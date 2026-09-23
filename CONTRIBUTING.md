@@ -61,9 +61,15 @@ python3 demo/run.py all                # train, learn, held-out eval in two arms
 
 ## Sign-off
 
-TODO(D2): contributions will require either a Developer Certificate of Origin sign-off
-(`git commit -s`) or a contributor license agreement. That is not decided yet, and outside
-contributions cannot be accepted until it is, nor before the project license is chosen (TODO(D1)).
+Adage is licensed under the [Apache License 2.0](LICENSE). Contributions are accepted under the
+same license, with a [Developer Certificate of Origin](https://developercertificate.org/) sign-off
+on every commit (decision D2): commit with `git commit -s`, which adds
+
+    Signed-off-by: Your Name <you@example.com>
+
+and certifies that you wrote the change or otherwise have the right to submit it under the
+project's license. There is no contributor license agreement. CI checks pull-request commits for
+the sign-off.
 
 ## Releasing (maintainers)
 
@@ -80,5 +86,7 @@ Releases are built by [dist](https://github.com/axodotdev/cargo-dist) from `dist
 
 Publishing needs, in the repository settings: the `HOMEBREW_TAP_TOKEN` secret (push access to
 `stevenvaughanbooth/homebrew-tap`), and for npm the `NPM_TOKEN` secret plus the variable
-`ADAGE_NPM_PUBLISH=true`. npm stays off until the package name (TODO(D3), `npm/config.mjs`) and the
-license (TODO(D1)) are decided. macOS binaries are not yet signed or notarised (TODO(D4)).
+`ADAGE_NPM_PUBLISH=true`. The npm package is `@adage/cli` (decision D3): claim the `@adage` scope
+first (`npm org create adage`); if it is taken, set `PACKAGE_NAME = "adage-cli"` in
+`npm/config.mjs`, the one place the name lives. macOS signing (decision D4) is off until the Apple
+Developer ID secrets exist; see the note in `dist-workspace.toml`.

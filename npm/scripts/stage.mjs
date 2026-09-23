@@ -42,7 +42,7 @@ function fail(msg) {
   process.exit(1)
 }
 
-// The workspace license is the one source of truth (TODO(D1): still "UNLICENSED").
+// The workspace license (Cargo.toml [workspace.package], Apache-2.0) is the one source of truth.
 function workspaceLicense() {
   const toml = readFileSync(path.join(repoDir, "Cargo.toml"), "utf8")
   const m = toml.match(/^\[workspace\.package\][^[]*?^license\s*=\s*"([^"]+)"/ms)

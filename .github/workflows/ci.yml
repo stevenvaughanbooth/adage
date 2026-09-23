@@ -20,6 +20,29 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
+  # Decision D2: every commit in a pull request carries a DCO sign-off (CONTRIBUTING.md).
+  dco:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: every commit is signed off
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ github.event.pull_request.base.sha }}"; head="${{ github.event.pull_request.head.sha }}"
+          missing=0
+          for c in $(git rev-list --no-merges "$base..$head"); do
+            if ! git show -s --format=%B "$c" | grep -qE '^Signed-off-by: .+ <.+>$'; then
+              echo "::error::commit $(git show -s --format='%h %s' "$c") has no Signed-off-by line (git commit -s)"
+              missing=1
+            fi
+          done
+          exit $missing
+
   fmt:
     runs-on: ubuntu-24.04
     steps:

@@ -6,8 +6,8 @@
 # via this job's OIDC token).
 #
 # Off until you turn it on: set the repository variable ADAGE_NPM_PUBLISH to "true" and add the
-# NPM_TOKEN secret. Before that: TODO(D3) choose the package name (npm/config.mjs) and TODO(D1) the
-# license (Cargo.toml [workspace.package] license, currently UNLICENSED).
+# NPM_TOKEN secret, after claiming the npm scope for the package name in npm/config.mjs
+# (`@adage/cli`; fallback `adage-cli`). The license comes from Cargo.toml (Apache-2.0).
 name: Publish npm
 
 on:

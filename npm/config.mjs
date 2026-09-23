@@ -1,8 +1,8 @@
 // npm distribution settings, read by npm/scripts/stage.mjs and the release workflow.
 
-// TODO(D3): the npm package name is undecided (Implementation Plan §6.2 and §9, decision D3).
-// `@adage/cli` is a placeholder: the `@adage` scope has not been claimed, `adage` is taken, and
-// `adage-cli` is the fallback. This is the only place the name is set. Platform packages are named
+// The npm package name (decision D3): `@adage/cli`, once the `@adage` scope is claimed
+// (`npm org create adage`). `adage` itself is taken; if the scope is not available, use the
+// fallback `adage-cli`. This is the only place the name is set. Platform packages are named
 // `<PACKAGE_NAME>-<os>-<cpu>` (`@adage/cli-darwin-arm64`); the command is `adage` whatever the name.
 export const PACKAGE_NAME = "@adage/cli"
 

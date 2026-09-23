@@ -30,7 +30,11 @@ cargo-cyclonedx = true
 pr-run-mode = "plan"
 # The npm job checks out npm/ (contents) and publishes with provenance (id-token).
 github-custom-job-permissions = { "publish-npm" = { contents = "read", id-token = "write" } }
-# TODO(D1): once LICENSE (and the generated NOTICE, scripts/notice.sh) exist at the repository
-# root, add `include = ["NOTICE"]`; dist ships LICENSE* files in every archive automatically.
-# TODO(D4): macOS Developer ID signing and notarisation are not configured (Apple Developer
-# Program decision). npm-installed binaries are not quarantined; direct downloads will be.
+# LICENSE ships in every archive automatically; NOTICE (third-party licenses, scripts/notice.sh)
+# is included explicitly.
+include = ["NOTICE"]
+# macOS Developer ID signing (decision D4: yes). Enable with `macos-sign = true` once the Apple
+# Developer Program enrolment exists and these repository secrets are set: CODESIGN_CERTIFICATE
+# (base64 .p12), CODESIGN_CERTIFICATE_PASSWORD, CODESIGN_IDENTITY; then run `dist generate`.
+# Enabling it before the secrets exist would fail every release. npm-installed binaries are not
+# quarantined; direct downloads and Homebrew bottles are, which is why D4 matters before Homebrew.

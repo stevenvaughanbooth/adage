@@ -294,10 +294,10 @@ The binary stays `adage` whatever the package names are.
 | Step | What | Who |
 | --- | --- | --- |
 | L0 | **Employer IP clearance (O9)**, in writing, covering a personal project built on personal equipment and time, including its later use at work. Keep the git history personal-only | You |
-| L1 | **Choose the license** (decision D1 below) and add `LICENSE` and `NOTICE`. The workspace currently says `license = "UNLICENSED"` | You decide; I implement |
+| L1 | ✅ **Apache-2.0** (D1). `LICENSE` and a generated `NOTICE` (third-party licenses, `scripts/notice.sh`) are at the repository root and ship in every release archive | Done |
 | L2 | **Third-party notices.** All Rust dependencies are permissive: 60× MIT OR Apache-2.0, 27× Apache-2.0 OR MIT, 10× MIT, BSD-2/3, 0BSD, ISC and similar. There is no copyleft; the one LGPL option is an OR choice. `cargo about` generates the NOTICE, and `cargo deny` enforces an allowlist in CI | Me |
 | L3 | **Model.** potion-base-8M is MIT. It is fetched, not bundled; attribute it in NOTICE. bge-base is also MIT, if we switch | Me |
-| L4 | **Contributions:** a DCO (sign-off) or a CLA (decision D2) | You decide |
+| L4 | ✅ **DCO sign-off** (D2): `git commit -s`; CI checks pull-request commits; no CLA | Done |
 | L5 | **Trademark.** "Adage" is a common word, and the mark may be narrow (Design §17.5). Run a knockout search (USPTO, EUIPO, classes 9 and 42) before spending on brand. Secure the GitHub org, npm scope, crates names and a domain. "On rails" stays a lowercase phrase; harness names are used descriptively only | You, with a search service if needed |
 | L6 | **Project hygiene:** `SECURITY.md` (private reporting; tracks are an attack surface), `CONTRIBUTING.md`, code of conduct, and a privacy statement | Me |
 | L7 | **Track licensing.** Shared tracks are data that others copy. Add an SPDX `license` field to the track manifest; `adage share` asks for it and `adage add` shows it | Me (small format change) |
@@ -322,13 +322,13 @@ The binary stays `adage` whatever the package names are.
 | **M4 — Public beta** | Docs, `SECURITY.md`, live adapter validation on OpenCode and Codex | — |
 | **M5 — 1.0** | Team depots + lockfiles (O12), proving ground as a product | — |
 
-## 9. Decisions needed from you
+## 9. Decisions
 
 | # | Decision | Recommendation |
 | --- | --- | --- |
 | **O9** | Employer IP clearance | Get it in writing before M2 or any public release |
-| **D1** | License | Apache-2.0 for the engine. Decide open core before building depots |
-| **D2** | DCO or CLA | DCO, unless you want to keep the option to relicense (then a CLA) |
-| **D3** | npm name | Claim the `@adage` scope if it is free, and publish `@adage/cli`; otherwise `adage-cli`. The binary stays `adage` either way |
-| **D4** | Apple Developer ID ($99/yr) | Yes, before the Homebrew and direct-download channels |
+| **D1** | License | ✅ **Apache-2.0** (decided 2026-09-23). Open core is still to decide before building depots |
+| **D2** | DCO or CLA | ✅ **DCO sign-off** (decided 2026-09-23) |
+| **D3** | npm name | ✅ **`@adage/cli`** once the `@adage` scope is claimed (`npm org create adage`); fallback `adage-cli` (decided 2026-09-23). The binary stays `adage` |
+| **D4** | Apple Developer ID ($99/yr) | ✅ **Yes** (decided 2026-09-23). Enrol, add the signing secrets, set `macos-sign = true` in `dist-workspace.toml`; required before Homebrew and direct downloads |
 | **D5** | Private or public beta first | A private beta with a few teams after the pilot, then public |

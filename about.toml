@@ -18,5 +18,5 @@ targets = [
 # Only what ships in the binary.
 ignore-dev-dependencies = true
 ignore-build-dependencies = true
-# Adage's own crates (publish = false, license TODO(D1)) are not third-party.
+# Adage's own crates (Apache-2.0, not published to crates.io) are not third-party.
 private = { ignore = true }

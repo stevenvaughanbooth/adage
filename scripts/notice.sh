@@ -4,8 +4,8 @@
 #   scripts/notice.sh [output]        (default: NOTICE)
 #
 # Needs cargo-about: `cargo install --locked cargo-about --features cli`.
-# TODO(D1): once the license is chosen, add LICENSE at the repository root, state it in about.hbs,
-# and commit the generated NOTICE (dist then ships both in every release archive).
+# Commit the regenerated NOTICE whenever dependencies change; dist ships it (and LICENSE) in every
+# release archive.
 set -eu
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 cd "$(dirname "$0")/.."

@@ -5,9 +5,10 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-# TODO(D1): the license is not chosen yet. Until it is, no crate may be published to crates.io
-# (publish = false), and cargo-deny skips these unpublished crates' own license.
-license = "UNLICENSED"
+# Apache-2.0 (decision D1; LICENSE, NOTICE). Releases ship through GitHub Releases, npm and
+# Homebrew; the crates are not published to crates.io yet (publish = false), so an accidental
+# `cargo publish` cannot happen. Flip this when crates.io publishing is wanted.
+license = "Apache-2.0"
 publish = false
 repository = "https://github.com/stevenvaughanbooth/adage"
 homepage = "https://github.com/stevenvaughanbooth/adage"

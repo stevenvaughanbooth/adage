@@ -40,8 +40,8 @@ allow = [
 unused-allowed-license = "warn"
 
 [licenses.private]
-# Adage's own crates say `license = "UNLICENSED"` until the license is chosen (TODO(D1)); they
-# are not published, so they are not license-checked here.
+# Adage's own crates (Apache-2.0) are not published to crates.io, so they are not license-checked
+# as dependencies here.
 ignore = true
 
 [bans]

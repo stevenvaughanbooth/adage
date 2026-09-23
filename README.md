@@ -208,3 +208,9 @@ directly (`adage share` / `adage add`) and reviewed with `adage review`. Intent 
 embeddings (`adage models fetch`; everything else works without the model). Hardened against an
 adversarial review (tracks are untrusted input; effects re-derived; bounded hot path; symlink-safe
 paths). Team depots and lockfiles are designed but not yet built. See the implementation plan.
+
+## License
+
+Adage is licensed under the [Apache License 2.0](LICENSE). Third-party licenses for everything
+compiled into the binary are in [NOTICE](NOTICE). Contributions are welcome under the same
+license with a DCO sign-off (`git commit -s`); see [CONTRIBUTING.md](CONTRIBUTING.md).
