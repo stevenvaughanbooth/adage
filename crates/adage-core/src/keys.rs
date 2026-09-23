@@ -25,10 +25,19 @@ pub fn op_name(a: &CanonicalAction) -> &'static str {
 
 /// Template an argv, keeping the command word literal.
 pub fn template_command(argv: &[String]) -> Vec<String> {
+    // For interpreters, the script is part of the command's identity: `python3 scripts/a {id}`,
+    // not `python3 {path} {id}`, which would match every script.
+    const INTERPRETERS: [&str; 9] = ["python", "python3", "node", "bash", "sh", "zsh", "ruby", "perl", "deno"];
+    let head = argv.first().map(|a| a.rsplit('/').next().unwrap_or(a)).unwrap_or("");
+    let script_at = if INTERPRETERS.contains(&head) {
+        argv.iter().skip(1).position(|a| !a.starts_with('-')).map(|p| p + 1)
+    } else {
+        None
+    };
     argv.iter()
         .enumerate()
         .map(|(i, t)| {
-            if i == 0 {
+            if i == 0 || Some(i) == script_at {
                 t.clone()
             } else {
                 placeholder(t).map(str::to_string).unwrap_or_else(|| t.clone())
@@ -136,6 +145,14 @@ mod tests {
         }
         canonicalise(&mut m, Path::new("/tmp/r/repo"));
         assert_eq!(template_key(&m.action), template_key(&n.action));
+    }
+
+    #[test]
+    fn interpreter_scripts_stay_literal() {
+        let argv: Vec<String> = ["python3", "scripts/wi-lookup", "W-1"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(template_command(&argv), vec!["python3", "scripts/wi-lookup", "{id}"]);
+        let argv: Vec<String> = ["python3", "-m", "unittest"].iter().map(|s| s.to_string()).collect();
+        assert_eq!(template_command(&argv)[0], "python3");
     }
 
     #[test]

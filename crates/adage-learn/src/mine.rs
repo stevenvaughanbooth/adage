@@ -254,7 +254,9 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
         instead: BTreeMap<String, u32>,
         signatures: BTreeMap<String, u32>,
     }
-    let mut pairs: BTreeMap<(String, String), P> = BTreeMap::new();
+    // Keyed by the command that worked: different failing runners (`pytest`, `python -m pytest`,
+    // `unittest`) that all lead to the same working command are one dead end.
+    let mut pairs: BTreeMap<String, P> = BTreeMap::new();
     let mut ran: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for s in sessions {
         for (i, a) in s.steps.iter().enumerate() {
@@ -269,7 +271,7 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             }) else {
                 continue;
             };
-            let p = pairs.entry((a.key.clone(), b.key.clone())).or_default();
+            let p = pairs.entry(b.key.clone()).or_default();
             if p.sessions.insert(s.id.clone()) {
                 *p.avoid.entry(shell_join(argv(a).unwrap())).or_default() += 1;
                 *p.instead.entry(shell_join(argv(b).unwrap())).or_default() += 1;
@@ -283,12 +285,19 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
         }
     }
     let mut out = Vec::new();
-    for (i, ((akey, _), p)) in pairs.into_iter().enumerate() {
+    for (i, (_bkey, p)) in pairs.into_iter().enumerate() {
         let support = p.sessions.len() as u32;
         if support < cfg.min_support {
             continue;
         }
-        let opp = ran.get(&akey).map(|s| s.len() as u32).unwrap_or(support);
+        // Opportunities: sessions that ran any of the failing commands.
+        let opp = p
+            .avoid
+            .keys()
+            .flat_map(|lit| ran.iter().filter(move |(k, _)| k.contains(lit.split_whitespace().next().unwrap_or(""))).flat_map(|(_, v)| v.iter()))
+            .collect::<BTreeSet<_>>()
+            .len()
+            .max(support as usize) as u32;
         let top = |m: &BTreeMap<String, u32>| m.iter().max_by_key(|(_, c)| **c).map(|(k, _)| k.clone()).unwrap_or_default();
         let signature = top(&p.signatures);
         if signature.is_empty() {

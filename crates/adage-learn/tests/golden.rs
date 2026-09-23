@@ -55,7 +55,9 @@ fn corpus(dir: &Path) -> (Vec<PathBuf>, String) {
         } else {
             t.call("Edit", json!({"file_path": format!("{cwd}/acme/billing.py")}), "ok", false);
         }
-        t.bash("python3 -m unittest discover -s tests", "Traceback\nRuntimeError: ACME_ENV is not set — run tests with 'make test'", true)
+        // Different failing runners, one working command: must be learned as one dead end.
+        let runner = ["python3 -m unittest discover -s tests", "python3 -m pytest tests", "python -m pytest -v"][i % 3];
+        t.bash(runner, "Traceback\nRuntimeError: ACME_ENV is not set — run tests with 'make test'", true)
             .bash("make test", "OK", false);
         files.push(t.write(dir));
     }
@@ -87,7 +89,7 @@ fn mines_all_four_route_kinds() {
 
     let dead = routes.iter().find(|r| matches!(r.step, Step::Avoid { .. })).expect("dead-end route");
     if let Step::Avoid { avoid, instead, signature } = &dead.step {
-        assert!(avoid.starts_with("python3 -m unittest"));
+        assert!(avoid.contains("unittest") || avoid.contains("pytest"));
         assert_eq!(instead, "make test");
         assert!(signature.contains("ACME_ENV is not set"));
     }
