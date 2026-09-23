@@ -1,0 +1,12 @@
+.DS_Store
+node_modules/
+target/
+.venv/
+__pycache__/
+*.onnx
+*.safetensors
+*.bin
+spikes/**/models/
+spikes/**/sandbox/
+spikes/**/.cache/
+.claude/settings.local.json
