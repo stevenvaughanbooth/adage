@@ -28,16 +28,21 @@ pub fn template_command(argv: &[String]) -> Vec<String> {
     // For interpreters, the script is part of the command's identity: `python3 scripts/a {id}`,
     // not `python3 {path} {id}`, which would match every script.
     const INTERPRETERS: [&str; 9] = ["python", "python3", "node", "bash", "sh", "zsh", "ruby", "perl", "deno"];
+    // Inline code (`python3 -c '…'`, `node -e '…'`) is not an identity: it becomes `{code}`, so
+    // one-off scripts neither split keys nor carry their text into reports.
+    const CODE_FLAGS: [&str; 5] = ["-c", "-e", "--eval", "-p", "--print"];
     let head = argv.first().map(|a| a.rsplit('/').next().unwrap_or(a)).unwrap_or("");
-    let script_at = if INTERPRETERS.contains(&head) {
-        argv.iter().skip(1).position(|a| !a.starts_with('-')).map(|p| p + 1)
-    } else {
-        None
-    };
+    let interpreter = INTERPRETERS.contains(&head);
+    let first_operand =
+        if interpreter { argv.iter().skip(1).position(|a| !a.starts_with('-')).map(|p| p + 1) } else { None };
+    let code_at = first_operand.filter(|&i| CODE_FLAGS.contains(&argv[i - 1].as_str()));
+    let script_at = first_operand.filter(|_| code_at.is_none());
     argv.iter()
         .enumerate()
         .map(|(i, t)| {
-            if i == 0 || Some(i) == script_at {
+            if Some(i) == code_at {
+                "{code}".to_string()
+            } else if i == 0 || Some(i) == script_at {
                 t.clone()
             } else {
                 placeholder(t).map(str::to_string).unwrap_or_else(|| t.clone())
@@ -232,5 +237,22 @@ mod tests {
     fn command_word_stays_literal() {
         let argv: Vec<String> = ["./scripts/wi-lookup", "W-2042", "--json"].iter().map(|s| s.to_string()).collect();
         assert_eq!(template_command(&argv), vec!["./scripts/wi-lookup", "{id}", "--json"]);
+    }
+}
+
+#[cfg(test)]
+mod code_tests {
+    use super::template_command;
+
+    fn t(argv: &[&str]) -> String {
+        template_command(&argv.iter().map(|s| s.to_string()).collect::<Vec<_>>()).join(" ")
+    }
+
+    #[test]
+    fn inline_code_is_a_placeholder_scripts_and_modules_are_not() {
+        assert_eq!(t(&["python3", "-c", "import json; print(json.load(open('/x')))"]), "python3 -c {code}");
+        assert_eq!(t(&["node", "-e", "console.log(1)"]), "node -e {code}");
+        assert_eq!(t(&["python3", "scripts/wi-lookup", "W-1234"]), "python3 scripts/wi-lookup {id}");
+        assert_eq!(t(&["python3", "-m", "pytest", "tests/test_a.py"]), "python3 -m pytest {path}");
     }
 }

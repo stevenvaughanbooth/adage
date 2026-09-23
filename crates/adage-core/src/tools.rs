@@ -69,14 +69,14 @@ pub fn normalize_tool(tool: &str, input: &Value, cwd: &str, table: &CommandTable
         "WebSearch" => {
             full(CanonicalAction::Fetch { url: format!("search:{}", s(input, "query")) }, Effect::Observe, false)
         }
-        "Skill" => full(
-            CanonicalAction::Exec { argv: vec!["skill".into(), s(input, "skill")], cwd: cwd.to_string() },
-            Effect::Environment,
-            false,
-        ),
+        // Harness tools, not shell commands: recorded in history, never mined as a command to run
+        // (a route cannot tell an agent to type `task general-purpose` into a shell).
+        "Skill" => {
+            full(CanonicalAction::Control { tool: format!("Skill {}", s(input, "skill")) }, Effect::Observe, false)
+        }
         "Task" | "Agent" => full(
-            CanonicalAction::Exec { argv: vec!["task".into(), s(input, "subagent_type")], cwd: cwd.to_string() },
-            Effect::Environment,
+            CanonicalAction::Control { tool: format!("Task {}", s(input, "subagent_type")) },
+            Effect::Observe,
             false,
         ),
         "ToolSearch" | "SendMessage" | "AskUserQuestion" | "TodoWrite" | "TaskCreate" | "TaskUpdate" | "TaskList"
@@ -86,11 +86,9 @@ pub fn normalize_tool(tool: &str, input: &Value, cwd: &str, table: &CommandTable
         }
         _ => {
             if let Some(rest) = tool.strip_prefix("mcp__") {
-                return full(
-                    CanonicalAction::Exec { argv: vec!["mcp".into(), rest.to_string()], cwd: cwd.to_string() },
-                    Effect::Environment,
-                    false,
-                );
+                // An MCP server's tool: the harness calls it, a shell cannot. Environment-class, since
+                // its effects are unknown, but never an exec that could become a directed command.
+                return full(CanonicalAction::Control { tool: format!("mcp {rest}") }, Effect::Environment, false);
             }
             vec![Normalized {
                 action: CanonicalAction::Unknown { raw: tool.to_string() },
@@ -228,5 +226,29 @@ mod harness_tests {
         );
         assert_eq!(calls, vec![("Edit".to_string(), json!({ "file_path": "schema/a.json" }))]);
         assert_eq!(from_codex("Bash", &json!({ "command": "ls" }))[0].0, "Bash");
+    }
+}
+
+#[cfg(test)]
+mod control_tests {
+    use super::normalize_tool;
+    use crate::keys::template_key;
+    use crate::types::CanonicalAction;
+    use crate::CommandTable;
+    use serde_json::json;
+
+    #[test]
+    fn harness_tools_are_control_never_exec() {
+        let t = CommandTable::load();
+        for (tool, input, key) in [
+            ("Task", json!({ "subagent_type": "general-purpose" }), "control Task general-purpose"),
+            ("Agent", json!({ "subagent_type": "Explore" }), "control Task Explore"),
+            ("Skill", json!({ "skill": "review" }), "control Skill review"),
+            ("mcp__browser__navigate", json!({ "url": "https://x" }), "control mcp browser__navigate"),
+        ] {
+            let n = normalize_tool(tool, &input, "/repo", &t);
+            assert!(matches!(n[0].action, CanonicalAction::Control { .. }), "{tool}: {:?}", n[0].action);
+            assert_eq!(template_key(&n[0].action), key);
+        }
     }
 }
