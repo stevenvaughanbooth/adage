@@ -1,0 +1,18 @@
+{
+  "name": "adage",
+  "owner": { "name": "stevenvaughanbooth" },
+  "metadata": {
+    "description": "Adage: put your agent on rails.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "adage",
+      "source": "./plugin/claude-code",
+      "description": "Put your agent on rails: Adage learns the routes your agents take and tells them, deterministically, what to do next. Needs the adage binary on PATH (npm, Homebrew, or the release installers).",
+      "version": "0.1.0",
+      "repository": "https://github.com/stevenvaughanbooth/adage",
+      "homepage": "https://github.com/stevenvaughanbooth/adage"
+    }
+  ]
+}

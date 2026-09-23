@@ -1,24 +1,65 @@
 #!/bin/sh
-# Adage SessionStart: install a verified binary into the plugin's stable data directory, run it once
-# (the first execution of a new binary pays a one-time code-signing check, 100-350 ms on macOS —
-# spike S1), then hand the SessionStart payload to it. Every failure path exits 0: fail open.
+# Adage SessionStart: make ${CLAUDE_PLUGIN_DATA}/bin/adage (what the other hooks run) point at an
+# adage binary, then hand the SessionStart payload to it. The binary comes from, in order:
+#   1. the plugin's bundled dist/<target>/adage, verified against dist/SHA256SUMS (plugin/build.sh);
+#   2. `adage` on PATH (npm, Homebrew, the release installers, cargo install). When that is npm's
+#      node launcher, it names the platform binary it runs, and hooks call that directly.
+# Nothing is ever downloaded here. A new bundled binary is run once first (the first execution of a
+# new binary pays a one-time code-signing check, 100-350 ms on macOS — spike S1).
+# Every failure path exits 0: fail open. Hints go to stderr; stdout would become session context.
 ROOT="$1"; DATA="$2"
-[ -n "$ROOT" ] && [ -n "$DATA" ] || { cat >/dev/null; exit 0; }
+skip() { [ -n "$1" ] && echo "adage: $1" >&2; cat >/dev/null; exit 0; }
+[ -n "$ROOT" ] && [ -n "$DATA" ] || skip ""
+EXE=adage
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) T=aarch64-apple-darwin ;; Darwin-x86_64) T=x86_64-apple-darwin ;;
   Linux-x86_64) T=x86_64-unknown-linux-gnu ;; Linux-aarch64) T=aarch64-unknown-linux-gnu ;;
-  *) cat >/dev/null; exit 0 ;;
+  # Git Bash. Unverified: whether Claude Code on Windows runs this exec-form hook at all.
+  MINGW*-x86_64|MSYS*-x86_64) T=x86_64-pc-windows-msvc; EXE=adage.exe ;;
+  *) T="" ;;
 esac
-SRC="$ROOT/dist/$T/adage"
-[ -f "$SRC" ] || { cat >/dev/null; exit 0; }
-WANT=$(grep " $T/adage\$" "$ROOT/dist/SHA256SUMS" 2>/dev/null | cut -d' ' -f1)
-GOT=$(shasum -a 256 "$SRC" 2>/dev/null | cut -d' ' -f1)
-[ -n "$WANT" ] && [ "$WANT" = "$GOT" ] || { cat >/dev/null; exit 0; }
-mkdir -p "$DATA/bin"
-if [ ! -x "$DATA/bin/adage-$GOT" ]; then
-  cp "$SRC" "$DATA/bin/.adage-$GOT.tmp" && chmod 755 "$DATA/bin/.adage-$GOT.tmp" \
-    && mv "$DATA/bin/.adage-$GOT.tmp" "$DATA/bin/adage-$GOT" || { cat >/dev/null; exit 0; }
-  "$DATA/bin/adage-$GOT" version >/dev/null 2>&1
+sha256() { { shasum -a 256 "$1" || sha256sum "$1"; } 2>/dev/null | cut -d' ' -f1; }
+mkdir -p "$DATA/bin" || skip "cannot create $DATA/bin"
+LINKED=""
+
+# 1. Bundled, verified.
+SRC="$ROOT/dist/$T/$EXE"
+if [ -n "$T" ] && [ -f "$SRC" ]; then
+  WANT=$(grep " $T/$EXE\$" "$ROOT/dist/SHA256SUMS" 2>/dev/null | cut -d' ' -f1)
+  GOT=$(sha256 "$SRC")
+  if [ -n "$WANT" ] && [ "$WANT" = "$GOT" ]; then
+    if [ "$EXE" = adage.exe ]; then
+      cmp -s "$SRC" "$DATA/bin/adage.exe" || cp -f "$SRC" "$DATA/bin/adage.exe"
+    else
+      if [ ! -x "$DATA/bin/adage-$GOT" ]; then
+        cp "$SRC" "$DATA/bin/.adage-$GOT.tmp" && chmod 755 "$DATA/bin/.adage-$GOT.tmp" \
+          && mv "$DATA/bin/.adage-$GOT.tmp" "$DATA/bin/adage-$GOT" || skip "cannot install the bundled binary"
+        "$DATA/bin/adage-$GOT" version >/dev/null 2>&1
+      fi
+      ln -sfn "adage-$GOT" "$DATA/bin/adage"
+    fi
+    LINKED=1
+  else
+    echo "adage: the bundled binary does not match dist/SHA256SUMS; ignoring it" >&2
+  fi
 fi
-ln -sfn "adage-$GOT" "$DATA/bin/adage"
-exec "$DATA/bin/adage" hook claude SessionStart
+
+# 2. On PATH. The binary answers `version` with "adage <version>"; npm's launcher, asked with
+# ADAGE_NPM_WHICH=1, prints the path of the platform binary instead.
+if [ -z "$LINKED" ] && P=$(command -v adage 2>/dev/null) && [ -n "$P" ]; then
+  OUT=$(ADAGE_NPM_WHICH=1 "$P" version 2>/dev/null)
+  case "$OUT" in
+    "adage "*) ;;
+    *) P="$OUT" ;;
+  esac
+  if [ -n "$P" ] && [ -f "$P" ]; then
+    if [ "$EXE" = adage.exe ]; then
+      cmp -s "$P" "$DATA/bin/adage.exe" || cp -f "$P" "$DATA/bin/adage.exe"
+    else
+      ln -sfn "$P" "$DATA/bin/adage"
+    fi && LINKED=1
+  fi
+fi
+
+[ -n "$LINKED" ] || skip "no adage binary found; install it (https://github.com/stevenvaughanbooth/adage#install) and start a new session"
+exec "$DATA/bin/$EXE" hook claude SessionStart
