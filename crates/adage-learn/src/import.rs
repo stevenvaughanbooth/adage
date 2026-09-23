@@ -3,14 +3,17 @@
 //! `~/.claude/projects/<project>/<session>.jsonl`: one record per line. Assistant records carry
 //! `tool_use` blocks (several blocks of one model turn share `message.id`); user records carry the
 //! prompt (string content) or `tool_result` blocks keyed by `tool_use_id`. Sessions steered by
-//! Adage are truncated at the first directive (Design §11: never learn from your own influence).
+//! Adage record which routes steered them; each miner excludes sessions steered by its own kind of
+//! route (Design §11: never learn from your own influence), and keeps them for other kinds.
 
 use adage_core::keys::{self, template_key};
 use adage_core::tools::normalize_tool;
 use adage_core::{repo, CommandTable, Normalized};
 use adage_runtime::Call;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -34,8 +37,32 @@ pub struct Session {
     pub prompt: String,
     pub steps: Vec<StepObs>,
     pub steered: bool,
+    /// Adage routes whose directives this session received. Evidence for a route kind is never
+    /// taken from a session steered by that kind (Design §11: never learn from your own influence).
+    pub directed: BTreeSet<String>,
     pub outcome: Option<bool>,
 }
+
+/// The kind of a route, from its id: evidence exclusion works per kind.
+pub fn route_kind(id: &str) -> &'static str {
+    if id.starts_with("lookup") || id.starts_with("read-linked") {
+        "work-items"
+    } else if id.starts_with("finish-line") {
+        "finish-line"
+    } else if id.starts_with("dead-end") {
+        "dead-ends"
+    } else {
+        "other"
+    }
+}
+
+impl Session {
+    pub fn steered_by(&self, kind: &str) -> bool {
+        self.directed.iter().any(|r| route_kind(r) == kind)
+    }
+}
+
+static ROUTE_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"route=\\?"([A-Za-z0-9_.-]+)"#).unwrap());
 
 impl Session {
     /// Index of the first step that edits or writes a file.
@@ -78,7 +105,7 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     let mut uses: Vec<(u32, String, String, Value)> = Vec::new();
     let mut results: HashMap<String, (String, bool)> = HashMap::new();
     let mut turn_of_msg: HashMap<String, u32> = HashMap::new();
-    let mut steer_cut: Option<usize> = None;
+    let mut directed: BTreeSet<String> = BTreeSet::new();
 
     for line in text.lines() {
         let Ok(rec) = serde_json::from_str::<Value>(line) else { continue };
@@ -98,9 +125,15 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
                 day = ts.chars().take(10).collect();
             }
         }
-        if line.contains("<adage-signal") && steer_cut.is_none() {
+        if line.contains("<adage-signal") {
             steered = true;
-            steer_cut = Some(uses.len());
+            for c in ROUTE_ATTR.captures_iter(line) {
+                directed.insert(c[1].to_string());
+            }
+        }
+        if line.contains("Adage finish-line check") {
+            steered = true;
+            directed.insert("finish-line-stop".to_string());
         }
         match rec.get("type").and_then(|v| v.as_str()) {
             Some("user") => {
@@ -155,9 +188,6 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     let cwd_path = PathBuf::from(&cwd);
     let root = repo::find_root(&cwd_path).unwrap_or(cwd_path);
     let repo_key = repo_override.map(str::to_string).unwrap_or_else(|| repo::repo_key(&root));
-    if let Some(cut) = steer_cut {
-        uses.truncate(cut);
-    }
     let root_str = root.to_string_lossy().to_string();
     let mut steps = Vec::new();
     for (turn, tid, name, input) in uses {
@@ -169,7 +199,7 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
             steps.push(StepObs { turn, key: template_key(&n.action), norm: n, call: call.clone(), rel_path });
         }
     }
-    Some(Session { id, root, repo: repo_key, model, day, prompt, steps, steered, outcome: None })
+    Some(Session { id, root, repo: repo_key, model, day, prompt, steps, steered, directed, outcome: None })
 }
 
 /// Every top-level (non-sidechain) transcript under a Claude Code projects directory.

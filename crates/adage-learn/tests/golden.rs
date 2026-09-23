@@ -117,14 +117,30 @@ fn learning_is_deterministic_and_versioned() {
 }
 
 #[test]
-fn steered_sessions_are_truncated_at_the_first_directive() {
+fn steered_sessions_are_excluded_only_from_their_own_route_kind() {
     let d = tempfile::tempdir().unwrap();
     let cwd = "/fixture/acme-billing";
-    let mut t = Tx::new("steered", cwd, "Pick up W-1099");
-    t.lines.push(json!({"type":"attachment","sessionId":"steered","cwd":cwd,"content":"<adage-signal track=\"x\">…</adage-signal>"}));
-    t.bash("python3 scripts/wi-lookup W-1099", "ok", false);
-    let p = t.write(d.path());
-    let s = adage_learn::import::parse_transcript(&p, &adage_core::CommandTable::load(), None).unwrap();
-    assert!(s.steered);
-    assert!(s.steps.is_empty(), "nothing after the first directive counts as evidence");
+    let (mut files, _) = corpus(d.path());
+    // Three sessions steered by the lookup route, which then hit a dead end the route never
+    // mentioned: they must count as dead-end evidence but not as lookup evidence.
+    for i in 0..3 {
+        let mut t = Tx::new(&format!("steered{i}"), cwd, "Pick up W-2099");
+        t.lines.push(json!({"type":"attachment","sessionId":format!("steered{i}"),"cwd":cwd,
+            "content":"<adage-signal track=\"x\" route=\"lookup-work-item\" aspect=\"green\">…</adage-signal>"}));
+        t.bash("./scripts/other-lookup W-2099", "ok", false)
+            .call("Edit", json!({"file_path": format!("{cwd}/acme/billing.py")}), "ok", false)
+            .bash("python3 -m pytest", "No module named pytest; error", true)
+            .bash("make test", "OK", false);
+        files.push(t.write(d.path()));
+    }
+    let p = files.last().unwrap();
+    let s = adage_learn::import::parse_transcript(p, &adage_core::CommandTable::load(), None).unwrap();
+    assert!(s.steered && s.directed.contains("lookup-work-item"));
+    assert!(!s.steps.is_empty(), "steps are kept; exclusion is per route kind");
+    let home = d.path().join("home");
+    let index = run(d.path(), &files, &home);
+    let lookup = index.routes.iter().find(|r| r.route.id == "lookup-work-item").unwrap();
+    assert_eq!(lookup.route.evidence.opportunities, 6, "steered sessions are not lookup opportunities");
+    let dead = index.routes.iter().find(|r| r.route.id.starts_with("dead-end")).unwrap();
+    assert_eq!(dead.route.evidence.support, 9, "steered sessions still count as dead-end evidence");
 }

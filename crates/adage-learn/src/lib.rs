@@ -103,19 +103,25 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
 
     for (repo, ss) in &by_repo {
         let mut rr = RepoReport { sessions: ss.len(), ..Default::default() };
-        let mut work = mine::prompt_routes(ss, cfg);
+        // Each miner sees only sessions not steered by its own kind of route.
+        let unsteered = |kind: &str| -> Vec<&Session> { ss.iter().copied().filter(|s| !s.steered_by(kind)).collect() };
+        let ws = unsteered("work-items");
+        let mut work = mine::prompt_routes(&ws, cfg);
         if let Some(r) = work.first() {
             if let adage_tracks::Step::Run { .. } = &r.step {
-                let key = lookup_key(ss, r);
+                let key = lookup_key(&ws, r);
                 if let Some(k) = key {
-                    work.extend(mine::read_batch_routes(ss, &k, cfg));
+                    work.extend(mine::read_batch_routes(&ws, &k, cfg));
                 }
             }
         }
+        let fs = unsteered("finish-line");
+        let fs: Vec<&Session> = fs.into_iter().filter(|s| !s.directed.contains("finish-line-stop")).collect();
+        let ds = unsteered("dead-ends");
         let groups: Vec<(&str, &str, Vec<Route>)> = vec![
             ("work-items", "Context gathering for prompts that name a work item", work),
-            ("finish-line", "Steps this repository requires after certain edits", mine::obligation_routes(ss, cfg)),
-            ("dead-ends", "Commands that fail in this repository, and what works instead", mine::dead_end_routes(ss, cfg)),
+            ("finish-line", "Steps this repository requires after certain edits", mine::obligation_routes(&fs, cfg)),
+            ("dead-ends", "Commands that fail in this repository, and what works instead", mine::dead_end_routes(&ds, cfg)),
         ];
         for (suffix, description, routes) in groups {
             let name = format!("{}/{suffix}", slug(repo));
@@ -169,16 +175,12 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     Ok(report)
 }
 
-/// The template key of the mined lookup step, as observed in the sessions.
-fn lookup_key(ss: &[&Session], r: &Route) -> Option<String> {
+/// The canonical key of the mined lookup command — the same key the runtime computes for the
+/// agent's call, so the linked-files route triggers on exactly this command.
+fn lookup_key(_ss: &[&Session], r: &Route) -> Option<String> {
     let adage_tracks::Step::Run { command } = &r.step else { return None };
-    let head = command.split_whitespace().next()?;
-    ss.iter().flat_map(|s| s.steps.iter()).find_map(|st| match &st.norm.action {
-        adage_core::CanonicalAction::Exec { argv, .. } if argv.first().map(String::as_str) == Some(head) && !st.call.failed => {
-            Some(st.key.clone())
-        }
-        _ => None,
-    })
+    let sample = command.replace("{item}", "X-1");
+    Some(adage_runtime::command_key(&sample, &CommandTable::load()))
 }
 
 pub fn is_prompt_route(r: &Route) -> bool {
