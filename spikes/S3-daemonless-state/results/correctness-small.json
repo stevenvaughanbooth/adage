@@ -1,0 +1,13 @@
+{
+  "scale": "small",
+  "loadavg_before": "9.35 7.61 5.29",
+  "loadavg_after": "10.36 7.87 5.41",
+  "elapsed_s": 6.6,
+  "concurrent_writers": {"thread_cases_ok":"20/20","thread_records":83999,"by_max_record_bytes":{"256":"4/4","480":"3/3","4000":"4/4","16000":"4/4","65000":"5/5"},"process_cases_ok":"8/8","process_records":44817},
+  "ordering": {"lag0":{"cases":100,"reconstruct_ok":100,"converge_ok":100,"late_folds":0,"dups_injected":0,"dups_detected":0},"lag1":{"cases":100,"reconstruct_ok":100,"converge_ok":100,"late_folds":13400,"dups_injected":0,"dups_detected":0},"lag1_dup2pct":{"cases":100,"reconstruct_ok":100,"converge_ok":100,"late_folds":13277,"dups_injected":615,"dups_detected":615},"lag5":{"cases":100,"reconstruct_ok":100,"converge_ok":0,"late_folds":16996,"dups_injected":0,"dups_detected":0}},
+  "crash_decide": {"rename":{"iterations":40,"kills":80,"decisions":903,"dseq_contiguous":true,"replayed_after_kill":18,"state_equals_rebuild":true,"corrupt_regions":0,"order_slips":0},"slots":{"iterations":40,"kills":80,"decisions":1821,"dseq_contiguous":true,"replayed_after_kill":15,"state_equals_rebuild":true,"corrupt_regions":0,"order_slips":0}},
+  "crash_state": {"rename":{"iterations":60,"kills":120,"progressed":59,"torn":0,"regressed":0,"stale_tmp":21,"final_value":2224},"slots":{"iterations":60,"kills":120,"progressed":60,"torn":0,"regressed":0,"stale_tmp":0,"final_value":18137},"unsafe":{"iterations":60,"kills":120,"progressed":38,"torn":22,"regressed":0,"stale_tmp":0,"final_value":34}},
+  "crash_spool": {"records_le_480B":{"iterations":30,"writers_killed":120,"records":17822,"corrupt_regions":0,"gaps_or_dups":0,"tail_pending":false},"records_le_65KB":{"iterations":15,"writers_killed":60,"records":2220,"corrupt_regions":0,"gaps_or_dups":0,"tail_pending":false}},
+  "torn_injection": {"cases":100,"ok":100,"damaged_frames":1865,"recovered":9401,"false_records":0},
+  "reader_prefix": [{"writers":8,"max_record_bytes":480,"records":4000,"polls":687,"pending_tail_seen":0,"corrupt_seen":0,"prefix_ok":true},{"writers":32,"max_record_bytes":480,"records":6400,"polls":1045,"pending_tail_seen":0,"corrupt_seen":0,"prefix_ok":true},{"writers":16,"max_record_bytes":16000,"records":1600,"polls":224,"pending_tail_seen":0,"corrupt_seen":0,"prefix_ok":true},{"writers":8,"max_record_bytes":65000,"records":320,"polls":212,"pending_tail_seen":0,"corrupt_seen":0,"prefix_ok":true}]
+}

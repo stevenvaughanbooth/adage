@@ -1,0 +1,17 @@
+[package]
+name = "s3-daemonless-state"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Spike S3: daemonless per-session state (flock) + append-only spools vs a minimal daemon"
+
+# Zero dependencies on purpose: flock comes from std (File::lock), CRC32 and the
+# PRNG are hand-rolled, so the prototype measures syscalls, not crates.
+[dependencies]
+
+[[bin]]
+name = "adage-s3"
+path = "src/main.rs"
+
+[profile.release]
+debug = 1
