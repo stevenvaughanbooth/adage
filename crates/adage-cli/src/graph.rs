@@ -128,7 +128,9 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
     for p in &spools {
         let st: SessionState = state::read(&p.with_extension("state")).unwrap_or_default();
         let repo = st.repo.clone().unwrap_or_default();
-        let sid: String = p.file_stem().map(|s| s.to_string_lossy().chars().take(8).collect()).unwrap_or_default();
+        // The whole (sanitised) id: OpenCode ids and Codex UUIDv7s begin with the creation time,
+        // so sessions started together share a long prefix. Displays shorten it themselves.
+        let sid: String = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
         let recs: Vec<Value> = spool::read_all(p).unwrap_or_default();
         match recs.iter().find_map(|r| r["arm"].as_str()) {
             Some("treated") => treated += 1,
