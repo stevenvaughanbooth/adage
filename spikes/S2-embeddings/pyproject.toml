@@ -1,0 +1,16 @@
+[project]
+name = "s2-embeddings"
+version = "0.1.0"
+description = "Adage spike S2: static vs transformer embeddings for intent families"
+requires-python = ">=3.9,<3.10"
+dependencies = [
+  "numpy==2.0.2",
+  "scikit-learn==1.6.1",
+  "onnxruntime==1.19.2",
+  "onnx==1.19.1",
+  "tokenizers==0.22.2",
+  "model2vec==0.7.0",
+  "safetensors==0.7.0",
+  "psutil==7.2.2",
+  "huggingface-hub==1.8.0",
+]

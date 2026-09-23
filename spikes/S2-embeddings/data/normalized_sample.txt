@@ -1,0 +1,692 @@
+begin {ticket}, no need to wait
+pick W-3310 off the backlog and start
+please start {ticket}, it's next in the queue
+can we start on the {ticket} ticket
+kick off W-7742 for me
+I'd like to begin W-4821 today
+start the {ticket} work
+I want you to start {ticket}
+kick off work on {ticket} now
+begin working on W-3310
+let's tackle {ticket} now
+please begin work on {ticket}
+start W-3310, the details are in the ticket [code]
+get going on {ticket}
+assign yourself {ticket} and start
+let's dig into {ticket} [code]
+start {ticket} whenever you're ready
+let's start on {ticket} [code]
+start {ticket} first thing -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+go ahead and start {ticket}
+start work on {ticket} -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+let's start {ticket}, should be quick
+pick up {ticket}
+start on W-4821 -- it's high priority [code]
+can you take {ticket} next -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+time to start {ticket} [code]
+start {ticket} -- customer is waiting -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+let's get moving on {ticket} -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+start W-3310 -- see {url} for context
+begin W-3310 before lunch [code]
+start on {ticket} -- it's high priority
+I want you to start {ticket}
+let's start on W-7742
+start {ticket} whenever you're ready
+start the {ticket} work
+let's tackle {ticket} now
+let's start W-3310, should be quick
+start {ticket} -- customer is waiting
+pick up {ticket}
+begin {ticket}, no need to wait
+what is {ticket}'s current status
+check on {ticket} before standup
+quick status check: {ticket}
+look at {ticket} status only, don't change anything -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+what stage is {ticket} in
+can you check {ticket}'s status
+what's the status of {ticket}
+review the current status of {ticket} [code]
+how's {ticket} coming along
+check W-4821 for me [code]
+can you check where {ticket} stands
+check the status of {ticket}
+give me an update on {ticket}
+look at {ticket} and tell me where it stands
+look into the current state of W-7742 [code]
+check {ticket} progress [code]
+where are we on {ticket}
+check whether W-4821 is done yet
+check on {ticket}
+what's happening with W-4821
+look up W-3310 status
+check {ticket}, is it blocked
+check W-7742 -- any updates
+check on {ticket} real quick
+check W-3310 and report back
+check {ticket} -- has anyone touched it [code]
+status check on W-3310
+what's the latest on {ticket} [code]
+peek at {ticket} and summarize progress [code]
+check in on {ticket} -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+review the current status of W-4821
+check in on {ticket}
+check {ticket} for me
+check the status of W-7742
+check {ticket} -- has anyone touched it -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+what's the status of W-4821
+what's happening with {ticket}
+check whether {ticket} is done yet
+look up W-4821 status [code]
+can you check {ticket}'s status [code]
+close {ticket}, it shipped
+close {ticket} since it's merged
+please close W-3310
+close W-3310 out
+resolve {ticket} and close it [code]
+resolve and close {ticket}
+time to close W-7742
+mark W-3310 resolved and close
+wrap up W-3310 and close it
+go ahead and close {ticket} [code]
+let's close W-4821
+close {ticket} now that it's verified [code]
+mark W-7742 closed
+close out {ticket} for me
+close {ticket}
+close {ticket} -- duplicate of {sha}
+close {ticket} -- confirmed by QA
+close W-3310 as won't fix
+close {ticket} -- verified fixed
+close out {ticket}, it's done
+mark {ticket} as resolved
+close W-4821 -- stale
+close out W-3310, all good
+W-7742 is finished, close it [code]
+please mark {ticket} closed
+close {ticket}, thanks
+we can close W-4821 now [code]
+close {ticket}, no further action needed -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+close W-3310 as done
+close {ticket} -- deployed to prod
+go ahead and close {ticket}
+close {ticket}, no further action needed
+close W-4821 now that it's verified
+close {ticket} -- duplicate of {sha} [code]
+close out W-3310, it's done [code]
+close {ticket} as done
+resolve {ticket} and close it
+we can close {ticket} now
+let's close {ticket} [code]
+close {ticket} -- deployed to prod -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+triage the backlog before the next sprint
+triage the bug reports from this week [code]
+do a first pass triage on new reports
+sort incoming tickets by priority
+look through new tickets and triage -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+triage new issues and assign labels [code]
+categorize the incoming tickets
+help me figure out which tickets are urgent [code]
+triage {ticket} and similar reports [code]
+can you triage what's come in overnight
+sort through new bug reports and prioritize
+can you do a triage pass on the backlog [code]
+triage the new tickets
+triage: which of these are urgent
+go through unlabelled tickets and triage them [code]
+help sort the bug queue
+triage and label the new issues
+prioritize the open tickets [code]
+sort the incoming bugs by severity
+triage the queue and flag anything urgent
+go through the inbox and triage each item
+triage support tickets from today -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+help me triage today's tickets [code]
+triage the support queue
+go triage what came in this morning
+triage {ticket}, {ticket} and the rest of today's batch
+triage {ticket} into the right bucket -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+prioritize and label the new tickets
+triage new tickets by severity
+go through the backlog and triage [code]
+triage the support queue [code]
+triage the bug reports from this week
+help me triage today's tickets
+categorize the incoming tickets [code]
+triage: which of these are urgent [code]
+triage {ticket} into the right bucket [code]
+triage new issues and assign labels
+please make test_rate_limiter pass
+test_auth_flow keeps failing, look into it and fix
+fix test_webhook_retries, it's red on CI [code]
+test_invoice_rounding is flaky, make it pass reliably [code]
+test_rate_limiter is red, please fix
+fix the test_rate_limiter failure
+fix test_rate_limiter -- it's blocking the release
+test_invoice_rounding broke after the last merge, fix it [code]
+go fix test_webhook_retries
+test_checkout_totals is broken, sort it out
+fix test_webhook_retries, it's been red for a day
+test_auth_flow started failing after {sha}, fix it [code]
+fix test_auth_flow -- error: assertion failed: expected 200, got 500
+test_invoice_rounding broke in {path}, fix it
+please fix test_rate_limiter [code]
+test_invoice_rounding fails locally, can you fix that
+go fix the test_login_redirect test failure
+the test_checkout_totals test is broken, can you fix it [code]
+can you patch test_checkout_totals so it passes
+make test_checkout_totals green again
+fix the flaky test_webhook_retries test
+test_invoice_rounding is failing, fix it
+fix test_webhook_retries before we merge {path}
+test_rate_limiter is failing on main, fix it
+fix this failing test: test_auth_flow
+test_invoice_rounding fails with port 3000 already in use, fix it
+fix test_login_redirect so CI goes green
+the test_rate_limiter suite is failing, fix it -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+can you fix the failing test_invoice_rounding test -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+test_invoice_rounding regressed, please fix
+can you get test_invoice_rounding passing again
+test_invoice_rounding started failing after {sha}, fix it
+fix the test_checkout_totals failure
+test_login_redirect broke in {path}, fix it
+fix this failing test: test_checkout_totals
+test_rate_limiter fails locally, can you fix that
+fix test_auth_flow before we merge {path}
+test_checkout_totals fails with port 3000 already in use, fix it
+please fix test_auth_flow
+test_rate_limiter keeps failing, look into it and fix
+the build is broken, investigate why [code]
+why did CI fail on {path} [code]
+why is CI failing on every PR -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+dig into the CI failure logs [code]
+look at the CI logs and figure out the failure
+look into the build failure on {path}
+investigate why the pipeline is failing [code]
+why does CI fail but local tests pass -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+investigate the failing CI job
+look into the CI failure at {url}
+investigate why test_webhook_retries fails only in CI
+investigate why the build failed
+CI has been red since {sha}, investigate
+investigate the failing build on {path} -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+the pipeline broke, can you investigate [code]
+CI failed with port 3000 already in use, investigate
+find out what's wrong with the CI run at {url}
+CI broke after {sha}, look into it
+check why the workflow run failed
+what's causing the CI failure
+find the root cause of the CI failure
+investigate the red build
+CI is red on main, find out why -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+dig into why the last run failed
+figure out why CI is failing
+investigate the CI error: TypeError: cannot read properties of undefined
+figure out what broke CI
+investigate the broken build at {url}
+investigate flaky CI on {path}
+why did the pipeline fail this time
+CI is red on main, find out why
+investigate the failing build on {path} [code]
+look into the CI failure at {url}
+figure out what broke CI [code]
+investigate why test_login_redirect fails only in CI [code]
+dig into the CI failure logs
+look into the build failure on {path}
+review {path} before we merge [code]
+review {pr} and leave comments [code]
+take a look at PR {pr}
+look at PR {pr} and tell me what you think
+can you give PR {pr} a look [code]
+review PR {pr} before it goes out
+review the pull request for {path}
+take a look at {pr} and flag concerns [code]
+can you review {path}'s PR -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+review {pr} -- it's ready for eyes [code]
+please take a look at PR {pr}
+review PR {pr}
+review PR {pr} carefully
+review the {path} pull request
+review {pr} for me
+review PR {pr} -- looking for correctness issues [code]
+can you review {url}
+please review PR {pr} when you get a chance
+review PR {pr}, focus on {path} [code]
+please review {pr}
+take a pass over PR {pr}
+review the changes in PR {pr}
+review this PR: {url}
+give PR {pr} a review
+can you review the diff at {url}
+review PR {pr}, especially {path} -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+review the pull request at {url}
+can you do a code review on {pr} -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+review {pr} for style and correctness
+look over PR {pr}
+take a pass over PR {pr} [code]
+take a look at PR {pr}
+review PR {pr}, focus on {path} -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+can you review {url}
+look over PR {pr}
+review the pull request at {url} -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+review this PR: {url}
+review PR {pr} -- looking for correctness issues
+look at PR {pr} and tell me what you think [code]
+review PR {pr}
+add a feature so users can export their data
+add an option to disable email notifications
+add a health check endpoint
+add a retry queue for failed webhooks [code]
+can you add pagination to {path}
+can you add a search filter to the dashboard
+add support for uploading attachments [code]
+add a new field to the order model
+add a new field {env_var} to the config schema [code]
+add pagination and sorting to the {path} endpoint
+add support for webhooks in inventory-service
+add a feature to bulk-export tickets [code]
+add an audit log for admin actions
+can we add retries to normalize_address [code]
+add a feature: export orders to CSV
+add dark-mode support across the app [code]
+add SSO login support
+add dark mode to the UI
+add support for {env_var} to the config
+add a feature flag for the new checkout flow
+add a new endpoint for refunds [code]
+add multi-currency support to billing
+add rate limiting to checkout-service
+add a settings page for notification preferences
+add a new report type to the dashboard
+add a rate limiter to the API
+add caching to checkout-service
+add a feature toggle for billing-service
+add support for partial refunds
+add throttling to the billing-service API
+can you add pagination to {path}
+add SSO login support -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+add support for uploading attachments
+add a feature toggle for checkout-service [code]
+add support for partial refunds [code]
+refactor {path} to reduce complexity
+refactor away the duplication between {path} and its tests [code]
+refactor {path} to use the new client -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+clean up duplicated logic in {path}
+refactor {path} for readability
+can you clean up validate_token
+refactor the notifications-service internals without changing behaviour
+refactor the checkout flow's error handling -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+refactor calculate_totals to remove duplication
+refactor the auth-service client wrapper -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+refactor validate_token, it's grown too large -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+break normalize_address into smaller functions [code]
+restructure auth-service into smaller modules [code]
+restructure {path} into smaller files [code]
+refactor auth-service for clarity, no behaviour change [code]
+tidy up naming across notifications-service
+restructure calculate_totals to be pure
+clean up the code in {path} [code]
+refactor {path} to match the new style guide
+simplify the logic in {path}
+refactor parse_config to remove the global state
+can we simplify parse_config
+clean up {path} before we add more features
+modernize {path} to use {path}
+refactor {path} -- it's hard to follow
+can you refactor handle_webhook to be more testable [code]
+tidy up {path}
+extract retry_with_backoff into its own module
+refactor billing-service to use dependency injection
+refactor the payment module [code]
+refactor {path} to reduce complexity [code]
+refactor the payment module
+can we simplify retry_with_backoff [code]
+refactor handle_webhook to remove the global state -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+refactor validate_token, it's grown too large
+break normalize_address into smaller functions
+tidy up naming across billing-service
+can you clean up normalize_address [code]
+clean up the code in {path}
+refactor {path} -- it's hard to follow
+update react, dependabot flagged it -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+bump lodash, we're two majors behind
+upgrade lodash to {version} and fix breakage
+can you upgrade requests
+bump requests and run the tests
+can you bump numpy to {version}
+update openssl to {version} before the audit
+bump the requests version to {version} -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+update stale dependencies including rails
+update requests to the latest version
+bump rails to {version} and update the changelog
+bump lodash from the old version to {version} [code]
+please bump lodash to {version}
+upgrade our express dependency [code]
+upgrade numpy and resolve any conflicts
+upgrade rails to the latest patch release -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+bump openssl to {version} across all services
+update all outdated dependencies
+update dependency lodash to {version} [code]
+upgrade django across the monorepo
+update requests, it's flagged as vulnerable
+can we update react for the CVE fix [code]
+upgrade express to patch the vulnerability
+please update rails [code]
+bump django to {version} [code]
+bump openssl to fix the security advisory [code]
+update rails in package.json to {version}
+update the lockfile after bumping requests
+update dependencies, especially react [code]
+update openssl to {version}, check for breaking changes
+bump numpy to {version} and update the changelog
+update dependencies, especially numpy [code]
+update the lockfile after bumping react [code]
+upgrade django to patch the vulnerability
+upgrade openssl across the monorepo
+upgrade react and resolve any conflicts [code]
+please bump express to {version}
+please update react
+can you bump django to {version} -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+write a troubleshooting guide for connection refused on port 5432
+document the breaking changes in rails {version}
+write internal docs on how checkout-service handles retries
+can you document handle_webhook [code]
+write user-facing docs for the export feature
+add a docs page for the rate limiter
+write up how inventory-service works
+can you write docs explaining retry_with_backoff
+write a quickstart guide for inventory-service
+document {path} for new engineers
+write release notes for this version
+document the new API endpoint
+document the retry policy in auth-service [code]
+document the {path} module
+add API docs for the new endpoint -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+add documentation for the config options
+write a runbook for inventory-service
+document the {ticket} feature for users
+document the deployment process for checkout-service [code]
+document calculate_totals's edge cases
+write a changelog entry for this release
+write a migration guide for numpy {version}
+write an architecture doc for billing-service -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+document how to set up auth-service locally
+write docs for the new endpoint -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+write docs on how to configure {env_var} -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+write a README for billing-service
+add docstrings to validate_token [code]
+write docs describing the new webhook payload -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+add comments and docs to parse_config
+write docs on how to configure {env_var} [code]
+write a README for notifications-service
+add comments and docs to calculate_totals
+write user-facing docs for the export feature -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+can you write docs explaining validate_token
+document how to set up checkout-service locally
+document {path} for new engineers
+document the {ticket} feature for users
+write a quickstart guide for notifications-service
+explain this code path in notifications-service
+explain what retry_with_backoff does
+what does this part of {path} do [code]
+what's going on in {path}
+explain how handle_webhook interacts with notifications-service
+can you walk me through {path}
+can you explain the design of billing-service
+explain why TypeError: cannot read properties of undefined happens here
+explain the data model behind inventory-service
+walk me through the {path} file [code]
+walk through parse_config step by step [code]
+help me understand the W-7742 implementation [code]
+can you clarify what validate_token returns
+what is parse_config supposed to do
+can you break down parse_config for me
+explain the control flow in normalize_address -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+explain what this diff changes
+what does {path} do, in plain terms
+explain the logic in {path}
+help me understand validate_token
+can you explain how search-service works [code]
+help me understand what {path} is doing
+what does this function do: validate_token [code]
+explain how auth-service handles retries
+help me understand this stack trace
+explain the algorithm in retry_with_backoff [code]
+explain why validate_token is written this way -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+can you explain this error: panic: nil pointer dereference
+explain the flow in {path}
+explain the purpose of handle_webhook
+explain why workspace protocol mismatch in pnpm-lock.yaml happens here
+can you explain this error: TypeError: cannot read properties of undefined
+explain the control flow in retry_with_backoff
+can you walk me through {path}
+help me understand what {path} is doing
+what is handle_webhook supposed to do
+can you explain how inventory-service works
+explain how calculate_totals interacts with billing-service
+is it safe to deploy on a Friday
+kick off a deploy of auth-service
+can you check if the deploy of billing-service succeeded
+is billing-service deployed yet
+deploy billing-service, then verify with test_auth_flow
+deploy inventory-service behind a feature flag
+who approves the deploy for billing-service
+deploy {path} to staging first
+is the inventory-service deploy pipeline green
+can we deploy auth-service now
+can we cut a release and deploy billing-service
+how do I deploy auth-service to staging
+deploy {path} once CI passes
+can we roll inventory-service back to the previous version
+what's blocking the deploy of {path}
+is there a deploy freeze right now
+can you deploy the latest {path} build
+what's our deploy schedule for notifications-service [code]
+what environment does {path} deploy to
+what's the process to deploy auth-service
+is it safe to deploy {path}
+can you deploy search-service and watch the dashboards
+how do we roll back inventory-service [code]
+how do canary deploys work for notifications-service -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+how do I promote {path} to production
+how do I trigger a deploy for notifications-service [code]
+what's the rollback plan if auth-service deploy fails [code]
+deploy auth-service to production
+what version of auth-service is in production
+how long does a inventory-service deploy usually take
+is the checkout-service deploy pipeline green [code]
+can you deploy search-service and watch the dashboards [code]
+deploy auth-service, then verify with test_login_redirect
+how do we roll back search-service
+is it safe to deploy {path}
+is it safe to deploy on a Friday [code]
+what's the rollback plan if inventory-service deploy fails
+can you check if the deploy of inventory-service succeeded
+deploy search-service to production
+can we roll checkout-service back to the previous version
+how do I bootstrap the local environment
+walk me through setting up checkout-service locally [code]
+how do I get the dev environment running
+set up the project so I can run it locally
+install everything needed to run billing-service
+get inventory-service running in docker-compose
+set up docker for inventory-service
+set up my machine to run the test suite
+set up my editor for this repo
+help me fix my broken dev environment -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+how do I install the dependencies for search-service
+what do I need to run notifications-service locally -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+help me configure inventory-service for local testing
+set up the .env file for billing-service
+walk me through first-time setup
+what environment variables does billing-service need
+help me set up my dev environment [code]
+set up the local toolchain for rails [code]
+how do I seed the local database for billing-service [code]
+help me configure {env_var} for local dev
+how do I get notifications-service running locally
+what's missing from my local search-service setup
+can you help me configure {env_var}
+set up a local database for notifications-service -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+what's the local setup for rails [code]
+set up the local environment for search-service [code]
+help me set up rails locally -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+set up pre-commit hooks for this repo
+can you set up billing-service on this machine -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+configure {env_var} and {env_var} for local development
+help me set up my dev environment -- also here's some more context that runs on for a while so we can check head truncation: detail0 detail1 detail2 detail3 detail4 detail5 detail6 detail7 detail8 detail9 detail10 detail11 detail12 detail13 detail14 detail15 detail16 detail17 detail18 detail19 detail20 detail21 detail22 detail23 detail24 detail25 detail26 detail27 detail28 detail29 detail30 detail31 detail32 detail33 detail34 detail35 detail36 detail37 detail38 detail39
+how do I bootstrap the local environment [code]
+set up a local database for auth-service
+what do I need to run search-service locally [code]
+set up docker for inventory-service [code]
+what's the local setup for numpy
+walk me through setting up billing-service locally
+let's tackle W-7742 now
+pick up W-7742
+start {ticket}, the details are in the ticket
+can you take {ticket} next
+start W-3310 whenever you're ready
+go ahead and start {ticket}
+kick off {ticket} for me
+can we start on the {ticket} ticket
+start {ticket} -- customer is waiting
+close {ticket} -- duplicate of {sha}
+close {ticket} now that it's verified
+{ticket} is finished, close it
+time to close {ticket}
+close {ticket} as won't fix
+resolve and close {ticket}
+close W-4821 since it's merged
+mark {ticket} as resolved
+close out W-3310, it's done
+close W-4821, thanks
+assign yourself W-4821 and start
+start {ticket} -- customer is waiting
+kick off {ticket} for me
+pick {ticket} off the backlog and start
+begin {ticket} before lunch
+I want you to start W-4821
+go ahead and start {ticket}
+start the {ticket} work
+let's start {ticket}, should be quick
+check whether {ticket} is done yet
+review the current status of {ticket}
+can you check where {ticket} stands
+check on W-7742 before standup
+look up {ticket} status
+check the status of {ticket}
+check in on {ticket}
+check on W-7742
+check {ticket} for me
+peek at {ticket} and summarize progress
+check {ticket} for me
+check the status of {ticket}
+check {ticket} -- any updates
+give me an update on {ticket}
+what stage is {ticket} in
+what is {ticket}'s current status
+can you check where {ticket} stands
+check W-7742 and report back
+close {ticket} -- deployed to prod
+close W-4821 -- duplicate of {sha}
+we can close {ticket} now
+close W-4821 out
+close {ticket}, it shipped
+close {ticket} -- stale
+mark W-4821 as resolved
+close {ticket}, no further action needed
+mark {ticket} closed
+resolve and close {ticket}
+please mark {ticket} closed
+wrap up {ticket} and close it
+time to close W-3310
+close {ticket} as won't fix
+close out W-4821 for me
+please close {ticket}
+close {ticket}
+triage {ticket} into the right bucket
+triage support tickets from today
+triage W-7742, W-7742 and the rest of today's batch
+prioritize the open tickets
+go through unlabelled tickets and triage them
+triage {ticket} and similar reports
+fix the test_auth_flow failure
+test_auth_flow broke in {path}, fix it
+test_webhook_retries is broken, sort it out
+fix test_webhook_retries so CI goes green
+the test_invoice_rounding suite is failing, fix it
+test_checkout_totals fails locally, can you fix that
+go fix test_auth_flow
+can you fix the failing test_webhook_retries test
+test_checkout_totals is red, please fix
+the build is broken, investigate why
+CI broke after {sha}, look into it
+CI has been red since {sha}, investigate
+look into the build failure on {path}
+why does CI fail but local tests pass
+add a feature to bulk-export tickets
+add a new endpoint for refunds
+add a new field {env_var} to the config schema
+add dark-mode support across the app
+add throttling to the search-service API
+restructure {path} into smaller files
+refactor retry_with_backoff, it's grown too large
+tidy up {path}
+can you refactor validate_token to be more testable
+extract calculate_totals into its own module
+restructure handle_webhook to be pure
+refactor away the duplication between {path} and its tests
+clean up duplicated logic in {path}
+refactor normalize_address to remove duplication
+refactor {path} for readability
+modernize {path} to use {path}
+can you refactor retry_with_backoff to be more testable
+refactor {path} to match the new style guide
+refactor the checkout-service client wrapper
+extract validate_token into its own module
+refactor notifications-service to use dependency injection
+can you break down retry_with_backoff for me
+help me understand the {ticket} implementation
+what's going on in {path}
+can you walk me through {path}
+explain the purpose of validate_token
+explain the flow in {path}
+explain the logic in {path}
+explain how search-service handles retries
+explain the algorithm in validate_token
+give PR {pr} a review
+look over PR {pr}
+can you review the diff at {url}
+review {pr} and leave comments
+please review PR {pr} when you get a chance
+take a pass over PR {pr}
+review the pull request for {path}
+add a new field {env_var} to the config schema
+add support for webhooks in checkout-service
+can you add pagination to {path}
+update stale dependencies including react
+upgrade express and resolve any conflicts
+upgrade our lodash dependency
+update express in package.json to {version}
+update django, it's flagged as vulnerable
+bump numpy from the old version to {version}
+bump the requests version to {version}
+can we update openssl for the CVE fix
+update the lockfile after bumping express
+please update lodash
+CI failed with TypeError: cannot read properties of undefined, investigate
+why did CI fail on {path}
+find out what's wrong with the CI run at {url}
+investigate why test_checkout_totals fails only in CI
+look into the CI failure at {url}
+investigate flaky CI on {path}
+how do canary deploys work for notifications-service
+how long does a search-service deploy usually take
+what's the process to deploy inventory-service
+can you deploy notifications-service and watch the dashboards
+what environment does {path} deploy to
+deploy inventory-service to production
+what's the rollback plan if search-service deploy fails
+configure {env_var} and {env_var} for local development
+help me set up my dev environment
+set up the local toolchain for requests
+what's missing from my local notifications-service setup
