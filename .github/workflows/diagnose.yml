@@ -1,0 +1,55 @@
+# Manual crash diagnosis (workflow_dispatch only): run a test binary under gdb on Linux and print
+# the native backtrace if it dies. Used to chase crashes that only reproduce on Linux runners.
+name: Diagnose
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Cargo package
+        default: adage-eval
+      test:
+        description: Integration test target
+        default: prop_shell
+      features:
+        description: Cargo features
+        default: slow
+      runs:
+        description: How many times to run it
+        default: "5"
+
+permissions:
+  contents: read
+
+jobs:
+  gdb:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: install gdb
+        run: sudo apt-get install -y -q gdb
+      - name: build the test binary
+        id: build
+        run: |
+          bin=$(cargo test --locked -p "${{ inputs.package }}" --features "${{ inputs.features }}" \
+                --test "${{ inputs.test }}" --no-run --message-format=json \
+                | jq -r 'select(.profile.test == true and .executable != null) | .executable' | tail -1)
+          echo "bin=$bin" >> "$GITHUB_OUTPUT"
+      - name: run under gdb
+        env:
+          ADAGE_PROP_TRACE: ${{ runner.temp }}/prop_last.json
+        run: |
+          for i in $(seq 1 "${{ inputs.runs }}"); do
+            echo "=== run $i"
+            gdb -q -batch -return-child-result \
+              -ex 'set pagination off' -ex 'handle SIGSEGV stop print' -ex run \
+              -ex 'echo \n--- crashing thread ---\n' -ex 'bt 40' \
+              -ex 'echo \n--- all threads (top frames) ---\n' -ex 'thread apply all bt 8' \
+              -ex 'info registers rsp' \
+              --args "${{ steps.build.outputs.bin }}" --test-threads=1 || {
+                echo "=== crashed on run $i; last input:"; head -c 3000 "$ADAGE_PROP_TRACE"; echo; exit 1; }
+          done
