@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Serve the live demo dashboard: http://127.0.0.1:8765  (reads $DEMO_ROOT/state.json), and the
 signal box at /brain, which draws `adage graph --json` for $ADAGE_HOME (default
-$DEMO_ROOT/adage-home) and refreshes it live. $ADAGE_BIN overrides the binary."""
+$DEMO_ROOT/adage-home) and refreshes it live. $ADAGE_BIN overrides the binary. The signal box page
+lives with the binary (crates/adage-cli/assets/brain.html), which also serves it on its own:
+`adage graph --serve`."""
 import functools
 import http.server
 import os
@@ -13,6 +15,7 @@ ROOT = Path(os.environ.get("DEMO_ROOT", "/tmp/adage-demo"))
 PORT = int(os.environ.get("DEMO_PORT", "8765"))
 ADAGE_HOME = os.environ.get("ADAGE_HOME", str(ROOT / "adage-home"))
 ADAGE_BIN = os.environ.get("ADAGE_BIN", str(HERE.parent.parent / "target" / "release" / "adage"))
+BRAIN = HERE.parent.parent / "crates" / "adage-cli" / "assets" / "brain.html"
 PAGE_HEAD = b'<!doctype html>\n<html lang="en"><meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
 
 
@@ -45,7 +48,7 @@ class H(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(body)
             return
         if self.path in ("/brain", "/brain.html"):
-            body = PAGE_HEAD + (HERE / "brain.html").read_bytes()
+            body = PAGE_HEAD + BRAIN.read_bytes()
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()

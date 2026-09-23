@@ -30,6 +30,7 @@ mod proposal;
 mod redact;
 mod reimport;
 mod review;
+mod serve;
 mod share;
 mod tty;
 
@@ -74,6 +75,7 @@ fn run(args: &[String]) -> Result<()> {
         Some("share") => share::share(&args[1..], &paths),
         Some("add") => add::add(&args[1..], &paths),
         Some("review") => review::review(&args[1..], &paths),
+        Some("graph") if args.iter().any(|a| a == "--serve") => serve::serve(&args[1..], &paths),
         Some("graph") => graph::graph(&args[1..], &paths),
         Some("models") => models::run(&args[1..], &paths),
         Some("hooks-config") => {

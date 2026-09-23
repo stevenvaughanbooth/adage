@@ -8,7 +8,8 @@
 //! direct, and how agents responded. Every count comes from the installed tracks and the session
 //! spools under `$ADAGE_HOME`; nothing is estimated. Read-only, so agents may run it.
 //!
-//! The JSON is what `demo/dashboard/brain.html` draws.
+//! The JSON is what the signal box (`crates/adage-cli/assets/brain.html`) draws; `adage graph
+//! --serve` serves both from the binary (see `serve.rs`).
 
 use crate::review::{ceiling_str, discover, preview};
 use adage_core::CommandTable;
@@ -94,6 +95,30 @@ fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
 
 pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
     let max_events: usize = crate::flag(args, "--events").and_then(|n| n.parse().ok()).unwrap_or(80).min(1000);
+    let out = build(paths, max_events)?;
+    if args.iter().any(|a| a == "--json") {
+        println!("{out}");
+    } else {
+        let s = &out["sessions"];
+        println!("adage graph: {} routes, {} sessions ({} treated, {} holdout)", routes_len(&out), s["total"], s["treated"], s["holdout"]);
+        for r in out["routes"].as_array().into_iter().flatten() {
+            let l = &r["live"];
+            println!(
+                "  [{}] {} → {} → {}   directed {} · followed {} · derailed {} │ holdout: would-have {} · unaided {} · not reached {}",
+                r["aspect"].as_str().unwrap_or(""),
+                r["trigger"]["label"].as_str().unwrap_or(""),
+                r["id"].as_str().unwrap_or(""),
+                r["step"]["label"].as_str().unwrap_or(""),
+                l["emitted"], l["followed"], l["derailed"], l["would_have"], l["holdout"]["unaided"], l["holdout"]["not_reached"]
+            );
+        }
+        println!("Use --json for the full graph (routes, observed commands, recent events).");
+    }
+    Ok(())
+}
+
+/// The graph as JSON, with at most `max_events` recent events.
+pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
     let table = CommandTable::load();
     let installed = discover(&paths.tracks())?;
     let index = Index::load(&paths.index());
@@ -287,24 +312,7 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
         "observed": observed,
         "events": events,
     });
-    if args.iter().any(|a| a == "--json") {
-        println!("{out}");
-    } else {
-        println!("adage graph: {} routes, {} sessions ({} treated, {} holdout)", routes_len(&out), spools.len(), treated, holdout);
-        for r in out["routes"].as_array().into_iter().flatten() {
-            let l = &r["live"];
-            println!(
-                "  [{}] {} → {} → {}   directed {} · followed {} · derailed {} │ holdout: would-have {} · unaided {} · not reached {}",
-                r["aspect"].as_str().unwrap_or(""),
-                r["trigger"]["label"].as_str().unwrap_or(""),
-                r["id"].as_str().unwrap_or(""),
-                r["step"]["label"].as_str().unwrap_or(""),
-                l["emitted"], l["followed"], l["derailed"], l["would_have"], l["holdout"]["unaided"], l["holdout"]["not_reached"]
-            );
-        }
-        println!("Use --json for the full graph (routes, observed commands, recent events).");
-    }
-    Ok(())
+    Ok(out)
 }
 
 /// Whether a route's command key covers an observed key: the route's tokens are a prefix of the
