@@ -29,6 +29,7 @@ thread_local! {
     static PARSER: std::cell::RefCell<Parser> = std::cell::RefCell::new({
         let mut p = Parser::new();
         p.set_language(&tree_sitter_bash::LANGUAGE.into()).expect("load tree-sitter-bash");
+        p.set_timeout_micros(PARSE_TIMEOUT_MICROS);
         p
     });
 }
@@ -66,22 +67,78 @@ fn too_deep(s: &str) -> bool {
     false
 }
 
+/// Parsing gives up after this long, and the command is recorded as unknown. tree-sitter's error
+/// recovery is quadratic on some malformed input: 16 KB of `a|a|a|…` or `)))…` took 0.6–0.7 s to
+/// parse in a release build (the hook's budget is 25 ms). Real commands, heredocs included, parse
+/// in well under a millisecond per kilobyte.
+pub const PARSE_TIMEOUT_MICROS: u64 = 50_000;
+
+/// Maximum depth of the syntax-tree walk (statements within statements, including `bash -c`
+/// scripts). `too_deep` bounds bracket nesting before parsing; this bounds everything else a
+/// grammar can nest (`if` in `if`, `!` in `!`, …) so no input can exhaust the stack.
+pub const MAX_DEPTH: usize = 96;
+
+/// More pipe operators than this (outside quotes) and a command is treated as unknown: a long run
+/// of `a|a|…|` sends tree-sitter's error recovery quadratic in a phase its timeout does not cover
+/// (16 KB took 0.6 s in a release build). No real pipeline has this many stages.
+pub const MAX_PIPES: usize = 128;
+
+fn too_many_pipes(s: &str) -> bool {
+    let (mut pipes, mut quote, mut escaped, mut prev) = (0usize, None::<char>, false, ' ');
+    for c in s.chars() {
+        if escaped {
+            escaped = false;
+        } else if c == '\\' && quote != Some('\'') {
+            escaped = true;
+        } else if let Some(q) = quote {
+            if c == q {
+                quote = None;
+            }
+        } else if c == '\'' || c == '"' {
+            quote = Some(c);
+        } else if c == '|' && prev != '|' {
+            pipes += 1;
+            if pipes > MAX_PIPES {
+                return true;
+            }
+        }
+        prev = c;
+    }
+    false
+}
+
 pub fn normalize_shell(command: &str, cwd: &str, table: &CommandTable) -> Vec<Normalized> {
+    normalize_at(command, cwd, table, 0)
+}
+
+fn unknown(note: &str) -> Normalized {
+    Normalized {
+        action: CanonicalAction::Unknown { raw: "oversized-or-deeply-nested-command".into() },
+        effect: Effect::Environment,
+        mutating: false,
+        confidence: 0.0,
+        note: note.into(),
+    }
+}
+
+fn normalize_at(command: &str, cwd: &str, table: &CommandTable, depth: usize) -> Vec<Normalized> {
     let command = command.trim();
     if command.is_empty() {
         return vec![];
     }
-    if command.len() > MAX_COMMAND || too_deep(command) {
-        return vec![Normalized {
-            action: CanonicalAction::Unknown { raw: "oversized-or-deeply-nested-command".into() },
-            effect: Effect::Environment,
-            mutating: false,
-            confidence: 0.0,
-            note: "not normalised: exceeds size or nesting bounds".into(),
-        }];
+    if command.len() > MAX_COMMAND || too_deep(command) || too_many_pipes(command) || depth > MAX_DEPTH {
+        return vec![unknown("not normalised: exceeds size or nesting bounds")];
     }
 
-    let tree = PARSER.with(|p| p.borrow_mut().parse(command, None));
+    let tree = PARSER.with(|p| {
+        let mut p = p.borrow_mut();
+        let t = p.parse(command, None);
+        if t.is_none() {
+            // A timed-out parse would otherwise resume on the next, unrelated command.
+            p.reset();
+        }
+        t
+    });
     let tree = match tree {
         Some(t) => t,
         None => {
@@ -90,13 +147,13 @@ pub fn normalize_shell(command: &str, cwd: &str, table: &CommandTable) -> Vec<No
                 effect: Effect::Environment,
                 mutating: false,
                 confidence: 0.0,
-                note: "tree-sitter failed to produce a tree".to_string(),
+                note: "tree-sitter produced no tree (parse timed out or failed)".to_string(),
             }]
         }
     };
     let root = tree.root_node();
 
-    let ctx = Ctx { src: command, table };
+    let ctx = Ctx { src: command, table, depth: std::cell::Cell::new(depth) };
     let mut cwd = cwd.to_string();
     let mut out = Vec::new();
     let mut cursor = root.walk();
@@ -109,6 +166,28 @@ pub fn normalize_shell(command: &str, cwd: &str, table: &CommandTable) -> Vec<No
 struct Ctx<'a> {
     src: &'a str,
     table: &'a CommandTable,
+    /// Current depth of the recursive walk (see [`MAX_DEPTH`]).
+    depth: std::cell::Cell<usize>,
+}
+
+/// Holds one level of walk depth; released on drop.
+struct Level<'a>(&'a std::cell::Cell<usize>);
+
+impl Drop for Level<'_> {
+    fn drop(&mut self) {
+        self.0.set(self.0.get() - 1);
+    }
+}
+
+impl Ctx<'_> {
+    /// Enter one level of the walk, or `None` past [`MAX_DEPTH`].
+    fn enter(&self) -> Option<Level<'_>> {
+        if self.depth.get() >= MAX_DEPTH {
+            return None;
+        }
+        self.depth.set(self.depth.get() + 1);
+        Some(Level(&self.depth))
+    }
 }
 
 fn text<'a>(node: Node, src: &'a str) -> &'a str {
@@ -203,6 +282,7 @@ fn command_argv(node: Node, src: &str) -> Vec<String> {
 fn extract_substitutions(node: Node, cwd: &str, ctx: &Ctx) -> Vec<Normalized> {
     let mut out = Vec::new();
     fn walk(node: Node, cwd: &str, ctx: &Ctx, out: &mut Vec<Normalized>) {
+        let Some(_level) = ctx.enter() else { return };
         let mut c = node.walk();
         for ch in node.children(&mut c) {
             if ch.kind() == "command_substitution" || ch.kind() == "process_substitution" {
@@ -373,14 +453,17 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
 
 /// The head command name of a pipeline stage, without a full walk — used only to decide whether
 /// a trailing stage is a pure filter.
-fn stage_head_name(node: Node, src: &str) -> Option<String> {
+fn stage_head_name(node: Node, src: &str, depth: usize) -> Option<String> {
+    if depth > MAX_DEPTH {
+        return None;
+    }
     match node.kind() {
         "command" => {
             let argv = command_argv(node, src);
             argv.first().map(|a| basename(a))
         }
-        "redirected_statement" => node.child_by_field_name("body").and_then(|b| stage_head_name(b, src)),
-        "negated_command" => node.child(1).and_then(|b| stage_head_name(b, src)),
+        "redirected_statement" => node.child_by_field_name("body").and_then(|b| stage_head_name(b, src, depth + 1)),
+        "negated_command" => node.child(1).and_then(|b| stage_head_name(b, src, depth + 1)),
         _ => None,
     }
 }
@@ -388,6 +471,9 @@ fn stage_head_name(node: Node, src: &str) -> Option<String> {
 /// Walk one statement-shaped node, threading `cwd` through what follows in the same sequence.
 fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
     let src = ctx.src;
+    let Some(_level) = ctx.enter() else {
+        return vec![unknown("not normalised: statements nested too deeply")];
+    };
     match node.kind() {
         "ERROR" => vec![Normalized {
             action: CanonicalAction::Unknown { raw: text(node, src).to_string() },
@@ -399,14 +485,25 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
 
         "list" => {
             // binary &&/|| node: children are [left, operator, right], left may itself be a
-            // nested `list` for chains of 3+.
-            let mut out = Vec::new();
-            let mut c = node.walk();
-            for ch in node.children(&mut c) {
-                match ch.kind() {
-                    "&&" | "||" => continue,
-                    _ => out.extend(walk_statement(ch, cwd, ctx)),
+            // nested `list` for chains of 3+. Flatten the chain iteratively: a long `a && b && …`
+            // is as deep as it is long, and recursing on it exhausted the stack.
+            let mut operands: Vec<Node> = Vec::new();
+            let mut cur = node;
+            loop {
+                let mut c = cur.walk();
+                let kids: Vec<Node> = cur.children(&mut c).filter(|ch| !matches!(ch.kind(), "&&" | "||")).collect();
+                let Some((first, rest)) = kids.split_first() else { break };
+                operands.extend(rest.iter().rev().copied());
+                if first.kind() == "list" {
+                    cur = *first;
+                } else {
+                    operands.push(*first);
+                    break;
                 }
+            }
+            let mut out = Vec::new();
+            for ch in operands.into_iter().rev() {
+                out.extend(walk_statement(ch, cwd, ctx));
             }
             out
         }
@@ -421,7 +518,7 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
             }
             let tail_pure = stages[1..]
                 .iter()
-                .all(|s| stage_head_name(*s, src).map(|n| PURE_FILTERS.contains(&n.as_str())).unwrap_or(false));
+                .all(|s| stage_head_name(*s, src, 0).map(|n| PURE_FILTERS.contains(&n.as_str())).unwrap_or(false));
             let mut head_actions = walk_statement(stages[0], cwd, ctx);
             if !tail_pure {
                 for a in head_actions.iter_mut() {
@@ -600,7 +697,7 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
             // inside it does not leak to the caller (subshell-like scoping).
             if matches!(cmd.as_str(), "bash" | "sh" | "zsh") {
                 if let Some(script) = extract_dash_c(&argv[1..]) {
-                    subs.extend(normalize_shell(&script, cwd, ctx.table));
+                    subs.extend(normalize_at(&script, cwd, ctx.table, ctx.depth.get()));
                     return subs;
                 }
             }

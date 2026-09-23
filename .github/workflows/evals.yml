@@ -1,0 +1,78 @@
+# Offline evals (docs/evals.md): regression gates on the committed datasets, property tests at the
+# slow case counts, replay fidelity, per-dataset reports, and the live runner's dry-run smoke
+# test. Nothing here runs an agent or spends tokens. The fast gates also run in ci.yml, as part
+# of `cargo test --workspace`.
+name: Evals
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  evals:
+    name: evals (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x64, os: ubuntu-24.04 }
+          - { name: macos-arm64, os: macos-14 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: gates
+        run: cargo test --locked -p adage-eval --test gates
+
+      - name: property tests (slow case counts)
+        run: cargo test --locked -p adage-eval --features slow
+
+      - name: regression tests for eval findings
+        run: cargo test --locked -p adage-core --test deep && cargo test --locked -p adage-tracks --test hostile && cargo test --locked -p adage-learn --test hostile
+
+      - name: reports and replay fidelity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build --locked -p adage-cli
+          adage=target/debug/adage
+          mkdir -p eval-reports
+          $adage eval evals/datasets/demo-haiku45 --split round2 --json > eval-reports/demo-round2.json
+          $adage eval evals/datasets/demo-haiku45 --split round1 --json > eval-reports/demo-round1.json
+          $adage eval evals/datasets/synthetic --json > eval-reports/synthetic.json
+          $adage eval evals/datasets/adversarial --json > eval-reports/adversarial.json
+          $adage eval fidelity evals/datasets/demo-haiku45 --round round2 --json > eval-reports/fidelity-round2.json
+          for d in demo-haiku45:round2 synthetic adversarial; do
+            name=${d%%:*}; split=${d#*:}; [ "$split" = "$d" ] && split=""
+            $adage eval evals/datasets/$name ${split:+--split $split}
+          done
+          # Same dataset, same bytes.
+          $adage eval evals/datasets/demo-haiku45 --split round2 --json | cmp - eval-reports/demo-round2.json
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: eval-reports-${{ matrix.name }}
+          path: eval-reports/
+
+      - name: live runner dry run (no agents)
+        run: python3 -m unittest evals/live/test_runner.py

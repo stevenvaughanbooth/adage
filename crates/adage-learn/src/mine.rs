@@ -416,14 +416,17 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             }
             if p.sessions.insert(s.id.clone()) {
                 *p.instead.entry(shell_join(argv(b).unwrap())).or_default() += 1;
-                if let Some(sig) = a.call.output.lines().rev().find(|l| {
-                    let l = l.to_ascii_lowercase();
-                    l.contains("error")
-                        || l.contains("no module named")
-                        || l.contains("not found")
-                        || l.contains("not set")
+                // Only a line that can be rendered safely may become the signature: tool output is
+                // untrusted, and one unrenderable line must not cost the route (or the learn).
+                if let Some(sig) = a.call.output.lines().rev().map(|l| signature_of(l.trim())).find(|l| {
+                    let lc = l.to_ascii_lowercase();
+                    (lc.contains("error")
+                        || lc.contains("no module named")
+                        || lc.contains("not found")
+                        || lc.contains("not set"))
+                        && adage_tracks::io::safe_text(l)
                 }) {
-                    *p.signatures.entry(signature_of(sig.trim())).or_default() += 1;
+                    *p.signatures.entry(sig).or_default() += 1;
                 }
             }
         }

@@ -252,6 +252,31 @@ pub fn plan(
             let proposals = adage_tracks::proposals::propose(&prev_proposals, &pinned, &today);
             let mut routes = adage_tracks::review::reconcile(prev.as_ref(), &reviews, routes);
             routes.sort_by(|a, b| a.id.cmp(&b.id));
+            // Mined routes are built from untrusted session content. One that fails validation
+            // (a quoted argument, an unrenderable signature) is dropped on its own; it must not
+            // stop the rest of the repository from being learned.
+            routes.retain(|r| {
+                let probe = Track {
+                    manifest: Manifest {
+                        track: TrackInfo {
+                            name: name.clone(),
+                            version: "0.0.0".into(),
+                            description: String::new(),
+                            provenance: String::new(),
+                        },
+                        scope: Scope { repo: repo.clone() },
+                        gauge: Gauge::default(),
+                    },
+                    routes: vec![r.clone()],
+                };
+                match io::validate(&probe) {
+                    Ok(()) => true,
+                    Err(e) => {
+                        eprintln!("adage: not learning a route: {e:#}");
+                        false
+                    }
+                }
+            });
             let (version, change) = bump(prev.as_ref(), &routes);
             let track = Track {
                 manifest: Manifest {

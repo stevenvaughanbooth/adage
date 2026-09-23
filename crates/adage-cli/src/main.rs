@@ -18,6 +18,7 @@
 //! adage review [--json]              routes awaiting a person's decision, with evidence and directive text
 //! adage review <approve|reject|demote|promote|pin|dismiss> <track> <route> [--by <name>]
 //! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
+//! adage eval <dataset> [--split ..] [--json]  offline replay eval of what Adage would have said
 //! adage version
 //! ```
 //! Environment: `ADAGE_HOME` (data directory), `ADAGE_ARM` (`treated`|`holdout`, overrides
@@ -85,6 +86,7 @@ fn run(args: &[String]) -> Result<()> {
         Some("review") => review::review(&args[1..], &paths),
         Some("graph") if args.iter().any(|a| a == "--serve") => serve::serve(&args[1..], &paths),
         Some("graph") => graph::graph(&args[1..], &paths),
+        Some("eval") => adage_eval::cli::run(&args[1..]),
         Some("models") => models::run(&args[1..], &paths),
         Some("survey") => survey::survey(&args[1..], &paths),
         Some("init") => init::init(&args[1..], &paths),
