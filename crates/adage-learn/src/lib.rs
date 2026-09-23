@@ -1,5 +1,6 @@
 //! `adage learn`: import sessions, mine routes, assemble versioned tracks, compile the index.
 
+pub mod codex;
 pub mod import;
 pub mod intent;
 pub mod mine;
@@ -102,10 +103,15 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     let mut sessions: Vec<Session> = Vec::new();
     for p in &inputs.transcripts {
         report.sessions_read += 1;
-        // Claude Code transcripts, or OpenCode `opencode export` files (recognised by content).
-        let parsed = match opencode::read_export(p) {
-            Some(v) => opencode::parse_export(&v, &table, inputs.repo_override.as_deref()),
-            None => import::parse_transcript(p, &table, inputs.repo_override.as_deref()),
+        // Claude Code transcripts, OpenCode `opencode export` files, or Codex rollouts (recognised
+        // by content).
+        let parsed = if let Some(lines) = codex::read_rollout(p) {
+            codex::parse_rollout(&lines, &table, inputs.repo_override.as_deref())
+        } else {
+            match opencode::read_export(p) {
+                Some(v) => opencode::parse_export(&v, &table, inputs.repo_override.as_deref()),
+                None => import::parse_transcript(p, &table, inputs.repo_override.as_deref()),
+            }
         };
         if let Some(mut s) = parsed {
             if s.steered {

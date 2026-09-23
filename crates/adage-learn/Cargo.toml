@@ -19,3 +19,4 @@ glob.workspace = true
 
 [dev-dependencies]
 tempfile = "3"
+adage-sim = { path = "../adage-sim" }
