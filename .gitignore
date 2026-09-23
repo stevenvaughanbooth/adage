@@ -13,3 +13,4 @@ spikes/**/.cache/
 spikes/**/local/
 spikes/**/cfg/
 spikes/S6-ssh-signing/keys/
+.claude/

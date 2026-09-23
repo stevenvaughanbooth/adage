@@ -137,7 +137,10 @@ def create_sandbox(out_dir):
         }
     }
 
-    (out_path / ".tracker" / "items.json").write_text(json.dumps(items, indent=2))
+    # The tracker is an external service in real life; locally its cache is opaque, so the
+    # realistic way in is the CLI (scripts/wi-lookup), not reading a JSON file.
+    import base64, zlib
+    (out_path / ".tracker" / "cache.bin").write_bytes(base64.b64encode(zlib.compress(json.dumps(items).encode())))
 
     # Schema files - invoice (with bugs)
     invoice_schema = {
@@ -342,11 +345,15 @@ def create_sandbox(out_dir):
     # scripts/wi-lookup
     (out_path / "scripts" / "wi-lookup").write_text(dedent("""\
         #!/usr/bin/env python3
+        # Look up a work item in the internal tracker.
+        import base64
         import json
         import sys
+        import zlib
+        from pathlib import Path
 
-        with open(".tracker/items.json") as f:
-            items = json.load(f)
+        _cache = Path(__file__).resolve().parent.parent / ".tracker" / "cache.bin"
+        items = json.loads(zlib.decompress(base64.b64decode(_cache.read_bytes())))
 
         if len(sys.argv) < 2:
             print("Usage: wi-lookup <ID> [--json]")
