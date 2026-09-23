@@ -1,37 +1,43 @@
 # Adage — Architecture
 
-**Status:** Architecture phase, draft 2 — reviewed; see [§15](#15-review-findings-and-resolutions), which overrides earlier sections where they conflict · **Date:** 2026-09-22 · **Implements:** *Adage — Design Spec*, draft 6
+**Status:** Draft 3, as built. It describes `main` at `cf5cf16`, not a plan · **Date:** 2026-09-23 ·
+**Implements:** *Adage — Design Spec*, draft 6 · **Plan:** *Adage — Implementation Plan*, draft 3
 
-> This document answers *how* Adage is built. It does not revisit *what* Adage does — every
-> behaviour here traces to a section of the design spec, cited as **[D§n]**. Architecture decisions
-> are numbered **A1…** and collected in [§13](#13-architecture-decisions).
+> This document answers *how* Adage is built today. Draft 2 was written before any code, and the
+> spikes (`spikes/S1`–`S8`) overturned several of its decisions, starting with the daemon. Draft 3
+> keeps draft 2's section numbers, because code comments cite them (`§4.7`, `§4.9`, `§4.11`,
+> `§6.3`, `§15`, `A12`, `F9`). Design behaviour is cited as **[D§n]**, and plan sections as
+> **[P§n]**. Mechanisms cite the file that implements them. Anything designed but not built is
+> marked **not built** and collected in [§14](#14-designed-but-not-built). What changed since
+> draft 2, and why, is in [§16](#16-changes-from-draft-2).
 
 ---
 
 ## 1. Drivers
 
-### 1.1 Quality attributes, in priority order
+### 1.1 Quality attributes, and how the build meets them
 
-| # | Attribute | Requirement | Source |
+| # | Attribute | Requirement | As built |
 | --- | --- | --- | --- |
-| Q1 | **Fail open** | Any failure yields no directive and no delay; the hook always exits cleanly | D§3.7, D§13.3 |
-| Q2 | **Hot-path latency** | No match ≤10 ms p95; structured match ≤15 ms; prompt with intent ≤25 ms — end to end, including process spawn | D§13.2, G6 |
-| Q3 | **Determinism** | Same situation + same index generation → same directive, byte for byte | D§3.2 |
-| Q4 | **Nothing executes** | No component runs a command, reads a repo file for the agent, or edits anything on the agent's behalf | D§3.1 |
-| Q5 | **Local first** | No network listener by default; raw content never leaves the machine; sharing is explicit | D§3.8, D§10.8 |
-| Q6 | **Trust** | Every track is verified before it can influence an agent; untrusted text never reaches a directive | D§15 |
-| Q7 | **Portability** | Claude Code first; OpenCode and Codex through the same core, differing only at the edges | O8, O14 |
-| Q8 | **Low footprint** | Nothing running when no agent is running; bounded memory and CPU when one is | G6 |
-| Q9 | **Evolvability** | Harness formats, models, and track schemas change; each is versioned and replaceable independently | D§11, D§13 |
+| Q1 | **Fail open** | Any failure yields no directive and no delay; the hook always exits cleanly | Every error path in `adage hook` returns nothing and exits 0. Panics are caught, and their messages silenced (`crates/adage-cli/src/main.rs`, `hook.rs`). Gaps: a payload over 8 MiB is not drained, and nothing records fail-open incidents yet ([§14](#14-designed-but-not-built)) |
+| Q2 | **Hot-path latency** | p95 ≤ 10 ms with no match, ≤ 15 ms for a structured match, ≤ 25 ms with prompt intent, end to end, spawn included [D§13.2] | Measured at 1.76 / 3.18 / 6.39 ms p95 ([§9](#9-performance-budget)) |
+| Q3 | **Determinism** | Same situation and same index generation give the same directive, byte for byte | The runtime is a pure function of index, state and event (`crates/adage-runtime/src/lib.rs`). The index is content-addressed. Learning reproduces the live demo index byte for byte ([§11](#11-evals-and-the-harness-simulator)) |
+| Q4 | **Nothing executes** | No component runs a command, reads a repo file for the agent, or edits for it | The runtime has no process spawns. It checks only that bound repository paths exist. Directives are text |
+| Q5 | **Local first** | No network listener by default; raw content never leaves the machine; sharing is explicit | No listener unless `adage graph --serve` is run, and then only on 127.0.0.1. No telemetry. Spools hold decisions and canonical keys, not prompt text |
+| Q6 | **Trust** | Every track is verified before it can influence an agent; untrusted text never reaches a directive | Tracks are validated on every read. Imports need a signature from a trusted signer. Directive text comes only from fixed templates ([§8](#8-security-architecture)) |
+| Q7 | **Portability** | Claude Code first; OpenCode and Codex through the same core | Three adapters over one event type ([§4.11](#411-harness-abstraction-a9)). Claude Code runs live; OpenCode and Codex are verified only in simulation. Runs on macOS, Linux and Windows |
+| Q8 | **Low footprint** | Nothing running when no agent is running | Nothing resident at all: each hook is a short-lived process |
+| Q9 | **Evolvability** | Harness formats, models and track schemas change independently | Command grammar as data (`crates/adage-core/data/commands.toml`), one adapter per harness, the model pinned by digest, tracks versioned by semver |
 
 ### 1.2 Constraints
 
-- Runs on developer laptops (macOS, Linux) and CI runners. No servers in v1.
-- Must install through each harness's supported mechanism: Claude Code plugin, OpenCode npm
-  plugin, Codex hook installer (O14).
-- Must not require a language runtime the developer doesn't already have.
-- Harness hook payloads are the documented interface; transcript formats are unstable and are only
-  used for backfill.
+- Runs on developer machines (macOS, Linux, Windows) and CI runners. There are no servers.
+- Installs through each harness's own mechanism: a Claude Code plugin, an OpenCode plugin file,
+  and Codex `hooks.json` [O14].
+- Needs no language runtime on the hook path. Node is used only by the npm launcher (not on the
+  hook path) and by OpenCode, which already runs on it.
+- Harness hook payloads are the live interface. On-disk histories are read only by `adage learn`
+  and `adage survey`. Their formats are undocumented for OpenCode and Codex (docs/harnesses.md).
 
 ---
 
@@ -39,19 +45,23 @@
 
 ```mermaid
 flowchart LR
-  Dev[Developer] -->|prompts| H[Harness<br/>Claude Code · Codex · OpenCode]
-  H -->|hook events| A[Adage]
-  A -->|directives| H
+  Dev[Developer] -->|prompts| H[Harness<br/>Claude Code · OpenCode · Codex]
+  H -->|hook payloads| A[adage hook<br/>per event]
+  A -->|directive text| H
   H -->|tool calls, under its own permissions| R[(Repository<br/>and tools)]
-  A -.->|reads history, backfill| T[(Harness transcripts)]
-  A -.->|reads commits, CI status| G[(git / CI)]
-  A -.->|share, pull requests| D[(Team depot<br/>plugin marketplace)]
-  P[Proving ground] -->|headless agent runs| S[(Sandboxes)]
-  P --> A
+  T[(Harness history<br/>transcripts · exports · rollouts)] -.->|adage learn / survey| L[adage CLI]
+  L -->|tracks, index| D[(ADAGE_HOME)]
+  A -->|state, spools| D
+  D -->|index| A
+  L -.->|adage share: a signed track directory| P[Teammate]
+  P -.->|adage add| L
+  Dev -->|review, share, add| L
 ```
 
-Adage has exactly two kinds of output: **directive text** returned to the harness, and **files** — its
-own data, tracks, and reports. It has no side effects on the repository, and never acts as the agent.
+Adage has two kinds of output: **directive text** returned to the harness, and **files** in its
+data directory (`ADAGE_HOME`) and in shared track directories. It has no side effects on the
+repository. Sharing is a directory copied by hand. Team depots and pull requests are not built
+([§4.13](#413-team-mode-a11)).
 
 ---
 
@@ -59,685 +69,941 @@ own data, tracks, and reports. It has no side effects on the repository, and nev
 
 ```mermaid
 flowchart TB
-  subgraph Edge["Edge — per harness"]
-    CCP[Claude Code plugin<br/>hooks.json]
-    OCP[OpenCode plugin<br/>npm, in-process]
-    CXI[Codex hook installer]
-    HC["adage hook<br/>(client mode)"]
+  subgraph Harness["Harness edge"]
+    CC["Claude Code plugin<br/>plugin/claude-code/hooks/hooks.json<br/>exec form"]
+    OC["OpenCode plugin<br/>plugin/opencode/adage.js"]
+    CX["Codex hooks.json<br/>adage install codex"]
   end
-  subgraph Core["adaged — resident, socket-activated"]
-    API[Socket API]
-    TR[Harness translators]
-    RT[Runtime<br/>match · decide · render]
-    SS[Session state]
-    EM[Embedding engine]
-    OB[Observation writer]
-    FE[Fast evidence<br/>CUSUM, demotion]
-    IX[(Index snapshot<br/>mmap)]
+  subgraph Bin["One binary: adage (crates/adage-cli)"]
+    HOOK["adage hook<br/>hook.rs"]
+    AD["Adapters<br/>harness/claude.rs · opencode.rs · codex.rs"]
+    RT["adage-runtime<br/>decide · render"]
+    ST["adage-store<br/>two-slot state · spools"]
+    LRN["adage-learn<br/>importers · miners · intent routes"]
+    INT["adage-intent<br/>static embedder · kNN + Louvain · purity"]
+    CORE["adage-core<br/>normaliser · effects · spans · repo key"]
+    TRK["adage-tracks<br/>model · validate · digest · index · review"]
+    SGN["adage-sign<br/>sshsig · allowed_signers"]
+    CMD["CLI: init · survey · learn · review · share · add<br/>status · report · graph · doctor · install · models"]
+    EVL["adage eval<br/>adage-eval"]
   end
-  subgraph Batch["adage learn — scheduled, niced subprocess"]
-    IMP[Importers]
-    NOR[Normaliser]
-    MIN[Miners<br/>routes · intents · failures<br/>dead ends · obligations]
-    CAL[Calibration + gates]
-    ASM[Track assembler]
-    CMP[Index compiler]
-  end
-  subgraph Tools["CLI tools"]
-    TK[Track toolchain<br/>validate · sign · verify · lock]
-    RP[Reports<br/>survey · status · digest]
-    PG[Proving ground<br/>orchestrator]
-    SH[Share<br/>redaction · PRs]
-  end
-  DB[(adage.db<br/>SQLite WAL)]
+  IDX[("index.json")]
+  SES[("sessions/<br/>*.state · *.spool")]
+  TRS[("tracks/<br/>learned · @imported")]
+  MOD[("models/<br/>potion-base-8m")]
+  HIS[("Harness history")]
 
-  CCP --> HC
-  CXI --> HC
-  HC --> API
-  OCP --> API
-  API --> TR --> RT
-  RT --> SS
-  RT --> EM
-  RT --> IX
-  RT --> OB --> DB
-  OB --> FE
-  DB --> IMP
-  IMP --> NOR --> MIN --> CAL --> ASM --> CMP --> IX
-  TK --> ASM
-  PG --> DB
-  RP --> DB
-  SH --> TK
+  CC --> HOOK
+  CX --> HOOK
+  OC -->|spawn, no shell| HOOK
+  HOOK --> AD --> RT
+  HOOK --> ST --> SES
+  RT --> IDX
+  RT -.->|prompt, intent routes only| INT -.-> MOD
+  RT --> CORE
+  HIS --> LRN
+  LRN --> CORE
+  LRN --> INT
+  LRN --> TRK --> TRS
+  TRK --> IDX
+  CMD --> TRK
+  CMD --> SGN
+  CMD --> SES
+  EVL --> LRN
+  EVL --> RT
 ```
 
-| Component | Responsibility | Process |
+| Crate | Responsibility | Key files |
 | --- | --- | --- |
-| **Edge adapters** | Register hooks in each harness; carry raw events to the core; render nothing themselves | Harness-owned |
-| **`adage hook`** | Client mode of the single binary: read stdin, T0 reject, forward over the socket, print the response, exit 0 | Short-lived, per hook call |
-| **`adaged`** | The runtime: session state, matching, decisions, rendering, observation logging, fast demotion | Resident while agents run |
-| **`adage learn`** | Import, normalise, mine, calibrate, assemble tracks, compile the index | Scheduled subprocess, niced |
-| **Track toolchain** | Parse, validate, sign, verify, lock, resolve interlocking | CLI and library |
-| **Reports** | Survey, status, weekly digest | CLI |
-| **Proving ground** | Reconstruct tasks, run agents in sandboxes, score, emit evidence | CLI orchestrator |
-| **Share** | Redaction review, export, team pull requests | CLI |
+| `adage-core` | Canonical actions, the shell normaliser (tree-sitter-bash and a command table as data), effect classes, typed spans, repository identity | `src/shell.rs`, `data/commands.toml`, `src/tools.rs`, `src/spans.rs`, `src/repo.rs` |
+| `adage-store` | Per-session two-slot state files and append-only spools; the data-directory layout | `src/state.rs`, `src/spool.rs`, `src/lib.rs` |
+| `adage-tracks` | The track and route model, validation (tracks are untrusted input), the canonical digest, the compiled index, review decisions and proposals | `src/model.rs`, `src/io.rs`, `src/index.rs`, `src/review.rs`, `src/proposals.rs` |
+| `adage-sign` | Native sshsig signing (ssh-agent first, key file second) and `allowed_signers` verification | `src/lib.rs`, `src/allowed_signers.rs` |
+| `adage-intent` | Prompt normalisation, the static embedding model, exact kNN + deterministic Louvain, the behavioural split/merge | `src/model.rs`, `src/cluster.rs`, `src/purity.rs` |
+| `adage-learn` | Importers (Claude Code, OpenCode export, Codex rollouts), miners, intent routes, versioning | `src/lib.rs`, `src/mine.rs`, `src/intent.rs`, `src/import.rs`, `src/opencode.rs`, `src/codex.rs` |
+| `adage-runtime` | Hook-time decisions, fixed-template rendering, holdout assignment, follow/derail judgement | `src/lib.rs`, `src/render.rs` |
+| `adage-cli` | The `adage` binary: the hook client, harness adapters, every command | `src/main.rs`, `src/hook.rs`, `src/harness/` |
+| `adage-eval` | Offline replay eval, datasets, the safety oracle, regression gates, property tests | `src/`, `tests/gates.rs`, `tests/prop_*.rs` |
+| `adage-sim` | The harness simulator: one scenario rendered in each harness's native history and hook formats | `src/`, `sim/fixtures/` |
 
-All Adage-owned components are **one Rust binary** with subcommands (A2). The only other artefacts
-are the per-harness adapter files.
+Everything Adage-owned is **one Rust binary** (A2). The only other artefacts are the harness
+edge files: the Claude Code plugin with its install shim, the OpenCode bridge plugin, and the npm
+launcher ([§7](#7-deployment-and-distribution)).
 
 ---
 
-## 4. Answering the handoff questions
+## 4. How it works
 
-### 4.1 Is a resident daemon needed? — Yes, a small one, socket-activated (A1)
+### 4.1 No daemon (A1)
 
-Three things cannot live in a per-call process:
+Draft 2 argued for a socket-activated daemon, for three reasons: a warm embedding model, session
+state across hook calls, and a single writer. The spikes removed each one:
 
-1. **A warm embedding model.** Loading even a small ONNX model takes hundreds of milliseconds; the
-   prompt-intent budget is 25 ms.
-2. **Session state across hook calls.** Command hooks spawn a fresh process per event, but routes
-   depend on what happened earlier in the session: history keys, the carried intent family,
-   directives awaiting follow/derail judgement, triggered obligations, stop requests already made.
-3. **A single writer** for observations and fast evidence, so concurrent sessions never contend.
+| Draft 2's reason | What replaced it | Evidence |
+| --- | --- | --- |
+| A warm embedding model | A static model (potion-base-8M) opened in every hook process that needs it | S2: 17 ms cold load in Rust. S7 addendum: the intent hook is 6.39 ms p95 end to end with the model opened per process |
+| Session state across hook calls | A per-session two-slot state file under `flock` | S3: 0.54 ms p95 to decide at 16 concurrent sessions, which matches a daemon round trip (0.50 ms) |
+| A single writer | Each hook appends its own records to a per-session spool; there is no database | S3: no loss, duplication or tearing under concurrent writers and `kill -9` |
 
-But a daemon must not cost anything when no agent runs (Q8). So `adaged` is **socket-activated**:
-launchd (macOS) and systemd `--user` (Linux) own the socket and start the daemon on the first
-connection. It exits after 30 minutes with no active session. A cold start costs one miss — the first
-call after activation returns no directive rather than waiting (Q1).
+So every hook is a process that the harness spawns, which reads its payload, decides, writes, and
+exits. Nothing runs between events, and there is no socket, service unit or idle timer.
 
-What the daemon does **not** do: mining, training, clustering, assembly. Those run in `adage learn`,
-a separate niced subprocess, so heavy work can never compete with the hot path.
+### 4.2 Hook registration per harness (A3)
 
-### 4.2 Hook client and delivery per harness (A3)
+| Harness | Registration | Invocation | Events Adage registers | Source |
+| --- | --- | --- | --- | --- |
+| Claude Code | Plugin `hooks/hooks.json`, or `adage install claude-code` into settings | **Exec form** (`command` + `args`): no shell | `SessionStart`, `UserPromptSubmit`, `PostToolBatch`, `PostToolUseFailure`, `Stop`, `SessionEnd` | `plugin/claude-code/hooks/hooks.json`, `crates/adage-cli/src/harness/claude.rs` (`settings`) |
+| Codex | `adage install codex` into `.codex/hooks.json` or `$CODEX_HOME/hooks.json` | Shell string with the binary path quoted; Codex has no exec form | `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `Stop`, `SessionEnd` | `crates/adage-cli/src/harness/codex.rs` (`settings`, `sh_quote`) |
+| OpenCode | `adage install opencode` writes the plugin to `.opencode/plugins/adage.js`, with the binary's absolute path embedded | The in-process plugin spawns `adage hook opencode <event>` with no shell and a 1 s timeout | `chat.message`, `tool.execute.after`, and on `event`: `session.created`, `message.part.updated` (tool errors), `session.idle`, `session.deleted` | `plugin/opencode/adage.js`, `crates/adage-cli/src/harness/opencode.rs` |
 
-| Harness | Registration | Transport | T0 reject |
-| --- | --- | --- | --- |
-| Claude Code | Plugin `hooks/hooks.json`, command hooks → `${CLAUDE_PLUGIN_ROOT}/bin/adage hook claude <event>` | Unix socket | In client |
-| Codex | Installer writes `~/.codex/hooks.json` with a stable command path so hash-based trust survives upgrades | Unix socket | In client |
-| OpenCode | npm plugin, in-process in the OpenCode server | Unix socket from Bun | In plugin (same index file) |
+**Exec form matters.** On Claude Code, a shell-form hook costs 10.4 ms p95 against 2.2 ms for exec
+form (S1). The plugin always uses exec form. Codex offers only shell strings.
 
-**Command hooks everywhere in v1**, rather than Claude Code's `http` hooks. `http` hooks remove the
-process spawn, but require a TCP listener on localhost, which any local process can reach, and a
-bearer token the hook config must reference through environment variables. A Unix socket with
-`0600` permissions and peer-credential checks is simpler to secure. A spike measures whether spawn
-cost actually threatens the budget; `http` hooks are the optimisation if it does (§12, R2).
-
-**The client is dumb by design.** It reads stdin, extracts only the fields T0 needs, and forwards
-the raw payload with the harness name and event. All parsing of native payloads happens in the
-daemon's translators, so supporting a new harness version is a daemon update, never a client update.
-
-**Exit discipline**, on every path: always drain stdin; always exit 0; never write to stderr in a
-way the harness surfaces to the model; deadline = harness timeout − 500 ms.
+**Decide at the synchronous hooks only.** Claude Code's `PostToolBatch` payload carries every call
+and response in the batch (S5 Q5), so the decision hook sees the whole batch. No asynchronous
+observation hooks are registered. S5 Q6 found that an async hook fired near session end can be cut
+off. `PreToolUse` and `SubagentStart` are not registered ([§14](#14-designed-but-not-built)).
 
 ### 4.3 The hot path
 
 ```mermaid
 sequenceDiagram
   participant H as Harness
-  participant C as adage hook
-  participant D as adaged
-  H->>C: event JSON on stdin
-  C->>C: T0 — mmap hot-key filter
-  alt no candidate (most calls)
-    C-->>H: exit 0, empty
-  else candidate
-    C->>D: raw event + harness + deadline
-    D->>D: translate → canonical event
-    D->>D: update session state, record observation
-    D->>D: T1 — backoff lookup on history keys
-    opt prompt decision point
-      D->>D: T2 — normalise + embed prompt, match intent families
+  participant A as adage hook (exec form)
+  participant D as ADAGE_HOME
+  H->>A: spawn with payload on stdin
+  A->>A: silence panics, 8 MiB stack, catch_unwind
+  A->>A: read ≤ 8 MiB, parse JSON, session_id + cwd
+  alt ADAGE_DISABLE=1, .adage/disabled, unknown harness or bad payload
+    A-->>H: exit 0, no output
+  else
+    A->>D: read index.json
+    alt no routes for this repository key (the common path)
+      A-->>H: exit 0, no output
+    else
+      A->>A: adapter.translate → Event
+      A->>D: lock the session's .state file, read the newest valid slot
+      A->>A: assign arm on first sight, then decide()
+      opt Prompt, and the repository has intent routes
+        A->>D: open models/potion-base-8m, embed the normalised prompt
+      end
+      A->>D: write the older slot, unlock
+      A->>D: append the decision record to the session's .spool file
+      A->>A: wrap each directive, cap to the harness limit, render the native shape
+      A-->>H: stdout JSON, exit 0
     end
-    D->>D: bind slots, validate contracts, effect ceiling, interlocking, EV rule
-    D->>D: assignment (holdout / knockout), render per harness
-    D-->>C: rendered output
-    C-->>H: stdout, exit 0
   end
 ```
 
-**Tiering:**
+The steps are in `crates/adage-cli/src/hook.rs`, and the harness-independent core never sees a
+native payload. Two shortcuts keep the common path cheap:
 
-- **T0 (client, ~50 µs).** A memory-mapped binary fuse filter over *(repo key, decision point,
-  tool class, template hash)* for every trigger in the active index. A miss exits immediately. The
-  filter is part of the index snapshot, so it is always consistent with it.
-- **T1 (daemon, <1 ms).** Backoff tables keyed by hashed n-grams of the session's recent templates,
-  longest history first.
-- **T2 (daemon, ~4–8 ms).** Prompt embedding, only at prompt decision points, only when the repo has
-  intent-triggered routes.
+- **Repository check.** If the index holds no route for this repository, the hook exits before
+  translating anything. Measured at 1.76 ms p95 (S7 addendum). Draft 2's client-side fuse filter
+  (T0) was not built.
+- **Lazy model.** The model is opened only at a prompt, and only if the repository has intent
+  routes (`embed` closure in `hook.rs`, `match_intent` in `adage-runtime`).
 
-### 4.4 Session state
+**Exit discipline.** The panic hook is replaced with a silent one, so nothing reaches stderr. The
+work runs on a thread with an 8 MiB stack on every platform. It is wrapped in `catch_unwind`, and
+the process always exits 0. Hook timeouts in the harness configuration are 5 s (10 s for the
+plugin's `SessionStart` shim, 2 s for Codex `SessionEnd`), and are a backstop rather than a
+budget. There is no internal per-event deadline.
 
-Held in memory by `adaged`, keyed by `{harness}:{session_id}`, with the agent tree for sub-agents:
+### 4.4 Session state and spools
 
-```rust
-struct SessionState {
-    key: SessionKey,
-    harness: Harness,
-    repo: RepoKey,                        // realpath(git root) + hash(normalised origin)
-    agents: AgentTree,                    // parent links, agent types, spawn depth
-    arm: Arm,                             // holdout or treated, hashed once at first sight
-    intent: Option<(IntentFamilyId, f32)>,
-    history: Ring<TemplateObs, 16>,       // canonical template + outcome class
-    pending: Vec<PendingDirective>,       // awaiting follow/derail judgement
-    obligations: Vec<Obligation>,         // finish-line: triggered, met, stop-requested
-    directives_emitted: u16,              // per-session cap
-    last_seen: Instant,
-}
+Both live in `$ADAGE_HOME/sessions/`, named by the sanitised session id (`adage-store/src/lib.rs`,
+`sanitise`: ids that had to be altered get a hash suffix, so no id escapes the directory or
+collides with another).
+
+**State: `<session>.state`** (`crates/adage-store/src/state.rs`). Two fixed 64 KiB slots, each
+`magic | seq | len | crc | payload`. A write goes to the older slot in one positional write, under
+an exclusive lock (`File::lock`: `flock` on Unix, `LockFileEx` on Windows), with no `fsync`. The
+reader takes the newest slot whose CRC is valid. The CRC covers the sequence number and length as
+well as the payload: covering only the payload let a torn write resurrect a state two writes old
+(eval bug 8). If both slots are invalid, the state starts again from its default.
+
+The state (`SessionState` in `adage-runtime`) holds:
+
+| Field | Purpose |
+| --- | --- |
+| `arm`, `repo` | Experiment arm and repository key, fixed at first sight |
+| `prompts`, `batches`, `first_edit_at_batch` | Counters |
+| `emitted` | Route ids already delivered (a route fires once per session) |
+| `pending` | Directives awaiting follow/derail judgement, with the expected key, command head and batches left |
+| `obligations` | Finish-line obligations: route, expected key, command, glob, `met`, `stop_requested` |
+| `history` | The last 32 canonical template keys |
+| `stop_requests` | Stop-hook requests made this session |
+| `intent` | The intent family the latest prompt matched |
+
+**Spool: `<session>.spool`** (`crates/adage-store/src/spool.rs`). Append-only records, each
+`magic | len | crc | JSON`, written with one `O_APPEND` write (records up to 1 MiB). A reader
+resynchronises on the next magic after a torn or corrupt frame, so a crash costs at most one
+record. Each hook appends one record:
+
+```text
+{ ts, event, arm, generation, harness?, decision: {
+    directives, would_have, continue_reason?, would_continue?, judgements, observed } }
 ```
 
-Every state change is also written to the observation log, so a daemon restart mid-session rebuilds
-state by replaying that session's events. Idle sessions are evicted after 30 minutes.
+`observed` holds canonical template keys, not raw commands, and no prompt text is recorded.
 
-**Follow and derail detection** runs as observations arrive: a pending directive is *followed* if a
-canonically equivalent action appears within its window, *derailed* if a different action does,
-and *expired* otherwise. Equivalence uses the normaliser's canonical actions, so `cat a.ts` and
-`Read(a.ts)` match.
+**Deviation from S3.** S3 recommended treating the state as a cache over the spool: fold spool
+records newer than a watermark, and rebuild on a CRC failure. That is not built. The hook never
+reads the spool. The state is authoritative for the session, and the spool is an audit log read
+by `report`, `graph`, `review` and `doctor`. Decisions read the current batch from the synchronous
+payload, which S3 identified as the condition under which the state stays exact.
 
 ### 4.5 The index (A4)
 
-The runtime never reads tracks directly. `adage learn` compiles everything the hot path needs into
-an **immutable, versioned snapshot**:
+The runtime never reads track directories. `adage learn`, `adage add` and every `adage review`
+decision compile all installed tracks into **one file**, `$ADAGE_HOME/index.json`
+(`crates/adage-tracks/src/index.rs`):
 
-```text
-index/
-├── gen-000142/
-│   ├── hotkeys.bin        binary fuse filter for T0
-│   ├── routes.bin         compiled routes, backoff tables, calibration, effect ceilings
-│   ├── intents.bin        family centroids, per-family thresholds, model id
-│   ├── failures.bin       failure-family centroids and thresholds
-│   ├── render.bin         directive templates per harness
-│   └── MANIFEST           generation, inputs digest, embedding model id, schema version
-└── current -> gen-000142
-```
+- **Content-addressed.** `generation` is the first 16 hex digits of the SHA-256 of the serialised
+  routes. The same tracks give the same bytes. Every spool record carries the generation that
+  decided.
+- **Atomic.** Written to a temporary file and renamed into place. A hook reads either the old
+  index or the new one.
+- **Fail open.** A missing or unreadable index loads as empty (`Index::load`).
+- **Scoped by repository key.** Every route carries the key of its repository, and the runtime
+  filters on it (`for_repo`). The key is the normalised `origin` URL, or the directory name when
+  there is no `origin` (`crates/adage-core/src/repo.rs`). Clones share routes. Two unrelated
+  repositories without an `origin` and with the same directory name also share them.
+- **Live routes only.** `active` and `probation` routes are compiled. When a learned route and an
+  imported one share an id, the learned one wins. A learned route a person retired still
+  suppresses an import of the same id.
 
-- **Zero-copy.** Files are `rkyv` archives, memory-mapped by both the client (for `hotkeys.bin`)
-  and the daemon.
-- **Atomic swap.** A new generation is written, fsynced, verified, and then `current` is renamed
-  into place. The daemon notices the new generation on its next request; in-flight requests finish
-  on the old one.
-- **Deterministic.** The same inputs produce the same generation bytes. `MANIFEST` records the
-  digest of every input, which makes "why did Adage say this?" answerable from the snapshot alone.
-- **Scoped.** One index per machine, containing every repo's routes; the repo key is the first
-  element of every lookup key, so there is no cross-repo leakage by construction.
-- **Fast demotion bypasses rebuilds.** Demotion is urgent; rebuilding is not. `adaged` keeps a small
-  in-memory overlay of routes demoted since the snapshot was built (from CUSUM on fast evidence),
-  consulted before the snapshot. The next generation absorbs it.
+There are no memory-mapped generations and no demotion overlay. Reading JSON meets the budget
+([§9](#9-performance-budget)).
 
 ### 4.6 Observations and evidence (A5)
 
-**One database, one writer.** `adage.db` is SQLite in WAL mode. `adaged` is the only writer during
-sessions; `adage learn` writes only to its own tables and to new index generations, never to the
-observation tables.
+There is **no database**. Draft 2's SQLite stores, and review finding F6 (one database per
+writer), are replaced as follows:
 
-| Store | Contents | Writer | Retention |
-| --- | --- | --- | --- |
-| `events` | Canonical hook events: decision points, tool observations, directives emitted, assignments, propensities | `adaged` | Structured fields 180 days |
-| `raw_text` | Prompt text, error heads, tool-output heads — needed to re-mine after a normaliser fix | `adaged` | **14 days**, then deleted |
-| `sessions` | Session summaries, outcomes (joined later from git and CI) | `adaged`, `adage learn` | 180 days |
-| `evidence` | Per-route sufficient statistics: sessions, days, follows, derails, outcomes, by gauge | `adage learn` | Indefinitely |
-| `fast_evidence` | Recent per-route correctness for CUSUM | `adaged` | Rolling |
-| `yard` | Installed tracks, versions, digests, signers, state per route | Toolchain | Indefinitely |
-| `reviews` | Items waiting in `adage review`, decisions taken | CLI | Indefinitely |
+| Draft 2 store | As built |
+| --- | --- |
+| `events`, `raw_text` | Session spools (decisions and canonical keys only). Learning reads the harness's own history instead of Adage's events |
+| `sessions` | Not kept. Outcomes enter learning through `adage learn --outcomes <json>` (session id → success) |
+| `evidence` | Stored in each route (`Evidence` in `crates/adage-tracks/src/model.rs`), counted in distinct sessions and recomputed on every learn |
+| `fast_evidence` | Not built. Derails are surfaced in `adage review` ([§4.16](#416-review)) |
+| `yard` | The tracks directory, with imports under `tracks/@imported/` |
+| `reviews` | `review.yaml` and `proposals.yaml` in each track directory |
 
-Writes from the hot path go through a bounded in-memory queue drained by a background thread;
-under back-pressure, observations are dropped before latency is affected (Q1 beats completeness),
-and the drop is counted.
+A route's evidence records opportunities, support, distinct days, successes, deviations that
+failed, the support rate, its Wilson 95% lower bound, the median position of the step, estimated
+turns saved, provenance and models. Aspects are set from it (`aspect_for` in
+`crates/adage-learn/src/mine.rs`), and capped by the effect ceiling:
 
-**Evidence is sufficient statistics**, not raw records: Beta counts per route and gauge, CUSUM state,
-duration summaries. That keeps it small, mergeable across machines by addition, and safe to share.
+| Threshold | Default | `--demo` |
+| --- | ---: | ---: |
+| Minimum distinct supporting sessions | 5 | 3 |
+| Wilson lower bound for green | 0.8 | 0.5 |
+| Support rate for yellow | 0.5 | 0.5 |
+| Rate that keeps an existing route (hysteresis) | 0.3 | 0.3 |
 
 ### 4.7 The learning pipeline (`adage learn`)
 
-Runs nightly from a launchd/systemd timer, or on demand. Niced, pauses on battery, killable at any
-point without harm: every stage writes to new files and commits by rename.
+`adage learn` runs on demand. The nightly timer in draft 2 was not built. It is deterministic
+and idempotent: inputs are sorted, clustering is seeded by canonical order, and a second run over
+the same history reports "unchanged" (`crates/adage-learn/src/lib.rs`).
 
 ```mermaid
 flowchart LR
-  I[Ingest<br/>events + backfill importers] --> N[Normalise<br/>canonical actions]
-  N --> S[Segment<br/>decision points,<br/>discovery & post-edit windows]
-  S --> F[Features]
-  F --> IF[Intent families]
-  F --> FF[Failure families]
-  F --> RM[Route mining<br/>backoff tables,<br/>slot provenance]
-  F --> DE[Dead ends]
-  F --> OB[Obligations]
-  IF & FF & RM & DE & OB --> C[Calibrate<br/>+ offline replay gates]
-  C --> E[Evidence merge<br/>local + imported priors]
-  E --> A[Assemble tracks<br/>group, name, semver,<br/>changelog, sign]
-  A --> X[Compile index<br/>new generation]
+  I[Import<br/>Claude Code JSONL · OpenCode export · Codex rollout] --> N[Normalise<br/>canonical actions, template keys]
+  N --> G[Group by repository key]
+  G --> W[Work items<br/>prompt lookup, linked files]
+  G --> F[Finish line<br/>edit → regenerate]
+  G --> DE[Dead ends<br/>fail → what worked]
+  G --> IN[Intent families<br/>if a model is installed]
+  W & F & DE & IN --> R[Reconcile<br/>pinned routes, review.yaml, proposals]
+  R --> V[Validate each route<br/>drop the invalid ones]
+  V --> S[Version<br/>semver bump, change]
+  S --> X[Write tracks<br/>compile index.json]
 ```
 
-| Stage | Key choices |
+| Stage | As built |
 | --- | --- |
-| **Ingest** | Live events from `adage.db`; importers for backfill (Claude Code JSONL including `subagents/` and `tool-results/`; Codex rollouts; OpenCode SQLite). Importers are versioned, streaming, resumable, and quarantine what they can't parse |
-| **Normalise** | tree-sitter-bash; per-command flag grammars; mapping tables per harness version as data; golden fixtures per version (D§11) |
-| **Training-data hygiene** | Only untreated sessions, holdout sessions, and treated sessions truncated at their first directive, with inverse-propensity weights (D§11) |
-| **Intent families** | Normalise prompts → embed (same model as runtime) → exact cosine kNN + deterministic Louvain over sorted inputs, per repository (S7: HDBSCAN was neither accurate nor order-invariant here) → behavioural purity split/merge → per-family thresholds calibrated on the repository's own prompts (D§8.2.1) |
-| **Labels** | Short labels and canonical phrasings written by a language model through the harness's own headless mode, using the developer's existing access; fallback is the family's most central normalised prompt |
-| **Route mining** | Variable-length backoff over templates; slot provenance rules; post-edit obligations; dead ends from fail-then-recover patterns |
-| **Calibration and gates** | Isotonic calibration per harness and effect class; offline replay on held-out sessions; confidence sequences for promotion (D§10.4) |
-| **Assembly** | Group into tracks (D§10.9); diff against the previous version to compute the semver bump and changelog; sign with the machine's local key |
-| **Compile** | Build the next index generation; swap atomically |
+| **Import** | Found by content (`read_session`). Claude Code transcripts from `~/.claude/projects` by default (sidechain records skipped). `opencode export` files via `--transcripts` (sub-agent sessions skipped). Codex rollouts via `--codex-sessions` (sub-agent threads and compressed `.zst` rollouts skipped). `--cwd-prefix` filters by recorded working directory |
+| **Normalise** | tree-sitter-bash plus the command table ([§4.7.1](#471-the-normaliser)); native tools mapped per harness (`crates/adage-core/src/tools.rs`) |
+| **Training hygiene** | A session steered by Adage is recognised from the directives in its transcript, and each miner excludes only sessions steered by its own kind of route (`Session::steered_by`). Draft 2's truncation with inverse-propensity weights was not built |
+| **Miners** | Four kinds per repository (`crates/adage-learn/src/mine.rs`, `intent.rs`), each a track named `<repo>/<kind>` |
+| **Reconcile** | Routes a person pinned (`authored`) are kept, and a materially different mined version becomes a proposal. Decisions in `review.yaml` are re-applied |
+| **Validate** | Every mined route is validated alone. One that fails is dropped with a message, rather than failing the repository (eval bug 1) |
+| **Version** | Shape changed or removed → major; added → minor; evidence only → patch; nothing → unchanged |
+| **Compile** | All tracks re-read, validated, compiled, and written atomically |
 
-**Determinism is a pipeline property**: inputs are sorted, every randomised algorithm is seeded, and
-every artefact is content-addressed. Running `adage learn` twice on the same inputs changes nothing,
-which is what makes automatic assembly idempotent.
+| Track | Trigger → step | Aspect ceiling |
+| --- | --- | --- |
+| `work-items` | A prompt naming a work item → run the lookup, with the ID bound (`lookup-work-item`); that lookup succeeding → read the files it lists, together (`read-linked-files`) | Lookup: green if its effect allows; files: yellow |
+| `finish-line` | An edit matching a glob → run the regenerate step; a bounded stop request if it is skipped | Green (regenerate after an edit) |
+| `dead-ends` | Announced at the first prompt → avoid these runners, which fail with this signature, and use this instead | Red |
+| `intents` | A prompt in an intent family → run the command those sessions ran first | Green only for observe or verify |
 
-### 4.8 Embedding model (A6)
+#### 4.7.1 The normaliser
 
-| Choice | Decision |
+`crates/adage-core/src/shell.rs` walks the tree-sitter-bash syntax tree. It unwraps `bash -lc`,
+tracks `cd`, splits `&&`/`||`/`;` sequences, keeps pipelines with pure-filter tails read-only, and
+parses compound constructs, redirects and heredocs. Flag grammars and effect classes are data in
+`crates/adage-core/data/commands.toml`, embedded at build time and parsed at run time. Unknown
+commands default to the `environment` effect. S8 measured 98.2% of real calls normalised and
+~32,000 calls/s, and its 315 golden fixtures run in `cargo test`. The normaliser's bounds are
+security controls ([§8](#8-security-architecture)).
+
+### 4.8 Embedding model and intent families (A6)
+
+| Choice | As built |
 | --- | --- |
-| Model | A small retrieval model in the ~30M-parameter class, 384 dimensions (for example `bge-small-en-v1.5`), exported to ONNX and quantised to int8 |
-| Runtime | ONNX Runtime through the `ort` crate, inside `adaged`; one session, intra-op threads capped at 2 |
-| Input | Normalised prompt head, ≤128 tokens (D§8.2.1) |
-| Latency | ~3–8 ms on a current laptop CPU for ≤128 tokens — to be confirmed by the spike (§12) |
-| Distribution | Downloaded on first run, verified by SHA-256, stored under the data directory. Not shipped inside the plugin, to keep the plugin small |
-| Pinning | Model id + digest recorded in every index generation; a mismatch disables intent routes until the next `adage learn` re-embeds |
-| Fallback | Model missing or cold → intent routes don't fire; structured routes still do (Q1) |
+| Model | **potion-base-8M**, a static embedding model: a 29,528 × 256 f32 table (`crates/adage-intent/src/model.rs`) |
+| Runtime | Plain Rust: a WordPiece tokenizer, safetensors rows read on demand, and mean pooling. No ONNX, `tokenizers` or `model2vec` dependency. It matches the reference to cosine 1.000000 (S7 addendum) |
+| Distribution | Never bundled. `adage models fetch` downloads three files from a pinned Hugging Face revision with `curl` (argv, HTTPS only, size-capped). `adage models install <dir>` takes them from a directory. Both verify each file's SHA-256 against digests compiled into the binary |
+| Pinning | The model id is `potion-base-8m@<first 12 hex digits of the table's digest>`, and every intent trigger records it. A different or missing model means intent routes never fire |
+| Fallback | No model: `learn` skips intent families, and hooks never match intent routes. Everything else works |
 
-Failure families use the same model in v1. A code-aware model is a later, measured addition.
+**Intent families** (`crates/adage-learn/src/intent.rs`, `crates/adage-intent/`), per repository:
+
+1. Normalise each session's first prompt (placeholders for IDs, paths and similar) and embed it.
+2. Sort by normalised text, then session id. The canonical order makes the result independent of
+   input order (S7).
+3. Exact cosine kNN (k = 10, edges at cosine ≥ 0.6), then deterministic Louvain (resolution 2.0,
+   no randomness) (`cluster.rs`).
+4. Label each session with its route: the first observe or verify command it ran before editing
+   that is not run by nearly every session.
+5. Split, merge and bar by behaviour (`purity.rs`): split a cluster whose route groups the text
+   separates; merge clusters with the same route and close centroids; keep a family only if its
+   dominant route clears the purity bar.
+6. Each kept family becomes a route. Its trigger is the centroid, quantised to integers, plus a
+   threshold calibrated on the repository's own prompts (floor 0.5). Its step is one fixed
+   command with no slots.
+
+Raw prompts never enter a track, and families carry no labels: the agent sees only the fixed
+template. Draft 2's model-written labels are not built. Precision is measured only on synthetic
+data: 0.87 of directives correct after split/merge, from 0.57 before (S7; [P§4.3]).
 
 ### 4.9 Track toolchain (A7)
 
-- **Parsing:** `serde` over TOML (manifest) and YAML (routes, intents) (O6). JSON Schemas are
-  published for both so editors can validate as people type.
-- **Canonical digest:** every file in the track, sorted by path, normalised line endings, hashed.
-  Signatures and lockfile entries refer to this digest, never to archive bytes.
-- **Signing:** SSH signatures in the same format git uses (`sshsig`), created and verified natively
-  through the `ssh-key` crate — no shelling out. Verification uses a `trusted-signers` file in the
-  repository or depot, in `allowed_signers` format (O5).
-- **Machine keys:** each machine generates a local signing key for auto-built personal tracks. When a
-  person shares a track, it is re-signed with their own git signing key.
-- **Lockfile:** `.adage/tracks.lock` records name, version, digest, signer, and source per track.
-- **Install-time checks:** schema validation; signature against trusted signers; every command
-  template re-classified by the normaliser and rejected if its declared effect is lower (D§15.2);
-  referenced scripts hashed and pinned; secret scan.
-- **Interlocking:** conflicts that are statically detectable (two green steps at the same trigger)
-  are resolved when the index is compiled; the remainder at runtime by the precedence rules (D§10.6).
+**Format** (`crates/adage-tracks/src/model.rs`, `io.rs`) [O6]:
 
-### 4.10 Plugin packaging and pack discovery (A8)
-
-**Adage on Claude Code** is a plugin: `hooks/hooks.json`, the `adage` binary resolved through
-`${CLAUDE_PLUGIN_ROOT}`, and a `SessionStart` hook that ensures the daemon's socket unit is
-installed on first use.
-
-**Track packs** are plugins too. Each carries its `tracks/` directory and one small `SessionStart`
-hook:
-
-```json
-{ "hooks": { "SessionStart": [ { "hooks": [ { "type": "command",
-  "command": "adage pack register \"${CLAUDE_PLUGIN_ROOT}\"" } ] } ] } }
+```text
+tracks/<repo-slug>/<kind>/        learned; tracks/@imported/<owner>/<name>/ for imports
+├── track.toml        manifest: name, semver, description, provenance, scope.repo, gauge
+├── routes/<id>.yaml  one route: trigger, step, slots with contracts, effect, aspect, state, exit, evidence
+├── review.yaml       a person's decisions, with their basis
+└── proposals.yaml    proposed changes to pinned routes
 ```
 
-Registration tells `adaged` that this pack is enabled **for this session**, which respects Claude
-Code's own per-project enablement without Adage scanning undocumented plugin cache paths. Packs are
-verified at registration (digest, signature, trusted signers) and compiled into the index on the
-next `adage learn`; until then they are held in the daemon's overlay at probation.
+A route's parts are typed. Triggers are `prompt`, `after_command`, `after_failure`, `after_edit`,
+`session_start` and `intent`. Steps are `run`, `read_batch` and `avoid`. Slots come from a prompt
+span or a JSON result field, and each has a contract: an anchored regex, or `repo_path`. Exit
+conditions are typed predicates (`intent_changes`, `exploratory_change`), never text.
 
-**OpenCode:** Adage is an npm plugin; packs are npm packages or git directories. **Codex:** packs
-arrive through git or a depot directory.
+**Validation** runs on every read of a track, so at learn, at add, at index compile and at every
+review decision (`io::validate`). Its checks are listed in [§8](#8-security-architecture).
+
+**Canonical digest** (`io::digest`, S6): every file except `track.sig`, sorted by relative path,
+with `\r\n` normalised outside `scripts/`, hashed per file. The digest is the SHA-256 of the
+resulting manifest lines.
+
+**Signing** (`crates/adage-sign/`, S6): sshsig over the digest's 32 raw bytes, in namespace
+`adage-track`, so a git commit signature can never be replayed as a track signature. Signing
+tries ssh-agent first (`ssh-agent-client-rs`), then a key file. A passphrase-protected key is
+decrypted in memory with a passphrase asked for at the terminal, echo off (`crates/adage-cli/src/tty.rs`),
+and zeroised after use. `ssh-key` is pinned to `=0.6.7` to match the agent crate. Verification is
+native, against an `allowed_signers` parser that enforces `namespaces=`, `valid-after=` and
+`valid-before=`. No `ssh-keygen` is run. Learned tracks are not signed: signing happens only when
+a person shares one. Draft 2's machine keys were not built.
+
+**Sharing** (`adage share <track> --out <dir> [--key <path>]`, `crates/adage-cli/src/share.rs`):
+
+1. Refuse inside an agent session, or without a terminal ([§8](#8-security-architecture)).
+2. List the track without following anything. A symlink anywhere refuses the track. Only
+   `track.toml`, `routes/*.yaml`, `intents/*.yaml`, `evidence.json`, `CHANGELOG.md` and
+   `review.yaml` travel. `scripts/` never travels in a direct share [O3]. At most 256 files of
+   1 MiB each.
+3. Run the redaction check over exactly those bytes: absolute paths, home-directory paths and
+   secret-looking strings (`redact.rs`). Any finding refuses the share, and nothing is written.
+4. Write to a staging directory, re-read and re-validate it, and require it to equal the source.
+5. Sign the digest into `track.sig`, then rename the staging directory into place.
+
+**Adding** (`adage add <dir> [--trust]`, `crates/adage-cli/src/add.rs`) [F9, O2]:
+
+1. Refuse inside an agent session, or without a terminal. Refuse an unsigned track, and any file
+   outside the track format.
+2. Copy exactly the listed files to a private staging directory. Compute the digest there, and
+   verify the embedded signature against it.
+3. Decide trust, in order:
+   - `$ADAGE_HOME/trusted-signers`, the person's own `allowed_signers` file;
+   - the repository's `.adage/trusted-signers`, for tracks scoped to that repository, **only once
+     approved on this machine with `--trust`**, pinned by SHA-256 in `$ADAGE_HOME/trust.json`
+     (trust on first use; any change needs approval again);
+   - a signer approved earlier with `--trust`, pinned to the repository key.
+4. Install at **probation**: green becomes yellow, and retired or demoted routes stay out of
+   service. Provenance becomes `imported:…`. The author's `review.yaml` travels but is not
+   installed: recipients review for themselves. A re-import keeps the recipient's own decisions.
+5. Install under `tracks/@imported/`, which `adage learn` never writes, and recompile the index.
+
+Lockfiles (`.adage/tracks.lock`) and script pinning are **not built**.
+
+### 4.10 Plugin packaging (A8)
+
+The Claude Code plugin (`plugin/claude-code/`) follows S5's recipe:
+
+- **No top-level `bin/`.** A plugin's `bin/` is put on the agent's Bash `PATH`, not on the hook's
+  (S5 Q3).
+- **A `SessionStart` shim** (`scripts/session-start`, exec form, with `${CLAUDE_PLUGIN_ROOT}` and
+  `${CLAUDE_PLUGIN_DATA}` as arguments) makes `${CLAUDE_PLUGIN_DATA}/bin/adage` point at a binary:
+  1. The plugin's bundled `dist/<target>/adage`, only if it matches `dist/SHA256SUMS`. It is copied
+     in under its digest (`adage-<sha256>`), **run once** (the first execution of a new binary
+     costs 119–352 ms on macOS, S1 G), and then symlinked.
+  2. Otherwise `adage` on `PATH`. When that is the npm launcher, the shim asks it for the platform
+     binary (`ADAGE_NPM_WHICH=1`), so hooks never start Node.
+  3. Otherwise it prints a hint to stderr and exits 0. Nothing is downloaded.
+- **Every other hook** executes `${CLAUDE_PLUGIN_DATA}/bin/adage` by absolute path. The data
+  directory is stable across plugin versions, while the plugin root is not (S5 Q2).
+- **`SessionStart` completes before the first prompt** (S5 Q1), so the first prompt is never a
+  cold miss.
+
+`plugin/build.sh` stages a host build and its checksums into `dist/`. The marketplace entry is
+`.claude-plugin/marketplace.json`, with source `./plugin/claude-code`. CI runs
+`claude plugin validate --strict` on both, plus `scripts/check-plugin.mjs`.
+
+**Track packs are not built.** Draft 2's pack plugins and `adage pack register` do not exist.
+Tracks arrive by `adage learn` or `adage add`.
 
 ### 4.11 Harness abstraction (A9)
 
-The core knows only a canonical model:
+The decision core knows one event type and one output type (`crates/adage-runtime/src/lib.rs`,
+`crates/adage-cli/src/harness/mod.rs`):
 
 ```rust
-enum DecisionPoint { Prompt, PreTool, Batch, Edit, Stop, SubagentStart, SessionStart, SessionEnd }
-
-struct CanonicalEvent {
-    harness: Harness, harness_version: Option<Version>,
-    session: SessionKey, agent: AgentRef,        // id, type, parent, depth
-    cwd: PathBuf, point: DecisionPoint,
-    prompt: Option<String>,
-    tools: Vec<ToolObs>,                         // native name, canonical action, outcome, duration
-    permission_mode: Option<String>,
-    deadline: Duration,
-}
-
-enum Output {
-    Nothing,
-    Context(Vec<Directive>),                     // additionalContext / appended result
-    Continue { reason: String },                 // stop-hook request (finish line, D§8.7)
-}
+enum Event { SessionStart, Prompt { text }, Batch { calls: Vec<Call> }, Failure { call },
+             Stop { stop_hook_active }, SessionEnd }
+struct Call { tool, input, output, failed }
+enum Output { Context(String), Continue(String) }
 ```
 
-Each harness contributes exactly two pure functions — **translate** (native payload → canonical
-event) and **render** (output → native response) — plus a capability table (does it support
-`PostToolBatch`, is context visible to the user, size caps). Translators and capability tables are
-versioned data plus code, and both are covered by golden fixtures of real payloads per harness
-version. Adding OpenCode is two functions, a capability table, a plugin file, and fixtures.
+Each harness contributes an `Adapter`: `envelope` (session id and cwd), `translate` (native event
+→ `Event`), `render` (`Output` → the exact stdout bytes), and `max_context`.
+
+| Normalised | Claude Code | OpenCode (plugin → adage) | Codex |
+| --- | --- | --- | --- |
+| `SessionStart` | `SessionStart` | `session.created` | `SessionStart` |
+| `Prompt` | `UserPromptSubmit` | `chat.message` (the user's own text parts only) | `UserPromptSubmit` |
+| `Batch` | `PostToolBatch`, `PostToolUse` | `tool.execute.after` | `PostToolUse` (a batch of one) |
+| `Failure` | `PostToolUseFailure` | `tool.execute.after` with exit ≠ 0, or a tool part in state `error` | An exit code in `tool_response`, which no Codex release supplies |
+| `Stop` | `Stop` | `session.idle` | `Stop` |
+| `SessionEnd` | `SessionEnd` | `session.deleted` | `SessionEnd` |
+
+| Output | Claude Code | OpenCode | Codex |
+| --- | --- | --- | --- |
+| `Context` | `hookSpecificOutput.additionalContext` | `{"context": …}`: the plugin sends a separate synthetic, `noReply` message at a prompt, and appends to the tool result after a tool | `hookSpecificOutput.additionalContext` (a developer message) |
+| `Continue` | Stop `decision: block` with the reason | `{"continue": …}`: the plugin sends the reason as a synthetic prompt | Stop `decision: block`: the reason comes back as a user prompt |
+
+The adapters also do the following:
+
+- **Ignore Adage's own text.** On Codex and OpenCode, a prompt starting with
+  `Adage finish-line check:` or `<adage-signal ` is Adage's own text coming back, and is ignored
+  (`is_own_text`).
+- **Split Codex patches.** `apply_patch` becomes one edit per file named in the patch, so
+  finish-line routes trigger on Codex edits (`adage_core::tools::from_codex`).
+- **Pin outputs.** Each harness's hook output is pinned byte for byte by
+  `crates/adage-cli/tests/golden/{claude-code,opencode,codex}.txt`.
+
+What each harness documents, what was read from source, and what is inferred is recorded in
+`docs/harnesses.md`.
 
 ### 4.12 Proving ground (A10)
 
-```mermaid
-flowchart LR
-  PR[Merged PRs] --> RC[Reconstruct<br/>task · base commit ·<br/>hidden check]
-  RC --> Q[Task queue]
-  Q --> W1[Worker] & W2[Worker]
-  W1 --> SB[(Sandbox<br/>container or<br/>disposable worktree)]
-  SB --> HA[Headless agent<br/>+ isolated Adage instance]
-  HA --> SC[Score: run hidden check]
-  SC --> R[(Results)]
-  R --> ST[Select shortest successful routes<br/>compare arms]
-  ST --> EV[Evidence, provenance = proving]
-```
+The proving ground is **not built as a product** [P§3]. Two parts exist:
 
-- **Reconstruction:** the PR's description becomes the task; the base commit is checked out; the
-  hidden check is the tests the PR added or modified, or its CI job. Tasks whose check fails at the
-  merge commit are discarded.
-- **Isolation:** every run gets a fresh sandbox — a container by default, a disposable worktree as a
-  fallback where containers are unavailable. No developer credentials inside; network egress limited
-  to the model provider.
-- **Agents:** the harness's own headless mode (`claude -p` first). Each run uses a **separate Adage
-  instance** with its own data directory and yard, so proving never touches the developer's evidence.
-- **Arms:** baseline (no tracks) and candidate tracks, K runs per task per arm, interleaved.
-- **Budget:** a token and wall-clock budget per job; runs stop cleanly when it is exhausted; cost is
-  reported.
-- **Output:** evidence with `provenance = proving`, which enters the yard like any imported prior
-  (D§12.2).
+- **Offline replay** (`adage eval`, `crates/adage-eval/`) learns from a train split and replays
+  held-out sessions through the real `decide()` in the holdout arm. It scores every would-have
+  directive against what the agent did later, and checks it with an independent safety oracle
+  ([§11](#11-evals-and-the-harness-simulator)).
+- **The live A/B runner** (`evals/live/runner.py`) runs real `claude` agents with and without
+  Adage on a sandbox and task set. It is a dry run unless given `--execute`, and it refuses
+  `--execute` inside an agent session.
 
-The proving ground is a batch tool, not a service. It runs on a developer machine or a CI runner.
+PR reconstruction, containers, per-job budgets and proving evidence entering tracks are
+**not built**.
 
-### 4.13 Team mode without a server (A11)
+### 4.13 Team mode (A11)
 
-v1 has no Adage server. Everything team-related travels through git:
-
-- **Team tracks** live in `.adage/tracks/` or a depot repository.
-- **Pull requests** are opened from the developer's machine with their own git and `gh`
-  credentials, by `adage share --pr` or the nightly assembler when `auto` policy allows (O12).
-- **Pooled evidence** is sufficient statistics, so pooling is addition: each contributor's counts are
-  added to the track's `evidence.json` in a pull request, capped per contributor (D§10.5).
-- **Trusted signers** is a reviewed file in the repository.
-
-A server, if one is ever needed, would only aggregate what these pull requests already carry.
+Direct sharing works: `adage share` → a signed directory → `adage add` ([§4.9](#49-track-toolchain-a7)).
+Team depots, `.adage/tracks/` in repositories, pooled evidence, and pull requests prepared by
+Adage are **not built** [O12, D§10.7; P§8 M5].
 
 ### 4.14 Experiments (A12)
 
-- **Assignment:** `arm = H(install_salt ‖ session_id) mod 10000` against the configured holdout
-  share; route knockouts `H(install_salt ‖ session_id ‖ route_id)`. Deterministic, stateless, and
-  reproducible from the log.
-- **Exposure logging:** in holdout sessions the runtime still computes the directive it *would*
-  have emitted and logs it, then returns nothing.
-- **Propensities:** logged with every decision, so off-policy evaluation of new policies is possible.
-- **Pilot configuration:** 50/50 (D§14.1); steady state 5–10% plus ~20% per-route knockouts.
+- **Assignment.** `arm = Holdout` when the first 4 bytes of `SHA-256("adage-arm:" + session_id)`,
+  scaled to [0, 1], fall below the holdout share (`assign_arm`). The share is `ADAGE_HOLDOUT`
+  (default 0.1). `ADAGE_ARM=treated|holdout` overrides it. The arm is fixed in the state at first
+  sight.
+- **Exposure logging.** In both arms, the runtime computes what it would deliver and records it
+  as `would_have` and `would_continue`. The holdout arm delivers nothing.
+- **Judgements.** A pending directive is **followed** when a later call has the same canonical
+  key, or the same command head. It is **derailed** when three batches pass without that. A
+  finish-line obligation is **met** when its step runs. In holdout sessions, the same judgements
+  measure whether the agent found the path unaided (`adage graph`).
+- **Not built:** hashing on the root session lineage (so `/clear` and forks keep their arm), an
+  install salt, per-route knockouts, propensity logging, and the static-guidance arm (F7, F14).
 
 ### 4.15 Version detection (A13)
 
-- **Harness versions:** read from hook payloads where present, else from the transcript `version`
-  field, else from the harness CLI once per day. The capability table is chosen by version range.
-- **Unknown shapes:** a payload the translator can't parse produces `Output::Nothing` and a counted
-  `unknown_shape` event — never an error surfaced to the harness.
-- **Drift alarm:** `adage doctor` and the digest warn when the unknown-shape rate or the
-  normaliser's `unknown` rate rises for a harness version, which usually means a format change.
+Adapters are not selected by harness version. A payload that does not parse, or an event an
+adapter does not know, produces no output. The Codex importer reads current and older rollout
+shapes, and ignores unknown record types, so a format change degrades to fewer learned steps
+rather than errors. Capability tables, the unknown-shape counter and the drift alarm are
+**not built**.
+
+### 4.16 Review
+
+`adage review` (`crates/adage-cli/src/review.rs`, `crates/adage-tracks/src/review.rs`) lists the
+routes that wait for a person:
+
+| Reason | Meaning |
+| --- | --- |
+| `new` | Learned and never reviewed |
+| `imported` | Installed by `adage add`, never reviewed here |
+| `resurfaced` | Rejected, but since strengthened materially |
+| `changed` | Decided, but since changed materially |
+| `proposed` | Pinned, and the miner's version differs materially (with a diff) |
+| Derail flag | ≥ 5 runtime judgements in the spools, and the Wilson lower bound of the derail share ≥ 0.5 |
+
+A change is **material** when a route's shape (trigger, step, slots, effect or exit) or aspect
+changes, its Wilson lower bound moves by ≥ 0.10, or its support doubles or halves. Each is judged
+against the basis recorded with the decision, so slow drift accumulates.
+
+The decisions are `approve`, `reject` (or `retire`), `demote`, `promote` (within the effect
+ceiling only), `pin` and `dismiss`. Each is recorded in the track's `review.yaml`, survives
+re-learning, re-validates the track, and recompiles the index. Decisions change trust, so they
+refuse to run inside an agent session. Listing is read-only and allowed anywhere.
+
+Learned routes are **delivered before review** (autonomy `auto` for personal tracks, O12). Review
+can retire, demote, pin or promote them afterwards.
 
 ---
 
 ## 5. Data model
 
-The canonical records, independent of storage:
+The records as built, independent of file format:
 
 ```text
-Session        key, harness, harness_version, repo, started, ended, arm, outcome_signals
-Event          session, seq, ts, point, agent, canonical actions[], outcomes[], directive?
-Directive      session, seq, track, route, version, aspect, effect, text_digest, tokens,
-               arm, knockout, propensity, would_have (holdout)
-Judgement      directive → followed | derailed | expired, at seq
-Route          id, track, version, trigger (point, intent?, keys, slots), steps[], exit[],
-               state, effect ceiling, last_good_version
-Evidence       route, gauge (model, harness range), sessions, days, follows, derails,
-               outcome counts, duration summary, CUSUM, provenance
-IntentFamily   id, label, phrasings[], centroid, model_id, threshold, purity
-FailureFamily  id, label, centroid, model_id, threshold
-Track          name, version, digest, signer, source, routes[], intents[], requires, gauge, scope
+Route        id, summary, trigger, step, slots[], effect, aspect, state, exit[], evidence, authored
+Evidence     opportunities, support, days, successes, deviations_failed, rate, lower_bound,
+             median_position, turns_saved, provenance, models[]
+Track        manifest{ name, version, description, provenance, scope.repo, gauge{harness[], models[]} },
+             routes[]
+Index        generation, routes[{ repo, track, version, route }]
+SessionState arm, repo, prompts, batches, emitted[], pending[], obligations[], history[32],
+             first_edit_at_batch, stop_requests, intent
+SpoolRecord  ts, event, arm, generation, harness?, decision
+Decision     directives[], would_have[], continue_reason?, would_continue?, judgements[], observed[]
+Directive    route, track, version, aspect, text
+Judgement    followed | derailed | obligation_met, route
+Review       decision, by, on, basis (shape hash, aspect, evidence)
 ```
 
-`Event` and `Directive` together are what make every claim reproducible: for any directive, the log
-records what the agent had just done, which index generation decided, which arm the session was in,
-and what the agent did next.
+A spool record ties every directive to the index generation that decided it and to the session's
+arm. With the tracks at that generation, it answers "why did Adage say this?". What the agent did
+next is in the next records' `observed` keys and judgements.
 
 ---
 
 ## 6. Interfaces
 
-### 6.1 Client ↔ daemon
+### 6.1 Harness → `adage hook`
 
-A length-prefixed binary protocol over the Unix socket at `$XDG_RUNTIME_DIR/adage/adaged.sock`
-(macOS: under `$TMPDIR`), mode `0600`, peer UID checked on every connection.
+`adage hook <claude|opencode|codex> <Event>`, with the native payload on stdin (≤ 8 MiB) and the
+native response on stdout, or nothing. The exit code is always 0. Every payload must carry a
+`session_id` and a `cwd` (`Adapter::envelope`).
 
-```text
-Request   { protocol: u16, harness, event_name, deadline_ms, raw_payload: bytes }
-Response  { output: bytes }       // already rendered for the harness; empty = nothing
-```
+### 6.2 OpenCode plugin → `adage hook opencode`
 
-One request per connection, no streaming, no retries. The client applies its deadline to the whole
-exchange; a late response is discarded and the client prints nothing.
-
-### 6.2 OpenCode plugin ↔ daemon
-
-The same protocol from inside the OpenCode server process. The plugin applies its returned text by
-appending to the prompt or tool result, as each hook allows.
+The plugin builds its own small payloads from documented hooks. The fields are tabulated in
+`crates/adage-cli/src/harness/opencode.rs`. It spawns the binary with no shell and waits at most
+1 s. A reply over 64 KiB, a non-JSON reply or a non-string field is ignored. Every hook body is
+wrapped in `try`. It never evaluates or executes text it receives.
 
 ### 6.3 CLI
 
-| Command | Purpose |
+| Command | Purpose | Writes | Refuses in an agent session |
+| --- | --- | --- | --- |
+| `adage init [--repo] [--yes]` | Detect harnesses, print install snippets, offer the model, run a survey | Only with `--yes` (the model) | `--yes` only |
+| `adage survey` | Read-only report of what agents do, with candidate routes from learn's dry run | — | — |
+| `adage learn` | Import, mine, write tracks, compile the index | Tracks, index | — |
+| `adage status` | Installed tracks, routes, aspects and evidence | — | — |
+| `adage report [--json]` | Directives, follows, derails and stop requests from spools | — | — |
+| `adage graph [--json] [--serve]` | Situations → routes → steps → responses, split by arm; `--serve` runs the signal box | — | — |
+| `adage review [<verb> <track> <route>]` | The review queue, and decisions ([§4.16](#416-review)) | Verbs only | Verbs only |
+| `adage share <track> --out <dir>` | Redaction check, copy, sign | Output directory | Yes |
+| `adage add <dir> [--trust]` | Verify, install at probation | Tracks, index, `trust.json` | Yes |
+| `adage install <harness> [--write]` | Print, or write, one harness's hook registration | Only with `--write` | `--write` only |
+| `adage models fetch \| install <dir> \| status` | The optional embedding model | `models/` | — |
+| `adage doctor [--json]` | Health checks ([§10](#10-observability)) | A probe file only | — |
+| `adage eval <dataset>` | Offline replay eval ([§11](#11-evals-and-the-harness-simulator)) | A temporary home | — |
+| `adage hooks-config <path>` | Print a Claude Code hooks block | — | — |
+| `adage hook <harness> <event>` | Called by harness hooks only | State, spool | — |
+
+### 6.4 Files a person edits
+
+| File | Purpose |
 | --- | --- |
-| `adage init` | Install the socket unit, register hooks for detected harnesses, download the model |
-| `adage survey` | Backfill import and the read-only report |
-| `adage learn` | Run the pipeline now |
-| `adage status` / `review` / `doctor` | Health, pending approvals, diagnostics |
-| `adage share [--pr] [--as-skill]` | Redaction review, export, team pull request |
-| `adage add` / `pack register` | Install tracks; register a plugin-shipped pack for a session |
-| `adage prove` | Proving-ground jobs |
-| `adage off` / `disable` | Kill switches at session, repo, and track level |
-| `adage hook <harness> <event>` | Client mode, called by harness hooks only |
+| `<repo>/.adage/disabled` | Kill switch for one repository: hooks say nothing |
+| `<repo>/.adage/trusted-signers` | Signers for tracks scoped to this repository; counts only once approved with `adage add --trust` |
+| `$ADAGE_HOME/trusted-signers` | The person's own `allowed_signers` file |
+| `$ADAGE_HOME/tracks/**/routes/*.yaml` | Routes may be hand-edited; `adage review pin` protects them from re-learning |
 
-### 6.4 Files a user or team edits
+`.adage/config.toml` and `.adage/tracks.lock` from draft 2 do not exist.
 
-| File | Format | Purpose |
-| --- | --- | --- |
-| `.adage/config.toml` | TOML | Repo policy: enabled, autonomy level, holdout share, green allowlist |
-| `.adage/tracks/*/` | TOML + YAML | Team and starter tracks |
-| `.adage/tracks.lock` | TOML | Pinned versions and digests |
-| `.adage/trusted-signers` | `allowed_signers` | Who may sign tracks for this repo |
+### 6.5 Environment
+
+| Variable | Effect |
+| --- | --- |
+| `ADAGE_HOME` | The data directory. Isolates tests, evals, the demo and the simulator |
+| `ADAGE_DISABLE=1` | Kill switch: hooks say nothing |
+| `ADAGE_HOLDOUT` | Holdout share, default 0.1 (1.0 for the pilot's shadow phase, [P§5]) |
+| `ADAGE_ARM` | `treated` or `holdout`: overrides assignment |
+| `ADAGE_ALLOW_NONINTERACTIVE=1` | Lifts the terminal requirement for CI. It never lifts the agent-session refusal |
+| `ADAGE_NPM_WHICH=1` | Asks the npm launcher which binary it runs |
 
 ---
 
-## 7. Deployment
+## 7. Deployment and distribution
+
+### 7.1 On disk
 
 ```text
-~/.local/share/adage/                (macOS: ~/Library/Application Support/Adage/)
-├── adage.db                         SQLite WAL
-├── index/gen-*/, index/current      compiled snapshots
-├── yard/                            installed tracks, by digest
-├── models/                          embedding model, by digest
-├── keys/                            machine signing key (0600)
-└── logs/                            daemon and pipeline logs, rotated
-
-Service units
-├── adaged.socket + adaged.service   socket activation, idle exit
-└── adage-learn.timer                nightly, low priority, on AC power
+$ADAGE_HOME        macOS ~/Library/Application Support/Adage · Windows %APPDATA%\Adage
+                   elsewhere $XDG_DATA_HOME/adage, else ~/.local/share/adage
+├── index.json                 compiled index (atomic rename)
+├── tracks/<repo>/<kind>/      learned tracks
+├── tracks/@imported/…         imported tracks
+├── sessions/<id>.state        two-slot state
+├── sessions/<id>.spool        decision log
+├── models/potion-base-8m/     manifest.json, model.safetensors, vocab.txt (optional)
+├── trusted-signers            the person's allowed_signers (optional)
+├── trust.json                 approvals from `adage add --trust`
+└── staging/                   transient, for `adage add`
 ```
 
-The binary itself lives inside the Claude Code plugin, in the npm package for OpenCode, or at a
-stable path written by the Codex installer. `adage init` ensures one copy is registered as the
-service binary; version skew between copies is detected by the protocol version.
+There are no service units, and nothing writes `learn.log` or `fail-open.log` (the latter is
+read by `doctor`, see [§14](#14-designed-but-not-built)).
+
+### 7.2 Channels
+
+| Channel | How the binary arrives | Hooks | Status |
+| --- | --- | --- | --- |
+| Claude Code | `/plugin marketplace add` → the plugin's shim links a verified bundled binary, or `adage` on `PATH` | Plugin `hooks.json` | Built; the marketplace entry says it needs `adage` on `PATH` |
+| npm | A thin main package plus one package per platform, selected by `os`/`cpu` in `optionalDependencies`. No postinstall script and no download (`npm/`) | `adage install …` records the real binary path, so Node is not on the hook path | Built; publishing is off until D1, D3 and `NPM_TOKEN` |
+| Homebrew, shell, PowerShell installers | `dist` releases (`dist-workspace.toml`) to tap `stevenvaughanbooth/homebrew-tap` | `adage install …` | Built; the first tagged release waits on secrets and D1–D4 |
+| crates.io | `cargo install adage-cli` | `adage install …` | `publish = false` until D1 |
+| OpenCode | `adage install opencode --write` | Plugin file | Built; the npm plugin package is planned [P§6.2] |
+| Codex | `adage install codex --write`, then approve in `/hooks` | `hooks.json` | Built |
+
+### 7.3 Release engineering
+
+| Piece | As built |
+| --- | --- |
+| Build profile | `lto = true`, `codegen-units = 1`, `strip`, `panic = "unwind"` (`catch_unwind` needs it) (`Cargo.toml`) |
+| Targets | `aarch64`/`x86_64-apple-darwin`, `aarch64`/`x86_64-unknown-linux-musl` (static), `x86_64-pc-windows-msvc` |
+| Release | `dist` 0.32.0 generates `.github/workflows/release.yml`: archives, SHA-256 sums, shell/PowerShell/Homebrew installers, GitHub build-provenance attestations (Sigstore), a CycloneDX SBOM per archive. Pull requests run the plan only |
+| npm | `.github/workflows/publish-npm.yml`, called by the release: stage the packages, smoke-test through the launcher, publish platform packages then the main package with `--provenance`. Off until `ADAGE_NPM_PUBLISH=true` |
+| CI | `.github/workflows/ci.yml`: rustfmt; clippy `-D warnings` and `cargo test --workspace --locked` on macOS arm64 and x64, Linux x64 and arm64, and Windows x64; the OpenCode plugin test under Node; the npm launcher test; the session-start shim test; a static musl build; `cargo deny` (advisories, bans, licenses, sources); plugin structure and `claude plugin validate --strict` |
+| Evals | `.github/workflows/evals.yml` (pushes, pull requests, weekly, Linux and macOS): gates, slow property tests, regression tests, reports and replay fidelity, the live runner's dry run |
+| Crash diagnosis | `.github/workflows/diagnose.yml` (manual): runs a test binary under gdb on Linux. It found the tree-sitter-bash segfault ([§8](#8-security-architecture)) |
+| Cross-checking | `scripts/cross-check.sh` type-checks every release target without its C toolchain |
+| Portability | `.gitattributes` forces LF everywhere, because golden files are compared byte for byte |
+| Pending | License (D1: `UNLICENSED`, `publish = false`), npm name (D3: `@adage/cli` is a placeholder in `npm/config.mjs`), Apple notarisation (D4), and NOTICE generation (`scripts/notice.sh`, after D1) |
 
 ---
 
 ## 8. Security architecture
 
-| Boundary | Control |
-| --- | --- |
-| Harness → client | Client parses only T0 fields; everything else is forwarded as opaque bytes |
-| Client → daemon | Unix socket, `0600`, peer UID check, 1 MB request cap, no network listener |
-| Tracks → index | Schema validation, signature against trusted signers, effect re-classification, script pinning — all before compilation |
-| Context → directive | Only validated slot values are interpolated into directive templates; free text is never echoed; taint from external content caps a route at yellow (D§15.2) |
-| Data at rest | Raw text 14 days; machine key `0600`; share path strips raw content and runs a secret scan |
-| Proving ground | Sandboxed runs, no developer credentials, restricted egress, separate Adage instance |
-| Supply chain | Reproducible release builds; binaries signed; the plugin pins the binary digest |
+The threat model has three hostile inputs: **tracks** (shared by others, or planted in a
+repository), **session content** (prompts, tool output, error lines and file lists, all of which
+an attacker can influence), and **the agent itself**, which may be steered into running `adage`.
 
-The daemon has no code path that spawns a process on the hot path. The only process spawns in the
-system are the pipeline's scheduled run, the harness's own headless mode during labelling and
-proving, and `git`/`gh` during sharing — all explicit, none triggered by a directive.
+| Boundary | Control | Where |
+| --- | --- | --- |
+| **Tracks are untrusted** | Validated on every read, and refused whole if any check fails. Names and ids are restricted character sets (no path traversal or attribute spoofing). Versions must be semver. Directed commands are plain argv: `[A-Za-z0-9 _./:=@,+{}-]`, ≤ 200 characters, single spaces, no absolute or `..` paths. Every `{slot}` must be declared, and only a prompt may bind a run step's slots. Contracts must be anchored and must reject 14 hostile probes (space, `;`, `\|`, `$(`, backtick, `&`, newline, `../`, a leading `-`, `<`, `>`, quotes, empty). Globs and signatures are restricted, with no invisible or bidirectional characters. Intent triggers need a unit centroid, 8–1024 dimensions, a threshold in [0.5, 0.99], a pinned model id, and at most 64 per track | `crates/adage-tracks/src/io.rs` (`validate`) |
+| **Effect ceilings** | `observe` and `verify` may be green. `regenerate` may be green only after an edit, and is yellow otherwise. `environment` is yellow at most. `author` and `publish` are never directed. A track's declared effect is never trusted: each command is re-classified by the normaliser, and a track declaring less than the command does is refused. An `avoid` step's alternative must be verify or regenerate | `model.rs` (`ceiling`), `io.rs` (`classify`) |
+| **Fixed-template rendering** | A track contributes structure, never prose. Directive bodies are fixed templates, and every interpolated field is sanitised: no backticks, angle brackets, quotes, backslashes, controls, line separators or invisible characters, ≤ 200 characters. Exit conditions are typed and rendered from fixed phrases [F9]. Each directive is wrapped in `<adage-signal track=… route=… aspect=…>` and says it was learned by Adage and not requested by the user (W3). The stop reason is one fixed template | `crates/adage-runtime/src/render.rs` |
+| **Slot binding** | A bound value must pass its contract and also be a plain token (`[A-Za-z0-9_./:@=+,-]`, ≤ 200, no leading `-`). A `repo_path` must be relative, safe, exist as a file, and still lie inside the repository once symlinks resolve. Intent routes bind nothing | `crates/adage-runtime/src/lib.rs` (`contract_ok`, `plain_token`) |
+| **Parser hardening** | Commands over 16 KiB, nesting over 48, or more than 128 pipes outside quotes are not parsed (recorded as unknown). The walk depth is bounded at 96, and `&&`/`\|\|` chains are flattened iteratively. Parsing times out after 50 ms. **The parser only ever sees an ASCII shadow**: every non-ASCII character is replaced by ASCII filler of the same byte length, and text is read back from the original by the same byte ranges. tree-sitter-bash's scanner calls `isdigit()` on full code points, which reads out of bounds in glibc, so any command with `{` followed by a large code point segfaulted the process on Linux | `crates/adage-core/src/shell.rs` (`ascii_shadow`, `too_deep`, `too_many_pipes`, `PARSE_TIMEOUT_MICROS`, `MAX_DEPTH`); commit `dd6a426` |
+| **Hook process** | 8 MiB stack on every platform. `catch_unwind` with a silent panic hook. Stdin capped at 8 MiB. Session ids sanitised before becoming file names. Spool records capped at 1 MiB | `main.rs`, `hook.rs`, `adage-store` |
+| **Agent-session refusal** | Commands that change trust, publish or install refuse inside an agent session, and without a terminal [F11]. `share`, `add` and review decisions check `CLAUDECODE`. `install --write` and `init --yes` check `CLAUDECODE`, `OPENCODE`, `CODEX_SANDBOX` and `CODEX_SANDBOX_NETWORK_DISABLED`. `ADAGE_ALLOW_NONINTERACTIVE=1` lifts only the terminal check. This guards against steering and is not a sandbox. The live eval runner refuses `--execute` under `CLAUDECODE` | `share.rs` (`require_person`), `install.rs` (`AGENT_ENV`), `init.rs`, `evals/live/runner.py` |
+| **Signing and trust** | sshsig in namespace `adage-track`. Trust anchors are the person's own file, or a repository's file only after trust-on-first-use approval pinned by hash. Imports are never green, start at probation, live apart from learned tracks, and lose to a learned route with the same id | [§4.9](#49-track-toolchain-a7) |
+| **Share path** | No symlinks, a file allowlist, size caps, a redaction scan over the exact bytes, and re-validation of the copy before signing | `share.rs`, `redact.rs` |
+| **Harness configuration** | `install --write` writes only the documented location. It merges JSON, replacing only Adage's own entries, and refuses a file that is not a JSON object. It refuses to write through a symlinked path inside the repository, writes atomically, and replaces the OpenCode plugin only if it is Adage's | `install.rs` |
+| **Binary provenance** | The plugin shim links a bundled binary only if it matches `dist/SHA256SUMS`, and never downloads. The model's digests are compiled into the binary, and `models fetch` uses HTTPS only with size caps | `plugin/claude-code/scripts/session-start`, `adage-intent/src/model.rs` |
+| **Signal box** | Bound to 127.0.0.1, GET and HEAD only, read-only. Requests whose `Host` is not that address are refused (DNS rebinding). A strict CSP | `crates/adage-cli/src/serve.rs` |
+| **Data at rest** | Spools hold decisions, canonical keys and the directive text sent. No prompt text is stored. `survey` prints only short prompt snippets, with home paths and secret-looking strings scrubbed | `hook.rs`, `survey.rs`, `redact.rs` |
+| **Supply chain** | `cargo deny` in CI (one advisory ignored with a written reason), `--locked` builds, attestations, SBOMs, npm provenance, no install scripts | `deny.toml`, `dist-workspace.toml` |
+
+**Independent check.** The eval's safety oracle (`crates/adage-eval/src/safety.rs`) re-checks
+every directive without using the runtime's code. The adversarial dataset attacks every input
+path: 84 directives were checked, with 0 unsafe. The property tests drive random, mostly hostile
+tracks through validation and `decide()`, and every output must pass the oracle. They found 8
+bugs, all fixed with regression tests (docs/evals.md).
+
+The only processes Adage starts are `curl` (in `adage models fetch`), `stty` (for a passphrase at
+a terminal), and, in the OpenCode plugin, `adage` itself. None is triggered by a directive.
 
 ---
 
 ## 9. Performance budget
 
-| Stage | Budget p95 | Notes |
-| --- | --- | --- |
-| Harness spawns `adage hook` | 5 ms | Static binary, no runtime to start |
-| Client: read stdin, T0 | 1 ms | mmap filter; large tool outputs read but not parsed |
-| Socket round trip | 0.5 ms | |
-| Translate + session update | 0.5 ms | |
-| T1 lookup + decide + render | 1 ms | |
-| T2 embed (prompt points only) | 10 ms | Spike to confirm |
-| **Total, no match** | **≤10 ms** | Most calls stop at T0 |
-| **Total, structured match** | **≤15 ms** | |
-| **Total, with intent** | **≤25 ms** | |
+Design budget [D§13.2]: p95 ≤ 10 ms with no match, ≤ 15 ms for a structured match, ≤ 25 ms with
+prompt intent, end to end, spawn included.
 
-**Memory:** daemon ≤150 MB resident with the model loaded; zero when idle-exited. **CPU:** negligible
-between events; `adage learn` capped by `nice` and a thread limit.
+**Hook, end to end** (S7 addendum: `crates/adage-cli/examples/hook_latency.rs`, the release
+binary in exec form, 500 runs after 20 warm-ups, Apple M3 Pro):
+
+| `UserPromptSubmit` scenario | p50 | p95 | p99 |
+| --- | ---: | ---: | ---: |
+| Repository with no routes (the common path) | 1.68 ms | 1.76 ms | 1.81 ms |
+| Structured routes only (no model touched) | 3.09 ms | 3.18 ms | 3.32 ms |
+| Intent routes, model installed (open, embed, match) | 6.25 ms | 6.39 ms | 6.73 ms |
+| Intent routes, model missing (fails open) | 3.09 ms | 3.19 ms | 3.27 ms |
+
+The intent path adds about 3.2 ms per process: 1.25 ms compiling the normaliser's regexes,
+1.25 ms building the vocabulary map, and 0.01 ms for the embedding itself.
+
+**Components:**
+
+| Measurement | Value | Source |
+| --- | --- | --- |
+| Exec-form spawn and exit, the floor | 1.67 ms p50, 2.14 ms p95 | S1 (machine under heavy load) |
+| The same, reading 300 KB of stdin | 2.13 ms p95 | S1 |
+| Shell form (`sh -c`) instead | 10.4 ms p95, 60 ms max | S1 |
+| First execution of a new binary (macOS code-signature check) | 119 ms p50, 172 ms p95, up to 352 ms | S1; absorbed by the shim's pre-run |
+| A Node hook client, for comparison | 35 ms p50, 54 ms p95 | S1; ruled out |
+| Two-slot state decide, 16 concurrent sessions | 0.54 ms p95 | S3 |
+| Parse timeout; worst pathological command after the fix | 50 ms; about 58 ms | docs/evals.md, bug 4 |
+| Normaliser throughput | ~32,000 calls/s, one thread | S8 |
+| Spool size | 240 KiB per 1,000 events | S3 |
+| Intent clustering, per repository | 17 s and 652 MB per 10k prompts; 300k prompts in 8.0 min as one graph | S7 |
+| Eval gates | Under a second | docs/evals.md |
+
+**Limits of these numbers.** Every latency was measured on one Apple M3 Pro, and S1 and S3 ran
+while other agents loaded the machine. Hook latency has not been measured on Linux or Windows. A
+pathological command can take one hook to about 58 ms, and the pilot's shadow phase checks hook
+p95 on real traffic [P§5]. Hook memory has not been measured.
 
 ---
 
 ## 10. Observability
 
-- **Local only.** Structured logs, rotated; no telemetry leaves the machine.
-- **`adage doctor`:** socket unit present and activatable; hooks registered per harness and matching
-  the installed version; index generation current and consistent; model present and pinned;
-  unknown-shape and quarantine rates; hot-path latency percentiles; dropped-observation count.
-- **Latency histograms** per stage are kept in the daemon and written to the database every few
-  minutes, so the performance budget is continuously measured, not asserted.
+Everything is local, and nothing leaves the machine.
 
----
-
-## 11. Research harness
-
-The credibility test (D§16) is an analysis, not a product feature, and needs fast iteration. It runs
-in **Python notebooks** over the same data, with one rule: the normaliser is never re-implemented.
-The Rust normaliser and feature extraction are exposed to Python through bindings, so research and
-product always agree on what a canonical action is. Mining algorithms prototyped in Python are
-ported to Rust once they pass the gates.
-
----
-
-## 12. Risks and spikes
-
-| # | Risk | Spike before implementation |
+| Tool | What it shows | Source |
 | --- | --- | --- |
-| R1 | Embedding latency on the slowest supported laptop exceeds the T2 budget | Benchmark int8 small models on target hardware; fall back to a static embedding model if needed |
-| R2 | Process spawn makes command hooks too slow on macOS | Measure end-to-end hook latency; adopt `http` hooks on Claude Code if p95 exceeds budget |
-| R3 | Socket activation behaves differently across launchd/systemd versions | Prototype both units; verify cold-start miss behaviour |
-| R4 | Plugin `SessionStart` pack registration timing — packs registered after the first prompt miss that prompt | Measure hook ordering; if needed, persist pack registrations per project |
-| R5 | HDBSCAN determinism and scale on hundreds of thousands of prompts | Benchmark on a synthetic corpus of the expected size |
-| R6 | Stop-hook semantics differ between harnesses | Verify `Continue` behaviour and loop guards per harness |
-| R7 | Harness hook payloads change without notice | Golden fixtures per version in CI; the unknown-shape alarm |
+| **Spools** | One record per hook call: event, arm, index generation, delivered and would-have directives, stop requests, judgements, observed keys | `sessions/*.spool` |
+| **`adage report`** | Totals across spools: directives, would-have, followed, derailed, obligations met, stop requests | `crates/adage-cli/src/main.rs` |
+| **`adage graph`** | Situations → routes → steps → agent responses, with live counts **split by arm**. In holdout sessions, "followed" means the agent found the path unaided. JSON for tools | `crates/adage-cli/src/graph.rs` |
+| **Signal box** | `adage graph --serve` serves the live page (`assets/brain.html`) and `/graph.json` from the binary | `serve.rs` |
+| **`adage review`** | Routes waiting for a person, including derail flags computed from spools | [§4.16](#416-review) |
+| **`adage status`** | Installed tracks, aspects, evidence, and whether the intent model is present | `main.rs` |
+| **`adage doctor`** | Pass/warn/fail with a fix for each: the binary; the data directory is writable; the index is present, parses, and its generation matches its routes; tracks validate; model checksums; each harness's hook registrations point at an existing adage binary; the plugin's staged binary; kill switches and experiment settings; total spool size (warns over 256 MiB); fail-open errors | `crates/adage-cli/src/doctor.rs` |
+| **`adage survey`** | What agents actually do, per repository, with learn's candidate routes | `crates/adage-cli/src/survey.rs` |
+| **`adage eval`** | Offline precision, recall, turns saved, finish-line accuracy, unsafe count, and replay fidelity against live spools | [§11](#11-evals-and-the-harness-simulator) |
+
+Latency is not recorded at run time. It is measured by the benchmark example, and in the pilot.
+
+---
+
+## 11. Evals and the harness simulator
+
+Draft 2's Python research harness was not built. Its role, a credibility test that uses the
+product's own normaliser, is filled by `adage eval`, which is Rust end to end.
+
+**Offline replay** (`crates/adage-eval/`, docs/evals.md):
+
+1. Split sessions deterministically: a named split, `hash:<share>`, or `all`.
+2. Learn with the real `adage learn` into a temporary home.
+3. Replay each held-out session through `decide()` in the holdout arm. Sessions steered by live
+   directives are skipped.
+4. Score every would-have directive against what the agent did later, and check it with the
+   safety oracle.
+
+The report is byte-identical across runs. Intent routes are not evaluated offline, because no
+model is used.
+
+| | Demo round 2 (real) | Synthetic | Adversarial |
+| --- | ---: | ---: | ---: |
+| Precision, all | 0.73 | 0.91 | 0.73 |
+| Recall of key steps | 0.78 | 1.00 | 0.77 |
+| Finish-line accuracy | 1.00 | 1.00 | 1.00 |
+| Unsafe directives | 0 | 0 | 0 of 84 |
+
+**Fidelity.** Learning from round 2's training split reproduces the live index byte for byte
+(generation `8dd5ec01ed76c4bd`). Replay reproduces 36 of 36 sessions' live decisions, and the exact
+hook event sequence in 35 of 36. These are gated in `cargo test -p adage-eval --test gates`,
+alongside thresholds set at the measured values less a margin.
+
+**Property tests** (`crates/adage-eval/tests/prop_*.rs`) cover the parts every hook runs: the
+normaliser (never panics, returns within 2 s on a 2 MiB stack), track validation through
+`decide()`, spools and state under tearing and bit flips, and `sanitise`.
+
+**Harness simulator** (`crates/adage-sim/`, `crates/adage-cli/tests/harness_sim.rs`). One
+scenario, the acme-billing sandbox, is rendered as each harness records it on disk (12 seeded
+sessions per harness, in `sim/fixtures/`) and as each harness's hooks deliver it. The test drives
+the real binary: learn from that harness's history, replay a held-out session through
+`adage hook <harness> <event>` in both arms, then check every response and `adage graph --json`.
+It proves Adage against **our reading** of OpenCode and Codex, not against the harnesses
+themselves. A live install is still needed (docs/harnesses.md, Verification). The simulator
+found that `graph` keyed sessions by an id prefix that OpenCode and Codex ids share.
+
+---
+
+## 12. Risks
+
+| # | Risk | Status |
+| --- | --- | --- |
+| R1 | Embedding latency exceeds the intent budget | **Closed.** The static model gives 6.39 ms p95 end to end (S7 addendum) |
+| R2 | Process spawn makes command hooks too slow | **Closed.** Exec form gives 2.2 ms p95 (S1). Shell form is slow, and Codex offers only shell form (unmeasured there) |
+| R3 | Socket activation differs across launchd and systemd | **Gone.** There is no daemon |
+| R4 | Pack registration timing | **Deferred.** Packs are not built. `SessionStart` does complete before the first prompt (S5 Q1) |
+| R5 | Clustering determinism and scale | **Closed.** kNN + Louvain is order-invariant, and takes 17 s per 10k-prompt repository (S7) |
+| R6 | Stop-hook semantics differ between harnesses | **Mitigated.** Requests are bounded per obligation and per session, and respect `stop_hook_active`. OpenCode has no stop hook (a synthetic prompt at idle); on Codex the reason becomes a user prompt |
+| R7 | Harness payloads change without notice | **Open.** Golden outputs and the simulator catch changes on our side only. There is no drift alarm |
+| R8 | Intent precision on real history is unknown | **Open.** Measured on synthetic labels only (0.87). If the pilot falls short, the fallback is bge-small (S2: 0.930 vs 0.852 top-1) [P§4.3] |
+| R9 | OpenCode and Codex adapters are unverified live | **Open.** Simulation only [P§4.2] |
+| R10 | Dead-end routes are keyed by runner, not by failing signature | **Open.** Over-broad warnings [P§4.1] |
+| R11 | The parse timeout makes pathological commands machine-dependent | **Open.** The fix is a node-count budget [P§4.1] |
 
 ---
 
 ## 13. Architecture decisions
 
-| # | Decision | Alternatives considered | Why |
+| # | Decision | Status | As built |
 | --- | --- | --- | --- |
-| A1 | Small resident daemon, socket-activated, idle-exit | No daemon; always-on daemon | Warm model, session state, single writer — at zero idle cost |
-| A2 | One Rust binary for client, daemon, pipeline, and CLI | Bun/TypeScript daemon + Go client; Python | Static binary, no runtime to install, fast start for the client, no GC pauses, native tree-sitter / ONNX / SQLite / SSH signatures |
-| A3 | Command hooks + Unix socket everywhere in v1; `http` hooks as a measured optimisation | `http` hooks first | Simpler to secure; uniform across harnesses |
-| A4 | Immutable, mmap'd, content-addressed index generations with atomic swap and a demotion overlay | Querying SQLite on the hot path | Latency, determinism, and explainability |
-| A5 | SQLite WAL, single writer, sufficient-statistics evidence | Postgres; files | Local-first, no service, mergeable evidence |
-| A6 | Small int8 retrieval embedding model in the daemon, downloaded and pinned | Hosted embeddings; static embeddings only | Local, fast, good enough — measured by the intent metrics |
-| A7 | Native `sshsig` signing and verification over a canonical digest | Shelling out to `ssh-keygen`; Sigstore | O5, no subprocess, no network |
-| A8 | Pack discovery by `SessionStart` registration hook | Scanning plugin caches | Uses documented mechanisms; respects per-project enablement |
-| A9 | Canonical event model; per-harness translate/render functions + capability tables | Per-harness runtimes | O8: OpenCode is two functions and fixtures |
-| A10 | Proving ground as a batch orchestrator with sandboxed headless runs and isolated Adage instances | A hosted service | No infrastructure; no contamination of personal evidence |
-| A11 | Team mode through git and pull requests only | A sync server | No infrastructure; review built in |
-| A12 | Stateless hashed assignment with exposure and propensity logging | Stored assignments | Deterministic and reproducible |
-| A13 | Capability tables and translators selected by harness version | Assume latest | Harnesses change often |
+| A1 | Resident daemon | **Replaced** | No daemon. Short-lived hook processes over state files and spools (S2, S3) |
+| A2 | One Rust binary | **Kept** | One binary for hooks and every command. Draft 2's separate hook-client binary was not needed (S1) |
+| A3 | Transport | **Replaced** | Exec-form command hooks, payload on stdin, no socket (S1) |
+| A4 | Index | **Simplified** | One content-addressed `index.json`, renamed atomically. No mmap, fuse filter or overlay |
+| A5 | Storage | **Replaced** | No database. Per-session two-slot state and spools; evidence lives in routes (S3) |
+| A6 | Embeddings | **Replaced** | Static potion-base-8M in plain Rust, fetched and pinned by digest; optional (S2, S7) |
+| A7 | Signing | **Kept, extended** | Native sshsig through ssh-agent or a key file; `ssh-key = 0.6.7` (S6). No machine keys; no lockfile |
+| A8 | Packaging | **Changed** | Binary in `${CLAUDE_PLUGIN_DATA}/bin` by digest, verified and pre-run. No pack discovery (S5, S1) |
+| A9 | Harness layer | **Kept** | One `Event`/`Output` pair; one adapter per harness |
+| A10 | Proving ground | **Partial** | Offline replay eval and a live A/B runner script; no product |
+| A11 | Team mode through git | **Partial** | Direct signed sharing only; depots not built |
+| A12 | Experiments | **Simplified** | Session-id hashed holdout, exposure logging; no knockouts or propensities |
+| A13 | Versioned capability tables | **Not built** | Unknown payloads fail open |
+| A14 | Imports live apart | **New** | `tracks/@imported/`, never written by learn; learned wins on id collisions [P§3a] |
+| A15 | Review decisions travel with the track | **New** | `review.yaml` per track, judged against a recorded basis; recipients' own decisions kept [P§3a] |
+| A16 | Offline replay as the regression gate | **New** | `adage eval` gates in `cargo test` and a weekly workflow |
+| A17 | Harness simulator | **New** | Proves adapters and importers against formats read from source, until live installs exist |
+| A18 | The parser sees ASCII only | **New** | `ascii_shadow` before tree-sitter-bash (commit `dd6a426`) |
 
 ---
 
-## 14. Handoff to implementation planning
+## 14. Designed but not built
 
-Questions phase 3 must answer:
+| Item | Design reference | Where it stands |
+| --- | --- | --- |
+| **Team depots and lockfiles** | D§10.7, O12; draft 2 A11, §6.4 | Milestone M5 [P§8]. Decide open core (D1) before building depots |
+| **Proving ground as a product** | D§12, O7; draft 2 A10 | Offline eval and the live runner exist ([§4.12](#412-proving-ground-a10)); PR reconstruction, containers and budgets do not. M5 |
+| **Sub-agent acceleration and pre-emption** | D§13.4 | No `SubagentStart` or `PreToolUse` hooks. Sub-agent records are skipped on import |
+| Track packs as plugins, pack registration | Draft 2 A8, F5 | Not built |
+| Per-session nonce in directives | F12 | Not built. The wrapper names the track, route and aspect, with no nonce |
+| Root-lineage arm hashing, install salt, knockouts, propensities, static-guidance arm | F7, F14; draft 2 A12 | Not built |
+| Fast demotion (CUSUM), last-good version, three-demotion blacklist | Draft 2 §4.5, F14 | Not built. Derails are flagged for review |
+| Scheduled learning | Draft 2 §4.7 | `adage learn` runs on demand |
+| Language-model family labels | Draft 2 §4.7, F10 | Families carry no labels |
+| Behaviour-trained intent projection | O13 | Later, by design |
+| Skill-trigger steps | O15 | Steps are `run`, `read_batch` and `avoid` only |
+| `adage off`, status line, `suggest` mode | D§6 J6, F14 | Kill switches are `ADAGE_DISABLE` and `.adage/disabled` |
+| Hard per-event deadlines | F2 | Harness timeouts (5 s) and the 50 ms parse timeout only |
+| Overflow spilled to a file | D§9.3 W8 | Directive text is truncated to 9,500 bytes |
+| Script pinning, `scripts/` in tracks | O3; draft 2 §4.9 | Scripts never travel in a share; nothing runs them |
+| Track format version and compatibility policy | P§6.1 | Tracks carry a semver, but no format version |
+| Fail-open incident log | P§4.1 | `doctor` reads `fail-open.log`; nothing writes it |
+| Spool retention | Draft 2 §4.6 | None; `doctor` warns over 256 MiB |
+| Harness version detection and drift alarm | Draft 2 A13 | Not built |
+| Codex after-failure routes | docs/harnesses.md | Not possible until Codex reports failures to hooks; the adapter already accepts an exit code |
 
-1. **Order of the spikes** in §12, and what each result changes.
-2. **Walking skeleton:** the thinnest end-to-end path — Claude Code hook → client → daemon → a
-   hand-written route → directive — before any mining exists.
-3. **Where the credibility test runs**, which depends on O9.
-4. **Test strategy:** golden fixtures per harness version; replay of recorded sessions through the
-   runtime; property tests for determinism; latency regression gates in CI.
-5. **Release engineering:** reproducible builds, signing, the plugin, the npm package, the Codex
-   installer.
-6. **Slices:** which vertical slices deliver the Survey, then the runtime, then automatic tracks,
-   then sharing, then the proving ground.
+**Decisions pending** ([Implementation Plan §9](Adage%20%E2%80%94%20Implementation%20Plan.md#9-decisions-needed-from-you)):
+
+| # | Decision | What waits on it |
+| --- | --- | --- |
+| **O9** | Employer IP clearance | The pilot on real history (M2), and any public release |
+| **D1** | License | `LICENSE`/`NOTICE`, crates.io and npm publishing (`publish = false`, `UNLICENSED` until then), and open core before depots |
+| **D2** | DCO or CLA | Accepting contributions |
+| **D3** | npm name | `npm/config.mjs` (`@adage/cli` is a placeholder) |
+| **D4** | Apple Developer ID | Notarised direct downloads and Homebrew |
+| **D5** | Private or public beta first | Milestone M4 |
 
 ---
 
-## 15. Review findings and resolutions
+## 15. Review findings
 
-An adversarial principal-engineer review (2026-09-22) checked this draft against the design spec and
-against current harness and crate documentation. Findings are either **accepted** — decided now, and
-overriding the earlier sections of this document — or **sent to a spike** in `spikes/`, because the
-answer needs measurement. A full rewrite of §§3–13 follows the first wave of spikes.
+Draft 2's §15.3, the questions sent to spikes, is closed: every spike has reported, and the board
+is `spikes/README.md`.
 
 ### 15.1 Facts that changed
 
-| Fact | Consequence |
+These facts from the draft 2 review still hold, and the build follows them:
+
+| Fact | How the build follows it |
 | --- | --- |
-| Claude Code deletes transcripts after **30 days** by default (`cleanupPeriodDays`) | Backfill history is shorter than assumed. Capture must start early, and the credibility test's corpus is at most 30 days deep unless retention is raised on that machine |
-| Plugin `bin/` is added to the **agent's Bash PATH**; organisation-distributed plugins may not have a top-level `bin/` | Adage must not ship its binary in `bin/` — the agent could run trust-changing commands |
-| `${CLAUDE_PLUGIN_ROOT}` changes on every plugin update | Service units and long-lived paths must never point into the plugin directory |
-| Codex Stop `block` turns the reason into a **new user prompt** | Violates W3 (never claim the user asked) unless worded and gated carefully |
-| OpenCode prompt-hook edits **persist as user input** | Directives must use the `context` hook instead |
-| Claude Code docs warn that imperative out-of-band text can trigger **prompt-injection defences** | The green-directive wording must be tested, not assumed |
-| `SubagentStart` carries agent id and type, **not the task description** | The delegation description must be joined from the `Agent` tool call |
-| `ssh-key` crate has **no ssh-agent support** | Signing with agent-held, FIDO, or 1Password keys needs another path |
-| The Rust `hdbscan` crate uses a kd-tree only, which degrades at 384 dimensions | Clustering at scale needs a different approach |
+| Claude Code deletes transcripts after 30 days by default | Backfill is at most 30 days deep unless retention is raised; capture has to start early |
+| A plugin's `bin/` is on the agent's Bash `PATH` (and not on hooks', S5 Q3) | No `bin/`; the binary lives in `${CLAUDE_PLUGIN_DATA}/bin` |
+| `${CLAUDE_PLUGIN_ROOT}` changes on every plugin update (S5 Q2) | Hooks call the binary in the data directory |
+| Codex Stop `block` turns the reason into a user prompt | The reason says plainly that it is from Adage, and the adapter ignores it when it returns |
+| OpenCode prompt-hook edits persist as user input | Directives go in as a separate synthetic, `noReply` message |
+| `SubagentStart` carries no task description (S5 Q7) | Relevant only once sub-agent routes are built |
+| `ssh-key` has no ssh-agent support | `ssh-agent-client-rs` fills the gap (S6) |
+| The `hdbscan` crate degrades at 384 dimensions | Clustering is kNN + Louvain (S7) |
 
-### 15.2 Accepted now
+### 15.2 Findings F1–F14: disposition
 
-| # | Finding | Resolution |
+| # | Finding | As built |
 | --- | --- | --- |
-| F1 | **Client-side T0 filtering throws away the observation stream**, biasing history, follow/derail, obligations, familiar-command counts, and holdout exposure | **Separate observe from decide.** Every event is *observed* without blocking (async hooks on Claude Code; an append-only per-session spool elsewhere). Directives are *decided* synchronously only at `UserPromptSubmit`, `PostToolBatch` (or `PostToolUse` where batches don't exist), `SubagentStart`, and `Stop`. T0 remains only as a fast path for decisions, never for observation. `PreToolUse` is registered only for the `Agent` tool, to capture delegation descriptions |
-| F2 | Client deadline of "harness timeout − 500 ms" contradicts the latency budget | Hard per-event deadlines (≈8 / 13 / 23 ms), non-blocking connect; structured routes answered before any model is loaded; pre-warm at `SessionStart`. The first prompt must not be a guaranteed miss |
-| F3 | Delivery semantics differ by harness | A **delivery channel** per harness and decision point in the capability table: Claude Code `additionalContext` (including at Stop, preferred over `block`); OpenCode `context` hook; Codex Stop only when `stop_hook_active` is false and with wording that plainly isn't from the user. Wording itself → spike S4 |
-| F4 | Plugin packaging is fragile and exposes the binary to the agent | No top-level `bin/`. An exec-form shim in `scripts/` installs a signature-verified binary, named by digest, into the plugin data directory, and runs that. → verified in spike S5 |
-| F5 | Pack registration can't find `adage`, is lost at idle exit, and misses T0 | The Adage plugin's own `SessionStart` enumerates enabled plugins through documented means and persists registrations per project. → spike S5 |
-| F6 | "Single writer" SQLite is false | **One database file per writer** (runtime events, learning, yard), read-only `ATTACH` across them. Directive, exposure, and judgement rows are never dropped under back-pressure; only raw text may be |
-| F7 | Session identity and ordering | Order observations by batch (`PostToolBatch`, or turn and tool-use ids); hash the experiment arm on the **root session lineage** so `/clear` and forks keep their arm; subscribe to model-switch events; persist session state, obligations, and the demotion overlay across restarts |
-| F8 | Determinism is overclaimed | Scope the claim to one index generation, one model digest, and one execution provider. Single-threaded deterministic inference; threshold hysteresis; labels cached by content hash; an as-of time in `MANIFEST` |
-| F9 | Trust anchors can be subverted by a hostile repository | **Trust-on-first-use approval of each repository's `trusted-signers`, pinned by hash and origin**, like Codex hook trust. The machine key is never valid in a team signer file. **Exit conditions become typed predicates rendered from fixed templates**, not free text from a track — a design-spec change to D§9 and D§10.3 |
-| F10 | Adage starts unbounded processes | Labelling runs with tools and hooks disabled, in an isolated config directory, and those sessions are excluded from mining. The proving ground has **no worktree fallback** — containers only. Automatic team pull requests are **prepared** automatically but pushed only after local approval in `adage review` — a design-spec change to D§10.9 |
-| F11 | The agent can run `adage` | Commands that change trust or publish refuse to run inside an agent session (detected by harness environment variables) or without a terminal |
-| F12 | `<signal source="adage">` can be spoofed by any README or web page | A per-session nonce, announced at `SessionStart`, included in every genuine directive |
-| F13 | Model download integrity | The embedding model's digest is compiled into the signed binary |
-| F14 | Missing components | Named, persisted components for: **stop-hook bounds** (once per obligation, respecting the harness's own block cap); **familiar-command computation** (excluding steered runs); **change pacing**; **human-edit detection** (`authored`); **last-good-version storage**; **the three-demotion blacklist**; **script-pin checks at runtime**; **a taint lattice** on observations (lookup-script output is external content); **the static-guidance arm** and developer stratification; **`suggest`-mode gating**, the status line, and `/adage off` detection; the **skill-trigger step type** (O15) |
+| F1 | Observe separately from decide | **Superseded.** Decisions read the whole batch from the synchronous `PostToolBatch` payload; no async hooks; `PreToolUse` on `Agent` not registered |
+| F2 | Hard per-event deadlines, pre-warm at `SessionStart` | **Partly.** The shim pre-runs a new binary at `SessionStart`; no internal deadlines |
+| F3 | A delivery channel per harness and decision point | **Built**, with one change: Claude Code's finish line uses Stop `decision: block`, bounded, instead of `additionalContext` at Stop |
+| F4 | No `bin/`; an exec-form shim installs a verified binary by digest | **Built** ([§4.10](#410-plugin-packaging-a8)) |
+| F5 | Pack registration | **Not built** |
+| F6 | One database per writer | **Superseded.** No database |
+| F7 | Batch ordering, root-lineage arms, persisted state | **Partly.** Batches come whole from the payload and state persists; arms hash the session id |
+| F8 | Scope the determinism claim | **Built** as scoped: one index generation, one pinned model; single-threaded embedding. Learning's parse timeout is the known exception (R11) |
+| F9 | TOFU for repository trusted-signers; typed exit predicates from fixed templates | **Built** (`add.rs`, `render.rs`). Machine keys do not exist |
+| F10 | Bound what Adage starts | **Built** by omission: no labelling runs, no proving-ground runs, no pull requests |
+| F11 | Refuse trust changes inside an agent session | **Built**, with the env checks listed in [§8](#8-security-architecture) |
+| F12 | A per-session nonce | **Not built** |
+| F13 | The model's digest compiled into the binary | **Built** (`adage-intent/src/model.rs`) |
+| F14 | Missing components | **Built:** stop-hook bounds (once per obligation, two per session), `authored` routes (set by `review pin`). **Not built:** familiar-command computation, change pacing, automatic human-edit detection, last-good versions, the demotion blacklist, runtime script pins, a taint lattice, the static-guidance arm, `suggest` mode, the status line, skill triggers |
 
-### 15.3 Sent to spikes
+---
 
-| Question | Spike | Decision it settles |
-| --- | --- | --- |
-| Can process spawn plus socket round trip meet the budget on macOS, and does `http` hook transport matter? | S1 | A2, A3 |
-| Are static embeddings good enough for intent families, and what do transformer embeddings cost to load and run? | S2 | A6, and whether A1 needs a daemon at all |
-| Can per-session state files with `flock` and append-only spools replace a daemon's memory correctly under concurrency? | S3 | A1, A5 |
-| Which directive wordings are followed, and which trip Claude's injection defences? Does Stop `additionalContext` work as a finish-line nudge? | S4 | D§9 wording rules, F3 |
-| How do plugin roots, data directories, `SessionStart` ordering, async hooks, and plugin enumeration actually behave? | S5 | A8, F4, F5 |
-| Can tracks be signed with keys held in ssh-agent and verified natively against `allowed_signers` with a namespace? | S6 | A7 |
-| Which clustering method is deterministic and scales to hundreds of thousands of prompts? | S7 (wave 2) | Intent pipeline |
-| How far does tree-sitter-bash plus per-command grammars get on real transcripts? | S8 (wave 2) | Normaliser |
+## 16. Changes from draft 2
 
-### 15.4 Ratings after review
-
-| Decision | Rating | Note |
-| --- | --- | --- |
-| A1 Daemon | **Pending S2, S3** | Candidate replacement: daemonless with per-session state files, or a client-spawned daemon (no launchd/systemd), pre-warmed at `SessionStart` |
-| A2 Rust | Keep | Separate small hook-client binary in the same workspace |
-| A3 Transport | **Changed** (F1) + pending S1 | |
-| A4 Index | Changed | Client filter via a checksummed binary fuse filter, not `rkyv`; client passes its generation; overlay persisted |
-| A5 Storage | **Changed** (F6) | |
-| A6 Embeddings | **Pending S2** | |
-| A7 Signing | Changed + pending S6 | Agent-held keys |
-| A8 Packs | **Changed** (F5) + pending S5 | |
-| A9 Harness layer | Keep | Add delivery channels and session-identity rules (F3, F7) |
-| A10 Proving ground | Changed (F10) | Containers only; isolated config; PR text is untrusted |
-| A11 Team mode | Keep | Pull requests gated by local approval (F10) |
-| A12 Experiments | Keep | Root-lineage hashing, developer stratification (F7, F14) |
-| A13 Versions | Keep | |
+| Decision | Draft 2 | As built | Why |
+| --- | --- | --- | --- |
+| Daemon (A1) | `adaged`, socket-activated by launchd/systemd, idle exit | None | S3: two-slot state decides in 0.54 ms p95 at 16 sessions, as fast as a daemon round trip. S2: a static model loads in 17 ms in Rust. Nothing left needed residency |
+| Transport (A3) | Command hooks forwarding to a Unix socket | Exec-form command hooks, all work in-process | S1: exec form is 2.2 ms p95 against 10.4 ms for shell form; without a daemon, a socket has nothing to connect to |
+| Hook client (A2) | A separate, dumb client binary with T0 filtering | The one binary does everything; the early exit is "no routes for this repository" | S1: the full binary spawns in about 2 ms; S7 addendum: the no-routes path is 1.76 ms p95 |
+| Index (A4) | mmap'd `rkyv` generations, a fuse filter, a demotion overlay | One JSON file, content-addressed, renamed atomically | JSON meets the budget (3.18 ms p95 with structured routes, S7 addendum); without fast demotion there is nothing to overlay |
+| Storage (A5, F6) | SQLite in WAL mode, later one database per writer | No database: per-session state and spools; evidence in routes; learning reads harness history | S3: spools survived concurrent writers and `kill -9` with no loss; hooks never touch a database |
+| State format | In daemon memory, 16-entry history | Two 64 KiB CRC slots under `flock`; 32-entry history; CRC covers sequence and length | S3's winning design; eval bug 8 (a torn write resurrected an older state) |
+| Embeddings (A6) | bge-small ONNX int8 in the daemon, downloaded | potion-base-8M, plain Rust, per process, optional | S2: static is good enough on verb contrast and open-set rejection, and loads in 17 ms; S7 addendum: 6.39 ms p95 end to end. bge-small remains the fallback if pilot precision falls short |
+| Clustering | HDBSCAN (already revised in draft 2's table) | Exact kNN + deterministic Louvain per repository, then split/merge | S7: HDBSCAN was neither order-invariant nor able to scale; Louvain is byte-identical under reordering |
+| Signing (A7) | `ssh-key` only; machine keys for personal tracks | sshsig through ssh-agent or a key file; only shared tracks are signed | S6: `ssh-agent-client-rs` closes the agent gap; ssh-keygen and Rust verify each other's signatures |
+| Packaging (A8) | Binary in the plugin; packs register at `SessionStart` | Binary in `${CLAUDE_PLUGIN_DATA}/bin` by digest, verified and pre-run; no packs | S5: `bin/` is on the agent's `PATH` and the plugin root changes per version; S1: a new binary's first execution costs 119–352 ms on macOS |
+| Observation (F1) | Every event observed, async hooks | Decisions at synchronous hooks only | S5 Q5: `PostToolBatch` carries the whole batch; S5 Q6: async hooks near session end can be cut off |
+| Finish line on Claude Code (F3) | `additionalContext` at Stop preferred | Stop `decision: block`, once per obligation and twice per session, never while `stop_hook_active` | S4 could not measure Stop `additionalContext` (no model runs completed), so it was never shown to work; slice 6 built bounded Stop blocks instead, and the demo ran with them [P§3] |
+| Normaliser hardening | tree-sitter-bash and grammars as data | Plus size, nesting, depth and pipe bounds, a 50 ms parse timeout, iterative chains, and the ASCII shadow | Eval bugs 3 and 4 (a stack overflow, a 0.7 s parse); a glibc segfault in tree-sitter-bash's scanner, found by the Diagnose workflow (commit `dd6a426`) |
+| Training hygiene | Truncate treated sessions at the first directive, with inverse-propensity weights | Exclude sessions steered by the same kind of route | Simpler, and propensities are not logged |
+| Directive wrapper | `<signal source="adage">` [D§9.2]; overflow spilled to a file | `<adage-signal>` with an attribution line; truncation at 9,500 bytes | The demo followed factual, attributed wording in 36 of 36 directed runs with no suspicion or refusal language [P§1] |
+| Imports and review (new) | A yard, and review state on routes | `tracks/@imported/`; `review.yaml` per track | [P§3a]: imports must never be overwritten by learn, and decisions must travel with a track without changing the route schema |
+| Codex | `AGENTS.md` fallback considered | Hooks only | [P§3a]: Codex hooks use Claude Code's contract, including `additionalContext` |
+| Proving ground (A10) | A batch orchestrator with containers | Offline replay eval and a live runner script | [P§3]: offline replay gates every change for free; the product waits for M5 |
+| Research harness (§11) | Python notebooks with Rust bindings | `adage eval` in Rust | The credibility test runs on the product's own code, with no bindings to keep in step |
+| Repository key | `realpath(git root)` plus a hash of the origin | The normalised origin URL, else the directory name | Clones share routes. Repositories without an origin can share a key by name ([§4.5](#45-the-index-a4)) |
+| Scheduling | A nightly launchd/systemd timer | `adage learn` on demand | No service units exist to host a timer |
+| Platforms | macOS and Linux | Plus Windows, CI-verified | [P§4.4]: the Windows port found two path bugs that stopped finish-line routes from firing there |
+| Pipeline storage of raw text | 14 days of raw text for re-mining | None stored by Adage; learning re-reads harness history | Harness history is already on disk; Adage adds no copy |
