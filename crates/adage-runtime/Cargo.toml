@@ -4,6 +4,7 @@ description = "Decisions at hook time: match routes, bind and validate slots, re
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
 adage-core = { path = "../adage-core" }

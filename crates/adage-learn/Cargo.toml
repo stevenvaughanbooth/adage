@@ -4,6 +4,7 @@ description = "Learn tracks from agent sessions: import transcripts, mine routes
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
 adage-core = { path = "../adage-core" }

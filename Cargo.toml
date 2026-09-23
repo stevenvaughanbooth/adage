@@ -5,8 +5,12 @@ members = ["crates/*"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+# TODO(D1): the license is not chosen yet. Until it is, no crate may be published to crates.io
+# (publish = false), and cargo-deny skips these unpublished crates' own license.
 license = "UNLICENSED"
+publish = false
 repository = "https://github.com/stevenvaughanbooth/adage"
+homepage = "https://github.com/stevenvaughanbooth/adage"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -28,3 +32,7 @@ lto = true
 codegen-units = 1
 strip = true
 panic = "unwind"
+
+# Release artifacts (dist builds with this profile; see dist-workspace.toml).
+[profile.dist]
+inherits = "release"

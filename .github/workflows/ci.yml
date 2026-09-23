@@ -1,0 +1,128 @@
+# Continuous integration (plan §6.1). Release builds are .github/workflows/release.yml (dist).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  fmt:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  test:
+    name: test (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macos-arm64, os: macos-14 }
+          - { name: macos-x64, os: macos-15-intel }
+          - { name: linux-x64, os: ubuntu-24.04 }
+          - { name: linux-arm64, os: ubuntu-24.04-arm }
+          - { name: windows-x64, os: windows-2022 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # Node runs the OpenCode plugin test (inside `cargo test`) and the npm launcher test.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: test (adage-store, the Windows-ported store, on every platform)
+        run: cargo test --locked -p adage-store
+      - name: test
+        # TODO: make Windows blocking once it has run green. Windows is compile- and clippy-proven
+        # locally (scripts/cross-check.sh) but these tests have never run on Windows.
+        continue-on-error: ${{ runner.os == 'Windows' }}
+        run: cargo test --workspace --locked
+      - name: OpenCode plugin test ran under node (not skipped)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          out=$(cargo test --locked -p adage-cli --test hooks opencode_plugin -- --nocapture 2>&1) || { echo "$out"; exit 1; }
+          echo "$out" | tail -5
+          if echo "$out" | grep -q "node not found"; then echo "the OpenCode plugin test was skipped"; exit 1; fi
+          echo "$out" | grep -q "1 passed"
+      - name: npm launcher
+        shell: bash
+        run: node npm/test/launcher.test.mjs
+      - name: Claude Code session-start hook
+        if: runner.os != 'Windows'
+        run: plugin/test/session-start.test.sh
+
+  # Release targets without a native CI test runner: the static musl builds dist ships for Linux.
+  musl:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: cargo build --locked --release -p adage-cli --target x86_64-unknown-linux-musl
+      - name: static and runnable
+        run: |
+          b=target/x86_64-unknown-linux-musl/release/adage
+          file "$b" | grep -Eq "statically linked|static-pie linked"
+          "$b" version
+
+  deny:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories bans licenses sources
+
+  plugin:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: structure and versions
+        run: node scripts/check-plugin.mjs
+      - name: install the Claude Code CLI (validation only; no agent runs)
+        run: npm install -g @anthropic-ai/claude-code
+      - name: claude plugin validate
+        run: |
+          claude plugin validate --strict plugin/claude-code
+          claude plugin validate --strict .

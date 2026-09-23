@@ -4,6 +4,7 @@ description = "Native sshsig signing of track digests (ssh-agent first, key file
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
 # Pinned to match ssh-agent-client-rs's own ssh-key 0.6 dependency (spike S6): the two crates'

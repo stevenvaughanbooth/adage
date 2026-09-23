@@ -4,10 +4,17 @@ description = "The adage binary: hook client, learner, and tools"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [[bin]]
 name = "adage"
 path = "src/main.rs"
+
+# Released by dist (dist-workspace.toml) although not published to crates.io yet.
+[package.metadata.dist]
+dist = true
 
 [dependencies]
 adage-core = { path = "../adage-core" }

@@ -4,6 +4,7 @@ description = "Canonical actions, the shell normaliser, effect classes, spans, a
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+publish.workspace = true
 
 [dependencies]
 serde.workspace = true

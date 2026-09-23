@@ -1,0 +1,36 @@
+[workspace]
+members = ["cargo:."]
+
+# Release configuration for dist (cargo-dist): https://axodotdev.github.io/cargo-dist/
+# After editing, regenerate the workflow with `dist generate` (CI fails if it is stale).
+[dist]
+cargo-dist-version = "0.32.0"
+ci = "github"
+# The npm channel is not dist's npm installer, which downloads the binary in a postinstall script.
+# Plan §6.2 calls for per-platform packages selected by optionalDependencies and no install-time
+# download, so the release publishes npm/ through the custom job .github/workflows/publish-npm.yml.
+installers = ["shell", "powershell", "homebrew"]
+tap = "stevenvaughanbooth/homebrew-tap"
+formula = "adage"
+publish-jobs = ["homebrew", "./publish-npm"]
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "aarch64-unknown-linux-musl",
+  "x86_64-unknown-linux-musl",
+  "x86_64-pc-windows-msvc",
+]
+install-path = "CARGO_HOME"
+install-updater = false
+# Supply chain (plan §6.1): keyless Sigstore build-provenance attestations for every artifact
+# (actions/attest-build-provenance), and a CycloneDX SBOM per archive (cargo-cyclonedx).
+github-attestations = true
+cargo-cyclonedx = true
+# PRs only check that the release would plan; tags build and publish.
+pr-run-mode = "plan"
+# The npm job checks out npm/ (contents) and publishes with provenance (id-token).
+github-custom-job-permissions = { "publish-npm" = { contents = "read", id-token = "write" } }
+# TODO(D1): once LICENSE (and the generated NOTICE, scripts/notice.sh) exist at the repository
+# root, add `include = ["NOTICE"]`; dist ships LICENSE* files in every archive automatically.
+# TODO(D4): macOS Developer ID signing and notarisation are not configured (Apple Developer
+# Program decision). npm-installed binaries are not quarantined; direct downloads will be.

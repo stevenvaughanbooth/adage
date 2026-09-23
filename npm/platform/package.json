@@ -1,0 +1,12 @@
+{
+  "name": "__PACKAGE_NAME__-__OS__-__CPU__",
+  "version": "0.0.0-dev",
+  "description": "The adage binary for __OS__-__CPU__ (__TARGET__). Install __PACKAGE_NAME__ instead; it selects this package.",
+  "license": "__LICENSE__",
+  "repository": { "type": "git", "url": "git+https://github.com/stevenvaughanbooth/adage.git" },
+  "homepage": "https://github.com/stevenvaughanbooth/adage#readme",
+  "os": ["__OS__"],
+  "cpu": ["__CPU__"],
+  "files": ["bin/"],
+  "preferUnplugged": true
+}

@@ -1,0 +1,12 @@
+{
+  "name": "__PACKAGE_NAME__",
+  "version": "0.0.0-dev",
+  "description": "Adage: put your agent on rails. Learns the routes coding agents take and tells them, deterministically, what to do next.",
+  "license": "__LICENSE__",
+  "repository": { "type": "git", "url": "git+https://github.com/stevenvaughanbooth/adage.git" },
+  "homepage": "https://github.com/stevenvaughanbooth/adage#readme",
+  "bin": { "adage": "bin/adage.js" },
+  "files": ["bin/adage.js"],
+  "engines": { "node": ">=18" },
+  "optionalDependencies": {}
+}
