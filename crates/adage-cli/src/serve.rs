@@ -33,9 +33,11 @@ pub fn serve(args: &[String], paths: &Paths) -> Result<()> {
     let listener = TcpListener::bind(("127.0.0.1", port))
         .with_context(|| format!("cannot listen on 127.0.0.1:{port} (try --port N, or --port 0 for any free port)"))?;
     let addr = listener.local_addr()?;
-    println!("adage graph: the signal box at http://{addr}/  (live JSON at http://{addr}/graph.json)");
-    println!("Read-only, on this machine only (ADAGE_HOME={}). Ctrl-C stops it.", paths.root.display());
-    std::io::stdout().flush()?;
+    // A closed stdout (the launcher went away) must not stop the server: `println!` would panic.
+    let mut out = std::io::stdout();
+    let _ = writeln!(out, "adage graph: the signal box at http://{addr}/  (live JSON at http://{addr}/graph.json)");
+    let _ = writeln!(out, "Read-only, on this machine only (ADAGE_HOME={}). Ctrl-C stops it.", paths.root.display());
+    let _ = out.flush();
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
         // One bad client must never stop the server.

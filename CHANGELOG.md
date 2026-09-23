@@ -7,6 +7,30 @@ version as the GitHub Release notes.
 
 ## Unreleased
 
+### Added
+
+- `adage init`, `adage survey`, `adage doctor` and `adage graph --serve` (the signal box served
+  from the binary).
+- `adage eval`, which replays held-out sessions offline and scores what Adage would have said. It
+  ships with committed datasets (real demo, synthetic, adversarial) and CI gates.
+- A Codex rollout importer: `adage learn --codex-sessions`.
+- A harness simulator (`crates/adage-sim`), which replays mock sessions end to end through each
+  harness's native hooks.
+- Windows support. CI covers macOS arm64 and x64, Linux x64 and arm64, and Windows x64.
+
+### Fixed
+
+- **Linux segfault in hooks.** A segfault in tree-sitter-bash's scanner (it calls `isdigit()` on
+  full code points) could crash a hook on Linux, given a `{` followed by a large code point. The
+  parser now only sees an ASCII shadow of each command, with the same byte offsets.
+- **Windows finish-line routes never fired.** Paths under `\\?\` roots, and `C:\…` paths, did
+  not resolve or relativize.
+- **Eight bugs found by property tests**, including a stack overflow on long `&&` chains, slow
+  parses of malformed input (now capped at 50 ms), invisible characters passing sanitisation, and a
+  track able to direct a command naming a path outside the repository.
+- **`adage learn --codex-sessions <dir>` fell back to all of `~/.claude/projects`** when the
+  directory held nothing. An explicit source that finds nothing is now an error.
+
 ## 0.1.0 - Unreleased
 
 The first version: Adage learns the routes coding agents take and, at each decision point, tells
