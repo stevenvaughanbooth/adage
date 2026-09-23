@@ -130,15 +130,15 @@ These were measured on the committed datasets, with demo thresholds and a window
 | | demo round 2 | demo round 1 | demo `hash:0.3` | synthetic | adversarial |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Train / test (scored) | 54 / 18 (18) | 18 / 18 (18) | 55 / 35 (24; 11 steered) | 34 / 18 (18) | 10 / 20 (20) |
-| Directives given | 48 | 28 | 65 | 58 | 74 |
-| Precision, all | 0.73 | 0.68 | 0.80 | 0.91 | 0.73 |
+| Directives given | 66 | 28 | 89 | 76 | 74 |
+| Precision, all | 0.74 | 0.68 | 0.81 | 0.93 | 0.73 |
 | — lookup | 0.67 | 0.50 | 0.63 | 0.78 | 1.00 |
 | — linked files | 0.75 | 1.00 | 1.00 | 1.00 | 0.50 |
 | — dead end | 0.78 | — | 0.83 | 1.00 | 1.00 |
 | — finish line | 0.75 | 1.00 | 1.00 | 0.88 | 0.41 |
-| Recall (key steps) | 0.78 (36/46) | 0.56 (20/36) | 0.81 (55/68) | 0.97 (75/77) | 0.57 (50/87) |
+| Recall (key steps) | 0.78 (36/46) | 0.56 (20/36) | 0.84 (57/68) | 1.00 (77/77) | 0.57 (50/87) |
 | Turns saved, lookup (median) | 9 | 10 | 10 | 1 | 0 |
-| Dead-end accuracy | 0/0 | — | 1/1 | 8/8 | 3/3 |
+| Dead-end accuracy | 0/0 | — | 3/3 | 10/10 | 3/3 |
 | Finish-line accuracy | 1.00 (4) | 1.00 (3) | 1.00 (7) | 1.00 (8) | 1.00 (7 met; 10 unlabelled) |
 | Unsafe directives | **0** | **0** | **0** | **0** | **0** / 84 checked |
 
@@ -150,10 +150,12 @@ Replay fidelity, round 2:
   agent ran a forked skill, whose tool calls fired hooks in the session but are recorded in a
   subagent transcript.
 - Learning from the 54 curated `round2` training transcripts reproduces the live round-2 index's
-  routes (ids and aspects). Two deliberate learner changes came after the live run: the
-  signature-keyed miner narrowed the dead end's avoided runners and evidence (below), and dead
-  ends and linked files now carry an exit condition (Design W2). Before them, the whole index
-  matched byte for byte (generation `8dd5ec01ed76c4bd`).
+  routes (ids and aspects), plus one it did not have. Three deliberate learner changes came
+  after the live run: the signature-keyed miner narrowed the dead end's avoided runners and
+  evidence (below), dead ends and linked files now carry an exit condition (Design W2), and a
+  second failure signature is now a dead end of its own (`dead-end-21cb2c`, below; the gate
+  admits exactly that route). Before them, the whole index matched byte for byte (generation
+  `8dd5ec01ed76c4bd`).
 
 Round 1 was decided by an earlier build. Its command keys templated interpreter scripts, so the
 current runtime no longer matches that index's linked-files trigger. Round-1 fidelity
@@ -179,9 +181,21 @@ What the numbers say:
     with a different signature: synthetic 1.00 → 0.97 (its `unittest` dead end), `hash:0.3`
     0.85 → 0.81 (`python -m pytest`, "command not found"). Adversarial fell 0.77 → 0.57: its
     `pytest` failures carry only unrenderable (hostile) error lines, so they share no signature.
-  - The miner keeps one dead end per working command, for its most common signature. A second
-    signature with enough support (round 2: `python -m pytest`, 4 sessions) is not yet a route of
-    its own.
+  - **One dead end per (working command, signature).** A second signature with enough support is
+    a route of its own. The most common signature's route keeps the id derived from the working
+    command alone (`dead-end-d41b1e`); each further signature's id is derived from (working
+    command, signature), so it is stable too. A runner is named under one signature only, its most
+    common. Round 2 now also learns `dead-end-21cb2c`: `python -m pytest` ("command not found", 4
+    of 5 sessions), and synthetic learns its `python3 -m unittest` dead end. Before → after:
+    - recall: `hash:0.3` 0.81 → 0.84 (dead-end key steps 1/4 → 3/4), synthetic 0.97 → 1.00
+      (8/10 → 10/10); round 2, round 1 and adversarial unchanged;
+    - precision: round 2 0.73 → 0.74, `hash:0.3` 0.80 → 0.81, synthetic 0.91 → 0.93; dead-end
+      precision unchanged on every dataset (0.78, 0.83, 1.00, 1.00); dead-end accuracy 3/3 on
+      `hash:0.3`, 10/10 on synthetic.
+    - Adversarial recall stays 0.57: its `pytest` failures have no renderable error line at all
+      (each carries quotes and shell syntax, or a right-to-left override), so they have no
+      signature to key a route by. Recovering them would mean naming a runner without saying why
+      it fails, which the signature rule exists to prevent.
 - **Finish-line obligations were never wrong** on labelled sessions. In round 2, one obligation
   was "needed but skipped": the agent did not regenerate, and the hidden check found stale
   generated code.
@@ -195,13 +209,13 @@ thresholds are the measured values less a margin:
 
 | Gate | Measured | Threshold |
 | --- | ---: | ---: |
-| demo round 2: precision all / lookup / linked files / dead end | 0.73 / 0.67 / 0.75 / 0.78 | ≥ 0.60 / 0.55 / 0.60 / 0.65 |
+| demo round 2: precision all / lookup / linked files / dead end | 0.74 / 0.67 / 0.75 / 0.78 | ≥ 0.60 / 0.55 / 0.60 / 0.65 |
 | demo round 2: recall / finish-line accuracy | 0.78 / 1.00 | ≥ 0.65 / 0.75 |
-| demo round 2: learned routes equal the live index's (ids, aspects) | equal | equal |
+| demo round 2: learned routes equal the live index's (ids, aspects) | equal, plus `dead-end-21cb2c` | equal, plus exactly `dead-end-21cb2c` (red) |
 | demo round 2: replay fidelity, decisions / events | 36/36, 35/36 | 36/36, ≥ 34/36 |
 | demo round 1: precision all / lookup, recall | 0.68 / 0.50, 0.56 | ≥ 0.55 / 0.40, 0.45 |
-| synthetic: precision all / lookup / linked files / dead end | 0.91 / 0.78 / 1.00 / 1.00 | ≥ 0.85 / 0.70 / 0.90 / 0.90 |
-| synthetic: recall / dead-end accuracy / finish-line accuracy | 0.97 / 1.00 / 1.00 | ≥ 0.90 / 0.90 / 0.90 |
+| synthetic: precision all / lookup / linked files / dead end | 0.93 / 0.78 / 1.00 / 1.00 | ≥ 0.85 / 0.70 / 0.90 / 0.90 |
+| synthetic: recall / dead-end accuracy / finish-line accuracy | 1.00 / 1.00 / 1.00 | ≥ 0.90 / 0.90 / 0.90 |
 | every dataset: unsafe directives | 0 | = 0 |
 | adversarial: every route kind exercised, directives checked | 4 kinds, 84 | 4 kinds, ≥ 80 |
 | same dataset, same report bytes; no temp paths in the report | yes | yes |

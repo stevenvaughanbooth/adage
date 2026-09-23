@@ -382,6 +382,9 @@ pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnCon
 /// ran it (numerator, denominator; integer arithmetic keeps the rule exact).
 pub const DEAD_END_CONSISTENCY: (usize, usize) = (9, 10);
 
+/// At most this many dead ends (failure signatures) per working command.
+pub const DEAD_END_SIGNATURES: usize = 3;
+
 /// The failure signature of a failed run: its last error line that can be rendered safely. Tool
 /// output is untrusted, and one unrenderable line must not cost the route (or the learn).
 fn failure_signature(step: &StepObs) -> Option<String> {
@@ -410,16 +413,18 @@ fn most_sessions(m: &BTreeMap<String, BTreeSet<&str>>) -> Option<String> {
 ///    sessions that ran it at all. A session in which any run of R passed counts against R: that
 ///    is usually an environment fix, such as `ACME_ENV=test python3 -m unittest`, which normalises
 ///    to the same argv, so the warning would be wrong for an agent that knows the fix.
-/// 3. The route's signature is the S with the most sessions among consistent runners' pairs (ties:
-///    the greatest S).
-/// 4. R is avoided if it is consistent and the route's signature is the signature in at least half
-///    of the sessions with a signed failure pair of R. At most three runners are named, most
-///    sessions first, then by name.
-/// 5. Support is the sessions with a pair of an avoided runner and the route's signature;
-///    opportunities are the sessions that ran an avoided runner.
+/// 3. Each signature S among consistent runners' pairs is a candidate route, most sessions first
+///    (ties: the greatest S), at most [`DEAD_END_SIGNATURES`].
+/// 4. R is avoided under S if it is consistent, is not already named under a more common
+///    signature, and S is the signature in at least half of the sessions with a signed failure
+///    pair of R. At most three runners are named, most sessions first, then by name.
+/// 5. Support is the sessions with a pair of an avoided runner and S; opportunities are the
+///    sessions that ran an avoided runner. A signature without enough support is no route.
 ///
-/// There is at most one dead end per working command, and its id is derived from W alone, so it
-/// keeps its id when its runners or signature change.
+/// So there is one dead end per (working command, signature). The most common signature's route
+/// has an id derived from W alone, as when there was one dead end per working command (the demo's
+/// `dead-end-d41b1e`), so it keeps its id when its runners or evidence change; each further
+/// signature's id is derived from (W, S).
 pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
     /// (session, runner, signature, working-command literal)
     type Pair<'a> = (&'a str, String, Option<String>, String);
@@ -464,76 +469,95 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
     };
     let mut out = Vec::new();
     for (wkey, ps) in pairs.into_iter() {
-        // 3. The route's signature, from consistent runners only.
+        // 3. The candidate signatures, from consistent runners only, most sessions first (ties:
+        //    the greatest signature, as the miner has always broken them).
         let mut by_sig: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
         for (sid, r, sig, _) in &ps {
             if let Some(sig) = sig.as_ref().filter(|_| consistent(r)) {
                 by_sig.entry(sig.clone()).or_default().insert(sid);
             }
         }
-        let Some(signature) = most_sessions(&by_sig) else { continue };
-        // 4. The runners that share it.
-        let mut signed: BTreeMap<&str, (BTreeSet<&str>, BTreeSet<&str>)> = BTreeMap::new();
+        let mut signatures: Vec<(&String, usize)> = by_sig.iter().map(|(s, ids)| (s, ids.len())).collect();
+        signatures.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| b.0.cmp(a.0)));
+        signatures.truncate(DEAD_END_SIGNATURES);
+        // Per runner: the sessions with a signed failure pair, and those per signature.
+        type Signed<'a> = (BTreeSet<&'a str>, BTreeMap<&'a str, BTreeSet<&'a str>>);
+        let mut signed: BTreeMap<&str, Signed> = BTreeMap::new();
         for (sid, r, sig, _) in &ps {
             if let Some(sig) = sig {
                 let e = signed.entry(r.as_str()).or_default();
                 e.0.insert(sid);
-                if *sig == signature {
-                    e.1.insert(sid);
+                e.1.entry(sig.as_str()).or_default().insert(sid);
+            }
+        }
+        // A runner is named by one route only: the first (most common) signature that claims it.
+        let mut named: BTreeSet<&str> = BTreeSet::new();
+        for (rank, (signature, _)) in signatures.iter().enumerate() {
+            let signature: &str = signature.as_str();
+            // 4. The runners that share it.
+            let mut runners: Vec<(&str, usize)> = signed
+                .iter()
+                .filter(|(r, _)| consistent(r) && !named.contains(*r))
+                .filter_map(|(r, (all, per))| {
+                    let same = per.get(signature).map_or(0, |x| x.len());
+                    (same > 0 && same * 2 >= all.len()).then_some((*r, same))
+                })
+                .collect();
+            runners.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+            runners.truncate(3);
+            let avoid: BTreeSet<&str> = runners.iter().map(|(r, _)| *r).collect();
+            // 5. Evidence.
+            let mut support: BTreeSet<String> = BTreeSet::new();
+            let mut instead: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
+            for (sid, r, sig, lit) in &ps {
+                if avoid.contains(r.as_str()) && sig.as_deref() == Some(signature) {
+                    support.insert(sid.to_string());
+                    instead.entry(lit.clone()).or_default().insert(sid);
                 }
             }
-        }
-        let mut runners: Vec<(&str, usize)> = signed
-            .iter()
-            .filter(|(r, (all, same))| consistent(r) && same.len() * 2 >= all.len())
-            .map(|(r, (_, same))| (*r, same.len()))
-            .collect();
-        runners.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
-        runners.truncate(3);
-        let avoid: BTreeSet<&str> = runners.iter().map(|(r, _)| *r).collect();
-        // 5. Evidence.
-        let mut support: BTreeSet<String> = BTreeSet::new();
-        let mut instead: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
-        for (sid, r, sig, lit) in &ps {
-            if avoid.contains(r.as_str()) && sig.as_deref() == Some(signature.as_str()) {
-                support.insert(sid.to_string());
-                instead.entry(lit.clone()).or_default().insert(sid);
+            let n = support.len() as u32;
+            if n < cfg.min_support {
+                continue;
             }
+            named.extend(avoid.iter().copied());
+            let opp = avoid.iter().filter_map(|r| ran.get(*r)).flatten().collect::<BTreeSet<_>>().len().max(n as usize)
+                as u32;
+            // The most common signature keeps the id derived from W alone, as when there was one
+            // dead end per working command; each further signature gets its own.
+            let id = if rank == 0 {
+                format!("dead-end-{}", stable(&[&wkey]))
+            } else {
+                format!("dead-end-{}", stable(&[&wkey, signature]))
+            };
+            out.push(Route {
+                id,
+                summary: "A verification command that fails in this repository, and what works instead".into(),
+                trigger: Trigger::SessionStart,
+                step: Step::Avoid {
+                    avoid: runners.iter().map(|(r, _)| *r).collect::<Vec<_>>().join(" / "),
+                    instead: most_sessions(&instead).unwrap_or_default(),
+                    signature: signature.to_string(),
+                },
+                slots: vec![],
+                effect: Effect::Verify,
+                aspect: Aspect::Red,
+                state: RouteState::Active,
+                // Design W2: every directive states when the agent may leave it.
+                exit: vec![Exit::IntentChanges],
+                evidence: Evidence {
+                    opportunities: opp,
+                    support: n,
+                    days: days(sessions, &support),
+                    rate: n as f64 / opp.max(1) as f64,
+                    lower_bound: wilson_lower(n, opp),
+                    turns_saved: 1.0,
+                    provenance: cfg.provenance.clone(),
+                    models: models(sessions),
+                    ..Default::default()
+                },
+                authored: false,
+            });
         }
-        let n = support.len() as u32;
-        if n < cfg.min_support {
-            continue;
-        }
-        let opp =
-            avoid.iter().filter_map(|r| ran.get(*r)).flatten().collect::<BTreeSet<_>>().len().max(n as usize) as u32;
-        out.push(Route {
-            id: format!("dead-end-{}", stable(&[&wkey])),
-            summary: "A verification command that fails in this repository, and what works instead".into(),
-            trigger: Trigger::SessionStart,
-            step: Step::Avoid {
-                avoid: runners.iter().map(|(r, _)| *r).collect::<Vec<_>>().join(" / "),
-                instead: most_sessions(&instead).unwrap_or_default(),
-                signature,
-            },
-            slots: vec![],
-            effect: Effect::Verify,
-            aspect: Aspect::Red,
-            state: RouteState::Active,
-            // Design W2: every directive states when the agent may leave it.
-            exit: vec![Exit::IntentChanges],
-            evidence: Evidence {
-                opportunities: opp,
-                support: n,
-                days: days(sessions, &support),
-                rate: n as f64 / opp.max(1) as f64,
-                lower_bound: wilson_lower(n, opp),
-                turns_saved: 1.0,
-                provenance: cfg.provenance.clone(),
-                models: models(sessions),
-                ..Default::default()
-            },
-            authored: false,
-        });
     }
     out
 }

@@ -40,8 +40,8 @@ fn assert_safe(r: &Report) {
 
 #[test]
 fn demo_round2_gates() {
-    // Measured: precision 0.729 overall; lookup 0.667, linked files 0.75, dead end 0.778;
-    // recall 0.783; finish-line accuracy 1.0 (4 obligations).
+    // Measured: precision 0.742 overall (0.729 before the second dead end); lookup 0.667, linked
+    // files 0.75, dead end 0.778; recall 0.783; finish-line accuracy 1.0 (4 obligations).
     let r = eval("demo-haiku45", Some("round2"));
     assert_eq!(r.scored_sessions, 18);
     at_least("overall precision", r.overall.precision, 0.60);
@@ -60,16 +60,24 @@ fn demo_round2_learns_what_the_live_learner_learned() {
     // deliberate changes since: the dead end's avoided runners and evidence (the signature-keyed
     // miner), and the exit condition dead ends and linked files now carry (Design W2). Before
     // them, identical index bytes (generation 8dd5ec01ed76c4bd).
+    //
+    // One route is added, deliberately: dead ends are now one per (working command, signature),
+    // so the second signature before `make test` (`python -m pytest`, "command not found", 4 of
+    // 5 sessions) is a route of its own, `dead-end-21cb2c`. The live route keeps its id and aspect
+    // (`dead-end-d41b1e`, the most common signature). Nothing else may differ.
     let r = eval("demo-haiku45", Some("round2"));
     let live: adage_tracks::Index =
         serde_json::from_slice(&std::fs::read(datasets().join("demo-haiku45/recorded/index-round2.json")).unwrap())
             .unwrap();
     let mut want: Vec<(String, String)> =
         live.routes.iter().map(|ir| (ir.route.id.clone(), format!("{:?}", ir.route.aspect).to_lowercase())).collect();
+    want.push(("dead-end-21cb2c".into(), "red".into()));
     let mut got: Vec<(String, String)> = r.routes.iter().map(|x| (x.id.clone(), x.aspect.clone())).collect();
     want.sort();
     got.sort();
     assert_eq!(got, want);
+    let second = r.routes.iter().find(|x| x.id == "dead-end-21cb2c").unwrap();
+    assert_eq!((second.step.as_str(), second.support), ("avoid python -m pytest; instead make test", 4));
 }
 
 #[test]
@@ -100,9 +108,9 @@ fn replay_reproduces_the_live_round2_decisions() {
 
 #[test]
 fn synthetic_gates() {
-    // Measured: precision 0.914 overall; lookup 0.778, linked files 1.0, dead end 1.0; recall
-    // 0.974 (1.0 before dead ends were keyed by signature: the route no longer names `unittest`,
-    // whose failures carry another signature); dead-end accuracy 1.0; finish-line accuracy 1.0.
+    // Measured: precision 0.934 overall; lookup 0.778, linked files 1.0, dead end 1.0; recall 1.0
+    // (0.974 while there was one dead end per working command: `unittest` fails with another
+    // signature, now a route of its own); dead-end accuracy 1.0; finish-line accuracy 1.0.
     let r = eval("synthetic", None);
     at_least("overall precision", r.overall.precision, 0.85);
     at_least("lookup precision", precision(&r, "lookup"), 0.70);

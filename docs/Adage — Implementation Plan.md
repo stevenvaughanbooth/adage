@@ -90,8 +90,8 @@ did later. Committed datasets and their gates (docs/evals.md):
 
 | | demo round 2 (real) | synthetic | adversarial |
 | --- | ---: | ---: | ---: |
-| Precision, all | 0.73 | 0.91 | 0.73 |
-| Recall of key steps | 0.78 | 0.97 | 0.57 |
+| Precision, all | 0.74 | 0.93 | 0.73 |
+| Recall of key steps | 0.78 | 1.00 | 0.57 |
 | Turns saved by the lookup (median) | 9 | 1 | 0 |
 | Finish-line accuracy | 1.00 | 1.00 | 1.00 |
 | Unsafe directives | 0 | 0 | 0 of 84 checked |
@@ -105,7 +105,8 @@ did later. Committed datasets and their gates (docs/evals.md):
 - **Dead ends are keyed by failing signature.** The eval found the dead-end route also warned
   against `python3 -m unittest`, which passes when `ACME_ENV` is set. The miner now names a runner
   only if its failures share the route's signature and it fails in 9 of 10 sessions that ran it;
-  dead-end accuracy rose and precision is unchanged (docs/evals.md).
+  dead-end accuracy rose and precision is unchanged (docs/evals.md). Each further signature with
+  enough support is a dead end of its own; the most common keeps the working command's id.
 
 The property tests found 8 bugs, all fixed with regression tests:
 
@@ -152,6 +153,11 @@ Closed since draft 2:
   message or panic location, never payload; rotated at 256 KiB), and `adage doctor` reports them.
 - Normalisation no longer depends on machine speed: the 50 ms parse timeout is replaced by a
   deterministic budget of bytes the lexer may read (2^20), with a 1 s backstop for unknown shapes.
+- One dead end per (working command, failure signature), not per working command. The most
+  common signature keeps the id derived from the working command (`dead-end-d41b1e`), so the
+  live-index gate holds; round 2 adds `dead-end-21cb2c` (`python -m pytest`). Recall: `hash:0.3`
+  0.81 → 0.84, synthetic 0.97 → 1.00; precision unchanged or up. Adversarial recall stays 0.57:
+  its pytest failures carry no renderable error line, so no signature (docs/evals.md).
 
 Open:
 
@@ -163,7 +169,6 @@ Open:
 | Payloads over 8 MiB are not drained from stdin (Design §13.3) | The harness may see a broken pipe | Drain and discard |
 | No precomputed no-match key set (Design §13.2) | Every event in a repository with routes pays the full decision path (about 3 ms) | Precompute trigger keys in the index |
 | Per-session nonce (review finding F12) and arm assignment by root session lineage (F7) were accepted but not built | `/clear` starts a new arm | Build both |
-| One dead-end route per working command: a second failing signature (round 2: `python -m pytest`, 4 sessions) is not named | Dead-end recall fell with the signature rule (adversarial set 0.77 → 0.58); precision held | Allow one route per (working command, signature), with ids that keep the live-index gate stable |
 | CI builds only x64 musl; arm64 musl is built only at release | A release-only failure is possible | Add aarch64 musl to CI |
 | `learn.log` is defined but never written | — | Write it, or remove the path |
 

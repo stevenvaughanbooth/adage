@@ -31,6 +31,12 @@ version as the GitHub Release notes.
   command, including `python3 -m unittest`, which passes once `ACME_ENV` is set. Dead ends are now
   keyed by failure signature: a runner is named only if its failures share the route's signature
   and it failed in at least 9 in 10 of the sessions that ran it. Route ids are unchanged.
+- **A second way to fail went unnamed.** There was one dead end per working command, so a second
+  failure signature before it (the demo's `python -m pytest`, "command not found", 4 sessions)
+  was not warned about. There is now one dead end per (working command, signature), at most three
+  per working command, each runner named under one signature only. The most common signature's
+  route keeps its id; each further one gets an id derived from the command and signature. Offline
+  recall rose (demo `hash:0.3` 0.81 → 0.84, synthetic 0.97 → 1.00) with no precision lost.
 - **Environment steps reached agents without a person's approval** (Design O11). Unknown commands
   are classified as environment, and a learned route running one was delivered at yellow at once.
   Learned and imported environment routes now start as drafts, which are never delivered, and
