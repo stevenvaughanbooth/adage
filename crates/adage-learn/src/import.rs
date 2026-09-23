@@ -41,7 +41,16 @@ pub struct Session {
     /// taken from a session steered by that kind (Design §11: never learn from your own influence).
     pub directed: BTreeSet<String>,
     pub outcome: Option<bool>,
+    /// The harness the session ran in, as recorded in a track's `gauge.harness`: `claude-code`
+    /// for Claude Code transcripts, `opencode` for `opencode export` files.
+    pub harness: String,
+    /// Prompts the person typed in the session (the first is [`Session::prompt`]).
+    pub prompts: u32,
 }
+
+/// `gauge.harness` names, per session source.
+pub const CLAUDE_CODE: &str = "claude-code";
+pub const OPENCODE: &str = "opencode";
 
 /// The kind of a route, from its id: evidence exclusion works per kind.
 pub fn route_kind(id: &str) -> &'static str {
@@ -95,8 +104,12 @@ fn is_synthetic_prompt(s: &str) -> bool {
 }
 
 /// Parse one transcript file. Returns `None` for sidechains or sessions without a usable prompt.
+///
+/// The file is streamed line by line, so memory is bounded by the session's own tool calls, not
+/// by the file (a long transcript is mostly tool output, kept only once per call).
 pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option<&str>) -> Option<Session> {
-    let text = std::fs::read_to_string(path).ok()?;
+    use std::io::BufRead;
+    let reader = std::io::BufReader::new(std::fs::File::open(path).ok()?);
     let mut id = String::new();
     let mut cwd: Option<String> = None;
     let mut model: Option<String> = None;
@@ -108,8 +121,11 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     let mut results: HashMap<String, (String, bool)> = HashMap::new();
     let mut turn_of_msg: HashMap<String, u32> = HashMap::new();
     let mut directed: BTreeSet<String> = BTreeSet::new();
+    let mut prompts = 0u32;
 
-    for line in text.lines() {
+    for line in reader.lines() {
+        let Ok(line) = line else { break };
+        let line = line.as_str();
         let Ok(rec) = serde_json::from_str::<Value>(line) else { continue };
         if rec.get("isSidechain").and_then(|v| v.as_bool()) == Some(true) {
             continue;
@@ -144,26 +160,29 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
             Some("user") => {
                 let content = &rec["message"]["content"];
                 if let Some(s) = content.as_str() {
-                    if prompt.is_none()
-                        && rec.get("isMeta").and_then(|v| v.as_bool()) != Some(true)
-                        && !is_synthetic_prompt(s)
-                    {
-                        prompt = Some(s.to_string());
+                    if rec.get("isMeta").and_then(|v| v.as_bool()) != Some(true) && !is_synthetic_prompt(s) {
+                        prompts += 1;
+                        if prompt.is_none() {
+                            prompt = Some(s.to_string());
+                        }
                     }
                 } else if let Some(items) = content.as_array() {
+                    let mut typed = false;
                     for it in items {
                         if it.get("type").and_then(|v| v.as_str()) == Some("tool_result") {
                             let tid = it.get("tool_use_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                             let failed = it.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
                             results.insert(tid, (text_of(it.get("content").unwrap_or(&Value::Null)), failed));
-                        } else if prompt.is_none() {
-                            if let Some(t) = it.get("text").and_then(|v| v.as_str()) {
-                                if !is_synthetic_prompt(t) {
+                        } else if let Some(t) = it.get("text").and_then(|v| v.as_str()) {
+                            if !is_synthetic_prompt(t) {
+                                typed = true;
+                                if prompt.is_none() {
                                     prompt = Some(t.to_string());
                                 }
                             }
                         }
                     }
+                    prompts += u32::from(typed);
                 }
             }
             Some("assistant") => {
@@ -207,7 +226,20 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
             steps.push(StepObs { turn, key: template_key(&n.action), norm: n, call: call.clone(), rel_path });
         }
     }
-    Some(Session { id, root, repo: repo_key, model, day, prompt, steps, steered, directed, outcome: None })
+    Some(Session {
+        id,
+        root,
+        repo: repo_key,
+        model,
+        day,
+        prompt,
+        steps,
+        steered,
+        directed,
+        outcome: None,
+        harness: CLAUDE_CODE.into(),
+        prompts,
+    })
 }
 
 /// Every top-level (non-sidechain) transcript under a Claude Code projects directory.

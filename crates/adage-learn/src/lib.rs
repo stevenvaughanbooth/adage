@@ -7,12 +7,13 @@ pub mod opencode;
 
 use adage_core::CommandTable;
 use adage_intent::model::StaticModel;
+use adage_tracks::proposals::Proposals;
 use adage_tracks::{io, Gauge, Index, Manifest, Route, Scope, Track, TrackInfo, Trigger};
 use anyhow::Result;
 use import::Session;
 pub use mine::LearnConfig;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Serialize)]
@@ -91,8 +92,62 @@ fn bump(prev: Option<&Track>, routes: &[Route]) -> (String, String) {
     }
 }
 
+/// One track as a learn run would write it, with the proposals it would record for pinned routes.
+#[derive(Debug, Clone)]
+pub struct Planned {
+    pub dir: PathBuf,
+    pub track: Track,
+    pub proposals: Proposals,
+}
+
+/// Read one session file: a Claude Code transcript, or an OpenCode `opencode export` file
+/// (recognised by content).
+pub fn read_session(path: &Path, table: &CommandTable, repo_override: Option<&str>) -> Option<Session> {
+    match opencode::read_export(path) {
+        Some(v) => opencode::parse_export(&v, table, repo_override),
+        None => import::parse_transcript(path, table, repo_override),
+    }
+}
+
+/// `adage learn`: import sessions, mine routes, write tracks, compile the index.
 pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &LearnConfig) -> Result<Report> {
     let table = CommandTable::load();
+    let mut sessions: Vec<Session> = Vec::new();
+    let (mut read, mut steered) = (0, 0);
+    for p in &inputs.transcripts {
+        read += 1;
+        if let Some(mut s) = read_session(p, &table, inputs.repo_override.as_deref()) {
+            steered += usize::from(s.steered);
+            s.outcome = inputs.outcomes.get(&s.id).copied();
+            if !s.steps.is_empty() {
+                sessions.push(s);
+            }
+        }
+    }
+    let (mut report, planned) = plan(sessions, inputs.models.as_deref(), tracks_root, cfg)?;
+    report.sessions_read = read;
+    report.sessions_steered = steered;
+    for p in &planned {
+        io::write(&p.dir, &p.track)?;
+        adage_tracks::proposals::save(&p.dir, &p.proposals)?;
+    }
+    let all = io::read_all(tracks_root)?;
+    let index = Index::compile(&all);
+    index.write_atomic(index_path)?;
+    report.index_generation = index.generation.clone();
+    Ok(report)
+}
+
+/// The dry run of `adage learn`: everything it would mine, reconcile, and version from these
+/// sessions against the tracks installed under `tracks_root`, with nothing written. `adage survey`
+/// shows these as candidates. `sessions_read`, `sessions_steered` and `index_generation` are left
+/// to the caller; sessions without steps are ignored.
+pub fn plan(
+    sessions: Vec<Session>,
+    models: Option<&Path>,
+    tracks_root: &Path,
+    cfg: &LearnConfig,
+) -> Result<(Report, Vec<Planned>)> {
     let mut report = Report {
         thresholds: format!(
             "min_support={} green_lower_bound={} yellow_rate={}",
@@ -100,29 +155,12 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         ),
         ..Default::default()
     };
-    let mut sessions: Vec<Session> = Vec::new();
-    for p in &inputs.transcripts {
-        report.sessions_read += 1;
-        // Claude Code transcripts, or OpenCode `opencode export` files (recognised by content).
-        let parsed = match opencode::read_export(p) {
-            Some(v) => opencode::parse_export(&v, &table, inputs.repo_override.as_deref()),
-            None => import::parse_transcript(p, &table, inputs.repo_override.as_deref()),
-        };
-        if let Some(mut s) = parsed {
-            if s.steered {
-                report.sessions_steered += 1;
-            }
-            s.outcome = inputs.outcomes.get(&s.id).copied();
-            if !s.steps.is_empty() {
-                sessions.push(s);
-            }
-        }
-    }
+    let mut sessions: Vec<Session> = sessions.into_iter().filter(|s| !s.steps.is_empty()).collect();
     sessions.sort_by(|a, b| a.id.cmp(&b.id));
     report.sessions_used = sessions.len();
     // Fail open: without a usable model, intent families are skipped and everything else is
     // learned exactly as before.
-    let model = inputs.models.as_deref().and_then(|d| StaticModel::load(&adage_intent::model::dir_in(d)).ok());
+    let model = models.and_then(|d| StaticModel::load(&adage_intent::model::dir_in(d)).ok());
     report.intent_model = model.as_ref().map(|m| m.id.clone());
 
     let mut by_repo: BTreeMap<String, Vec<&Session>> = BTreeMap::new();
@@ -130,6 +168,8 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         by_repo.entry(s.repo.clone()).or_default().push(s);
     }
 
+    let today = adage_tracks::review::today();
+    let mut planned = Vec::new();
     for (repo, ss) in &by_repo {
         let mut rr = RepoReport { sessions: ss.len(), ..Default::default() };
         // Hysteresis: routes that already exist in this repository's tracks keep a lower bar.
@@ -167,6 +207,10 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
             rr.intent_families = mined.families;
             groups.push(("intents", "Commands that requests like these lead to in this repository", mined.routes));
         }
+        // The harnesses these sessions ran in (Claude Code transcripts, OpenCode exports).
+        let harness: Vec<String> = ss.iter().map(|s| s.harness.clone()).collect::<BTreeSet<_>>().into_iter().collect();
+        let models: Vec<String> =
+            ss.iter().filter_map(|s| s.model.clone()).collect::<BTreeSet<_>>().into_iter().collect();
         for (suffix, description, routes) in groups {
             let name = format!("{}/{suffix}", slug(repo));
             let dir = tracks_root.join(slug(repo)).join(suffix);
@@ -174,12 +218,16 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
             if routes.is_empty() && prev.is_none() {
                 continue;
             }
-            // Human-edited routes are preserved; the miner never overwrites them.
+            // Human-edited routes are preserved; the miner never overwrites them. Where the miner's
+            // own version differs materially, it is proposed in `adage review` instead.
             let mut routes = routes;
+            let mut pinned: Vec<(Route, Option<Route>)> = Vec::new();
             if let Some(p) = &prev {
                 for r in p.routes.iter().filter(|r| r.authored) {
+                    let mined = routes.iter().find(|x| x.id == r.id).cloned();
                     routes.retain(|x| x.id != r.id);
                     routes.push(r.clone());
+                    pinned.push((r.clone(), mined));
                 }
             }
             // A person's decisions in `adage review` hold across re-learning (review.yaml). If they
@@ -191,6 +239,13 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
                     continue;
                 }
             };
+            // Proposals are recomputed from scratch every run; an unreadable file only loses dates
+            // and dismissals, never a decision.
+            let prev_proposals = adage_tracks::proposals::load(&dir).unwrap_or_else(|e| {
+                eprintln!("adage: ignoring unreadable proposals for {name}: {e:#}");
+                Proposals::default()
+            });
+            let proposals = adage_tracks::proposals::propose(&prev_proposals, &pinned, &today);
             let mut routes = adage_tracks::review::reconcile(prev.as_ref(), &reviews, routes);
             routes.sort_by(|a, b| a.id.cmp(&b.id));
             let (version, change) = bump(prev.as_ref(), &routes);
@@ -203,35 +258,22 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
                         provenance: cfg.provenance.clone(),
                     },
                     scope: Scope { repo: repo.clone() },
-                    gauge: Gauge {
-                        harness: vec!["claude-code".into()],
-                        models: ss
-                            .iter()
-                            .filter_map(|s| s.model.clone())
-                            .collect::<std::collections::BTreeSet<_>>()
-                            .into_iter()
-                            .collect(),
-                    },
+                    gauge: Gauge { harness: harness.clone(), models: models.clone() },
                 },
                 routes,
             };
             io::validate(&track)?;
-            io::write(&dir, &track)?;
-            rr.tracks.push(TrackReport {
-                name,
-                version,
-                change,
-                routes: track.routes.iter().map(|r| format!("{} [{:?}]", r.id, r.aspect).to_lowercase()).collect(),
-            });
+            let mut lines: Vec<String> =
+                track.routes.iter().map(|r| format!("{} [{:?}]", r.id, r.aspect).to_lowercase()).collect();
+            lines.extend(
+                proposals.routes.keys().map(|id| format!("{id}: pinned; a change is proposed in `adage review`")),
+            );
+            rr.tracks.push(TrackReport { name, version, change, routes: lines });
+            planned.push(Planned { dir, track, proposals });
         }
         report.repos.insert(repo.clone(), rr);
     }
-
-    let all = io::read_all(tracks_root)?;
-    let index = Index::compile(&all);
-    index.write_atomic(index_path)?;
-    report.index_generation = index.generation.clone();
-    Ok(report)
+    Ok((report, planned))
 }
 
 /// The canonical key of the mined lookup command — the same key the runtime computes for the

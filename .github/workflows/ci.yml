@@ -60,9 +60,6 @@ jobs:
       - name: test (adage-store, the Windows-ported store, on every platform)
         run: cargo test --locked -p adage-store
       - name: test
-        # TODO: make Windows blocking once it has run green. Windows is compile- and clippy-proven
-        # locally (scripts/cross-check.sh) but these tests have never run on Windows.
-        continue-on-error: ${{ runner.os == 'Windows' }}
         run: cargo test --workspace --locked
       - name: OpenCode plugin test ran under node (not skipped)
         if: runner.os != 'Windows'

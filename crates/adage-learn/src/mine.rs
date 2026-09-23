@@ -483,7 +483,8 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
     out
 }
 
-fn glob_for(rel: &str) -> Option<String> {
+/// The path pattern an edit to `rel` stands for: `schema/invoice.json` → `schema/*.json`.
+pub fn glob_for(rel: &str) -> Option<String> {
     let (dir, file) = rel.rsplit_once('/').unwrap_or(("", rel));
     let ext = file.rsplit_once('.').map(|(_, e)| e)?;
     Some(if dir.is_empty() { format!("*.{ext}") } else { format!("{dir}/*.{ext}") })

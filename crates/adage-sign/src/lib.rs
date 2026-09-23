@@ -4,6 +4,9 @@
 //!
 //! The signed message is the 32 raw bytes of the canonical digest (`adage_tracks::io::digest`),
 //! exactly as in S6, so `ssh-keygen -Y verify -n adage-track` over those bytes agrees.
+//!
+//! A passphrase-protected key file is decrypted in memory with a passphrase the caller obtains
+//! (`adage share` asks at the terminal, echo off); the passphrase is zeroised after use.
 
 pub mod allowed_signers;
 
@@ -13,6 +16,13 @@ pub use ssh_key::PublicKey;
 use ssh_key::{HashAlg, LineEnding, PrivateKey, SshSig};
 use std::path::Path;
 use std::time::SystemTime;
+pub use zeroize::Zeroizing;
+
+/// Asks for a key file's passphrase. `None`: none can be had (no terminal), so stop asking.
+pub type Passphrase<'a> = &'a dyn Fn(&Path) -> Option<Zeroizing<String>>;
+
+/// Wrong passphrases accepted before giving up, as ssh-keygen does.
+const PASSPHRASE_TRIES: usize = 3;
 
 /// The sshsig namespace for track signatures. A git commit signature (namespace `git`) can never
 /// be replayed as a track signature.
@@ -54,6 +64,17 @@ pub fn key_line(key: &PublicKey) -> String {
 /// Sign `msg`: ssh-agent first (the identity matching `key` if one is given, else the agent's
 /// first key, Ed25519 preferred), falling back to `key` as an unencrypted private key file.
 pub fn sign(msg: &[u8], namespace: &str, agent_sock: Option<&Path>, key: Option<&Path>) -> Result<Signed> {
+    sign_with(msg, namespace, agent_sock, key, &|_| None)
+}
+
+/// [`sign`], with `ask` supplying the passphrase when the key file is passphrase-protected.
+pub fn sign_with(
+    msg: &[u8],
+    namespace: &str,
+    agent_sock: Option<&Path>,
+    key: Option<&Path>,
+    ask: Passphrase,
+) -> Result<Signed> {
     let wanted = key.map(public_key_for).transpose()?;
     let agent_err = match agent_sock {
         Some(sock) => match sign_with_agent(msg, namespace, sock, wanted.as_ref()) {
@@ -63,19 +84,40 @@ pub fn sign(msg: &[u8], namespace: &str, agent_sock: Option<&Path>, key: Option<
         None => "no ssh-agent (SSH_AUTH_SOCK is not set)".to_string(),
     };
     match key {
-        Some(k) if !is_public(k) => sign_with_key_file(msg, namespace, k),
+        Some(k) if !is_public(k) => sign_key_file(msg, namespace, k, ask),
         Some(k) => bail!("{agent_err}; {} is a public key, so its private half must be in ssh-agent", k.display()),
         None => bail!("{agent_err}; pass --key <private key file>"),
     }
 }
 
 pub fn sign_with_key_file(msg: &[u8], namespace: &str, path: &Path) -> Result<Signed> {
-    let key = PrivateKey::read_openssh_file(path).with_context(|| format!("reading private key {}", path.display()))?;
+    sign_key_file(msg, namespace, path, &|_| None)
+}
+
+fn sign_key_file(msg: &[u8], namespace: &str, path: &Path, ask: Passphrase) -> Result<Signed> {
+    let mut key =
+        PrivateKey::read_openssh_file(path).with_context(|| format!("reading private key {}", path.display()))?;
     if key.is_encrypted() {
-        bail!("{} is passphrase-protected; add it to ssh-agent (ssh-add) and retry", path.display());
+        key = decrypt(&key, path, ask)?;
     }
     let sig = SshSig::sign(&key, namespace, HashAlg::Sha512, msg).context("signing with key file")?;
     finish(sig, key.public_key().clone(), Method::KeyFile, namespace, msg)
+}
+
+/// Decrypt a passphrase-protected key, asking up to [`PASSPHRASE_TRIES`] times.
+fn decrypt(key: &PrivateKey, path: &Path, ask: Passphrase) -> Result<PrivateKey> {
+    for _ in 0..PASSPHRASE_TRIES {
+        let Some(pass) = ask(path) else {
+            bail!(
+                "{} is passphrase-protected, and there is no terminal to ask for its passphrase; add it to ssh-agent (ssh-add) and retry",
+                path.display()
+            );
+        };
+        if let Ok(k) = key.decrypt(pass.as_bytes()) {
+            return Ok(k);
+        }
+    }
+    bail!("wrong passphrase for {} ({PASSPHRASE_TRIES} tries)", path.display())
 }
 
 pub fn sign_with_agent(msg: &[u8], namespace: &str, sock: &Path, wanted: Option<&PublicKey>) -> Result<Signed> {
@@ -208,6 +250,31 @@ mod tests {
         let who = verify(&msg, NAMESPACE, &s.pem, &allowed, SystemTime::now()).unwrap();
         assert_eq!(who.principals, vec!["tester@example".to_string()]);
         assert_eq!(fingerprint(&verify_embedded(&msg, NAMESPACE, &s.pem).unwrap()), fingerprint(&pk));
+    }
+
+    #[test]
+    fn passphrase_protected_key_files_are_decrypted_with_the_passphrase_asked_for() {
+        let d = tempfile::tempdir().unwrap();
+        let k = PrivateKey::random(&mut rand_core::OsRng, ssh_key::Algorithm::Ed25519).unwrap();
+        let enc = k.encrypt(&mut rand_core::OsRng, "correct horse").unwrap();
+        let p = d.path().join("id_enc");
+        std::fs::write(&p, enc.to_openssh(LineEnding::LF).unwrap().as_bytes()).unwrap();
+        let msg = message(DIGEST).unwrap();
+        // No way to ask: refused, pointing at ssh-agent.
+        let e = sign(&msg, NAMESPACE, None, Some(&p)).unwrap_err().to_string();
+        assert!(e.contains("passphrase-protected") && e.contains("ssh-add"), "{e}");
+        // A wrong passphrase first, then the right one.
+        let tries = std::cell::Cell::new(0);
+        let ask = |_: &Path| {
+            tries.set(tries.get() + 1);
+            Some(Zeroizing::new(if tries.get() == 1 { "wrong" } else { "correct horse" }.to_string()))
+        };
+        let s = sign_with(&msg, NAMESPACE, None, Some(&p), &ask).unwrap();
+        assert_eq!((s.method, tries.get()), (Method::KeyFile, 2));
+        assert_eq!(fingerprint(&s.key), fingerprint(k.public_key()));
+        // Always wrong: gives up after three tries.
+        let e = sign_with(&msg, NAMESPACE, None, Some(&p), &|_| Some(Zeroizing::new("nope".into()))).unwrap_err();
+        assert!(e.to_string().contains("wrong passphrase"), "{e}");
     }
 
     #[test]

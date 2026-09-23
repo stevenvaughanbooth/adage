@@ -2,17 +2,21 @@
 //!
 //! ```text
 //! adage hook <claude|opencode|codex> <Event>   hook client (reads the harness payload on stdin)
+//! adage init [--repo <path>] [--yes]  first run: detect harnesses, show hook snippets, offer the model, survey
+//! adage survey [--repo <key>] [--since <days>] [--json]   what your agents actually do (read-only)
+//! adage doctor [--json]              check the binary, data directory, index, tracks, model, hooks
 //! adage learn [options]              mine tracks from agent sessions and compile the index
 //! adage status                       installed tracks, routes, aspects, and evidence
 //! adage report [--json]              directives emitted, followed, and derailed, from spools
 //! adage graph [--json] [--events <n>] situations → routes → steps → agent responses, with live counts
+//! adage graph --serve [--port <n>]   serve the signal box at http://127.0.0.1:<n>/ (default 8765)
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
 //!                                    print (default) or write a harness's hook registration
 //! adage share <track> --out <dir> [--key <path>]   redaction-check, copy, and sign a track
 //! adage add <dir> [--trust]          verify a shared track and install it at probation
 //! adage review [--json]              routes awaiting a person's decision, with evidence and directive text
-//! adage review <approve|reject|demote|promote|pin> <track> <route> [--by <name>]
+//! adage review <approve|reject|demote|promote|pin|dismiss> <track> <route> [--by <name>]
 //! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
 //! adage version
 //! ```
@@ -21,14 +25,22 @@
 //! `ADAGE_ALLOW_NONINTERACTIVE=1` (let `share` and `add` run without a terminal, for CI).
 
 mod add;
+mod detect;
+mod doctor;
 mod graph;
 mod harness;
 mod hook;
+mod init;
 mod install;
 mod models;
+mod proposal;
 mod redact;
+mod reimport;
 mod review;
+mod serve;
 mod share;
+mod survey;
+mod tty;
 
 use adage_learn::{Inputs, LearnConfig};
 use adage_store::Paths;
@@ -71,8 +83,12 @@ fn run(args: &[String]) -> Result<()> {
         Some("share") => share::share(&args[1..], &paths),
         Some("add") => add::add(&args[1..], &paths),
         Some("review") => review::review(&args[1..], &paths),
+        Some("graph") if args.iter().any(|a| a == "--serve") => serve::serve(&args[1..], &paths),
         Some("graph") => graph::graph(&args[1..], &paths),
         Some("models") => models::run(&args[1..], &paths),
+        Some("survey") => survey::survey(&args[1..], &paths),
+        Some("init") => init::init(&args[1..], &paths),
+        Some("doctor") => doctor::doctor(&args[1..], &paths),
         Some("hooks-config") => {
             let bin = args.get(1).cloned().unwrap_or_else(|| "adage".into());
             println!("{}", serde_json::to_string_pretty(&harness::claude::settings(&bin))?);
@@ -84,9 +100,7 @@ fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         _ => {
-            println!(
-                "usage: adage <learn|status|report|graph|review|share|add|install|models|hooks-config|version|hook>"
-            );
+            println!("usage: adage <init|survey|learn|status|report|graph|review|share|add|install|models|doctor|hooks-config|version|hook>");
             Ok(())
         }
     }

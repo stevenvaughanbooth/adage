@@ -8,7 +8,11 @@
 //! adage review demote  <track> <route> [--by <name>]     green → yellow, held across re-learning
 //! adage review promote <track> <route> [--by <name>]     yellow → green, within the effect ceiling only
 //! adage review pin     <track> <route> [--by <name>]     edit-lock: mark `authored`
+//! adage review dismiss <track> <route>                   keep a pinned route; silence its proposed change
 //! ```
+//!
+//! A pinned route whose learned version drifted materially waits with the reason "proposed" and a
+//! diff (see [`crate::proposal`]); `approve` applies the proposed version, which stays pinned.
 //!
 //! `<track>` is a track name (a learned track wins over an import of the same name) or its
 //! directory under the tracks directory, e.g. `@imported/acme/work-items`.
@@ -21,6 +25,7 @@ use crate::share::{describe_step, require_person};
 use adage_learn::LearnConfig;
 use adage_runtime::{render, SessionState};
 use adage_store::{spool, state, Paths};
+use adage_tracks::proposals::{self, Proposal, Proposals};
 use adage_tracks::review::{self, aspect_str, Decision, Review, Reviews};
 use adage_tracks::{
     ceiling, index, io, wilson_lower, Aspect, Contract, Index, Route, RouteState, Step, Track, Trigger,
@@ -35,7 +40,7 @@ const MIN_JUDGED: u32 = 5;
 /// A route is flagged when the Wilson lower bound of its derail share reaches this.
 const DERAIL_BAR: f64 = 0.5;
 
-const USAGE: &str = "usage: adage review [--json]\n       adage review <approve|reject|retire|demote|promote|pin> <track> <route> [--by <name>]";
+const USAGE: &str = "usage: adage review [--json]\n       adage review <approve|reject|retire|demote|promote|pin|dismiss> <track> <route> [--by <name>]";
 
 pub(crate) struct Installed {
     pub(crate) dir: PathBuf,
@@ -44,12 +49,14 @@ pub(crate) struct Installed {
     pub(crate) track: Track,
     pub(crate) imported: bool,
     pub(crate) reviews: Reviews,
+    /// Proposed changes to pinned routes, from `adage learn` or a re-run `adage add`.
+    pub(crate) proposals: Proposals,
 }
 
 pub fn review(args: &[String], paths: &Paths) -> Result<()> {
     match args.first().map(String::as_str) {
         None | Some("list") | Some("--json") => list(paths, args.iter().any(|a| a == "--json")),
-        Some(verb @ ("approve" | "reject" | "retire" | "demote" | "promote" | "pin")) => {
+        Some(verb @ ("approve" | "reject" | "retire" | "demote" | "promote" | "pin" | "dismiss")) => {
             decide(verb, &args[1..], paths)
         }
         _ => bail!("{USAGE}"),
@@ -67,6 +74,11 @@ pub(crate) fn discover(root: &Path) -> Result<Vec<Installed>> {
             match loaded {
                 Ok((track, reviews)) => out.push(Installed {
                     reference: d.strip_prefix(root).unwrap_or(&d).to_string_lossy().replace('\\', "/"),
+                    // Proposals are advisory local state: an unreadable file hides them, nothing more.
+                    proposals: proposals::load(&d).unwrap_or_else(|e| {
+                        eprintln!("adage: ignoring unreadable proposals in {}: {e:#}", d.display());
+                        Proposals::default()
+                    }),
                     dir: d,
                     imported: index::is_imported(&track),
                     track,
@@ -223,6 +235,7 @@ struct Item<'a> {
     reasons: Vec<(&'static str, String)>,
     followed: u32,
     derailed: u32,
+    proposal: Option<&'a Proposal>,
 }
 
 fn queue<'a>(all: &'a [Installed], judged: &BTreeMap<(String, String), (u32, u32)>, index: &Index) -> Vec<Item<'a>> {
@@ -258,6 +271,16 @@ fn queue<'a>(all: &'a [Installed], judged: &BTreeMap<(String, String), (u32, u32
                     }
                 }
             }
+            let proposal = crate::proposal::current(inst.proposals.routes.get(&r.id), r);
+            if let Some(p) = proposal {
+                reasons.push((
+                    "proposed",
+                    format!(
+                        "pinned, so learning left it as it is; since {} its learned version differs: {}",
+                        p.on, p.reason
+                    ),
+                ));
+            }
             let delivered = index.routes.iter().any(|ir| {
                 ir.repo == m.scope.repo && ir.track == m.track.name && ir.version == m.track.version && ir.route == *r
             });
@@ -271,7 +294,7 @@ fn queue<'a>(all: &'a [Installed], judged: &BTreeMap<(String, String), (u32, u32
                 ));
             }
             if !reasons.is_empty() {
-                items.push(Item { inst, route: r, reasons, followed, derailed });
+                items.push(Item { inst, route: r, reasons, followed, derailed, proposal });
             }
         }
     }
@@ -302,13 +325,20 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
                     "effect": r.effect.as_str(),
                     "state": lower(r.state),
                     "authored": r.authored,
-                    "decisions": verbs(r),
+                    "decisions": verbs(r, it.proposal.is_some()),
                     "step": describe_step(&r.step),
                     "evidence": { "support": e.support, "opportunities": e.opportunities, "days": e.days, "rate": e.rate, "lower_bound": e.lower_bound },
                     "runtime": { "followed": it.followed, "derailed": it.derailed },
                     "directive": directive,
                     "example_values": examples,
                     "last_review": it.inst.reviews.routes.get(&r.id).map(|v| json!({ "decision": v.decision.as_str(), "on": v.on, "by": v.by })),
+                    "proposal": it.proposal.map(|p| {
+                        let diff: Vec<Value> = crate::proposal::diff(r, &p.route)
+                            .into_iter()
+                            .map(|(field, pinned, proposed)| json!({ "field": field, "pinned": pinned, "proposed": proposed }))
+                            .collect();
+                        json!({ "on": p.on, "reason": p.reason, "diff": diff, "directive": preview(t, &crate::proposal::applied(p)).0 })
+                    }),
                 })
             })
             .collect();
@@ -357,15 +387,30 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
         for line in directive.lines() {
             println!("    {line}");
         }
-        println!("  decide     adage review <{}> {} {}\n", verbs(r).join("|"), it.inst.reference, r.id);
+        if let Some(p) = it.proposal {
+            println!("  proposed   `adage review approve` applies these changes (the route stays pinned):");
+            for (field, pinned, proposed) in crate::proposal::diff(r, &p.route) {
+                println!("    - {field:<9} {pinned}");
+                println!("    + {field:<9} {proposed}");
+            }
+        }
+        println!(
+            "  decide     adage review <{}> {} {}\n",
+            verbs(r, it.proposal.is_some()).join("|"),
+            it.inst.reference,
+            r.id
+        );
     }
     Ok(())
 }
 
 /// The decisions that can apply to a route as it stands (promotion of an import may still be
 /// refused for want of first-hand evidence).
-fn verbs(r: &Route) -> Vec<&'static str> {
+fn verbs(r: &Route, proposed: bool) -> Vec<&'static str> {
     let mut v = vec!["approve", "reject"];
+    if proposed {
+        v.push("dismiss");
+    }
     if live(r.state) && r.aspect == Aspect::Green {
         v.push("demote");
     }
@@ -380,7 +425,7 @@ fn verbs(r: &Route) -> Vec<&'static str> {
 
 /// A learned (non-imported) route in the same repository whose own evidence clears the default
 /// green bar: the local first-hand evidence Design O2 requires before an import may be green.
-fn first_hand<'a>(all: &'a [Installed], repo: &str, id: &str) -> Option<&'a Route> {
+pub(crate) fn first_hand<'a>(all: &'a [Installed], repo: &str, id: &str) -> Option<&'a Route> {
     let bar = LearnConfig::default();
     all.iter().filter(|i| !i.imported && i.track.manifest.scope.repo == repo).flat_map(|i| i.track.routes.iter()).find(
         |r| {
@@ -434,6 +479,7 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     let inst = resolve(&all, spec)?;
     let mut track = inst.track.clone();
     let mut reviews = inst.reviews.clone();
+    let mut props = inst.proposals.clone();
     let repo = track.manifest.scope.repo.clone();
     let r = track
         .routes
@@ -441,7 +487,33 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         .find(|r| r.id == **route_id)
         .with_context(|| format!("{} has no route {route_id:?}", inst.reference))?;
     let before = r.clone();
+    let proposal = crate::proposal::current(props.routes.get(route_id.as_str()), r).cloned();
+    if verb == "dismiss" {
+        let p =
+            proposal.with_context(|| format!("{route_id} has no proposed change to dismiss (see `adage review`)"))?;
+        props.routes.remove(route_id.as_str());
+        props.dismissed.insert(route_id.to_string(), review::basis(&p.route, 0, 0));
+        proposals::save(&inst.dir, &props)?;
+        println!("adage review: dismissed the proposed change to {} {route_id}", inst.reference);
+        println!(
+            "  kept       the pinned route as it is; learning proposes again only if its version changes materially"
+        );
+        println!("  recorded   {}/{}", inst.reference, proposals::FILE);
+        return Ok(());
+    }
     let (decision, bump) = match verb {
+        "approve" if proposal.is_some() => {
+            // Apply the proposed version; it stays pinned, so later drift is proposed again.
+            let p = proposal.as_ref().unwrap();
+            *r = crate::proposal::applied(p);
+            if inst.imported && r.aspect == Aspect::Green {
+                r.aspect = Aspect::Yellow;
+            }
+            props.routes.remove(route_id.as_str());
+            props.dismissed.remove(route_id.as_str());
+            let bump = if review::shape(r) != review::shape(&before) { Bump::Major } else { Bump::Patch };
+            (Decision::Pinned, bump)
+        }
         "approve" => {
             if !live(r.state) {
                 // Approving a retired or demoted route puts it back into service at probation.
@@ -514,6 +586,9 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     io::validate(&track).context("the reviewed track fails validation; nothing was written")?;
     io::write(&inst.dir, &track)?;
     review::save(&inst.dir, &reviews)?;
+    if props != inst.proposals {
+        proposals::save(&inst.dir, &props)?;
+    }
 
     // Recompile the index exactly as `adage learn` and `adage add` do.
     let tracks = io::read_all(&paths.tracks())?;
@@ -521,7 +596,14 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     index.write_atomic(&paths.index())?;
 
     let change = |a: String, b: String| if a == b { a } else { format!("{a} → {b}") };
-    println!("adage review: {} {} {}", decision.as_str(), inst.reference, route_id);
+    if proposal.is_some() && verb == "approve" {
+        println!("adage review: applied the proposed change to {} {route_id}; it stays pinned", inst.reference);
+    } else {
+        println!("adage review: {} {} {}", decision.as_str(), inst.reference, route_id);
+    }
+    if verb == "approve" && proposal.is_some() {
+        println!("  step       {}", change(describe_step(&before.step), describe_step(&after.step)));
+    }
     println!("  aspect     {}", change(aspect_str(before.aspect).into(), aspect_str(after.aspect).into()));
     println!("  state      {}", change(lower(before.state), lower(after.state)));
     if after.authored != before.authored {

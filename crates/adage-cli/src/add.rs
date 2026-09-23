@@ -212,8 +212,14 @@ fn install(stage: &Path, src: &Path, paths: &Paths, trust: bool) -> Result<()> {
     // Imports live apart from learned tracks, so `adage learn` never overwrites one, and an import
     // never replaces a learned track (where both hold a route, the index keeps the learned one).
     let dest = paths.tracks().join(IMPORTED_DIR).join(&name);
+    // A re-import keeps the recipient's own review decisions for routes whose ids survive.
+    let carried = crate::reimport::carry(&dest, imported, &paths.tracks())?;
+    let imported = carried.track;
+    io::validate(&imported)?;
     let fresh = stage.join("out");
     io::write(&fresh, &imported)?;
+    adage_tracks::review::save(&fresh, &carried.reviews)?;
+    adage_tracks::proposals::save(&fresh, &carried.proposals)?;
     for rel in ["evidence.json", "CHANGELOG.md"] {
         if dir.join(rel).is_file() {
             std::fs::copy(dir.join(rel), fresh.join(rel))?;
@@ -253,6 +259,13 @@ fn install(stage: &Path, src: &Path, paths: &Paths, trust: bool) -> Result<()> {
         let note =
             if before != r.aspect { format!(" (was {})", format!("{before:?}").to_lowercase()) } else { String::new() };
         println!("    {:<22} {aspect}{note:<12} {}", r.id, describe_step(&r.step));
+    }
+    if !carried.kept.is_empty() {
+        let kept: Vec<String> = carried.kept.iter().map(|(id, d)| format!("{id} ({})", d.as_str())).collect();
+        println!("  kept       your review decisions: {}", kept.join(", "));
+    }
+    for id in carried.proposals.routes.keys() {
+        println!("  proposed   {id} is pinned here and the new version differs; see `adage review`");
     }
     println!("index generation {}, {} routes", index.generation, index.routes.len());
     Ok(())

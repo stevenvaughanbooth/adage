@@ -1,0 +1,132 @@
+//! `adage init [--repo <path>] [--yes]` (plan §6.3): first run, in one command.
+//!
+//! 1. Detects the installed harnesses (read-only probing; see [`crate::detect`]).
+//! 2. Shows how to register Adage's hooks with each: `adage install <harness>`'s printed snippet,
+//!    and the `--write` command that would install it. `init` itself never writes a harness's
+//!    configuration.
+//! 3. Offers the optional embedding model: prints `adage models fetch`, and runs it only with
+//!    `--yes`.
+//! 4. Runs `adage survey` over existing history (read-only), for the repository at `--repo` if
+//!    given, else for every repository.
+//!
+//! Printing is allowed anywhere, including inside an agent session. `--yes` downloads into the
+//! data directory, so it needs a person at a terminal and refuses inside an agent session.
+
+use crate::detect;
+use adage_core::repo;
+use adage_store::Paths;
+use anyhow::{bail, Context, Result};
+use std::path::PathBuf;
+
+fn agent_session() -> Option<&'static str> {
+    crate::install::AGENT_ENV.iter().copied().find(|v| std::env::var_os(v).is_some())
+}
+
+pub fn init(args: &[String], paths: &Paths) -> Result<()> {
+    let yes = args.iter().any(|a| a == "--yes");
+    if let Some(bad) = args.iter().find(|a| a.starts_with("--") && !matches!(a.as_str(), "--yes" | "--repo")) {
+        bail!("unknown option {bad}\nusage: adage init [--repo <path>] [--yes]");
+    }
+    let agent = agent_session();
+    if yes {
+        if let Some(v) = agent {
+            bail!("`adage init --yes` downloads into Adage's data directory, so it will not run inside an agent session ({v} is set). Run it yourself, in a terminal, or run `adage init` to print only.");
+        }
+        crate::share::require_person("init --yes")?;
+    }
+    let repo_arg = crate::flag(args, "--repo").map(PathBuf::from);
+    let start = match &repo_arg {
+        Some(p) => p.canonicalize().with_context(|| format!("--repo {} does not exist", p.display()))?,
+        None => std::env::current_dir()?,
+    };
+    let root = repo::find_root(&start);
+    if repo_arg.is_some() && root.is_none() {
+        bail!("{} is not inside a git repository", start.display());
+    }
+    let repo_key = root.as_deref().map(repo::repo_key);
+
+    println!("adage init: set Adage up on this machine. It will:");
+    println!("  1. detect the agent harnesses installed here (read-only);");
+    println!("  2. show how to register Adage's hooks with each (`adage install <harness>`; nothing is written);");
+    println!(
+        "  3. {} the optional embedding model for intent families (`adage models fetch`);",
+        if yes { "download" } else { "offer" }
+    );
+    println!(
+        "  4. survey your existing agent history{} — read-only.",
+        match (&repo_arg, &repo_key) {
+            (Some(_), Some(k)) => format!(" for {k}"),
+            _ => String::new(),
+        }
+    );
+    if let Some(v) = agent {
+        println!("Inside an agent session ({v} is set): printing only.");
+    }
+
+    // 1. Harnesses.
+    println!("\n1. Harnesses");
+    let found = detect::harnesses();
+    for d in &found {
+        if d.found() {
+            println!("  {:<12} found: {}", d.harness, d.evidence.join("; "));
+        } else {
+            println!("  {:<12} not found", d.harness);
+        }
+    }
+
+    // 2. Hook registration.
+    println!("\n2. Hooks");
+    let regs = detect::registrations(root.as_deref());
+    let repo_opt = repo_arg.as_ref().map(|p| format!(" --repo {}", p.display())).unwrap_or_default();
+    let installed: Vec<&detect::Detected> = found.iter().filter(|d| d.found()).collect();
+    if installed.is_empty() {
+        println!("  No harness found. When you install one: `adage install <claude-code|opencode|codex>` prints its registration.");
+    }
+    for d in installed {
+        let h = d.harness;
+        println!();
+        for r in regs.iter().filter(|r| r.harness == h) {
+            let bin = r.binary.as_ref().map(|b| detect::tilde(b)).unwrap_or_else(|| "?".into());
+            println!(
+                "  {h}: already registered in {} (runs {bin}); `adage doctor` checks it",
+                detect::tilde(&r.location)
+            );
+        }
+        let here =
+            if root.is_some() { "this repository" } else { "a repository (run it inside one, or pass --repo <path>)" };
+        println!("  {h}: `adage install {h} --write{repo_opt}` registers Adage for {here}; add `--scope user` for every repository.");
+        match h {
+            "claude-code" => println!("  {h}: or use the plugin: `claude --plugin-dir plugin/claude-code` (see README). The settings it would write:"),
+            "opencode" => {
+                println!("  {h}: it writes Adage's plugin file (.opencode/plugins/adage.js); `adage install opencode` prints it in full.");
+                continue;
+            }
+            _ => println!("  {h}: the hooks.json entries it would merge (Codex then asks you to approve them in /hooks):"),
+        }
+        crate::install::install(&[h.to_string(), "--print".to_string()])?;
+    }
+
+    // 3. The embedding model.
+    println!("\n3. Embedding model (optional)");
+    match adage_intent::model::status(&paths.models()) {
+        Ok(m) => println!("  installed: {}", m.id),
+        Err(_) if yes => {
+            println!("  fetching (31 MB, SHA-256 verified)…");
+            if let Err(e) = crate::models::run(&["fetch".to_string()], paths) {
+                println!("  could not fetch it: {e:#}");
+                println!("  Everything else works without it; retry with `adage models fetch`, or `adage models install <dir>` offline.");
+            }
+        }
+        Err(_) => println!(
+            "  not installed. `adage models fetch` downloads it (31 MB, SHA-256 verified) to enable intent families; `adage init --yes` does it for you. Everything else works without it."
+        ),
+    }
+
+    // 4. Survey.
+    println!("\n4. Survey\n");
+    let opts = crate::survey::Options { repo: repo_arg.as_ref().and(repo_key.clone()), ..Default::default() };
+    let s = crate::survey::run(&opts, paths)?;
+    crate::survey::print_text(&s);
+    println!("`adage doctor` checks the whole setup at any time.");
+    Ok(())
+}
