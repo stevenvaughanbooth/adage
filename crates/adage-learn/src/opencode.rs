@@ -11,7 +11,7 @@
 //! appended to tool output (after a tool); both are recorded in the export. Sub-agent sessions
 //! (`info.parentID` set) are skipped, like Claude Code sidechains.
 
-use crate::import::{Session, StepObs};
+use crate::import::{Session, StepObs, OPENCODE};
 use adage_core::keys::{self, template_key};
 use adage_core::tools::{from_opencode, normalize_tool};
 use adage_core::{repo, CommandTable};
@@ -39,7 +39,7 @@ pub fn read_export(path: &Path) -> Option<Value> {
     if !head.trim_start().strip_prefix('{')?.trim_start().starts_with("\"info\"") {
         return None;
     }
-    let v: Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+    let v: Value = serde_json::from_reader(std::io::BufReader::new(std::fs::File::open(path).ok()?)).ok()?;
     is_export(&v).then_some(v)
 }
 
@@ -94,20 +94,26 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
     // (turn, tool, input, output, failed)
     let mut uses: Vec<(u32, String, Value, String, bool)> = Vec::new();
     let mut turns = 0u32;
+    let mut prompts = 0u32;
     for m in v.get("messages")?.as_array()? {
         let mi = m.get("info").unwrap_or(&Value::Null);
         let parts = m.get("parts").and_then(|p| p.as_array()).map(Vec::as_slice).unwrap_or(&[]);
         match s(mi, &["role"]) {
             Some("user") => {
+                let mut typed = false;
                 for p in parts.iter().filter(|p| s(p, &["type"]) == Some("text")) {
                     let text = s(p, &["text"]).unwrap_or("");
                     let synthetic = p.get("synthetic").and_then(|x| x.as_bool()) == Some(true);
                     if synthetic {
                         note(text, &mut steered);
-                    } else if prompt.is_none() && p.get("ignored").and_then(|x| x.as_bool()) != Some(true) && !text.trim().is_empty() && !own_text(text) {
-                        prompt = Some(text.to_string());
+                    } else if p.get("ignored").and_then(|x| x.as_bool()) != Some(true) && !text.trim().is_empty() && !own_text(text) {
+                        typed = true;
+                        if prompt.is_none() {
+                            prompt = Some(text.to_string());
+                        }
                     }
                 }
+                prompts += u32::from(typed);
             }
             Some("assistant") => {
                 if model.is_none() {
@@ -162,7 +168,7 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
             }
         }
     }
-    Some(Session { id, root, repo: repo_key, model, day, prompt, steps, steered, directed, outcome: None })
+    Some(Session { id, root, repo: repo_key, model, day, prompt, steps, steered, directed, outcome: None, harness: OPENCODE.into(), prompts })
 }
 
 #[cfg(test)]

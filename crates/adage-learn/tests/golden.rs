@@ -164,3 +164,49 @@ fn a_publishing_variant_is_never_merged_into_a_lookup() {
         "a publish command must never be directed"
     );
 }
+
+#[test]
+fn the_dry_run_plans_exactly_what_learn_writes_and_writes_nothing() {
+    let d = tempfile::tempdir().unwrap();
+    let (files, _) = corpus(d.path());
+    let home = d.path().join("home");
+    let table = adage_core::CommandTable::load();
+    let sessions: Vec<_> = files.iter().filter_map(|p| adage_learn::read_session(p, &table, Some("acme-billing"))).collect();
+    assert_eq!(sessions[0].harness, "claude-code");
+    assert_eq!(sessions[0].prompts, 1);
+    let (rep, planned) = adage_learn::plan(sessions, None, &home.join("tracks"), &LearnConfig::demo()).unwrap();
+    assert_eq!(rep.sessions_used, 6);
+    assert!(!home.exists(), "a plan writes nothing");
+    assert_eq!(planned.len(), 3);
+    run(d.path(), &files, &home);
+    for p in &planned {
+        assert_eq!(io::read(&p.dir).unwrap(), p.track, "learn wrote what the plan said");
+        assert_eq!(p.track.manifest.gauge.harness, vec!["claude-code".to_string()]);
+    }
+}
+
+#[test]
+fn a_pinned_route_that_drifts_is_proposed_not_overwritten() {
+    let d = tempfile::tempdir().unwrap();
+    let (files, _) = corpus(d.path());
+    let home = d.path().join("home");
+    run(d.path(), &files, &home);
+    let dir = home.join("tracks/acme-billing/work-items");
+    let mut t = io::read(&dir).unwrap();
+    let r = t.routes.iter_mut().find(|r| r.id == "lookup-work-item").unwrap();
+    r.authored = true;
+    r.step = Step::Run { command: "python3 scripts/wi-lookup {item} --json".into() };
+    io::write(&dir, &t).unwrap();
+    run(d.path(), &files, &home);
+    let after = io::read(&dir).unwrap();
+    let pinned = after.routes.iter().find(|r| r.id == "lookup-work-item").unwrap();
+    assert_eq!(pinned.step, Step::Run { command: "python3 scripts/wi-lookup {item} --json".into() }, "never overwritten");
+    let p = adage_tracks::proposals::load(&dir).unwrap();
+    let prop = &p.routes["lookup-work-item"];
+    assert_eq!(prop.route.step, Step::Run { command: "python3 scripts/wi-lookup {item}".into() });
+    assert!(prop.reason.contains("step"), "{}", prop.reason);
+    // Re-learning the same sessions leaves identical bytes.
+    let bytes = std::fs::read(dir.join(adage_tracks::proposals::FILE)).unwrap();
+    run(d.path(), &files, &home);
+    assert_eq!(std::fs::read(dir.join(adage_tracks::proposals::FILE)).unwrap(), bytes);
+}

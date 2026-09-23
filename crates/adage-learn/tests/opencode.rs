@@ -140,4 +140,8 @@ fn learns_all_four_route_kinds_from_opencode_exports() {
     let fin = routes.iter().find(|r| matches!(r.trigger, Trigger::AfterEdit { .. })).expect("finish-line route");
     assert_eq!(fin.trigger, Trigger::AfterEdit { paths: "schema/*.json".into() });
     assert_eq!(fin.step, Step::Run { command: "make gen".into() });
+    // The tracks record the harness the sessions came from, not Claude Code by default.
+    for t in adage_tracks::io::read_all(&home.join("tracks")).unwrap() {
+        assert_eq!(t.manifest.gauge.harness, vec!["opencode".to_string()], "{}", t.manifest.track.name);
+    }
 }
