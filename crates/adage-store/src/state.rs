@@ -66,6 +66,17 @@ mod pos {
     }
 }
 
+/// The CRC covers the sequence number and length as well as the payload. With the payload alone, a
+/// write torn after the header left a new sequence number over the slot's *old* payload, whose CRC
+/// still matched: the reader then took a state two writes stale for the newest.
+fn frame_crc(seq: u64, len: u32, payload: &[u8]) -> u32 {
+    let mut b = Vec::with_capacity(12 + payload.len());
+    b.extend_from_slice(&seq.to_le_bytes());
+    b.extend_from_slice(&len.to_le_bytes());
+    b.extend_from_slice(payload);
+    crc32(&b)
+}
+
 fn read_slot(file: &File, idx: usize) -> Option<(u64, Vec<u8>)> {
     let mut hdr = [0u8; HEADER];
     pos::read_exact_at(file, &mut hdr, (idx * SLOT) as u64).ok()?;
@@ -80,7 +91,7 @@ fn read_slot(file: &File, idx: usize) -> Option<(u64, Vec<u8>)> {
     }
     let mut payload = vec![0u8; len];
     pos::read_exact_at(file, &mut payload, (idx * SLOT + HEADER) as u64).ok()?;
-    (crc32(&payload) == crc).then_some((seq, payload))
+    (frame_crc(seq, len as u32, &payload) == crc).then_some((seq, payload))
 }
 
 /// The newest valid slot, and which slot index it is in.
@@ -123,7 +134,7 @@ where
     buf.extend_from_slice(&MAGIC);
     buf.extend_from_slice(&seq.to_le_bytes());
     buf.extend_from_slice(&(payload.len() as u32).to_le_bytes());
-    buf.extend_from_slice(&crc32(&payload).to_le_bytes());
+    buf.extend_from_slice(&frame_crc(seq, payload.len() as u32, &payload).to_le_bytes());
     buf.extend_from_slice(&payload);
     pos::write_all_at(&file, &buf, (target * SLOT) as u64)?;
     file.unlock()?;
@@ -180,6 +191,23 @@ mod tests {
         pos::write_all_at(&f, b"garbage", (SLOT + HEADER) as u64).unwrap();
         let s: S = read(&p).unwrap();
         assert_eq!(s.n, 1);
+    }
+
+    /// Regression (found by the adage-eval property tests): a write torn right after the header's
+    /// sequence number left the slot's old payload, with its old, matching CRC, under a new
+    /// sequence number, and the reader took that state, two writes stale, as the newest.
+    #[test]
+    fn a_write_torn_after_the_sequence_number_is_not_read_as_newest() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("x.state");
+        for n in 1..=3 {
+            update::<S, _>(&p, |s| s.n = n).unwrap();
+        }
+        // Slots: 0 holds n=3 (seq 3), 1 holds n=2 (seq 2). The next write goes to slot 1; tear it
+        // after the new sequence number only.
+        let f = OpenOptions::new().write(true).open(&p).unwrap();
+        pos::write_all_at(&f, &4u64.to_le_bytes(), (SLOT + 4) as u64).unwrap();
+        assert_eq!(read::<S>(&p).unwrap().n, 3, "the previous state, not an older one");
     }
 
     #[test]
