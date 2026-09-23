@@ -8,8 +8,9 @@ use crate::transcript::{self, Transcript};
 use adage_core::keys::{self, template_key};
 use adage_core::tools::normalize_tool;
 use adage_core::{repo, CanonicalAction, CommandTable, Effect};
-use adage_runtime::{decide, Arm, Ctx, Directive, Event, Judgement, SessionState};
+use adage_runtime::{decide, fast, Arm, Ctx, Directive, Event, Judgement, SessionState};
 use adage_tracks::Index;
+use serde::Serialize;
 use std::path::Path;
 
 /// A directive the runtime would have given, and when.
@@ -51,6 +52,27 @@ pub struct Replayed {
     pub turns: u32,
     /// Per event: hook name, would-have route ids, whether a stop request would have been made.
     pub trace: Vec<(&'static str, Vec<String>, bool)>,
+    /// The hook's no-match fast path, checked against the full decision on every event.
+    pub fast: FastCheck,
+    /// Per event (as `trace`): whether the hook's fast path skips it, leaving no spool record.
+    pub skipped: Vec<bool>,
+}
+
+/// The no-match fast path (`adage_runtime::fast`) against the full decision path. The replay
+/// keeps a second session state, decided the way the hook decides: an event the fast path skips
+/// is not decided at all. A skipped event's full decision must be empty, and every other event's
+/// decision, and the state later decisions read, must be the same on both paths.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct FastCheck {
+    pub events: u32,
+    pub skipped: u32,
+    /// `<session> event <n> (<hook>): <what differed>`
+    pub mismatches: Vec<String>,
+}
+
+/// The state later decisions read (not the `batches` and `history` counters).
+fn decision_state(st: &SessionState) -> serde_json::Value {
+    serde_json::json!([st.arm, st.emitted, st.pending, st.obligations, st.stop_requests, st.prompts > 0])
 }
 
 pub fn actions(t: &Transcript, root: &Path, table: &CommandTable) -> Vec<Action> {
@@ -101,10 +123,32 @@ pub fn replay(
         actions: actions(t, root, table),
         ..Default::default()
     };
-    for step in transcript::events(t, &root.to_string_lossy(), stop) {
+    let triggers = index.triggers(repo_key);
+    let root_s = root.to_string_lossy().to_string();
+    let mut fast_st = st.clone();
+    for (n, step) in transcript::events(t, &root_s, stop).into_iter().enumerate() {
         let before: Vec<bool> = st.obligations.iter().map(|o| o.stop_requested).collect();
+        let skip = fast::skip(&triggers, &step.event, &root_s, || Some(fast_st.clone()));
         let d = decide(&ctx, &mut st, &step.event);
         let name = transcript::hook_name(&step.event);
+        r.fast.events += 1;
+        r.skipped.push(skip);
+        let mut differs = |what: &str| r.fast.mismatches.push(format!("{} event {n} ({name}): {what}", t.id));
+        if skip {
+            r.fast.skipped += 1;
+            if !d.would_have.is_empty() || !d.judgements.is_empty() || d.would_continue.is_some() {
+                differs("skipped, but the full path decided something");
+            }
+        } else {
+            let fd = decide(&ctx, &mut fast_st, &step.event);
+            if serde_json::to_value(&fd).ok() != serde_json::to_value(&d).ok() {
+                differs("different decisions");
+            }
+        }
+        if decision_state(&fast_st) != decision_state(&st) {
+            differs("different state for later decisions");
+            fast_st = st.clone();
+        }
         debug_assert!(d.directives.is_empty(), "the holdout arm never delivers");
         for w in &d.would_have {
             r.fired.push(Fired { directive: w.clone(), event: name, turn: step.turn });

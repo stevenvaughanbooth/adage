@@ -108,22 +108,37 @@ jobs:
         if: runner.os != 'Windows'
         run: plugin/test/session-start.test.sh
 
-  # Release targets without a native CI test runner: the static musl builds dist ships for Linux.
+  # Release targets without a native CI test runner: the static musl builds dist ships for Linux,
+  # each built natively (x64, and arm64 on GitHub's arm64 runner) with the distribution's musl-gcc.
   musl:
-    runs-on: ubuntu-24.04
+    name: musl (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-24.04 }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04-arm }
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: x86_64-unknown-linux-musl
+          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
       - run: sudo apt-get update && sudo apt-get install -y musl-tools
-      - run: cargo build --locked --release -p adage-cli --target x86_64-unknown-linux-musl
+      - name: build
+        # musl-tools installs `musl-gcc`; the cc crate finds it for x86_64 by itself, but looks
+        # for `aarch64-linux-musl-gcc` on arm64 unless told.
+        env:
+          CC_aarch64_unknown_linux_musl: musl-gcc
+        run: cargo build --locked --release -p adage-cli --target ${{ matrix.target }}
       - name: static and runnable
         run: |
-          b=target/x86_64-unknown-linux-musl/release/adage
+          b=target/${{ matrix.target }}/release/adage
           file "$b" | grep -Eq "statically linked|static-pie linked"
           "$b" version
 

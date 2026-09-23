@@ -31,6 +31,26 @@ version as the GitHub Release notes.
   command, including `python3 -m unittest`, which passes once `ACME_ENV` is set. Dead ends are now
   keyed by failure signature: a runner is named only if its failures share the route's signature
   and it failed in at least 9 in 10 of the sessions that ran it. Route ids are unchanged.
+- **A second way to fail went unnamed.** There was one dead end per working command, so a second
+  failure signature before it (the demo's `python -m pytest`, "command not found", 4 sessions)
+  was not warned about. There is now one dead end per (working command, signature), at most three
+  per working command, each runner named under one signature only. The most common signature's
+  route keeps its id; each further one gets an id derived from the command and signature. Offline
+  recall rose (demo `hash:0.3` 0.81 → 0.84, synthetic 0.97 → 1.00) with no precision lost.
+- **Unrelated repositories without `origin` shared routes** when their directories had the same
+  name. Such a repository is now keyed `<directory name>@<root commit>`; the root commit is read
+  straight from `.git` (loose objects, packs, packed refs, linked worktrees) without running git,
+  and remembered in `$ADAGE_HOME/repo-keys`. A repository whose root cannot be read (no commits
+  yet, SHA-256, shallow, alternates) is keyed by a hash of its path. Routes learned under the bare
+  directory name keep working until `adage learn` re-keys a repository of that name. New
+  dependency: `miniz_oxide` (MIT OR Zlib OR Apache-2.0), with `adler2`.
+- **A corrupt session state started the session over**, so a dead end could be announced twice
+  and a finish-line obligation forgotten. When neither state slot can be read, the hook now
+  rebuilds the state from the session's spool (up to 4 MiB): emitted routes, obligations, stop
+  requests, arm, repository and counters. Spool records gain `kind` and `repo` fields.
+- **Oversized payloads were cut off, not drained** (Design §13.3). A payload over 8 MiB is now
+  read to the end and discarded, so the harness writing it never sees a broken pipe; the same
+  with a kill switch on. The refusal is recorded in `fail-open.log`.
 - **Environment steps reached agents without a person's approval** (Design O11). Unknown commands
   are classified as environment, and a learned route running one was delivered at yellow at once.
   Learned and imported environment routes now start as drafts, which are never delivered, and
@@ -55,6 +75,19 @@ version as the GitHub Release notes.
   repository.
 - **`adage learn --codex-sessions <dir>` fell back to all of `~/.claude/projects`** when the
   directory held nothing. An explicit source that finds nothing is now an error.
+
+### Changed
+
+- **`adage learn` writes `learn.log`**: one JSON line per run with the sessions read and used and,
+  per repository, the tracks written (version, change, route count). No prompt, command or path.
+  Rotated at 256 KiB.
+- **CI builds the aarch64 musl release target**, natively on the arm64 runner, as it did x86_64.
+- **Hooks return early on events that cannot match** (Design §13.2). The index now stores, per
+  repository, what can make its routes act, and a hook skips an event that cannot change any
+  decision before loading the command table, locking the state or writing the spool: a no-match
+  tool batch now costs 1.9 ms p50 instead of 2.8 ms. The eval replay checks on every event of
+  every dataset that the fast path changes no decision. Skipped events are not written to the
+  spool, so `adage graph` shows fewer off-route commands.
 
 ## 0.1.0 - Unreleased
 

@@ -179,7 +179,7 @@ fn silent_or(treated: bool, v: &[&'static str]) -> Vec<&'static str> {
 
 /// Claude Code: `PostToolBatch` per turn, `PostToolUseFailure` per failed call, Stop `block`.
 fn replay_claude(sb: &Sandbox, sid: &str, arm: &str) {
-    let r = scenario::replay();
+    let r = replay_for(sb);
     let cwd = sb.repo();
     let treated = arm == "treated";
     let mut rng = Rng::new(7);
@@ -226,7 +226,7 @@ fn replay_claude(sb: &Sandbox, sid: &str, arm: &str) {
 /// OpenCode: the payloads `plugin/opencode/adage.js` builds, one `tool.execute.after` per call;
 /// the finish line is a `continue` at `session.idle`, whose prompt comes back via `chat.message`.
 fn replay_opencode(sb: &Sandbox, sid: &str, arm: &str) {
-    let r = scenario::replay();
+    let r = replay_for(sb);
     let cwd = sb.repo();
     let treated = arm == "treated";
     let h = |ev: &str, extra: Value| sb.hook("opencode", ev, &opencode::payload(sid, &cwd, extra), arm);
@@ -260,7 +260,7 @@ fn replay_opencode(sb: &Sandbox, sid: &str, arm: &str) {
 
 /// Codex: `PostToolUse` per call with no exit code; Stop `block` becomes a new `UserPromptSubmit`.
 fn replay_codex(sb: &Sandbox, sid: &str, arm: &str) {
-    let r = scenario::replay();
+    let r = replay_for(sb);
     let cwd = sb.repo();
     let treated = arm == "treated";
     let mut rng = Rng::new(9);
@@ -300,6 +300,26 @@ fn replay_codex(sb: &Sandbox, sid: &str, arm: &str) {
 // ---------------------------------------------------------------------------------------------
 // Graph
 
+/// The learned dead ends: one per failure signature before `make test`.
+fn dead_ends(g: &Value) -> Vec<&Value> {
+    g["routes"].as_array().unwrap().iter().filter(|r| r["id"].as_str().unwrap().starts_with("dead-end-")).collect()
+}
+
+/// The dead end that names this runner.
+fn dead_end<'a>(g: &'a Value, avoid: &str) -> &'a Value {
+    dead_ends(g).into_iter().find(|r| r["step"]["avoid"] == avoid).unwrap_or_else(|| panic!("no dead end for {avoid}"))
+}
+
+/// The held-out replay, expecting at the prompt the lookup and every dead end the sandbox learned
+/// (each announced once, at the first prompt).
+fn replay_for(sb: &Sandbox) -> scenario::Replay {
+    let mut r = scenario::replay();
+    let n = dead_ends(&sb.graph()).len();
+    assert!(n >= 1, "no dead end learned");
+    r.prompt_expect = std::iter::once("lookup-work-item").chain(std::iter::repeat_n("dead-end-", n)).collect();
+    r
+}
+
 fn route<'a>(g: &'a Value, prefix: &str) -> &'a Value {
     g["routes"]
         .as_array()
@@ -318,8 +338,12 @@ fn check_graph(sb: &Sandbox, harness: &str) {
         json!({ "total": 2, "treated": 1, "holdout": 1 }),
         "{harness}: both sessions, split by arm"
     );
-    for id in ["lookup-work-item", "read-linked-files", "finish-line-", "dead-end-"] {
-        let r = route(&g, id);
+    let mut all: Vec<(String, &Value)> = ["lookup-work-item", "read-linked-files", "finish-line-"]
+        .iter()
+        .map(|id| (id.to_string(), route(&g, id)))
+        .collect();
+    all.extend(dead_ends(&g).into_iter().map(|r| (r["id"].as_str().unwrap().to_string(), r)));
+    for (id, r) in all {
         for arm in ["treated", "holdout"] {
             assert_eq!(r["arms"][arm]["sessions"], 1, "{harness} {id} {arm}");
             assert_eq!(r["arms"][arm]["applied"], 1, "{harness} {id} {arm}: applied (delivered or withheld) once");
@@ -338,7 +362,7 @@ fn check_graph(sb: &Sandbox, harness: &str) {
         (json!(1), json!(1)),
         "{harness}: make gen ran in both"
     );
-    let dead = route(&g, "dead-end-");
+    let dead = dead_end(&g, "python3 -m unittest");
     assert_eq!(
         (dead["arms"]["treated"]["hit_avoided"].clone(), dead["arms"]["holdout"]["hit_avoided"].clone()),
         (json!(1), json!(1)),
@@ -348,15 +372,24 @@ fn check_graph(sb: &Sandbox, harness: &str) {
     assert_eq!(stops, 1, "{harness}: one stop request, in the treated arm");
 }
 
-const ALL_FOUR: [&str; 4] = ["dead-end-", "finish-line-", "lookup-work-item", "read-linked-files"];
+/// All four route kinds, with `dead` dead ends: one per failure signature with enough support.
+/// Each history's agents run `python3 -m unittest` (`ACME_ENV is not set`) or `python3 -m pytest`
+/// (`No module named pytest`) before `make test`, picked at random, so a history names the pytest
+/// dead end only where at least three sessions ran it.
+fn assert_all_four(report: &Value, harness: &str, dead: usize) {
+    assert_kinds(report, harness, dead);
+    assert_eq!(report["sessions_used"], 12, "{harness}");
+}
 
-fn assert_all_four(report: &Value, harness: &str) {
+fn assert_kinds(report: &Value, harness: &str, dead: usize) {
     let got = learned_routes(report);
-    assert_eq!(got.len(), 4, "{harness}: {got:?}");
-    for (g, w) in got.iter().zip(ALL_FOUR) {
+    let want: Vec<&str> = std::iter::repeat_n("dead-end-", dead)
+        .chain(["finish-line-", "lookup-work-item", "read-linked-files"])
+        .collect();
+    assert_eq!(got.len(), want.len(), "{harness}: {got:?}");
+    for (g, w) in got.iter().zip(want) {
         assert!(g.starts_with(w), "{harness}: {got:?}");
     }
-    assert_eq!(report["sessions_used"], 12, "{harness}");
 }
 
 /// Two sessions' ids as the harness would mint them, two seconds apart (two agents started together).
@@ -379,7 +412,7 @@ fn claude_code_learn_then_replay() {
     let sb = Sandbox::new();
     let projects = adage_sim::fixtures_dir().join("claude/projects");
     let rep = sb.learn(&["--claude-projects", projects.to_str().unwrap()]);
-    assert_all_four(&rep, "claude");
+    assert_all_four(&rep, "claude", 2);
     let (a, b) = ids("claude");
     replay_claude(&sb, &a, "treated");
     replay_claude(&sb, &b, "holdout");
@@ -390,7 +423,7 @@ fn claude_code_learn_then_replay() {
 fn opencode_learn_then_replay() {
     let sb = Sandbox::new();
     let rep = sb.learn_files(&adage_sim::fixture_files("opencode"));
-    assert_all_four(&rep, "opencode");
+    assert_all_four(&rep, "opencode", 2);
     let (a, b) = ids("opencode");
     replay_opencode(&sb, &a, "treated");
     replay_opencode(&sb, &b, "holdout");
@@ -402,7 +435,7 @@ fn codex_learn_then_replay() {
     let sb = Sandbox::new();
     let sessions = adage_sim::fixtures_dir().join("codex/sessions");
     let rep = sb.learn(&["--codex-sessions", sessions.to_str().unwrap()]);
-    assert_all_four(&rep, "codex");
+    assert_all_four(&rep, "codex", 1);
     let (a, b) = ids("codex");
     replay_codex(&sb, &a, "treated");
     replay_codex(&sb, &b, "holdout");
@@ -415,11 +448,29 @@ fn codex_learn_then_replay() {
 fn learn_from_codex_history_deliver_in_opencode() {
     let sb = Sandbox::new();
     let rep = sb.learn_files(&adage_sim::fixture_files("codex"));
-    assert_all_four(&rep, "codex");
+    assert_all_four(&rep, "codex", 1);
     let (a, b) = ids("opencode");
     replay_opencode(&sb, &a, "treated");
     replay_opencode(&sb, &b, "holdout");
     check_graph(&sb, "codex → opencode");
+}
+
+/// Each `adage learn` appends one summary line to `$ADAGE_HOME/learn.log`.
+#[test]
+fn learn_writes_one_summary_line_per_run() {
+    let sb = Sandbox::new();
+    let files = adage_sim::fixture_files("claude");
+    sb.learn_files(&files);
+    let rep = sb.learn_files(&files);
+    let text = std::fs::read_to_string(sb.root.join("adage/learn.log")).unwrap();
+    let lines: Vec<Value> = text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    assert_eq!(lines.len(), 2, "{text}");
+    let last = &lines[1];
+    assert_eq!((last["sessions_read"].clone(), last["sessions_used"].clone()), (json!(12), json!(12)));
+    assert_eq!(last["index_generation"], rep["index_generation"]);
+    let tracks = last["repos"]["acme-billing"]["tracks"].as_array().unwrap();
+    assert!(tracks.iter().all(|t| t["change"].is_string() && t["routes"].as_u64().unwrap() > 0), "{last}");
+    assert!(!text.contains(&*sb.root.to_string_lossy()), "no paths in the log");
 }
 
 /// All three histories at once: one repository, the same four routes, evidence from every harness.
@@ -432,8 +483,7 @@ fn learn_from_all_three_histories_together() {
     let rep = sb.learn_files(&files);
     assert_eq!((rep["sessions_read"].clone(), rep["sessions_used"].clone()), (json!(36), json!(36)));
     assert_eq!(rep["repos"].as_object().unwrap().len(), 1);
-    let got = learned_routes(&rep);
-    assert_eq!(got.len(), 4, "{got:?}");
+    assert_kinds(&rep, "all three", 2);
     let g = sb.graph();
     let lookup = route(&g, "lookup-work-item");
     // Nine sessions per harness look the work item up; ten per harness name one.
@@ -441,12 +491,15 @@ fn learn_from_all_three_histories_together() {
         (lookup["evidence"]["support"].clone(), lookup["evidence"]["opportunities"].clone()),
         (json!(27), json!(30))
     );
-    // Six sessions per harness hit a dead end before `make test`. The dead end is keyed by its
-    // failure signature: the unittest runs (`ACME_ENV is not set`) are its evidence, and the pytest
-    // runs (`No module named pytest`, a different failure) are not.
-    let dead = route(&g, "dead-end-");
-    assert_eq!(dead["step"]["avoid"], "python3 -m unittest");
+    // Six sessions per harness hit a dead end before `make test`. Dead ends are keyed by failure
+    // signature: the unittest runs (`ACME_ENV is not set`, 11 sessions) are one route's evidence,
+    // and the pytest runs (`No module named pytest`, 7 sessions) another's.
+    let dead = dead_end(&g, "python3 -m unittest");
     assert_eq!(dead["evidence"]["support"], 11);
+    let pytest = dead_end(&g, "python3 -m pytest");
+    assert_eq!(pytest["step"]["signature"], "No module named pytest");
+    assert_eq!(pytest["evidence"]["support"], 7);
+    assert_ne!(dead["id"], pytest["id"]);
     // Replaying in each harness against the combined index draws the same directives.
     let (a, _) = ids("claude");
     replay_claude(&sb, &a, "treated");
@@ -467,13 +520,13 @@ fn opencode_plugin_full_session_in_node() {
         return;
     }
     let sb = Sandbox::new();
-    assert_all_four(&sb.learn_files(&adage_sim::fixture_files("opencode")), "opencode");
+    assert_all_four(&sb.learn_files(&adage_sim::fixture_files("opencode")), "opencode", 2);
     let (src, _, code) =
         sb.run(&["install", "opencode", "--print", "--bin", env!("CARGO_BIN_EXE_adage")], b"", "treated");
     assert_eq!(code, 0);
     let plugin = sb.root.join("adage-plugin.mjs");
     std::fs::write(&plugin, src).unwrap();
-    let r = scenario::replay();
+    let r = replay_for(&sb);
     let (a, b) = ids("opencode");
     for (sid, arm) in [(a, "treated"), (b, "holdout")] {
         let script = sb.root.join(format!("script-{arm}.json"));

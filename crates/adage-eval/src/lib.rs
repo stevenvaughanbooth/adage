@@ -90,6 +90,8 @@ pub struct Report {
     pub dead_ends: score::DeadEnds,
     pub finish_line: score::FinishLine,
     pub safety: score::Safety,
+    /// The hook's no-match fast path over every replayed event (`replay::FastCheck`).
+    pub fast_path: replay::FastCheck,
     pub sessions: Vec<score::SessionScore>,
 }
 
@@ -146,6 +148,7 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
     let repo_key = ds.manifest.repo.clone();
 
     let mut tally = score::Tally::default();
+    let mut fast = replay::FastCheck::default();
     let (mut scored, mut skipped) = (0, 0);
     let mut test = split.test.clone();
     test.sort();
@@ -157,6 +160,9 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
             continue;
         }
         let rep = replay::replay(&t, &index, &repo_key, &sandbox.root, &table, meta.stopped());
+        fast.events += rep.fast.events;
+        fast.skipped += rep.fast.skipped;
+        fast.mismatches.extend(rep.fast.mismatches.iter().cloned());
         score::score_session(
             &mut tally,
             &rep,
@@ -202,6 +208,7 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
         dead_ends: tally.dead_ends,
         finish_line: tally.finish_line,
         safety: tally.safety,
+        fast_path: fast,
         sessions: tally.sessions,
     })
 }
@@ -275,6 +282,17 @@ pub fn render_text(r: &Report) -> String {
         f.obligations, f.met, f.caught, f.false_alarms, f.unknown, pct(f.accuracy), f.missed, f.stop_requests, f.stop_requests_correct
     );
     let _ = writeln!(s, "safety: {} checked, {} unsafe", r.safety.checked, r.safety.unsafe_directives);
+    let f = &r.fast_path;
+    let _ = writeln!(
+        s,
+        "fast path: {} of {} events skipped with no match; {} decisions differ",
+        f.skipped,
+        f.events,
+        f.mismatches.len()
+    );
+    for m in &f.mismatches {
+        let _ = writeln!(s, "  DIFFERS {m}");
+    }
     for v in &r.safety.violations {
         let _ = writeln!(s, "  UNSAFE {}: {}", v.route, v.reason);
     }

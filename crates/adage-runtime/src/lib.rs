@@ -4,6 +4,8 @@
 //! which directives to emit. No I/O except checking that bound repository paths exist. The CLI
 //! owns reading payloads, locking state, writing spools, and printing harness output.
 
+pub mod fast;
+pub mod rebuild;
 pub mod render;
 
 use adage_core::keys::{self, template_key};
@@ -416,7 +418,7 @@ fn match_intent<'a>(ctx: &Ctx, routes: &[&'a IndexedRoute], text: &str) -> Optio
     best.map(|(_, f, ir)| (f.clone(), ir))
 }
 
-fn push_history(st: &mut SessionState, key: String) {
+pub(crate) fn push_history(st: &mut SessionState, key: String) {
     st.history.push(key);
     if st.history.len() > HISTORY {
         let extra = st.history.len() - HISTORY;

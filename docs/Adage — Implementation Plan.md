@@ -90,8 +90,8 @@ did later. Committed datasets and their gates (docs/evals.md):
 
 | | demo round 2 (real) | synthetic | adversarial |
 | --- | ---: | ---: | ---: |
-| Precision, all | 0.73 | 0.91 | 0.73 |
-| Recall of key steps | 0.78 | 0.97 | 0.57 |
+| Precision, all | 0.74 | 0.93 | 0.73 |
+| Recall of key steps | 0.78 | 1.00 | 0.57 |
 | Turns saved by the lookup (median) | 9 | 1 | 0 |
 | Finish-line accuracy | 1.00 | 1.00 | 1.00 |
 | Unsafe directives | 0 | 0 | 0 of 84 checked |
@@ -105,7 +105,8 @@ did later. Committed datasets and their gates (docs/evals.md):
 - **Dead ends are keyed by failing signature.** The eval found the dead-end route also warned
   against `python3 -m unittest`, which passes when `ACME_ENV` is set. The miner now names a runner
   only if its failures share the route's signature and it fails in 9 of 10 sessions that ran it;
-  dead-end accuracy rose and precision is unchanged (docs/evals.md).
+  dead-end accuracy rose and precision is unchanged (docs/evals.md). Each further signature with
+  enough support is a dead end of its own; the most common keeps the working command's id.
 
 The property tests found 8 bugs, all fixed with regression tests:
 
@@ -152,20 +153,51 @@ Closed since draft 2:
   message or panic location, never payload; rotated at 256 KiB), and `adage doctor` reports them.
 - Normalisation no longer depends on machine speed: the 50 ms parse timeout is replaced by a
   deterministic budget of bytes the lexer may read (2^20), with a 1 s backstop for unknown shapes.
+- One dead end per (working command, failure signature), not per working command. The most
+  common signature keeps the id derived from the working command (`dead-end-d41b1e`), so the
+  live-index gate holds; round 2 adds `dead-end-21cb2c` (`python -m pytest`). Recall: `hash:0.3`
+  0.81 → 0.84, synthetic 0.97 → 1.00; precision unchanged or up. Adversarial recall stays 0.57:
+  its pytest failures carry no renderable error line, so no signature (docs/evals.md).
+- Repositories without `origin` are keyed `<directory name>@<root commit>`, so unrelated ones
+  with the same name no longer share routes. The root commit is read from the object store
+  without running git (loose objects, v2 packs with deltas, packed refs, worktrees; new
+  dependency `miniz_oxide`), and remembered per path in `$ADAGE_HOME/repo-keys`, which `adage
+  learn` fills. Unreadable roots (no commits, SHA-256, shallow, alternates) fall back to a hash
+  of the path, which copies do not share. Bare-name keys from before still apply until a
+  repository of that name is re-keyed. Hook p50/p95 unchanged within 0.1–0.2 ms; a cold cache
+  costs one walk (38 ms for 5,000 packed commits, about 0.45 s for 50,000).
+- A state file that can no longer be read (both slots fail their CRC, or the payload no longer
+  parses) is rebuilt from the session's spool (at most 4 MiB, 10,000 records): arm, repository,
+  counters, emitted routes, history, finish-line obligations and stop requests. Spool records now
+  carry `kind` and `repo`; older ones are mapped by event name. The watermark fold S3 also
+  proposed is not built: the state stays authoritative while readable.
+- The no-match fast path (Design §13.2): the index stores per-repository triggers, and the hook
+  skips an event that cannot change a decision before the command table, state lock and spool. A
+  no-match batch: 2.82/2.93 ms p50/p95 → 1.87/1.96 ms (a repository without routes: 1.76/1.87).
+  The eval replay proves it on every event of every dataset (0 differences; 45–72% of events
+  skipped). Skipped events leave no spool record, so `adage graph` lists fewer off-route commands;
+  runs of avoided commands, and every event of a session with a pending judgement or obligation,
+  are still recorded.
+- Payloads over 8 MiB are read to the end and discarded (Design §13.3), so the harness never sees
+  a broken pipe; with a kill switch on too. The refusal is recorded in `fail-open.log`.
+- Design W8 (spill directives over the harness cap to a file) cannot arise, so it is not built:
+  with the longest fields validation accepts, the largest decision (three directives) is 8,287
+  bytes, under every harness's 9,500. A test (`the_largest_decision_fits_every_harness_cap`) pins
+  the bound and each limit it rests on; raising one fails it. Truncation stays as a backstop.
+- `adage learn` appends a one-line JSON summary per run to `learn.log` (rotated at 256 KiB).
+- CI builds the aarch64 musl release target natively on the arm64 runner (`musl-tools`, with
+  `CC_aarch64_unknown_linux_musl=musl-gcc`) and checks it is static and runs. Written, and
+  type-checked locally with `scripts/cross-check.sh`; its first CI run is the real test.
 
 Open:
 
 | Gap | Impact | Fix |
 | --- | --- | --- |
-| Repository key collides for unrelated repos with no `origin` and the same directory name | Routes from one such repo reach the other (directives still validated) | Key no-origin repos by directory name plus the root commit, read without running git in the hook |
-| State files are never rebuilt from the spool (S3 recommended a watermark and rebuild on CRC failure) | If both slots are corrupt, a session's state resets | Rebuild from the spool, or document state as a best-effort cache |
-| Directive text over 9,500 bytes is truncated, not spilled to a file (Design W8) | Only reachable with many long directives at once | Spill to a file and point to it |
-| Payloads over 8 MiB are not drained from stdin (Design §13.3) | The harness may see a broken pipe | Drain and discard |
-| No precomputed no-match key set (Design §13.2) | Every event in a repository with routes pays the full decision path (about 3 ms) | Precompute trigger keys in the index |
+| The command table is parsed, and its 57 regexes compiled, at every decided event (about 1 ms of the 3 ms full path) | Every event the fast path cannot skip pays it | Compile pattern regexes lazily, or once per build |
+| Events the no-match fast path skips leave no spool record | `adage graph` and the signal box list only recorded commands, so fewer off-route ones; route metrics are unaffected | If the off-route view matters, record a light entry for skipped calls (needs the cheaper table above to carry keys) |
+| A failing runner whose error output has no renderable line (quotes, shell syntax, invisible characters) has no signature, so no dead end names it | Adversarial dead-end recall 3/30; overall recall 0.57 | Cut an unrenderable line at its first unrenderable character, with a minimum length, if that keeps the safety oracle at 0 |
+| A linked worktree does not see its repository's `origin` (the config lives in the common git directory; `repo_key` reads `<root>/.git/config`) | A worktree is keyed `<worktree dir>@<root commit>`, so it does not share the main checkout's routes | Read `origin` from the common directory (`gitobj::Repo` already finds it); re-keys existing worktree routes |
 | Per-session nonce (review finding F12) and arm assignment by root session lineage (F7) were accepted but not built | `/clear` starts a new arm | Build both |
-| One dead-end route per working command: a second failing signature (round 2: `python -m pytest`, 4 sessions) is not named | Dead-end recall fell with the signature rule (adversarial set 0.77 → 0.58); precision held | Allow one route per (working command, signature), with ids that keep the live-index gate stable |
-| CI builds only x64 musl; arm64 musl is built only at release | A release-only failure is possible | Add aarch64 musl to CI |
-| `learn.log` is defined but never written | — | Write it, or remove the path |
 
 Fixed from the architecture audit (draft 3):
 

@@ -6,15 +6,23 @@
 
 use crate::io;
 use crate::model::*;
+use crate::triggers::Triggers;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::borrow::Cow;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Index {
     pub generation: String,
     pub routes: Vec<IndexedRoute>,
+    /// Per repository, what can make its routes act ([`Triggers`]), for the hook's no-match fast
+    /// path. Derived from `routes`, so not part of `generation`; an index written before it
+    /// existed has none, and [`Index::triggers`] derives them on the fly.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub triggers: BTreeMap<String, Triggers>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -73,7 +81,21 @@ impl Index {
         routes.sort_by(|a, b| (&a.repo, &a.track, &a.route.id).cmp(&(&b.repo, &b.track, &b.route.id)));
         let body = serde_json::to_vec(&routes).unwrap_or_default();
         let generation = io::hex(&Sha256::digest(&body))[..16].to_string();
-        Index { generation, routes }
+        let mut triggers: BTreeMap<String, Triggers> = BTreeMap::new();
+        let repos: BTreeSet<&str> = routes.iter().map(|r| r.repo.as_str()).collect();
+        for repo in repos {
+            triggers.insert(repo.to_string(), Triggers::of(routes.iter().filter(|r| r.repo == repo).map(|r| &r.route)));
+        }
+        Index { generation, routes, triggers }
+    }
+
+    /// What can make `repo`'s routes act: precomputed, or derived from the routes for an index
+    /// compiled before triggers were stored.
+    pub fn triggers(&self, repo: &str) -> Cow<'_, Triggers> {
+        match self.triggers.get(repo) {
+            Some(t) => Cow::Borrowed(t),
+            None => Cow::Owned(Triggers::of(self.for_repo(repo).map(|r| &r.route))),
+        }
     }
 
     pub fn for_repo<'a>(&'a self, repo: &'a str) -> impl Iterator<Item = &'a IndexedRoute> + 'a {

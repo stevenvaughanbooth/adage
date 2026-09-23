@@ -1,7 +1,11 @@
 //! Repository identity and repo-relative paths.
 
+use crate::gitobj;
 use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet};
+use std::ops::Bound;
 use std::path::{Component, Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 /// Walk up from `start` to the nearest directory containing `.git`.
 pub fn find_root(start: &Path) -> Option<PathBuf> {
@@ -15,27 +19,140 @@ pub fn find_root(start: &Path) -> Option<PathBuf> {
     None
 }
 
-/// A stable repository key: the normalised `origin` URL if there is one, else the directory name.
-/// Clones of the same repository in different directories share a key.
+/// A stable repository key.
+///
+/// - With an `origin` remote: the normalised `origin` URL. Clones of the same repository in
+///   different directories share a key.
+/// - Without one: `<directory name>@<root commit>`, the first 12 hex digits of the root of
+///   `HEAD`'s first-parent history, read from the object store without running git
+///   ([`crate::gitobj`]). Unrelated repositories that happen to share a directory name get
+///   different keys; copies of one repository share a key.
+/// - If the root commit cannot be read (no commits yet, a SHA-256 or shallow repository,
+///   alternates, a history longer than [`gitobj::MAX_WALK`]), or the directory is not a git
+///   repository: `<directory name>@path-<12 hex digits of SHA-256 of the root's path>`. Such a
+///   key is not shared with any copy.
+/// - A directory that no longer exists (history of a deleted checkout, read by `adage learn`):
+///   the directory name alone, the key every repository without `origin` had before. Hooks accept
+///   such a *legacy* key only while no repository of that name has a new key ([`lookup_key`]).
 pub fn repo_key(root: &Path) -> String {
-    let origin = std::fs::read_to_string(root.join(".git/config")).ok().and_then(|cfg| {
-        let mut in_origin = false;
-        for line in cfg.lines() {
-            let l = line.trim();
-            if l.starts_with('[') {
-                in_origin = l == r#"[remote "origin"]"#;
-            } else if in_origin {
-                if let Some(url) = l.strip_prefix("url =") {
-                    return Some(normalise_origin(url.trim()));
-                }
+    origin_key(root).unwrap_or_else(|| no_origin_key(root, CACHE.get().map(PathBuf::as_path)))
+}
+
+/// Where [`repo_key`] remembers root commits for the rest of this process. The CLI sets
+/// `$ADAGE_HOME/repo-keys`, so the history `adage learn` walks is not walked again by a hook.
+static CACHE: OnceLock<PathBuf> = OnceLock::new();
+
+/// Remember root commits under `dir` for the rest of this process (first call wins).
+pub fn use_cache(dir: PathBuf) {
+    let _ = CACHE.set(dir);
+}
+
+/// [`repo_key`], remembering a root commit once found in `cache` (a directory), so that a long
+/// history is walked once, not at every hook. A remembered root commit is used only while the
+/// repository's object store still holds it.
+pub fn repo_key_cached(root: &Path, cache: &Path) -> String {
+    origin_key(root).unwrap_or_else(|| no_origin_key(root, Some(cache)))
+}
+
+/// The key under which a hook looks up routes for `root`, given the repository keys the index
+/// holds routes for; `None` when nothing applies. Without `origin`, the object store is read only
+/// if the index holds routes for some repository of this directory name.
+///
+/// A legacy key (the bare directory name, from before keys carried the root commit) is accepted
+/// only while the index holds no new-style key for that name. Once `adage learn` has re-keyed a
+/// repository of that name, a legacy key could belong to any repository of the name, so it is
+/// ignored: that is the collision the new keys exist to prevent.
+pub fn lookup_key(root: &Path, cache: Option<&Path>, keys: &BTreeSet<&str>) -> Option<String> {
+    if let Some(o) = origin_key(root) {
+        return keys.contains(o.as_str()).then_some(o);
+    }
+    let name = dir_name(root);
+    let prefix = format!("{name}@");
+    let scoped = keys
+        .range::<str, _>((Bound::Included(prefix.as_str()), Bound::Unbounded))
+        .next()
+        .is_some_and(|k| k.starts_with(&prefix));
+    if scoped {
+        let key = no_origin_key(root, cache);
+        return keys.contains(key.as_str()).then_some(key);
+    }
+    keys.contains(name.as_str()).then_some(name)
+}
+
+/// The `origin` remote's normalised URL, from the repository's config.
+pub fn origin_key(root: &Path) -> Option<String> {
+    let cfg = std::fs::read_to_string(root.join(".git/config")).ok()?;
+    let mut in_origin = false;
+    for line in cfg.lines() {
+        let l = line.trim();
+        if l.starts_with('[') {
+            in_origin = l == r#"[remote "origin"]"#;
+        } else if in_origin {
+            if let Some(url) = l.strip_prefix("url =") {
+                return Some(normalise_origin(url.trim()));
             }
         }
-        None
-    });
-    match origin {
-        Some(o) => o,
-        None => root.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
     }
+    None
+}
+
+/// The repository's directory name: its whole key before keys carried the root commit.
+pub fn dir_name(root: &Path) -> String {
+    root.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
+}
+
+fn no_origin_key(root: &Path, cache: Option<&Path>) -> String {
+    let name = dir_name(root);
+    if !root.is_dir() {
+        return name;
+    }
+    match root_commit(root, cache) {
+        Some(c) => format!("{name}@{}", &c[..12]),
+        None => format!("{name}@path-{}", short_hash(&root.to_string_lossy())),
+    }
+}
+
+/// Root commits found in this process, by repository path: `adage learn` asks once per session.
+static FOUND: Mutex<BTreeMap<String, String>> = Mutex::new(BTreeMap::new());
+
+/// The root commit (40 hex digits): through the cache directory when one is given (hooks, one
+/// repository per process), else remembered in this process (`adage learn`, many sessions per
+/// repository).
+fn root_commit(root: &Path, cache: Option<&Path>) -> Option<String> {
+    let path = root.to_string_lossy().to_string();
+    if let Some(cache) = cache {
+        return root_commit_cached(root, &path, cache);
+    }
+    if let Some(c) = FOUND.lock().ok().and_then(|m| m.get(&path).cloned()) {
+        return Some(c);
+    }
+    let c = gitobj::hex(&gitobj::Repo::open(root)?.root_commit()?);
+    if let Ok(mut m) = FOUND.lock() {
+        m.insert(path, c.clone());
+    }
+    Some(c)
+}
+
+fn root_commit_cached(root: &Path, path: &str, cache: &Path) -> Option<String> {
+    let mut repo = gitobj::Repo::open(root)?;
+    // One file per repository path: the path, then the root commit.
+    let file = cache.join(short_hash(path));
+    if let Ok(text) = std::fs::read_to_string(&file) {
+        let mut lines = text.lines();
+        if let (Some(p), Some(c)) = (lines.next(), lines.next()) {
+            if p == path && gitobj::parse_hex(c).is_some_and(|id| repo.has(&id)) {
+                return Some(c.to_string());
+            }
+        }
+    }
+    let c = gitobj::hex(&repo.root_commit()?);
+    // Best effort: a cache that cannot be written only costs the walk next time.
+    let _ = std::fs::create_dir_all(cache);
+    let tmp = file.with_extension(format!("tmp{}", std::process::id()));
+    if std::fs::write(&tmp, format!("{path}\n{c}\n")).is_ok() {
+        let _ = std::fs::rename(&tmp, &file);
+    }
+    Some(c)
 }
 
 fn normalise_origin(url: &str) -> String {

@@ -182,6 +182,9 @@ sequenceDiagram
       A-->>H: exit 0, no output
     else
       A->>A: adapter.translate → Event
+      opt the event cannot change a decision (precomputed triggers; may read the state)
+        A-->>H: exit 0, no output, nothing written
+      end
       A->>D: lock the session's .state file, read the newest valid slot
       A->>A: assign arm on first sight, then decide()
       opt Prompt, and the repository has intent routes
@@ -196,11 +199,23 @@ sequenceDiagram
 ```
 
 The steps are in `crates/adage-cli/src/hook.rs`, and the harness-independent core never sees a
-native payload. Two shortcuts keep the common path cheap:
+native payload. Three shortcuts keep the common path cheap:
 
 - **Repository check.** If the index holds no route for this repository, the hook exits before
   translating anything. Measured at 1.76 ms p95 (S7 addendum). Draft 2's client-side fuse filter
   (T0) was not built.
+- **No-match fast path** (Design §13.2). `Index::compile` stores, per repository, what can make
+  its routes act (`adage_tracks::triggers::Triggers`: prompt span kinds, intent routes, dead ends
+  still to announce, words a matching command must contain, finish-line globs).
+  `adage_runtime::fast::skip` rejects an event before the command table, the state lock and the
+  spool when it cannot change any decision: session start and end always; a prompt with no
+  bindable span, no intent routes and no dead end to announce; a batch or failure with no call
+  containing a trigger word or every literal piece of a finish-line glob, while the session has
+  no pending judgement or obligation; a stop with no obligation left to request. Runs of a dead
+  end's avoided commands are words too, so `adage graph` still counts them; other skipped events
+  leave no spool record. The eval replay checks every event of every dataset against the full
+  path (`fast_path_changes_no_decision`). A no-match batch costs what a repository without routes
+  does: 1.9 ms p50, from 2.8 ms.
 - **Lazy model.** The model is opened only at a prompt, and only if the repository has intent
   routes (`embed` closure in `hook.rs`, `match_intent` in `adage-runtime`).
 
@@ -221,7 +236,9 @@ collides with another).
 an exclusive lock (`File::lock`: `flock` on Unix, `LockFileEx` on Windows), with no `fsync`. The
 reader takes the newest slot whose CRC is valid. The CRC covers the sequence number and length as
 well as the payload: covering only the payload let a torn write resurrect a state two writes old
-(eval bug 8). If both slots are invalid, the state starts again from its default.
+(eval bug 8). If both slots are invalid, or the newest payload no longer parses, the state is
+rebuilt from the session's spool (below); with no spool, or one over 4 MiB, it starts again from
+its default.
 
 The state (`SessionState` in `adage-runtime`) holds:
 
@@ -242,17 +259,23 @@ resynchronises on the next magic after a torn or corrupt frame, so a crash costs
 record. Each hook appends one record:
 
 ```text
-{ ts, event, arm, generation, harness?, decision: {
+{ ts, event, kind, arm, repo, generation, harness?, decision: {
     directives, would_have, continue_reason?, would_continue?, judgements, observed } }
 ```
 
 `observed` holds canonical template keys, not raw commands, and no prompt text is recorded.
+`kind` (the runtime event) and `repo` were added for rebuilds; older records are read by their
+harness event name.
 
 **Deviation from S3.** S3 recommended treating the state as a cache over the spool: fold spool
-records newer than a watermark, and rebuild on a CRC failure. That is not built. The hook never
-reads the spool. The state is authoritative for the session, and the spool is an audit log read
-by `report`, `graph`, `review` and `doctor`. Decisions read the current batch from the synchronous
-payload, which S3 identified as the condition under which the state stays exact.
+records newer than a watermark, and rebuild on a CRC failure. Only the rebuild is built. The state
+is authoritative for the session while it can be read, and the spool is an audit log read by
+`report`, `graph`, `review` and `doctor`. When the state cannot be read, the hook replays the
+spool's recorded decisions under the state lock (`adage_runtime::rebuild`, at most 4 MiB and
+10,000 records): arm, repository, counters, emitted routes, history, finish-line obligations
+(from the index) and stop requests. An in-flight follow judgement is dropped, and an obligation
+re-armed by an edit after it was met stays met, since the spool keeps call keys, not paths: a
+rebuilt session can miss a stop request, never make an extra one.
 
 ### 4.5 The index (A4)
 
@@ -267,9 +290,15 @@ decision compile all installed tracks into **one file**, `$ADAGE_HOME/index.json
   index or the new one.
 - **Fail open.** A missing or unreadable index loads as empty (`Index::load`).
 - **Scoped by repository key.** Every route carries the key of its repository, and the runtime
-  filters on it (`for_repo`). The key is the normalised `origin` URL, or the directory name when
-  there is no `origin` (`crates/adage-core/src/repo.rs`). Clones share routes. Two unrelated
-  repositories without an `origin` and with the same directory name also share them.
+  filters on it (`for_repo`). The key is the normalised `origin` URL, or, when there is no
+  `origin`, `<directory name>@<root commit>` (`crates/adage-core/src/repo.rs`). The root commit
+  is read from the object store without running git (`gitobj.rs`: loose objects, v2 packs with
+  deltas, packed refs, linked worktrees), and remembered per path under
+  `$ADAGE_HOME/repo-keys` so a long history is walked once (by `adage learn`, usually). Where it
+  cannot be read (no commits, SHA-256, shallow, alternates), the key is `<name>@path-<hash of
+  the root's path>`. Clones and copies share routes; unrelated repositories with one name do
+  not. A bare directory-name key (from before) is still honoured until a repository of that name
+  is re-keyed (`repo::lookup_key`).
 - **Live routes only.** `active` and `probation` routes are compiled. When a learned route and an
   imported one share an id, the learned one wins. A learned route a person retired still
   suppresses an import of the same id.
@@ -682,14 +711,19 @@ $ADAGE_HOME        macOS ~/Library/Application Support/Adage · Windows %APPDATA
 ├── tracks/@imported/…         imported tracks
 ├── sessions/<id>.state        two-slot state
 ├── sessions/<id>.spool        decision log
+├── repo-keys/<hash>           root commits found, per repository path (no-origin repository keys)
+├── learn.log                  one JSON line per `adage learn` run (rotated to learn.log.1 at 256 KiB)
+├── fail-open.log              hook errors that were swallowed (rotated at 256 KiB)
 ├── models/potion-base-8m/     manifest.json, model.safetensors, vocab.txt (optional)
 ├── trusted-signers            the person's allowed_signers (optional)
 ├── trust.json                 approvals from `adage add --trust`
 └── staging/                   transient, for `adage add`
 ```
 
-There are no service units, and nothing writes `learn.log` or `fail-open.log` (the latter is
-read by `doctor`, see [§14](#14-designed-but-not-built)).
+There are no service units. `adage learn` appends a summary to `learn.log` (sessions read and
+used, and per repository the tracks written, with versions, changes and route counts; no prompt,
+command or path), and hooks append their swallowed errors to `fail-open.log`, which `doctor`
+reads.
 
 ### 7.2 Channels
 
@@ -917,11 +951,10 @@ found that `graph` keyed sessions by an id prefix that OpenCode and Codex ids sh
 | Behaviour-trained intent projection | O13 | Later, by design |
 | Skill-trigger steps | O15 | Steps are `run`, `read_batch` and `avoid` only |
 | `adage off`, status line, `suggest` mode | D§6 J6, F14 | Kill switches are `ADAGE_DISABLE` and `.adage/disabled` |
-| Hard per-event deadlines | F2 | Harness timeouts (5 s) and the 50 ms parse timeout only |
-| Overflow spilled to a file | D§9.3 W8 | Directive text is truncated to 9,500 bytes |
+| Hard per-event deadlines | F2 | Harness timeouts (5 s), and the parse budget (2^20 lexer reads, 1 s backstop) only |
+| Overflow spilled to a file | D§9.3 W8 | Not needed: the largest decision validation allows is 8,287 bytes, under every harness's 9,500 (a test pins it); truncation remains as a backstop |
 | Script pinning, `scripts/` in tracks | O3; draft 2 §4.9 | Scripts never travel in a share; nothing runs them |
 | Track format version and compatibility policy | P§6.1 | Tracks carry a semver, but no format version |
-| Fail-open incident log | P§4.1 | `doctor` reads `fail-open.log`; nothing writes it |
 | Spool retention | Draft 2 §4.6 | None; `doctor` warns over 256 MiB |
 | Harness version detection and drift alarm | Draft 2 A13 | Not built |
 | Codex after-failure routes | docs/harnesses.md | Not possible until Codex reports failures to hooks; the adapter already accepts an exit code |
@@ -1003,7 +1036,7 @@ These facts from the draft 2 review still hold, and the build follows them:
 | Codex | `AGENTS.md` fallback considered | Hooks only | [P§3a]: Codex hooks use Claude Code's contract, including `additionalContext` |
 | Proving ground (A10) | A batch orchestrator with containers | Offline replay eval and a live runner script | [P§3]: offline replay gates every change for free; the product waits for M5 |
 | Research harness (§11) | Python notebooks with Rust bindings | `adage eval` in Rust | The credibility test runs on the product's own code, with no bindings to keep in step |
-| Repository key | `realpath(git root)` plus a hash of the origin | The normalised origin URL, else the directory name | Clones share routes. Repositories without an origin can share a key by name ([§4.5](#45-the-index-a4)) |
+| Repository key | `realpath(git root)` plus a hash of the origin | The normalised origin URL, else `<directory name>@<root commit>` | Clones share routes; unrelated repositories without an origin no longer share a key by name ([§4.5](#45-the-index-a4)) |
 | Scheduling | A nightly launchd/systemd timer | `adage learn` on demand | No service units exist to host a timer |
 | Platforms | macOS and Linux | Plus Windows, CI-verified | [P§4.4]: the Windows port found two path bugs that stopped finish-line routes from firing there |
 | Pipeline storage of raw text | 14 days of raw text for re-mining | None stored by Adage; learning re-reads harness history | Harness history is already on disk; Adage adds no copy |

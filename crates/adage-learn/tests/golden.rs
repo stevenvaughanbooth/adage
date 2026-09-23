@@ -190,19 +190,41 @@ fn dead_end_corpus(dir: &Path, groups: &[(usize, &[Run])]) -> Vec<PathBuf> {
     files
 }
 
-fn only_dead_end(index: &Index) -> (String, String, String, u32, u32) {
-    let dead: Vec<_> = index.routes.iter().filter(|r| r.route.id.starts_with("dead-end")).collect();
-    assert_eq!(dead.len(), 1, "one dead end per working command");
-    let Step::Avoid { avoid, instead, signature } = &dead[0].route.step else { panic!("not an avoid step") };
-    let e = &dead[0].route.evidence;
-    (avoid.clone(), signature.clone(), instead.clone(), e.support, e.opportunities)
+/// (id, avoid, signature, instead, support, opportunities) of each dead end, in index order.
+type Dead = (String, String, String, String, u32, u32);
+
+fn dead_ends(index: &Index) -> Vec<Dead> {
+    index
+        .routes
+        .iter()
+        .filter(|r| r.route.id.starts_with("dead-end"))
+        .map(|r| {
+            let Step::Avoid { avoid, instead, signature } = &r.route.step else { panic!("not an avoid step") };
+            let e = &r.route.evidence;
+            (r.route.id.clone(), avoid.clone(), signature.clone(), instead.clone(), e.support, e.opportunities)
+        })
+        .collect()
 }
+
+fn only_dead_end(index: &Index) -> (String, String, String, u32, u32) {
+    let dead = dead_ends(index);
+    assert_eq!(dead.len(), 1, "one failure signature, one dead end: {dead:?}");
+    let (_, avoid, signature, instead, support, opportunities) = dead[0].clone();
+    (avoid, signature, instead, support, opportunities)
+}
+
+/// The dead end whose signature is `sig`.
+fn dead_end_for(index: &Index, sig: &str) -> Dead {
+    dead_ends(index).into_iter().find(|d| d.2 == sig).unwrap_or_else(|| panic!("no dead end for {sig}"))
+}
+
+const NOT_FOUND: &str = "zsh: command not found: python";
 
 #[test]
 fn a_dead_end_names_only_runners_that_share_its_signature() {
     // docs/evals.md: the route named every runner that failed before `make test`, including
     // `python3 -m unittest`, which passes once `ACME_ENV` is set, and `python -m pytest`, which
-    // fails for an unrelated reason.
+    // fails for an unrelated reason. That reason is now a dead end of its own.
     let d = tempfile::tempdir().unwrap();
     let files = dead_end_corpus(
         d.path(),
@@ -214,15 +236,76 @@ fn a_dead_end_names_only_runners_that_share_its_signature() {
                     ("python3 -m unittest discover -s tests", NO_ENV, true),
                 ],
             ),
-            (3, &[("python -m pytest -v", "zsh: command not found: python", true)]),
+            (3, &[("python -m pytest -v", NOT_FOUND, true)]),
             (2, &[(ENV_FIXED, "OK", false)]),
         ],
     );
     let index = run(d.path(), &files, &d.path().join("home"));
-    assert_eq!(
-        only_dead_end(&index),
-        ("python3 -m pytest".into(), "No module named pytest".into(), "make test".into(), 6, 6)
+    let dead = dead_ends(&index);
+    assert_eq!(dead.len(), 2, "one dead end per (working command, signature): {dead:?}");
+    let first = dead_end_for(&index, "No module named pytest");
+    assert_eq!((first.1.as_str(), first.3.as_str(), first.4, first.5), ("python3 -m pytest", "make test", 6, 6));
+    let second = dead_end_for(&index, NOT_FOUND);
+    assert_eq!((second.1.as_str(), second.3.as_str(), second.4, second.5), ("python -m pytest", "make test", 3, 3));
+    // `python3 -m unittest` is still named by neither: it passes once `ACME_ENV` is set.
+    assert!(dead.iter().all(|d| !d.1.contains("unittest")), "{dead:?}");
+}
+
+#[test]
+fn the_most_common_signature_keeps_the_working_commands_id() {
+    // Adding a second signature must not rename the first route: its id is derived from the
+    // working command alone (the demo's `dead-end-d41b1e`), and the new route's from (working
+    // command, signature). Both ids are stable across re-learning.
+    let d = tempfile::tempdir().unwrap();
+    let one: &[(usize, &[Run])] = &[(5, &[("python3 -m pytest tests", NO_PYTEST, true)])];
+    let index = run(d.path(), &dead_end_corpus(d.path(), one), &d.path().join("home"));
+    let alone = dead_ends(&index);
+    assert_eq!(alone.len(), 1);
+
+    let d = tempfile::tempdir().unwrap();
+    let two: &[(usize, &[Run])] =
+        &[(5, &[("python3 -m pytest tests", NO_PYTEST, true)]), (4, &[("python -m pytest -v", NOT_FOUND, true)])];
+    let index = run(d.path(), &dead_end_corpus(d.path(), two), &d.path().join("home"));
+    let first = dead_end_for(&index, "No module named pytest");
+    let second = dead_end_for(&index, NOT_FOUND);
+    assert_eq!(first.0, alone[0].0, "the most common signature keeps its id");
+    assert_ne!(second.0, first.0);
+    assert!(second.0.starts_with("dead-end-") && second.0.len() == "dead-end-".len() + 6, "{}", second.0);
+
+    // The same corpus again: the same ids.
+    let d = tempfile::tempdir().unwrap();
+    let index = run(d.path(), &dead_end_corpus(d.path(), two), &d.path().join("home"));
+    assert_eq!(dead_end_for(&index, NOT_FOUND).0, second.0);
+}
+
+#[test]
+fn a_second_signature_needs_its_own_support_and_names_each_runner_once() {
+    // Two sessions are below the demo's minimum support (3): no second route.
+    let d = tempfile::tempdir().unwrap();
+    let files = dead_end_corpus(
+        d.path(),
+        &[(5, &[("python3 -m pytest tests", NO_PYTEST, true)]), (2, &[("python -m pytest -v", NOT_FOUND, true)])],
     );
+    let index = run(d.path(), &files, &d.path().join("home"));
+    assert_eq!(only_dead_end(&index).1, "No module named pytest");
+
+    // A runner that fails with two signatures is named once, under its more common one.
+    let d = tempfile::tempdir().unwrap();
+    let files = dead_end_corpus(
+        d.path(),
+        &[
+            (5, &[("python3 -m pytest tests", NO_PYTEST, true)]),
+            (3, &[("python3 -m pytest -x", NO_ENV, true)]),
+            (3, &[("python -m pytest -v", NOT_FOUND, true)]),
+        ],
+    );
+    let index = run(d.path(), &files, &d.path().join("home"));
+    let dead = dead_ends(&index);
+    let named: Vec<&str> = dead.iter().flat_map(|d| d.1.split(" / ")).collect();
+    assert_eq!(named.iter().filter(|r| **r == "python3 -m pytest").count(), 1, "{dead:?}");
+    assert_eq!(dead_end_for(&index, "No module named pytest").1, "python3 -m pytest");
+    assert_eq!(dead_end_for(&index, NOT_FOUND).1, "python -m pytest");
+    assert!(dead.iter().all(|d| d.2 != "RuntimeError: ACME_ENV is not set — run tests with 'make test'"), "{dead:?}");
 }
 
 #[test]
