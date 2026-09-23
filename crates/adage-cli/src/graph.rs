@@ -57,7 +57,7 @@ fn lower(x: impl std::fmt::Debug) -> String {
     format!("{x:?}").to_lowercase()
 }
 
-fn trigger(t: &Trigger) -> Value {
+pub(crate) fn trigger(t: &Trigger) -> Value {
     let (kind, label) = match t {
         Trigger::Prompt { span } => ("prompt", format!("a prompt names a {}", span_kind_label(*span))),
         Trigger::AfterCommand { command } => ("after_command", format!("`{command}` succeeds")),

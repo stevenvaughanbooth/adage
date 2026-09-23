@@ -26,9 +26,12 @@ mod harness;
 mod hook;
 mod install;
 mod models;
+mod proposal;
 mod redact;
+mod reimport;
 mod review;
 mod share;
+mod tty;
 
 use adage_learn::{Inputs, LearnConfig};
 use adage_store::Paths;

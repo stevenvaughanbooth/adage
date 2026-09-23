@@ -205,7 +205,9 @@ fn write_and_sign(stage: &Path, contents: &[(String, Vec<u8>)], track: &Track, k
     }
     let digest = io::digest(stage)?;
     let sock = std::env::var_os("SSH_AUTH_SOCK").filter(|s| !s.is_empty()).map(PathBuf::from);
-    let signed = adage_sign::sign(&adage_sign::message(&digest)?, adage_sign::NAMESPACE, sock.as_deref(), key)
+    // A passphrase-protected key file is decrypted with a passphrase asked for at the terminal.
+    let ask = |p: &Path| crate::tty::secret(&format!("Enter passphrase for {}: ", p.display()));
+    let signed = adage_sign::sign_with(&adage_sign::message(&digest)?, adage_sign::NAMESPACE, sock.as_deref(), key, &ask)
         .context("signing the track")?;
     std::fs::write(stage.join(SIG), &signed.pem)?;
     Ok((digest, signed))
