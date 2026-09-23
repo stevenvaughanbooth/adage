@@ -142,6 +142,27 @@ fn expect_routes(out: &str, want: &[&str], what: &str) {
     }
 }
 
+/// [`expect_routes`] for a turn's hook, with a diagnosis on failure: what the runtime observed in
+/// this session (from `adage graph`), the edit-triggered routes it had, and the payload sent. A
+/// failure on a platform we cannot run locally (Windows in CI) then says why, not only what.
+fn expect_turn(sb: &Sandbox, payload: &Value, out: &str, want: &[&str], what: &str) {
+    let got = routes_in(&context_of(out));
+    let ok = got.len() == want.len() && want.iter().all(|w| got.iter().any(|g| g.starts_with(w)));
+    if !ok {
+        let g = sb.graph();
+        let recent: Vec<&Value> = g["events"].as_array().map(|e| e.iter().rev().take(4).collect()).unwrap_or_default();
+        let edits: Vec<&Value> = g["routes"]
+            .as_array()
+            .map(|r| r.iter().filter(|r| r["trigger"]["kind"] == "after_edit").map(|r| &r["trigger"]).collect())
+            .unwrap_or_default();
+        panic!(
+            "{what}: got {got:?}, want {want:?}\nresponse: {out}\npayload: {payload}\nedit routes: {edits:?}\nrecent events (newest first): {recent:#?}\nsandbox: {}",
+            sb.repo()
+        );
+    }
+    expect_routes(out, want, what);
+}
+
 fn silent_or(treated: bool, v: &[&'static str]) -> Vec<&'static str> {
     if treated {
         v.to_vec()
@@ -175,7 +196,7 @@ fn replay_claude(sb: &Sandbox, sid: &str, arm: &str) {
         for t in turns {
             for (ev, p, want) in claude::turn_hooks(t, sid, &cwd, rng) {
                 let out = sb.hook("claude", ev, &p, arm);
-                expect_routes(&out, &silent_or(treated, &want), &format!("claude {ev}"));
+                expect_turn(sb, &p, &out, &silent_or(treated, &want), &format!("claude {ev}"));
                 if !out.is_empty() {
                     assert_eq!(serde_json::from_str::<Value>(&out).unwrap()["hookSpecificOutput"]["hookEventName"], ev);
                 }
@@ -213,7 +234,7 @@ fn replay_opencode(sb: &Sandbox, sid: &str, arm: &str) {
         for t in turns {
             for (ev, p, want) in opencode::turn_hooks(t, sid, &cwd) {
                 let out = sb.hook("opencode", ev, &p, arm);
-                expect_routes(&out, &silent_or(treated, &want), &format!("opencode {ev} {}", p["tool"]));
+                expect_turn(sb, &p, &out, &silent_or(treated, &want), &format!("opencode {ev} {}", p["tool"]));
                 if !out.is_empty() {
                     assert!(serde_json::from_str::<Value>(&out).unwrap()["context"].is_string());
                 }
@@ -248,7 +269,7 @@ fn replay_codex(sb: &Sandbox, sid: &str, arm: &str) {
         for t in turns {
             for (ev, p, want) in codex::turn_hooks(t, sid, &cwd, turn_id, rng) {
                 let out = sb.hook("codex", ev, &p, arm);
-                expect_routes(&out, &silent_or(treated, &want), &format!("codex {ev} {}", p["tool_input"]));
+                expect_turn(sb, &p, &out, &silent_or(treated, &want), &format!("codex {ev} {}", p["tool_input"]));
                 if !out.is_empty() {
                     assert_eq!(
                         serde_json::from_str::<Value>(&out).unwrap()["hookSpecificOutput"]["hookEventName"],
