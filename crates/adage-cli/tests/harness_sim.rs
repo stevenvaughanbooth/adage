@@ -61,7 +61,10 @@ impl Sandbox {
             .env("CODEX_HOME", self.root.join("home/.codex"))
             .env("ADAGE_ARM", arm)
             .env_remove("ADAGE_DISABLE")
-            .env_remove("CLAUDECODE");
+            .env_remove("CLAUDECODE")
+            .env_remove("OPENCODE")
+            .env_remove("CODEX_SANDBOX")
+            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED");
         c
     }
     fn run(&self, args: &[&str], stdin: &[u8], arm: &str) -> (String, String, i32) {

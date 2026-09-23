@@ -151,7 +151,31 @@ Open:
 | Dead-end routes are keyed by runner, not by failing signature | Over-broad warnings (eval: `unittest` passes when `ACME_ENV` is set) | Key dead ends on (command, signature); only warn for runners whose failures share it |
 | Nothing writes `$ADAGE_HOME/fail-open.log` | `adage doctor` cannot report hook failures | Record caught panics and errors in the hook's fail-open path (bounded, rotating) |
 | The parse timeout (50 ms) makes normalisation depend on machine speed for pathological commands | Rare nondeterminism in `learn` for such commands | Replace with a node-count budget |
-| Architecture doc is still draft 2 | Docs lag the code (daemon → none, etc.) | Draft 3, as built |
+| Repository key collides for unrelated repos with no `origin` and the same directory name | Routes from one such repo reach the other (directives still validated) | Key no-origin repos by directory name plus the root commit, read without running git in the hook |
+| State files are never rebuilt from the spool (S3 recommended a watermark and rebuild on CRC failure) | If both slots are corrupt, a session's state resets | Rebuild from the spool, or document state as a best-effort cache |
+| Directive text over 9,500 bytes is truncated, not spilled to a file (Design W8) | Only reachable with many long directives at once | Spill to a file and point to it |
+| Payloads over 8 MiB are not drained from stdin (Design §13.3) | The harness may see a broken pipe | Drain and discard |
+| No precomputed no-match key set (Design §13.2) | Every event in a repository with routes pays the full decision path (about 3 ms) | Precompute trigger keys in the index |
+| Per-session nonce (review finding F12) and arm assignment by root session lineage (F7) were accepted but not built | `/clear` starts a new arm | Build both |
+| CI builds only x64 musl; arm64 musl is built only at release | A release-only failure is possible | Add aarch64 musl to CI |
+| `learn.log` is defined but never written | — | Write it, or remove the path |
+
+Fixed from the architecture audit (draft 3):
+
+- **Agent-session refusal:** `share`, `add` and review decisions now refuse inside OpenCode and
+  Codex sessions too, not only Claude Code.
+- **Track digest:** now follows the S6 spec exactly:
+  - no symlinks;
+  - hidden files are skipped;
+  - a lone `\r` is normalised;
+  - line endings are normalised on raw bytes, never through a lossy UTF-8 decode that could map
+    different content to the same digest.
+- **Linux plugin binary:** the plugin shim finds the released `linux-musl` binaries.
+
+Fixed on branch `gaps-2`, and not yet merged:
+
+- **Design O11:** environment-effect routes wait for approval.
+- **Design W2:** dead-end and linked-file directives state an exit condition.
 
 ### 4.2 Harness limits (from `docs/harnesses.md`)
 

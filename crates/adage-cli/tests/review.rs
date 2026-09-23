@@ -44,6 +44,9 @@ impl World {
             .env("ADAGE_HOME", self.p("data"))
             .env("HOME", self.p("home"))
             .env_remove("CLAUDECODE")
+            .env_remove("OPENCODE")
+            .env_remove("CODEX_SANDBOX")
+            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
             .stdin(Stdio::null());
         c

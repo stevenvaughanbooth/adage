@@ -138,6 +138,9 @@ impl World {
             .env("ADAGE_ARM", "treated")
             .env_remove("ADAGE_DISABLE")
             .env_remove("CLAUDECODE")
+            .env_remove("OPENCODE")
+            .env_remove("CODEX_SANDBOX")
+            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

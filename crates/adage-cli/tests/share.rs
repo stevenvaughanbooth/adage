@@ -35,6 +35,9 @@ impl World {
             .env("ADAGE_HOME", self.p(adage_home))
             .env("HOME", self.p("home"))
             .env_remove("CLAUDECODE")
+            .env_remove("OPENCODE")
+            .env_remove("CODEX_SANDBOX")
+            .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
             .env_remove("SSH_AUTH_SOCK")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
             .stdin(Stdio::null());
@@ -285,10 +288,13 @@ fn agent_sessions_and_pipes_cannot_share_or_change_trust() {
     let key = w.p("keys/id_ed25519");
     let share = ["share", NAME, "--out", out.to_str().unwrap(), "--key", key.to_str().unwrap()];
     // Inside an agent session nothing lifts the refusal, not even the CI override.
-    let o = w.cmd("sender", &w.p("elsewhere"), &share).env("CLAUDECODE", "1").output().unwrap();
-    assert!(!o.status.success());
-    assert!(text(&o).contains("agent session"), "{}", text(&o));
-    assert!(!out.exists());
+    // Every harness's marker, not only Claude Code's.
+    for var in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX"] {
+        let o = w.cmd("sender", &w.p("elsewhere"), &share).env(var, "1").output().unwrap();
+        assert!(!o.status.success(), "{var}");
+        assert!(text(&o).contains("agent session") && text(&o).contains(var), "{var}: {}", text(&o));
+        assert!(!out.exists());
+    }
 
     assert!(w.share().status.success());
     let o = w

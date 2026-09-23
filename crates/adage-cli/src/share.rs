@@ -21,10 +21,12 @@ const MAX_FILE_BYTES: u64 = 1 << 20;
 /// CI and tests); nothing lifts the agent-session refusal. Environment detection is a guard against
 /// an agent being steered into these commands, not a sandbox.
 pub fn require_person(cmd: &str) -> Result<()> {
-    if std::env::var_os("CLAUDECODE").is_some() {
+    // Every harness's marker, not only Claude Code's: an OpenCode or Codex agent must not be able
+    // to share, trust, or review either.
+    if let Some(var) = crate::install::AGENT_ENV.iter().find(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty())) {
         bail!(
             "`adage {cmd}` changes what is shared or trusted, so it will not run inside an agent session \
-             (CLAUDECODE is set). Run it yourself, in a terminal."
+             ({var} is set). Run it yourself, in a terminal."
         );
     }
     if std::env::var("ADAGE_ALLOW_NONINTERACTIVE").as_deref() == Ok("1") {
