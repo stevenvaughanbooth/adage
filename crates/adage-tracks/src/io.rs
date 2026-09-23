@@ -104,10 +104,16 @@ fn safe_command(c: &str) -> bool {
     !c.is_empty() && c.len() <= 200 && c.chars().all(|ch| ch.is_ascii_alphanumeric() || " _./:=@,+{}-".contains(ch))
 }
 
-/// Free text rendered to the agent (failure signatures): printable, no quotes or shell syntax.
-fn safe_text(t: &str) -> bool {
+/// Free text rendered to the agent (failure signatures): printable, no quotes or shell syntax,
+/// and nothing invisible or direction-changing (text must read the way it is).
+pub fn safe_text(t: &str) -> bool {
     t.len() <= 160
-        && !t.chars().any(|c| c.is_control() || "`<>\"\\$;|&{}".contains(c) || c == '\u{2028}' || c == '\u{2029}')
+        && !t.chars().any(|c| c.is_control() || "`<>\"\\$;|&{}".contains(c) || c == '\u{2028}' || c == '\u{2029}' || invisible(c))
+}
+
+/// Zero-width, bidirectional-control and other invisible format characters.
+pub fn invisible(c: char) -> bool {
+    matches!(c, '\u{00AD}' | '\u{061C}' | '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}')
 }
 
 fn safe_glob(g: &str) -> bool {

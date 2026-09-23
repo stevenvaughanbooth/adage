@@ -11,7 +11,11 @@ const MAX_FIELD: usize = 200;
 
 pub fn sanitise(s: &str) -> String {
     s.chars()
-        .filter(|c| !matches!(c, '`' | '<' | '>' | '"' | '\\' | '\u{85}' | '\u{2028}' | '\u{2029}') && !c.is_control())
+        .filter(|c| {
+            !matches!(c, '`' | '<' | '>' | '"' | '\\' | '\u{85}' | '\u{2028}' | '\u{2029}')
+                && !c.is_control()
+                && !adage_tracks::io::invisible(*c)
+        })
         .take(MAX_FIELD)
         .collect::<String>()
         .trim()
