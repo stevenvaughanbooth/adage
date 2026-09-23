@@ -1,0 +1,38 @@
+{
+ "100k": {
+  "repos": 10,
+  "mean": {
+   "ari": 0.4113,
+   "ari_families": 0.4222,
+   "purity": 0.7511,
+   "coverage": 0.9753,
+   "noise_recall": 0.8162,
+   "noise_recall_oneoff": 0.9999,
+   "noise_recall_chatter": 0.0817,
+   "clusters": 64.9,
+   "n": 10000.0
+  },
+  "min_ari": 0.3681,
+  "max_ari": 0.4471,
+  "wall_s": 5.63,
+  "peak_rss_mb": 216.2
+ },
+ "300k": {
+  "repos": 30,
+  "mean": {
+   "ari": 0.407,
+   "ari_families": 0.4193,
+   "purity": 0.7492,
+   "coverage": 0.9731,
+   "noise_recall": 0.8155,
+   "noise_recall_oneoff": 0.9998,
+   "noise_recall_chatter": 0.079,
+   "clusters": 65.5333,
+   "n": 10000.0
+  },
+  "min_ari": 0.3789,
+  "max_ari": 0.4354,
+  "wall_s": 16.85,
+  "peak_rss_mb": 652.4
+ }
+}
