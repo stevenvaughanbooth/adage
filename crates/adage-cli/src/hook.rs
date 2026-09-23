@@ -86,9 +86,7 @@ pub fn run(harness: &str, event: &str) -> Option<String> {
     let paths = Paths::from_env();
     let index = Index::load(&paths.index());
     let repo_key = repo::repo_key(&root);
-    if index.for_repo(&repo_key).next().is_none() {
-        return None; // nothing installed for this repository: the common, cheapest path
-    }
+    index.for_repo(&repo_key).next()?; // nothing installed for this repository: the common, cheapest path
     let ev = to_event(event, &p)?;
     let table = CommandTable::load();
     let ctx = Ctx { index: &index, repo: repo_key.clone(), root: &root, table: &table };

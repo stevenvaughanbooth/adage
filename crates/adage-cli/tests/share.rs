@@ -141,8 +141,9 @@ fn share_then_add_installs_routes_at_probation() {
     let o = w.add(&[]);
     assert!(o.status.success(), "{}", text(&o));
     assert!(text(&o).contains("was green"), "{}", text(&o));
-    let installed = io::read(&w.p("recipient/tracks").join(NAME)).unwrap();
+    let installed = io::read(&w.p("recipient/tracks/@imported").join(NAME)).unwrap();
     assert!(installed.manifest.track.provenance.starts_with("imported"));
+    assert!(!w.p("recipient/tracks").join(NAME).exists(), "imports never occupy a learned track's directory");
     let index = Index::load(&w.p("recipient/index.json"));
     assert_eq!(index.routes.len(), 2);
     for r in &index.routes {
@@ -153,6 +154,16 @@ fn share_then_add_installs_routes_at_probation() {
     assert_eq!(lookup.route.aspect, Aspect::Yellow);
     assert!(!w.p("recipient/trust.json").exists(), "personal trust changes nothing");
     assert!(walk(&w.p("recipient/staging")).is_empty(), "the staging copy is removed");
+
+    // The recipient later learns the same track: it lands beside the import, and where both hold a
+    // route the index keeps first-hand evidence.
+    io::write(&w.p("recipient/tracks").join(NAME), &track()).unwrap();
+    let all = io::read_all(&w.p("recipient/tracks")).unwrap();
+    assert_eq!(all.len(), 2, "learning never overwrites the import");
+    let index = Index::compile(&all);
+    assert_eq!(index.routes.len(), 2, "one route per id");
+    let lookup = index.for_repo(REPO).find(|r| r.route.id == "lookup").unwrap();
+    assert_eq!(lookup.route.aspect, Aspect::Green, "the learned route wins over the import");
 }
 
 #[test]

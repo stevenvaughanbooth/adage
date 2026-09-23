@@ -25,21 +25,38 @@ pub struct IndexedRoute {
     pub route: Route,
 }
 
+/// Tracks installed by `adage add` carry an `imported:` provenance and live under [`IMPORTED_DIR`].
+pub fn is_imported(t: &Track) -> bool {
+    t.manifest.track.provenance.starts_with("imported")
+}
+
+/// Where `adage add` installs tracks, inside the tracks directory. `@` never appears in a learned
+/// track's directory, so `adage learn` can never write over an import.
+pub const IMPORTED_DIR: &str = "@imported";
+
 impl Index {
     pub fn compile(tracks: &[Track]) -> Index {
-        let mut routes: Vec<IndexedRoute> = tracks
+        let mut routes: Vec<(bool, IndexedRoute)> = tracks
             .iter()
             .flat_map(|t| {
                 t.routes.iter().filter(|r| matches!(r.state, RouteState::Active | RouteState::Probation)).map(
-                    move |r| IndexedRoute {
-                        repo: t.manifest.scope.repo.clone(),
-                        track: t.manifest.track.name.clone(),
-                        version: t.manifest.track.version.clone(),
-                        route: r.clone(),
+                    move |r| {
+                        let ir = IndexedRoute {
+                            repo: t.manifest.scope.repo.clone(),
+                            track: t.manifest.track.name.clone(),
+                            version: t.manifest.track.version.clone(),
+                            route: r.clone(),
+                        };
+                        (is_imported(t), ir)
                     },
                 )
             })
             .collect();
+        // A route learned here and the same route imported from a teammate share a content-derived
+        // id: keep one, and prefer first-hand evidence over an import.
+        routes.sort_by(|(ia, a), (ib, b)| (&a.repo, &a.route.id, ia, &a.track).cmp(&(&b.repo, &b.route.id, ib, &b.track)));
+        routes.dedup_by(|(_, b), (_, a)| a.repo == b.repo && a.route.id == b.route.id);
+        let mut routes: Vec<IndexedRoute> = routes.into_iter().map(|(_, r)| r).collect();
         routes.sort_by(|a, b| (&a.repo, &a.track, &a.route.id).cmp(&(&b.repo, &b.track, &b.route.id)));
         let body = serde_json::to_vec(&routes).unwrap_or_default();
         let generation = io::hex(&Sha256::digest(&body))[..16].to_string();

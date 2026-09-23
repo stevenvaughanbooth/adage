@@ -308,7 +308,7 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
             "query", "print", "fetch",
         ];
         let lower = cmd.to_ascii_lowercase();
-        let parts: Vec<&str> = lower.split(|c: char| c == '-' || c == '_' || c == '.').collect();
+        let parts: Vec<&str> = lower.split(['-', '_', '.']).collect();
         let read_by_name = parts.iter().take(2).any(|p| READ_VERBS.contains(p));
         if read_by_name {
             return (Effect::Observe, 0.6, format!("'{cmd}' classified observe by name; unverified"));

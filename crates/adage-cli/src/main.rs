@@ -147,7 +147,8 @@ fn status(paths: &Paths) -> Result<()> {
         return Ok(());
     }
     for t in tracks {
-        println!("{} @ {}  [{}]", t.manifest.track.name, t.manifest.track.version, t.manifest.scope.repo);
+        let origin = if adage_tracks::index::is_imported(&t) { "  (imported)" } else { "" };
+        println!("{} @ {}  [{}]{origin}", t.manifest.track.name, t.manifest.track.version, t.manifest.scope.repo);
         for r in &t.routes {
             let dot = match r.aspect {
                 Aspect::Green => "🟢",

@@ -13,7 +13,7 @@ use crate::share::{describe_step, list_files, require_person, SIG};
 use adage_core::repo::{find_root, repo_key};
 use adage_sign::{allowed_signers, fingerprint, key_line, NAMESPACE};
 use adage_store::Paths;
-use adage_tracks::{io, Aspect, Index, RouteState, Track};
+use adage_tracks::{index::IMPORTED_DIR, io, Aspect, Index, RouteState, Track};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -199,10 +199,9 @@ fn install(stage: &Path, src: &Path, paths: &Paths, trust: bool) -> Result<()> {
     let (imported, was) = at_probation(track);
     io::validate(&imported)?;
     let name = imported.manifest.track.name.clone();
-    let dest = paths.tracks().join(&name);
-    if dest.exists() && !io::read(&dest).is_ok_and(|t| t.manifest.track.provenance.starts_with("imported")) {
-        bail!("refusing: a local track already exists at {}; imports never replace local tracks", dest.display());
-    }
+    // Imports live apart from learned tracks, so `adage learn` never overwrites one, and an import
+    // never replaces a learned track (where both hold a route, the index keeps the learned one).
+    let dest = paths.tracks().join(IMPORTED_DIR).join(&name);
     let fresh = stage.join("out");
     io::write(&fresh, &imported)?;
     for rel in ["evidence.json", "CHANGELOG.md"] {

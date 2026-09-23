@@ -7,7 +7,7 @@
 
 use crate::redact;
 use adage_store::Paths;
-use adage_tracks::{io, Step, Track};
+use adage_tracks::{index, io, Step, Track};
 use anyhow::{bail, Context, Result};
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
@@ -104,12 +104,16 @@ fn why_not(rel: &str) -> &'static str {
 }
 
 /// An installed track by name, or a track directory by path.
+/// A learned track wins over an import of the same name.
 fn find_track(root: &Path, name: &str) -> Result<PathBuf> {
     let mut stack = vec![root.to_path_buf()];
+    let mut import = None;
     while let Some(d) = stack.pop() {
         if d.join("track.toml").is_file() {
-            if io::read(&d).is_ok_and(|t| t.manifest.track.name == name) {
-                return Ok(d);
+            match io::read(&d) {
+                Ok(t) if t.manifest.track.name == name && index::is_imported(&t) => import = Some(d),
+                Ok(t) if t.manifest.track.name == name => return Ok(d),
+                _ => {}
             }
             continue;
         }
@@ -118,6 +122,9 @@ fn find_track(root: &Path, name: &str) -> Result<PathBuf> {
                 stack.push(e.path());
             }
         }
+    }
+    if let Some(d) = import {
+        return Ok(d);
     }
     let p = Path::new(name);
     if p.join("track.toml").is_file() {
