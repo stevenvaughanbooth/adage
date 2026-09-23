@@ -276,3 +276,341 @@ fn kill_switches_and_unknown_repositories_produce_nothing() {
         assert_eq!(w.run(&["hook", h, ev], p.as_bytes(), &[]).0, "", "{h}: .adage/disabled");
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// OpenCode (payloads as `plugin/opencode/adage.js` builds them)
+
+fn oc(session: &str, cwd: &str, extra: Value) -> Value {
+    let mut b = json!({ "session_id": session, "cwd": cwd });
+    for (k, v) in extra.as_object().unwrap() {
+        b[k] = v.clone();
+    }
+    b
+}
+
+#[test]
+fn opencode_golden() {
+    let w = World::new();
+    let cwd = w.repo();
+    let s = |extra: Value| oc("ses_opencode", &cwd, extra);
+    let lookup_out = json!({ "linked_files": ["acme/billing.py", "../etc/passwd", "missing.py"], "note": INJECTION }).to_string();
+    let patch = format!("*** Begin Patch\n*** Update File: schema/invoice.json\n@@\n-{{}}\n+{{\"a\":1}}\n*** End Patch\n{INJECTION}");
+    let t = golden(
+        "opencode",
+        &w,
+        "opencode",
+        &[
+            ("session.created", s(json!({}))),
+            ("chat.message", s(json!({ "prompt": format!("Pick up W-2042 and fix the invoice rounding. {INJECTION}") }))),
+            ("tool.execute.after", s(json!({ "tool": "bash", "args": { "command": "./scripts/wi-lookup W-2042 --json", "description": "look up" }, "output": lookup_out, "exit": 0 }))),
+            (
+                "tool.execute.after",
+                s(json!({ "tool": "bash", "args": { "command": "python3 -m pytest tests" }, "output": format!("RuntimeError: ACME_ENV is not set\n{INJECTION}"), "exit": 1 })),
+            ),
+            ("tool.execute.after", s(json!({ "tool": "apply_patch", "args": { "patchText": patch }, "output": "Success", "exit": null }))),
+            ("session.idle", s(json!({ "stop_hook_active": false }))),
+            ("chat.message", s(json!({ "prompt": "Adage finish-line check: this session changed files matching schema/*.json W-2042" }))),
+            ("session.idle", s(json!({ "stop_hook_active": true }))),
+            ("session.deleted", s(json!({}))),
+        ],
+    );
+    assert!(t.contains("{\"context\":") && t.contains("./scripts/wi-lookup W-2042 --json"));
+    assert!(t.contains("dead-pytest"), "a non-zero exit is a failure");
+    assert!(t.contains("route=\\\"gen\\\""), "apply_patch edits trigger the finish line");
+    assert!(t.contains("{\"continue\":\"Adage finish-line check:"));
+    assert_no_injection(&t);
+}
+
+#[test]
+fn opencode_thrown_tool_errors_are_failures() {
+    let w = World::new();
+    let p = oc("ses_err", &w.repo(), json!({ "tool": "bash", "args": { "command": "python3 -m pytest tests" }, "error": "RuntimeError: ACME_ENV is not set" }));
+    let out = w.hook("opencode", "tool.error", &p);
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert!(v["context"].as_str().unwrap().contains("route=\"dead-pytest\""));
+    // A tool the adapter cannot attribute to one call is ignored, not guessed.
+    let p = oc("ses_err2", &w.repo(), json!({ "tool": "apply_patch", "args": { "patchText": "" }, "error": "ACME_ENV is not set" }));
+    assert_eq!(w.hook("opencode", "tool.error", &p), "");
+}
+
+#[test]
+fn opencode_hostile_payloads() {
+    let w = World::new();
+    let cwd = w.repo();
+    let many: String = (0..10_000).map(|i| format!("*** Add File: ../../etc/f{i}\n")).collect();
+    let cases = [
+        json!({ "tool": 5, "args": "x", "output": "y" }),
+        json!({ "tool": "bash", "args": [1, 2], "output": { "o": 1 }, "exit": "1" }),
+        json!({ "tool": "bash", "args": { "command": "$(".repeat(20_000) }, "output": "x".repeat(1 << 20) }),
+        json!({ "tool": "apply_patch", "args": { "patchText": many } }),
+        json!({ "tool": "read", "args": { "filePath": "/etc/passwd" }, "output": INJECTION }),
+    ];
+    for (i, extra) in cases.into_iter().enumerate() {
+        let out = w.hook("opencode", "tool.execute.after", &oc(&format!("ses_h{i}"), &cwd, extra));
+        assert_no_injection(&out);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Codex (payloads per developers.openai.com/codex/hooks)
+
+fn cx(ev: &str, cwd: &str, extra: Value) -> Value {
+    let mut b = json!({ "session_id": "019a-codex", "transcript_path": "/dev/null", "cwd": cwd, "hook_event_name": ev, "model": "gpt-test", "permission_mode": "default" });
+    for (k, v) in extra.as_object().unwrap() {
+        b[k] = v.clone();
+    }
+    b
+}
+
+#[test]
+fn codex_golden() {
+    let w = World::new();
+    let cwd = w.repo();
+    let lookup_out = json!({ "linked_files": ["acme/billing.py", "../etc/passwd"], "note": INJECTION }).to_string();
+    let patch = format!("*** Begin Patch\n*** Update File: schema/invoice.json\n@@\n-{{}}\n+{{}}\n*** End Patch\n{INJECTION}");
+    let reason = "Adage finish-line check: this session changed files matching schema/*.json, and this repository requires running `make gen` after such changes; W-2042";
+    let t = golden(
+        "codex",
+        &w,
+        "codex",
+        &[
+            ("SessionStart", cx("SessionStart", &cwd, json!({ "source": "startup" }))),
+            ("UserPromptSubmit", cx("UserPromptSubmit", &cwd, json!({ "turn_id": "t1", "prompt": format!("Pick up W-2042 and fix the invoice rounding. {INJECTION}") }))),
+            (
+                "PostToolUse",
+                cx("PostToolUse", &cwd, json!({ "turn_id": "t1", "tool_name": "Bash", "tool_use_id": "c1", "tool_input": { "command": "./scripts/wi-lookup W-2042 --json" }, "tool_response": lookup_out })),
+            ),
+            (
+                // No failure signal in Codex's PostToolUse: a failing command looks like any other.
+                "PostToolUse",
+                cx("PostToolUse", &cwd, json!({ "turn_id": "t1", "tool_name": "Bash", "tool_use_id": "c2", "tool_input": { "command": "python3 -m pytest tests" }, "tool_response": "RuntimeError: ACME_ENV is not set" })),
+            ),
+            (
+                "PostToolUse",
+                cx("PostToolUse", &cwd, json!({ "turn_id": "t1", "tool_name": "apply_patch", "tool_use_id": "c3", "tool_input": { "command": patch }, "tool_response": "Success. Updated the following files:\nM schema/invoice.json" })),
+            ),
+            ("Stop", cx("Stop", &cwd, json!({ "turn_id": "t1", "stop_hook_active": false, "last_assistant_message": "Done." }))),
+            ("UserPromptSubmit", cx("UserPromptSubmit", &cwd, json!({ "turn_id": "t2", "prompt": reason }))),
+            ("Stop", cx("Stop", &cwd, json!({ "turn_id": "t2", "stop_hook_active": true }))),
+            ("SessionEnd", cx("SessionEnd", &cwd, json!({ "reason": "other" }))),
+        ],
+    );
+    assert!(t.contains("\"hookEventName\":\"UserPromptSubmit\"") && t.contains("./scripts/wi-lookup W-2042 --json"));
+    assert!(!t.contains("dead-pytest"), "Codex reports no failures today");
+    assert!(t.contains("route=\\\"gen\\\""), "apply_patch edits trigger the finish line");
+    assert!(t.contains("\"decision\":\"block\""));
+    assert_no_injection(&t);
+}
+
+#[test]
+fn codex_structured_exit_codes_count_as_failures() {
+    let w = World::new();
+    let p = cx(
+        "PostToolUse",
+        &w.repo(),
+        json!({ "tool_name": "Bash", "tool_input": { "command": "python3 -m pytest tests" }, "tool_response": { "exit_code": 1, "output": "RuntimeError: ACME_ENV is not set" } }),
+    );
+    let out = w.hook("codex", "PostToolUse", &p);
+    assert!(out.contains("route=\\\"dead-pytest\\\""), "{out}");
+}
+
+// ---------------------------------------------------------------------------------------------
+// adage install
+
+fn git_repo(w: &World, name: &str) -> PathBuf {
+    let r = w.p(name);
+    std::fs::create_dir_all(r.join(".git")).unwrap();
+    r
+}
+
+fn install(w: &World, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> (String, String, i32) {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+    c.arg("install")
+        .args(args)
+        .current_dir(cwd)
+        .env("ADAGE_HOME", w.p("adage"))
+        .env("HOME", w.p("home"))
+        .env("XDG_CONFIG_HOME", w.p("home/.config"))
+        .env("CODEX_HOME", w.p("home/.codex"))
+        .env("ADAGE_ALLOW_NONINTERACTIVE", "1");
+    for v in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX", "CODEX_SANDBOX_NETWORK_DISABLED"] {
+        c.env_remove(v);
+    }
+    for (k, v) in env {
+        c.env(k, v);
+    }
+    let o = c.stdin(Stdio::null()).output().unwrap();
+    (String::from_utf8_lossy(&o.stdout).to_string(), String::from_utf8_lossy(&o.stderr).to_string(), o.status.code().unwrap_or(-1))
+}
+
+/// Every file under a directory, relative, sorted.
+fn files(dir: &Path) -> Vec<String> {
+    let mut out = vec![];
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.is_dir() && !p.is_symlink() {
+                stack.push(p);
+            } else {
+                out.push(p.strip_prefix(dir).unwrap().to_string_lossy().to_string());
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn install_prints_by_default_and_writes_nothing() {
+    let w = World::new();
+    let repo = git_repo(&w, "proj");
+    let before = (files(&w.p("home")), files(&repo));
+    for h in ["claude-code", "codex", "opencode"] {
+        let (out, _, code) = install(&w, &repo, &[h, "--bin", "/opt/adage bin/adage"], &[]);
+        assert_eq!(code, 0);
+        assert!(out.contains("/opt/adage bin/adage"), "{h}: {out}");
+        let (out2, _, _) = install(&w, &repo, &[h, "--print", "--bin", "/opt/adage bin/adage"], &[]);
+        assert_eq!(out, out2);
+    }
+    assert_eq!(before, (files(&w.p("home")), files(&repo)), "printing never writes");
+    // The Claude Code snippet is exactly the long-standing hooks-config block.
+    let (a, _, _) = install(&w, &repo, &["claude-code", "--bin", "/opt/adage"], &[]);
+    let (b, _, _) = w.run(&["hooks-config", "/opt/adage"], b"", &[]);
+    assert_eq!(serde_json::from_str::<Value>(&a).unwrap(), serde_json::from_str::<Value>(&b).unwrap());
+    // Codex runs `command` through a shell: the path is quoted.
+    let (c, _, _) = install(&w, &repo, &["codex", "--bin", "/opt/it's here/adage"], &[]);
+    let v: Value = serde_json::from_str(&c).unwrap();
+    assert_eq!(v["hooks"]["Stop"][0]["hooks"][0]["command"], "'/opt/it'\\''s here/adage' hook codex Stop");
+    // The OpenCode plugin gets the path as a JS string literal, and nothing else changes.
+    let (o, _, _) = install(&w, &repo, &["opencode", "--bin", "/opt/a\"b/adage"], &[]);
+    assert!(o.starts_with("// Adage for OpenCode") && o.contains(r#"const ADAGE_BIN = "/opt/a\"b/adage""#), "{o}");
+}
+
+#[test]
+fn install_write_merges_into_project_config_and_is_idempotent() {
+    let w = World::new();
+    let repo = git_repo(&w, "proj");
+    std::fs::create_dir_all(repo.join(".codex")).unwrap();
+    let theirs = json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": "notify-me" }] }] }, "other": true });
+    std::fs::write(repo.join(".codex/hooks.json"), theirs.to_string()).unwrap();
+    for _ in 0..2 {
+        let (_, err, code) = install(&w, &repo.join(".codex"), &["codex", "--write", "--bin", "/opt/adage"], &[]);
+        assert_eq!(code, 0, "{err}");
+    }
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(repo.join(".codex/hooks.json")).unwrap()).unwrap();
+    assert_eq!(v["other"], true);
+    let stop = v["hooks"]["Stop"].as_array().unwrap();
+    assert_eq!(stop.len(), 2, "theirs kept, ours once: {stop:?}");
+    assert_eq!(stop[0]["hooks"][0]["command"], "notify-me");
+    assert_eq!(v["hooks"]["PostToolUse"].as_array().unwrap().len(), 1);
+
+    let (_, err, code) = install(&w, &repo, &["claude-code", "--write", "--bin", "/opt/adage"], &[]);
+    assert_eq!(code, 0, "{err}");
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(repo.join(".claude/settings.local.json")).unwrap()).unwrap();
+    assert_eq!(v["hooks"]["UserPromptSubmit"][0]["hooks"][0]["args"], json!(["hook", "claude", "UserPromptSubmit"]));
+
+    let (_, err, code) = install(&w, &repo, &["opencode", "--write", "--bin", "/opt/adage"], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert!(std::fs::read_to_string(repo.join(".opencode/plugins/adage.js")).unwrap().contains("\"/opt/adage\""));
+    assert_eq!(files(&w.p("home")), Vec::<String>::new(), "project scope never touches the home directory");
+}
+
+#[test]
+fn install_write_user_scope_uses_documented_paths_only() {
+    let w = World::new();
+    let repo = git_repo(&w, "proj");
+    for h in ["codex", "opencode", "claude-code"] {
+        let (_, err, code) = install(&w, &repo, &[h, "--write", "--scope", "user", "--bin", "/opt/adage"], &[]);
+        assert_eq!(code, 0, "{err}");
+    }
+    assert_eq!(files(&w.p("home")), vec![".claude/settings.json", ".codex/hooks.json", ".config/opencode/plugins/adage.js"]);
+    assert_eq!(files(&repo), Vec::<String>::new(), "user scope never touches the repository");
+}
+
+#[test]
+fn install_write_refuses_what_it_should() {
+    let w = World::new();
+    let repo = git_repo(&w, "proj");
+    // Inside an agent session.
+    for v in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX"] {
+        let (_, err, code) = install(&w, &repo, &["codex", "--write", "--bin", "/opt/adage"], &[(v, "1")]);
+        assert_ne!(code, 0, "{v}");
+        assert!(err.contains(v), "{err}");
+    }
+    // Without a terminal, unless explicitly allowed.
+    let (_, _, code) = install(&w, &repo, &["codex", "--write", "--bin", "/opt/adage"], &[("ADAGE_ALLOW_NONINTERACTIVE", "0")]);
+    assert_ne!(code, 0);
+    // Outside a repository, project scope has nowhere to write.
+    let (_, _, code) = install(&w, &w.p("plain"), &["codex", "--write", "--bin", "/opt/adage"], &[]);
+    assert_ne!(code, 0);
+    // Someone else's config that is not a JSON object, or a plugin file that is not ours.
+    std::fs::create_dir_all(repo.join(".codex")).unwrap();
+    std::fs::write(repo.join(".codex/hooks.json"), "[1]").unwrap();
+    assert_ne!(install(&w, &repo, &["codex", "--write", "--bin", "/opt/adage"], &[]).2, 0);
+    assert_eq!(std::fs::read_to_string(repo.join(".codex/hooks.json")).unwrap(), "[1]");
+    std::fs::create_dir_all(repo.join(".opencode/plugins")).unwrap();
+    std::fs::write(repo.join(".opencode/plugins/adage.js"), "export const Mine = 1").unwrap();
+    assert_ne!(install(&w, &repo, &["opencode", "--write", "--bin", "/opt/adage"], &[]).2, 0);
+    // A repository that symlinks the config directory elsewhere.
+    let evil = git_repo(&w, "evil");
+    std::os::unix::fs::symlink(w.p("home"), evil.join(".claude")).unwrap();
+    assert_ne!(install(&w, &evil, &["claude-code", "--write", "--bin", "/opt/adage"], &[]).2, 0);
+    assert_eq!(files(&w.p("home")), Vec::<String>::new());
+    // Unknown harness or scope.
+    assert_ne!(install(&w, &repo, &["vscode"], &[]).2, 0);
+    assert_ne!(install(&w, &repo, &["codex", "--scope", "system"], &[]).2, 0);
+}
+
+// ---------------------------------------------------------------------------------------------
+// The OpenCode plugin itself, in node with a fake OpenCode client (skipped without node)
+
+#[test]
+fn opencode_plugin_places_text_and_fails_open() {
+    if Command::new("node").arg("--version").output().is_err() {
+        eprintln!("node not found: skipping the OpenCode plugin test");
+        return;
+    }
+    use std::os::unix::fs::PermissionsExt;
+    let w = World::new();
+    std::fs::create_dir_all(w.p("bins")).unwrap();
+    std::fs::create_dir_all(w.p("plugins")).unwrap();
+    let huge = format!("{{\"context\":\"{}\"}}", "x".repeat(200_000));
+    let scripts = [
+        ("slow", "exec sleep 5".to_string()),
+        ("garbage", "cat >/dev/null; echo 'not json'".to_string()),
+        ("badtype", r#"cat >/dev/null; echo '{"context":123,"continue":["x"]}'"#.to_string()),
+        ("huge", format!("cat >/dev/null; echo '{huge}'")),
+        ("record", r#"cat > "$RECORD_FILE""#.to_string()),
+    ];
+    let mut env: Vec<(String, String)> = vec![];
+    let mut plugin = |name: &str, bin: &str| {
+        let (src, _, code) = install(&w, &w.p("plain"), &["opencode", "--print", "--bin", bin], &[]);
+        assert_eq!(code, 0);
+        let path = w.p(&format!("plugins/{name}.mjs"));
+        std::fs::write(&path, src).unwrap();
+        env.push((format!("PLUGIN_{}", name.to_uppercase()), path.to_string_lossy().to_string()));
+    };
+    for (name, body) in &scripts {
+        let path = w.p(&format!("bins/{name}"));
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        plugin(name, path.to_str().unwrap());
+    }
+    plugin("real", env!("CARGO_BIN_EXE_adage"));
+    plugin("missing", "/nonexistent/adage");
+    let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugin/opencode/test/plugin.test.mjs");
+    let o = Command::new("node")
+        .arg(script)
+        .envs(env)
+        .env("REPO", w.repo())
+        .env("RECORD_FILE", w.p("recorded.json"))
+        .env("ADAGE_HOME", w.p("adage"))
+        .env("HOME", w.p("home"))
+        .env("ADAGE_ARM", "treated")
+        .env_remove("ADAGE_DISABLE")
+        .output()
+        .unwrap();
+    let text = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
+    assert!(o.status.success() && text.contains("plugin ok"), "{text}");
+}
