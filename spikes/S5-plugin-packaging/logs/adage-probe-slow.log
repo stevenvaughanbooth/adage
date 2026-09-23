@@ -1,0 +1,32 @@
+{
+  "start_ts": "2026-09-23T04:16:37.3NZ",
+  "end_ts": "2026-09-23T04:16:42.3NZ",
+  "event": "PostToolUse-async",
+  "pid": "17038",
+  "sleep_s": "5",
+  "stdin_digest": "437695ae6999affe8ff7b9fa468798b597f5917288f156f45607b228273216f8"
+}
+{
+  "start_ts": "2026-09-23T04:16:37.3NZ",
+  "end_ts": "2026-09-23T04:16:42.3NZ",
+  "event": "PostToolUse-async",
+  "pid": "17041",
+  "sleep_s": "5",
+  "stdin_digest": "87ea6c67c26f828733e2f7ed0044f109eeba05b6a79342fb7bb7454384316152"
+}
+{
+  "start_ts": "2026-09-23T04:16:39.3NZ",
+  "end_ts": "2026-09-23T04:16:44.3NZ",
+  "event": "PostToolUse-async",
+  "pid": "17122",
+  "sleep_s": "5",
+  "stdin_digest": "69b3d6292f116d3cb781b335a6dfc60d69d2652fcc63bf5bbcd845ba6a803073"
+}
+{
+  "start_ts": "2026-09-23T04:16:41.3NZ",
+  "end_ts": "2026-09-23T04:16:46.3NZ",
+  "event": "PostToolUse-async",
+  "pid": "17166",
+  "sleep_s": "5",
+  "stdin_digest": "89377f42a69d812d45dfb8fcf5cfe805cf42f270958844bdbaa63036f0dbc119"
+}

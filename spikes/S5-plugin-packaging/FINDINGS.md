@@ -1,215 +1,160 @@
 # S5 · Plugin packaging and pack discovery — FINDINGS
 
-## Blocker (read first)
+## Status
 
-The `claude` CLI in this sandbox (`~/.local/bin/claude`, 2.1.221) has **no credentials at all**
-(`claude auth status` -> `loggedIn: false, authMethod: none`; `claude -p ...` -> `Failed to
-authenticate: OAuth session expired and could not be refreshed`). This is true both for the
-isolated `CLAUDE_CONFIG_DIR` built for this spike and for the real user config (fallback per the
-brief). One `claude -p` attempt was made (see `results/run1-auth-failure.txt`), confirmed via
-`claude doctor` / `claude auth status` that no token exists; per instructions not to dig for
-workarounds, the keychain was not probed and the run was not retried in a loop. **1 of the 15
-budgeted `claude -p` runs was used; 0 succeeded.**
+Run 1 (`claude -p`, isolated + real config) failed on a pre-existing auth problem in this sandbox
+(`Failed to authenticate: OAuth session expired`). After the coordinator confirmed the CLI was
+logged in (`claude auth status` -> `loggedIn: true, claude.ai`), Run 2 succeeded against the
+**real** `~/.claude` config with `--plugin-dir` only (the isolated `CLAUDE_CONFIG_DIR` still can't
+see that login, as expected — nothing was installed there or in `~/.claude`). One rich `-p` prompt
+(`scripts/probe-prompt.txt`) exercised every hook event in one pass; all answers below are now
+**measured** from `logs/*.log` (raw JSON-lines, `results/version-bump.txt` for Q2).
 
-Consequence: every question that requires watching a *live* hook fire during an agentic turn
-(ordering, PATH inside a hook process, batch concurrency, async blocking, subagent payload, exec-
-vs shell-form substitution) could **not** be measured directly. Two things rescued partial, real
-evidence anyway:
-
-- `claude plugin <subcommand>` (install/update/list/details/validate) needs **no model auth** —
-  used extensively against the isolated config dir (`cfg/`, never touching real `~/.claude`) to
-  answer Q2 and part of Q4 empirically.
-- The exact command a hook would run (`claude plugin list --json`) is itself just a subprocess
-  call, so it was run directly to characterize its output and latency, which is valid regardless of
-  who spawns the subprocess.
-
-Everything else below is answered from `docs/en/plugins-reference` and `docs/en/hooks`
-(fetched 2026-09-22) and is marked **[doc-only, unverified live]**.
-
-The probe plugins (`plugins/adage-probe`, `plugins/pack-probe`) are complete, pass
-`claude plugin validate`, and `claude plugin details adage-probe` confirms all 8 requested hooks
-registered correctly — ready to run the moment a working `claude -p` credential exists. See "How
-to finish this spike" at the end.
+**Runs used: 2 of 15** (1 failed on auth, 1 succeeded and answered everything). No retries beyond
+that; no usage-limit error was hit.
 
 ---
 
-## Q1 — SessionStart vs UserPromptSubmit ordering
+## Q1 — SessionStart vs UserPromptSubmit ordering — **measured**
 
-**[doc-only, unverified live].** The hooks reference states the lifecycle as:
+`SessionStart` (3 hooks: main logger + exec-form arg probe + shell-form arg probe, all across two
+plugins) fired and **fully completed** — including each hook's own `claude plugin list --json`
+subprocess call — before `UserPromptSubmit` fired one second later (`04:16:29` → `04:16:30`).
+SessionStart hooks are synchronous and block the first prompt until they finish; there is no race.
 
-```
-[Optional Setup] -> SessionStart -> [MCP unavailable at launch]
-     |
-[First user enters prompt] -> UserPromptSubmit -> UserPromptExpansion -> agentic loop -> Stop
-```
+## Q2 — CLAUDE_PLUGIN_ROOT / CLAUDE_PLUGIN_DATA stability across a version bump — **measured**
 
-SessionStart is documented to fire "before any user input," and MCP-tool hooks specifically are
-unavailable "at initial launch" — implying `command`/`http`/`prompt`/`agent`-type SessionStart hooks
-*do* run before the first `UserPromptSubmit`. Nothing in the docs states whether Claude Code
-*waits* for a synchronous SessionStart hook to exit before accepting the first prompt, versus
-firing it and racing ahead. Not resolved without a live run.
+(Unchanged from the first pass — this didn't need `claude -p`.) Installed `adage-probe@probe-mp`
+1.0.0 from a throwaway local-directory marketplace into an isolated config, bumped to 2.0.0,
+re-ran `claude plugin update`. `installPath` changed from `.../cache/probe-mp/adage-probe/1.0.0`
+to `.../2.0.0` — a real copy (not a symlink), old version retained. Also, in Run 2,
+`CLAUDE_PLUGIN_DATA` for the `--plugin-dir`-loaded plugin resolved to
+`/Users/stevenbooth/.claude/plugins/data/adage-probe-inline/` — stable, not version-qualified, and
+notably **written under the real `~/.claude`** even though the plugin itself was loaded from
+`--plugin-dir` (only the plugin file tree is session-local; its persistent data directory is not).
 
-## Q2 — CLAUDE_PLUGIN_ROOT / CLAUDE_PLUGIN_DATA stability across a version bump
+**Doc claim that turned out wrong:** plugin-marketplaces docs say a local-directory marketplace's
+relative-path source "loads in place" with "no version-based caching" — measured behavior is a
+full versioned copy under `~/.claude/plugins/cache/...`, identical to a git source.
 
-**Measured** (`scripts/version-bump-test.sh`, output in `results/version-bump.txt`).
+## Q3 — bin/ on PATH: hook processes vs the Bash tool — **measured**
 
-Built a throwaway local-directory marketplace (`marketplace/probe-mp/marketplace.json`, source
-`"./adage-probe-src"`) inside this spike folder, installed `adage-probe@probe-mp` at version 1.0.0
-into an isolated `CLAUDE_CONFIG_DIR`, bumped the version in the source to 2.0.0, ran
-`claude plugin marketplace update` + `claude plugin update`, and diffed `claude plugin list --json`:
+**Different for each.** The Bash tool's own `command -v adage-marker` / `command -v pack-marker`
+both resolved, and its `$PATH` had both `.../adage-probe/bin` and `.../pack-probe/bin` appended at
+the end. But **every hook subprocess's own `$PATH`** (captured directly, all 15+ firings across
+both plugins) **never contains either bin/ directory** — hooks do not inherit the PATH
+augmentation that the Bash tool gets. `adage-marker`/`pack-marker` were `NOTFOUND` in 100% of hook
+invocations.
 
-| | before | after |
-|---|---|---|
-| version | 1.0.0 | 2.0.0 |
-| installPath (approx. CLAUDE_PLUGIN_ROOT) | `.../cache/probe-mp/adage-probe/1.0.0` | `.../cache/probe-mp/adage-probe/2.0.0` |
+## Q4 — Cross-plugin discovery and `claude plugin list --json` from inside a hook — **measured**
 
-Confirmed the 1.0.0 directory is a real copy (not a symlink — `file` reports "directory") and a
-file added to the *source* after install did not appear in the cached copy — it is a genuine
-independent snapshot. Both version directories are kept (grace-period retention matches docs).
+`pack-probe`'s `SessionStart` hook ran `claude plugin list --json` (real subprocess, ~0.3s) and got
+back **`[]`** — it cannot see either itself or `adage-probe`, because both were loaded via
+`--plugin-dir`, which is session-only and never written to persisted config. This confirms the
+doc-only inference from the first pass: `claude plugin list --json` only enumerates
+marketplace-installed plugins (Q2's mechanism), not `--plugin-dir`/inline ones. For production
+(Adage and packs installed from a real marketplace) this command remains a viable, fast, no-auth
+discovery path; it is simply untested by the dev-mode harness this spike is required to use.
 
-**CLAUDE_PLUGIN_DATA** was not independently observed (the probe plugin never wrote to it), but per
-docs it resolves to `~/.claude/plugins/data/{id}/`, where `{id}` is derived from plugin+marketplace
-name only, never the version — so it should be the one stable, cross-version location, exactly as
-S4.10/F4 assume. This part is doc-sourced, not measured.
+## Q5 — PostToolBatch payload shape/size; parallel PostToolUse concurrency — **measured**
 
-**Documentation claim that turned out wrong:** the plugin-marketplaces docs state a relative-path
-source in a *local-directory* marketplace "loads in place" and gets "no version-based caching."
-Measured behavior contradicts this for the ordinary `claude plugin install` flow: it is copied into
-a versioned cache directory (`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>/`) exactly
-like a git/URL/archive source, and a version bump produces a brand-new directory. (The "loads in
-place" behavior the docs describe may apply only to referencing the marketplace entry directly
-without ever running `install` — not exercised here.) This reinforces, rather than weakens,
-F4/S15.1's "CLAUDE_PLUGIN_ROOT changes on every plugin update" — it is not a workaround you get by
-using a local/private marketplace instead of git.
-
-## Q3 — Is a plugin's bin/ on the PATH of hook processes and of the agent's Bash tool?
-
-**[doc-only, unverified live].** Docs confirm bin/ is added to the **Bash tool's** PATH while the
-plugin is enabled (the F4 fact already accepted in S15.1). The docs are **silent** on whether hook
-*subprocesses* also inherit that PATH-modified environment. `plugins/adage-probe` ships
-`bin/adage-marker` and `plugins/pack-probe` ships `bin/pack-marker` specifically to answer this
-with `command -v adage-marker` inside a hook and inside a Bash-tool call — both scripts are in
-place and untested. Open until a live run is possible.
-
-## Q4 — Cross-plugin discovery and claude plugin list --json from inside a hook
-
-**Partially measured.** `claude plugin list --json`:
-- needs no model auth (confirmed — it is a config-file read), runs in **~0.35s** as a bare
-  subprocess (`results/version-bump.txt`, timing run) — relevant to hook latency budgets (F2);
-- lists **every marketplace-installed plugin regardless of enabled state**, with an explicit
-  `enabled: true|false` field (confirmed by disabling `adage-probe@probe-mp` and re-listing) and an
-  `installPath` — so a hook can filter to enabled plugins and get real filesystem paths;
-- reflects only **persisted config** (`enabledPlugins` in settings / `installed_plugins.json`), not
-  live per-process state. It therefore **cannot see plugins loaded only via --plugin-dir** (the
-  "@inline" source used for this whole spike per the brief's rules) — those are session-scoped and
-  never written to disk. It also cannot know about a different, concurrently running session's
-  plugin set.
-
-Net for F5: for the real deployment shape (Adage and packs installed from an actual marketplace,
-not dev-mode --plugin-dir), a pack's SessionStart hook shelling out to `claude plugin list --json`
-**is** a viable, fast, documented way to enumerate sibling plugins and their paths — this validates
-F5's premise. It does **not** help in the --plugin-dir dev/test mode this spike was constrained to
-use, so the actual "can pack-probe find adage-probe" cross-check could not be exercised end-to-end
-live.
-
-## Q5 — PostToolBatch payload shape/size; parallel PostToolUse concurrency
-
-**[doc-only, unverified live].** Documented shape:
+Exact captured shape:
 ```json
-{"hook_event_name":"PostToolBatch","tool_calls":[
-  {"tool_name":"Bash","tool_input":{},"tool_use_id":"...","success":true,"output":"..."}
-]}
+{"session_id":"...","cwd":"...","hook_event_name":"PostToolBatch",
+ "tool_calls":[
+   {"tool_name":"Bash","tool_input":{"command":"sleep 2 && echo A_DONE","description":"..."},
+    "tool_use_id":"toolu_...","tool_response":"A_DONE"},
+   {"tool_name":"Bash","tool_input":{"command":"sleep 2 && echo B_DONE","description":"..."},
+    "tool_use_id":"toolu_...","tool_response":"B_DONE"}]}
 ```
-Docs state "all matching hooks run in parallel within a single event," which speaks to multiple
-*hook registrations* for one event, not to whether the underlying tool calls in a batch overlap in
-wall-clock time. `plugins/adage-probe`'s PostToolUse hook (`log-event.sh`) and its async sibling
-(`log-event-slow.sh`, 5s sleep) are wired up to make this directly observable via timestamps once a
-live run is possible — not yet run.
+**Doc discrepancy:** the hooks reference documents `result`/`success`/`error` fields; the real
+payload uses a single `tool_response` per call (string or, for a standalone `PostToolUse`, a
+richer object `{stdout, stderr, interrupted, isImage, noOutputExpected}`) with no boolean
+`success` field. Both A_DONE/B_DONE `sleep 2` commands were issued as one parallel batch and their
+individual `PostToolUse` hooks both stamped the same second, immediately followed by one
+`PostToolBatch` — consistent with genuine parallel tool execution, though sub-second hook-runner
+concurrency itself wasn't separately isolated.
 
-## Q6 — async: true semantics
+## Q6 — async: true semantics — **measured**
 
-**[doc-only, unverified live].** Per docs/en/hooks: does not block the turn, output/exit code are
-ignored, and the `timeout` field is *not* enforced on async hooks. A distinct `asyncRewake: true`
-variant runs in the background but wakes Claude on exit code 2, surfacing stderr as a system
-reminder. The probe's async PostToolUse hook sleeps 5s specifically to make "did the turn wait 5s"
-observable by wall-clock — ready, not yet run.
+4 of 5 `PostToolUse` events produced a matching async sibling (5 s sleep each); their `start_ts`
+tracked each triggering `PostToolUse` closely (e.g. both parallel-Bash hooks started their 5 s
+sleep at the same second as the sync hook), while the main turn kept progressing through
+`PreToolUse:Agent` → `SubagentStart` → `Stop` → `SessionEnd` without waiting — total session wall
+time (~22 s) is far less than what 4×5 s of serial async sleeps would need if they blocked (20 s+
+just for those, plus the rest of the turn). **Confirms async hooks do not block.** One nuance
+found: the 5th async hook (fired from the very last `PostToolUse`, ~3 s before `SessionEnd`) never
+produced a log line even after waiting — its 5 s sleep didn't fit before the session process
+exited, i.e. **an async hook spawned close to session end can be cut off, not guaranteed to run to
+completion.**
 
-## Q7 — SubagentStart payload and PreToolUse/Agent description
+## Q7 — SubagentStart payload and PreToolUse/Agent description — **measured**
 
-**[doc-only, unverified live].** Documented SubagentStart payload is
-`{hook_event_name, agent_type, agent_id, cwd}` — **no task/prompt description**, confirming the
-S15.1 fact that drove F5's requirement to join the delegation description from the Agent tool call
-instead. PreToolUse for `tool_name: "Agent"` should carry the description inside `tool_input` (per
-the general PreToolUse shape `{tool_name, tool_input, tool_use_id}`), but this was not observed
-directly.
+`SubagentStart`: `{session_id, cwd, scratchpad_dir, prompt_id, agent_id, agent_type,
+hook_event_name}` — confirmed **no task/prompt description**, exactly as F5 assumed.
+`PreToolUse` matched on `Agent` **does** carry it:
+```json
+{"tool_name":"Agent","tool_input":{"description":"probe task",
+ "prompt":"Reply with the single word OK and stop.","subagent_type":"general-purpose",
+ "run_in_background":false}}
+```
+This confirms F1/F5's design is correct as written: join the delegation description from the
+`PreToolUse`/`Agent` hook, not from `SubagentStart`.
 
-## Q8 — Exec-form (args) vs shell-form hooks
+## Q8 — Exec-form (args) vs shell-form hooks — **measured**
 
-**[doc-only, unverified live].** Both are documented and supported: `args` present => exec form
-(`command` is a literal executable, each `args` element passed verbatim, no shell, safer for
-plugin-supplied paths); `args` absent => shell form (`sh -c` on Unix), which expands `$VAR` and
-supports pipes/redirects. Docs are explicit that `${CLAUDE_PLUGIN_ROOT}` / `${CLAUDE_PLUGIN_DATA}` /
-`${CLAUDE_PROJECT_DIR}` are substituted as plain strings **even in exec form**, but ordinary env
-vars are not — `hooks/hooks.json` in adage-probe includes matched exec-form and shell-form hooks
-(`scripts/log-args.sh`) both given a literal `$PATH` token, specifically to catch this difference
-live. Not yet run.
+Both fired from the same `SessionStart` event, each given a literal `$PATH` token and
+`${CLAUDE_PLUGIN_ROOT}`:
+- **exec-form** (`args` array): received `$PATH` **literally, unexpanded**; `${CLAUDE_PLUGIN_ROOT}`
+  substituted to the real path.
+- **shell-form** (single `command` string): received `$PATH` **fully expanded** by `sh -c`;
+  `${CLAUDE_PLUGIN_ROOT}` also substituted.
+
+Exactly as documented: only the three named placeholders are substituted regardless of form;
+everything else is shell-expanded only in shell form.
 
 ---
 
-## Recommended packaging recipe (revised in light of the above)
+## Final recommended packaging recipe
 
-- **Binary placement:** confirmed correct not to use a top-level bin/ (F4) — that directory is
-  proven to attach to the agent's Bash PATH, and now also proven to move on every version bump even
-  for a "private"/local marketplace, so nothing may hardcode into it. Ship the Adage binary through
-  an exec-form scripts/ shim (per F4) that installs a digest-named, signature-verified binary into
-  `${CLAUDE_PLUGIN_DATA}` (the one location confirmed by docs — id derived from plugin+marketplace
-  name, not version — to survive updates) and execs it from there.
-- **Hooks reach the binary** via `${CLAUDE_PLUGIN_DATA}/<digest>/adage`, resolved fresh on every
-  invocation (never cached as a path in long-lived state, since CLAUDE_PLUGIN_ROOT itself is proven
-  unstable across updates).
-- **Pack discovery:** register via SessionStart calling
-  `adage pack register "${CLAUDE_PLUGIN_ROOT}"` as F5 proposes, **and** have adaged/the CLI
-  independently confirm and enumerate enabled packs by shelling out to `claude plugin list --json`
-  (confirmed fast, ~0.35s, no auth needed, gives real paths and enabled state) rather than scanning
-  undocumented cache paths — viable for the real (marketplace-installed) deployment shape, not for
-  --plugin-dir dev mode.
-- **Sync vs async:** per docs (not independently confirmed here), observation-only hooks should be
-  `async: true` (or `asyncRewake` where a failure must surface); decision hooks (UserPromptSubmit,
-  PostToolBatch, SubagentStart, Stop) must stay synchronous, matching F1's split — this spike could
-  not add live timing evidence for that split.
-- **First-prompt timing guarantee:** unresolved (Q1) — do not assume UserPromptSubmit waits for
-  SessionStart to finish; design pre-warm assuming a race until proven otherwise.
+- **No top-level `bin/`** (confirmed both risk vectors: it's on the agent's Bash PATH, and F4's
+  path-instability finding independently confirmed in Q2). Ship the Adage binary via an exec-form
+  `scripts/` shim into `${CLAUDE_PLUGIN_DATA}` — confirmed stable and *not* version-qualified (Q2),
+  and confirmed to live under the real `~/.claude/plugins/data/...` even for `--plugin-dir`-loaded
+  plugins, so it truly persists across path churn.
+- **Hooks must exec the binary by absolute `${CLAUDE_PLUGIN_DATA}` path on every invocation** —
+  never rely on PATH, since hook subprocesses do **not** get the plugin's `bin/` on PATH (Q3,
+  measured) even though the agent's Bash tool does.
+- **Pack discovery**: `SessionStart` → `adage pack register "${CLAUDE_PLUGIN_ROOT}"` (F5) plus a
+  `claude plugin list --json` cross-check works and is fast (~0.3 s) **only for
+  marketplace-installed** packs (Q4, measured) — it returns `[]` for `--plugin-dir` dev mode, so
+  Adage's registration RPC, not `plugin list`, must be the source of truth in general.
+- **Sync vs async** (confirmed, Q6): observation-only hooks as `async: true` — genuinely
+  non-blocking — but do not rely on one to finish if it's fired near `Stop`/`SessionEnd`; flush or
+  make decision-relevant hooks (`UserPromptSubmit`, `PostToolBatch`, `SubagentStart`, `Stop`)
+  synchronous per F1.
+- **First-prompt timing** (Q1, measured): `SessionStart` fully blocks the first `UserPromptSubmit`,
+  so pre-warm work placed there is safe to assume complete before the first decision point.
+- **Delegation description** (Q7, measured): capture it from `PreToolUse` matched on `Agent`
+  (`tool_input.description`/`.prompt`), never from `SubagentStart`.
 
-## Documentation claim that turned out wrong
+## Documentation claims that turned out wrong
 
-plugin-marketplaces docs' claim that a local-directory marketplace's relative-path source "loads in
-place" with "no version-based caching" is false for the ordinary `claude plugin install` flow —
-measured behavior is a full versioned copy under `~/.claude/plugins/cache/...`, same as a git
-source. See Q2.
+1. Local-directory marketplace relative-path sources "load in place, no version caching" — false;
+   they're copied into a versioned cache dir like any other source (Q2).
+2. `PostToolBatch`/`PostToolUse` payloads carry `result`/`success`/`error` fields — actual field is
+   `tool_response` (string or an object), with no boolean `success` (Q5).
 
 ## Runs used
 
-- `claude -p` (Haiku, --max-turns 8): **1 attempted, 0 succeeded** — auth failure, not a
-  usage-limit error. Did not retry (per instructions). 14 of 15 budgeted runs unused.
-- All other measurements used plain `claude plugin ...` subcommands (unlimited, no model call).
+- `claude -p` (Haiku, `--max-turns 8`): **2 of 15 budgeted runs** — 1 failed on a pre-existing auth
+  error (not a usage-limit error), 1 succeeded and produced every measurement above.
+- Q2's marketplace/version-bump test used only `claude plugin ...` subcommands (no model call, not
+  counted against the budget).
 
 ## What could not be done
 
-Everything gated on watching a real agentic turn: Q1 ordering/blocking, Q3 hook-process PATH, Q4's
---plugin-dir-mode cross-plugin lookup, Q5 batch shape/concurrency, Q6 async blocking, Q7 payload
-contents, Q8 substitution differences. The plugins, hooks, scripts, and log format needed to answer
-all of them in one more short session are complete and validated (`claude plugin validate`,
-`claude plugin details`) in `plugins/adage-probe` and `plugins/pack-probe`.
-
-## How to finish this spike
-
-With working `claude -p` credentials, from this folder:
-
-```bash
-claude -p "$(cat scripts/probe-prompt.txt)" \
-  --plugin-dir ./plugins/adage-probe --plugin-dir ./plugins/pack-probe \
-  --model claude-haiku-4-5-20251001 --max-turns 8 --permission-mode bypassPermissions
-```
-
-then read `logs/adage-probe.log`, `logs/adage-probe-slow.log`, `logs/adage-probe-args.log`, and
-`logs/pack-probe.log` (JSON-lines, one record per hook firing) to fill in Q1, Q3, Q5, Q6, Q7, Q8.
+Nothing outstanding from the original question list. Sub-second-scale concurrency of the two
+*parallel* `PostToolUse` hook invocations within a batch (Q5) was inferred from same-second
+timestamps rather than isolated with finer-grained instrumentation — a genuinely tighter test would
+need higher-resolution timers than this probe's `date -u +%3N`.
