@@ -1,0 +1,324 @@
+{
+  "by_effect": [
+    [
+      "observe",
+      4153
+    ],
+    [
+      "environment",
+      1485
+    ],
+    [
+      "author",
+      433
+    ],
+    [
+      "verify",
+      134
+    ],
+    [
+      "publish",
+      74
+    ],
+    [
+      "regenerate",
+      4
+    ]
+  ],
+  "by_op": [
+    [
+      "exec",
+      3280
+    ],
+    [
+      "fetch",
+      1387
+    ],
+    [
+      "read",
+      425
+    ],
+    [
+      "search",
+      388
+    ],
+    [
+      "compound",
+      241
+    ],
+    [
+      "list",
+      165
+    ],
+    [
+      "write",
+      149
+    ],
+    [
+      "edit",
+      133
+    ],
+    [
+      "unknown",
+      115
+    ]
+  ],
+  "distinct_exact_commands": 4416,
+  "distinct_generalised_templates": 1691,
+  "elapsed_secs": 0.195329166,
+  "lines_parsed": 11280,
+  "lines_quarantined": 0,
+  "low_confidence_rate": 0.11777813146586026,
+  "non_unknown_rate": 0.9816966417316568,
+  "repeat_rate_exact": 0.38675791819194655,
+  "repeat_rate_template": 0.7770173484004457,
+  "sessions_scanned": 62,
+  "throughput_calls_per_sec": 32166.21525942521,
+  "tool_calls_normalized": 6283,
+  "top_generalised_templates": [
+    [
+      "fetch {url}",
+      1098
+    ],
+    [
+      "search:content {pattern}",
+      313
+    ],
+    [
+      "fetch {query}",
+      289
+    ],
+    [
+      "read {path}",
+      287
+    ],
+    [
+      "exec echo",
+      178
+    ],
+    [
+      "list {path}",
+      165
+    ],
+    [
+      "exec python3",
+      162
+    ],
+    [
+      "write {path}",
+      149
+    ],
+    [
+      "read {path} [range]",
+      138
+    ],
+    [
+      "edit {path}",
+      133
+    ],
+    [
+      "exec sleep {n}",
+      119
+    ],
+    [
+      "unknown",
+      115
+    ],
+    [
+      "exec echo {path}",
+      97
+    ],
+    [
+      "exec task general-purpose",
+      76
+    ],
+    [
+      "search:filename {pattern}",
+      75
+    ],
+    [
+      "exec source {path}",
+      72
+    ],
+    [
+      "exec echo ",
+      72
+    ],
+    [
+      "exec cat",
+      62
+    ],
+    [
+      "exec echo ---",
+      49
+    ],
+    [
+      "exec python3 -c {path}",
+      43
+    ],
+    [
+      "exec p {url}",
+      30
+    ],
+    [
+      "exec curl -s {path}",
+      28
+    ],
+    [
+      "exec probe {url}",
+      21
+    ],
+    [
+      "exec echo waited",
+      20
+    ],
+    [
+      "exec wc -l {path}",
+      19
+    ]
+  ],
+  "top_unhandled_commands": [
+    [
+      "claude",
+      56
+    ],
+    [
+      "probe",
+      53
+    ],
+    [
+      "run",
+      39
+    ],
+    [
+      "p",
+      30
+    ],
+    [
+      "date",
+      22
+    ],
+    [
+      "fetch",
+      18
+    ],
+    [
+      "uptime",
+      18
+    ],
+    [
+      "lsof",
+      16
+    ],
+    [
+      "q",
+      15
+    ],
+    [
+      "du",
+      14
+    ],
+    [
+      "ps",
+      13
+    ],
+    [
+      "stat",
+      13
+    ],
+    [
+      "show",
+      11
+    ],
+    [
+      "g",
+      10
+    ],
+    [
+      "perl",
+      10
+    ],
+    [
+      "uv",
+      10
+    ],
+    [
+      "xcodegen",
+      8
+    ],
+    [
+      "F",
+      7
+    ],
+    [
+      "st",
+      7
+    ],
+    [
+      "$B",
+      7
+    ],
+    [
+      "command",
+      6
+    ],
+    [
+      "sysctl",
+      6
+    ],
+    [
+      "rustc",
+      6
+    ],
+    [
+      "s",
+      5
+    ],
+    [
+      "pgrep",
+      5
+    ]
+  ],
+  "unrecognised_native_tools": [
+    [
+      "ToolSearch",
+      62
+    ],
+    [
+      "SendMessage",
+      23
+    ],
+    [
+      "AskUserQuestion",
+      11
+    ],
+    [
+      "Monitor",
+      7
+    ],
+    [
+      "Skill",
+      4
+    ],
+    [
+      "Artifact",
+      3
+    ],
+    [
+      "TaskStop",
+      2
+    ],
+    [
+      "SendUserFile",
+      1
+    ],
+    [
+      "ExitPlanMode",
+      1
+    ],
+    [
+      "ReadNotifications",
+      1
+    ]
+  ]
+}
