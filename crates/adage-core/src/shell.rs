@@ -34,10 +34,46 @@ thread_local! {
 
 /// Entry point: normalise one shell command string (the value of a `Bash` tool call, or the
 /// unwrapped body of `bash -lc "…"`) into zero or more canonical actions.
+/// Commands longer than this are not normalised (recorded as unknown): the hot path must stay
+/// bounded, and no real hand-typed agent command is this long.
+pub const MAX_COMMAND: usize = 16 * 1024;
+/// Maximum nesting of `$(`, `(`, `{` and backticks before a command is treated as unknown; the
+/// syntax-tree walk is recursive, so this bounds stack depth.
+pub const MAX_NESTING: usize = 48;
+
+fn too_deep(s: &str) -> bool {
+    let (mut depth, mut max, mut tick) = (0usize, 0usize, false);
+    for c in s.chars() {
+        match c {
+            '(' | '{' => depth += 1,
+            ')' | '}' => depth = depth.saturating_sub(1),
+            '`' => {
+                tick = !tick;
+                if tick { depth += 1 } else { depth = depth.saturating_sub(1) }
+            }
+            _ => {}
+        }
+        max = max.max(depth);
+        if max > MAX_NESTING {
+            return true;
+        }
+    }
+    false
+}
+
 pub fn normalize_shell(command: &str, cwd: &str, table: &CommandTable) -> Vec<Normalized> {
     let command = command.trim();
     if command.is_empty() {
         return vec![];
+    }
+    if command.len() > MAX_COMMAND || too_deep(command) {
+        return vec![Normalized {
+            action: CanonicalAction::Unknown { raw: "oversized-or-deeply-nested-command".into() },
+            effect: Effect::Environment,
+            mutating: false,
+            confidence: 0.0,
+            note: "not normalised: exceeds size or nesting bounds".into(),
+        }];
     }
 
     let tree = PARSER.with(|p| p.borrow_mut().parse(command, None));
@@ -191,7 +227,8 @@ fn read_range(cmd: &str, argv: &[String]) -> Option<(i64, i64)> {
         "sed" => {
             let joined = argv.join(" ");
             let re = regex::Regex::new(r"(\d+),(\d+)p").unwrap();
-            re.captures(&joined).map(|c| (c[1].parse().unwrap(), c[2].parse().unwrap()))
+            let c = re.captures(&joined)?;
+            Some((c[1].parse().ok()?, c[2].parse().ok()?))
         }
         "head" => {
             let i = argv.iter().position(|a| a == "-n")?;

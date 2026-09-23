@@ -45,7 +45,32 @@ impl Paths {
     }
 }
 
-/// Session ids come from harness payloads; never let one escape the sessions directory.
+/// Session ids come from harness payloads; never let one escape the sessions directory. Ids that
+/// had to be altered (or truncated) get a hash suffix, so two different ids never share files.
 pub fn sanitise(s: &str) -> String {
-    s.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).take(128).collect()
+    let clean: String = s.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).take(96).collect();
+    if clean == s {
+        return clean;
+    }
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in s.bytes() {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x100_0000_01b3);
+    }
+    format!("{clean}-{h:016x}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sanitise;
+
+    #[test]
+    fn sanitised_ids_do_not_collide_or_escape() {
+        assert_eq!(sanitise("abc-123"), "abc-123");
+        assert_ne!(sanitise("a.b"), sanitise("a_b"));
+        assert!(!sanitise("../../etc/passwd").contains('/'));
+        let long_a = format!("{}a", "x".repeat(200));
+        let long_b = format!("{}b", "x".repeat(200));
+        assert_ne!(sanitise(&long_a), sanitise(&long_b));
+    }
 }

@@ -144,3 +144,23 @@ fn steered_sessions_are_excluded_only_from_their_own_route_kind() {
     let dead = index.routes.iter().find(|r| r.route.id.starts_with("dead-end")).unwrap();
     assert_eq!(dead.route.evidence.support, 9, "steered sessions still count as dead-end evidence");
 }
+
+#[test]
+fn a_publishing_variant_is_never_merged_into_a_lookup() {
+    let d = tempfile::tempdir().unwrap();
+    let cwd = "/fixture/acme";
+    let mut files = vec![];
+    for i in 0..6 {
+        let id = format!("GH-1{i}");
+        let mut t = Tx::new(&format!("g{i}"), cwd, &format!("handle {id}"));
+        let cmd = if i == 0 { format!("gh issue view {id}") } else { format!("gh issue close {id}") };
+        t.bash(&cmd, "ok", false).call("Edit", json!({"file_path": format!("{cwd}/a.py")}), "ok", false);
+        files.push(t.write(d.path()));
+    }
+    let home = d.path().join("home");
+    let index = run(d.path(), &files, &home);
+    assert!(
+        !index.routes.iter().any(|r| matches!(&r.route.step, Step::Run { command } if command.contains("close"))),
+        "a publish command must never be directed"
+    );
+}

@@ -11,7 +11,7 @@ const MAX_FIELD: usize = 200;
 
 pub fn sanitise(s: &str) -> String {
     s.chars()
-        .filter(|c| !matches!(c, '`' | '<' | '>' | '\n' | '\r'))
+        .filter(|c| !matches!(c, '`' | '<' | '>' | '"' | '\\' | '\u{85}' | '\u{2028}' | '\u{2029}') && !c.is_control())
         .take(MAX_FIELD)
         .collect::<String>()
         .trim()
@@ -81,10 +81,15 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
         )),
         (Step::Run { command }, _) => Some(format!("A known next step here is:\n  {}{}", sanitise(&bind(command, bound)), exit)),
         (Step::ReadBatch { slot, .. }, _) => {
+            // Each path was validated individually; render each whole, never a truncated list.
             let files = bound.iter().find(|(k, _)| k == slot)?.1.clone();
+            let shown: Vec<String> = files.split(", ").map(sanitise).filter(|f| !f.is_empty() && f.len() < MAX_FIELD).collect();
+            if shown.is_empty() {
+                return None;
+            }
             Some(format!(
                 "That result lists these files: {}.\nIf you need them, read them together in one turn rather than one at a time.{}",
-                sanitise(&files),
+                shown.join(", "),
                 exit
             ))
         }

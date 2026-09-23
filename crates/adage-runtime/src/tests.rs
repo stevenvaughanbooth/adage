@@ -185,3 +185,60 @@ fn linked_files_from_plain_text_output() {
     let read = d.directives.iter().find(|x| x.route == "read-linked").expect("read-batch from text output");
     assert!(read.text.contains("acme/billing.py") && !read.text.contains("passwd"));
 }
+
+#[test]
+fn symlinks_out_of_the_repo_are_rejected() {
+    let (dir, index, table) = fixture();
+    std::os::unix::fs::symlink("/etc/hosts", dir.path().join("acme/notes.md")).unwrap();
+    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table };
+    let mut st = SessionState::default();
+    let out = r#"{"linked_files":["acme/notes.md","acme/billing.py"]}"#;
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("./scripts/wi-lookup W-2042 --json", out)] });
+    let read = d.directives.iter().find(|x| x.route == "read-linked").unwrap();
+    assert!(!read.text.contains("notes.md") && read.text.contains("acme/billing.py"));
+}
+
+#[test]
+fn obligations_rearm_after_a_new_edit_and_stop_requests_are_bounded() {
+    let (dir, index, table) = fixture();
+    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table };
+    let mut st = SessionState::default();
+    let edit = |f: &str| Call { tool: "Edit".into(), input: json!({ "file_path": dir.path().join(f).to_string_lossy() }), output: String::new(), failed: false };
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![edit("schema/a.json")] });
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make gen", "ok")] });
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![edit("schema/b.json")] });
+    assert!(decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false }).continue_reason.is_some(), "re-armed");
+    for _ in 0..5 {
+        decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make gen", "ok")] });
+        decide(&ctx, &mut st, &Event::Batch { calls: vec![edit("schema/c.json")] });
+        decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false });
+    }
+    assert!(st.stop_requests <= MAX_STOP_REQUESTS);
+}
+
+#[test]
+fn hostile_output_does_not_panic() {
+    let (dir, index, table) = fixture();
+    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table };
+    let mut st = SessionState::default();
+    let calls = vec![
+        bash("./scripts/wi-lookup W-2042 --json", "} {"),
+        bash("sed -n 99999999999999999999,2p a.py", ""),
+        bash(&"$(echo ".repeat(20_000), ""),
+        bash(&"x".repeat(100_000), ""),
+    ];
+    let _ = decide(&ctx, &mut st, &Event::Batch { calls });
+    assert!(serde_json::to_vec(&st).unwrap().len() < 64 * 1024, "state stays within its slot");
+}
+
+#[test]
+fn holdout_records_would_continue() {
+    let (dir, index, table) = fixture();
+    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table };
+    let mut st = SessionState::default();
+    let edit = Call { tool: "Edit".into(), input: json!({ "file_path": dir.path().join("schema/a.json").to_string_lossy() }), output: String::new(), failed: false };
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![edit] });
+    st.arm = Some(Arm::Holdout);
+    let d = decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false });
+    assert!(d.continue_reason.is_none() && d.would_continue.is_some());
+}

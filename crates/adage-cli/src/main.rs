@@ -26,9 +26,12 @@ fn main() {
         // Fail open, always: no panic, error, or timeout may block or disturb the agent.
         let harness = args.get(1).cloned().unwrap_or_default();
         let event = args.get(2).cloned().unwrap_or_default();
+        // Nothing may reach the harness but our JSON: silence panic messages entirely.
+        std::panic::set_hook(Box::new(|_| {}));
         let out = std::panic::catch_unwind(|| hook::run(&harness, &event)).ok().flatten();
         if let Some(o) = out {
-            println!("{o}");
+            use std::io::Write;
+            let _ = writeln!(std::io::stdout(), "{o}");
         }
         std::process::exit(0);
     }
@@ -111,7 +114,7 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&rep)?);
     } else {
         println!(
-            "adage learn: {} sessions read, {} used, {} steered (truncated at first directive)",
+            "adage learn: {} sessions read, {} used, {} steered (excluded per route kind from evidence they influenced)",
             rep.sessions_read, rep.sessions_used, rep.sessions_steered
         );
         println!("thresholds: {}", rep.thresholds);

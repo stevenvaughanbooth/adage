@@ -125,13 +125,16 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
                 day = ts.chars().take(10).collect();
             }
         }
-        if line.contains("<adage-signal") {
+        // Directives are delivered as hook attachments; text elsewhere (a tool printing Adage's
+        // own docs, say) is not steering.
+        let is_attachment = matches!(rec.get("type").and_then(|v| v.as_str()), Some("attachment") | Some("system"));
+        if is_attachment && line.contains("<adage-signal") {
             steered = true;
             for c in ROUTE_ATTR.captures_iter(line) {
                 directed.insert(c[1].to_string());
             }
         }
-        if line.contains("Adage finish-line check") {
+        if is_attachment && line.contains("Adage finish-line check") {
             steered = true;
             directed.insert("finish-line-stop".to_string());
         }

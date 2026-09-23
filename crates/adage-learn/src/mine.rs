@@ -99,6 +99,24 @@ fn shell_join(argv: &[String]) -> String {
 /// Pseudo-field meaning "repository paths mentioned in the command's text output".
 pub const PATHS_FIELD: &str = "*paths";
 
+trait MaxRank {
+    fn max_by_rank(self, other: Effect) -> Effect;
+}
+
+impl MaxRank for Effect {
+    fn max_by_rank(self, other: Effect) -> Effect {
+        let r = |e: Effect| match e {
+            Effect::Observe => 0,
+            Effect::Verify => 1,
+            Effect::Regenerate => 2,
+            Effect::Environment => 3,
+            Effect::Author => 4,
+            Effect::Publish => 5,
+        };
+        if r(other) > r(self) { other } else { self }
+    }
+}
+
 /// A command's runner, without its targets: `python3 -m pytest tests/a.py -v` → `python3 -m pytest`.
 fn runner(argv: &[String]) -> String {
     let mut out: Vec<&str> = Vec::new();
@@ -163,7 +181,9 @@ pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             let templ: Vec<String> = av.iter().map(|a| if a == t { "{item}".to_string() } else { a.clone() }).collect();
             let command = shell_join(&templ);
             // Variants of one command (interpreter prefix, flags) are one behaviour: group by head.
-            let head = adage_core::keys::command_head(av);
+            // Only variants with the same effect class are one behaviour: `gh issue view` and
+            // `gh issue close` share a head but must never be merged.
+            let head = format!("{}|{}", adage_core::keys::command_head(av), step.norm.effect.as_str());
             if !seen.insert(head.clone()) || step.call.failed {
                 continue;
             }
@@ -192,7 +212,8 @@ pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
     }
     let rate = support as f64 / opportunities.max(1) as f64;
     let lb = wilson_lower(support, opportunities);
-    let effect = best.effect.unwrap_or(Effect::Environment);
+    // Re-derive the effect from the command that will actually be directed; never inherit it.
+    let effect = best.effect.unwrap_or(Effect::Environment).max_by_rank(adage_tracks::io::classify(&command, &adage_core::CommandTable::load()));
     let Some(aspect) = aspect_for(effect, false, lb, rate, cfg, "lookup-work-item") else { return vec![] };
     let Some(contract) = spans::ticket_contract(&best.values) else { return vec![] };
     let mut turns = best.turns.clone();

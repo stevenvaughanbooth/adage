@@ -41,11 +41,22 @@ static PATH: Lazy<Regex> = Lazy::new(|| {
         .unwrap()
 });
 
+/// Only the first part of a text is scanned, and at most this many spans are returned: the hot
+/// path must stay bounded whatever an agent pastes or a tool prints.
+pub const MAX_SCAN: usize = 64 * 1024;
+pub const MAX_SPANS: usize = 256;
+
 /// Extract spans in order of appearance, de-duplicated per kind.
 pub fn extract(text: &str) -> Vec<Span> {
+    let mut cut = text.len().min(MAX_SCAN);
+    while !text.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    let text = &text[..cut];
     let mut out: Vec<(usize, Span)> = Vec::new();
+    let mut seen: std::collections::HashSet<(SpanKind, String)> = std::collections::HashSet::new();
     let mut push = |pos: usize, kind: SpanKind, value: &str| {
-        if !out.iter().any(|(_, s)| s.kind == kind && s.value == value) {
+        if out.len() < MAX_SPANS * 4 && seen.insert((kind, value.to_string())) {
             out.push((pos, Span { kind, value: value.to_string() }));
         }
     };
@@ -67,7 +78,7 @@ pub fn extract(text: &str) -> Vec<Span> {
         }
     }
     out.sort_by_key(|(p, _)| *p);
-    out.into_iter().map(|(_, s)| s).collect()
+    out.into_iter().take(MAX_SPANS).map(|(_, s)| s).collect()
 }
 
 /// Derive a strict, anchored contract regex from observed values of one ticket-like slot, e.g.
@@ -103,6 +114,15 @@ mod tests {
         assert!(s.contains(&Span { kind: SpanKind::Ticket, value: "W-2042".into() }));
         assert!(s.contains(&Span { kind: SpanKind::Path, value: "acme/billing.py".into() }));
         assert!(s.iter().any(|x| x.kind == SpanKind::Url));
+    }
+
+    #[test]
+    fn extraction_is_bounded_and_fast() {
+        let big: String = (0..80_000).map(|i| format!("W-{i} ")).collect();
+        let t = std::time::Instant::now();
+        let s = extract(&big);
+        assert!(s.len() <= MAX_SPANS);
+        assert!(t.elapsed().as_millis() < 500, "took {:?}", t.elapsed());
     }
 
     #[test]

@@ -100,6 +100,24 @@ pub struct SessionState {
     pub obligations: Vec<Obligation>,
     pub history: Vec<String>,
     pub first_edit_at_batch: Option<u32>,
+    /// Stop-hook requests made this session (bounded).
+    #[serde(default)]
+    pub stop_requests: u32,
+}
+
+/// At most this many stop-hook requests per session, across all obligations.
+pub const MAX_STOP_REQUESTS: u32 = 2;
+const MAX_KEY: usize = 256;
+
+fn cap(mut s: String) -> String {
+    if s.len() > MAX_KEY {
+        let mut i = MAX_KEY;
+        while !s.is_char_boundary(i) {
+            i -= 1;
+        }
+        s.truncate(i);
+    }
+    s
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -127,6 +145,9 @@ pub struct Decision {
     pub continue_reason: Option<String>,
     /// What would have been emitted — recorded in both arms for exposure logging.
     pub would_have: Vec<Directive>,
+    /// A stop-hook request that would have been made (recorded in both arms).
+    #[serde(default)]
+    pub would_continue: Option<String>,
     pub judgements: Vec<Judgement>,
     /// Canonical template keys of the calls observed in this event.
     pub observed: Vec<String>,
@@ -207,6 +228,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             st.batches += 1;
             for call in calls {
                 for (key, n) in call_keys(call, ctx) {
+                    let key = cap(key);
                     d.observed.push(key.clone());
                     push_history(st, key.clone());
                     // Follow / derail judgement.
@@ -235,7 +257,29 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                             for ir in routes.iter() {
                                 if let (Trigger::AfterEdit { paths }, Step::Run { command }) = (&ir.route.trigger, &ir.route.step) {
                                     let hit = glob::Pattern::new(paths).map(|g| g.matches(&rel)).unwrap_or(false);
-                                    if hit && !st.obligations.iter().any(|o| o.route == ir.route.id) {
+                                    if !hit {
+                                        continue;
+                                    }
+                                    if let Some(o) = st.obligations.iter_mut().find(|o| o.route == ir.route.id) {
+                                        // A new matching edit after the step ran re-arms the obligation.
+                                        if o.met {
+                                            o.met = false;
+                                            o.stop_requested = false;
+                                        }
+                                        continue;
+                                    }
+                                    // Only enforce a rule the agent was actually told about.
+                                    let announced = st.emitted.iter().any(|e| e == &ir.route.id);
+                                    let emitted_now = !announced && emit_ok(st, &out, &ir.route.id) && {
+                                        match render::route_text(&ir.route, &[]) {
+                                            Some(t) => {
+                                                out.push(directive(ir, t));
+                                                true
+                                            }
+                                            None => false,
+                                        }
+                                    };
+                                    if announced || emitted_now {
                                         st.obligations.push(Obligation {
                                             route: ir.route.id.clone(),
                                             expect_key: command_key(command, ctx.table),
@@ -244,11 +288,6 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                             met: false,
                                             stop_requested: false,
                                         });
-                                        if emit_ok(st, &out, &ir.route.id) {
-                                            if let Some(t) = render::route_text(&ir.route, &[]) {
-                                                out.push(directive(ir, t));
-                                            }
-                                        }
                                     }
                                 }
                             }
@@ -292,10 +331,12 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             }
         }
         Event::Stop { stop_hook_active } => {
-            if !*stop_hook_active {
+            if !*stop_hook_active && st.stop_requests < MAX_STOP_REQUESTS {
                 if let Some(o) = st.obligations.iter_mut().find(|o| !o.met && !o.stop_requested) {
                     o.stop_requested = true;
+                    st.stop_requests += 1;
                     let reason = render::stop_reason(&o.paths, &o.command);
+                    d.would_continue = Some(reason.clone());
                     if st.arm != Some(Arm::Holdout) {
                         d.continue_reason = Some(reason);
                     }
@@ -332,10 +373,27 @@ fn directive(ir: &IndexedRoute, text: String) -> Directive {
     }
 }
 
+/// Belt and braces: whatever a contract says, a bound value is a plain token.
+fn plain_token(v: &str) -> bool {
+    !v.is_empty() && v.len() <= 200 && !v.starts_with('-') && v.chars().all(|c| c.is_ascii_alphanumeric() || "_./:@=+,-".contains(c))
+}
+
 fn contract_ok(c: &Contract, v: &str, root: &Path) -> bool {
+    if !plain_token(v) {
+        return false;
+    }
     match c {
         Contract::Pattern { regex } => Regex::new(regex).map(|r| r.is_match(v)).unwrap_or(false),
-        Contract::RepoPath => repo::is_safe_relative(v) && root.join(v).is_file(),
+        Contract::RepoPath => {
+            if !repo::is_safe_relative(v) {
+                return false;
+            }
+            // Resolve symlinks: the real file must still be inside the repository.
+            match (root.canonicalize(), root.join(v).canonicalize()) {
+                (Ok(r), Ok(p)) => p.starts_with(&r) && p.is_file(),
+                _ => false,
+            }
+        }
     }
 }
 
@@ -379,6 +437,9 @@ fn bind_result_route(r: &Route, output: &str, root: &Path) -> Option<String> {
 pub fn extract_json(s: &str) -> Option<Value> {
     let start = s.find('{')?;
     let end = s.rfind('}')?;
+    if end <= start {
+        return None;
+    }
     serde_json::from_str(&s[start..=end]).ok()
 }
 
