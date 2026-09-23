@@ -28,6 +28,26 @@ how strongly it may be directed, and typed slot contracts: a value from the prom
 only if it matches the contract learned from real values (`^W-\d{4}$`), and file paths only if they
 are safe, repository-relative, and exist.
 
+## Results
+
+Real **Claude Haiku 4.5** agents, headless, each in a fresh copy of a sandbox repository whose
+conventions they cannot guess. Adage learned from 18 training sessions, then two learning-loop rounds
+of held-out work items ran 18 sessions with Adage and 18 without (hooks active, directives withheld).
+Hidden tests scored every run. Round 2 learned from every earlier session.
+
+| Round 2, held-out | With Adage | Without | p (permutation) |
+| --- | ---: | ---: | ---: |
+| Turns before first edit (median) | **2** | 20 | 0.0002 |
+| Seconds to first edit (median) | **12.0** | 42.5 | 0.0001 |
+| Total turns (median) | **9** | 27.5 | < 0.001 |
+| Cost per run (mean, USD) | **0.053** | 0.135 | 0.0001 |
+| Hidden checks passed | **100%** | 78% | 0.11 (n.s. at n = 18) |
+
+Round 1 showed the loop at work: removing exploration exposed a dead end (agents that no longer read
+the Makefile tried `pytest` first: 1.44 failed runs per session). Round 2 learned it as a red route
+and it disappeared (0.00). Without Adage, 4 of 18 round-1 agents gave up asking what the ticket was.
+Full data: [demo/results](demo/results/); interactive results page published as an artifact.
+
 ## Quick start (Claude Code)
 
 ```bash
@@ -83,5 +103,7 @@ fails untouched and passes with its reference solution.
 
 ## Status
 
-v0.1: Claude Code only; tracks are local; sharing, signing enforcement, intent embeddings, and the
-OpenCode and Codex adapters are designed and spiked but not yet built. See the implementation plan.
+v0.1: Claude Code only; tracks are local. Hardened against an adversarial review (tracks are
+untrusted input; effects re-derived; bounded hot path; symlink-safe paths). Sharing and signing,
+intent embeddings, the review queue, and the OpenCode and Codex adapters are designed and spiked but
+not yet built. See the implementation plan.

@@ -41,7 +41,9 @@ h1 span { color: var(--muted); font-weight: 500; }
 .pill.live .dot { animation: pulse 1.2s infinite; background: var(--good); }
 @keyframes pulse { 50% { opacity: .3; } }
 .grid { display: grid; gap: 14px; }
-.kpis { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-bottom: 14px; }
+.kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 14px; }
+@media (max-width: 760px) { .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 440px) { .kpis { grid-template-columns: 1fr; } }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
 .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; font-weight: 700; }
 .kpi .label { color: var(--muted); font-size: 12px; font-weight: 600; }

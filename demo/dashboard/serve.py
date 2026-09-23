@@ -21,6 +21,13 @@ class H(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if self.path == "/snapshot.html" and (HERE / "snapshot.html").exists():
+            body = (HERE / "snapshot.html").read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if self.path in ("/", "/index.html"):
             body = (HERE / "index.html").read_bytes()
             self.send_response(200)
