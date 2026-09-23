@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 adage-core = { path = "../adage-core" }
 adage-tracks = { path = "../adage-tracks" }
+adage-intent = { path = "../adage-intent" }
 serde.workspace = true
 serde_json.workspace = true
 regex.workspace = true

@@ -7,6 +7,7 @@ name = "adage-cli"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-intent",
  "adage-learn",
  "adage-runtime",
  "adage-sign",
@@ -37,10 +38,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "adage-intent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "adage-learn"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-intent",
  "adage-runtime",
  "adage-tracks",
  "anyhow",
@@ -57,6 +72,7 @@ name = "adage-runtime"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-intent",
  "adage-tracks",
  "glob",
  "regex",

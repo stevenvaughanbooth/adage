@@ -213,8 +213,55 @@ pub fn validate(t: &Track) -> Result<()> {
             Trigger::AfterFailure { command, signature } if !safe_text(signature) || command.len() > 200 => {
                 bail!("{}: failure trigger contains unsafe text", ctx())
             }
+            Trigger::Intent { family, model, centroid, threshold } => {
+                validate_intent(family, model, centroid, *threshold).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
+                // An intent route directs one fixed command: no slots, so nothing from the prompt
+                // (or the track) is interpolated into what the agent reads.
+                if !matches!(r.step, Step::Run { .. }) || !r.slots.is_empty() {
+                    bail!("{}: an intent route must be a run step with no slots", ctx());
+                }
+            }
             _ => {}
         }
+    }
+    let intents = t.routes.iter().filter(|r| matches!(r.trigger, Trigger::Intent { .. })).count();
+    if intents > MAX_INTENT_ROUTES {
+        bail!("track {} has {intents} intent routes; at most {MAX_INTENT_ROUTES} are allowed", t.manifest.track.name);
+    }
+    Ok(())
+}
+
+/// `name@digest`: a model name and the first 12 hex digits of its table's SHA-256.
+fn safe_model_id(m: &str) -> bool {
+    let Some((name, digest)) = m.split_once('@') else { return false };
+    !name.is_empty()
+        && name.len() <= 48
+        && name.as_bytes()[0].is_ascii_alphanumeric()
+        && name.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || b".-".contains(&c))
+        && digest.len() == 12
+        && digest.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+}
+
+fn validate_intent(family: &str, model: &str, centroid: &[i16], threshold: f32) -> Result<()> {
+    if !safe_id(family) {
+        bail!("intent family id {family:?} is not allowed");
+    }
+    if !safe_model_id(model) {
+        bail!("intent model id {model:?} is not allowed");
+    }
+    if !(INTENT_MIN_DIM..=INTENT_MAX_DIM).contains(&centroid.len()) {
+        bail!("intent centroid has {} dimensions; {INTENT_MIN_DIM}..={INTENT_MAX_DIM} are allowed", centroid.len());
+    }
+    if centroid.iter().any(|&x| !(-10_000..=10_000).contains(&x)) {
+        bail!("intent centroid components must lie in -10000..=10000");
+    }
+    // A stored centroid is a unit vector: anything else would make the threshold meaningless.
+    let norm2: f64 = centroid.iter().map(|&x| (x as f64 / 1e4).powi(2)).sum();
+    if !(0.98..=1.02).contains(&norm2) {
+        bail!("intent centroid is not a unit vector (|c|^2 = {norm2:.3})");
+    }
+    if !threshold.is_finite() || !(INTENT_MIN_THRESHOLD..=INTENT_MAX_THRESHOLD).contains(&threshold) {
+        bail!("intent threshold {threshold} is outside {INTENT_MIN_THRESHOLD}..={INTENT_MAX_THRESHOLD}");
     }
     Ok(())
 }

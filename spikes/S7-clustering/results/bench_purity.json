@@ -1,0 +1,218 @@
+{
+ "10k/louvain": {
+  "none": {
+   "families": 29,
+   "directive_precision": 0.5727,
+   "directive_recall": 0.5142,
+   "noise_directed": 0.0105,
+   "impure_family_directed": 0.8391,
+   "wrong_directives": 420,
+   "directives": 983
+  },
+  "bar": {
+   "families": 13,
+   "directive_precision": 0.6827,
+   "directive_recall": 0.4146,
+   "noise_directed": 0.0028,
+   "impure_family_directed": 0.1609,
+   "wrong_directives": 211,
+   "directives": 665
+  },
+  "full": {
+   "families": 28,
+   "directive_precision": 0.8744,
+   "directive_recall": 0.6932,
+   "noise_directed": 0.0044,
+   "impure_family_directed": 0.2414,
+   "wrong_directives": 109,
+   "directives": 868,
+   "split_report": [
+    {
+     "cluster": 2,
+     "groups": {
+      "read-arch": 26,
+      "read-docs": 14
+     },
+     "loo_acc": 0.975,
+     "split": true
+    },
+    {
+     "cluster": 5,
+     "groups": {
+      "read-arch": 37,
+      "read-docs": 26
+     },
+     "loo_acc": 0.889,
+     "split": true
+    },
+    {
+     "cluster": 6,
+     "groups": {
+      "read-docs": 14,
+      "status": 17
+     },
+     "loo_acc": 0.806
+    },
+    {
+     "cluster": 7,
+     "groups": {
+      "read-arch": 11,
+      "read-docs": 14,
+      "setup-script": 27
+     },
+     "loo_acc": 1.0,
+     "split": true
+    },
+    {
+     "cluster": 9,
+     "groups": {
+      "deploy-runbook": 99,
+      "read-docs": 38,
+      "setup-script": 69
+     },
+     "loo_acc": 0.917,
+     "split": true
+    },
+    {
+     "cluster": 10,
+     "groups": {
+      "close": 21,
+      "lookup": 20,
+      "status": 18,
+      "triage-list": 15
+     },
+     "loo_acc": 0.77
+    },
+    {
+     "cluster": 16,
+     "groups": {
+      "pr-diff": 21,
+      "read-arch": 43,
+      "read-docs": 44
+     },
+     "loo_acc": 0.917,
+     "split": true
+    },
+    {
+     "cluster": 20,
+     "groups": {
+      "npm-outdated": 83,
+      "pip-list": 70
+     },
+     "loo_acc": 0.556
+    },
+    {
+     "cluster": 24,
+     "groups": {
+      "close": 82,
+      "status": 87
+     },
+     "loo_acc": 0.964,
+     "split": true
+    }
+   ]
+  }
+ },
+ "10k/knn_hdbscan": {
+  "none": {
+   "families": 5,
+   "directive_precision": 0.5546,
+   "directive_recall": 0.1717,
+   "noise_directed": 0.0,
+   "impure_family_directed": 0.0,
+   "wrong_directives": 151,
+   "directives": 339
+  },
+  "bar": {
+   "families": 2,
+   "directive_precision": 0.9853,
+   "directive_recall": 0.0612,
+   "noise_directed": 0.0,
+   "impure_family_directed": 0.0,
+   "wrong_directives": 1,
+   "directives": 68
+  },
+  "full": {
+   "families": 9,
+   "directive_precision": 0.9711,
+   "directive_recall": 0.2758,
+   "noise_directed": 0.0,
+   "impure_family_directed": 0.0,
+   "wrong_directives": 9,
+   "directives": 311,
+   "split_report": [
+    {
+     "cluster": 0,
+     "groups": {
+      "close": 102,
+      "lookup": 88,
+      "status": 105
+     },
+     "loo_acc": 0.929,
+     "split": true
+    },
+    {
+     "cluster": 3,
+     "groups": {
+      "ci-logs": 33,
+      "run-tests": 88
+     },
+     "loo_acc": 0.983,
+     "split": true
+    },
+    {
+     "cluster": 4,
+     "groups": {
+      "read-arch": 11,
+      "setup-script": 22
+     },
+     "loo_acc": 1.0,
+     "split": true
+    }
+   ]
+  }
+ },
+ "10k/oracle": {
+  "bar": {
+   "families": 13,
+   "directive_precision": 0.9108,
+   "directive_recall": 0.7461,
+   "noise_directed": 0.0099,
+   "impure_family_directed": 0.1954,
+   "wrong_directives": 80,
+   "directives": 897
+  }
+ },
+ "100k_per_repo/louvain": {
+  "none": {
+   "families": 342,
+   "directives": 9701,
+   "wrong_directives": 3454,
+   "repos": 10,
+   "precision_mean": 0.6441,
+   "recall_mean": 0.5911,
+   "noise_directed_mean": 0.0186,
+   "impure_directed_mean": 0.8726
+  },
+  "bar": {
+   "families": 167,
+   "directives": 6292,
+   "wrong_directives": 1268,
+   "repos": 10,
+   "precision_mean": 0.7976,
+   "recall_mean": 0.4764,
+   "noise_directed_mean": 0.0006,
+   "impure_directed_mean": 0.1591
+  },
+  "full": {
+   "families": 275,
+   "directives": 7782,
+   "wrong_directives": 1201,
+   "repos": 10,
+   "precision_mean": 0.8456,
+   "recall_mean": 0.623,
+   "noise_directed_mean": 0.0025,
+   "impure_directed_mean": 0.1594
+  }
+ }
+}

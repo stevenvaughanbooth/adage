@@ -14,7 +14,7 @@ ends with a recommendation.
 | [S4 · Directive wording](S4-directive-wording/SPIKE.md) | Which directive wordings are followed, and which trip injection defences? | D§9, F3 | 1 | ⏸ Partial (21 valid runs) — superseded in practice by the demo: the factual wording was followed in 36/36 Adage runs with zero suspicion or refusal language |
 | [S5 · Plugin packaging](S5-plugin-packaging/SPIKE.md) | How do plugin roots, data dirs, SessionStart ordering, async hooks, and plugin enumeration behave? | A8, F4, F5 | 1 | ✅ Done — all 8 questions measured; recipe in FINDINGS |
 | [S6 · SSH signing](S6-ssh-signing/SPIKE.md) | Can tracks be signed with agent-held keys and verified natively with namespaces? | A7 | 1 | ✅ Native — signs via ssh-agent and verifies in Rust |
-| [S7 · Clustering at scale](S7-clustering/SPIKE.md) | Which clustering method is deterministic and scales to hundreds of thousands of prompts? | Intent pipeline | 2 | ⏸ Not run (usage limit) — needed before intent families ship |
+| [S7 · Clustering at scale](S7-clustering/SPIKE.md) | Which clustering method is deterministic and scales to hundreds of thousands of prompts? | Intent pipeline | 2 | ✅ Pass on determinism, scale, purity; ❌ ARI ≥ 0.8 unreachable (supervised oracle 0.75) — **exact kNN + deterministic Louvain**, per repo: ARI 0.42, 300k in 8.0 min / 768 MB global, 17 s per repo; purity step lifts directive precision 0.57 → 0.87 |
 | [S8 · Normaliser coverage](S8-normaliser/SPIKE.md) | How far do tree-sitter-bash and per-command grammars get on real transcripts? | Normaliser | 2 | ✅ Pass — 98.2% normalised, 315 fixtures; promoted to adage-core |
 
 ## Conventions

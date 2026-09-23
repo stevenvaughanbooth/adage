@@ -127,7 +127,7 @@ fn learns_all_four_route_kinds_from_opencode_exports() {
         files.push(p);
     }
     let home = d.path().join("home");
-    let inputs = Inputs { transcripts: files, outcomes: BTreeMap::new(), repo_override: Some("acme-billing".into()) };
+    let inputs = Inputs { transcripts: files, outcomes: BTreeMap::new(), repo_override: Some("acme-billing".into()), models: None };
     let rep = learn(&inputs, &home.join("tracks"), &home.join("index.json"), &LearnConfig::demo()).unwrap();
     assert_eq!((rep.sessions_read, rep.sessions_used), (6, 6));
     let index = Index::load(&home.join("index.json"));

@@ -1,0 +1,29 @@
+{
+ "s2_benchmark": {
+  "top1": 0.9061,
+  "oracle": {
+   "ari": 0.7642,
+   "ari_families": 0.7785,
+   "purity": 0.8892,
+   "coverage": 0.9538,
+   "noise_recall": 0.9261,
+   "clusters": 14,
+   "n": 922,
+   "noise_recall_chatter": 0.9261
+  }
+ },
+ "scaled_10k": {
+  "top1": 0.9063,
+  "oracle": {
+   "ari": 0.7445,
+   "ari_families": 0.7771,
+   "purity": 0.8898,
+   "coverage": 0.9005,
+   "noise_recall": 0.9694,
+   "clusters": 14,
+   "n": 10000,
+   "noise_recall_oneoff": 0.9998,
+   "noise_recall_chatter": 0.8475
+  }
+ }
+}

@@ -103,6 +103,9 @@ pub struct SessionState {
     /// Stop-hook requests made this session (bounded).
     #[serde(default)]
     pub stop_requests: u32,
+    /// The intent family the latest prompt matched, carried through the session (Design §8.2.1).
+    #[serde(default)]
+    pub intent: Option<String>,
 }
 
 /// At most this many stop-hook requests per session, across all obligations.
@@ -153,11 +156,16 @@ pub struct Decision {
     pub observed: Vec<String>,
 }
 
+/// Embeds a raw prompt: `(model id, unit vector)`, or `None` when no model is available. Called
+/// only at a prompt decision point, and only when the repository has intent routes.
+pub type Embed<'a> = &'a dyn Fn(&str) -> Option<(String, Vec<f32>)>;
+
 pub struct Ctx<'a> {
     pub index: &'a Index,
     pub repo: String,
     pub root: &'a Path,
     pub table: &'a CommandTable,
+    pub embed: Option<Embed<'a>>,
 }
 
 /// The canonical template key of a command string, for matching the agent's calls.
@@ -213,7 +221,18 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     out.push(directive(ir, text));
                 }
             }
-            // 2. Known dead ends, once, at the first prompt.
+            // 2. Intent routes: the prompt means what a family means. The model is consulted only
+            //    if this repository has such routes; no model, no match (fail open).
+            if let Some((family, ir)) = match_intent(ctx, &routes, text) {
+                st.intent = Some(family);
+                if emit_ok(st, &out, &ir.route.id) {
+                    if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, ctx) {
+                        st.pending.push(Pending { route: ir.route.id.clone(), expect_key: key, expect_head: head, batches_left: FOLLOW_WINDOW });
+                        out.push(directive(ir, text));
+                    }
+                }
+            }
+            // 3. Known dead ends, once, at the first prompt.
             if st.prompts == 1 {
                 for ir in routes.iter().filter(|r| matches!(r.route.trigger, Trigger::SessionStart)) {
                     if emit_ok(st, &out, &ir.route.id) {
@@ -353,6 +372,29 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
         d.directives = out;
     }
     d
+}
+
+/// The most similar intent family whose threshold the prompt clears, if any. Ties keep the first
+/// route in index order.
+fn match_intent<'a>(ctx: &Ctx, routes: &[&'a IndexedRoute], text: &str) -> Option<(String, &'a IndexedRoute)> {
+    let intents: Vec<&'a IndexedRoute> =
+        routes.iter().copied().filter(|r| matches!(r.route.trigger, Trigger::Intent { .. })).collect();
+    if intents.is_empty() {
+        return None;
+    }
+    let (model_id, v) = (ctx.embed?)(text)?;
+    let mut best: Option<(f32, &'a String, &'a IndexedRoute)> = None;
+    for ir in intents {
+        let Trigger::Intent { family, model, centroid, threshold } = &ir.route.trigger else { continue };
+        if *model != model_id || centroid.len() != v.len() {
+            continue;
+        }
+        let s = adage_intent::cosine(&v, &adage_intent::dequantize(centroid));
+        if s >= *threshold && best.is_none_or(|b| s > b.0) {
+            best = Some((s, family, ir));
+        }
+    }
+    best.map(|(_, f, ir)| (f.clone(), ir))
 }
 
 fn push_history(st: &mut SessionState, key: String) {

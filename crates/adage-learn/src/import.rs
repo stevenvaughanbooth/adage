@@ -49,6 +49,8 @@ pub fn route_kind(id: &str) -> &'static str {
         "work-items"
     } else if id.starts_with("finish-line") {
         "finish-line"
+    } else if id.starts_with("intent-") {
+        "intents"
     } else if id.starts_with("dead-end") {
         "dead-ends"
     } else {
