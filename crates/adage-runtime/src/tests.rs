@@ -27,7 +27,12 @@ fn fixture() -> (tempfile::TempDir, Index, CommandTable) {
     let lookup_key = command_key("./scripts/wi-lookup W-1 --json", &table);
     let track = Track {
         manifest: Manifest {
-            track: TrackInfo { name: "acme/t".into(), version: "0.1.0".into(), description: String::new(), provenance: "desire-path".into() },
+            track: TrackInfo {
+                name: "acme/t".into(),
+                version: "0.1.0".into(),
+                description: String::new(),
+                provenance: "desire-path".into(),
+            },
             scope: Scope { repo: "acme".into() },
             gauge: Gauge::default(),
         },
@@ -36,7 +41,11 @@ fn fixture() -> (tempfile::TempDir, Index, CommandTable) {
                 "lookup",
                 Trigger::Prompt { span: SpanKind::Ticket },
                 Step::Run { command: "./scripts/wi-lookup {item} --json".into() },
-                vec![Slot { name: "item".into(), source: SlotSource::Prompt { span: SpanKind::Ticket }, contract: Contract::Pattern { regex: r"^W-\d{4}$".into() } }],
+                vec![Slot {
+                    name: "item".into(),
+                    source: SlotSource::Prompt { span: SpanKind::Ticket },
+                    contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
+                }],
                 Effect::Observe,
                 Aspect::Green,
             ),
@@ -44,7 +53,11 @@ fn fixture() -> (tempfile::TempDir, Index, CommandTable) {
                 "read-linked",
                 Trigger::AfterCommand { command: lookup_key },
                 Step::ReadBatch { slot: "files".into(), max: 5 },
-                vec![Slot { name: "files".into(), source: SlotSource::ResultField { field: "linked_files".into() }, contract: Contract::RepoPath }],
+                vec![Slot {
+                    name: "files".into(),
+                    source: SlotSource::ResultField { field: "linked_files".into() },
+                    contract: Contract::RepoPath,
+                }],
                 Effect::Observe,
                 Aspect::Yellow,
             ),
@@ -59,7 +72,11 @@ fn fixture() -> (tempfile::TempDir, Index, CommandTable) {
             route(
                 "dead-unittest",
                 Trigger::SessionStart,
-                Step::Avoid { avoid: "python3 -m unittest".into(), instead: "make test".into(), signature: "ACME_ENV is not set".into() },
+                Step::Avoid {
+                    avoid: "python3 -m unittest".into(),
+                    instead: "make test".into(),
+                    signature: "ACME_ENV is not set".into(),
+                },
                 vec![],
                 Effect::Verify,
                 Aspect::Red,
@@ -131,7 +148,12 @@ fn obligation_met_means_no_stop_request() {
     let (dir, index, table) = fixture();
     let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
     let mut st = SessionState::default();
-    let edit = Call { tool: "Write".into(), input: json!({ "file_path": dir.path().join("schema/a.json").to_string_lossy() }), output: String::new(), failed: false };
+    let edit = Call {
+        tool: "Write".into(),
+        input: json!({ "file_path": dir.path().join("schema/a.json").to_string_lossy() }),
+        output: String::new(),
+        failed: false,
+    };
     decide(&ctx, &mut st, &Event::Batch { calls: vec![edit] });
     let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make gen", "ok")] });
     assert!(d.judgements.iter().any(|j| matches!(j, Judgement::ObligationMet { .. })));
@@ -203,7 +225,12 @@ fn obligations_rearm_after_a_new_edit_and_stop_requests_are_bounded() {
     let (dir, index, table) = fixture();
     let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
     let mut st = SessionState::default();
-    let edit = |f: &str| Call { tool: "Edit".into(), input: json!({ "file_path": dir.path().join(f).to_string_lossy() }), output: String::new(), failed: false };
+    let edit = |f: &str| Call {
+        tool: "Edit".into(),
+        input: json!({ "file_path": dir.path().join(f).to_string_lossy() }),
+        output: String::new(),
+        failed: false,
+    };
     decide(&ctx, &mut st, &Event::Batch { calls: vec![edit("schema/a.json")] });
     decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make gen", "ok")] });
     decide(&ctx, &mut st, &Event::Batch { calls: vec![edit("schema/b.json")] });
@@ -236,7 +263,12 @@ fn holdout_records_would_continue() {
     let (dir, index, table) = fixture();
     let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
     let mut st = SessionState::default();
-    let edit = Call { tool: "Edit".into(), input: json!({ "file_path": dir.path().join("schema/a.json").to_string_lossy() }), output: String::new(), failed: false };
+    let edit = Call {
+        tool: "Edit".into(),
+        input: json!({ "file_path": dir.path().join("schema/a.json").to_string_lossy() }),
+        output: String::new(),
+        failed: false,
+    };
     decide(&ctx, &mut st, &Event::Batch { calls: vec![edit] });
     st.arm = Some(Arm::Holdout);
     let d = decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false });
@@ -276,7 +308,12 @@ fn intent_fixture(model: &str, threshold: f32) -> (tempfile::TempDir, Index, Com
     ));
     let track = Track {
         manifest: Manifest {
-            track: TrackInfo { name: "acme/t".into(), version: "0.1.0".into(), description: String::new(), provenance: "desire-path".into() },
+            track: TrackInfo {
+                name: "acme/t".into(),
+                version: "0.1.0".into(),
+                description: String::new(),
+                provenance: "desire-path".into(),
+            },
             scope: Scope { repo: "acme".into() },
             gauge: Gauge::default(),
         },

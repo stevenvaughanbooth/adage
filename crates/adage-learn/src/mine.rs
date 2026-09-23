@@ -26,7 +26,14 @@ pub struct LearnConfig {
 
 impl Default for LearnConfig {
     fn default() -> Self {
-        LearnConfig { min_support: 5, green_lower_bound: 0.8, yellow_rate: 0.5, retain_rate: 0.3, existing: BTreeSet::new(), provenance: "desire-path".into() }
+        LearnConfig {
+            min_support: 5,
+            green_lower_bound: 0.8,
+            yellow_rate: 0.5,
+            retain_rate: 0.3,
+            existing: BTreeSet::new(),
+            provenance: "desire-path".into(),
+        }
     }
 }
 
@@ -34,11 +41,22 @@ impl LearnConfig {
     /// Thresholds for small demonstrations; the report always states which were used.
     /// The rate bar for a route id: `retain_rate` if it already exists, else `yellow_rate`.
     pub fn bar(&self, id: &str) -> f64 {
-        if self.existing.contains(id) { self.retain_rate } else { self.yellow_rate }
+        if self.existing.contains(id) {
+            self.retain_rate
+        } else {
+            self.yellow_rate
+        }
     }
 
     pub fn demo() -> Self {
-        LearnConfig { min_support: 3, green_lower_bound: 0.5, yellow_rate: 0.5, retain_rate: 0.3, existing: BTreeSet::new(), provenance: "desire-path".into() }
+        LearnConfig {
+            min_support: 3,
+            green_lower_bound: 0.5,
+            yellow_rate: 0.5,
+            retain_rate: 0.3,
+            existing: BTreeSet::new(),
+            provenance: "desire-path".into(),
+        }
     }
 }
 
@@ -50,7 +68,14 @@ pub(crate) fn median(v: &mut [f64]) -> f64 {
     v[v.len() / 2]
 }
 
-pub(crate) fn aspect_for(effect: Effect, by_edit: bool, lb: f64, rate: f64, cfg: &LearnConfig, id: &str) -> Option<Aspect> {
+pub(crate) fn aspect_for(
+    effect: Effect,
+    by_edit: bool,
+    lb: f64,
+    rate: f64,
+    cfg: &LearnConfig,
+    id: &str,
+) -> Option<Aspect> {
     let max = ceiling(effect, by_edit)?;
     if lb >= cfg.green_lower_bound && max == Aspect::Green {
         Some(Aspect::Green)
@@ -91,7 +116,13 @@ pub(crate) fn argv(step: &StepObs) -> Option<&Vec<String>> {
 
 pub(crate) fn shell_join(argv: &[String]) -> String {
     argv.iter()
-        .map(|a| if a.chars().all(|c| c.is_ascii_alphanumeric() || "-_./={}:,@+".contains(c)) { a.clone() } else { format!("'{}'", a.replace('\'', "")) })
+        .map(|a| {
+            if a.chars().all(|c| c.is_ascii_alphanumeric() || "-_./={}:,@+".contains(c)) {
+                a.clone()
+            } else {
+                format!("'{}'", a.replace('\'', ""))
+            }
+        })
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -113,7 +144,11 @@ impl MaxRank for Effect {
             Effect::Author => 4,
             Effect::Publish => 5,
         };
-        if r(other) > r(self) { other } else { self }
+        if r(other) > r(self) {
+            other
+        } else {
+            self
+        }
     }
 }
 
@@ -144,7 +179,8 @@ fn runner(argv: &[String]) -> String {
 /// A failure signature safe to store and share: no absolute paths, no machine details.
 fn signature_of(line: &str) -> String {
     let parts: Vec<&str> = line.split(": ").collect();
-    let kept: Vec<&str> = parts.iter().copied().skip_while(|p| p.trim_start().starts_with('/') || p.contains("/bin/")).collect();
+    let kept: Vec<&str> =
+        parts.iter().copied().skip_while(|p| p.trim_start().starts_with('/') || p.contains("/bin/")).collect();
     let s = if kept.is_empty() { line } else { &kept.join(": ") };
     s.split_whitespace().filter(|w| !w.starts_with('/')).collect::<Vec<_>>().join(" ").chars().take(120).collect()
 }
@@ -199,13 +235,18 @@ pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             }
         }
     }
-    let Some((_head, mut best)) = cands.into_iter().max_by(|a, b| {
-        a.1.sessions.len().cmp(&b.1.sessions.len()).then_with(|| b.0.cmp(&a.0))
-    }) else {
+    let Some((_head, mut best)) =
+        cands.into_iter().max_by(|a, b| a.1.sessions.len().cmp(&b.1.sessions.len()).then_with(|| b.0.cmp(&a.0)))
+    else {
         return vec![];
     };
     // The representative command: the most common variant.
-    let command = best.variants.iter().max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0))).map(|(k, _)| k.clone()).unwrap_or_default();
+    let command = best
+        .variants
+        .iter()
+        .max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0)))
+        .map(|(k, _)| k.clone())
+        .unwrap_or_default();
     let support = best.sessions.len() as u32;
     if support < cfg.min_support {
         return vec![];
@@ -213,7 +254,10 @@ pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
     let rate = support as f64 / opportunities.max(1) as f64;
     let lb = wilson_lower(support, opportunities);
     // Re-derive the effect from the command that will actually be directed; never inherit it.
-    let effect = best.effect.unwrap_or(Effect::Environment).max_by_rank(adage_tracks::io::classify(&command, &adage_core::CommandTable::load()));
+    let effect = best
+        .effect
+        .unwrap_or(Effect::Environment)
+        .max_by_rank(adage_tracks::io::classify(&command, &adage_core::CommandTable::load()));
     let Some(aspect) = aspect_for(effect, false, lb, rate, cfg, "lookup-work-item") else { return vec![] };
     let Some(contract) = spans::ticket_contract(&best.values) else { return vec![] };
     let mut turns = best.turns.clone();
@@ -261,15 +305,18 @@ pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnCon
             .map(|obj| {
                 obj.iter()
                     .filter_map(|(k, v)| {
-                        let arr: Vec<String> = v.as_array()?.iter().filter_map(|x| x.as_str().map(str::to_string)).collect();
-                        (!arr.is_empty() && arr.iter().all(|p| p.contains('/') || p.contains('.'))).then_some((k.clone(), arr))
+                        let arr: Vec<String> =
+                            v.as_array()?.iter().filter_map(|x| x.as_str().map(str::to_string)).collect();
+                        (!arr.is_empty() && arr.iter().all(|p| p.contains('/') || p.contains('.')))
+                            .then_some((k.clone(), arr))
                     })
                     .collect()
             })
             .unwrap_or_default();
         if listed.is_empty() {
             // Plain-text output: the repository paths it mentions.
-            let paths: Vec<String> = spans::extract(output).into_iter().filter(|x| x.kind == SpanKind::Path).map(|x| x.value).collect();
+            let paths: Vec<String> =
+                spans::extract(output).into_iter().filter(|x| x.kind == SpanKind::Path).map(|x| x.value).collect();
             if !paths.is_empty() {
                 listed.push((PATHS_FIELD.to_string(), paths));
             }
@@ -306,7 +353,11 @@ pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnCon
         summary: "Read the files the work item links, together".into(),
         trigger: Trigger::AfterCommand { command: lookup_key.to_string() },
         step: Step::ReadBatch { slot: "files".into(), max: 5 },
-        slots: vec![Slot { name: "files".into(), source: SlotSource::ResultField { field }, contract: Contract::RepoPath }],
+        slots: vec![Slot {
+            name: "files".into(),
+            source: SlotSource::ResultField { field },
+            contract: Contract::RepoPath,
+        }],
         effect: Effect::Observe,
         aspect: Aspect::Yellow,
         state: RouteState::Active,
@@ -348,9 +399,13 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             if !a.call.failed || a.norm.effect != Effect::Verify {
                 continue;
             }
-            let Some(b) = s.steps.iter().skip(i + 1).take(5).find(|b| {
-                argv(b).is_some() && !b.call.failed && b.norm.effect == Effect::Verify && b.key != a.key
-            }) else {
+            let Some(b) = s
+                .steps
+                .iter()
+                .skip(i + 1)
+                .take(5)
+                .find(|b| argv(b).is_some() && !b.call.failed && b.norm.effect == Effect::Verify && b.key != a.key)
+            else {
                 continue;
             };
             let p = pairs.entry(b.key.clone()).or_default();
@@ -363,7 +418,10 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
                 *p.instead.entry(shell_join(argv(b).unwrap())).or_default() += 1;
                 if let Some(sig) = a.call.output.lines().rev().find(|l| {
                     let l = l.to_ascii_lowercase();
-                    l.contains("error") || l.contains("no module named") || l.contains("not found") || l.contains("not set")
+                    l.contains("error")
+                        || l.contains("no module named")
+                        || l.contains("not found")
+                        || l.contains("not set")
                 }) {
                     *p.signatures.entry(signature_of(sig.trim())).or_default() += 1;
                 }
@@ -380,11 +438,16 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
         let opp = p
             .avoid
             .keys()
-            .flat_map(|lit| ran.iter().filter(move |(k, _)| k.contains(lit.split_whitespace().next().unwrap_or(""))).flat_map(|(_, v)| v.iter()))
+            .flat_map(|lit| {
+                ran.iter()
+                    .filter(move |(k, _)| k.contains(lit.split_whitespace().next().unwrap_or("")))
+                    .flat_map(|(_, v)| v.iter())
+            })
             .collect::<BTreeSet<_>>()
             .len()
             .max(support as usize) as u32;
-        let top = |m: &BTreeMap<String, u32>| m.iter().max_by_key(|(_, c)| **c).map(|(k, _)| k.clone()).unwrap_or_default();
+        let top =
+            |m: &BTreeMap<String, u32>| m.iter().max_by_key(|(_, c)| **c).map(|(k, _)| k.clone()).unwrap_or_default();
         let signature = top(&p.signatures);
         // Name every failing runner, most common first (e.g. `python3 -m pytest` / `python3 -m unittest`).
         let mut runners: Vec<(&String, &u32)> = p.avoid.iter().collect();
@@ -531,7 +594,10 @@ mod tests {
         let v = |x: &[&str]| x.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         assert_eq!(runner(&v(&["python3", "-m", "pytest", "tests/a.py", "-v"])), "python3 -m pytest");
         assert_eq!(runner(&v(&["pytest", "tests/", "-v"])), "pytest");
-        assert_eq!(signature_of("/Applications/Xcode.app/x/bin/python3: No module named pytest"), "No module named pytest");
+        assert_eq!(
+            signature_of("/Applications/Xcode.app/x/bin/python3: No module named pytest"),
+            "No module named pytest"
+        );
         assert_eq!(signature_of("RuntimeError: ACME_ENV is not set"), "RuntimeError: ACME_ENV is not set");
     }
 

@@ -64,21 +64,17 @@ pub fn install(args: &[String]) -> Result<()> {
     let bin = bin.to_string_lossy().to_string();
 
     let (content, project_rel, user_path): (String, &str, fn() -> Result<PathBuf>) = match harness {
-        "claude-code" | "claude" => (
-            serde_json::to_string_pretty(&claude::settings(&bin))?,
-            ".claude/settings.local.json",
-            || home(".claude/settings.json"),
-        ),
-        "codex" => (
-            serde_json::to_string_pretty(&codex::settings(&bin))?,
-            ".codex/hooks.json",
-            || env_dir("CODEX_HOME", ".codex").map(|d| d.join("hooks.json")),
-        ),
-        "opencode" => (
-            opencode::plugin_source(&bin),
-            ".opencode/plugins/adage.js",
-            || env_dir("XDG_CONFIG_HOME", ".config").map(|d| d.join("opencode/plugins/adage.js")),
-        ),
+        "claude-code" | "claude" => {
+            (serde_json::to_string_pretty(&claude::settings(&bin))?, ".claude/settings.local.json", || {
+                home(".claude/settings.json")
+            })
+        }
+        "codex" => (serde_json::to_string_pretty(&codex::settings(&bin))?, ".codex/hooks.json", || {
+            env_dir("CODEX_HOME", ".codex").map(|d| d.join("hooks.json"))
+        }),
+        "opencode" => (opencode::plugin_source(&bin), ".opencode/plugins/adage.js", || {
+            env_dir("XDG_CONFIG_HOME", ".config").map(|d| d.join("opencode/plugins/adage.js"))
+        }),
         _ => bail!("{USAGE}"),
     };
 
@@ -88,7 +84,9 @@ pub fn install(args: &[String]) -> Result<()> {
             println!();
         }
         let target = if scope == "user" { user_path()?.display().to_string() } else { format!("<repo>/{project_rel}") };
-        eprintln!("adage install: printed only. `adage install {harness} --write --scope {scope}` would write {target}");
+        eprintln!(
+            "adage install: printed only. `adage install {harness} --write --scope {scope}` would write {target}"
+        );
         return Ok(());
     }
 
@@ -101,7 +99,9 @@ pub fn install(args: &[String]) -> Result<()> {
             None => std::env::current_dir()?,
         };
         let start = start.canonicalize().with_context(|| format!("{} does not exist", start.display()))?;
-        let root = repo::find_root(&start).with_context(|| format!("{} is not inside a git repository; pass --repo or --scope user", start.display()))?;
+        let root = repo::find_root(&start).with_context(|| {
+            format!("{} is not inside a git repository; pass --repo or --scope user", start.display())
+        })?;
         let target = root.join(project_rel);
         // A repository must not redirect the write elsewhere through a symlinked directory or file.
         for p in target.ancestors().take_while(|p| *p != root) {
@@ -111,7 +111,8 @@ pub fn install(args: &[String]) -> Result<()> {
         }
         target
     };
-    let body = if harness == "opencode" { own_file(&target, &content)? } else { merge_hooks(&target, &content, harness)? };
+    let body =
+        if harness == "opencode" { own_file(&target, &content)? } else { merge_hooks(&target, &content, harness)? };
     write_atomic(&target, &body)?;
     println!("adage install: wrote {}", target.display());
     if harness == "codex" {
@@ -134,7 +135,11 @@ fn require_person() -> Result<()> {
 fn is_ours(entry: &Value, harness: &str) -> bool {
     entry.get("hooks").and_then(|h| h.as_array()).is_some_and(|hs| {
         hs.iter().any(|h| {
-            let args: Vec<&str> = h.get("args").and_then(|a| a.as_array()).map(|a| a.iter().filter_map(|x| x.as_str()).collect()).unwrap_or_default();
+            let args: Vec<&str> = h
+                .get("args")
+                .and_then(|a| a.as_array())
+                .map(|a| a.iter().filter_map(|x| x.as_str()).collect())
+                .unwrap_or_default();
             let cmd = h.get("command").and_then(|c| c.as_str()).unwrap_or("");
             match harness {
                 "codex" => cmd.contains(" hook codex "),
@@ -149,16 +154,22 @@ pub fn merge_hooks(target: &Path, ours: &str, harness: &str) -> Result<String> {
     let ours: Value = serde_json::from_str(ours)?;
     let mut doc: Value = match std::fs::read_to_string(target) {
         Ok(s) if s.trim().is_empty() => json!({}),
-        Ok(s) => serde_json::from_str(&s).with_context(|| format!("{} is not valid JSON; not touching it", target.display()))?,
+        Ok(s) => serde_json::from_str(&s)
+            .with_context(|| format!("{} is not valid JSON; not touching it", target.display()))?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => json!({}),
         Err(e) => return Err(e).with_context(|| format!("reading {}", target.display())),
     };
-    let obj = doc.as_object_mut().with_context(|| format!("{} is not a JSON object; not touching it", target.display()))?;
+    let obj =
+        doc.as_object_mut().with_context(|| format!("{} is not a JSON object; not touching it", target.display()))?;
     let hooks = obj.entry("hooks").or_insert_with(|| json!({}));
-    let hooks = hooks.as_object_mut().with_context(|| format!("\"hooks\" in {} is not an object; not touching it", target.display()))?;
+    let hooks = hooks
+        .as_object_mut()
+        .with_context(|| format!("\"hooks\" in {} is not an object; not touching it", target.display()))?;
     for (event, entries) in ours["hooks"].as_object().into_iter().flatten() {
         let list = hooks.entry(event.clone()).or_insert_with(|| json!([]));
-        let list = list.as_array_mut().with_context(|| format!("hooks.{event} in {} is not an array; not touching it", target.display()))?;
+        let list = list
+            .as_array_mut()
+            .with_context(|| format!("hooks.{event} in {} is not an array; not touching it", target.display()))?;
         list.retain(|e| !is_ours(e, harness));
         list.extend(entries.as_array().into_iter().flatten().cloned());
     }
@@ -168,7 +179,9 @@ pub fn merge_hooks(target: &Path, ours: &str, harness: &str) -> Result<String> {
 /// The OpenCode plugin file: replaced only if absent or already Adage's.
 fn own_file(target: &Path, content: &str) -> Result<String> {
     match std::fs::read_to_string(target) {
-        Ok(s) if !s.starts_with("// Adage for OpenCode") => bail!("{} exists and is not Adage's plugin; not touching it", target.display()),
+        Ok(s) if !s.starts_with("// Adage for OpenCode") => {
+            bail!("{} exists and is not Adage's plugin; not touching it", target.display())
+        }
         _ => Ok(content.to_string()),
     }
 }

@@ -158,7 +158,10 @@ fn safe_date(s: &str) -> bool {
 
 pub fn validate(r: &Reviews) -> Result<()> {
     for (id, v) in &r.routes {
-        if id.is_empty() || id.len() > 64 || !id.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-') {
+        if id.is_empty()
+            || id.len() > 64
+            || !id.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-')
+        {
             bail!("{FILE}: route id {id:?} is not allowed");
         }
         if !safe_date(&v.on) {
@@ -234,7 +237,9 @@ pub fn reconcile(prev: Option<&Track>, reviews: &Reviews, mut mined: Vec<Route>)
         }
         let Some(m) = mined.iter_mut().find(|r| r.id == *id) else {
             if rv.decision == Decision::Rejected {
-                if let Some(p) = prev.and_then(|p| p.routes.iter().find(|r| r.id == *id && r.state == RouteState::Retired)) {
+                if let Some(p) =
+                    prev.and_then(|p| p.routes.iter().find(|r| r.id == *id && r.state == RouteState::Retired))
+                {
                     mined.push(p.clone());
                 }
             }
@@ -299,14 +304,20 @@ mod tests {
             aspect,
             state: RouteState::Active,
             exit: vec![],
-            evidence: Evidence { support, opportunities: opp, lower_bound: wilson_lower(support, opp), ..Default::default() },
+            evidence: Evidence {
+                support,
+                opportunities: opp,
+                lower_bound: wilson_lower(support, opp),
+                ..Default::default()
+            },
             authored: false,
         }
     }
 
     fn reviewed(r: &Route, d: Decision) -> Reviews {
         let mut rs = Reviews::default();
-        rs.routes.insert(r.id.clone(), Review { decision: d, on: "2026-09-22".into(), by: None, basis: basis(r, 0, 0) });
+        rs.routes
+            .insert(r.id.clone(), Review { decision: d, on: "2026-09-22".into(), by: None, basis: basis(r, 0, 0) });
         rs
     }
 
@@ -345,7 +356,12 @@ mod tests {
         retired.state = RouteState::Retired;
         let prev = Track {
             manifest: Manifest {
-                track: TrackInfo { name: "x/y".into(), version: "0.1.0".into(), description: "d".into(), provenance: "p".into() },
+                track: TrackInfo {
+                    name: "x/y".into(),
+                    version: "0.1.0".into(),
+                    description: "d".into(),
+                    provenance: "p".into(),
+                },
                 scope: Scope { repo: "x".into() },
                 gauge: Gauge::default(),
             },

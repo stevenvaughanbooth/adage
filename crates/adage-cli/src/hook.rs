@@ -4,9 +4,9 @@
 
 use crate::harness::{self, Output};
 use adage_core::{repo, CommandTable};
-use adage_runtime::{assign_arm, decide, render, Arm, Ctx, SessionState};
 use adage_intent::model::{self, StaticModel};
 use adage_intent::normalize::normalize;
+use adage_runtime::{assign_arm, decide, render, Arm, Ctx, SessionState};
 use adage_store::{spool, state, Paths};
 use adage_tracks::Index;
 use serde_json::{json, Value};

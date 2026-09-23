@@ -20,7 +20,16 @@ fn install_fixture_model(models: &Path) {
             _ => vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.05],
         })
         .collect();
-    model::write_installed(&model::dir_in(models), MODEL_ID, 8, 0, 100, &words.join("\n"), &model::safetensors_bytes(&rows)).unwrap();
+    model::write_installed(
+        &model::dir_in(models),
+        MODEL_ID,
+        8,
+        0,
+        100,
+        &words.join("\n"),
+        &model::safetensors_bytes(&rows),
+    )
+    .unwrap();
 }
 
 fn route(id: &str, trigger: Trigger, command: &str, effect: Effect) -> Route {
@@ -55,17 +64,28 @@ fn world() -> World {
     let centroid = adage_intent::quantize(&m.embed("fix the failing tests").unwrap());
     let track = Track {
         manifest: Manifest {
-            track: TrackInfo { name: "acme-intent/intents".into(), version: "0.1.0".into(), description: String::new(), provenance: "desire-path".into() },
+            track: TrackInfo {
+                name: "acme-intent/intents".into(),
+                version: "0.1.0".into(),
+                description: String::new(),
+                provenance: "desire-path".into(),
+            },
             scope: Scope { repo: "acme-intent".into() },
             gauge: Gauge::default(),
         },
         routes: vec![
-            route("intent-tests", Trigger::Intent { family: "intent-tests".into(), model: MODEL_ID.into(), centroid, threshold: 0.8 }, "make test", Effect::Verify),
+            route(
+                "intent-tests",
+                Trigger::Intent { family: "intent-tests".into(), model: MODEL_ID.into(), centroid, threshold: 0.8 },
+                "make test",
+                Effect::Verify,
+            ),
             route("dead-end-x", Trigger::SessionStart, "make test", Effect::Verify),
         ],
     };
     let mut track = track;
-    track.routes[1].step = Step::Avoid { avoid: "pytest".into(), instead: "make test".into(), signature: "ACME_ENV is not set".into() };
+    track.routes[1].step =
+        Step::Avoid { avoid: "pytest".into(), instead: "make test".into(), signature: "ACME_ENV is not set".into() };
     track.routes[1].aspect = Aspect::Red;
     io::validate(&track).unwrap();
     Index::compile(&[track]).write_atomic(&home.join("index.json")).unwrap();

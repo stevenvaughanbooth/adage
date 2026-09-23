@@ -35,11 +35,17 @@ fn rules() -> &'static Rules {
             ("PyPI token", r"\bpypi-[A-Za-z0-9_-]{50,}"),
             ("private key", r"-----BEGIN [A-Z ]*PRIVATE KEY"),
             ("JSON web token", r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}"),
-            ("credential assignment", r"(?i)\b(?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token)\s*[:=]\s*\S{8,}"),
+            (
+                "credential assignment",
+                r"(?i)\b(?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token)\s*[:=]\s*\S{8,}",
+            ),
         ];
         Rules {
             home: Regex::new(r#"(?:^|[^A-Za-z0-9_.])~/|\$HOME\b|\$\{HOME\}|/(?:Users|home)/[^/\s"']+"#).unwrap(),
-            absolute: Regex::new(r#"(?:^|[\s"'`=:,(\[{])(/[A-Za-z0-9._@+~-]+/[^\s"'`]*|[A-Za-z]:\\[^\s"'`]*|file://\S*)"#).unwrap(),
+            absolute: Regex::new(
+                r#"(?:^|[\s"'`=:,(\[{])(/[A-Za-z0-9._@+~-]+/[^\s"'`]*|[A-Za-z]:\\[^\s"'`]*|file://\S*)"#,
+            )
+            .unwrap(),
             tokens: tokens.into_iter().map(|(k, r)| (k, Regex::new(r).unwrap())).collect(),
             candidate: Regex::new(r"[A-Za-z0-9+_=-]{24,}").unwrap(),
             hex: Regex::new(r"(?:^|[^A-Za-z0-9])([0-9a-fA-F]{32,})\b").unwrap(),
@@ -77,8 +83,11 @@ pub fn scan(file: &str, text: &str, home: Option<&str>) -> Vec<Finding> {
     let home = home.filter(|h| h.len() > 1 && *h != "/");
     let mut out = Vec::new();
     for (i, line) in text.lines().enumerate() {
-        let mut push = |kind: &'static str, excerpt: String| out.push(Finding { file: file.into(), line: i + 1, kind, excerpt });
-        let home_hit = home.and_then(|h| line.find(h).map(|_| h.to_string())).or_else(|| r.home.find(line).map(|m| m.as_str().trim().to_string()));
+        let mut push =
+            |kind: &'static str, excerpt: String| out.push(Finding { file: file.into(), line: i + 1, kind, excerpt });
+        let home_hit = home
+            .and_then(|h| line.find(h).map(|_| h.to_string()))
+            .or_else(|| r.home.find(line).map(|m| m.as_str().trim().to_string()));
         if let Some(h) = home_hit {
             push("home-directory path", h);
         } else if let Some(c) = r.absolute.captures(line) {

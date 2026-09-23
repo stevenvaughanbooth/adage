@@ -8,8 +8,8 @@
 pub mod allowed_signers;
 
 pub use allowed_signers::AllowedSigner;
-pub use ssh_key::PublicKey;
 use anyhow::{bail, Context, Result};
+pub use ssh_key::PublicKey;
 use ssh_key::{HashAlg, LineEnding, PrivateKey, SshSig};
 use std::path::Path;
 use std::time::SystemTime;
@@ -90,7 +90,9 @@ pub fn sign_with_agent(msg: &[u8], namespace: &str, sock: &Path, wanted: Option<
         })
         .collect();
     let key = match wanted {
-        Some(w) => ids.into_iter().find(|k| k.key_data() == w.key_data()).context("the agent does not hold this key")?,
+        Some(w) => {
+            ids.into_iter().find(|k| k.key_data() == w.key_data()).context("the agent does not hold this key")?
+        }
         None => {
             let mut ids = ids;
             ids.sort_by_key(|k| k.algorithm() != ssh_key::Algorithm::Ed25519);
@@ -142,7 +144,13 @@ pub fn verify_embedded(msg: &[u8], namespace: &str, pem: &str) -> Result<PublicK
 
 /// Verify against allowed signers, enforcing each entry's `namespaces=`, `valid-after=` and
 /// `valid-before=` at `now`. Returns the entry that accepted the signature.
-pub fn verify(msg: &[u8], namespace: &str, pem: &str, signers: &[AllowedSigner], now: SystemTime) -> Result<AllowedSigner> {
+pub fn verify(
+    msg: &[u8],
+    namespace: &str,
+    pem: &str,
+    signers: &[AllowedSigner],
+    now: SystemTime,
+) -> Result<AllowedSigner> {
     let sig = parse_signature(pem)?;
     let mut reasons = Vec::new();
     for s in signers.iter().filter(|s| s.key.key_data() == sig.public_key()) {

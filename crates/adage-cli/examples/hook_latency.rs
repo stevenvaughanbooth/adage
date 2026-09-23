@@ -39,7 +39,11 @@ fn index(home: &Path, repo: &str, with_intent: bool, centroid: Vec<i16>, model_i
         "lookup-work-item",
         Trigger::Prompt { span: SpanKind::Ticket },
         Step::Run { command: "python3 scripts/wi-lookup {item}".into() },
-        vec![Slot { name: "item".into(), source: SlotSource::Prompt { span: SpanKind::Ticket }, contract: Contract::Pattern { regex: r"^W-\d{4}$".into() } }],
+        vec![Slot {
+            name: "item".into(),
+            source: SlotSource::Prompt { span: SpanKind::Ticket },
+            contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
+        }],
         Effect::Observe,
     )];
     if with_intent {
@@ -53,7 +57,12 @@ fn index(home: &Path, repo: &str, with_intent: bool, centroid: Vec<i16>, model_i
     }
     let t = Track {
         manifest: Manifest {
-            track: TrackInfo { name: format!("{repo}/bench"), version: "0.1.0".into(), description: String::new(), provenance: "desire-path".into() },
+            track: TrackInfo {
+                name: format!("{repo}/bench"),
+                version: "0.1.0".into(),
+                description: String::new(),
+                provenance: "desire-path".into(),
+            },
             scope: Scope { repo: repo.into() },
             gauge: Gauge::default(),
         },
@@ -72,7 +81,8 @@ fn time(bin: &str, home: &Path, repo: &Path, prompt: &str, runs: usize) -> (serd
     let mut ms = Vec::with_capacity(runs);
     let mut last = String::new();
     for i in 0..runs + 20 {
-        let payload = serde_json::json!({ "session_id": format!("bench-{i}"), "cwd": repo, "prompt": prompt }).to_string();
+        let payload =
+            serde_json::json!({ "session_id": format!("bench-{i}"), "cwd": repo, "prompt": prompt }).to_string();
         let t = Instant::now();
         let mut c = Command::new(bin)
             .args(["hook", "claude", "UserPromptSubmit"])

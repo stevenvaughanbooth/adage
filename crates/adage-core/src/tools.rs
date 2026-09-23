@@ -31,7 +31,11 @@ pub fn normalize_tool(tool: &str, input: &Value, cwd: &str, table: &CommandTable
                 pattern: s(input, "pattern"),
                 paths: vec![resolve_path(cwd, &{
                     let p = s(input, "path");
-                    if p.is_empty() { ".".to_string() } else { p }
+                    if p.is_empty() {
+                        ".".to_string()
+                    } else {
+                        p
+                    }
                 })],
             },
             Effect::Observe,
@@ -42,7 +46,11 @@ pub fn normalize_tool(tool: &str, input: &Value, cwd: &str, table: &CommandTable
                 kind: "filename".into(),
                 pattern: {
                     let p = s(input, "pattern");
-                    if p.is_empty() { "*".to_string() } else { p }
+                    if p.is_empty() {
+                        "*".to_string()
+                    } else {
+                        p
+                    }
                 },
                 paths: vec![resolve_path(cwd, ".")],
             },
@@ -51,22 +59,16 @@ pub fn normalize_tool(tool: &str, input: &Value, cwd: &str, table: &CommandTable
         ),
         "LS" => full(CanonicalAction::List { path: resolve_path(cwd, ".") }, Effect::Observe, false),
         "Bash" => normalize_shell(&s(input, "command"), cwd, table),
-        "Edit" | "MultiEdit" | "NotebookEdit" => full(
-            CanonicalAction::Edit { path: resolve_path(cwd, &s(input, "file_path")) },
-            Effect::Author,
-            true,
-        ),
-        "Write" => full(
-            CanonicalAction::Write { path: resolve_path(cwd, &s(input, "file_path")) },
-            Effect::Author,
-            true,
-        ),
+        "Edit" | "MultiEdit" | "NotebookEdit" => {
+            full(CanonicalAction::Edit { path: resolve_path(cwd, &s(input, "file_path")) }, Effect::Author, true)
+        }
+        "Write" => {
+            full(CanonicalAction::Write { path: resolve_path(cwd, &s(input, "file_path")) }, Effect::Author, true)
+        }
         "WebFetch" => full(CanonicalAction::Fetch { url: s(input, "url") }, Effect::Observe, false),
-        "WebSearch" => full(
-            CanonicalAction::Fetch { url: format!("search:{}", s(input, "query")) },
-            Effect::Observe,
-            false,
-        ),
+        "WebSearch" => {
+            full(CanonicalAction::Fetch { url: format!("search:{}", s(input, "query")) }, Effect::Observe, false)
+        }
         "Skill" => full(
             CanonicalAction::Exec { argv: vec!["skill".into(), s(input, "skill")], cwd: cwd.to_string() },
             Effect::Environment,
@@ -77,14 +79,11 @@ pub fn normalize_tool(tool: &str, input: &Value, cwd: &str, table: &CommandTable
             Effect::Environment,
             false,
         ),
-        "ToolSearch" | "SendMessage" | "AskUserQuestion" | "TodoWrite" | "TaskCreate"
-        | "TaskUpdate" | "TaskList" | "TaskStop" | "Monitor" | "ExitPlanMode" | "EnterPlanMode"
-        | "SendUserFile" | "ReadNotifications" | "Artifact" | "ScheduleWakeup" | "CronCreate"
-        | "CronDelete" | "CronList" => full(
-            CanonicalAction::Control { tool: tool.to_string() },
-            Effect::Observe,
-            false,
-        ),
+        "ToolSearch" | "SendMessage" | "AskUserQuestion" | "TodoWrite" | "TaskCreate" | "TaskUpdate" | "TaskList"
+        | "TaskStop" | "Monitor" | "ExitPlanMode" | "EnterPlanMode" | "SendUserFile" | "ReadNotifications"
+        | "Artifact" | "ScheduleWakeup" | "CronCreate" | "CronDelete" | "CronList" => {
+            full(CanonicalAction::Control { tool: tool.to_string() }, Effect::Observe, false)
+        }
         _ => {
             if let Some(rest) = tool.strip_prefix("mcp__") {
                 return full(
@@ -115,12 +114,17 @@ const MAX_PATCH_FILES: usize = 64;
 /// `Write` for an added file or a move target, `Edit` for an updated or deleted file. Codex's and
 /// OpenCode's `apply_patch` tools share the format.
 pub fn patch_files(patch: &str) -> Vec<(&'static str, String)> {
-    const MARKERS: [(&str, &str); 4] =
-        [("*** Add File: ", "Write"), ("*** Update File: ", "Edit"), ("*** Delete File: ", "Edit"), ("*** Move to: ", "Write")];
+    const MARKERS: [(&str, &str); 4] = [
+        ("*** Add File: ", "Write"),
+        ("*** Update File: ", "Edit"),
+        ("*** Delete File: ", "Edit"),
+        ("*** Move to: ", "Write"),
+    ];
     let mut out: Vec<(&'static str, String)> = Vec::new();
     for line in patch.lines() {
         let l = line.trim_end();
-        let hit = MARKERS.iter().find_map(|(marker, tool)| l.strip_prefix(marker).map(|p| (*tool, p.trim().to_string())));
+        let hit =
+            MARKERS.iter().find_map(|(marker, tool)| l.strip_prefix(marker).map(|p| (*tool, p.trim().to_string())));
         if let Some((tool, p)) = hit {
             if !p.is_empty() && p.len() <= 4096 && !out.iter().any(|(t, q)| *t == tool && *q == p) {
                 out.push((tool, p));
@@ -185,8 +189,13 @@ mod harness_tests {
     #[test]
     fn patches_name_their_files() {
         let p = "*** Begin Patch\n*** Update File: src/a.rs\n@@\n-x\n+y\n*** Add File: schema/b.json\n+{}\n*** Delete File: old.txt\n*** Update File: src/c.rs\n*** Move to: src/d.rs\n*** End Patch";
-        let want: Vec<(&str, String)> =
-            vec![("Edit", "src/a.rs".into()), ("Write", "schema/b.json".into()), ("Edit", "old.txt".into()), ("Edit", "src/c.rs".into()), ("Write", "src/d.rs".into())];
+        let want: Vec<(&str, String)> = vec![
+            ("Edit", "src/a.rs".into()),
+            ("Write", "schema/b.json".into()),
+            ("Edit", "old.txt".into()),
+            ("Edit", "src/c.rs".into()),
+            ("Write", "src/d.rs".into()),
+        ];
         assert_eq!(patch_files(p), want);
         assert!(patch_files("no markers here").is_empty());
         let many: String = (0..500).map(|i| format!("*** Add File: f{i}\n")).collect();
@@ -195,15 +204,28 @@ mod harness_tests {
 
     #[test]
     fn opencode_tools_map_to_the_canonical_vocabulary() {
-        assert_eq!(from_opencode("bash", &json!({ "command": "make test" })), vec![("Bash".to_string(), json!({ "command": "make test" }))]);
-        assert_eq!(from_opencode("read", &json!({ "filePath": "/r/a.py" })), vec![("Read".to_string(), json!({ "file_path": "/r/a.py" }))]);
+        assert_eq!(
+            from_opencode("bash", &json!({ "command": "make test" })),
+            vec![("Bash".to_string(), json!({ "command": "make test" }))]
+        );
+        assert_eq!(
+            from_opencode("read", &json!({ "filePath": "/r/a.py" })),
+            vec![("Read".to_string(), json!({ "file_path": "/r/a.py" }))]
+        );
         assert_eq!(from_opencode("apply_patch", &json!({ "patchText": "*** Add File: x.json\n" }))[0].0, "Write");
-        assert_eq!(from_opencode("bash", &json!(42)), vec![("Bash".to_string(), json!({ "command": "" }))], "hostile args never panic");
+        assert_eq!(
+            from_opencode("bash", &json!(42)),
+            vec![("Bash".to_string(), json!({ "command": "" }))],
+            "hostile args never panic"
+        );
     }
 
     #[test]
     fn codex_apply_patch_is_split_per_file() {
-        let calls = from_codex("apply_patch", &json!({ "command": "*** Begin Patch\n*** Update File: schema/a.json\n*** End Patch" }));
+        let calls = from_codex(
+            "apply_patch",
+            &json!({ "command": "*** Begin Patch\n*** Update File: schema/a.json\n*** End Patch" }),
+        );
         assert_eq!(calls, vec![("Edit".to_string(), json!({ "file_path": "schema/a.json" }))]);
         assert_eq!(from_codex("Bash", &json!({ "command": "ls" }))[0].0, "Bash");
     }

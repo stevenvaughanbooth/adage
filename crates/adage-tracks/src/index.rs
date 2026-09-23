@@ -60,7 +60,13 @@ impl Index {
         // id: keep one, and prefer first-hand evidence over an import (a live first-hand route over
         // a retired one, and a retired first-hand route over any import).
         routes.sort_by(|(ia, a), (ib, b)| {
-            (&a.repo, &a.route.id, ia, !live(&a.route), &a.track).cmp(&(&b.repo, &b.route.id, ib, !live(&b.route), &b.track))
+            (&a.repo, &a.route.id, ia, !live(&a.route), &a.track).cmp(&(
+                &b.repo,
+                &b.route.id,
+                ib,
+                !live(&b.route),
+                &b.track,
+            ))
         });
         routes.dedup_by(|(_, b), (_, a)| a.repo == b.repo && a.route.id == b.route.id);
         let mut routes: Vec<IndexedRoute> = routes.into_iter().map(|(_, r)| r).filter(|r| live(&r.route)).collect();

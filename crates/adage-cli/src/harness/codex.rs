@@ -35,7 +35,11 @@ impl Adapter for Codex {
             }
             let failure = failure || failed(resp);
             let mut cs = calls(from_codex(tool, &input), cwd, &output, failure);
-            Some(if failure && cs.len() == 1 { Event::Failure { call: cs.remove(0) } } else { Event::Batch { calls: cs } })
+            Some(if failure && cs.len() == 1 {
+                Event::Failure { call: cs.remove(0) }
+            } else {
+                Event::Batch { calls: cs }
+            })
         };
         Some(match event {
             "SessionStart" => Event::SessionStart,
@@ -50,7 +54,9 @@ impl Adapter for Codex {
             // Named in Codex's hook vocabulary but not documented, and reported never to fire
             // (openai/codex#34289). Accepted so that it works if it ever does.
             "PostToolUseFailure" => tool_call(true)?,
-            "Stop" => Event::Stop { stop_hook_active: p.get("stop_hook_active").and_then(|x| x.as_bool()).unwrap_or(false) },
+            "Stop" => {
+                Event::Stop { stop_hook_active: p.get("stop_hook_active").and_then(|x| x.as_bool()).unwrap_or(false) }
+            }
             "SessionEnd" => Event::SessionEnd,
             _ => return None,
         })
@@ -59,7 +65,9 @@ impl Adapter for Codex {
     fn render(&self, event: &str, out: Output) -> Option<String> {
         Some(match out {
             Output::Continue(reason) => json!({ "decision": "block", "reason": reason }).to_string(),
-            Output::Context(text) => json!({ "hookSpecificOutput": { "hookEventName": event, "additionalContext": text } }).to_string(),
+            Output::Context(text) => {
+                json!({ "hookSpecificOutput": { "hookEventName": event, "additionalContext": text } }).to_string()
+            }
         })
     }
 }
@@ -75,9 +83,7 @@ pub fn sh_quote(s: &str) -> String {
 
 /// A Codex `hooks.json` document. `SessionEnd` is capped at 3 seconds by Codex.
 pub fn settings(bin: &str) -> Value {
-    let h = |ev: &str, timeout: u32| {
-        json!([{ "hooks": [{ "type": "command", "command": format!("{} hook codex {ev}", sh_quote(bin)), "timeout": timeout }] }])
-    };
+    let h = |ev: &str, timeout: u32| json!([{ "hooks": [{ "type": "command", "command": format!("{} hook codex {ev}", sh_quote(bin)), "timeout": timeout }] }]);
     json!({
         "hooks": {
             "SessionStart": h("SessionStart", 5),

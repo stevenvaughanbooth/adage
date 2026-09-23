@@ -18,22 +18,20 @@ pub fn find_root(start: &Path) -> Option<PathBuf> {
 /// A stable repository key: the normalised `origin` URL if there is one, else the directory name.
 /// Clones of the same repository in different directories share a key.
 pub fn repo_key(root: &Path) -> String {
-    let origin = std::fs::read_to_string(root.join(".git/config"))
-        .ok()
-        .and_then(|cfg| {
-            let mut in_origin = false;
-            for line in cfg.lines() {
-                let l = line.trim();
-                if l.starts_with('[') {
-                    in_origin = l == r#"[remote "origin"]"#;
-                } else if in_origin {
-                    if let Some(url) = l.strip_prefix("url =") {
-                        return Some(normalise_origin(url.trim()));
-                    }
+    let origin = std::fs::read_to_string(root.join(".git/config")).ok().and_then(|cfg| {
+        let mut in_origin = false;
+        for line in cfg.lines() {
+            let l = line.trim();
+            if l.starts_with('[') {
+                in_origin = l == r#"[remote "origin"]"#;
+            } else if in_origin {
+                if let Some(url) = l.strip_prefix("url =") {
+                    return Some(normalise_origin(url.trim()));
                 }
             }
-            None
-        });
+        }
+        None
+    });
     match origin {
         Some(o) => o,
         None => root.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),

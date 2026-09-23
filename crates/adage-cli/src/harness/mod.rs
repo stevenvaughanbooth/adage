@@ -9,8 +9,8 @@ pub mod claude;
 pub mod codex;
 pub mod opencode;
 
-pub use adage_runtime::Event;
 use adage_runtime::Call;
+pub use adage_runtime::Event;
 use serde_json::Value;
 use std::path::PathBuf;
 
@@ -34,7 +34,10 @@ pub trait Adapter: Sync {
     fn name(&self) -> &'static str;
     /// Session and cwd from the native payload. `None` → do nothing.
     fn envelope(&self, p: &Value) -> Option<Envelope> {
-        Some(Envelope { session: p.get("session_id")?.as_str()?.to_string(), cwd: PathBuf::from(p.get("cwd")?.as_str()?) })
+        Some(Envelope {
+            session: p.get("session_id")?.as_str()?.to_string(),
+            cwd: PathBuf::from(p.get("cwd")?.as_str()?),
+        })
     }
     /// Native event name and payload → normalised event. `None` → do nothing.
     fn translate(&self, event: &str, p: &Value, cwd: &str) -> Option<Event>;

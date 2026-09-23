@@ -61,12 +61,14 @@ impl Adapter for Claude {
         Some(match event {
             "SessionStart" => Event::SessionStart,
             "UserPromptSubmit" => Event::Prompt { text: p.get("prompt")?.as_str()?.to_string() },
-            "PostToolBatch" => Event::Batch {
-                calls: p.get("tool_calls")?.as_array()?.iter().map(|c| call_from(c, false)).collect(),
-            },
+            "PostToolBatch" => {
+                Event::Batch { calls: p.get("tool_calls")?.as_array()?.iter().map(|c| call_from(c, false)).collect() }
+            }
             "PostToolUse" => Event::Batch { calls: vec![call_from(p, false)] },
             "PostToolUseFailure" => Event::Failure { call: call_from(p, true) },
-            "Stop" => Event::Stop { stop_hook_active: p.get("stop_hook_active").and_then(|x| x.as_bool()).unwrap_or(false) },
+            "Stop" => {
+                Event::Stop { stop_hook_active: p.get("stop_hook_active").and_then(|x| x.as_bool()).unwrap_or(false) }
+            }
             "SessionEnd" => Event::SessionEnd,
             _ => return None,
         })
@@ -75,7 +77,9 @@ impl Adapter for Claude {
     fn render(&self, event: &str, out: Output) -> Option<String> {
         Some(match out {
             Output::Continue(reason) => json!({ "decision": "block", "reason": reason }).to_string(),
-            Output::Context(text) => json!({ "hookSpecificOutput": { "hookEventName": event, "additionalContext": text } }).to_string(),
+            Output::Context(text) => {
+                json!({ "hookSpecificOutput": { "hookEventName": event, "additionalContext": text } }).to_string()
+            }
         })
     }
 

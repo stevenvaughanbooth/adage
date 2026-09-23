@@ -45,22 +45,47 @@ impl Effect {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op", rename_all = "lowercase")]
 pub enum CanonicalAction {
-    Read { path: String, range: Option<(i64, i64)> },
-    Search { kind: String, pattern: String, paths: Vec<String> },
-    List { path: String },
-    Exec { argv: Vec<String>, cwd: String },
-    Edit { path: String },
-    Write { path: String },
-    Fetch { url: String },
-    Unknown { raw: String },
+    Read {
+        path: String,
+        range: Option<(i64, i64)>,
+    },
+    Search {
+        kind: String,
+        pattern: String,
+        paths: Vec<String>,
+    },
+    List {
+        path: String,
+    },
+    Exec {
+        argv: Vec<String>,
+        cwd: String,
+    },
+    Edit {
+        path: String,
+    },
+    Write {
+        path: String,
+    },
+    Fetch {
+        url: String,
+    },
+    Unknown {
+        raw: String,
+    },
     /// Harness-control tools (tool search, messaging, questions, planning) — neither context
     /// gathering nor mutation. Recorded so sessions stay complete; never directed.
-    Control { tool: String },
+    Control {
+        tool: String,
+    },
     /// A compound construct (loop/conditional/case/subshell/function) whose *body* we
     /// successfully parsed into sub-actions, listed in `actions`. Distinct from PoC's opaque
     /// "…compound…" placeholder: the brief asks us to "decide what a loop over reads should
     /// become" rather than treat compounds as opaque.
-    Compound { kind: String, actions: Vec<Normalized> },
+    Compound {
+        kind: String,
+        actions: Vec<Normalized>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

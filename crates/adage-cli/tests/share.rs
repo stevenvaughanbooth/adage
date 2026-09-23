@@ -54,7 +54,11 @@ impl World {
         self.run("recipient", &args)
     }
     fn trust_personally(&self, pk: &ssh_key::PublicKey) {
-        std::fs::write(self.p("recipient/trusted-signers"), format!("alice@example namespaces=\"adage-track\" {}\n", adage_sign::key_line(pk))).unwrap();
+        std::fs::write(
+            self.p("recipient/trusted-signers"),
+            format!("alice@example namespaces=\"adage-track\" {}\n", adage_sign::key_line(pk)),
+        )
+        .unwrap();
     }
 }
 
@@ -89,7 +93,12 @@ fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effec
 fn track() -> Track {
     Track {
         manifest: Manifest {
-            track: TrackInfo { name: NAME.into(), version: "1.2.0".into(), description: "work items".into(), provenance: "desire-path".into() },
+            track: TrackInfo {
+                name: NAME.into(),
+                version: "1.2.0".into(),
+                description: "work items".into(),
+                provenance: "desire-path".into(),
+            },
             scope: Scope { repo: REPO.into() },
             gauge: Gauge::default(),
         },
@@ -98,14 +107,22 @@ fn track() -> Track {
                 "lookup",
                 Trigger::Prompt { span: SpanKind::Ticket },
                 Step::Run { command: "./scripts/wi-lookup {item} --json".into() },
-                vec![Slot { name: "item".into(), source: SlotSource::Prompt { span: SpanKind::Ticket }, contract: Contract::Pattern { regex: r"^W-\d{4}$".into() } }],
+                vec![Slot {
+                    name: "item".into(),
+                    source: SlotSource::Prompt { span: SpanKind::Ticket },
+                    contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
+                }],
                 Effect::Observe,
                 Aspect::Green,
             ),
             route(
                 "dead-unittest",
                 Trigger::SessionStart,
-                Step::Avoid { avoid: "python3 -m unittest".into(), instead: "make test".into(), signature: "ACME_ENV is not set".into() },
+                Step::Avoid {
+                    avoid: "python3 -m unittest".into(),
+                    instead: "make test".into(),
+                    signature: "ACME_ENV is not set".into(),
+                },
                 vec![],
                 Effect::Verify,
                 Aspect::Red,
@@ -129,7 +146,16 @@ fn share_then_add_installs_routes_at_probation() {
     let o = w.share();
     let t = text(&o);
     assert!(o.status.success(), "{t}");
-    for s in ["Included", "track.toml", "routes/lookup.yaml", "routes/dead-unittest.yaml", ".DS_Store", "hidden", "Signed:", "namespace adage-track"] {
+    for s in [
+        "Included",
+        "track.toml",
+        "routes/lookup.yaml",
+        "routes/dead-unittest.yaml",
+        ".DS_Store",
+        "hidden",
+        "Signed:",
+        "namespace adage-track",
+    ] {
         assert!(t.contains(s), "summary lacks {s:?}:\n{t}");
     }
     let mut shared: Vec<String> = walk(&w.p("out"));
@@ -177,7 +203,8 @@ fn unknown_signer_is_refused_without_trust_then_pinned() {
 
     let o = w.add(&["--trust"]);
     assert!(o.status.success(), "{}", text(&o));
-    let trust: serde_json::Value = serde_json::from_slice(&std::fs::read(w.p("recipient/trust.json")).unwrap()).unwrap();
+    let trust: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(w.p("recipient/trust.json")).unwrap()).unwrap();
     assert_eq!(trust["repos"][REPO]["signers"][0]["key"], adage_sign::key_line(&pk));
     assert!(trust["repos"][REPO]["trusted_signers_sha256"].is_null());
 
@@ -223,7 +250,11 @@ fn tampered_unsigned_wrong_namespace_and_invalid_tracks_are_refused() {
     t.routes[0].step = Step::Run { command: "gh issue close {item}".into() };
     io::write(&bad, &t).unwrap();
     let msg = adage_sign::message(&io::digest(&bad).unwrap()).unwrap();
-    std::fs::write(bad.join("track.sig"), adage_sign::sign_with_key_file(&msg, adage_sign::NAMESPACE, &key).unwrap().pem).unwrap();
+    std::fs::write(
+        bad.join("track.sig"),
+        adage_sign::sign_with_key_file(&msg, adage_sign::NAMESPACE, &key).unwrap().pem,
+    )
+    .unwrap();
     let o = w.run("recipient", &["add", bad.to_str().unwrap(), "--trust"]);
     assert!(!o.status.success());
     assert!(text(&o).contains("fails validation"), "{}", text(&o));
@@ -260,7 +291,11 @@ fn agent_sessions_and_pipes_cannot_share_or_change_trust() {
     assert!(!out.exists());
 
     assert!(w.share().status.success());
-    let o = w.cmd("recipient", &w.p("elsewhere"), &["add", out.to_str().unwrap(), "--trust"]).env("CLAUDECODE", "1").output().unwrap();
+    let o = w
+        .cmd("recipient", &w.p("elsewhere"), &["add", out.to_str().unwrap(), "--trust"])
+        .env("CLAUDECODE", "1")
+        .output()
+        .unwrap();
     assert!(!o.status.success());
     assert!(text(&o).contains("agent session"), "{}", text(&o));
     // Without a terminal, and without the explicit override.
@@ -283,7 +318,8 @@ fn repository_trusted_signers_are_approved_once_and_pinned_by_hash() {
     std::fs::create_dir_all(repo.join(".adage")).unwrap();
     std::fs::write(repo.join(".git/config"), "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n").unwrap();
     let signers = repo.join(".adage/trusted-signers");
-    std::fs::write(&signers, format!("alice@example namespaces=\"adage-track\" {}\n", adage_sign::key_line(&pk))).unwrap();
+    std::fs::write(&signers, format!("alice@example namespaces=\"adage-track\" {}\n", adage_sign::key_line(&pk)))
+        .unwrap();
     let out = w.p("out");
     let add = |extra: &[&str]| {
         let mut args = vec!["add", out.to_str().unwrap()];
@@ -296,7 +332,8 @@ fn repository_trusted_signers_are_approved_once_and_pinned_by_hash() {
     assert!(text(&o).contains("has not been approved"), "{}", text(&o));
     let o = add(&["--trust"]);
     assert!(o.status.success(), "{}", text(&o));
-    let trust: serde_json::Value = serde_json::from_slice(&std::fs::read(w.p("recipient/trust.json")).unwrap()).unwrap();
+    let trust: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(w.p("recipient/trust.json")).unwrap()).unwrap();
     assert_eq!(trust["repos"][REPO]["trusted_signers_sha256"].as_str().unwrap().len(), 64);
     assert!(add(&[]).status.success(), "approved file, unchanged");
 

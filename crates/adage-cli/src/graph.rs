@@ -72,7 +72,9 @@ fn trigger(t: &Trigger) -> Value {
 fn step(s: &Step) -> Value {
     match s {
         Step::Run { command } => json!({ "kind": "run", "label": command }),
-        Step::ReadBatch { slot, max } => json!({ "kind": "read_batch", "label": format!("read ≤{max} listed files at once"), "slot": slot }),
+        Step::ReadBatch { slot, max } => {
+            json!({ "kind": "read_batch", "label": format!("read ≤{max} listed files at once"), "slot": slot })
+        }
         Step::Avoid { avoid, instead, signature } => {
             json!({ "kind": "avoid", "label": instead, "avoid": avoid, "signature": signature })
         }
@@ -84,7 +86,8 @@ fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
     match &r.step {
         Step::Run { command } => vec![(command_key(command, table), "directs")],
         Step::Avoid { avoid, instead, .. } => {
-            let mut v: Vec<(String, &'static str)> = avoid.split(" / ").map(|a| (command_key(a.trim(), table), "avoids")).collect();
+            let mut v: Vec<(String, &'static str)> =
+                avoid.split(" / ").map(|a| (command_key(a.trim(), table), "avoids")).collect();
             v.push((command_key(instead, table), "directs"));
             v
         }
@@ -111,9 +114,11 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
             let repo = i.track.manifest.scope.repo.clone();
             let table = &table;
             i.track.routes.iter().filter_map(move |r| match &r.step {
-                Step::Avoid { avoid, .. } => {
-                    Some((repo.clone(), r.id.clone(), avoid.split(" / ").map(|a| command_key(a.trim(), table)).collect()))
-                }
+                Step::Avoid { avoid, .. } => Some((
+                    repo.clone(),
+                    r.id.clone(),
+                    avoid.split(" / ").map(|a| command_key(a.trim(), table)).collect(),
+                )),
                 _ => None,
             })
         })
@@ -158,7 +163,9 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
             for j in d["judgements"].as_array().into_iter().flatten() {
                 match (j["kind"].as_str(), j["route"].as_str()) {
                     (Some("followed"), Some(id)) => drop(sets(&mut arms, &repo, id, &arm).followed.insert(sid.clone())),
-                    (Some("obligation_met"), Some(id)) => drop(sets(&mut arms, &repo, id, &arm).met.insert(sid.clone())),
+                    (Some("obligation_met"), Some(id)) => {
+                        drop(sets(&mut arms, &repo, id, &arm).met.insert(sid.clone()))
+                    }
                     _ => {}
                 }
             }
@@ -185,7 +192,8 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
                 }
                 judged.push(json!([kind, id]));
             }
-            let keys: Vec<String> = d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str().map(String::from)).collect();
+            let keys: Vec<String> =
+                d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str().map(String::from)).collect();
             for k in &keys {
                 let e = observed.entry(k.clone()).or_default();
                 e.0 += 1;
@@ -210,7 +218,8 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
         let t = &inst.track;
         let repo = &t.manifest.scope.repo;
         for r in &t.routes {
-            let indexed = index.routes.iter().any(|x| &x.repo == repo && x.route.id == r.id && x.track == t.manifest.track.name);
+            let indexed =
+                index.routes.iter().any(|x| &x.repo == repo && x.route.id == r.id && x.track == t.manifest.track.name);
             for (k, how) in route_keys(r, &table) {
                 railed.entry(k).or_insert((r.id.clone(), how));
             }
@@ -290,7 +299,13 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
     if args.iter().any(|a| a == "--json") {
         println!("{out}");
     } else {
-        println!("adage graph: {} routes, {} sessions ({} treated, {} holdout)", routes_len(&out), spools.len(), treated, holdout);
+        println!(
+            "adage graph: {} routes, {} sessions ({} treated, {} holdout)",
+            routes_len(&out),
+            spools.len(),
+            treated,
+            holdout
+        );
         for r in out["routes"].as_array().into_iter().flatten() {
             let l = &r["live"];
             println!(
@@ -312,7 +327,8 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
 /// `python3 -m pytest` covers `python3 -m pytest {path} -v`).
 fn speaks_for(route_key: &str, observed: &str) -> bool {
     let slot = |t: &str| t.starts_with('{') && t.ends_with('}');
-    let (r, o): (Vec<&str>, Vec<&str>) = (route_key.split_whitespace().collect(), observed.split_whitespace().collect());
+    let (r, o): (Vec<&str>, Vec<&str>) =
+        (route_key.split_whitespace().collect(), observed.split_whitespace().collect());
     r.len() >= 2 && r.len() <= o.len() && r.iter().zip(&o).all(|(a, b)| a == b || (slot(a) && slot(b)))
 }
 

@@ -47,25 +47,40 @@ fn corpus(dir: &Path) -> (Vec<PathBuf>, String) {
         let schema = i < 4;
         let mut t = Tx::new(&format!("s{i}"), cwd, &format!("Pick up {id} and get it done."));
         t.bash("ls", "README.md\nMakefile\nacme\nscripts", false)
-            .bash(&format!("python3 scripts/wi-lookup {id}"), &format!("ID: {id}\nLinked files: acme/billing.py\nAcceptance: ok"), false)
+            .bash(
+                &format!("python3 scripts/wi-lookup {id}"),
+                &format!("ID: {id}\nLinked files: acme/billing.py\nAcceptance: ok"),
+                false,
+            )
             .call("Read", json!({"file_path": format!("{cwd}/acme/billing.py")}), "code", false);
         if schema {
-            t.call("Edit", json!({"file_path": format!("{cwd}/schema/invoice.json")}), "ok", false)
-                .bash("make gen", "generated", false);
+            t.call("Edit", json!({"file_path": format!("{cwd}/schema/invoice.json")}), "ok", false).bash(
+                "make gen",
+                "generated",
+                false,
+            );
         } else {
             t.call("Edit", json!({"file_path": format!("{cwd}/acme/billing.py")}), "ok", false);
         }
         // Different failing runners, one working command: must be learned as one dead end.
         let runner = ["python3 -m unittest discover -s tests", "python3 -m pytest tests", "python -m pytest -v"][i % 3];
-        t.bash(runner, "Traceback\nRuntimeError: ACME_ENV is not set — run tests with 'make test'", true)
-            .bash("make test", "OK", false);
+        t.bash(runner, "Traceback\nRuntimeError: ACME_ENV is not set — run tests with 'make test'", true).bash(
+            "make test",
+            "OK",
+            false,
+        );
         files.push(t.write(dir));
     }
     (files, cwd.to_string())
 }
 
 fn run(dir: &Path, files: &[PathBuf], home: &Path) -> Index {
-    let inputs = Inputs { transcripts: files.to_vec(), outcomes: BTreeMap::new(), repo_override: Some("acme-billing".into()), models: None };
+    let inputs = Inputs {
+        transcripts: files.to_vec(),
+        outcomes: BTreeMap::new(),
+        repo_override: Some("acme-billing".into()),
+        models: None,
+    };
     learn(&inputs, &home.join("tracks"), &home.join("index.json"), &LearnConfig::demo()).unwrap();
     let _ = dir;
     Index::load(&home.join("index.json"))

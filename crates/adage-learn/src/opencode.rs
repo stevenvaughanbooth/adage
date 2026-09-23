@@ -104,7 +104,11 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
                     let synthetic = p.get("synthetic").and_then(|x| x.as_bool()) == Some(true);
                     if synthetic {
                         note(text, &mut steered);
-                    } else if prompt.is_none() && p.get("ignored").and_then(|x| x.as_bool()) != Some(true) && !text.trim().is_empty() && !own_text(text) {
+                    } else if prompt.is_none()
+                        && p.get("ignored").and_then(|x| x.as_bool()) != Some(true)
+                        && !text.trim().is_empty()
+                        && !own_text(text)
+                    {
                         prompt = Some(text.to_string());
                     }
                 }
@@ -130,7 +134,13 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
                     };
                     note(&output, &mut steered);
                     any = true;
-                    uses.push((turns, s(p, &["tool"]).unwrap_or("").to_string(), st.get("input").cloned().unwrap_or(Value::Null), output, failed));
+                    uses.push((
+                        turns,
+                        s(p, &["tool"]).unwrap_or("").to_string(),
+                        st.get("input").cloned().unwrap_or(Value::Null),
+                        output,
+                        failed,
+                    ));
                 }
                 if any {
                     turns += 1;

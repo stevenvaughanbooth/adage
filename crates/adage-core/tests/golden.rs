@@ -174,7 +174,13 @@ fn run(path: &str, table: &CommandTable) -> i32 {
             Ok(()) => passed += 1,
             Err(msg) => {
                 failed += 1;
-                failures.push(format!("[{}] {}\n    cmd: {}\n    got: {}", fx.id, msg, fx.cmd, serde_json::to_string(&actual).unwrap_or_default()));
+                failures.push(format!(
+                    "[{}] {}\n    cmd: {}\n    got: {}",
+                    fx.id,
+                    msg,
+                    fx.cmd,
+                    serde_json::to_string(&actual).unwrap_or_default()
+                ));
             }
         }
     }

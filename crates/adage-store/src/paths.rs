@@ -16,7 +16,10 @@ impl Paths {
         let root = if cfg!(target_os = "macos") {
             home.join("Library/Application Support/Adage")
         } else {
-            std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".local/share")).join("adage")
+            std::env::var_os("XDG_DATA_HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join(".local/share"))
+                .join("adage")
         };
         Paths { root }
     }
@@ -52,7 +55,8 @@ impl Paths {
 /// Session ids come from harness payloads; never let one escape the sessions directory. Ids that
 /// had to be altered (or truncated) get a hash suffix, so two different ids never share files.
 pub fn sanitise(s: &str) -> String {
-    let clean: String = s.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).take(96).collect();
+    let clean: String =
+        s.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).take(96).collect();
     if clean == s {
         return clean;
     }

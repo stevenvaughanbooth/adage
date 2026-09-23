@@ -37,8 +37,7 @@ static TICKET: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b[A-Z][A-Z0-9]{0,9}-\d{1
 static URL: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\bhttps?://[^\s)>\]"'`]+"#).unwrap());
 static SHA: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b[0-9a-f]{7,40}\b").unwrap());
 static PATH: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?:^|[\s`'(])((?:\.{0,2}/)?[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.[A-Za-z0-9]{1,6})\b")
-        .unwrap()
+    Regex::new(r"(?:^|[\s`'(])((?:\.{0,2}/)?[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*\.[A-Za-z0-9]{1,6})\b").unwrap()
 });
 
 /// Only the first part of a text is scanned, and at most this many spans are returned: the hot

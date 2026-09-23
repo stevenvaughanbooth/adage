@@ -36,9 +36,21 @@ pub struct Pinned {
 
 /// The upstream files, pinned by digest (the digests S2 recorded).
 pub const FILES: [Pinned; 3] = [
-    Pinned { name: "model.safetensors", sha256: "f65d0f325faadc1e121c319e2faa41170d3fa07d8c89abd48ca5358d9a223de2", bytes: 30_236_760 },
-    Pinned { name: "tokenizer.json", sha256: "e67e803f624fb4d67dea1c730d06e1067e1b14d830e2c2202569e3ef0f70bb50", bytes: 683_666 },
-    Pinned { name: "config.json", sha256: "2a6ac0e9aaa356a68a5688070db78fc3a464fefe85d2f06a1905ce3718687553", bytes: 202 },
+    Pinned {
+        name: "model.safetensors",
+        sha256: "f65d0f325faadc1e121c319e2faa41170d3fa07d8c89abd48ca5358d9a223de2",
+        bytes: 30_236_760,
+    },
+    Pinned {
+        name: "tokenizer.json",
+        sha256: "e67e803f624fb4d67dea1c730d06e1067e1b14d830e2c2202569e3ef0f70bb50",
+        bytes: 683_666,
+    },
+    Pinned {
+        name: "config.json",
+        sha256: "2a6ac0e9aaa356a68a5688070db78fc3a464fefe85d2f06a1905ce3718687553",
+        bytes: 202,
+    },
 ];
 
 /// Where a pinned file is downloaded from.
@@ -160,13 +172,23 @@ impl StaticModel {
                 vocab.insert(tok.to_string(), i as u32);
             }
         }
-        ensure!(vocab.len() == m.vocab_size, "vocabulary has {} tokens, the manifest says {}", vocab.len(), m.vocab_size);
+        ensure!(
+            vocab.len() == m.vocab_size,
+            "vocabulary has {} tokens, the manifest says {}",
+            vocab.len(),
+            m.vocab_size
+        );
         ensure!((m.unk as usize) < m.vocab_size, "unk id out of range");
         let path = dir.join("model.safetensors");
         let mut file = File::open(&path)?;
         let file_len = file.metadata()?.len();
         let (offset, rows, cols) = safetensors_header(&mut file, file_len)?;
-        ensure!(rows == m.vocab_size && cols == m.dim, "table is {rows}x{cols}, the manifest says {}x{}", m.vocab_size, m.dim);
+        ensure!(
+            rows == m.vocab_size && cols == m.dim,
+            "table is {rows}x{cols}, the manifest says {}x{}",
+            m.vocab_size,
+            m.dim
+        );
         let rows_store = if load_all {
             use std::io::{Read, Seek, SeekFrom};
             file.seek(SeekFrom::Start(offset))?;
@@ -285,15 +307,35 @@ pub fn install(src: &Path, models_root: &Path) -> Result<Manifest> {
     let cfg: serde_json::Value = serde_json::from_slice(&std::fs::read(src.join("config.json"))?)?;
     let dim = cfg["hidden_dim"].as_u64().context("hidden_dim")? as usize;
     ensure!(cfg["normalize"] == true, "model does not normalise");
-    write_installed(&dir_in(models_root), &pinned_id(), dim, unk, tok.model.max_input_chars_per_word, &vocab_txt, &std::fs::read(src.join("model.safetensors"))?)
+    write_installed(
+        &dir_in(models_root),
+        &pinned_id(),
+        dim,
+        unk,
+        tok.model.max_input_chars_per_word,
+        &vocab_txt,
+        &std::fs::read(src.join("model.safetensors"))?,
+    )
 }
 
 /// Write an installed model directory (manifest, vocabulary, table) atomically. `install` uses it
 /// for the pinned model; tests use it for small fixture models.
-pub fn write_installed(dir: &Path, id: &str, dim: usize, unk: u32, max_chars: usize, vocab_txt: &str, safetensors: &[u8]) -> Result<Manifest> {
+pub fn write_installed(
+    dir: &Path,
+    id: &str,
+    dim: usize,
+    unk: u32,
+    max_chars: usize,
+    vocab_txt: &str,
+    safetensors: &[u8],
+) -> Result<Manifest> {
     let parent = dir.parent().context("model dir has no parent")?;
     std::fs::create_dir_all(parent)?;
-    let tmp = parent.join(format!(".{}.tmp{}", dir.file_name().and_then(|n| n.to_str()).unwrap_or("model"), std::process::id()));
+    let tmp = parent.join(format!(
+        ".{}.tmp{}",
+        dir.file_name().and_then(|n| n.to_str()).unwrap_or("model"),
+        std::process::id()
+    ));
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp)?;
     std::fs::write(tmp.join("vocab.txt"), vocab_txt)?;
@@ -360,7 +402,8 @@ pub(crate) mod tests {
                 _ => vec![0.0, 0.0, 0.0, 0.1],
             })
             .collect();
-        write_installed(dir, "fixture@000000000000", dim, 0, 100, &words.join("\n"), &safetensors_bytes(&rows)).unwrap();
+        write_installed(dir, "fixture@000000000000", dim, 0, 100, &words.join("\n"), &safetensors_bytes(&rows))
+            .unwrap();
         StaticModel::open(dir).unwrap()
     }
 

@@ -10,10 +10,10 @@ use adage_core::keys::{self, template_key};
 use adage_core::tools::normalize_tool;
 use adage_core::{repo, CommandTable, Normalized};
 use adage_runtime::Call;
-use serde_json::Value;
-use std::collections::{BTreeSet, HashMap};
 use once_cell::sync::Lazy;
 use regex::Regex;
+use serde_json::Value;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -144,7 +144,10 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
             Some("user") => {
                 let content = &rec["message"]["content"];
                 if let Some(s) = content.as_str() {
-                    if prompt.is_none() && rec.get("isMeta").and_then(|v| v.as_bool()) != Some(true) && !is_synthetic_prompt(s) {
+                    if prompt.is_none()
+                        && rec.get("isMeta").and_then(|v| v.as_bool()) != Some(true)
+                        && !is_synthetic_prompt(s)
+                    {
                         prompt = Some(s.to_string());
                     }
                 } else if let Some(items) = content.as_array() {

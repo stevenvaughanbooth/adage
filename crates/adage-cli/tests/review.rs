@@ -132,7 +132,12 @@ fn verify(id: &str, aspect: Aspect, support: u32) -> Route {
 fn make_track(name: &str, provenance: &str, routes: Vec<Route>) -> Track {
     Track {
         manifest: Manifest {
-            track: TrackInfo { name: name.into(), version: "0.1.0".into(), description: "test".into(), provenance: provenance.into() },
+            track: TrackInfo {
+                name: name.into(),
+                version: "0.1.0".into(),
+                description: "test".into(),
+                provenance: provenance.into(),
+            },
             scope: Scope { repo: REPO.into() },
             gauge: Gauge::default(),
         },
@@ -145,7 +150,10 @@ fn install(w: &World, reference: &str, t: &Track, reviews: &[(&Route, Decision)]
     io::write(&dir, t).unwrap();
     let mut rs = Reviews::default();
     for (r, d) in reviews {
-        rs.routes.insert(r.id.clone(), Review { decision: *d, on: "2026-09-01".into(), by: None, basis: review::basis(r, 0, 0) });
+        rs.routes.insert(
+            r.id.clone(),
+            Review { decision: *d, on: "2026-09-01".into(), by: None, basis: review::basis(r, 0, 0) },
+        );
     }
     review::save(&dir, &rs).unwrap();
     let all = io::read_all(&w.paths().tracks()).unwrap();
@@ -158,7 +166,8 @@ fn reasons(q: &Value) -> BTreeMap<(String, String), Vec<String>> {
         .unwrap()
         .iter()
         .map(|i| {
-            let kinds = i["reasons"].as_array().unwrap().iter().map(|r| r["kind"].as_str().unwrap().to_string()).collect();
+            let kinds =
+                i["reasons"].as_array().unwrap().iter().map(|r| r["kind"].as_str().unwrap().to_string()).collect();
             ((i["track"].as_str().unwrap().to_string(), i["route"].as_str().unwrap().to_string()), kinds)
         })
         .collect()
@@ -212,7 +221,12 @@ fn populated() -> World {
     }
     for i in 0..4 {
         w.session(&format!("h{i}"), REPO, "holdout", &[("derailed", "approved-same")]);
-        w.session(&format!("o{i}"), "elsewhere", "treated", &[("derailed", "approved-same"), ("derailed", "approved-same")]);
+        w.session(
+            &format!("o{i}"),
+            "elsewhere",
+            "treated",
+            &[("derailed", "approved-same"), ("derailed", "approved-same")],
+        );
     }
     w
 }
@@ -234,7 +248,9 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
     assert_eq!(got, expect, "{q:#}");
     assert_eq!(q["count"], 5);
 
-    let item = |t: &str, r: &str| q["queue"].as_array().unwrap().iter().find(|i| i["track"] == t && i["route"] == r).unwrap().clone();
+    let item = |t: &str, r: &str| {
+        q["queue"].as_array().unwrap().iter().find(|i| i["track"] == t && i["route"] == r).unwrap().clone()
+    };
     let lk = item(NAME, "lookup");
     assert_eq!(lk["aspect"], "green");
     assert_eq!(lk["ceiling"], "green");
@@ -253,11 +269,21 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
     let dr = item(NAME, "derails");
     assert_eq!(dr["runtime"]["derailed"], 6, "holdout and other repositories are not counted");
     assert!(dr["reasons"][0]["detail"].as_str().unwrap().contains("demoting"));
-    assert!(item(NAME, "approved-changed")["reasons"][0]["detail"].as_str().unwrap().starts_with("approved on 2026-09-01; since then lower bound moved"));
+    assert!(item(NAME, "approved-changed")["reasons"][0]["detail"]
+        .as_str()
+        .unwrap()
+        .starts_with("approved on 2026-09-01; since then lower bound moved"));
     assert_eq!(item("@imported/acme/work-items", "lookup")["imported"], true);
 
     let t = w.ok(&["review"]);
-    for s in ["5 route(s) await a decision", "why        new:", "Wilson lower bound", "example values: item = W-1234", "adage review <approve|reject|demote|pin> acme/work-items lookup", "(imported)"] {
+    for s in [
+        "5 route(s) await a decision",
+        "why        new:",
+        "Wilson lower bound",
+        "example values: item = W-1234",
+        "adage review <approve|reject|demote|pin> acme/work-items lookup",
+        "(imported)",
+    ] {
         assert!(t.contains(s), "listing lacks {s:?}:\n{t}");
     }
     // Deterministic: the same inputs give the same bytes.
@@ -269,7 +295,13 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
 fn decisions_change_track_files_and_index() {
     let w = populated();
     let dir = w.track_dir(NAME);
-    let lookup_in_index = |w: &World| w.index().routes.iter().find(|r| r.track == NAME && r.version != IMPORT_VERSION && r.route.id == "lookup").map(|r| r.route.clone());
+    let lookup_in_index = |w: &World| {
+        w.index()
+            .routes
+            .iter()
+            .find(|r| r.track == NAME && r.version != IMPORT_VERSION && r.route.id == "lookup")
+            .map(|r| r.route.clone())
+    };
 
     // Approve: recorded, nothing else changes, and it leaves the queue.
     let before = std::fs::read(dir.join("routes/lookup.yaml")).unwrap();
@@ -331,7 +363,15 @@ fn decisions_change_track_files_and_index() {
 #[test]
 fn promotion_never_exceeds_the_effect_ceiling() {
     let w = World::new();
-    let gen = route("gen-at-start", Trigger::SessionStart, Step::Run { command: "make gen".into() }, Effect::Regenerate, Aspect::Yellow, 10, 10);
+    let gen = route(
+        "gen-at-start",
+        Trigger::SessionStart,
+        Step::Run { command: "make gen".into() },
+        Effect::Regenerate,
+        Aspect::Yellow,
+        10,
+        10,
+    );
     let gen_edit = route(
         "gen-after-edit",
         Trigger::AfterEdit { paths: "schema/*.json".into() },
@@ -341,7 +381,15 @@ fn promotion_never_exceeds_the_effect_ceiling() {
         10,
         10,
     );
-    let env = route("env", Trigger::SessionStart, Step::Run { command: "make install".into() }, Effect::Environment, Aspect::Yellow, 10, 10);
+    let env = route(
+        "env",
+        Trigger::SessionStart,
+        Step::Run { command: "make install".into() },
+        Effect::Environment,
+        Aspect::Yellow,
+        10,
+        10,
+    );
     let red = route(
         "dead",
         Trigger::SessionStart,
@@ -354,10 +402,16 @@ fn promotion_never_exceeds_the_effect_ceiling() {
     install(&w, NAME, &make_track(NAME, "desire-path", vec![gen, gen_edit, env, red]), &[]);
     let files = |w: &World| {
         let d = w.track_dir(NAME);
-        (std::fs::read(d.join("routes/gen-at-start.yaml")).unwrap(), std::fs::read(d.join("track.toml")).unwrap(), std::fs::read(w.paths().index()).unwrap())
+        (
+            std::fs::read(d.join("routes/gen-at-start.yaml")).unwrap(),
+            std::fs::read(d.join("track.toml")).unwrap(),
+            std::fs::read(w.paths().index()).unwrap(),
+        )
     };
     let untouched = files(&w);
-    for (id, why) in [("gen-at-start", "ceiling is yellow"), ("env", "ceiling is yellow"), ("dead", "only a yellow route")] {
+    for (id, why) in
+        [("gen-at-start", "ceiling is yellow"), ("env", "ceiling is yellow"), ("dead", "only a yellow route")]
+    {
         let o = w.run(&["review", "promote", NAME, id]);
         assert!(!o.status.success(), "{id} must not be promoted");
         assert!(text(&o).contains(why), "{id}: {}", text(&o));
@@ -454,15 +508,28 @@ fn corpus(dir: &Path, n: usize) -> Vec<PathBuf> {
             let id = format!("W-10{:02}", 40 + i);
             let mut t = Tx::new(&format!("s{i:02}"), cwd, &format!("Pick up {id} and get it done."));
             t.bash("ls", "README.md\nMakefile\nacme\nscripts", false)
-                .bash(&format!("python3 scripts/wi-lookup {id}"), &format!("ID: {id}\nLinked files: acme/billing.py\nAcceptance: ok"), false)
+                .bash(
+                    &format!("python3 scripts/wi-lookup {id}"),
+                    &format!("ID: {id}\nLinked files: acme/billing.py\nAcceptance: ok"),
+                    false,
+                )
                 .call("Read", json!({"file_path": format!("{cwd}/acme/billing.py")}), "code", false);
             if i % 3 != 2 {
-                t.call("Edit", json!({"file_path": format!("{cwd}/schema/invoice.json")}), "ok", false).bash("make gen", "generated", false);
+                t.call("Edit", json!({"file_path": format!("{cwd}/schema/invoice.json")}), "ok", false).bash(
+                    "make gen",
+                    "generated",
+                    false,
+                );
             } else {
                 t.call("Edit", json!({"file_path": format!("{cwd}/acme/billing.py")}), "ok", false);
             }
-            let runner = ["python3 -m unittest discover -s tests", "python3 -m pytest tests", "python -m pytest -v"][i % 3];
-            t.bash(runner, "Traceback\nRuntimeError: ACME_ENV is not set — run tests with 'make test'", true).bash("make test", "OK", false);
+            let runner =
+                ["python3 -m unittest discover -s tests", "python3 -m pytest tests", "python -m pytest -v"][i % 3];
+            t.bash(runner, "Traceback\nRuntimeError: ACME_ENV is not set — run tests with 'make test'", true).bash(
+                "make test",
+                "OK",
+                false,
+            );
             t.write(dir)
         })
         .collect()
@@ -484,7 +551,8 @@ fn decisions_survive_relearning() {
     let work = "acme-billing/work-items";
     let dead = w.track(dead_ends).routes[0].clone();
     assert_eq!(dead.aspect, Aspect::Red);
-    let aspect = |w: &World, t: &str, id: &str| w.track(t).routes.iter().find(|r| r.id == id).map(|r| (r.aspect, r.state));
+    let aspect =
+        |w: &World, t: &str, id: &str| w.track(t).routes.iter().find(|r| r.id == id).map(|r| (r.aspect, r.state));
     assert_eq!(aspect(&w, work, "lookup-work-item").unwrap().0, Aspect::Green);
     assert_eq!(aspect(&w, work, "read-linked-files").unwrap().0, Aspect::Yellow);
     let q = reasons(&w.queue());
@@ -518,7 +586,11 @@ fn decisions_survive_relearning() {
     learn(&w, &twelve);
     assert_eq!(aspect(&w, dead_ends, &dead.id).unwrap(), (Aspect::Red, RouteState::Probation));
     assert!(w.index().routes.iter().any(|r| r.route.id == dead.id));
-    assert_eq!(aspect(&w, work, "lookup-work-item").unwrap().0, Aspect::Yellow, "a demotion holds even as evidence grows");
+    assert_eq!(
+        aspect(&w, work, "lookup-work-item").unwrap().0,
+        Aspect::Yellow,
+        "a demotion holds even as evidence grows"
+    );
     assert_eq!(aspect(&w, work, "read-linked-files").unwrap().0, Aspect::Yellow);
     let q = reasons(&w.queue());
     assert_eq!(q[&key(dead_ends, &dead.id)], vec!["resurfaced".to_string()]);

@@ -55,9 +55,7 @@ where
     file.lock()?;
     let current = newest(&file);
     let (target, seq, mut state) = match &current {
-        Some((idx, seq, payload)) => {
-            (1 - idx, seq + 1, serde_json::from_slice::<T>(payload).unwrap_or_default())
-        }
+        Some((idx, seq, payload)) => (1 - idx, seq + 1, serde_json::from_slice::<T>(payload).unwrap_or_default()),
         None => (0, 1, T::default()),
     };
     let out = f(&mut state);

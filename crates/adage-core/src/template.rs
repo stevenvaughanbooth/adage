@@ -8,18 +8,14 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 static SHA_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[0-9a-fA-F]{7,40}$").unwrap());
-static UUID_RE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-        .unwrap()
-});
+static UUID_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$").unwrap());
 static TICKET_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[A-Z]{1,6}-\d+$").unwrap());
 static PR_ISSUE_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^#\d+$").unwrap());
 static NUMBER_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^-?\d+(\.\d+)?$").unwrap());
 static URL_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-zA-Z][a-zA-Z0-9+.-]*://").unwrap());
-static PATH_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^(/|\./|\.\./|~/|[A-Za-z0-9_.-]+/)").unwrap());
-static ENV_ASSIGN_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*=").unwrap());
+static PATH_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(/|\./|\.\./|~/|[A-Za-z0-9_.-]+/)").unwrap());
+static ENV_ASSIGN_RE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*=").unwrap());
 
 /// Classify a single bare-word operand into a typed placeholder, or `None` to keep it literal
 /// (flags, subcommand names, and other low-cardinality tokens are kept literal so templates
@@ -53,7 +49,5 @@ pub fn placeholder(token: &str) -> Option<&'static str> {
 }
 
 pub fn template_argv(argv: &[String]) -> Vec<String> {
-    argv.iter()
-        .map(|t| placeholder(t).map(|p| p.to_string()).unwrap_or_else(|| t.clone()))
-        .collect()
+    argv.iter().map(|t| placeholder(t).map(|p| p.to_string()).unwrap_or_else(|| t.clone())).collect()
 }

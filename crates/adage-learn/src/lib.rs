@@ -60,7 +60,8 @@ pub fn slug(repo: &str) -> String {
 fn bump(prev: Option<&Track>, routes: &[Route]) -> (String, String) {
     let Some(p) = prev else { return ("0.1.0".into(), "created".into()) };
     let v: Vec<u64> = p.manifest.track.version.split('.').filter_map(|x| x.parse().ok()).collect();
-    let (ma, mi, pa) = (v.first().copied().unwrap_or(0), v.get(1).copied().unwrap_or(1), v.get(2).copied().unwrap_or(0));
+    let (ma, mi, pa) =
+        (v.first().copied().unwrap_or(0), v.get(1).copied().unwrap_or(1), v.get(2).copied().unwrap_or(0));
     // An intent family's centroid and threshold drift as sessions accumulate; that is evidence,
     // not a change of route.
     let shape = |r: &Route| {
@@ -155,7 +156,11 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         let mut groups: Vec<(&str, &str, Vec<Route>)> = vec![
             ("work-items", "Context gathering for prompts that name a work item", work),
             ("finish-line", "Steps this repository requires after certain edits", mine::obligation_routes(&fs, cfg)),
-            ("dead-ends", "Commands that fail in this repository, and what works instead", mine::dead_end_routes(&ds, cfg)),
+            (
+                "dead-ends",
+                "Commands that fail in this repository, and what works instead",
+                mine::dead_end_routes(&ds, cfg),
+            ),
         ];
         if let Some(m) = &model {
             let mined = intent::intent_routes(&unsteered("intents"), m, cfg);
@@ -200,7 +205,12 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
                     scope: Scope { repo: repo.clone() },
                     gauge: Gauge {
                         harness: vec!["claude-code".into()],
-                        models: ss.iter().filter_map(|s| s.model.clone()).collect::<std::collections::BTreeSet<_>>().into_iter().collect(),
+                        models: ss
+                            .iter()
+                            .filter_map(|s| s.model.clone())
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .into_iter()
+                            .collect(),
                     },
                 },
                 routes,

@@ -12,7 +12,12 @@ use std::process::{Command, Stdio};
 fn track() -> Track {
     Track {
         manifest: Manifest {
-            track: TrackInfo { name: "acme/work".into(), version: "0.1.0".into(), description: String::new(), provenance: "desire-path".into() },
+            track: TrackInfo {
+                name: "acme/work".into(),
+                version: "0.1.0".into(),
+                description: String::new(),
+                provenance: "desire-path".into(),
+            },
             scope: Scope { repo: "acme".into() },
             gauge: Gauge::default(),
         },
@@ -21,7 +26,11 @@ fn track() -> Track {
             summary: "lookup".into(),
             trigger: Trigger::Prompt { span: SpanKind::Ticket },
             step: Step::Run { command: "./scripts/wi-lookup {item}".into() },
-            slots: vec![Slot { name: "item".into(), source: SlotSource::Prompt { span: SpanKind::Ticket }, contract: Contract::Pattern { regex: r"^W-\d{4}$".into() } }],
+            slots: vec![Slot {
+                name: "item".into(),
+                source: SlotSource::Prompt { span: SpanKind::Ticket },
+                contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
+            }],
             effect: Effect::Observe,
             aspect: Aspect::Green,
             state: RouteState::Active,
@@ -67,7 +76,8 @@ impl World {
     }
     fn session(&self, id: &str, arm: &str, looks_up: bool) {
         let cwd = self.root.join("acme").to_string_lossy().to_string();
-        let base = |ev: &str| json!({ "session_id": id, "transcript_path": "/dev/null", "cwd": cwd, "hook_event_name": ev });
+        let base =
+            |ev: &str| json!({ "session_id": id, "transcript_path": "/dev/null", "cwd": cwd, "hook_event_name": ev });
         let mut p = base("UserPromptSubmit");
         p["prompt"] = json!("Pick up W-2042 please");
         self.run(&["hook", "claude", "UserPromptSubmit"], &p, arm);
@@ -97,7 +107,12 @@ fn graph_splits_judgements_by_arm() {
     assert_eq!(r["live"]["holdout"]["not_reached"], 1);
     assert_eq!(r["arms"]["treated"], json!({ "sessions": 1, "applied": 1, "followed": 1, "met": 0, "hit_avoided": 0 }));
     assert_eq!(r["arms"]["holdout"], json!({ "sessions": 1, "applied": 1, "followed": 0, "met": 0, "hit_avoided": 0 }));
-    let railed = g["observed"].as_array().unwrap().iter().find(|o| o["route"] == "lookup").expect("the lookup command is on rails");
+    let railed = g["observed"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["route"] == "lookup")
+        .expect("the lookup command is on rails");
     assert_eq!(railed["how"], "directs");
     let kinds: Vec<&str> = g["events"].as_array().unwrap().iter().filter_map(|e| e["arm"].as_str()).collect();
     assert!(kinds.contains(&"treated") && kinds.contains(&"holdout"));
@@ -106,7 +121,11 @@ fn graph_splits_judgements_by_arm() {
 #[test]
 fn graph_on_an_empty_home_is_empty_not_an_error() {
     let dir = tempfile::tempdir().unwrap();
-    let o = Command::new(env!("CARGO_BIN_EXE_adage")).args(["graph", "--json"]).env("ADAGE_HOME", dir.path()).output().unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_adage"))
+        .args(["graph", "--json"])
+        .env("ADAGE_HOME", dir.path())
+        .output()
+        .unwrap();
     assert!(o.status.success());
     let g: Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(g["routes"], json!([]));

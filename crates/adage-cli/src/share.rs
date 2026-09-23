@@ -159,7 +159,12 @@ pub fn share(args: &[String], paths: &Paths) -> Result<()> {
         let bytes = std::fs::read(src.join(rel))?;
         match std::str::from_utf8(&bytes) {
             Ok(text) => findings.extend(redact::scan(rel, text, home.as_deref())),
-            Err(_) => findings.push(redact::Finding { file: rel.clone(), line: 0, kind: "not UTF-8 text", excerpt: String::new() }),
+            Err(_) => findings.push(redact::Finding {
+                file: rel.clone(),
+                line: 0,
+                kind: "not UTF-8 text",
+                excerpt: String::new(),
+            }),
         }
         contents.push((rel.clone(), bytes));
     }
@@ -193,7 +198,12 @@ pub fn share(args: &[String], paths: &Paths) -> Result<()> {
     Ok(())
 }
 
-fn write_and_sign(stage: &Path, contents: &[(String, Vec<u8>)], track: &Track, key: Option<&Path>) -> Result<(String, adage_sign::Signed)> {
+fn write_and_sign(
+    stage: &Path,
+    contents: &[(String, Vec<u8>)],
+    track: &Track,
+    key: Option<&Path>,
+) -> Result<(String, adage_sign::Signed)> {
     for (rel, bytes) in contents {
         let p = stage.join(rel);
         std::fs::create_dir_all(p.parent().unwrap())?;
@@ -211,7 +221,14 @@ fn write_and_sign(stage: &Path, contents: &[(String, Vec<u8>)], track: &Track, k
     Ok((digest, signed))
 }
 
-fn print_summary(t: &Track, out: &Path, contents: &[(String, Vec<u8>)], l: &Listing, digest: &str, s: &adage_sign::Signed) {
+fn print_summary(
+    t: &Track,
+    out: &Path,
+    contents: &[(String, Vec<u8>)],
+    l: &Listing,
+    digest: &str,
+    s: &adage_sign::Signed,
+) {
     let m = &t.manifest;
     println!("adage share: {} @ {}  (repo {})\n", m.track.name, m.track.version, m.scope.repo);
     println!("Included — exactly these files, plus {SIG}:");
@@ -243,9 +260,15 @@ fn print_summary(t: &Track, out: &Path, contents: &[(String, Vec<u8>)], l: &List
         adage_sign::Method::Agent => "via ssh-agent",
         adage_sign::Method::KeyFile => "with key file",
     };
-    println!("Signed:  {} ({}, {how}), namespace {}", adage_sign::fingerprint(&s.key), s.key.algorithm(), adage_sign::NAMESPACE);
+    println!(
+        "Signed:  {} ({}, {how}), namespace {}",
+        adage_sign::fingerprint(&s.key),
+        s.key.algorithm(),
+        adage_sign::NAMESPACE
+    );
     println!("Wrote:   {}", out.display());
-    let principal = Some(s.key.comment()).filter(|c| !c.is_empty() && !c.contains(char::is_whitespace)).unwrap_or("adage-signer");
+    let principal =
+        Some(s.key.comment()).filter(|c| !c.is_empty() && !c.contains(char::is_whitespace)).unwrap_or("adage-signer");
     println!(
         "\nRecipients trust this signer with a line in <repo>/.adage/trusted-signers or $ADAGE_HOME/trusted-signers:\n  {principal} namespaces=\"{}\" {}",
         adage_sign::NAMESPACE,

@@ -13,15 +13,16 @@ use crate::types::{CanonicalAction, Effect, Normalized};
 /// Trailing pipeline stages that only filter keep a pipeline read-only (ported from the PoC's
 /// `PURE_FILTERS`, extended slightly).
 const PURE_FILTERS: &[&str] = &[
-    "head", "tail", "grep", "rg", "jq", "sed", "wc", "sort", "uniq", "cut", "awk", "tr", "column",
-    "cat", "less", "more", "fold", "tac", "rev",
+    "head", "tail", "grep", "rg", "jq", "sed", "wc", "sort", "uniq", "cut", "awk", "tr", "column", "cat", "less",
+    "more", "fold", "tac",
+    "rev",
     // deliberately NOT here: "xargs" — its purity depends entirely on the command it runs.
 ];
 
 /// Shell built-ins / assignment-only forms that consume no worldly action of their own.
 const NOOP_BUILTINS: &[&str] = &[
-    "cd", "export", "local", "declare", "typeset", "readonly", "unset", "set", "shift", "return",
-    "exit", "alias", "unalias", "trap", "ulimit", "umask", "wait", "fg", "bg", "jobs", "type",
+    "cd", "export", "local", "declare", "typeset", "readonly", "unset", "set", "shift", "return", "exit", "alias",
+    "unalias", "trap", "ulimit", "umask", "wait", "fg", "bg", "jobs", "type",
 ];
 
 thread_local! {
@@ -49,7 +50,11 @@ fn too_deep(s: &str) -> bool {
             ')' | '}' => depth = depth.saturating_sub(1),
             '`' => {
                 tick = !tick;
-                if tick { depth += 1 } else { depth = depth.saturating_sub(1) }
+                if tick {
+                    depth += 1
+                } else {
+                    depth = depth.saturating_sub(1)
+                }
             }
             _ => {}
         }
@@ -181,8 +186,8 @@ fn command_argv(node: Node, src: &str) -> Vec<String> {
                 }
             }
             "variable_assignment" => continue,
-            "word" | "string" | "raw_string" | "number" | "concatenation" | "simple_expansion"
-            | "expansion" | "ansi_c_string" => {
+            "word" | "string" | "raw_string" | "number" | "concatenation" | "simple_expansion" | "expansion"
+            | "ansi_c_string" => {
                 argv.push(word_text(ch, src));
             }
             _ => {}
@@ -252,10 +257,8 @@ fn read_range(cmd: &str, argv: &[String]) -> Option<(i64, i64)> {
 /// `CommandTable`) — the reason a shared flag table is wrong: `-n` is boolean for `rg` but takes
 /// a value for `head`.
 fn operands(cmd: &str, argv: &[String], table: &CommandTable) -> Vec<String> {
-    let value_flags: Vec<&str> = table
-        .get(cmd)
-        .map(|s| s.value_flags.iter().map(|s| s.as_str()).collect())
-        .unwrap_or_default();
+    let value_flags: Vec<&str> =
+        table.get(cmd).map(|s| s.value_flags.iter().map(|s| s.as_str()).collect()).unwrap_or_default();
     let mut out = Vec::new();
     let mut i = 1;
     while i < argv.len() {
@@ -304,8 +307,8 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
         // `list_services`) is classified observe by name, at reduced confidence. The miner still
         // needs session evidence before such a step can be directed.
         const READ_VERBS: [&str; 13] = [
-            "lookup", "show", "get", "list", "view", "status", "info", "describe", "search", "find",
-            "query", "print", "fetch",
+            "lookup", "show", "get", "list", "view", "status", "info", "describe", "search", "find", "query", "print",
+            "fetch",
         ];
         let lower = cmd.to_ascii_lowercase();
         let parts: Vec<&str> = lower.split(['-', '_', '.']).collect();
@@ -313,11 +316,7 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
         if read_by_name {
             return (Effect::Observe, 0.6, format!("'{cmd}' classified observe by name; unverified"));
         }
-        return (
-            Effect::Environment,
-            0.5,
-            format!("'{cmd}' has no flag-grammar entry — defaulted to environment"),
-        );
+        return (Effect::Environment, 0.5, format!("'{cmd}' has no flag-grammar entry — defaulted to environment"));
     };
 
     let mut effect = spec.effect;
@@ -749,11 +748,8 @@ fn shape_command(cmd: &str, argv: &[String], ops: &[String], cwd: &str, table: &
             };
         }
         let pattern = ops.first().cloned().unwrap_or_default();
-        let paths = if ops.len() > 1 {
-            ops[1..].iter().map(|p| resolve_path(cwd, p)).collect()
-        } else {
-            vec![cwd.to_string()]
-        };
+        let paths =
+            if ops.len() > 1 { ops[1..].iter().map(|p| resolve_path(cwd, p)).collect() } else { vec![cwd.to_string()] };
         return Normalized {
             action: CanonicalAction::Search { kind: "content".into(), pattern, paths },
             effect: Effect::Observe,
@@ -765,7 +761,10 @@ fn shape_command(cmd: &str, argv: &[String], ops: &[String], cwd: &str, table: &
 
     if matches!(cmd, "find" | "fd") {
         let ni = argv.iter().position(|a| a == "-name" || a == "-iname");
-        let pattern = ni.and_then(|i| argv.get(i + 1)).cloned().unwrap_or_else(|| ops.first().cloned().unwrap_or_else(|| "*".to_string()));
+        let pattern = ni
+            .and_then(|i| argv.get(i + 1))
+            .cloned()
+            .unwrap_or_else(|| ops.first().cloned().unwrap_or_else(|| "*".to_string()));
         return Normalized {
             action: CanonicalAction::Search {
                 kind: "filename".into(),

@@ -34,7 +34,11 @@ pub enum Arm {
 pub fn assign_arm(session: &str, holdout_share: f64) -> Arm {
     let h = Sha256::digest(format!("adage-arm:{session}").as_bytes());
     let x = u32::from_le_bytes([h[0], h[1], h[2], h[3]]) as f64 / u32::MAX as f64;
-    if x < holdout_share { Arm::Holdout } else { Arm::Treated }
+    if x < holdout_share {
+        Arm::Holdout
+    } else {
+        Arm::Treated
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -217,7 +221,12 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     continue;
                 }
                 if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, ctx) {
-                    st.pending.push(Pending { route: ir.route.id.clone(), expect_key: key, expect_head: head, batches_left: FOLLOW_WINDOW });
+                    st.pending.push(Pending {
+                        route: ir.route.id.clone(),
+                        expect_key: key,
+                        expect_head: head,
+                        batches_left: FOLLOW_WINDOW,
+                    });
                     out.push(directive(ir, text));
                 }
             }
@@ -227,7 +236,12 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 st.intent = Some(family);
                 if emit_ok(st, &out, &ir.route.id) {
                     if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, ctx) {
-                        st.pending.push(Pending { route: ir.route.id.clone(), expect_key: key, expect_head: head, batches_left: FOLLOW_WINDOW });
+                        st.pending.push(Pending {
+                            route: ir.route.id.clone(),
+                            expect_key: key,
+                            expect_head: head,
+                            batches_left: FOLLOW_WINDOW,
+                        });
                         out.push(directive(ir, text));
                     }
                 }
@@ -274,7 +288,9 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         if let Some(p) = keys::action_path(&n.action) {
                             let rel = repo::relativize(ctx.root, p);
                             for ir in routes.iter() {
-                                if let (Trigger::AfterEdit { paths }, Step::Run { command }) = (&ir.route.trigger, &ir.route.step) {
+                                if let (Trigger::AfterEdit { paths }, Step::Run { command }) =
+                                    (&ir.route.trigger, &ir.route.step)
+                                {
                                     let hit = glob::Pattern::new(paths).map(|g| g.matches(&rel)).unwrap_or(false);
                                     if !hit {
                                         continue;
@@ -340,7 +356,10 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 push_history(st, format!("{key} !failed"));
                 for ir in routes.iter() {
                     if let Trigger::AfterFailure { command, signature } = &ir.route.trigger {
-                        if *command == key && call.output.contains(signature.as_str()) && emit_ok(st, &out, &ir.route.id) {
+                        if *command == key
+                            && call.output.contains(signature.as_str())
+                            && emit_ok(st, &out, &ir.route.id)
+                        {
                             if let Some(t) = render::route_text(&ir.route, &[]) {
                                 out.push(directive(ir, t));
                             }
@@ -417,7 +436,10 @@ fn directive(ir: &IndexedRoute, text: String) -> Directive {
 
 /// Belt and braces: whatever a contract says, a bound value is a plain token.
 fn plain_token(v: &str) -> bool {
-    !v.is_empty() && v.len() <= 200 && !v.starts_with('-') && v.chars().all(|c| c.is_ascii_alphanumeric() || "_./:@=+,-".contains(c))
+    !v.is_empty()
+        && v.len() <= 200
+        && !v.starts_with('-')
+        && v.chars().all(|c| c.is_ascii_alphanumeric() || "_./:@=+,-".contains(c))
 }
 
 fn contract_ok(c: &Contract, v: &str, root: &Path) -> bool {
@@ -459,16 +481,13 @@ fn bind_result_route(r: &Route, output: &str, root: &Path) -> Option<String> {
     let Step::ReadBatch { slot, max } = &r.step else { return None };
     let s = r.slots.iter().find(|s| &s.name == slot)?;
     let SlotSource::ResultField { field } = &s.source else { return None };
-    let candidates: Vec<String> = match extract_json(output).and_then(|j| j.get(field).and_then(|v| v.as_array()).cloned()) {
-        Some(list) => list.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
-        // Plain-text output, or the "*paths" pseudo-field: repository paths it mentions.
-        None => spans::extract(output).into_iter().filter(|x| x.kind == SpanKind::Path).map(|x| x.value).collect(),
-    };
-    let files: Vec<String> = candidates
-        .into_iter()
-        .filter(|p| contract_ok(&s.contract, p, root))
-        .take(*max)
-        .collect();
+    let candidates: Vec<String> =
+        match extract_json(output).and_then(|j| j.get(field).and_then(|v| v.as_array()).cloned()) {
+            Some(list) => list.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
+            // Plain-text output, or the "*paths" pseudo-field: repository paths it mentions.
+            None => spans::extract(output).into_iter().filter(|x| x.kind == SpanKind::Path).map(|x| x.value).collect(),
+        };
+    let files: Vec<String> = candidates.into_iter().filter(|p| contract_ok(&s.contract, p, root)).take(*max).collect();
     if files.is_empty() {
         return None;
     }

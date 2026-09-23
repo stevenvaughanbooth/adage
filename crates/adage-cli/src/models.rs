@@ -15,12 +15,20 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
     match args.first().map(String::as_str) {
         Some("fetch") => fetch(paths),
         Some("install") => {
-            let dir = args.get(1).context("usage: adage models install <dir with model.safetensors, tokenizer.json, config.json>")?;
+            let dir = args
+                .get(1)
+                .context("usage: adage models install <dir with model.safetensors, tokenizer.json, config.json>")?;
             install(Path::new(dir), paths)
         }
         Some("status") | None => {
             match model::status(&paths.models()) {
-                Ok(m) => println!("intent model: {} ({} x {}) in {}", m.id, m.vocab_size, m.dim, model::dir_in(&paths.models()).display()),
+                Ok(m) => println!(
+                    "intent model: {} ({} x {}) in {}",
+                    m.id,
+                    m.vocab_size,
+                    m.dim,
+                    model::dir_in(&paths.models()).display()
+                ),
                 Err(e) => println!("intent model: {e:#}"),
             }
             Ok(())

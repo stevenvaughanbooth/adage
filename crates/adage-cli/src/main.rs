@@ -84,7 +84,9 @@ fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         _ => {
-            println!("usage: adage <learn|status|report|graph|review|share|add|install|models|hooks-config|version|hook>");
+            println!(
+                "usage: adage <learn|status|report|graph|review|share|add|install|models|hooks-config|version|hook>"
+            );
             Ok(())
         }
     }
@@ -107,9 +109,9 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         i += 1;
     }
     if let Some(dir) = flag(args, "--claude-projects").or_else(|| {
-        transcripts.is_empty().then(|| {
-            std::env::var("HOME").map(|h| format!("{h}/.claude/projects")).unwrap_or_default()
-        })
+        transcripts
+            .is_empty()
+            .then(|| std::env::var("HOME").map(|h| format!("{h}/.claude/projects")).unwrap_or_default())
     }) {
         let prefix = flag(args, "--cwd-prefix");
         for p in adage_learn::import::discover(std::path::Path::new(&dir)) {
@@ -161,10 +163,13 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
 
 fn status(paths: &Paths) -> Result<()> {
     let tracks = io::read_all(&paths.tracks())?;
-    let has_intents = tracks.iter().any(|t| t.routes.iter().any(|r| matches!(r.trigger, adage_tracks::Trigger::Intent { .. })));
+    let has_intents =
+        tracks.iter().any(|t| t.routes.iter().any(|r| matches!(r.trigger, adage_tracks::Trigger::Intent { .. })));
     match adage_intent::model::StaticModel::open(&adage_intent::model::dir_in(&paths.models())) {
         Ok(m) => println!("intent model: {}", m.id),
-        Err(_) if has_intents => println!("intent model: not installed, so intent routes will not fire (`adage models fetch`)"),
+        Err(_) if has_intents => {
+            println!("intent model: not installed, so intent routes will not fire (`adage models fetch`)")
+        }
         Err(_) => {}
     }
     if tracks.is_empty() {

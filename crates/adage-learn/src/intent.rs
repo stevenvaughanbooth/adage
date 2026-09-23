@@ -51,9 +51,10 @@ fn candidates(s: &Session) -> Vec<Cand> {
             // A failing verify run is still the first step of a fix (a red test run is how it
             // starts) — unless the session then switched to a different verify command that
             // worked, which makes it a dead end, not a route.
-            let switched = disc.iter().skip(i + 1).any(|b| {
-                argv(b).is_some() && !b.call.failed && b.norm.effect == Effect::Verify && b.key != st.key
-            });
+            let switched = disc
+                .iter()
+                .skip(i + 1)
+                .any(|b| argv(b).is_some() && !b.call.failed && b.norm.effect == Effect::Verify && b.key != st.key);
             if st.norm.effect != Effect::Verify || switched {
                 continue;
             }
@@ -168,12 +169,19 @@ pub fn intent_routes(sessions: &[&Session], model: &StaticModel, cfg: &LearnConf
             turns.push(x.turn as f64);
             who.insert(items[i].session.id.clone());
         }
-        let command = variants.iter().max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0))).map(|(k, _)| k.clone()).unwrap_or_default();
+        let command = variants
+            .iter()
+            .max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0)))
+            .map(|(k, _)| k.clone())
+            .unwrap_or_default();
         let observed = group.rsplit('|').next().and_then(Effect::parse).unwrap_or(Effect::Environment);
         // Re-derive the effect from the command that will be directed; never inherit it.
         let effect = observed.max_by_rank(io::classify(&command, &table));
         let base = format!("intent-{}", stable(&[&group]));
-        let id = (1..).map(|k| if k == 1 { base.clone() } else { format!("{base}-{k}") }).find(|x| !ids.contains(x)).unwrap();
+        let id = (1..)
+            .map(|k| if k == 1 { base.clone() } else { format!("{base}-{k}") })
+            .find(|x| !ids.contains(x))
+            .unwrap();
         let Some(aspect) = aspect_for(effect, false, lb, rate, cfg, &id) else { continue };
         let route = Route {
             id: id.clone(),
@@ -202,7 +210,12 @@ pub fn intent_routes(sessions: &[&Session], model: &StaticModel, cfg: &LearnConf
         // Anything a track could not carry (an unsafe command, say) is dropped here, not later.
         let probe = Track {
             manifest: Manifest {
-                track: TrackInfo { name: "probe/intents".into(), version: "0.0.0".into(), description: String::new(), provenance: String::new() },
+                track: TrackInfo {
+                    name: "probe/intents".into(),
+                    version: "0.0.0".into(),
+                    description: String::new(),
+                    provenance: String::new(),
+                },
                 scope: Scope { repo: String::new() },
                 gauge: Gauge::default(),
             },

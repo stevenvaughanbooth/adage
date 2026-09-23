@@ -59,11 +59,7 @@ fn build_spec(raw: RawCommand) -> CommandSpec {
             Some((re, e))
         })
         .collect();
-    let subcommands = raw
-        .subcommands
-        .into_iter()
-        .map(|sc| (sc.name.clone(), build_spec(sc)))
-        .collect();
+    let subcommands = raw.subcommands.into_iter().map(|sc| (sc.name.clone(), build_spec(sc))).collect();
     CommandSpec {
         effect,
         value_flags: raw.value_flags,
@@ -79,11 +75,7 @@ impl CommandTable {
     pub fn load() -> CommandTable {
         const RAW: &str = include_str!("../data/commands.toml");
         let raw: RawTable = toml::from_str(RAW).expect("data/commands.toml must parse");
-        let commands = raw
-            .commands
-            .into_iter()
-            .map(|c| (c.name.clone(), build_spec(c)))
-            .collect();
+        let commands = raw.commands.into_iter().map(|c| (c.name.clone(), build_spec(c))).collect();
         CommandTable { commands }
     }
 

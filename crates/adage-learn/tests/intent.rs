@@ -69,7 +69,16 @@ fn install_fixture_model(models: &Path) {
         vocab.push(w);
         rows.push(axis(2, 0.05, 0));
     }
-    model::write_installed(&model::dir_in(models), "fixture@000000000000", dim, 0, 100, &vocab.join("\n"), &model::safetensors_bytes(&rows)).unwrap();
+    model::write_installed(
+        &model::dir_in(models),
+        "fixture@000000000000",
+        dim,
+        0,
+        100,
+        &vocab.join("\n"),
+        &model::safetensors_bytes(&rows),
+    )
+    .unwrap();
 }
 
 const TEST_PROMPTS: [&str; 8] = [
@@ -106,9 +115,12 @@ fn corpus(dir: &Path) -> Vec<PathBuf> {
     }
     for (i, p) in DOC_PROMPTS.iter().enumerate() {
         let mut t = Tx::new(&format!("d{i}"), p);
-        t.bash("git status", "clean", false)
-            .bash("./scripts/show-docs", "docs/index.md\ndocs/api.md", false)
-            .call("Edit", json!({"file_path": format!("{CWD}/docs/api.md")}), "ok", false);
+        t.bash("git status", "clean", false).bash("./scripts/show-docs", "docs/index.md\ndocs/api.md", false).call(
+            "Edit",
+            json!({"file_path": format!("{CWD}/docs/api.md")}),
+            "ok",
+            false,
+        );
         files.push(t.write(dir));
     }
     for (i, p) in CHAT.iter().enumerate() {
@@ -120,7 +132,12 @@ fn corpus(dir: &Path) -> Vec<PathBuf> {
 }
 
 fn run(files: &[PathBuf], home: &Path, models: Option<PathBuf>) -> (Report, Index) {
-    let inputs = Inputs { transcripts: files.to_vec(), outcomes: BTreeMap::new(), repo_override: Some("acme-docs".into()), models };
+    let inputs = Inputs {
+        transcripts: files.to_vec(),
+        outcomes: BTreeMap::new(),
+        repo_override: Some("acme-docs".into()),
+        models,
+    };
     let rep = learn(&inputs, &home.join("tracks"), &home.join("index.json"), &LearnConfig::demo()).unwrap();
     (rep, Index::load(&home.join("index.json")))
 }
@@ -141,7 +158,13 @@ fn mines_intent_routes_and_the_runtime_matches_new_phrasings() {
     assert_eq!(rep.repos["acme-docs"].intent_families, 2, "chit-chat never becomes a usable family");
 
     let found = intents(&index);
-    let cmds: Vec<String> = found.iter().map(|r| match &r.step { Step::Run { command } => command.clone(), _ => unreachable!() }).collect();
+    let cmds: Vec<String> = found
+        .iter()
+        .map(|r| match &r.step {
+            Step::Run { command } => command.clone(),
+            _ => unreachable!(),
+        })
+        .collect();
     assert_eq!(found.len(), 2, "{cmds:?}");
     assert!(cmds.contains(&"make test".to_string()), "{cmds:?}");
     assert!(cmds.contains(&"scripts/show-docs".to_string()), "{cmds:?}");
@@ -161,13 +184,16 @@ fn mines_intent_routes_and_the_runtime_matches_new_phrasings() {
 
     // Runtime: a phrasing never seen in training finds its family; chit-chat finds nothing.
     let m = StaticModel::open(&model::dir_in(&models)).unwrap();
-    let embed = |t: &str| -> Option<(String, Vec<f32>)> { Some((m.id.clone(), m.embed(&adage_intent::normalize::normalize(t))?)) };
+    let embed = |t: &str| -> Option<(String, Vec<f32>)> {
+        Some((m.id.clone(), m.embed(&adage_intent::normalize::normalize(t))?))
+    };
     let root = tempfile::tempdir().unwrap();
     let table = CommandTable::load();
     let ctx = Ctx { index: &index, repo: "acme-docs".into(), root: root.path(), table: &table, embed: Some(&embed) };
     let d1 = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "Broken tests again! Fix?".into() });
     assert!(d1.directives.iter().any(|x| x.text.contains("make test")), "{:?}", d1.directives);
-    let d2 = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "Could you update the README docs".into() });
+    let d2 =
+        decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "Could you update the README docs".into() });
     assert!(d2.directives.iter().any(|x| x.text.contains("scripts/show-docs")), "{:?}", d2.directives);
     let d3 = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "thanks, coffee?".into() });
     assert!(d3.directives.is_empty());

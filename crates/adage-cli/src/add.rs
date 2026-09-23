@@ -11,13 +11,13 @@
 
 use crate::share::{describe_step, list_files, require_person, SIG};
 use adage_core::repo::{find_root, repo_key};
+use adage_sign::PublicKey;
 use adage_sign::{allowed_signers, fingerprint, key_line, NAMESPACE};
 use adage_store::Paths;
 use adage_tracks::{index::IMPORTED_DIR, io, Aspect, Index, RouteState, Track};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use adage_sign::PublicKey;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -77,9 +77,15 @@ fn decide(paths: &Paths, repo: &str, msg: &[u8], pem: &str, signer: &PublicKey, 
 
     let personal = paths.root.join("trusted-signers");
     if personal.is_file() {
-        let s = allowed_signers::parse(&std::fs::read_to_string(&personal)?).with_context(|| personal.display().to_string())?;
+        let s = allowed_signers::parse(&std::fs::read_to_string(&personal)?)
+            .with_context(|| personal.display().to_string())?;
         match adage_sign::verify(msg, NAMESPACE, pem, &s, now) {
-            Ok(e) => return Ok(Decision { how: format!("{} in {}", e.principals.join(","), personal.display()), record: None }),
+            Ok(e) => {
+                return Ok(Decision {
+                    how: format!("{} in {}", e.principals.join(","), personal.display()),
+                    record: None,
+                })
+            }
             Err(e) if adage_sign::lists_key(&s, signer) => bail!("refusing: {e:#} ({})", personal.display()),
             Err(_) => {}
         }
@@ -95,7 +101,8 @@ fn decide(paths: &Paths, repo: &str, msg: &[u8], pem: &str, signer: &PublicKey, 
     let (file_hash, file_signers) = match &repo_file {
         Some(p) => {
             let bytes = std::fs::read(p)?;
-            let s = allowed_signers::parse(&String::from_utf8_lossy(&bytes)).with_context(|| p.display().to_string())?;
+            let s =
+                allowed_signers::parse(&String::from_utf8_lossy(&bytes)).with_context(|| p.display().to_string())?;
             (Some(io::hex(&Sha256::digest(&bytes))), Some(s))
         }
         None => (None, None),
@@ -142,7 +149,10 @@ fn decide(paths: &Paths, repo: &str, msg: &[u8], pem: &str, signer: &PublicKey, 
     }
 
     if pin_matches && pinned.signers.iter().any(|s| s.key == key_line(signer)) {
-        return Ok(Decision { how: format!("approved earlier on this machine for {repo} ({})", trust_path(paths).display()), record: None });
+        return Ok(Decision {
+            how: format!("approved earlier on this machine for {repo} ({})", trust_path(paths).display()),
+            record: None,
+        });
     }
     if trust {
         approve(&mut store);
@@ -240,7 +250,8 @@ fn install(stage: &Path, src: &Path, paths: &Paths, trust: bool) -> Result<()> {
     println!("  routes     imported at probation; never green on import (O2):");
     for (r, before) in imported.routes.iter().zip(was) {
         let aspect = format!("{:?}", r.aspect).to_lowercase();
-        let note = if before != r.aspect { format!(" (was {})", format!("{before:?}").to_lowercase()) } else { String::new() };
+        let note =
+            if before != r.aspect { format!(" (was {})", format!("{before:?}").to_lowercase()) } else { String::new() };
         println!("    {:<22} {aspect}{note:<12} {}", r.id, describe_step(&r.step));
     }
     println!("index generation {}, {} routes", index.generation, index.routes.len());
@@ -289,11 +300,19 @@ mod tests {
         };
         let t = Track {
             manifest: Manifest {
-                track: TrackInfo { name: "a/b".into(), version: "1.0.0".into(), description: "d".into(), provenance: "desire-path".into() },
+                track: TrackInfo {
+                    name: "a/b".into(),
+                    version: "1.0.0".into(),
+                    description: "d".into(),
+                    provenance: "desire-path".into(),
+                },
                 scope: Scope { repo: "a".into() },
                 gauge: Gauge::default(),
             },
-            routes: vec![route("live", Aspect::Green, RouteState::Active), route("gone", Aspect::Yellow, RouteState::Retired)],
+            routes: vec![
+                route("live", Aspect::Green, RouteState::Active),
+                route("gone", Aspect::Yellow, RouteState::Retired),
+            ],
         };
         let (t, was) = at_probation(t);
         assert_eq!(was, vec![Aspect::Green, Aspect::Yellow]);

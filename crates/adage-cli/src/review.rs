@@ -22,7 +22,9 @@ use adage_learn::LearnConfig;
 use adage_runtime::{render, SessionState};
 use adage_store::{spool, state, Paths};
 use adage_tracks::review::{self, aspect_str, Decision, Review, Reviews};
-use adage_tracks::{ceiling, index, io, wilson_lower, Aspect, Contract, Index, Route, RouteState, Step, Track, Trigger};
+use adage_tracks::{
+    ceiling, index, io, wilson_lower, Aspect, Contract, Index, Route, RouteState, Step, Track, Trigger,
+};
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -47,7 +49,9 @@ pub(crate) struct Installed {
 pub fn review(args: &[String], paths: &Paths) -> Result<()> {
     match args.first().map(String::as_str) {
         None | Some("list") | Some("--json") => list(paths, args.iter().any(|a| a == "--json")),
-        Some(verb @ ("approve" | "reject" | "retire" | "demote" | "promote" | "pin")) => decide(verb, &args[1..], paths),
+        Some(verb @ ("approve" | "reject" | "retire" | "demote" | "promote" | "pin")) => {
+            decide(verb, &args[1..], paths)
+        }
         _ => bail!("{USAGE}"),
     }
 }
@@ -101,7 +105,8 @@ fn resolve<'a>(all: &'a [Installed], spec: &str) -> Result<&'a Installed> {
 fn judgements(paths: &Paths) -> BTreeMap<(String, String), (u32, u32)> {
     let mut out: BTreeMap<(String, String), (u32, u32)> = BTreeMap::new();
     let Ok(rd) = std::fs::read_dir(paths.sessions()) else { return out };
-    let mut spools: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "spool")).collect();
+    let mut spools: Vec<PathBuf> =
+        rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "spool")).collect();
     spools.sort();
     for p in spools {
         let st: SessionState = state::read(&p.with_extension("state")).unwrap_or_default();
@@ -195,7 +200,9 @@ pub(crate) fn preview(t: &Track, r: &Route) -> (String, BTreeMap<String, String>
     let mut bound = BTreeMap::new();
     for s in &r.slots {
         let v = match (&s.contract, &r.step) {
-            (Contract::RepoPath, Step::ReadBatch { slot, .. }) if *slot == s.name => Some("src/example_a.py, src/example_b.py".to_string()),
+            (Contract::RepoPath, Step::ReadBatch { slot, .. }) if *slot == s.name => {
+                Some("src/example_a.py, src/example_b.py".to_string())
+            }
             (Contract::RepoPath, _) => Some("src/example.py".to_string()),
             (Contract::Pattern { regex }, _) => example_for(regex),
         };
@@ -204,7 +211,8 @@ pub(crate) fn preview(t: &Track, r: &Route) -> (String, BTreeMap<String, String>
         }
     }
     let pairs: Vec<(String, String)> = bound.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-    let body = render::route_text(r, &pairs).unwrap_or_else(|| "(this route cannot be rendered safely; Adage would say nothing)".into());
+    let body = render::route_text(r, &pairs)
+        .unwrap_or_else(|| "(this route cannot be rendered safely; Adage would say nothing)".into());
     let m = &t.manifest.track;
     (render::wrap(&m.name, &m.version, &r.id, r.aspect, &body), bound)
 }
@@ -257,7 +265,10 @@ fn queue<'a>(all: &'a [Installed], judged: &BTreeMap<(String, String), (u32, u32
             if delivered && r.aspect != Aspect::Red && n >= MIN_JUDGED && wilson_lower(derailed, n) >= DERAIL_BAR {
                 let advice = if r.aspect == Aspect::Green { "consider demoting it" } else { "consider retiring it" };
                 let since = if rv.is_some() { " since the last decision" } else { "" };
-                reasons.push(("derailing", format!("agents left this route in {derailed} of {n} treated sessions{since}; {advice}")));
+                reasons.push((
+                    "derailing",
+                    format!("agents left this route in {derailed} of {n} treated sessions{since}; {advice}"),
+                ));
             }
             if !reasons.is_empty() {
                 items.push(Item { inst, route: r, reasons, followed, derailed });
@@ -312,7 +323,10 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     for it in &items {
         let (t, r, e) = (&it.inst.track, it.route, &it.route.evidence);
         let origin = if it.inst.imported { "  (imported)" } else { "" };
-        println!("{} @ {}  {}   [{}]{origin}", it.inst.reference, t.manifest.track.version, r.id, t.manifest.scope.repo);
+        println!(
+            "{} @ {}  {}   [{}]{origin}",
+            it.inst.reference, t.manifest.track.version, r.id, t.manifest.scope.repo
+        );
         for (kind, detail) in &it.reasons {
             println!("  why        {kind}: {detail}");
         }
@@ -334,7 +348,10 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
         let ex = if examples.is_empty() {
             String::new()
         } else {
-            format!(" (example values: {})", examples.iter().map(|(k, v)| format!("{k} = {v}")).collect::<Vec<_>>().join(", "))
+            format!(
+                " (example values: {})",
+                examples.iter().map(|(k, v)| format!("{k} = {v}")).collect::<Vec<_>>().join(", ")
+            )
         };
         println!("  directive{ex}");
         for line in directive.lines() {
@@ -365,10 +382,14 @@ fn verbs(r: &Route) -> Vec<&'static str> {
 /// green bar: the local first-hand evidence Design O2 requires before an import may be green.
 fn first_hand<'a>(all: &'a [Installed], repo: &str, id: &str) -> Option<&'a Route> {
     let bar = LearnConfig::default();
-    all.iter()
-        .filter(|i| !i.imported && i.track.manifest.scope.repo == repo)
-        .flat_map(|i| i.track.routes.iter())
-        .find(|r| r.id == id && live(r.state) && r.evidence.support >= bar.min_support && r.evidence.lower_bound >= bar.green_lower_bound)
+    all.iter().filter(|i| !i.imported && i.track.manifest.scope.repo == repo).flat_map(|i| i.track.routes.iter()).find(
+        |r| {
+            r.id == id
+                && live(r.state)
+                && r.evidence.support >= bar.min_support
+                && r.evidence.lower_bound >= bar.green_lower_bound
+        },
+    )
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -380,7 +401,8 @@ enum Bump {
 
 fn bumped(v: &str, b: Bump) -> String {
     let p: Vec<u64> = v.split('.').map(|x| x.parse().unwrap_or(0)).collect();
-    let (ma, mi, pa) = (p.first().copied().unwrap_or(0), p.get(1).copied().unwrap_or(0), p.get(2).copied().unwrap_or(0));
+    let (ma, mi, pa) =
+        (p.first().copied().unwrap_or(0), p.get(1).copied().unwrap_or(0), p.get(2).copied().unwrap_or(0));
     match b {
         Bump::Patch => format!("{ma}.{mi}.{}", pa + 1),
         Bump::Minor => format!("{ma}.{}.0", mi + 1),
@@ -448,7 +470,11 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         }
         "promote" => {
             if r.aspect != Aspect::Yellow || !live(r.state) {
-                bail!("{route_id} is {} ({}); only a yellow route in service can be promoted", aspect_str(r.aspect), lower(r.state));
+                bail!(
+                    "{route_id} is {} ({}); only a yellow route in service can be promoted",
+                    aspect_str(r.aspect),
+                    lower(r.state)
+                );
             }
             if ceiling(r.effect, by_edit(r)) != Some(Aspect::Green) {
                 bail!(
@@ -476,7 +502,8 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         }
         _ => bail!("{USAGE}"),
     };
-    let (followed, derailed) = judgements(paths).get(&(repo.clone(), route_id.to_string())).copied().unwrap_or_default();
+    let (followed, derailed) =
+        judgements(paths).get(&(repo.clone(), route_id.to_string())).copied().unwrap_or_default();
     let basis = review::basis(r, followed, derailed);
     let after = r.clone();
     reviews.routes.insert(route_id.to_string(), Review { decision, on: review::today(), by, basis });

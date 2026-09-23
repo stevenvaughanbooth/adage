@@ -5,8 +5,8 @@
 //! subcommands stay literal: `make gen` and `./scripts/wi-lookup {id}` must remain distinguishable.
 
 use crate::template::placeholder;
-use std::path::Path;
 use crate::types::{CanonicalAction, Normalized};
+use std::path::Path;
 
 pub fn op_name(a: &CanonicalAction) -> &'static str {
     match a {
@@ -57,7 +57,11 @@ pub fn template_key(a: &CanonicalAction) -> String {
         CanonicalAction::Edit { .. } => "edit {path}".to_string(),
         CanonicalAction::Write { .. } => "write {path}".to_string(),
         CanonicalAction::Fetch { url } => {
-            if url.starts_with("search:") { "fetch {query}".into() } else { "fetch {url}".into() }
+            if url.starts_with("search:") {
+                "fetch {query}".into()
+            } else {
+                "fetch {url}".into()
+            }
         }
         CanonicalAction::Unknown { .. } => "unknown".to_string(),
         CanonicalAction::Control { tool } => format!("control {tool}"),
@@ -183,8 +187,7 @@ mod tests {
 
     #[test]
     fn command_word_stays_literal() {
-        let argv: Vec<String> =
-            ["./scripts/wi-lookup", "W-2042", "--json"].iter().map(|s| s.to_string()).collect();
+        let argv: Vec<String> = ["./scripts/wi-lookup", "W-2042", "--json"].iter().map(|s| s.to_string()).collect();
         assert_eq!(template_command(&argv), vec!["./scripts/wi-lookup", "{id}", "--json"]);
     }
 }

@@ -37,8 +37,8 @@ pub fn read(dir: &Path) -> Result<Track> {
         files.sort();
         for p in files {
             if p.extension().is_some_and(|x| x == "yaml") {
-                let r: Route = serde_yaml::from_str(&std::fs::read_to_string(&p)?)
-                    .with_context(|| format!("{}", p.display()))?;
+                let r: Route =
+                    serde_yaml::from_str(&std::fs::read_to_string(&p)?).with_context(|| format!("{}", p.display()))?;
                 routes.push(r);
             }
         }
@@ -83,13 +83,20 @@ pub fn slot_refs(command: &str) -> Vec<String> {
 
 fn safe_id(id: &str) -> bool {
     let b = id.as_bytes();
-    !b.is_empty() && b.len() <= 64 && b[0].is_ascii_alphanumeric() && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
+    !b.is_empty()
+        && b.len() <= 64
+        && b[0].is_ascii_alphanumeric()
+        && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
 }
 
 fn safe_name(n: &str) -> bool {
     n.len() <= 128
         && n.split('/').count() <= 2
-        && n.split('/').all(|p| !p.is_empty() && p.as_bytes()[0].is_ascii_alphanumeric() && p.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || b"._-".contains(&c)))
+        && n.split('/').all(|p| {
+            !p.is_empty()
+                && p.as_bytes()[0].is_ascii_alphanumeric()
+                && p.bytes().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || b"._-".contains(&c))
+        })
 }
 
 /// Directed commands are plain argv: no shell operators, substitutions, redirections, or quoting.
@@ -99,11 +106,16 @@ fn safe_command(c: &str) -> bool {
 
 /// Free text rendered to the agent (failure signatures): printable, no quotes or shell syntax.
 fn safe_text(t: &str) -> bool {
-    t.len() <= 160 && !t.chars().any(|c| c.is_control() || "`<>\"\\$;|&{}".contains(c) || c == '\u{2028}' || c == '\u{2029}')
+    t.len() <= 160
+        && !t.chars().any(|c| c.is_control() || "`<>\"\\$;|&{}".contains(c) || c == '\u{2028}' || c == '\u{2029}')
 }
 
 fn safe_glob(g: &str) -> bool {
-    !g.is_empty() && g.len() <= 120 && !g.starts_with('/') && !g.contains("..") && g.chars().all(|c| c.is_ascii_alphanumeric() || "_./*-".contains(c))
+    !g.is_empty()
+        && g.len() <= 120
+        && !g.starts_with('/')
+        && !g.contains("..")
+        && g.chars().all(|c| c.is_ascii_alphanumeric() || "_./*-".contains(c))
 }
 
 fn rank(e: Effect) -> u8 {
@@ -121,7 +133,11 @@ fn rank(e: Effect) -> u8 {
 /// strongest effect of any action in the command wins.
 pub fn classify(command: &str, table: &CommandTable) -> Effect {
     let filled = regex::Regex::new(r"\{[a-z_][a-z0-9_]*\}").unwrap().replace_all(command, "X-1");
-    normalize_shell(&filled, "/repo", table).iter().map(|n| n.effect).max_by_key(|e| rank(*e)).unwrap_or(Effect::Environment)
+    normalize_shell(&filled, "/repo", table)
+        .iter()
+        .map(|n| n.effect)
+        .max_by_key(|e| rank(*e))
+        .unwrap_or(Effect::Environment)
 }
 
 /// A contract must reject values that could carry shell syntax, whitespace, traversal, or flags.

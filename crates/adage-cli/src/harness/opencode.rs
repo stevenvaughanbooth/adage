@@ -25,7 +25,9 @@ impl Adapter for OpenCode {
 
     fn translate(&self, event: &str, p: &Value, cwd: &str) -> Option<Event> {
         let s = |k: &str| p.get(k).and_then(|v| v.as_str()).unwrap_or("");
-        let native = || from_opencode(p.get("tool").and_then(|v| v.as_str()).unwrap_or(""), p.get("args").unwrap_or(&Value::Null));
+        let native = || {
+            from_opencode(p.get("tool").and_then(|v| v.as_str()).unwrap_or(""), p.get("args").unwrap_or(&Value::Null))
+        };
         Some(match event {
             "session.created" => Event::SessionStart,
             "chat.message" => {
@@ -54,7 +56,9 @@ impl Adapter for OpenCode {
                 }
                 Event::Failure { call: cs.remove(0) }
             }
-            "session.idle" => Event::Stop { stop_hook_active: p.get("stop_hook_active").and_then(|x| x.as_bool()).unwrap_or(false) },
+            "session.idle" => {
+                Event::Stop { stop_hook_active: p.get("stop_hook_active").and_then(|x| x.as_bool()).unwrap_or(false) }
+            }
             "session.deleted" => Event::SessionEnd,
             _ => return None,
         })
