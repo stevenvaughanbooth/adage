@@ -99,9 +99,17 @@ fn safe_name(n: &str) -> bool {
         })
 }
 
-/// Directed commands are plain argv: no shell operators, substitutions, redirections, or quoting.
+/// Directed commands are plain argv: no shell operators, substitutions, redirections, or quoting,
+/// and no path outside the repository (absolute, or with a `..` segment), in an argument or in a
+/// flag's value.
 fn safe_command(c: &str) -> bool {
-    !c.is_empty() && c.len() <= 200 && c.chars().all(|ch| ch.is_ascii_alphanumeric() || " _./:=@,+{}-".contains(ch))
+    let inside = |part: &str| !part.starts_with('/') && !part.split('/').any(|seg| seg == "..");
+    // Words separated by single spaces: a blank or padded command renders as nothing.
+    !c.is_empty()
+        && c.len() <= 200
+        && c.split(' ').all(|t| !t.is_empty())
+        && c.chars().all(|ch| ch.is_ascii_alphanumeric() || " _./:=@,+{}-".contains(ch))
+        && c.split(' ').all(|t| t.split(['=', ',']).all(inside))
 }
 
 /// Free text rendered to the agent (failure signatures): printable, no quotes or shell syntax,
@@ -199,6 +207,11 @@ pub fn validate(t: &Track) -> Result<()> {
                         bail!("{}: command references undeclared slot {{{n}}}", ctx());
                     }
                 }
+                // Only a prompt binds a run step's slots; any other trigger would render the
+                // placeholder itself (`make {item}`) as the directed command.
+                if !slot_refs(command).is_empty() && !matches!(r.trigger, Trigger::Prompt { .. }) {
+                    bail!("{}: command {:?} has slots its trigger cannot bind", ctx(), command);
+                }
                 // Never trust a declared effect: classify the command ourselves.
                 let actual = classify(command, &table);
                 if rank(actual) > rank(r.effect) {
@@ -222,8 +235,13 @@ pub fn validate(t: &Track) -> Result<()> {
                 if r.aspect != Aspect::Red {
                     bail!("{}: an avoid step must be red", ctx());
                 }
-                if !safe_command(avoid) || !safe_command(instead) || !safe_text(signature) {
+                // `avoid` names one or more failing runners, joined with " / ".
+                if !avoid.split(" / ").all(safe_command) || !safe_command(instead) || !safe_text(signature) {
                     bail!("{}: avoid/instead/signature contain characters that may not be rendered", ctx());
+                }
+                // Nothing binds an avoid step's slots.
+                if !slot_refs(avoid).is_empty() || !slot_refs(instead).is_empty() {
+                    bail!("{}: an avoid step has slots nothing can bind", ctx());
                 }
                 if rank(classify(instead, &table)) > rank(Effect::Regenerate) {
                     bail!("{}: the suggested command {:?} is not a verify or regenerate step", ctx(), instead);
