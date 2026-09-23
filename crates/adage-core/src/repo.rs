@@ -53,12 +53,44 @@ pub fn short_hash(s: &str) -> String {
 /// Make `path` relative to `root` if it lies inside it. Lexical only — no filesystem access.
 /// Repository-relative paths always use `/`, on Windows too, so tracks are portable.
 pub fn relativize(root: &Path, path: &str) -> String {
-    let p = Path::new(path);
-    let norm = lexical_normalise(p);
-    match norm.strip_prefix(lexical_normalise(root)) {
-        Ok(rel) => rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/"),
-        Err(_) => norm.to_string_lossy().to_string(),
+    // Compared as text, the same on every platform: Windows paths arrive with `\\?\` prefixes
+    // (from `canonicalize`), mixed `/` and `\\` separators, and either drive-letter case, and in a
+    // `\\?\` path `/` is not a separator, so `Path::strip_prefix` would miss the root.
+    let root_parts = path_parts(&root.to_string_lossy());
+    let parts = path_parts(path);
+    if parts.len() >= root_parts.len() && parts[..root_parts.len()] == root_parts[..] && !root_parts.is_empty() {
+        parts[root_parts.len()..].join("/")
+    } else {
+        let joined = parts.join("/");
+        if path.starts_with('/') {
+            format!("/{joined}")
+        } else {
+            joined
+        }
     }
+}
+
+/// A path's components, lexically normalised (`.` dropped, `..` applied). A Windows drive path
+/// (`C:\x`, `c:/x`, `\\?\C:\x`) is split on both separators with its drive letter lower-cased;
+/// anything else is split on `/` only (a backslash in a Unix path is an ordinary character).
+fn path_parts(s: &str) -> Vec<String> {
+    let s = s.strip_prefix(r"\\?\").unwrap_or(s);
+    let windows = matches!(s.as_bytes(), [d, b':', ..] if d.is_ascii_alphabetic());
+    let mut out: Vec<String> = Vec::new();
+    for (i, c) in s.split(|ch| ch == '/' || (windows && ch == '\\')).enumerate() {
+        match c {
+            "" | "." => {}
+            ".." => {
+                // Never climb above the drive.
+                if !(windows && out.len() == 1) {
+                    out.pop();
+                }
+            }
+            drive if windows && i == 0 => out.push(drive.to_ascii_lowercase()),
+            other => out.push(other.to_string()),
+        }
+    }
+    out
 }
 
 pub fn lexical_normalise(p: &Path) -> PathBuf {
@@ -105,6 +137,24 @@ mod tests {
             assert!(!is_safe_relative(r"acme\..\..\secret"));
             assert_eq!(relativize(Path::new(r"C:\r\repo"), r"C:\r\repo\acme\billing.py"), "acme/billing.py");
         }
+    }
+
+    #[test]
+    fn relativizes_windows_paths_on_any_platform() {
+        let root = Path::new(r"\\?\C:\Users\a\acme-billing");
+        for p in [
+            r"\\?\C:\Users\a\acme-billing/schema/invoice.json",
+            r"C:\Users\a\acme-billing\schema\invoice.json",
+            r"c:/Users/a/acme-billing/schema/invoice.json",
+            r"C:\Users\a\acme-billing\src\..\schema\.\invoice.json",
+        ] {
+            assert_eq!(relativize(root, p), "schema/invoice.json", "{p}");
+        }
+        assert_eq!(relativize(root, "schema/invoice.json"), "schema/invoice.json");
+        assert_eq!(relativize(root, r"C:\Users\a\other\x.json"), "c:/Users/a/other/x.json");
+        assert_eq!(relativize(Path::new("/r/repo"), "/r/other/x"), "/r/other/x");
+        assert_eq!(relativize(Path::new("/r/repo"), "/r/repo/a/../b"), "b");
+        assert_eq!(relativize(Path::new("/r/repo"), "/r/repository/x"), "/r/repository/x", "component boundary");
     }
 
     #[test]

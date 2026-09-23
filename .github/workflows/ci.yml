@@ -60,7 +60,7 @@ jobs:
       - name: test (adage-store, the Windows-ported store, on every platform)
         run: cargo test --locked -p adage-store
       - name: test
-        run: cargo test --workspace --locked
+        run: cargo test --workspace --locked --no-fail-fast
       - name: OpenCode plugin test ran under node (not skipped)
         if: runner.os != 'Windows'
         shell: bash
