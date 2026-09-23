@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Adage Proving Run</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700&display=swap">
 <style>
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --ink: #14171f; --muted: #667085; --line: #e4e7ec; --soft: #f1f3f6;
@@ -13,17 +15,23 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #0e1117; --panel: #161b24; --ink: #e8ebf0; --muted: #98a2b3; --line: #262d3a; --soft: #1c2230;
     --holdout: #7b8698; --adage: #5b8cff; --c-explore: #4a5363; --c-other: #3a4250; --c-exec: #8a94a6;
   }
 }
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0e1117; --panel: #161b24; --ink: #e8ebf0; --muted: #98a2b3; --line: #262d3a; --soft: #1c2230;
   --holdout: #7b8698; --adage: #5b8cff; --c-explore: #4a5363; --c-other: #3a4250; --c-exec: #8a94a6;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif; }
-.wrap { max-width: 1320px; margin: 0 auto; padding: 20px 16px 48px; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.kpi .v, .status, .statsrow b, .route .ev, .axis text, .n { font-variant-numeric: tabular-nums; }
+.route code, .feed pre { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
+.intro { color: var(--muted); max-width: 72ch; margin: -6px 0 16px; }
+button:focus-visible { outline: 2px solid var(--adage); outline-offset: 2px; }
+.wrap { max-width: 1320px; margin: 0 auto; padding-inline: 16px; padding-block: 20px 48px; }
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px 20px; margin-bottom: 18px; }
 h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
 h1 span { color: var(--muted); font-weight: 500; }
@@ -83,6 +91,12 @@ h1 span { color: var(--muted); font-weight: 500; }
 .statsrow .st b { font-size: 15px; }
 .statsrow .p { font-weight: 700; }
 .statsrow .p.sig { color: var(--good); }
+.loop { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.loop th, .loop td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.loop th:first-child, .loop td:first-child { text-align: left; }
+.loop th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.loop .a { color: var(--adage); font-weight: 700; }
+.loopwrap { overflow-x: auto; }
 .toggle { margin-left: auto; cursor: pointer; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 3px 9px; font-size: 12px; }
 </style>
 </head>
@@ -95,7 +109,9 @@ h1 span { color: var(--muted); font-weight: 500; }
     <button class="toggle" id="theme">theme</button>
   </header>
 
+  <p class="intro" id="intro">Real Claude agents work held-out tickets, each in a fresh copy of a sandbox repository whose conventions they cannot guess. Adage learned its tracks from earlier agents' sessions. In the “without” arm Adage's hooks still run but withhold every directive; hidden tests score every run.</p>
   <div class="grid kpis" id="kpis"></div>
+  <section class="panel" id="loopPanel" style="margin-bottom:14px"><h2>The learning loop — each round learns from every session before it</h2><div id="loop"></div></section>
   <section class="panel" id="statsPanel" style="margin-bottom:14px"><h2>Is the difference real? — permutation tests on held-out runs</h2><div id="stats" class="statsrow"></div></section>
 
   <div class="grid two">
@@ -135,8 +151,12 @@ $("theme").onclick = () => {
   try { localStorage.setItem("adage-theme", next); } catch (e) {}
 };
 
+const roundOf = (r) => r.round || 1;
+const latestRound = (runs) => Math.max(1, ...runs.filter((r) => r.phase === "eval").map(roundOf));
+const evalDone = (runs, rd) => runs.filter((r) => r.phase === "eval" && r.metrics && roundOf(r) === (rd ?? latestRound(runs)));
+
 function kpis(runs) {
-  const done = runs.filter((r) => r.phase === "eval" && r.metrics);
+  const done = evalDone(runs);
   const arm = (a) => done.filter((r) => r.arm === a).map((r) => r.metrics);
   const H = arm("holdout"), A = arm("adage");
   const tiles = [
@@ -174,7 +194,7 @@ function permP(a, b, stat, n = 5000) {
 }
 
 function stats(runs) {
-  const done = runs.filter((r) => r.phase === "eval" && r.metrics);
+  const done = evalDone(runs);
   const get = (arm, f) => done.filter((r) => r.arm === arm).map((r) => f(r.metrics)).filter((v) => v != null);
   const rows = [
     ["Turns before first edit", (m) => m.turns_to_first_edit, median, "median", 1],
@@ -192,14 +212,32 @@ function stats(runs) {
   }).join("");
 }
 
+function loop(state, runs) {
+  const rounds = [...new Set(runs.filter((r) => r.phase === "eval" && r.metrics).map(roundOf))].sort();
+  if (!rounds.length) { $("loop").innerHTML = `<div class="empty">Appears after the first evaluation round.</div>`; return; }
+  const rowsOut = rounds.map((rd) => {
+    const d = evalDone(runs, rd), A = d.filter((r) => r.arm === "adage").map((r) => r.metrics), H = d.filter((r) => r.arm === "holdout").map((r) => r.metrics);
+    const routes = ((state.rounds || {})[String(rd)] || {}).tracks || (rd === 1 ? state.tracks : []) || [];
+    const kinds = routes.map((ir) => `<span class="aspect ${ir.route.aspect}" style="display:inline-block;vertical-align:-1px" title="${esc(ir.route.id)}"></span>`).join(" ");
+    const f = (arr, fn, g, d2) => fmt(g(arr.map(fn)), d2);
+    return `<tr><td>Round ${rd} ${kinds}</td>
+      <td class="a">${f(A, (m) => m.turns_to_first_edit, median, 1)}</td><td>${f(H, (m) => m.turns_to_first_edit, median, 1)}</td>
+      <td class="a">${f(A, (m) => m.dead_end_hits, mean, 2)}</td><td>${f(H, (m) => m.dead_end_hits, mean, 2)}</td>
+      <td class="a">${Math.round((mean(A.map((m) => (m.passed ? 1 : 0))) || 0) * 100)}%</td><td>${Math.round((mean(H.map((m) => (m.passed ? 1 : 0))) || 0) * 100)}%</td>
+      <td class="a">${f(A, (m) => m.cost_usd, mean, 3)}</td><td>${f(H, (m) => m.cost_usd, mean, 3)}</td></tr>`;
+  }).join("");
+  $("loop").innerHTML = `<div class="loopwrap"><table class="loop"><thead><tr><th>Round · routes learned</th><th colspan="2">Turns before first edit</th><th colspan="2">Dead-end hits / run</th><th colspan="2">Hidden checks passed</th><th colspan="2">Cost / run (USD)</th></tr>
+    <tr><th></th><th>Adage</th><th>without</th><th>Adage</th><th>without</th><th>Adage</th><th>without</th><th>Adage</th><th>without</th></tr></thead><tbody>${rowsOut}</tbody></table></div>`;
+}
+
 function lanes(runs) {
   const now = Date.now() / 1000;
-  const order = (r) => (r.phase === "train" ? 0 : 1);
-  const sorted = [...runs].sort((a, b) => order(a) - order(b) || String(a.task).localeCompare(String(b.task)) || String(a.id).localeCompare(String(b.id)));
+  const order = (r) => (r.phase === "train" ? 0 : roundOf(r));
+  const sorted = [...runs].sort((a, b) => order(b) - order(a) || String(a.task).localeCompare(String(b.task)) || String(a.id).localeCompare(String(b.id)));
   const span = Math.max(60, ...runs.map((r) => (r.metrics ? r.metrics.elapsed : now - (r.t0 || now))));
   let html = "", group = "";
   for (const r of sorted) {
-    const g = r.phase === "train" ? "Training — agents without Adage (Adage learns from these)" : `Held-out work item ${r.task}`;
+    const g = r.phase === "train" ? "Training — agents without Adage (Adage learns from these)" : `Round ${roundOf(r)} · held-out work item ${r.task}`;
     if (g !== group) { html += `<div class="group">${esc(g)}</div>`; group = g; }
     const x = (t) => `${Math.min(99.2, (t / span) * 100)}%`;
     const ticks = (r.events || []).map((e) => `<div class="tick" title="${esc(e.tool)}: ${esc(e.cmd)}" style="left:${x(e.t)};background:var(--c-${e.cat})"></div>`).join("");
@@ -215,7 +253,7 @@ function lanes(runs) {
 }
 
 function chart(runs) {
-  const done = runs.filter((r) => r.phase === "eval" && r.metrics);
+  const done = evalDone(runs);
   const tasks = [...new Set(done.map((r) => r.task))].sort();
   if (!tasks.length) { $("chart").innerHTML = `<div class="empty">Appears as held-out runs finish.</div>`; return; }
   const W = 460, rowH = 34, H = tasks.length * rowH + 30, L = 64;
@@ -270,8 +308,8 @@ async function tick() {
     ph.className = "pill" + (running ? " live" : "");
     ph.lastElementChild.textContent = { train: "training", learn: "learning", eval: "evaluating", done: "complete", smoke: "smoke test" }[s.phase] || s.phase;
     const ev = runs.filter((r) => r.phase === "eval");
-    $("meta").textContent = `${s.model || ""} · ${runs.filter((r) => r.phase === "train").length} training runs · ${ev.filter((r) => r.metrics).length}/${ev.length} held-out runs done · ${running} running`;
-    kpis(runs); stats(runs); lanes(runs); chart(runs); tracks(s); feed(runs);
+    $("meta").textContent = `${s.model || ""} · round ${latestRound(runs)} · ${runs.filter((r) => r.phase === "train").length} training runs · ${ev.filter((r) => r.metrics).length}/${ev.length} held-out runs done · ${running} running`;
+    kpis(runs); loop(s, runs); stats(runs); lanes(runs); chart(runs); tracks(s); feed(runs);
     const L = s.learn;
     $("foot").textContent = L ? `Learned from ${L.sessions_used} real sessions · index ${L.index_generation} · thresholds ${L.thresholds} (demo scale)` : "";
   } catch (e) { /* keep last frame */ }

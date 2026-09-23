@@ -16,19 +16,29 @@ pub struct LearnConfig {
     pub green_lower_bound: f64,
     /// Minimum support rate for yellow.
     pub yellow_rate: f64,
+    /// Lower bar that keeps an *existing* route (hysteresis): routes do not flap when their rate
+    /// dips just below the bar that created them. Demotion on harm is separate.
+    pub retain_rate: f64,
+    /// Ids of routes that already exist; they are judged against `retain_rate`.
+    pub existing: BTreeSet<String>,
     pub provenance: String,
 }
 
 impl Default for LearnConfig {
     fn default() -> Self {
-        LearnConfig { min_support: 5, green_lower_bound: 0.8, yellow_rate: 0.5, provenance: "desire-path".into() }
+        LearnConfig { min_support: 5, green_lower_bound: 0.8, yellow_rate: 0.5, retain_rate: 0.3, existing: BTreeSet::new(), provenance: "desire-path".into() }
     }
 }
 
 impl LearnConfig {
     /// Thresholds for small demonstrations; the report always states which were used.
+    /// The rate bar for a route id: `retain_rate` if it already exists, else `yellow_rate`.
+    pub fn bar(&self, id: &str) -> f64 {
+        if self.existing.contains(id) { self.retain_rate } else { self.yellow_rate }
+    }
+
     pub fn demo() -> Self {
-        LearnConfig { min_support: 3, green_lower_bound: 0.5, yellow_rate: 0.5, provenance: "desire-path".into() }
+        LearnConfig { min_support: 3, green_lower_bound: 0.5, yellow_rate: 0.5, retain_rate: 0.3, existing: BTreeSet::new(), provenance: "desire-path".into() }
     }
 }
 
@@ -40,15 +50,27 @@ fn median(v: &mut [f64]) -> f64 {
     v[v.len() / 2]
 }
 
-fn aspect_for(effect: Effect, by_edit: bool, lb: f64, rate: f64, cfg: &LearnConfig) -> Option<Aspect> {
+fn aspect_for(effect: Effect, by_edit: bool, lb: f64, rate: f64, cfg: &LearnConfig, id: &str) -> Option<Aspect> {
     let max = ceiling(effect, by_edit)?;
     if lb >= cfg.green_lower_bound && max == Aspect::Green {
         Some(Aspect::Green)
-    } else if rate >= cfg.yellow_rate {
+    } else if rate >= cfg.bar(id) {
         Some(Aspect::Yellow)
     } else {
         None
     }
+}
+
+/// A short, stable id suffix derived from content, so a route keeps its identity across versions.
+fn stable(parts: &[&str]) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for p in parts {
+        for b in p.bytes().chain(std::iter::once(0)) {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x100_0000_01b3);
+        }
+    }
+    format!("{:06x}", h & 0xff_ffff)
 }
 
 fn models(sessions: &[&Session]) -> Vec<String> {
@@ -77,6 +99,38 @@ fn shell_join(argv: &[String]) -> String {
 /// Pseudo-field meaning "repository paths mentioned in the command's text output".
 pub const PATHS_FIELD: &str = "*paths";
 
+/// A command's runner, without its targets: `python3 -m pytest tests/a.py -v` → `python3 -m pytest`.
+fn runner(argv: &[String]) -> String {
+    let mut out: Vec<&str> = Vec::new();
+    let mut i = 0;
+    while i < argv.len() {
+        let t = argv[i].as_str();
+        if i > 0 && (t.contains('/') || t.contains('.') || (t.starts_with('-') && t != "-m")) {
+            break;
+        }
+        out.push(t);
+        if t == "-m" {
+            if let Some(m) = argv.get(i + 1) {
+                out.push(m);
+            }
+            break;
+        }
+        i += 1;
+        if out.len() >= 3 {
+            break;
+        }
+    }
+    out.join(" ")
+}
+
+/// A failure signature safe to store and share: no absolute paths, no machine details.
+fn signature_of(line: &str) -> String {
+    let parts: Vec<&str> = line.split(": ").collect();
+    let kept: Vec<&str> = parts.iter().copied().skip_while(|p| p.trim_start().starts_with('/') || p.contains("/bin/")).collect();
+    let s = if kept.is_empty() { line } else { &kept.join(": ") };
+    s.split_whitespace().filter(|w| !w.starts_with('/')).collect::<Vec<_>>().join(" ").chars().take(120).collect()
+}
+
 pub struct Mined {
     pub routes: Vec<(String, Route)>, // (track suffix, route)
 }
@@ -91,6 +145,7 @@ pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
         values: Vec<String>,
         effect: Option<Effect>,
         key: String,
+        variants: BTreeMap<String, u32>,
     }
     let mut opportunities = 0u32;
     let mut cands: BTreeMap<String, C> = BTreeMap::new();
@@ -107,10 +162,13 @@ pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             let Some(t) = tickets.iter().find(|t| av.contains(t)) else { continue };
             let templ: Vec<String> = av.iter().map(|a| if a == t { "{item}".to_string() } else { a.clone() }).collect();
             let command = shell_join(&templ);
-            if !seen.insert(command.clone()) || step.call.failed {
+            // Variants of one command (interpreter prefix, flags) are one behaviour: group by head.
+            let head = adage_core::keys::command_head(av);
+            if !seen.insert(head.clone()) || step.call.failed {
                 continue;
             }
-            let c = cands.entry(command).or_default();
+            let c = cands.entry(head).or_default();
+            *c.variants.entry(command).or_default() += 1;
             c.sessions.insert(s.id.clone());
             c.positions.push(i as f64);
             c.turns.push(step.turn as f64);
@@ -121,11 +179,13 @@ pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             }
         }
     }
-    let Some((command, mut best)) = cands.into_iter().max_by(|a, b| {
+    let Some((_head, mut best)) = cands.into_iter().max_by(|a, b| {
         a.1.sessions.len().cmp(&b.1.sessions.len()).then_with(|| b.0.cmp(&a.0))
     }) else {
         return vec![];
     };
+    // The representative command: the most common variant.
+    let command = best.variants.iter().max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0))).map(|(k, _)| k.clone()).unwrap_or_default();
     let support = best.sessions.len() as u32;
     if support < cfg.min_support {
         return vec![];
@@ -133,7 +193,7 @@ pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
     let rate = support as f64 / opportunities.max(1) as f64;
     let lb = wilson_lower(support, opportunities);
     let effect = best.effect.unwrap_or(Effect::Environment);
-    let Some(aspect) = aspect_for(effect, false, lb, rate, cfg) else { return vec![] };
+    let Some(aspect) = aspect_for(effect, false, lb, rate, cfg, "lookup-work-item") else { return vec![] };
     let Some(contract) = spans::ticket_contract(&best.values) else { return vec![] };
     let mut turns = best.turns.clone();
     vec![Route {
@@ -216,7 +276,7 @@ pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnCon
         return vec![];
     }
     let rate = n as f64 / opportunities.max(1) as f64;
-    if rate < cfg.yellow_rate {
+    if rate < cfg.bar("read-linked-files") {
         return vec![];
     }
     let field = fields.into_iter().max_by_key(|(_, c)| *c).map(|(f, _)| f).unwrap_or_default();
@@ -259,6 +319,7 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
     let mut pairs: BTreeMap<String, P> = BTreeMap::new();
     let mut ran: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     for s in sessions {
+        let mut seen_runner: BTreeSet<(String, String)> = BTreeSet::new();
         for (i, a) in s.steps.iter().enumerate() {
             if argv(a).is_some() {
                 ran.entry(a.key.clone()).or_default().insert(s.id.clone());
@@ -272,20 +333,24 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
                 continue;
             };
             let p = pairs.entry(b.key.clone()).or_default();
+            // Every distinct failing runner in the session counts once, not just the first.
+            let r = runner(argv(a).unwrap());
+            if seen_runner.insert((b.key.clone(), r.clone())) {
+                *p.avoid.entry(r).or_default() += 1;
+            }
             if p.sessions.insert(s.id.clone()) {
-                *p.avoid.entry(shell_join(argv(a).unwrap())).or_default() += 1;
                 *p.instead.entry(shell_join(argv(b).unwrap())).or_default() += 1;
                 if let Some(sig) = a.call.output.lines().rev().find(|l| {
                     let l = l.to_ascii_lowercase();
                     l.contains("error") || l.contains("no module named") || l.contains("not found") || l.contains("not set")
                 }) {
-                    *p.signatures.entry(sig.trim().chars().take(160).collect()).or_default() += 1;
+                    *p.signatures.entry(signature_of(sig.trim())).or_default() += 1;
                 }
             }
         }
     }
     let mut out = Vec::new();
-    for (i, (_bkey, p)) in pairs.into_iter().enumerate() {
+    for (bkey, p) in pairs.into_iter() {
         let support = p.sessions.len() as u32;
         if support < cfg.min_support {
             continue;
@@ -300,14 +365,18 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             .max(support as usize) as u32;
         let top = |m: &BTreeMap<String, u32>| m.iter().max_by_key(|(_, c)| **c).map(|(k, _)| k.clone()).unwrap_or_default();
         let signature = top(&p.signatures);
+        // Name every failing runner, most common first (e.g. `python3 -m pytest` / `python3 -m unittest`).
+        let mut runners: Vec<(&String, &u32)> = p.avoid.iter().collect();
+        runners.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
+        let avoid_all = runners.iter().take(3).map(|(k, _)| k.as_str()).collect::<Vec<_>>().join(" / ");
         if signature.is_empty() {
             continue;
         }
         out.push(Route {
-            id: format!("dead-end-{}", i + 1),
+            id: format!("dead-end-{}", stable(&[&bkey])),
             summary: "A verification command that fails in this repository, and what works instead".into(),
             trigger: Trigger::SessionStart,
-            step: Step::Avoid { avoid: top(&p.avoid), instead: top(&p.instead), signature },
+            step: Step::Avoid { avoid: avoid_all, instead: top(&p.instead), signature },
             slots: vec![],
             effect: Effect::Verify,
             aspect: Aspect::Red,
@@ -398,14 +467,14 @@ pub fn obligation_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route>
         let not_editing = total.saturating_sub(opp);
         let ran_without = ran_total.saturating_sub(support);
         let rate_without = if not_editing == 0 { 0.0 } else { ran_without as f64 / not_editing as f64 };
-        if rate_with < cfg.yellow_rate || rate_with - rate_without < 0.3 {
+        let id = format!("finish-line-{}", stable(&[&g, &c]));
+        if rate_with < cfg.bar(&id) || rate_with - rate_without < 0.3 {
             continue;
         }
         let lb = wilson_lower(support, opp);
-        let Some(aspect) = aspect_for(Effect::Regenerate, true, lb, rate_with, cfg) else { continue };
-        let n = out.len() + 1;
+        let Some(aspect) = aspect_for(Effect::Regenerate, true, lb, rate_with, cfg, &id) else { continue };
         out.push(Route {
-            id: format!("finish-line-{n}"),
+            id,
             summary: "A regeneration step this repository requires after editing these files".into(),
             trigger: Trigger::AfterEdit { paths: g.clone() },
             step: Step::Run { command: c.clone() },
@@ -435,6 +504,15 @@ pub fn obligation_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runners_and_signatures_are_generalised() {
+        let v = |x: &[&str]| x.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(runner(&v(&["python3", "-m", "pytest", "tests/a.py", "-v"])), "python3 -m pytest");
+        assert_eq!(runner(&v(&["pytest", "tests/", "-v"])), "pytest");
+        assert_eq!(signature_of("/Applications/Xcode.app/x/bin/python3: No module named pytest"), "No module named pytest");
+        assert_eq!(signature_of("RuntimeError: ACME_ENV is not set"), "RuntimeError: ACME_ENV is not set");
+    }
 
     #[test]
     fn globs() {

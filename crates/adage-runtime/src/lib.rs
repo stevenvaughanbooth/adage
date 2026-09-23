@@ -72,6 +72,10 @@ impl Event {
 pub struct Pending {
     pub route: String,
     pub expect_key: String,
+    /// The directed command's head; a variant with the same head (added flags, interpreter
+    /// prefix) counts as following.
+    #[serde(default)]
+    pub expect_head: String,
     pub batches_left: u32,
 }
 
@@ -183,8 +187,8 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 if !emit_ok(st, &out, &ir.route.id) {
                     continue;
                 }
-                if let Some((text, key)) = bind_prompt_route(&ir.route, &spans, ctx) {
-                    st.pending.push(Pending { route: ir.route.id.clone(), expect_key: key, batches_left: FOLLOW_WINDOW });
+                if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, ctx) {
+                    st.pending.push(Pending { route: ir.route.id.clone(), expect_key: key, expect_head: head, batches_left: FOLLOW_WINDOW });
                     out.push(directive(ir, text));
                 }
             }
@@ -206,8 +210,12 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     d.observed.push(key.clone());
                     push_history(st, key.clone());
                     // Follow / derail judgement.
+                    let head = match &n.action {
+                        adage_core::CanonicalAction::Exec { argv, .. } => keys::command_head(argv),
+                        _ => String::new(),
+                    };
                     st.pending.retain(|p| {
-                        if p.expect_key == key {
+                        if p.expect_key == key || (!p.expect_head.is_empty() && p.expect_head == head) {
                             d.judgements.push(Judgement::Followed { route: p.route.clone() });
                             false
                         } else {
@@ -332,7 +340,7 @@ fn contract_ok(c: &Contract, v: &str, root: &Path) -> bool {
 }
 
 /// Bind a prompt route's slots from prompt spans; every slot must validate.
-fn bind_prompt_route(r: &Route, spans: &[spans::Span], ctx: &Ctx) -> Option<(String, String)> {
+fn bind_prompt_route(r: &Route, spans: &[spans::Span], ctx: &Ctx) -> Option<(String, String, String)> {
     let Step::Run { command } = &r.step else { return None };
     let mut bound: Vec<(String, String)> = Vec::new();
     for s in &r.slots {
@@ -342,7 +350,8 @@ fn bind_prompt_route(r: &Route, spans: &[spans::Span], ctx: &Ctx) -> Option<(Str
     }
     let text = render::route_text(r, &bound)?;
     let rendered = render::bind(command, &bound);
-    Some((text, command_key(&rendered, ctx.table)))
+    let argv: Vec<String> = rendered.split_whitespace().map(str::to_string).collect();
+    Some((text, command_key(&rendered, ctx.table), keys::command_head(&argv)))
 }
 
 /// Bind a route's result-field slot from the triggering command's JSON output.

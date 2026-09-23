@@ -36,6 +36,7 @@ CONCURRENCY = int(os.environ.get("DEMO_CONCURRENCY", "3"))
 REPEATS = int(os.environ.get("DEMO_REPEATS", "3"))
 TRAIN_REPEATS = int(os.environ.get("DEMO_TRAIN_REPEATS", "2"))
 MAX_TURNS = int(os.environ.get("DEMO_MAX_TURNS", "30"))
+ROUND = int(os.environ.get("DEMO_ROUND", "1"))
 
 TRAIN = ["W-1041", "W-1042", "W-1043", "W-1044", "W-1045", "W-1046"]
 HELD_OUT = ["W-2041", "W-2042", "W-2043", "W-2044", "W-2045", "W-2046"]
@@ -125,7 +126,7 @@ def run_one(run_id, phase, arm, task, prompt_template):
     subprocess.run([sys.executable, str(SANDBOX / "generate.py"), str(sandbox)], check=True, capture_output=True)
     prompt = prompt_template.format(id=task)
     update_run(run_id, id=run_id, phase=phase, arm=arm, task=task, prompt=prompt, status="running",
-               t0=time.time(), events=[], directives=[])
+               t0=time.time(), events=[], directives=[], round=ROUND)
 
     env = dict(os.environ)
     env["ADAGE_HOME"] = str(ADAGE_HOME)
@@ -279,7 +280,7 @@ def train():
 def learn():
     STATE["phase"] = "learn"
     save_state()
-    runs = [r for r in STATE["runs"].values() if r.get("phase") == "train" and r.get("metrics")]
+    runs = [r for r in STATE["runs"].values() if r.get("metrics") and (r.get("phase") == "train" or ROUND > 1)]
     transcripts, outcomes = [], {}
     for r in runs:
         sid = r["metrics"]["session_id"]
@@ -289,7 +290,8 @@ def learn():
             outcomes[sid] = r["metrics"]["passed"]
     (ROOT / "outcomes.json").write_text(json.dumps(outcomes))
     env = dict(os.environ, ADAGE_HOME=str(ADAGE_HOME))
-    shutil.rmtree(ADAGE_HOME / "tracks", ignore_errors=True)
+    if ROUND == 1:
+        shutil.rmtree(ADAGE_HOME / "tracks", ignore_errors=True)
     out = subprocess.run([str(ADAGE_BIN), "learn", "--demo", "--json", "--repo", "acme-billing",
                           "--outcomes", str(ROOT / "outcomes.json"), "--transcripts", *transcripts],
                          capture_output=True, text=True, env=env)
@@ -299,6 +301,7 @@ def learn():
     rep = json.loads(out.stdout)
     STATE["learn"] = rep
     STATE["tracks"] = read_tracks()
+    STATE.setdefault("rounds", {})[str(ROUND)] = {"learn": rep, "tracks": STATE["tracks"]}
     save_state()
     print(json.dumps(rep, indent=2))
 
@@ -316,8 +319,9 @@ def evaluate():
         for i, task in enumerate(HELD_OUT):
             prompt = PROMPTS[(i + r) % len(PROMPTS)]
             # Interleave arms so both see the same conditions over time.
-            plan.append((f"eval-{task}-r{r + 1}-holdout", "eval", "holdout", task, prompt))
-            plan.append((f"eval-{task}-r{r + 1}-adage", "eval", "adage", task, prompt))
+            tag = "eval" if ROUND == 1 else f"eval{ROUND}"
+            plan.append((f"{tag}-{task}-r{r + 1}-holdout", "eval", "holdout", task, prompt))
+            plan.append((f"{tag}-{task}-r{r + 1}-adage", "eval", "adage", task, prompt))
     phase_runs("eval", plan)
     STATE["phase"] = "done"
     save_state()
@@ -330,6 +334,7 @@ def main():
         sys.exit(f"build first: cargo build --release  (missing {ADAGE_BIN})")
     STATE = load_state()
     STATE["model"] = MODEL
+    STATE["round"] = ROUND
     what = sys.argv[1] if len(sys.argv) > 1 else "all"
     if what in ("train", "all"):
         train()

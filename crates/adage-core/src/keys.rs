@@ -94,6 +94,23 @@ pub fn canonicalise(n: &mut Normalized, root: &Path) {
     }
 }
 
+/// The identity of a command, independent of its arguments: tokens up to and including the first
+/// path-like token (the script), else the first two. `python3 scripts/wi-lookup W-1 --json`,
+/// `scripts/wi-lookup W-1` and `./scripts/wi-lookup W-1` share the head `scripts/wi-lookup` after
+/// dropping interpreters.
+pub fn command_head(argv: &[String]) -> String {
+    const INTERPRETERS: [&str; 9] = ["python", "python3", "node", "bash", "sh", "zsh", "ruby", "perl", "deno"];
+    let toks: Vec<&str> = argv
+        .iter()
+        .map(|t| t.strip_prefix("./").unwrap_or(t))
+        .filter(|t| !INTERPRETERS.contains(&t.rsplit('/').next().unwrap_or(t)))
+        .collect();
+    match toks.iter().position(|t| t.contains('/')) {
+        Some(i) => toks[i].to_string(),
+        None => toks.iter().take(2).copied().collect::<Vec<_>>().join(" "),
+    }
+}
+
 /// Expand compound actions into their body actions, in order.
 pub fn flatten(items: &[Normalized]) -> Vec<Normalized> {
     let mut out = Vec::new();
@@ -145,6 +162,15 @@ mod tests {
         }
         canonicalise(&mut m, Path::new("/tmp/r/repo"));
         assert_eq!(template_key(&m.action), template_key(&n.action));
+    }
+
+    #[test]
+    fn command_heads_ignore_interpreter_and_arguments() {
+        let v = |x: &[&str]| x.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let a = command_head(&v(&["python3", "scripts/wi-lookup", "W-1", "--json"]));
+        assert_eq!(a, "scripts/wi-lookup");
+        assert_eq!(command_head(&v(&["./scripts/wi-lookup", "W-2"])), a);
+        assert_eq!(command_head(&v(&["make", "test"])), "make test");
     }
 
     #[test]

@@ -103,6 +103,12 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
 
     for (repo, ss) in &by_repo {
         let mut rr = RepoReport { sessions: ss.len(), ..Default::default() };
+        // Hysteresis: routes that already exist in this repository's tracks keep a lower bar.
+        let mut cfg = cfg.clone();
+        for t in io::read_all(&tracks_root.join(slug(repo))).unwrap_or_default() {
+            cfg.existing.extend(t.routes.iter().map(|r| r.id.clone()));
+        }
+        let cfg = &cfg;
         // Each miner sees only sessions not steered by its own kind of route.
         let unsteered = |kind: &str| -> Vec<&Session> { ss.iter().copied().filter(|s| !s.steered_by(kind)).collect() };
         let ws = unsteered("work-items");
