@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate acme-billing sandbox repository with seeded bugs."""
+"""Generate acme-billing sandbox repository ."""
 
 import json
 import os
@@ -89,16 +89,16 @@ def create_sandbox(out_dir):
         "W-1046": {
             "id": "W-1046",
             "title": "Add configurable due days",
-            "description": "Invoice due date should be configurable per invoice. Add 'due_days' int field with default 30 to invoice schema and use it in due_date calculation.",
+            "description": "Invoices all use a fixed payment window. Add a 'due_days' int field with default 30 to the invoice schema so each invoice can carry its own window.",
             "linked_files": ["schema/invoice.json", "acme/billing.py"],
-            "acceptance": "Invoice schema has due_days field, and due_date uses it instead of hardcoded 30"
+            "acceptance": "Invoice schema has a due_days field (int, default 30); generated models include it"
         },
         "W-2041": {
             "id": "W-2041",
-            "title": "Fix VAT calculation precision",
-            "description": "VAT calculations on large invoices lose precision. When calculating 20% tax on $10000, result should be exactly $2000.00, not $1999.99.",
+            "title": "Invoice amounts drop the cents",
+            "description": "Formatted invoices lose the cents: an invoice for $150.50 is shown as $150. Customers are disputing totals.",
             "linked_files": ["acme/billing.py"],
-            "acceptance": "20% tax on $10000.00 yields exactly $2000.00 with proper rounding"
+            "acceptance": "format_invoice shows dollars and cents, e.g. an invoice of 15050 cents shows 150.50"
         },
         "W-2042": {
             "id": "W-2042",
@@ -124,16 +124,16 @@ def create_sandbox(out_dir):
         "W-2045": {
             "id": "W-2045",
             "title": "Add payment terms",
-            "description": "Add 'payment_terms' string field (default 'NET30') to invoice schema and use in payment deadline calculation.",
+            "description": "Invoices need payment terms. Add a 'payment_terms' string field with default 'NET30' to the invoice schema.",
             "linked_files": ["schema/invoice.json", "acme/billing.py"],
-            "acceptance": "Invoice schema has payment_terms field, used in deadline calculation"
+            "acceptance": "Invoice schema has a payment_terms field (str, default NET30); generated models include it"
         },
         "W-2046": {
             "id": "W-2046",
             "title": "Add customer tier field",
-            "description": "Add 'tier' string field (default 'standard') to customer schema. Use it for discount eligibility checks.",
+            "description": "Customers need a tier for upcoming discount rules. Add a 'tier' string field with default 'standard' to the customer schema.",
             "linked_files": ["schema/customer.json", "acme/customers.py"],
-            "acceptance": "Customer schema has tier field, used in validation logic"
+            "acceptance": "Customer schema has a tier field (str, default standard); generated models include it"
         }
     }
 
@@ -217,27 +217,24 @@ def create_sandbox(out_dir):
 
     # acme/billing.py with bugs
     (out_path / "acme" / "billing.py").write_text(dedent("""\
-        \"\"\"Billing calculations with seeded bugs.\"\"\"
+        \"\"\"Billing calculations .\"\"\"
         import math
         from datetime import datetime, timedelta
 
-        # Bug in W-1041: uses floor instead of banker's rounding
         def apply_discount(amount_cents, discount_pct):
             discount_amount = amount_cents * (discount_pct / 100)
-            return int(math.floor(discount_amount))  # Bug: should use round
+            return int(math.floor(discount_amount))
 
-        # Bug in W-1042: EU region uses 15% instead of 20%
         def get_tax_rate(region):
             rates = {
                 "US": 0.08,
-                "EU": 0.15,  # Bug: should be 0.20
+                "EU": 0.15,
                 "CA": 0.13
             }
             return rates.get(region.upper(), 0.08)
 
-        # Bug in W-1043: includes due date, should be after
         def is_late(due_date, payment_date):
-            return payment_date >= due_date  # Bug: should be >
+            return payment_date >= due_date
 
         def calculate_late_fee(amount_cents, days_late):
             if days_late > 0:
@@ -250,35 +247,32 @@ def create_sandbox(out_dir):
             return discounted + tax
 
         def format_invoice(invoice_dict):
-            # Bug in W-2041: uses integer division for cents, losing precision
             amount_dollars = invoice_dict['amount_cents'] // 100
             return f"Invoice {invoice_dict['id']}: ${amount_dollars}"
         """))
 
     # acme/customers.py with bugs
     (out_path / "acme" / "customers.py").write_text(dedent("""\
-        \"\"\"Customer management with seeded bugs.\"\"\"
+        \"\"\"Customer management .\"\"\"
 
-        # Bug in W-1044: no dot requirement in domain
         def validate_email(email):
             if "@" not in email:
                 raise ValueError("Invalid email: missing @")
-            return True  # Bug: should check for dot in domain
+            return True
 
         def validate_customer(name, email, region):
-            if not name:  # Bug in W-2044: accepts empty string
+            if not name:
                 pass
             validate_email(email)
             return True
 
-        # Bug in W-2042: case-sensitive region lookup
         def get_tax_rate(region):
             rates = {
                 "us": 0.08,
                 "eu": 0.20,
                 "ca": 0.13
             }
-            return rates.get(region, 0.0)  # Bug: should be region.lower()
+            return rates.get(region, 0.0)
         """))
 
     # acme/generated/__init__.py

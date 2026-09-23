@@ -1,9 +1,0 @@
---- a/acme/billing.py
-+++ b/acme/billing.py
-@@ -3,7 +3,7 @@ import math
- from datetime import datetime, timedelta
-
- def apply_discount(amount_cents, discount_pct):
-     discount_amount = amount_cents * (discount_pct / 100)
--    return int(math.floor(discount_amount))  # Bug: should use round
-+    return int(round(discount_amount))

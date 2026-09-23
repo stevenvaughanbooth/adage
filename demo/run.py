@@ -80,6 +80,8 @@ def classify(name, inp, failed=False):
     if name in EDIT_TOOLS:
         return "edit"
     cmd = (inp or {}).get("command", "") if isinstance(inp, dict) else ""
+    if name == "Bash" and any(s in cmd for s in ("sed -i", "cat >", "cat <<", "tee ", "> acme/", "> schema/", ">acme/", "write_text(")):
+        return "edit"
     if name == "Bash":
         if "wi-lookup" in cmd:
             return "lookup"
