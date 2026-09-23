@@ -438,7 +438,12 @@ fn learn_from_all_three_histories_together() {
         (lookup["evidence"]["support"].clone(), lookup["evidence"]["opportunities"].clone()),
         (json!(27), json!(30))
     );
-    assert!(route(&g, "dead-end-")["evidence"]["support"].as_u64().unwrap() >= 12);
+    // Six sessions per harness hit a dead end before `make test`. The dead end is keyed by its
+    // failure signature: the unittest runs (`ACME_ENV is not set`) are its evidence, and the pytest
+    // runs (`No module named pytest`, a different failure) are not.
+    let dead = route(&g, "dead-end-");
+    assert_eq!(dead["step"]["avoid"], "python3 -m unittest");
+    assert_eq!(dead["evidence"]["support"], 11);
     // Replaying in each harness against the combined index draws the same directives.
     let (a, _) = ids("claude");
     replay_claude(&sb, &a, "treated");

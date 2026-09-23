@@ -91,18 +91,20 @@ did later. Committed datasets and their gates (docs/evals.md):
 | | demo round 2 (real) | synthetic | adversarial |
 | --- | ---: | ---: | ---: |
 | Precision, all | 0.73 | 0.91 | 0.73 |
-| Recall of key steps | 0.78 | 1.00 | 0.77 |
+| Recall of key steps | 0.78 | 0.97 | 0.57 |
 | Turns saved by the lookup (median) | 9 | 1 | 0 |
 | Finish-line accuracy | 1.00 | 1.00 | 1.00 |
 | Unsafe directives | 0 | 0 | 0 of 84 checked |
 
 - **The real dataset reproduces the live index.** It holds the 90 demo sessions, redacted. Learning
-  from round 2's training split reproduces the live index byte for byte, and replay reproduces
-  36 of 36 live decisions.
+  from round 2's training split reproduces the live index's routes (ids and aspects; byte for
+  byte before the dead-end change below), and replay reproduces 36 of 36 live decisions.
 - **Offline precision understates correctness.** 6 of 18 lookup "misses" are agents that never found
   the tracker at all.
-- **One finding still to act on:** the dead-end route also warns against `python3 -m unittest`, which
-  passes when `ACME_ENV` is set. The miner should key dead ends on the failing signature.
+- **Dead ends are keyed by failing signature.** The eval found the dead-end route also warned
+  against `python3 -m unittest`, which passes when `ACME_ENV` is set. The miner now names a runner
+  only if its failures share the route's signature and it fails in 9 of 10 sessions that ran it;
+  dead-end accuracy rose and precision is unchanged (docs/evals.md).
 
 The property tests found 8 bugs, all fixed with regression tests:
 
@@ -143,12 +145,13 @@ Closed since draft 2:
 - `gauge.harness` records the real harness.
 - Passphrase prompts at a TTY.
 - The survey report.
+- Dead ends are keyed by failing signature: a runner is named only if its failures share the
+  route's signature and it fails in 9 of 10 sessions that ran it.
 
 Open:
 
 | Gap | Impact | Fix |
 | --- | --- | --- |
-| Dead-end routes are keyed by runner, not by failing signature | Over-broad warnings (eval: `unittest` passes when `ACME_ENV` is set) | Key dead ends on (command, signature); only warn for runners whose failures share it |
 | Nothing writes `$ADAGE_HOME/fail-open.log` | `adage doctor` cannot report hook failures | Record caught panics and errors in the hook's fail-open path (bounded, rotating) |
 | The parse timeout (50 ms) makes normalisation depend on machine speed for pathological commands | Rare nondeterminism in `learn` for such commands | Replace with a node-count budget |
 | Architecture doc is still draft 2 | Docs lag the code (daemon → none, etc.) | Draft 3, as built |

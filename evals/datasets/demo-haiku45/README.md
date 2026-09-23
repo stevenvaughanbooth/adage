@@ -66,8 +66,10 @@ modifies it. Its output is deterministic.
 
 ## What it reproduces
 
-- Learning from the curated `round2` training sessions reproduces the live round-2 index byte for
-  byte (generation `8dd5ec01ed76c4bd`).
+- Learning from the curated `round2` training sessions reproduces the live round-2 index's routes
+  (ids and aspects). Every route matches byte for byte except the dead end, which the
+  signature-keyed dead-end miner deliberately narrowed; before that change the whole index matched
+  (generation `8dd5ec01ed76c4bd`).
 - Replaying the 36 round-2 eval sessions against that index reproduces every live decision
   (36/36). In 35/36 sessions it also reproduces the exact hook event sequence. In the other session
   the agent ran a forked skill: its tool calls fired hooks in this session but are recorded in a

@@ -136,9 +136,9 @@ These were measured on the committed datasets, with demo thresholds and a window
 | — linked files | 0.75 | 1.00 | 1.00 | 1.00 | 0.50 |
 | — dead end | 0.78 | — | 0.83 | 1.00 | 1.00 |
 | — finish line | 0.75 | 1.00 | 1.00 | 0.88 | 0.41 |
-| Recall (key steps) | 0.78 (36/46) | 0.56 (20/36) | 0.85 (58/68) | 1.00 (77/77) | 0.77 (67/87) |
+| Recall (key steps) | 0.78 (36/46) | 0.56 (20/36) | 0.81 (55/68) | 0.97 (75/77) | 0.57 (50/87) |
 | Turns saved, lookup (median) | 9 | 10 | 10 | 1 | 0 |
-| Dead-end accuracy | 0/1 | — | 2/4 | 10/10 | 20/20 |
+| Dead-end accuracy | 0/0 | — | 1/1 | 8/8 | 3/3 |
 | Finish-line accuracy | 1.00 (4) | 1.00 (3) | 1.00 (7) | 1.00 (8) | 1.00 (7 met; 10 unlabelled) |
 | Unsafe directives | **0** | **0** | **0** | **0** | **0** / 84 checked |
 
@@ -149,8 +149,10 @@ Replay fidelity, round 2:
 - It reproduces the exact hook event sequence in **35/36** sessions. In the other session the
   agent ran a forked skill, whose tool calls fired hooks in the session but are recorded in a
   subagent transcript.
-- Learning from the 54 curated `round2` training transcripts reproduces the live round-2 index
-  **byte for byte** (generation `8dd5ec01ed76c4bd`).
+- Learning from the 54 curated `round2` training transcripts reproduces the live round-2 index's
+  routes (ids and aspects), and every route byte for byte except the dead end, whose avoided
+  runners and evidence the signature-keyed miner deliberately narrowed (below). Before that
+  change, the whole index matched byte for byte (generation `8dd5ec01ed76c4bd`).
 
 Round 1 was decided by an earlier build. Its command keys templated interpreter scripts, so the
 current runtime no longer matches that index's linked-files trigger. Round-1 fidelity
@@ -162,10 +164,23 @@ What the numbers say:
   to 10 turns to find it. Offline, every one of those lookups had a correct directive at the
   prompt (lookup recall 12/12 in round 2). This matches the live A/B, where round-2 turns before
   the first edit fell from a median of 20 to 2.
-- **The dead-end route is too broad.** In round 2 it names `python3 -m unittest` as failing, but
-  that command passes when `ACME_ENV` is set. The one agent that ran it after the warning ran
-  `ACME_ENV=test python3 -m unittest discover -s tests` and got a pass (dead-end accuracy 0/1; 2/4 on `hash:0.3`). The miner records the failing runner without
-  the condition under which it fails.
+- **Dead ends are keyed by their failure signature.** The round-2 route used to name
+  `python3 -m pytest / python3 -m unittest / python -m pytest`, but `python3 -m unittest` passes
+  when `ACME_ENV` is set. The one agent that ran it after the warning ran
+  `ACME_ENV=test python3 -m unittest discover -s tests` and got a pass (dead-end accuracy 0/1;
+  2/4 on `hash:0.3`). The miner now names a runner only if its failures share the route's
+  signature and it failed in at least 9 in 10 of the sessions that ran it (see
+  `adage_learn::mine::dead_end_routes`). The route keeps its id (`dead-end-d41b1e`, derived from
+  the working command) and now names only `python3 -m pytest` ("No module named pytest").
+  - Precision is unchanged on every dataset. Dead-end accuracy rose: 0/1 → 0/0 in round 2, 2/4 →
+    1/1 on `hash:0.3`, and stays 100% on synthetic (8/8) and adversarial (3/3).
+  - The cost is recall of failed verifies by runners the route no longer names, because they fail
+    with a different signature: synthetic 1.00 → 0.97 (its `unittest` dead end), `hash:0.3`
+    0.85 → 0.81 (`python -m pytest`, "command not found"). Adversarial fell 0.77 → 0.57: its
+    `pytest` failures carry only unrenderable (hostile) error lines, so they share no signature.
+  - The miner keeps one dead end per working command, for its most common signature. A second
+    signature with enough support (round 2: `python -m pytest`, 4 sessions) is not yet a route of
+    its own.
 - **Finish-line obligations were never wrong** on labelled sessions. In round 2, one obligation
   was "needed but skipped": the agent did not regenerate, and the hidden check found stale
   generated code.
@@ -185,7 +200,7 @@ thresholds are the measured values less a margin:
 | demo round 2: replay fidelity, decisions / events | 36/36, 35/36 | 36/36, ≥ 34/36 |
 | demo round 1: precision all / lookup, recall | 0.68 / 0.50, 0.56 | ≥ 0.55 / 0.40, 0.45 |
 | synthetic: precision all / lookup / linked files / dead end | 0.91 / 0.78 / 1.00 / 1.00 | ≥ 0.85 / 0.70 / 0.90 / 0.90 |
-| synthetic: recall / dead-end accuracy / finish-line accuracy | 1.00 / 1.00 / 1.00 | ≥ 0.90 / 0.90 / 0.90 |
+| synthetic: recall / dead-end accuracy / finish-line accuracy | 0.97 / 1.00 / 1.00 | ≥ 0.90 / 0.90 / 0.90 |
 | every dataset: unsafe directives | 0 | = 0 |
 | adversarial: every route kind exercised, directives checked | 4 kinds, 84 | 4 kinds, ≥ 80 |
 | same dataset, same report bytes; no temp paths in the report | yes | yes |

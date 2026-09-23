@@ -56,8 +56,9 @@ fn demo_round2_gates() {
 #[test]
 fn demo_round2_learns_what_the_live_learner_learned() {
     // The offline learner, fed the curated transcripts of the same 54 sessions, must learn the
-    // routes the live round-2 index held (ids, aspects, steps). Measured: identical index bytes
-    // (generation 8dd5ec01ed76c4bd).
+    // routes the live round-2 index held (ids, aspects). Measured: identical routes except the
+    // dead end's avoided runners and evidence, which the signature-keyed miner deliberately
+    // narrowed (identical index bytes, generation 8dd5ec01ed76c4bd, before that change).
     let r = eval("demo-haiku45", Some("round2"));
     let live: adage_tracks::Index =
         serde_json::from_slice(&std::fs::read(datasets().join("demo-haiku45/recorded/index-round2.json")).unwrap())
@@ -99,7 +100,8 @@ fn replay_reproduces_the_live_round2_decisions() {
 #[test]
 fn synthetic_gates() {
     // Measured: precision 0.914 overall; lookup 0.778, linked files 1.0, dead end 1.0; recall
-    // 1.0; dead-end accuracy 1.0; finish-line accuracy 1.0.
+    // 0.974 (1.0 before dead ends were keyed by signature: the route no longer names `unittest`,
+    // whose failures carry another signature); dead-end accuracy 1.0; finish-line accuracy 1.0.
     let r = eval("synthetic", None);
     at_least("overall precision", r.overall.precision, 0.85);
     at_least("lookup precision", precision(&r, "lookup"), 0.70);

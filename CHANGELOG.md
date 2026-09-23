@@ -20,6 +20,10 @@ version as the GitHub Release notes.
 
 ### Fixed
 
+- **Over-broad dead-end warnings.** A dead end named every runner that failed before the working
+  command, including `python3 -m unittest`, which passes once `ACME_ENV` is set. Dead ends are now
+  keyed by failure signature: a runner is named only if its failures share the route's signature
+  and it failed in at least 9 in 10 of the sessions that ran it. Route ids are unchanged.
 - **Linux segfault in hooks.** A segfault in tree-sitter-bash's scanner (it calls `isdigit()` on
   full code points) could crash a hook on Linux, given a `{` followed by a large code point. The
   parser now only sees an ASCII shadow of each command, with the same byte offsets.

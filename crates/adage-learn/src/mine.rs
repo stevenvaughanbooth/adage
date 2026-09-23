@@ -377,26 +377,65 @@ pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnCon
     }]
 }
 
+/// A runner is named in a dead end only if it failed in at least this share of the sessions that
+/// ran it (numerator, denominator; integer arithmetic keeps the rule exact).
+pub const DEAD_END_CONSISTENCY: (usize, usize) = (9, 10);
+
+/// The failure signature of a failed run: its last error line that can be rendered safely. Tool
+/// output is untrusted, and one unrenderable line must not cost the route (or the learn).
+fn failure_signature(step: &StepObs) -> Option<String> {
+    step.call.output.lines().rev().map(|l| signature_of(l.trim())).find(|l| {
+        let lc = l.to_ascii_lowercase();
+        (lc.contains("error") || lc.contains("no module named") || lc.contains("not found") || lc.contains("not set"))
+            && adage_tracks::io::safe_text(l)
+    })
+}
+
+/// The key with the most sessions. Ties go to the greatest key, as the miner has always broken
+/// them, so the choice is deterministic.
+fn most_sessions(m: &BTreeMap<String, BTreeSet<&str>>) -> Option<String> {
+    m.iter().max_by(|a, b| a.1.len().cmp(&b.1.len()).then_with(|| a.0.cmp(b.0))).map(|(k, _)| k.clone())
+}
+
 /// A verify command that fails, followed by a different verify command that succeeds.
+///
+/// Dead ends are keyed by (working command, failure signature), and a runner is named only where
+/// the evidence says it is a dead end, not merely that it failed once (docs/evals.md: `python3 -m
+/// unittest` fails without `ACME_ENV` and passes with it). For each working command W:
+///
+/// 1. A *failure pair* is a failed verify run of runner R with signature S (its last renderable
+///    error line), followed within five steps by W succeeding.
+/// 2. R is *consistent* if it failed in at least [`DEAD_END_CONSISTENCY`] (9 in 10) of the
+///    sessions that ran it at all. A session in which any run of R passed counts against R: that
+///    is usually an environment fix, such as `ACME_ENV=test python3 -m unittest`, which normalises
+///    to the same argv, so the warning would be wrong for an agent that knows the fix.
+/// 3. The route's signature is the S with the most sessions among consistent runners' pairs (ties:
+///    the greatest S).
+/// 4. R is avoided if it is consistent and the route's signature is the signature in at least half
+///    of the sessions with a signed failure pair of R. At most three runners are named, most
+///    sessions first, then by name.
+/// 5. Support is the sessions with a pair of an avoided runner and the route's signature;
+///    opportunities are the sessions that ran an avoided runner.
+///
+/// There is at most one dead end per working command, and its id is derived from W alone, so it
+/// keeps its id when its runners or signature change.
 pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
-    #[derive(Default)]
-    struct P {
-        sessions: BTreeSet<String>,
-        avoid: BTreeMap<String, u32>,
-        instead: BTreeMap<String, u32>,
-        signatures: BTreeMap<String, u32>,
-    }
-    // Keyed by the command that worked: different failing runners (`pytest`, `python -m pytest`,
-    // `unittest`) that all lead to the same working command are one dead end.
-    let mut pairs: BTreeMap<String, P> = BTreeMap::new();
-    let mut ran: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    /// (session, runner, signature, working-command literal)
+    type Pair<'a> = (&'a str, String, Option<String>, String);
+    let mut pairs: BTreeMap<String, BTreeSet<Pair>> = BTreeMap::new();
+    // Per runner: the sessions that ran it (as a verify step), and those in which it passed.
+    let mut ran: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
+    let mut passed: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
     for s in sessions {
-        let mut seen_runner: BTreeSet<(String, String)> = BTreeSet::new();
         for (i, a) in s.steps.iter().enumerate() {
-            if argv(a).is_some() {
-                ran.entry(a.key.clone()).or_default().insert(s.id.clone());
+            let Some(av) = argv(a) else { continue };
+            if a.norm.effect != Effect::Verify {
+                continue;
             }
-            if !a.call.failed || a.norm.effect != Effect::Verify {
+            let r = runner(av);
+            ran.entry(r.clone()).or_default().insert(&s.id);
+            if !a.call.failed {
+                passed.entry(r).or_default().insert(&s.id);
                 continue;
             }
             let Some(b) = s
@@ -408,62 +447,73 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             else {
                 continue;
             };
-            let p = pairs.entry(b.key.clone()).or_default();
-            // Every distinct failing runner in the session counts once, not just the first.
-            let r = runner(argv(a).unwrap());
-            if seen_runner.insert((b.key.clone(), r.clone())) {
-                *p.avoid.entry(r).or_default() += 1;
+            pairs.entry(b.key.clone()).or_default().insert((
+                &s.id,
+                r,
+                failure_signature(a),
+                shell_join(argv(b).unwrap()),
+            ));
+        }
+    }
+    let consistent = |r: &str| {
+        let n = ran.get(r).map_or(0, |x| x.len());
+        let ok = passed.get(r).map_or(0, |x| x.len());
+        let (num, den) = DEAD_END_CONSISTENCY;
+        n > 0 && (n - ok) * den >= n * num
+    };
+    let mut out = Vec::new();
+    for (wkey, ps) in pairs.into_iter() {
+        // 3. The route's signature, from consistent runners only.
+        let mut by_sig: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
+        for (sid, r, sig, _) in &ps {
+            if let Some(sig) = sig.as_ref().filter(|_| consistent(r)) {
+                by_sig.entry(sig.clone()).or_default().insert(sid);
             }
-            if p.sessions.insert(s.id.clone()) {
-                *p.instead.entry(shell_join(argv(b).unwrap())).or_default() += 1;
-                // Only a line that can be rendered safely may become the signature: tool output is
-                // untrusted, and one unrenderable line must not cost the route (or the learn).
-                if let Some(sig) = a.call.output.lines().rev().map(|l| signature_of(l.trim())).find(|l| {
-                    let lc = l.to_ascii_lowercase();
-                    (lc.contains("error")
-                        || lc.contains("no module named")
-                        || lc.contains("not found")
-                        || lc.contains("not set"))
-                        && adage_tracks::io::safe_text(l)
-                }) {
-                    *p.signatures.entry(sig).or_default() += 1;
+        }
+        let Some(signature) = most_sessions(&by_sig) else { continue };
+        // 4. The runners that share it.
+        let mut signed: BTreeMap<&str, (BTreeSet<&str>, BTreeSet<&str>)> = BTreeMap::new();
+        for (sid, r, sig, _) in &ps {
+            if let Some(sig) = sig {
+                let e = signed.entry(r.as_str()).or_default();
+                e.0.insert(sid);
+                if *sig == signature {
+                    e.1.insert(sid);
                 }
             }
         }
-    }
-    let mut out = Vec::new();
-    for (bkey, p) in pairs.into_iter() {
-        let support = p.sessions.len() as u32;
-        if support < cfg.min_support {
+        let mut runners: Vec<(&str, usize)> = signed
+            .iter()
+            .filter(|(r, (all, same))| consistent(r) && same.len() * 2 >= all.len())
+            .map(|(r, (_, same))| (*r, same.len()))
+            .collect();
+        runners.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+        runners.truncate(3);
+        let avoid: BTreeSet<&str> = runners.iter().map(|(r, _)| *r).collect();
+        // 5. Evidence.
+        let mut support: BTreeSet<String> = BTreeSet::new();
+        let mut instead: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
+        for (sid, r, sig, lit) in &ps {
+            if avoid.contains(r.as_str()) && sig.as_deref() == Some(signature.as_str()) {
+                support.insert(sid.to_string());
+                instead.entry(lit.clone()).or_default().insert(sid);
+            }
+        }
+        let n = support.len() as u32;
+        if n < cfg.min_support {
             continue;
         }
-        // Opportunities: sessions that ran any of the failing commands.
-        let opp = p
-            .avoid
-            .keys()
-            .flat_map(|lit| {
-                ran.iter()
-                    .filter(move |(k, _)| k.contains(lit.split_whitespace().next().unwrap_or("")))
-                    .flat_map(|(_, v)| v.iter())
-            })
-            .collect::<BTreeSet<_>>()
-            .len()
-            .max(support as usize) as u32;
-        let top =
-            |m: &BTreeMap<String, u32>| m.iter().max_by_key(|(_, c)| **c).map(|(k, _)| k.clone()).unwrap_or_default();
-        let signature = top(&p.signatures);
-        // Name every failing runner, most common first (e.g. `python3 -m pytest` / `python3 -m unittest`).
-        let mut runners: Vec<(&String, &u32)> = p.avoid.iter().collect();
-        runners.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
-        let avoid_all = runners.iter().take(3).map(|(k, _)| k.as_str()).collect::<Vec<_>>().join(" / ");
-        if signature.is_empty() {
-            continue;
-        }
+        let opp =
+            avoid.iter().filter_map(|r| ran.get(*r)).flatten().collect::<BTreeSet<_>>().len().max(n as usize) as u32;
         out.push(Route {
-            id: format!("dead-end-{}", stable(&[&bkey])),
+            id: format!("dead-end-{}", stable(&[&wkey])),
             summary: "A verification command that fails in this repository, and what works instead".into(),
             trigger: Trigger::SessionStart,
-            step: Step::Avoid { avoid: avoid_all, instead: top(&p.instead), signature },
+            step: Step::Avoid {
+                avoid: runners.iter().map(|(r, _)| *r).collect::<Vec<_>>().join(" / "),
+                instead: most_sessions(&instead).unwrap_or_default(),
+                signature,
+            },
             slots: vec![],
             effect: Effect::Verify,
             aspect: Aspect::Red,
@@ -471,10 +521,10 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             exit: vec![],
             evidence: Evidence {
                 opportunities: opp,
-                support,
-                days: days(sessions, &p.sessions),
-                rate: support as f64 / opp.max(1) as f64,
-                lower_bound: wilson_lower(support, opp),
+                support: n,
+                days: days(sessions, &support),
+                rate: n as f64 / opp.max(1) as f64,
+                lower_bound: wilson_lower(n, opp),
                 turns_saved: 1.0,
                 provenance: cfg.provenance.clone(),
                 models: models(sessions),
