@@ -73,12 +73,14 @@ cargo build --release -p adage-cli
 target/release/adage install opencode            # print the plugin; add --write to install it
 target/release/adage install codex               # print a hooks.json; add --write to merge it
 opencode export <session-id> > s.json && target/release/adage learn --transcripts s.json
+target/release/adage learn --codex-sessions ~/.codex/sessions   # Codex rollouts
 ```
 
 `--write` installs into the repository (`.opencode/plugins/adage.js`, `.codex/hooks.json`) or, with
 `--scope user`, the harness's documented user location; it never runs inside an agent session.
 `adage install claude-code` does the same for Claude Code settings. What each harness supports, and
-what it cannot do yet (Codex reports no tool failures, so dead-end routes stay silent there), is in
+what it cannot do yet (Codex reports no tool failures to hooks, so only routes that react to a
+failed command stay silent there; learned dead ends are announced at the first prompt), is in
 [docs/harnesses.md](docs/harnesses.md).
 
 `adage status` shows every track and route with its aspect and evidence; `adage report` summarises
@@ -145,6 +147,7 @@ fails untouched and passes with its reference solution.
 | `crates/adage-sign` | Native `sshsig` signing and `allowed_signers` verification for shared tracks |
 | `crates/adage-intent` | Prompt normalisation, the static embedding model in plain Rust (WordPiece + safetensors rows read on demand), deterministic kNN + Louvain clustering, behavioural split/merge |
 | `crates/adage-cli` | The `adage` binary; harness adapters in `src/harness/` |
+| `crates/adage-sim` | Harness simulator: seeded mock histories (`sim/fixtures/`) and native hook payloads for Claude Code, OpenCode, and Codex |
 | `plugin/claude-code` | The Claude Code plugin |
 | `plugin/opencode` | The OpenCode plugin (installed by `adage install opencode`) |
 | `demo/` | Sandbox, runner, live dashboard |
@@ -155,8 +158,10 @@ fails untouched and passes with its reference solution.
 
 ## Status
 
-v0.1: Claude Code, plus OpenCode and Codex adapters (built against their documentation, not yet
-run against a live installation — see [docs/harnesses.md](docs/harnesses.md)). Tracks are shared
+v0.1: Claude Code, plus OpenCode and Codex adapters and importers, built against their
+documentation and source and verified end to end by the harness simulator (learn from each
+harness's mock history, replay a held-out session through its native hooks in both arms), but not
+yet run against a live installation — see [docs/harnesses.md](docs/harnesses.md#verification). Tracks are shared
 directly (`adage share` / `adage add`) and reviewed with `adage review`. Intent families use static
 embeddings (`adage models fetch`; everything else works without the model). Hardened against an
 adversarial review (tracks are untrusted input; effects re-derived; bounded hot path; symlink-safe
