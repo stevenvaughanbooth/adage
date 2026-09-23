@@ -162,9 +162,11 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
             }
             for j in d["judgements"].as_array().into_iter().flatten() {
                 match (j["kind"].as_str(), j["route"].as_str()) {
-                    (Some("followed"), Some(id)) => drop(sets(&mut arms, &repo, id, &arm).followed.insert(sid.clone())),
+                    (Some("followed"), Some(id)) => {
+                        sets(&mut arms, &repo, id, &arm).followed.insert(sid.clone());
+                    }
                     (Some("obligation_met"), Some(id)) => {
-                        drop(sets(&mut arms, &repo, id, &arm).met.insert(sid.clone()))
+                        sets(&mut arms, &repo, id, &arm).met.insert(sid.clone());
                     }
                     _ => {}
                 }
