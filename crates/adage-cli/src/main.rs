@@ -106,7 +106,7 @@ fn run(args: &[String]) -> Result<()> {
     }
 }
 
-/// `adage learn [--transcripts <file>...] [--claude-projects <dir>] [--cwd-prefix <path>]
+/// `adage learn [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
 ///               [--outcomes <json>] [--repo <key>] [--demo] [--json]`
 fn learn(args: &[String], paths: &Paths) -> Result<()> {
     let mut transcripts: Vec<PathBuf> = Vec::new();
@@ -122,8 +122,33 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         }
         i += 1;
     }
+    // Codex rollouts: `--codex-sessions <dir>` (`$CODEX_HOME/sessions`), read only when asked.
+    if let Some(dir) = flag(args, "--codex-sessions") {
+        let (found, compressed) = adage_learn::codex::discover(std::path::Path::new(&dir));
+        if compressed > 0 {
+            eprintln!("adage learn: skipped {compressed} compressed Codex rollouts (.jsonl.zst); decompress them with `zstd -d` to include them");
+        }
+        let prefix = flag(args, "--cwd-prefix");
+        for p in found {
+            if let Some(pre) = &prefix {
+                // The first line (session metadata) records the cwd.
+                let mut head = String::new();
+                if let Ok(f) = std::fs::File::open(&p) {
+                    use std::io::{BufRead, Read};
+                    let _ = std::io::BufReader::new(f).take(1 << 20).read_line(&mut head);
+                }
+                if !head.contains(&format!("\"cwd\":\"{pre}")) {
+                    continue;
+                }
+            }
+            transcripts.push(p);
+        }
+    }
+    // Default to Claude Code history only when no source was named: an explicit source that finds
+    // nothing is an error, never a silent fallback to other history.
+    let explicit = args.iter().any(|a| a == "--transcripts" || a == "--codex-sessions");
     if let Some(dir) = flag(args, "--claude-projects").or_else(|| {
-        transcripts.is_empty().then(|| {
+        (!explicit).then(|| {
             adage_store::home_dir()
                 .map(|h| h.join(".claude").join("projects").to_string_lossy().into_owned())
                 .unwrap_or_default()

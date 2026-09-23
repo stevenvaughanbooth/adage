@@ -1,5 +1,6 @@
 //! `adage learn`: import sessions, mine routes, assemble versioned tracks, compile the index.
 
+pub mod codex;
 pub mod import;
 pub mod intent;
 pub mod mine;
@@ -100,9 +101,12 @@ pub struct Planned {
     pub proposals: Proposals,
 }
 
-/// Read one session file: a Claude Code transcript, or an OpenCode `opencode export` file
-/// (recognised by content).
+/// Read one session file: a Claude Code transcript, an OpenCode `opencode export` file, or a Codex
+/// rollout (recognised by content).
 pub fn read_session(path: &Path, table: &CommandTable, repo_override: Option<&str>) -> Option<Session> {
+    if let Some(lines) = codex::read_rollout(path) {
+        return codex::parse_rollout(&lines, table, repo_override);
+    }
     match opencode::read_export(path) {
         Some(v) => opencode::parse_export(&v, table, repo_override),
         None => import::parse_transcript(path, table, repo_override),

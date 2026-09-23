@@ -1,0 +1,666 @@
+{
+  "info": {
+    "directory": "/fixture/acme-billing",
+    "id": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+    "projectID": "prj_acmebilling0000",
+    "slug": "yxvvff-aogayn",
+    "time": {
+      "created": 1788441420000,
+      "updated": 1788441517356
+    },
+    "title": "W-1042 is assigned to you. Fix it and ma",
+    "version": "1.18.32"
+  },
+  "messages": [
+    {
+      "info": {
+        "agent": "build",
+        "id": "msg_0676a60e00011HZ9Vyqi1C2pm1",
+        "model": {
+          "modelID": "claude-sonnet-4-6",
+          "providerID": "anthropic"
+        },
+        "role": "user",
+        "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+        "time": {
+          "created": 1788441420000
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0676a60e0002YAhysi83YR3O3Z",
+          "messageID": "msg_0676a60e00011HZ9Vyqi1C2pm1",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "text": "W-1042 is assigned to you. Fix it and make sure the tests pass.",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "info": {
+        "agent": "build",
+        "cost": 0.0123,
+        "finish": "tool-calls",
+        "id": "msg_0676a64c8003PB4CP4xOpwRsvx",
+        "mode": "build",
+        "modelID": "claude-sonnet-4-6",
+        "parentID": "msg_0676a60e00011HZ9Vyqi1C2pm1",
+        "path": {
+          "cwd": "/fixture/acme-billing",
+          "root": "/fixture/acme-billing"
+        },
+        "providerID": "anthropic",
+        "role": "assistant",
+        "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+        "time": {
+          "completed": 1788441439512,
+          "created": 1788441421000
+        },
+        "tokens": {
+          "cache": {
+            "read": 18000,
+            "write": 0
+          },
+          "input": 1200,
+          "output": 90,
+          "reasoning": 0
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0676a64c8004FO1LK3PBPqBRMt",
+          "messageID": "msg_0676a64c8003PB4CP4xOpwRsvx",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0676a64c800529QC7brGsM2v3V",
+          "messageID": "msg_0676a64c8003PB4CP4xOpwRsvx",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "text": "Let me get oriented first.",
+          "time": {
+            "end": 1788441421400,
+            "start": 1788441421000
+          },
+          "type": "text"
+        },
+        {
+          "callID": "toolu_9v3RsQpbDrD2NYLc71uZWbtd",
+          "id": "prt_0676a64c8006emUWFMWNgvMvQy",
+          "messageID": "msg_0676a64c8003PB4CP4xOpwRsvx",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "state": {
+            "input": {
+              "command": "ls",
+              "description": "Run ls"
+            },
+            "metadata": {
+              "exit": 0,
+              "output": "tools",
+              "truncated": false
+            },
+            "output": "Makefile\nREADME.md\nacme\nschema\nscripts\ntests\ntools\n",
+            "status": "completed",
+            "time": {
+              "end": 1788441439312,
+              "start": 1788441421500
+            },
+            "title": "ls"
+          },
+          "tool": "bash",
+          "type": "tool"
+        },
+        {
+          "callID": "toolu_iPQZM1W9yF5cXDxPSOVio2cP",
+          "id": "prt_0676a64c80072qrOpMGRn2wH4t",
+          "messageID": "msg_0676a64c8003PB4CP4xOpwRsvx",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "state": {
+            "input": {
+              "filePath": "/fixture/acme-billing/README.md"
+            },
+            "metadata": {
+              "truncated": false
+            },
+            "output": "<path>/fixture/acme-billing/README.md</path>\n<type>file</type>\n<content>\n1: # acme-billing\n2: \n3: Billing for Acme. Work items are tracked in the internal tracker.\n4: \n5: See the Makefile for common tasks.\n\n(End of file - total 5 lines)\n</content>",
+            "status": "completed",
+            "time": {
+              "end": 1788441439312,
+              "start": 1788441421500
+            },
+            "title": "README.md"
+          },
+          "tool": "read",
+          "type": "tool"
+        },
+        {
+          "cost": 0.0123,
+          "id": "prt_0676aad18008F9szJw1nBelRE3",
+          "messageID": "msg_0676a64c8003PB4CP4xOpwRsvx",
+          "reason": "tool-calls",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "tokens": {
+            "cache": {
+              "read": 18000,
+              "write": 0
+            },
+            "input": 1200,
+            "output": 90,
+            "reasoning": 0
+          },
+          "type": "step-finish"
+        }
+      ]
+    },
+    {
+      "info": {
+        "agent": "build",
+        "cost": 0.0123,
+        "finish": "tool-calls",
+        "id": "msg_0676ab100009pkOyCTzFoUaW1n",
+        "mode": "build",
+        "modelID": "claude-sonnet-4-6",
+        "parentID": "msg_0676a60e00011HZ9Vyqi1C2pm1",
+        "path": {
+          "cwd": "/fixture/acme-billing",
+          "root": "/fixture/acme-billing"
+        },
+        "providerID": "anthropic",
+        "role": "assistant",
+        "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+        "time": {
+          "completed": 1788441458665,
+          "created": 1788441440512
+        },
+        "tokens": {
+          "cache": {
+            "read": 18000,
+            "write": 0
+          },
+          "input": 1200,
+          "output": 90,
+          "reasoning": 0
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0676ab10000azmzfojAgy6hg1t",
+          "messageID": "msg_0676ab100009pkOyCTzFoUaW1n",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0676ab10000brqcnqCZdnbQL8B",
+          "messageID": "msg_0676ab100009pkOyCTzFoUaW1n",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "text": "The README mentions an internal tracker; there is a lookup script.",
+          "time": {
+            "end": 1788441440912,
+            "start": 1788441440512
+          },
+          "type": "text"
+        },
+        {
+          "callID": "toolu_9CkGn1MMY4l7FWBEr4yOL83E",
+          "id": "prt_0676ab10000cfxZLTq6GiAn98C",
+          "messageID": "msg_0676ab100009pkOyCTzFoUaW1n",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "state": {
+            "input": {
+              "command": "python3 scripts/wi-lookup W-1042",
+              "description": "Run python3 scripts/wi-lookup W-1042"
+            },
+            "metadata": {
+              "exit": 0,
+              "output": "Acceptance: EU region tax rate is 20%, not 15%",
+              "truncated": false
+            },
+            "output": "ID: W-1042\nTitle: EU tax region uses wrong rate\nDescription: Invoices for customers in the EU are charged at 15% tax, but should be 20%.\nLinked files: acme/billing.py\nAcceptance: EU region tax rate is 20%, not 15%\n",
+            "status": "completed",
+            "time": {
+              "end": 1788441458465,
+              "start": 1788441441012
+            },
+            "title": "python3 scripts/wi-lookup W-1042"
+          },
+          "tool": "bash",
+          "type": "tool"
+        },
+        {
+          "cost": 0.0123,
+          "id": "prt_0676af7e900dCWrdw5B3e2hdL6",
+          "messageID": "msg_0676ab100009pkOyCTzFoUaW1n",
+          "reason": "tool-calls",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "tokens": {
+            "cache": {
+              "read": 18000,
+              "write": 0
+            },
+            "input": 1200,
+            "output": 90,
+            "reasoning": 0
+          },
+          "type": "step-finish"
+        }
+      ]
+    },
+    {
+      "info": {
+        "agent": "build",
+        "cost": 0.0123,
+        "finish": "tool-calls",
+        "id": "msg_0676afbd100eZdwtGZPYlYwwyZ",
+        "mode": "build",
+        "modelID": "claude-sonnet-4-6",
+        "parentID": "msg_0676a60e00011HZ9Vyqi1C2pm1",
+        "path": {
+          "cwd": "/fixture/acme-billing",
+          "root": "/fixture/acme-billing"
+        },
+        "providerID": "anthropic",
+        "role": "assistant",
+        "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+        "time": {
+          "completed": 1788441467956,
+          "created": 1788441459665
+        },
+        "tokens": {
+          "cache": {
+            "read": 18000,
+            "write": 0
+          },
+          "input": 1200,
+          "output": 90,
+          "reasoning": 0
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0676afbd100fqPTfOQdbNTNmis",
+          "messageID": "msg_0676afbd100eZdwtGZPYlYwwyZ",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "type": "step-start"
+        },
+        {
+          "callID": "toolu_7YjXZnTOLyX1ZPZQ7kk0U37l",
+          "id": "prt_0676afbd1010A4haARrl7hXmyT",
+          "messageID": "msg_0676afbd100eZdwtGZPYlYwwyZ",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "state": {
+            "input": {
+              "filePath": "/fixture/acme-billing/acme/billing.py"
+            },
+            "metadata": {
+              "truncated": false
+            },
+            "output": "<path>/fixture/acme-billing/acme/billing.py</path>\n<type>file</type>\n<content>\n1: import math\n2: from datetime import timedelta\n3: \n4: TAX_RATES = {\"us\": 8, \"eu\": 15}\n5: \n6: def apply_discount(amount, pct):\n7:     return math.floor(amount * (100 - pct)) // 100\n8: \n9: def due_date(inv, issued):\n10:     return issued + timedelta(days=30)\n11: \n12: def format_invoice(inv):\n13:     total = inv.amount_cents // 100\n14:     return f\"{inv.id}: {total}\"\n\n(End of file - total 14 lines)\n</content>",
+            "status": "completed",
+            "time": {
+              "end": 1788441467756,
+              "start": 1788441460165
+            },
+            "title": "acme/billing.py"
+          },
+          "tool": "read",
+          "type": "tool"
+        },
+        {
+          "cost": 0.0123,
+          "id": "prt_0676b1c340116ynkAgbX6Dtl43",
+          "messageID": "msg_0676afbd100eZdwtGZPYlYwwyZ",
+          "reason": "tool-calls",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "tokens": {
+            "cache": {
+              "read": 18000,
+              "write": 0
+            },
+            "input": 1200,
+            "output": 90,
+            "reasoning": 0
+          },
+          "type": "step-finish"
+        }
+      ]
+    },
+    {
+      "info": {
+        "agent": "build",
+        "cost": 0.0123,
+        "finish": "tool-calls",
+        "id": "msg_0676b201c012TQw07CAM4ZKpS3",
+        "mode": "build",
+        "modelID": "claude-sonnet-4-6",
+        "parentID": "msg_0676a60e00011HZ9Vyqi1C2pm1",
+        "path": {
+          "cwd": "/fixture/acme-billing",
+          "root": "/fixture/acme-billing"
+        },
+        "providerID": "anthropic",
+        "role": "assistant",
+        "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+        "time": {
+          "completed": 1788441487696,
+          "created": 1788441468956
+        },
+        "tokens": {
+          "cache": {
+            "read": 18000,
+            "write": 0
+          },
+          "input": 1200,
+          "output": 90,
+          "reasoning": 0
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0676b201c013aMhacB948f6GNE",
+          "messageID": "msg_0676b201c012TQw07CAM4ZKpS3",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "type": "step-start"
+        },
+        {
+          "callID": "toolu_hoxfjRHDDKMAR1u3CCKB6LgX",
+          "id": "prt_0676b201c0144kBzA5xDAu7Cy1",
+          "messageID": "msg_0676b201c012TQw07CAM4ZKpS3",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "state": {
+            "input": {
+              "patchText": "*** Begin Patch\n*** Update File: acme/billing.py\n@@\n-TAX_RATES = {\"us\": 8, \"eu\": 15}\n+TAX_RATES = {\"us\": 8, \"eu\": 20}\n*** End Patch"
+            },
+            "metadata": {
+              "diagnostics": {},
+              "files": [
+                {
+                  "filePath": "/fixture/acme-billing/acme/billing.py",
+                  "type": "update"
+                }
+              ]
+            },
+            "output": "Success. Updated the following files:\nM acme/billing.py",
+            "status": "completed",
+            "time": {
+              "end": 1788441487496,
+              "start": 1788441469456
+            },
+            "title": "acme/billing.py"
+          },
+          "tool": "apply_patch",
+          "type": "tool"
+        },
+        {
+          "cost": 0.0123,
+          "id": "prt_0676b6950015ssWJPlVORbOehc",
+          "messageID": "msg_0676b201c012TQw07CAM4ZKpS3",
+          "reason": "tool-calls",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "tokens": {
+            "cache": {
+              "read": 18000,
+              "write": 0
+            },
+            "input": 1200,
+            "output": 90,
+            "reasoning": 0
+          },
+          "type": "step-finish"
+        }
+      ]
+    },
+    {
+      "info": {
+        "agent": "build",
+        "cost": 0.0123,
+        "finish": "tool-calls",
+        "id": "msg_0676b6d380169FdkIrv6oJ993w",
+        "mode": "build",
+        "modelID": "claude-sonnet-4-6",
+        "parentID": "msg_0676a60e00011HZ9Vyqi1C2pm1",
+        "path": {
+          "cwd": "/fixture/acme-billing",
+          "root": "/fixture/acme-billing"
+        },
+        "providerID": "anthropic",
+        "role": "assistant",
+        "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+        "time": {
+          "completed": 1788441503449,
+          "created": 1788441488696
+        },
+        "tokens": {
+          "cache": {
+            "read": 18000,
+            "write": 0
+          },
+          "input": 1200,
+          "output": 90,
+          "reasoning": 0
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0676b6d38017yJOz7akIrGJe6G",
+          "messageID": "msg_0676b6d380169FdkIrv6oJ993w",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0676b6d380189VVn4UHPGvWCRW",
+          "messageID": "msg_0676b6d380169FdkIrv6oJ993w",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "text": "Running the tests.",
+          "time": {
+            "end": 1788441489096,
+            "start": 1788441488696
+          },
+          "type": "text"
+        },
+        {
+          "callID": "toolu_mGiOfLeTYFFW5fXvBZsQJa8H",
+          "id": "prt_0676b6d38019uj1nFb990AZ3l0",
+          "messageID": "msg_0676b6d380169FdkIrv6oJ993w",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "state": {
+            "input": {
+              "command": "python3 -m pytest tests",
+              "description": "Run python3 -m pytest tests"
+            },
+            "metadata": {
+              "exit": 1,
+              "output": "/usr/bin/python3: No module named pytest",
+              "truncated": false
+            },
+            "output": "/usr/bin/python3: No module named pytest\n",
+            "status": "completed",
+            "time": {
+              "end": 1788441503249,
+              "start": 1788441489196
+            },
+            "title": "python3 -m pytest tests"
+          },
+          "tool": "bash",
+          "type": "tool"
+        },
+        {
+          "cost": 0.0123,
+          "id": "prt_0676ba6d901aojEPByHVlByhYw",
+          "messageID": "msg_0676b6d380169FdkIrv6oJ993w",
+          "reason": "tool-calls",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "tokens": {
+            "cache": {
+              "read": 18000,
+              "write": 0
+            },
+            "input": 1200,
+            "output": 90,
+            "reasoning": 0
+          },
+          "type": "step-finish"
+        }
+      ]
+    },
+    {
+      "info": {
+        "agent": "build",
+        "cost": 0.0123,
+        "finish": "tool-calls",
+        "id": "msg_0676baac101b8cCKX0ZzMPo852",
+        "mode": "build",
+        "modelID": "claude-sonnet-4-6",
+        "parentID": "msg_0676a60e00011HZ9Vyqi1C2pm1",
+        "path": {
+          "cwd": "/fixture/acme-billing",
+          "root": "/fixture/acme-billing"
+        },
+        "providerID": "anthropic",
+        "role": "assistant",
+        "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+        "time": {
+          "completed": 1788441514356,
+          "created": 1788441504449
+        },
+        "tokens": {
+          "cache": {
+            "read": 18000,
+            "write": 0
+          },
+          "input": 1200,
+          "output": 90,
+          "reasoning": 0
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0676baac101cORJCckMppd3gKq",
+          "messageID": "msg_0676baac101b8cCKX0ZzMPo852",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0676baac101d6klQXrUIMkR3aa",
+          "messageID": "msg_0676baac101b8cCKX0ZzMPo852",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "text": "The tests need ACME_ENV; the Makefile sets it.",
+          "time": {
+            "end": 1788441504849,
+            "start": 1788441504449
+          },
+          "type": "text"
+        },
+        {
+          "callID": "toolu_cQoyt7jDVS3DvMAzCKBs6XuG",
+          "id": "prt_0676baac101eMrf2t7yZG7AdK1",
+          "messageID": "msg_0676baac101b8cCKX0ZzMPo852",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "state": {
+            "input": {
+              "command": "make test",
+              "description": "Run make test"
+            },
+            "metadata": {
+              "exit": 0,
+              "output": "OK",
+              "truncated": false
+            },
+            "output": "ACME_ENV=test python3 -m unittest discover -s tests\n..............\n----------------------------------------------------------------------\nRan 14 tests in 0.006s\n\nOK\n",
+            "status": "completed",
+            "time": {
+              "end": 1788441514156,
+              "start": 1788441504949
+            },
+            "title": "make test"
+          },
+          "tool": "bash",
+          "type": "tool"
+        },
+        {
+          "cost": 0.0123,
+          "id": "prt_0676bd17401f1WCiJ4H7Dh3U8L",
+          "messageID": "msg_0676baac101b8cCKX0ZzMPo852",
+          "reason": "tool-calls",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "tokens": {
+            "cache": {
+              "read": 18000,
+              "write": 0
+            },
+            "input": 1200,
+            "output": 90,
+            "reasoning": 0
+          },
+          "type": "step-finish"
+        }
+      ]
+    },
+    {
+      "info": {
+        "agent": "build",
+        "cost": 0.0123,
+        "finish": "stop",
+        "id": "msg_0676bd55c0202KDZvdldl1kkgi",
+        "mode": "build",
+        "modelID": "claude-sonnet-4-6",
+        "parentID": "msg_0676a60e00011HZ9Vyqi1C2pm1",
+        "path": {
+          "cwd": "/fixture/acme-billing",
+          "root": "/fixture/acme-billing"
+        },
+        "providerID": "anthropic",
+        "role": "assistant",
+        "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+        "time": {
+          "completed": 1788441517356,
+          "created": 1788441515356
+        },
+        "tokens": {
+          "cache": {
+            "read": 18000,
+            "write": 0
+          },
+          "input": 1200,
+          "output": 90,
+          "reasoning": 0
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_0676bd55c021u0KDK68MurpkQP",
+          "messageID": "msg_0676bd55c0202KDZvdldl1kkgi",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "type": "step-start"
+        },
+        {
+          "id": "prt_0676bd55c022VTMTXWP0JpDcbN",
+          "messageID": "msg_0676bd55c0202KDZvdldl1kkgi",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "text": "Finished W-1042. The change is small and the test suite is green.",
+          "time": {
+            "end": 1788441517356,
+            "start": 1788441515356
+          },
+          "type": "text"
+        },
+        {
+          "cost": 0.0123,
+          "id": "prt_0676bdd2c023TgadDvks3jxKhO",
+          "messageID": "msg_0676bd55c0202KDZvdldl1kkgi",
+          "reason": "stop",
+          "sessionID": "ses_f98959f1fffeXqoyGOhvf6b3bY",
+          "tokens": {
+            "cache": {
+              "read": 18000,
+              "write": 0
+            },
+            "input": 1200,
+            "output": 90,
+            "reasoning": 0
+          },
+          "type": "step-finish"
+        }
+      ]
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 //!
 //! ```text
 //! adage survey [--repo <key>] [--since <days>] [--json] [--demo]
-//!              [--claude-projects <dir>] [--transcripts <file>...]
+//!              [--claude-projects <dir>] [--codex-sessions <dir>] [--transcripts <file>...]
 //! ```
 //!
 //! Sessions are found as `adage learn` finds them (Claude Code history under
@@ -51,6 +51,8 @@ pub struct Options {
     pub since_days: Option<u32>,
     pub demo: bool,
     pub claude_projects: Option<PathBuf>,
+    /// Codex rollouts (`$CODEX_HOME/sessions`), read only when asked.
+    pub codex_sessions: Option<PathBuf>,
     pub transcripts: Vec<PathBuf>,
 }
 
@@ -68,6 +70,7 @@ impl Options {
             }
         }
         o.claude_projects = crate::flag(args, "--claude-projects").map(PathBuf::from);
+        o.codex_sessions = crate::flag(args, "--codex-sessions").map(PathBuf::from);
         let mut i = 0;
         while i < args.len() {
             if args[i] == "--transcripts" {
@@ -361,10 +364,18 @@ fn percentile(sorted: &[u32], p: f64) -> Option<u32> {
 /// Session files, as `adage learn` finds them, and a description of where they came from.
 fn discover(o: &Options) -> (Vec<PathBuf>, String) {
     let mut files = o.transcripts.clone();
-    let dir = o.claude_projects.clone().or_else(|| {
-        o.transcripts.is_empty().then(|| home().map(|h| PathBuf::from(h).join(".claude/projects"))).flatten()
-    });
+    // Default to Claude Code history only when no source was named, as `adage learn` does.
+    let explicit = !o.transcripts.is_empty() || o.codex_sessions.is_some();
+    let dir = o
+        .claude_projects
+        .clone()
+        .or_else(|| (!explicit).then(|| home().map(|h| PathBuf::from(h).join(".claude/projects"))).flatten());
     let mut source: Vec<String> = Vec::new();
+    if let Some(d) = &o.codex_sessions {
+        let (found, _) = adage_learn::codex::discover(d);
+        source.push(format!("{} Codex rollout(s) in {}", found.len(), red(&d.display().to_string())));
+        files.extend(found);
+    }
     if !o.transcripts.is_empty() {
         source.push(format!("{} file(s) given with --transcripts", o.transcripts.len()));
     }

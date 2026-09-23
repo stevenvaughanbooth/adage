@@ -111,11 +111,12 @@ hook outputs per harness, and hostile-payload suites. Clippy is clean.
 
 | Harness | What cannot work today | Why |
 | --- | --- | --- |
-| Codex | Dead-end routes | Hooks receive no failure signal (openai/codex#34289); the adapter already accepts one if added |
-| Codex | Learning from history | Session log format under `~/.codex/sessions` is undocumented |
+| Codex | After-failure routes (authored or imported) | Hooks receive no failure signal (openai/codex#34289, still so at rust-v0.156.1); the adapter already accepts one if added. Learned dead ends are unaffected: they are announced at the first prompt, and are learned from Codex rollouts, which record exit codes |
+| Codex | ~~Learning from history~~ | Built: `adage learn --codex-sessions` reads rollouts, format read from source (rust-v0.156.1, older shapes at rust-v0.40.0); undocumented, so a release may change it |
 | OpenCode | A true finish-line Stop block | No stop hook (#16626); Adage sends a synthetic prompt on `session.idle` |
-| OpenCode | Learning from on-disk history | Storage is an undocumented, changing SQLite schema; `opencode export` files work |
+| OpenCode | Learning from on-disk history | The SQLite schema is known from source but undocumented and migrating; `opencode export` files work, and `opencode session list --format json` plus `export` exports a whole history with documented commands |
 | Both | Invisible directives | Directives are visible to the user in both UIs |
+| Both | Verified only in simulation | The harness simulator (`crates/adage-sim`) proves learning and delivery against the formats as read from source; the harnesses themselves have not been run (docs/harnesses.md, Verification) |
 
 ### 4.3 Intent families
 
