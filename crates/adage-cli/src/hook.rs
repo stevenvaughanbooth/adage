@@ -8,7 +8,7 @@ use crate::harness::{self, Output};
 use adage_core::{repo, CommandTable};
 use adage_intent::model::{self, StaticModel};
 use adage_intent::normalize::normalize;
-use adage_runtime::{assign_arm, decide, render, Arm, Ctx, SessionState};
+use adage_runtime::{assign_arm, decide, rebuild, render, Arm, Ctx, SessionState};
 use adage_store::{spool, state, Paths};
 use adage_tracks::Index;
 use serde_json::{json, Value};
@@ -59,7 +59,15 @@ pub fn run(harness: &str, event: &str) -> Result<Option<String>, Failure> {
     let ctx = Ctx { index: &index, repo: repo_key.clone(), root: &root, table: &table, embed: Some(&embed) };
     let arm_env = std::env::var("ADAGE_ARM").ok();
     let share: f64 = std::env::var("ADAGE_HOLDOUT").ok().and_then(|v| v.parse().ok()).unwrap_or(0.1);
-    let (decision, arm) = state::update::<SessionState, _>(&paths.state(&session), |st| {
+    let spool_path = paths.spool(&session);
+    // A state that can no longer be read is rebuilt from the session's spool, if it is small
+    // enough to replay quickly (it is read under the state lock).
+    let rebuild = || {
+        let small = std::fs::metadata(&spool_path).is_ok_and(|m| m.len() <= rebuild::MAX_SPOOL_BYTES);
+        let records: Vec<Value> = if small { spool::read_all(&spool_path).ok()? } else { return None };
+        rebuild::rebuild(&records, &index, &repo_key, &table)
+    };
+    let (decision, arm) = state::update_or_rebuild::<SessionState, _>(&paths.state(&session), rebuild, |st| {
         if st.arm.is_none() {
             st.arm = Some(match arm_env.as_deref() {
                 Some("holdout") => Arm::Holdout,
@@ -73,7 +81,7 @@ pub fn run(harness: &str, event: &str) -> Result<Option<String>, Failure> {
     .map_err(|e| Failure::io("state", "updating the session state", &e))?;
 
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    let mut rec = json!({ "ts": ts, "event": event, "arm": arm, "generation": index.generation, "decision": decision });
+    let mut rec = json!({ "ts": ts, "event": event, "kind": ev.name(), "arm": arm, "repo": repo_key, "generation": index.generation, "decision": decision });
     if adapter.name() != "claude" {
         rec["harness"] = json!(adapter.name());
     }

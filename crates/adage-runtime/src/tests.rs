@@ -403,3 +403,90 @@ fn dead_ends_and_linked_files_state_their_exit_condition() {
     let text = render::route_text(&r, &[("files".into(), "a.py, b.py".into())]).unwrap();
     assert!(text.ends_with("one at a time. Ignore this if the user is asking for something else."), "{text}");
 }
+
+/// The fields a rebuild restores, as JSON (Obligation has no PartialEq).
+fn restored(st: &SessionState) -> serde_json::Value {
+    json!({
+        "arm": st.arm, "repo": st.repo, "prompts": st.prompts, "batches": st.batches,
+        "emitted": st.emitted, "obligations": st.obligations, "history": st.history,
+        "first_edit_at_batch": st.first_edit_at_batch, "stop_requests": st.stop_requests,
+    })
+}
+
+#[test]
+fn state_rebuilt_from_the_spool_matches_the_live_state_after_every_event() {
+    let (dir, index, table) = fixture();
+    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let edit = |f: &str| Call {
+        tool: "Edit".into(),
+        input: json!({ "file_path": dir.path().join(f).to_string_lossy() }),
+        output: String::new(),
+        failed: false,
+    };
+    let lookup_out = r#"{"id":"W-2042","linked_files":["acme/billing.py"]}"#;
+    let failed = Call { failed: true, ..bash("python3 -m unittest", "RuntimeError: ACME_ENV is not set") };
+    let events = vec![
+        ("SessionStart", Event::SessionStart),
+        ("UserPromptSubmit", Event::Prompt { text: "Pick up W-2042 please".into() }),
+        ("PostToolBatch", Event::Batch { calls: vec![bash("./scripts/wi-lookup W-2042 --json", lookup_out)] }),
+        ("PostToolBatch", Event::Batch { calls: vec![edit("schema/invoice.json"), bash("ls", "x")] }),
+        ("PostToolUseFailure", Event::Failure { call: failed }),
+        ("Stop", Event::Stop { stop_hook_active: false }),
+        ("PostToolBatch", Event::Batch { calls: vec![bash("make gen", "ok")] }),
+        ("Stop", Event::Stop { stop_hook_active: false }),
+        ("UserPromptSubmit", Event::Prompt { text: "and W-2043".into() }),
+    ];
+    for holdout in [false, true] {
+        let mut st = SessionState {
+            arm: Some(if holdout { Arm::Holdout } else { Arm::Treated }),
+            repo: Some("acme".into()),
+            ..Default::default()
+        };
+        let mut records: Vec<serde_json::Value> = Vec::new();
+        for (i, (name, ev)) in events.iter().enumerate() {
+            let d = decide(&ctx, &mut st, ev);
+            // What the hook spools; the second half of the session in the old format (no `kind`
+            // or `repo`), which the rebuild maps by event name.
+            let mut rec =
+                json!({ "ts": i, "event": name, "arm": st.arm, "generation": index.generation, "decision": d });
+            if i < 4 {
+                rec["kind"] = json!(ev.name());
+                rec["repo"] = json!("acme");
+            }
+            records.push(rec);
+            let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+            assert_eq!(restored(&rebuilt), restored(&st), "after event {i} ({name}), holdout {holdout}");
+        }
+        assert_eq!(st.emitted.len(), 4, "lookup, dead end, linked files, finish line");
+        assert_eq!((st.stop_requests, st.obligations[0].met), (1, true));
+    }
+}
+
+#[test]
+fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
+    // A re-arming edit after the obligation was met is invisible in the spool (it keeps call keys,
+    // not paths): the rebuilt obligation stays met, so it can miss a request, never add one.
+    let (dir, index, table) = fixture();
+    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let edit = |f: &str| Call {
+        tool: "Edit".into(),
+        input: json!({ "file_path": dir.path().join(f).to_string_lossy() }),
+        output: String::new(),
+        failed: false,
+    };
+    let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+    let mut records = Vec::new();
+    for ev in [
+        Event::Batch { calls: vec![edit("schema/a.json")] },
+        Event::Batch { calls: vec![bash("make gen", "ok")] },
+        Event::Batch { calls: vec![edit("schema/b.json")] },
+    ] {
+        let d = decide(&ctx, &mut st, &ev);
+        records.push(json!({ "kind": ev.name(), "arm": st.arm, "decision": d }));
+    }
+    let mut rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+    assert!(!st.obligations[0].met && rebuilt.obligations[0].met);
+    let live = decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false });
+    let quiet = decide(&ctx, &mut rebuilt, &Event::Stop { stop_hook_active: false });
+    assert!(live.continue_reason.is_some() && quiet.continue_reason.is_none());
+}

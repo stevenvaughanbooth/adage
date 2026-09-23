@@ -44,6 +44,10 @@ version as the GitHub Release notes.
   yet, SHA-256, shallow, alternates) is keyed by a hash of its path. Routes learned under the bare
   directory name keep working until `adage learn` re-keys a repository of that name. New
   dependency: `miniz_oxide` (MIT OR Zlib OR Apache-2.0), with `adler2`.
+- **A corrupt session state started the session over**, so a dead end could be announced twice
+  and a finish-line obligation forgotten. When neither state slot can be read, the hook now
+  rebuilds the state from the session's spool (up to 4 MiB): emitted routes, obligations, stop
+  requests, arm, repository and counters. Spool records gain `kind` and `repo` fields.
 - **Environment steps reached agents without a person's approval** (Design O11). Unknown commands
   are classified as environment, and a learned route running one was delivered at yellow at once.
   Learned and imported environment routes now start as drafts, which are never delivered, and

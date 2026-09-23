@@ -166,13 +166,17 @@ Closed since draft 2:
   of the path, which copies do not share. Bare-name keys from before still apply until a
   repository of that name is re-keyed. Hook p50/p95 unchanged within 0.1–0.2 ms; a cold cache
   costs one walk (38 ms for 5,000 packed commits, about 0.45 s for 50,000).
+- A state file that can no longer be read (both slots fail their CRC, or the payload no longer
+  parses) is rebuilt from the session's spool (at most 4 MiB, 10,000 records): arm, repository,
+  counters, emitted routes, history, finish-line obligations and stop requests. Spool records now
+  carry `kind` and `repo`; older ones are mapped by event name. The watermark fold S3 also
+  proposed is not built: the state stays authoritative while readable.
 
 Open:
 
 | Gap | Impact | Fix |
 | --- | --- | --- |
 | A linked worktree does not see its repository's `origin` (the config lives in the common git directory; `repo_key` reads `<root>/.git/config`) | A worktree is keyed `<worktree dir>@<root commit>`, so it does not share the main checkout's routes | Read `origin` from the common directory (`gitobj::Repo` already finds it); re-keys existing worktree routes |
-| State files are never rebuilt from the spool (S3 recommended a watermark and rebuild on CRC failure) | If both slots are corrupt, a session's state resets | Rebuild from the spool, or document state as a best-effort cache |
 | Directive text over 9,500 bytes is truncated, not spilled to a file (Design W8) | Only reachable with many long directives at once | Spill to a file and point to it |
 | Payloads over 8 MiB are not drained from stdin (Design §13.3) | The harness may see a broken pipe | Drain and discard |
 | No precomputed no-match key set (Design §13.2) | Every event in a repository with routes pays the full decision path (about 3 ms) | Precompute trigger keys in the index |

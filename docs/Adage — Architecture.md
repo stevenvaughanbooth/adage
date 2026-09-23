@@ -221,7 +221,9 @@ collides with another).
 an exclusive lock (`File::lock`: `flock` on Unix, `LockFileEx` on Windows), with no `fsync`. The
 reader takes the newest slot whose CRC is valid. The CRC covers the sequence number and length as
 well as the payload: covering only the payload let a torn write resurrect a state two writes old
-(eval bug 8). If both slots are invalid, the state starts again from its default.
+(eval bug 8). If both slots are invalid, or the newest payload no longer parses, the state is
+rebuilt from the session's spool (below); with no spool, or one over 4 MiB, it starts again from
+its default.
 
 The state (`SessionState` in `adage-runtime`) holds:
 
@@ -242,17 +244,23 @@ resynchronises on the next magic after a torn or corrupt frame, so a crash costs
 record. Each hook appends one record:
 
 ```text
-{ ts, event, arm, generation, harness?, decision: {
+{ ts, event, kind, arm, repo, generation, harness?, decision: {
     directives, would_have, continue_reason?, would_continue?, judgements, observed } }
 ```
 
 `observed` holds canonical template keys, not raw commands, and no prompt text is recorded.
+`kind` (the runtime event) and `repo` were added for rebuilds; older records are read by their
+harness event name.
 
 **Deviation from S3.** S3 recommended treating the state as a cache over the spool: fold spool
-records newer than a watermark, and rebuild on a CRC failure. That is not built. The hook never
-reads the spool. The state is authoritative for the session, and the spool is an audit log read
-by `report`, `graph`, `review` and `doctor`. Decisions read the current batch from the synchronous
-payload, which S3 identified as the condition under which the state stays exact.
+records newer than a watermark, and rebuild on a CRC failure. Only the rebuild is built. The state
+is authoritative for the session while it can be read, and the spool is an audit log read by
+`report`, `graph`, `review` and `doctor`. When the state cannot be read, the hook replays the
+spool's recorded decisions under the state lock (`adage_runtime::rebuild`, at most 4 MiB and
+10,000 records): arm, repository, counters, emitted routes, history, finish-line obligations
+(from the index) and stop requests. An in-flight follow judgement is dropped, and an obligation
+re-armed by an edit after it was met stays met, since the spool keeps call keys, not paths: a
+rebuilt session can miss a stop request, never make an extra one.
 
 ### 4.5 The index (A4)
 

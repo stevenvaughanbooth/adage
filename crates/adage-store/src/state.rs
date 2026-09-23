@@ -117,11 +117,32 @@ pub fn update<T, R>(path: &Path, f: impl FnOnce(&mut T) -> R) -> io::Result<R>
 where
     T: Serialize + DeserializeOwned + Default,
 {
+    update_or_rebuild(path, || None, f)
+}
+
+/// [`update`], but a state that was written and can no longer be read (both slots fail their
+/// CRC, or the newest payload no longer parses) starts from `rebuild()` instead of the default,
+/// when it gives one. `rebuild` runs under the file's exclusive lock, so it must be bounded. A new
+/// (empty) file starts from the default without it.
+pub fn update_or_rebuild<T, R>(
+    path: &Path,
+    rebuild: impl FnOnce() -> Option<T>,
+    f: impl FnOnce(&mut T) -> R,
+) -> io::Result<R>
+where
+    T: Serialize + DeserializeOwned + Default,
+{
     let file = open(path)?;
     file.lock()?;
     let current = newest(&file);
     let (target, seq, mut state) = match &current {
-        Some((idx, seq, payload)) => (1 - idx, seq + 1, serde_json::from_slice::<T>(payload).unwrap_or_default()),
+        Some((idx, seq, payload)) => {
+            let state = serde_json::from_slice::<T>(payload).ok().or_else(rebuild).unwrap_or_default();
+            (1 - idx, seq + 1, state)
+        }
+        // Written before, but neither slot is valid now: corrupt. (Neither can win over slot 0's
+        // next write, so its sequence can start again.)
+        None if file.metadata()?.len() > 0 => (0, 1, rebuild().unwrap_or_default()),
         None => (0, 1, T::default()),
     };
     let out = f(&mut state);
@@ -208,6 +229,51 @@ mod tests {
         let f = OpenOptions::new().write(true).open(&p).unwrap();
         pos::write_all_at(&f, &4u64.to_le_bytes(), (SLOT + 4) as u64).unwrap();
         assert_eq!(read::<S>(&p).unwrap().n, 3, "the previous state, not an older one");
+    }
+
+    fn corrupt_both(p: &Path) {
+        let f = OpenOptions::new().write(true).open(p).unwrap();
+        for slot in 0..2 {
+            pos::write_all_at(&f, b"garbage", (slot * SLOT + HEADER) as u64).unwrap();
+        }
+    }
+
+    #[test]
+    fn unreadable_state_is_rebuilt_and_only_then() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("x.state");
+        let rebuilt = || Some(S { n: 40, v: vec!["from the spool".into()] });
+        // A new file: the default, and no rebuild.
+        update_or_rebuild::<S, _>(&p, || panic!("nothing to rebuild"), |s| s.n += 1).unwrap();
+        update::<S, _>(&p, |s| s.n += 1).unwrap();
+        // A readable state: no rebuild.
+        update_or_rebuild::<S, _>(&p, || panic!("state is readable"), |s| s.n += 1).unwrap();
+        assert_eq!(read::<S>(&p).unwrap().n, 3);
+        // Both slots corrupt: the rebuilt state, and the update applies to it.
+        corrupt_both(&p);
+        assert_eq!(read::<S>(&p).unwrap(), S::default(), "unreadable");
+        update_or_rebuild::<S, _>(&p, rebuilt, |s| s.n += 1).unwrap();
+        assert_eq!(read::<S>(&p).unwrap(), S { n: 41, v: vec!["from the spool".into()] });
+        // And the file is healthy again.
+        update_or_rebuild::<S, _>(&p, || panic!("healthy"), |s| s.n += 1).unwrap();
+        assert_eq!(read::<S>(&p).unwrap().n, 42);
+        // Nothing to rebuild from: the default, as before.
+        corrupt_both(&p);
+        update_or_rebuild::<S, _>(&p, || None, |s| s.n += 1).unwrap();
+        assert_eq!(read::<S>(&p).unwrap().n, 1);
+    }
+
+    #[test]
+    fn a_payload_that_no_longer_parses_is_rebuilt() {
+        #[derive(Default, Serialize, Deserialize, Debug, PartialEq)]
+        struct Other {
+            n: String,
+        }
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("x.state");
+        update::<Other, _>(&p, |s| s.n = "not a number".into()).unwrap();
+        update_or_rebuild::<S, _>(&p, || Some(S { n: 7, v: vec![] }), |s| s.n += 1).unwrap();
+        assert_eq!(read::<S>(&p).unwrap().n, 8);
     }
 
     #[test]
