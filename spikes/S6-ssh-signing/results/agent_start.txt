@@ -1,0 +1,3 @@
+SSH_AUTH_SOCK=/Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/sandbox/agent.sock; export SSH_AUTH_SOCK;
+SSH_AGENT_PID=97895; export SSH_AGENT_PID;
+echo Agent pid 97895;

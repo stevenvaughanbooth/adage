@@ -1,0 +1,4 @@
+$ ssh-keygen -Y sign -f /Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/keys/dev_ed25519.pub -n adage-track /Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/sandbox/s2.msg
+Signing file /Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/sandbox/s2.msg
+Write signature to /Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/sandbox/s2.msg.sig
+[exit 0]

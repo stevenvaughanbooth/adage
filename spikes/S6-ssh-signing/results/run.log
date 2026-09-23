@@ -1,0 +1,22 @@
+
+=== 0. Build ===
+
+=== 1. Keys and a private ssh-agent (never touches ~/.ssh or the real agent) ===
+wrote "/Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/keys/dev_ed25519" and "/Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/keys/dev_ed25519.pub"
+fingerprint: SHA256:RRS1qaB387PKzfCznKbu671wfEMVUfDtUg0KIWhXLZE
+
+=== 2. A sample track directory + canonical digest ===
+
+=== 3. Four signers over the same canonical digest, namespace=adage-track ===
+
+=== 4. Interoperability matrix: 4 signers x 2 verifiers ===
+
+=== 5. Namespace enforcement: a git-namespace signature must not verify as adage-track ===
+
+=== 6. Tamper tests ===
+
+=== 7. valid-after / valid-before enforcement ===
+
+=== 8. git config plumbing (gpg.format=ssh, user.signingkey, gpg.ssh.allowedSignersFile) ===
+
+=== Done. See results/ for raw output and results/matrix.csv for the interoperability matrix. ===

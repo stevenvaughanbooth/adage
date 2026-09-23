@@ -1,0 +1,1 @@
+signed "/Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/results/track.digest" -> "/Users/stevenbooth/Documents/skill-compile/spikes/S6-ssh-signing/results/S3_git_ns.sig" (namespace="git", key file)

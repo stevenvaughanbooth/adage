@@ -1,0 +1,21 @@
+-- Rust verify, correct namespace (git) --
+GOOD signature: namespace="git" principal(s)=["steven"] key=SHA256:RRS1qaB387PKzfCznKbu671wfEMVUfDtUg0KIWhXLZE alg=Ed25519
+exit=0
+-- Rust verify, WRONG namespace (adage-track) on a git-namespace signature --
+REJECT: key matched but cryptographic verification failed: namespace invalid
+Error: signature did not verify against any matching allowed_signers entry
+exit=1
+-- ssh-keygen -Y verify, WRONG namespace (adage-track) on a git-namespace signature --
+Couldn't verify signature: namespace does not match
+Could not verify signature.
+exit=255
+-- git commit signature namespace field --
+-----BEGIN SSH SIGNATURE-----
+-- Rust verify of the REAL git commit signature, namespace=adage-track (expect reject) --
+REJECT: key matched but cryptographic verification failed: namespace invalid
+Error: signature did not verify against any matching allowed_signers entry
+exit=1
+-- ssh-keygen -Y verify of the REAL git commit signature, namespace=adage-track (expect reject) --
+Couldn't verify signature: namespace does not match
+Could not verify signature.
+exit=255
