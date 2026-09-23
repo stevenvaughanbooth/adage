@@ -228,8 +228,13 @@ pub fn resolve_path(cwd: &str, p: &str) -> String {
     if p.is_empty() {
         return cwd.to_string();
     }
-    if p.starts_with('/') || p.starts_with('~') {
+    if p.starts_with('/') || p.starts_with('~') || windows_absolute(p) {
         return p.to_string();
+    }
+    // A Windows working directory (`C:\x`, `\\?\C:\x`): join and normalise on both separators,
+    // keeping the drive, rather than as a Unix path (which would prefix `/` to `C:`).
+    if windows_absolute(cwd) {
+        return crate::repo::path_parts(&format!("{cwd}/{p}")).join("/");
     }
     if p == "." {
         return cwd.to_string();
@@ -247,6 +252,12 @@ pub fn resolve_path(cwd: &str, p: &str) -> String {
         }
     }
     format!("/{}", stack.join("/"))
+}
+
+/// A Windows absolute path: a drive (`C:\x`, `c:/x`), a `\\?\` verbatim path, or a UNC or
+/// root-relative path starting with `\\`.
+fn windows_absolute(p: &str) -> bool {
+    p.starts_with('\\') || matches!(p.as_bytes(), [d, b':', b'\\' | b'/', ..] if d.is_ascii_alphabetic())
 }
 
 /// Extract (argv, has_var_prefix) for a `command` node: variable_assignment children are
@@ -929,5 +940,36 @@ fn shape_command(cmd: &str, argv: &[String], ops: &[String], cwd: &str, table: &
         mutating,
         confidence,
         note,
+    }
+}
+
+#[cfg(test)]
+mod resolve_tests {
+    use super::resolve_path;
+
+    #[test]
+    fn windows_paths_resolve_on_any_platform() {
+        let cwd = r"\\?\C:\Users\a\acme-billing";
+        // Absolute Windows paths are kept as given (relativize reads every spelling).
+        let abs = r"\\?\C:\Users\a\acme-billing/schema/invoice.json";
+        assert_eq!(resolve_path(cwd, abs), abs);
+        assert_eq!(resolve_path(cwd, r"C:\Users\a\acme-billing\x.py"), r"C:\Users\a\acme-billing\x.py");
+        // Relative paths join onto a Windows cwd, keeping the drive.
+        assert_eq!(resolve_path(cwd, "schema/invoice.json"), "c:/Users/a/acme-billing/schema/invoice.json");
+        assert_eq!(resolve_path(r"C:\r\repo", r"src\..\schema\x.json"), "c:/r/repo/schema/x.json");
+        // Unix is unchanged.
+        assert_eq!(resolve_path("/r/repo", "schema/x.json"), "/r/repo/schema/x.json");
+        assert_eq!(resolve_path("/r/repo", "/etc/hosts"), "/etc/hosts");
+        assert_eq!(resolve_path("/r/repo", "a/../b"), "/r/repo/b");
+    }
+
+    #[test]
+    fn a_windows_edit_relativizes_to_the_glob_path() {
+        let cwd = r"\\?\C:\Users\a\acme-billing";
+        let root = std::path::Path::new(cwd);
+        for p in [r"\\?\C:\Users\a\acme-billing/schema/invoice.json", "schema/invoice.json", r"schema\invoice.json"] {
+            let resolved = resolve_path(cwd, p);
+            assert_eq!(crate::repo::relativize(root, &resolved), "schema/invoice.json", "{p} → {resolved}");
+        }
     }
 }

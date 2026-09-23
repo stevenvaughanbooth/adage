@@ -73,7 +73,7 @@ pub fn relativize(root: &Path, path: &str) -> String {
 /// A path's components, lexically normalised (`.` dropped, `..` applied). A Windows drive path
 /// (`C:\x`, `c:/x`, `\\?\C:\x`) is split on both separators with its drive letter lower-cased;
 /// anything else is split on `/` only (a backslash in a Unix path is an ordinary character).
-fn path_parts(s: &str) -> Vec<String> {
+pub(crate) fn path_parts(s: &str) -> Vec<String> {
     let s = s.strip_prefix(r"\\?\").unwrap_or(s);
     let windows = matches!(s.as_bytes(), [d, b':', ..] if d.is_ascii_alphabetic());
     let mut out: Vec<String> = Vec::new();
