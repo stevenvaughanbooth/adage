@@ -273,7 +273,7 @@ pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
         }],
         effect,
         aspect,
-        state: RouteState::Active,
+        state: initial_state(effect),
         exit: vec![Exit::IntentChanges],
         evidence: Evidence {
             opportunities,

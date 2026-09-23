@@ -189,6 +189,18 @@ pub fn ceiling(effect: Effect, triggered_by_edit: bool) -> Option<Aspect> {
     }
 }
 
+/// The state a learned or imported route starts in (Design §10.4, O11). An environment step may
+/// be delivered only on a route a person approved in `adage review`, so it starts as a draft, which
+/// is never delivered; `approve` puts it into service (yellow at most, its ceiling). Every other
+/// directable step starts in service.
+pub fn initial_state(effect: Effect) -> RouteState {
+    if effect == Effect::Environment {
+        RouteState::Draft
+    } else {
+        RouteState::Active
+    }
+}
+
 /// Wilson score interval lower bound at 95%.
 pub fn wilson_lower(successes: u32, n: u32) -> f64 {
     if n == 0 {

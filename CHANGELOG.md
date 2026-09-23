@@ -31,6 +31,11 @@ version as the GitHub Release notes.
   command, including `python3 -m unittest`, which passes once `ACME_ENV` is set. Dead ends are now
   keyed by failure signature: a runner is named only if its failures share the route's signature
   and it failed in at least 9 in 10 of the sessions that ran it. Route ids are unchanged.
+- **Environment steps reached agents without a person's approval** (Design O11). Unknown commands
+  are classified as environment, and a learned route running one was delivered at yellow at once.
+  Learned and imported environment routes now start as drafts, which are never delivered, and
+  wait in `adage review` (reason "approval") until `approve` puts them into service. Re-learning
+  keeps the approval while the step is unchanged; a different command waits again.
 - **Normalisation depended on machine speed.** Pathological commands were cut off by a 50 ms
   parse timeout, so a slow machine could record a command as unknown where a fast one parsed it.
   The cut-off is now a budget of bytes the lexer may read (2^20, re-reads included), the same on

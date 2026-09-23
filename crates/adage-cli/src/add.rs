@@ -273,12 +273,16 @@ fn install(stage: &Path, src: &Path, paths: &Paths, trust: bool) -> Result<()> {
 
 /// Design O2: imported routes start at probation — yellow for signed, trusted sources, never green.
 /// Routes the author retired or demoted stay out of service. The author's `review.yaml` travels in
-/// the signed package but is not installed: the recipient reviews imports for themselves.
+/// the signed package but is not installed: the recipient reviews imports for themselves, so an
+/// environment step waits as a draft until the recipient approves it (O11).
 fn at_probation(mut t: Track) -> (Track, Vec<Aspect>) {
     let was = t.routes.iter().map(|r| r.aspect).collect();
     for r in &mut t.routes {
         if matches!(r.state, RouteState::Active | RouteState::Probation) {
-            r.state = RouteState::Probation;
+            r.state = match adage_tracks::initial_state(r.effect) {
+                RouteState::Draft => RouteState::Draft,
+                _ => RouteState::Probation,
+            };
         }
         if r.aspect == Aspect::Green {
             r.aspect = Aspect::Yellow;
@@ -325,10 +329,12 @@ mod tests {
             routes: vec![
                 route("live", Aspect::Green, RouteState::Active),
                 route("gone", Aspect::Yellow, RouteState::Retired),
+                Route { effect: adage_core::Effect::Environment, ..route("setup", Aspect::Yellow, RouteState::Active) },
             ],
         };
         let (t, was) = at_probation(t);
-        assert_eq!(was, vec![Aspect::Green, Aspect::Yellow]);
+        assert_eq!(was, vec![Aspect::Green, Aspect::Yellow, Aspect::Yellow]);
+        assert_eq!(t.routes[2].state, RouteState::Draft, "an imported environment step waits for the recipient (O11)");
         assert_eq!((t.routes[0].state, t.routes[0].aspect), (RouteState::Probation, Aspect::Yellow));
         assert_eq!(t.routes[1].state, RouteState::Retired, "a route its author rejected stays retired");
         assert_eq!(t.manifest.track.provenance, "imported:desire-path");
