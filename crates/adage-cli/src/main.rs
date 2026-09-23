@@ -32,6 +32,7 @@ mod reimport;
 mod review;
 mod serve;
 mod share;
+mod survey;
 mod tty;
 
 use adage_learn::{Inputs, LearnConfig};
@@ -78,6 +79,7 @@ fn run(args: &[String]) -> Result<()> {
         Some("graph") if args.iter().any(|a| a == "--serve") => serve::serve(&args[1..], &paths),
         Some("graph") => graph::graph(&args[1..], &paths),
         Some("models") => models::run(&args[1..], &paths),
+        Some("survey") => survey::survey(&args[1..], &paths),
         Some("hooks-config") => {
             let bin = args.get(1).cloned().unwrap_or_else(|| "adage".into());
             println!("{}", serde_json::to_string_pretty(&harness::claude::settings(&bin))?);

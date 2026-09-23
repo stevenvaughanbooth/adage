@@ -105,9 +105,40 @@ pub fn scan(file: &str, text: &str, home: Option<&str>) -> Vec<Finding> {
     out
 }
 
+/// Text safe to print in a report (`adage survey`): the same rules as [`scan`], applied as
+/// replacements. Home-directory paths become `~` (another user's home, `~user`), and tokens,
+/// high-entropy strings and long hex strings become `[redacted]`.
+pub fn scrub(text: &str, home: Option<&str>) -> String {
+    let r = rules();
+    let mut s = text.to_string();
+    if let Some(h) = home.filter(|h| h.len() > 1 && *h != "/") {
+        s = s.replace(h.trim_end_matches('/'), "~");
+    }
+    static OTHER_HOME: OnceLock<Regex> = OnceLock::new();
+    let other = OTHER_HOME.get_or_init(|| Regex::new(r#"/(?:Users|home)/([^/\s"']+)"#).unwrap());
+    s = other.replace_all(&s, "~$1").into_owned();
+    for (_, re) in &r.tokens {
+        s = re.replace_all(&s, "[redacted]").into_owned();
+    }
+    s = r.candidate.replace_all(&s, |c: &regex::Captures| if high_entropy(&c[0]) { "[redacted]".to_string() } else { c[0].to_string() }).into_owned();
+    r.hex.replace_all(&s, |c: &regex::Captures| c[0].replace(&c[1], "[redacted]")).into_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scrub_redacts_what_scan_finds() {
+        let home = Some("/Users/alice");
+        assert_eq!(scrub("cd /Users/alice/src/billing && make", home), "cd ~/src/billing && make");
+        assert_eq!(scrub("see /home/bob/x", home), "see ~bob/x");
+        let token = format!("use ghp_{} now", "A1b2C3d4E5".repeat(4));
+        assert_eq!(scrub(&token, home), "use [redacted] now");
+        assert_eq!(scrub("key q8Zr2LwP9vKx3NmT7bYc5HdJ1fGs here", home), "key [redacted] here");
+        assert_eq!(scrub("commit 9f2c4e1a7b3d5f6e8a0c2b4d6f8e0a1c", home), "commit [redacted]");
+        assert_eq!(scrub("Pick up W-1042 and fix the tests", home), "Pick up W-1042 and fix the tests");
+    }
 
     fn kinds(text: &str) -> Vec<&'static str> {
         scan("f", text, Some("/Users/alice")).into_iter().map(|f| f.kind).collect()
