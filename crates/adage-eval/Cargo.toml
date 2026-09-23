@@ -1,0 +1,28 @@
+[package]
+name = "adage-eval"
+description = "Offline evaluation: learn from a train split, replay held-out sessions through the runtime, score what Adage would have said"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+# Larger property-test case counts and the heavier gates; run in the evals workflow.
+slow = []
+
+[dependencies]
+adage-core = { path = "../adage-core" }
+adage-tracks = { path = "../adage-tracks" }
+adage-runtime = { path = "../adage-runtime" }
+adage-learn = { path = "../adage-learn" }
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+regex.workspace = true
+once_cell.workspace = true
+sha2.workspace = true
+glob.workspace = true
+tempfile = "3"
+
+[dev-dependencies]
+adage-store = { path = "../adage-store" }
+proptest = { version = "1", default-features = false, features = ["std"] }

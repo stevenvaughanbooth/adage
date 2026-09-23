@@ -1,0 +1,190 @@
+{
+ "generation": "8dd5ec01ed76c4bd",
+ "routes": [
+  {
+   "repo": "acme-billing",
+   "route": {
+    "aspect": "red",
+    "authored": false,
+    "effect": "verify",
+    "evidence": {
+     "days": 1,
+     "deviations_failed": 0,
+     "lower_bound": 0.14929517058883945,
+     "median_position": 0.0,
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ],
+     "opportunities": 43,
+     "provenance": "desire-path",
+     "rate": 0.2558139534883721,
+     "successes": 0,
+     "support": 11,
+     "turns_saved": 1.0
+    },
+    "exit": [],
+    "id": "dead-end-d41b1e",
+    "slots": [],
+    "state": "active",
+    "step": {
+     "avoid": "python3 -m pytest / python3 -m unittest / python -m pytest",
+     "do": "avoid",
+     "instead": "make test",
+     "signature": "No module named pytest"
+    },
+    "summary": "A verification command that fails in this repository, and what works instead",
+    "trigger": {
+     "on": "session_start"
+    }
+   },
+   "track": "acme-billing/dead-ends",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "acme-billing",
+   "route": {
+    "aspect": "green",
+    "authored": false,
+    "effect": "regenerate",
+    "evidence": {
+     "days": 1,
+     "deviations_failed": 0,
+     "lower_bound": 0.6456695613241317,
+     "median_position": 0.0,
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ],
+     "opportunities": 7,
+     "provenance": "desire-path",
+     "rate": 1.0,
+     "successes": 0,
+     "support": 7,
+     "turns_saved": 0.0
+    },
+    "exit": [
+     {
+      "when": "exploratory_change"
+     }
+    ],
+    "id": "finish-line-e7e809",
+    "slots": [],
+    "state": "active",
+    "step": {
+     "command": "make gen",
+     "do": "run"
+    },
+    "summary": "A regeneration step this repository requires after editing these files",
+    "trigger": {
+     "on": "after_edit",
+     "paths": "schema/*.json"
+    }
+   },
+   "track": "acme-billing/finish-line",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "acme-billing",
+   "route": {
+    "aspect": "green",
+    "authored": false,
+    "effect": "observe",
+    "evidence": {
+     "days": 1,
+     "deviations_failed": 0,
+     "lower_bound": 0.5266186471733927,
+     "median_position": 11.0,
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ],
+     "opportunities": 33,
+     "provenance": "desire-path",
+     "rate": 0.696969696969697,
+     "successes": 0,
+     "support": 23,
+     "turns_saved": 8.0
+    },
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "id": "lookup-work-item",
+    "slots": [
+     {
+      "contract": {
+       "kind": "pattern",
+       "regex": "^W-\\d{4}$"
+      },
+      "name": "item",
+      "source": {
+       "from": "prompt",
+       "span": "ticket"
+      }
+     }
+    ],
+    "state": "active",
+    "step": {
+     "command": "python3 scripts/wi-lookup {item}",
+     "do": "run"
+    },
+    "summary": "Look up the work item named in the prompt",
+    "trigger": {
+     "on": "prompt",
+     "span": "ticket"
+    }
+   },
+   "track": "acme-billing/work-items",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "acme-billing",
+   "route": {
+    "aspect": "yellow",
+    "authored": false,
+    "effect": "observe",
+    "evidence": {
+     "days": 1,
+     "deviations_failed": 0,
+     "lower_bound": 0.7167126220185179,
+     "median_position": 0.0,
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ],
+     "opportunities": 16,
+     "provenance": "desire-path",
+     "rate": 0.9375,
+     "successes": 0,
+     "support": 15,
+     "turns_saved": 0.0
+    },
+    "exit": [],
+    "id": "read-linked-files",
+    "slots": [
+     {
+      "contract": {
+       "kind": "repo_path"
+      },
+      "name": "files",
+      "source": {
+       "field": "*paths",
+       "from": "result_field"
+      }
+     }
+    ],
+    "state": "active",
+    "step": {
+     "do": "read_batch",
+     "max": 5,
+     "slot": "files"
+    },
+    "summary": "Read the files the work item links, together",
+    "trigger": {
+     "command": "exec python3 scripts/wi-lookup {id}",
+     "on": "after_command"
+    }
+   },
+   "track": "acme-billing/work-items",
+   "version": "0.1.0"
+  }
+ ]
+}

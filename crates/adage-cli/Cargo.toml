@@ -24,6 +24,7 @@ adage-intent = { path = "../adage-intent" }
 adage-runtime = { path = "../adage-runtime" }
 adage-learn = { path = "../adage-learn" }
 adage-sign = { path = "../adage-sign" }
+adage-eval = { path = "../adage-eval" }
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
