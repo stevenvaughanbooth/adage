@@ -74,6 +74,9 @@ fn shell_join(argv: &[String]) -> String {
         .join(" ")
 }
 
+/// Pseudo-field meaning "repository paths mentioned in the command's text output".
+pub const PATHS_FIELD: &str = "*paths";
+
 pub struct Mined {
     pub routes: Vec<(String, Route)>, // (track suffix, route)
 }
@@ -171,15 +174,25 @@ pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnCon
     let mut saved: Vec<f64> = Vec::new();
     for s in sessions {
         let Some(pos) = s.steps.iter().position(|x| x.key == lookup_key && !x.call.failed) else { continue };
-        let Some(json) = extract_json(&s.steps[pos].call.output) else { continue };
-        let Some(obj) = json.as_object() else { continue };
-        let listed: Vec<(String, Vec<String>)> = obj
-            .iter()
-            .filter_map(|(k, v)| {
-                let arr: Vec<String> = v.as_array()?.iter().filter_map(|x| x.as_str().map(str::to_string)).collect();
-                (!arr.is_empty() && arr.iter().all(|p| p.contains('/') || p.contains('.'))).then_some((k.clone(), arr))
+        let output = &s.steps[pos].call.output;
+        let mut listed: Vec<(String, Vec<String>)> = extract_json(output)
+            .and_then(|j| j.as_object().cloned())
+            .map(|obj| {
+                obj.iter()
+                    .filter_map(|(k, v)| {
+                        let arr: Vec<String> = v.as_array()?.iter().filter_map(|x| x.as_str().map(str::to_string)).collect();
+                        (!arr.is_empty() && arr.iter().all(|p| p.contains('/') || p.contains('.'))).then_some((k.clone(), arr))
+                    })
+                    .collect()
             })
-            .collect();
+            .unwrap_or_default();
+        if listed.is_empty() {
+            // Plain-text output: the repository paths it mentions.
+            let paths: Vec<String> = spans::extract(output).into_iter().filter(|x| x.kind == SpanKind::Path).map(|x| x.value).collect();
+            if !paths.is_empty() {
+                listed.push((PATHS_FIELD.to_string(), paths));
+            }
+        }
         let Some((field, files)) = listed.into_iter().next() else { continue };
         opportunities += 1;
         let mut read_turns: BTreeSet<u32> = BTreeSet::new();
@@ -260,7 +273,10 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             if p.sessions.insert(s.id.clone()) {
                 *p.avoid.entry(shell_join(argv(a).unwrap())).or_default() += 1;
                 *p.instead.entry(shell_join(argv(b).unwrap())).or_default() += 1;
-                if let Some(sig) = a.call.output.lines().rev().find(|l| l.contains("Error") || l.contains("error:")) {
+                if let Some(sig) = a.call.output.lines().rev().find(|l| {
+                    let l = l.to_ascii_lowercase();
+                    l.contains("error") || l.contains("no module named") || l.contains("not found") || l.contains("not set")
+                }) {
                     *p.signatures.entry(sig.trim().chars().take(160).collect()).or_default() += 1;
                 }
             }

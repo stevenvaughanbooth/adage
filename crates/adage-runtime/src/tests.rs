@@ -174,3 +174,14 @@ fn arm_assignment_is_deterministic() {
     assert_eq!(assign_arm("abc", 0.0), Arm::Treated);
     assert_eq!(assign_arm("abc", 1.0), Arm::Holdout);
 }
+
+#[test]
+fn linked_files_from_plain_text_output() {
+    let (dir, index, table) = fixture();
+    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table };
+    let mut st = SessionState::default();
+    let out = "ID: W-2042\nLinked files: acme/billing.py, ../etc/passwd\nAcceptance: ok";
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("./scripts/wi-lookup W-2042 --json", out)] });
+    let read = d.directives.iter().find(|x| x.route == "read-linked").expect("read-batch from text output");
+    assert!(read.text.contains("acme/billing.py") && !read.text.contains("passwd"));
+}

@@ -350,14 +350,15 @@ fn bind_result_route(r: &Route, output: &str, root: &Path) -> Option<String> {
     let Step::ReadBatch { slot, max } = &r.step else { return None };
     let s = r.slots.iter().find(|s| &s.name == slot)?;
     let SlotSource::ResultField { field } = &s.source else { return None };
-    let json = extract_json(output)?;
-    let list = json.get(field)?.as_array()?;
-    let files: Vec<String> = list
-        .iter()
-        .filter_map(|v| v.as_str())
+    let candidates: Vec<String> = match extract_json(output).and_then(|j| j.get(field).and_then(|v| v.as_array()).cloned()) {
+        Some(list) => list.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
+        // Plain-text output, or the "*paths" pseudo-field: repository paths it mentions.
+        None => spans::extract(output).into_iter().filter(|x| x.kind == SpanKind::Path).map(|x| x.value).collect(),
+    };
+    let files: Vec<String> = candidates
+        .into_iter()
         .filter(|p| contract_ok(&s.contract, p, root))
         .take(*max)
-        .map(str::to_string)
         .collect();
     if files.is_empty() {
         return None;
