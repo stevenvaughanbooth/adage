@@ -163,7 +163,8 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     for (turn, tid, name, input) in uses {
         let (output, failed) = results.get(&tid).cloned().unwrap_or_default();
         let call = Call { tool: name.clone(), input: input.clone(), output, failed };
-        for n in keys::flatten(&normalize_tool(&name, &input, &root_str, table)) {
+        for mut n in keys::flatten(&normalize_tool(&name, &input, &root_str, table)) {
+            keys::canonicalise(&mut n, &root);
             let rel_path = keys::action_path(&n.action).map(|p| repo::relativize(&root, p));
             steps.push(StepObs { turn, key: template_key(&n.action), norm: n, call: call.clone(), rel_path });
         }

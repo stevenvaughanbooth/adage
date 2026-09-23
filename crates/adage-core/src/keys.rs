@@ -5,6 +5,7 @@
 //! subcommands stay literal: `make gen` and `./scripts/wi-lookup {id}` must remain distinguishable.
 
 use crate::template::placeholder;
+use std::path::Path;
 use crate::types::{CanonicalAction, Normalized};
 
 pub fn op_name(a: &CanonicalAction) -> &'static str {
@@ -58,6 +59,32 @@ pub fn template_key(a: &CanonicalAction) -> String {
     }
 }
 
+/// Canonicalise command paths against the repository root, so the same behaviour in different
+/// checkouts produces the same key: `/tmp/x/repo/scripts/a`, `./scripts/a` and `scripts/a` all
+/// become `scripts/a`.
+pub fn canonicalise(n: &mut Normalized, root: &Path) {
+    // macOS: /tmp is a symlink to /private/tmp; compare both sides without the prefix.
+    fn strip(s: &str) -> &str {
+        s.strip_prefix("/private").unwrap_or(s)
+    }
+    let root_s = strip(&root.to_string_lossy()).to_string();
+    let fix = |t: &mut String| {
+        if let Some(rest) = strip(t).strip_prefix(root_s.as_str()) {
+            if rest.is_empty() || rest.starts_with('/') {
+                *t = rest.trim_start_matches('/').to_string();
+            }
+        }
+        if let Some(rest) = t.strip_prefix("./") {
+            *t = rest.to_string();
+        }
+    };
+    match &mut n.action {
+        CanonicalAction::Exec { argv, .. } => argv.iter_mut().filter(|t| t.contains('/')).for_each(fix),
+        CanonicalAction::Compound { actions, .. } => actions.iter_mut().for_each(|a| canonicalise(a, root)),
+        _ => {}
+    }
+}
+
 /// Expand compound actions into their body actions, in order.
 pub fn flatten(items: &[Normalized]) -> Vec<Normalized> {
     let mut out = Vec::new();
@@ -88,6 +115,28 @@ pub fn is_author(a: &CanonicalAction) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn canonicalises_paths() {
+        let mut n = Normalized {
+            action: CanonicalAction::Exec {
+                argv: vec!["/tmp/r/repo/scripts/wi-lookup".into(), "W-1".into()],
+                cwd: "/tmp/r/repo".into(),
+            },
+            effect: crate::Effect::Observe,
+            mutating: false,
+            confidence: 1.0,
+            note: String::new(),
+        };
+        canonicalise(&mut n, Path::new("/tmp/r/repo"));
+        assert_eq!(template_key(&n.action), "exec scripts/wi-lookup {id}");
+        let mut m = n.clone();
+        if let CanonicalAction::Exec { argv, .. } = &mut m.action {
+            argv[0] = "./scripts/wi-lookup".into();
+        }
+        canonicalise(&mut m, Path::new("/tmp/r/repo"));
+        assert_eq!(template_key(&m.action), template_key(&n.action));
+    }
 
     #[test]
     fn command_word_stays_literal() {

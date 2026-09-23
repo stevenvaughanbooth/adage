@@ -250,6 +250,17 @@ fn has_flag(argv: &[String], flag: &str) -> bool {
 /// Effect classification for one `exec`-shaped command, table-driven per Design Spec §8.6:
 /// "Classification is data, per command template… Unknown commands default to Environment."
 fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect, f64, String) {
+    // `python3 scripts/wi-lookup W-1` — classify the script, not the interpreter.
+    const INTERPRETERS: [&str; 9] = ["python", "python3", "node", "bash", "sh", "zsh", "ruby", "perl", "deno"];
+    if INTERPRETERS.contains(&cmd) {
+        if let Some(script) = args.first().filter(|a| !a.starts_with('-') && a.contains('/')) {
+            let base = basename(script);
+            if table.get(&base).is_none() {
+                return classify_effect(&base, &args[1..], table);
+            }
+        }
+    }
+    let cmd = &basename(cmd);
     let Some(spec) = table.get(cmd) else {
         // Unlisted commands default to environment (Design §8.6). One narrow exception: a
         // project script whose name leads with a read verb (`wi-lookup`, `show-config`,

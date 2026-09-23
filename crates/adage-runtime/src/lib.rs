@@ -138,14 +138,24 @@ pub struct Ctx<'a> {
 /// The canonical template key of a command string, for matching the agent's calls.
 pub fn command_key(command: &str, table: &CommandTable) -> String {
     let n = adage_core::shell::normalize_shell(command, "/", table);
-    keys::flatten(&n).first().map(|x| template_key(&x.action)).unwrap_or_default()
+    keys::flatten(&n)
+        .first()
+        .map(|x| {
+            let mut x = x.clone();
+            keys::canonicalise(&mut x, Path::new("/"));
+            template_key(&x.action)
+        })
+        .unwrap_or_default()
 }
 
 fn call_keys(call: &Call, ctx: &Ctx) -> Vec<(String, adage_core::Normalized)> {
     let cwd = ctx.root.to_string_lossy();
     keys::flatten(&normalize_tool(&call.tool, &call.input, &cwd, ctx.table))
         .into_iter()
-        .map(|n| (template_key(&n.action), n))
+        .map(|mut n| {
+            keys::canonicalise(&mut n, ctx.root);
+            (template_key(&n.action), n)
+        })
         .collect()
 }
 
