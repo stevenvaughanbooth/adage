@@ -220,10 +220,11 @@ function loop(state, runs) {
     const routes = ((state.rounds || {})[String(rd)] || {}).tracks || (rd === 1 ? state.tracks : []) || [];
     const kinds = routes.map((ir) => `<span class="aspect ${ir.route.aspect}" style="display:inline-block;vertical-align:-1px" title="${esc(ir.route.id)}"></span>`).join(" ");
     const f = (arr, fn, g, d2) => fmt(g(arr.map(fn)), d2);
+    const pct = (arr) => (arr.length ? `${Math.round(mean(arr.map((m) => (m.passed ? 1 : 0))) * 100)}%` : "–");
     return `<tr><td>Round ${rd} ${kinds}</td>
       <td class="a">${f(A, (m) => m.turns_to_first_edit, median, 1)}</td><td>${f(H, (m) => m.turns_to_first_edit, median, 1)}</td>
       <td class="a">${f(A, (m) => m.dead_end_hits, mean, 2)}</td><td>${f(H, (m) => m.dead_end_hits, mean, 2)}</td>
-      <td class="a">${Math.round((mean(A.map((m) => (m.passed ? 1 : 0))) || 0) * 100)}%</td><td>${Math.round((mean(H.map((m) => (m.passed ? 1 : 0))) || 0) * 100)}%</td>
+      <td class="a">${pct(A)}</td><td>${pct(H)}</td>
       <td class="a">${f(A, (m) => m.cost_usd, mean, 3)}</td><td>${f(H, (m) => m.cost_usd, mean, 3)}</td></tr>`;
   }).join("");
   $("loop").innerHTML = `<div class="loopwrap"><table class="loop"><thead><tr><th>Round · routes learned</th><th colspan="2">Turns before first edit</th><th colspan="2">Dead-end hits / run</th><th colspan="2">Hidden checks passed</th><th colspan="2">Cost / run (USD)</th></tr>

@@ -49,7 +49,10 @@ def perm_p(a, b, stat, n=10000, seed=7):
 def main():
     state = json.loads((ROOT / "state.json").read_text())
     runs = [r for r in state["runs"].values() if r.get("metrics")]
-    ev = [r for r in runs if r["phase"] == "eval"]
+    all_ev = [r for r in runs if r["phase"] == "eval"]
+    rounds = sorted({r.get("round", 1) for r in all_ev})
+    latest = rounds[-1] if rounds else 1
+    ev = [r for r in all_ev if r.get("round", 1) == latest]
     arms = {a: [r["metrics"] for r in ev if r["arm"] == a] for a in ("holdout", "adage")}
     metrics = {
         "turns_to_first_edit": (lambda m: m["turns_to_first_edit"], med),
@@ -76,12 +79,22 @@ def main():
         ],
         "metrics": {},
     }
-    for name, (f, agg) in metrics.items():
-        h = [f(m) for m in arms["holdout"]]
-        a = [f(m) for m in arms["adage"]]
-        summary["metrics"][name] = {
-            "without_adage": agg(h), "with_adage": agg(a), "aggregate": agg.__name__,
-            "p_value": perm_p(a, h, agg), "n": [len(a), len(h)],
+    def stats_for(arm_runs):
+        out = {}
+        for name, (f, agg) in metrics.items():
+            h = [f(m) for m in arm_runs["holdout"]]
+            a = [f(m) for m in arm_runs["adage"]]
+            out[name] = {"without_adage": agg(h), "with_adage": agg(a), "aggregate": agg.__name__,
+                         "p_value": perm_p(a, h, agg), "n": [len(a), len(h)]}
+        return out
+    summary["latest_round"] = latest
+    summary["metrics"] = stats_for(arms)
+    summary["rounds"] = {}
+    for rd in rounds:
+        rr = [r for r in all_ev if r.get("round", 1) == rd]
+        summary["rounds"][str(rd)] = {
+            "metrics": stats_for({a: [r["metrics"] for r in rr if r["arm"] == a] for a in ("holdout", "adage")}),
+            "routes": [x["route"]["id"] + ":" + x["route"]["aspect"] for x in ((state.get("rounds") or {}).get(str(rd), {}).get("tracks") or [])],
         }
     followed = sum(1 for r in ev if r["arm"] == "adage" for d in r["metrics"].get("adage", []) if d.get("kind") == "followed")
     emitted = sum(1 for r in ev if r["arm"] == "adage" for d in r["metrics"].get("adage", []) if d.get("kind") == "directives")
@@ -97,6 +110,12 @@ def main():
     embed = "<script>window.__STATE__ = " + json.dumps(state).replace("</", "<\\/") + ";</script>\n<script>"
     page = page.replace("<script>", embed, 1).replace("live proving run", "proving run results", 1)
     (out / "index.html").write_text(page)
+    # Artifact variant: the publisher supplies its own document skeleton.
+    import re as _re
+    art = _re.sub(r"<!doctype html>\s*<html[^>]*>\s*<head>\s*", "", page, flags=_re.I)
+    art = _re.sub(r'<meta charset="utf-8">\s*<meta name="viewport"[^>]*>\s*', "", art)
+    art = art.replace("</head>\n<body>", "").replace("</body>\n</html>", "")
+    (out / "artifact.html").write_text(art)
     print(json.dumps(summary["metrics"], indent=2))
     print(f"\nwrote {out}")
 
