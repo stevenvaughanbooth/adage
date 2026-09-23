@@ -53,9 +53,14 @@ pub fn executable(p: &Path) -> bool {
     }
 }
 
-/// Show a path with the home directory as `~`.
+/// Show a path with the home directory as `~` (and without Windows' `\\?\` verbatim prefix,
+/// which `canonicalize` adds and people never type).
 pub fn tilde(p: &Path) -> String {
-    let s = p.display().to_string();
+    let raw = p.display().to_string();
+    let s = match raw.strip_prefix(r"\\?\UNC\") {
+        Some(rest) => format!(r"\\{rest}"),
+        None => raw.strip_prefix(r"\\?\").map(str::to_string).unwrap_or(raw),
+    };
     match home() {
         Some(h) if s.starts_with(&*h.to_string_lossy()) && h.as_os_str().len() > 1 => {
             format!("~{}", &s[h.to_string_lossy().len()..])

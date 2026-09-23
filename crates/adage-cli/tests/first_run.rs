@@ -47,6 +47,7 @@ impl World {
     fn run(&self, args: &[&str]) -> Output {
         self.cmd(args).output().unwrap()
     }
+    #[cfg(unix)]
     fn fake_bin(&self, name: &str, script: &str) {
         let p = self.p("bin").join(name);
         std::fs::write(&p, format!("#!/bin/sh\n{script}\n")).unwrap();
@@ -100,19 +101,23 @@ fn init_detects_harnesses_prints_snippets_and_writes_nothing() {
     let w = World::new();
     std::fs::create_dir_all(w.p("home/.claude")).unwrap();
     std::fs::create_dir_all(w.p("xdg/opencode")).unwrap();
+    // A fake `codex` on PATH is a shell script, which only Unix can run.
+    #[cfg(unix)]
     w.fake_bin("codex", "exit 0");
     let before = w.snapshot();
     let o = w.run(&["init"]);
     let t = text(&o);
     assert!(o.status.success(), "{t}");
+    let claude_found = format!("claude-code  found: ~{}.claude exists", std::path::MAIN_SEPARATOR);
+    #[cfg(unix)]
+    assert!(t.contains("codex        found: `codex` on PATH") && t.contains("hook codex"), "{t}");
+    assert!(!t.contains(r"\\?\"), "no verbatim Windows prefix in output:\n{t}");
     for s in [
         "1. Harnesses",
-        "claude-code  found: ~/.claude exists",
+        claude_found.as_str(),
         "opencode     found:",
-        "codex        found: `codex` on PATH",
         "adage install claude-code --write",
         "\"UserPromptSubmit\"",
-        "hook codex",
         ".opencode/plugins/adage.js",
         "3. Embedding model",
         "`adage models fetch`",
@@ -142,6 +147,7 @@ fn init_prints_inside_an_agent_session_but_yes_refuses_there() {
 }
 
 #[test]
+#[cfg(unix)] // fakes `curl` with a shell script
 fn init_yes_fetches_the_model_and_survives_a_failed_download() {
     let w = World::new();
     // No network in tests: a `curl` that fails like an unreachable host.
