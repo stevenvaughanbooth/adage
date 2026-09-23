@@ -186,11 +186,13 @@ fails untouched and passes with its reference solution.
 | `crates/adage-sign` | Native `sshsig` signing (ssh-agent or key file) and `allowed_signers` verification |
 | `crates/adage-sign` | Native `sshsig` signing and `allowed_signers` verification for shared tracks |
 | `crates/adage-intent` | Prompt normalisation, the static embedding model in plain Rust (WordPiece + safetensors rows read on demand), deterministic kNN + Louvain clustering, behavioural split/merge |
+| `crates/adage-eval` | `adage eval`: offline replay of recorded sessions through the runtime, scored against what agents did; safety oracle; property tests |
 | `crates/adage-cli` | The `adage` binary; harness adapters in `src/harness/` |
 | `crates/adage-sim` | Harness simulator: seeded mock histories (`sim/fixtures/`) and native hook payloads for Claude Code, OpenCode, and Codex |
 | `plugin/claude-code` | The Claude Code plugin |
 | `plugin/opencode` | The OpenCode plugin (installed by `adage install opencode`) |
 | `demo/` | Sandbox, runner, live dashboard |
+| `evals/` | Eval datasets (90 real demo sessions, synthetic, adversarial) and the live proving-ground runner — see [docs/evals.md](docs/evals.md) |
 | `docs/` | [Design spec](docs/Adage%20—%20Design%20Spec.md) · [Architecture](docs/Adage%20—%20Architecture.md) · [Implementation plan](docs/Adage%20—%20Implementation%20Plan.md) |
 | `spikes/` | The experiments that settled the architecture — see [the board](spikes/README.md) |
 
