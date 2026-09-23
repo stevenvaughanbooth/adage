@@ -52,6 +52,21 @@ Full data: [demo/results](demo/results/); interactive results page published as 
 
 ## Quick start
 
+### First run
+
+```bash
+cargo build --release -p adage-cli
+target/release/adage init             # detect harnesses, print hook snippets, offer the model, survey history
+target/release/adage survey           # what your agents actually do, per repository (read-only)
+target/release/adage doctor           # check binary, data dir, index, tracks, model, hooks, kill switches
+target/release/adage graph --serve    # the signal box at http://127.0.0.1:8765 (read-only, loopback only)
+```
+
+`init` writes nothing unless you pass `--yes` (which only downloads the embedding model); it shows
+the `adage install <harness> --write` command for each harness it finds. `survey` reads the same
+history `learn` does and lists the routes `learn` would build as candidates, with prompts shown only
+as short redacted snippets. `doctor` exits non-zero only when a check fails.
+
 ### Claude Code
 
 ```bash
@@ -96,11 +111,13 @@ skips intent families and hooks never load a model.
 
 **Sharing:** `adage share <track> --out <dir> [--key <path>]` checks every file for absolute paths,
 home-directory paths and secret-looking strings, re-validates the track, and signs its digest
-(`sshsig`, namespace `adage-track`; ssh-agent first, else the key file). `adage add <dir>` verifies the
+(`sshsig`, namespace `adage-track`; ssh-agent first, else the key file, whose passphrase is asked for at
+the terminal). `adage add <dir>` verifies the
 signature against `$ADAGE_HOME/trusted-signers` or the repository's `.adage/trusted-signers` (approved
 once with `--trust` and pinned by hash in `$ADAGE_HOME/trust.json`) and installs the routes at
 probation, never green, under `tracks/@imported/` where `adage learn` never writes; if you later learn
-the same route yourself, your first-hand route wins. An unknown signer needs `--trust`. Both commands refuse to run inside an agent
+the same route yourself, your first-hand route wins. Adding a newer version keeps your own review
+decisions for every route that survives. An unknown signer needs `--trust`. Both commands refuse to run inside an agent
 session (`CLAUDECODE`) or without a terminal; `ADAGE_ALLOW_NONINTERACTIVE=1` lifts only the terminal check.
 
 **Review:** `adage review [--json]` lists the routes that need a person's decision: new routes from
@@ -108,7 +125,9 @@ session (`CLAUDECODE`) or without a terminal; `ADAGE_ALLOW_NONINTERACTIVE=1` lif
 aspect, a Wilson lower bound moving by 0.10, or support doubling or halving), imports at probation,
 rejected routes that came back stronger, and routes agents keep leaving in treated sessions. Each
 entry shows its evidence, effect and ceiling, and the exact directive text with example slot values.
-`adage review <approve|reject|demote|promote|pin> <track> <route> [--by <name>]` records the decision
+A pinned route is never overwritten: when learning (or a re-import) finds a materially different
+version, it waits as *proposed*, with a diff; `approve` applies it (still pinned) and `dismiss` keeps
+yours. `adage review <approve|reject|demote|promote|pin|dismiss> <track> <route> [--by <name>]` records the decision
 in the track's `review.yaml`, re-validates the track, and recompiles the index. Promotion never exceeds
 the effect ceiling, and an import cannot be promoted to green without first-hand evidence learned
 locally. `adage learn` keeps rejected routes retired until they strengthen materially, and holds
@@ -128,6 +147,9 @@ after schema edits), with twelve work items and hidden checks.
 python3 demo/run.py all                  # train (no Adage) → learn → held-out eval, two arms
 python3 demo/dashboard/serve.py          # live dashboard at http://127.0.0.1:8765
 ```
+
+The signal box page lives with the binary (`crates/adage-cli/assets/brain.html`); `adage graph
+--serve` serves it without the Python server.
 
 See [demo/SANDBOX.md](demo/SANDBOX.md). `python3 demo/sandbox/selfcheck.py` proves every work item
 fails untouched and passes with its reference solution.

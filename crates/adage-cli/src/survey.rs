@@ -174,6 +174,9 @@ pub struct Candidate {
     pub lower_bound: f64,
 }
 
+/// A failing command: (sessions, runs, what worked next → sessions).
+type FailCount = (u32, u32, BTreeMap<String, u32>);
+
 /// Per-repository counters, folded one session at a time.
 #[derive(Default)]
 struct Acc {
@@ -185,7 +188,7 @@ struct Acc {
     turns: Vec<u32>,
     no_edit: u32,
     commands: HashMap<String, (u32, u32)>,
-    failures: HashMap<String, (u32, u32, BTreeMap<String, u32>)>,
+    failures: HashMap<String, FailCount>,
     editors: HashMap<String, u32>,
     regen: HashMap<(String, String), u32>,
     spans: BTreeMap<&'static str, (u32, BTreeMap<String, u32>)>,
@@ -427,7 +430,7 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
             v.sort_by(|x, y| y.1.cmp(x.1).then(x.0.cmp(y.0)));
             v.into_iter().take(TOP).map(|(k, (s, r))| CommandCount { template: red(k), sessions: *s, runs: *r }).collect()
         };
-        let mut failures: Vec<(&String, &(u32, u32, BTreeMap<String, u32>))> =
+        let mut failures: Vec<(&String, &FailCount)> =
             a.failures.iter().filter(|(_, (s, r, _))| *s >= 2 || *r > *s).collect();
         failures.sort_by(|x, y| (y.1 .0, y.1 .1).cmp(&(x.1 .0, x.1 .1)).then(x.0.cmp(y.0)));
         let repeated_failures = failures
@@ -461,7 +464,7 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
         let candidates = planned
             .iter()
             .filter(|p| p.track.manifest.scope.repo == repo)
-            .flat_map(|p| candidates(p))
+            .flat_map(candidates)
             .collect();
         survey.repos.push(RepoSurvey {
             repo: red(&repo),
