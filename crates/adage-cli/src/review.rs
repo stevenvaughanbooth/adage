@@ -35,13 +35,13 @@ const DERAIL_BAR: f64 = 0.5;
 
 const USAGE: &str = "usage: adage review [--json]\n       adage review <approve|reject|retire|demote|promote|pin> <track> <route> [--by <name>]";
 
-struct Installed {
-    dir: PathBuf,
+pub(crate) struct Installed {
+    pub(crate) dir: PathBuf,
     /// The track's directory relative to the tracks directory: unambiguous, and what the queue prints.
-    reference: String,
-    track: Track,
-    imported: bool,
-    reviews: Reviews,
+    pub(crate) reference: String,
+    pub(crate) track: Track,
+    pub(crate) imported: bool,
+    pub(crate) reviews: Reviews,
 }
 
 pub fn review(args: &[String], paths: &Paths) -> Result<()> {
@@ -54,7 +54,7 @@ pub fn review(args: &[String], paths: &Paths) -> Result<()> {
 
 /// Every installed track with its directory and decisions. Unreadable tracks are skipped, as
 /// `io::read_all` does; symlinked directories are never followed.
-fn discover(root: &Path) -> Result<Vec<Installed>> {
+pub(crate) fn discover(root: &Path) -> Result<Vec<Installed>> {
     let mut out = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(d) = stack.pop() {
@@ -130,7 +130,7 @@ fn by_edit(r: &Route) -> bool {
     matches!(r.trigger, Trigger::AfterEdit { .. })
 }
 
-fn ceiling_str(r: &Route) -> &'static str {
+pub(crate) fn ceiling_str(r: &Route) -> &'static str {
     ceiling(r.effect, by_edit(r)).map(aspect_str).unwrap_or("none")
 }
 
@@ -191,7 +191,7 @@ fn example_for(regex: &str) -> Option<String> {
 }
 
 /// The exact text the route would deliver, with example slot values (and which were used).
-fn preview(t: &Track, r: &Route) -> (String, BTreeMap<String, String>) {
+pub(crate) fn preview(t: &Track, r: &Route) -> (String, BTreeMap<String, String>) {
     let mut bound = BTreeMap::new();
     for s in &r.slots {
         let v = match (&s.contract, &r.step) {

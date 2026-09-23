@@ -5,6 +5,7 @@
 //! adage learn [options]              mine tracks from agent sessions and compile the index
 //! adage status                       installed tracks, routes, aspects, and evidence
 //! adage report [--json]              directives emitted, followed, and derailed, from spools
+//! adage graph [--json] [--events <n>] situations → routes → steps → agent responses, with live counts
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
 //!                                    print (default) or write a harness's hook registration
@@ -20,6 +21,7 @@
 //! `ADAGE_ALLOW_NONINTERACTIVE=1` (let `share` and `add` run without a terminal, for CI).
 
 mod add;
+mod graph;
 mod harness;
 mod hook;
 mod install;
@@ -69,6 +71,7 @@ fn run(args: &[String]) -> Result<()> {
         Some("share") => share::share(&args[1..], &paths),
         Some("add") => add::add(&args[1..], &paths),
         Some("review") => review::review(&args[1..], &paths),
+        Some("graph") => graph::graph(&args[1..], &paths),
         Some("models") => models::run(&args[1..], &paths),
         Some("hooks-config") => {
             let bin = args.get(1).cloned().unwrap_or_else(|| "adage".into());
@@ -81,7 +84,7 @@ fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         _ => {
-            println!("usage: adage <learn|status|report|review|share|add|install|models|hooks-config|version|hook>");
+            println!("usage: adage <learn|status|report|graph|review|share|add|install|models|hooks-config|version|hook>");
             Ok(())
         }
     }
