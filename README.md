@@ -73,8 +73,10 @@ home-directory paths and secret-looking strings, re-validates the track, and sig
 (`sshsig`, namespace `adage-track`; ssh-agent first, else the key file). `adage add <dir>` verifies the
 signature against `$ADAGE_HOME/trusted-signers` or the repository's `.adage/trusted-signers` (approved
 once with `--trust` and pinned by hash in `$ADAGE_HOME/trust.json`) and installs the routes at
-probation, never green. An unknown signer needs `--trust`. Both commands refuse to run inside an agent
+probation, never green, under `tracks/@imported/` where `adage learn` never writes; if you later learn
+the same route yourself, your first-hand route wins. An unknown signer needs `--trust`. Both commands refuse to run inside an agent
 session (`CLAUDECODE`) or without a terminal; `ADAGE_ALLOW_NONINTERACTIVE=1` lifts only the terminal check.
+
 **Experiment:** `ADAGE_HOLDOUT=0.1` (default) holds out 10% of sessions — Adage computes what it would
 have said and logs it, but says nothing — so every claimed effect is measured against a control.
 
@@ -102,6 +104,7 @@ fails untouched and passes with its reference solution.
 | `crates/adage-runtime` | Hook-time decisions and directive rendering from fixed templates |
 | `crates/adage-learn` | Transcript import and the route miners |
 | `crates/adage-sign` | Native `sshsig` signing (ssh-agent or key file) and `allowed_signers` verification |
+| `crates/adage-sign` | Native `sshsig` signing and `allowed_signers` verification for shared tracks |
 | `crates/adage-cli` | The `adage` binary |
 | `plugin/claude-code` | The Claude Code plugin |
 | `demo/` | Sandbox, runner, live dashboard |
