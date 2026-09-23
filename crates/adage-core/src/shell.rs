@@ -29,6 +29,7 @@ thread_local! {
     static PARSER: std::cell::RefCell<Parser> = std::cell::RefCell::new({
         let mut p = Parser::new();
         p.set_language(&tree_sitter_bash::LANGUAGE.into()).expect("load tree-sitter-bash");
+        p.set_timeout_micros(PARSE_TIMEOUT_MICROS);
         p
     });
 }
@@ -66,10 +67,45 @@ fn too_deep(s: &str) -> bool {
     false
 }
 
+/// Parsing gives up after this long, and the command is recorded as unknown. tree-sitter's error
+/// recovery is quadratic on some malformed input: 16 KB of `a|a|a|…` or `)))…` took 0.6–0.7 s to
+/// parse in a release build (the hook's budget is 25 ms). Real commands, heredocs included, parse
+/// in well under a millisecond per kilobyte.
+pub const PARSE_TIMEOUT_MICROS: u64 = 50_000;
+
 /// Maximum depth of the syntax-tree walk (statements within statements, including `bash -c`
 /// scripts). `too_deep` bounds bracket nesting before parsing; this bounds everything else a
 /// grammar can nest (`if` in `if`, `!` in `!`, …) so no input can exhaust the stack.
 pub const MAX_DEPTH: usize = 96;
+
+/// More pipe operators than this (outside quotes) and a command is treated as unknown: a long run
+/// of `a|a|…|` sends tree-sitter's error recovery quadratic in a phase its timeout does not cover
+/// (16 KB took 0.6 s in a release build). No real pipeline has this many stages.
+pub const MAX_PIPES: usize = 128;
+
+fn too_many_pipes(s: &str) -> bool {
+    let (mut pipes, mut quote, mut escaped, mut prev) = (0usize, None::<char>, false, ' ');
+    for c in s.chars() {
+        if escaped {
+            escaped = false;
+        } else if c == '\\' && quote != Some('\'') {
+            escaped = true;
+        } else if let Some(q) = quote {
+            if c == q {
+                quote = None;
+            }
+        } else if c == '\'' || c == '"' {
+            quote = Some(c);
+        } else if c == '|' && prev != '|' {
+            pipes += 1;
+            if pipes > MAX_PIPES {
+                return true;
+            }
+        }
+        prev = c;
+    }
+    false
+}
 
 pub fn normalize_shell(command: &str, cwd: &str, table: &CommandTable) -> Vec<Normalized> {
     normalize_at(command, cwd, table, 0)
@@ -90,11 +126,19 @@ fn normalize_at(command: &str, cwd: &str, table: &CommandTable, depth: usize) ->
     if command.is_empty() {
         return vec![];
     }
-    if command.len() > MAX_COMMAND || too_deep(command) || depth > MAX_DEPTH {
+    if command.len() > MAX_COMMAND || too_deep(command) || too_many_pipes(command) || depth > MAX_DEPTH {
         return vec![unknown("not normalised: exceeds size or nesting bounds")];
     }
 
-    let tree = PARSER.with(|p| p.borrow_mut().parse(command, None));
+    let tree = PARSER.with(|p| {
+        let mut p = p.borrow_mut();
+        let t = p.parse(command, None);
+        if t.is_none() {
+            // A timed-out parse would otherwise resume on the next, unrelated command.
+            p.reset();
+        }
+        t
+    });
     let tree = match tree {
         Some(t) => t,
         None => {
@@ -103,7 +147,7 @@ fn normalize_at(command: &str, cwd: &str, table: &CommandTable, depth: usize) ->
                 effect: Effect::Environment,
                 mutating: false,
                 confidence: 0.0,
-                note: "tree-sitter failed to produce a tree".to_string(),
+                note: "tree-sitter produced no tree (parse timed out or failed)".to_string(),
             }]
         }
     };

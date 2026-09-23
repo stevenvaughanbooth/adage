@@ -226,18 +226,26 @@ These use `proptest` with default case counts and bounded inputs, and finish in 
    - Fix: `&&`/`||` chains are flattened iteratively, and a depth bound (`MAX_DEPTH = 96`) covers
      everything else.
    - Regression tests: `adage-core/tests/deep.rs`.
-4. **Tracks could direct paths outside the repository.** Validation checked only a command's
+4. **Pathological commands stalled the hook for most of a second.** tree-sitter's error recovery is
+   quadratic on some malformed input. In a release build, 16 KB of `a|a|…|` took 0.6 s to
+   normalise and `)))…` took 0.7 s, against a hook budget of 25 ms.
+   - Fix: a 50 ms parse timeout (the parser is reset after a timeout). Pipe operators outside
+     quotes are capped at 128, because the `a|…|` case spends its time where the timeout is not
+     checked. The worst case measured afterwards is about 58 ms.
+   - Regression tests: `adage-core/tests/deep.rs`, and the committed proptest seed in
+     `prop_shell.proptest-regressions`.
+5. **Tracks could direct paths outside the repository.** Validation checked only a command's
    characters, so a shared track could direct `cat /etc/passwd` (observe, and so eligible for
    green) or `cat ../../secret`.
    - Regression tests: `adage-tracks/tests/hostile.rs`.
-5. **Unbound slot placeholders were rendered.** A run step with `{slot}` under a trigger that
+6. **Unbound slot placeholders were rendered.** A run step with `{slot}` under a trigger that
    cannot bind it rendered the placeholder itself as the command (`make {item}`). Only a prompt may
    now bind a run step's slots.
    - Regression tests: `adage-tracks/tests/hostile.rs`.
-6. **Blank commands were accepted.** `" "` passed validation and rendered as a directive to run
+7. **Blank commands were accepted.** `" "` passed validation and rendered as a directive to run
    nothing.
    - Regression tests: `adage-tracks/tests/hostile.rs`.
-7. **A torn state write could resurrect an older state.** The slot CRC covered only the payload. A
+8. **A torn state write could resurrect an older state.** The slot CRC covered only the payload. A
    write torn after the header's sequence number therefore left the old payload, with its still
    valid CRC, under a new sequence number. The reader took a state two writes stale as the newest.
    The CRC now covers the sequence number, the length and the payload. State files written before
