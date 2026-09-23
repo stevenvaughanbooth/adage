@@ -284,18 +284,26 @@ task set, with any `claude` model. A JSON config supplies:
 - the arms (`adage`, `holdout`, `off`);
 - the model, max turns, concurrency, learn thresholds and a spend cap.
 
-`evals/live/configs/acme-billing.json` is the demo.
+`evals/live/configs/acme-billing.json` is the demo. `evals/live/configs/harbor-dispatch.json` is
+the second demo, built to test whether the effect generalises: a TypeScript service on Node 26
+(`evals/live/sandboxes/harbor-dispatch/`) with its own four conventions (`INC-` incidents behind
+`bin/fetch-incident`, a path-alias dead end on `npm test`, `registry/*.csv` → `npm run codegen`),
+84 runs over two rounds with Claude Sonnet 5.
 
 ```bash
 python3 evals/live/runner.py evals/live/configs/acme-billing.json            # dry run: prints the plan
+python3 evals/live/runner.py --config evals/live/configs/harbor-dispatch.json --dry-run
 python3 evals/live/runner.py evals/live/configs/acme-billing.json --json     # the plan as JSON
 python3 evals/live/runner.py evals/live/configs/acme-billing.json --execute  # real agents, real spend
 ```
 
 The runner is a dry run unless `--execute` is given. It refuses to execute from inside an agent
-session. A run writes the layout of a demo archive, so
-`build_demo.py <root> <dataset>` turns any live run into an offline dataset for `adage eval`.
-`python3 -m unittest evals/live/test_runner.py` smoke-tests the dry run.
+session. A run writes the layout of a demo archive and a results page like `demo/results/`, so
+`build_demo.py <root> <dataset> --name … --repo … --sandbox …` turns any live run into an offline
+dataset for `adage eval`. `python3 -m unittest evals/live/test_runner.py` smoke-tests the dry run.
+For harbor-dispatch, `selfcheck.py` proves every incident solvable and `rehearse.py` proves, with
+scripted sessions and no model, that `adage learn` learns all four of its conventions and that
+`adage eval` ingests the result.
 See [evals/live/README.md](../evals/live/README.md).
 
 ### How the two relate

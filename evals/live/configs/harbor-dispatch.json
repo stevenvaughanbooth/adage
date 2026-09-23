@@ -1,0 +1,26 @@
+{
+  "name": "harbor-dispatch",
+  "description": "Demo 2: the harbor-dispatch sandbox (TypeScript on Node 26, terminal operations), 6 training and 6 held-out incidents, hidden checks, two learning rounds",
+  "repo_key": "harbor-dispatch",
+  "workdir": "harbor-dispatch",
+  "sandbox": ["python3", "{repo}/evals/live/sandboxes/harbor-dispatch/generate.py", "{dir}"],
+  "score": ["python3", "{repo}/evals/live/sandboxes/harbor-dispatch/score.py", "{dir}", "{task}"],
+  "prompts": ["{id} is assigned to you. Please resolve it.", "Could you fix {id}?", "Take {id} through to done, please."],
+  "train": { "tasks": ["INC-58", "INC-63", "INC-107", "INC-112", "INC-164", "INC-171"], "repeats": 2 },
+  "eval": { "tasks": ["INC-86", "INC-94", "INC-203", "INC-219", "INC-245", "INC-268"], "repeats": 3, "arms": ["holdout", "adage"] },
+  "rounds": 2,
+  "model": "claude-sonnet-5",
+  "max_turns": 30,
+  "concurrency": 3,
+  "learn_args": ["--demo"],
+  "budget_usd": 45.0,
+  "classify": {
+    "lookup": ["fetch-incident"],
+    "regen": ["npm run codegen", "tools/codegen.mjs"],
+    "verify": ["npm test", "npm run test", "npm run check", "node --test", "--test ", "npm t "],
+    "bash_edit": ["sed -i", "perl -pi", "cat >", "cat <<", "tee ", "> src/", ">src/", "> registry/", ">registry/", ">> registry/", "writeFileSync"],
+    "check_flags": ["--verify"]
+  },
+  "obligation": { "paths": "registry/*.csv" },
+  "labels": { "lookup": "incident lookup", "regen": "npm run codegen" }
+}
