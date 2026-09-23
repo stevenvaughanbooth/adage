@@ -549,6 +549,7 @@ fn install(w: &World, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> (Strin
 }
 
 /// Every file under a directory, relative, sorted.
+#[cfg(unix)]
 fn files(dir: &Path) -> Vec<String> {
     let mut out = vec![];
     let mut stack = vec![dir.to_path_buf()];
@@ -567,6 +568,7 @@ fn files(dir: &Path) -> Vec<String> {
 }
 
 #[test]
+#[cfg(unix)] // Unix path spellings throughout; Windows has its own test below
 fn install_prints_by_default_and_writes_nothing() {
     let w = World::new();
     let repo = git_repo(&w, "proj");
@@ -593,6 +595,7 @@ fn install_prints_by_default_and_writes_nothing() {
 }
 
 #[test]
+#[cfg(unix)] // Unix path spellings throughout; Windows has its own test below
 fn install_write_merges_into_project_config_and_is_idempotent() {
     let w = World::new();
     let repo = git_repo(&w, "proj");
@@ -624,6 +627,7 @@ fn install_write_merges_into_project_config_and_is_idempotent() {
 }
 
 #[test]
+#[cfg(unix)] // Unix path spellings throughout; Windows has its own test below
 fn install_write_user_scope_uses_documented_paths_only() {
     let w = World::new();
     let repo = git_repo(&w, "proj");
@@ -639,6 +643,7 @@ fn install_write_user_scope_uses_documented_paths_only() {
 }
 
 #[test]
+#[cfg(unix)] // Unix path spellings throughout; Windows has its own test below
 fn install_write_refuses_what_it_should() {
     let w = World::new();
     let repo = git_repo(&w, "proj");
@@ -730,4 +735,24 @@ fn opencode_plugin_places_text_and_fails_open() {
         .unwrap();
     let text = format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr));
     assert!(o.status.success() && text.contains("plugin ok"), "{text}");
+}
+
+/// `adage install` on Windows: a drive path is accepted as `--bin` and reaches each harness's
+/// snippet intact (JSON-escaped in hook configs, a JS string literal in the OpenCode plugin).
+#[test]
+#[cfg(windows)]
+fn install_accepts_windows_binary_paths() {
+    let w = World::new();
+    let repo = git_repo(&w, "proj");
+    let bin = r"C:\Program Files\Adage\adage.exe";
+    let (a, err, code) = install(&w, &repo, &["claude-code", "--bin", bin], &[]);
+    assert_eq!(code, 0, "{err}");
+    let v: Value = serde_json::from_str(&a).unwrap();
+    assert!(v.to_string().contains(serde_json::to_string(bin).unwrap().trim_matches('"')), "{a}");
+    let (o, err, code) = install(&w, &repo, &["opencode", "--bin", bin], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert!(o.contains(r#"const ADAGE_BIN = "C:\\Program Files\\Adage\\adage.exe""#), "{o}");
+    let (_, err, code) = install(&w, &repo, &["claude-code", "--bin", "adage.exe"], &[]);
+    assert_ne!(code, 0);
+    assert!(err.contains("absolute"), "{err}");
 }

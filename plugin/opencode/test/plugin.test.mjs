@@ -5,6 +5,7 @@
 // Env: PLUGIN_REAL, PLUGIN_MISSING, PLUGIN_SLOW, PLUGIN_GARBAGE, PLUGIN_BADTYPE, PLUGIN_HUGE,
 // PLUGIN_RECORD (plugin files); RECORD_FILE (where the recording binary writes); REPO (cwd).
 
+import { pathToFileURL } from "node:url"
 import assert from "node:assert/strict"
 import { existsSync, readFileSync } from "node:fs"
 
@@ -17,7 +18,7 @@ function fakeClient() {
 
 async function load(env) {
   const client = fakeClient()
-  const mod = await import(process.env[env])
+  const mod = await import(pathToFileURL(process.env[env]).href)
   const hooks = await mod.Adage({ client, directory: repo, worktree: repo, project: {}, $: null })
   return { client, hooks }
 }

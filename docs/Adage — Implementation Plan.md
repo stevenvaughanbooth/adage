@@ -1,6 +1,6 @@
 # Adage — Implementation Plan
 
-**Status:** Phase 3, draft 2 (as built, plus the road to a public release) · **Date:** 2026-09-23 ·
+**Status:** Phase 3, draft 3 (as built, plus the road to a public release) · **Date:** 2026-09-23 ·
 **Builds:** *Adage — Architecture* draft 2 + spike results + slices 1–10 as merged on `main`
 
 Draft 1 planned slices 1–10. They are built. This draft records what was built and how it differs
@@ -50,11 +50,13 @@ spikes/S1–S8/        the experiments behind every decision above
 The `adage` binary exposes these commands:
 
 ```text
-learn · status · report · graph · review · share · add · install · models · hooks-config · hook · version
+init · survey · learn · status · report · graph [--serve] · review · eval · doctor · share · add · install · models · hooks-config · hook · version
 ```
 
-Test state: 125 tests pass (`cargo test --workspace`), including 315 normaliser fixtures, golden
-hook outputs per harness, and hostile-payload suites. Clippy is clean.
+Test state: 211 tests pass (`cargo test --workspace`), including 315 normaliser fixtures, golden
+hook outputs per harness, hostile-payload suites, property tests, the harness simulator's
+end-to-end replays, and the eval gates (§3a). CI runs them on macOS arm64 and x64, Linux x64 and
+arm64, and Windows x64, with clippy `-D warnings`, rustfmt, and `cargo deny`.
 
 ## 3. Slices: plan versus as built
 
@@ -73,9 +75,45 @@ hook outputs per harness, and hostile-payload suites. Clippy is clean.
 | 10b | OpenCode + Codex adapters | ✅ built, ⚠️ not run live | Built from docs and source; neither harness installed here |
 | 10c | Sharing + signing | ✅ | `adage share` (redaction check, sshsig) / `adage add` (trust on first use, probation) |
 | — | `adage graph` + signal box | ✅ (added) | Live state as a rail network; judgements split by arm |
-| — | Survey report (Design J1) | ❌ | `status` / `report` / `graph` cover part of it |
-| — | Proving ground as a product | ❌ | The demo runner is a working prototype |
+| — | Survey report (Design J1) | ✅ | `adage survey`: read-only report of what agents do, with the routes learn would build as candidates |
+| — | Proving ground as a product | ⚠️ partial | Offline: `adage eval` (§3a). Live: `evals/live/runner.py` runs the with/without A/B on any sandbox and task set; not yet a product |
+| — | First run: `init`, `doctor`, `graph --serve` | ✅ | Plan §6.3 |
+| — | Release engineering (M1) | ✅ built | CI, `dist` releases, npm packages, marketplace, Windows port; first tagged release waits on secrets and D1–D4 |
+| — | Harness simulator + Codex importer | ✅ | `crates/adage-sim`: mock sessions in each harness's native format, end-to-end replays; `adage learn --codex-sessions` |
 | — | Team depots, lockfiles (Design §10.7, O12) | ❌ | Direct sharing works; depots do not |
+
+## 3a. Evals
+
+`adage eval` learns from a deterministic train split and replays each held-out session through the
+real `decide()` in the holdout arm. It then scores every would-have directive against what the agent
+did later. Committed datasets and their gates (docs/evals.md):
+
+| | demo round 2 (real) | synthetic | adversarial |
+| --- | ---: | ---: | ---: |
+| Precision, all | 0.73 | 0.91 | 0.73 |
+| Recall of key steps | 0.78 | 1.00 | 0.77 |
+| Turns saved by the lookup (median) | 9 | 1 | 0 |
+| Finish-line accuracy | 1.00 | 1.00 | 1.00 |
+| Unsafe directives | 0 | 0 | 0 of 84 checked |
+
+- **The real dataset reproduces the live index.** It holds the 90 demo sessions, redacted. Learning
+  from round 2's training split reproduces the live index byte for byte, and replay reproduces
+  36 of 36 live decisions.
+- **Offline precision understates correctness.** 6 of 18 lookup "misses" are agents that never found
+  the tracker at all.
+- **One finding still to act on:** the dead-end route also warns against `python3 -m unittest`, which
+  passes when `ACME_ENV` is set. The miner should key dead ends on the failing signature.
+
+The property tests found 8 bugs, all fixed with regression tests:
+
+1. A single quoted error line failed `learn` for the whole repository.
+2. Bidirectional-override and zero-width characters passed validation.
+3. A 15 KB `&&` chain overflowed the stack.
+4. Pathological commands took 0.7 s to parse; parsing is now capped at 50 ms.
+5. A track could direct commands naming paths outside the repository.
+6. Unfillable slots were sent as literal `{item}`.
+7. A blank command passed validation.
+8. A torn state write could resurrect a state two writes old.
 
 ### Where the build deviated from the design, deliberately
 
@@ -98,13 +136,21 @@ hook outputs per harness, and hostile-payload suites. Clippy is clean.
 
 ### 4.1 Correctness and product gaps
 
+Closed since draft 2:
+
+- Proposals for pinned routes (`adage review` reason "proposed").
+- Review decisions survive re-import.
+- `gauge.harness` records the real harness.
+- Passphrase prompts at a TTY.
+- The survey report.
+
+Open:
+
 | Gap | Impact | Fix |
 | --- | --- | --- |
-| Learn keeps a pinned route but does not *propose* the mined change in `adage review` | A person never sees drift on routes they pinned | Emit a "proposed change" queue item |
-| Re-running `adage add` for an import loses the recipient's own review decisions | Surprising after a teammate ships an update | Carry local `review.yaml` across re-import when the route id survives |
-| Learned tracks record `gauge.harness = ["claude-code"]` even when learned from OpenCode sessions | Metadata only | Take the harness from the session source |
-| Passphrase-protected keys sign only through ssh-agent | Minor | Prompt for a passphrase at a TTY |
-| Survey report (J1) not built | First-run experience is `status` + `graph`, not a report | Slice in Phase 5 |
+| Dead-end routes are keyed by runner, not by failing signature | Over-broad warnings (eval: `unittest` passes when `ACME_ENV` is set) | Key dead ends on (command, signature); only warn for runners whose failures share it |
+| Nothing writes `$ADAGE_HOME/fail-open.log` | `adage doctor` cannot report hook failures | Record caught panics and errors in the hook's fail-open path (bounded, rotating) |
+| The parse timeout (50 ms) makes normalisation depend on machine speed for pathological commands | Rare nondeterminism in `learn` for such commands | Replace with a node-count budget |
 | Architecture doc is still draft 2 | Docs lag the code (daemon → none, etc.) | Draft 3, as built |
 
 ### 4.2 Harness limits (from `docs/harnesses.md`)
@@ -115,6 +161,7 @@ hook outputs per harness, and hostile-payload suites. Clippy is clean.
 | Codex | ~~Learning from history~~ | Built: `adage learn --codex-sessions` reads rollouts, format read from source (rust-v0.156.1, older shapes at rust-v0.40.0); undocumented, so a release may change it |
 | OpenCode | A true finish-line Stop block | No stop hook (#16626); Adage sends a synthetic prompt on `session.idle` |
 | OpenCode | Learning from on-disk history | The SQLite schema is known from source but undocumented and migrating; `opencode export` files work, and `opencode session list --format json` plus `export` exports a whole history with documented commands |
+| Codex | Hooks on Windows (unverified) | `adage install codex` quotes the binary path for a POSIX shell (`'…'`); which shell Codex uses for hook commands on Windows is not yet checked |
 | Both | Invisible directives | Directives are visible to the user in both UIs |
 | Both | Verified only in simulation | The harness simulator (`crates/adage-sim`) proves learning and delivery against the formats as read from source; the harnesses themselves have not been run (docs/harnesses.md, Verification) |
 
@@ -130,10 +177,14 @@ hook outputs per harness, and hostile-payload suites. Clippy is clean.
 
 ### 4.4 Platforms
 
-- **No Windows.** The store uses Unix `FileExt` (`pwrite`) and `flock`. A Windows port is small:
-  `seek_write`, plus `LockFileEx` through `std`'s file locking. The adapters and paths also need
-  Windows data-directory handling.
-- **Only macOS arm64 has been built and run.** Linux should work (CI will prove it).
+**Windows is ported and CI-verified** on windows-2022, and Linux on x64 and arm64. Running the
+harness simulator there found two Windows-only bugs, both fixed with platform-independent tests:
+
+- Paths under `\\?\` roots failed to relativize.
+- `resolve_path` treated `C:\…` paths as relative.
+
+Together they meant finish-line routes never fired on Windows. Claude Code's plugin hook on Windows
+(Git Bash) is still unverified.
 
 ## 5. Phase 4 — Pilot on real history
 
@@ -233,9 +284,9 @@ The binary stays `adage` whatever the package names are.
 | Milestone | Contents | Exit |
 | --- | --- | --- |
 | **M0 — Clearance** | L0, D1–D2 decided, license files, name reservations | Written clearance on file; `LICENSE` merged |
-| **M1 — Release engineering** | CI, `dist`, build matrix, Windows port, SBOM, signing | A tagged release produces attested binaries for every target |
+| **M1 — Release engineering** ✅ built | CI, `dist`, build matrix, Windows port, SBOM, signing | A tagged release produces attested binaries for every target (needs `NPM_TOKEN`, `HOMEBREW_TAP_TOKEN`, the tap repo, and D1–D4) |
 | **M2 — Pilot** | Phase 4 on real history | Primary metric and guardrails read out |
-| **M3 — Channels + first run** | npm, Homebrew, crates.io, Claude Code marketplace, OpenCode npm plugin; `init`, `doctor`, the survey report | A new user goes from `npm i -g` to their first directive in under 5 minutes |
+| **M3 — Channels + first run** | npm, Homebrew, crates.io, Claude Code marketplace, OpenCode npm plugin; `init`, `doctor`, the survey report (first run ✅ built) | A new user goes from `npm i -g` to their first directive in under 5 minutes |
 | **M4 — Public beta** | Docs, `SECURITY.md`, live adapter validation on OpenCode and Codex | — |
 | **M5 — 1.0** | Team depots + lockfiles (O12), proving ground as a product | — |
 

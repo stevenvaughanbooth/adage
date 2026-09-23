@@ -58,17 +58,33 @@ fn main() {
         let event = args.get(2).cloned().unwrap_or_default();
         // Nothing may reach the harness but our JSON: silence panic messages entirely.
         std::panic::set_hook(Box::new(|_| {}));
-        let out = std::panic::catch_unwind(|| hook::run(&harness, &event)).ok().flatten();
+        let out =
+            on_big_stack(move || std::panic::catch_unwind(|| hook::run(&harness, &event)).ok().flatten()).flatten();
         if let Some(o) = out {
             use std::io::Write;
             let _ = writeln!(std::io::stdout(), "{o}");
         }
         std::process::exit(0);
     }
-    if let Err(e) = run(&args) {
-        eprintln!("adage: {e:#}");
-        std::process::exit(1);
+    match on_big_stack(move || run(&args)) {
+        Some(Ok(())) => {}
+        Some(Err(e)) => {
+            eprintln!("adage: {e:#}");
+            std::process::exit(1);
+        }
+        None => std::process::exit(1),
     }
+}
+
+/// The stack every command runs on. Main-thread stacks differ by platform (8 MiB on Linux and
+/// macOS, 1 MiB on Windows); normalising hostile commands recurses to a bounded depth that fits
+/// easily in release builds, but should not depend on which platform's default it got.
+const STACK: usize = 8 << 20;
+
+/// Run `f` on a thread with [`STACK`] bytes of stack. `None` if the thread could not be started
+/// or `f` panicked.
+fn on_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    std::thread::Builder::new().stack_size(STACK).spawn(f).ok()?.join().ok()
 }
 
 fn flag(args: &[String], name: &str) -> Option<String> {

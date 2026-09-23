@@ -11,8 +11,12 @@ use adage_core::CommandTable;
 use proptest::prelude::*;
 use std::time::{Duration, Instant};
 
-/// Hook processes run on the main thread (8 MiB on Linux and macOS); test with a quarter of it.
-const STACK: usize = 2 << 20;
+/// The adage binary runs every command on an 8 MiB thread (on every platform); an optimised build
+/// must fit in 1 MiB (Windows' main-thread default) to keep a wide margin. Unoptimised debug
+/// frames are many times larger (measured on macOS: the worst generated case needs over 512 KiB
+/// in debug and under 128 KiB in release, and Linux debug frames are larger still), so debug
+/// builds get the production stack instead.
+const STACK: usize = if cfg!(debug_assertions) { 8 << 20 } else { 1 << 20 };
 const BUDGET: Duration = Duration::from_secs(2);
 
 fn cases() -> u32 {

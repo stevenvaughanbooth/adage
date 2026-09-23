@@ -355,7 +355,7 @@ fn walk(dir: &Path) -> Vec<String> {
             if e.path().is_dir() {
                 stack.push(e.path());
             } else {
-                out.push(e.path().strip_prefix(dir).unwrap().to_string_lossy().to_string());
+                out.push(e.path().strip_prefix(dir).unwrap().to_string_lossy().replace('\\', "/"));
             }
         }
     }

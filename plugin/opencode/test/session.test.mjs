@@ -8,6 +8,7 @@
 // Env: PLUGIN (plugin file, from `adage install opencode --print`), SCRIPT (the JSON script),
 // REPO (the session's directory; replaces "{REPO}" in the script).
 
+import { pathToFileURL } from "node:url"
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 
@@ -17,7 +18,7 @@ const sid = script.session
 
 const calls = []
 const client = { session: { prompt: async (req) => { calls.push(req); return {} } } }
-const mod = await import(process.env.PLUGIN)
+const mod = await import(pathToFileURL(process.env.PLUGIN).href)
 const hooks = await mod.Adage({ client, directory: repo, worktree: repo, project: {}, $: null })
 
 const routes = (text) => [...String(text).matchAll(/<adage-signal [^>]*route="([^"]+)"/g)].map((m) => m[1])
