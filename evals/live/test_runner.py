@@ -143,6 +143,41 @@ class DryRun(unittest.TestCase):
         m2 = runner.run_metrics(cfg, events[:4], {}, {"passed": False, "stale_generated": True}, wd, 1.0, "sid", [])
         self.assertEqual((m2["obligation_applies"], m2["obligation_met"]), (True, False))
 
+    def test_regeneration_inside_the_editing_command_counts(self):
+        # Found in the Sonnet 5 run: `sed … registry/ports.csv && npm run codegen && npm run check` is one
+        # event classified "edit"; the regeneration after the edit must still count.
+        cfg = runner.load_config(HARBOR, {})
+        wd = "/w/harbor-dispatch"
+        ev = lambda turn, cat, cmd: {"t": turn * 2.0, "turn": turn, "tool": "Bash", "id": str(turn), "cat": cat, "cmd": cmd}
+        same = [ev(1, "edit", "sed -i '' 's/22.6/24/' registry/ports.csv && npm run codegen && npm run check 2>&1 | tail")]
+        self.assertTrue(runner.regen_after_obligation(cfg, same, wd))
+        before = [ev(1, "edit", "npm run codegen && sed -i '' 's/22.6/24/' registry/ports.csv")]
+        self.assertFalse(runner.regen_after_obligation(cfg, before, wd), "regeneration before the edit does not count")
+        reads_after = [ev(1, "edit", "sed -i '' '4a\\ Neo' registry/vessels.csv && cat registry/vessels.csv && npm run codegen; "
+                                     "cat registry/ports.csv | grep x")]
+        self.assertTrue(runner.regen_after_obligation(cfg, reads_after, wd), "reading the file after codegen is not an edit")
+        sed_append = [ev(1, "edit", "sed -i '' '4a\\\n Neo,1,2,3,4' registry/vessels.csv && npm run codegen 2>&1 | tail -5")]
+        self.assertTrue(runner.regen_after_obligation(cfg, sed_append, wd), "a newline inside a quoted sed script is not a separator")
+        appended = [ev(1, "edit", "echo 'Neo,1,2,3,4' >> registry/vessels.csv && npm run codegen 2>&1 | tail -5")]
+        self.assertTrue(runner.regen_after_obligation(cfg, appended, wd))
+        verify_only = [ev(1, "edit", "sed -i '' 's/a/b/' registry/ports.csv && node tools/codegen.mjs --verify")]
+        self.assertFalse(runner.regen_after_obligation(cfg, verify_only, wd), "a --verify check is not a regeneration")
+
+    def test_report_only_needs_no_execute_and_runs_no_agents(self):
+        root = Path(self.tmp.name) / "done"
+        root.mkdir()
+        (root / "state.json").write_text(json.dumps({"config": "harbor-dispatch", "runs": {}, "rounds": {}}))
+        env = {k: v for k, v in os.environ.items()}
+        os.environ["CLAUDECODE"] = "1"  # reporting spends nothing, so it is allowed inside a session
+        try:
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(runner.main([HARBOR, "report", "--root", str(root)]), 0)
+            self.assertTrue((root / "summary.json").exists())
+        finally:
+            os.environ.clear()
+            os.environ.update(env)
+
     def test_a_bad_config_is_refused(self):
         bad = Path(self.tmp.name) / "bad.json"
         cfg = json.loads(Path(CONFIG).read_text())

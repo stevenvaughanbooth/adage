@@ -50,6 +50,41 @@ the Makefile tried `pytest` first: 1.44 failed runs per session). Round 2 learne
 and it disappeared (0.00). Without Adage, 4 of 18 round-1 agents gave up asking what the ticket was.
 Full data: [demo/results](demo/results/); interactive results page published as an artifact.
 
+### A second demo: a stronger model, a different stack
+
+Next, **Claude Sonnet 5** on **harbor-dispatch**, a TypeScript service on Node 26 whose conventions
+differ from the first sandbox:
+
+- incidents like `INC-94` resolve only through `bin/fetch-incident`;
+- `npm test` fails and `npm run check` works;
+- `registry/*.csv` edits need `npm run codegen`.
+
+There were 84 sessions: 12 for training, then 36 with Adage and 36 without over two rounds. The run
+cost $6.55 in total.
+
+| Round 2, held-out | With Adage | Without | p (permutation) |
+| --- | ---: | ---: | ---: |
+| Turns before first edit (median) | **3** | 6 | 0.02 |
+| Seconds to first edit (median) | **6.7** | 11.0 | < 0.001 |
+| Exploration calls before first edit (median) | **2** | 4 | < 0.001 |
+| Total turns (median) | **7** | 10 | 0.002 |
+| Cost per run (mean, USD) | **0.065** | 0.086 | < 0.001 |
+| Hidden checks passed | 100% | 100% | — |
+
+Sonnet found every convention on its own:
+
+- it ran the lookup unaided in every training session;
+- it met the finish-line obligation 100% of the time in both arms;
+- it never tried `npm test`, so no dead end was learned.
+
+Adage's effect therefore moved from avoiding failures (Haiku: 78% → 100% hidden checks) to
+**skipping exploration**: agents went to the lookup and the linked files directly. That halved the
+turns before the first edit and cut cost by 24%, with quality unchanged. The weaker the agent is at
+finding conventions, the more Adage adds.
+
+Results are in [demo/results/20260923-1249-harbor-dispatch-claude-sonnet-5](demo/results/20260923-1249-harbor-dispatch-claude-sonnet-5/).
+
+
 ## Install
 
 From a tagged release (none published yet), for macOS (arm64, x64), Linux (x64, arm64; static) and

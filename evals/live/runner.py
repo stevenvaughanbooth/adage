@@ -44,6 +44,7 @@ Config: JSON. See evals/live/configs/ and evals/live/README.md.
 
 import fnmatch
 import json
+import re
 import os
 import random
 import shutil
@@ -333,13 +334,69 @@ def follow_counts(spool):
     return {"exposed": len(exposed), "followed": len(followed), "derailed": len(derailed)}
 
 
+def shell_segments(cmd):
+    """Split a shell command on `&&`, `||`, `;` and newlines outside quotes (a sed script such as
+    `'4a\\<newline>row'` keeps its newline). Coarse, for metrics only."""
+    segs, cur, quote, i = [], [], None, 0
+    while i < len(cmd):
+        ch = cmd[i]
+        if quote:
+            if ch == quote:
+                quote = None
+            elif ch == "\\" and quote == '"' and i + 1 < len(cmd):
+                cur.append(ch)
+                i += 1
+                ch = cmd[i]
+        elif ch in "'\"":
+            quote = ch
+        elif cmd.startswith("&&", i) or cmd.startswith("||", i):
+            segs.append("".join(cur))
+            cur = []
+            i += 2
+            continue
+        elif ch in ";\n":
+            segs.append("".join(cur))
+            cur = []
+            i += 1
+            continue
+        cur.append(ch)
+        i += 1
+    segs.append("".join(cur))
+    return [x.strip() for x in segs if x.strip()]
+
+
+def regen_after_obligation(cfg, events, workdir):
+    """Did a regenerate step run after the last edit the finish-line obligation covers?
+
+    A single shell command may do both: `sed -i … registry/x.csv && npm run codegen && npm run check`
+    is one event, classified "edit", yet the regeneration follows the edit. So a Bash event's command
+    is read segment by segment, in order."""
+    ob = [i for i, e in enumerate(events) if touches_obligation(cfg, e, workdir)]
+    if not ob:
+        return False
+    last = events[ob[-1]]
+    c = cfg["classify"]
+    if last["tool"] == "Bash" and not last.get("failed"):
+        segs = shell_segments(last.get("cmd") or "")
+        d, _, _ = ((cfg.get("obligation") or {}).get("paths") or "").rpartition("/")
+        # The last segment that writes the covered files (not one that merely reads them, like the
+        # `cat registry/x.csv` that often follows the edit).
+        writes = lambda x: d and f"{d}/" in x and (any(b in x for b in c["bash_edit"]) or re.search(rf">>?\s*{re.escape(d)}/", x))
+        edit_at = max((i for i, x in enumerate(segs) if writes(x)), default=None)
+        if edit_at is not None:
+            for x in segs[edit_at + 1:]:
+                if any(r in x for r in c["regen"]) and not any(f in x for f in c.get("check_flags", [])):
+                    return True
+    return any(e["cat"] == "regen" and not e.get("failed") for e in events[ob[-1] + 1:])
+
+
 def run_metrics(cfg, events, result, score, workdir, elapsed, sid, spool):
     first_edit = next((e for e in events if e["cat"] == "edit"), None)
     before = [e for e in events if not first_edit or e["t"] < first_edit["t"]]
     lookup = next((e for e in events if e["cat"] == "lookup" and not e.get("failed")), None)
     ob_edits = [i for i, e in enumerate(events) if touches_obligation(cfg, e, workdir)]
     ob_applies = bool(ob_edits)
-    regen_after = ob_applies and any(e["cat"] == "regen" and not e.get("failed") for e in events[ob_edits[-1] + 1:])
+    regen_after = ob_applies and regen_after_obligation(cfg, events, workdir)
     stale = bool(score.get("stale_generated"))
     passed = bool(score.get("passed"))
     return {
@@ -583,7 +640,16 @@ def results_page(root, state):
     sys.path.insert(0, str(REPO / "demo"))
     import report  # noqa: E402 - demo/report.py
 
-    return report.build(state, root / "results")
+    return report.build(redact_home(state), root / "results")
+
+
+def redact_home(state):
+    """The state with the person's home directory shown as `~`: results pages are meant to be
+    shared, and agents' commands sometimes name paths under it (one listed ~/.claude/projects)."""
+    home = str(Path.home())
+    if not home or home == "/":
+        return state
+    return json.loads(json.dumps(state).replace(home, "~"))
 
 
 # --------------------------------------------------------------------------------------- main
@@ -635,6 +701,8 @@ def main(argv):
     adage = Path(opts["adage"] or REPO / "target" / "release" / "adage")
     rounds = rounds_for(cfg, opts["round"])
     p = describe(cfg, opts["phases"], rounds, root, adage)
+    if opts["phases"] == ["report"]:
+        return report_only(cfg, root)
     if not opts["execute"]:
         if opts["json"]:
             print(json.dumps(p, indent=1))
@@ -670,6 +738,39 @@ def main(argv):
         (root / "summary.json").write_text(json.dumps(summary, indent=2))
         print(json.dumps(summary["metrics"], indent=2))
         print(f"results page: {results_page(root, live.state)}")
+    return 0
+
+
+def report_only(cfg, root):
+    """Rebuild summary.json and the results page from a finished run's state.json. Spends no tokens
+    and runs no agents, so it needs neither --execute nor a terminal session. Metrics that are pure
+    functions of the recorded events (the finish-line obligation) are recomputed with the current
+    rules, so a metric fix applies to runs already done."""
+    p = root / "state.json"
+    if not p.exists():
+        raise SystemExit(f"no state.json in {root}; run the experiment first")
+    state = json.loads(p.read_text())
+    changed = 0
+    for rid, r in state.get("runs", {}).items():
+        m, score = r.get("metrics"), r.get("score") or {}
+        if not m or not m.get("obligation_applies"):
+            continue
+        workdir = root / "runs" / rid / cfg["workdir"]
+        met = regen_after_obligation(cfg, r.get("events", []), workdir) and not bool(score.get("stale_generated"))
+        if m.get("obligation_met") != met:
+            m["obligation_met"] = met
+            changed += 1
+    tmp = root / "state.json.tmp"
+    tmp.write_text(json.dumps(state))
+    tmp.replace(p)
+    rounds = sorted({int(r.get("round") or 1) for r in state.get("runs", {}).values() if r.get("phase") == "eval"}) or [1]
+    summaries = {str(rd): summarise(state, rd) for rd in rounds}
+    latest = max(rounds)
+    summary = {**summaries[str(latest)], "config": cfg["name"], "model": cfg["model"], "rounds": summaries}
+    (root / "summary.json").write_text(json.dumps(summary, indent=2))
+    print(f"recomputed the finish-line obligation for {changed} run(s)")
+    print(json.dumps(summary["metrics"], indent=2))
+    print(f"results page: {results_page(root, state)}")
     return 0
 
 
