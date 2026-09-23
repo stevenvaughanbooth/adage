@@ -40,6 +40,10 @@ impl Paths {
     pub fn tracks(&self) -> PathBuf {
         self.root.join("tracks")
     }
+    /// Downloaded embedding models (`adage models fetch`); never shipped with Adage.
+    pub fn models(&self) -> PathBuf {
+        self.root.join("models")
+    }
     pub fn learn_log(&self) -> PathBuf {
         self.root.join("learn.log")
     }

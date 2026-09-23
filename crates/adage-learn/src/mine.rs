@@ -42,7 +42,7 @@ impl LearnConfig {
     }
 }
 
-fn median(v: &mut [f64]) -> f64 {
+pub(crate) fn median(v: &mut [f64]) -> f64 {
     if v.is_empty() {
         return 0.0;
     }
@@ -50,7 +50,7 @@ fn median(v: &mut [f64]) -> f64 {
     v[v.len() / 2]
 }
 
-fn aspect_for(effect: Effect, by_edit: bool, lb: f64, rate: f64, cfg: &LearnConfig, id: &str) -> Option<Aspect> {
+pub(crate) fn aspect_for(effect: Effect, by_edit: bool, lb: f64, rate: f64, cfg: &LearnConfig, id: &str) -> Option<Aspect> {
     let max = ceiling(effect, by_edit)?;
     if lb >= cfg.green_lower_bound && max == Aspect::Green {
         Some(Aspect::Green)
@@ -62,7 +62,7 @@ fn aspect_for(effect: Effect, by_edit: bool, lb: f64, rate: f64, cfg: &LearnConf
 }
 
 /// A short, stable id suffix derived from content, so a route keeps its identity across versions.
-fn stable(parts: &[&str]) -> String {
+pub(crate) fn stable(parts: &[&str]) -> String {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for p in parts {
         for b in p.bytes().chain(std::iter::once(0)) {
@@ -73,23 +73,23 @@ fn stable(parts: &[&str]) -> String {
     format!("{:06x}", h & 0xff_ffff)
 }
 
-fn models(sessions: &[&Session]) -> Vec<String> {
+pub(crate) fn models(sessions: &[&Session]) -> Vec<String> {
     let s: BTreeSet<String> = sessions.iter().filter_map(|x| x.model.clone()).collect();
     s.into_iter().collect()
 }
 
-fn days(sessions: &[&Session], ids: &BTreeSet<String>) -> u32 {
+pub(crate) fn days(sessions: &[&Session], ids: &BTreeSet<String>) -> u32 {
     sessions.iter().filter(|s| ids.contains(&s.id)).map(|s| s.day.clone()).collect::<BTreeSet<_>>().len() as u32
 }
 
-fn argv(step: &StepObs) -> Option<&Vec<String>> {
+pub(crate) fn argv(step: &StepObs) -> Option<&Vec<String>> {
     match &step.norm.action {
         CanonicalAction::Exec { argv, .. } => Some(argv),
         _ => None,
     }
 }
 
-fn shell_join(argv: &[String]) -> String {
+pub(crate) fn shell_join(argv: &[String]) -> String {
     argv.iter()
         .map(|a| if a.chars().all(|c| c.is_ascii_alphanumeric() || "-_./={}:,@+".contains(c)) { a.clone() } else { format!("'{}'", a.replace('\'', "")) })
         .collect::<Vec<_>>()
@@ -99,7 +99,7 @@ fn shell_join(argv: &[String]) -> String {
 /// Pseudo-field meaning "repository paths mentioned in the command's text output".
 pub const PATHS_FIELD: &str = "*paths";
 
-trait MaxRank {
+pub(crate) trait MaxRank {
     fn max_by_rank(self, other: Effect) -> Effect;
 }
 

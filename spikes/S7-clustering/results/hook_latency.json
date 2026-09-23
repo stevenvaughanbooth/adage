@@ -1,0 +1,44 @@
+{
+  "in_process_embed_ms": 1.501625,
+  "in_process_open_ms": 1.199041,
+  "intent_routes_model_installed": {
+    "max_ms": 10.324667,
+    "mean_ms": 6.264170008000009,
+    "p50_ms": 6.2469589999999995,
+    "p95_ms": 6.394459,
+    "p99_ms": 6.731292,
+    "runs": 500
+  },
+  "intent_routes_model_installed_ticket_prompt": {
+    "max_ms": 8.185875000000001,
+    "mean_ms": 6.214841997999999,
+    "p50_ms": 6.201083,
+    "p95_ms": 6.329416,
+    "p99_ms": 6.791833,
+    "runs": 500
+  },
+  "intent_routes_model_missing": {
+    "max_ms": 3.428292,
+    "mean_ms": 3.0910155420000014,
+    "p50_ms": 3.0886669999999996,
+    "p95_ms": 3.188209,
+    "p99_ms": 3.2741670000000003,
+    "runs": 500
+  },
+  "no_routes_for_repo": {
+    "max_ms": 2.058125,
+    "mean_ms": 1.678346944,
+    "p50_ms": 1.677042,
+    "p95_ms": 1.7572079999999999,
+    "p99_ms": 1.8094160000000001,
+    "runs": 500
+  },
+  "structured_routes_only": {
+    "max_ms": 4.184292,
+    "mean_ms": 3.088551918000003,
+    "p50_ms": 3.091125,
+    "p95_ms": 3.1792499999999997,
+    "p99_ms": 3.320875,
+    "runs": 500
+  }
+}

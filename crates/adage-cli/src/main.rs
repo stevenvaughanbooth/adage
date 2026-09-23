@@ -8,6 +8,7 @@
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage share <track> --out <dir> [--key <path>]   redaction-check, copy, and sign a track
 //! adage add <dir> [--trust]          verify a shared track and install it at probation
+//! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
 //! adage version
 //! ```
 //! Environment: `ADAGE_HOME` (data directory), `ADAGE_ARM` (`treated`|`holdout`, overrides
@@ -16,6 +17,7 @@
 
 mod add;
 mod hook;
+mod models;
 mod redact;
 mod share;
 
@@ -59,6 +61,7 @@ fn run(args: &[String]) -> Result<()> {
         Some("report") => report(&paths, args.iter().any(|a| a == "--json")),
         Some("share") => share::share(&args[1..], &paths),
         Some("add") => add::add(&args[1..], &paths),
+        Some("models") => models::run(&args[1..], &paths),
         Some("hooks-config") => {
             let bin = args.get(1).cloned().unwrap_or_else(|| "adage".into());
             println!("{}", serde_json::to_string_pretty(&hook::settings(&bin))?);
@@ -69,7 +72,7 @@ fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         _ => {
-            println!("usage: adage <learn|status|report|share|add|hooks-config|version|hook>");
+            println!("usage: adage <learn|status|report|share|add|models|hooks-config|version|hook>");
             Ok(())
         }
     }
@@ -116,7 +119,7 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         None => BTreeMap::new(),
     };
     let cfg = if args.iter().any(|a| a == "--demo") { LearnConfig::demo() } else { LearnConfig::default() };
-    let inputs = Inputs { transcripts, outcomes, repo_override: flag(args, "--repo") };
+    let inputs = Inputs { transcripts, outcomes, repo_override: flag(args, "--repo"), models: Some(paths.models()) };
     let rep = adage_learn::learn(&inputs, &paths.tracks(), &paths.index(), &cfg)?;
     if args.iter().any(|a| a == "--json") {
         println!("{}", serde_json::to_string_pretty(&rep)?);
@@ -126,8 +129,12 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
             rep.sessions_read, rep.sessions_used, rep.sessions_steered
         );
         println!("thresholds: {}", rep.thresholds);
+        match &rep.intent_model {
+            Some(m) => println!("intent families: {m}"),
+            None => println!("intent families: skipped (no embedding model; `adage models fetch` enables them)"),
+        }
         for (repo, rr) in &rep.repos {
-            println!("\n{repo} — {} sessions", rr.sessions);
+            println!("\n{repo} — {} sessions, {} usable intent families", rr.sessions, rr.intent_families);
             for t in &rr.tracks {
                 println!("  {} @ {} ({})", t.name, t.version, t.change);
                 for r in &t.routes {
@@ -142,6 +149,12 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
 
 fn status(paths: &Paths) -> Result<()> {
     let tracks = io::read_all(&paths.tracks())?;
+    let has_intents = tracks.iter().any(|t| t.routes.iter().any(|r| matches!(r.trigger, adage_tracks::Trigger::Intent { .. })));
+    match adage_intent::model::StaticModel::open(&adage_intent::model::dir_in(&paths.models())) {
+        Ok(m) => println!("intent model: {}", m.id),
+        Err(_) if has_intents => println!("intent model: not installed, so intent routes will not fire (`adage models fetch`)"),
+        Err(_) => {}
+    }
     if tracks.is_empty() {
         println!("no tracks installed in {}", paths.tracks().display());
         return Ok(());

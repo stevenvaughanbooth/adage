@@ -235,3 +235,44 @@ exactly (`src/s7/check_rust.py`). What makes it deterministic:
   measured.
 * **The HDBSCAN baselines at 100k and 300k are timeouts, not measurements.** Their extrapolations
   assume the quadratic growth observed below the timeout.
+
+## Addendum: applied in slice 9 (`crates/adage-intent`)
+
+The recommendation now ships as production Rust. Two checks close the loop between the spike and
+the product.
+
+**The production embedder equals the Python reference** (`src/s7/check_rust_embed.py` →
+`results/rust_embed_check.json`). The embedder is a plain-Rust WordPiece tokenizer, safetensors rows
+read on demand, and mean pooling, with no `tokenizers`, `model2vec-rs` or `hf-hub` dependency.
+Over 3,922 prompts (S2's benchmark plus 3,000 scaled prompts):
+
+* The embedding cosine to model2vec's is **1.000000** at the minimum; every vector is identical to
+  1e-5.
+* The normalised text is identical for 3,839 prompts. The other 83 differ only by the intended
+  one-letter ticket fix (`W-4821` → `{ticket}`).
+
+**Hook latency with the model**, from `crates/adage-cli/examples/hook_latency.rs` →
+`results/hook_latency.json`. Each scenario spawns the release binary in exec form, the way Claude
+Code runs it, 500 times after 20 warm-up runs:
+
+| `UserPromptSubmit` scenario | p50 | p95 | p99 |
+| --- | ---: | ---: | ---: |
+| Repository with no routes (the common path) | 1.68 ms | 1.76 ms | 1.81 ms |
+| Structured routes only (no model touched) | 3.09 ms | 3.18 ms | 3.32 ms |
+| **Intent routes, model installed (open + embed + match)** | **6.25 ms** | **6.39 ms** | 6.73 ms |
+| Intent routes, ticket prompt (still embeds) | 6.20 ms | 6.33 ms | 6.79 ms |
+| Intent routes, model missing (fails open) | 3.09 ms | 3.19 ms | 3.27 ms |
+
+Per-process cost of the intent path, about 3.2 ms in total:
+
+* 1.25 ms compiling the normaliser's regexes;
+* 1.25 ms building the 29,528-token vocabulary map;
+* 0.01 ms for the embedding itself (a dozen 1 KB row reads).
+
+Loading the model in every hook process is within budget: 6.4 ms p95 against the 25 ms p95
+prompt-with-intent budget (Design §13.2), with no daemon. If it ever needs to be faster, two
+optimisations would roughly halve the added cost, and neither is needed now:
+
+* ASCII-only regex classes in the normaliser;
+* a precomputed sorted vocabulary file searched in place, instead of a hash map built on every
+  call.

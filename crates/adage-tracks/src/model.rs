@@ -62,7 +62,20 @@ pub enum Trigger {
     AfterEdit { paths: String },
     /// Delivered once, at the first prompt of a session in this repository.
     SessionStart,
+    /// A prompt that means what an intent family means (Design §8.2.1): the normalised prompt's
+    /// embedding, from exactly `model`, has cosine similarity >= `threshold` to `centroid`.
+    /// Raw prompts never travel in a track; only the centroid does, as integers in units of 1e-4
+    /// (`adage_intent::quantize`). A different or missing model means the route never fires.
+    Intent { family: String, model: String, centroid: Vec<i16>, threshold: f32 },
 }
+
+/// Bounds on intent triggers (tracks are untrusted input).
+pub const INTENT_MIN_DIM: usize = 8;
+pub const INTENT_MAX_DIM: usize = 1024;
+pub const INTENT_MIN_THRESHOLD: f32 = 0.5;
+pub const INTENT_MAX_THRESHOLD: f32 = 0.99;
+/// At most this many intent routes per track: matching is one dot product each, on the hot path.
+pub const MAX_INTENT_ROUTES: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "do", rename_all = "snake_case")]

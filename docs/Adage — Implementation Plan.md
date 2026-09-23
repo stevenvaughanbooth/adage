@@ -45,7 +45,7 @@ Each slice is vertical, testable, and leaves `main` working.
 | 6 | **Runtime decisions** | Decision points, effect ceilings, slot validation, interlocking, per-session caps, stop-hook bounds, follow/derail judgement | Unit tests for every rule; replay test over recorded sessions |
 | 7 | **Claude Code plugin** | Plugin with exec-form hooks, data-dir install, `SessionStart` pre-run | Installs with `--plugin-dir`; fails open with the binary missing |
 | 8 | **Demo** | Sandbox repo, training + held-out tasks, runner, live dashboard, published results | Real agents, both arms, results charted live |
-| 9 | Intent families | Static embeddings, normalised prompts, per-family thresholds | S7 results applied |
+| 9 | **Intent families** | Static embeddings in-process (`adage-intent`), normalised prompts, kNN + Louvain families split/merged by behaviour, per-family thresholds, `adage models fetch` | S7 results applied — **built**; fails open without the model |
 | 10 | Sharing, review queue, OpenCode adapter | Per design | — |
 
 Slices 1–8 are the demo path. 9–10 follow.

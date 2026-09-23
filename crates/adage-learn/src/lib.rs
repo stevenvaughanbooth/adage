@@ -1,9 +1,11 @@
 //! `adage learn`: import sessions, mine routes, assemble versioned tracks, compile the index.
 
 pub mod import;
+pub mod intent;
 pub mod mine;
 
 use adage_core::CommandTable;
+use adage_intent::model::StaticModel;
 use adage_tracks::{io, Gauge, Index, Manifest, Route, Scope, Track, TrackInfo, Trigger};
 use anyhow::Result;
 use import::Session;
@@ -20,11 +22,15 @@ pub struct Report {
     pub repos: BTreeMap<String, RepoReport>,
     pub index_generation: String,
     pub thresholds: String,
+    /// The embedding model intent families were learned with; `None` if none is installed (intent
+    /// families are then skipped, and existing intent tracks are left as they are).
+    pub intent_model: Option<String>,
 }
 
 #[derive(Debug, Default, Serialize)]
 pub struct RepoReport {
     pub sessions: usize,
+    pub intent_families: usize,
     pub tracks: Vec<TrackReport>,
 }
 
@@ -41,6 +47,8 @@ pub struct Inputs {
     /// Session id → task succeeded, where known.
     pub outcomes: BTreeMap<String, bool>,
     pub repo_override: Option<String>,
+    /// The models directory (`$ADAGE_HOME/models`). No usable model there: no intent families.
+    pub models: Option<PathBuf>,
 }
 
 pub fn slug(repo: &str) -> String {
@@ -52,7 +60,17 @@ fn bump(prev: Option<&Track>, routes: &[Route]) -> (String, String) {
     let Some(p) = prev else { return ("0.1.0".into(), "created".into()) };
     let v: Vec<u64> = p.manifest.track.version.split('.').filter_map(|x| x.parse().ok()).collect();
     let (ma, mi, pa) = (v.first().copied().unwrap_or(0), v.get(1).copied().unwrap_or(1), v.get(2).copied().unwrap_or(0));
-    let shape = |r: &Route| (r.id.clone(), serde_json::to_string(&(&r.trigger, &r.step, &r.slots, &r.aspect)).unwrap_or_default());
+    // An intent family's centroid and threshold drift as sessions accumulate; that is evidence,
+    // not a change of route.
+    let shape = |r: &Route| {
+        let trigger = match &r.trigger {
+            Trigger::Intent { family, model, .. } => {
+                Trigger::Intent { family: family.clone(), model: model.clone(), centroid: vec![], threshold: 0.0 }
+            }
+            t => t.clone(),
+        };
+        (r.id.clone(), serde_json::to_string(&(&trigger, &r.step, &r.slots, &r.aspect)).unwrap_or_default())
+    };
     let old: BTreeMap<_, _> = p.routes.iter().map(shape).collect();
     let new: BTreeMap<_, _> = routes.iter().map(shape).collect();
     if old == new {
@@ -95,6 +113,10 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     }
     sessions.sort_by(|a, b| a.id.cmp(&b.id));
     report.sessions_used = sessions.len();
+    // Fail open: without a usable model, intent families are skipped and everything else is
+    // learned exactly as before.
+    let model = inputs.models.as_deref().and_then(|d| StaticModel::load(&adage_intent::model::dir_in(d)).ok());
+    report.intent_model = model.as_ref().map(|m| m.id.clone());
 
     let mut by_repo: BTreeMap<String, Vec<&Session>> = BTreeMap::new();
     for s in &sessions {
@@ -124,11 +146,16 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         let fs = unsteered("finish-line");
         let fs: Vec<&Session> = fs.into_iter().filter(|s| !s.directed.contains("finish-line-stop")).collect();
         let ds = unsteered("dead-ends");
-        let groups: Vec<(&str, &str, Vec<Route>)> = vec![
+        let mut groups: Vec<(&str, &str, Vec<Route>)> = vec![
             ("work-items", "Context gathering for prompts that name a work item", work),
             ("finish-line", "Steps this repository requires after certain edits", mine::obligation_routes(&fs, cfg)),
             ("dead-ends", "Commands that fail in this repository, and what works instead", mine::dead_end_routes(&ds, cfg)),
         ];
+        if let Some(m) = &model {
+            let mined = intent::intent_routes(&unsteered("intents"), m, cfg);
+            rr.intent_families = mined.families;
+            groups.push(("intents", "Commands that requests like these lead to in this repository", mined.routes));
+        }
         for (suffix, description, routes) in groups {
             let name = format!("{}/{suffix}", slug(repo));
             let dir = tracks_root.join(slug(repo)).join(suffix);

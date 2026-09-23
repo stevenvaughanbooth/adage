@@ -36,3 +36,14 @@ echo "== the Rust Louvain reproduces the Python reference exactly =="
 
 echo "== benchmark: quality + determinism, scale, purity (test corpora, seed 20260922) =="
 .venv/bin/python -W ignore -m s7.bench quality scale perrepo purity
+
+echo "== production embedder (crates/adage-intent) vs the Python reference =="
+(cd ../.. && cargo build --release -p adage-cli -p adage-intent --examples)
+H=$(mktemp -d)
+ADAGE_HOME="$H" ../../target/release/adage models install models/potion-base-8m
+.venv/bin/python -W ignore -m s7.check_rust_embed "$H/models/potion-base-8m"
+
+echo "== hook latency with the model (Rust, exec form) =="
+../../target/release/examples/hook_latency ../../target/release/adage models/potion-base-8m 500 > results/hook_latency.json
+cat results/hook_latency.json
+rm -rf "$H"

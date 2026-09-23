@@ -73,6 +73,12 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
                 exit.trim_start()
             ))
         }
+        // The family's label and phrasings are for people; the agent sees only this template.
+        (Step::Run { command }, Trigger::Intent { .. }) => Some(format!(
+            "In this repository, requests like this one usually start by running:\n  {}\n{}",
+            sanitise(&bind(command, bound)),
+            exit.trim_start()
+        )),
         (Step::Run { command }, Trigger::AfterEdit { paths }) => Some(format!(
             "In this repository, changes to files matching {} must be followed by running:\n  {}\nCI fails if this is skipped.{}",
             sanitise(paths),

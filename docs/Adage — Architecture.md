@@ -310,7 +310,7 @@ flowchart LR
 | **Ingest** | Live events from `adage.db`; importers for backfill (Claude Code JSONL including `subagents/` and `tool-results/`; Codex rollouts; OpenCode SQLite). Importers are versioned, streaming, resumable, and quarantine what they can't parse |
 | **Normalise** | tree-sitter-bash; per-command flag grammars; mapping tables per harness version as data; golden fixtures per version (D§11) |
 | **Training-data hygiene** | Only untreated sessions, holdout sessions, and treated sessions truncated at their first directive, with inverse-propensity weights (D§11) |
-| **Intent families** | Normalise prompts → embed (same model as runtime) → HDBSCAN with a fixed seed over sorted inputs → behavioural purity split/merge → per-family thresholds (D§8.2.1) |
+| **Intent families** | Normalise prompts → embed (same model as runtime) → exact cosine kNN + deterministic Louvain over sorted inputs, per repository (S7: HDBSCAN was neither accurate nor order-invariant here) → behavioural purity split/merge → per-family thresholds calibrated on the repository's own prompts (D§8.2.1) |
 | **Labels** | Short labels and canonical phrasings written by a language model through the harness's own headless mode, using the developer's existing access; fallback is the family's most central normalised prompt |
 | **Route mining** | Variable-length backoff over templates; slot provenance rules; post-edit obligations; dead ends from fail-then-recover patterns |
 | **Calibration and gates** | Isotonic calibration per harness and effect class; offline replay on held-out sessions; confidence sequences for promotion (D§10.4) |

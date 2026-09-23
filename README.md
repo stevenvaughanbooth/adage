@@ -14,7 +14,7 @@ harness's own permissions.
 
 ## What it does, concretely
 
-From real sessions in a repository, Adage learns four kinds of route:
+From real sessions in a repository, Adage learns five kinds of route:
 
 | Route | Learned from | At runtime |
 | --- | --- | --- |
@@ -22,6 +22,7 @@ From real sessions in a repository, Adage learns four kinds of route:
 | **Linked files** | Agents reading, one turn at a time, the files a lookup listed | 🟡 "That result lists these files … read them together in one turn" |
 | **Dead ends** | A verify command that fails, followed by one that works | 🔴 "Running `python3 -m unittest` fails (…). Use this instead: `make test`" |
 | **Finish line** | A regenerate step that follows edits to a path pattern | 🟢 after the edit, and once at Stop if still unmet: "changes to `schema/*.json` must be followed by `make gen`" |
+| **Intent** | Prompts that mean the same thing (an *intent family*) whose sessions ran the same command first | 🟢/🟡 "Requests like this one usually start by running: `make test`" (optional; needs `adage models fetch`) |
 
 Every route carries its evidence (distinct sessions, Wilson lower bound), an effect class that caps
 how strongly it may be directed, and typed slot contracts: a value from the prompt reaches a directive
@@ -68,6 +69,13 @@ directives emitted, followed, and derailed. Data lives in `~/Library/Application
 
 **Kill switches:** `ADAGE_DISABLE=1`, or a `.adage/disabled` file in a repository.
 
+**Intent families (optional):** `adage models fetch` downloads the pinned static embedding model
+(potion-base-8M, 31 MB, SHA-256 verified; `adage models install <dir>` for offline machines) into
+the data directory. `adage learn` then clusters each repository's prompts into intent families
+(exact kNN + deterministic Louvain, split and merged by what the sessions did next — spike S7) and
+learns an intent route per usable family. Without the model everything else works unchanged: learning
+skips intent families and hooks never load a model.
+
 **Sharing:** `adage share <track> --out <dir> [--key <path>]` checks every file for absolute paths,
 home-directory paths and secret-looking strings, re-validates the track, and signs its digest
 (`sshsig`, namespace `adage-track`; ssh-agent first, else the key file). `adage add <dir>` verifies the
@@ -104,7 +112,7 @@ fails untouched and passes with its reference solution.
 | `crates/adage-runtime` | Hook-time decisions and directive rendering from fixed templates |
 | `crates/adage-learn` | Transcript import and the route miners |
 | `crates/adage-sign` | Native `sshsig` signing (ssh-agent or key file) and `allowed_signers` verification |
-| `crates/adage-sign` | Native `sshsig` signing and `allowed_signers` verification for shared tracks |
+| `crates/adage-intent` | Prompt normalisation, the static embedding model in plain Rust (WordPiece + safetensors rows read on demand), deterministic kNN + Louvain clustering, behavioural split/merge |
 | `crates/adage-cli` | The `adage` binary |
 | `plugin/claude-code` | The Claude Code plugin |
 | `demo/` | Sandbox, runner, live dashboard |
@@ -116,6 +124,6 @@ fails untouched and passes with its reference solution.
 ## Status
 
 v0.1: Claude Code only; tracks are shared directly (`adage share` / `adage add`). Hardened against an adversarial review (tracks are
-untrusted input; effects re-derived; bounded hot path; symlink-safe paths). Team depots, lockfiles,
-intent embeddings, the review queue, and the OpenCode and Codex adapters are designed and spiked but
+untrusted input; effects re-derived; bounded hot path; symlink-safe paths). Intent families use static
+embeddings (slice 9); team depots, lockfiles, the review queue, and the OpenCode and Codex adapters are designed and spiked but
 not yet built. See the implementation plan.

@@ -65,7 +65,7 @@ fn corpus(dir: &Path) -> (Vec<PathBuf>, String) {
 }
 
 fn run(dir: &Path, files: &[PathBuf], home: &Path) -> Index {
-    let inputs = Inputs { transcripts: files.to_vec(), outcomes: BTreeMap::new(), repo_override: Some("acme-billing".into()) };
+    let inputs = Inputs { transcripts: files.to_vec(), outcomes: BTreeMap::new(), repo_override: Some("acme-billing".into()), models: None };
     learn(&inputs, &home.join("tracks"), &home.join("index.json"), &LearnConfig::demo()).unwrap();
     let _ = dir;
     Index::load(&home.join("index.json"))

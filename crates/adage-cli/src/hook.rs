@@ -2,6 +2,8 @@
 //! Returns `None` for "no output" — including on every error path (fail open).
 
 use adage_core::{repo, CommandTable};
+use adage_intent::model::{self, StaticModel};
+use adage_intent::normalize::normalize;
 use adage_runtime::{assign_arm, decide, render, Arm, Call, Ctx, Event, SessionState};
 use adage_store::{spool, state, Paths};
 use adage_tracks::Index;
@@ -89,7 +91,15 @@ pub fn run(harness: &str, event: &str) -> Option<String> {
     index.for_repo(&repo_key).next()?; // nothing installed for this repository: the common, cheapest path
     let ev = to_event(event, &p)?;
     let table = CommandTable::load();
-    let ctx = Ctx { index: &index, repo: repo_key.clone(), root: &root, table: &table };
+    // The embedding model is opened only if the runtime asks, which it does only at a prompt in a
+    // repository with intent routes. Missing or damaged model: no vector, no intent directive.
+    let models = paths.models();
+    let embed = move |text: &str| -> Option<(String, Vec<f32>)> {
+        let m = StaticModel::open(&model::dir_in(&models)).ok()?;
+        let v = m.embed(&normalize(text))?;
+        Some((m.id, v))
+    };
+    let ctx = Ctx { index: &index, repo: repo_key.clone(), root: &root, table: &table, embed: Some(&embed) };
     let arm_env = std::env::var("ADAGE_ARM").ok();
     let share: f64 = std::env::var("ADAGE_HOLDOUT").ok().and_then(|v| v.parse().ok()).unwrap_or(0.1);
     let (decision, arm) = state::update::<SessionState, _>(&paths.state(&session), |st| {
