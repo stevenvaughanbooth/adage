@@ -1,0 +1,165 @@
+{
+  "meta": {
+    "started_at": "2026-09-23T04:10:20.681Z",
+    "uptime_before": "21:10  up 12 days, 20:01, 2 users, load averages: 9.78 7.12 4.89",
+    "node_version": "v26.5.1",
+    "platform": "Darwin 25.6.0 arm64",
+    "cpus": 11,
+    "uptime_after": "21:13  up 12 days, 20:04, 2 users, load averages: 37.52 14.99 8.20"
+  },
+  "scenarios": {
+    "A_spawn_exit_floor": {
+      "label": "A: spawn + exit only (floor, exec form, no stdin plumbing)",
+      "n": 3000,
+      "stats": {
+        "n": 3000,
+        "ok": 3000,
+        "errors": 0,
+        "min": 1.39,
+        "p50": 1.669833,
+        "p95": 2.142791,
+        "p99": 3.133708,
+        "max": 6.712,
+        "mean": 1.744321285999999
+      },
+      "uptime_before": "21:10  up 12 days, 20:01, 2 users, load averages: 9.78 7.12 4.89",
+      "uptime_after": "21:10  up 12 days, 20:01, 2 users, load averages: 9.64 7.14 4.90"
+    },
+    "B_stdin_2kb": {
+      "label": "B: + read 2 KB stdin",
+      "n": 3000,
+      "stats": {
+        "n": 3000,
+        "ok": 3000,
+        "errors": 0,
+        "min": 1.403333,
+        "p50": 1.625416,
+        "p95": 1.990708,
+        "p99": 2.2785,
+        "max": 3.348042,
+        "mean": 1.666324113666662
+      },
+      "uptime_before": "21:10  up 12 days, 20:01, 2 users, load averages: 9.64 7.14 4.90",
+      "uptime_after": "21:10  up 12 days, 20:01, 2 users, load averages: 9.35 7.12 4.91"
+    },
+    "C_stdin_300kb": {
+      "label": "C: + read 300 KB stdin (typical large PostToolBatch)",
+      "n": 3000,
+      "stats": {
+        "n": 3000,
+        "ok": 3000,
+        "errors": 0,
+        "min": 1.451708,
+        "p50": 1.685083,
+        "p95": 2.13125,
+        "p99": 2.587125,
+        "max": 5.589917,
+        "mean": 1.747425708000003
+      },
+      "uptime_before": "21:10  up 12 days, 20:01, 2 users, load averages: 9.35 7.12 4.91",
+      "uptime_after": "21:10  up 12 days, 20:02, 2 users, load averages: 9.32 7.15 4.93"
+    },
+    "D_socket_warm": {
+      "label": "D: + socket round trip, server warm",
+      "n": 3000,
+      "stats": {
+        "n": 3000,
+        "ok": 3000,
+        "errors": 0,
+        "min": 1.445875,
+        "p50": 1.688042,
+        "p95": 2.16325,
+        "p99": 2.833708,
+        "max": 6.463208,
+        "mean": 1.7567776786666665
+      },
+      "uptime_before": "21:10  up 12 days, 20:02, 2 users, load averages: 9.32 7.15 4.93",
+      "uptime_after": "21:10  up 12 days, 20:02, 2 users, load averages: 9.21 7.16 4.95"
+    },
+    "E_socket_missing": {
+      "label": "E: + socket connect to a missing socket (fail-open path)",
+      "n": 3000,
+      "stats": {
+        "n": 3000,
+        "ok": 3000,
+        "errors": 0,
+        "min": 1.416416,
+        "p50": 1.640417,
+        "p95": 2.066792,
+        "p99": 2.501625,
+        "max": 4.029209,
+        "mean": 1.697060542999999
+      },
+      "uptime_before": "21:10  up 12 days, 20:02, 2 users, load averages: 9.21 7.16 4.95",
+      "uptime_after": "21:10  up 12 days, 20:02, 2 users, load averages: 9.04 7.16 4.96"
+    },
+    "F_socket_shell_form": {
+      "label": "F: same as D but spawned via /bin/sh -c (shell form)",
+      "n": 3000,
+      "stats": {
+        "n": 3000,
+        "ok": 3000,
+        "errors": 0,
+        "min": 3.830459,
+        "p50": 5.166084,
+        "p95": 10.4015,
+        "p99": 20.1985,
+        "max": 60.126292,
+        "mean": 5.944869100666664
+      },
+      "uptime_before": "21:10  up 12 days, 20:02, 2 users, load averages: 9.04 7.16 4.96",
+      "uptime_after": "21:11  up 12 days, 20:02, 2 users, load averages: 9.05 7.28 5.06"
+    },
+    "G_fresh_binary": {
+      "label": "G: freshly written, never-executed binary copy (Gatekeeper/codesign cost)",
+      "n": 300,
+      "stats": {
+        "n": 300,
+        "ok": 300,
+        "errors": 0,
+        "min": 109.881792,
+        "p50": 119.434458,
+        "p95": 172.027792,
+        "p99": 294.674125,
+        "max": 352.543334,
+        "mean": 127.3152482033333
+      },
+      "uptime_before": "21:11  up 12 days, 20:02, 2 users, load averages: 9.05 7.28 5.06",
+      "uptime_after": "21:11  up 12 days, 20:03, 2 users, load averages: 9.11 7.51 5.23"
+    },
+    "NB_node_stdin_2kb": {
+      "label": "Node comparison: + read 2 KB stdin",
+      "n": 1000,
+      "stats": {
+        "n": 1000,
+        "ok": 1000,
+        "errors": 0,
+        "min": 29.935459,
+        "p50": 35.083959,
+        "p95": 53.94525,
+        "p99": 82.294875,
+        "max": 106.989667,
+        "mean": 39.35447833899996
+      },
+      "uptime_before": "21:11  up 12 days, 20:03, 2 users, load averages: 9.11 7.51 5.23",
+      "uptime_after": "21:12  up 12 days, 20:03, 2 users, load averages: 12.74 8.55 5.71"
+    },
+    "ND_node_socket_warm": {
+      "label": "Node comparison: + socket round trip, server warm",
+      "n": 1000,
+      "stats": {
+        "n": 1000,
+        "ok": 1000,
+        "errors": 0,
+        "min": 31.20975,
+        "p50": 45.969083,
+        "p95": 82.603584,
+        "p99": 132.133667,
+        "max": 347.060583,
+        "mean": 50.05766458599993
+      },
+      "uptime_before": "21:12  up 12 days, 20:03, 2 users, load averages: 12.74 8.55 5.71",
+      "uptime_after": "21:13  up 12 days, 20:04, 2 users, load averages: 37.52 14.99 8.20"
+    }
+  }
+}
