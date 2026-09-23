@@ -12,7 +12,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 fn cases() -> u32 {
-    if cfg!(feature = "slow") { 1_000 } else { 64 }
+    if cfg!(feature = "slow") {
+        1_000
+    } else {
+        64
+    }
 }
 
 fn records() -> impl Strategy<Value = Vec<Value>> {

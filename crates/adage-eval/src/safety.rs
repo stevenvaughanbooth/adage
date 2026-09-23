@@ -32,10 +32,16 @@ pub struct Violation {
 const EXIT: &str = r"(?:Ignore this if (?:the user is asking for something else|this is an exploratory or draft change)(?: or (?:the user is asking for something else|this is an exploratory or draft change))*\.)?";
 
 static T_LOOKUP: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(&format!(r"^In this repository, (?:work item|file|commit|link) details are looked up with:\n  (?P<cmd>[^\n]*)\n{EXIT}$")).unwrap()
+    Regex::new(&format!(
+        r"^In this repository, (?:work item|file|commit|link) details are looked up with:\n  (?P<cmd>[^\n]*)\n{EXIT}$"
+    ))
+    .unwrap()
 });
 static T_INTENT: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(&format!(r"^In this repository, requests like this one usually start by running:\n  (?P<cmd>[^\n]*)\n{EXIT}$")).unwrap()
+    Regex::new(&format!(
+        r"^In this repository, requests like this one usually start by running:\n  (?P<cmd>[^\n]*)\n{EXIT}$"
+    ))
+    .unwrap()
 });
 static T_FINISH: Lazy<Regex> = Lazy::new(|| {
     Regex::new(&format!(
@@ -88,7 +94,10 @@ fn text_ok(what: &str, s: &str) -> Option<String> {
 }
 
 fn glob_ok(g: &str) -> Option<String> {
-    let ok = !g.is_empty() && !g.starts_with('/') && !g.contains("..") && g.chars().all(|c| c.is_ascii_alphanumeric() || "_./*-".contains(c));
+    let ok = !g.is_empty()
+        && !g.starts_with('/')
+        && !g.contains("..")
+        && g.chars().all(|c| c.is_ascii_alphanumeric() || "_./*-".contains(c));
     (!ok).then(|| format!("glob {g:?} is not a safe repository pattern"))
 }
 
@@ -166,7 +175,8 @@ pub fn check_directive(r: &Route, text: &str, root: Option<&Path>, canaries: &[S
         Some(max) if r.aspect < max => bad(format!("aspect {:?} exceeds the ceiling {max:?}", r.aspect)),
         _ => {}
     }
-    let caps = [&*T_LOOKUP, &*T_INTENT, &*T_FINISH, &*T_RUN, &*T_READ, &*T_AVOID].iter().find_map(|re| re.captures(text));
+    let caps =
+        [&*T_LOOKUP, &*T_INTENT, &*T_FINISH, &*T_RUN, &*T_READ, &*T_AVOID].iter().find_map(|re| re.captures(text));
     let Some(c) = caps else {
         bad("text is not one of the fixed directive templates".into());
         return out;
@@ -243,7 +253,11 @@ mod tests {
             summary: String::new(),
             trigger: Trigger::Prompt { span: SpanKind::Ticket },
             step: Step::Run { command: "python3 scripts/wi-lookup {item}".into() },
-            slots: vec![Slot { name: "item".into(), source: SlotSource::Prompt { span: SpanKind::Ticket }, contract: Contract::Pattern { regex: r"^W-\d{4}$".into() } }],
+            slots: vec![Slot {
+                name: "item".into(),
+                source: SlotSource::Prompt { span: SpanKind::Ticket },
+                contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
+            }],
             effect: Effect::Observe,
             aspect: Aspect::Green,
             state: RouteState::Active,

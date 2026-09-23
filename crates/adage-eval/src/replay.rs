@@ -85,7 +85,14 @@ pub fn actions(t: &Transcript, root: &Path, table: &CommandTable) -> Vec<Action>
 }
 
 /// `stop`: replay the session's final Stop hook (see [`transcript::events`]).
-pub fn replay(t: &Transcript, index: &Index, repo_key: &str, root: &Path, table: &CommandTable, stop: bool) -> Replayed {
+pub fn replay(
+    t: &Transcript,
+    index: &Index,
+    repo_key: &str,
+    root: &Path,
+    table: &CommandTable,
+    stop: bool,
+) -> Replayed {
     let ctx = Ctx { index, repo: repo_key.to_string(), root, table, embed: None };
     let mut st = SessionState { arm: Some(Arm::Holdout), repo: Some(repo_key.to_string()), ..Default::default() };
     let mut r = Replayed {

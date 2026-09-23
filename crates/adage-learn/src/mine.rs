@@ -420,7 +420,10 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
                 // untrusted, and one unrenderable line must not cost the route (or the learn).
                 if let Some(sig) = a.call.output.lines().rev().map(|l| signature_of(l.trim())).find(|l| {
                     let lc = l.to_ascii_lowercase();
-                    (lc.contains("error") || lc.contains("no module named") || lc.contains("not found") || lc.contains("not set"))
+                    (lc.contains("error")
+                        || lc.contains("no module named")
+                        || lc.contains("not found")
+                        || lc.contains("not set"))
                         && adage_tracks::io::safe_text(l)
                 }) {
                     *p.signatures.entry(sig).or_default() += 1;

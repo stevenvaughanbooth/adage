@@ -16,7 +16,11 @@ const STACK: usize = 2 << 20;
 const BUDGET: Duration = Duration::from_secs(2);
 
 fn cases() -> u32 {
-    if cfg!(feature = "slow") { 2_000 } else { 128 }
+    if cfg!(feature = "slow") {
+        2_000
+    } else {
+        128
+    }
 }
 
 /// Normalise on a small-stack thread; fail on panic, stack overflow (the process aborts, which

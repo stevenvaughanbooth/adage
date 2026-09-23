@@ -157,7 +157,17 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
             continue;
         }
         let rep = replay::replay(&t, &index, &repo_key, &sandbox.root, &table, meta.stopped());
-        score::score_session(&mut tally, &rep, Some(meta), &index, &repo_key, &sandbox.root, &table, opts.window, &ds.manifest.canaries);
+        score::score_session(
+            &mut tally,
+            &rep,
+            Some(meta),
+            &index,
+            &repo_key,
+            &sandbox.root,
+            &table,
+            opts.window,
+            &ds.manifest.canaries,
+        );
         scored += 1;
     }
     tally.finish();
@@ -204,7 +214,11 @@ fn pct(x: f64) -> String {
 pub fn render_text(r: &Report) -> String {
     use std::fmt::Write;
     let mut s = String::new();
-    let _ = writeln!(s, "adage eval: {} (split {}, thresholds {}, window {} turns)", r.dataset, r.split, r.thresholds, r.window);
+    let _ = writeln!(
+        s,
+        "adage eval: {} (split {}, thresholds {}, window {} turns)",
+        r.dataset, r.split, r.thresholds, r.window
+    );
     let _ = writeln!(
         s,
         "sessions: {} train, {} test, {} scored, {} skipped (steered){}",
@@ -216,7 +230,11 @@ pub fn render_text(r: &Report) -> String {
     );
     let _ = writeln!(s, "index {} with {} routes", r.index_generation, r.routes.len());
     for x in &r.routes {
-        let _ = writeln!(s, "  {:<22} {:<12} {:<6} {:>3}/{:<3} {}", x.id, x.kind, x.aspect, x.support, x.opportunities, x.step);
+        let _ = writeln!(
+            s,
+            "  {:<22} {:<12} {:<6} {:>3}/{:<3} {}",
+            x.id, x.kind, x.aspect, x.support, x.opportunities, x.step
+        );
     }
     let _ = writeln!(s, "\ndirectives        given  correct  precision  @window  false-rate  turns-saved (median)");
     let mut row = |name: &str, m: &score::Metrics| {

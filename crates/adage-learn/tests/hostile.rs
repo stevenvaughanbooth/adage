@@ -9,7 +9,9 @@ use std::path::{Path, PathBuf};
 
 fn session(dir: &Path, sid: &str, calls: &[(&str, &str, bool)]) -> PathBuf {
     let cwd = "/fixture/acme-billing";
-    let mut lines = vec![json!({"type":"user","sessionId":sid,"cwd":cwd,"timestamp":"2026-09-20T10:00:00Z","message":{"role":"user","content":"Pick up W-1041 and get it done."}})];
+    let mut lines = vec![
+        json!({"type":"user","sessionId":sid,"cwd":cwd,"timestamp":"2026-09-20T10:00:00Z","message":{"role":"user","content":"Pick up W-1041 and get it done."}}),
+    ];
     for (n, (cmd, out, err)) in calls.iter().enumerate() {
         let id = format!("toolu_{n}");
         lines.push(json!({"type":"assistant","sessionId":sid,"cwd":cwd,"message":{"id":format!("msg_{n}"),"model":"m","content":[{"type":"tool_use","id":id,"name":"Bash","input":{"command":cmd}}]}}));
@@ -22,7 +24,12 @@ fn session(dir: &Path, sid: &str, calls: &[(&str, &str, bool)]) -> PathBuf {
 
 fn learn_all(dir: &Path, files: Vec<PathBuf>) -> anyhow::Result<Index> {
     let home = dir.join("home");
-    let inputs = Inputs { transcripts: files, outcomes: BTreeMap::new(), repo_override: Some("acme-billing".into()), models: None };
+    let inputs = Inputs {
+        transcripts: files,
+        outcomes: BTreeMap::new(),
+        repo_override: Some("acme-billing".into()),
+        models: None,
+    };
     learn(&inputs, &home.join("tracks"), &home.join("index.json"), &LearnConfig::demo())?;
     Ok(Index::load(&home.join("index.json")))
 }
@@ -61,7 +68,11 @@ fn a_safe_error_line_is_preferred_over_a_hostile_one() {
     let files: Vec<PathBuf> = (0..4)
         .map(|i| {
             // Most sessions end on a hostile line; the miner must look past it to a renderable one.
-            let out = if i == 0 { "RuntimeError: ACME_ENV is not set" } else { "RuntimeError: ACME_ENV is not set\nError: `id` | sh" };
+            let out = if i == 0 {
+                "RuntimeError: ACME_ENV is not set"
+            } else {
+                "RuntimeError: ACME_ENV is not set\nError: `id` | sh"
+            };
             session(d.path(), &format!("s{i}"), &[("python3 -m pytest", out, true), ("make test", "OK", false)])
         })
         .collect();
@@ -79,7 +90,13 @@ fn invisible_characters_never_reach_a_track() {
     // treats it like any other unrenderable character.
     let d = tempfile::tempdir().unwrap();
     let files: Vec<PathBuf> = (0..4)
-        .map(|i| session(d.path(), &format!("s{i}"), &[("python3 -m pytest", "RuntimeError: not set\u{202e}tset ekam", true), ("make test", "OK", false)]))
+        .map(|i| {
+            session(
+                d.path(),
+                &format!("s{i}"),
+                &[("python3 -m pytest", "RuntimeError: not set\u{202e}tset ekam", true), ("make test", "OK", false)],
+            )
+        })
         .collect();
     let index = learn_all(d.path(), files).unwrap();
     for r in &index.routes {
@@ -99,7 +116,11 @@ fn a_quoted_lookup_argument_does_not_abort_learning() {
             session(
                 d.path(),
                 &format!("s{i}"),
-                &[("python3 scripts/wi-lookup W-1041 --fields 'title body'", "ID: W-1041", false), ("python3 -m pytest", "No module named pytest", true), ("make test", "OK", false)],
+                &[
+                    ("python3 scripts/wi-lookup W-1041 --fields 'title body'", "ID: W-1041", false),
+                    ("python3 -m pytest", "No module named pytest", true),
+                    ("make test", "OK", false),
+                ],
             )
         })
         .collect();

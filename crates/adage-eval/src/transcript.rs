@@ -112,7 +112,8 @@ fn route_ids(line: &str, out: &mut BTreeSet<String>) {
 }
 
 pub fn read(path: &Path) -> anyhow::Result<Transcript> {
-    parse(&std::fs::read_to_string(path)?).ok_or_else(|| anyhow::anyhow!("{}: no session id, cwd, or prompt", path.display()))
+    parse(&std::fs::read_to_string(path)?)
+        .ok_or_else(|| anyhow::anyhow!("{}: no session id, cwd, or prompt", path.display()))
 }
 
 /// Parse transcript text. `None` without a session id, a cwd, or a prompt.
@@ -273,13 +274,23 @@ pub fn events(t: &Transcript, root: &str, stop: bool) -> Vec<Step> {
                 for (c, input) in &rebased {
                     // A call rejected before it ran (invalid input) raises no failure hook.
                     if c.failed && !c.output.trim_start().starts_with("<tool_use_error>") {
-                        let call = Call { tool: c.tool.clone(), input: input.clone(), output: c.output.replace(&t.cwd, root), failed: true };
+                        let call = Call {
+                            tool: c.tool.clone(),
+                            input: input.clone(),
+                            output: c.output.replace(&t.cwd, root),
+                            failed: true,
+                        };
                         out.push(Step { turn, event: Event::Failure { call } });
                     }
                 }
                 let calls = rebased
                     .into_iter()
-                    .map(|(c, input)| Call { tool: c.tool, input, output: c.hook_output.replace(&t.cwd, root), failed: false })
+                    .map(|(c, input)| Call {
+                        tool: c.tool,
+                        input,
+                        output: c.hook_output.replace(&t.cwd, root),
+                        failed: false,
+                    })
                     .collect();
                 out.push(Step { turn, event: Event::Batch { calls } });
             }
@@ -322,7 +333,10 @@ mod tests {
         assert_eq!(t.turns().count(), 1);
         let ev = events(&t, "/tmp/root", true);
         let names: Vec<_> = ev.iter().map(|s| hook_name(&s.event)).collect();
-        assert_eq!(names, ["SessionStart", "UserPromptSubmit", "PostToolUseFailure", "PostToolBatch", "Stop", "SessionEnd"]);
+        assert_eq!(
+            names,
+            ["SessionStart", "UserPromptSubmit", "PostToolUseFailure", "PostToolBatch", "Stop", "SessionEnd"]
+        );
         let Event::Batch { calls } = &ev[3].event else { panic!() };
         assert_eq!(calls[1].input["file_path"], "/tmp/root/x.py");
         assert_eq!(calls[1].output, "", "a Read's hook payload carries no text");

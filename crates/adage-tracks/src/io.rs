@@ -116,7 +116,9 @@ fn safe_command(c: &str) -> bool {
 /// and nothing invisible or direction-changing (text must read the way it is).
 pub fn safe_text(t: &str) -> bool {
     t.len() <= 160
-        && !t.chars().any(|c| c.is_control() || "`<>\"\\$;|&{}".contains(c) || c == '\u{2028}' || c == '\u{2029}' || invisible(c))
+        && !t.chars().any(|c| {
+            c.is_control() || "`<>\"\\$;|&{}".contains(c) || c == '\u{2028}' || c == '\u{2029}' || invisible(c)
+        })
 }
 
 /// Zero-width, bidirectional-control and other invisible format characters.

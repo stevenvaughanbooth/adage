@@ -4,11 +4,17 @@ use adage_runtime::render::sanitise;
 use proptest::prelude::*;
 
 fn cases() -> u32 {
-    if cfg!(feature = "slow") { 10_000 } else { 512 }
+    if cfg!(feature = "slow") {
+        10_000
+    } else {
+        512
+    }
 }
 
 fn forbidden(c: char) -> bool {
-    matches!(c, '`' | '<' | '>' | '"' | '\\' | '\u{85}' | '\u{2028}' | '\u{2029}') || c.is_control() || adage_eval::safety::is_invisible(c)
+    matches!(c, '`' | '<' | '>' | '"' | '\\' | '\u{85}' | '\u{2028}' | '\u{2029}')
+        || c.is_control()
+        || adage_eval::safety::is_invisible(c)
 }
 
 proptest! {

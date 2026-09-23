@@ -30,7 +30,11 @@ fn at_least(what: &str, got: f64, min: f64) {
 }
 
 fn assert_safe(r: &Report) {
-    assert_eq!(r.safety.unsafe_directives, 0, "unsafe directives in {} {}: {:#?}", r.dataset, r.split, r.safety.violations);
+    assert_eq!(
+        r.safety.unsafe_directives, 0,
+        "unsafe directives in {} {}: {:#?}",
+        r.dataset, r.split, r.safety.violations
+    );
     assert!(r.safety.checked > 0, "nothing was checked");
 }
 
@@ -55,10 +59,9 @@ fn demo_round2_learns_what_the_live_learner_learned() {
     // routes the live round-2 index held (ids, aspects, steps). Measured: identical index bytes
     // (generation 8dd5ec01ed76c4bd).
     let r = eval("demo-haiku45", Some("round2"));
-    let live: adage_tracks::Index = serde_json::from_slice(
-        &std::fs::read(datasets().join("demo-haiku45/recorded/index-round2.json")).unwrap(),
-    )
-    .unwrap();
+    let live: adage_tracks::Index =
+        serde_json::from_slice(&std::fs::read(datasets().join("demo-haiku45/recorded/index-round2.json")).unwrap())
+            .unwrap();
     let mut want: Vec<(String, String)> =
         live.routes.iter().map(|ir| (ir.route.id.clone(), format!("{:?}", ir.route.aspect).to_lowercase())).collect();
     let mut got: Vec<(String, String)> = r.routes.iter().map(|x| (x.id.clone(), x.aspect.clone())).collect();
@@ -79,8 +82,8 @@ fn demo_round1_gates() {
 
 #[test]
 fn replay_reproduces_the_live_round2_decisions() {
-    // Measured: 36/36 sessions decide identically; 35/36 raise the same hook events (one session
-    // has a turn Claude Code split differently around a failed call).
+    // Measured: 36/36 sessions decide identically; 35/36 raise the same hook events (in the other,
+    // a forked skill's tool calls fired hooks but live in a subagent transcript).
     let f = fidelity::run(&datasets().join("demo-haiku45"), "round2").unwrap();
     let (mut sessions, mut decisions, mut events) = (0, 0, 0);
     for a in f.by_arm.values() {
@@ -125,7 +128,10 @@ fn eval_output_is_deterministic() {
     let b = serde_json::to_vec(&eval("demo-haiku45", Some("hash:0.3"))).unwrap();
     assert_eq!(a, b, "same dataset, same bytes");
     let text = String::from_utf8(a).unwrap();
-    assert!(!text.contains(std::env::temp_dir().to_string_lossy().trim_end_matches('/')), "temp paths leak into the report");
+    assert!(
+        !text.contains(std::env::temp_dir().to_string_lossy().trim_end_matches('/')),
+        "temp paths leak into the report"
+    );
 }
 
 /// The generated datasets on disk are exactly what the generators write. After changing a
@@ -149,7 +155,11 @@ fn generated_datasets_are_up_to_date() {
             let mut stack = vec![d.to_path_buf()];
             while let Some(x) = stack.pop() {
                 for e in std::fs::read_dir(&x).unwrap().flatten() {
-                    if e.path().is_dir() { stack.push(e.path()) } else { v.push(e.path().strip_prefix(d).unwrap().to_path_buf()) }
+                    if e.path().is_dir() {
+                        stack.push(e.path())
+                    } else {
+                        v.push(e.path().strip_prefix(d).unwrap().to_path_buf())
+                    }
                 }
             }
             v.sort();
@@ -157,7 +167,12 @@ fn generated_datasets_are_up_to_date() {
         };
         assert_eq!(files(tmp.path()), files(&committed), "{name}: file list differs");
         for f in files(tmp.path()) {
-            assert_eq!(std::fs::read(tmp.path().join(&f)).unwrap(), std::fs::read(committed.join(&f)).unwrap(), "{name}/{}", f.display());
+            assert_eq!(
+                std::fs::read(tmp.path().join(&f)).unwrap(),
+                std::fs::read(committed.join(&f)).unwrap(),
+                "{name}/{}",
+                f.display()
+            );
         }
     }
 }
@@ -165,6 +180,16 @@ fn generated_datasets_are_up_to_date() {
 #[test]
 fn demo_dataset_is_redacted() {
     let dir = datasets().join("demo-haiku45");
+    // Whoever runs this: their home directory and account name must not appear either.
+    let home = std::env::var("HOME").unwrap_or_default();
+    let account = Path::new(&home).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let mut forbidden = vec!["/Users/".to_string(), "/private/tmp/adage-demo".into(), "/var/folders".into()];
+    if home.len() > 1 && home != "/home/user" {
+        forbidden.push(home.clone());
+    }
+    if account.len() >= 4 && account != "user" && account != "runner" {
+        forbidden.push(account);
+    }
     let mut stack = vec![dir];
     while let Some(d) = stack.pop() {
         for e in std::fs::read_dir(&d).unwrap().flatten() {
@@ -173,8 +198,8 @@ fn demo_dataset_is_redacted() {
                 stack.push(p);
             } else if p.extension().is_some_and(|x| x == "json" || x == "jsonl" || x == "txt") {
                 let t = std::fs::read_to_string(&p).unwrap();
-                for bad in ["/Users/", "stevenbooth", "/private/tmp/adage-demo", "/var/folders"] {
-                    assert!(!t.contains(bad), "{} contains {bad:?}", p.display());
+                for bad in &forbidden {
+                    assert!(!t.contains(bad.as_str()), "{} contains {bad:?}", p.display());
                 }
             }
         }

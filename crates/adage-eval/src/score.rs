@@ -93,7 +93,11 @@ pub fn round(x: f64) -> f64 {
 }
 
 pub fn ratio(a: u32, b: u32) -> f64 {
-    if b == 0 { 0.0 } else { round(a as f64 / b as f64) }
+    if b == 0 {
+        0.0
+    } else {
+        round(a as f64 / b as f64)
+    }
 }
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
@@ -235,7 +239,9 @@ impl Expect {
 fn runs_runner(a: &Action, runner: &str) -> bool {
     let Some(argv) = &a.argv else { return false };
     let r: Vec<&str> = runner.split_whitespace().collect();
-    !r.is_empty() && argv.len() >= r.len() && argv.iter().zip(&r).all(|(x, y)| x == y || x.rsplit('/').next() == Some(*y))
+    !r.is_empty()
+        && argv.len() >= r.len()
+        && argv.iter().zip(&r).all(|(x, y)| x == y || x.rsplit('/').next() == Some(*y))
 }
 
 fn after(a: &Action, f: &Fired) -> bool {
@@ -255,8 +261,7 @@ pub fn score_session(
     window: u32,
     canaries: &[String],
 ) {
-    let routes: BTreeMap<&str, &Route> =
-        index.for_repo(repo_key).map(|ir| (ir.route.id.as_str(), &ir.route)).collect();
+    let routes: BTreeMap<&str, &Route> = index.for_repo(repo_key).map(|ir| (ir.route.id.as_str(), &ir.route)).collect();
     let acts = &rep.actions;
     let mut detail = Vec::new();
     let mut session_saved = 0;
@@ -345,7 +350,11 @@ pub fn score_session(
             }
         };
         let in_window = correct && matched.is_some_and(|t| t.saturating_sub(f.turn) <= window);
-        for m in [&mut tally.overall, tally.by_kind.entry(k.into()).or_default(), tally.by_route.entry(route.id.clone()).or_default()] {
+        for m in [
+            &mut tally.overall,
+            tally.by_kind.entry(k.into()).or_default(),
+            tally.by_route.entry(route.id.clone()).or_default(),
+        ] {
             m.add(&rep.id, correct, in_window, saved);
         }
         if correct {
@@ -376,7 +385,8 @@ pub fn score_session(
             fl.stop_requests_correct += 1;
         }
     }
-    let any_obligation = rep.fired.iter().any(|f| routes.get(f.directive.route.as_str()).is_some_and(|r| kind(r) == "finish-line"));
+    let any_obligation =
+        rep.fired.iter().any(|f| routes.get(f.directive.route.as_str()).is_some_and(|r| kind(r) == "finish-line"));
     if meta.is_some_and(|m| m.stale_generated == Some(true)) && !any_obligation {
         tally.finish_line.missed += 1;
     }
@@ -398,7 +408,13 @@ fn glob_pattern(p: &str) -> Option<glob::Pattern> {
 }
 
 /// Key steps the agent took, and whether a matching directive came first.
-fn recall(tally: &mut Tally, rep: &Replayed, routes: &BTreeMap<&str, &Route>, root: &Path, table: &CommandTable) -> (u32, u32) {
+fn recall(
+    tally: &mut Tally,
+    rep: &Replayed,
+    routes: &BTreeMap<&str, &Route>,
+    root: &Path,
+    table: &CommandTable,
+) -> (u32, u32) {
     let acts = &rep.actions;
     let fired: Vec<(&Fired, &Route)> =
         rep.fired.iter().filter_map(|f| routes.get(f.directive.route.as_str()).map(|r| (f, *r))).collect();
@@ -421,12 +437,17 @@ fn recall(tally: &mut Tally, rep: &Replayed, routes: &BTreeMap<&str, &Route>, ro
     // 1. The lookup of the prompt's ticket, and the files it listed.
     let tickets: Vec<String> =
         spans::extract(&rep.prompt).into_iter().filter(|s| s.kind == SpanKind::Ticket).map(|s| s.value).collect();
-    let lookup = acts.iter().find(|a| !a.failed && a.argv.as_ref().is_some_and(|v| v.iter().any(|x| tickets.contains(x))));
+    let lookup =
+        acts.iter().find(|a| !a.failed && a.argv.as_ref().is_some_and(|v| v.iter().any(|x| tickets.contains(x))));
     if let Some(l) = lookup {
         steps.push(("lookup", covered_cmd(l)));
         let listed: BTreeSet<String> = spans::extract(&l.output)
             .into_iter()
-            .filter(|s| s.kind == SpanKind::Path && adage_core::repo::is_safe_relative(&s.value) && root.join(&s.value).is_file())
+            .filter(|s| {
+                s.kind == SpanKind::Path
+                    && adage_core::repo::is_safe_relative(&s.value)
+                    && root.join(&s.value).is_file()
+            })
             .map(|s| s.value)
             .collect();
         let mut seen = BTreeSet::new();
@@ -434,7 +455,9 @@ fn recall(tally: &mut Tally, rep: &Replayed, routes: &BTreeMap<&str, &Route>, ro
             let Some(p) = &a.rel_path else { continue };
             if listed.contains(p) && seen.insert(p.clone()) {
                 let hit = fired.iter().any(|(f, r)| {
-                    matches!(r.step, Step::ReadBatch { .. }) && f.turn < a.turn && files_in(&f.directive.text).contains(p)
+                    matches!(r.step, Step::ReadBatch { .. })
+                        && f.turn < a.turn
+                        && files_in(&f.directive.text).contains(p)
                 });
                 steps.push(("linked-read", hit));
             }
@@ -458,7 +481,9 @@ fn recall(tally: &mut Tally, rep: &Replayed, routes: &BTreeMap<&str, &Route>, ro
     }
     // 4. A regenerate after the first edit.
     if let Some(first_edit) = acts.iter().position(|a| a.author) {
-        if let Some(g) = acts.iter().skip(first_edit + 1).find(|a| a.effect == Effect::Regenerate && a.argv.is_some() && !a.failed) {
+        if let Some(g) =
+            acts.iter().skip(first_edit + 1).find(|a| a.effect == Effect::Regenerate && a.argv.is_some() && !a.failed)
+        {
             let hit = named.iter().any(|(t, e, k)| *k == "finish-line" && *t <= g.turn && e.matches(g));
             steps.push(("regenerate", hit));
         }

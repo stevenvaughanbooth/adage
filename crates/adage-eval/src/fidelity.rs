@@ -52,12 +52,14 @@ pub fn run(dir: &Path, round: &str) -> Result<FidelityReport> {
     let ds = Dataset::load(dir)?;
     let n: u32 = round.strip_prefix("round").and_then(|x| x.parse().ok()).context("round must be round1 or round2")?;
     let idx_path = dir.join("recorded").join(format!("index-{round}.json"));
-    let index: Index = serde_json::from_slice(&std::fs::read(&idx_path).with_context(|| idx_path.display().to_string())?)?;
+    let index: Index =
+        serde_json::from_slice(&std::fs::read(&idx_path).with_context(|| idx_path.display().to_string())?)?;
     let rec_path = dir.join("recorded/decisions.json");
     let recorded: BTreeMap<String, Vec<Recorded>> = serde_json::from_slice(&std::fs::read(&rec_path)?)?;
     let table = CommandTable::load();
     let sandbox = crate::dataset::Sandbox::create(&ds.sandbox()?)?;
-    let mut rep = FidelityReport { round: round.into(), index_generation: index.generation.clone(), ..Default::default() };
+    let mut rep =
+        FidelityReport { round: round.into(), index_generation: index.generation.clone(), ..Default::default() };
     for s in ds.manifest.sessions.iter().filter(|s| s.phase == "eval" && s.round == Some(n)) {
         let Some(live) = recorded.get(&s.run) else { continue };
         let t = transcript::read(&ds.path(s))?;

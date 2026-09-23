@@ -258,7 +258,12 @@ pub fn plan(
             routes.retain(|r| {
                 let probe = Track {
                     manifest: Manifest {
-                        track: TrackInfo { name: name.clone(), version: "0.0.0".into(), description: String::new(), provenance: String::new() },
+                        track: TrackInfo {
+                            name: name.clone(),
+                            version: "0.0.0".into(),
+                            description: String::new(),
+                            provenance: String::new(),
+                        },
                         scope: Scope { repo: repo.clone() },
                         gauge: Gauge::default(),
                     },

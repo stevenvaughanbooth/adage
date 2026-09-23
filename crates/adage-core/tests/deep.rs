@@ -24,7 +24,8 @@ fn a_long_and_chain_is_walked_iteratively() {
 
 #[test]
 fn other_deep_nesting_is_cut_off_not_crashed() {
-    for (open, close, n) in [("! ", "", 6000), ("if true; then ", " fi;", 800), ("a | ", "", 3500), ("a || ", "", 3000)] {
+    for (open, close, n) in [("! ", "", 6000), ("if true; then ", " fi;", 800), ("a | ", "", 3500), ("a || ", "", 3000)]
+    {
         let cmd = format!("{}ls{}", open.repeat(n), close.repeat(n));
         assert!(on_small_stack(cmd) >= 1);
     }

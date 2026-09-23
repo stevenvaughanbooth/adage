@@ -122,7 +122,11 @@ impl Dataset {
             }
             let (mut train, mut test) = (vec![], vec![]);
             for id in ids {
-                if in_test(&id, seed, share) { test.push(id) } else { train.push(id) }
+                if in_test(&id, seed, share) {
+                    test.push(id)
+                } else {
+                    train.push(id)
+                }
             }
             return Ok(Split { train, test });
         }
@@ -143,7 +147,12 @@ impl Dataset {
             bail!("sandbox file {f:?} is not a relative path inside the dataset");
         }
         let text = std::fs::read_to_string(self.dir.join(f))?;
-        Ok(text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')).map(SandboxEntry::parse).collect())
+        Ok(text
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(SandboxEntry::parse)
+            .collect())
     }
 }
 

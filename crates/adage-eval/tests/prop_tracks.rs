@@ -17,11 +17,15 @@ use adage_runtime::{decide, Arm, Call, Ctx, Event, SessionState};
 use adage_tracks::*;
 use proptest::prelude::*;
 use proptest::test_runner::{Config, TestRunner};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use serde_json::json;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn cases() -> u32 {
-    if cfg!(feature = "slow") { 4_000 } else { 256 }
+    if cfg!(feature = "slow") {
+        4_000
+    } else {
+        256
+    }
 }
 
 /// Text drawn to hit every check: shell syntax, quotes, paths out of the repository, slots,
@@ -41,8 +45,17 @@ fn hostile_text() -> impl Strategy<Value = String> {
 
 fn contract() -> impl Strategy<Value = Contract> {
     prop_oneof![
-        prop::sample::select(vec![r"^W-\d{4}$", r"^[A-Z]+-\d+$", ".*", r"^.+$", r"W-\d+", r"^[a-z./-]+$", r"^\S+$", "^(W-1|--x)$"])
-            .prop_map(|r| Contract::Pattern { regex: r.to_string() }),
+        prop::sample::select(vec![
+            r"^W-\d{4}$",
+            r"^[A-Z]+-\d+$",
+            ".*",
+            r"^.+$",
+            r"W-\d+",
+            r"^[a-z./-]+$",
+            r"^\S+$",
+            "^(W-1|--x)$"
+        ])
+        .prop_map(|r| Contract::Pattern { regex: r.to_string() }),
         Just(Contract::RepoPath),
     ]
 }
@@ -75,8 +88,13 @@ fn random_route() -> impl Strategy<Value = Route> {
         3 => contract().prop_map(|c| vec![Slot { name: "item".into(), source: SlotSource::Prompt { span: SpanKind::Ticket }, contract: c }]),
         1 => contract().prop_map(|c| vec![Slot { name: "item".into(), source: SlotSource::Prompt { span: SpanKind::Path }, contract: c }]),
     ];
-    let files_slot = (prop_oneof![4 => Just(Contract::RepoPath), 1 => contract()], prop::sample::select(vec!["linked_files", "*paths"]))
-        .prop_map(|(c, f)| vec![Slot { name: "files".into(), source: SlotSource::ResultField { field: f.into() }, contract: c }]);
+    let files_slot = (
+        prop_oneof![4 => Just(Contract::RepoPath), 1 => contract()],
+        prop::sample::select(vec!["linked_files", "*paths"]),
+    )
+        .prop_map(|(c, f)| {
+            vec![Slot { name: "files".into(), source: SlotSource::ResultField { field: f.into() }, contract: c }]
+        });
     let shaped = prop_oneof![
         4 => (command.clone(), item_slot, prop::sample::select(vec![Aspect::Green, Aspect::Green, Aspect::Yellow, Aspect::Yellow, Aspect::Red]))
             .prop_map(|(command, slots, aspect)| (Step::Run { command }, slots, aspect)),
@@ -88,8 +106,17 @@ fn random_route() -> impl Strategy<Value = Route> {
             .prop_map(|(avoid, instead, signature, aspect)| (Step::Avoid { avoid, instead, signature }, vec![], aspect)),
     ];
     let effect = prop::sample::select(vec![
-        Effect::Observe, Effect::Observe, Effect::Observe, Effect::Verify, Effect::Verify, Effect::Regenerate, Effect::Regenerate,
-        Effect::Environment, Effect::Environment, Effect::Author, Effect::Publish,
+        Effect::Observe,
+        Effect::Observe,
+        Effect::Observe,
+        Effect::Verify,
+        Effect::Verify,
+        Effect::Regenerate,
+        Effect::Regenerate,
+        Effect::Environment,
+        Effect::Environment,
+        Effect::Author,
+        Effect::Publish,
     ]);
     let id = prop_oneof![
         9 => prop::sample::select(vec!["lookup-work-item", "read-linked-files", "dead-end-1", "finish-line-1", "r"]),
@@ -116,7 +143,15 @@ fn mostly(good: Vec<&'static str>) -> impl Strategy<Value = String> {
     prop_oneof![3 => prop::sample::select(good).prop_map(str::to_string), 1 => hostile_text()]
 }
 
-fn build(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, aspect: Aspect, exit: Vec<Exit>) -> Route {
+fn build(
+    id: &str,
+    trigger: Trigger,
+    step: Step,
+    slots: Vec<Slot>,
+    effect: Effect,
+    aspect: Aspect,
+    exit: Vec<Exit>,
+) -> Route {
     Route {
         id: id.into(),
         summary: String::new(),
@@ -141,25 +176,68 @@ fn plausible_route() -> impl Strategy<Value = Route> {
         1 => contract(),
     ];
     let aspect = prop::sample::select(vec![Aspect::Green, Aspect::Yellow]);
-    let lookup = (mostly(vec!["python3 scripts/wi-lookup {item}", "scripts/wi-lookup {item} --json", "gh issue view {item}", "cat {item}"]), ticket_contract, aspect.clone(), exits.clone())
+    let lookup = (
+        mostly(vec![
+            "python3 scripts/wi-lookup {item}",
+            "scripts/wi-lookup {item} --json",
+            "gh issue view {item}",
+            "cat {item}",
+        ]),
+        ticket_contract,
+        aspect.clone(),
+        exits.clone(),
+    )
         .prop_map(|(command, c, aspect, exit)| {
             let slot = Slot { name: "item".into(), source: SlotSource::Prompt { span: SpanKind::Ticket }, contract: c };
-            build("lookup-work-item", Trigger::Prompt { span: SpanKind::Ticket }, Step::Run { command }, vec![slot], Effect::Observe, aspect, exit)
+            build(
+                "lookup-work-item",
+                Trigger::Prompt { span: SpanKind::Ticket },
+                Step::Run { command },
+                vec![slot],
+                Effect::Observe,
+                aspect,
+                exit,
+            )
         });
-    let path_lookup = (mostly(vec!["cat {item}", "head -n 20 {item}"]), prop_oneof![3 => Just(Contract::RepoPath), 1 => contract()], exits.clone())
+    let path_lookup = (
+        mostly(vec!["cat {item}", "head -n 20 {item}"]),
+        prop_oneof![3 => Just(Contract::RepoPath), 1 => contract()],
+        exits.clone(),
+    )
         .prop_map(|(command, c, exit)| {
             let slot = Slot { name: "item".into(), source: SlotSource::Prompt { span: SpanKind::Path }, contract: c };
-            build("read-named-file", Trigger::Prompt { span: SpanKind::Path }, Step::Run { command }, vec![slot], Effect::Observe, Aspect::Yellow, exit)
+            build(
+                "read-named-file",
+                Trigger::Prompt { span: SpanKind::Path },
+                Step::Run { command },
+                vec![slot],
+                Effect::Observe,
+                Aspect::Yellow,
+                exit,
+            )
         });
     let linked = (
-        prop::sample::select(vec!["exec python3 scripts/wi-lookup {id}", "exec scripts/wi-lookup {id} --json", "exec make test"]),
+        prop::sample::select(vec![
+            "exec python3 scripts/wi-lookup {id}",
+            "exec scripts/wi-lookup {id} --json",
+            "exec make test",
+        ]),
         prop::sample::select(vec!["linked_files", "*paths"]),
         prop_oneof![9 => 1usize..=10, 1 => Just(0usize)],
         prop_oneof![4 => Just(Contract::RepoPath), 1 => contract()],
     )
         .prop_map(|(cmd, field, max, c)| {
-            let slot = Slot { name: "files".into(), source: SlotSource::ResultField { field: field.into() }, contract: c };
-            build("read-linked-files", Trigger::AfterCommand { command: cmd.into() }, Step::ReadBatch { slot: "files".into(), max }, vec![slot], Effect::Observe, Aspect::Yellow, vec![])
+            let slot =
+                Slot { name: "files".into(), source: SlotSource::ResultField { field: field.into() }, contract: c };
+            build(
+                "read-linked-files",
+                Trigger::AfterCommand { command: cmd.into() },
+                Step::ReadBatch { slot: "files".into(), max },
+                vec![slot],
+                Effect::Observe,
+                Aspect::Yellow,
+                vec![],
+            )
         });
     let finish = (
         mostly(vec!["schema/*.json", "acme/*.py", "*.py"]),
@@ -179,7 +257,15 @@ fn plausible_route() -> impl Strategy<Value = Route> {
         .prop_map(|(avoid, instead, signature)| {
             // `a / b` is how the miner names several runners; validation sees one string.
             let avoid = avoid.replace(" / ", " ");
-            build("dead-end-1", Trigger::SessionStart, Step::Avoid { avoid, instead, signature }, vec![], Effect::Verify, Aspect::Red, vec![])
+            build(
+                "dead-end-1",
+                Trigger::SessionStart,
+                Step::Avoid { avoid, instead, signature },
+                vec![],
+                Effect::Verify,
+                Aspect::Red,
+                vec![],
+            )
         });
     prop_oneof![3 => lookup, 1 => path_lookup, 2 => linked, 2 => finish, 2 => dead_end]
 }
@@ -188,9 +274,20 @@ fn route() -> impl Strategy<Value = Route> {
     prop_oneof![3 => plausible_route(), 1 => random_route()]
 }
 
-
 fn event() -> impl Strategy<Value = Event> {
-    let ids = prop::sample::select(vec!["W-1234", "W-1234", "W-1234", "W-12345", "--W-1", "W-１２３４", "acme/billing.py", "acme/billing.py", "../etc/passwd", "PROJ-7", ""]);
+    let ids = prop::sample::select(vec![
+        "W-1234",
+        "W-1234",
+        "W-1234",
+        "W-12345",
+        "--W-1",
+        "W-１２３４",
+        "acme/billing.py",
+        "acme/billing.py",
+        "../etc/passwd",
+        "PROJ-7",
+        "",
+    ]);
     let prompt = (hostile_text(), ids).prop_map(|(t, id)| Event::Prompt { text: format!("Please do {id} {t}") });
     let cmd = prop_oneof![
         3 => prop::sample::select(vec!["python3 scripts/wi-lookup W-1234", "scripts/wi-lookup W-1234 --json", "make test", "make gen", "cat acme/billing.py", "python3 -m pytest"])
@@ -227,10 +324,20 @@ fn sandbox() -> tempfile::TempDir {
 }
 
 /// One case: validate the track; if accepted, drive it and check every directive.
-fn check(routes: Vec<Route>, events: Vec<Event>, accepted: &AtomicUsize, checked: &AtomicUsize) -> Result<(), TestCaseError> {
+fn check(
+    routes: Vec<Route>,
+    events: Vec<Event>,
+    accepted: &AtomicUsize,
+    checked: &AtomicUsize,
+) -> Result<(), TestCaseError> {
     let track = Track {
         manifest: Manifest {
-            track: TrackInfo { name: "acme/t".into(), version: "1.0.0".into(), description: String::new(), provenance: "authored".into() },
+            track: TrackInfo {
+                name: "acme/t".into(),
+                version: "1.0.0".into(),
+                description: String::new(),
+                provenance: "authored".into(),
+            },
             scope: Scope { repo: "acme".into() },
             gauge: Gauge::default(),
         },

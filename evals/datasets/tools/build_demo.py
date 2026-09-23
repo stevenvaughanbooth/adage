@@ -36,15 +36,28 @@ OUT_DEFAULT = HERE.parent / "demo-haiku45"
 MAX_TEXT = 3000
 MAGIC = bytes([0xAD, 0xA6, 0xE5, 0x01])
 
-# Machine-specific text -> placeholders. Order matters: longest prefixes first.
-REDACTIONS = [
-    ("/private/tmp/adage-demo", "/sandbox"),
-    ("/tmp/adage-demo", "/sandbox"),
-    ("/private/var/folders", "/tmp"),
-    ("/Users/stevenbooth", "/home/user"),
-    ("stevenbooth", "user"),
-]
-FORBIDDEN = re.compile(r"stevenbooth|/Users/|stevenvaughanbooth|/var/folders", re.I)
+# Machine-specific text -> placeholders, longest first: the run root (whatever directory the
+# runner used, found from each session's cwd), then this machine's home directory and account name.
+HOME = str(Path.home())
+REDACTIONS = []
+
+
+def set_redactions(roots):
+    REDACTIONS.clear()
+    for r in sorted(roots, key=len, reverse=True):
+        REDACTIONS.append((r, "/sandbox"))
+        if r.startswith("/private/"):
+            REDACTIONS.append((r[len("/private"):], "/sandbox"))
+    REDACTIONS.append(("/private/var/folders", "/tmp"))
+    REDACTIONS.append((HOME, "/home/user"))
+    name = Path(HOME).name
+    if len(name) >= 4 and name != "user":
+        REDACTIONS.append((name, "user"))
+
+
+def forbidden():
+    pats = [re.escape(a) for a, _ in REDACTIONS] + [r"/Users/", r"/var/folders"]
+    return re.compile("|".join(pats), re.I)
 
 
 def redact(s):
@@ -227,11 +240,22 @@ def main():
     import datetime
     sessions = []
     sources = {}
+    # The run root: everything before /runs/ in each session's working directory.
+    roots = set()
+    for run_id in sorted(runs):
+        for tx in (raw / "transcripts").glob(f"*/{runs[run_id]['metrics']['session_id']}.jsonl"):
+            for line in tx.read_text().splitlines()[:50]:
+                cwd = (json.loads(line) if line.startswith("{") else {}).get("cwd") or ""
+                if "/runs/" in cwd:
+                    roots.add(cwd[:cwd.index("/runs/")])
+                    break
+    set_redactions(roots or {"/private/tmp/adage-demo"})
     for run_id in sorted(runs):
         r = runs[run_id]
         iso = datetime.datetime.fromtimestamp(r["t0"], datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        tx = raw / "transcripts" / f"-private-tmp-adage-demo-runs-{run_id}-acme-billing" / f"{r['metrics']['session_id']}.jsonl"
-        if tx.exists():
+        found = sorted((raw / "transcripts").glob(f"*/{r['metrics']['session_id']}.jsonl"))
+        tx = found[0] if found else None
+        if tx:
             recs, source = curate(tx), "transcript"
         else:
             recs, source = convert(run_id, r, raw / "runs" / run_id / "stream.jsonl", iso), "stream-json"
@@ -310,8 +334,9 @@ def main():
     (out / "recorded" / "index-round1.json").write_text(json.dumps(idx1, indent=1, sort_keys=True) + "\n")
 
     leaks = []
+    bad = forbidden()
     for f in sorted(out.rglob("*")):
-        if f.is_file() and f.suffix in (".json", ".jsonl", ".txt") and FORBIDDEN.search(f.read_text()):
+        if f.is_file() and f.suffix in (".json", ".jsonl", ".txt") and bad.search(f.read_text()):
             leaks.append(str(f))
     if leaks:
         raise SystemExit("machine-specific text survived redaction in: " + ", ".join(leaks))
