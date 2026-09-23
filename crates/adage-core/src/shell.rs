@@ -67,6 +67,26 @@ fn too_deep(s: &str) -> bool {
     false
 }
 
+/// `s` with every non-ASCII character replaced by as many `x` bytes as it occupies, so byte
+/// offsets are unchanged. tree-sitter-bash's C scanner calls `isdigit()` on full code points
+/// (scanner.c, still so in 0.25.1), which is undefined behaviour above 255 and reads out of bounds
+/// in glibc's table: a `{` followed by a large code point crashed the process on Linux. Bash
+/// itself treats every non-ASCII character as an ordinary word character, which `x` also is.
+pub(crate) fn ascii_shadow(s: &str) -> std::borrow::Cow<'_, str> {
+    if s.is_ascii() {
+        return s.into();
+    }
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        if c.is_ascii() {
+            out.push(c);
+        } else {
+            out.extend(std::iter::repeat_n('x', c.len_utf8()));
+        }
+    }
+    out.into()
+}
+
 /// Parsing gives up after this long, and the command is recorded as unknown. tree-sitter's error
 /// recovery is quadratic on some malformed input: 16 KB of `a|a|a|…` or `)))…` took 0.6–0.7 s to
 /// parse in a release build (the hook's budget is 25 ms). Real commands, heredocs included, parse
@@ -130,9 +150,12 @@ fn normalize_at(command: &str, cwd: &str, table: &CommandTable, depth: usize) ->
         return vec![unknown("not normalised: exceeds size or nesting bounds")];
     }
 
+    // The parser only ever sees ASCII: see [`ascii_shadow`]. Text is still read from `command`
+    // by the same byte ranges, so non-ASCII paths and arguments come through unchanged.
+    let shadow = ascii_shadow(command);
     let tree = PARSER.with(|p| {
         let mut p = p.borrow_mut();
-        let t = p.parse(command, None);
+        let t = p.parse(shadow.as_ref(), None);
         if t.is_none() {
             // A timed-out parse would otherwise resume on the next, unrelated command.
             p.reset();
@@ -971,5 +994,33 @@ mod resolve_tests {
             let resolved = resolve_path(cwd, p);
             assert_eq!(crate::repo::relativize(root, &resolved), "schema/invoice.json", "{p} → {resolved}");
         }
+    }
+}
+
+#[cfg(test)]
+mod shadow_tests {
+    use super::{ascii_shadow, normalize_shell};
+    use crate::CommandTable;
+
+    #[test]
+    fn the_parser_only_sees_ascii_with_offsets_unchanged() {
+        for s in ["{\u{10FFFF}..9}", "cat résumé.txt", "echo 日本 && ls", "\u{1F600}{\u{2028}", "plain"] {
+            let sh = ascii_shadow(s);
+            assert!(sh.is_ascii(), "{s:?}");
+            assert_eq!(sh.len(), s.len(), "{s:?}");
+            for (a, b) in s.char_indices().filter(|(_, c)| c.is_ascii()).map(|(i, c)| (sh.as_bytes()[i], c)) {
+                assert_eq!(a as char, b, "ASCII characters are kept in place");
+            }
+        }
+    }
+
+    #[test]
+    fn non_ascii_arguments_survive_normalisation() {
+        let out = normalize_shell("cat résumé.txt && ls 日本", "/repo", &CommandTable::load());
+        let text = format!("{out:?}");
+        assert!(text.contains("résumé.txt") && text.contains("日本"), "{text}");
+        // The input shape that crashed tree-sitter-bash's scanner on glibc: no crash, some result.
+        let _ = normalize_shell("{\u{10FFFF}", "/repo", &CommandTable::load());
+        let _ = normalize_shell("echo {\u{1F600}..}", "/repo", &CommandTable::load());
     }
 }
