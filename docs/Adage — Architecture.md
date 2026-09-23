@@ -711,14 +711,19 @@ $ADAGE_HOME        macOS ~/Library/Application Support/Adage · Windows %APPDATA
 ├── tracks/@imported/…         imported tracks
 ├── sessions/<id>.state        two-slot state
 ├── sessions/<id>.spool        decision log
+├── repo-keys/<hash>           root commits found, per repository path (no-origin repository keys)
+├── learn.log                  one JSON line per `adage learn` run (rotated to learn.log.1 at 256 KiB)
+├── fail-open.log              hook errors that were swallowed (rotated at 256 KiB)
 ├── models/potion-base-8m/     manifest.json, model.safetensors, vocab.txt (optional)
 ├── trusted-signers            the person's allowed_signers (optional)
 ├── trust.json                 approvals from `adage add --trust`
 └── staging/                   transient, for `adage add`
 ```
 
-There are no service units, and nothing writes `learn.log` or `fail-open.log` (the latter is
-read by `doctor`, see [§14](#14-designed-but-not-built)).
+There are no service units. `adage learn` appends a summary to `learn.log` (sessions read and
+used, and per repository the tracks written, with versions, changes and route counts; no prompt,
+command or path), and hooks append their swallowed errors to `fail-open.log`, which `doctor`
+reads.
 
 ### 7.2 Channels
 
@@ -946,11 +951,10 @@ found that `graph` keyed sessions by an id prefix that OpenCode and Codex ids sh
 | Behaviour-trained intent projection | O13 | Later, by design |
 | Skill-trigger steps | O15 | Steps are `run`, `read_batch` and `avoid` only |
 | `adage off`, status line, `suggest` mode | D§6 J6, F14 | Kill switches are `ADAGE_DISABLE` and `.adage/disabled` |
-| Hard per-event deadlines | F2 | Harness timeouts (5 s) and the 50 ms parse timeout only |
-| Overflow spilled to a file | D§9.3 W8 | Directive text is truncated to 9,500 bytes |
+| Hard per-event deadlines | F2 | Harness timeouts (5 s), and the parse budget (2^20 lexer reads, 1 s backstop) only |
+| Overflow spilled to a file | D§9.3 W8 | Not needed: the largest decision validation allows is 8,287 bytes, under every harness's 9,500 (a test pins it); truncation remains as a backstop |
 | Script pinning, `scripts/` in tracks | O3; draft 2 §4.9 | Scripts never travel in a share; nothing runs them |
 | Track format version and compatibility policy | P§6.1 | Tracks carry a semver, but no format version |
-| Fail-open incident log | P§4.1 | `doctor` reads `fail-open.log`; nothing writes it |
 | Spool retention | Draft 2 §4.6 | None; `doctor` warns over 256 MiB |
 | Harness version detection and drift alarm | Draft 2 A13 | Not built |
 | Codex after-failure routes | docs/harnesses.md | Not possible until Codex reports failures to hooks; the adapter already accepts an exit code |

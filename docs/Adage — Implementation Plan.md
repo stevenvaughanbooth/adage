@@ -178,19 +178,26 @@ Closed since draft 2:
   skipped). Skipped events leave no spool record, so `adage graph` lists fewer off-route commands;
   runs of avoided commands, and every event of a session with a pending judgement or obligation,
   are still recorded.
-- The command table is parsed, and its 57 regexes compiled, at every decided event (about 1 ms of
-  the full path). Compiling them lazily would cut every decided event's cost; not done.
+- Payloads over 8 MiB are read to the end and discarded (Design §13.3), so the harness never sees
+  a broken pipe; with a kill switch on too. The refusal is recorded in `fail-open.log`.
+- Design W8 (spill directives over the harness cap to a file) cannot arise, so it is not built:
+  with the longest fields validation accepts, the largest decision (three directives) is 8,287
+  bytes, under every harness's 9,500. A test (`the_largest_decision_fits_every_harness_cap`) pins
+  the bound and each limit it rests on; raising one fails it. Truncation stays as a backstop.
+- `adage learn` appends a one-line JSON summary per run to `learn.log` (rotated at 256 KiB).
+- CI builds the aarch64 musl release target natively on the arm64 runner (`musl-tools`, with
+  `CC_aarch64_unknown_linux_musl=musl-gcc`) and checks it is static and runs. Written, and
+  type-checked locally with `scripts/cross-check.sh`; its first CI run is the real test.
 
 Open:
 
 | Gap | Impact | Fix |
 | --- | --- | --- |
+| The command table is parsed, and its 57 regexes compiled, at every decided event (about 1 ms of the 3 ms full path) | Every event the fast path cannot skip pays it | Compile pattern regexes lazily, or once per build |
+| Events the no-match fast path skips leave no spool record | `adage graph` and the signal box list only recorded commands, so fewer off-route ones; route metrics are unaffected | If the off-route view matters, record a light entry for skipped calls (needs the cheaper table above to carry keys) |
+| A failing runner whose error output has no renderable line (quotes, shell syntax, invisible characters) has no signature, so no dead end names it | Adversarial dead-end recall 3/30; overall recall 0.57 | Cut an unrenderable line at its first unrenderable character, with a minimum length, if that keeps the safety oracle at 0 |
 | A linked worktree does not see its repository's `origin` (the config lives in the common git directory; `repo_key` reads `<root>/.git/config`) | A worktree is keyed `<worktree dir>@<root commit>`, so it does not share the main checkout's routes | Read `origin` from the common directory (`gitobj::Repo` already finds it); re-keys existing worktree routes |
-| Directive text over 9,500 bytes is truncated, not spilled to a file (Design W8) | Only reachable with many long directives at once | Spill to a file and point to it |
-| Payloads over 8 MiB are not drained from stdin (Design §13.3) | The harness may see a broken pipe | Drain and discard |
 | Per-session nonce (review finding F12) and arm assignment by root session lineage (F7) were accepted but not built | `/clear` starts a new arm | Build both |
-| CI builds only x64 musl; arm64 musl is built only at release | A release-only failure is possible | Add aarch64 musl to CI |
-| `learn.log` is defined but never written | — | Write it, or remove the path |
 
 Fixed from the architecture audit (draft 3):
 

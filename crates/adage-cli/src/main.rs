@@ -212,6 +212,9 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
     let cfg = if args.iter().any(|a| a == "--demo") { LearnConfig::demo() } else { LearnConfig::default() };
     let inputs = Inputs { transcripts, outcomes, repo_override: flag(args, "--repo"), models: Some(paths.models()) };
     let rep = adage_learn::learn(&inputs, &paths.tracks(), &paths.index(), &cfg)?;
+    if let Err(e) = log_learn(paths, &rep) {
+        eprintln!("adage learn: could not write {}: {e}", paths.learn_log().display());
+    }
     if args.iter().any(|a| a == "--json") {
         println!("{}", serde_json::to_string_pretty(&rep)?);
     } else {
@@ -235,6 +238,48 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         }
         println!("\nindex generation {}", rep.index_generation);
     }
+    Ok(())
+}
+
+/// `learn.log` is rotated (to `learn.log.1`) when it reaches this size.
+const LEARN_LOG_ROTATE: u64 = 256 << 10;
+
+/// Append one line per `adage learn` run to `$ADAGE_HOME/learn.log`: when it ran, how many
+/// sessions it read and used, and per repository the tracks it wrote (version, change, route
+/// count), with the index generation. No prompt, command or path.
+fn log_learn(paths: &Paths, rep: &adage_learn::Report) -> Result<()> {
+    use std::io::Write;
+    let path = paths.learn_log();
+    if std::fs::metadata(&path).is_ok_and(|m| m.len() >= LEARN_LOG_ROTATE) {
+        std::fs::rename(&path, path.with_extension("log.1"))?;
+    }
+    let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64)?;
+    let repos: BTreeMap<&String, serde_json::Value> = rep
+        .repos
+        .iter()
+        .map(|(repo, rr)| {
+            let tracks: Vec<serde_json::Value> = rr
+                .tracks
+                .iter()
+                .map(|t| serde_json::json!({ "name": t.name, "version": t.version, "change": t.change, "routes": t.routes.len() }))
+                .collect();
+            (repo, serde_json::json!({ "sessions": rr.sessions, "tracks": tracks }))
+        })
+        .collect();
+    let line = serde_json::json!({
+        "ts": ts,
+        "version": env!("CARGO_PKG_VERSION"),
+        "sessions_read": rep.sessions_read,
+        "sessions_used": rep.sessions_used,
+        "sessions_steered": rep.sessions_steered,
+        "thresholds": rep.thresholds,
+        "intent_model": rep.intent_model,
+        "index_generation": rep.index_generation,
+        "repos": repos,
+    });
+    std::fs::create_dir_all(&paths.root)?;
+    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&path)?;
+    f.write_all(format!("{line}\n").as_bytes())?;
     Ok(())
 }
 

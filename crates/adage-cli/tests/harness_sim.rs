@@ -455,6 +455,24 @@ fn learn_from_codex_history_deliver_in_opencode() {
     check_graph(&sb, "codex → opencode");
 }
 
+/// Each `adage learn` appends one summary line to `$ADAGE_HOME/learn.log`.
+#[test]
+fn learn_writes_one_summary_line_per_run() {
+    let sb = Sandbox::new();
+    let files = adage_sim::fixture_files("claude");
+    sb.learn_files(&files);
+    let rep = sb.learn_files(&files);
+    let text = std::fs::read_to_string(sb.root.join("adage/learn.log")).unwrap();
+    let lines: Vec<Value> = text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
+    assert_eq!(lines.len(), 2, "{text}");
+    let last = &lines[1];
+    assert_eq!((last["sessions_read"].clone(), last["sessions_used"].clone()), (json!(12), json!(12)));
+    assert_eq!(last["index_generation"], rep["index_generation"]);
+    let tracks = last["repos"]["acme-billing"]["tracks"].as_array().unwrap();
+    assert!(tracks.iter().all(|t| t["change"].is_string() && t["routes"].as_u64().unwrap() > 0), "{last}");
+    assert!(!text.contains(&*sb.root.to_string_lossy()), "no paths in the log");
+}
+
 /// All three histories at once: one repository, the same four routes, evidence from every harness.
 #[test]
 fn learn_from_all_three_histories_together() {

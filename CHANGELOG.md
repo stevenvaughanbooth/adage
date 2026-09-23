@@ -48,6 +48,9 @@ version as the GitHub Release notes.
   and a finish-line obligation forgotten. When neither state slot can be read, the hook now
   rebuilds the state from the session's spool (up to 4 MiB): emitted routes, obligations, stop
   requests, arm, repository and counters. Spool records gain `kind` and `repo` fields.
+- **Oversized payloads were cut off, not drained** (Design §13.3). A payload over 8 MiB is now
+  read to the end and discarded, so the harness writing it never sees a broken pipe; the same
+  with a kill switch on. The refusal is recorded in `fail-open.log`.
 - **Environment steps reached agents without a person's approval** (Design O11). Unknown commands
   are classified as environment, and a learned route running one was delivered at yellow at once.
   Learned and imported environment routes now start as drafts, which are never delivered, and
@@ -75,6 +78,10 @@ version as the GitHub Release notes.
 
 ### Changed
 
+- **`adage learn` writes `learn.log`**: one JSON line per run with the sessions read and used and,
+  per repository, the tracks written (version, change, route count). No prompt, command or path.
+  Rotated at 256 KiB.
+- **CI builds the aarch64 musl release target**, natively on the arm64 runner, as it did x86_64.
 - **Hooks return early on events that cannot match** (Design §13.2). The index now stores, per
   repository, what can make its routes act, and a hook skips an event that cannot change any
   decision before loading the command table, locking the state or writing the spool: a no-match

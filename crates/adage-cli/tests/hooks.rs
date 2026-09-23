@@ -303,6 +303,41 @@ fn malformed_oversized_and_unknown_payloads_produce_nothing() {
     assert_eq!((out.as_str(), code), ("", 0));
 }
 
+/// Design §13.3: the hook always drains its input. A payload over the 8 MiB cap is refused, but
+/// read to the end, so the harness writing it never sees a broken pipe; so is any payload when a
+/// kill switch is on.
+#[test]
+fn oversized_payloads_are_drained_not_cut_off() {
+    let w = World::new();
+    let big = format!("{{\"session_id\":\"s\",\"cwd\":\"{}\",\"prompt\":\"{}\"}}", w.repo(), "x".repeat(12 << 20));
+    // (environment, fail-open entries so far): a kill switch is not an error.
+    for (env, logged) in [(None, 1), (Some(("ADAGE_DISABLE", "1")), 1)] {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        c.args(["hook", "claude", "UserPromptSubmit"])
+            .env("ADAGE_HOME", w.p("adage"))
+            .env_remove("ADAGE_DISABLE")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        if let Some((k, v)) = env {
+            c.env(k, v);
+        }
+        let mut child = c.spawn().unwrap();
+        let mut sin = child.stdin.take().unwrap();
+        let wrote = sin.write_all(big.as_bytes());
+        drop(sin);
+        let o = child.wait_with_output().unwrap();
+        assert!(wrote.is_ok(), "{env:?}: the whole payload was read: {wrote:?}");
+        assert_eq!((o.stdout.len(), o.stderr.len(), o.status.code()), (0, 0, Some(0)), "{env:?}");
+        let errors: Vec<Value> = fail_open_log(&w);
+        assert_eq!(
+            errors.iter().filter(|e| e["error"] == "payload: stdin exceeds 8 MiB").count(),
+            logged,
+            "{errors:#?}"
+        );
+    }
+}
+
 #[test]
 fn kill_switches_and_unknown_repositories_produce_nothing() {
     let w = World::new();
