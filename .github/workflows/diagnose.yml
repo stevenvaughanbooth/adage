@@ -31,7 +31,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: install gdb
-        run: sudo apt-get install -y -q gdb
+        run: sudo apt-get update -q && sudo apt-get install -y -q gdb
       - name: build the test binary
         id: build
         run: |
