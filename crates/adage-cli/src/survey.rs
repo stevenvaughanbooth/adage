@@ -533,14 +533,19 @@ fn candidates(p: &adage_learn::Planned) -> Vec<Candidate> {
         lower_bound: (r.evidence.lower_bound * 100.0).round() / 100.0,
     };
     let mut out = Vec::new();
-    for r in p
-        .track
-        .routes
-        .iter()
-        .filter(|r| matches!(r.state, adage_tracks::RouteState::Active | adage_tracks::RouteState::Probation))
-    {
+    for r in p.track.routes.iter().filter(|r| {
+        matches!(
+            r.state,
+            adage_tracks::RouteState::Active | adage_tracks::RouteState::Probation | adage_tracks::RouteState::Draft
+        )
+    }) {
         if let Some(prop) = p.proposals.routes.get(&r.id) {
             out.push(row(&prop.route, "proposed"));
+            continue;
+        }
+        // An environment step learn would build as a draft: never delivered until approved (O11).
+        if r.state == adage_tracks::RouteState::Draft {
+            out.push(row(r, "needs approval"));
             continue;
         }
         let status = match installed.as_ref().and_then(|t| t.routes.iter().find(|x| x.id == r.id)) {

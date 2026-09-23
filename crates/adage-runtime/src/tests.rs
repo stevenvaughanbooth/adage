@@ -380,3 +380,26 @@ fn the_embedder_is_not_called_without_intent_routes() {
     decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "tests failing".into() });
     assert!(!called.get(), "no intent routes: the model is never loaded");
 }
+
+/// Design W2: every directive states an exit condition. A dead end's is on its own line after the
+/// command; a route stored without one (older tracks) renders as before.
+#[test]
+fn dead_ends_and_linked_files_state_their_exit_condition() {
+    let avoid = Step::Avoid { avoid: "python3 -m pytest".into(), instead: "make test".into(), signature: "x".into() };
+    let mut r = route("d", Trigger::SessionStart, avoid, vec![], Effect::Verify, Aspect::Red);
+    assert_eq!(
+        render::route_text(&r, &[]).unwrap(),
+        "In this repository, running python3 -m pytest fails (\"x\"). Use this instead:\n  make test\nIgnore this if the user is asking for something else."
+    );
+    r.exit.clear();
+    assert!(render::route_text(&r, &[]).unwrap().ends_with("Use this instead:\n  make test"));
+    let files = Slot {
+        name: "files".into(),
+        source: SlotSource::ResultField { field: "f".into() },
+        contract: Contract::RepoPath,
+    };
+    let read = Step::ReadBatch { slot: "files".into(), max: 5 };
+    let r = route("r", Trigger::SessionStart, read, vec![files], Effect::Observe, Aspect::Yellow);
+    let text = render::route_text(&r, &[("files".into(), "a.py, b.py".into())]).unwrap();
+    assert!(text.ends_with("one at a time. Ignore this if the user is asking for something else."), "{text}");
+}

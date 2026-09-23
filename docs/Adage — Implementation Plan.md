@@ -53,7 +53,7 @@ The `adage` binary exposes these commands:
 init · survey · learn · status · report · graph [--serve] · review · eval · doctor · share · add · install · models · hooks-config · hook · version
 ```
 
-Test state: 211 tests pass (`cargo test --workspace`), including 315 normaliser fixtures, golden
+Test state: 229 tests pass (`cargo test --workspace`), including 315 normaliser fixtures, golden
 hook outputs per harness, hostile-payload suites, property tests, the harness simulator's
 end-to-end replays, and the eval gates (§3a). CI runs them on macOS arm64 and x64, Linux x64 and
 arm64, and Windows x64, with clippy `-D warnings`, rustfmt, and `cargo deny`.
@@ -91,25 +91,28 @@ did later. Committed datasets and their gates (docs/evals.md):
 | | demo round 2 (real) | synthetic | adversarial |
 | --- | ---: | ---: | ---: |
 | Precision, all | 0.73 | 0.91 | 0.73 |
-| Recall of key steps | 0.78 | 1.00 | 0.77 |
+| Recall of key steps | 0.78 | 0.97 | 0.57 |
 | Turns saved by the lookup (median) | 9 | 1 | 0 |
 | Finish-line accuracy | 1.00 | 1.00 | 1.00 |
 | Unsafe directives | 0 | 0 | 0 of 84 checked |
 
 - **The real dataset reproduces the live index.** It holds the 90 demo sessions, redacted. Learning
-  from round 2's training split reproduces the live index byte for byte, and replay reproduces
-  36 of 36 live decisions.
+  from round 2's training split reproduces the live index's routes (ids and aspects; byte for
+  byte before the dead-end and exit-condition changes), and replay reproduces 36 of 36 live
+  decisions.
 - **Offline precision understates correctness.** 6 of 18 lookup "misses" are agents that never found
   the tracker at all.
-- **One finding still to act on:** the dead-end route also warns against `python3 -m unittest`, which
-  passes when `ACME_ENV` is set. The miner should key dead ends on the failing signature.
+- **Dead ends are keyed by failing signature.** The eval found the dead-end route also warned
+  against `python3 -m unittest`, which passes when `ACME_ENV` is set. The miner now names a runner
+  only if its failures share the route's signature and it fails in 9 of 10 sessions that ran it;
+  dead-end accuracy rose and precision is unchanged (docs/evals.md).
 
 The property tests found 8 bugs, all fixed with regression tests:
 
 1. A single quoted error line failed `learn` for the whole repository.
 2. Bidirectional-override and zero-width characters passed validation.
 3. A 15 KB `&&` chain overflowed the stack.
-4. Pathological commands took 0.7 s to parse; parsing is now capped at 50 ms.
+4. Pathological commands took 0.7 s to parse; parsing now stops after a fixed lexing budget (about 7 ms).
 5. A track could direct commands naming paths outside the repository.
 6. Unfillable slots were sent as literal `{item}`.
 7. A blank command passed validation.
@@ -143,20 +146,24 @@ Closed since draft 2:
 - `gauge.harness` records the real harness.
 - Passphrase prompts at a TTY.
 - The survey report.
+- Dead ends are keyed by failing signature: a runner is named only if its failures share the
+  route's signature and it fails in 9 of 10 sessions that ran it.
+- Hooks record caught panics and internal errors in `$ADAGE_HOME/fail-open.log` (class, fixed
+  message or panic location, never payload; rotated at 256 KiB), and `adage doctor` reports them.
+- Normalisation no longer depends on machine speed: the 50 ms parse timeout is replaced by a
+  deterministic budget of bytes the lexer may read (2^20), with a 1 s backstop for unknown shapes.
 
 Open:
 
 | Gap | Impact | Fix |
 | --- | --- | --- |
-| Dead-end routes are keyed by runner, not by failing signature | Over-broad warnings (eval: `unittest` passes when `ACME_ENV` is set) | Key dead ends on (command, signature); only warn for runners whose failures share it |
-| Nothing writes `$ADAGE_HOME/fail-open.log` | `adage doctor` cannot report hook failures | Record caught panics and errors in the hook's fail-open path (bounded, rotating) |
-| The parse timeout (50 ms) makes normalisation depend on machine speed for pathological commands | Rare nondeterminism in `learn` for such commands | Replace with a node-count budget |
 | Repository key collides for unrelated repos with no `origin` and the same directory name | Routes from one such repo reach the other (directives still validated) | Key no-origin repos by directory name plus the root commit, read without running git in the hook |
 | State files are never rebuilt from the spool (S3 recommended a watermark and rebuild on CRC failure) | If both slots are corrupt, a session's state resets | Rebuild from the spool, or document state as a best-effort cache |
 | Directive text over 9,500 bytes is truncated, not spilled to a file (Design W8) | Only reachable with many long directives at once | Spill to a file and point to it |
 | Payloads over 8 MiB are not drained from stdin (Design §13.3) | The harness may see a broken pipe | Drain and discard |
 | No precomputed no-match key set (Design §13.2) | Every event in a repository with routes pays the full decision path (about 3 ms) | Precompute trigger keys in the index |
 | Per-session nonce (review finding F12) and arm assignment by root session lineage (F7) were accepted but not built | `/clear` starts a new arm | Build both |
+| One dead-end route per working command: a second failing signature (round 2: `python -m pytest`, 4 sessions) is not named | Dead-end recall fell with the signature rule (adversarial set 0.77 → 0.58); precision held | Allow one route per (working command, signature), with ids that keep the live-index gate stable |
 | CI builds only x64 musl; arm64 musl is built only at release | A release-only failure is possible | Add aarch64 musl to CI |
 | `learn.log` is defined but never written | — | Write it, or remove the path |
 
@@ -172,9 +179,10 @@ Fixed from the architecture audit (draft 3):
     different content to the same digest.
 - **Linux plugin binary:** the plugin shim finds the released `linux-musl` binaries.
 
-Fixed on branch `gaps-2`, and not yet merged:
+Fixed on branch `gaps-2` (merged):
 
-- **Design O11:** environment-effect routes wait for approval.
+- **Design O11:** learned environment-effect routes start as drafts and wait for approval in
+  `adage review`.
 - **Design W2:** dead-end and linked-file directives state an exit condition.
 
 ### 4.2 Harness limits (from `docs/harnesses.md`)

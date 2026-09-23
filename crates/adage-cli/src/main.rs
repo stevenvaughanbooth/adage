@@ -28,6 +28,7 @@
 mod add;
 mod detect;
 mod doctor;
+mod failopen;
 mod graph;
 mod harness;
 mod hook;
@@ -57,9 +58,24 @@ fn main() {
         let harness = args.get(1).cloned().unwrap_or_default();
         let event = args.get(2).cloned().unwrap_or_default();
         // Nothing may reach the harness but our JSON: silence panic messages entirely.
-        std::panic::set_hook(Box::new(|_| {}));
-        let out =
-            on_big_stack(move || std::panic::catch_unwind(|| hook::run(&harness, &event)).ok().flatten()).flatten();
+        failopen::install_panic_hook();
+        let (h, e) = (harness.clone(), event.clone());
+        let out = match on_big_stack(move || std::panic::catch_unwind(|| hook::run(&h, &e))) {
+            Some(Ok(Ok(out))) => out,
+            Some(Ok(Err(f))) => {
+                failopen::record(&Paths::from_env().root, &harness, &event, &f);
+                None
+            }
+            Some(Err(_)) => {
+                failopen::record(&Paths::from_env().root, &harness, &event, &failopen::panic_failure());
+                None
+            }
+            None => {
+                let f = failopen::Failure::new("thread", "the hook thread could not start");
+                failopen::record(&Paths::from_env().root, &harness, &event, &f);
+                None
+            }
+        };
         if let Some(o) = out {
             use std::io::Write;
             let _ = writeln!(std::io::stdout(), "{o}");

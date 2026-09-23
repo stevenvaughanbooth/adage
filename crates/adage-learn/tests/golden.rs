@@ -1,7 +1,7 @@
 //! End-to-end learner test over synthetic Claude Code transcripts in the real on-disk format.
 
 use adage_learn::{learn, Inputs, LearnConfig};
-use adage_tracks::{io, Aspect, Index, Step, Trigger};
+use adage_tracks::{io, Aspect, Exit, Index, Step, Trigger};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -101,6 +101,9 @@ fn mines_all_four_route_kinds() {
 
     let linked = routes.iter().find(|r| matches!(r.step, Step::ReadBatch { .. })).expect("linked-files route");
     assert!(matches!(linked.trigger, Trigger::AfterCommand { .. }));
+    // Design W2: every learned route states an exit condition.
+    assert!(routes.iter().all(|r| !r.exit.is_empty()), "{routes:#?}");
+    assert_eq!(linked.exit, vec![Exit::IntentChanges]);
 
     let dead = routes.iter().find(|r| matches!(r.step, Step::Avoid { .. })).expect("dead-end route");
     if let Step::Avoid { avoid, instead, signature } = &dead.step {
@@ -109,6 +112,7 @@ fn mines_all_four_route_kinds() {
         assert!(signature.contains("ACME_ENV is not set"));
     }
     assert_eq!(dead.aspect, Aspect::Red);
+    assert_eq!(dead.exit, vec![Exit::IntentChanges]);
 
     let fin = routes.iter().find(|r| matches!(r.trigger, Trigger::AfterEdit { .. })).expect("finish-line route");
     assert_eq!(fin.trigger, Trigger::AfterEdit { paths: "schema/*.json".into() });
@@ -137,14 +141,15 @@ fn steered_sessions_are_excluded_only_from_their_own_route_kind() {
     let cwd = "/fixture/acme-billing";
     let (mut files, _) = corpus(d.path());
     // Three sessions steered by the lookup route, which then hit a dead end the route never
-    // mentioned: they must count as dead-end evidence but not as lookup evidence.
+    // mentioned: they must count as dead-end evidence but not as lookup evidence. (The dead end
+    // is the corpus's, same failure signature: evidence for a dead end shares its signature.)
     for i in 0..3 {
         let mut t = Tx::new(&format!("steered{i}"), cwd, "Pick up W-2099");
         t.lines.push(json!({"type":"attachment","sessionId":format!("steered{i}"),"cwd":cwd,
             "content":"<adage-signal track=\"x\" route=\"lookup-work-item\" aspect=\"green\">…</adage-signal>"}));
         t.bash("./scripts/other-lookup W-2099", "ok", false)
             .call("Edit", json!({"file_path": format!("{cwd}/acme/billing.py")}), "ok", false)
-            .bash("python3 -m pytest", "No module named pytest; error", true)
+            .bash("python3 -m pytest", "RuntimeError: ACME_ENV is not set — run tests with 'make test'", true)
             .bash("make test", "OK", false);
         files.push(t.write(d.path()));
     }
@@ -158,6 +163,100 @@ fn steered_sessions_are_excluded_only_from_their_own_route_kind() {
     assert_eq!(lookup.route.evidence.opportunities, 6, "steered sessions are not lookup opportunities");
     let dead = index.routes.iter().find(|r| r.route.id.starts_with("dead-end")).unwrap();
     assert_eq!(dead.route.evidence.support, 9, "steered sessions still count as dead-end evidence");
+}
+
+const NO_PYTEST: &str = "/usr/bin/python3: No module named pytest";
+const NO_ENV: &str = "Traceback\nRuntimeError: ACME_ENV is not set — run tests with 'make test'";
+const ENV_FIXED: &str = "ACME_ENV=test python3 -m unittest discover -s tests";
+
+/// A run: command, output, failed.
+type Run<'a> = (&'a str, &'a str, bool);
+
+/// For each (count, runs): `count` sessions that each run `runs` and then `make test`.
+fn dead_end_corpus(dir: &Path, groups: &[(usize, &[Run])]) -> Vec<PathBuf> {
+    let mut files = vec![];
+    let mut n = 0;
+    for (count, runs) in groups {
+        for _ in 0..*count {
+            let mut t = Tx::new(&format!("d{n:02}"), "/fixture/acme-billing", "Fix the rounding bug.");
+            n += 1;
+            for (cmd, out, failed) in *runs {
+                t.bash(cmd, out, *failed);
+            }
+            t.bash("make test", "OK", false);
+            files.push(t.write(dir));
+        }
+    }
+    files
+}
+
+fn only_dead_end(index: &Index) -> (String, String, String, u32, u32) {
+    let dead: Vec<_> = index.routes.iter().filter(|r| r.route.id.starts_with("dead-end")).collect();
+    assert_eq!(dead.len(), 1, "one dead end per working command");
+    let Step::Avoid { avoid, instead, signature } = &dead[0].route.step else { panic!("not an avoid step") };
+    let e = &dead[0].route.evidence;
+    (avoid.clone(), signature.clone(), instead.clone(), e.support, e.opportunities)
+}
+
+#[test]
+fn a_dead_end_names_only_runners_that_share_its_signature() {
+    // docs/evals.md: the route named every runner that failed before `make test`, including
+    // `python3 -m unittest`, which passes once `ACME_ENV` is set, and `python -m pytest`, which
+    // fails for an unrelated reason.
+    let d = tempfile::tempdir().unwrap();
+    let files = dead_end_corpus(
+        d.path(),
+        &[
+            (
+                6,
+                &[
+                    ("python3 -m pytest tests", NO_PYTEST, true),
+                    ("python3 -m unittest discover -s tests", NO_ENV, true),
+                ],
+            ),
+            (3, &[("python -m pytest -v", "zsh: command not found: python", true)]),
+            (2, &[(ENV_FIXED, "OK", false)]),
+        ],
+    );
+    let index = run(d.path(), &files, &d.path().join("home"));
+    assert_eq!(
+        only_dead_end(&index),
+        ("python3 -m pytest".into(), "No module named pytest".into(), "make test".into(), 6, 6)
+    );
+}
+
+#[test]
+fn a_runner_that_passes_once_the_environment_is_fixed_is_never_named() {
+    // `python3 -m unittest` fails with the route's own signature, but passes in two sessions that
+    // set `ACME_ENV` (normalised to the same argv): it failed in 5 of the 7 sessions that ran it,
+    // under the 9-in-10 bar. `python3 -m pytest` failed every time it ran.
+    let d = tempfile::tempdir().unwrap();
+    let files = dead_end_corpus(
+        d.path(),
+        &[
+            (5, &[("python3 -m unittest discover -s tests", NO_ENV, true)]),
+            (3, &[("python3 -m pytest tests", NO_ENV, true)]),
+            (2, &[(ENV_FIXED, "OK", false)]),
+        ],
+    );
+    let index = run(d.path(), &files, &d.path().join("home"));
+    let (avoid, signature, _, support, opportunities) = only_dead_end(&index);
+    assert_eq!(avoid, "python3 -m pytest");
+    assert_eq!(signature, "RuntimeError: ACME_ENV is not set — run tests with 'make test'");
+    assert_eq!((support, opportunities), (3, 3));
+
+    // Without the environment-fixed sessions, unittest fails every time it runs and is named,
+    // first, because more sessions show it.
+    let d = tempfile::tempdir().unwrap();
+    let files = dead_end_corpus(
+        d.path(),
+        &[
+            (5, &[("python3 -m unittest discover -s tests", NO_ENV, true)]),
+            (3, &[("python3 -m pytest tests", NO_ENV, true)]),
+        ],
+    );
+    let index = run(d.path(), &files, &d.path().join("home"));
+    assert_eq!(only_dead_end(&index).0, "python3 -m unittest / python3 -m pytest");
 }
 
 #[test]

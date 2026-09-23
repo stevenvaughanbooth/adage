@@ -606,6 +606,55 @@ fn decisions_survive_relearning() {
     assert_eq!(aspect(&w, dead_ends, &dead.id).unwrap().1, RouteState::Retired);
 }
 
+/// Design O11: an environment step is delivered only on a route a person approved. `acme-tracker`
+/// is not in the command table, so it is classified as environment (as unknown commands are).
+#[test]
+fn an_environment_step_is_delivered_only_after_approval() {
+    let w = World::new();
+    std::fs::create_dir_all(w.p("tx")).unwrap();
+    let files: Vec<PathBuf> = (0..6)
+        .map(|i| {
+            let id = format!("W-10{:02}", 40 + i);
+            let mut t = Tx::new(&format!("e{i:02}"), "/fixture/acme-billing", &format!("Pick up {id}."));
+            t.bash(&format!("acme-tracker fetch {id}"), "ok", false);
+            t.write(&w.p("tx"))
+        })
+        .collect();
+    learn(&w, &files);
+    let work = "acme-billing/work-items";
+    let lookup = || w.track(work).routes.into_iter().find(|r| r.id == "lookup-work-item").unwrap();
+    let delivered = || w.index().routes.iter().any(|r| r.route.id == "lookup-work-item");
+    let l = lookup();
+    assert_eq!((l.effect, l.aspect, l.state), (Effect::Environment, Aspect::Yellow, RouteState::Draft));
+    assert!(!delivered(), "a draft is never delivered");
+    let q = w.queue();
+    assert_eq!(reasons(&q)[&key(work, "lookup-work-item")], vec!["approval".to_string()], "{q:#}");
+
+    w.ok(&["review", "approve", work, "lookup-work-item"]);
+    assert_eq!((lookup().aspect, lookup().state), (Aspect::Yellow, RouteState::Active));
+    assert!(delivered(), "approved, it is delivered (yellow, its ceiling)");
+    assert!(!reasons(&w.queue()).contains_key(&key(work, "lookup-work-item")));
+
+    // Re-learning keeps the approval while the step is the one approved.
+    learn(&w, &files);
+    assert_eq!(lookup().state, RouteState::Active);
+    assert!(delivered());
+
+    // A different command is a different step: it waits for approval again.
+    let other: Vec<PathBuf> = (0..6)
+        .map(|i| {
+            let id = format!("W-10{:02}", 40 + i);
+            let mut t = Tx::new(&format!("e{i:02}"), "/fixture/acme-billing", &format!("Pick up {id}."));
+            t.bash(&format!("acme-tracker fetch --full {id}"), "ok", false);
+            t.write(&w.p("tx"))
+        })
+        .collect();
+    learn(&w, &other);
+    assert_eq!(lookup().state, RouteState::Draft);
+    assert!(!delivered());
+    assert_eq!(reasons(&w.queue())[&key(work, "lookup-work-item")], vec!["changed".to_string()]);
+}
+
 fn walk(dir: &Path) -> Vec<String> {
     let mut out = Vec::new();
     let mut stack = vec![dir.to_path_buf()];

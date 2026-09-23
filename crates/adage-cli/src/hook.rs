@@ -1,7 +1,9 @@
 //! Hook client, harness-agnostic. Reads the harness payload on stdin, translates it into a
 //! normalised event through the harness adapter, decides, and prints the adapter's rendering.
-//! Returns `None` for "no output" — including on every error path (fail open).
+//! Returns `Ok(None)` when there is nothing to say, and `Err` when something went wrong: the caller
+//! prints nothing in either case (fail open), and records the error in `fail-open.log`.
 
+use crate::failopen::{self, Failure};
 use crate::harness::{self, Output};
 use adage_core::{repo, CommandTable};
 use adage_intent::model::{self, StaticModel};
@@ -15,24 +17,36 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_STDIN: u64 = 8 << 20;
 
-pub fn run(harness: &str, event: &str) -> Option<String> {
-    let adapter = harness::adapter(harness)?;
+pub fn run(harness: &str, event: &str) -> Result<Option<String>, Failure> {
+    let Some(adapter) = harness::adapter(harness) else { return Err(Failure::new("config", "unknown harness")) };
     if std::env::var("ADAGE_DISABLE").is_ok_and(|v| v == "1") {
-        return None;
+        return Ok(None);
     }
     let mut buf = String::new();
-    std::io::stdin().take(MAX_STDIN).read_to_string(&mut buf).ok()?;
-    let p: Value = serde_json::from_str(&buf).ok()?;
-    let harness::Envelope { session, cwd } = adapter.envelope(&p)?;
+    std::io::stdin().take(MAX_STDIN).read_to_string(&mut buf).map_err(|e| Failure::io("io", "reading stdin", &e))?;
+    #[cfg(debug_assertions)]
+    if std::env::var("ADAGE_TEST_FAULT").is_ok_and(|v| v == "panic") {
+        // Fault injection for tests (debug builds only). The message quotes the payload, as a real
+        // panic message can: it must never reach the log.
+        panic!("injected fault while handling {buf}");
+    }
+    let p: Value = serde_json::from_str(&buf)
+        .map_err(|e| Failure::new("payload", format!("stdin is not a JSON payload ({:?})", e.classify())))?;
+    let Some(harness::Envelope { session, cwd }) = adapter.envelope(&p) else {
+        return Err(Failure::new("payload", "no session id or working directory"));
+    };
     let root = repo::find_root(&cwd).unwrap_or_else(|| cwd.clone());
     if root.join(".adage/disabled").exists() {
-        return None;
+        return Ok(None);
     }
     let paths = Paths::from_env();
     let index = Index::load(&paths.index());
     let repo_key = repo::repo_key(&root);
-    index.for_repo(&repo_key).next()?; // nothing installed for this repository: the common, cheapest path
-    let ev = adapter.translate(event, &p, &cwd.to_string_lossy())?;
+    if index.for_repo(&repo_key).next().is_none() {
+        return Ok(None); // nothing installed for this repository: the common, cheapest path
+    }
+    // An event this adapter does not act on.
+    let Some(ev) = adapter.translate(event, &p, &cwd.to_string_lossy()) else { return Ok(None) };
     let table = CommandTable::load();
     // The embedding model is opened only if the runtime asks, which it does only at a prompt in a
     // repository with intent routes. Missing or damaged model: no vector, no intent directive.
@@ -56,20 +70,23 @@ pub fn run(harness: &str, event: &str) -> Option<String> {
         }
         (decide(&ctx, st, &ev), st.arm)
     })
-    .ok()?;
+    .map_err(|e| Failure::io("state", "updating the session state", &e))?;
 
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
     let mut rec = json!({ "ts": ts, "event": event, "arm": arm, "generation": index.generation, "decision": decision });
     if adapter.name() != "claude" {
         rec["harness"] = json!(adapter.name());
     }
-    let _ = spool::append(&paths.spool(&session), &rec);
+    if let Err(e) = spool::append(&paths.spool(&session), &rec) {
+        // Measurement is lost, but the decision stands: record it and carry on.
+        failopen::record(&paths.root, harness, event, &Failure::io("spool", "appending to the session spool", &e));
+    }
 
     if let Some(reason) = decision.continue_reason {
-        return adapter.render(event, Output::Continue(reason));
+        return Ok(adapter.render(event, Output::Continue(reason)));
     }
     if decision.directives.is_empty() {
-        return None;
+        return Ok(None);
     }
     let mut text = decision
         .directives
@@ -81,5 +98,5 @@ pub fn run(harness: &str, event: &str) -> Option<String> {
     if text.len() > max {
         text.truncate(text.char_indices().take_while(|(i, _)| *i < max).last().map(|(i, _)| i).unwrap_or(0));
     }
-    adapter.render(event, Output::Context(text))
+    Ok(adapter.render(event, Output::Context(text)))
 }

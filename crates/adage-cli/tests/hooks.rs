@@ -325,6 +325,81 @@ fn kill_switches_and_unknown_repositories_produce_nothing() {
     }
 }
 
+/// The fail-open log's entries, parsed.
+fn fail_open_log(w: &World) -> Vec<Value> {
+    std::fs::read_to_string(w.p("adage/fail-open.log"))
+        .unwrap_or_default()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect()
+}
+
+#[test]
+#[cfg(debug_assertions)] // the fault is injected only in debug builds
+fn a_panic_in_the_hook_is_recorded_without_the_payload_and_doctor_warns() {
+    let w = World::new();
+    let secret = "PROMPT-TEXT-THAT-MUST-NOT-BE-LOGGED";
+    for (h, ev) in harnesses() {
+        let p = json!({ "session_id": format!("s-panic-{h}"), "cwd": w.repo(), "prompt": format!("Pick up W-2042 {secret}") });
+        let (out, err, code) = w.run(&["hook", h, ev], p.to_string().as_bytes(), &[("ADAGE_TEST_FAULT", "panic")]);
+        assert_eq!((out.as_str(), err.as_str(), code), ("", "", 0), "{h}: a panic stays silent and exits 0");
+    }
+    let log = fail_open_log(&w);
+    assert_eq!(log.len(), 3, "{log:#?}");
+    for (e, (h, ev)) in log.iter().zip(harnesses()) {
+        assert_eq!(
+            (e["harness"].as_str(), e["event"].as_str(), e["class"].as_str()),
+            (Some(h), Some(ev), Some("panic"))
+        );
+        let error = e["error"].as_str().unwrap();
+        assert!(error.starts_with("panic: panic at adage-cli/src/hook.rs:"), "{error}");
+    }
+    let text = std::fs::read_to_string(w.p("adage/fail-open.log")).unwrap();
+    for bad in [secret, "W-2042", "injected fault", &w.root.to_string_lossy()] {
+        assert!(!text.contains(bad), "the log contains {bad:?}:\n{text}");
+    }
+    let (out, _, _) = w.run(&["doctor", "--json"], b"", &[]);
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let fo = v["checks"].as_array().unwrap().iter().find(|c| c["check"] == "fail-open errors").unwrap();
+    assert_eq!(fo["status"], "warn", "{fo}");
+    assert!(fo["detail"].as_str().unwrap().contains("3 in the last 7 days"), "{fo}");
+    assert!(fo["detail"].as_str().unwrap().contains("panic at adage-cli/src/hook.rs"), "{fo}");
+}
+
+#[test]
+fn internal_errors_are_recorded_and_nothing_to_do_is_not() {
+    let w = World::new();
+    let p = json!({ "session_id": "s-quiet", "cwd": w.repo(), "prompt": "Pick up W-2042" }).to_string();
+    let other =
+        json!({ "session_id": "s-other", "cwd": w.p("plain").to_string_lossy(), "prompt": "W-2042" }).to_string();
+    // Nothing to do: kill switch, a repository with no tracks, an event the adapter ignores, and
+    // a decision with no directive.
+    w.run(&["hook", "claude", "UserPromptSubmit"], p.as_bytes(), &[("ADAGE_DISABLE", "1")]);
+    w.run(&["hook", "claude", "UserPromptSubmit"], other.as_bytes(), &[]);
+    w.run(&["hook", "claude", "NoSuchEvent"], p.as_bytes(), &[]);
+    w.run(&["hook", "claude", "SessionEnd"], p.as_bytes(), &[]);
+    assert_eq!(fail_open_log(&w), Vec::<Value>::new(), "nothing to do is not an error");
+    // Errors: a payload that is not JSON, one with no session, and an unknown harness.
+    w.run(&["hook", "claude", "UserPromptSubmit"], format!("not json {p}").as_bytes(), &[]);
+    w.run(&["hook", "codex", "Stop"], json!({ "cwd": w.repo(), "prompt": "W-2042" }).to_string().as_bytes(), &[]);
+    w.run(&["hook", "nosuchharness", "Stop"], p.as_bytes(), &[]);
+    let errors: Vec<String> = fail_open_log(&w).iter().map(|e| e["error"].as_str().unwrap().to_string()).collect();
+    assert_eq!(
+        errors,
+        [
+            "payload: stdin is not a JSON payload (Syntax)",
+            "payload: no session id or working directory",
+            "config: unknown harness"
+        ]
+    );
+    let text = std::fs::read_to_string(w.p("adage/fail-open.log")).unwrap();
+    assert!(!text.contains("W-2042") && !text.contains(&*w.root.to_string_lossy()), "{text}");
+    // No data directory: nothing is recorded, and none is created.
+    let nowhere = w.p("nowhere");
+    w.run(&["hook", "claude", "Stop"], b"not json", &[("ADAGE_HOME", nowhere.to_str().unwrap())]);
+    assert!(!nowhere.exists());
+}
+
 // ---------------------------------------------------------------------------------------------
 // OpenCode (payloads as `plugin/opencode/adage.js` builds them)
 

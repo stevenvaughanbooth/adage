@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 const SPOOL_WARN_BYTES: u64 = 256 << 20;
 /// Fail-open errors within this many days count as recent.
 const RECENT_DAYS: u64 = 7;
-pub const FAIL_OPEN_LOG: &str = "fail-open.log";
+pub use crate::failopen::FAIL_OPEN_LOG;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]

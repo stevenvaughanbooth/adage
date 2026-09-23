@@ -57,8 +57,13 @@ static T_READ: Lazy<Regex> = Lazy::new(|| {
     ))
     .unwrap()
 });
+/// The exit clause on a line of its own: the avoid template adds it only when there is one.
+const EXIT_LINE: &str = r"\nIgnore this if (?:the user is asking for something else|this is an exploratory or draft change)(?: or (?:the user is asking for something else|this is an exploratory or draft change))*\.";
 static T_AVOID: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r#"^In this repository, running (?P<avoid>[^\n]*) fails \("(?P<sig>[^\n"]*)"\)\. Use this instead:\n  (?P<cmd>[^\n]*)$"#).unwrap()
+    Regex::new(&format!(
+        r#"^In this repository, running (?P<avoid>[^\n]*) fails \("(?P<sig>[^\n"]*)"\)\. Use this instead:\n  (?P<cmd>[^\n]*)(?:{EXIT_LINE})?$"#
+    ))
+    .unwrap()
 });
 static T_STOP: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^Adage finish-line check: this session changed files matching (?P<glob>[^\n`]*), and this repository requires running `(?P<cmd>[^\n`]*)` after such changes; it has not been run yet\. Run it \(and re-run the tests\) before finishing\. This reminder is from Adage, not from the user\.$").unwrap()

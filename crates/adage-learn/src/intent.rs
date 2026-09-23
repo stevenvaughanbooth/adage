@@ -191,7 +191,7 @@ pub fn intent_routes(sessions: &[&Session], model: &StaticModel, cfg: &LearnConf
             slots: vec![],
             effect,
             aspect,
-            state: RouteState::Active,
+            state: initial_state(effect),
             exit: vec![Exit::IntentChanges],
             evidence: Evidence {
                 opportunities: opp,

@@ -3,7 +3,8 @@
 //!
 //! ```text
 //! adage review [--json]                                  list the queue (agents may read it)
-//! adage review approve <track> <route> [--by <name>]     accept as is (restores a retired route at probation)
+//! adage review approve <track> <route> [--by <name>]     accept as is (restores a retired route at probation;
+//!                                                        puts an environment step, a draft until then, into service)
 //! adage review reject  <track> <route> [--by <name>]     retire it; `retire` is the same
 //! adage review demote  <track> <route> [--by <name>]     green → yellow, held across re-learning
 //! adage review promote <track> <route> [--by <name>]     yellow → green, within the effect ceiling only
@@ -252,6 +253,10 @@ fn queue<'a>(all: &'a [Installed], judged: &BTreeMap<(String, String), (u32, u32
             };
             let mut reasons: Vec<(&'static str, String)> = Vec::new();
             match rv {
+                None if r.state == RouteState::Draft && !r.authored => reasons.push((
+                    "approval",
+                    "an environment step: it is delivered only after a person approves it (`approve`)".into(),
+                )),
                 None if r.authored || !live(r.state) => {}
                 None if inst.imported => reasons.push((
                     "imported",
@@ -513,6 +518,15 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
             props.dismissed.remove(route_id.as_str());
             let bump = if review::shape(r) != review::shape(&before) { Bump::Major } else { Bump::Patch };
             (Decision::Pinned, bump)
+        }
+        "approve" if r.state == RouteState::Draft => {
+            // An environment step waiting for a person (O11): approval puts it into service,
+            // yellow at most; an import stays at probation.
+            r.state = if inst.imported { RouteState::Probation } else { RouteState::Active };
+            if r.aspect == Aspect::Green {
+                r.aspect = Aspect::Yellow;
+            }
+            (Decision::Approved, Bump::Minor)
         }
         "approve" => {
             if !live(r.state) {

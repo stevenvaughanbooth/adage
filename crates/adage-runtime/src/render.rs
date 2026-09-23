@@ -103,12 +103,20 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
                 exit
             ))
         }
-        (Step::Avoid { avoid, instead, signature }, _) => Some(format!(
-            "In this repository, running {} fails (\"{}\"). Use this instead:\n  {}",
-            sanitise(avoid),
-            sanitise(signature),
-            sanitise(instead)
-        )),
+        (Step::Avoid { avoid, instead, signature }, _) => {
+            let mut text = format!(
+                "In this repository, running {} fails (\"{}\"). Use this instead:\n  {}",
+                sanitise(avoid),
+                sanitise(signature),
+                sanitise(instead)
+            );
+            // Design W2: the exit condition, on its own line after the command (as for a lookup).
+            if !exit.is_empty() {
+                text.push('\n');
+                text.push_str(exit.trim_start());
+            }
+            Some(text)
+        }
     }
 }
 

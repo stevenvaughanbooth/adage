@@ -225,7 +225,9 @@ pub fn save(dir: &Path, r: &Reviews) -> Result<()> {
 /// - **Demoted:** held at yellow, whatever the evidence says.
 /// - **Promoted:** held at the promoted aspect while its shape and evidence are materially
 ///   unchanged and its effect ceiling allows; otherwise learning decides and the queue shows why.
-/// - **Approved / Pinned:** nothing to hold (pinned routes are `authored` and carried over as is).
+/// - **Approved:** an environment route, which the miner learns as a draft (O11), is put into
+///   service while its shape is the one approved. Otherwise nothing to hold.
+/// - **Pinned:** nothing to hold (pinned routes are `authored` and carried over as is).
 ///
 /// Losing authority stays automatic: a reviewed route the miner no longer finds is dropped like
 /// any other, and its decision re-applies if it comes back.
@@ -254,6 +256,11 @@ pub fn reconcile(prev: Option<&Track>, reviews: &Reviews, mut mined: Vec<Route>)
             }
             Decision::Rejected => m.state = RouteState::Retired,
             Decision::Demoted if m.aspect == Aspect::Green => m.aspect = Aspect::Yellow,
+            // An environment step waits as a draft until a person approves it (O11). Approval holds
+            // for the step that was approved: a different command waits again.
+            Decision::Approved if m.state == RouteState::Draft && shape(m) == rv.basis.shape => {
+                m.state = RouteState::Active
+            }
             Decision::Promoted
                 if m.aspect == Aspect::Yellow
                     && shape(m) == rv.basis.shape
@@ -389,6 +396,26 @@ mod tests {
         a.authored = true;
         let out = reconcile(None, &reviewed(&r, Decision::Rejected), vec![a.clone()]);
         assert_eq!(out, vec![a]);
+    }
+
+    #[test]
+    fn an_approved_environment_step_leaves_draft_only_while_unchanged() {
+        let mut env = route("e", Aspect::Yellow, 10, 12);
+        env.effect = Effect::Environment;
+        env.state = initial_state(env.effect);
+        assert_eq!(env.state, RouteState::Draft);
+        // Not reviewed: stays a draft.
+        assert_eq!(reconcile(None, &Reviews::default(), vec![env.clone()])[0].state, RouteState::Draft);
+        // Approved, re-mined unchanged (evidence may drift): in service.
+        let drifted =
+            Route { evidence: Evidence { support: 30, opportunities: 30, ..env.evidence.clone() }, ..env.clone() };
+        assert_eq!(reconcile(None, &reviewed(&env, Decision::Approved), vec![drifted])[0].state, RouteState::Active);
+        // Approved, but the step is now a different command: a draft again.
+        let mut other = env.clone();
+        other.step = Step::Run { command: "make setup".into() };
+        assert_eq!(reconcile(None, &reviewed(&env, Decision::Approved), vec![other])[0].state, RouteState::Draft);
+        // Other effects start in service.
+        assert_eq!(initial_state(Effect::Verify), RouteState::Active);
     }
 
     #[test]

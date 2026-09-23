@@ -17,17 +17,42 @@ version as the GitHub Release notes.
 - A harness simulator (`crates/adage-sim`), which replays mock sessions end to end through each
   harness's native hooks.
 - Windows support. CI covers macOS arm64 and x64, Linux x64 and arm64, and Windows x64.
+- **Hooks record their fail-open errors.** A caught panic or internal error (unreadable stdin, a
+  malformed payload, a state file that cannot be updated, a spool that cannot be appended) still
+  makes the hook say nothing and exit 0, and now also appends one line to
+  `$ADAGE_HOME/fail-open.log`, which `adage doctor` reports. Entries carry the time, harness,
+  event, an error class and a fixed message or panic location; never a prompt, tool output,
+  command or path. The log rotates at 256 KiB, keeping one previous file. "Nothing to do" (no
+  tracks for the repository, a kill switch, an ignored event) is not recorded.
 
 ### Fixed
 
+- **Over-broad dead-end warnings.** A dead end named every runner that failed before the working
+  command, including `python3 -m unittest`, which passes once `ACME_ENV` is set. Dead ends are now
+  keyed by failure signature: a runner is named only if its failures share the route's signature
+  and it failed in at least 9 in 10 of the sessions that ran it. Route ids are unchanged.
+- **Environment steps reached agents without a person's approval** (Design O11). Unknown commands
+  are classified as environment, and a learned route running one was delivered at yellow at once.
+  Learned and imported environment routes now start as drafts, which are never delivered, and
+  wait in `adage review` (reason "approval") until `approve` puts them into service. Re-learning
+  keeps the approval while the step is unchanged; a different command waits again.
+- **Dead-end and linked-file directives stated no exit condition** (Design W2). Both are now
+  learned with one ("Ignore this if the user is asking for something else."), and the dead-end
+  template renders it on its own line after the command. Routes stored without one render as
+  before.
+- **Normalisation depended on machine speed.** Pathological commands were cut off by a 50 ms
+  parse timeout, so a slow machine could record a command as unknown where a fast one parsed it.
+  The cut-off is now a budget of bytes the lexer may read (2^20, re-reads included), the same on
+  every machine; a 1 s wall-clock backstop remains for input shapes not yet known.
 - **Linux segfault in hooks.** A segfault in tree-sitter-bash's scanner (it calls `isdigit()` on
   full code points) could crash a hook on Linux, given a `{` followed by a large code point. The
   parser now only sees an ASCII shadow of each command, with the same byte offsets.
 - **Windows finish-line routes never fired.** Paths under `\\?\` roots, and `C:\…` paths, did
   not resolve or relativize.
 - **Eight bugs found by property tests**, including a stack overflow on long `&&` chains, slow
-  parses of malformed input (now capped at 50 ms), invisible characters passing sanitisation, and a
-  track able to direct a command naming a path outside the repository.
+  parses of malformed input (now cut off by a fixed lexing budget, about 7 ms), invisible
+  characters passing sanitisation, and a track able to direct a command naming a path outside the
+  repository.
 - **`adage learn --codex-sessions <dir>` fell back to all of `~/.claude/projects`** when the
   directory held nothing. An explicit source that finds nothing is now an error.
 
