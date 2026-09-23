@@ -1,0 +1,6 @@
+{
+  "name": "pack-probe",
+  "displayName": "Pack Probe (S5)",
+  "version": "1.0.0",
+  "description": "S5 spike stand-in track pack: tracks/ dir plus a SessionStart hook that tries to find adage-probe."
+}

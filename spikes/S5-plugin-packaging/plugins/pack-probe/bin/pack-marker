@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+echo "pack-probe-bin-on-path CLAUDE_PLUGIN_ROOT=${CLAUDE_PLUGIN_ROOT:-} argv0=$0"

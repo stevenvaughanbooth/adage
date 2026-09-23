@@ -1,0 +1,5 @@
+Do exactly these steps in order.
+Step 1: In a single message, call the Bash tool TWICE (two separate tool_use blocks in parallel, not sequential) with these exact commands: 'sleep 2 && echo A_DONE' and 'sleep 2 && echo B_DONE'.
+Step 2: Call the Bash tool once with: command -v adage-marker; command -v pack-marker; echo PATH_IS=$PATH
+Step 3: Use the Task tool to launch one subagent of type general-purpose with description 'probe task' and prompt 'Reply with the single word OK and stop.'
+Step 4: After the subagent replies, reply with the single word DONE and stop.

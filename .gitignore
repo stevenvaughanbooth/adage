@@ -11,3 +11,4 @@ spikes/**/sandbox/
 spikes/**/.cache/
 .claude/settings.local.json
 spikes/**/local/
+spikes/**/cfg/
