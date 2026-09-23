@@ -50,6 +50,24 @@ the Makefile tried `pytest` first: 1.44 failed runs per session). Round 2 learne
 and it disappeared (0.00). Without Adage, 4 of 18 round-1 agents gave up asking what the ticket was.
 Full data: [demo/results](demo/results/); interactive results page published as an artifact.
 
+## Install
+
+From a tagged release (none published yet), for macOS (arm64, x64), Linux (x64, arm64; static) and
+Windows (x64):
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.ps1 | iex"
+brew install stevenvaughanbooth/tap/adage
+npm install -g <package>    # name not decided yet (npm/config.mjs)
+cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli
+```
+
+Every release archive has a SHA-256 checksum, a Sigstore build-provenance attestation
+(`gh attestation verify <file> --repo stevenvaughanbooth/adage`) and a CycloneDX SBOM. For Claude
+Code, add the plugin marketplace with `/plugin marketplace add stevenvaughanbooth/adage` and install
+`adage`; the plugin runs the `adage` it finds on `PATH` and never downloads anything.
+
 ## Quick start
 
 ### Claude Code
@@ -83,7 +101,7 @@ what it cannot do yet (Codex reports no tool failures, so dead-end routes stay s
 
 `adage status` shows every track and route with its aspect and evidence; `adage report` summarises
 directives emitted, followed, and derailed. Data lives in `~/Library/Application Support/Adage`
-(macOS) or `~/.local/share/adage` (Linux); `ADAGE_HOME` overrides it.
+(macOS), `~/.local/share/adage` (Linux) or `%APPDATA%\Adage` (Windows); `ADAGE_HOME` overrides it.
 
 **Kill switches:** `ADAGE_DISABLE=1`, or a `.adage/disabled` file in a repository.
 
