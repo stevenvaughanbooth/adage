@@ -1,11 +1,13 @@
 //! `adage` — put your agent on rails.
 //!
 //! ```text
-//! adage hook claude <Event>          hook client (reads the harness payload on stdin)
+//! adage hook <claude|opencode|codex> <Event>   hook client (reads the harness payload on stdin)
 //! adage learn [options]              mine tracks from agent sessions and compile the index
 //! adage status                       installed tracks, routes, aspects, and evidence
 //! adage report [--json]              directives emitted, followed, and derailed, from spools
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
+//! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
+//!                                    print (default) or write a harness's hook registration
 //! adage share <track> --out <dir> [--key <path>]   redaction-check, copy, and sign a track
 //! adage add <dir> [--trust]          verify a shared track and install it at probation
 //! adage review [--json]              routes awaiting a person's decision, with evidence and directive text
@@ -17,7 +19,9 @@
 //! `ADAGE_ALLOW_NONINTERACTIVE=1` (let `share` and `add` run without a terminal, for CI).
 
 mod add;
+mod harness;
 mod hook;
+mod install;
 mod redact;
 mod review;
 mod share;
@@ -65,15 +69,16 @@ fn run(args: &[String]) -> Result<()> {
         Some("review") => review::review(&args[1..], &paths),
         Some("hooks-config") => {
             let bin = args.get(1).cloned().unwrap_or_else(|| "adage".into());
-            println!("{}", serde_json::to_string_pretty(&hook::settings(&bin))?);
+            println!("{}", serde_json::to_string_pretty(&harness::claude::settings(&bin))?);
             Ok(())
         }
+        Some("install") => install::install(&args[1..]),
         Some("version") | Some("--version") => {
             println!("adage {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         _ => {
-            println!("usage: adage <learn|status|report|review|share|add|hooks-config|version|hook>");
+            println!("usage: adage <learn|status|report|review|share|add|install|hooks-config|version|hook>");
             Ok(())
         }
     }

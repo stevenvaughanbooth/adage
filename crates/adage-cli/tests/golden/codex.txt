@@ -1,0 +1,27 @@
+### SessionStart
+(nothing)
+
+### UserPromptSubmit
+{"hookSpecificOutput":{"additionalContext":"<adage-signal track=\"acme/work@0.3.0\" route=\"lookup\" aspect=\"green\">\nIn this repository, work item details are looked up with:\n  ./scripts/wi-lookup W-2042 --json\nIgnore this if the user is asking for something else.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-signal>\n\n<adage-signal track=\"acme/work@0.3.0\" route=\"dead-unittest\" aspect=\"red\">\nIn this repository, running python3 -m unittest fails (\"ACME_ENV is not set\"). Use this instead:\n  make test\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-signal>","hookEventName":"UserPromptSubmit"}}
+
+### PostToolUse
+{"hookSpecificOutput":{"additionalContext":"<adage-signal track=\"acme/work@0.3.0\" route=\"read-linked\" aspect=\"yellow\">\nThat result lists these files: acme/billing.py.\nIf you need them, read them together in one turn rather than one at a time. Ignore this if the user is asking for something else.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-signal>","hookEventName":"PostToolUse"}}
+
+### PostToolUse
+(nothing)
+
+### PostToolUse
+{"hookSpecificOutput":{"additionalContext":"<adage-signal track=\"acme/work@0.3.0\" route=\"gen\" aspect=\"green\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nCI fails if this is skipped. Ignore this if the user is asking for something else.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-signal>","hookEventName":"PostToolUse"}}
+
+### Stop
+{"decision":"block","reason":"Adage finish-line check: this session changed files matching schema/*.json, and this repository requires running `make gen` after such changes; it has not been run yet. Run it (and re-run the tests) before finishing. This reminder is from Adage, not from the user."}
+
+### UserPromptSubmit
+(nothing)
+
+### Stop
+(nothing)
+
+### SessionEnd
+(nothing)
+

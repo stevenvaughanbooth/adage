@@ -2,6 +2,7 @@
 
 pub mod import;
 pub mod mine;
+pub mod opencode;
 
 use adage_core::CommandTable;
 use adage_tracks::{io, Gauge, Index, Manifest, Route, Scope, Track, TrackInfo, Trigger};
@@ -83,7 +84,12 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     let mut sessions: Vec<Session> = Vec::new();
     for p in &inputs.transcripts {
         report.sessions_read += 1;
-        if let Some(mut s) = import::parse_transcript(p, &table, inputs.repo_override.as_deref()) {
+        // Claude Code transcripts, or OpenCode `opencode export` files (recognised by content).
+        let parsed = match opencode::read_export(p) {
+            Some(v) => opencode::parse_export(&v, &table, inputs.repo_override.as_deref()),
+            None => import::parse_transcript(p, &table, inputs.repo_override.as_deref()),
+        };
+        if let Some(mut s) = parsed {
             if s.steered {
                 report.sessions_steered += 1;
             }

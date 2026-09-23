@@ -9,7 +9,8 @@ harness's own permissions.
 
 ```text
   your agents' sessions ──► adage learn ──► tracks ──► index ──► hooks ──► directives
-        (transcripts)          (mine)       (files)   (compiled)  (Claude Code)  (text only)
+        (transcripts)          (mine)       (files)   (compiled)  (Claude Code,  (text only)
+                                                                   OpenCode, Codex)
 ```
 
 ## What it does, concretely
@@ -48,7 +49,9 @@ the Makefile tried `pytest` first: 1.44 failed runs per session). Round 2 learne
 and it disappeared (0.00). Without Adage, 4 of 18 round-1 agents gave up asking what the ticket was.
 Full data: [demo/results](demo/results/); interactive results page published as an artifact.
 
-## Quick start (Claude Code)
+## Quick start
+
+### Claude Code
 
 ```bash
 # 1. Build the binary and stage it into the plugin
@@ -61,6 +64,21 @@ target/release/adage status
 # 3. Run Claude Code with the Adage plugin
 claude --plugin-dir plugin/claude-code
 ```
+
+### OpenCode and Codex
+
+```bash
+cargo build --release -p adage-cli
+target/release/adage install opencode            # print the plugin; add --write to install it
+target/release/adage install codex               # print a hooks.json; add --write to merge it
+opencode export <session-id> > s.json && target/release/adage learn --transcripts s.json
+```
+
+`--write` installs into the repository (`.opencode/plugins/adage.js`, `.codex/hooks.json`) or, with
+`--scope user`, the harness's documented user location; it never runs inside an agent session.
+`adage install claude-code` does the same for Claude Code settings. What each harness supports, and
+what it cannot do yet (Codex reports no tool failures, so dead-end routes stay silent there), is in
+[docs/harnesses.md](docs/harnesses.md).
 
 `adage status` shows every track and route with its aspect and evidence; `adage report` summarises
 directives emitted, followed, and derailed. Data lives in `~/Library/Application Support/Adage`
@@ -117,8 +135,9 @@ fails untouched and passes with its reference solution.
 | `crates/adage-learn` | Transcript import and the route miners |
 | `crates/adage-sign` | Native `sshsig` signing (ssh-agent or key file) and `allowed_signers` verification |
 | `crates/adage-sign` | Native `sshsig` signing and `allowed_signers` verification for shared tracks |
-| `crates/adage-cli` | The `adage` binary |
+| `crates/adage-cli` | The `adage` binary; harness adapters in `src/harness/` |
 | `plugin/claude-code` | The Claude Code plugin |
+| `plugin/opencode` | The OpenCode plugin (installed by `adage install opencode`) |
 | `demo/` | Sandbox, runner, live dashboard |
 | `docs/` | [Design spec](docs/Adage%20—%20Design%20Spec.md) · [Architecture](docs/Adage%20—%20Architecture.md) · [Implementation plan](docs/Adage%20—%20Implementation%20Plan.md) |
 | `spikes/` | The experiments that settled the architecture — see [the board](spikes/README.md) |
@@ -127,7 +146,9 @@ fails untouched and passes with its reference solution.
 
 ## Status
 
-v0.1: Claude Code only; tracks are shared directly (`adage share` / `adage add`). Hardened against an adversarial review (tracks are
-untrusted input; effects re-derived; bounded hot path; symlink-safe paths). Team depots, lockfiles,
-intent embeddings, and the OpenCode and Codex adapters are designed and spiked but
-not yet built. See the implementation plan.
+v0.1: Claude Code, plus OpenCode and Codex adapters (built against their documentation, not yet
+run against a live installation — see [docs/harnesses.md](docs/harnesses.md)). Tracks are shared
+directly (`adage share` / `adage add`) and reviewed with `adage review`. Hardened against an
+adversarial review (tracks are untrusted input; effects re-derived; bounded hot path; symlink-safe
+paths). Team depots, lockfiles, and intent embeddings are designed and spiked but not yet built.
+See the implementation plan.
