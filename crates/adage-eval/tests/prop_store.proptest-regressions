@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 779a9e260135fae1821dd3a57b105c5b66d575f2594342d1f9acfabb4753a732 # shrinks to ss = [S { n: 0, items: [] }, S { n: 0, items: [] }, S { n: 0, items: [""] }, S { n: 1457638689, items: ["ලਸ਼%{܀\u{1da6b}b\u{c3e}.^\u{1ce2}.勉=:🉢>_SX", "$Àퟳ🕴{¥%.%{=🛫 .🣀\\𝔾"] }], cut = Index(646730689599097320), trunc = Index(4512850528997462539)

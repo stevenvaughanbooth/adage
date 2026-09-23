@@ -4,6 +4,10 @@
 //! change passes and a real regression fails. When a change moves a number on purpose, re-measure
 //! (`adage eval <dataset> --split <split>`), update the threshold and docs/evals.md together, and
 //! say why in the commit.
+//!
+//! Replay needs POSIX paths: the recorded transcripts are POSIX, and so is the normaliser's path
+//! handling. The evals workflow runs these on Linux and macOS.
+#![cfg(unix)]
 
 use adage_eval::{fidelity, run, Options, Report};
 use std::path::{Path, PathBuf};

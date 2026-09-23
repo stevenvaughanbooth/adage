@@ -6,6 +6,9 @@
 //! stop request that comes out is held to the independent oracle in `adage_eval::safety`: fixed
 //! template text, no shell syntax or invisible characters in any field, no path outside the
 //! repository, slot values that satisfy their contracts, effects that may be directed at all.
+//!
+//! Unix only, like the gates: edit events carry POSIX paths under the sandbox root.
+#![cfg(unix)]
 
 use adage_core::spans::SpanKind;
 use adage_core::{CommandTable, Effect};
