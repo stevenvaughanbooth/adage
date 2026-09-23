@@ -1,0 +1,45 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ADAGE_ARM=A ADAGE_TASK=T4 python3 /Users/stevenbooth/Documents/skill-compile/spikes/S4-directive-wording/hooks/directive_hook.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ADAGE_ARM=A ADAGE_TASK=T4 python3 /Users/stevenbooth/Documents/skill-compile/spikes/S4-directive-wording/hooks/directive_hook.py"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ADAGE_ARM=A ADAGE_TASK=T4 python3 /Users/stevenbooth/Documents/skill-compile/spikes/S4-directive-wording/hooks/directive_hook.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ADAGE_ARM=A ADAGE_TASK=T4 python3 /Users/stevenbooth/Documents/skill-compile/spikes/S4-directive-wording/hooks/directive_hook.py"
+          }
+        ]
+      }
+    ]
+  }
+}

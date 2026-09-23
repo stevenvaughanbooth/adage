@@ -70,11 +70,13 @@ ALLOWED_TOOLS = [
 ]
 
 USAGE_LIMIT_MARKERS = [
-    "usage limit",
-    "rate limit",
-    "credit balance",
-    "quota",
-    "429",
+    "usage limit reached",
+    "exceeded your usage limit",
+    "you've hit your usage limit",
+    "you have exceeded your usage limit",
+    "rate_limit_error",
+    "quota exceeded",
+    "please upgrade your plan",
 ]
 AUTH_ERROR_MARKERS = [
     "failed to authenticate",
@@ -119,15 +121,58 @@ def reset_sandbox():
     subprocess.run(["git", "clean", "-fdx", "-q"], cwd=SANDBOX, check=True)
 
 
-def classify_error(text):
-    low = text.lower()
-    for m in USAGE_LIMIT_MARKERS:
-        if m in low:
-            return "usage_limit"
-    for m in AUTH_ERROR_MARKERS:
-        if m in low:
+def last_result_event(stdout_text):
+    """The stream-json `result` event carries the authoritative outcome (subtype, is_error,
+    errors[]) — parse it instead of grepping raw text, which false-positives on things like a
+    UUID that happens to contain "429"."""
+    result = None
+    for line in (stdout_text or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if obj.get("type") == "result":
+            result = obj
+    return result
+
+
+def classify_status(returncode, stdout_text, stderr_text):
+    """Returns one of: ok, max_turns_reached, usage_limit, auth_error, error_<subtype>,
+    no_result_event. Only usage_limit / auth_error should ever stop the harness loop —
+    everything else (including max_turns_reached) is a legitimate, countable data point."""
+    result = last_result_event(stdout_text)
+    combined_low = ((stdout_text or "") + "\n" + (stderr_text or "")).lower()
+
+    if result is not None:
+        subtype = result.get("subtype") or ""
+        result_text = (result.get("result") or "").lower()
+        errors_text = " ".join(result.get("errors") or []).lower()
+        blob = " ".join([subtype.lower(), result_text, errors_text, combined_low])
+
+        if "authenticate" in result_text or "oauth" in result_text or any(
+            m in blob for m in AUTH_ERROR_MARKERS
+        ):
             return "auth_error"
-    return None
+        if any(m in blob for m in USAGE_LIMIT_MARKERS):
+            return "usage_limit"
+        if subtype == "error_max_turns":
+            return "max_turns_reached"
+        if result.get("is_error"):
+            return f"error_{subtype or 'unknown'}"
+        return "ok"
+
+    # No result event at all — the CLI itself failed before/without producing one (bad flags,
+    # crash, or an auth failure so early no result event was emitted).
+    for m in AUTH_ERROR_MARKERS:
+        if m in combined_low:
+            return "auth_error"
+    for m in USAGE_LIMIT_MARKERS:
+        if m in combined_low:
+            return "usage_limit"
+    return "no_result_event"
 
 
 def ensure_log_header():
@@ -162,16 +207,20 @@ def count_budget_spent():
     return n
 
 
+RETRIABLE_STATUSES = {"usage_limit", "auth_error", "dry_run"}
+
+
 def completed_combos():
-    """(arm, task, repeat) triples that already have a non-error, non-dry-run row, so a
-    resumed invocation of this script doesn't re-run (and re-spend budget on) work that
-    already succeeded."""
+    """(arm, task, repeat) triples that already produced a usable result — including a
+    max-turns cutoff or a model-side error, which are legitimate data points, not harness
+    failures — so a resumed invocation doesn't re-spend budget on work already done. Only
+    usage_limit/auth_error (blocked before any usable result) and dry_run are retried."""
     done = set()
     if not os.path.exists(RUN_LOG):
         return done
     with open(RUN_LOG) as f:
         for row in csv.DictReader(f):
-            if row.get("status") == "ok":
+            if row.get("status") not in RETRIABLE_STATUSES:
                 arm = row["arm"] if row["arm"] != "" else None
                 done.add((arm, row["task"], int(row["repeat"])))
     return done
@@ -231,16 +280,16 @@ def run_one(arm, task, repeat, model, max_turns, dry_run, seq):
     with open(stderr_path, "w") as f:
         f.write(proc.stderr)
 
-    combined = (proc.stdout or "") + "\n" + (proc.stderr or "")
-    err_class = classify_error(combined)
-    status = err_class or ("ok" if proc.returncode == 0 else f"exit_{proc.returncode}")
+    status = classify_status(proc.returncode, proc.stdout, proc.stderr)
 
     append_log([run_id, seq, arm, task, repeat, started, ended, status, proc.returncode,
                 model, max_turns, transcript_path, ""])
 
-    if err_class:
-        print(f"  !! {err_class} detected — stopping the harness per the safety rule "
+    if status in ("usage_limit", "auth_error"):
+        print(f"  !! {status} detected — stopping the harness per the safety rule "
               f"(no retry loop). See {stderr_path}")
+    elif status == "max_turns_reached":
+        print(f"  (agent hit --max-turns {max_turns} without finishing — recorded as data, not an error)")
     return status
 
 
