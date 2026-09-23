@@ -79,6 +79,10 @@ h1 span { color: var(--muted); font-weight: 500; }
 .axis text { fill: var(--muted); font-size: 11px; }
 .empty { color: var(--muted); font-style: italic; padding: 8px 0; }
 .foot { margin-top: 16px; color: var(--muted); font-size: 12px; }
+.statsrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 18px; font-size: 13px; }
+.statsrow .st b { font-size: 15px; }
+.statsrow .p { font-weight: 700; }
+.statsrow .p.sig { color: var(--good); }
 .toggle { margin-left: auto; cursor: pointer; background: none; border: 1px solid var(--line); color: var(--muted); border-radius: 8px; padding: 3px 9px; font-size: 12px; }
 </style>
 </head>
@@ -92,6 +96,7 @@ h1 span { color: var(--muted); font-weight: 500; }
   </header>
 
   <div class="grid kpis" id="kpis"></div>
+  <section class="panel" id="statsPanel" style="margin-bottom:14px"><h2>Is the difference real? — permutation tests on held-out runs</h2><div id="stats" class="statsrow"></div></section>
 
   <div class="grid two">
     <section class="panel">
@@ -154,6 +159,36 @@ function kpis(runs) {
     return `<div class="panel kpi"><div class="label">${label}</div>
       <div class="row"><span class="v adage">${show(a)}</span><span class="v holdout">${show(h)}</span>${delta}</div>
       <div class="n">Adage vs without · ${A.length} + ${H.length} runs · ${agg}</div></div>`;
+  }).join("");
+}
+
+function permP(a, b, stat, n = 5000) {
+  // Two-sided permutation test on a difference statistic; seeded for stable numbers.
+  let seed = 7; const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const obs = Math.abs(stat(a) - stat(b)); const all = a.concat(b); let hit = 0;
+  for (let i = 0; i < n; i++) {
+    const sh = all.slice(); for (let j = sh.length - 1; j > 0; j--) { const k = Math.floor(rnd() * (j + 1)); [sh[j], sh[k]] = [sh[k], sh[j]]; }
+    if (Math.abs(stat(sh.slice(0, a.length)) - stat(sh.slice(a.length))) >= obs - 1e-12) hit++;
+  }
+  return (hit + 1) / (n + 1);
+}
+
+function stats(runs) {
+  const done = runs.filter((r) => r.phase === "eval" && r.metrics);
+  const get = (arm, f) => done.filter((r) => r.arm === arm).map((r) => f(r.metrics)).filter((v) => v != null);
+  const rows = [
+    ["Turns before first edit", (m) => m.turns_to_first_edit, median, "median", 1],
+    ["Seconds to first edit", (m) => m.time_to_first_edit, median, "median", 1],
+    ["Total turns", (m) => m.turns, median, "median", 1],
+    ["Hidden check pass rate", (m) => (m.passed ? 1 : 0), mean, "mean", 2],
+    ["Cost per run (USD)", (m) => m.cost_usd, mean, "mean", 3],
+  ];
+  if (done.length < 6) { $("stats").innerHTML = `<div class="empty">Needs held-out runs in both arms.</div>`; return; }
+  $("stats").innerHTML = rows.map(([label, f, fn, agg, d]) => {
+    const A = get("adage", f), H = get("holdout", f);
+    if (A.length < 3 || H.length < 3) return "";
+    const p = permP(A, H, fn);
+    return `<div class="st">${label}<br><b>${fmt(fn(A), d)}</b> with Adage vs <b>${fmt(fn(H), d)}</b> without (${agg}) · <span class="p ${p < 0.05 ? "sig" : ""}">p = ${p < 0.001 ? "< 0.001" : p.toFixed(3)}</span> · n = ${A.length} + ${H.length}</div>`;
   }).join("");
 }
 
@@ -228,7 +263,7 @@ function feed(runs) {
 
 async function tick() {
   try {
-    const s = await (await fetch("state.json", { cache: "no-store" })).json();
+    const s = window.__STATE__ || (await (await fetch("state.json", { cache: "no-store" })).json());
     const runs = Object.values(s.runs || {});
     const running = runs.filter((r) => r.status === "running").length;
     const ph = $("phase");
@@ -236,12 +271,12 @@ async function tick() {
     ph.lastElementChild.textContent = { train: "training", learn: "learning", eval: "evaluating", done: "complete", smoke: "smoke test" }[s.phase] || s.phase;
     const ev = runs.filter((r) => r.phase === "eval");
     $("meta").textContent = `${s.model || ""} · ${runs.filter((r) => r.phase === "train").length} training runs · ${ev.filter((r) => r.metrics).length}/${ev.length} held-out runs done · ${running} running`;
-    kpis(runs); lanes(runs); chart(runs); tracks(s); feed(runs);
+    kpis(runs); stats(runs); lanes(runs); chart(runs); tracks(s); feed(runs);
     const L = s.learn;
     $("foot").textContent = L ? `Learned from ${L.sessions_used} real sessions · index ${L.index_generation} · thresholds ${L.thresholds} (demo scale)` : "";
   } catch (e) { /* keep last frame */ }
 }
-tick(); setInterval(tick, 1500);
+tick(); if (!window.__STATE__) setInterval(tick, 1500);
 </script>
 </body>
 </html>
