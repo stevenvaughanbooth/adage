@@ -5,7 +5,8 @@
 //! constructs (`for`, `while`, `if`, `case`, subshells, `$(…)`) are parsed rather than treated
 //! as one opaque low-confidence blob. See SPIKE.md's method section.
 
-use tree_sitter::{Node, Parser};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use tree_sitter::{Node, Parser, Tree};
 
 use crate::table::CommandTable;
 use crate::types::{CanonicalAction, Effect, Normalized};
@@ -29,7 +30,7 @@ thread_local! {
     static PARSER: std::cell::RefCell<Parser> = std::cell::RefCell::new({
         let mut p = Parser::new();
         p.set_language(&tree_sitter_bash::LANGUAGE.into()).expect("load tree-sitter-bash");
-        p.set_timeout_micros(PARSE_TIMEOUT_MICROS);
+        p.set_timeout_micros(PARSE_BACKSTOP_MICROS);
         p
     });
 }
@@ -87,11 +88,68 @@ pub(crate) fn ascii_shadow(s: &str) -> std::borrow::Cow<'_, str> {
     out.into()
 }
 
-/// Parsing gives up after this long, and the command is recorded as unknown. tree-sitter's error
-/// recovery is quadratic on some malformed input: 16 KB of `a|a|a|…` or `)))…` took 0.6–0.7 s to
-/// parse in a release build (the hook's budget is 25 ms). Real commands, heredocs included, parse
-/// in well under a millisecond per kilobyte.
-pub const PARSE_TIMEOUT_MICROS: u64 = 50_000;
+/// The parse budget: how many bytes tree-sitter's lexer may read, counting every re-read, before
+/// the parse is abandoned and the command recorded as unknown. It makes the cut-off a property of
+/// the command, not of the machine: the same command is cut off, or not, everywhere.
+///
+/// tree-sitter's error recovery is quadratic on some malformed input, and the quadratic part is
+/// re-lexing: 16 KB of `)))…` makes the lexer read 128 million bytes (0.76 s in a release build;
+/// the hook's budget is 25 ms), `>>>…` 56 million, `|||…` 64 million. Real commands read each byte
+/// one to seven times (heredocs are the most), so every real command up to [`MAX_COMMAND`] fits in
+/// this budget with room to spare, and a cut-off parse costs about 7 ms in a release build.
+///
+/// The one known quadratic case that is not lexing, a long run of `a|a|…|`, is bounded by
+/// [`MAX_PIPES`] before parsing.
+pub const PARSE_BUDGET: u64 = 64 * MAX_COMMAND as u64;
+
+/// A wall-clock backstop, far above anything the budget allows: a cut-off parse takes about 7 ms in
+/// a release build and 40–60 ms in a debug one (macOS arm64), and the worst real command well
+/// under it. It is not how pathological commands are cut off, and no known input reaches it. It
+/// exists so that an input shape not yet known, whose cost is neither lexing nor pipes, still
+/// cannot stall a hook without limit. If it ever fires, the result for that command depends on the
+/// machine, which is why it sits two orders of magnitude above the budget's worst case.
+pub const PARSE_BACKSTOP_MICROS: u64 = 1_000_000;
+
+/// Why a command has no syntax tree: the note recorded on its unknown action.
+pub const NOTE_BUDGET_SPENT: &str = "not normalised: parse budget spent";
+pub const NOTE_NO_TREE: &str = "tree-sitter produced no tree (backstop timeout or parse failure)";
+
+/// Parse `src` (ASCII) within [`PARSE_BUDGET`]. `Err` carries the note: the budget was spent, or
+/// the backstop fired or tree-sitter failed.
+///
+/// The input is fed one byte per read, so each read is one byte of lexing and the read count
+/// measures the lexer's work exactly. (Chunk boundaries fall between characters because the parser
+/// only sees the ASCII shadow, and all 315 normaliser fixtures parse to the same tree as a
+/// whole-string parse.) When the
+/// budget is spent, the read returns end of input and raises the parser's cancellation flag, which
+/// tree-sitter checks every 100 parse operations: where it stops is fixed by the input too.
+fn parse_within_budget(p: &mut Parser, src: &[u8]) -> Result<Tree, &'static str> {
+    let cancel = AtomicUsize::new(0);
+    let mut reads: u64 = 0;
+    // SAFETY: `cancel` outlives every use of the flag: it is unset again below, before `cancel`
+    // is dropped, and the parser reads it only inside `parse_with`.
+    unsafe { p.set_cancellation_flag(Some(&cancel)) };
+    let tree = p.parse_with(
+        &mut |offset: usize, _| {
+            reads += 1;
+            if reads > PARSE_BUDGET {
+                cancel.store(1, Ordering::Relaxed);
+                return &[][..];
+            }
+            src.get(offset..offset + 1).unwrap_or(&[])
+        },
+        None,
+    );
+    unsafe { p.set_cancellation_flag(None) };
+    match tree {
+        Some(t) if reads <= PARSE_BUDGET => Ok(t),
+        _ => {
+            // A cancelled or timed-out parse would otherwise resume on the next, unrelated command.
+            p.reset();
+            Err(if reads > PARSE_BUDGET { NOTE_BUDGET_SPENT } else { NOTE_NO_TREE })
+        }
+    }
+}
 
 /// Maximum depth of the syntax-tree walk (statements within statements, including `bash -c`
 /// scripts). `too_deep` bounds bracket nesting before parsing; this bounds everything else a
@@ -99,8 +157,9 @@ pub const PARSE_TIMEOUT_MICROS: u64 = 50_000;
 pub const MAX_DEPTH: usize = 96;
 
 /// More pipe operators than this (outside quotes) and a command is treated as unknown: a long run
-/// of `a|a|…|` sends tree-sitter's error recovery quadratic in a phase its timeout does not cover
-/// (16 KB took 0.6 s in a release build). No real pipeline has this many stages.
+/// of `a|a|…|` sends tree-sitter's error recovery quadratic in a phase that is not lexing, so
+/// [`PARSE_BUDGET`] does not see it (16 KB took 0.6 s in a release build, reading only 144 thousand
+/// bytes). No real pipeline has this many stages.
 pub const MAX_PIPES: usize = 128;
 
 fn too_many_pipes(s: &str) -> bool {
@@ -153,24 +212,16 @@ fn normalize_at(command: &str, cwd: &str, table: &CommandTable, depth: usize) ->
     // The parser only ever sees ASCII: see [`ascii_shadow`]. Text is still read from `command`
     // by the same byte ranges, so non-ASCII paths and arguments come through unchanged.
     let shadow = ascii_shadow(command);
-    let tree = PARSER.with(|p| {
-        let mut p = p.borrow_mut();
-        let t = p.parse(shadow.as_ref(), None);
-        if t.is_none() {
-            // A timed-out parse would otherwise resume on the next, unrelated command.
-            p.reset();
-        }
-        t
-    });
+    let tree = PARSER.with(|p| parse_within_budget(&mut p.borrow_mut(), shadow.as_bytes()));
     let tree = match tree {
-        Some(t) => t,
-        None => {
+        Ok(t) => t,
+        Err(note) => {
             return vec![Normalized {
                 action: CanonicalAction::Unknown { raw: command.to_string() },
                 effect: Effect::Environment,
                 mutating: false,
                 confidence: 0.0,
-                note: "tree-sitter produced no tree (parse timed out or failed)".to_string(),
+                note: note.to_string(),
             }]
         }
     };

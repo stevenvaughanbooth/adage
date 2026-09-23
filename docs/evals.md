@@ -244,10 +244,15 @@ These use `proptest` with default case counts and bounded inputs, and finish in 
 4. **Pathological commands stalled the hook for most of a second.** tree-sitter's error recovery is
    quadratic on some malformed input. In a release build, 16 KB of `a|a|…|` took 0.6 s to
    normalise and `)))…` took 0.7 s, against a hook budget of 25 ms.
-   - Fix: a 50 ms parse timeout (the parser is reset after a timeout). Pipe operators outside
-     quotes are capped at 128, because the `a|…|` case spends its time where the timeout is not
-     checked. The worst case measured afterwards is about 58 ms.
-   - Regression tests: `adage-core/tests/deep.rs`, and the committed proptest seed in
+   - Fix: a deterministic parse budget. The quadratic part is re-lexing (`)))…` makes the lexer
+     read 128 million bytes), so the parser is fed one byte per read and gives up after 2^20 reads
+     (64 × `MAX_COMMAND`; real commands read each byte one to seven times). The cut-off is a
+     property of the command, so it no longer depends on machine speed, as the first fix (a 50 ms
+     timeout) did. Pipe operators outside quotes are capped at 128, because the `a|…|` case spends
+     its time outside lexing. A cut-off parse takes about 7 ms in release; a 1 s wall-clock
+     backstop remains only for input shapes not yet known.
+   - Regression tests: `adage-core/tests/deep.rs` (including that the budget, not the clock, cuts
+     off each pathological case), and the committed proptest seed in
      `prop_shell.proptest-regressions`.
 5. **Tracks could direct paths outside the repository.** Validation checked only a command's
    characters, so a shared track could direct `cat /etc/passwd` (observe, and so eligible for

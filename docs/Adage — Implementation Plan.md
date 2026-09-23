@@ -111,7 +111,7 @@ The property tests found 8 bugs, all fixed with regression tests:
 1. A single quoted error line failed `learn` for the whole repository.
 2. Bidirectional-override and zero-width characters passed validation.
 3. A 15 KB `&&` chain overflowed the stack.
-4. Pathological commands took 0.7 s to parse; parsing is now capped at 50 ms.
+4. Pathological commands took 0.7 s to parse; parsing now stops after a fixed lexing budget (about 7 ms).
 5. A track could direct commands naming paths outside the repository.
 6. Unfillable slots were sent as literal `{item}`.
 7. A blank command passed validation.
@@ -149,12 +149,13 @@ Closed since draft 2:
   route's signature and it fails in 9 of 10 sessions that ran it.
 - Hooks record caught panics and internal errors in `$ADAGE_HOME/fail-open.log` (class, fixed
   message or panic location, never payload; rotated at 256 KiB), and `adage doctor` reports them.
+- Normalisation no longer depends on machine speed: the 50 ms parse timeout is replaced by a
+  deterministic budget of bytes the lexer may read (2^20), with a 1 s backstop for unknown shapes.
 
 Open:
 
 | Gap | Impact | Fix |
 | --- | --- | --- |
-| The parse timeout (50 ms) makes normalisation depend on machine speed for pathological commands | Rare nondeterminism in `learn` for such commands | Replace with a node-count budget |
 | Architecture doc is still draft 2 | Docs lag the code (daemon → none, etc.) | Draft 3, as built |
 
 ### 4.2 Harness limits (from `docs/harnesses.md`)
