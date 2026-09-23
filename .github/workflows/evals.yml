@@ -45,7 +45,15 @@ jobs:
         run: cargo test --locked -p adage-eval --test gates
 
       - name: property tests (slow case counts)
+        env:
+          ADAGE_PROP_TRACE: ${{ runner.temp }}/prop_shell_last.json
         run: cargo test --locked -p adage-eval --features slow
+      - name: last property-test input (if the process crashed)
+        if: failure()
+        shell: bash
+        run: |
+          f="${{ runner.temp }}/prop_shell_last.json"
+          if [ -f "$f" ]; then echo "bytes: $(wc -c < "$f")"; head -c 4000 "$f"; echo; fi
 
       - name: regression tests for eval findings
         run: cargo test --locked -p adage-core --test deep && cargo test --locked -p adage-tracks --test hostile && cargo test --locked -p adage-learn --test hostile

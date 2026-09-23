@@ -60,7 +60,15 @@ jobs:
       - name: test (adage-store, the Windows-ported store, on every platform)
         run: cargo test --locked -p adage-store
       - name: test
+        env:
+          ADAGE_PROP_TRACE: ${{ runner.temp }}/prop_shell_last.json
         run: cargo test --workspace --locked --no-fail-fast
+      - name: last property-test input (if the process crashed)
+        if: failure()
+        shell: bash
+        run: |
+          f="${{ runner.temp }}/prop_shell_last.json"
+          if [ -f "$f" ]; then echo "bytes: $(wc -c < "$f")"; head -c 4000 "$f"; echo; fi
       - name: OpenCode plugin test ran under node (not skipped)
         if: runner.os != 'Windows'
         shell: bash

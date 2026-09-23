@@ -30,6 +30,11 @@ fn cases() -> u32 {
 /// Normalise on a small-stack thread; fail on panic, stack overflow (the process aborts, which
 /// fails the test run), or taking longer than the budget.
 fn check(cmd: String) -> Result<(), TestCaseError> {
+    // A crash (stack overflow, SIGSEGV in the C parser) kills the process before proptest can
+    // report the input, so record each case first: CI prints this file when the step fails.
+    if let Some(path) = std::env::var_os("ADAGE_PROP_TRACE") {
+        let _ = std::fs::write(path, serde_json::to_string(&cmd).unwrap_or_default());
+    }
     let h = std::thread::Builder::new()
         .stack_size(STACK)
         .spawn(move || {
