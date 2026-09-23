@@ -1,0 +1,2 @@
+run_id,seq,arm,task,repeat,started_at,ended_at,status,exit_code,model,max_turns,transcript_path,notes
+001-A-T1-r1,1,A,T1,1,2026-09-23T04:12:00Z,2026-09-23T04:12:02Z,auth_error,1,claude-sonnet-5,4,/Users/stevenbooth/Documents/skill-compile/spikes/S4-directive-wording/results/transcripts/001-A-T1-r1.stream.jsonl,
