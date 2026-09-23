@@ -37,6 +37,13 @@ version as the GitHub Release notes.
   per working command, each runner named under one signature only. The most common signature's
   route keeps its id; each further one gets an id derived from the command and signature. Offline
   recall rose (demo `hash:0.3` 0.81 → 0.84, synthetic 0.97 → 1.00) with no precision lost.
+- **Unrelated repositories without `origin` shared routes** when their directories had the same
+  name. Such a repository is now keyed `<directory name>@<root commit>`; the root commit is read
+  straight from `.git` (loose objects, packs, packed refs, linked worktrees) without running git,
+  and remembered in `$ADAGE_HOME/repo-keys`. A repository whose root cannot be read (no commits
+  yet, SHA-256, shallow, alternates) is keyed by a hash of its path. Routes learned under the bare
+  directory name keep working until `adage learn` re-keys a repository of that name. New
+  dependency: `miniz_oxide` (MIT OR Zlib OR Apache-2.0), with `adler2`.
 - **Environment steps reached agents without a person's approval** (Design O11). Unknown commands
   are classified as environment, and a learned route running one was delivered at yellow at once.
   Learned and imported environment routes now start as drafts, which are never delivered, and

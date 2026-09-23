@@ -109,6 +109,8 @@ fn flag(args: &[String], name: &str) -> Option<String> {
 
 fn run(args: &[String]) -> Result<()> {
     let paths = Paths::from_env();
+    // Root commits `learn` and `survey` find are left for hooks (repository keys).
+    adage_core::repo::use_cache(paths.repo_keys());
     match args.first().map(String::as_str) {
         Some("learn") => learn(&args[1..], &paths),
         Some("status") => status(&paths),

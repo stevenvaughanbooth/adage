@@ -41,10 +41,10 @@ pub fn run(harness: &str, event: &str) -> Result<Option<String>, Failure> {
     }
     let paths = Paths::from_env();
     let index = Index::load(&paths.index());
-    let repo_key = repo::repo_key(&root);
-    if index.for_repo(&repo_key).next().is_none() {
+    let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
+    let Some(repo_key) = repo::lookup_key(&root, Some(&paths.repo_keys()), &keys) else {
         return Ok(None); // nothing installed for this repository: the common, cheapest path
-    }
+    };
     // An event this adapter does not act on.
     let Some(ev) = adapter.translate(event, &p, &cwd.to_string_lossy()) else { return Ok(None) };
     let table = CommandTable::load();

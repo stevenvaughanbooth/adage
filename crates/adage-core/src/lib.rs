@@ -1,6 +1,7 @@
 //! Adage core: the canonical action vocabulary, the shell normaliser (tree-sitter-bash plus a
 //! data-driven command table), effect classes, typed spans, and repository identity.
 
+pub mod gitobj;
 pub mod keys;
 pub mod repo;
 pub mod shell;

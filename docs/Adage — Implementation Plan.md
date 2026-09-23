@@ -158,12 +158,20 @@ Closed since draft 2:
   live-index gate holds; round 2 adds `dead-end-21cb2c` (`python -m pytest`). Recall: `hash:0.3`
   0.81 → 0.84, synthetic 0.97 → 1.00; precision unchanged or up. Adversarial recall stays 0.57:
   its pytest failures carry no renderable error line, so no signature (docs/evals.md).
+- Repositories without `origin` are keyed `<directory name>@<root commit>`, so unrelated ones
+  with the same name no longer share routes. The root commit is read from the object store
+  without running git (loose objects, v2 packs with deltas, packed refs, worktrees; new
+  dependency `miniz_oxide`), and remembered per path in `$ADAGE_HOME/repo-keys`, which `adage
+  learn` fills. Unreadable roots (no commits, SHA-256, shallow, alternates) fall back to a hash
+  of the path, which copies do not share. Bare-name keys from before still apply until a
+  repository of that name is re-keyed. Hook p50/p95 unchanged within 0.1–0.2 ms; a cold cache
+  costs one walk (38 ms for 5,000 packed commits, about 0.45 s for 50,000).
 
 Open:
 
 | Gap | Impact | Fix |
 | --- | --- | --- |
-| Repository key collides for unrelated repos with no `origin` and the same directory name | Routes from one such repo reach the other (directives still validated) | Key no-origin repos by directory name plus the root commit, read without running git in the hook |
+| A linked worktree does not see its repository's `origin` (the config lives in the common git directory; `repo_key` reads `<root>/.git/config`) | A worktree is keyed `<worktree dir>@<root commit>`, so it does not share the main checkout's routes | Read `origin` from the common directory (`gitobj::Repo` already finds it); re-keys existing worktree routes |
 | State files are never rebuilt from the spool (S3 recommended a watermark and rebuild on CRC failure) | If both slots are corrupt, a session's state resets | Rebuild from the spool, or document state as a best-effort cache |
 | Directive text over 9,500 bytes is truncated, not spilled to a file (Design W8) | Only reachable with many long directives at once | Spill to a file and point to it |
 | Payloads over 8 MiB are not drained from stdin (Design §13.3) | The harness may see a broken pipe | Drain and discard |

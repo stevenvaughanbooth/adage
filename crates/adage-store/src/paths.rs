@@ -61,6 +61,10 @@ impl Paths {
     pub fn models(&self) -> PathBuf {
         self.root.join("models")
     }
+    /// Root commits already found, per repository path (`adage_core::repo::repo_key_cached`).
+    pub fn repo_keys(&self) -> PathBuf {
+        self.root.join("repo-keys")
+    }
     pub fn learn_log(&self) -> PathBuf {
         self.root.join("learn.log")
     }
