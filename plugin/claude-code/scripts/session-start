@@ -1,0 +1,24 @@
+#!/bin/sh
+# Adage SessionStart: install a verified binary into the plugin's stable data directory, run it once
+# (the first execution of a new binary pays a one-time code-signing check, 100-350 ms on macOS —
+# spike S1), then hand the SessionStart payload to it. Every failure path exits 0: fail open.
+ROOT="$1"; DATA="$2"
+[ -n "$ROOT" ] && [ -n "$DATA" ] || { cat >/dev/null; exit 0; }
+case "$(uname -s)-$(uname -m)" in
+  Darwin-arm64) T=aarch64-apple-darwin ;; Darwin-x86_64) T=x86_64-apple-darwin ;;
+  Linux-x86_64) T=x86_64-unknown-linux-gnu ;; Linux-aarch64) T=aarch64-unknown-linux-gnu ;;
+  *) cat >/dev/null; exit 0 ;;
+esac
+SRC="$ROOT/dist/$T/adage"
+[ -f "$SRC" ] || { cat >/dev/null; exit 0; }
+WANT=$(grep " $T/adage\$" "$ROOT/dist/SHA256SUMS" 2>/dev/null | cut -d' ' -f1)
+GOT=$(shasum -a 256 "$SRC" 2>/dev/null | cut -d' ' -f1)
+[ -n "$WANT" ] && [ "$WANT" = "$GOT" ] || { cat >/dev/null; exit 0; }
+mkdir -p "$DATA/bin"
+if [ ! -x "$DATA/bin/adage-$GOT" ]; then
+  cp "$SRC" "$DATA/bin/.adage-$GOT.tmp" && chmod 755 "$DATA/bin/.adage-$GOT.tmp" \
+    && mv "$DATA/bin/.adage-$GOT.tmp" "$DATA/bin/adage-$GOT" || { cat >/dev/null; exit 0; }
+  "$DATA/bin/adage-$GOT" version >/dev/null 2>&1
+fi
+ln -sfn "adage-$GOT" "$DATA/bin/adage"
+exec "$DATA/bin/adage" hook claude SessionStart

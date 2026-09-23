@@ -1,0 +1,7 @@
+{
+  "name": "adage",
+  "version": "0.1.0",
+  "description": "Put your agent on rails: Adage learns the routes your agents take and tells them, deterministically, what to do next.",
+  "author": { "name": "Adage" },
+  "repository": "https://github.com/stevenvaughanbooth/adage"
+}

@@ -170,7 +170,7 @@ def run_one(run_id, phase, arm, task, prompt_template):
                 assistant_turns += 1
             for u in uses:
                 tools_by_id[u.get("id")] = u
-                ev = {"t": t, "turn": assistant_turns, "tool": u.get("name"),
+                ev = {"t": t, "turn": assistant_turns, "tool": u.get("name"), "id": u.get("id"),
                       "cat": classify(u.get("name"), u.get("input")),
                       "cmd": (u.get("input") or {}).get("command") or (u.get("input") or {}).get("file_path") or ""}
                 events.append(ev)
@@ -178,12 +178,11 @@ def run_one(run_id, phase, arm, task, prompt_template):
         elif typ == "user":
             for c in m.get("message", {}).get("content", []) or []:
                 if isinstance(c, dict) and c.get("type") == "tool_result" and c.get("is_error"):
-                    for ev in reversed(events):
-                        u = tools_by_id.get(c.get("tool_use_id"))
-                        if u and ev["tool"] == u.get("name"):
+                    u = tools_by_id.get(c.get("tool_use_id"))
+                    for ev in events:
+                        if u and ev.get("id") == u.get("id"):
                             ev["failed"] = True
                             ev["cat"] = classify(u.get("name"), u.get("input"), failed=True)
-                            break
             update_run(run_id, events=events)
         elif typ == "result":
             result = m
