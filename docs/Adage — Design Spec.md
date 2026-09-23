@@ -1,6 +1,6 @@
 # Adage — Design Spec
 
-**Status:** Design phase, draft 6 — decisions closed except O9 · **Date:** 2026-09-22 · **Supersedes:** *Interaction Graph Compiler — Design v2*
+**Status:** Design phase, draft 7 — decisions closed except O9; architecture review changes applied · **Date:** 2026-09-22 · **Supersedes:** *Interaction Graph Compiler — Design v2*
 
 > **Adage** — *Agentic DAG Engine.* An adage is wisdom distilled from long experience; a track is
 > an adage for your agents. **Put your agent on rails.** Brand system in [§17](#17-naming-and-brand).
@@ -191,7 +191,8 @@ whichever is clearer.
    exactly what will leave the machine — templates, statistics, intent labels and canonical
    phrasings, no prompts, no argument values.
 2. The track is committed to a team depot, or directly to the repo under `.adage/tracks/`. In team
-   mode Adage can open the pull request itself (§10.9) — a person still reviews and merges it.
+   mode Adage prepares the pull request itself (§10.9); it is pushed only after the author approves it
+   locally in `adage review`, and a teammate still reviews and merges it.
 3. The teammate runs `adage add` or simply pulls the repo. Install shows every command the track
    can direct and every script it depends on, with their content hashes.
 4. The track starts on probation on the teammate's machine: as yellow advice if it is signed by a
@@ -382,7 +383,11 @@ A **route** is a trigger, a sequence of steps, optional switches, and exit condi
   are resolved by a pluggable decision backend (§8.5).
 - **Exit conditions** are observable facts that mean the route no longer applies: "the work item is
   Closed", "the user asked for something other than implementation". An exit condition is always
-  stated to the agent.
+  stated to the agent. Exit conditions are **typed predicates** — a result field equals a value, a
+  failure family matches, the intent family changes — and Adage renders their wording from its own
+  fixed templates. A track never supplies free text that reaches the agent; only validated slot
+  values are interpolated (§15). Labels and descriptions in a track are for people and for matching,
+  never for the agent's context.
 
 ### 8.4 Compiled steps
 
@@ -476,7 +481,8 @@ steps:
     aspect: green
     run: "pnpm --filter {affected_package} typecheck"
 exit:
-  - "the user asked for a draft or an exploratory change"
+  - intent_changes: true              # rendered: "the user asks for something else"
+  - intent_family: exploratory-draft  # rendered: "this is a draft or an exploratory change"
 ```
 
 These are often the most deterministic routes a repository has, and they target a different cost:
@@ -667,8 +673,10 @@ steps:
       contract: repo-path
       max: 5
 exit:
-  - "the lookup reports state Closed"
-  - "the user asks for something other than implementation"
+  - result: lookup                    # typed predicate over a validated result field
+    field: state
+    equals: Closed
+  - intent_changes: true
 ```
 
 `{lookup.files[*]}` binds from the result of a command *the agent* ran; Adage reads it from the hook
@@ -814,8 +822,10 @@ Three further limits keep automation honest:
 
 **Tracks as pull requests.** In team mode, when a personal track has cleared its bars and is
 portable — its requirements are met by the repository and its scope isn't specific to one person's
-habits — Adage opens a pull request adding it to the repository's `.adage/tracks/`. Think of it as a
-dependency bot for agent behaviour. The pull request carries the evidence summary, a preview of every
+habits — Adage prepares a pull request adding it to the repository's `.adage/tracks/`. Nothing is
+pushed until the author approves it locally in `adage review`, after seeing the redaction review —
+content never leaves the machine on a timer. Think of it as a dependency bot for agent behaviour,
+with a human at the gate. The pull request carries the evidence summary, a preview of every
 directive, every command with its effect class, and the redaction review. Merging is team adoption;
 starter tracks accumulate this way, reviewed through the same process as code. Later evidence from
 teammates arrives as further pull requests, usually patch bumps.

@@ -14,8 +14,8 @@ ends with a recommendation.
 | [S4 · Directive wording](S4-directive-wording/SPIKE.md) | Which directive wordings are followed, and which trip injection defences? | D§9, F3 | 1 | Running |
 | [S5 · Plugin packaging](S5-plugin-packaging/SPIKE.md) | How do plugin roots, data dirs, SessionStart ordering, async hooks, and plugin enumeration behave? | A8, F4, F5 | 1 | Running |
 | [S6 · SSH signing](S6-ssh-signing/SPIKE.md) | Can tracks be signed with agent-held keys and verified natively with namespaces? | A7 | 1 | Running |
-| S7 · Clustering at scale | Which clustering method is deterministic and scales to hundreds of thousands of prompts? | Intent pipeline | 2 | Queued — needs S2 |
-| S8 · Normaliser coverage | How far do tree-sitter-bash and per-command grammars get on real transcripts? | Normaliser | 2 | Queued |
+| [S7 · Clustering at scale](S7-clustering/SPIKE.md) | Which clustering method is deterministic and scales to hundreds of thousands of prompts? | Intent pipeline | 2 | Queued — needs S2 |
+| [S8 · Normaliser coverage](S8-normaliser/SPIKE.md) | How far do tree-sitter-bash and per-command grammars get on real transcripts? | Normaliser | 2 | Running |
 
 ## Conventions
 
