@@ -1,0 +1,9 @@
+--- a/schema/invoice.json
++++ b/schema/invoice.json
+@@ -3,6 +3,7 @@
+   "customer_id": {"type": "str", "default": null},
+   "amount_cents": {"type": "int", "default": 0},
+   "tax_region": {"type": "str", "default": "US"},
+   "discount_pct": {"type": "float", "default": 0.0}
++  "due_days": {"type": "int", "default": 30}
+ }

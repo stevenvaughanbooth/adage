@@ -1,0 +1,186 @@
+//! `adage learn`: import sessions, mine routes, assemble versioned tracks, compile the index.
+
+pub mod import;
+pub mod mine;
+
+use adage_core::CommandTable;
+use adage_tracks::{io, Gauge, Index, Manifest, Route, Scope, Track, TrackInfo, Trigger};
+use anyhow::Result;
+use import::Session;
+pub use mine::LearnConfig;
+use serde::Serialize;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+#[derive(Debug, Default, Serialize)]
+pub struct Report {
+    pub sessions_read: usize,
+    pub sessions_used: usize,
+    pub sessions_steered: usize,
+    pub repos: BTreeMap<String, RepoReport>,
+    pub index_generation: String,
+    pub thresholds: String,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct RepoReport {
+    pub sessions: usize,
+    pub tracks: Vec<TrackReport>,
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct TrackReport {
+    pub name: String,
+    pub version: String,
+    pub change: String,
+    pub routes: Vec<String>,
+}
+
+pub struct Inputs {
+    pub transcripts: Vec<PathBuf>,
+    /// Session id → task succeeded, where known.
+    pub outcomes: BTreeMap<String, bool>,
+    pub repo_override: Option<String>,
+}
+
+pub fn slug(repo: &str) -> String {
+    repo.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect()
+}
+
+/// Semantic-version bump from the difference between the previous and new routes (Design §10.9).
+fn bump(prev: Option<&Track>, routes: &[Route]) -> (String, String) {
+    let Some(p) = prev else { return ("0.1.0".into(), "created".into()) };
+    let v: Vec<u64> = p.manifest.track.version.split('.').filter_map(|x| x.parse().ok()).collect();
+    let (ma, mi, pa) = (v.first().copied().unwrap_or(0), v.get(1).copied().unwrap_or(1), v.get(2).copied().unwrap_or(0));
+    let shape = |r: &Route| (r.id.clone(), serde_json::to_string(&(&r.trigger, &r.step, &r.slots, &r.aspect)).unwrap_or_default());
+    let old: BTreeMap<_, _> = p.routes.iter().map(shape).collect();
+    let new: BTreeMap<_, _> = routes.iter().map(shape).collect();
+    if old == new {
+        let same_evidence = p.routes == routes;
+        return if same_evidence {
+            (p.manifest.track.version.clone(), "unchanged".into())
+        } else {
+            (format!("{ma}.{mi}.{}", pa + 1), "evidence updated".into())
+        };
+    }
+    let removed_or_changed = old.iter().any(|(k, v)| new.get(k).is_some_and(|n| n != v) || !new.contains_key(k));
+    if removed_or_changed {
+        (format!("{}.0.0", ma + 1), "route changed or removed".into())
+    } else {
+        (format!("{ma}.{}.0", mi + 1), "route added".into())
+    }
+}
+
+pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &LearnConfig) -> Result<Report> {
+    let table = CommandTable::load();
+    let mut report = Report {
+        thresholds: format!(
+            "min_support={} green_lower_bound={} yellow_rate={}",
+            cfg.min_support, cfg.green_lower_bound, cfg.yellow_rate
+        ),
+        ..Default::default()
+    };
+    let mut sessions: Vec<Session> = Vec::new();
+    for p in &inputs.transcripts {
+        report.sessions_read += 1;
+        if let Some(mut s) = import::parse_transcript(p, &table, inputs.repo_override.as_deref()) {
+            if s.steered {
+                report.sessions_steered += 1;
+            }
+            s.outcome = inputs.outcomes.get(&s.id).copied();
+            if !s.steps.is_empty() {
+                sessions.push(s);
+            }
+        }
+    }
+    sessions.sort_by(|a, b| a.id.cmp(&b.id));
+    report.sessions_used = sessions.len();
+
+    let mut by_repo: BTreeMap<String, Vec<&Session>> = BTreeMap::new();
+    for s in &sessions {
+        by_repo.entry(s.repo.clone()).or_default().push(s);
+    }
+
+    for (repo, ss) in &by_repo {
+        let mut rr = RepoReport { sessions: ss.len(), ..Default::default() };
+        let mut work = mine::prompt_routes(ss, cfg);
+        if let Some(r) = work.first() {
+            if let adage_tracks::Step::Run { .. } = &r.step {
+                let key = lookup_key(ss, r);
+                if let Some(k) = key {
+                    work.extend(mine::read_batch_routes(ss, &k, cfg));
+                }
+            }
+        }
+        let groups: Vec<(&str, &str, Vec<Route>)> = vec![
+            ("work-items", "Context gathering for prompts that name a work item", work),
+            ("finish-line", "Steps this repository requires after certain edits", mine::obligation_routes(ss, cfg)),
+            ("dead-ends", "Commands that fail in this repository, and what works instead", mine::dead_end_routes(ss, cfg)),
+        ];
+        for (suffix, description, routes) in groups {
+            let name = format!("{}/{suffix}", slug(repo));
+            let dir = tracks_root.join(slug(repo)).join(suffix);
+            let prev = io::read(&dir).ok();
+            if routes.is_empty() && prev.is_none() {
+                continue;
+            }
+            // Human-edited routes are preserved; the miner never overwrites them.
+            let mut routes = routes;
+            if let Some(p) = &prev {
+                for r in p.routes.iter().filter(|r| r.authored) {
+                    routes.retain(|x| x.id != r.id);
+                    routes.push(r.clone());
+                }
+            }
+            routes.sort_by(|a, b| a.id.cmp(&b.id));
+            let (version, change) = bump(prev.as_ref(), &routes);
+            let track = Track {
+                manifest: Manifest {
+                    track: TrackInfo {
+                        name: name.clone(),
+                        version: version.clone(),
+                        description: description.into(),
+                        provenance: cfg.provenance.clone(),
+                    },
+                    scope: Scope { repo: repo.clone() },
+                    gauge: Gauge {
+                        harness: vec!["claude-code".into()],
+                        models: ss.iter().filter_map(|s| s.model.clone()).collect::<std::collections::BTreeSet<_>>().into_iter().collect(),
+                    },
+                },
+                routes,
+            };
+            io::validate(&track)?;
+            io::write(&dir, &track)?;
+            rr.tracks.push(TrackReport {
+                name,
+                version,
+                change,
+                routes: track.routes.iter().map(|r| format!("{} [{:?}]", r.id, r.aspect).to_lowercase()).collect(),
+            });
+        }
+        report.repos.insert(repo.clone(), rr);
+    }
+
+    let all = io::read_all(tracks_root)?;
+    let index = Index::compile(&all);
+    index.write_atomic(index_path)?;
+    report.index_generation = index.generation.clone();
+    Ok(report)
+}
+
+/// The template key of the mined lookup step, as observed in the sessions.
+fn lookup_key(ss: &[&Session], r: &Route) -> Option<String> {
+    let adage_tracks::Step::Run { command } = &r.step else { return None };
+    let head = command.split_whitespace().next()?;
+    ss.iter().flat_map(|s| s.steps.iter()).find_map(|st| match &st.norm.action {
+        adage_core::CanonicalAction::Exec { argv, .. } if argv.first().map(String::as_str) == Some(head) && !st.call.failed => {
+            Some(st.key.clone())
+        }
+        _ => None,
+    })
+}
+
+pub fn is_prompt_route(r: &Route) -> bool {
+    matches!(r.trigger, Trigger::Prompt { .. })
+}

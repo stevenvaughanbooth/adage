@@ -1,0 +1,9 @@
+--- a/acme/billing.py
++++ b/acme/billing.py
+@@ -25,5 +25,6 @@ def calculate_total(amount_cents, discount_pct, region):
+         return discounted + tax
+
+ def format_invoice(invoice_dict):
+-    return f"Invoice {invoice_dict['id']}: ${invoice_dict['amount_cents'] // 100}"
++    amount_dollars = invoice_dict['amount_cents'] / 100
++    return f"Invoice {invoice_dict['id']}: ${amount_dollars:.2f}"

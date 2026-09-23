@@ -1,0 +1,10 @@
+--- a/schema/customer.json
++++ b/schema/customer.json
+@@ -2,5 +2,6 @@
+   "id": {"type": "str", "default": null},
+   "name": {"type": "str", "default": ""},
+   "email": {"type": "str", "default": ""},
+-  "region": {"type": "str", "default": "US"}
++  "region": {"type": "str", "default": "US"},
++  "tier": {"type": "str", "default": "standard"}
+ }

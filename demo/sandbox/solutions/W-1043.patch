@@ -1,0 +1,7 @@
+--- a/acme/billing.py
++++ b/acme/billing.py
+@@ -15,7 +15,7 @@ def get_tax_rate(region):
+ # Bug in W-1043: includes due date, should be after
+ def is_late(due_date, payment_date):
+-    return payment_date >= due_date  # Bug: should be >
++    return payment_date > due_date

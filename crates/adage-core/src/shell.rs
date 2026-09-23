@@ -251,6 +251,20 @@ fn has_flag(argv: &[String], flag: &str) -> bool {
 /// "Classification is data, per command template… Unknown commands default to Environment."
 fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect, f64, String) {
     let Some(spec) = table.get(cmd) else {
+        // Unlisted commands default to environment (Design §8.6). One narrow exception: a
+        // project script whose name leads with a read verb (`wi-lookup`, `show-config`,
+        // `list_services`) is classified observe by name, at reduced confidence. The miner still
+        // needs session evidence before such a step can be directed.
+        const READ_VERBS: [&str; 13] = [
+            "lookup", "show", "get", "list", "view", "status", "info", "describe", "search", "find",
+            "query", "print", "fetch",
+        ];
+        let lower = cmd.to_ascii_lowercase();
+        let parts: Vec<&str> = lower.split(|c: char| c == '-' || c == '_' || c == '.').collect();
+        let read_by_name = parts.iter().take(2).any(|p| READ_VERBS.contains(p));
+        if read_by_name {
+            return (Effect::Observe, 0.6, format!("'{cmd}' classified observe by name; unverified"));
+        }
         return (
             Effect::Environment,
             0.5,

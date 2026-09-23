@@ -1,0 +1,420 @@
+//! Route miners (Design §11). Each miner counts evidence in **distinct sessions** and returns
+//! routes whose aspect is set by the evidence and capped by the step's effect class.
+
+use crate::import::{Session, StepObs};
+use adage_core::spans::{self, SpanKind};
+use adage_core::{CanonicalAction, Effect};
+use adage_runtime::extract_json;
+use adage_tracks::*;
+use std::collections::{BTreeMap, BTreeSet};
+
+#[derive(Debug, Clone)]
+pub struct LearnConfig {
+    /// Minimum distinct supporting sessions for any route.
+    pub min_support: u32,
+    /// Wilson lower bound required for green.
+    pub green_lower_bound: f64,
+    /// Minimum support rate for yellow.
+    pub yellow_rate: f64,
+    pub provenance: String,
+}
+
+impl Default for LearnConfig {
+    fn default() -> Self {
+        LearnConfig { min_support: 5, green_lower_bound: 0.8, yellow_rate: 0.5, provenance: "desire-path".into() }
+    }
+}
+
+impl LearnConfig {
+    /// Thresholds for small demonstrations; the report always states which were used.
+    pub fn demo() -> Self {
+        LearnConfig { min_support: 3, green_lower_bound: 0.5, yellow_rate: 0.5, provenance: "desire-path".into() }
+    }
+}
+
+fn median(v: &mut [f64]) -> f64 {
+    if v.is_empty() {
+        return 0.0;
+    }
+    v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    v[v.len() / 2]
+}
+
+fn aspect_for(effect: Effect, by_edit: bool, lb: f64, rate: f64, cfg: &LearnConfig) -> Option<Aspect> {
+    let max = ceiling(effect, by_edit)?;
+    if lb >= cfg.green_lower_bound && max == Aspect::Green {
+        Some(Aspect::Green)
+    } else if rate >= cfg.yellow_rate {
+        Some(Aspect::Yellow)
+    } else {
+        None
+    }
+}
+
+fn models(sessions: &[&Session]) -> Vec<String> {
+    let s: BTreeSet<String> = sessions.iter().filter_map(|x| x.model.clone()).collect();
+    s.into_iter().collect()
+}
+
+fn days(sessions: &[&Session], ids: &BTreeSet<String>) -> u32 {
+    sessions.iter().filter(|s| ids.contains(&s.id)).map(|s| s.day.clone()).collect::<BTreeSet<_>>().len() as u32
+}
+
+fn argv(step: &StepObs) -> Option<&Vec<String>> {
+    match &step.norm.action {
+        CanonicalAction::Exec { argv, .. } => Some(argv),
+        _ => None,
+    }
+}
+
+fn shell_join(argv: &[String]) -> String {
+    argv.iter()
+        .map(|a| if a.chars().all(|c| c.is_ascii_alphanumeric() || "-_./={}:,@+".contains(c)) { a.clone() } else { format!("'{}'", a.replace('\'', "")) })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+pub struct Mined {
+    pub routes: Vec<(String, Route)>, // (track suffix, route)
+}
+
+/// Prompt → command routes, with the prompt's ticket bound into the command.
+pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
+    #[derive(Default)]
+    struct C {
+        sessions: BTreeSet<String>,
+        positions: Vec<f64>,
+        turns: Vec<f64>,
+        values: Vec<String>,
+        effect: Option<Effect>,
+        key: String,
+    }
+    let mut opportunities = 0u32;
+    let mut cands: BTreeMap<String, C> = BTreeMap::new();
+    for s in sessions {
+        let tickets: Vec<String> =
+            spans::extract(&s.prompt).into_iter().filter(|x| x.kind == SpanKind::Ticket).map(|x| x.value).collect();
+        if tickets.is_empty() {
+            continue;
+        }
+        opportunities += 1;
+        let mut seen = BTreeSet::new();
+        for (i, step) in s.discovery().iter().enumerate() {
+            let Some(av) = argv(step) else { continue };
+            let Some(t) = tickets.iter().find(|t| av.contains(t)) else { continue };
+            let templ: Vec<String> = av.iter().map(|a| if a == t { "{item}".to_string() } else { a.clone() }).collect();
+            let command = shell_join(&templ);
+            if !seen.insert(command.clone()) || step.call.failed {
+                continue;
+            }
+            let c = cands.entry(command).or_default();
+            c.sessions.insert(s.id.clone());
+            c.positions.push(i as f64);
+            c.turns.push(step.turn as f64);
+            c.values.push(t.clone());
+            c.effect.get_or_insert(step.norm.effect);
+            if c.key.is_empty() {
+                c.key = step.key.clone();
+            }
+        }
+    }
+    let Some((command, mut best)) = cands.into_iter().max_by(|a, b| {
+        a.1.sessions.len().cmp(&b.1.sessions.len()).then_with(|| b.0.cmp(&a.0))
+    }) else {
+        return vec![];
+    };
+    let support = best.sessions.len() as u32;
+    if support < cfg.min_support {
+        return vec![];
+    }
+    let rate = support as f64 / opportunities.max(1) as f64;
+    let lb = wilson_lower(support, opportunities);
+    let effect = best.effect.unwrap_or(Effect::Environment);
+    let Some(aspect) = aspect_for(effect, false, lb, rate, cfg) else { return vec![] };
+    let Some(contract) = spans::ticket_contract(&best.values) else { return vec![] };
+    let mut turns = best.turns.clone();
+    vec![Route {
+        id: "lookup-work-item".into(),
+        summary: "Look up the work item named in the prompt".into(),
+        trigger: Trigger::Prompt { span: SpanKind::Ticket },
+        step: Step::Run { command },
+        slots: vec![Slot {
+            name: "item".into(),
+            source: SlotSource::Prompt { span: SpanKind::Ticket },
+            contract: Contract::Pattern { regex: contract },
+        }],
+        effect,
+        aspect,
+        state: RouteState::Active,
+        exit: vec![Exit::IntentChanges],
+        evidence: Evidence {
+            opportunities,
+            support,
+            days: days(sessions, &best.sessions),
+            rate,
+            lower_bound: lb,
+            median_position: median(&mut best.positions),
+            turns_saved: median(&mut turns),
+            provenance: cfg.provenance.clone(),
+            models: models(sessions),
+            ..Default::default()
+        },
+        authored: false,
+    }]
+}
+
+/// After a lookup whose JSON output lists files, agents read those files — often one per turn.
+pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnConfig) -> Vec<Route> {
+    let mut opportunities = 0u32;
+    let mut support: BTreeSet<String> = BTreeSet::new();
+    let mut fields: BTreeMap<String, u32> = BTreeMap::new();
+    let mut saved: Vec<f64> = Vec::new();
+    for s in sessions {
+        let Some(pos) = s.steps.iter().position(|x| x.key == lookup_key && !x.call.failed) else { continue };
+        let Some(json) = extract_json(&s.steps[pos].call.output) else { continue };
+        let Some(obj) = json.as_object() else { continue };
+        let listed: Vec<(String, Vec<String>)> = obj
+            .iter()
+            .filter_map(|(k, v)| {
+                let arr: Vec<String> = v.as_array()?.iter().filter_map(|x| x.as_str().map(str::to_string)).collect();
+                (!arr.is_empty() && arr.iter().all(|p| p.contains('/') || p.contains('.'))).then_some((k.clone(), arr))
+            })
+            .collect();
+        let Some((field, files)) = listed.into_iter().next() else { continue };
+        opportunities += 1;
+        let mut read_turns: BTreeSet<u32> = BTreeSet::new();
+        let mut covered: BTreeSet<String> = BTreeSet::new();
+        for st in s.steps.iter().skip(pos + 1).take(16) {
+            if let (CanonicalAction::Read { .. }, Some(rel)) = (&st.norm.action, &st.rel_path) {
+                if files.contains(rel) {
+                    covered.insert(rel.clone());
+                    read_turns.insert(st.turn);
+                }
+            }
+        }
+        if covered.len() * 2 >= files.len() {
+            support.insert(s.id.clone());
+            *fields.entry(field).or_default() += 1;
+            saved.push(read_turns.len().saturating_sub(1) as f64);
+        }
+    }
+    let n = support.len() as u32;
+    if n < cfg.min_support {
+        return vec![];
+    }
+    let rate = n as f64 / opportunities.max(1) as f64;
+    if rate < cfg.yellow_rate {
+        return vec![];
+    }
+    let field = fields.into_iter().max_by_key(|(_, c)| *c).map(|(f, _)| f).unwrap_or_default();
+    vec![Route {
+        id: "read-linked-files".into(),
+        summary: "Read the files the work item links, together".into(),
+        trigger: Trigger::AfterCommand { command: lookup_key.to_string() },
+        step: Step::ReadBatch { slot: "files".into(), max: 5 },
+        slots: vec![Slot { name: "files".into(), source: SlotSource::ResultField { field }, contract: Contract::RepoPath }],
+        effect: Effect::Observe,
+        aspect: Aspect::Yellow,
+        state: RouteState::Active,
+        exit: vec![],
+        evidence: Evidence {
+            opportunities,
+            support: n,
+            days: days(sessions, &support),
+            rate,
+            lower_bound: wilson_lower(n, opportunities),
+            turns_saved: median(&mut saved),
+            provenance: cfg.provenance.clone(),
+            models: models(sessions),
+            ..Default::default()
+        },
+        authored: false,
+    }]
+}
+
+/// A verify command that fails, followed by a different verify command that succeeds.
+pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
+    #[derive(Default)]
+    struct P {
+        sessions: BTreeSet<String>,
+        avoid: BTreeMap<String, u32>,
+        instead: BTreeMap<String, u32>,
+        signatures: BTreeMap<String, u32>,
+    }
+    let mut pairs: BTreeMap<(String, String), P> = BTreeMap::new();
+    let mut ran: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for s in sessions {
+        for (i, a) in s.steps.iter().enumerate() {
+            if argv(a).is_some() {
+                ran.entry(a.key.clone()).or_default().insert(s.id.clone());
+            }
+            if !a.call.failed || a.norm.effect != Effect::Verify {
+                continue;
+            }
+            let Some(b) = s.steps.iter().skip(i + 1).take(5).find(|b| {
+                argv(b).is_some() && !b.call.failed && b.norm.effect == Effect::Verify && b.key != a.key
+            }) else {
+                continue;
+            };
+            let p = pairs.entry((a.key.clone(), b.key.clone())).or_default();
+            if p.sessions.insert(s.id.clone()) {
+                *p.avoid.entry(shell_join(argv(a).unwrap())).or_default() += 1;
+                *p.instead.entry(shell_join(argv(b).unwrap())).or_default() += 1;
+                if let Some(sig) = a.call.output.lines().rev().find(|l| l.contains("Error") || l.contains("error:")) {
+                    *p.signatures.entry(sig.trim().chars().take(160).collect()).or_default() += 1;
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for (i, ((akey, _), p)) in pairs.into_iter().enumerate() {
+        let support = p.sessions.len() as u32;
+        if support < cfg.min_support {
+            continue;
+        }
+        let opp = ran.get(&akey).map(|s| s.len() as u32).unwrap_or(support);
+        let top = |m: &BTreeMap<String, u32>| m.iter().max_by_key(|(_, c)| **c).map(|(k, _)| k.clone()).unwrap_or_default();
+        let signature = top(&p.signatures);
+        if signature.is_empty() {
+            continue;
+        }
+        out.push(Route {
+            id: format!("dead-end-{}", i + 1),
+            summary: "A verification command that fails in this repository, and what works instead".into(),
+            trigger: Trigger::SessionStart,
+            step: Step::Avoid { avoid: top(&p.avoid), instead: top(&p.instead), signature },
+            slots: vec![],
+            effect: Effect::Verify,
+            aspect: Aspect::Red,
+            state: RouteState::Active,
+            exit: vec![],
+            evidence: Evidence {
+                opportunities: opp,
+                support,
+                days: days(sessions, &p.sessions),
+                rate: support as f64 / opp.max(1) as f64,
+                lower_bound: wilson_lower(support, opp),
+                turns_saved: 1.0,
+                provenance: cfg.provenance.clone(),
+                models: models(sessions),
+                ..Default::default()
+            },
+            authored: false,
+        });
+    }
+    out
+}
+
+fn glob_for(rel: &str) -> Option<String> {
+    let (dir, file) = rel.rsplit_once('/').unwrap_or(("", rel));
+    let ext = file.rsplit_once('.').map(|(_, e)| e)?;
+    Some(if dir.is_empty() { format!("*.{ext}") } else { format!("{dir}/*.{ext}") })
+}
+
+/// Edits to a path pattern followed, in successful sessions, by a regenerate step — and sessions
+/// that skipped it failing.
+pub fn obligation_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
+    // glob -> sessions editing it
+    let mut editors: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    // (glob, command literal, key) -> sessions running it after the last edit
+    let mut after: BTreeMap<(String, String), BTreeSet<String>> = BTreeMap::new();
+    let mut cmd_key: BTreeMap<String, String> = BTreeMap::new();
+    // command -> sessions running it at all
+    let mut runs: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    let mut failed_without: BTreeMap<(String, String), u32> = BTreeMap::new();
+
+    for s in sessions {
+        let mut last_edit: BTreeMap<String, usize> = BTreeMap::new();
+        for (i, st) in s.steps.iter().enumerate() {
+            if adage_core::keys::is_author(&st.norm.action) {
+                if let Some(g) = st.rel_path.as_deref().and_then(glob_for) {
+                    last_edit.insert(g.clone(), i);
+                    editors.entry(g).or_default().insert(s.id.clone());
+                }
+            }
+            if st.norm.effect == Effect::Regenerate && !st.call.failed {
+                if let Some(av) = argv(st) {
+                    let lit = shell_join(av);
+                    runs.entry(lit.clone()).or_default().insert(s.id.clone());
+                    cmd_key.entry(lit).or_insert_with(|| st.key.clone());
+                }
+            }
+        }
+        for (g, &li) in &last_edit {
+            let mut ran_after = BTreeSet::new();
+            for st in s.steps.iter().skip(li + 1) {
+                if st.norm.effect == Effect::Regenerate && !st.call.failed {
+                    if let Some(av) = argv(st) {
+                        ran_after.insert(shell_join(av));
+                    }
+                }
+            }
+            for c in &ran_after {
+                after.entry((g.clone(), c.clone())).or_default().insert(s.id.clone());
+            }
+            for c in cmd_key.keys() {
+                if !ran_after.contains(c) && s.outcome == Some(false) {
+                    *failed_without.entry((g.clone(), c.clone())).or_default() += 1;
+                }
+            }
+        }
+    }
+
+    let total = sessions.len() as u32;
+    let mut out = Vec::new();
+    for ((g, c), ids) in after {
+        let support = ids.len() as u32;
+        let opp = editors.get(&g).map(|s| s.len() as u32).unwrap_or(0);
+        if support < cfg.min_support || opp == 0 {
+            continue;
+        }
+        let rate_with = support as f64 / opp as f64;
+        let ran_total = runs.get(&c).map(|s| s.len() as u32).unwrap_or(0);
+        let not_editing = total.saturating_sub(opp);
+        let ran_without = ran_total.saturating_sub(support);
+        let rate_without = if not_editing == 0 { 0.0 } else { ran_without as f64 / not_editing as f64 };
+        if rate_with < cfg.yellow_rate || rate_with - rate_without < 0.3 {
+            continue;
+        }
+        let lb = wilson_lower(support, opp);
+        let Some(aspect) = aspect_for(Effect::Regenerate, true, lb, rate_with, cfg) else { continue };
+        let n = out.len() + 1;
+        out.push(Route {
+            id: format!("finish-line-{n}"),
+            summary: "A regeneration step this repository requires after editing these files".into(),
+            trigger: Trigger::AfterEdit { paths: g.clone() },
+            step: Step::Run { command: c.clone() },
+            slots: vec![],
+            effect: Effect::Regenerate,
+            aspect,
+            state: RouteState::Active,
+            exit: vec![Exit::ExploratoryChange],
+            evidence: Evidence {
+                opportunities: opp,
+                support,
+                days: days(sessions, &ids),
+                deviations_failed: failed_without.get(&(g.clone(), c.clone())).copied().unwrap_or(0),
+                rate: rate_with,
+                lower_bound: lb,
+                turns_saved: 0.0,
+                provenance: cfg.provenance.clone(),
+                models: models(sessions),
+                ..Default::default()
+            },
+            authored: false,
+        });
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn globs() {
+        assert_eq!(glob_for("schema/invoice.json").unwrap(), "schema/*.json");
+        assert_eq!(glob_for("setup.py").unwrap(), "*.py");
+        assert!(glob_for("Makefile").is_none());
+    }
+}

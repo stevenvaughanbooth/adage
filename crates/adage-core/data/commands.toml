@@ -681,7 +681,7 @@ name = "make"
 effect = "environment"      # default target is unpredictable; refined by pattern in code
 value_flags = ["-f", "-C", "-j"]
 pattern_effects = [
-  ["^(test|tests|check)$", "verify"], ["^(build|all)$", "verify"],
+  ["^(test|tests|check|ci|lint|typecheck|verify)$", "verify"], ["^(build|all)$", "verify"],
   ["^(gen|generate|codegen|proto)$", "regenerate"], ["^(fmt|format)$", "regenerate"],
   ["^(clean|distclean)$", "publish"],
 ]

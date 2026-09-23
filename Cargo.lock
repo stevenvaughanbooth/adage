@@ -3,6 +3,21 @@
 version = 4
 
 [[package]]
+name = "adage-cli"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-learn",
+ "adage-runtime",
+ "adage-store",
+ "adage-tracks",
+ "anyhow",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "adage-core"
 version = "0.1.0"
 dependencies = [
@@ -14,6 +29,36 @@ dependencies = [
  "toml",
  "tree-sitter",
  "tree-sitter-bash",
+]
+
+[[package]]
+name = "adage-learn"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-runtime",
+ "adage-tracks",
+ "anyhow",
+ "glob",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "adage-runtime"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-tracks",
+ "glob",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
 ]
 
 [[package]]

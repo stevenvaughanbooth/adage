@@ -1,0 +1,12 @@
+--- a/acme/customers.py
++++ b/acme/customers.py
+@@ -1,7 +1,10 @@
+ """Customer management with seeded bugs."""
+
+ def validate_email(email):
+     if "@" not in email:
+         raise ValueError("Invalid email: missing @")
++    domain = email.split("@")[1]
++    if "." not in domain:
++        raise ValueError("Invalid email: domain must contain a dot")
+     return True  # Bug: should check for dot in domain

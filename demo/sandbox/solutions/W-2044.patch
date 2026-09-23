@@ -1,0 +1,12 @@
+--- a/acme/customers.py
++++ b/acme/customers.py
+@@ -4,8 +4,8 @@ def validate_email(email):
+     return True  # Bug: should check for dot in domain
+
+ def validate_customer(name, email, region):
+-    if not name:  # Bug in W-2044: accepts empty string
+-        pass
++    if not name:
++        raise ValueError("Customer name cannot be empty")
+     validate_email(email)
+     return True
