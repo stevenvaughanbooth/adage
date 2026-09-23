@@ -98,7 +98,8 @@ did later. Committed datasets and their gates (docs/evals.md):
 
 - **The real dataset reproduces the live index.** It holds the 90 demo sessions, redacted. Learning
   from round 2's training split reproduces the live index's routes (ids and aspects; byte for
-  byte before the dead-end change below), and replay reproduces 36 of 36 live decisions.
+  byte before the dead-end and exit-condition changes), and replay reproduces 36 of 36 live
+  decisions.
 - **Offline precision understates correctness.** 6 of 18 lookup "misses" are agents that never found
   the tracker at all.
 - **Dead ends are keyed by failing signature.** The eval found the dead-end route also warned

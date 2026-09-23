@@ -1,7 +1,7 @@
 //! End-to-end learner test over synthetic Claude Code transcripts in the real on-disk format.
 
 use adage_learn::{learn, Inputs, LearnConfig};
-use adage_tracks::{io, Aspect, Index, Step, Trigger};
+use adage_tracks::{io, Aspect, Exit, Index, Step, Trigger};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -101,6 +101,9 @@ fn mines_all_four_route_kinds() {
 
     let linked = routes.iter().find(|r| matches!(r.step, Step::ReadBatch { .. })).expect("linked-files route");
     assert!(matches!(linked.trigger, Trigger::AfterCommand { .. }));
+    // Design W2: every learned route states an exit condition.
+    assert!(routes.iter().all(|r| !r.exit.is_empty()), "{routes:#?}");
+    assert_eq!(linked.exit, vec![Exit::IntentChanges]);
 
     let dead = routes.iter().find(|r| matches!(r.step, Step::Avoid { .. })).expect("dead-end route");
     if let Step::Avoid { avoid, instead, signature } = &dead.step {
@@ -109,6 +112,7 @@ fn mines_all_four_route_kinds() {
         assert!(signature.contains("ACME_ENV is not set"));
     }
     assert_eq!(dead.aspect, Aspect::Red);
+    assert_eq!(dead.exit, vec![Exit::IntentChanges]);
 
     let fin = routes.iter().find(|r| matches!(r.trigger, Trigger::AfterEdit { .. })).expect("finish-line route");
     assert_eq!(fin.trigger, Trigger::AfterEdit { paths: "schema/*.json".into() });

@@ -361,7 +361,8 @@ pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnCon
         effect: Effect::Observe,
         aspect: Aspect::Yellow,
         state: RouteState::Active,
-        exit: vec![],
+        // Design W2: every directive states when the agent may leave it.
+        exit: vec![Exit::IntentChanges],
         evidence: Evidence {
             opportunities,
             support: n,
@@ -518,7 +519,8 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             effect: Effect::Verify,
             aspect: Aspect::Red,
             state: RouteState::Active,
-            exit: vec![],
+            // Design W2: every directive states when the agent may leave it.
+            exit: vec![Exit::IntentChanges],
             evidence: Evidence {
                 opportunities: opp,
                 support: n,

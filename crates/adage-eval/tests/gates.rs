@@ -56,9 +56,10 @@ fn demo_round2_gates() {
 #[test]
 fn demo_round2_learns_what_the_live_learner_learned() {
     // The offline learner, fed the curated transcripts of the same 54 sessions, must learn the
-    // routes the live round-2 index held (ids, aspects). Measured: identical routes except the
-    // dead end's avoided runners and evidence, which the signature-keyed miner deliberately
-    // narrowed (identical index bytes, generation 8dd5ec01ed76c4bd, before that change).
+    // routes the live round-2 index held (ids, aspects). Measured: identical routes except two
+    // deliberate changes since: the dead end's avoided runners and evidence (the signature-keyed
+    // miner), and the exit condition dead ends and linked files now carry (Design W2). Before
+    // them, identical index bytes (generation 8dd5ec01ed76c4bd).
     let r = eval("demo-haiku45", Some("round2"));
     let live: adage_tracks::Index =
         serde_json::from_slice(&std::fs::read(datasets().join("demo-haiku45/recorded/index-round2.json")).unwrap())

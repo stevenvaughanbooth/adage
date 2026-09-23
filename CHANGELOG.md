@@ -36,6 +36,10 @@ version as the GitHub Release notes.
   Learned and imported environment routes now start as drafts, which are never delivered, and
   wait in `adage review` (reason "approval") until `approve` puts them into service. Re-learning
   keeps the approval while the step is unchanged; a different command waits again.
+- **Dead-end and linked-file directives stated no exit condition** (Design W2). Both are now
+  learned with one ("Ignore this if the user is asking for something else."), and the dead-end
+  template renders it on its own line after the command. Routes stored without one render as
+  before.
 - **Normalisation depended on machine speed.** Pathological commands were cut off by a 50 ms
   parse timeout, so a slow machine could record a command as unknown where a fast one parsed it.
   The cut-off is now a budget of bytes the lexer may read (2^20, re-reads included), the same on

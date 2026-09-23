@@ -150,9 +150,10 @@ Replay fidelity, round 2:
   agent ran a forked skill, whose tool calls fired hooks in the session but are recorded in a
   subagent transcript.
 - Learning from the 54 curated `round2` training transcripts reproduces the live round-2 index's
-  routes (ids and aspects), and every route byte for byte except the dead end, whose avoided
-  runners and evidence the signature-keyed miner deliberately narrowed (below). Before that
-  change, the whole index matched byte for byte (generation `8dd5ec01ed76c4bd`).
+  routes (ids and aspects). Two deliberate learner changes came after the live run: the
+  signature-keyed miner narrowed the dead end's avoided runners and evidence (below), and dead
+  ends and linked files now carry an exit condition (Design W2). Before them, the whole index
+  matched byte for byte (generation `8dd5ec01ed76c4bd`).
 
 Round 1 was decided by an earlier build. Its command keys templated interpreter scripts, so the
 current runtime no longer matches that index's linked-files trigger. Round-1 fidelity
