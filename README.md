@@ -67,6 +67,14 @@ directives emitted, followed, and derailed. Data lives in `~/Library/Application
 (macOS) or `~/.local/share/adage` (Linux); `ADAGE_HOME` overrides it.
 
 **Kill switches:** `ADAGE_DISABLE=1`, or a `.adage/disabled` file in a repository.
+
+**Sharing:** `adage share <track> --out <dir> [--key <path>]` checks every file for absolute paths,
+home-directory paths and secret-looking strings, re-validates the track, and signs its digest
+(`sshsig`, namespace `adage-track`; ssh-agent first, else the key file). `adage add <dir>` verifies the
+signature against `$ADAGE_HOME/trusted-signers` or the repository's `.adage/trusted-signers` (approved
+once with `--trust` and pinned by hash in `$ADAGE_HOME/trust.json`) and installs the routes at
+probation, never green. An unknown signer needs `--trust`. Both commands refuse to run inside an agent
+session (`CLAUDECODE`) or without a terminal; `ADAGE_ALLOW_NONINTERACTIVE=1` lifts only the terminal check.
 **Experiment:** `ADAGE_HOLDOUT=0.1` (default) holds out 10% of sessions — Adage computes what it would
 have said and logs it, but says nothing — so every claimed effect is measured against a control.
 
@@ -93,6 +101,7 @@ fails untouched and passes with its reference solution.
 | `crates/adage-tracks` | Track format, validation, canonical digest, compiled index |
 | `crates/adage-runtime` | Hook-time decisions and directive rendering from fixed templates |
 | `crates/adage-learn` | Transcript import and the route miners |
+| `crates/adage-sign` | Native `sshsig` signing (ssh-agent or key file) and `allowed_signers` verification |
 | `crates/adage-cli` | The `adage` binary |
 | `plugin/claude-code` | The Claude Code plugin |
 | `demo/` | Sandbox, runner, live dashboard |
@@ -103,7 +112,7 @@ fails untouched and passes with its reference solution.
 
 ## Status
 
-v0.1: Claude Code only; tracks are local. Hardened against an adversarial review (tracks are
-untrusted input; effects re-derived; bounded hot path; symlink-safe paths). Sharing and signing,
+v0.1: Claude Code only; tracks are shared directly (`adage share` / `adage add`). Hardened against an adversarial review (tracks are
+untrusted input; effects re-derived; bounded hot path; symlink-safe paths). Team depots, lockfiles,
 intent embeddings, the review queue, and the OpenCode and Codex adapters are designed and spiked but
 not yet built. See the implementation plan.

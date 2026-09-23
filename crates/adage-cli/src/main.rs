@@ -6,12 +6,18 @@
 //! adage status                       installed tracks, routes, aspects, and evidence
 //! adage report [--json]              directives emitted, followed, and derailed, from spools
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
+//! adage share <track> --out <dir> [--key <path>]   redaction-check, copy, and sign a track
+//! adage add <dir> [--trust]          verify a shared track and install it at probation
 //! adage version
 //! ```
 //! Environment: `ADAGE_HOME` (data directory), `ADAGE_ARM` (`treated`|`holdout`, overrides
-//! assignment), `ADAGE_HOLDOUT` (holdout share, default 0.1), `ADAGE_DISABLE=1` (kill switch).
+//! assignment), `ADAGE_HOLDOUT` (holdout share, default 0.1), `ADAGE_DISABLE=1` (kill switch),
+//! `ADAGE_ALLOW_NONINTERACTIVE=1` (let `share` and `add` run without a terminal, for CI).
 
+mod add;
 mod hook;
+mod redact;
+mod share;
 
 use adage_learn::{Inputs, LearnConfig};
 use adage_store::Paths;
@@ -51,6 +57,8 @@ fn run(args: &[String]) -> Result<()> {
         Some("learn") => learn(&args[1..], &paths),
         Some("status") => status(&paths),
         Some("report") => report(&paths, args.iter().any(|a| a == "--json")),
+        Some("share") => share::share(&args[1..], &paths),
+        Some("add") => add::add(&args[1..], &paths),
         Some("hooks-config") => {
             let bin = args.get(1).cloned().unwrap_or_else(|| "adage".into());
             println!("{}", serde_json::to_string_pretty(&hook::settings(&bin))?);
@@ -61,7 +69,7 @@ fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         _ => {
-            println!("usage: adage <learn|status|report|hooks-config|version|hook>");
+            println!("usage: adage <learn|status|report|share|add|hooks-config|version|hook>");
             Ok(())
         }
     }
