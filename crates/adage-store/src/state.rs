@@ -162,6 +162,25 @@ where
     Ok(out)
 }
 
+/// Read state without modifying it (shared lock): the default for a missing or empty file, and
+/// `None` for one that was written but can no longer be read (which [`update_or_rebuild`] would
+/// rebuild).
+pub fn try_read<T: DeserializeOwned + Default>(path: &Path) -> io::Result<Option<T>> {
+    let file = match File::open(path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Some(T::default())),
+        Err(e) => return Err(e),
+    };
+    file.lock_shared()?;
+    let v = match newest(&file) {
+        Some((_, _, p)) => serde_json::from_slice(&p).ok(),
+        None if file.metadata()?.len() > 0 => None,
+        None => Some(T::default()),
+    };
+    file.unlock()?;
+    Ok(v)
+}
+
 /// Read state without modifying it (shared lock).
 pub fn read<T: DeserializeOwned + Default>(path: &Path) -> io::Result<T> {
     if !path.exists() {
@@ -257,8 +276,12 @@ mod tests {
         // And the file is healthy again.
         update_or_rebuild::<S, _>(&p, || panic!("healthy"), |s| s.n += 1).unwrap();
         assert_eq!(read::<S>(&p).unwrap().n, 42);
-        // Nothing to rebuild from: the default, as before.
+        // A reader can tell unreadable from missing.
+        assert_eq!(try_read::<S>(&p).unwrap().map(|s| s.n), Some(42));
+        assert_eq!(try_read::<S>(&d.path().join("missing.state")).unwrap(), Some(S::default()));
         corrupt_both(&p);
+        assert_eq!(try_read::<S>(&p).unwrap(), None);
+        // Nothing to rebuild from: the default, as before.
         update_or_rebuild::<S, _>(&p, || None, |s| s.n += 1).unwrap();
         assert_eq!(read::<S>(&p).unwrap().n, 1);
     }

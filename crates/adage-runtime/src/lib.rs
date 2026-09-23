@@ -4,6 +4,7 @@
 //! which directives to emit. No I/O except checking that bound repository paths exist. The CLI
 //! owns reading payloads, locking state, writing spools, and printing harness output.
 
+pub mod fast;
 pub mod rebuild;
 pub mod render;
 

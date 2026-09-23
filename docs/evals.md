@@ -44,6 +44,10 @@ What it does:
      `--include-steered` to score them anyway.
 4. It **scores** every would-have directive against what the agent actually did later in the
    session, and checks every directive with an independent safety oracle.
+5. It **checks the hook's no-match fast path** (`adage_runtime::fast`) on every event: a second
+   session state is decided the way the hook decides, skipping what the fast path skips. A skipped
+   event's full decision must be empty, and the two paths must give the same decisions and the
+   same decision state. The report's `fast path` line counts skips and differences.
 
 The output is deterministic: the same dataset gives the same bytes. No temp path, time or
 hash-map order reaches the report.
@@ -218,6 +222,7 @@ thresholds are the measured values less a margin:
 | synthetic: recall / dead-end accuracy / finish-line accuracy | 1.00 / 1.00 / 1.00 | ≥ 0.90 / 0.90 / 0.90 |
 | every dataset: unsafe directives | 0 | = 0 |
 | adversarial: every route kind exercised, directives checked | 4 kinds, 84 | 4 kinds, ≥ 80 |
+| every dataset: the hook's no-match fast path changes no decision | 0 differ (skips 95–437 events per dataset) | 0 differ, some skipped |
 | same dataset, same report bytes; no temp paths in the report | yes | yes |
 | demo dataset redacted; generated datasets match their generators | yes | yes |
 

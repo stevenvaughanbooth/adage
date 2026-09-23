@@ -1,6 +1,7 @@
-//! A session whose state file is corrupted (both slots fail their CRC) carries on from its spool:
-//! a dead end already announced is not announced again, and a finish-line obligation made before
-//! the corruption is still enforced at Stop. Without a spool, the state starts over.
+//! Session state in the hook. A session whose state file is corrupted (both slots fail their CRC)
+//! carries on from its spool: a dead end already announced is not announced again, and a
+//! finish-line obligation made before the corruption is still enforced at Stop. Without a spool,
+//! the state starts over. Events that cannot match stop before the state and the spool.
 
 use adage_core::Effect;
 use adage_tracks::*;
@@ -130,8 +131,37 @@ fn a_corrupt_state_is_rebuilt_from_the_spool() {
     // ... and the dead end, announced at the first prompt, is not announced again.
     assert_eq!(hook(&w, "UserPromptSubmit", json!({ "prompt": "Also the totals." })), "");
     let st: adage_runtime::SessionState = adage_store::state::read(&state).unwrap();
-    assert_eq!((st.prompts, st.batches, st.stop_requests), (2, 2, 1));
+    // The second prompt could change nothing (its dead end was announced), so the no-match fast
+    // path skipped it without touching the state.
+    assert_eq!((st.prompts, st.batches, st.stop_requests), (1, 2, 1));
     assert_eq!(st.emitted, vec!["dead-end-x", "finish-line-x"]);
+}
+
+#[test]
+fn events_that_cannot_match_stop_before_the_state_and_the_spool() {
+    let w = world();
+    let sessions = w.home.join("sessions");
+    let ls =
+        json!({ "tool_calls": [{ "tool_name": "Bash", "tool_input": { "command": "ls -la" }, "tool_response": "x" }] });
+    // Nothing yet in this session, and nothing a route could match: no state, no spool.
+    assert_eq!(hook(&w, "SessionStart", json!({ "source": "startup" })), "");
+    assert_eq!(hook(&w, "PostToolBatch", ls.clone()), "");
+    assert!(!sessions.exists(), "skipped before any file was touched");
+    // The first prompt announces the dead end, so it is decided.
+    assert!(hook(&w, "UserPromptSubmit", json!({ "prompt": "Fix it." })).contains("dead-end-x"));
+    let spool = || adage_store::spool::read_all::<serde_json::Value>(&sessions.join("s-1.spool")).unwrap().len();
+    assert_eq!(spool(), 1);
+    // A run of the avoided command is recorded (for `adage graph`), though it matches no trigger.
+    let pytest = json!({ "tool_name": "Bash", "tool_input": { "command": "pytest -q" }, "tool_response": "No module named pytest" });
+    hook(&w, "PostToolUseFailure", pytest);
+    assert_eq!(spool(), 2);
+    hook(&w, "PostToolBatch", ls.clone());
+    assert_eq!(spool(), 2, "no match: skipped");
+    // An edit the finish line covers makes an obligation; from then on every batch is decided.
+    let edit = json!({ "tool_calls": [{ "tool_name": "Edit", "tool_input": { "file_path": w.repo.join("schema/a.json") }, "tool_response": "ok" }] });
+    assert!(hook(&w, "PostToolBatch", edit).contains("finish-line-x"));
+    hook(&w, "PostToolBatch", ls);
+    assert_eq!(spool(), 4);
 }
 
 #[test]

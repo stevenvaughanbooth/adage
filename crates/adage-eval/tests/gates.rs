@@ -134,6 +134,33 @@ fn adversarial_set_yields_no_unsafe_directive() {
 }
 
 #[test]
+fn fast_path_changes_no_decision() {
+    // The hook's no-match fast path (adage_runtime::fast) skips events before any decision. On
+    // every event of every dataset, a skipped event's full decision is empty, and deciding the
+    // hook's way gives the same decisions and the same decision state as deciding every event.
+    // Measured skips: round 2 131/294, round 1 292/405, hash:0.3 437/634, synthetic 365/492,
+    // adversarial 95/210. The recorded live index predates stored triggers: they are derived.
+    let recorded = Options {
+        split: Some("round2".into()),
+        index: Some(datasets().join("demo-haiku45/recorded/index-round2.json")),
+        ..Default::default()
+    };
+    let runs = [
+        eval("demo-haiku45", Some("round2")),
+        eval("demo-haiku45", Some("round1")),
+        eval("demo-haiku45", Some("hash:0.3")),
+        eval("synthetic", None),
+        eval("adversarial", None),
+        run(&datasets().join("demo-haiku45"), &recorded).unwrap(),
+    ];
+    for r in &runs {
+        let f = &r.fast_path;
+        assert!(f.mismatches.is_empty(), "{} {}: {:#?}", r.dataset, r.split, f.mismatches);
+        assert!(f.skipped > 0 && f.skipped < f.events, "{} {}: {} of {}", r.dataset, r.split, f.skipped, f.events);
+    }
+}
+
+#[test]
 fn eval_output_is_deterministic() {
     let a = serde_json::to_vec(&eval("demo-haiku45", Some("hash:0.3"))).unwrap();
     let b = serde_json::to_vec(&eval("demo-haiku45", Some("hash:0.3"))).unwrap();

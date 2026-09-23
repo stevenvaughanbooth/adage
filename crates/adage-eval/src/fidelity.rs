@@ -26,7 +26,8 @@ struct Recorded {
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct ArmFidelity {
     pub sessions: u32,
-    /// Same hook events, in the same order.
+    /// Same hook events, in the same order: every event (hooks from before the no-match fast
+    /// path), or every event the fast path does not skip.
     pub events_match: u32,
     /// Same would-have directives (and stop requests) at the same events.
     pub decisions_match: u32,
@@ -70,7 +71,10 @@ pub fn run(dir: &Path, round: &str) -> Result<FidelityReport> {
         a.sessions += 1;
         let names = |v: &Sig| v.iter().map(|x| x.0.clone()).collect::<Vec<_>>();
         let (rn, ln) = (names(&replayed), names(&live));
-        if rn == ln {
+        // Hooks with the no-match fast path record no event it skips.
+        let recorded: Vec<String> =
+            rn.iter().zip(&r.skipped).filter(|(_, skipped)| !**skipped).map(|(n, _)| n.clone()).collect();
+        if rn == ln || recorded == ln {
             a.events_match += 1;
         } else {
             let i = rn.iter().zip(&ln).take_while(|(x, y)| x == y).count();

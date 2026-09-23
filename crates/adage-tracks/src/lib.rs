@@ -7,6 +7,7 @@ pub mod io;
 pub mod model;
 pub mod proposals;
 pub mod review;
+pub mod triggers;
 
 pub use index::{Index, IndexedRoute};
 pub use model::*;

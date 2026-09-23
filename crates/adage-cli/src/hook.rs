@@ -8,7 +8,7 @@ use crate::harness::{self, Output};
 use adage_core::{repo, CommandTable};
 use adage_intent::model::{self, StaticModel};
 use adage_intent::normalize::normalize;
-use adage_runtime::{assign_arm, decide, rebuild, render, Arm, Ctx, SessionState};
+use adage_runtime::{assign_arm, decide, fast, rebuild, render, Arm, Ctx, SessionState};
 use adage_store::{spool, state, Paths};
 use adage_tracks::Index;
 use serde_json::{json, Value};
@@ -47,6 +47,13 @@ pub fn run(harness: &str, event: &str) -> Result<Option<String>, Failure> {
     };
     // An event this adapter does not act on.
     let Some(ev) = adapter.translate(event, &p, &cwd.to_string_lossy()) else { return Ok(None) };
+    // An event that cannot change any decision stops here, before the command table, the state
+    // lock and the spool (Design §13.2; `adage_runtime::fast`).
+    let state_path = paths.state(&session);
+    let read_state = || state::try_read::<SessionState>(&state_path).ok().flatten();
+    if fast::skip(&index.triggers(&repo_key), &ev, &cwd.to_string_lossy(), read_state) {
+        return Ok(None);
+    }
     let table = CommandTable::load();
     // The embedding model is opened only if the runtime asks, which it does only at a prompt in a
     // repository with intent routes. Missing or damaged model: no vector, no intent directive.
@@ -67,7 +74,7 @@ pub fn run(harness: &str, event: &str) -> Result<Option<String>, Failure> {
         let records: Vec<Value> = if small { spool::read_all(&spool_path).ok()? } else { return None };
         rebuild::rebuild(&records, &index, &repo_key, &table)
     };
-    let (decision, arm) = state::update_or_rebuild::<SessionState, _>(&paths.state(&session), rebuild, |st| {
+    let (decision, arm) = state::update_or_rebuild::<SessionState, _>(&state_path, rebuild, |st| {
         if st.arm.is_none() {
             st.arm = Some(match arm_env.as_deref() {
                 Some("holdout") => Arm::Holdout,

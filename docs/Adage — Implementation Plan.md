@@ -171,6 +171,15 @@ Closed since draft 2:
   counters, emitted routes, history, finish-line obligations and stop requests. Spool records now
   carry `kind` and `repo`; older ones are mapped by event name. The watermark fold S3 also
   proposed is not built: the state stays authoritative while readable.
+- The no-match fast path (Design §13.2): the index stores per-repository triggers, and the hook
+  skips an event that cannot change a decision before the command table, state lock and spool. A
+  no-match batch: 2.82/2.93 ms p50/p95 → 1.87/1.96 ms (a repository without routes: 1.76/1.87).
+  The eval replay proves it on every event of every dataset (0 differences; 45–72% of events
+  skipped). Skipped events leave no spool record, so `adage graph` lists fewer off-route commands;
+  runs of avoided commands, and every event of a session with a pending judgement or obligation,
+  are still recorded.
+- The command table is parsed, and its 57 regexes compiled, at every decided event (about 1 ms of
+  the full path). Compiling them lazily would cut every decided event's cost; not done.
 
 Open:
 
@@ -179,7 +188,6 @@ Open:
 | A linked worktree does not see its repository's `origin` (the config lives in the common git directory; `repo_key` reads `<root>/.git/config`) | A worktree is keyed `<worktree dir>@<root commit>`, so it does not share the main checkout's routes | Read `origin` from the common directory (`gitobj::Repo` already finds it); re-keys existing worktree routes |
 | Directive text over 9,500 bytes is truncated, not spilled to a file (Design W8) | Only reachable with many long directives at once | Spill to a file and point to it |
 | Payloads over 8 MiB are not drained from stdin (Design §13.3) | The harness may see a broken pipe | Drain and discard |
-| No precomputed no-match key set (Design §13.2) | Every event in a repository with routes pays the full decision path (about 3 ms) | Precompute trigger keys in the index |
 | Per-session nonce (review finding F12) and arm assignment by root session lineage (F7) were accepted but not built | `/clear` starts a new arm | Build both |
 | CI builds only x64 musl; arm64 musl is built only at release | A release-only failure is possible | Add aarch64 musl to CI |
 | `learn.log` is defined but never written | — | Write it, or remove the path |

@@ -55,7 +55,7 @@ fn index(home: &Path, repos: &[String]) {
         ),
         route(
             "read-linked-files",
-            Trigger::AfterCommand { command: "python3 scripts/wi-lookup {arg}".into() },
+            Trigger::AfterCommand { command: "exec python3 scripts/wi-lookup {id}".into() },
             Step::ReadBatch { slot: "files".into(), max: 5 },
             vec![Slot {
                 name: "files".into(),
@@ -180,8 +180,8 @@ fn spawn(bin: &str, home: &Path, event: &str, payload: &Value) -> (f64, String) 
     (t.elapsed().as_secs_f64() * 1e3, String::from_utf8_lossy(&out.stdout).to_string())
 }
 
-/// Time one scenario. Each run is a fresh session unless `session` is given (then the state
-/// file persists across runs, as within a real session).
+/// Time one scenario: `payload(i)` for run `i` (`usize::MAX` for the first, cold-cache run). A
+/// payload with a fixed session id keeps its state across runs, as within a real session.
 fn time(bin: &str, home: &Path, event: &str, payload: &dyn Fn(usize) -> Value, runs: usize) -> (Value, String) {
     let _ = std::fs::remove_dir_all(home.join("repo-keys"));
     let (first, first_out) = spawn(bin, home, event, &payload(usize::MAX));
@@ -264,9 +264,12 @@ fn main() {
     let (r, last) = time(bin, &home, "PostToolBatch", &batch(&big, None), runs);
     assert!(last.is_empty(), "no route matches: {last}");
     out.insert("no_match_batch_fresh_session".into(), r);
+    // Mid-session: the first prompt has been decided (the state exists, the dead end announced).
+    let first = json!({ "session_id": "bench-one", "cwd": big, "prompt": "Pick up W-2042 please" });
+    assert!(spawn(bin, &home, "UserPromptSubmit", &first).1.contains("dead-end-1"));
     let (r, last) = time(bin, &home, "PostToolBatch", &batch(&big, Some("bench-one")), runs);
     assert!(last.is_empty(), "no route matches: {last}");
-    out.insert("no_match_batch_same_session".into(), r);
+    out.insert("no_match_batch_mid_session".into(), r);
 
     println!("{}", serde_json::to_string_pretty(&Value::Object(out)).unwrap());
 }

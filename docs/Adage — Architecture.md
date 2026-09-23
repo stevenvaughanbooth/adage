@@ -182,6 +182,9 @@ sequenceDiagram
       A-->>H: exit 0, no output
     else
       A->>A: adapter.translate → Event
+      opt the event cannot change a decision (precomputed triggers; may read the state)
+        A-->>H: exit 0, no output, nothing written
+      end
       A->>D: lock the session's .state file, read the newest valid slot
       A->>A: assign arm on first sight, then decide()
       opt Prompt, and the repository has intent routes
@@ -196,11 +199,23 @@ sequenceDiagram
 ```
 
 The steps are in `crates/adage-cli/src/hook.rs`, and the harness-independent core never sees a
-native payload. Two shortcuts keep the common path cheap:
+native payload. Three shortcuts keep the common path cheap:
 
 - **Repository check.** If the index holds no route for this repository, the hook exits before
   translating anything. Measured at 1.76 ms p95 (S7 addendum). Draft 2's client-side fuse filter
   (T0) was not built.
+- **No-match fast path** (Design §13.2). `Index::compile` stores, per repository, what can make
+  its routes act (`adage_tracks::triggers::Triggers`: prompt span kinds, intent routes, dead ends
+  still to announce, words a matching command must contain, finish-line globs).
+  `adage_runtime::fast::skip` rejects an event before the command table, the state lock and the
+  spool when it cannot change any decision: session start and end always; a prompt with no
+  bindable span, no intent routes and no dead end to announce; a batch or failure with no call
+  containing a trigger word or every literal piece of a finish-line glob, while the session has
+  no pending judgement or obligation; a stop with no obligation left to request. Runs of a dead
+  end's avoided commands are words too, so `adage graph` still counts them; other skipped events
+  leave no spool record. The eval replay checks every event of every dataset against the full
+  path (`fast_path_changes_no_decision`). A no-match batch costs what a repository without routes
+  does: 1.9 ms p50, from 2.8 ms.
 - **Lazy model.** The model is opened only at a prompt, and only if the repository has intent
   routes (`embed` closure in `hook.rs`, `match_intent` in `adage-runtime`).
 

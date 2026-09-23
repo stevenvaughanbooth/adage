@@ -73,6 +73,15 @@ version as the GitHub Release notes.
 - **`adage learn --codex-sessions <dir>` fell back to all of `~/.claude/projects`** when the
   directory held nothing. An explicit source that finds nothing is now an error.
 
+### Changed
+
+- **Hooks return early on events that cannot match** (Design §13.2). The index now stores, per
+  repository, what can make its routes act, and a hook skips an event that cannot change any
+  decision before loading the command table, locking the state or writing the spool: a no-match
+  tool batch now costs 1.9 ms p50 instead of 2.8 ms. The eval replay checks on every event of
+  every dataset that the fast path changes no decision. Skipped events are not written to the
+  spool, so `adage graph` shows fewer off-route commands.
+
 ## 0.1.0 - Unreleased
 
 The first version: Adage learns the routes coding agents take and, at each decision point, tells
