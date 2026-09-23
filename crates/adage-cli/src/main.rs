@@ -8,6 +8,8 @@
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage share <track> --out <dir> [--key <path>]   redaction-check, copy, and sign a track
 //! adage add <dir> [--trust]          verify a shared track and install it at probation
+//! adage review [--json]              routes awaiting a person's decision, with evidence and directive text
+//! adage review <approve|reject|demote|promote|pin> <track> <route> [--by <name>]
 //! adage version
 //! ```
 //! Environment: `ADAGE_HOME` (data directory), `ADAGE_ARM` (`treated`|`holdout`, overrides
@@ -17,6 +19,7 @@
 mod add;
 mod hook;
 mod redact;
+mod review;
 mod share;
 
 use adage_learn::{Inputs, LearnConfig};
@@ -59,6 +62,7 @@ fn run(args: &[String]) -> Result<()> {
         Some("report") => report(&paths, args.iter().any(|a| a == "--json")),
         Some("share") => share::share(&args[1..], &paths),
         Some("add") => add::add(&args[1..], &paths),
+        Some("review") => review::review(&args[1..], &paths),
         Some("hooks-config") => {
             let bin = args.get(1).cloned().unwrap_or_else(|| "adage".into());
             println!("{}", serde_json::to_string_pretty(&hook::settings(&bin))?);
@@ -69,7 +73,7 @@ fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         _ => {
-            println!("usage: adage <learn|status|report|share|add|hooks-config|version|hook>");
+            println!("usage: adage <learn|status|report|review|share|add|hooks-config|version|hook>");
             Ok(())
         }
     }

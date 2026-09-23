@@ -248,10 +248,14 @@ fn install(stage: &Path, src: &Path, paths: &Paths, trust: bool) -> Result<()> {
 }
 
 /// Design O2: imported routes start at probation — yellow for signed, trusted sources, never green.
+/// Routes the author retired or demoted stay out of service. The author's `review.yaml` travels in
+/// the signed package but is not installed: the recipient reviews imports for themselves.
 fn at_probation(mut t: Track) -> (Track, Vec<Aspect>) {
     let was = t.routes.iter().map(|r| r.aspect).collect();
     for r in &mut t.routes {
-        r.state = RouteState::Probation;
+        if matches!(r.state, RouteState::Active | RouteState::Probation) {
+            r.state = RouteState::Probation;
+        }
         if r.aspect == Aspect::Green {
             r.aspect = Aspect::Yellow;
         }
@@ -261,4 +265,40 @@ fn at_probation(mut t: Track) -> (Track, Vec<Aspect>) {
         *p = format!("imported:{p}");
     }
     (t, was)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use adage_tracks::{Evidence, Gauge, Manifest, Route, Scope, Step, TrackInfo, Trigger};
+
+    #[test]
+    fn probation_never_revives_retired_routes() {
+        let route = |id: &str, aspect, state| Route {
+            id: id.into(),
+            summary: "s".into(),
+            trigger: Trigger::SessionStart,
+            step: Step::Run { command: "make test".into() },
+            slots: vec![],
+            effect: adage_core::Effect::Verify,
+            aspect,
+            state,
+            exit: vec![],
+            evidence: Evidence::default(),
+            authored: false,
+        };
+        let t = Track {
+            manifest: Manifest {
+                track: TrackInfo { name: "a/b".into(), version: "1.0.0".into(), description: "d".into(), provenance: "desire-path".into() },
+                scope: Scope { repo: "a".into() },
+                gauge: Gauge::default(),
+            },
+            routes: vec![route("live", Aspect::Green, RouteState::Active), route("gone", Aspect::Yellow, RouteState::Retired)],
+        };
+        let (t, was) = at_probation(t);
+        assert_eq!(was, vec![Aspect::Green, Aspect::Yellow]);
+        assert_eq!((t.routes[0].state, t.routes[0].aspect), (RouteState::Probation, Aspect::Yellow));
+        assert_eq!(t.routes[1].state, RouteState::Retired, "a route its author rejected stays retired");
+        assert_eq!(t.manifest.track.provenance, "imported:desire-path");
+    }
 }

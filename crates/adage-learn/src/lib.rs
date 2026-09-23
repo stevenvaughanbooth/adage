@@ -144,6 +144,16 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
                     routes.push(r.clone());
                 }
             }
+            // A person's decisions in `adage review` hold across re-learning (review.yaml). If they
+            // cannot be read, leave the track as it is rather than silently undo them.
+            let reviews = match adage_tracks::review::load(&dir) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("adage: not updating {name}: {e:#}");
+                    continue;
+                }
+            };
+            let mut routes = adage_tracks::review::reconcile(prev.as_ref(), &reviews, routes);
             routes.sort_by(|a, b| a.id.cmp(&b.id));
             let (version, change) = bump(prev.as_ref(), &routes);
             let track = Track {

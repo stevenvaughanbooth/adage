@@ -5,6 +5,7 @@
 pub mod index;
 pub mod io;
 pub mod model;
+pub mod review;
 
 pub use index::{Index, IndexedRoute};
 pub use model::*;
@@ -113,5 +114,25 @@ mod tests {
         let b = Index::compile(&[sample()]);
         assert_eq!(serde_json::to_string(&a).unwrap(), serde_json::to_string(&b).unwrap());
         assert_eq!(a.for_repo("acme-billing").count(), 1);
+    }
+
+    #[test]
+    fn a_retired_first_hand_route_shadows_imports_but_not_live_routes() {
+        let mut imported = sample();
+        imported.manifest.track.name = "acme-billing/zz-imported".into();
+        imported.manifest.track.provenance = "imported:desire-path".into();
+        imported.routes[0].state = RouteState::Probation;
+        imported.routes[0].aspect = Aspect::Yellow;
+        let mut retired = sample();
+        retired.routes[0].state = RouteState::Retired;
+        assert!(Index::compile(&[retired.clone(), imported.clone()]).routes.is_empty());
+        // Without the retired route, the import is delivered.
+        assert_eq!(Index::compile(&[imported.clone()]).routes.len(), 1);
+        // A live first-hand route in another track wins over the retired one.
+        let mut live = sample();
+        live.manifest.track.name = "acme-billing/a-live".into();
+        let idx = Index::compile(&[retired, imported, live]);
+        assert_eq!(idx.routes.len(), 1);
+        assert_eq!(idx.routes[0].track, "acme-billing/a-live");
     }
 }

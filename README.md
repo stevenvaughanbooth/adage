@@ -77,6 +77,18 @@ probation, never green, under `tracks/@imported/` where `adage learn` never writ
 the same route yourself, your first-hand route wins. An unknown signer needs `--trust`. Both commands refuse to run inside an agent
 session (`CLAUDECODE`) or without a terminal; `ADAGE_ALLOW_NONINTERACTIVE=1` lifts only the terminal check.
 
+**Review:** `adage review [--json]` lists the routes that need a person's decision: new routes from
+`adage learn`, routes whose aspect or evidence changed materially since the last decision (shape,
+aspect, a Wilson lower bound moving by 0.10, or support doubling or halving), imports at probation,
+rejected routes that came back stronger, and routes agents keep leaving in treated sessions. Each
+entry shows its evidence, effect and ceiling, and the exact directive text with example slot values.
+`adage review <approve|reject|demote|promote|pin> <track> <route> [--by <name>]` records the decision
+in the track's `review.yaml`, re-validates the track, and recompiles the index. Promotion never exceeds
+the effect ceiling, and an import cannot be promoted to green without first-hand evidence learned
+locally. `adage learn` keeps rejected routes retired until they strengthen materially, and holds
+demotions and promotions. A rejected route also keeps a teammate's import of the same route out of
+the index. Decisions refuse to run inside an agent session. Listing is allowed there.
+
 **Experiment:** `ADAGE_HOLDOUT=0.1` (default) holds out 10% of sessions — Adage computes what it would
 have said and logs it, but says nothing — so every claimed effect is measured against a control.
 
@@ -117,5 +129,5 @@ fails untouched and passes with its reference solution.
 
 v0.1: Claude Code only; tracks are shared directly (`adage share` / `adage add`). Hardened against an adversarial review (tracks are
 untrusted input; effects re-derived; bounded hot path; symlink-safe paths). Team depots, lockfiles,
-intent embeddings, the review queue, and the OpenCode and Codex adapters are designed and spiked but
+intent embeddings, and the OpenCode and Codex adapters are designed and spiked but
 not yet built. See the implementation plan.

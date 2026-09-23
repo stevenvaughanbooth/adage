@@ -36,10 +36,14 @@ pub const IMPORTED_DIR: &str = "@imported";
 
 impl Index {
     pub fn compile(tracks: &[Track]) -> Index {
+        let live = |r: &Route| matches!(r.state, RouteState::Active | RouteState::Probation);
+        // A first-hand route a person retired still takes part in de-duplication, so an import of
+        // the same route cannot slip back in behind the rejection; it is dropped afterwards.
         let mut routes: Vec<(bool, IndexedRoute)> = tracks
             .iter()
             .flat_map(|t| {
-                t.routes.iter().filter(|r| matches!(r.state, RouteState::Active | RouteState::Probation)).map(
+                let imported = is_imported(t);
+                t.routes.iter().filter(move |r| live(r) || (!imported && r.state == RouteState::Retired)).map(
                     move |r| {
                         let ir = IndexedRoute {
                             repo: t.manifest.scope.repo.clone(),
@@ -53,10 +57,13 @@ impl Index {
             })
             .collect();
         // A route learned here and the same route imported from a teammate share a content-derived
-        // id: keep one, and prefer first-hand evidence over an import.
-        routes.sort_by(|(ia, a), (ib, b)| (&a.repo, &a.route.id, ia, &a.track).cmp(&(&b.repo, &b.route.id, ib, &b.track)));
+        // id: keep one, and prefer first-hand evidence over an import (a live first-hand route over
+        // a retired one, and a retired first-hand route over any import).
+        routes.sort_by(|(ia, a), (ib, b)| {
+            (&a.repo, &a.route.id, ia, !live(&a.route), &a.track).cmp(&(&b.repo, &b.route.id, ib, !live(&b.route), &b.track))
+        });
         routes.dedup_by(|(_, b), (_, a)| a.repo == b.repo && a.route.id == b.route.id);
-        let mut routes: Vec<IndexedRoute> = routes.into_iter().map(|(_, r)| r).collect();
+        let mut routes: Vec<IndexedRoute> = routes.into_iter().map(|(_, r)| r).filter(|r| live(&r.route)).collect();
         routes.sort_by(|a, b| (&a.repo, &a.track, &a.route.id).cmp(&(&b.repo, &b.track, &b.route.id)));
         let body = serde_json::to_vec(&routes).unwrap_or_default();
         let generation = io::hex(&Sha256::digest(&body))[..16].to_string();

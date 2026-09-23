@@ -42,7 +42,7 @@ pub fn require_person(cmd: &str) -> Result<()> {
 /// The files a shared track may contain (Design §10.1). `scripts/` travels only with
 /// repository-committed tracks, never in a direct share.
 fn allowed(rel: &str) -> bool {
-    matches!(rel, "track.toml" | "evidence.json" | "CHANGELOG.md")
+    matches!(rel, "track.toml" | "evidence.json" | "CHANGELOG.md" | "review.yaml")
         || ["routes/", "intents/"].iter().any(|d| {
             rel.strip_prefix(d).is_some_and(|f| !f.contains('/') && !f.starts_with('.') && f.ends_with(".yaml"))
         })
