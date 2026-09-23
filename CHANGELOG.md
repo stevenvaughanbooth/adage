@@ -17,6 +17,13 @@ version as the GitHub Release notes.
 - A harness simulator (`crates/adage-sim`), which replays mock sessions end to end through each
   harness's native hooks.
 - Windows support. CI covers macOS arm64 and x64, Linux x64 and arm64, and Windows x64.
+- **Hooks record their fail-open errors.** A caught panic or internal error (unreadable stdin, a
+  malformed payload, a state file that cannot be updated, a spool that cannot be appended) still
+  makes the hook say nothing and exit 0, and now also appends one line to
+  `$ADAGE_HOME/fail-open.log`, which `adage doctor` reports. Entries carry the time, harness,
+  event, an error class and a fixed message or panic location; never a prompt, tool output,
+  command or path. The log rotates at 256 KiB, keeping one previous file. "Nothing to do" (no
+  tracks for the repository, a kill switch, an ignored event) is not recorded.
 
 ### Fixed
 

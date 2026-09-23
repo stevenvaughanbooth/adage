@@ -147,12 +147,13 @@ Closed since draft 2:
 - The survey report.
 - Dead ends are keyed by failing signature: a runner is named only if its failures share the
   route's signature and it fails in 9 of 10 sessions that ran it.
+- Hooks record caught panics and internal errors in `$ADAGE_HOME/fail-open.log` (class, fixed
+  message or panic location, never payload; rotated at 256 KiB), and `adage doctor` reports them.
 
 Open:
 
 | Gap | Impact | Fix |
 | --- | --- | --- |
-| Nothing writes `$ADAGE_HOME/fail-open.log` | `adage doctor` cannot report hook failures | Record caught panics and errors in the hook's fail-open path (bounded, rotating) |
 | The parse timeout (50 ms) makes normalisation depend on machine speed for pathological commands | Rare nondeterminism in `learn` for such commands | Replace with a node-count budget |
 | Architecture doc is still draft 2 | Docs lag the code (daemon → none, etc.) | Draft 3, as built |
 
