@@ -1,19 +1,74 @@
-//! Two-slot state files under `flock` (spike S3's winning design).
+//! Two-slot state files under an exclusive file lock (spike S3's winning design): `flock` on Unix,
+//! `LockFileEx` on Windows, both through `std`'s `File::lock`.
 
 use crate::crc::crc32;
 use serde::{de::DeserializeOwned, Serialize};
 use std::fs::{File, OpenOptions};
 use std::io;
-use std::os::unix::fs::FileExt;
 use std::path::Path;
 
 pub const SLOT: usize = 64 * 1024;
 const HEADER: usize = 4 + 8 + 4 + 4;
 const MAGIC: [u8; 4] = [0xAD, 0xA6, 0x57, 0x01];
 
+/// Positional I/O: `pread`/`pwrite` on Unix, `ReadFile`/`WriteFile` with an offset on Windows.
+/// Windows' `seek_read`/`seek_write` may transfer fewer bytes than asked (and move the cursor, which
+/// nothing here relies on), so they are looped to the full length like Unix's `*_exact_at`.
+#[cfg(unix)]
+mod pos {
+    use std::fs::File;
+    use std::io;
+    use std::os::unix::fs::FileExt;
+
+    pub fn read_exact_at(file: &File, buf: &mut [u8], off: u64) -> io::Result<()> {
+        file.read_exact_at(buf, off)
+    }
+    pub fn write_all_at(file: &File, buf: &[u8], off: u64) -> io::Result<()> {
+        file.write_all_at(buf, off)
+    }
+}
+
+#[cfg(windows)]
+mod pos {
+    use std::fs::File;
+    use std::io;
+    use std::os::windows::fs::FileExt;
+
+    pub fn read_exact_at(file: &File, mut buf: &mut [u8], mut off: u64) -> io::Result<()> {
+        while !buf.is_empty() {
+            match file.seek_read(buf, off) {
+                Ok(0) => return Err(io::ErrorKind::UnexpectedEof.into()),
+                Ok(n) => {
+                    buf = &mut buf[n..];
+                    off += n as u64;
+                }
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                // Reading past the end of a file with an offset is ERROR_HANDLE_EOF.
+                Err(e) if e.raw_os_error() == Some(38) => return Err(io::ErrorKind::UnexpectedEof.into()),
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())
+    }
+    pub fn write_all_at(file: &File, mut buf: &[u8], mut off: u64) -> io::Result<()> {
+        while !buf.is_empty() {
+            match file.seek_write(buf, off) {
+                Ok(0) => return Err(io::ErrorKind::WriteZero.into()),
+                Ok(n) => {
+                    buf = &buf[n..];
+                    off += n as u64;
+                }
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())
+    }
+}
+
 fn read_slot(file: &File, idx: usize) -> Option<(u64, Vec<u8>)> {
     let mut hdr = [0u8; HEADER];
-    file.read_exact_at(&mut hdr, (idx * SLOT) as u64).ok()?;
+    pos::read_exact_at(file, &mut hdr, (idx * SLOT) as u64).ok()?;
     if hdr[0..4] != MAGIC {
         return None;
     }
@@ -24,7 +79,7 @@ fn read_slot(file: &File, idx: usize) -> Option<(u64, Vec<u8>)> {
         return None;
     }
     let mut payload = vec![0u8; len];
-    file.read_exact_at(&mut payload, (idx * SLOT + HEADER) as u64).ok()?;
+    pos::read_exact_at(file, &mut payload, (idx * SLOT + HEADER) as u64).ok()?;
     (crc32(&payload) == crc).then_some((seq, payload))
 }
 
@@ -70,7 +125,7 @@ where
     buf.extend_from_slice(&(payload.len() as u32).to_le_bytes());
     buf.extend_from_slice(&crc32(&payload).to_le_bytes());
     buf.extend_from_slice(&payload);
-    file.write_all_at(&buf, (target * SLOT) as u64)?;
+    pos::write_all_at(&file, &buf, (target * SLOT) as u64)?;
     file.unlock()?;
     Ok(out)
 }
@@ -122,7 +177,7 @@ mod tests {
         update::<S, _>(&p, |s| s.n = 2).unwrap();
         // Slot 1 holds n=2 now; corrupt its payload.
         let f = OpenOptions::new().write(true).open(&p).unwrap();
-        f.write_all_at(b"garbage", (SLOT + HEADER) as u64).unwrap();
+        pos::write_all_at(&f, b"garbage", (SLOT + HEADER) as u64).unwrap();
         let s: S = read(&p).unwrap();
         assert_eq!(s.n, 1);
     }

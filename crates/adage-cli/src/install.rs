@@ -31,8 +31,8 @@ fn flag(args: &[String], name: &str) -> Option<String> {
 }
 
 fn home(rel: &str) -> Result<PathBuf> {
-    let home = std::env::var_os("HOME").filter(|h| !h.is_empty()).context("HOME is not set")?;
-    Ok(PathBuf::from(home).join(rel))
+    let home = adage_store::home_dir().context("HOME is not set")?;
+    Ok(home.join(rel))
 }
 
 /// `$var` if set and non-empty, else `~/<home_rel>`.
@@ -62,6 +62,11 @@ pub fn install(args: &[String]) -> Result<()> {
         bail!("--bin must be an absolute path");
     }
     let bin = bin.to_string_lossy().to_string();
+    // Windows' canonical form is a verbatim path (`\\?\C:\...`); hooks want the plain one.
+    let bin = match bin.strip_prefix(r"\\?\") {
+        Some(plain) if cfg!(windows) && plain.as_bytes().get(1) == Some(&b':') => plain.to_string(),
+        _ => bin,
+    };
 
     let (content, project_rel, user_path): (String, &str, fn() -> Result<PathBuf>) = match harness {
         "claude-code" | "claude" => {

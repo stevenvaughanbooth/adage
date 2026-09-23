@@ -208,6 +208,7 @@ fn linked_files_from_plain_text_output() {
     assert!(read.text.contains("acme/billing.py") && !read.text.contains("passwd"));
 }
 
+#[cfg(unix)] // Windows symlinks need a privilege CI runners do not grant.
 #[test]
 fn symlinks_out_of_the_repo_are_rejected() {
     let (dir, index, table) = fixture();

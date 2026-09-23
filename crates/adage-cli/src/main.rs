@@ -109,9 +109,11 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         i += 1;
     }
     if let Some(dir) = flag(args, "--claude-projects").or_else(|| {
-        transcripts
-            .is_empty()
-            .then(|| std::env::var("HOME").map(|h| format!("{h}/.claude/projects")).unwrap_or_default())
+        transcripts.is_empty().then(|| {
+            adage_store::home_dir()
+                .map(|h| h.join(".claude").join("projects").to_string_lossy().into_owned())
+                .unwrap_or_default()
+        })
     }) {
         let prefix = flag(args, "--cwd-prefix");
         for p in adage_learn::import::discover(std::path::Path::new(&dir)) {

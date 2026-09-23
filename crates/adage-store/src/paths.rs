@@ -1,25 +1,39 @@
 use std::path::{Path, PathBuf};
 
 /// Adage's data directory. `ADAGE_HOME` overrides the default, which lets tests, the proving
-/// ground, and the demo run fully isolated instances.
+/// ground, and the demo run fully isolated instances. Defaults:
+///
+/// * macOS: `~/Library/Application Support/Adage`
+/// * Windows: `%APPDATA%\Adage`
+/// * elsewhere: `$XDG_DATA_HOME/adage`, else `~/.local/share/adage`
 #[derive(Debug, Clone)]
 pub struct Paths {
     pub root: PathBuf,
 }
 
+/// A non-empty environment variable, as a path.
+fn env_path(var: &str) -> Option<PathBuf> {
+    std::env::var_os(var).filter(|v| !v.is_empty()).map(PathBuf::from)
+}
+
+/// The user's home directory: `HOME` when set (always on Unix; tests and Git Bash set it on
+/// Windows too, which keeps test runs isolated), else `USERPROFILE` on Windows.
+pub fn home_dir() -> Option<PathBuf> {
+    env_path("HOME").or_else(|| if cfg!(windows) { env_path("USERPROFILE") } else { None })
+}
+
 impl Paths {
     pub fn from_env() -> Paths {
-        if let Some(h) = std::env::var_os("ADAGE_HOME") {
-            return Paths { root: PathBuf::from(h) };
+        if let Some(h) = env_path("ADAGE_HOME") {
+            return Paths { root: h };
         }
-        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
+        let home = || home_dir().unwrap_or_else(|| PathBuf::from("."));
         let root = if cfg!(target_os = "macos") {
-            home.join("Library/Application Support/Adage")
+            home().join("Library/Application Support/Adage")
+        } else if cfg!(windows) {
+            env_path("APPDATA").unwrap_or_else(|| home().join("AppData").join("Roaming")).join("Adage")
         } else {
-            std::env::var_os("XDG_DATA_HOME")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| home.join(".local/share"))
-                .join("adage")
+            env_path("XDG_DATA_HOME").unwrap_or_else(|| home().join(".local/share")).join("adage")
         };
         Paths { root }
     }

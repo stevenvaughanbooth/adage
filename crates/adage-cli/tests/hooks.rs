@@ -663,11 +663,15 @@ fn install_write_refuses_what_it_should() {
     std::fs::create_dir_all(repo.join(".opencode/plugins")).unwrap();
     std::fs::write(repo.join(".opencode/plugins/adage.js"), "export const Mine = 1").unwrap();
     assert_ne!(install(&w, &repo, &["opencode", "--write", "--bin", "/opt/adage"], &[]).2, 0);
-    // A repository that symlinks the config directory elsewhere.
-    let evil = git_repo(&w, "evil");
-    std::os::unix::fs::symlink(w.p("home"), evil.join(".claude")).unwrap();
-    assert_ne!(install(&w, &evil, &["claude-code", "--write", "--bin", "/opt/adage"], &[]).2, 0);
-    assert_eq!(files(&w.p("home")), Vec::<String>::new());
+    // A repository that symlinks the config directory elsewhere (Unix: Windows symlinks need a
+    // privilege CI runners do not grant).
+    #[cfg(unix)]
+    {
+        let evil = git_repo(&w, "evil");
+        std::os::unix::fs::symlink(w.p("home"), evil.join(".claude")).unwrap();
+        assert_ne!(install(&w, &evil, &["claude-code", "--write", "--bin", "/opt/adage"], &[]).2, 0);
+        assert_eq!(files(&w.p("home")), Vec::<String>::new());
+    }
     // Unknown harness or scope.
     assert_ne!(install(&w, &repo, &["vscode"], &[]).2, 0);
     assert_ne!(install(&w, &repo, &["codex", "--scope", "system"], &[]).2, 0);
@@ -676,6 +680,8 @@ fn install_write_refuses_what_it_should() {
 // ---------------------------------------------------------------------------------------------
 // The OpenCode plugin itself, in node with a fake OpenCode client (skipped without node)
 
+// Unix: the fake broken binaries are `#!/bin/sh` scripts.
+#[cfg(unix)]
 #[test]
 fn opencode_plugin_places_text_and_fails_open() {
     if Command::new("node").arg("--version").output().is_err() {

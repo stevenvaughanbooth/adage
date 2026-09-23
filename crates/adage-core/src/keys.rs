@@ -74,15 +74,24 @@ pub fn template_key(a: &CanonicalAction) -> String {
 
 /// Canonicalise command paths against the repository root, so the same behaviour in different
 /// checkouts produces the same key: `/tmp/x/repo/scripts/a`, `./scripts/a` and `scripts/a` all
-/// become `scripts/a`.
+/// become `scripts/a`. Windows paths (`C:\x\repo\scripts\a`, `c:/x/repo/scripts/a`, and Git Bash's
+/// `/c/x/repo/scripts/a`) canonicalise the same way, whichever platform the transcript is read on.
 pub fn canonicalise(n: &mut Normalized, root: &Path) {
     // macOS: /tmp is a symlink to /private/tmp; compare both sides without the prefix.
     fn strip(s: &str) -> &str {
         s.strip_prefix("/private").unwrap_or(s)
     }
-    let root_s = strip(&root.to_string_lossy()).to_string();
+    let root_s = strip(&windows_slashed(&root.to_string_lossy())).to_string();
+    // Git Bash spells `c:/x` as `/c/x`.
+    let root_bash = match root_s.as_bytes() {
+        [d, b':', b'/', ..] => Some(format!("/{}{}", *d as char, &root_s[2..])),
+        _ => None,
+    };
     let fix = |t: &mut String| {
-        if let Some(rest) = strip(t).strip_prefix(root_s.as_str()) {
+        let slashed = windows_slashed(t);
+        let s = strip(&slashed);
+        let rest = s.strip_prefix(root_s.as_str()).or_else(|| root_bash.as_deref().and_then(|b| s.strip_prefix(b)));
+        if let Some(rest) = rest {
             if rest.is_empty() || rest.starts_with('/') {
                 *t = rest.trim_start_matches('/').to_string();
             }
@@ -92,9 +101,23 @@ pub fn canonicalise(n: &mut Normalized, root: &Path) {
         }
     };
     match &mut n.action {
-        CanonicalAction::Exec { argv, .. } => argv.iter_mut().filter(|t| t.contains('/')).for_each(fix),
+        CanonicalAction::Exec { argv, .. } => {
+            argv.iter_mut().filter(|t| t.contains('/') || t.contains('\\')).for_each(fix)
+        }
         CanonicalAction::Compound { actions, .. } => actions.iter_mut().for_each(|a| canonicalise(a, root)),
         _ => {}
+    }
+}
+
+/// A Windows drive path (`C:\x`, `C:/x`, `\\?\C:\x`) in `/` form with a lower-case drive letter;
+/// anything else unchanged (a backslash in a Unix path is an ordinary character).
+fn windows_slashed(s: &str) -> std::borrow::Cow<'_, str> {
+    let s = s.strip_prefix(r"\\?\").unwrap_or(s);
+    match s.as_bytes() {
+        [d, b':', b'\\' | b'/', ..] if d.is_ascii_alphabetic() => {
+            format!("{}{}", d.to_ascii_lowercase() as char, s[1..].replace('\\', "/")).into()
+        }
+        _ => s.into(),
     }
 }
 
@@ -166,6 +189,26 @@ mod tests {
         }
         canonicalise(&mut m, Path::new("/tmp/r/repo"));
         assert_eq!(template_key(&m.action), template_key(&n.action));
+    }
+
+    #[test]
+    fn canonicalises_windows_paths_on_any_platform() {
+        let root = Path::new(r"C:\work\repo");
+        for tok in
+            [r"C:\work\repo\scripts\wi-lookup", "c:/work/repo/scripts/wi-lookup", "/c/work/repo/scripts/wi-lookup"]
+        {
+            let mut n = Normalized {
+                action: CanonicalAction::Exec { argv: vec![tok.into(), "W-1".into()], cwd: r"C:\work\repo".into() },
+                effect: crate::Effect::Observe,
+                mutating: false,
+                confidence: 1.0,
+                note: String::new(),
+            };
+            canonicalise(&mut n, root);
+            assert_eq!(template_key(&n.action), "exec scripts/wi-lookup {id}", "{tok}");
+        }
+        // A Unix backslash is just a character.
+        assert_eq!(windows_slashed(r"a\b"), r"a\b");
     }
 
     #[test]

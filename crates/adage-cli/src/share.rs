@@ -152,7 +152,7 @@ pub fn share(args: &[String], paths: &Paths) -> Result<()> {
     let listing = list_files(&src)?;
 
     // Redaction and safety check, over exactly the bytes that will be written, before any are.
-    let home = std::env::var("HOME").ok();
+    let home = adage_store::home_dir().map(|h| h.to_string_lossy().into_owned());
     let mut contents = Vec::new();
     let mut findings = Vec::new();
     for rel in &listing.files {

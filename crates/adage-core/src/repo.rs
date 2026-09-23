@@ -51,11 +51,12 @@ pub fn short_hash(s: &str) -> String {
 }
 
 /// Make `path` relative to `root` if it lies inside it. Lexical only — no filesystem access.
+/// Repository-relative paths always use `/`, on Windows too, so tracks are portable.
 pub fn relativize(root: &Path, path: &str) -> String {
     let p = Path::new(path);
     let norm = lexical_normalise(p);
     match norm.strip_prefix(lexical_normalise(root)) {
-        Ok(rel) => rel.to_string_lossy().to_string(),
+        Ok(rel) => rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/"),
         Err(_) => norm.to_string_lossy().to_string(),
     }
 }
@@ -74,13 +75,17 @@ pub fn lexical_normalise(p: &Path) -> PathBuf {
     out
 }
 
-/// True if `rel` is a safe repository-relative path: no absolute path, no `..`, no leading `-`.
+/// True if `rel` is a safe repository-relative path: no absolute path (nor, on Windows, a drive or
+/// UNC prefix), no `..`, no leading `-`.
 pub fn is_safe_relative(rel: &str) -> bool {
     !rel.is_empty()
         && !rel.starts_with('/')
+        && !rel.starts_with('\\')
         && !rel.starts_with('-')
         && !rel.starts_with('~')
-        && !Path::new(rel).components().any(|c| matches!(c, Component::ParentDir))
+        && !Path::new(rel)
+            .components()
+            .any(|c| matches!(c, Component::ParentDir | Component::Prefix(_) | Component::RootDir))
 }
 
 #[cfg(test)]
@@ -93,6 +98,13 @@ mod tests {
         assert!(is_safe_relative("acme/billing.py"));
         assert!(!is_safe_relative("../etc/passwd"));
         assert!(!is_safe_relative("--config=/x"));
+        assert!(!is_safe_relative(r"\Windows\system.ini"));
+        #[cfg(windows)]
+        {
+            assert!(!is_safe_relative(r"C:\Windows\system.ini"));
+            assert!(!is_safe_relative(r"acme\..\..\secret"));
+            assert_eq!(relativize(Path::new(r"C:\r\repo"), r"C:\r\repo\acme\billing.py"), "acme/billing.py");
+        }
     }
 
     #[test]

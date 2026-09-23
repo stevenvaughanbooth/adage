@@ -256,7 +256,25 @@ fn read_at(f: &File, buf: &mut [u8], off: u64) -> std::io::Result<()> {
     f.read_exact_at(buf, off)
 }
 
-#[cfg(not(unix))]
+/// `seek_read` may return fewer bytes than asked; loop to the full length like `read_exact_at`.
+#[cfg(windows)]
+fn read_at(f: &File, mut buf: &mut [u8], mut off: u64) -> std::io::Result<()> {
+    use std::os::windows::fs::FileExt;
+    while !buf.is_empty() {
+        match f.seek_read(buf, off) {
+            Ok(0) => return Err(std::io::ErrorKind::UnexpectedEof.into()),
+            Ok(n) => {
+                buf = &mut buf[n..];
+                off += n as u64;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(any(unix, windows)))]
 fn read_at(f: &File, buf: &mut [u8], off: u64) -> std::io::Result<()> {
     use std::io::{Read, Seek, SeekFrom};
     let mut f = f.try_clone()?;
