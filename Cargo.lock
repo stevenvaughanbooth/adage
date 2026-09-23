@@ -11,6 +11,7 @@ dependencies = [
  "adage-learn",
  "adage-runtime",
  "adage-sign",
+ "adage-sim",
  "adage-store",
  "adage-tracks",
  "anyhow",
@@ -57,6 +58,7 @@ dependencies = [
  "adage-core",
  "adage-intent",
  "adage-runtime",
+ "adage-sim",
  "adage-tracks",
  "anyhow",
  "glob",
@@ -91,6 +93,13 @@ dependencies = [
  "ssh-agent-client-rs",
  "ssh-key",
  "tempfile",
+]
+
+[[package]]
+name = "adage-sim"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
