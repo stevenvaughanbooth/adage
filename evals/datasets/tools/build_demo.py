@@ -2,6 +2,14 @@
 """Curate the committed demo eval dataset from a raw demo archive.
 
   python3 evals/datasets/tools/build_demo.py <raw-archive-dir> [out-dir]
+      [--name N] [--repo KEY] [--description TEXT] [--sandbox DIR]
+
+The defaults name the first demo's dataset (demo-haiku45, repo acme-billing). For any other live run
+(evals/live/runner.py writes the same layout), name it and pass a freshly generated sandbox with
+--sandbox so that sandbox.txt lists its files, e.g.
+
+  python3 evals/datasets/tools/build_demo.py /tmp/adage-live/harbor-dispatch evals/datasets/harbor-sonnet5 \\
+      --name harbor-sonnet5 --repo harbor-dispatch --sandbox <dir made by the sandbox's generate.py>
 
 <raw-archive-dir> is a demo run's `raw/` directory (transcripts/<project>/<session>.jsonl,
 runs/<run>/stream.jsonl, state.json, outcomes.json, adage-home/). The archive is read, never
@@ -28,6 +36,7 @@ Deterministic: the same archive gives the same bytes.
 
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -230,9 +239,40 @@ def spool_records(p):
     return out
 
 
+def options(argv):
+    """Positional <raw> [out]; --name, --repo, --description name the dataset (defaults: the first
+    demo), and --sandbox <dir> writes sandbox.txt from a freshly generated sandbox's files."""
+    opts = {"name": "demo-haiku45", "repo": "acme-billing", "sandbox": None,
+            "description": "Real Claude Code sessions (Claude Haiku 4.5) from the Adage demo on the acme-billing sandbox"}
+    pos = []
+    it = iter(argv)
+    for a in it:
+        if a in ("--name", "--repo", "--description", "--sandbox"):
+            v = next(it, None)
+            if v is None:
+                raise SystemExit(f"{a} needs a value")
+            opts[a[2:]] = v
+        else:
+            pos.append(a)
+    if not pos or len(pos) > 2:
+        raise SystemExit("usage: build_demo.py <raw-archive-dir> [out-dir] [--name N] [--repo K] [--description D] [--sandbox DIR]")
+    return pos, opts
+
+
+def sandbox_files(d):
+    """A sandbox's files, repository-relative, as sandbox.txt lists them (git's view if it is a repo)."""
+    d = Path(d)
+    try:
+        out = subprocess.run(["git", "ls-files"], cwd=d, capture_output=True, text=True, check=True).stdout.split()
+    except (OSError, subprocess.CalledProcessError):
+        out = [str(p.relative_to(d)) for p in d.rglob("*") if p.is_file() and ".git" not in p.relative_to(d).parts]
+    return sorted(out)
+
+
 def main():
-    raw = Path(sys.argv[1]).resolve()
-    out = Path(sys.argv[2]).resolve() if len(sys.argv) > 2 else OUT_DEFAULT
+    pos, opts = options(sys.argv[1:])
+    raw = Path(pos[0]).resolve()
+    out = Path(pos[1]).resolve() if len(pos) > 1 else OUT_DEFAULT
     state = json.loads((raw / "state.json").read_text())
     runs = {k: v for k, v in state["runs"].items() if v.get("metrics") and (raw / "runs" / k / "stream.jsonl").exists()}
     (out / "sessions").mkdir(parents=True, exist_ok=True)
@@ -287,17 +327,18 @@ def main():
 
     train = lambda s: s["phase"] == "train"
     eval_round = lambda s, n: s["phase"] == "eval" and s["round"] == n
+    # Round n learned from the training sessions and every earlier round's eval sessions (both arms),
+    # then ran held-out work; its test set is that round's control (holdout) arm.
+    last_round = max([s["round"] for s in sessions if s["phase"] == "eval"] or [1])
     splits = {
-        # What the live round-1 index learned from, and the round-1 held-out control arm.
-        "round1": {"train": ids(train), "test": ids(lambda s: eval_round(s, 1) and s["arm"] == "holdout")},
-        # Round 2 learned from every earlier session (both round-1 arms), then ran new held-out work.
-        "round2": {"train": ids(lambda s: train(s) or eval_round(s, 1)),
-                   "test": ids(lambda s: eval_round(s, 2) and s["arm"] == "holdout")},
+        f"round{n}": {"train": ids(lambda s, n=n: train(s) or (s["phase"] == "eval" and s["round"] < n)),
+                      "test": ids(lambda s, n=n: eval_round(s, n) and s["arm"] == "holdout")}
+        for n in range(1, last_round + 1)
     }
     manifest = {
-        "name": "demo-haiku45",
-        "description": "Real Claude Code sessions (Claude Haiku 4.5) from the Adage demo on the acme-billing sandbox",
-        "repo": "acme-billing",
+        "name": opts["name"],
+        "description": opts["description"],
+        "repo": opts["repo"],
         "learn": "demo",
         "sandbox": "sandbox.txt",
         "model": state.get("model"),
@@ -328,10 +369,15 @@ def main():
             })
         decided[run_id] = evs
     (out / "recorded" / "decisions.json").write_text(json.dumps(decided, indent=0, sort_keys=True) + "\n")
-    idx2 = json.loads((raw / "adage-home" / "index.json").read_text())
-    (out / "recorded" / "index-round2.json").write_text(json.dumps(idx2, indent=1, sort_keys=True) + "\n")
-    idx1 = {"generation": gens.get(1), "routes": state["rounds"]["1"]["tracks"]}
-    (out / "recorded" / "index-round1.json").write_text(json.dumps(idx1, indent=1, sort_keys=True) + "\n")
+    # The live index on disk is the last round's; earlier rounds' routes are kept in state.json.
+    rounds = sorted(int(k) for k in (state.get("rounds") or {"1": None}))
+    last = json.loads((raw / "adage-home" / "index.json").read_text())
+    (out / "recorded" / f"index-round{rounds[-1]}.json").write_text(json.dumps(last, indent=1, sort_keys=True) + "\n")
+    for n in rounds[:-1]:
+        idx = {"generation": gens.get(n), "routes": state["rounds"][str(n)]["tracks"]}
+        (out / "recorded" / f"index-round{n}.json").write_text(json.dumps(idx, indent=1, sort_keys=True) + "\n")
+    if opts["sandbox"]:
+        (out / "sandbox.txt").write_text("\n".join(sandbox_files(opts["sandbox"])) + "\n")
 
     leaks = []
     bad = forbidden()
