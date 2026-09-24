@@ -35,7 +35,23 @@ version as the GitHub Release notes.
   still being written; `adage_store::lock` file locks.
 - `adage doctor` checks the configuration and live learning: on or off, each repository's last
   automatic learn and its outcome, a stuck learner, and requests left waiting.
-
+- **A terminal UI.** `adage watch` (also `adage doctor --watch`) is a live pane for a split
+  terminal: health lamps re-checked every few seconds, every hook call as it happens (directives
+  by aspect, holdout sessions withheld, followed and derailed judgements, finish lines met, stop
+  requests), and what learning changed, from `learn.log`. `adage ui`, or plain `adage` at a
+  terminal, is a full-screen app with Live, Routes (evidence, live counts, exact directive text,
+  and review decisions through `adage review`'s own code), Health (every doctor check with one-key
+  fixes: install hooks after showing the file and diff, fetch the model with progress, learn this
+  repository now as a background learner would, turn auto-learn on, open the fail-open log) and
+  Settings (every `adage config` key with its source, edited through `adage config set`'s code).
+  The learning ticker says when a background learner is running. `--demo`
+  replays a scripted scenario through real hook calls into a temporary data directory; `adage
+  watch --once` prints one frame as text. Built on ratatui and crossterm; the terminal is restored
+  on every exit, including a panic, and `NO_COLOR` is honoured. Hooks never load any of it.
+- **`adage init` is a guided wizard at a terminal.** It asks before each step (register hooks per
+  harness, fetch the model, run a first learn, turn auto-learning on) and ends with the doctor's
+  summary. Piped, inside an agent session, or with the new `--print` (or `--yes`), it prints the
+  report it always has.
 - `adage init`, `adage survey`, `adage doctor` and `adage graph --serve` (the signal box served
   from the binary).
 - `adage eval`, which replays held-out sessions offline and scores what Adage would have said. It

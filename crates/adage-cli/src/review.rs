@@ -77,7 +77,7 @@ pub(crate) fn discover(root: &Path) -> Result<Vec<Installed>> {
                     reference: d.strip_prefix(root).unwrap_or(&d).to_string_lossy().replace('\\', "/"),
                     // Proposals are advisory local state: an unreadable file hides them, nothing more.
                     proposals: proposals::load(&d).unwrap_or_else(|e| {
-                        eprintln!("adage: ignoring unreadable proposals in {}: {e:#}", d.display());
+                        crate::ui::warn(format!("adage: ignoring unreadable proposals in {}: {e:#}", d.display()));
                         Proposals::default()
                     }),
                     dir: d,
@@ -85,7 +85,7 @@ pub(crate) fn discover(root: &Path) -> Result<Vec<Installed>> {
                     track,
                     reviews,
                 }),
-                Err(e) => eprintln!("adage: skipping invalid track {}: {e:#}", d.display()),
+                Err(e) => crate::ui::warn(format!("adage: skipping invalid track {}: {e:#}", d.display())),
             }
             continue;
         }
@@ -428,6 +428,32 @@ fn verbs(r: &Route, proposed: bool) -> Vec<&'static str> {
     v
 }
 
+/// What `adage ui` shows beside each installed route: the decisions that apply to it, and why it
+/// awaits review (empty when it does not). Keyed by (track reference, route id).
+pub(crate) struct Standing {
+    pub(crate) verbs: Vec<&'static str>,
+    pub(crate) reasons: Vec<(&'static str, String)>,
+}
+
+pub(crate) fn standings(paths: &Paths) -> Result<BTreeMap<(String, String), Standing>> {
+    let all = discover(&paths.tracks())?;
+    let judged = judgements(paths);
+    let index = Index::compile(&all.iter().map(|i| i.track.clone()).collect::<Vec<_>>());
+    let mut out: BTreeMap<(String, String), Standing> = BTreeMap::new();
+    for inst in &all {
+        for r in &inst.track.routes {
+            let proposed = crate::proposal::current(inst.proposals.routes.get(&r.id), r).is_some();
+            out.insert((inst.reference.clone(), r.id.clone()), Standing { verbs: verbs(r, proposed), reasons: vec![] });
+        }
+    }
+    for it in queue(&all, &judged, &index) {
+        if let Some(s) = out.get_mut(&(it.inst.reference.clone(), it.route.id.clone())) {
+            s.reasons = it.reasons;
+        }
+    }
+    Ok(out)
+}
+
 /// A learned (non-imported) route in the same repository whose own evidence clears the default
 /// green bar: the local first-hand evidence Design O2 requires before an import may be green.
 pub(crate) fn first_hand<'a>(all: &'a [Installed], repo: &str, id: &str) -> Option<&'a Route> {
@@ -479,9 +505,29 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     };
     let (Some(spec), Some(route_id), None) = (pos.first(), pos.get(1), pos.get(2)) else { bail!("{USAGE}") };
     let by = crate::flag(args, "--by");
+    for line in apply(verb, spec, route_id, by, paths)? {
+        println!("{line}");
+    }
+    Ok(())
+}
+
+/// A decision from `adage ui`: the same guard and the same code path as `adage review <verb>`.
+pub(crate) fn decide_quietly(verb: &str, spec: &str, route_id: &str, paths: &Paths) -> Result<Vec<String>> {
+    require_person(&format!("review {verb}"))?;
+    apply(verb, spec, route_id, None, paths)
+}
+
+/// Record one decision and recompile the index; returns the report `adage review` prints. The
+/// caller has checked for a person at the terminal.
+fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Paths) -> Result<Vec<String>> {
+    if !matches!(verb, "approve" | "reject" | "retire" | "demote" | "promote" | "pin" | "dismiss") {
+        bail!("{USAGE}");
+    }
     if let Some(b) = &by {
         review::check_by(b)?;
     }
+    let route_id = &route_id.to_string();
+    let mut out: Vec<String> = Vec::new();
     let all = discover(&paths.tracks())?;
     let inst = resolve(&all, spec)?;
     let mut track = inst.track.clone();
@@ -501,12 +547,13 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         props.routes.remove(route_id.as_str());
         props.dismissed.insert(route_id.to_string(), review::basis(&p.route, 0, 0));
         proposals::save(&inst.dir, &props)?;
-        println!("adage review: dismissed the proposed change to {} {route_id}", inst.reference);
-        println!(
+        out.push(format!("adage review: dismissed the proposed change to {} {route_id}", inst.reference));
+        out.push(
             "  kept       the pinned route as it is; learning proposes again only if its version changes materially"
+                .into(),
         );
-        println!("  recorded   {}/{}", inst.reference, proposals::FILE);
-        return Ok(());
+        out.push(format!("  recorded   {}/{}", inst.reference, proposals::FILE));
+        return Ok(out);
     }
     let (decision, bump) = match verb {
         "approve" if proposal.is_some() => {
@@ -613,22 +660,25 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
 
     let change = |a: String, b: String| if a == b { a } else { format!("{a} → {b}") };
     if proposal.is_some() && verb == "approve" {
-        println!("adage review: applied the proposed change to {} {route_id}; it stays pinned", inst.reference);
+        out.push(format!(
+            "adage review: applied the proposed change to {} {route_id}; it stays pinned",
+            inst.reference
+        ));
     } else {
-        println!("adage review: {} {} {}", decision.as_str(), inst.reference, route_id);
+        out.push(format!("adage review: {} {} {}", decision.as_str(), inst.reference, route_id));
     }
     if verb == "approve" && proposal.is_some() {
-        println!("  step       {}", change(describe_step(&before.step), describe_step(&after.step)));
+        out.push(format!("  step       {}", change(describe_step(&before.step), describe_step(&after.step))));
     }
-    println!("  aspect     {}", change(aspect_str(before.aspect).into(), aspect_str(after.aspect).into()));
-    println!("  state      {}", change(lower(before.state), lower(after.state)));
+    out.push(format!("  aspect     {}", change(aspect_str(before.aspect).into(), aspect_str(after.aspect).into())));
+    out.push(format!("  state      {}", change(lower(before.state), lower(after.state))));
     if after.authored != before.authored {
-        println!("  authored   yes: `adage learn` will not overwrite it");
+        out.push("  authored   yes: `adage learn` will not overwrite it".into());
     }
-    println!("  track      {} @ {}", track.manifest.track.name, track.manifest.track.version);
-    println!("  recorded   {}/{}", inst.reference, review::FILE);
-    println!("index generation {}, {} routes", index.generation, index.routes.len());
-    Ok(())
+    out.push(format!("  track      {} @ {}", track.manifest.track.name, track.manifest.track.version));
+    out.push(format!("  recorded   {}/{}", inst.reference, review::FILE));
+    out.push(format!("index generation {}, {} routes", index.generation, index.routes.len()));
+    Ok(out)
 }
 
 #[cfg(test)]

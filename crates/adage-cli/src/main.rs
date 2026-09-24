@@ -2,9 +2,12 @@
 //!
 //! ```text
 //! adage hook <claude|opencode|codex> <Event>   hook client (reads the harness payload on stdin)
-//! adage init [--repo <path>] [--yes]  first run: detect harnesses, show hook snippets, offer the model, survey
+//! adage init [--repo <path>] [--yes | --print]  first run: a guided wizard at a terminal; else detect
+//!                                    harnesses, show hook snippets, offer the model, survey
 //! adage survey [--repo <key>] [--since <days>] [--json]   what your agents actually do (read-only)
 //! adage doctor [--json]              check the binary, data directory, index, tracks, model, hooks
+//! adage watch [--repo <path>] [--demo]  a live pane: health lights, hook activity, what Adage learns
+//! adage ui                           the full-screen app: live feed, routes and review, health fixes, settings
 //! adage learn [options]              mine tracks from agent sessions and compile the index
 //! adage learn --auto --repo-root <path>   learn one repository quietly (what hooks start)
 //! adage config [get <key> | set <key> <value>] [--json]   settings in $ADAGE_HOME/config.toml
@@ -49,6 +52,7 @@ mod serve;
 mod share;
 mod survey;
 mod tty;
+mod ui;
 
 use adage_learn::{Inputs, LearnConfig};
 use adage_store::Paths;
@@ -133,6 +137,11 @@ fn run(args: &[String]) -> Result<()> {
         Some("survey") => survey::survey(&args[1..], &paths),
         Some("init") => init::init(&args[1..], &paths),
         Some("doctor") => doctor::doctor(&args[1..], &paths),
+        Some("watch") => ui::watch(&args[1..], &paths),
+        Some("ui") => ui::app(&args[1..], &paths),
+        // Bare `adage` at a terminal opens the app; anywhere else (a pipe, an agent's shell) it
+        // prints the usage, as `--help` always does.
+        None if ui::interactive() => ui::app(&[], &paths),
         Some("hooks-config") => {
             let bin = args.get(1).cloned().unwrap_or_else(|| "adage".into());
             println!("{}", serde_json::to_string_pretty(&harness::claude::settings(&bin))?);
@@ -144,7 +153,9 @@ fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         _ => {
-            println!("usage: adage <init|survey|learn|status|report|graph|review|share|add|install|models|doctor|config|hooks-config|version|hook>");
+            println!("usage: adage <init|survey|learn|status|report|graph|review|share|add|install|models|doctor|watch|ui|config|hooks-config|version|hook>");
+            println!("       adage watch   live pane for a split terminal: health, hook activity, learning");
+            println!("       adage ui      full-screen app: live feed, routes and review, health fixes, settings");
             Ok(())
         }
     }

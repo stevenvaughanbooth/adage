@@ -43,6 +43,100 @@ fn env_dir(var: &str, home_rel: &str) -> Result<PathBuf> {
     }
 }
 
+/// A harness's registration for one binary: what to write, and where each scope puts it.
+struct Registration {
+    content: String,
+    project_rel: &'static str,
+    user_path: fn() -> Result<PathBuf>,
+}
+
+fn registration(harness: &str, bin: &str) -> Result<Registration> {
+    let (content, project_rel, user_path): (String, &'static str, fn() -> Result<PathBuf>) = match harness {
+        "claude-code" | "claude" => {
+            (serde_json::to_string_pretty(&claude::settings(bin))?, ".claude/settings.local.json", || {
+                home(".claude/settings.json")
+            })
+        }
+        "codex" => (serde_json::to_string_pretty(&codex::settings(bin))?, ".codex/hooks.json", || {
+            env_dir("CODEX_HOME", ".codex").map(|d| d.join("hooks.json"))
+        }),
+        "opencode" => (opencode::plugin_source(bin), ".opencode/plugins/adage.js", || {
+            env_dir("XDG_CONFIG_HOME", ".config").map(|d| d.join("opencode/plugins/adage.js"))
+        }),
+        _ => bail!("{USAGE}"),
+    };
+    Ok(Registration { content, project_rel, user_path })
+}
+
+/// The adage binary hooks should run: `--bin`, else this one; absolute, in plain form.
+fn hook_binary(bin: Option<PathBuf>) -> Result<String> {
+    let bin = match bin {
+        Some(b) => b,
+        None => std::env::current_exe().context("cannot locate the adage binary; pass --bin")?,
+    };
+    let bin = bin.canonicalize().unwrap_or(bin);
+    if !bin.is_absolute() {
+        bail!("--bin must be an absolute path");
+    }
+    let bin = bin.to_string_lossy().to_string();
+    // Windows' canonical form is a verbatim path (`\\?\C:\...`); hooks want the plain one.
+    Ok(match bin.strip_prefix(r"\\?\") {
+        Some(plain) if cfg!(windows) && plain.as_bytes().get(1) == Some(&b':') => plain.to_string(),
+        _ => bin,
+    })
+}
+
+/// One write `adage install --write` would make: the file, what it holds now, and what it will.
+#[derive(Debug, Clone)]
+pub(crate) struct Plan {
+    pub(crate) harness: String,
+    pub(crate) target: PathBuf,
+    pub(crate) before: Option<String>,
+    pub(crate) after: String,
+}
+
+/// Plan the write for `harness` in `scope`: `project` is the repository containing `repo` (else
+/// the current directory), `user` the harness's user location. Reads, never writes.
+pub(crate) fn plan(harness: &str, scope: &str, repo: Option<&Path>, bin: Option<PathBuf>) -> Result<Plan> {
+    if scope != "project" && scope != "user" {
+        bail!("--scope must be project or user\n{USAGE}");
+    }
+    let reg = registration(harness, &hook_binary(bin)?)?;
+    let target = if scope == "user" {
+        (reg.user_path)()?
+    } else {
+        let start = match repo {
+            Some(r) => r.to_path_buf(),
+            None => std::env::current_dir()?,
+        };
+        let start = start.canonicalize().with_context(|| format!("{} does not exist", start.display()))?;
+        let root = repo::find_root(&start).with_context(|| {
+            format!("{} is not inside a git repository; pass --repo or --scope user", start.display())
+        })?;
+        let target = root.join(reg.project_rel);
+        // A repository must not redirect the write elsewhere through a symlinked directory or file.
+        for p in target.ancestors().take_while(|p| *p != root) {
+            if p.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {
+                bail!("{} is a symlink; not writing through it", p.display());
+            }
+        }
+        target
+    };
+    let after = if harness == "opencode" {
+        own_file(&target, &reg.content)?
+    } else {
+        merge_hooks(&target, &reg.content, harness)?
+    };
+    let before = std::fs::read_to_string(&target).ok();
+    Ok(Plan { harness: harness.to_string(), target, before, after })
+}
+
+/// Make a planned write. Needs a person at a terminal, outside any agent session.
+pub(crate) fn apply(p: &Plan) -> Result<()> {
+    require_person()?;
+    write_atomic(&p.target, &p.after)
+}
+
 pub fn install(args: &[String]) -> Result<()> {
     let harness = args.first().map(String::as_str).unwrap_or("");
     let write = args.iter().any(|a| a == "--write");
@@ -53,42 +147,23 @@ pub fn install(args: &[String]) -> Result<()> {
     if scope != "project" && scope != "user" {
         bail!("--scope must be project or user\n{USAGE}");
     }
-    let bin = match flag(args, "--bin") {
-        Some(b) => PathBuf::from(b),
-        None => std::env::current_exe().context("cannot locate the adage binary; pass --bin")?,
-    };
-    let bin = bin.canonicalize().unwrap_or(bin);
-    if !bin.is_absolute() {
-        bail!("--bin must be an absolute path");
+    let bin = flag(args, "--bin").map(PathBuf::from);
+    if !matches!(harness, "claude-code" | "claude" | "codex" | "opencode") {
+        bail!("{USAGE}");
     }
-    let bin = bin.to_string_lossy().to_string();
-    // Windows' canonical form is a verbatim path (`\\?\C:\...`); hooks want the plain one.
-    let bin = match bin.strip_prefix(r"\\?\") {
-        Some(plain) if cfg!(windows) && plain.as_bytes().get(1) == Some(&b':') => plain.to_string(),
-        _ => bin,
-    };
-
-    let (content, project_rel, user_path): (String, &str, fn() -> Result<PathBuf>) = match harness {
-        "claude-code" | "claude" => {
-            (serde_json::to_string_pretty(&claude::settings(&bin))?, ".claude/settings.local.json", || {
-                home(".claude/settings.json")
-            })
-        }
-        "codex" => (serde_json::to_string_pretty(&codex::settings(&bin))?, ".codex/hooks.json", || {
-            env_dir("CODEX_HOME", ".codex").map(|d| d.join("hooks.json"))
-        }),
-        "opencode" => (opencode::plugin_source(&bin), ".opencode/plugins/adage.js", || {
-            env_dir("XDG_CONFIG_HOME", ".config").map(|d| d.join("opencode/plugins/adage.js"))
-        }),
-        _ => bail!("{USAGE}"),
-    };
 
     if !write {
+        let reg = registration(harness, &hook_binary(bin)?)?;
+        let content = reg.content;
         print!("{content}");
         if !content.ends_with('\n') {
             println!();
         }
-        let target = if scope == "user" { user_path()?.display().to_string() } else { format!("<repo>/{project_rel}") };
+        let target = if scope == "user" {
+            (reg.user_path)()?.display().to_string()
+        } else {
+            format!("<repo>/{}", reg.project_rel)
+        };
         eprintln!(
             "adage install: printed only. `adage install {harness} --write --scope {scope}` would write {target}"
         );
@@ -96,30 +171,10 @@ pub fn install(args: &[String]) -> Result<()> {
     }
 
     require_person()?;
-    let target = if scope == "user" {
-        user_path()?
-    } else {
-        let start = match flag(args, "--repo") {
-            Some(r) => PathBuf::from(r),
-            None => std::env::current_dir()?,
-        };
-        let start = start.canonicalize().with_context(|| format!("{} does not exist", start.display()))?;
-        let root = repo::find_root(&start).with_context(|| {
-            format!("{} is not inside a git repository; pass --repo or --scope user", start.display())
-        })?;
-        let target = root.join(project_rel);
-        // A repository must not redirect the write elsewhere through a symlinked directory or file.
-        for p in target.ancestors().take_while(|p| *p != root) {
-            if p.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {
-                bail!("{} is a symlink; not writing through it", p.display());
-            }
-        }
-        target
-    };
-    let body =
-        if harness == "opencode" { own_file(&target, &content)? } else { merge_hooks(&target, &content, harness)? };
-    write_atomic(&target, &body)?;
-    println!("adage install: wrote {}", target.display());
+    let repo = flag(args, "--repo").map(PathBuf::from);
+    let p = plan(harness, &scope, repo.as_deref(), bin)?;
+    write_atomic(&p.target, &p.after)?;
+    println!("adage install: wrote {}", p.target.display());
     if harness == "codex" {
         println!("Codex asks you to review new hooks before they run: open /hooks in Codex to approve them.");
     }
