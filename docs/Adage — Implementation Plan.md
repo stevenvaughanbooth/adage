@@ -53,7 +53,7 @@ The `adage` binary exposes these commands:
 init · survey · learn · status · report · graph [--serve] · review · eval · doctor · share · add · install · models · hooks-config · hook · version
 ```
 
-Test state: 229 tests pass (`cargo test --workspace`), including 315 normaliser fixtures, golden
+Test state: 281 tests pass (`cargo test --workspace`), including 315 normaliser fixtures, golden
 hook outputs per harness, hostile-payload suites, property tests, the harness simulator's
 end-to-end replays, and the eval gates (§3a). CI runs them on macOS arm64 and x64, Linux x64 and
 arm64, and Windows x64, with clippy `-D warnings`, rustfmt, and `cargo deny`.
@@ -81,6 +81,7 @@ arm64, and Windows x64, with clippy `-D warnings`, rustfmt, and `cargo deny`.
 | — | Release engineering (M1) | ✅ built | CI, `dist` releases, npm packages, marketplace, Windows port; first tagged release waits on secrets and D1–D4 |
 | — | Harness simulator + Codex importer | ✅ | `crates/adage-sim`: mock sessions in each harness's native format, end-to-end replays; `adage learn --codex-sessions` |
 | — | Team depots, lockfiles (Design §10.7, O12) | ❌ | Direct sharing works; depots do not |
+| — | Live learning (Design §10.9, automatic tracks) | ✅ (added) | Hooks start a debounced, single-flight background learner per repository at each stop; `config.toml` / `adage config`; `learn.log` records each route change; parse cache. Architecture §4.7.2, docs/live-learning.md |
 
 ## 3a. Evals
 
@@ -185,6 +186,21 @@ Closed since draft 2:
   bytes, under every harness's 9,500. A test (`the_largest_decision_fits_every_harness_cap`) pins
   the bound and each limit it rests on; raising one fails it. Truncation stays as a backstop.
 - `adage learn` appends a one-line JSON summary per run to `learn.log` (rotated at 256 KiB).
+- **Live learning** (branch `live-learn`): learning no longer waits for a person to run
+  `adage learn`. At Claude Code and Codex `Stop`/`SessionEnd` and OpenCode
+  `session.idle`/`session.deleted`, after its decision, the hook writes a request marker
+  (`learn-queue/<repo>.json`) and starts a detached `adage learn --auto` for the repository,
+  debounced per `learn.min_interval_secs` (a request inside the interval starts a learner that
+  waits, so none is lost) and single-flight per repository (`<repo>.lock`); `tracks.lock`
+  serialises every writer of tracks and the index. The learner learns only that repository, and
+  writes what a full learn writes for it. Stop p95 2.04 → 2.36 ms (learner running), 2.77 ms
+  when it starts one (`hook_bench`). Every learn appends per-repository route changes (`new`,
+  `draft`, `retired`, `aspect`, `evidence`, `proposal`) to `learn.log`; failures are
+  `learn_error` lines. `$ADAGE_HOME/config.toml` with `adage config` (`learn.auto`,
+  `min_interval_secs`, `thresholds`, sources, `parse_cache`, `runtime.holdout`; environment
+  wins). A parse cache keyed by (path, size, mtime) makes re-learning 207 real transcripts
+  60 ms instead of 300–670 ms, byte-identical. `doctor` reports auto-learn state, last runs, stuck
+  locks and backlog. `adage_store::spool::read_from` tails spools for live views.
 - CI builds the aarch64 musl release target natively on the arm64 runner (`musl-tools`, with
   `CC_aarch64_unknown_linux_musl=musl-gcc`) and checks it is static and runs. Written, and
   type-checked locally with `scripts/cross-check.sh`; its first CI run is the real test.
@@ -198,6 +214,9 @@ Open:
 | A failing runner whose error output has no renderable line (quotes, shell syntax, invisible characters) has no signature, so no dead end names it | Adversarial dead-end recall 3/30; overall recall 0.57 | Cut an unrenderable line at its first unrenderable character, with a minimum length, if that keeps the safety oracle at 0 |
 | A linked worktree does not see its repository's `origin` (the config lives in the common git directory; `repo_key` reads `<root>/.git/config`) | A worktree is keyed `<worktree dir>@<root commit>`, so it does not share the main checkout's routes | Read `origin` from the common directory (`gitobj::Repo` already finds it); re-keys existing worktree routes |
 | Per-session nonce (review finding F12) and arm assignment by root session lineage (F7) were accepted but not built | `/clear` starts a new arm | Build both |
+| Automatic learning reads only configured sources; `adage learn` can be given others (`--transcripts`, `--codex-sessions`) | A route learned by hand from an unconfigured source can lose that evidence at the next automatic learn | Set `learn.codex_sessions` / `learn.opencode_exports` for sources you learn from; or remember manual sources |
+| The first automatic learn with an empty parse cache parses the whole Claude Code history (every repository), as `adage learn` does | One slow background learn (about 1 s per 4,000 sessions of the simulator's size), after which each learn reads only what changed | Pre-filter by project directory before parsing, if histories get large |
+| A learner is detached with a new process group, not a new session (`setsid` needs `libc`) | A terminal hang-up that signals the whole session could stop a learner mid-run. Hooks keep the previous index (it is replaced atomically, last); a track directory left half-written is rewritten by the next learn | Add `setsid` if it shows up |
 
 Fixed from the architecture audit (draft 3):
 
