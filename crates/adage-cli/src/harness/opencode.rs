@@ -64,6 +64,10 @@ impl Adapter for OpenCode {
         })
     }
 
+    fn is_learn_point(&self, event: &str) -> bool {
+        matches!(event, "session.idle" | "session.deleted")
+    }
+
     fn render(&self, _event: &str, out: Output) -> Option<String> {
         Some(match out {
             Output::Continue(reason) => json!({ "continue": reason }).to_string(),

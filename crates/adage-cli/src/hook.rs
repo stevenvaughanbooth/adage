@@ -2,7 +2,12 @@
 //! normalised event through the harness adapter, decides, and prints the adapter's rendering.
 //! Returns `Ok(None)` when there is nothing to say, and `Err` when something went wrong: the caller
 //! prints nothing in either case (fail open), and records the error in `fail-open.log`.
+//!
+//! When an event ends a turn or a session, the hook then asks for the repository to be learned
+//! (`crate::autolearn`): that never changes what it prints, and a failure there is recorded in
+//! `fail-open.log` and ignored.
 
+use crate::autolearn;
 use crate::failopen::{self, Failure};
 use crate::harness::{self, Output};
 use adage_core::{repo, CommandTable};
@@ -54,16 +59,38 @@ pub fn run(harness: &str, event: &str) -> Result<Option<String>, Failure> {
         return Ok(None);
     }
     let paths = Paths::from_env();
+    let out = respond(adapter, harness, event, &p, &session, &cwd, &root, &paths);
+    if adapter.is_learn_point(event) {
+        let transcript = p.get("transcript_path").and_then(|v| v.as_str());
+        if let Err(f) = autolearn::on_turn_end(&paths, &root, adapter.name(), transcript) {
+            failopen::record(&paths.root, harness, event, &f);
+        }
+    }
+    out
+}
+
+/// Decide and render: everything after the kill switches.
+#[allow(clippy::too_many_arguments)]
+fn respond(
+    adapter: &dyn harness::Adapter,
+    harness: &str,
+    event: &str,
+    p: &Value,
+    session: &str,
+    cwd: &std::path::Path,
+    root: &std::path::Path,
+    paths: &Paths,
+) -> Result<Option<String>, Failure> {
     let index = Index::load(&paths.index());
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
-    let Some(repo_key) = repo::lookup_key(&root, Some(&paths.repo_keys()), &keys) else {
+    let Some(repo_key) = repo::lookup_key(root, Some(&paths.repo_keys()), &keys) else {
         return Ok(None); // nothing installed for this repository: the common, cheapest path
     };
     // An event this adapter does not act on.
-    let Some(ev) = adapter.translate(event, &p, &cwd.to_string_lossy()) else { return Ok(None) };
+    let Some(ev) = adapter.translate(event, p, &cwd.to_string_lossy()) else { return Ok(None) };
     // An event that cannot change any decision stops here, before the command table, the state
     // lock and the spool (Design §13.2; `adage_runtime::fast`).
-    let state_path = paths.state(&session);
+    let state_path = paths.state(session);
     let read_state = || state::try_read::<SessionState>(&state_path).ok().flatten();
     if fast::skip(&index.triggers(&repo_key), &ev, &cwd.to_string_lossy(), read_state) {
         return Ok(None);
@@ -77,10 +104,11 @@ pub fn run(harness: &str, event: &str) -> Result<Option<String>, Failure> {
         let v = m.embed(&normalize(text))?;
         Some((m.id, v))
     };
-    let ctx = Ctx { index: &index, repo: repo_key.clone(), root: &root, table: &table, embed: Some(&embed) };
+    let ctx = Ctx { index: &index, repo: repo_key.clone(), root, table: &table, embed: Some(&embed) };
     let arm_env = std::env::var("ADAGE_ARM").ok();
-    let share: f64 = std::env::var("ADAGE_HOLDOUT").ok().and_then(|v| v.parse().ok()).unwrap_or(0.1);
-    let spool_path = paths.spool(&session);
+    // ADAGE_HOLDOUT, else `runtime.holdout` in config.toml, else 0.1.
+    let share: f64 = adage_store::config::load(paths).config.runtime_holdout;
+    let spool_path = paths.spool(session);
     // A state that can no longer be read is rebuilt from the session's spool, if it is small
     // enough to replay quickly (it is read under the state lock).
     let rebuild = || {
@@ -93,7 +121,7 @@ pub fn run(harness: &str, event: &str) -> Result<Option<String>, Failure> {
             st.arm = Some(match arm_env.as_deref() {
                 Some("holdout") => Arm::Holdout,
                 Some("treated") => Arm::Treated,
-                _ => assign_arm(&session, share),
+                _ => assign_arm(session, share),
             });
             st.repo = Some(repo_key.clone());
         }
@@ -106,7 +134,7 @@ pub fn run(harness: &str, event: &str) -> Result<Option<String>, Failure> {
     if adapter.name() != "claude" {
         rec["harness"] = json!(adapter.name());
     }
-    if let Err(e) = spool::append(&paths.spool(&session), &rec) {
+    if let Err(e) = spool::append(&paths.spool(session), &rec) {
         // Measurement is lost, but the decision stands: record it and carry on.
         failopen::record(&paths.root, harness, event, &Failure::io("spool", "appending to the session spool", &e));
     }

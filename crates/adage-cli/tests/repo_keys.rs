@@ -58,6 +58,7 @@ fn adage(home: &Path, args: &[&str], stdin: &str) -> String {
     let mut c = Command::new(env!("CARGO_BIN_EXE_adage"))
         .args(args)
         .env("ADAGE_HOME", home)
+        .env("ADAGE_AUTO_LEARN", "0")
         .env("ADAGE_ARM", "treated")
         .env_remove("ADAGE_DISABLE")
         .env_remove("CLAUDECODE")

@@ -152,10 +152,13 @@ def claude_command(cfg, prompt, settings):
 
 
 def env_for(arm, home):
-    """Environment overrides for one session. Training and `off` sessions have no hooks at all."""
+    """Environment overrides for one session. Training and `off` sessions have no hooks at all.
+    Automatic learning is off: the rounds decide when learning happens, so the index stays fixed
+    within a round."""
     if arm in ("train", "off"):
         return {}
-    return {"ADAGE_HOME": str(home), "ADAGE_ARM": "holdout" if arm == "holdout" else "treated"}
+    return {"ADAGE_HOME": str(home), "ADAGE_ARM": "holdout" if arm == "holdout" else "treated",
+            "ADAGE_AUTO_LEARN": "0"}
 
 
 def rounds_for(cfg, round_):

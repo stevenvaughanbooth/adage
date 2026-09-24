@@ -12,6 +12,12 @@
 //! per scenario (after 20 warm-up runs), exec form, payload on stdin, timing spawn to exit, and
 //! prints JSON: p50, p95, p99, max and mean in milliseconds, and the first run's time with an
 //! empty repository-key cache.
+//!
+//! Last, `Stop` with live learning (Architecture §4.7.2): off (`ADAGE_AUTO_LEARN=0`, the cost
+//! before live learning, plus one read of `config.toml`); on while a learner runs (the lock is
+//! held, so the hook only records the request: the steady state); and on with
+//! `learn.min_interval_secs = 0` and no learner running, so every `Stop` starts a detached learner
+//! (which finds no history under an empty `HOME` and exits).
 
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
@@ -164,11 +170,18 @@ fn pct(v: &mut [f64], p: f64) -> f64 {
 }
 
 fn spawn(bin: &str, home: &Path, event: &str, payload: &Value) -> (f64, String) {
+    spawn_env(bin, home, event, payload, &[])
+}
+
+fn spawn_env(bin: &str, home: &Path, event: &str, payload: &Value, env: &[(&str, &str)]) -> (f64, String) {
     let t = Instant::now();
     let mut c = Command::new(bin)
         .args(["hook", "claude", event])
         .env("ADAGE_HOME", home)
         .env("ADAGE_ARM", "treated")
+        // Learners a Stop starts read this (empty) home's history, never the real one.
+        .env("HOME", home.join("user-home"))
+        .envs(env.iter().copied())
         .env_remove("ADAGE_DISABLE")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -183,12 +196,23 @@ fn spawn(bin: &str, home: &Path, event: &str, payload: &Value) -> (f64, String) 
 /// Time one scenario: `payload(i)` for run `i` (`usize::MAX` for the first, cold-cache run). A
 /// payload with a fixed session id keeps its state across runs, as within a real session.
 fn time(bin: &str, home: &Path, event: &str, payload: &dyn Fn(usize) -> Value, runs: usize) -> (Value, String) {
+    time_env(bin, home, event, payload, runs, &[])
+}
+
+fn time_env(
+    bin: &str,
+    home: &Path,
+    event: &str,
+    payload: &dyn Fn(usize) -> Value,
+    runs: usize,
+    env: &[(&str, &str)],
+) -> (Value, String) {
     let _ = std::fs::remove_dir_all(home.join("repo-keys"));
-    let (first, first_out) = spawn(bin, home, event, &payload(usize::MAX));
+    let (first, first_out) = spawn_env(bin, home, event, &payload(usize::MAX), env);
     let mut ms = Vec::with_capacity(runs);
     let mut last = String::new();
     for i in 0..runs + 20 {
-        let (e, out) = spawn(bin, home, event, &payload(i));
+        let (e, out) = spawn_env(bin, home, event, &payload(i), env);
         if i >= 20 {
             ms.push(e);
         }
@@ -270,6 +294,27 @@ fn main() {
     let (r, last) = time(bin, &home, "PostToolBatch", &batch(&big, Some("bench-one")), runs);
     assert!(last.is_empty(), "no route matches: {last}");
     out.insert("no_match_batch_mid_session".into(), r);
+
+    // Stop, with no obligation to check: the fast path, then live learning's trigger.
+    std::fs::create_dir_all(home.join("user-home")).unwrap();
+    let stop = |i: usize| json!({ "session_id": format!("bench-stop-{i}"), "cwd": big, "stop_hook_active": false });
+    let (r, _) = time_env(bin, &home, "Stop", &stop, runs, &[("ADAGE_AUTO_LEARN", "0")]);
+    out.insert("stop_auto_learn_off".into(), r);
+    let queue = |repo: &str| home.join("learn-queue").join(format!("{}.lock", adage_learn::slug(repo)));
+    let lock = adage_store::lock::try_exclusive(&queue(&key(&big))).unwrap().expect("no learner yet");
+    let (r, _) = time_env(bin, &home, "Stop", &stop, runs, &[]);
+    out.insert("stop_auto_learn_on_learner_running".into(), r);
+    drop(lock);
+    std::fs::write(home.join("config.toml"), "[learn]\nmin_interval_secs = 0\n").unwrap();
+    let (r, _) = time_env(bin, &home, "Stop", &stop, runs, &[]);
+    out.insert("stop_auto_learn_on_starts_learner".into(), r);
+    // Let the last learners finish before the scratch directory goes.
+    let t = Instant::now();
+    while adage_store::lock::is_held(&queue(&key(&big))).unwrap_or(false) && t.elapsed().as_secs() < 30 {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let learned = std::fs::read_to_string(home.join("learn.log")).map(|t| t.lines().count()).unwrap_or(0);
+    out.insert("learners_that_ran".into(), learned.into());
 
     println!("{}", serde_json::to_string_pretty(&Value::Object(out)).unwrap());
 }

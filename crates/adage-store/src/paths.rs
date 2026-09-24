@@ -68,6 +68,24 @@ impl Paths {
     pub fn learn_log(&self) -> PathBuf {
         self.root.join("learn.log")
     }
+    /// The person's settings (`adage config`).
+    pub fn config(&self) -> PathBuf {
+        self.root.join(crate::config::FILE)
+    }
+    /// Live learning's queue: per repository, a request marker (`<slug>.json`), the learner's lock
+    /// (`<slug>.lock`) and its last run (`<slug>.state.json`).
+    pub fn learn_queue(&self) -> PathBuf {
+        self.root.join("learn-queue")
+    }
+    /// Caches that can always be rebuilt (per-transcript parses under `cache/sessions`).
+    pub fn cache(&self) -> PathBuf {
+        self.root.join("cache")
+    }
+    /// Held by whatever writes the tracks directory and the index (`adage learn`, automatic
+    /// learning, review decisions, `adage add`), so writers never interleave.
+    pub fn tracks_lock(&self) -> PathBuf {
+        self.root.join("tracks.lock")
+    }
 }
 
 /// Session ids come from harness payloads; never let one escape the sessions directory. Ids that

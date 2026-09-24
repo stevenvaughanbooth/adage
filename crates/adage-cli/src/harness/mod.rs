@@ -47,6 +47,11 @@ pub trait Adapter: Sync {
     fn max_context(&self) -> usize {
         9_500
     }
+    /// Does this native event end an agent turn or a session? Live learning is triggered there
+    /// (`crate::autolearn`), whatever the decision.
+    fn is_learn_point(&self, event: &str) -> bool {
+        matches!(event, "Stop" | "SessionEnd")
+    }
 }
 
 pub fn adapter(harness: &str) -> Option<&'static dyn Adapter> {

@@ -81,6 +81,7 @@ fn hook(w: &World, event: &str, extra: serde_json::Value) -> String {
     let mut c = Command::new(env!("CARGO_BIN_EXE_adage"))
         .args(["hook", "claude", event])
         .env("ADAGE_HOME", &w.home)
+        .env("ADAGE_AUTO_LEARN", "0")
         .env("ADAGE_ARM", "treated")
         .env_remove("ADAGE_DISABLE")
         .stdin(Stdio::piped())
