@@ -109,16 +109,68 @@ Code, add the plugin marketplace with `/plugin marketplace add stevenvaughanboot
 
 ```bash
 cargo build --release -p adage-cli
-target/release/adage init             # detect harnesses, print hook snippets, offer the model, survey history
+target/release/adage init             # guided setup at a terminal: hooks, model, first learn, auto-learn
+target/release/adage watch            # run in a split pane: Adage's health, hook activity, and learning, live
 target/release/adage survey           # what your agents actually do, per repository (read-only)
 target/release/adage doctor           # check binary, data dir, index, tracks, model, hooks, kill switches
 target/release/adage graph --serve    # the signal box at http://127.0.0.1:8765 (read-only, loopback only)
 ```
 
-`init` writes nothing unless you pass `--yes` (which only downloads the embedding model); it shows
-the `adage install <harness> --write` command for each harness it finds. `survey` reads the same
-history `learn` does and lists the routes `learn` would build as candidates, with prompts shown only
-as short redacted snippets. `doctor` exits non-zero only when a check fails.
+At a terminal, `init` is a wizard: it detects your harnesses and, one step at a time, asks before
+it registers hooks (showing the exact file and diff), fetches the embedding model, runs a first
+`adage learn`, and turns auto-learning on; it ends with the doctor's summary. Piped, inside an agent
+session, or with `--print`, it prints the same report as before and writes nothing unless you pass
+`--yes` (which only downloads the embedding model). `survey` reads the same history `learn` does and
+lists the routes `learn` would build as candidates, with prompts shown only as short redacted
+snippets. `doctor` exits non-zero only when a check fails.
+
+### Watch it live
+
+`adage watch` (or `adage doctor --watch`) is a compact live pane for a split terminal. It works in
+60×20 and grows with the pane:
+
+```text
+ adage watch · harbor-dispatch · gen 8216e29f                         LIVE
++ adage 0.1.0  + hooks cc  + 4 routes  + auto-learn on  - no model
++ fail-open 0
+ activity · harbor-dispatch ────────────────────────────────────────────
+12:04:00 ●d76f0f cc prompt  → lookup-incident [G]
+12:04:01 ◌19b2cf cc prompt  withheld lookup-incident [G]
+12:04:02 ●d76f0f cc tools   → read-linked-files [Y]  ✓ followed lookup-i
+12:04:05 ●bc0c7d cc tools   ✗ derailed lookup-incident
+12:04:06 ●bc0c7d cc failure → dead-end-npm-test [R]
+12:04:07 ●bc0c7d cc stop    ■ stop-request
+12:04:08 ●bc0c7d cc tools   ✓ met codegen-after-registry
+ learning ──────────────────────────────────────────────────────────────
+12:04 auto-learn: 27/28 sessions used, 730ms, 2 changes, gen 8216e29f
+12:04   learned incidents: read-linked-files yellow→green (13/17 sessions)
+ q quit · p pause · f all repos · v hide quiet · ? help
+```
+
+- **Top:** health lamps, re-checked every few seconds: the binary, hooks that run for this
+  repository, its routes in the index, auto-learn, the embedding model, recent fail-open errors.
+- **Middle:** every hook call as it happens, from the session spools: time, session, harness, event,
+  and what Adage did: a directive (→, coloured by aspect), withheld in a holdout session (◌),
+  followed ✓ or derailed ✗, a finish line met, or a stop request.
+- **Bottom:** what learning changed, from `learn.log`.
+
+Keys: `q` quits, `p` pauses, `f` switches between this repository and all of them, `v` hides events
+where Adage said nothing, `↑`/`↓` scroll, `?` shows help. `NO_COLOR` is honoured: aspects are then
+spelled out (`[G]`, `[Y]`, `[R]`), as above.
+
+`adage ui` (or plain `adage` at a terminal) is the full-screen app, with four tabs:
+
+| Tab | What it does |
+| --- | --- |
+| **Live** | the watch view, larger |
+| **Routes** | every installed route by track: aspect, trigger and step, evidence (sessions, Wilson lower bound), live counts, and the exact directive text. Review decisions (`a`pprove, `r`eject, `d`emote, `p`romote, pi`n`, dismiss `x`) ask first, then run exactly what `adage review` runs, with the same ceilings |
+| **Health** | every doctor check, live. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), learn now, clear a stale learning lock, or open the fail-open log |
+| **Settings** | `learn.auto`, `learn.min_interval_secs`, `learn.thresholds` and `runtime.holdout` in `$ADAGE_HOME/config.toml`, validated, with the file's comments kept |
+
+`adage watch --demo` and `adage ui --demo` replay a small scripted scenario (three sessions of the
+harbor-dispatch demo, through real hook calls) into a temporary data directory, so you can see it
+all without an agent running. `adage watch --once [--size 80x24]` prints a single frame as text.
+Decisions, installs and settings refuse inside an agent session, as their commands do.
 
 ### Claude Code
 

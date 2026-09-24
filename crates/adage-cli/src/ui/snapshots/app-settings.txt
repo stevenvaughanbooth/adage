@@ -1,0 +1,30 @@
+ adage  1 Live  2 Routes (1 to review)  3 Health (2)  4 Settings
+config /home/me/.local/share/adage/config.toml
+
+learn.auto               true
+  learn automatically after agent sessions end
+learn.min_interval_secs  unset (default)
+  the shortest time between automatic learning runs, in seconds
+learn.thresholds         unset (default)
+  the evidence bars routes must clear: default, or demo (for small demonstrations)
+runtime.holdout          unset (default)
+  the share of sessions held out as a control (nothing delivered); ADAGE_HOLDOUT overrides it
+
+Enter edits (Space toggles on/off and cycles choices); the file keeps its comments and other keys.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ harbor-dispatch · gen 8216e29f · 4 routes · auto-learn on        Enter edit · Space toggle · ? help · q quit

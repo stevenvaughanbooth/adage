@@ -1,4 +1,5 @@
 //! `adage doctor [--json]` (plan §6.3): is this machine's Adage set up and healthy?
+//! `adage doctor --watch` is `adage watch`: the same checks, live, with hook activity.
 //!
 //! Each check is pass, warn, or fail, with a fix for anything short of pass. The command exits
 //! non-zero only when a check fails. Read-only, apart from one probe file created and removed to
@@ -34,7 +35,7 @@ pub enum Status {
     Fail,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Check {
     pub check: String,
     pub status: Status,
@@ -400,17 +401,28 @@ fn fail_open(paths: &Paths) -> Check {
     }
 }
 
-pub fn doctor(args: &[String], paths: &Paths) -> Result<()> {
-    let repo_root = std::env::current_dir().ok().and_then(|d| repo::find_root(&d));
+/// Every check, in display order, for the repository at `repo_root` (if any). `adage watch` and
+/// `adage ui` re-run these every few seconds.
+pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
     let (bin, exe) = binary();
     let scan = scan_tracks(&paths.tracks());
     let (index, idx) = index_check(paths, &scan);
     let mut checks = vec![bin, data_dir(paths), index, tracks_check(&scan), model_check(paths, &idx)];
-    checks.extend(hooks_checks(repo_root.as_deref(), exe.as_deref()));
-    checks.extend(plugin_check(repo_root.as_deref(), exe.as_deref()));
-    checks.push(kill_switches(repo_root.as_deref()));
+    checks.extend(hooks_checks(repo_root, exe.as_deref()));
+    checks.extend(plugin_check(repo_root, exe.as_deref()));
+    checks.push(kill_switches(repo_root));
     checks.push(spools(paths));
     checks.push(fail_open(paths));
+    checks
+}
+
+pub fn doctor(args: &[String], paths: &Paths) -> Result<()> {
+    if args.iter().any(|a| a == "--watch") {
+        let rest: Vec<String> = args.iter().filter(|a| *a != "--watch").cloned().collect();
+        return crate::ui::watch(&rest, paths);
+    }
+    let repo_root = std::env::current_dir().ok().and_then(|d| repo::find_root(&d));
+    let checks = checks(paths, repo_root.as_deref());
 
     let count = |s: Status| checks.iter().filter(|c| c.status == s).count();
     let (p, w, f) = (count(Status::Pass), count(Status::Warn), count(Status::Fail));

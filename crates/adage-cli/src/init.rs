@@ -1,4 +1,4 @@
-//! `adage init [--repo <path>] [--yes]` (plan §6.3): first run, in one command.
+//! `adage init [--repo <path>] [--yes | --print]` (plan §6.3): first run, in one command.
 //!
 //! 1. Detects the installed harnesses (read-only probing; see [`crate::detect`]).
 //! 2. Shows how to register Adage's hooks with each: `adage install <harness>`'s printed snippet,
@@ -8,6 +8,11 @@
 //!    `--yes`.
 //! 4. Runs `adage survey` over existing history (read-only), for the repository at `--repo` if
 //!    given, else for every repository.
+//!
+//! At a terminal (stdin and stdout both terminals, outside any agent session, and without
+//! `--print` or `--yes`) `init` is a guided wizard instead (`crate::ui::wizard`): it asks
+//! before each step, shows the exact file and diff before installing hooks, and can fetch the
+//! model, run a first `adage learn`, and turn auto-learning on.
 //!
 //! Printing is allowed anywhere, including inside an agent session. `--yes` downloads into the
 //! data directory, so it needs a person at a terminal and refuses inside an agent session.
@@ -24,10 +29,19 @@ fn agent_session() -> Option<&'static str> {
 
 pub fn init(args: &[String], paths: &Paths) -> Result<()> {
     let yes = args.iter().any(|a| a == "--yes");
-    if let Some(bad) = args.iter().find(|a| a.starts_with("--") && !matches!(a.as_str(), "--yes" | "--repo")) {
-        bail!("unknown option {bad}\nusage: adage init [--repo <path>] [--yes]");
+    let print = args.iter().any(|a| a == "--print");
+    if let Some(bad) =
+        args.iter().find(|a| a.starts_with("--") && !matches!(a.as_str(), "--yes" | "--repo" | "--print"))
+    {
+        bail!("unknown option {bad}\nusage: adage init [--repo <path>] [--yes | --print]");
     }
     let agent = agent_session();
+    // A person at a terminal gets the guided wizard; `--print`, `--yes`, a pipe, or an agent's
+    // shell get the plain report below.
+    if !yes && !print && agent.is_none() && crate::ui::interactive() {
+        let repo = crate::flag(args, "--repo").map(PathBuf::from);
+        return crate::ui::wizard(repo, paths);
+    }
     if yes {
         if let Some(v) = agent {
             bail!("`adage init --yes` downloads into Adage's data directory, so it will not run inside an agent session ({v} is set). Run it yourself, in a terminal, or run `adage init` to print only.");

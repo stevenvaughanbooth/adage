@@ -44,25 +44,77 @@ fn install(dir: &Path, paths: &Paths) -> Result<()> {
 }
 
 fn fetch(paths: &Paths) -> Result<()> {
+    let m = fetch_with(paths, &mut |p| {
+        if p.file_done == 0 {
+            println!("fetching {} ({} bytes)", p.url, p.file_bytes);
+        }
+    })?;
+    println!("installed {} into {}", m, model::dir_in(&paths.models()).display());
+    Ok(())
+}
+
+/// Download progress, reported about five times a second while `curl` runs.
+pub(crate) struct Progress<'a> {
+    pub(crate) url: &'a str,
+    pub(crate) file_done: u64,
+    pub(crate) file_bytes: u64,
+    /// Bytes of every file so far, and of all of them.
+    pub(crate) done: u64,
+    pub(crate) total: u64,
+}
+
+/// Download and install the pinned model, reporting progress; returns its id. `curl`'s own output
+/// is captured, so a terminal UI can call this.
+pub(crate) fn fetch_with(paths: &Paths, progress: &mut dyn FnMut(&Progress)) -> Result<String> {
+    use std::process::Stdio;
     let tmp = paths.models().join(format!(".download{}", std::process::id()));
     std::fs::create_dir_all(&tmp)?;
-    let result = (|| -> Result<()> {
+    let total: u64 = model::FILES.iter().map(|f| f.bytes).sum();
+    let result = (|| -> Result<String> {
+        let mut before = 0u64;
         for f in &model::FILES {
             let url = model::url(f.name);
-            println!("fetching {} ({} bytes)", url, f.bytes);
-            let status = std::process::Command::new("curl")
+            let out = tmp.join(f.name);
+            let report = |progress: &mut dyn FnMut(&Progress), done: u64| {
+                progress(&Progress { url: &url, file_done: done, file_bytes: f.bytes, done: before + done, total })
+            };
+            report(progress, 0);
+            let mut child = std::process::Command::new("curl")
                 .args(["-fsSL", "--proto", "=https", "--max-filesize"])
                 .arg((f.bytes + 4096).to_string())
                 .arg("-o")
-                .arg(tmp.join(f.name))
+                .arg(&out)
                 .arg(&url)
-                .status()
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::piped())
+                .spawn()
                 .context("could not run curl; download the files yourself and use `adage models install <dir>`")?;
+            let status = loop {
+                if let Some(s) = child.try_wait()? {
+                    break s;
+                }
+                let done = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
+                report(progress, done.max(1).min(f.bytes));
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            };
             if !status.success() {
-                bail!("downloading {} failed ({status})", f.name);
+                let mut err = String::new();
+                if let Some(mut e) = child.stderr.take() {
+                    use std::io::Read;
+                    let _ = e.read_to_string(&mut err);
+                }
+                let err = err.trim();
+                bail!(
+                    "downloading {} failed ({status}){}",
+                    f.name,
+                    if err.is_empty() { String::new() } else { format!(": {err}") }
+                );
             }
+            report(progress, f.bytes);
+            before += f.bytes;
         }
-        install(&tmp, paths)
+        Ok(model::install(&tmp, &paths.models())?.id)
     })();
     let _ = std::fs::remove_dir_all(&tmp);
     result
