@@ -163,6 +163,8 @@ fn learns_all_four_route_kinds_from_opencode_exports() {
         outcomes: BTreeMap::new(),
         repo_override: Some("acme-billing".into()),
         models: None,
+        cache: None,
+        only_repo: None,
     };
     let rep = learn(&inputs, &home.join("tracks"), &home.join("index.json"), &LearnConfig::demo()).unwrap();
     assert_eq!((rep.sessions_read, rep.sessions_used), (6, 6));

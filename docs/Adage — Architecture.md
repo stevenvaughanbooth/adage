@@ -146,7 +146,9 @@ state across hook calls, and a single writer. The spikes removed each one:
 | A single writer | Each hook appends its own records to a per-session spool; there is no database | S3: no loss, duplication or tearing under concurrent writers and `kill -9` |
 
 So every hook is a process that the harness spawns, which reads its payload, decides, writes, and
-exits. Nothing runs between events, and there is no socket, service unit or idle timer.
+exits. There is no socket, service unit or idle timer. The one process that outlives a hook is a
+short-lived learner that a `Stop` hook may start for its repository, which exits when it has
+learned ([§4.7.2](#472-live-learning)).
 
 ### 4.2 Hook registration per harness (A3)
 
@@ -334,7 +336,8 @@ turns saved, provenance and models. Aspects are set from it (`aspect_for` in
 
 ### 4.7 The learning pipeline (`adage learn`)
 
-`adage learn` runs on demand. The nightly timer in draft 2 was not built. It is deterministic
+`adage learn` runs on demand, and automatically when sessions stop or end
+([§4.7.2](#472-live-learning)). The nightly timer in draft 2 was not built. It is deterministic
 and idempotent: inputs are sorted, clustering is seeded by canonical order, and a second run over
 the same history reports "unchanged" (`crates/adage-learn/src/lib.rs`).
 
@@ -354,7 +357,7 @@ flowchart LR
 
 | Stage | As built |
 | --- | --- |
-| **Import** | Found by content (`read_session`). Claude Code transcripts from `~/.claude/projects` by default (sidechain records skipped). `opencode export` files via `--transcripts` (sub-agent sessions skipped). Codex rollouts via `--codex-sessions` (sub-agent threads and compressed `.zst` rollouts skipped). `--cwd-prefix` filters by recorded working directory |
+| **Import** | Through the parse cache (below). Found by content (`read_session`). Claude Code transcripts from `~/.claude/projects` by default (sidechain records skipped). `opencode export` files via `--transcripts` (sub-agent sessions skipped). Codex rollouts via `--codex-sessions` (sub-agent threads and compressed `.zst` rollouts skipped). `--cwd-prefix` filters by recorded working directory |
 | **Normalise** | tree-sitter-bash plus the command table ([§4.7.1](#471-the-normaliser)); native tools mapped per harness (`crates/adage-core/src/tools.rs`) |
 | **Training hygiene** | A session steered by Adage is recognised from the directives in its transcript, and each miner excludes only sessions steered by its own kind of route (`Session::steered_by`). Draft 2's truncation with inverse-propensity weights was not built |
 | **Miners** | Four kinds per repository (`crates/adage-learn/src/mine.rs`, `intent.rs`), each a track named `<repo>/<kind>` |
@@ -379,6 +382,80 @@ parses compound constructs, redirects and heredocs. Flag grammars and effect cla
 commands default to the `environment` effect. S8 measured 98.2% of real calls normalised and
 ~32,000 calls/s, and its 315 golden fixtures run in `cargo test`. The normaliser's bounds are
 security controls ([§8](#8-security-architecture)).
+
+#### 4.7.2 Live learning
+
+Learning runs by itself, per repository, seconds after sessions stop, without a daemon or a timer
+(`crates/adage-cli/src/autolearn.rs`; the file contract for tools that watch it is
+[docs/live-learning.md](live-learning.md)).
+
+```mermaid
+sequenceDiagram
+  participant H as adage hook (Stop / SessionEnd)
+  participant Q as learn-queue/<repo>
+  participant L as adage learn --auto (detached)
+  participant D as tracks, index, learn.log
+  H->>H: decide and render as always
+  H->>Q: write the request marker
+  alt a learner holds <repo>.lock, or one is scheduled
+    H-->>H: done (the learner re-checks the marker)
+  else
+    H->>L: spawn detached, stdio null (--after <ms> if inside the interval)
+  end
+  L->>Q: take <repo>.lock, or exit (single flight)
+  L->>L: wait until --after
+  L->>D: under tracks.lock: learn this repository only (parse cache), diff its routes
+  L->>D: append a learn line (changes) to learn.log
+  L->>Q: re-read the marker once; learn again if a request arrived meanwhile
+```
+
+- **Trigger.** Every adapter names its end-of-turn and end-of-session events
+  (`Adapter::is_learn_point`: Claude Code and Codex `Stop`/`SessionEnd`, OpenCode
+  `session.idle`/`session.deleted`). After the normal decision, and only if `learn.auto` is on and
+  the repository is not switched off (`.adage/disabled`, `ADAGE_DISABLE`), the hook writes the
+  request marker and, unless a learner holds the repository's lock or is already scheduled, starts
+  `adage learn --auto --repo-root <root>`: on Unix in its own process group
+  (`CommandExt::process_group(0)`), on Windows with `DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP`,
+  with stdin, stdout and stderr null so the harness never waits on an inherited pipe. The trigger
+  never changes the hook's output; a failure is recorded in `fail-open.log` (class `learn`). It
+  fires for repositories with no routes yet, which is how a repository gets its first ones.
+- **Debounce without losing the last session.** At most one learn starts per repository per
+  `learn.min_interval_secs` (120 s). A request inside the interval starts a learner that holds
+  the lock and sleeps until the interval ends (`--after`), so later requests only refresh the
+  marker, and the last session of a burst is still learned.
+- **Single flight.** `<repo>.lock` (`File::try_lock`: `flock`, `LockFileEx`) admits one learner
+  per repository; the OS releases it when the learner exits, so a crash leaves nothing stuck. A
+  separate `tracks.lock` serialises every writer of the tracks directory and index: learners,
+  `adage learn`, review decisions and `adage add`. A learner that finishes re-reads the marker
+  once, and learns again if a session ended while it ran.
+- **Scope.** The learner reads the configured sources (Claude Code history; Codex and OpenCode
+  only if configured, plus any transcript a hook named) and keeps only sessions of its
+  repository key (`Inputs::only_repo`), so other repositories' tracks are untouched. What it
+  writes for the repository is byte for byte what a full `adage learn` writes for it (tested).
+  A repository with no usable session is left as it is, index included.
+- **Parse cache.** Parsing transcripts is most of learn's cost, and transcripts only grow. The
+  cache (`crates/adage-learn/src/cache.rs`, `$ADAGE_HOME/cache/sessions/`) keeps each parsed
+  session keyed by (path, size, modification time), in a manifest stamped with the build
+  (version, executable size and time; another build empties it). A hit re-derives the repository
+  key from the stored root, so cached and uncached learns write identical tracks and index
+  (tested). The manifest's roots let the learner skip other repositories' transcripts without
+  opening them. The files are a derived copy of harness history (prompts and tool output),
+  created owner-only, pruned with their transcripts, and optional (`learn.parse_cache = false`,
+  or `adage learn --no-cache`).
+- **What changed.** Each learn snapshots the repository's tracks and proposals before and after,
+  and `adage_learn::diff` reports one change per route: `new`, `draft` (awaiting approval, O11),
+  `retired`, `aspect` (with from/to), `evidence` (support or opportunities moved), `proposal`.
+  Every learn, manual or automatic, appends one line per repository to `learn.log` with these
+  changes, in fixed templates (`crates/adage-cli/src/learnlog.rs`); failures are `learn_error`
+  lines with a fixed class and message. Neither holds prompt text, commands, output or paths.
+- **Configuration.** `$ADAGE_HOME/config.toml`, read through one reader
+  (`adage_store::config`) by hooks, learners and commands: `learn.auto`,
+  `learn.min_interval_secs`, `learn.thresholds` (`default`/`demo`, used by manual learning too),
+  the history sources, `learn.parse_cache`, and `runtime.holdout`. Environment variables win
+  (`ADAGE_AUTO_LEARN`, `ADAGE_HOLDOUT`). Invalid values fall back to defaults and are reported by
+  `adage config` and `adage doctor`; `adage config set` refuses inside an agent session.
+- **Experiments.** The demo and live runners set `ADAGE_AUTO_LEARN=0`: their rounds decide when
+  learning happens, and the index must not change within one.
 
 ### 4.8 Embedding model and intent families (A6)
 
@@ -661,7 +738,9 @@ wrapped in `try`. It never evaluates or executes text it receives.
 | --- | --- | --- | --- |
 | `adage init [--repo] [--yes]` | Detect harnesses, print install snippets, offer the model, run a survey | Only with `--yes` (the model) | `--yes` only |
 | `adage survey` | Read-only report of what agents do, with candidate routes from learn's dry run | — | — |
-| `adage learn` | Import, mine, write tracks, compile the index | Tracks, index | — |
+| `adage learn` | Import, mine, write tracks, compile the index | Tracks, index, `learn.log`, parse cache | — |
+| `adage learn --auto --repo-root <path>` | One repository, quietly: what a hook starts ([§4.7.2](#472-live-learning)) | The same, for that repository; `learn-queue/` | — |
+| `adage config [get \| set]` | Show, read and change `config.toml` | `set` only | `set` only |
 | `adage status` | Installed tracks, routes, aspects and evidence | — | — |
 | `adage report [--json]` | Directives, follows, derails and stop requests from spools | — | — |
 | `adage graph [--json] [--serve]` | Situations → routes → steps → responses, split by arm; `--serve` runs the signal box | — | — |
@@ -673,7 +752,7 @@ wrapped in `try`. It never evaluates or executes text it receives.
 | `adage doctor [--json]` | Health checks ([§10](#10-observability)) | A probe file only | — |
 | `adage eval <dataset>` | Offline replay eval ([§11](#11-evals-and-the-harness-simulator)) | A temporary home | — |
 | `adage hooks-config <path>` | Print a Claude Code hooks block | — | — |
-| `adage hook <harness> <event>` | Called by harness hooks only | State, spool | — |
+| `adage hook <harness> <event>` | Called by harness hooks only | State, spool; at a stop, `learn-queue/` | — |
 
 ### 6.4 Files a person edits
 
@@ -683,8 +762,10 @@ wrapped in `try`. It never evaluates or executes text it receives.
 | `<repo>/.adage/trusted-signers` | Signers for tracks scoped to this repository; counts only once approved with `adage add --trust` |
 | `$ADAGE_HOME/trusted-signers` | The person's own `allowed_signers` file |
 | `$ADAGE_HOME/tracks/**/routes/*.yaml` | Routes may be hand-edited; `adage review pin` protects them from re-learning |
+| `$ADAGE_HOME/config.toml` | The person's settings ([§4.7.2](#472-live-learning), docs/live-learning.md); `adage config set` writes it |
 
-`.adage/config.toml` and `.adage/tracks.lock` from draft 2 do not exist.
+Draft 2's per-repository `.adage/config.toml` and `.adage/tracks.lock` do not exist; the settings
+and the tracks lock live in `$ADAGE_HOME`.
 
 ### 6.5 Environment
 
@@ -692,7 +773,8 @@ wrapped in `try`. It never evaluates or executes text it receives.
 | --- | --- |
 | `ADAGE_HOME` | The data directory. Isolates tests, evals, the demo and the simulator |
 | `ADAGE_DISABLE=1` | Kill switch: hooks say nothing |
-| `ADAGE_HOLDOUT` | Holdout share, default 0.1 (1.0 for the pilot's shadow phase, [P§5]) |
+| `ADAGE_HOLDOUT` | Holdout share, default 0.1 (1.0 for the pilot's shadow phase, [P§5]); wins over `runtime.holdout` |
+| `ADAGE_AUTO_LEARN` | `0` or `1`: wins over `learn.auto` (the demo and live runners set `0`) |
 | `ADAGE_ARM` | `treated` or `holdout`: overrides assignment |
 | `ADAGE_ALLOW_NONINTERACTIVE=1` | Lifts the terminal requirement for CI. It never lifts the agent-session refusal |
 | `ADAGE_NPM_WHICH=1` | Asks the npm launcher which binary it runs |
@@ -712,7 +794,12 @@ $ADAGE_HOME        macOS ~/Library/Application Support/Adage · Windows %APPDATA
 ├── sessions/<id>.state        two-slot state
 ├── sessions/<id>.spool        decision log
 ├── repo-keys/<hash>           root commits found, per repository path (no-origin repository keys)
-├── learn.log                  one JSON line per `adage learn` run (rotated to learn.log.1 at 256 KiB)
+├── config.toml                the person's settings (optional; `adage config`)
+├── learn.log                  one JSON line per repository per learn, manual or automatic, with its
+│                              route changes (rotated to learn.log.1 at 256 KiB)
+├── learn-queue/<repo>.*       live learning: request marker, lock, last run, remembered sources
+├── cache/sessions/            parse cache: manifest.json and one parsed session per transcript
+├── tracks.lock                held by whatever writes tracks and the index
 ├── fail-open.log              hook errors that were swallowed (rotated at 256 KiB)
 ├── models/potion-base-8m/     manifest.json, model.safetensors, vocab.txt (optional)
 ├── trusted-signers            the person's allowed_signers (optional)
@@ -720,10 +807,10 @@ $ADAGE_HOME        macOS ~/Library/Application Support/Adage · Windows %APPDATA
 └── staging/                   transient, for `adage add`
 ```
 
-There are no service units. `adage learn` appends a summary to `learn.log` (sessions read and
-used, and per repository the tracks written, with versions, changes and route counts; no prompt,
-command or path), and hooks append their swallowed errors to `fail-open.log`, which `doctor`
-reads.
+There are no service units. Every learn appends to `learn.log` (per repository: sessions read and
+used, duration, the tracks written with versions, changes and route counts, and each route that
+changed; no prompt, command or path), and hooks append their swallowed errors to
+`fail-open.log`; `doctor` reads both.
 
 ### 7.2 Channels
 
@@ -821,6 +908,26 @@ The intent path adds about 3.2 ms per process: 1.25 ms compiling the normaliser'
 | Intent clustering, per repository | 17 s and 652 MB per 10k prompts; 300k prompts in 8.0 min as one graph | S7 |
 | Eval gates | Under a second | docs/evals.md |
 
+**Live learning** (`hook_bench`, release, 300 runs after 20 warm-ups, `Stop` with no obligation;
+`learn_bench`; Apple M3 Pro under load from other agents):
+
+| Measurement | p50 | p95 | p99 |
+| --- | ---: | ---: | ---: |
+| `Stop`, before live learning (the previous binary) | 1.97 ms | 2.04 ms | 2.14 ms |
+| `Stop`, `learn.auto` off | 1.99 ms | 2.26 ms | 4.77 ms |
+| `Stop`, a learner running: the request is recorded (the steady state) | 2.23 ms | 2.36 ms | 2.42 ms |
+| `Stop` that starts a detached learner | 2.47 ms | 2.77 ms | 2.86 ms |
+
+| Learning | No cache | Cold cache | Warm cache |
+| --- | ---: | ---: | ---: |
+| `adage learn`, 207 real Claude Code transcripts (130 MB, 86 repositories) | 300–670 ms | 337 ms | 60 ms |
+| `adage learn`, 600 simulator sessions in 2 repositories (9 MB) | 104–303 ms | 181–226 ms | 62 ms |
+| `adage learn`, 4,000 simulator sessions in 4 repositories (61 MB) | 559–896 ms | 1.07–1.32 s | 234–272 ms |
+| `adage learn --auto`, one repository of 300 (of 600) sessions, one transcript changed | — | — | 44 ms |
+| `adage learn --auto`, one repository of 1,000 (of 4,000) sessions, one transcript changed | — | — | 138 ms |
+
+The parse cache holds 13 MB for the 130 MB of real history. Ranges are repeated runs.
+
 **Limits of these numbers.** Every latency was measured on one Apple M3 Pro, and S1 and S3 ran
 while other agents loaded the machine. Hook latency has not been measured on Linux or Windows. A
 pathological command can take one hook to about 58 ms, and the pilot's shadow phase checks hook
@@ -840,8 +947,9 @@ Everything is local, and nothing leaves the machine.
 | **Signal box** | `adage graph --serve` serves the live page (`assets/brain.html`) and `/graph.json` from the binary | `serve.rs` |
 | **`adage review`** | Routes waiting for a person, including derail flags computed from spools | [§4.16](#416-review) |
 | **`adage status`** | Installed tracks, aspects, evidence, and whether the intent model is present | `main.rs` |
-| **`adage doctor`** | Pass/warn/fail with a fix for each: the binary; the data directory is writable; the index is present, parses, and its generation matches its routes; tracks validate; model checksums; each harness's hook registrations point at an existing adage binary; the plugin's staged binary; kill switches and experiment settings; total spool size (warns over 256 MiB); fail-open errors | `crates/adage-cli/src/doctor.rs` |
+| **`adage doctor`** | Pass/warn/fail with a fix for each: the binary; the data directory is writable; the index is present, parses, and its generation matches its routes; tracks validate; model checksums; each harness's hook registrations point at an existing adage binary; the plugin's staged binary; kill switches and experiment settings; total spool size (warns over 256 MiB); fail-open errors; `config.toml` problems; live learning: on or off, each repository's last automatic learn and its outcome, a learner holding its lock over 15 minutes, requests left waiting | `crates/adage-cli/src/doctor.rs` |
 | **`adage survey`** | What agents actually do, per repository, with learn's candidate routes | `crates/adage-cli/src/survey.rs` |
+| **`learn.log`** | One line per repository per learn, manual or automatic: sessions, duration, and each route that changed (`new`, `draft`, `retired`, `aspect`, `evidence`, `proposal`); `learn_error` lines. Tailed with the spools (`adage_store::spool::read_from`) by live views | [§4.7.2](#472-live-learning), docs/live-learning.md |
 | **`adage eval`** | Offline precision, recall, turns saved, finish-line accuracy, unsafe count, and replay fidelity against live spools | [§11](#11-evals-and-the-harness-simulator) |
 
 Latency is not recorded at run time. It is measured by the benchmark example, and in the pilot.
@@ -1037,6 +1145,6 @@ These facts from the draft 2 review still hold, and the build follows them:
 | Proving ground (A10) | A batch orchestrator with containers | Offline replay eval and a live runner script | [P§3]: offline replay gates every change for free; the product waits for M5 |
 | Research harness (§11) | Python notebooks with Rust bindings | `adage eval` in Rust | The credibility test runs on the product's own code, with no bindings to keep in step |
 | Repository key | `realpath(git root)` plus a hash of the origin | The normalised origin URL, else `<directory name>@<root commit>` | Clones share routes; unrelated repositories without an origin no longer share a key by name ([§4.5](#45-the-index-a4)) |
-| Scheduling | A nightly launchd/systemd timer | `adage learn` on demand | No service units exist to host a timer |
+| Scheduling | A nightly launchd/systemd timer | `adage learn` on demand, and live learning: a `Stop` hook starts a detached, debounced, single-flight learner for its repository ([§4.7.2](#472-live-learning)) | No service units exist to host a timer; learning seconds after a session beats learning overnight |
 | Platforms | macOS and Linux | Plus Windows, CI-verified | [P§4.4]: the Windows port found two path bugs that stopped finish-line routes from firing there |
-| Pipeline storage of raw text | 14 days of raw text for re-mining | None stored by Adage; learning re-reads harness history | Harness history is already on disk; Adage adds no copy |
+| Pipeline storage of raw text | 14 days of raw text for re-mining | No raw text; learning re-reads harness history, through an optional parse cache of the parsed sessions (owner-only, pruned with the transcripts) | Harness history is already on disk; the cache only saves re-parsing it, and `learn.parse_cache = false` turns it off |

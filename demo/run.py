@@ -131,6 +131,8 @@ def run_one(run_id, phase, arm, task, prompt_template):
     env = dict(os.environ)
     env["ADAGE_HOME"] = str(ADAGE_HOME)
     env["ADAGE_ARM"] = "holdout" if arm == "holdout" else "treated"
+    # Learning happens between rounds, never during one: no automatic learning.
+    env["ADAGE_AUTO_LEARN"] = "0"
     cmd = [
         "claude", "-p", prompt,
         "--model", MODEL,

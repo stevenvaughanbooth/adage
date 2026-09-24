@@ -12,11 +12,12 @@ use adage_core::{repo, CommandTable, Normalized};
 use adage_runtime::Call;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StepObs {
     /// Model turn index (0-based), counting assistant messages that issued tool calls.
     pub turn: u32,
@@ -27,7 +28,8 @@ pub struct StepObs {
     pub rel_path: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+/// Serializable so that a parse can be cached (`crate::cache`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
     pub root: PathBuf,

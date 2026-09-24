@@ -88,7 +88,14 @@ fn every_fixture_parses_with_its_prompt_and_calls() {
 fn learns_all_four_route_kinds_from_codex_rollouts() {
     let d = tempfile::tempdir().unwrap();
     let files: Vec<PathBuf> = fixtures().into_iter().map(|f| f.0).collect();
-    let inputs = Inputs { transcripts: files, outcomes: BTreeMap::new(), repo_override: None, models: None };
+    let inputs = Inputs {
+        transcripts: files,
+        outcomes: BTreeMap::new(),
+        repo_override: None,
+        models: None,
+        cache: None,
+        only_repo: None,
+    };
     let rep = learn(&inputs, &d.path().join("tracks"), &d.path().join("index.json"), &LearnConfig::demo()).unwrap();
     assert_eq!((rep.sessions_read, rep.sessions_used), (12, 12));
     assert!(rep.repos.contains_key("acme-billing"), "the repository key is the checkout's directory name");

@@ -137,6 +137,8 @@ fn run(files: &[PathBuf], home: &Path, models: Option<PathBuf>) -> (Report, Inde
         outcomes: BTreeMap::new(),
         repo_override: Some("acme-docs".into()),
         models,
+        cache: None,
+        only_repo: None,
     };
     let rep = learn(&inputs, &home.join("tracks"), &home.join("index.json"), &LearnConfig::demo()).unwrap();
     (rep, Index::load(&home.join("index.json")))

@@ -9,6 +9,33 @@ version as the GitHub Release notes.
 
 ### Added
 
+- **Live learning.** Adage now learns by itself while agents work: when a session stops or ends
+  (Claude Code and Codex `Stop`/`SessionEnd`, OpenCode `session.idle`/`session.deleted`), the hook
+  starts a detached background learner for that repository, at most once per
+  `learn.min_interval_secs` (a request inside the interval is learned when it ends, never
+  dropped), one learner per repository at a time. The hook never waits for it and its output never
+  changes (Stop p95 +0.3 ms, +0.7 ms when it starts a learner). `adage learn` still works, and
+  both write the same tracks. Turn it off with `adage config set learn.auto false` or
+  `ADAGE_AUTO_LEARN=0`. See docs/live-learning.md.
+- **`$ADAGE_HOME/config.toml` and `adage config`** (`get`, `set`, `--json`): `learn.auto`,
+  `learn.min_interval_secs`, `learn.thresholds` (`default` or `demo`; also used by `adage learn`),
+  history sources for automatic learning, `learn.parse_cache`, and `runtime.holdout`.
+  Environment variables still win. `config set` validates, writes atomically, and refuses inside an
+  agent session.
+- **`learn.log` records what changed.** Every learn, manual or automatic, appends one line per
+  repository with `kind`, `trigger` (`auto`/`manual`), `repo`, `duration_ms` and `changes`: each
+  route that is new, drafted, retired, changed aspect (yellow → green), changed evidence, or got a
+  proposal, in fixed-template summaries with no prompt, command, output or path. Failures are
+  `learn_error` lines. Existing fields are unchanged.
+- **Parse cache.** Parsed transcripts are kept in `$ADAGE_HOME/cache/sessions`, keyed by path,
+  size and modification time, so re-learning parses only what changed: 60 ms instead of about
+  300–670 ms for 207 real transcripts (130 MB). Results are byte-identical with and without it
+  (`--no-cache`, `learn.parse_cache = false`).
+- `adage_store::spool::read_from(path, offset)` for following spools live, safe against records
+  still being written; `adage_store::lock` file locks.
+- `adage doctor` checks the configuration and live learning: on or off, each repository's last
+  automatic learn and its outcome, a stuck learner, and requests left waiting.
+
 - `adage init`, `adage survey`, `adage doctor` and `adage graph --serve` (the signal box served
   from the binary).
 - `adage eval`, which replays held-out sessions offline and scores what Adage would have said. It
@@ -77,6 +104,12 @@ version as the GitHub Release notes.
   directory held nothing. An explicit source that finds nothing is now an error.
 
 ### Changed
+
+- `learn.log` has one line per repository per run instead of one per run (a run that found no
+  usable session writes one line with `repo` null).
+- `adage learn`, automatic learners, review decisions and `adage add` take `$ADAGE_HOME/tracks.lock`
+  while they write tracks and the index, so they never interleave.
+- The demo and live eval runners set `ADAGE_AUTO_LEARN=0`, so the index stays fixed within a round.
 
 - **`adage learn` writes `learn.log`**: one JSON line per run with the sessions read and used and,
   per repository, the tracks written (version, change, route count). No prompt, command or path.

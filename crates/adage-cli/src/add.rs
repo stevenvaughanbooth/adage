@@ -195,6 +195,8 @@ pub fn add(args: &[String], paths: &Paths) -> Result<()> {
 }
 
 fn install(stage: &Path, src: &Path, paths: &Paths, trust: bool) -> Result<()> {
+    // One writer of the tracks and index at a time (`adage learn`, automatic learners).
+    let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let dir = stage.join("in");
     let digest = io::digest(&dir)?;
     let msg = adage_sign::message(&digest)?;

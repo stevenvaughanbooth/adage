@@ -126,7 +126,8 @@ as short redacted snippets. `doctor` exits non-zero only when a check fails.
 # 1. Build the binary and stage it into the plugin
 plugin/build.sh
 
-# 2. Learn from your existing Claude Code history (reads ~/.claude/projects)
+# 2. Learn from your existing Claude Code history (reads ~/.claude/projects). After this,
+#    Adage keeps learning by itself as sessions end (see "Live learning" below).
 target/release/adage learn
 target/release/adage status
 
@@ -156,6 +157,36 @@ directives emitted, followed, and derailed. Data lives in `~/Library/Application
 (macOS), `~/.local/share/adage` (Linux) or `%APPDATA%\Adage` (Windows); `ADAGE_HOME` overrides it.
 
 **Kill switches:** `ADAGE_DISABLE=1`, or a `.adage/disabled` file in a repository.
+
+**Live learning:** you do not have to run `adage learn` again. When an agent's session stops or
+ends, the hook starts a background learner for that repository (detached; the hook never waits,
+and never says anything different). It learns at most once per `learn.min_interval_secs` per
+repository, one learner at a time, and appends each route that changed (new, retired, yellow →
+green, evidence, awaiting review) to `$ADAGE_HOME/learn.log`. `adage doctor` shows the last run
+per repository. The file contract for tools that follow it live is
+[docs/live-learning.md](docs/live-learning.md).
+
+**Settings:** `$ADAGE_HOME/config.toml`, shown and changed with `adage config`:
+
+```bash
+adage config                                  # every key, its value, and where it came from
+adage config set learn.auto false             # stop learning automatically (ADAGE_AUTO_LEARN=0 also works)
+adage config set learn.thresholds demo        # lower evidence bars, for small histories
+adage config set learn.min_interval_secs 300  # learn each repository at most every 5 minutes
+```
+
+| Key | Default | |
+| --- | --- | --- |
+| `learn.auto` | `true` | Learn automatically when sessions stop or end (`ADAGE_AUTO_LEARN` wins) |
+| `learn.min_interval_secs` | `120` | At most one automatic learn per repository per interval |
+| `learn.thresholds` | `default` | `default` or `demo`, for `adage learn` too (`--demo` wins) |
+| `learn.claude_projects` | `""` | Claude Code history (`""` = `~/.claude/projects`) |
+| `learn.codex_sessions` | `""` | Codex rollouts automatic learning reads (e.g. `~/.codex/sessions`) |
+| `learn.opencode_exports` | `""` | A directory of `opencode export` files automatic learning reads |
+| `learn.parse_cache` | `true` | Keep parsed transcripts in `cache/sessions` (owner-only), so re-learning parses only what changed |
+| `runtime.holdout` | `0.1` | Holdout share (`ADAGE_HOLDOUT` wins) |
+
+`config set` refuses inside an agent session.
 
 **Intent families (optional):** `adage models fetch` downloads the pinned static embedding model
 (potion-base-8M, 31 MB, SHA-256 verified; `adage models install <dir>` for offline machines) into
@@ -189,7 +220,7 @@ locally. `adage learn` keeps rejected routes retired until they strengthen mater
 demotions and promotions. A rejected route also keeps a teammate's import of the same route out of
 the index. Decisions refuse to run inside an agent session. Listing is allowed there.
 
-**Experiment:** `ADAGE_HOLDOUT=0.1` (default) holds out 10% of sessions — Adage computes what it would
+**Experiment:** `runtime.holdout = 0.1` (default; `ADAGE_HOLDOUT` overrides) holds out 10% of sessions — Adage computes what it would
 have said and logs it, but says nothing — so every claimed effect is measured against a control.
 
 ## The demo
