@@ -131,6 +131,8 @@ pub struct Live {
     /// Lines scrolled back from the newest (0 follows the feed).
     pub scroll: usize,
     pub help: bool,
+    /// Repositories a background learner is working on now.
+    pub learning: Vec<String>,
 }
 
 impl Live {
@@ -445,7 +447,19 @@ pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>
     f.render_widget(feed_block, feed_area);
     draw_feed(f, inner, live, key, ctx);
 
-    let tick_block = section(" learning ".to_string(), t);
+    let tick_block = if live.learning.is_empty() {
+        section(" learning ".to_string(), t)
+    } else {
+        let what = if live.learning.len() == 1 {
+            "learning now…".to_string()
+        } else {
+            format!("{} learners running…", live.learning.len())
+        };
+        Block::default()
+            .borders(Borders::TOP)
+            .border_style(t.dim())
+            .title(Span::styled(format!(" learning · {what} "), t.yellow().patch(t.bold())))
+    };
     let inner = tick_block.inner(ticker);
     f.render_widget(tick_block, ticker);
     draw_ticker(f, inner, live, key, ctx);

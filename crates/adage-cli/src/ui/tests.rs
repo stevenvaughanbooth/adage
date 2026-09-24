@@ -3,7 +3,6 @@
 //! (`ADAGE_BLESS=1` rewrites them).
 
 use super::app::{self, AppState, Cmd, Modal, Tab};
-use super::config::{self, ConfigStore};
 use super::feed::{self, Act};
 use super::health::{Fix, Health, Light};
 use super::learnlog::{self, Tone};
@@ -49,7 +48,6 @@ fn fixture(dir: &Path) -> Paths {
     let a = "7c1e04d2-11aa-4a31-9f0e-00000000a11c";
     let b = "3f9b62e8-22bb-4c7d-8b21-000000000b0b";
     let c = "91d5aa70-33cc-47e2-a5c3-00000000c4a1";
-    let d = |x| x;
     spool::append(
         &s(a),
         &rec(
@@ -84,12 +82,12 @@ fn fixture(dir: &Path) -> Paths {
             "treated",
             "PostToolBatch",
             "batch",
-            d(decision(
+            decision(
                 vec![directive("read-linked-files", "yellow")],
                 vec![],
                 vec![json!({ "kind": "followed", "route": "lookup-incident" })],
                 None,
-            )),
+            ),
         ),
     )
     .unwrap();
@@ -216,7 +214,7 @@ fn health() -> Health {
         routes_total: 5,
         routes_repo: Some(4),
         repo_key: Some("harbor-dispatch".into()),
-        auto_learn: Some(true),
+        auto_learn: Some((true, "file".into())),
     }
 }
 
@@ -226,7 +224,8 @@ fn ctx(paths: Paths, color: bool) -> Ctx {
 
 fn live_from(paths: &Paths) -> Live {
     let mut live = Live::default();
-    Sources { spool: SpoolTail::new(paths.sessions()), log: LineTail::new(paths.learn_log()) }.poll(&mut live);
+    let c = ctx(paths.clone(), false);
+    Sources::new(&c).poll(&mut live, Some("harbor-dispatch"));
     live
 }
 
@@ -304,7 +303,21 @@ fn learn_log_reads_both_shapes_and_skips_the_rest() {
     assert_eq!(t[1].text, "learned harbor-dispatch/work-items: lookup-work-item yellow→green (24/25 sessions)");
     assert_eq!(t[1].short, "learned work-items: lookup-work-item yellow→green (24/25 sessions)");
     assert_eq!(t[1].aspect, Some(Aspect::Green));
-    let e = learnlog::parse(r#"{"ts":1,"kind":"learn_error","class":"lock","error":"busy"}"#);
+    // `adage_learn::diff`'s summaries: the evidence after the arrow, or the counts alone.
+    let t = learnlog::parse(
+        &json!({ "ts": T0, "kind": "learn", "trigger": "manual", "repo": "r", "changes": [
+            { "route": "finish-line-6a01b2", "track": "r/finish-line", "change": "aspect", "from": "yellow", "to": "green",
+              "summary": "finish line route yellow → green (9 of 9 sessions, lower bound 0.70)" },
+            { "route": "finish-line-6a01b2", "track": "r/finish-line", "change": "evidence", "from": null, "to": null,
+              "summary": "green finish line route evidence 6/8 → 7/8 sessions" },
+          ], "repos": { "r": { "tracks": [{ "name": "r/finish-line" }] } } })
+        .to_string(),
+    );
+    assert_eq!(t.len(), 3, "the legacy per-track fields beside `changes` add nothing: {t:?}");
+    assert_eq!(t[0].text, "learn (manual) r: 2 changes");
+    assert_eq!(t[1].text, "learned r/finish-line: finish-line-6a01b2 yellow→green (9 of 9 sessions, lower bound 0.70)");
+    assert_eq!(t[2].text, "evidence r/finish-line: finish-line-6a01b2 6/8 → 7/8 sessions");
+    let e = learnlog::parse(r#"{"ts":1,"kind":"learn_error","trigger":"auto","class":"lock","error":"busy"}"#);
     assert_eq!((e[0].tone, e[0].text.as_str()), (Tone::Error, "learning failed (lock): busy"));
     // Missing fields are tolerated; unknown kinds and non-JSON are skipped.
     assert_eq!(learnlog::parse(r#"{"kind":"learn"}"#)[0].text, "learn");
@@ -318,31 +331,20 @@ fn learn_log_reads_both_shapes_and_skips_the_rest() {
 }
 
 #[test]
-fn config_edits_keep_comments_and_validate() {
-    let text = "# my settings\n[learn]\n# learn after sessions\nauto = false\n\n[other]\nx = 1\n";
-    let out = config::set_in(text, "learn.auto", &toml::Value::Boolean(true)).unwrap();
-    assert_eq!(out, "# my settings\n[learn]\n# learn after sessions\nauto = true\n\n[other]\nx = 1\n");
-    let out = config::set_in(&out, "learn.min_interval_secs", &toml::Value::Integer(900)).unwrap();
-    assert!(out.contains("auto = true\nmin_interval_secs = 900\n"), "{out}");
-    let out = config::set_in(&out, "runtime.holdout", &toml::Value::Float(0.2)).unwrap();
-    assert!(out.ends_with("[runtime]\nholdout = 0.2\n"), "{out}");
-    let s = config::setting("runtime.holdout").unwrap();
-    assert!(config::parse_value(s, "1.5").is_err() && config::parse_value(s, "x").is_err());
-    assert_eq!(config::parse_value(s, "0.25").unwrap(), toml::Value::Float(0.25));
-    let s = config::setting("learn.min_interval_secs").unwrap();
-    assert!(config::parse_value(s, "5").is_err());
-    let s = config::setting("learn.thresholds").unwrap();
-    assert!(config::parse_value(s, "strict").is_err());
-
+fn settings_show_every_config_key_with_its_source() {
     let d = tempfile::tempdir().unwrap();
-    let store = config::TomlFile::in_home(d.path());
-    assert_eq!(store.get("learn.auto").unwrap(), None);
-    store.set("learn.auto", toml::Value::Boolean(true)).unwrap();
-    assert_eq!(config::auto_learn(d.path()), Some(true));
-    // A file that is not TOML is never rewritten.
-    std::fs::write(store.path(), "[learn\nauto = ").unwrap();
-    assert!(store.set("learn.auto", toml::Value::Boolean(false)).is_err());
-    assert_eq!(std::fs::read_to_string(store.path()).unwrap(), "[learn\nauto = ");
+    let paths = Paths::at(d.path());
+    std::fs::write(paths.config(), "[learn]\nmin_interval_secs = 600\nbogus = 1\n").unwrap();
+    let mut s = AppState::new(paths.config());
+    s.load_settings(&adage_store::config::load(&paths));
+    let row = |k: &str| s.settings.iter().find(|r| r.key == k).unwrap();
+    assert_eq!(s.settings.len(), adage_store::config::KEYS.len());
+    assert_eq!(
+        (row("learn.min_interval_secs").value.as_str(), row("learn.min_interval_secs").source.as_str()),
+        ("600", "file")
+    );
+    assert_eq!(row("learn.thresholds").source, "default");
+    assert!(s.settings_problems.iter().any(|p| p.contains("learn.bogus")), "{:?}", s.settings_problems);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -559,6 +561,17 @@ fn route_row(id: &str, aspect: Aspect, verbs: Vec<&'static str>, reasons: Vec<(S
 
 fn app_state() -> AppState {
     let mut s = AppState::new("/home/me/.local/share/adage/config.toml".into());
+    // Every key at its default, whatever this shell's environment says.
+    s.settings = adage_store::config::KEYS
+        .iter()
+        .map(|k| app::SettingRow {
+            key: k.name,
+            value: k.default.to_string(),
+            source: "default".into(),
+            doc: k.doc,
+            default: k.default,
+        })
+        .collect();
     s.health = Some(health());
     s.routes = Some(Ok(Routes {
         rows: vec![
@@ -579,7 +592,8 @@ fn app_frames_routes_health_settings() {
     let d = tempfile::tempdir().unwrap();
     let c = ctx(Paths::at(d.path()), true);
     let mut s = app_state();
-    s.settings[0].value = Some("true".into());
+    s.settings[0].value = "false".into();
+    s.settings[0].source = "file".into();
     for (tab, name) in [(Tab::Routes, "app-routes"), (Tab::Health, "app-health"), (Tab::Settings, "app-settings")] {
         s.tab = tab;
         let (text, _) = render(110, 30, |f| app::draw(f, &s, &c));
@@ -622,20 +636,26 @@ fn review_keys_confirm_and_respect_the_verbs_that_apply() {
     assert!(s.key(KeyCode::Enter, none).is_none());
     assert!(matches!(&s.modal, Some(Modal::Scope { harness }) if harness == "codex"));
     assert!(matches!(s.key(KeyCode::Char('u'), none), Some(Cmd::PlanInstall { scope: "user", .. })));
-    // Settings: a boolean toggles; a number opens the editor, which validates.
+    // Settings: a boolean toggles; thresholds switch with Space; a number opens the editor, whose
+    // value `adage_store::config::set` validates when it is saved.
     s.key(KeyCode::Char('4'), none);
-    assert!(matches!(s.key(KeyCode::Enter, none), Some(Cmd::Do(app::Action::SetConfig { key: "learn.auto", .. }))));
-    s.key(KeyCode::Down, none);
-    assert!(s.key(KeyCode::Enter, none).is_none());
-    for ch in "12".chars() {
-        s.key(KeyCode::Char(ch), none);
-    }
-    assert!(s.key(KeyCode::Enter, none).is_none());
-    assert!(matches!(&s.modal, Some(Modal::Edit { error: Some(e), .. }) if e.contains("between 60")));
-    s.key(KeyCode::Char('0'), none);
     assert!(matches!(
         s.key(KeyCode::Enter, none),
-        Some(Cmd::Do(app::Action::SetConfig { key: "learn.min_interval_secs", .. }))
+        Some(Cmd::Do(app::Action::SetConfig { key: "learn.auto", ref value })) if value == "false"
+    ));
+    s.key(KeyCode::Down, none);
+    assert!(s.key(KeyCode::Enter, none).is_none());
+    assert!(matches!(&s.modal, Some(Modal::Edit { key: "learn.min_interval_secs", .. })));
+    s.key(KeyCode::Backspace, none);
+    s.key(KeyCode::Char('9'), none);
+    assert!(matches!(
+        s.key(KeyCode::Enter, none),
+        Some(Cmd::Do(app::Action::SetConfig { key: "learn.min_interval_secs", ref value })) if value == "129"
+    ));
+    s.key(KeyCode::Down, none);
+    assert!(matches!(
+        s.key(KeyCode::Char(' '), none),
+        Some(Cmd::Do(app::Action::SetConfig { key: "learn.thresholds", ref value })) if value == "demo"
     ));
     assert!(matches!(s.key(KeyCode::Char('q'), none), Some(Cmd::Quit)));
 }
@@ -700,4 +720,36 @@ fn clock_times_use_the_offset() {
     assert_eq!(view::clock(T0, 0, true), "12:04:00");
     assert_eq!(view::clock(T0, -7 * 3600, false), "05:04");
     assert_eq!(view::clock(T0, 10 * 3600 + 1800, true), "22:34:00");
+}
+
+#[test]
+fn loader_delivers_health_at_once_and_routes_on_request() {
+    use super::jobs::{Loaded, Loader, Want};
+    let home = super::demo::setup().unwrap();
+    let loader = Loader::spawn(home.paths.clone(), Some(home.repo.clone()));
+    let wait = |want: &dyn Fn(&Loaded) -> bool| {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while std::time::Instant::now() < deadline {
+            if let Ok(m) = loader.rx.recv_timeout(std::time::Duration::from_millis(100)) {
+                if want(&m) {
+                    return Some(m);
+                }
+            }
+        }
+        None
+    };
+    match wait(&|m| matches!(m, Loaded::Health(_))) {
+        Some(Loaded::Health(h)) => {
+            assert_eq!(h.repo_key.as_deref(), Some("harbor-dispatch"));
+            let index = h.checks.iter().find(|c| c.check == "index").unwrap();
+            assert_eq!(index.status, Status::Pass, "the demo's index is intact: {}", index.detail);
+        }
+        _ => panic!("no health"),
+    }
+    loader.want(Want::Routes);
+    match wait(&|m| matches!(m, Loaded::Routes(_))) {
+        Some(Loaded::Routes(Ok(r))) => assert_eq!(r.rows.len(), 4),
+        Some(Loaded::Routes(Err(e))) => panic!("{e}"),
+        _ => panic!("no routes"),
+    }
 }

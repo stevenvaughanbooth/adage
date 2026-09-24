@@ -29,6 +29,8 @@ fn learn_all(dir: &Path, files: Vec<PathBuf>) -> anyhow::Result<Index> {
         outcomes: BTreeMap::new(),
         repo_override: Some("acme-billing".into()),
         models: None,
+        cache: None,
+        only_repo: None,
     };
     learn(&inputs, &home.join("tracks"), &home.join("index.json"), &LearnConfig::demo())?;
     Ok(Index::load(&home.join("index.json")))

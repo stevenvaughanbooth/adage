@@ -88,9 +88,11 @@ fn run(v: &Value, ts: u64, repo: Option<String>) -> Vec<Tick> {
         parts.push(if ms >= 1000 { format!("{:.1}s", ms as f64 / 1000.0) } else { format!("{ms}ms") });
     }
     let changes: Vec<&Value> = v["changes"].as_array().map(|a| a.iter().collect()).unwrap_or_default();
-    // The older summary lists tracks per repository instead of changes.
+    // The older summary lists tracks per repository instead of changes (newer lines keep it too,
+    // beside `changes`, which then says it better).
     let mut tracks = Vec::new();
-    for (r, rr) in v["repos"].as_object().into_iter().flatten() {
+    let legacy = if v["changes"].is_array() { None } else { v["repos"].as_object() };
+    for (r, rr) in legacy.into_iter().flatten() {
         for t in rr["tracks"].as_array().into_iter().flatten() {
             let name = t["name"].as_str().unwrap_or("?");
             let change = t["change"].as_str().unwrap_or("written");
@@ -139,7 +141,22 @@ fn change(c: &Value, ts: u64, repo: Option<String>) -> Tick {
         (None, Some(t)) => format!(" {t}"),
         _ => String::new(),
     };
-    let summary = s(c, "summary").map(|x| format!(" ({x})")).unwrap_or_default();
+    // Summaries are fixed templates that restate the change and end with the evidence in
+    // parentheses ("finish line route yellow → green (9 of 9 sessions, lower bound 0.70)"): show
+    // that evidence after the arrow, or the whole summary when there is no arrow.
+    let summary = match s(c, "summary") {
+        // "green finish line route evidence 6/8 → 7/8 sessions": the counts say it.
+        Some(x) if s(c, "change") == Some("evidence") && x.contains("evidence ") => {
+            format!(" {}", &x[x.find("evidence ").unwrap_or(0) + "evidence ".len()..])
+        }
+        Some(x) if x.ends_with(')') && x.contains('(') && !arrow.is_empty() => {
+            let inner = &x[x.rfind('(').unwrap_or(0)..];
+            format!(" {inner}")
+        }
+        Some(x) if arrow.is_empty() => format!(": {x}"),
+        Some(x) if !x.contains('→') => format!(" ({x})"),
+        _ => String::new(),
+    };
     let verb = match s(c, "change") {
         Some("new") => "new route",
         Some("retired") => "retired",

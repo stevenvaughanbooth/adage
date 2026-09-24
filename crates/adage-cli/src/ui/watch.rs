@@ -11,20 +11,35 @@ use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::Terminal;
 
-/// The files the live view follows.
+/// The files the live view follows, and the learners' locks.
 pub struct Sources {
     pub spool: SpoolTail,
     pub log: LineTail,
+    paths: adage_store::Paths,
+    polls: u64,
 }
+
+/// Learners' locks are probed every this many polls (about twice a second).
+const LOCK_EVERY: u64 = 3;
 
 impl Sources {
     pub fn new(ctx: &Ctx) -> Sources {
-        Sources { spool: SpoolTail::new(ctx.paths.sessions()), log: LineTail::new(ctx.paths.learn_log()) }
+        Sources {
+            spool: SpoolTail::new(ctx.paths.sessions()),
+            log: LineTail::new(ctx.paths.learn_log()),
+            paths: ctx.paths.clone(),
+            polls: 0,
+        }
     }
 
-    pub fn poll(&mut self, live: &mut Live) {
+    /// New records and log lines; which repositories are learning (`repo`, or all).
+    pub fn poll(&mut self, live: &mut Live, repo: Option<&str>) {
         live.push_records(self.spool.poll());
         live.push_log(self.log.poll());
+        if self.polls.is_multiple_of(LOCK_EVERY) {
+            live.learning = health::learning_now(&self.paths, if live.all_repos { None } else { repo });
+        }
+        self.polls += 1;
     }
 }
 
@@ -73,7 +88,7 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                 ctx.tz = view::local_offset();
             }
         }
-        sources.poll(&mut live);
+        sources.poll(&mut live, health.as_ref().and_then(|h| h.repo_key.as_deref()));
         t.terminal.draw(|f| view::draw_live(f, f.area(), &live, health.as_ref(), &ctx, true))?;
         if let Some(k) = term::next_key()? {
             if live_key(&mut live, k.code, k.modifiers) {
@@ -106,8 +121,8 @@ pub fn buffer_text(b: &Buffer) -> String {
 pub fn snapshot(ctx: &Ctx, size: Option<(u16, u16)>) -> String {
     let (w, h) = size.unwrap_or((100, 30));
     let mut live = Live::default();
-    Sources::new(ctx).poll(&mut live);
     let health = health::gather(&ctx.paths, ctx.root.as_deref());
+    Sources::new(ctx).poll(&mut live, health.repo_key.as_deref());
     let mut term = match Terminal::new(TestBackend::new(w, h)) {
         Ok(t) => t,
         Err(e) => return format!("adage watch: {e}\n"),

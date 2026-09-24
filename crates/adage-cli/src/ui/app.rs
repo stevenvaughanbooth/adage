@@ -8,7 +8,6 @@
 //! through the same functions as `adage review` and `adage install --write`, with the same
 //! refusals (effect ceilings, an agent session).
 
-use super::config::{self, ConfigStore, Kind, Setting};
 use super::diff::{self, Op};
 use super::health::{Fix, Health};
 use super::jobs::{self, Job, Loaded, Loader, Want};
@@ -19,6 +18,7 @@ use super::view::{self, Ctx, Live};
 use super::watch::{self, Sources};
 use crate::doctor::Status;
 use crate::install::Plan;
+use adage_store::config;
 use anyhow::Result;
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -45,8 +45,7 @@ pub enum Action {
     Install(Box<Plan>),
     FetchModel,
     LearnNow,
-    ClearLock(PathBuf),
-    SetConfig { key: &'static str, value: toml::Value },
+    SetConfig { key: &'static str, value: String },
 }
 
 pub enum Modal {
@@ -75,9 +74,20 @@ pub enum WantKind {
     Health,
 }
 
+/// One `adage config` key as the Settings tab shows it.
 pub struct SettingRow {
-    pub setting: &'static Setting,
-    pub value: Option<String>,
+    pub key: &'static str,
+    pub value: String,
+    /// `default`, `file`, or `env VAR`.
+    pub source: String,
+    pub doc: &'static str,
+    pub default: &'static str,
+}
+
+impl SettingRow {
+    fn boolean(&self) -> bool {
+        matches!(self.default, "true" | "false")
+    }
 }
 
 pub struct AppState {
@@ -90,7 +100,8 @@ pub struct AppState {
     pub check_sel: usize,
     pub setting_sel: usize,
     pub settings: Vec<SettingRow>,
-    pub settings_error: Option<String>,
+    /// Problems `adage_store::config` found in the file.
+    pub settings_problems: Vec<String>,
     pub config_path: PathBuf,
     pub modal: Option<Modal>,
     pub notices: Vec<String>,
@@ -107,25 +118,26 @@ impl AppState {
             detail_scroll: 0,
             check_sel: 0,
             setting_sel: 0,
-            settings: config::SETTINGS.iter().map(|s| SettingRow { setting: s, value: None }).collect(),
-            settings_error: None,
+            settings: vec![],
+            settings_problems: vec![],
             config_path,
             modal: None,
             notices: vec![],
         }
     }
 
-    pub fn load_settings(&mut self, store: &dyn ConfigStore) {
-        self.settings_error = None;
-        for row in &mut self.settings {
-            match store.get(row.setting.key) {
-                Ok(v) => row.value = v.as_ref().map(config::show),
-                Err(e) => {
-                    row.value = None;
-                    self.settings_error = Some(format!("{e:#}"));
-                }
-            }
-        }
+    /// The effective configuration, as `adage config` shows it.
+    pub fn load_settings(&mut self, loaded: &config::Loaded) {
+        self.settings = config::KEYS
+            .iter()
+            .map(|k| {
+                let (value, source) =
+                    loaded.get(k.name).cloned().unwrap_or((k.default.to_string(), config::Source::Default));
+                SettingRow { key: k.name, value, source: source.to_string(), doc: k.doc, default: k.default }
+            })
+            .collect();
+        self.settings_problems = loaded.problems.clone();
+        self.setting_sel = self.setting_sel.min(self.settings.len().saturating_sub(1));
     }
 
     fn route_rows(&self) -> &[RouteRow] {
@@ -234,16 +246,8 @@ impl AppState {
             },
             Modal::Edit { key, mut buffer, .. } => match code {
                 KeyCode::Esc => None,
-                KeyCode::Enter => {
-                    let s = config::setting(key)?;
-                    match config::parse_value(s, &buffer) {
-                        Ok(value) => Some(Cmd::Do(Action::SetConfig { key, value })),
-                        Err(e) => {
-                            self.modal = Some(Modal::Edit { key, buffer, error: Some(format!("{e:#}")) });
-                            None
-                        }
-                    }
-                }
+                // Validated by `adage_store::config::set`; an error reopens the editor.
+                KeyCode::Enter => Some(Cmd::Do(Action::SetConfig { key, value: buffer })),
                 KeyCode::Backspace => {
                     buffer.pop();
                     self.modal = Some(Modal::Edit { key, buffer, error: None });
@@ -344,7 +348,7 @@ impl AppState {
             KeyCode::Char('i') => fix_of(self, &|f| matches!(f, Fix::InstallHooks(_))),
             KeyCode::Char('m') => Some(Fix::FetchModel),
             KeyCode::Char('l') => Some(Fix::LearnNow),
-            KeyCode::Char('c') => fix_of(self, &|f| matches!(f, Fix::ClearLock(_))),
+            KeyCode::Char('s') => Some(Fix::OpenSettings),
             KeyCode::Char('o') => Some(Fix::OpenFailOpen),
             _ => None,
         }?;
@@ -377,8 +381,9 @@ impl AppState {
                 self.confirm(
                     "Learn now",
                     vec![
-                        Line::raw("Run `adage learn`: read your agents' session history, mine routes,"),
-                        Line::raw("update the tracks, and recompile the index hooks read."),
+                        Line::raw("Learn this repository now, exactly as a background learner does"),
+                        Line::raw("(`adage learn --auto --repo-root <repo>`): read its sessions, mine routes,"),
+                        Line::raw("update its tracks, recompile the index, and log what changed."),
                         Line::raw(""),
                         hint,
                     ],
@@ -386,23 +391,20 @@ impl AppState {
                 );
                 None
             }
-            Fix::ClearLock(p) => {
-                self.confirm(
-                    "Clear the stale lock",
-                    vec![Line::raw(format!("Remove {}?", crate::detect::tilde(&p))), Line::raw(""), hint],
-                    Action::ClearLock(p),
-                );
+            Fix::OpenSettings => {
+                self.tab = Tab::Settings;
                 None
             }
             Fix::EnableAutoLearn => {
                 self.confirm(
                     "Turn auto-learn on",
                     vec![
-                        Line::raw("Set learn.auto = true in config.toml: Adage then learns after agent sessions end."),
+                        Line::raw("Set learn.auto = true in config.toml: Adage then learns in the background"),
+                        Line::raw("whenever an agent session in a repository stops or ends."),
                         Line::raw(""),
                         hint,
                     ],
-                    Action::SetConfig { key: "learn.auto", value: toml::Value::Boolean(true) },
+                    Action::SetConfig { key: "learn.auto", value: "true".into() },
                 );
                 None
             }
@@ -416,23 +418,15 @@ impl AppState {
             KeyCode::Down | KeyCode::Char('j') => self.setting_sel = (self.setting_sel + 1).min(n.saturating_sub(1)),
             KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('e') => {
                 let row = self.settings.get(self.setting_sel)?;
-                let s = row.setting;
-                if let Kind::Bool = s.kind {
-                    let on = row.value.as_deref() == Some("true");
-                    return Some(Cmd::Do(Action::SetConfig { key: s.key, value: toml::Value::Boolean(!on) }));
+                if row.boolean() {
+                    let next = if row.value == "true" { "false" } else { "true" };
+                    return Some(Cmd::Do(Action::SetConfig { key: row.key, value: next.into() }));
                 }
-                if let Kind::Choice(options) = s.kind {
-                    if code == KeyCode::Char(' ') {
-                        let cur = row.value.as_deref().and_then(|v| options.iter().position(|o| *o == v));
-                        let next = options[cur.map_or(0, |i| (i + 1) % options.len())];
-                        return Some(Cmd::Do(Action::SetConfig {
-                            key: s.key,
-                            value: toml::Value::String(next.into()),
-                        }));
-                    }
+                if row.key == "learn.thresholds" && code == KeyCode::Char(' ') {
+                    let next = if row.value == "demo" { "default" } else { "demo" };
+                    return Some(Cmd::Do(Action::SetConfig { key: row.key, value: next.into() }));
                 }
-                self.modal =
-                    Some(Modal::Edit { key: s.key, buffer: row.value.clone().unwrap_or_default(), error: None });
+                self.modal = Some(Modal::Edit { key: row.key, buffer: row.value.clone(), error: None });
             }
             _ => {}
         }
@@ -525,15 +519,15 @@ fn draw_status(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         .map(|g| g[..g.len().min(8)].to_string())
         .unwrap_or_else(|| "none".into());
     let routes = h.map(|h| h.routes_repo.unwrap_or(h.routes_total)).unwrap_or(0);
-    let auto = match h.and_then(|h| h.auto_learn) {
-        Some(true) => "on",
-        Some(false) => "off",
-        None => "default",
+    let auto = match h.and_then(|h| h.auto_learn.as_ref()) {
+        Some((true, _)) => "on",
+        Some((false, _)) => "off",
+        None => "?",
     };
     let keys = match s.tab {
         Tab::Live => "p pause · f scope · v quiet",
         Tab::Routes => "a/r/d/p/n/x review · R reload",
-        Tab::Health => "Enter fix · i m l c o · R recheck",
+        Tab::Health => "Enter fix · i m l o s · R recheck",
         Tab::Settings => "Enter edit · Space toggle",
     };
     let left = Line::from(vec![
@@ -541,7 +535,7 @@ fn draw_status(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         Span::styled(format!("· gen {gen} · {routes} routes · auto-learn {auto}"), t.dim()),
     ]);
     // The keys stay whole at the right; the state on the left gives way.
-    let right = format!("{keys} · ? help · q quit ");
+    let right = format!(" {keys} · ? help · q quit ");
     let right_w = (right.chars().count() as u16).min(area.width);
     let [l, r] = Layout::horizontal([Constraint::Min(0), Constraint::Length(right_w)]).areas(area);
     f.render_widget(Paragraph::new(left), l);
@@ -734,29 +728,36 @@ fn draw_settings(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let t = &ctx.theme;
     let mut lines = vec![
         Line::from(vec![Span::styled("config ", t.dim()), Span::raw(crate::detect::tilde(&s.config_path))]),
+        Line::from(Span::styled(
+            "the same settings as `adage config`; environment variables win over the file",
+            t.dim(),
+        )),
         Line::raw(""),
     ];
-    if let Some(e) = &s.settings_error {
-        lines.push(Line::from(Span::styled(format!("cannot read it: {e}"), t.red())));
+    for p in &s.settings_problems {
+        lines.push(Line::from(Span::styled(format!("! {p}"), t.yellow())));
+    }
+    if !s.settings_problems.is_empty() {
         lines.push(Line::raw(""));
     }
-    let key_w = config::SETTINGS.iter().map(|x| x.key.len()).max().unwrap_or(10);
+    let key_w = s.settings.iter().map(|r| r.key.len()).max().unwrap_or(10);
+    let val_w = s.settings.iter().map(|r| r.value.chars().count().max(2)).max().unwrap_or(8).min(40);
     for (i, row) in s.settings.iter().enumerate() {
         let sel = i == s.setting_sel;
-        let (value, style) = match &row.value {
-            Some(v) => (v.clone(), t.bold()),
-            None => ("unset (default)".to_string(), t.dim()),
-        };
+        let shown = if row.value.is_empty() { "\"\"".to_string() } else { row.value.clone() };
+        let source_style = if row.source == "default" { t.dim() } else { t.accent() };
         lines.push(Line::from(vec![
-            Span::styled(format!("{:<key_w$}", row.setting.key), if sel { t.selected() } else { Style::default() }),
+            Span::styled(format!("{:<key_w$}", row.key), if sel { t.selected() } else { Style::default() }),
             Span::raw("  "),
-            Span::styled(value, style),
+            Span::styled(format!("{shown:<val_w$}"), t.bold()),
+            Span::raw("  "),
+            Span::styled(format!("({})", row.source), source_style),
         ]));
-        lines.push(Line::from(Span::styled(format!("  {}", row.setting.help), t.dim())));
+        lines.push(Line::from(Span::styled(format!("  {}", row.doc), t.dim())));
     }
     lines.push(Line::raw(""));
     lines.push(Line::from(Span::styled(
-        "Enter edits (Space toggles on/off and cycles choices); the file keeps its comments and other keys.",
+        "Enter edits (Space toggles on/off and switches thresholds); every value is validated before it is saved.",
         t.dim(),
     )));
     f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
@@ -784,14 +785,14 @@ fn app_help(tab: Tab, t: &Theme) -> Vec<Line<'static>> {
             v.push(k("i", "install hooks for a harness"));
             v.push(k("m", "fetch the embedding model"));
             v.push(k("l", "run learn now"));
-            v.push(k("c", "clear a stale learning lock"));
+            v.push(k("s", "open the settings"));
             v.push(k("o", "open the fail-open log"));
             v.push(k("R", "re-run the checks"));
         }
         Tab::Settings => {
             v.push(k("↑ ↓", "select a setting"));
             v.push(k("Enter", "edit (toggles booleans)"));
-            v.push(k("Space", "toggle, or cycle a choice"));
+            v.push(k("Space", "toggle on/off, or switch thresholds"));
         }
     }
     v
@@ -842,10 +843,10 @@ fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
             0,
         ),
         Modal::Edit { key, buffer, error } => {
-            let s = config::setting(key);
+            let doc = config::key(key).map(|k| k.doc).unwrap_or("");
             let mut ls = vec![
                 Line::from(Span::styled(key.to_string(), t.bold())),
-                Line::from(Span::styled(s.map(|s| s.help).unwrap_or("").to_string(), t.dim())),
+                Line::from(Span::styled(doc.to_string(), t.dim())),
                 Line::raw(""),
                 Line::from(vec![Span::raw("> "), Span::styled(format!("{buffer}▏"), t.accent())]),
             ];
@@ -896,14 +897,7 @@ pub fn install_confirm(p: &Plan, t: &Theme) -> Vec<Line<'static>> {
 // Runtime
 
 /// Carry out a command. Returns `true` to quit.
-fn execute(
-    cmd: Cmd,
-    s: &mut AppState,
-    ctx: &Ctx,
-    loader: &Loader,
-    job: &mut Option<Job>,
-    store: &dyn ConfigStore,
-) -> bool {
+fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Option<Job>) -> bool {
     let t = &ctx.theme;
     match cmd {
         Cmd::Quit => return true,
@@ -928,16 +922,6 @@ fn execute(
             }
             Err(e) => s.message("Cannot install", vec![format!("{e:#}")], true),
         },
-        // Settings and locks change what Adage does, so, like review decisions and installs (whose
-        // own guards apply), they refuse inside an agent session.
-        Cmd::Do(Action::SetConfig { .. } | Action::ClearLock(_)) if super::agent_marker().is_some() => {
-            let v = super::agent_marker().unwrap_or_default();
-            s.message(
-                "Refused",
-                vec![format!("This changes what Adage does, so it will not run inside an agent session ({v} is set).")],
-                true,
-            );
-        }
         Cmd::Do(action) => match action {
             Action::Review { verb, reference, route } => {
                 match crate::review::decide_quietly(verb, &reference, &route, &ctx.paths) {
@@ -968,22 +952,28 @@ fn execute(
                 *job = Some(j);
             }
             Action::LearnNow => {
-                let j = jobs::learn_now(ctx.paths.clone(), vec![]);
+                let j = jobs::learn_now(ctx.paths.clone(), ctx.root.clone());
                 s.modal = Some(Modal::Progress { title: j.title.clone(), status: j.status.clone(), ratio: 0.0 });
                 *job = Some(j);
             }
-            Action::ClearLock(p) => {
-                match std::fs::remove_file(&p) {
-                    Ok(()) => s.message("Lock cleared", vec![format!("removed {}", crate::detect::tilde(&p))], false),
-                    Err(e) => s.message("Not removed", vec![format!("{}: {e}", p.display())], true),
-                }
-                loader.want(Want::Health);
-            }
             Action::SetConfig { key, value } => {
-                if let Err(e) = store.set(key, value) {
-                    s.message("Not saved", vec![format!("{e:#}")], true);
+                // `adage config set`'s own guard and validation.
+                let set = crate::share::require_person("config set")
+                    .and_then(|()| config::set(&ctx.paths, key, &value).map_err(|e| anyhow::anyhow!(e)));
+                let loaded = config::load(&ctx.paths);
+                s.load_settings(&loaded);
+                match set {
+                    Ok(stored) => {
+                        if let Some((v, src @ config::Source::Env(_))) = loaded.get(key) {
+                            s.message(
+                                "Saved, but overridden",
+                                vec![format!("{key} = {stored} is in config.toml, but {src} overrides it: the effective value is {v}.")],
+                                false,
+                            );
+                        }
+                    }
+                    Err(e) => s.modal = Some(Modal::Edit { key, buffer: value, error: Some(format!("{e:#}")) }),
                 }
-                s.load_settings(store);
                 loader.want(Want::Health);
             }
         },
@@ -1009,10 +999,9 @@ fn pretty_fail_open(line: &str) -> String {
 
 pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
     let loader = Loader::spawn(ctx.paths.clone(), ctx.root.clone());
-    let store = config::TomlFile::in_home(&ctx.paths.root);
     let mut sources = Sources::new(&ctx);
-    let mut s = AppState::new(store.path().to_path_buf());
-    s.load_settings(&store);
+    let mut s = AppState::new(ctx.paths.config());
+    s.load_settings(&config::load(&ctx.paths));
     let mut job: Option<Job> = None;
     let mut ctx = ctx;
     let mut t = Term::enter()?;
@@ -1062,10 +1051,11 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                 }
             }
         }
-        sources.poll(&mut s.live);
+        let key = s.health.as_ref().and_then(|h| h.repo_key.clone());
+        sources.poll(&mut s.live, key.as_deref());
         ticks += 1;
         if ticks.is_multiple_of(20) {
-            s.load_settings(&store);
+            s.load_settings(&config::load(&ctx.paths));
         }
         s.notices.extend(super::take_notices());
         if s.notices.len() > 20 {
@@ -1075,7 +1065,7 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
         t.terminal.draw(|f| draw(f, &s, &ctx))?;
         if let Some(k) = term::next_key()? {
             if let Some(cmd) = s.key(k.code, k.modifiers) {
-                if execute(cmd, &mut s, &ctx, &loader, &mut job, &store) {
+                if execute(cmd, &mut s, &ctx, &loader, &mut job) {
                     break;
                 }
             }

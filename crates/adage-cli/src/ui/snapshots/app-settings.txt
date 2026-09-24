@@ -1,25 +1,25 @@
  adage  1 Live  2 Routes (1 to review)  3 Health (2)  4 Settings
 config /home/me/.local/share/adage/config.toml
+the same settings as `adage config`; environment variables win over the file
 
-learn.auto               true
-  learn automatically after agent sessions end
-learn.min_interval_secs  unset (default)
-  the shortest time between automatic learning runs, in seconds
-learn.thresholds         unset (default)
-  the evidence bars routes must clear: default, or demo (for small demonstrations)
-runtime.holdout          unset (default)
-  the share of sessions held out as a control (nothing delivered); ADAGE_HOLDOUT overrides it
+learn.auto               false    (file)
+  learn automatically, in the background, when an agent session stops or ends
+learn.min_interval_secs  120      (default)
+  at most one automatic learn per repository in this many seconds (0 to 86400)
+learn.thresholds         default  (default)
+  evidence bars for `adage learn` and automatic learning: default, or demo (lower)
+learn.claude_projects    ""       (default)
+  Claude Code history to learn from ("" = ~/.claude/projects)
+learn.codex_sessions     ""       (default)
+  Codex rollouts automatic learning reads, e.g. ~/.codex/sessions ("" = none)
+learn.opencode_exports   ""       (default)
+  a directory of `opencode export` files automatic learning reads ("" = none)
+learn.parse_cache        true     (default)
+  keep parsed transcripts in cache/sessions so re-learning parses only what changed
+runtime.holdout          0.1      (default)
+  share of sessions held out as the control arm (Adage decides but says nothing)
 
-Enter edits (Space toggles on/off and cycles choices); the file keeps its comments and other keys.
-
-
-
-
-
-
-
-
-
+Enter edits (Space toggles on/off and switches thresholds); every value is validated before it is saved.
 
 
 

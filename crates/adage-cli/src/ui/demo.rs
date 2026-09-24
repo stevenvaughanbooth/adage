@@ -43,13 +43,16 @@ impl Drop for DemoHome {
 }
 
 fn evidence(support: u32, opportunities: u32) -> Evidence {
-    let rate = support as f64 / opportunities.max(1) as f64;
+    // Four decimals, as a person would write them: serde_json's default float parser does not
+    // round-trip every f64 (18/19 = 0.9473684210526315 comes back one ulp off), and the doctor
+    // re-hashes the index's routes after parsing it.
+    let r4 = |x: f64| (x * 1e4).round() / 1e4;
     Evidence {
         support,
         opportunities,
         days: 3,
-        rate,
-        lower_bound: wilson_lower(support, opportunities),
+        rate: r4(support as f64 / opportunities.max(1) as f64),
+        lower_bound: r4(wilson_lower(support, opportunities)),
         provenance: "desire-path".into(),
         ..Default::default()
     }
@@ -166,7 +169,7 @@ pub fn setup() -> Result<DemoHome> {
         serde_json::to_string_pretty(&crate::harness::claude::settings(&exe))?,
     )?;
     std::fs::create_dir_all(&home.paths.root)?;
-    std::fs::write(home.paths.root.join(super::config::FILE), "[learn]\nauto = true\n")?;
+    std::fs::write(home.paths.config(), "[learn]\nauto = true\n")?;
     install_track(&home.paths, &track(0))?;
     Ok(home)
 }
@@ -288,6 +291,9 @@ fn run_hook(exe: &Path, home: &DemoHome, arm: &str, event: &str, payload: &Value
         .env("ADAGE_HOME", &home.paths.root)
         .env("HOME", home.dir.join("home"))
         .env("ADAGE_ARM", arm)
+        // The scenario simulates learning itself; a real background learner here would find no
+        // history (HOME is the demo's) and has nothing to add.
+        .env("ADAGE_AUTO_LEARN", "0")
         .env_remove("ADAGE_DISABLE")
         .env_remove("ADAGE_HOLDOUT")
         .stdin(Stdio::piped())
@@ -315,17 +321,23 @@ fn learn(home: &DemoHome, round: usize) {
     let (read, used) = (25 + 3 * round as u64, 24 + 3 * round as u64);
     let lookup = &t.routes[0].evidence;
     let linked = &t.routes[1].evidence;
+    // Summaries in `adage_learn::diff`'s fixed templates.
     let mut changes = vec![json!({
-        "route": "lookup-incident", "track": TRACK, "change": "evidence",
-        "from": format!("{}/{}", lookup.support - 1, lookup.opportunities - 1),
-        "to": format!("{}/{} sessions", lookup.support, lookup.opportunities),
+        "route": "lookup-incident", "track": TRACK, "change": "evidence", "from": null, "to": null,
+        "summary": format!(
+            "green work item route evidence {}/{} → {}/{} sessions",
+            lookup.support - 1, lookup.opportunities - 1, lookup.support, lookup.opportunities
+        ),
     })];
     if round == 1 {
         changes.insert(
             0,
             json!({
                 "route": "read-linked-files", "track": TRACK, "change": "aspect", "from": "yellow", "to": "green",
-                "summary": format!("{}/{} sessions", linked.support, linked.opportunities),
+                "summary": format!(
+                    "linked files route yellow → green ({} of {} sessions, lower bound {:.2})",
+                    linked.support, linked.opportunities, linked.lower_bound
+                ),
             }),
         );
     }
@@ -334,10 +346,7 @@ fn learn(home: &DemoHome, round: usize) {
         "sessions_read": read, "sessions_used": used, "duration_ms": 640 + 90 * round as u64,
         "index_generation": generation, "changes": changes,
     });
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(home.paths.learn_log()) {
-        use std::io::Write;
-        let _ = writeln!(f, "{line}");
-    }
+    let _ = crate::learnlog::append(&home.paths, &line);
 }
 
 /// Play `rounds` rounds, `pace` apart, until done or `stop` is set.

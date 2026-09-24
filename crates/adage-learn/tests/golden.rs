@@ -80,6 +80,8 @@ fn run(dir: &Path, files: &[PathBuf], home: &Path) -> Index {
         outcomes: BTreeMap::new(),
         repo_override: Some("acme-billing".into()),
         models: None,
+        cache: None,
+        only_repo: None,
     };
     learn(&inputs, &home.join("tracks"), &home.join("index.json"), &LearnConfig::demo()).unwrap();
     let _ = dir;

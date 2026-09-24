@@ -8,8 +8,11 @@
 //! Checks: the binary; the data directory; the compiled index (present, intact, current); the
 //! installed tracks; the embedding model and its checksums; each harness's hook registrations
 //! (and that they run an adage binary that exists); the Claude Code plugin's staged binary; kill
-//! switches and experiment settings; the size of the session spools; and fail-open errors, if any
-//! are recorded in `$ADAGE_HOME/fail-open.log` (one JSON object per line, newest last).
+//! switches and experiment settings; the size of the session spools; fail-open errors, if any
+//! are recorded in `$ADAGE_HOME/fail-open.log` (one JSON object per line, newest last); the
+//! configuration file; and live learning (`crate::autolearn`): whether it is on, each repository's
+//! last automatic learn and its outcome, a learner that has held its lock too long, and requests
+//! still waiting.
 
 use crate::detect;
 use adage_core::repo;
@@ -401,6 +404,159 @@ fn fail_open(paths: &Paths) -> Check {
     }
 }
 
+/// A learner holding its repository's lock for longer than this is reported as stuck.
+const STUCK_MS: u64 = 15 * 60_000;
+/// A request still waiting this long after it could have been learned is backlog.
+const BACKLOG_SLACK_MS: u64 = 5 * 60_000;
+
+fn ago(now: u64, ts: u64) -> String {
+    let s = now.saturating_sub(ts) / 1000;
+    match s {
+        0..=59 => format!("{s}s ago"),
+        60..=3599 => format!("{}m ago", s / 60),
+        3600..=172_799 => format!("{}h ago", s / 3600),
+        _ => format!("{}d ago", s / 86_400),
+    }
+}
+
+/// Live learning: the configuration, then per repository in the learn queue its last automatic
+/// learn, a stuck learner, and waiting requests.
+fn live_learning(paths: &Paths) -> Vec<Check> {
+    use crate::autolearn::{read_json, Request, RunState, Spawned};
+    let loaded = adage_store::config::load(paths);
+    let cfg = &loaded.config;
+    let mut out = Vec::new();
+    out.push(if loaded.problems.is_empty() {
+        let at = detect::tilde(&paths.config());
+        pass("config", if paths.config().exists() { format!("{at} is valid") } else { format!("no {at}: defaults") })
+    } else {
+        warn(
+            "config",
+            format!("{}: {}", detect::tilde(&paths.config()), loaded.problems.join("; ")),
+            "fix it with `adage config set <key> <value>`, or edit the file; `adage config` shows every key",
+        )
+    });
+    let source = &loaded.values["learn.auto"].1;
+    out.push(if cfg.learn_auto {
+        pass(
+            "auto-learn",
+            format!(
+                "on ({source}): each repository is learned in the background when a session stops, at most every {}s, {} thresholds",
+                cfg.learn_min_interval_secs,
+                cfg.learn_thresholds.as_str()
+            ),
+        )
+    } else {
+        pass("auto-learn", format!("off ({source}): run `adage learn` yourself, or `adage config set learn.auto true`"))
+    });
+
+    let now = crate::learnlog::now_ms();
+    let dir = paths.learn_queue();
+    let mut slugs: Vec<String> = std::fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| e.file_name().to_str().map(str::to_string))
+        .filter_map(|n| n.strip_suffix(".json").map(str::to_string))
+        .filter(|n| !n.contains('.'))
+        .collect();
+    slugs.sort();
+    if slugs.is_empty() {
+        return out;
+    }
+    // The last automatic learn per repository, from learn.log.
+    let mut last: std::collections::BTreeMap<String, serde_json::Value> = Default::default();
+    for l in crate::learnlog::read(paths) {
+        if l["trigger"] == "auto" {
+            if let Some(r) = l["repo"].as_str() {
+                last.insert(r.to_string(), l);
+            }
+        }
+    }
+    let (mut runs, mut failed, mut stuck, mut backlog) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    for slug in &slugs {
+        let file = |suffix: &str| dir.join(format!("{slug}{suffix}"));
+        let Some(req) = read_json::<Request>(&file(".json")) else { continue };
+        let state: Option<RunState> = read_json(&file(".state.json"));
+        let spawned: Spawned = read_json(&file(".spawn.json")).unwrap_or_default();
+        let held = adage_store::lock::is_held(&file(".lock")).unwrap_or(false);
+        let repo = &req.repo;
+        match last.get(repo) {
+            Some(l) if l["kind"] == "learn_error" => {
+                let ts = l["ts"].as_u64().unwrap_or(0);
+                let what = l["error"].as_str().unwrap_or("unknown error").to_string();
+                failed.push(format!("{repo} ({}, {}: {what})", ago(now, ts), l["class"].as_str().unwrap_or("?")));
+            }
+            Some(l) => {
+                let ts = l["ts"].as_u64().unwrap_or(0);
+                let n = l["changes"].as_array().map(|c| c.len()).unwrap_or(0);
+                runs.push(format!("{repo} ({}, ok, {n} change(s))", ago(now, ts)));
+            }
+            // Rotated out of learn.log: the learner's own record of its last run.
+            None => match &state {
+                Some(s) if s.finished_at.is_some() => {
+                    runs.push(format!("{repo} ({}, {})", ago(now, s.finished_at.unwrap_or(0)), s.outcome))
+                }
+                _ => runs.push(format!("{repo} (not learned automatically yet)")),
+            },
+        }
+        let started = state.as_ref().map(|s| s.started_at).unwrap_or(0);
+        let waiting = spawned.after > now;
+        if held
+            && !waiting
+            && state.as_ref().is_some_and(|s| s.outcome == "running")
+            && now.saturating_sub(started) > STUCK_MS
+        {
+            let pid = state.as_ref().map(|s| s.pid).unwrap_or(0);
+            stuck.push(format!("{repo} (learner pid {pid}, started {})", ago(now, started)));
+        }
+        let processed = state.as_ref().map(|s| s.processed).unwrap_or(0);
+        let due =
+            req.requested_at.max(spawned.after).saturating_add(cfg.learn_min_interval_secs * 1000 + BACKLOG_SLACK_MS);
+        if cfg.learn_auto && req.requested_at > processed && !held && now > due {
+            backlog.push(format!("{repo} (requested {})", ago(now, req.requested_at)));
+        }
+    }
+    let shown = |v: &[String]| {
+        let mut s = v.iter().take(5).cloned().collect::<Vec<_>>().join("; ");
+        if v.len() > 5 {
+            s.push_str(&format!("; and {} more", v.len() - 5));
+        }
+        s
+    };
+    out.push(if failed.is_empty() {
+        pass("auto-learn runs", shown(&runs))
+    } else {
+        warn(
+            "auto-learn runs",
+            format!("last automatic learn failed for {}", shown(&failed)),
+            "run `adage learn` in a terminal to see the error; `adage doctor` passes once a learn succeeds",
+        )
+    });
+    if !stuck.is_empty() {
+        out.push(warn(
+            "auto-learn lock",
+            format!("a learner has held its lock for over {} minutes: {}", STUCK_MS / 60_000, shown(&stuck)),
+            "stop that process; the lock is released when it exits and the next session stop starts a new learner",
+        ));
+    } else {
+        out.push(pass("auto-learn lock", "no learner stuck"));
+    }
+    out.push(if backlog.is_empty() {
+        pass(
+            "auto-learn queue",
+            format!("{} repositor{} queued, none waiting", slugs.len(), if slugs.len() == 1 { "y" } else { "ies" }),
+        )
+    } else {
+        warn(
+            "auto-learn queue",
+            format!("{} request(s) not learned yet: {}", backlog.len(), shown(&backlog)),
+            "`adage learn` learns everything now; if requests keep waiting, check `fail-open.log` (class learn)",
+        )
+    });
+    out
+}
+
 /// Every check, in display order, for the repository at `repo_root` (if any). `adage watch` and
 /// `adage ui` re-run these every few seconds.
 pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
@@ -413,6 +569,7 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
     checks.push(kill_switches(repo_root));
     checks.push(spools(paths));
     checks.push(fail_open(paths));
+    checks.extend(live_learning(paths));
     checks
 }
 

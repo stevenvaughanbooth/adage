@@ -2,12 +2,15 @@
 //!
 //! ```text
 //! adage hook <claude|opencode|codex> <Event>   hook client (reads the harness payload on stdin)
-//! adage init [--repo <path>] [--yes]  first run: detect harnesses, show hook snippets, offer the model, survey
+//! adage init [--repo <path>] [--yes | --print]  first run: a guided wizard at a terminal; else detect
+//!                                    harnesses, show hook snippets, offer the model, survey
 //! adage survey [--repo <key>] [--since <days>] [--json]   what your agents actually do (read-only)
 //! adage doctor [--json]              check the binary, data directory, index, tracks, model, hooks
 //! adage watch [--repo <path>] [--demo]  a live pane: health lights, hook activity, what Adage learns
 //! adage ui                           the full-screen app: live feed, routes and review, health fixes, settings
 //! adage learn [options]              mine tracks from agent sessions and compile the index
+//! adage learn --auto --repo-root <path>   learn one repository quietly (what hooks start)
+//! adage config [get <key> | set <key> <value>] [--json]   settings in $ADAGE_HOME/config.toml
 //! adage status                       installed tracks, routes, aspects, and evidence
 //! adage report [--json]              directives emitted, followed, and derailed, from spools
 //! adage graph [--json] [--events <n>] situations → routes → steps → agent responses, with live counts
@@ -24,10 +27,13 @@
 //! adage version
 //! ```
 //! Environment: `ADAGE_HOME` (data directory), `ADAGE_ARM` (`treated`|`holdout`, overrides
-//! assignment), `ADAGE_HOLDOUT` (holdout share, default 0.1), `ADAGE_DISABLE=1` (kill switch),
+//! assignment), `ADAGE_HOLDOUT` (holdout share; overrides `runtime.holdout`, default 0.1),
+//! `ADAGE_AUTO_LEARN` (`0`/`1`; overrides `learn.auto`), `ADAGE_DISABLE=1` (kill switch),
 //! `ADAGE_ALLOW_NONINTERACTIVE=1` (let `share` and `add` run without a terminal, for CI).
 
 mod add;
+mod autolearn;
+mod config;
 mod detect;
 mod doctor;
 mod failopen;
@@ -36,6 +42,7 @@ mod harness;
 mod hook;
 mod init;
 mod install;
+mod learnlog;
 mod models;
 mod proposal;
 mod redact;
@@ -115,7 +122,9 @@ fn run(args: &[String]) -> Result<()> {
     // Root commits `learn` and `survey` find are left for hooks (repository keys).
     adage_core::repo::use_cache(paths.repo_keys());
     match args.first().map(String::as_str) {
+        Some("learn") if args.iter().any(|a| a == "--auto") => autolearn::run_auto(&args[1..], &paths),
         Some("learn") => learn(&args[1..], &paths),
+        Some("config") => config::run(&args[1..], &paths),
         Some("status") => status(&paths),
         Some("report") => report(&paths, args.iter().any(|a| a == "--json")),
         Some("share") => share::share(&args[1..], &paths),
@@ -144,7 +153,7 @@ fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         _ => {
-            println!("usage: adage <init|survey|learn|status|report|graph|review|share|add|install|models|doctor|watch|ui|hooks-config|version|hook>");
+            println!("usage: adage <init|survey|learn|status|report|graph|review|share|add|install|models|doctor|watch|ui|config|hooks-config|version|hook>");
             println!("       adage watch   live pane for a split terminal: health, hook activity, learning");
             println!("       adage ui      full-screen app: live feed, routes and review, health fixes, settings");
             Ok(())
@@ -153,8 +162,13 @@ fn run(args: &[String]) -> Result<()> {
 }
 
 /// `adage learn [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
-///               [--outcomes <json>] [--repo <key>] [--demo] [--json]`
+///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--json]`
+///
+/// Thresholds: `--demo`, else `learn.thresholds` (`adage config`). Parses are cached under
+/// `$ADAGE_HOME/cache/sessions` unless `--no-cache` or `learn.parse_cache = false` (the result is
+/// the same).
 fn learn(args: &[String], paths: &Paths) -> Result<()> {
+    let started = std::time::Instant::now();
     let mut transcripts: Vec<PathBuf> = Vec::new();
     let mut i = 0;
     while i < args.len() {
@@ -219,10 +233,48 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         Some(p) => serde_json::from_str(&std::fs::read_to_string(p)?)?,
         None => BTreeMap::new(),
     };
-    let cfg = if args.iter().any(|a| a == "--demo") { LearnConfig::demo() } else { LearnConfig::default() };
-    let inputs = Inputs { transcripts, outcomes, repo_override: flag(args, "--repo"), models: Some(paths.models()) };
-    let rep = adage_learn::learn(&inputs, &paths.tracks(), &paths.index(), &cfg)?;
-    if let Err(e) = log_learn(paths, &rep) {
+    let settings = adage_store::config::load(paths).config;
+    let cfg = if args.iter().any(|a| a == "--demo") {
+        LearnConfig::demo()
+    } else {
+        autolearn::thresholds(settings.learn_thresholds)
+    };
+    let cache =
+        (settings.learn_parse_cache && !args.iter().any(|a| a == "--no-cache")).then(|| paths.cache().join("sessions"));
+    transcripts.sort();
+    transcripts.dedup();
+    let inputs = Inputs {
+        transcripts,
+        outcomes,
+        repo_override: flag(args, "--repo"),
+        models: Some(paths.models()),
+        cache,
+        only_repo: None,
+    };
+    // One writer of the tracks and index at a time (automatic learners, review decisions).
+    std::fs::create_dir_all(&paths.root)?;
+    let tracks_lock = adage_store::lock::exclusive(&paths.tracks_lock())?;
+    let before = adage_learn::diff::snapshot_all(&paths.tracks());
+    let result = adage_learn::learn(&inputs, &paths.tracks(), &paths.index(), &cfg);
+    let after = adage_learn::diff::snapshot_all(&paths.tracks());
+    drop(tracks_lock);
+    let rep = match result {
+        Ok(r) => r,
+        Err(e) => {
+            let line = learnlog::error_line(learnlog::now_ms(), "manual", None, "learn", &learnlog::describe(&e));
+            let _ = learnlog::append(paths, &line);
+            return Err(e);
+        }
+    };
+    let changes: BTreeMap<&String, Vec<adage_learn::diff::Change>> = rep
+        .repos
+        .keys()
+        .map(|r| {
+            let empty = Default::default();
+            (r, adage_learn::diff::diff(before.get(r).unwrap_or(&empty), after.get(r).unwrap_or(&empty)))
+        })
+        .collect();
+    if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64) {
         eprintln!("adage learn: could not write {}: {e}", paths.learn_log().display());
     }
     if args.iter().any(|a| a == "--json") {
@@ -245,51 +297,43 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
                     println!("    · {r}");
                 }
             }
+            for c in changes.get(repo).into_iter().flatten() {
+                println!("  changed: {}: {}", c.route, c.summary);
+            }
         }
         println!("\nindex generation {}", rep.index_generation);
     }
     Ok(())
 }
 
-/// `learn.log` is rotated (to `learn.log.1`) when it reaches this size.
-const LEARN_LOG_ROTATE: u64 = 256 << 10;
-
-/// Append one line per `adage learn` run to `$ADAGE_HOME/learn.log`: when it ran, how many
-/// sessions it read and used, and per repository the tracks it wrote (version, change, route
-/// count), with the index generation. No prompt, command or path.
-fn log_learn(paths: &Paths, rep: &adage_learn::Report) -> Result<()> {
-    use std::io::Write;
-    let path = paths.learn_log();
-    if std::fs::metadata(&path).is_ok_and(|m| m.len() >= LEARN_LOG_ROTATE) {
-        std::fs::rename(&path, path.with_extension("log.1"))?;
+/// Append one `learn.log` line per repository this `adage learn` learned (`crate::learnlog`), or
+/// one with no repository if it found no usable session. No prompt, command or path.
+fn log_learn(
+    paths: &Paths,
+    rep: &adage_learn::Report,
+    changes: &BTreeMap<&String, Vec<adage_learn::diff::Change>>,
+    duration_ms: u64,
+) -> Result<()> {
+    let ts = learnlog::now_ms();
+    let line = |repo: Option<&str>, changes: &[adage_learn::diff::Change]| {
+        learnlog::learn_line(
+            ts,
+            &learnlog::Learned {
+                trigger: "manual",
+                repo,
+                sessions_read: rep.sessions_read,
+                duration_ms,
+                changes,
+                report: rep,
+            },
+        )
+    };
+    if rep.repos.is_empty() {
+        learnlog::append(paths, &line(None, &[]))?;
     }
-    let ts = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64)?;
-    let repos: BTreeMap<&String, serde_json::Value> = rep
-        .repos
-        .iter()
-        .map(|(repo, rr)| {
-            let tracks: Vec<serde_json::Value> = rr
-                .tracks
-                .iter()
-                .map(|t| serde_json::json!({ "name": t.name, "version": t.version, "change": t.change, "routes": t.routes.len() }))
-                .collect();
-            (repo, serde_json::json!({ "sessions": rr.sessions, "tracks": tracks }))
-        })
-        .collect();
-    let line = serde_json::json!({
-        "ts": ts,
-        "version": env!("CARGO_PKG_VERSION"),
-        "sessions_read": rep.sessions_read,
-        "sessions_used": rep.sessions_used,
-        "sessions_steered": rep.sessions_steered,
-        "thresholds": rep.thresholds,
-        "intent_model": rep.intent_model,
-        "index_generation": rep.index_generation,
-        "repos": repos,
-    });
-    std::fs::create_dir_all(&paths.root)?;
-    let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&path)?;
-    f.write_all(format!("{line}\n").as_bytes())?;
+    for repo in rep.repos.keys() {
+        learnlog::append(paths, &line(Some(repo), changes.get(repo).map(Vec::as_slice).unwrap_or(&[])))?;
+    }
     Ok(())
 }
 

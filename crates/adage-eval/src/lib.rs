@@ -115,7 +115,14 @@ pub fn learn_index(ds: &Dataset, train: &[String], cfg: &LearnConfig) -> Result<
             outcomes.insert(s.id.clone(), p);
         }
     }
-    let inputs = Inputs { transcripts, outcomes, repo_override: Some(ds.manifest.repo.clone()), models: None };
+    let inputs = Inputs {
+        transcripts,
+        outcomes,
+        repo_override: Some(ds.manifest.repo.clone()),
+        models: None,
+        cache: None,
+        only_repo: None,
+    };
     let index_path = home.path().join("index.json");
     adage_learn::learn(&inputs, &home.path().join("tracks"), &index_path, cfg)?;
     Ok(Index::load(&index_path))

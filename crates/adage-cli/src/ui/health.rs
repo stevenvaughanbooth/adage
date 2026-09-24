@@ -1,21 +1,16 @@
-//! Health for the live screens: `adage doctor`'s checks plus a few the UI adds (configuration,
-//! auto-learning, a stale learning lock), the compact lamps `adage watch` shows, and the one-key
-//! fix for each problem that has one.
+//! Health for the live screens: `adage doctor`'s checks (including its configuration and live
+//! learning checks), the compact lamps `adage watch` shows, the one-key fix for each problem that
+//! has one, and whether a background learner is running.
 
-use super::config;
-use super::learnlog;
 use super::theme::Lamp;
+use crate::autolearn::Queue;
 use crate::detect;
 use crate::doctor::{self, Check, Status};
 use adage_core::repo;
-use adage_store::Paths;
+use adage_store::{config, lock, Paths};
 use adage_tracks::Index;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-/// The lock a running `adage learn` holds (live-learning contract). One older than
-/// [`STALE_LOCK_SECS`] is presumed left behind by a learner that died.
-pub const LEARN_LOCK: &str = "learn.lock";
-pub const STALE_LOCK_SECS: u64 = 30 * 60;
 /// Fail-open errors within this many days count as recent (as `adage doctor` counts them).
 const RECENT_DAYS: u64 = 7;
 
@@ -27,9 +22,9 @@ pub enum Fix {
     InstallHooks(String),
     FetchModel,
     LearnNow,
-    ClearLock(PathBuf),
     OpenFailOpen,
     EnableAutoLearn,
+    OpenSettings,
 }
 
 impl Fix {
@@ -37,10 +32,10 @@ impl Fix {
         match self {
             Fix::InstallHooks(h) => format!("install {h} hooks"),
             Fix::FetchModel => "fetch the embedding model".into(),
-            Fix::LearnNow => "run learn now".into(),
-            Fix::ClearLock(_) => "clear the stale lock".into(),
+            Fix::LearnNow => "learn this repository now".into(),
             Fix::OpenFailOpen => "open the fail-open log".into(),
             Fix::EnableAutoLearn => "turn auto-learn on".into(),
+            Fix::OpenSettings => "open the settings".into(),
         }
     }
 }
@@ -62,7 +57,8 @@ pub struct Health {
     /// Routes for this repository, when it has a key.
     pub routes_repo: Option<usize>,
     pub repo_key: Option<String>,
-    pub auto_learn: Option<bool>,
+    /// The effective `learn.auto`, and where it came from (`default`, `file`, `env …`).
+    pub auto_learn: Option<(bool, String)>,
 }
 
 impl Health {
@@ -101,113 +97,36 @@ pub fn repo_key(paths: &Paths, root: &Path, index: &Index) -> String {
         .unwrap_or_else(|| repo::repo_key_cached(root, &paths.repo_keys()))
 }
 
-/// The newest learn.log event, if it was an error.
-fn last_learn_error(paths: &Paths) -> Option<learnlog::Tick> {
-    let mut tail = super::tail::LineTail::new(paths.learn_log());
-    let lines = tail.poll();
-    let last = lines.iter().rev().find_map(|l| learnlog::parse(l).into_iter().next())?;
-    (last.tone == learnlog::Tone::Error).then_some(last)
-}
-
-fn extra_checks(paths: &Paths) -> Vec<(Check, Option<Fix>)> {
-    let mut out = Vec::new();
-    let store = config::TomlFile::in_home(&paths.root);
-    let cfg = config::ConfigStore::get(&store, "learn.auto");
-    let (auto, cfg_check) = match cfg {
-        Ok(v) => {
-            let exists = config::ConfigStore::path(&store).exists();
-            let detail = if exists {
-                format!("{} is valid", detect::tilde(config::ConfigStore::path(&store)))
+/// Repositories a background learner is working on now: `repo` only, or every one in the queue.
+/// A learner holds `learn-queue/<slug>.lock` while it runs or waits (live learning).
+pub fn learning_now(paths: &Paths, repo: Option<&str>) -> Vec<String> {
+    match repo {
+        Some(r) => {
+            let held = lock::is_held(&Queue::new(paths, r).lock()).unwrap_or(false);
+            if held {
+                vec![r.to_string()]
             } else {
-                "no config.toml: Adage's defaults apply".to_string()
-            };
-            (v.and_then(|v| v.as_bool()), Check { check: "config".into(), status: Status::Pass, detail, fix: None })
+                vec![]
+            }
         }
-        Err(e) => (
-            None,
-            Check {
-                check: "config".into(),
-                status: Status::Fail,
-                detail: format!("{e:#}"),
-                fix: Some(format!("fix {} by hand", detect::tilde(config::ConfigStore::path(&store)))),
-            },
-        ),
-    };
-    out.push((cfg_check, None));
-    let err = last_learn_error(paths);
-    let learn = match (auto, &err) {
-        (_, Some(e)) => (
-            Check {
-                check: "auto-learn".into(),
-                status: Status::Warn,
-                detail: format!("the last learning run failed: {}", e.text),
-                fix: Some("run `adage learn` to see the error in full".into()),
-            },
-            Some(Fix::LearnNow),
-        ),
-        (Some(true), None) => (
-            Check {
-                check: "auto-learn".into(),
-                status: Status::Pass,
-                detail: "on: Adage learns after agent sessions end".into(),
-                fix: None,
-            },
-            None,
-        ),
-        (Some(false), None) => (
-            Check {
-                check: "auto-learn".into(),
-                status: Status::Pass,
-                detail: "off: routes change only when you run `adage learn`".into(),
-                fix: None,
-            },
-            None,
-        ),
-        (None, None) => (
-            Check {
-                check: "auto-learn".into(),
-                status: Status::Pass,
-                detail: "not set in config.toml (Adage's default applies)".into(),
-                fix: None,
-            },
-            Some(Fix::EnableAutoLearn),
-        ),
-    };
-    out.push(learn);
-    let lock = paths.root.join(LEARN_LOCK);
-    if let Ok(m) = std::fs::metadata(&lock) {
-        let age = m.modified().ok().and_then(|t| t.elapsed().ok()).map(|d| d.as_secs()).unwrap_or(0);
-        if age > STALE_LOCK_SECS {
-            out.push((
-                Check {
-                    check: "learn lock".into(),
-                    status: Status::Warn,
-                    detail: format!(
-                        "{} is {} minutes old: a learner probably died holding it, and learning waits on it",
-                        detect::tilde(&lock),
-                        age / 60
-                    ),
-                    fix: Some("remove it (press Enter)".into()),
-                },
-                Some(Fix::ClearLock(lock)),
-            ));
-        } else {
-            out.push((
-                Check {
-                    check: "learn lock".into(),
-                    status: Status::Pass,
-                    detail: format!("a learning run is in progress ({age}s)"),
-                    fix: None,
-                },
-                None,
-            ));
-        }
+        None => std::fs::read_dir(paths.learn_queue())
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "lock"))
+            .filter(|p| lock::is_held(p).unwrap_or(false))
+            .filter_map(|p| p.file_stem().map(|s| s.to_string_lossy().to_string()))
+            .collect(),
     }
-    out
 }
 
-/// The fix for a doctor check, when it is short of pass and one key can fix it.
+/// The fix for a doctor check, when one key can fix it.
 fn fix_for(c: &Check) -> Option<Fix> {
+    // Auto-learn passes whether it is on or off; off has a one-key fix all the same.
+    if c.check == "auto-learn" && c.detail.starts_with("off") {
+        return Some(Fix::EnableAutoLearn);
+    }
     if c.status == Status::Pass {
         return None;
     }
@@ -216,21 +135,19 @@ fn fix_for(c: &Check) -> Option<Fix> {
     }
     match c.check.as_str() {
         "embedding model" => Some(Fix::FetchModel),
-        "index" | "tracks" => Some(Fix::LearnNow),
+        "index" | "tracks" | "auto-learn runs" | "auto-learn queue" => Some(Fix::LearnNow),
         "fail-open errors" => Some(Fix::OpenFailOpen),
+        "config" => Some(Fix::OpenSettings),
         _ => None,
     }
 }
 
 /// Every check, with lamps, for the repository at `root`.
 pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
-    let mut checks = doctor::checks(paths, root);
-    let mut fixes: Vec<Option<Fix>> = checks.iter().map(fix_for).collect();
-    let auto_learn = config::auto_learn(&paths.root);
-    for (c, f) in extra_checks(paths) {
-        checks.push(c);
-        fixes.push(f);
-    }
+    let checks = doctor::checks(paths, root);
+    let fixes: Vec<Option<Fix>> = checks.iter().map(fix_for).collect();
+    let loaded = config::load(paths);
+    let auto_learn = loaded.get("learn.auto").map(|(_, src)| (loaded.config.learn_auto, src.to_string()));
     let index = Index::load(&paths.index());
     let generation = std::fs::metadata(paths.index()).is_ok().then(|| index.generation.clone());
     let key = root.map(|r| repo_key(paths, r, &index));
@@ -272,16 +189,17 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
             }
         }),
     });
-    let learn_check = by("auto-learn");
+    // Any live-learning check short of pass (a failed run, a stuck learner, a backlog) dims it.
+    let learning_trouble = checks.iter().any(|c| c.check.starts_with("auto-learn") && c.status != Status::Pass);
     lights.push(Light {
-        label: match auto_learn {
-            Some(true) => "auto-learn on".into(),
-            Some(false) => "auto-learn off".into(),
-            None => "auto-learn default".into(),
+        label: match &auto_learn {
+            Some((true, _)) => "auto-learn on".into(),
+            Some((false, _)) => "auto-learn off".into(),
+            None => "auto-learn ?".into(),
         },
-        lamp: match (auto_learn, learn_check.map(|c| c.status)) {
-            (_, Some(Status::Warn | Status::Fail)) => Lamp::Warn,
-            (Some(true), _) => Lamp::Ok,
+        lamp: match (&auto_learn, learning_trouble) {
+            (_, true) => Lamp::Warn,
+            (Some((true, _)), false) => Lamp::Ok,
             _ => Lamp::Off,
         },
     });

@@ -62,6 +62,7 @@ impl World {
         c.args(args)
             .current_dir(&self.root)
             .env("ADAGE_HOME", self.root.join("adage"))
+            .env("ADAGE_AUTO_LEARN", "0")
             .env("HOME", self.root.join("home"))
             .env("ADAGE_ARM", arm)
             .env_remove("ADAGE_DISABLE")
@@ -124,6 +125,7 @@ fn graph_on_an_empty_home_is_empty_not_an_error() {
     let o = Command::new(env!("CARGO_BIN_EXE_adage"))
         .args(["graph", "--json"])
         .env("ADAGE_HOME", dir.path())
+        .env("ADAGE_AUTO_LEARN", "0")
         .output()
         .unwrap();
     assert!(o.status.success());

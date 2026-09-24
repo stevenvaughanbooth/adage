@@ -146,24 +146,50 @@ pub fn fetch_model(paths: Paths) -> Job {
     })
 }
 
-/// Run `adage learn` as a child process (its output is captured, never written to the screen).
-pub fn learn_now(paths: Paths, extra: Vec<String>) -> Job {
+/// Learn now, as a child process (its output is captured, never written to the screen). In a
+/// repository this is exactly what a hook's background learner runs, `adage learn --auto
+/// --repo-root <root>`, so it takes the same per-repository lock and logs to `learn.log` the same
+/// way; the result is read back from there. Outside one it is `adage learn` (every repository).
+pub fn learn_now(paths: Paths, root: Option<PathBuf>) -> Job {
     Job::spawn("Learning from your agents' sessions", move |tx| {
         let exe = std::env::current_exe()?;
         let _ = tx.send(JobMsg::Progress(0.1, "reading transcripts…".into()));
-        let out = std::process::Command::new(exe)
-            .arg("learn")
-            .args(&extra)
-            .env("ADAGE_HOME", &paths.root)
-            .stdin(std::process::Stdio::null())
-            .output()?;
-        let mut lines: Vec<String> = String::from_utf8_lossy(&out.stdout).lines().map(String::from).collect();
+        let mut cmd = std::process::Command::new(exe);
+        cmd.arg("learn").env("ADAGE_HOME", &paths.root).stdin(std::process::Stdio::null());
+        if let Some(r) = &root {
+            cmd.args(["--auto", "--repo-root"]).arg(r);
+        }
+        let started = crate::learnlog::now_ms();
+        let out = cmd.output()?;
         let err: Vec<String> = String::from_utf8_lossy(&out.stderr).lines().map(String::from).collect();
         if !out.status.success() {
             let msg = err.last().cloned().unwrap_or_else(|| format!("adage learn exited with {}", out.status));
             anyhow::bail!("{}", msg.trim_start_matches("adage: "));
         }
-        lines.extend(err);
+        let Some(root) = root else {
+            let mut lines: Vec<String> = String::from_utf8_lossy(&out.stdout).lines().map(String::from).collect();
+            lines.extend(err);
+            return Ok(lines);
+        };
+        // What this run appended for the repository.
+        let repo = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
+        let mine: Vec<serde_json::Value> = crate::learnlog::read(&paths)
+            .into_iter()
+            .filter(|l| l["ts"].as_u64().is_some_and(|t| t >= started) && l["repo"] == repo.as_str())
+            .collect();
+        if mine.is_empty() {
+            return Ok(vec![format!(
+                "A learner is already working on {repo}; what it changes appears in the learning ticker."
+            )]);
+        }
+        let mut lines = Vec::new();
+        for l in &mine {
+            let ticks = super::learnlog::parse(&l.to_string());
+            if let Some(e) = ticks.iter().find(|t| t.tone == super::learnlog::Tone::Error) {
+                anyhow::bail!("{}", e.text);
+            }
+            lines.extend(ticks.into_iter().map(|t| t.text));
+        }
         Ok(lines)
     })
 }

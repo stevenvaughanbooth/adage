@@ -9,8 +9,12 @@
 //!   concurrent writers never interleave (`FILE_APPEND_DATA` on Windows, likewise one write per
 //!   record). Readers stop at the first incomplete or corrupt frame and resynchronise on the next
 //!   magic.
+//! * **Config** — `config.toml`: the person's settings ([`config`]).
+//! * **Locks** — single-flight file locks for live learning ([`lock`]).
 
+pub mod config;
 mod crc;
+pub mod lock;
 pub mod paths;
 pub mod spool;
 pub mod state;

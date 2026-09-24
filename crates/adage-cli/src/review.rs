@@ -488,6 +488,8 @@ fn bumped(v: &str, b: Bump) -> String {
 
 fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     require_person(&format!("review {verb}"))?;
+    // One writer of the tracks and index at a time: an automatic learner may be running.
+    let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let pos: Vec<&String> = {
         let mut v = Vec::new();
         let mut i = 0;

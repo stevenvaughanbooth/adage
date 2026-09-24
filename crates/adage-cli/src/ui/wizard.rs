@@ -5,13 +5,12 @@
 //!    written only on `y`, through `adage install --write`'s own code.
 //! 3. The embedding model (optional): fetched with progress.
 //! 4. A first `adage learn`.
-//! 5. Auto-learn: `learn.auto = true` in `config.toml`.
+//! 5. Auto-learn: `learn.auto = true` in `config.toml` (`adage config set`), if it is off.
 //! 6. The doctor's summary, and where to go next (`adage watch` in a split pane).
 //!
 //! `n` skips a step, `q` stops; what was done is printed when the wizard exits.
 
 use super::app::install_confirm;
-use super::config::{self, ConfigStore};
 use super::health::{self, Health};
 use super::jobs::{self, Job};
 use super::term::{self, Term};
@@ -20,6 +19,7 @@ use super::view::Ctx;
 use crate::detect::{self, Detected, Registration};
 use crate::doctor::Status;
 use crate::install::Plan;
+use adage_store::config;
 use anyhow::Result;
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::layout::{Constraint, Layout};
@@ -83,7 +83,8 @@ pub struct Wizard {
     pub scope: &'static str,
     pub plan: Option<Result<Plan, String>>,
     pub model: Option<String>,
-    pub auto_learn: Option<bool>,
+    /// The effective `learn.auto`, and where it came from.
+    pub auto_learn: Option<(bool, String)>,
     pub config_path: String,
     pub progress: Option<(String, f64)>,
     pub output: Vec<String>,
@@ -181,6 +182,11 @@ impl Wizard {
             }
             Kind::Model if yes => Some(Cmd::FetchModel),
             Kind::Learn if yes => Some(Cmd::Learn),
+            // Already on (by default, in the file, or ADAGE_AUTO_LEARN): nothing to write.
+            Kind::AutoLearn if yes && self.auto_learn.as_ref().is_some_and(|(on, _)| *on) => {
+                let src = self.auto_learn.as_ref().map(|(_, s)| s.clone()).unwrap_or_default();
+                self.advance(StepStatus::Done(format!("already on ({src})")))
+            }
             Kind::AutoLearn if yes => Some(Cmd::AutoLearn),
             Kind::Model | Kind::Learn | Kind::AutoLearn if no => self.advance(StepStatus::Skipped),
             Kind::Finish if yes || code == KeyCode::Esc => Some(Cmd::Quit),
@@ -294,15 +300,15 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
             out.push(Line::raw("hooks read. It reads transcripts; it never runs anything they contain."));
         }
         Kind::AutoLearn => {
-            let now = match w.auto_learn {
-                Some(true) => "on",
-                Some(false) => "off",
-                None => "not set",
+            let now = match &w.auto_learn {
+                Some((true, src)) => format!("on ({src}): y keeps it so"),
+                Some((false, src)) => format!("off ({src})"),
+                None => "unknown".to_string(),
             };
             out.push(Line::raw("Learn automatically after agent sessions end, so routes keep up with how your"));
             out.push(Line::raw("agents work. This sets `learn.auto = true` in:"));
             out.push(Line::from(Span::styled(format!("  {}", w.config_path), t.bold())));
-            out.push(dim(&format!("It is {now} now.")));
+            out.push(dim(&format!("Now: {now}.")));
         }
         Kind::Finish => match &w.health {
             None => out.push(dim("running `adage doctor`…")),
@@ -422,11 +428,11 @@ pub fn draw(f: &mut Frame, w: &Wizard, ctx: &Ctx) {
 // Runtime
 
 pub fn run(ctx: Ctx) -> Result<()> {
-    let store = config::TomlFile::in_home(&ctx.paths.root);
     let mut w = Wizard::new(detect::harnesses(), detect::registrations(ctx.root.as_deref()), ctx.root.is_some());
     w.model = adage_intent::model::status(&ctx.paths.models()).ok().map(|m| m.id);
-    w.auto_learn = config::auto_learn(&ctx.paths.root);
-    w.config_path = detect::tilde(store.path());
+    let loaded = config::load(&ctx.paths);
+    w.auto_learn = loaded.get("learn.auto").map(|(_, src)| (loaded.config.learn_auto, src.to_string()));
+    w.config_path = detect::tilde(&ctx.paths.config());
     let mut job: Option<(Job, Kind)> = None;
     let mut t = Term::enter()?;
     let replan = |w: &mut Wizard| {
@@ -492,13 +498,16 @@ pub fn run(ctx: Ctx) -> Result<()> {
                 None
             }
             Cmd::Learn => {
-                job = Some((jobs::learn_now(ctx.paths.clone(), vec![]), Kind::Learn));
+                job = Some((jobs::learn_now(ctx.paths.clone(), ctx.root.clone()), Kind::Learn));
                 w.progress = Some(("reading transcripts…".into(), 0.1));
                 None
             }
-            Cmd::AutoLearn => match store.set("learn.auto", toml::Value::Boolean(true)) {
-                Ok(()) => {
-                    w.auto_learn = Some(true);
+            // `adage config set`'s own guard and validation.
+            Cmd::AutoLearn => match crate::share::require_person("config set")
+                .and_then(|()| config::set(&ctx.paths, "learn.auto", "true").map_err(|e| anyhow::anyhow!(e)))
+            {
+                Ok(_) => {
+                    w.auto_learn = Some((true, "file".into()));
                     w.advance(StepStatus::Done(format!("learn.auto = true in {}", w.config_path)))
                 }
                 Err(e) => w.advance(StepStatus::Failed(format!("{e:#}"))),

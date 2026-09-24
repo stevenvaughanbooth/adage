@@ -10,13 +10,12 @@
 //! * hook activity: `$ADAGE_HOME/sessions/*.spool`, followed incrementally ([`tail`]);
 //! * learning: `$ADAGE_HOME/learn.log`, one JSON object per line ([`learnlog`]);
 //! * health: `adage doctor`'s checks, re-run every few seconds on a worker thread ([`health`]);
-//! * settings: `$ADAGE_HOME/config.toml` ([`config`], a minimal stand-in; see its docs).
+//! * settings: `$ADAGE_HOME/config.toml`, through `adage_store::config` (as `adage config`).
 //!
 //! The terminal is restored on every exit path, including a panic ([`term`]). `NO_COLOR` is
 //! honoured: colour is dropped and aspects and lamps are spelled out.
 
 mod app;
-mod config;
 mod demo;
 mod diff;
 mod feed;

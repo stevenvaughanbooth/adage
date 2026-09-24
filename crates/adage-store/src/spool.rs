@@ -1,4 +1,12 @@
 //! Append-only, CRC-framed spools: `magic | len | crc | payload`, one `O_APPEND` write each.
+//!
+//! **Following a spool live.** `adage ui` / `adage watch` tail `$ADAGE_HOME/sessions/*.spool` with
+//! [`read_from`]: keep the offset it returns per file and call it again when the file grows. A
+//! record still being written when it is read (its frame runs past the end of the file) is not
+//! returned, and the offset stops at its start, so the next call reads it whole. A torn frame (a
+//! crash mid-append) is skipped once later records make it provably corrupt, exactly as
+//! [`read_all`] does. Each record is the JSON object the hook appended (Architecture §4.4):
+//! `{ ts, event, kind, arm, repo, generation, harness?, decision }`, with no prompt text.
 
 use crate::crc::crc32;
 use serde::{de::DeserializeOwned, Serialize};
@@ -27,14 +35,30 @@ pub fn append<T: Serialize>(path: &Path, record: &T) -> io::Result<()> {
     f.write_all(&buf)
 }
 
-/// Every valid record, in file order. Corrupt or truncated frames are skipped by resynchronising
-/// on the next magic, so a crash mid-append costs at most that one record.
-pub fn read_all<T: DeserializeOwned>(path: &Path) -> io::Result<Vec<T>> {
-    let bytes = match std::fs::read(path) {
-        Ok(b) => b,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+/// The valid records from byte `offset` on, and the offset to continue from. A frame that runs past
+/// the current end of the file (still being appended) ends the read, and the returned offset
+/// points at it. An offset past the end of the file (the spool was replaced or truncated) starts
+/// again from the beginning. A missing file is empty at offset 0.
+pub fn read_from<T: DeserializeOwned>(path: &Path, offset: u64) -> io::Result<(Vec<T>, u64)> {
+    use std::io::{Read, Seek, SeekFrom};
+    let mut f = match std::fs::File::open(path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok((Vec::new(), 0)),
         Err(e) => return Err(e),
     };
+    let len = f.metadata()?.len();
+    let start = if offset > len { 0 } else { offset };
+    f.seek(SeekFrom::Start(start))?;
+    let mut bytes = Vec::new();
+    f.take(len - start).read_to_end(&mut bytes)?;
+    let (out, consumed) = parse(&bytes, false);
+    Ok((out, start + consumed as u64))
+}
+
+/// Records in `bytes`, and how many bytes were consumed. With `to_end`, an incomplete frame at the
+/// end is skipped over like a corrupt one (the whole file is read); without it, parsing stops at
+/// it so that a tail can read it once it is complete.
+fn parse<T: DeserializeOwned>(bytes: &[u8], to_end: bool) -> (Vec<T>, usize) {
     let mut out = Vec::new();
     let mut i = 0;
     while i + HEADER <= bytes.len() {
@@ -45,6 +69,17 @@ pub fn read_all<T: DeserializeOwned>(path: &Path) -> io::Result<Vec<T>> {
         let len = u32::from_le_bytes(bytes[i + 4..i + 8].try_into().unwrap()) as usize;
         let crc = u32::from_le_bytes(bytes[i + 8..i + 12].try_into().unwrap());
         let end = i + HEADER + len;
+        if len <= MAX_RECORD && end > bytes.len() && !to_end {
+            // Still being written, unless a complete record follows it (then it was torn by a
+            // crash, and is skipped as read_all would): wait for more.
+            match (i + 1..bytes.len()).find(|&j| valid_frame_at(bytes, j)) {
+                Some(j) => {
+                    i = j;
+                    continue;
+                }
+                None => return (out, i),
+            }
+        }
         if len > MAX_RECORD || end > bytes.len() || crc32(&bytes[i + HEADER..end]) != crc {
             i += 1;
             continue;
@@ -54,121 +89,35 @@ pub fn read_all<T: DeserializeOwned>(path: &Path) -> io::Result<Vec<T>> {
         }
         i = end;
     }
-    Ok(out)
+    // Fewer than a header's bytes remain: they may begin a frame not yet complete.
+    (out, if to_end { bytes.len() } else { i })
 }
 
-/// At most this many bytes are read by one [`read_from`] call; the rest waits for the next.
-pub const MAX_READ_FROM: u64 = 8 << 20;
+/// Does a complete frame with a valid CRC start at `j`?
+fn valid_frame_at(bytes: &[u8], j: usize) -> bool {
+    if j + HEADER > bytes.len() || bytes[j..j + 4] != MAGIC {
+        return false;
+    }
+    let len = u32::from_le_bytes(bytes[j + 4..j + 8].try_into().unwrap()) as usize;
+    let crc = u32::from_le_bytes(bytes[j + 8..j + 12].try_into().unwrap());
+    len <= MAX_RECORD && j + HEADER + len <= bytes.len() && crc32(&bytes[j + HEADER..j + HEADER + len]) == crc
+}
 
-/// Records appended after byte `offset`, for a reader that follows a spool as it grows (`adage
-/// watch`). Returns the records and the offset to resume from: just past the last complete frame,
-/// or at the start of a frame still being written, so a partial write is read once it completes.
-/// Garbage between frames (a torn frame from a crash) is skipped by resynchronising on the next
-/// magic, as [`read_all`] does. A file shorter than `offset` was truncated or replaced: the caller
-/// sees `(vec![], len)` with `len < offset` and restarts from 0.
-///
-/// `offset` may land inside a frame (a reader starting near the end of a large spool): it
-/// resynchronises on the next valid frame.
-pub fn read_from<T: DeserializeOwned>(path: &Path, offset: u64) -> io::Result<(Vec<T>, u64)> {
-    use std::io::{Read, Seek, SeekFrom};
-    let mut f = match std::fs::File::open(path) {
-        Ok(f) => f,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok((Vec::new(), 0)),
+/// Every valid record, in file order. Corrupt or truncated frames are skipped by resynchronising
+/// on the next magic, so a crash mid-append costs at most that one record.
+pub fn read_all<T: DeserializeOwned>(path: &Path) -> io::Result<Vec<T>> {
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(e),
     };
-    let len = f.metadata()?.len();
-    if len <= offset {
-        return Ok((Vec::new(), len));
-    }
-    f.seek(SeekFrom::Start(offset))?;
-    let mut bytes = Vec::new();
-    f.take(MAX_READ_FROM.min(len - offset)).read_to_end(&mut bytes)?;
-    let (out, used) = parse_frames(&bytes);
-    Ok((out, offset + used as u64))
-}
-
-/// Complete, valid frames in `bytes`, and how many bytes were consumed. A frame whose header or
-/// payload runs past the end is left unconsumed: it may still be being written, or have been cut
-/// off by [`MAX_READ_FROM`], and is read next time.
-fn parse_frames<T: DeserializeOwned>(bytes: &[u8]) -> (Vec<T>, usize) {
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes.len() - i < 4 {
-            // Possibly the start of a magic: wait for more.
-            if MAGIC.starts_with(&bytes[i..]) {
-                break;
-            }
-            i += 1;
-            continue;
-        }
-        if bytes[i..i + 4] != MAGIC {
-            i += 1;
-            continue;
-        }
-        if i + HEADER > bytes.len() {
-            break;
-        }
-        let len = u32::from_le_bytes(bytes[i + 4..i + 8].try_into().unwrap()) as usize;
-        if len > MAX_RECORD {
-            i += 1;
-            continue;
-        }
-        let end = i + HEADER + len;
-        if end > bytes.len() {
-            // Incomplete: an append in progress (or a torn frame, skipped once more bytes arrive
-            // and its CRC fails).
-            break;
-        }
-        let crc = u32::from_le_bytes(bytes[i + 8..i + 12].try_into().unwrap());
-        if crc32(&bytes[i + HEADER..end]) != crc {
-            i += 1;
-            continue;
-        }
-        if let Ok(v) = serde_json::from_slice(&bytes[i + HEADER..end]) {
-            out.push(v);
-        }
-        i = end;
-    }
-    (out, i)
+    Ok(parse(&bytes, true).0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use serde_json::{json, Value};
-
-    #[test]
-    fn read_from_follows_appends_and_waits_for_partial_frames() {
-        let d = tempfile::tempdir().unwrap();
-        let p = d.path().join("s.spool");
-        append(&p, &json!({ "i": 0 })).unwrap();
-        let (v, off): (Vec<Value>, u64) = read_from(&p, 0).unwrap();
-        assert_eq!(v.len(), 1);
-        // A frame written in two pieces is read only once complete.
-        let payload = serde_json::to_vec(&json!({ "i": 1 })).unwrap();
-        let mut frame = MAGIC.to_vec();
-        frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
-        frame.extend_from_slice(&crc32(&payload).to_le_bytes());
-        frame.extend_from_slice(&payload);
-        let mut f = OpenOptions::new().append(true).open(&p).unwrap();
-        f.write_all(&frame[..7]).unwrap();
-        let (v, off2): (Vec<Value>, u64) = read_from(&p, off).unwrap();
-        assert!(v.is_empty());
-        assert_eq!(off2, off, "a partial frame is not consumed");
-        f.write_all(&frame[7..]).unwrap();
-        let (v, off3): (Vec<Value>, u64) = read_from(&p, off2).unwrap();
-        assert_eq!(v, vec![json!({ "i": 1 })]);
-        assert_eq!(off3, std::fs::metadata(&p).unwrap().len());
-        // Starting mid-frame resynchronises on the next one.
-        append(&p, &json!({ "i": 2 })).unwrap();
-        let (v, _): (Vec<Value>, u64) = read_from(&p, 3).unwrap();
-        assert_eq!(v.last().unwrap()["i"], 2);
-        // Truncation shows as a length below the offset.
-        std::fs::write(&p, b"").unwrap();
-        let (v, len): (Vec<Value>, u64) = read_from(&p, off3).unwrap();
-        assert!(v.is_empty() && len == 0);
-    }
 
     #[test]
     fn append_and_read_back_in_order() {
@@ -192,6 +141,86 @@ mod tests {
         append(&p, &json!({ "b": 2 })).unwrap();
         let v: Vec<Value> = read_all(&p).unwrap();
         assert_eq!(v.len(), 2);
+    }
+
+    #[test]
+    fn read_from_resumes_and_waits_for_partial_records() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.spool");
+        let (none, off): (Vec<Value>, u64) = read_from(&p, 0).unwrap();
+        assert!(none.is_empty() && off == 0, "a missing spool is empty");
+        append(&p, &json!({ "i": 0 })).unwrap();
+        append(&p, &json!({ "i": 1 })).unwrap();
+        let (v, off): (Vec<Value>, u64) = read_from(&p, 0).unwrap();
+        assert_eq!(v.len(), 2);
+        assert_eq!(off, std::fs::metadata(&p).unwrap().len());
+        // Half a record: its first bytes are on disk, the rest not yet.
+        let payload = serde_json::to_vec(&json!({ "i": 2 })).unwrap();
+        let mut frame = MAGIC.to_vec();
+        frame.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        frame.extend_from_slice(&crc32(&payload).to_le_bytes());
+        frame.extend_from_slice(&payload);
+        let mut f = OpenOptions::new().append(true).open(&p).unwrap();
+        for cut in [3, HEADER, HEADER + 4] {
+            let before = std::fs::metadata(&p).unwrap().len();
+            f.write_all(&frame[..cut]).unwrap();
+            let (v, at): (Vec<Value>, u64) = read_from(&p, off).unwrap();
+            assert!(v.is_empty(), "nothing complete yet (cut at {cut})");
+            assert_eq!(at, off, "the offset waits at the partial frame");
+            // Undo, to try the next cut from the same place.
+            f.set_len(before).unwrap();
+        }
+        f.write_all(&frame[..HEADER + 4]).unwrap();
+        f.write_all(&frame[HEADER + 4..]).unwrap();
+        let (v, off2): (Vec<Value>, u64) = read_from(&p, off).unwrap();
+        assert_eq!(v, vec![json!({ "i": 2 })]);
+        assert_eq!(off2, std::fs::metadata(&p).unwrap().len());
+        // A torn frame followed by a complete one is skipped, as read_all does.
+        f.write_all(&[0xAD, 0xA6, 0xE5, 0x01, 200, 0, 0, 0, 1, 2]).unwrap();
+        append(&p, &json!({ "i": 3 })).unwrap();
+        let (v, _): (Vec<Value>, u64) = read_from(&p, off2).unwrap();
+        assert_eq!(v, vec![json!({ "i": 3 })]);
+        // An offset past the end (the spool was replaced) starts again.
+        let (v, _): (Vec<Value>, u64) = read_from(&p, 1 << 40).unwrap();
+        assert_eq!(v.len(), 4);
+    }
+
+    #[test]
+    fn read_from_follows_concurrent_appenders_exactly_once() {
+        let d = tempfile::tempdir().unwrap();
+        let p = std::sync::Arc::new(d.path().join("s.spool"));
+        let writers: Vec<_> = (0..4)
+            .map(|t| {
+                let p = p.clone();
+                std::thread::spawn(move || {
+                    for i in 0..300 {
+                        append(&p, &json!({ "t": t, "i": i, "pad": "x".repeat(i * 7 % 900) })).unwrap();
+                    }
+                })
+            })
+            .collect();
+        let mut seen: Vec<Value> = Vec::new();
+        let mut off = 0;
+        let mut done = false;
+        while !done {
+            done = writers.iter().all(|w| w.is_finished());
+            let (v, o): (Vec<Value>, u64) = read_from(&p, off).unwrap();
+            seen.extend(v);
+            off = o;
+        }
+        for w in writers {
+            w.join().unwrap();
+        }
+        let (v, _): (Vec<Value>, u64) = read_from(&p, off).unwrap();
+        seen.extend(v);
+        assert_eq!(seen.len(), 1200, "every record once, none torn");
+        let mut keys: Vec<(u64, u64)> =
+            seen.iter().map(|r| (r["t"].as_u64().unwrap(), r["i"].as_u64().unwrap())).collect();
+        keys.sort();
+        keys.dedup();
+        assert_eq!(keys.len(), 1200);
+        let all: Vec<Value> = read_all(&p).unwrap();
+        assert_eq!(all, seen, "the tail reads what read_all reads, in order");
     }
 
     #[test]

@@ -1,6 +1,8 @@
 //! `adage learn`: import sessions, mine routes, assemble versioned tracks, compile the index.
 
+pub mod cache;
 pub mod codex;
+pub mod diff;
 pub mod import;
 pub mod intent;
 pub mod mine;
@@ -28,6 +30,11 @@ pub struct Report {
     /// The embedding model intent families were learned with; `None` if none is installed (intent
     /// families are then skipped, and existing intent tracks are left as they are).
     pub intent_model: Option<String>,
+    /// Transcripts read from the parse cache, and parsed afresh (with [`Inputs::cache`]).
+    #[serde(skip)]
+    pub cache_hits: usize,
+    #[serde(skip)]
+    pub cache_misses: usize,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -52,6 +59,12 @@ pub struct Inputs {
     pub repo_override: Option<String>,
     /// The models directory (`$ADAGE_HOME/models`). No usable model there: no intent families.
     pub models: Option<PathBuf>,
+    /// The parse cache directory (`$ADAGE_HOME/cache/sessions`, [`cache`]); `None` parses every
+    /// transcript. The results are the same either way.
+    pub cache: Option<PathBuf>,
+    /// Learn only this repository (automatic learning): sessions of other repositories are not
+    /// read into the run, not counted in `sessions_read`, and their tracks are left as they are.
+    pub only_repo: Option<String>,
 }
 
 pub fn slug(repo: &str) -> String {
@@ -118,19 +131,58 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     let table = CommandTable::load();
     let mut sessions: Vec<Session> = Vec::new();
     let (mut read, mut steered) = (0, 0);
+    let mut cache = inputs.cache.as_deref().map(cache::Cache::open);
+    // Repository keys by root, found once per run.
+    let mut keys: BTreeMap<PathBuf, String> = BTreeMap::new();
+    let mut repo_of = |root: &Path| -> String {
+        keys.entry(root.to_path_buf()).or_insert_with(|| adage_core::repo::repo_key(root)).clone()
+    };
+    let (over, only) = (inputs.repo_override.as_deref(), inputs.only_repo.as_deref());
     for p in &inputs.transcripts {
-        read += 1;
-        if let Some(mut s) = read_session(p, &table, inputs.repo_override.as_deref()) {
-            steered += usize::from(s.steered);
-            s.outcome = inputs.outcomes.get(&s.id).copied();
-            if !s.steps.is_empty() {
-                sessions.push(s);
+        let got = match cache.as_mut() {
+            Some(c) => c.read(p, &table, over, only, &mut repo_of),
+            None => match read_session(p, &table, over) {
+                None => cache::Read::Nothing,
+                Some(s) if only.is_some_and(|r| r != s.repo) => cache::Read::Elsewhere,
+                Some(s) => cache::Read::Session(Box::new(s)),
+            },
+        };
+        match got {
+            cache::Read::Elsewhere => {}
+            // A file with no session belongs to no repository: counted only in a full run.
+            cache::Read::Nothing => read += usize::from(only.is_none()),
+            cache::Read::Session(s) => {
+                let mut s = *s;
+                read += 1;
+                steered += usize::from(s.steered);
+                s.outcome = inputs.outcomes.get(&s.id).copied();
+                if !s.steps.is_empty() {
+                    sessions.push(s);
+                }
             }
         }
+    }
+    let (hits, misses) = cache.as_ref().map(|c| (c.hits, c.misses)).unwrap_or((0, 0));
+    if let Some(c) = cache {
+        c.save();
+    }
+    if only.is_some() && sessions.is_empty() {
+        // Nothing to learn for this repository: its tracks and the index stay exactly as they are.
+        let report = Report {
+            sessions_read: read,
+            sessions_steered: steered,
+            index_generation: Index::load(index_path).generation,
+            thresholds: thresholds(cfg),
+            cache_hits: hits,
+            cache_misses: misses,
+            ..Default::default()
+        };
+        return Ok(report);
     }
     let (mut report, planned) = plan(sessions, inputs.models.as_deref(), tracks_root, cfg)?;
     report.sessions_read = read;
     report.sessions_steered = steered;
+    (report.cache_hits, report.cache_misses) = (hits, misses);
     for p in &planned {
         io::write(&p.dir, &p.track)?;
         adage_tracks::proposals::save(&p.dir, &p.proposals)?;
@@ -140,6 +192,13 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     index.write_atomic(index_path)?;
     report.index_generation = index.generation.clone();
     Ok(report)
+}
+
+fn thresholds(cfg: &LearnConfig) -> String {
+    format!(
+        "min_support={} green_lower_bound={} yellow_rate={}",
+        cfg.min_support, cfg.green_lower_bound, cfg.yellow_rate
+    )
 }
 
 /// The dry run of `adage learn`: everything it would mine, reconcile, and version from these
@@ -152,13 +211,7 @@ pub fn plan(
     tracks_root: &Path,
     cfg: &LearnConfig,
 ) -> Result<(Report, Vec<Planned>)> {
-    let mut report = Report {
-        thresholds: format!(
-            "min_support={} green_lower_bound={} yellow_rate={}",
-            cfg.min_support, cfg.green_lower_bound, cfg.yellow_rate
-        ),
-        ..Default::default()
-    };
+    let mut report = Report { thresholds: thresholds(cfg), ..Default::default() };
     let mut sessions: Vec<Session> = sessions.into_iter().filter(|s| !s.steps.is_empty()).collect();
     sessions.sort_by(|a, b| a.id.cmp(&b.id));
     report.sessions_used = sessions.len();

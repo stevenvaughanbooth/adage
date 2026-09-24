@@ -43,7 +43,7 @@ pub fn assign_arm(session: &str, holdout_share: f64) -> Arm {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Call {
     pub tool: String,
     pub input: Value,

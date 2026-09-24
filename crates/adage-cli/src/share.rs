@@ -25,8 +25,9 @@ pub fn require_person(cmd: &str) -> Result<()> {
     // to share, trust, or review either.
     if let Some(var) = crate::install::AGENT_ENV.iter().find(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty())) {
         bail!(
-            "`adage {cmd}` changes what is shared or trusted, so it will not run inside an agent session \
-             ({var} is set). Run it yourself, in a terminal."
+            "`adage {cmd}` is a decision for a person (it changes what is shared, trusted or \
+             configured), so it will not run inside an agent session ({var} is set). Run it \
+             yourself, in a terminal."
         );
     }
     if std::env::var("ADAGE_ALLOW_NONINTERACTIVE").as_deref() == Ok("1") {
@@ -34,8 +35,8 @@ pub fn require_person(cmd: &str) -> Result<()> {
     }
     if !std::io::stdin().is_terminal() {
         bail!(
-            "`adage {cmd}` changes what is shared or trusted, so it needs a person at a terminal (stdin is \
-             not a terminal). For CI, set ADAGE_ALLOW_NONINTERACTIVE=1."
+            "`adage {cmd}` needs a person at a terminal (stdin is not a terminal). For CI, set \
+             ADAGE_ALLOW_NONINTERACTIVE=1."
         );
     }
     Ok(())

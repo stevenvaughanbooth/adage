@@ -27,4 +27,4 @@ adage 0.1.0 at ~/bin/adage
 
 
 
- harbor-dispatch · gen 8216e29f · 4 routes · auto-learn onEnter fix · i m l c o · R recheck · ? help · q quit
+ harbor-dispatch · gen 8216e29f · 4 routes · auto-learn o Enter fix · i m l o s · R recheck · ? help · q quit
