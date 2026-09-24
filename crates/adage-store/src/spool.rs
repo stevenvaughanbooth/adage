@@ -167,8 +167,9 @@ mod tests {
             let (v, at): (Vec<Value>, u64) = read_from(&p, off).unwrap();
             assert!(v.is_empty(), "nothing complete yet (cut at {cut})");
             assert_eq!(at, off, "the offset waits at the partial frame");
-            // Undo, to try the next cut from the same place.
-            f.set_len(before).unwrap();
+            // Undo, to try the next cut from the same place. Through its own write handle: Windows
+            // refuses `set_len` on an append-only one.
+            OpenOptions::new().write(true).open(&p).unwrap().set_len(before).unwrap();
         }
         f.write_all(&frame[..HEADER + 4]).unwrap();
         f.write_all(&frame[HEADER + 4..]).unwrap();
