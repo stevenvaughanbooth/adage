@@ -146,19 +146,8 @@ pub struct RepoFile {
     pub deps: Vec<String>,
 }
 
-/// Execution levels (Track C §3.1). A pack may only *request* one; only a machine grants it.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-pub enum Level {
-    /// Directive text only (today).
-    #[default]
-    E0,
-    /// Prefetch: run at the trigger, inject typed output.
-    E1,
-    /// An MCP tool the agent calls.
-    E2,
-    /// An MCP tool with real effects, staged and verified.
-    E3,
-}
+/// Execution levels (Track C §3.1), shared with the index (`IndexedRoute::exec`).
+pub use adage_tracks::index::Level;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

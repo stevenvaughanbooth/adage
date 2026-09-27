@@ -380,7 +380,7 @@ pub fn learn_only(
     rr.instincts = Some(ir);
     report.repos.insert(repo.to_string(), rr);
     let all = io::read_all(tracks_root)?;
-    let (index, conflicts) = adage_tracks::Index::compile_with_conflicts(&all);
+    let (index, conflicts) = adage_tracks::Index::compile_root(tracks_root, &all);
     index.write_atomic(index_path)?;
     report.index_generation = index.generation;
     report.conflicts = conflicts;

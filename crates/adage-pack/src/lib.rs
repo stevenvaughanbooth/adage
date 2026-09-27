@@ -20,13 +20,16 @@
 //! `CLOSURE` byte for byte); [`Pack::write`] writes the canonical form; [`upgrade_track`] turns a
 //! v1 track directory into a pack.
 
+pub mod bind;
 pub mod closure;
 pub mod digest;
+pub mod instincts;
 pub mod model;
 pub mod types;
 pub mod upgrade;
 pub mod validate;
 
+pub use bind::{bind, BindEnv, Binding, BoundRoute, Status, Target};
 pub use closure::Closure;
 pub use digest::{digest_dir, pack_digest, route_exec_digest, sign_dir, verify_dir, NAMESPACE};
 pub use model::*;

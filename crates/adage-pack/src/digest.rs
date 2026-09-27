@@ -21,10 +21,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::time::SystemTime;
 
-/// The sshsig namespace for packs. An `allowed_signers` entry restricted to `adage-track` does
-/// not authorise a pack, which can request execution. (`adage_sign::NAMESPACE` is `adage-track`;
-/// C1 moves this constant into adage-sign.)
-pub const NAMESPACE: &str = "adage-pack";
+/// The sshsig namespace for packs ([`adage_sign::PACK_NAMESPACE`]). An `allowed_signers` entry
+/// restricted to `adage-track` does not authorise a pack, which can request execution.
+pub const NAMESPACE: &str = adage_sign::PACK_NAMESPACE;
 
 pub fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()

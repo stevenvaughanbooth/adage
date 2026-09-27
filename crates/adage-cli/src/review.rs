@@ -343,8 +343,9 @@ fn queue<'a>(all: &'a [Installed], judged: &BTreeMap<(String, String), (u32, u32
 fn list(paths: &Paths, as_json: bool) -> Result<()> {
     let all = discover(&paths.tracks())?;
     let judged = judgements(paths);
-    let index = Index::compile(&all.iter().map(|i| i.track.clone()).collect::<Vec<_>>());
+    let index = Index::compile_root(&paths.tracks(), &all.iter().map(|i| i.track.clone()).collect::<Vec<_>>()).0;
     let items = queue(&all, &judged, &index);
+    let inert = crate::packs::inert_routes(paths);
     if as_json {
         let rows: Vec<Value> = items
             .iter()
@@ -382,9 +383,10 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
                 })
             })
             .collect();
-        println!("{}", serde_json::to_string_pretty(&json!({ "count": rows.len(), "queue": rows }))?);
+        println!("{}", serde_json::to_string_pretty(&json!({ "count": rows.len(), "queue": rows, "inert": inert }))?);
         return Ok(());
     }
+    print_inert(&inert);
     if items.is_empty() {
         println!("adage review: nothing awaits a decision.");
         return Ok(());
@@ -448,6 +450,26 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Routes of installed packs that are inert here (Track C §2.3): never delivered, and no decision
+/// changes that; restoring what they need (a script, a tool) and running `adage add` again does.
+fn print_inert(inert: &[crate::packs::InertRoute]) {
+    if inert.is_empty() {
+        return;
+    }
+    println!("adage review: {} pack route(s) are inert here (not delivered):\n", inert.len());
+    for i in inert {
+        println!(
+            "{} @ {}  {}   [{}]  (pack, sha256 {})",
+            i.pack,
+            i.version,
+            i.route,
+            i.repo,
+            &i.digest[..i.digest.len().min(16)]
+        );
+        println!("  why        inert: {}\n", i.reason);
+    }
+}
+
 /// The decisions that can apply to a route as it stands (promotion of an import may still be
 /// refused for want of first-hand evidence).
 fn verbs(r: &Route, proposed: bool) -> Vec<&'static str> {
@@ -482,7 +504,7 @@ pub(crate) struct Standing {
 pub(crate) fn standings(paths: &Paths) -> Result<BTreeMap<(String, String), Standing>> {
     let all = discover(&paths.tracks())?;
     let judged = judgements(paths);
-    let index = Index::compile(&all.iter().map(|i| i.track.clone()).collect::<Vec<_>>());
+    let index = Index::compile_root(&paths.tracks(), &all.iter().map(|i| i.track.clone()).collect::<Vec<_>>()).0;
     let mut out: BTreeMap<(String, String), Standing> = BTreeMap::new();
     for inst in &all {
         for r in &inst.track.routes {
@@ -717,7 +739,7 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
 
     // Recompile the index exactly as `adage learn` and `adage add` do.
     let tracks = io::read_all(&paths.tracks())?;
-    let index = Index::compile(&tracks);
+    let index = Index::compile_root(&paths.tracks(), &tracks).0;
     index.write_atomic(&paths.index())?;
 
     let change = |a: String, b: String| if a == b { a } else { format!("{a} → {b}") };

@@ -23,8 +23,20 @@ impl World {
     fn new() -> World {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
-        for d in ["sender", "recipient", "home", "keys", "elsewhere"] {
+        for d in ["sender", "recipient", "home", "keys", "elsewhere", "repo/.git", "repo/scripts", "bin"] {
             std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        // The recipient's checkout of the repository: `add` runs here, so the lookup's script is
+        // pinned (L-ref) when the v1 track is upgraded to a pack.
+        std::fs::write(root.join("repo/.git/config"), "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n")
+            .unwrap();
+        std::fs::write(root.join("repo/scripts/wi-lookup"), "#!/bin/sh\necho '{}'\n").unwrap();
+        // Tools the routes name, found by PATH lookup at bind (never run).
+        std::fs::write(root.join("bin/make"), "#!/bin/sh\nexit 1\n").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(root.join("bin/make"), std::fs::Permissions::from_mode(0o755)).unwrap();
         }
         World { _dir: dir, root }
     }
@@ -34,7 +46,8 @@ impl World {
     fn run(&self, adage_home: &str, args: &[&str]) -> Output {
         Command::new(env!("CARGO_BIN_EXE_adage"))
             .args(args)
-            .current_dir(self.p("elsewhere"))
+            .current_dir(self.p("repo"))
+            .env("PATH", self.p("bin"))
             .env("ADAGE_HOME", self.p(adage_home))
             .env("HOME", self.p("home"))
             .env_remove("CLAUDECODE")
@@ -52,18 +65,23 @@ impl World {
         assert!(o.status.success(), "adage {args:?} failed:\n{}", text(&o));
         text(&o)
     }
-    /// The sender publishes `t` as `out`, signed with the test key.
+    /// The sender publishes `t` as `out`, a v1 track signed with the test key (the recipient
+    /// upgrades it to a pack in place).
     fn publish(&self, t: &Track, out: &str) {
         let _ = std::fs::remove_dir_all(self.p("sender/tracks"));
         io::write(&self.p("sender/tracks").join(NAME), t).unwrap();
         let (o, key) = (self.p(out), self.p("keys/id_ed25519"));
-        self.ok("sender", &["share", NAME, "--out", o.to_str().unwrap(), "--key", key.to_str().unwrap()]);
+        self.ok(
+            "sender",
+            &["share", NAME, "--out", o.to_str().unwrap(), "--key", key.to_str().unwrap(), "--format", "v1"],
+        );
     }
     fn add(&self, out: &str) -> String {
         self.ok("recipient", &["add", self.p(out).to_str().unwrap()])
     }
+    /// The bound track of the imported pack, for this repository.
     fn installed(&self) -> PathBuf {
-        self.p("recipient/tracks/@imported").join(NAME)
+        self.p("recipient/tracks/@imported/@bound").join(NAME).join("github-com-acme-billing")
     }
     fn route(&self, id: &str) -> Route {
         io::read(&self.installed()).unwrap().routes.into_iter().find(|r| r.id == id).unwrap()
