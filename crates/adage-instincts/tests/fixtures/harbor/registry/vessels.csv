@@ -1,0 +1,5 @@
+class,length_m,beam_m,draft_m,teu
+Feeder,140,22,8,1000
+Panamax,294,32,12,5000
+Post-Panamax,335,43,14.5,10000
+ULCV,400,61,16,24000
