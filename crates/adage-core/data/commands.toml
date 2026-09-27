@@ -15,12 +15,19 @@
 #   mutating_flags  - flags whose presence alone forces effect to "author" (e.g. sed -i).
 #   publish_flags   - flags whose presence forces effect to "publish" (e.g. git reset --hard,
 #                      curl -X POST).
+#   inert           - (default false) true only when the program's behaviour cannot be changed
+#                      by repository files to run code (Track C §4.2): it gates automatic
+#                      approval of execution by adage-exec. Never set it for make, npm, cargo,
+#                      pytest, python, node, sh or anything that reads repository config as code.
+#                      It is not inherited: `git` is not inert, only the listed git subcommands
+#                      are, and only with adage-exec's git hardening in a non-hazardous repository.
 #   subcommands     - table of first-positional-argument overrides (git status, npm install, ...).
 #     each subcommand entry may itself carry effect / value_flags / mutating_flags / publish_flags,
 #     and for a few (npm/pnpm/yarn "run") a `pattern_effects` list of (regex-on-next-arg, effect).
 
 [[commands]]
 name = "cat"
+inert = true
 effect = "observe"
 value_flags = []
 
@@ -31,11 +38,13 @@ value_flags = ["-b", "-w", "-s"]
 
 [[commands]]
 name = "head"
+inert = true
 effect = "observe"
 value_flags = ["-n", "-c"]
 
 [[commands]]
 name = "tail"
+inert = true
 effect = "observe"
 value_flags = ["-n", "-c", "-f"]
 
@@ -47,11 +56,13 @@ mutating_flags = ["-i", "-i.bak"]   # -i[SUFFIX] handled specially in code too
 
 [[commands]]
 name = "rg"
+inert = true
 effect = "observe"
 value_flags = ["-e", "-A", "-B", "-C", "-m", "-t", "-T", "-g", "--type", "--max-count", "--glob", "--type-add"]
 
 [[commands]]
 name = "grep"
+inert = true
 effect = "observe"
 value_flags = ["-e", "-A", "-B", "-C", "-m", "-f", "--max-count", "--include", "--exclude"]
 
@@ -69,6 +80,7 @@ publish_flags = ["-x", "-X", "--exec", "--exec-batch"]  # fd -x rm ... is a publ
 
 [[commands]]
 name = "ls"
+inert = true
 effect = "observe"
 value_flags = []
 
@@ -79,6 +91,7 @@ value_flags = ["-L", "-I", "-P"]
 
 [[commands]]
 name = "wc"
+inert = true
 effect = "observe"
 value_flags = []
 
@@ -129,6 +142,7 @@ value_flags = []
 
 [[commands]]
 name = "jq"
+inert = true
 effect = "observe"
 value_flags = ["-f", "--arg", "--argjson", "--slurpfile"]
 
@@ -353,15 +367,19 @@ effect = "observe"
 value_flags = []
 [[commands.subcommands]]
 name = "status"
+inert = true
 effect = "observe"
 [[commands.subcommands]]
 name = "log"
+inert = true
 effect = "observe"
 [[commands.subcommands]]
 name = "diff"
+inert = true
 effect = "observe"
 [[commands.subcommands]]
 name = "show"
+inert = true
 effect = "observe"
 [[commands.subcommands]]
 name = "blame"
@@ -371,6 +389,7 @@ name = "describe"
 effect = "observe"
 [[commands.subcommands]]
 name = "rev-parse"
+inert = true
 effect = "observe"
 [[commands.subcommands]]
 name = "ls-files"
