@@ -401,7 +401,7 @@ fn plausible_route() -> impl Strategy<Value = Route> {
 }
 
 fn route() -> impl Strategy<Value = Route> {
-    prop_oneof![3 => plausible_route(), 1 => random_route(), 1 => instinct_route()]
+    prop_oneof![3 => plausible_route(), 1 => random_route(), 2 => instinct_route()]
 }
 
 fn event() -> impl Strategy<Value = Event> {
