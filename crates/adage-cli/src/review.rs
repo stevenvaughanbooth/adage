@@ -141,7 +141,7 @@ fn judgements(paths: &Paths) -> BTreeMap<(String, String), (u32, u32)> {
 }
 
 fn live(s: RouteState) -> bool {
-    matches!(s, RouteState::Active | RouteState::Probation)
+    matches!(s, RouteState::Active | RouteState::Probation | RouteState::Stale)
 }
 
 fn by_edit(r: &Route) -> bool {

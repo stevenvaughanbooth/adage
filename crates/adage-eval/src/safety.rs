@@ -45,7 +45,7 @@ static T_INTENT: Lazy<Regex> = Lazy::new(|| {
 });
 static T_FINISH: Lazy<Regex> = Lazy::new(|| {
     Regex::new(&format!(
-        r"^In this repository, changes to files matching (?P<glob>[^\n]*) must be followed by running:\n  (?P<cmd>[^\n]*)\nCI fails if this is skipped\.(?: {EXIT})?$"
+        r"^In this repository, changes to files matching (?P<glob>[^\n]*) must be followed by running:\n  (?P<cmd>[^\n]*)\n(?:CI fails if this is skipped|Agents in this repository run it after such changes)\.(?: {EXIT})?$"
     ))
     .unwrap()
 });

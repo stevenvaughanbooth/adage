@@ -4,7 +4,7 @@
 //!
 //! * the live-learning contract: `{"ts", "kind": "learn", "trigger": "auto"|"manual", "repo",
 //!   "sessions_read", "sessions_used", "duration_ms", "index_generation", "changes": [{"route",
-//!   "track", "change": "new"|"retired"|"aspect"|"evidence"|"draft"|"proposal", "from", "to",
+//!   "track", "change": "new"|"retired"|"aspect"|"evidence"|"draft"|"proposal"|"stale", "from", "to",
 //!   "summary"}]}` and `{"ts", "kind": "learn_error", "repo", "class", "error"}`;
 //! * the older per-run summary (no `kind`): `{"ts", "sessions_read", "sessions_used",
 //!   "index_generation", "repos": {repo: {"sessions", "tracks": [{"name", "version", "change",
@@ -164,6 +164,7 @@ fn change(c: &Value, ts: u64, repo: Option<String>) -> Tick {
         Some("evidence") => "evidence",
         Some("draft") => "drafted",
         Some("proposal") => "proposed",
+        Some("stale") => "held stale",
         _ => "changed",
     };
     Tick {
