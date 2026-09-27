@@ -45,6 +45,24 @@ version as the GitHub Release notes.
   directives correct, 3 of 4 failed verify runs answered, 0 unsafe) and is a gate; offline evals
   and the L0 baseline stay learned-only by default (`--instincts` includes them). See
   docs/instincts.md.
+- **Learned value types, core (Track G, G1).** A new crate, `adage-graph`, finds value slots and
+  learns a type for each, from sessions alone: `flow.rs` matches tokens of prompts, earlier
+  outputs and earlier paths against later argv positions and option values (keyed by HeadSub
+  identity, position or option, and affix), and keeps a sink as a slot when it sees at least 3
+  distinct values, at least 60% of them flow-bound and none holding half. `types/` reads values
+  as run skeletons (`BIL-1041` → `U{3} '-' D{4}`), anti-unifies them pointwise, with star folding
+  or a union of at most 3, chooses along the lattice by MDL, and enforces the safety constraints
+  (anchored, `plain_token` alphabet, no leading `-`, at most 128 bytes, not word-like, rejects
+  every negative). `adage-core` gains the shared tokeniser (`tokens.rs`) and the O(len) run
+  matcher and regex writer (`vtype.rs`); the two agree on every string (property test). Not yet
+  wired into `adage learn`, the runtime or tracks: behaviour is unchanged. New
+  `adage eval types <gen-dir|dataset-dir>` compares learned types with today's hard-coded ticket
+  detector. `evals/gen` specs take `id_shape` (`prefix_dash`, the default and unchanged,
+  `hash_num`, `uuid`, `path_num`, `branch`, `mixed`), `specs/idshapes.json` covers them, and
+  `rehearse.py` writes a holdout of 200 fresh ids and 200 near misses. On that suite learned
+  types reach lookup recall 1.00, accept 1.00 and reject 1.00 with no unsafe acceptance on every
+  shape; the hard-coded detector finds nothing outside `X-123` ids. See
+  docs/tracks/track-g-graph-engine.md, "Status".
 
 - **Tunable engine parameters and the L0 optimisation bench.** Every number the runtime and the
   learner tune on (follow window, directive budget, stop requests, history; support, green and

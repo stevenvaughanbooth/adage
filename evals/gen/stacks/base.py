@@ -19,6 +19,7 @@ import textwrap
 import zlib
 
 import bugs
+import grammar
 
 # adage-core's ticket and path span patterns (crates/adage-core/src/spans.rs).
 TICKET = re.compile(r"\b[A-Z][A-Z0-9]{0,9}-\d{1,7}\b")
@@ -37,7 +38,9 @@ BRIEF_PROMPTS = (
 
 
 def slug(task_id):
-    return task_id.lower().replace("-", "_")
+    # Ids of every shape (`bil/412`, `fix/login-42`, a UUID) become identifiers; for prefix_dash
+    # ids this is exactly the old `lower().replace("-", "_")`.
+    return re.sub(r"[^a-z0-9_]", "_", task_id.lower())
 
 
 class Stack:
@@ -158,7 +161,7 @@ class Stack:
     def prompts(self, t):
         if t.kind == "control":
             return [p.format(path=self.module_path(t.module), problem=self.control_problem(t)) for p in CONTROL_PROMPTS]
-        return [p.format(id=t.id) for p in self.skin.prompts]
+        return [p.format(id=grammar.mention(t.id)) for p in self.skin.prompts]
 
     def solution(self, t):
         """The reference solution: exact text edits, then commands to run."""
@@ -202,11 +205,16 @@ class Stack:
         out = []
         ids = [t.id for t in self.plan.tasks if t.kind != "control"]
         if c.lookup:
-            digits = sorted(len(i.split("-")[1]) for i in ids) or list(self.plan.spec["id_digits"])
-            lo, hi = digits[0], digits[-1]
-            rep = f"{{{lo}}}" if lo == hi else f"{{{lo},{hi}}}"
+            shape = self.plan.spec.get("id_shape", "prefix_dash")
+            if shape == "prefix_dash":
+                digits = sorted(len(i.split("-")[1]) for i in ids) or list(self.plan.spec["id_digits"])
+                lo, hi = digits[0], digits[-1]
+                rep = f"{{{lo}}}" if lo == hi else f"{{{lo},{hi}}}"
+                pattern = f"^{re.escape(sk.id_prefix)}-\\d{rep}$"
+            else:
+                pattern = grammar.id_pattern(shape, sk.id_prefix, ids, self.plan.spec["id_digits"])
             out.append({"id": "lookup", "kind": "lookup", "command": self.lookup_cmd(),
-                        "id_pattern": f"^{re.escape(sk.id_prefix)}-\\d{rep}$",
+                        "id_pattern": pattern,
                         "notes": f"Task prompts name only an item ID. Items live in {sk.tracker_phrase}: an opaque "
                                  f"store ({sk.store}) that only {sk.tool} reads. The README mentions only "
                                  f"{sk.tracker_phrase}."})

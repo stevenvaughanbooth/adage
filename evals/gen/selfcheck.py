@@ -38,6 +38,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import gen  # noqa: E402
+import grammar  # noqa: E402
 import score as scorer  # noqa: E402
 from skins import SKINS  # noqa: E402
 from stacks.base import PATH_SPAN, TICKET  # noqa: E402
@@ -167,11 +168,13 @@ class Checker:
         look = self.conv_of("lookup")
         tracker = [t for t in self.tasks["tasks"] if t["kind"] != "control"]
         for t in self.tasks["tasks"]:
-            ids = TICKET.findall(" ".join(t["prompts"]))
+            shape = self.spec["spec"].get("id_shape", "prefix_dash")
+            found = TICKET if shape == "prefix_dash" else grammar.mention_regex(shape, SKINS[self.tasks["skin"]].id_prefix)
+            ids = found.findall(" ".join(t["prompts"]))
             if t["kind"] == "control":
                 self.check(f"{t['id']}: control prompts contain nothing ID-like", not ids, str(ids))
             else:
-                self.check(f"{t['id']}: prompts name only the ID", set(ids) == {t["id"]}, str(ids))
+                self.check(f"{t['id']}: prompts name only the ID", set(ids) == {grammar.mention(t["id"])}, str(ids))
         if not look:
             return
         cmd = look[0]["command"]

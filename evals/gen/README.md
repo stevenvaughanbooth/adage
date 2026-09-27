@@ -96,6 +96,7 @@ they live, and which become tracker tasks or control tasks.
 | `conventions.decoys` | `["unused_target", "lookalike_regen"]` | A list of modes, or a count |
 | `tasks.bugfix`, `.registry`, `.control` | 4, 2, 2 | `bugfix + control` <= 12; `registry` <= 6 and needs `finish_line`; tracker tasks need `lookup`; `control` >= 25% of all |
 | `id_digits` | the skin's | `[min, max]` digits of item numbers |
+| `id_shape` | `prefix_dash` | Tracker ids: `prefix_dash` (`BIL-1041`), `hash_num` (`#482` in prompts, `482` to the tool), `uuid`, `path_num` (`bil/412`), `branch` (`fix/<word>-<n>`), `mixed` (`BIL-1041` and `#482`, one tool). Left out of the normalised spec when default, so existing bundles keep their bytes. `specs/idshapes.json` covers every shape; `rehearse.py` also writes `holdout.json` (200 fresh ids, 200 near misses) for `adage eval types` |
 | `name` | `<stack>-<skin>` | The bundle's name |
 
 A spec is validated before anything is written; a bad one exits 2 with the reason. A suite

@@ -22,6 +22,7 @@ pub mod replay;
 pub mod safety;
 pub mod score;
 pub mod transcript;
+pub mod value_types;
 
 use adage_core::CommandTable;
 use adage_learn::{Inputs, LearnConfig};
