@@ -1,4 +1,5 @@
 {
+ "conventions": "conventions.json",
  "description": "Real Claude Code sessions (Claude Haiku 4.5) from the Adage demo on the acme-billing sandbox",
  "learn": "demo",
  "model": "claude-haiku-4-5-20251001",
@@ -1542,6 +1543,7 @@
  },
  "splits": {
   "round1": {
+   "note": "round 1 as run live: learn from the 18 training-task sessions (W-1041..W-1046), test on the round-1 holdout arm (W-2041..W-2046); no task on both sides",
    "test": [
     "1556ea80-3d8e-47b2-ae90-17a4e1c5cab8",
     "18e8f17b-44fc-499e-8762-17a35a913626",
@@ -1584,6 +1586,7 @@
    ]
   },
   "round2": {
+   "note": "round 2 as run live: learn from the training sessions and the round-1 eval sessions, which worked the same six tasks it tests (W-2041..W-2046). Leaky by task: it measures a learner that has seen these tasks, not held-out tasks; use group:task:<k>:<fold> or temporal for held-out-task numbers",
    "test": [
     "07e0b483-18c9-4634-b49b-d42d14b03025",
     "131b4a53-0889-4b5b-bb8a-0c78e7af1668",

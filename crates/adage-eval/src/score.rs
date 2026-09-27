@@ -54,6 +54,10 @@ pub struct Metrics {
     pub false_directive_rate: f64,
     pub turns_saved: u32,
     pub turns_saved_median: f64,
+    /// Wilson 95% intervals `[low, high]` for the proportions above.
+    pub precision_ci: [f64; 2],
+    pub precision_in_window_ci: [f64; 2],
+    pub false_directive_rate_ci: [f64; 2],
     #[serde(skip)]
     saved: Vec<u32>,
     #[serde(skip)]
@@ -78,6 +82,9 @@ impl Metrics {
         self.precision = ratio(self.correct, self.directives);
         self.precision_in_window = ratio(self.correct_in_window, self.directives);
         self.false_directive_rate = if self.directives == 0 { 0.0 } else { round(1.0 - self.precision) };
+        self.precision_ci = wilson(self.correct, self.directives);
+        self.precision_in_window_ci = wilson(self.correct_in_window, self.directives);
+        self.false_directive_rate_ci = wilson(self.directives - self.correct, self.directives);
         self.turns_saved = self.saved.iter().sum();
         self.saved.sort_unstable();
         self.turns_saved_median = match self.saved.len() {
@@ -100,11 +107,36 @@ pub fn ratio(a: u32, b: u32) -> f64 {
     }
 }
 
+/// The Wilson score 95% interval `[low, high]` for `k` successes in `n` trials, rounded like
+/// every other metric. With no trials it is `[0, 1]`: nothing is known.
+///
+/// Plain IEEE arithmetic and `sqrt` (correctly rounded), so the bytes are the same everywhere.
+pub fn wilson(k: u32, n: u32) -> [f64; 2] {
+    if n == 0 {
+        return [0.0, 1.0];
+    }
+    const Z: f64 = 1.959_963_984_540_054;
+    let n = n as f64;
+    let p = k as f64 / n;
+    let z2 = Z * Z;
+    let denom = 1.0 + z2 / n;
+    let centre = (p + z2 / (2.0 * n)) / denom;
+    let half = Z * (p * (1.0 - p) / n + z2 / (4.0 * n * n)).sqrt() / denom;
+    [round((centre - half).max(0.0)), round((centre + half).min(1.0))]
+}
+
+/// `[low–high]` in percent, for the text report.
+pub fn ci_text(ci: [f64; 2]) -> String {
+    format!("[{:.1}–{:.1}]", ci[0] * 100.0, ci[1] * 100.0)
+}
+
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
 pub struct Recall {
     pub key_steps: u32,
     pub covered: u32,
     pub recall: f64,
+    /// Wilson 95% interval for `recall`.
+    pub recall_ci: [f64; 2],
 }
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
@@ -117,6 +149,8 @@ pub struct DeadEnds {
     /// ... and it succeeded.
     pub refuted: u32,
     pub accuracy: f64,
+    /// Wilson 95% interval for `accuracy` (confirmed of tested).
+    pub accuracy_ci: [f64; 2],
     /// Failed verify runs in scored sessions, and those a warning had already covered.
     pub failed_verify_runs: u32,
     pub failed_runs_after_warning: u32,
@@ -134,6 +168,8 @@ pub struct FinishLine {
     /// Not run, and the session has no outcome labels.
     pub unknown: u32,
     pub accuracy: f64,
+    /// Wilson 95% interval for `accuracy` (met + caught of labelled obligations).
+    pub accuracy_ci: [f64; 2],
     /// Sessions whose hidden check found stale generated code with no obligation given.
     pub missed: u32,
     pub stop_requests: u32,
@@ -193,15 +229,19 @@ impl Tally {
         let mut total = Recall::default();
         for r in self.recall.values_mut() {
             r.recall = ratio(r.covered, r.key_steps);
+            r.recall_ci = wilson(r.covered, r.key_steps);
             total.key_steps += r.key_steps;
             total.covered += r.covered;
         }
         total.recall = ratio(total.covered, total.key_steps);
+        total.recall_ci = wilson(total.covered, total.key_steps);
         self.recall.insert("all".into(), total);
         let d = &mut self.dead_ends;
         d.accuracy = ratio(d.confirmed, d.tested);
+        d.accuracy_ci = wilson(d.confirmed, d.tested);
         let f = &mut self.finish_line;
         f.accuracy = ratio(f.met + f.caught, f.met + f.caught + f.false_alarms);
+        f.accuracy_ci = wilson(f.met + f.caught, f.met + f.caught + f.false_alarms);
         self.safety.violations.sort();
     }
 }
@@ -220,15 +260,23 @@ fn files_in(text: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-struct Expect {
-    key: String,
-    head: String,
+/// A command as the scorer compares it: its canonical key and its command head.
+pub(crate) struct Expect {
+    pub(crate) key: String,
+    pub(crate) head: String,
 }
 
 impl Expect {
-    fn of(cmd: &str, table: &CommandTable) -> Expect {
+    pub(crate) fn of(cmd: &str, table: &CommandTable) -> Expect {
         let argv: Vec<String> = cmd.split_whitespace().map(str::to_string).collect();
         Expect { key: command_key(cmd, table), head: adage_core::keys::command_head(&argv) }
+    }
+    /// The same command, for route matching: the same canonical key, or the same head where the
+    /// head names a script (`scripts/wi-lookup`, however it is invoked). Stricter than
+    /// [`Expect::matches`], where a head such as `npm run` would make `npm run check` and
+    /// `npm run codegen` one command.
+    pub(crate) fn same(&self, other: &Expect) -> bool {
+        (!self.key.is_empty() && self.key == other.key) || (self.head.contains('/') && self.head == other.head)
     }
     fn matches(&self, a: &Action) -> bool {
         a.argv.is_some() && !a.failed && (a.key == self.key || (!self.head.is_empty() && a.head == self.head))
@@ -237,7 +285,11 @@ impl Expect {
 
 /// Does a failing runner (`python3 -m pytest`) describe this command?
 fn runs_runner(a: &Action, runner: &str) -> bool {
-    let Some(argv) = &a.argv else { return false };
+    a.argv.as_ref().is_some_and(|argv| argv_runs(argv, runner))
+}
+
+/// Does `argv` start with `runner`'s words (the first may be a path to it)?
+pub(crate) fn argv_runs(argv: &[String], runner: &str) -> bool {
     let r: Vec<&str> = runner.split_whitespace().collect();
     !r.is_empty()
         && argv.len() >= r.len()
@@ -498,4 +550,19 @@ fn recall(
         }
     }
     (steps.len() as u32, covered)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wilson_matches_known_values() {
+        assert_eq!(wilson(5, 10), [0.2366, 0.7634]);
+        assert_eq!(wilson(49, 66), [0.6257, 0.8325]);
+        assert_eq!(wilson(50, 50), [0.9287, 1.0]);
+        assert_eq!(wilson(0, 3), [0.0, 0.5615]);
+        assert_eq!(wilson(0, 0), [0.0, 1.0]);
+        assert_eq!(ci_text([0.6257, 0.8325]), "[62.6–83.2]");
+    }
 }

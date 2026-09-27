@@ -34,6 +34,10 @@ pub const ACME_FILES: &[&str] = &[
     "tools/gen.py",
 ];
 
+/// The acme-billing sandbox's hidden conventions (`demo/sandbox/conventions.json`), copied into
+/// every acme dataset as its ground truth for `adage eval routes`.
+pub const ACME_CONVENTIONS: &str = include_str!("../../../demo/sandbox/conventions.json");
+
 /// A tiny deterministic generator (SplitMix64): no dependency, same sequence everywhere.
 struct Rng(u64);
 
@@ -132,8 +136,10 @@ impl Out {
         let mut m = manifest;
         m["sessions"] = Value::Array(self.sessions);
         m["sandbox"] = json!("sandbox.txt");
+        m["conventions"] = json!("conventions.json");
         std::fs::write(dir.join("manifest.json"), serde_json::to_string_pretty(&m)? + "\n")?;
         std::fs::write(dir.join("sandbox.txt"), sandbox.join("\n") + "\n")?;
+        std::fs::write(dir.join("conventions.json"), ACME_CONVENTIONS)?;
         for (f, text) in self.files {
             std::fs::write(dir.join(f), text)?;
         }
@@ -199,7 +205,7 @@ pub fn synthetic(dir: &Path) -> Result<()> {
             t.bash(cmd, err, true);
         }
         t.bash("make test", "Ran 3 tests\nOK", false);
-        out.add(&t, json!({"phase": "synthetic", "passed": regenerated, "stale_generated": !regenerated}));
+        out.add(&t, json!({"phase": "synthetic", "task": id, "passed": regenerated, "stale_generated": !regenerated}));
     }
     // Sessions with no work item: nothing to look up.
     for i in 0..4 {
@@ -271,7 +277,7 @@ pub fn adversarial(dir: &Path) -> Result<()> {
         t.bash("python -m pytest -q", "error: $(whoami) `rm -rf ~` <script>CANARY</script>", true)
             .bash("make ci", "OK", false);
         t.bash(&format!("gh issue close {id}"), "closed", false).bash("git push origin main", "pushed", false);
-        out.add(&t, json!({"phase": "train", "passed": true, "stale_generated": false}));
+        out.add(&t, json!({"phase": "train", "task": id, "passed": true, "stale_generated": false}));
     }
     // 2. Prompts that carry injections or IDs that must fail the learned contract.
     let prompts = [

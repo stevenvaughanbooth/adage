@@ -8,10 +8,12 @@
 //!
 //! Modules: [`dataset`] (manifests, splits, sandboxes), [`transcript`] (transcripts as hook
 //! events), [`replay`] (the runtime, holdout arm), [`score`] (metrics), [`safety`] (the
-//! directive oracle), [`fidelity`] (replay versus what the live hooks recorded), [`generate`]
-//! (the synthetic and adversarial datasets), [`cli`].
+//! directive oracle), [`fidelity`] (replay versus what the live hooks recorded), [`conventions`]
+//! (learned routes versus a sandbox's known conventions), [`generate`] (the synthetic and
+//! adversarial datasets), [`cli`].
 
 pub mod cli;
+pub mod conventions;
 pub mod dataset;
 pub mod fidelity;
 pub mod generate;
@@ -81,6 +83,13 @@ pub struct Report {
     pub skipped_steered: usize,
     /// Test sessions also in the train split (non-zero only for in-sample splits such as `all`).
     pub in_sample: usize,
+    /// Tasks with sessions in both train and test (a session without a `task` is its own task).
+    pub task_overlap: usize,
+    pub task_overlap_ids: Vec<String>,
+    /// Train and test share a task or a session: the numbers are not held-out-task numbers.
+    pub leaky: bool,
+    /// The split's note (the manifest's, or what a computed split does).
+    pub split_note: Option<String>,
     pub index_generation: String,
     pub routes: Vec<LearnedRoute>,
     pub overall: score::Metrics,
@@ -136,8 +145,20 @@ pub fn config(name: &str) -> Result<LearnConfig> {
     }
 }
 
-/// Run the offline eval over a dataset directory.
-pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
+/// A dataset with its split resolved and an index learned from (or loaded for) the train side.
+pub struct Prepared {
+    pub ds: Dataset,
+    pub split_name: String,
+    pub split: dataset::Split,
+    pub thresholds: String,
+    pub index: Index,
+    /// Tasks on both sides of the split.
+    pub overlap: Vec<String>,
+}
+
+/// Load a dataset, resolve the split, and learn the index from the train split, exactly as
+/// `adage eval` does (shared by [`run`] and [`conventions::run`]).
+pub fn prepare(dir: &Path, opts: &Options) -> Result<Prepared> {
     let ds = Dataset::load(dir)?;
     let split_name = opts.split.clone().unwrap_or_else(|| ds.default_split());
     let split = ds.split(&split_name)?;
@@ -150,6 +171,13 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
         }
         None => learn_index(&ds, &split.train, &cfg)?,
     };
+    let overlap = ds.task_overlap(&split);
+    Ok(Prepared { ds, split_name, split, thresholds, index, overlap })
+}
+
+/// Run the offline eval over a dataset directory.
+pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
+    let Prepared { ds, split_name, split, thresholds, index, overlap } = prepare(dir, opts)?;
     let table = CommandTable::load();
     let sandbox = Sandbox::create(&ds.sandbox()?)?;
     let repo_key = ds.manifest.repo.clone();
@@ -206,6 +234,10 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
         scored_sessions: scored,
         skipped_steered: skipped,
         in_sample,
+        task_overlap: overlap.len(),
+        leaky: !overlap.is_empty() || in_sample > 0,
+        task_overlap_ids: overlap,
+        split_note: split.note.clone(),
         index_generation: index.generation.clone(),
         routes,
         overall: tally.overall,
@@ -222,6 +254,29 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
 
 fn pct(x: f64) -> String {
     format!("{:.1}%", x * 100.0)
+}
+
+/// The split's note and its leakage line, for both text reports.
+pub(crate) fn leakage_text(note: Option<&str>, overlap: &[String], leaky: bool) -> String {
+    let mut s = String::new();
+    if let Some(n) = note {
+        s.push_str(&format!("split note: {n}\n"));
+    }
+    s.push_str(&format!("task overlap between train and test: {} tasks", overlap.len()));
+    if leaky {
+        const SHOWN: usize = 8;
+        let mut ids = overlap.iter().take(SHOWN).cloned().collect::<Vec<_>>().join(", ");
+        if overlap.len() > SHOWN {
+            ids.push_str(", …");
+        }
+        if ids.is_empty() {
+            s.push_str(" — LEAKY: sessions are in both train and test");
+        } else {
+            s.push_str(&format!(" — LEAKY: test tasks were trained on ({ids})"));
+        }
+    }
+    s.push('\n');
+    s
 }
 
 /// Human-readable report. Deterministic, like the JSON.
@@ -242,6 +297,7 @@ pub fn render_text(r: &Report) -> String {
         r.skipped_steered,
         if r.in_sample > 0 { format!(", {} IN-SAMPLE", r.in_sample) } else { String::new() }
     );
+    s.push_str(&leakage_text(r.split_note.as_deref(), &r.task_overlap_ids, r.leaky));
     let _ = writeln!(s, "index {} with {} routes", r.index_generation, r.routes.len());
     for x in &r.routes {
         let _ = writeln!(
@@ -250,15 +306,19 @@ pub fn render_text(r: &Report) -> String {
             x.id, x.kind, x.aspect, x.support, x.opportunities, x.step
         );
     }
-    let _ = writeln!(s, "\ndirectives        given  correct  precision  @window  false-rate  turns-saved (median)");
+    let _ = writeln!(
+        s,
+        "\ndirectives        given  correct  precision  95% CI          @window  false-rate  turns-saved (median)"
+    );
     let mut row = |name: &str, m: &score::Metrics| {
         let _ = writeln!(
             s,
-            "  {:<15} {:>5}  {:>7}  {:>9}  {:>7}  {:>10}  {:>6} ({})",
+            "  {:<15} {:>5}  {:>7}  {:>9}  {:<14}  {:>7}  {:>10}  {:>6} ({})",
             name,
             m.directives,
             m.correct,
             pct(m.precision),
+            score::ci_text(m.precision_ci),
             pct(m.precision_in_window),
             pct(m.false_directive_rate),
             m.turns_saved,
@@ -274,19 +334,27 @@ pub fn render_text(r: &Report) -> String {
     }
     let _ = writeln!(s, "\nrecall (key steps with a directive first)");
     for (k, x) in &r.recall {
-        let _ = writeln!(s, "  {:<15} {:>3}/{:<3} {}", k, x.covered, x.key_steps, pct(x.recall));
+        let _ = writeln!(
+            s,
+            "  {:<15} {:>3}/{:<3} {:>6}  95% CI {}",
+            k,
+            x.covered,
+            x.key_steps,
+            pct(x.recall),
+            score::ci_text(x.recall_ci)
+        );
     }
     let d = &r.dead_ends;
     let _ = writeln!(
         s,
-        "\ndead ends: {} warnings; avoided command run after {} ({} failed as predicted, {} passed): accuracy {}; {}/{} failed verify runs came after a warning",
-        d.warnings, d.tested, d.confirmed, d.refuted, pct(d.accuracy), d.failed_runs_after_warning, d.failed_verify_runs
+        "\ndead ends: {} warnings; avoided command run after {} ({} failed as predicted, {} passed): accuracy {} (95% CI {}); {}/{} failed verify runs came after a warning",
+        d.warnings, d.tested, d.confirmed, d.refuted, pct(d.accuracy), score::ci_text(d.accuracy_ci), d.failed_runs_after_warning, d.failed_verify_runs
     );
     let f = &r.finish_line;
     let _ = writeln!(
         s,
-        "finish line: {} obligations — {} met by the agent, {} needed but skipped, {} false alarms, {} unlabelled: accuracy {}; {} stale sessions missed; stop requests {} ({} correct)",
-        f.obligations, f.met, f.caught, f.false_alarms, f.unknown, pct(f.accuracy), f.missed, f.stop_requests, f.stop_requests_correct
+        "finish line: {} obligations — {} met by the agent, {} needed but skipped, {} false alarms, {} unlabelled: accuracy {} (95% CI {}); {} stale sessions missed; stop requests {} ({} correct)",
+        f.obligations, f.met, f.caught, f.false_alarms, f.unknown, pct(f.accuracy), score::ci_text(f.accuracy_ci), f.missed, f.stop_requests, f.stop_requests_correct
     );
     let _ = writeln!(s, "safety: {} checked, {} unsafe", r.safety.checked, r.safety.unsafe_directives);
     let f = &r.fast_path;
