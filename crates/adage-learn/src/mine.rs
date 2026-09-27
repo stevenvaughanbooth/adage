@@ -5,9 +5,13 @@ use crate::import::{Session, StepObs};
 use adage_core::spans::{self, SpanKind};
 use adage_core::{CanonicalAction, Effect};
 use adage_runtime::extract_json;
+use adage_tracks::params::LearnParams;
 use adage_tracks::*;
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Learning thresholds, as the miners read them. Build one from [`LearnParams`] with
+/// [`LearnConfig::from_params`]; [`LearnConfig::default`] and [`LearnConfig::demo`] are the two
+/// presets (`adage_tracks::params`).
 #[derive(Debug, Clone)]
 pub struct LearnConfig {
     /// Minimum distinct supporting sessions for any route.
@@ -22,23 +26,30 @@ pub struct LearnConfig {
     /// Ids of routes that already exist; they are judged against `retain_rate`.
     pub existing: BTreeSet<String>,
     pub provenance: String,
+    /// A dead end names a runner only if it failed in at least `num/den` of the sessions that
+    /// ran it ([`DEAD_END_CONSISTENCY`] by default).
+    pub dead_end_consistency: (usize, usize),
+    /// At most this many dead ends per working command ([`DEAD_END_SIGNATURES`] by default).
+    pub dead_end_signatures: usize,
+    /// A finish-line command's rate after the edit must exceed its rate without it by this much.
+    pub finish_line_contrast: f64,
+    /// Intent routes: the share of sessions above which a command is ubiquitous.
+    pub intent_ubiquitous: f64,
+    /// Intent routes: the in-family minus out-of-family rate a command needs.
+    pub intent_contrast: f64,
+    /// Review: the lower-bound movement that counts as a material change.
+    pub material_lower_bound: f64,
+    /// Stale routes: the exposed share that explains a route's absence ([`crate::stale`]).
+    pub stale_exposure: f64,
 }
 
 impl Default for LearnConfig {
     fn default() -> Self {
-        LearnConfig {
-            min_support: 5,
-            green_lower_bound: 0.8,
-            yellow_rate: 0.5,
-            retain_rate: 0.3,
-            existing: BTreeSet::new(),
-            provenance: "desire-path".into(),
-        }
+        LearnConfig::from_params(&LearnParams::default())
     }
 }
 
 impl LearnConfig {
-    /// Thresholds for small demonstrations; the report always states which were used.
     /// The rate bar for a route id: `retain_rate` if it already exists, else `yellow_rate`.
     pub fn bar(&self, id: &str) -> f64 {
         if self.existing.contains(id) {
@@ -48,14 +59,27 @@ impl LearnConfig {
         }
     }
 
+    /// Thresholds for small demonstrations; the report always states which were used.
     pub fn demo() -> Self {
+        LearnConfig::from_params(&LearnParams::demo())
+    }
+
+    /// The miners' configuration for a set of learn parameters.
+    pub fn from_params(p: &LearnParams) -> Self {
         LearnConfig {
-            min_support: 3,
-            green_lower_bound: 0.5,
-            yellow_rate: 0.5,
-            retain_rate: 0.3,
+            min_support: p.min_support,
+            green_lower_bound: p.green_lower_bound,
+            yellow_rate: p.yellow_rate,
+            retain_rate: p.retain_rate,
             existing: BTreeSet::new(),
             provenance: "desire-path".into(),
+            dead_end_consistency: (p.dead_end_consistency[0] as usize, p.dead_end_consistency[1] as usize),
+            dead_end_signatures: p.dead_end_signatures,
+            finish_line_contrast: p.finish_line_contrast,
+            intent_ubiquitous: p.intent_ubiquitous,
+            intent_contrast: p.intent_contrast,
+            material_lower_bound: p.material_lower_bound,
+            stale_exposure: p.stale_exposure,
         }
     }
 }
@@ -379,10 +403,12 @@ pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnCon
 }
 
 /// A runner is named in a dead end only if it failed in at least this share of the sessions that
-/// ran it (numerator, denominator; integer arithmetic keeps the rule exact).
+/// ran it (numerator, denominator; integer arithmetic keeps the rule exact). The default of
+/// `LearnParams::dead_end_consistency`.
 pub const DEAD_END_CONSISTENCY: (usize, usize) = (9, 10);
 
-/// At most this many dead ends (failure signatures) per working command.
+/// At most this many dead ends (failure signatures) per working command. The default of
+/// `LearnParams::dead_end_signatures`.
 pub const DEAD_END_SIGNATURES: usize = 3;
 
 /// The failure signature of a failed run: its last error line that can be rendered safely. Tool
@@ -409,12 +435,12 @@ fn most_sessions(m: &BTreeMap<String, BTreeSet<&str>>) -> Option<String> {
 ///
 /// 1. A *failure pair* is a failed verify run of runner R with signature S (its last renderable
 ///    error line), followed within five steps by W succeeding.
-/// 2. R is *consistent* if it failed in at least [`DEAD_END_CONSISTENCY`] (9 in 10) of the
+/// 2. R is *consistent* if it failed in at least `cfg.dead_end_consistency` (9 in 10) of the
 ///    sessions that ran it at all. A session in which any run of R passed counts against R: that
 ///    is usually an environment fix, such as `ACME_ENV=test python3 -m unittest`, which normalises
 ///    to the same argv, so the warning would be wrong for an agent that knows the fix.
 /// 3. Each signature S among consistent runners' pairs is a candidate route, most sessions first
-///    (ties: the greatest S), at most [`DEAD_END_SIGNATURES`].
+///    (ties: the greatest S), at most `cfg.dead_end_signatures` (3).
 /// 4. R is avoided under S if it is consistent, is not already named under a more common
 ///    signature, and S is the signature in at least half of the sessions with a signed failure
 ///    pair of R. At most three runners are named, most sessions first, then by name.
@@ -464,7 +490,7 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
     let consistent = |r: &str| {
         let n = ran.get(r).map_or(0, |x| x.len());
         let ok = passed.get(r).map_or(0, |x| x.len());
-        let (num, den) = DEAD_END_CONSISTENCY;
+        let (num, den) = cfg.dead_end_consistency;
         n > 0 && (n - ok) * den >= n * num
     };
     let mut out = Vec::new();
@@ -479,7 +505,7 @@ pub fn dead_end_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
         }
         let mut signatures: Vec<(&String, usize)> = by_sig.iter().map(|(s, ids)| (s, ids.len())).collect();
         signatures.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| b.0.cmp(a.0)));
-        signatures.truncate(DEAD_END_SIGNATURES);
+        signatures.truncate(cfg.dead_end_signatures);
         // Per runner: the sessions with a signed failure pair, and those per signature.
         type Signed<'a> = (BTreeSet<&'a str>, BTreeMap<&'a str, BTreeSet<&'a str>>);
         let mut signed: BTreeMap<&str, Signed> = BTreeMap::new();
@@ -632,7 +658,7 @@ pub fn obligation_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route>
         let ran_without = ran_total.saturating_sub(support);
         let rate_without = if not_editing == 0 { 0.0 } else { ran_without as f64 / not_editing as f64 };
         let id = format!("finish-line-{}", stable(&[&g, &c]));
-        if rate_with < cfg.bar(&id) || rate_with - rate_without < 0.3 {
+        if rate_with < cfg.bar(&id) || rate_with - rate_without < cfg.finish_line_contrast {
             continue;
         }
         let lb = wilson_lower(support, opp);

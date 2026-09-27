@@ -12,6 +12,7 @@
 //! (learned routes versus a sandbox's known conventions), [`generate`] (the synthetic and
 //! adversarial datasets), [`cli`].
 
+pub mod bench;
 pub mod cli;
 pub mod conventions;
 pub mod dataset;
@@ -24,6 +25,7 @@ pub mod transcript;
 
 use adage_core::CommandTable;
 use adage_learn::{Inputs, LearnConfig};
+use adage_tracks::params::EngineParams;
 use adage_tracks::Index;
 use anyhow::{Context, Result};
 use dataset::{Dataset, Sandbox};
@@ -52,11 +54,14 @@ pub struct Options {
     pub include_steered: bool,
     /// Replay with this index instead of learning one from the train split.
     pub index: Option<PathBuf>,
+    /// Engine parameters laid over the thresholds preset (a partial `EngineParams` object, as
+    /// `--params <file>` reads it); `None` is the preset exactly.
+    pub params: Option<serde_json::Value>,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { split: None, thresholds: None, window: 3, include_steered: false, index: None }
+        Options { split: None, thresholds: None, window: 3, include_steered: false, index: None, params: None }
     }
 }
 
@@ -91,6 +96,8 @@ pub struct Report {
     /// The split's note (the manifest's, or what a computed split does).
     pub split_note: Option<String>,
     pub index_generation: String,
+    /// SHA-256 of the engine parameters' canonical JSON (`EngineParams::params_hash`).
+    pub params_hash: String,
     pub routes: Vec<LearnedRoute>,
     pub overall: score::Metrics,
     pub by_kind: BTreeMap<String, score::Metrics>,
@@ -138,10 +145,16 @@ pub fn learn_index(ds: &Dataset, train: &[String], cfg: &LearnConfig) -> Result<
 }
 
 pub fn config(name: &str) -> Result<LearnConfig> {
-    match name {
-        "demo" => Ok(LearnConfig::demo()),
-        "default" => Ok(LearnConfig::default()),
-        other => anyhow::bail!("unknown thresholds {other:?} (demo or default)"),
+    Ok(LearnConfig::from_params(&EngineParams::preset(name)?.learn))
+}
+
+/// The engine parameters for a thresholds preset (`demo` or `default`) with `overrides` laid
+/// over it.
+pub fn engine_params(thresholds: &str, overrides: Option<&serde_json::Value>) -> Result<EngineParams> {
+    let base = EngineParams::preset(thresholds)?;
+    match overrides {
+        Some(o) => base.with_overrides(o),
+        None => Ok(base),
     }
 }
 
@@ -154,6 +167,8 @@ pub struct Prepared {
     pub index: Index,
     /// Tasks on both sides of the split.
     pub overlap: Vec<String>,
+    /// The engine parameters: the index was learned with `learn`; replay decides with `runtime`.
+    pub params: EngineParams,
 }
 
 /// Load a dataset, resolve the split, and learn the index from the train split, exactly as
@@ -163,7 +178,8 @@ pub fn prepare(dir: &Path, opts: &Options) -> Result<Prepared> {
     let split_name = opts.split.clone().unwrap_or_else(|| ds.default_split());
     let split = ds.split(&split_name)?;
     let thresholds = opts.thresholds.clone().unwrap_or_else(|| ds.manifest.learn.clone());
-    let cfg = config(&thresholds)?;
+    let params = engine_params(&thresholds, opts.params.as_ref())?;
+    let cfg = LearnConfig::from_params(&params.learn);
     let index = match &opts.index {
         Some(p) => {
             let p = if p.is_relative() && !p.exists() { dir.join(p) } else { p.clone() };
@@ -172,12 +188,17 @@ pub fn prepare(dir: &Path, opts: &Options) -> Result<Prepared> {
         None => learn_index(&ds, &split.train, &cfg)?,
     };
     let overlap = ds.task_overlap(&split);
-    Ok(Prepared { ds, split_name, split, thresholds, index, overlap })
+    Ok(Prepared { ds, split_name, split, thresholds, index, overlap, params })
 }
 
 /// Run the offline eval over a dataset directory.
 pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
-    let Prepared { ds, split_name, split, thresholds, index, overlap } = prepare(dir, opts)?;
+    evaluate(&prepare(dir, opts)?, opts)
+}
+
+/// Replay and score a prepared dataset (the second half of [`run`]).
+pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
+    let Prepared { ds, split_name, split, thresholds, index, overlap, params } = p;
     let table = CommandTable::load();
     let sandbox = Sandbox::create(&ds.sandbox()?)?;
     let repo_key = ds.manifest.repo.clone();
@@ -194,7 +215,7 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
             skipped += 1;
             continue;
         }
-        let rep = replay::replay(&t, &index, &repo_key, &sandbox.root, &table, meta.stopped());
+        let rep = replay::replay(&t, index, &repo_key, &sandbox.root, &table, meta.stopped(), params.runtime);
         fast.events += rep.fast.events;
         fast.skipped += rep.fast.skipped;
         fast.mismatches.extend(rep.fast.mismatches.iter().cloned());
@@ -202,7 +223,7 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
             &mut tally,
             &rep,
             Some(meta),
-            &index,
+            index,
             &repo_key,
             &sandbox.root,
             &table,
@@ -226,8 +247,8 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
         .collect();
     Ok(Report {
         dataset: ds.manifest.name.clone(),
-        split: split_name,
-        thresholds,
+        split: split_name.clone(),
+        thresholds: thresholds.clone(),
         window: opts.window,
         train_sessions: split.train.len(),
         test_sessions: split.test.len(),
@@ -236,9 +257,10 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
         in_sample,
         task_overlap: overlap.len(),
         leaky: !overlap.is_empty() || in_sample > 0,
-        task_overlap_ids: overlap,
+        task_overlap_ids: overlap.clone(),
         split_note: split.note.clone(),
         index_generation: index.generation.clone(),
+        params_hash: params.params_hash(),
         routes,
         overall: tally.overall,
         by_kind: tally.by_kind,

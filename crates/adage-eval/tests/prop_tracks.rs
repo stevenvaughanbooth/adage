@@ -352,7 +352,8 @@ fn check(
     let root_s = root.to_string_lossy().to_string();
     let index = Index::compile(&[track]);
     let table = CommandTable::load();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: &root, table: &table, embed: None };
+    let ctx =
+        Ctx { index: &index, repo: "acme".into(), root: &root, table: &table, embed: None, params: Default::default() };
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
     for ev in events {
         // Edit paths are generated relative to a placeholder root.

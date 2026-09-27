@@ -13,7 +13,8 @@
 //! **Stale.** A route that was in service but is not found again this run is kept as
 //! `RouteState::Stale` ([`adage_tracks::review::keep_stale`]) when [`verdict`] finds:
 //!
-//! - it is exposed (at least one exposed session), and either at least [`STALE_EXPOSURE`] of the
+//! - it is exposed (at least one exposed session), and either at least `cfg.stale_exposure`
+//!   ([`STALE_EXPOSURE`] by default) of the
 //!   sessions where it applies were exposed, or its unsteered support is below `min_support`; and
 //! - there is no contrary evidence: among unsteered sessions ([`probe`]), at least `min_support`
 //!   opportunities with a support rate below `retain_rate` (the bar that keeps an existing route)
@@ -34,7 +35,7 @@ use adage_tracks::{Route, Step, Trigger};
 use std::collections::BTreeMap;
 
 /// The share of a route's occurrences that must be exposed for its absence to be put down to
-/// exposure alone, whatever its unsteered support.
+/// exposure alone, whatever its unsteered support. The default of `LearnConfig::stale_exposure`.
 pub const STALE_EXPOSURE: f64 = 0.5;
 
 /// Where a route's trigger occurred, split by whether the session was steered on its kind.
@@ -254,5 +255,5 @@ pub fn verdict(
     }
     let share = e.exposed as f64 / (e.exposed + e.unsteered) as f64;
     let thin = p.map_or(e.unsteered, |p| p.support) < cfg.min_support;
-    (share >= STALE_EXPOSURE || thin).then_some(e.exposed)
+    (share >= cfg.stale_exposure || thin).then_some(e.exposed)
 }

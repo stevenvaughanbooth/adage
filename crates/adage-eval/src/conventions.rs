@@ -384,7 +384,13 @@ pub fn score_routes(
 /// `adage eval routes <dataset>`: learn from the train split as `adage eval` does, then score
 /// the learned routes against the dataset's conventions.
 pub fn run(dir: &Path, opts: &Options) -> Result<RoutesReport> {
-    let Prepared { ds, split_name, split, thresholds, index, overlap } = crate::prepare(dir, opts)?;
+    score_prepared(&crate::prepare(dir, opts)?)
+}
+
+/// Score the routes of a prepared dataset's index against its conventions (the second half of
+/// [`run`]).
+pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
+    let Prepared { ds, split_name, split, thresholds, index, overlap, .. } = p;
     let file = ds.conventions_file()?.with_context(|| {
         format!("dataset {} has no conventions file (manifest `conventions`, or conventions.json)", ds.manifest.name)
     })?;
@@ -419,13 +425,13 @@ pub fn run(dir: &Path, opts: &Options) -> Result<RoutesReport> {
         .unwrap_or_else(|_| "conventions.json".into());
     Ok(RoutesReport {
         dataset: ds.manifest.name.clone(),
-        split: split_name,
-        thresholds,
+        split: split_name.clone(),
+        thresholds: thresholds.clone(),
         train_sessions: split.train.len(),
         test_sessions: split.test.len(),
         task_overlap: overlap.len(),
         leaky: !overlap.is_empty(),
-        task_overlap_ids: overlap,
+        task_overlap_ids: overlap.clone(),
         split_note: split.note.clone(),
         conventions_file,
         sandbox: conv.sandbox.clone(),
