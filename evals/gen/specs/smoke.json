@@ -1,0 +1,24 @@
+{
+  "name": "smoke",
+  "description": "Six small sandboxes across both stacks, all three skins and every dead-end mode. Each has 4 bugfix, 2 registry and 2 control tasks (control = 25%).",
+  "sandboxes": [
+    {"seed": 11, "spec": {"name": "py-billing", "stack": "python-make", "skin": "billing",
+      "conventions": {"dead_end": "env_guard", "instinct_violation": true, "decoys": ["unused_target", "lookalike_regen"]},
+      "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 12, "spec": {"name": "py-clinic", "stack": "python-make", "skin": "clinic",
+      "conventions": {"dead_end": "wrong_runner", "instinct_violation": true, "decoys": ["lookalike_verify", "legacy_script"]},
+      "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 13, "spec": {"name": "py-logistics", "stack": "python-make", "skin": "logistics",
+      "conventions": {"dead_end": "env_guard", "instinct_violation": false, "decoys": ["unused_target", "lookalike_regen", "lookalike_verify"]},
+      "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 21, "spec": {"name": "node-logistics", "stack": "node-npm", "skin": "logistics",
+      "conventions": {"dead_end": "path_alias", "instinct_violation": true, "decoys": ["unused_target", "lookalike_regen"]},
+      "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 22, "spec": {"name": "node-billing", "stack": "node-npm", "skin": "billing",
+      "conventions": {"dead_end": "env_guard", "instinct_violation": true, "decoys": ["lookalike_verify", "legacy_script"]},
+      "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 23, "spec": {"name": "node-clinic", "stack": "node-npm", "skin": "clinic",
+      "conventions": {"dead_end": "wrong_runner", "instinct_violation": false, "decoys": ["unused_target", "lookalike_regen"]},
+      "tasks": {"bugfix": 4, "registry": 2, "control": 2}}}
+  ]
+}
