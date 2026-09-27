@@ -69,6 +69,13 @@ jobs:
           $adage eval evals/datasets/synthetic --json > eval-reports/synthetic.json
           $adage eval evals/datasets/adversarial --json > eval-reports/adversarial.json
           $adage eval fidelity evals/datasets/demo-haiku45 --round round2 --json > eval-reports/fidelity-round2.json
+          # Leak-free splits (held out by task) and learned routes scored against ground truth.
+          $adage eval evals/datasets/demo-haiku45 --split temporal --json > eval-reports/demo-temporal.json
+          for f in 0 1 2; do
+            $adage eval evals/datasets/demo-haiku45 --split group:task:3:$f --json > eval-reports/demo-group-$f.json
+          done
+          $adage eval routes evals/datasets/demo-haiku45 --split temporal --json > eval-reports/routes-demo-temporal.json
+          $adage eval routes evals/datasets/synthetic --json > eval-reports/routes-synthetic.json
           for d in demo-haiku45:round2 synthetic adversarial; do
             name=${d%%:*}; split=${d#*:}; [ "$split" = "$d" ] && split=""
             $adage eval evals/datasets/$name ${split:+--split $split}
@@ -89,3 +96,6 @@ jobs:
       # node-npm bundles are checked with the runner's Node and skipped if it has none.
       - name: procedural sandbox generator
         run: python3 -m unittest discover evals/gen
+
+      - name: external benchmark protocol (no Harbor, no agents)
+        run: python3 -m unittest discover evals/external
