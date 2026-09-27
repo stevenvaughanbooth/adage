@@ -1,0 +1,3 @@
+{"type": "system", "subtype": "init", "session_id": "sess-a"}
+{"type": "assistant", "message": {"id": "m1", "content": []}}
+{"type": "result", "subtype": "success", "num_turns": 12, "total_cost_usd": 0.5, "session_id": "sess-a"}
