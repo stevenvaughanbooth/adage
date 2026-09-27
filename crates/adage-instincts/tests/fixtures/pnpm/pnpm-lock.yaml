@@ -1,0 +1,17 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      '@tidewater/ui':
+        specifier: workspace:*
+        version: link:packages/ui
+    devDependencies:
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.0

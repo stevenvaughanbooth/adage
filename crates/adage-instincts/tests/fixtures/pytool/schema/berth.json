@@ -1,0 +1,4 @@
+{
+  "id": {"type": "str"},
+  "length_m": {"type": "float", "default": 0.0}
+}

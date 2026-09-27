@@ -1,0 +1,12 @@
+[project]
+name = "quayside"
+version = "2.0.1"
+requires-python = ">=3.11"
+dependencies = ["django>=5.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.uv]
+dev-dependencies = ["pytest>=8", "black>=24"]

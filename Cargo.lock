@@ -66,6 +66,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "adage-instincts"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-tracks",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "adage-intent"
 version = "0.1.0"
 dependencies = [
