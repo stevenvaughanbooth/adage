@@ -9,6 +9,23 @@ version as the GitHub Release notes.
 
 ### Added
 
+- **`adage-train`: skill → reflex training** (new crate and binary, optional; the `adage` binary
+  still never executes anything). `adage-train plan --from <SKILL.md|CONTRIBUTING.md|Makefile|
+  package.json|workflow.yml|runbook.md>` extracts typed claims deterministically (verify,
+  regenerate_after(glob), lookup, avoid, environment; commands normalised and effect-classified,
+  anything above regenerate reported as unsafe and never exercised; Makefile, package.json and CI
+  through adage-instincts' declared facts), generates seeded tasks (implicit and explicit phrasings,
+  at least 25% controls) and prints a budget estimate; it is free. `adage-train run --plan` is a
+  dry run unless `--execute`, which refuses inside an agent session or without a terminal, and
+  drives Claude Code headlessly on `git clone --local` copies with no origin, a per-session home and
+  config directory, an environment allowlist, restricted tools, the sandbox settings, a spending cap
+  and bounded concurrency. Exploration transcripts are mined into a separate staging directory under
+  the repository's key with provenance `synthetic:skill:<sha256>@<run>` (never green, never beyond
+  probation, not activated); `--validate N` compares baseline, skill-in-context and reflex arms on
+  held-out tasks. `adage-train report` says per claim `compiled → route <id>`, `contradicted` (the
+  skill is stale), `never exercised` or `unsafe`, with cost and an acceptance table. A pluggable
+  `Harness` with a scripted fake runs the whole pipeline end to end in tests. See docs/training.md.
+
 - **Tunable engine parameters and the L0 optimisation bench.** Every number the runtime and the
   learner tune on (follow window, directive budget, stop requests, history; support, green and
   yellow bars, retain rate, dead-end consistency and signatures, finish-line and intent contrasts,

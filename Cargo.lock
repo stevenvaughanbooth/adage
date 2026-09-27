@@ -173,6 +173,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "adage-train"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-instincts",
+ "adage-learn",
+ "adage-store",
+ "adage-tracks",
+ "anyhow",
+ "glob",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
