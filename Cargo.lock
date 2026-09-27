@@ -129,6 +129,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "adage-pack"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-instincts",
+ "adage-sign",
+ "adage-tracks",
+ "anyhow",
+ "proptest",
+ "rand_core 0.6.4",
+ "regex",
+ "regex-syntax",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "ssh-key",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
 name = "adage-runtime"
 version = "0.1.0"
 dependencies = [

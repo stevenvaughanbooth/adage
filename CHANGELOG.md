@@ -9,6 +9,24 @@ version as the GitHub Release notes.
 
 ### Added
 
+- **Track packs, format `adage-pack/1` (Track C, milestone C0).** A new crate, `adage-pack`,
+  defines the pack: one track namespace in route format v2 (shapes run, avoid, after, read,
+  advise, obligation and sequence; typed inputs and outputs; argv steps; exit predicates; an
+  execution request that grants nothing), closed over everything it references and
+  content-addressed. It reads packs as untrusted input (a file allowlist with no symlinks and at
+  most 256 files, 1 MiB per file and 64 KiB per script; UTF-8 without NUL, control or invisible
+  characters; unknown fields refused; strict, anchored and bounded contract types; plain argv
+  tokens; repository-relative paths and globs; effects re-classified locally), computes the
+  closure (types, L-ref and L-vendor scripts, tools, templates, models, links, the implicit
+  after-command and avoid-instead edges; no dangling references, no unreferenced bytes, no after
+  cycles or chains over four) and checks it against the pack's `CLOSURE` byte for byte. It
+  computes the route exec digest (canonical JSON without evidence and aspect, with type
+  definitions and script hashes inlined: the future approval key) and the pack digest (the track
+  digest algorithm, with `CLOSURE` included and `pack.sig` excluded), signs and verifies in the new
+  sshsig namespace `adage-pack`, and upgrades v1 track directories to packs (L-none, or L-ref
+  pinned against a repository). Nothing uses packs yet: `adage share` and `adage add` move to them
+  in C1, and nothing executes. A debugging binary, `adage-pack inspect|verify|digest|upgrade`, ships
+  with the crate. See docs/packs.md.
 - **`adage-train`: skill → reflex training** (new crate and binary, optional; the `adage` binary
   still never executes anything). `adage-train plan --from <SKILL.md|CONTRIBUTING.md|Makefile|
   package.json|workflow.yml|runbook.md>` extracts typed claims deterministically (verify,
