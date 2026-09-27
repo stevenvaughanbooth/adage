@@ -5,7 +5,7 @@
 //! interpolated is sanitised: no backticks, no angle brackets, no newlines, bounded length.
 
 use crate::span_kind_label;
-use adage_tracks::{Aspect, Exit, Route, SlotSource, Step, Trigger};
+use adage_tracks::{Aspect, Exit, Origin, Route, SlotSource, Step, Trigger};
 
 const MAX_FIELD: usize = 200;
 
@@ -53,7 +53,40 @@ pub fn wrap(track: &str, version: &str, route: &str, aspect: Aspect, body: &str)
 
 /// A directive as the agent receives it.
 pub fn wrap_directive(d: &crate::Directive) -> String {
-    wrap_kind(&d.track, &d.version, &d.route, &d.kind, d.aspect, &d.text)
+    wrap_origin(&d.track, &d.version, &d.route, &d.kind, d.aspect, &d.text, d.origin.as_ref())
+}
+
+/// The last line of a learned route's wrapper.
+pub const LEARNED_FOOTER: &str =
+    "Learned by Adage from this repository's earlier agent sessions; not requested by the user.";
+
+/// The last line of the wrapper: what the directive is based on. A learned route (or one whose
+/// origin is unknown) says it was learned from sessions; an instinct says it is Adage's default
+/// for repositories of its ecosystem, from the file that declares it — never that sessions showed
+/// anything. Every interpolated value was validated with the track (a closed ecosystem list, a
+/// repository-relative path) and is checked again here.
+pub fn footer(origin: Option<&Origin>) -> String {
+    match origin {
+        Some(Origin::Instinct { ecosystem, declared, .. }) => {
+            let eco = ecosystem
+                .as_deref()
+                .filter(|e| adage_tracks::ECOSYSTEMS.contains(e))
+                .map(|e| format!("{e} repositories"))
+                .unwrap_or_else(|| "repositories like this one".into());
+            let from = declared
+                .as_deref()
+                .filter(|d| declared_ok(d))
+                .map(|d| format!(" (from this repository's {d})"))
+                .unwrap_or_default();
+            format!("Adage default for {eco}{from}; not requested by the user.")
+        }
+        _ => LEARNED_FOOTER.to_string(),
+    }
+}
+
+/// A declared file named in an instinct's text: a plain repository-relative path.
+fn declared_ok(d: &str) -> bool {
+    adage_tracks::advice::safe_glob(d) && !d.contains('*')
 }
 
 /// The wrapper around a directive's body: `<adage-signal track="name@version" route="id"
@@ -62,6 +95,20 @@ pub fn wrap_directive(d: &crate::Directive) -> String {
 /// Learning reads it to know which miners a directive could steer, and falls back to the route id
 /// when it is missing (`adage_learn::import::steered_kinds`).
 pub fn wrap_kind(track: &str, version: &str, route: &str, kind: &str, aspect: Aspect, body: &str) -> String {
+    wrap_origin(track, version, route, kind, aspect, body, None)
+}
+
+/// [`wrap_kind`] for a route of a given origin: an instinct's wrapper carries `origin="instinct"`
+/// after `kind`, and its own last line ([`footer`]).
+pub fn wrap_origin(
+    track: &str,
+    version: &str,
+    route: &str,
+    kind: &str,
+    aspect: Aspect,
+    body: &str,
+    origin: Option<&Origin>,
+) -> String {
     let a = match aspect {
         Aspect::Green => "green",
         Aspect::Yellow => "yellow",
@@ -69,12 +116,14 @@ pub fn wrap_kind(track: &str, version: &str, route: &str, kind: &str, aspect: As
     };
     let kind: String = kind.chars().filter(|c| c.is_ascii_lowercase() || *c == '-').take(32).collect();
     let kind = if kind.is_empty() { String::new() } else { format!(" kind=\"{kind}\"") };
+    let attr = if matches!(origin, Some(Origin::Instinct { .. })) { " origin=\"instinct\"" } else { "" };
     format!(
-        "<adage-signal track=\"{}@{}\" route=\"{}\" aspect=\"{a}\"{kind}>\n{}\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-signal>",
+        "<adage-signal track=\"{}@{}\" route=\"{}\" aspect=\"{a}\"{kind}{attr}>\n{}\n{}\n</adage-signal>",
         sanitise(track),
         sanitise(version),
         sanitise(route),
-        body
+        body,
+        footer(origin)
     )
 }
 
@@ -83,6 +132,20 @@ pub fn wrap_kind(track: &str, version: &str, route: &str, kind: &str, aspect: As
 /// otherwise the directive says what the sessions show: agents here run it.
 pub const FINISH_CI_FAILS: &str = "CI fails if this is skipped.";
 pub const FINISH_OBSERVED: &str = "Agents in this repository run it after such changes.";
+/// An instinct's finish line claims no session evidence, only that the repository declares it
+/// (`<file> declares this.` when the declaring file is known).
+pub const FINISH_DECLARED: &str = "This repository's build declares this step.";
+
+/// The evidence sentence of a finish-line directive.
+fn finish_basis(r: &Route) -> String {
+    if r.is_instinct() {
+        return match r.origin() {
+            Origin::Instinct { declared: Some(d), .. } if declared_ok(&d) => format!("{d} declares this."),
+            _ => FINISH_DECLARED.to_string(),
+        };
+    }
+    if r.evidence.deviations_failed > 0 { FINISH_CI_FAILS } else { FINISH_OBSERVED }.to_string()
+}
 
 /// The body text for a route with its slots bound, or `None` if it cannot be rendered safely.
 pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
@@ -111,8 +174,14 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
             "In this repository, changes to files matching {} must be followed by running:\n  {}\n{}{}",
             sanitise(paths),
             sanitise(command),
-            if r.evidence.deviations_failed > 0 { FINISH_CI_FAILS } else { FINISH_OBSERVED },
+            finish_basis(r),
             exit
+        )),
+        // After a failure: what to run instead (the instinct form of a dead end).
+        (Step::Run { command }, Trigger::AfterFailure { .. }) => Some(format!(
+            "That failed. In this repository, run this instead:\n  {}\n{}",
+            sanitise(&bind(command, bound)),
+            exit.trim_start()
         )),
         (Step::Run { command }, _) => {
             Some(format!("A known next step here is:\n  {}{}", sanitise(&bind(command, bound)), exit))
@@ -130,6 +199,16 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
                 shown.join(", "),
                 exit
             ))
+        }
+        (Step::Advise { template, slots }, _) => {
+            // A fixed sentence; each slot value passed its contract when the track was read, and
+            // is sanitised again (a value that changes is refused, not rendered).
+            if slots.iter().any(|(_, v)| sanitise(v) != *v) {
+                return None;
+            }
+            let mut text = adage_tracks::advice::text(template, slots)?;
+            text.push_str(&exit);
+            Some(text)
         }
         (Step::Avoid { avoid, instead, signature }, _) => {
             let mut text = format!(

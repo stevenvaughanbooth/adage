@@ -16,7 +16,7 @@
 #   cap         the strongest aspect it may ever be given (always yellow for instincts)
 #   detection   what in the repository it is detected from (no session history)
 #   fp_risk     false-positive risk: very-low, low, low-med, medium
-#   kind        route | advisory (an advisory needs Step::Advise, which the model lacks)
+#   kind        route | advisory (a fixed advisory template, `Step::Advise`)
 #   needs       model/runtime extensions it requires before it can be delivered as designed
 
 [pack]
@@ -47,7 +47,7 @@ cap = "yellow"
 detection = "Runtime history only (same key, same signature, twice, no edit between); timeouts and connection errors exempt"
 fp_risk = "medium"
 kind = "advisory"
-needs = ["Trigger::RepeatFailure", "Step::Advise"]
+needs = ["Trigger::RepeatFailure"]
 
 [[instinct]]
 id = "U3"
@@ -73,7 +73,7 @@ cap = "yellow"
 detection = "Code generated ... DO NOT EDIT, @generated, go:generate outputs, and files a declared generator script writes"
 fp_risk = "very-low"
 kind = "advisory"
-needs = ["Step::Advise"]
+needs = []
 
 [[instinct]]
 id = "U5"
@@ -99,7 +99,7 @@ cap = "yellow"
 detection = "A lockfile present at the repository root"
 fp_risk = "very-low"
 kind = "advisory"
-needs = ["Step::Advise"]
+needs = []
 
 [[instinct]]
 id = "N1"
@@ -138,7 +138,7 @@ cap = "yellow"
 detection = "Package manager from the lockfile; pack-level approval because this is an environment effect"
 fp_risk = "medium"
 kind = "route"
-needs = ["pack-level approval in adage init"]
+needs = ["an edit trigger scoped to a manifest's dependency section"]
 
 [[instinct]]
 id = "U8"

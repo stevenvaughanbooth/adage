@@ -249,6 +249,31 @@ pub fn validate(t: &Track) -> Result<()> {
                     bail!("{}: the suggested command {:?} is not a verify or regenerate step", ctx(), instead);
                 }
             }
+            Step::Advise { template, slots } => {
+                crate::advice::check(template, slots, &table).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
+                // Advice directs nothing: yellow, observe, no route slots, and a reactive trigger.
+                if r.aspect != Aspect::Yellow || r.effect != Effect::Observe || !r.slots.is_empty() {
+                    bail!("{}: an advisory step is yellow, observe, with no route slots", ctx());
+                }
+                if !matches!(
+                    r.trigger,
+                    Trigger::AfterEdit { .. } | Trigger::AfterCommand { .. } | Trigger::AfterFailure { .. }
+                ) {
+                    bail!("{}: an advisory step follows an edit, a command or a failure", ctx());
+                }
+            }
+        }
+        if let Some(o) = &r.evidence.origin {
+            validate_origin(o).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
+        }
+        // An instinct is yellow at most and never a Stop request (Design; docs/instincts.md).
+        if r.is_instinct() && r.aspect != Aspect::Yellow {
+            bail!("{}: an instinct route is yellow", ctx());
+        }
+        for k in r.evidence.by_origin.keys() {
+            if !safe_id(k.replace('_', "-").as_str()) || k.len() > 32 {
+                bail!("{}: evidence origin {:?} is not allowed", ctx(), k);
+            }
         }
         match &r.trigger {
             Trigger::AfterEdit { paths } if !safe_glob(paths) => bail!("{}: glob {:?} is not allowed", ctx(), paths),
@@ -279,6 +304,28 @@ pub fn validate(t: &Track) -> Result<()> {
     let intents = t.routes.iter().filter(|r| matches!(r.trigger, Trigger::Intent { .. })).count();
     if intents > MAX_INTENT_ROUTES {
         bail!("track {} has {intents} intent routes; at most {MAX_INTENT_ROUTES} are allowed", t.manifest.track.name);
+    }
+    Ok(())
+}
+
+/// Where a route came from: every field is rendered into the directive's wrapper, so each is a
+/// short safe token from a closed set or a repository-relative path.
+fn validate_origin(o: &Origin) -> Result<()> {
+    if let Origin::Instinct { pack, version, instinct, ecosystem, declared } = o {
+        let token = |s: &str| s.len() <= 32 && s.bytes().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c));
+        if !token(pack) || !token(version) || !token(instinct) {
+            bail!("instinct origin {pack:?}@{version:?} ({instinct:?}) is not allowed");
+        }
+        if let Some(e) = ecosystem {
+            if !ECOSYSTEMS.contains(&e.as_str()) {
+                bail!("ecosystem {e:?} is not one of {ECOSYSTEMS:?}");
+            }
+        }
+        if let Some(d) = declared {
+            if !crate::advice::safe_glob(d) || d.contains('*') {
+                bail!("declared file {d:?} is not a repository-relative path");
+            }
+        }
     }
     Ok(())
 }

@@ -79,7 +79,18 @@ pub fn learn_line(ts: u64, l: &Learned) -> Value {
                 .iter()
                 .map(|t| json!({ "name": t.name, "version": t.version, "change": t.change, "routes": t.routes.len() }))
                 .collect();
-            [(repo.to_string(), json!({ "sessions": rr.sessions, "tracks": tracks }))].into_iter().collect()
+            let mut entry = json!({ "sessions": rr.sessions, "tracks": tracks });
+            // Instinct counts only: ids and reasons stay in `adage learn --json`.
+            if let Some(i) = &rr.instincts {
+                entry["instincts"] = json!({
+                    "bound": i.bound,
+                    "advice": i.advice,
+                    "drafts": i.drafts,
+                    "retired": i.retired.len(),
+                    "confirmed": i.confirmed.len(),
+                });
+            }
+            [(repo.to_string(), entry)].into_iter().collect()
         }
         _ => Default::default(),
     };

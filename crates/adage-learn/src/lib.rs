@@ -4,6 +4,7 @@ pub mod cache;
 pub mod codex;
 pub mod diff;
 pub mod import;
+pub mod instincts;
 pub mod intent;
 pub mod mine;
 pub mod opencode;
@@ -46,6 +47,9 @@ pub struct RepoReport {
     pub sessions: usize,
     pub intent_families: usize,
     pub tracks: Vec<TrackReport>,
+    /// What binding instincts did (`None` when learning did not bind them).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instincts: Option<instincts::InstinctReport>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -76,7 +80,7 @@ pub fn slug(repo: &str) -> String {
 }
 
 /// Semantic-version bump from the difference between the previous and new routes (Design §10.9).
-fn bump(prev: Option<&Track>, routes: &[Route]) -> (String, String) {
+pub(crate) fn bump(prev: Option<&Track>, routes: &[Route]) -> (String, String) {
     let Some(p) = prev else { return ("0.1.0".into(), "created".into()) };
     let v: Vec<u64> = p.manifest.track.version.split('.').filter_map(|x| x.parse().ok()).collect();
     let (ma, mi, pa) =
@@ -116,6 +120,21 @@ pub struct Planned {
     pub dir: PathBuf,
     pub track: Track,
     pub proposals: Proposals,
+    /// Decisions to save beside the track (`review.yaml`), when learning made one itself (an
+    /// instinct retired automatically).
+    pub reviews: Option<adage_tracks::review::Reviews>,
+}
+
+impl Planned {
+    /// Write the track, its proposals and any decisions learning recorded.
+    pub fn write(&self) -> Result<()> {
+        io::write(&self.dir, &self.track)?;
+        adage_tracks::proposals::save(&self.dir, &self.proposals)?;
+        if let Some(r) = &self.reviews {
+            adage_tracks::review::save(&self.dir, r)?;
+        }
+        Ok(())
+    }
 }
 
 /// Read one session file: a Claude Code transcript, an OpenCode `opencode export` file, or a Codex
@@ -170,6 +189,19 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     if let Some(c) = cache {
         c.save();
     }
+    if let (Some(repo), true, Some(ic)) = (only, sessions.is_empty(), cfg.instincts.as_ref()) {
+        // No session to learn from yet: bind the repository's instincts from its files (day 0),
+        // when its root is known and they are not bound already.
+        let bound = io::read(&tracks_root.join(slug(repo)).join(instincts::TRACK)).is_ok();
+        if let (Some(root), false) = (ic.roots.get(repo), bound) {
+            let mut report = instincts::learn_only(repo, root, tracks_root, index_path, ic)?;
+            report.sessions_read = read;
+            report.sessions_steered = steered;
+            report.thresholds = thresholds(cfg);
+            (report.cache_hits, report.cache_misses) = (hits, misses);
+            return Ok(report);
+        }
+    }
     if only.is_some() && sessions.is_empty() {
         // Nothing to learn for this repository: its tracks and the index stay exactly as they are.
         let report = Report {
@@ -188,8 +220,7 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     report.sessions_steered = steered;
     (report.cache_hits, report.cache_misses) = (hits, misses);
     for p in &planned {
-        io::write(&p.dir, &p.track)?;
-        adage_tracks::proposals::save(&p.dir, &p.proposals)?;
+        p.write()?;
     }
     let all = io::read_all(tracks_root)?;
     let (index, conflicts) = Index::compile_with_conflicts(&all);
@@ -231,8 +262,11 @@ pub fn plan(
     }
 
     let today = adage_tracks::review::today();
+    let judged =
+        cfg.instincts.as_ref().and_then(|c| c.spools.as_deref()).map(instincts::judgements).unwrap_or_default();
     let mut planned = Vec::new();
     for (repo, ss) in &by_repo {
+        let first_planned = planned.len();
         let mut rr = RepoReport { sessions: ss.len(), ..Default::default() };
         // Hysteresis: routes that already exist in this repository's tracks keep a lower bar.
         let mut cfg = cfg.clone();
@@ -370,7 +404,24 @@ pub fn plan(
                 proposals.routes.keys().map(|id| format!("{id}: pinned; a change is proposed in `adage review`")),
             );
             rr.tracks.push(TrackReport { name, version, change, routes: lines });
-            planned.push(Planned { dir, track, proposals });
+            planned.push(Planned { dir, track, proposals, reviews: None });
+        }
+        // Instincts, after the miners and review: bound from the repository's own files, with
+        // every route from another source taking precedence (docs/instincts.md).
+        if let Some(ic) = &cfg.instincts {
+            let mut others: Vec<Route> =
+                planned[first_planned..].iter().flat_map(|p: &Planned| p.track.routes.iter().cloned()).collect();
+            let planned_names: BTreeSet<&str> =
+                planned[first_planned..].iter().map(|p| p.track.manifest.track.name.as_str()).collect();
+            // Installed tracks this run did not re-plan (imports, and learned kinds not mined now).
+            others.extend(instincts::other_routes_except(tracks_root, repo, &planned_names));
+            let root = ic.roots.get(repo).cloned().or_else(|| instincts::root_of(ss.iter().map(|s| s.root.as_path())));
+            let (ir, plan) = instincts::plan_repo(repo, root.as_deref(), tracks_root, &others, ic, &judged, &today)?;
+            if let Some((tr, p)) = plan {
+                rr.tracks.push(tr);
+                planned.push(p);
+            }
+            rr.instincts = Some(ir);
         }
         report.repos.insert(repo.clone(), rr);
     }

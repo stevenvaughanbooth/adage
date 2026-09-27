@@ -79,6 +79,9 @@ fn step(s: &Step) -> Value {
         Step::Avoid { avoid, instead, signature } => {
             json!({ "kind": "avoid", "label": instead, "avoid": avoid, "signature": signature })
         }
+        Step::Advise { template, slots } => {
+            json!({ "kind": "advise", "label": adage_tracks::advice::text(template, slots).unwrap_or_default(), "template": template })
+        }
     }
 }
 
@@ -92,7 +95,7 @@ fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
             v.push((command_key(instead, table), "directs"));
             v
         }
-        Step::ReadBatch { .. } => vec![],
+        Step::ReadBatch { .. } | Step::Advise { .. } => vec![],
     }
 }
 

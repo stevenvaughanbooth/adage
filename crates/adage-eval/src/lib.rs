@@ -57,12 +57,90 @@ pub struct Options {
     /// Engine parameters laid over the thresholds preset (a partial `EngineParams` object, as
     /// `--params <file>` reads it); `None` is the preset exactly.
     pub params: Option<serde_json::Value>,
+    /// Instincts (prebuilt routes bound from the repository's files): off by default, so the
+    /// eval's numbers are those of learned routes alone.
+    pub instincts: InstinctMode,
+    /// The repository's real files, for binding instincts (a dataset's `sandbox.txt` lists names
+    /// only). Default: `evals/sandboxes/<repo>` beside the datasets directory.
+    pub sandbox_dir: Option<PathBuf>,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { split: None, thresholds: None, window: 3, include_steered: false, index: None, params: None }
+        Options {
+            split: None,
+            thresholds: None,
+            window: 3,
+            include_steered: false,
+            index: None,
+            params: None,
+            instincts: InstinctMode::Off,
+            sandbox_dir: None,
+        }
     }
+}
+
+/// Whether the eval binds instincts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum InstinctMode {
+    /// Learned routes only (the default; the committed numbers).
+    #[default]
+    Off,
+    /// Learned routes, then instincts bound from the sandbox (`--instincts`): what `adage learn`
+    /// does by default.
+    With,
+    /// Instincts only (`--instincts-only`): nothing is learned from the train sessions; the index
+    /// holds only what binds from the sandbox's files. Day-0 value.
+    Only,
+}
+
+impl InstinctMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            InstinctMode::Off => "off",
+            InstinctMode::With => "with",
+            InstinctMode::Only => "only",
+        }
+    }
+}
+
+/// The directory of a dataset's repository files for binding instincts: `--sandbox-dir`, else
+/// `<datasets>/../sandboxes/<repo>`.
+pub fn sandbox_files(dir: &Path, ds: &Dataset, opts: &Options) -> Result<PathBuf> {
+    let p = match &opts.sandbox_dir {
+        Some(p) => p.clone(),
+        None => dir.join("../../sandboxes").join(&ds.manifest.repo),
+    };
+    if !p.is_dir() {
+        anyhow::bail!(
+            "binding instincts needs the repository's files; {} does not exist (pass --sandbox-dir <dir>)",
+            p.display()
+        );
+    }
+    Ok(p)
+}
+
+/// The instinct configuration for an eval: the default packs, the sandbox as the repository's root,
+/// and no spools (nothing to retire).
+fn instinct_config(repo: &str, root: &Path) -> adage_learn::instincts::Config {
+    let mut c = adage_learn::instincts::Config::default();
+    c.roots.insert(repo.to_string(), root.to_path_buf());
+    c
+}
+
+/// An index of instincts alone, bound from `root` for `repo`: nothing learned from any session.
+pub fn instincts_index(repo: &str, root: &Path) -> Result<Index> {
+    let home = tempfile::tempdir()?;
+    let index_path = home.path().join("index.json");
+    adage_learn::instincts::learn_only(
+        repo,
+        root,
+        &home.path().join("tracks"),
+        &index_path,
+        &instinct_config(repo, root),
+    )?;
+    Ok(Index::load(&index_path))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -109,6 +187,17 @@ pub struct Report {
     /// The hook's no-match fast path over every replayed event (`replay::FastCheck`).
     pub fast_path: replay::FastCheck,
     pub sessions: Vec<score::SessionScore>,
+    /// Instinct directives against what the agents did; `None` when instincts were off.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub instincts: Option<InstinctsReport>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct InstinctsReport {
+    /// `with` (after learning) or `only` (nothing learned: day 0).
+    pub mode: InstinctMode,
+    #[serde(flatten)]
+    pub stats: score::Instincts,
 }
 
 fn step_text(s: &adage_tracks::Step) -> String {
@@ -116,6 +205,10 @@ fn step_text(s: &adage_tracks::Step) -> String {
         adage_tracks::Step::Run { command } => command.clone(),
         adage_tracks::Step::ReadBatch { slot, max } => format!("read {{{slot}}} (max {max})"),
         adage_tracks::Step::Avoid { avoid, instead, .. } => format!("avoid {avoid}; instead {instead}"),
+        adage_tracks::Step::Advise { template, slots } => {
+            let s: Vec<String> = slots.iter().map(|(k, v)| format!("{k}={v}")).collect();
+            format!("advise {template} ({})", s.join(", "))
+        }
     }
 }
 
@@ -179,13 +272,18 @@ pub fn prepare(dir: &Path, opts: &Options) -> Result<Prepared> {
     let split = ds.split(&split_name)?;
     let thresholds = opts.thresholds.clone().unwrap_or_else(|| ds.manifest.learn.clone());
     let params = engine_params(&thresholds, opts.params.as_ref())?;
-    let cfg = LearnConfig::from_params(&params.learn);
-    let index = match &opts.index {
-        Some(p) => {
+    let mut cfg = LearnConfig::from_params(&params.learn);
+    let index = match (&opts.index, opts.instincts) {
+        (Some(p), _) => {
             let p = if p.is_relative() && !p.exists() { dir.join(p) } else { p.clone() };
             serde_json::from_slice::<Index>(&std::fs::read(&p).with_context(|| p.display().to_string())?)?
         }
-        None => learn_index(&ds, &split.train, &cfg)?,
+        (None, InstinctMode::Off) => learn_index(&ds, &split.train, &cfg)?,
+        (None, InstinctMode::With) => {
+            cfg.instincts = Some(instinct_config(&ds.manifest.repo, &sandbox_files(dir, &ds, opts)?));
+            learn_index(&ds, &split.train, &cfg)?
+        }
+        (None, InstinctMode::Only) => instincts_index(&ds.manifest.repo, &sandbox_files(dir, &ds, opts)?)?,
     };
     let overlap = ds.task_overlap(&split);
     Ok(Prepared { ds, split_name, split, thresholds, index, overlap, params })
@@ -271,6 +369,8 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
         safety: tally.safety,
         fast_path: fast,
         sessions: tally.sessions,
+        instincts: (opts.instincts != InstinctMode::Off)
+            .then(|| InstinctsReport { mode: opts.instincts, stats: tally.instincts.clone() }),
     })
 }
 
@@ -378,6 +478,27 @@ pub fn render_text(r: &Report) -> String {
         "finish line: {} obligations — {} met by the agent, {} needed but skipped, {} false alarms, {} unlabelled: accuracy {} (95% CI {}); {} stale sessions missed; stop requests {} ({} correct)",
         f.obligations, f.met, f.caught, f.false_alarms, f.unknown, pct(f.accuracy), score::ci_text(f.accuracy_ci), f.missed, f.stop_requests, f.stop_requests_correct
     );
+    if let Some(i) = &r.instincts {
+        let x = &i.stats;
+        let _ = writeln!(
+            s,
+            "instincts ({}): {} directives, {} correct: precision {} (95% CI {}); dead ends {}/{}, finish lines {}/{}; {} advice; failed verify runs answered {}/{}: recall {} (95% CI {})",
+            i.mode.as_str(),
+            x.directives,
+            x.correct,
+            pct(x.precision),
+            score::ci_text(x.precision_ci),
+            x.dead_end_correct,
+            x.dead_end_directives,
+            x.finish_line_correct,
+            x.finish_line_directives,
+            x.advice,
+            x.failures_answered,
+            x.failed_verify_runs,
+            pct(x.recall),
+            score::ci_text(x.recall_ci)
+        );
+    }
     let _ = writeln!(s, "safety: {} checked, {} unsafe", r.safety.checked, r.safety.unsafe_directives);
     let f = &r.fast_path;
     let _ = writeln!(

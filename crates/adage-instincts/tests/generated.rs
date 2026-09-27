@@ -47,7 +47,7 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
                 Step::Run { command } => Some(command.clone()),
                 _ => None,
             })
-            .chain(r.advisories.iter().filter_map(|a| a.slots.get("command").cloned()))
+            .chain(r.advisories().iter().filter_map(|a| a.slots.get("command").cloned()))
             .collect();
         for x in &r.routes {
             eprintln!("{name}: {} {:?} -> {:?}", x.id, x.trigger, x.step);

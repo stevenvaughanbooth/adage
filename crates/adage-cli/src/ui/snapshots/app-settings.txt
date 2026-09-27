@@ -16,15 +16,15 @@ learn.opencode_exports   ""       (default)
   a directory of `opencode export` files automatic learning reads ("" = none)
 learn.parse_cache        true     (default)
   keep parsed transcripts in cache/sessions so re-learning parses only what changed
+instincts.enabled        true     (default)
+  bind Adage's built-in defaults (instincts) from each repository's declared files
+instincts.packs          core     (default)
+  instinct packs to bind, comma-separated (only core exists)
+instincts.disabled       ""       (default)
+  instinct ids never to bind, comma-separated, e.g. U3,N1 (see docs/instincts.md)
 runtime.holdout          0.1      (default)
   share of sessions held out as the control arm (Adage decides but says nothing)
 
 Enter edits (Space toggles on/off and switches thresholds); every value is validated before it is saved.
-
-
-
-
-
-
 
  harbor-dispatch · gen 8216e29f · 4 routes · auto-learn on        Enter edit · Space toggle · ? help · q quit

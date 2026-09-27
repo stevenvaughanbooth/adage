@@ -11,6 +11,8 @@ adage-core = { path = "../adage-core" }
 adage-tracks = { path = "../adage-tracks" }
 adage-intent = { path = "../adage-intent" }
 adage-runtime = { path = "../adage-runtime" }
+adage-instincts = { path = "../adage-instincts" }
+adage-store = { path = "../adage-store" }
 serde.workspace = true
 serde_json.workspace = true
 regex.workspace = true

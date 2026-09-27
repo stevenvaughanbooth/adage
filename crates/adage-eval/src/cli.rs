@@ -3,6 +3,7 @@
 //! ```text
 //! adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>]
 //!            [--window <turns>] [--include-steered] [--index <index.json>] [--json]
+//!            [--instincts | --instincts-only] [--sandbox-dir <dir>]
 //! adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>]
 //!            [--index <index.json>] [--json]
 //! adage eval bench run|sweep|report|bless …   (the L0 bench: `crate::bench::cli`)
@@ -15,6 +16,11 @@
 //! `--params <file.toml|json>`: engine parameters (`adage_tracks::params::EngineParams`, any
 //! subset) laid over the thresholds preset.
 //!
+//! Instincts are off by default, so the numbers are those of learned routes. `--instincts` binds
+//! them after learning, as `adage learn` does; `--instincts-only` learns nothing from the train
+//! sessions and binds only instincts, from the repository's files (`--sandbox-dir`, default
+//! `evals/sandboxes/<repo>`), then replays the test sessions: what Adage says on day 0.
+//!
 //! Read-only apart from `generate` (which writes only `<out-dir>`), and it runs nothing: safe
 //! to run anywhere, including inside an agent session.
 
@@ -25,6 +31,18 @@ fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
 }
 
+/// `--instincts` (learned routes, then instincts) or `--instincts-only` (instincts alone, nothing
+/// learned: day 0); neither is the default, learned routes only.
+fn instinct_mode(args: &[String]) -> crate::InstinctMode {
+    if args.iter().any(|a| a == "--instincts-only") {
+        crate::InstinctMode::Only
+    } else if args.iter().any(|a| a == "--instincts") {
+        crate::InstinctMode::With
+    } else {
+        crate::InstinctMode::Off
+    }
+}
+
 /// `--params <file>`: an override object for the engine parameters.
 fn params(args: &[String]) -> Result<Option<serde_json::Value>> {
     flag(args, "--params")
@@ -32,7 +50,7 @@ fn params(args: &[String]) -> Result<Option<serde_json::Value>> {
         .transpose()
 }
 
-const USAGE: &str = "usage: adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--window <n>] [--include-steered] [--index <file>] [--json]\n       adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--index <file>] [--json]\n       adage eval bench run|sweep|report|bless … (adage eval bench --help)\n       adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--json]\n       adage eval generate <synthetic|adversarial> <out-dir>\n<split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all";
+const USAGE: &str = "usage: adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--window <n>] [--include-steered] [--index <file>] [--instincts | --instincts-only] [--sandbox-dir <dir>] [--json]\n       adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--index <file>] [--json]\n       adage eval bench run|sweep|report|bless … (adage eval bench --help)\n       adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--json]\n       adage eval generate <synthetic|adversarial> <out-dir>\n<split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all";
 
 pub fn run(args: &[String]) -> Result<()> {
     let json = args.iter().any(|a| a == "--json");
@@ -49,6 +67,8 @@ pub fn run(args: &[String]) -> Result<()> {
                 thresholds: flag(args, "--thresholds"),
                 index: flag(args, "--index").map(PathBuf::from),
                 params: params(args)?,
+                instincts: instinct_mode(args),
+                sandbox_dir: flag(args, "--sandbox-dir").map(PathBuf::from),
                 ..Default::default()
             };
             let r = crate::conventions::run(&PathBuf::from(dir), &opts)?;
@@ -94,6 +114,8 @@ pub fn run(args: &[String]) -> Result<()> {
                 include_steered: args.iter().any(|a| a == "--include-steered"),
                 index: flag(args, "--index").map(PathBuf::from),
                 params: params(args)?,
+                instincts: instinct_mode(args),
+                sandbox_dir: flag(args, "--sandbox-dir").map(PathBuf::from),
             };
             let r = crate::run(&PathBuf::from(dir), &opts)?;
             if json {

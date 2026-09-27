@@ -36,6 +36,9 @@ use std::path::Path;
 pub fn kind(r: &Route) -> &'static str {
     match (&r.trigger, &r.step) {
         (_, Step::Avoid { .. }) => "dead-end",
+        // An instinct's dead end: after the failing runner, the working command.
+        (Trigger::AfterFailure { .. }, Step::Run { .. }) => "dead-end",
+        (_, Step::Advise { .. }) => "advice",
         (_, Step::ReadBatch { .. }) => "linked-files",
         (Trigger::AfterEdit { .. }, _) => "finish-line",
         (Trigger::Prompt { .. }, _) => "lookup",
@@ -177,6 +180,32 @@ pub struct FinishLine {
     pub stop_requests_correct: u32,
 }
 
+/// Instinct directives (prebuilt routes, bound from the repository's files): what they said on day
+/// 0 against what the agents did.
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+pub struct Instincts {
+    /// Directives from instinct routes that direct a command (advice excluded).
+    pub directives: u32,
+    /// ... that the agent then took unaided (as for any directive).
+    pub correct: u32,
+    pub precision: f64,
+    pub precision_ci: [f64; 2],
+    /// Instinct dead ends (after a failure, the declared command): given, and correct.
+    pub dead_end_directives: u32,
+    pub dead_end_correct: u32,
+    /// Instinct finish lines (after an edit, the declared generator): given, and correct.
+    pub finish_line_directives: u32,
+    pub finish_line_correct: u32,
+    /// Advice given (generated files, lockfiles, the package manager); not scored.
+    pub advice: u32,
+    /// Failed verify runs in scored sessions, and those an instinct answered with a directive at
+    /// that failure whose command the agent then ran successfully (day-0 recall of dead ends).
+    pub failed_verify_runs: u32,
+    pub failures_answered: u32,
+    pub recall: f64,
+    pub recall_ci: [f64; 2],
+}
+
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
 pub struct Safety {
     pub checked: u32,
@@ -220,6 +249,7 @@ pub struct Tally {
     pub finish_line: FinishLine,
     pub safety: Safety,
     pub sessions: Vec<SessionScore>,
+    pub instincts: Instincts,
 }
 
 impl Tally {
@@ -243,13 +273,20 @@ impl Tally {
         let f = &mut self.finish_line;
         f.accuracy = ratio(f.met + f.caught, f.met + f.caught + f.false_alarms);
         f.accuracy_ci = wilson(f.met + f.caught, f.met + f.caught + f.false_alarms);
+        let i = &mut self.instincts;
+        i.precision = ratio(i.correct, i.directives);
+        i.precision_ci = wilson(i.correct, i.directives);
+        i.recall = ratio(i.failures_answered, i.failed_verify_runs);
+        i.recall_ci = wilson(i.failures_answered, i.failed_verify_runs);
         self.safety.violations.sort();
     }
 }
 
 /// The directed command a directive's text names (the indented line).
 fn command_in(text: &str) -> Option<String> {
-    text.lines().find_map(|l| l.strip_prefix("  ")).map(|s| s.trim().to_string())
+    // "A known next step here is:" carries its exit clause on the command's line.
+    let cmd = |l: &str| l.split(" Ignore this if ").next().unwrap_or(l).trim().to_string();
+    text.lines().find_map(|l| l.strip_prefix("  ")).map(cmd)
 }
 
 fn files_in(text: &str) -> Vec<String> {
@@ -323,13 +360,20 @@ pub fn score_session(
         let Some(route) = routes.get(f.directive.route.as_str()) else { continue };
         let text = &f.directive.text;
         tally.safety.checked += 1;
-        let v = safety::check_directive(route, text, Some(root), canaries);
+        // The whole directive as the agent receives it: wrapper, origin line and body.
+        let v =
+            safety::check_wrapper(route, &adage_runtime::render::wrap_directive(&f.directive), Some(root), canaries);
         if !v.is_empty() {
             tally.safety.unsafe_directives += 1;
             tally.safety.violations.extend(v);
         }
         let k = kind(route);
         let (correct, matched, saved) = match &route.step {
+            // Advice directs no command: it is checked for safety, and not scored.
+            Step::Advise { .. } => {
+                tally.instincts.advice += u32::from(route.is_instinct());
+                continue;
+            }
             Step::ReadBatch { .. } => {
                 let files = files_in(text);
                 let reads: Vec<&Action> = acts
@@ -403,6 +447,22 @@ pub fn score_session(
             }
         };
         let in_window = correct && matched.is_some_and(|t| t.saturating_sub(f.turn) <= window);
+        if route.is_instinct() {
+            let i = &mut tally.instincts;
+            i.directives += 1;
+            i.correct += u32::from(correct);
+            match &route.trigger {
+                Trigger::AfterFailure { .. } => {
+                    i.dead_end_directives += 1;
+                    i.dead_end_correct += u32::from(correct);
+                }
+                Trigger::AfterEdit { .. } => {
+                    i.finish_line_directives += 1;
+                    i.finish_line_correct += u32::from(correct);
+                }
+                _ => {}
+            }
+        }
         for m in [
             &mut tally.overall,
             tally.by_kind.entry(k.into()).or_default(),
@@ -491,7 +551,7 @@ fn recall(
                     named.push((f.turn, Expect::of(&c, table), kind(r)));
                 }
             }
-            Step::ReadBatch { .. } => {}
+            Step::ReadBatch { .. } | Step::Advise { .. } => {}
         }
     }
     let covered_cmd = |a: &Action| named.iter().any(|(t, e, _)| *t < a.turn && e.matches(a));
@@ -533,6 +593,20 @@ fn recall(
     // 3. Each failed verify: a dead end, covered if a warning naming its runner came first.
     for a in acts.iter().filter(|a| a.effect == Effect::Verify && a.argv.is_some() && a.failed) {
         tally.dead_ends.failed_verify_runs += 1;
+        // Instincts answer a failure as it happens: a directive at this turn's failure event whose
+        // command the agent then ran successfully.
+        tally.instincts.failed_verify_runs += 1;
+        let answered = fired.iter().any(|(f, r)| {
+            r.is_instinct()
+                && matches!(r.trigger, Trigger::AfterFailure { .. })
+                && f.turn == a.turn
+                && f.event == "PostToolUseFailure"
+                && command_in(&f.directive.text).is_some_and(|c| {
+                    let e = Expect::of(&c, table);
+                    acts.iter().any(|b| b.turn > a.turn && e.matches(b))
+                })
+        });
+        tally.instincts.failures_answered += u32::from(answered);
         let hit = fired.iter().any(|(f, r)| match &r.step {
             Step::Avoid { avoid, .. } => f.turn < a.turn && avoid.split(" / ").any(|x| runs_runner(a, x)),
             _ => false,

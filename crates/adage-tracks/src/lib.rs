@@ -2,6 +2,7 @@
 //! evidence, reading and writing track directories, validation, canonical digests, and the
 //! compiled index the runtime reads.
 
+pub mod advice;
 pub mod index;
 pub mod interlock;
 pub mod io;

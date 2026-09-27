@@ -1,7 +1,7 @@
 //! `adage eval bench`: the command line.
 //!
 //! ```text
-//! adage eval bench run [--suite core|<file.toml>] [--params <file.toml|json>] [--out <f.jsonl>]
+//! adage eval bench run [--suite core|<file.toml>] [--params <file.toml|json>] [--out <f.jsonl>] [--instincts]
 //!                      [--datasets <dir>] [--baseline <f.jsonl>] [--label <name>]
 //!                      [--git-sha <sha>] [--deterministic] [--summary-only]
 //! adage eval bench sweep --space <file.toml> [--strategy grid|random:N|sobol:N|halton:N]
@@ -21,7 +21,7 @@ use adage_tracks::params::EngineParams;
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
-pub const USAGE: &str = "usage: adage eval bench run [--suite core|<file>] [--params <file>] [--out <f.jsonl>] [--datasets <dir>] [--baseline <f.jsonl>] [--label <name>] [--git-sha <sha>] [--deterministic]\n       adage eval bench sweep --space <file> [--strategy grid|random:N|sobol:N|halton:N] [--seed <n>] [--jobs <n>] [--out <f.jsonl>] [--detail] [--suite …] [--datasets …] [--baseline …]\n       adage eval bench report <f.jsonl> [--top <k>] [--pareto a,b,c] [--vs-baseline <f.jsonl>]\n       adage eval bench bless <f.jsonl> --reason \"<why>\" [--label <name>] [--out <f.jsonl>]";
+pub const USAGE: &str = "usage: adage eval bench run [--suite core|<file>] [--params <file>] [--out <f.jsonl>] [--instincts] [--datasets <dir>] [--baseline <f.jsonl>] [--label <name>] [--git-sha <sha>] [--deterministic]\n       adage eval bench sweep --space <file> [--strategy grid|random:N|sobol:N|halton:N] [--seed <n>] [--jobs <n>] [--out <f.jsonl>] [--detail] [--suite …] [--datasets …] [--baseline …]\n       adage eval bench report <f.jsonl> [--top <k>] [--pareto a,b,c] [--vs-baseline <f.jsonl>]\n       adage eval bench bless <f.jsonl> --reason \"<why>\" [--label <name>] [--out <f.jsonl>]";
 
 fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
@@ -35,7 +35,11 @@ fn env_from(args: &[String], suite_name: Option<String>) -> Result<Env> {
     let suite = Suite::load(suite_name.as_deref().unwrap_or("core"))?;
     let datasets = PathBuf::from(flag(args, "--datasets").unwrap_or_else(|| "evals/datasets".into()));
     let git_sha = flag(args, "--git-sha").or_else(|| std::env::var("ADAGE_GIT_SHA").ok().filter(|s| !s.is_empty()));
-    Env::new(suite, &datasets, git_sha, has(args, "--deterministic"))
+    let mut env = Env::new(suite, &datasets, git_sha, has(args, "--deterministic"))?;
+    if has(args, "--instincts") {
+        env.instincts = crate::InstinctMode::With;
+    }
+    Ok(env)
 }
 
 /// The route-precision reference: `--baseline`, else `evals/baselines/l0-<suite>.jsonl` if it

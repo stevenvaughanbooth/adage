@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "adage-core",
  "adage-eval",
+ "adage-instincts",
  "adage-intent",
  "adage-learn",
  "adage-runtime",
@@ -98,9 +99,11 @@ name = "adage-learn"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-instincts",
  "adage-intent",
  "adage-runtime",
  "adage-sim",
+ "adage-store",
  "adage-tracks",
  "anyhow",
  "glob",

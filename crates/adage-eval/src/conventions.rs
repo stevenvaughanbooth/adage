@@ -207,6 +207,15 @@ struct Ctx<'a> {
 
 /// Does `route` match convention `c`? `Err` says why not (for routes of the same kind).
 fn matches(route: &Route, c: &Convention, cx: &Ctx) -> std::result::Result<(), String> {
+    // Advice not to hand-edit a generated file, naming the command that regenerates it, is the
+    // regeneration convention seen from the output's side.
+    if let Step::Advise { template, slots } = &route.step {
+        let cmd = slots.get("command").filter(|_| template == "generated-file" && c.kind == Kind::FinishLine);
+        return match cmd {
+            Some(cmd) if Expect::of(cmd, cx.table).same(&Expect::of(&c.command, cx.table)) => Ok(()),
+            _ => Err("advice matches no other convention".into()),
+        };
+    }
     if Kind::of_route(route) != Some(c.kind) {
         return Err("another kind".into());
     }
@@ -230,6 +239,17 @@ fn matches(route: &Route, c: &Convention, cx: &Ctx) -> std::result::Result<(), S
             }
             Ok(())
         }
+        // An instinct's dead end: after the avoided runner fails, run the working command.
+        (Trigger::AfterFailure { command: key, .. }, Step::Run { command }) => {
+            same(&Expect::of(command, cx.table), "working command")?;
+            let argv: Vec<String> =
+                key.strip_prefix("exec ").unwrap_or(key).split_whitespace().map(str::to_string).collect();
+            if !c.avoided.iter().any(|a| argv_runs(&argv, a)) {
+                return Err(format!("follows a failure of {key:?}, which the convention does not avoid"));
+            }
+            Ok(())
+        }
+        (_, Step::Advise { .. }) => Err("advice matches no convention".into()),
         (trigger, Step::ReadBatch { slot, .. }) => {
             let Trigger::AfterCommand { command } = trigger else {
                 return Err("linked files not triggered by a command".into());

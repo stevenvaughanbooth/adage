@@ -87,7 +87,7 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
             let Some(ir) = index.for_repo(repo).find(|ir| ir.route.id == dir.route) else { continue };
             match (&ir.route.trigger, &ir.route.step) {
                 (Trigger::AfterEdit { paths }, Step::Run { command })
-                    if !st.obligations.iter().any(|o| o.route == dir.route) =>
+                    if !ir.route.is_instinct() && !st.obligations.iter().any(|o| o.route == dir.route) =>
                 {
                     st.obligations.push(Obligation {
                         route: dir.route.clone(),

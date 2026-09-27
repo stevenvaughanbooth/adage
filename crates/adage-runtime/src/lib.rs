@@ -166,14 +166,30 @@ pub struct Directive {
     /// records written before it existed.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub kind: String,
+    /// Where the route came from, when it is not learned (an instinct): its wrapper says so
+    /// instead of claiming session evidence ([`render::footer`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<adage_tracks::Origin>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Judgement {
-    Followed { route: String },
-    Derailed { route: String },
-    ObligationMet { route: String },
+    Followed {
+        route: String,
+    },
+    Derailed {
+        route: String,
+    },
+    ObligationMet {
+        route: String,
+    },
+    /// The agent ran the directed command within the follow window, and it failed. Three of
+    /// these (or a derail rate whose Wilson lower bound reaches 0.5) retire an instinct route at
+    /// the next learn (`adage_learn::instincts`).
+    FollowedFailed {
+        route: String,
+    },
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -359,7 +375,12 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     // Follow / derail judgement: the directed command, or it with options added.
                     st.pending.retain(|p| {
                         if meets(&p.expect_key, &key) {
-                            d.judgements.push(Judgement::Followed { route: p.route.clone() });
+                            let route = p.route.clone();
+                            d.judgements.push(if call.failed {
+                                Judgement::FollowedFailed { route }
+                            } else {
+                                Judgement::Followed { route }
+                            });
                             false
                         } else {
                             true
@@ -376,11 +397,35 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         if let Some(p) = keys::action_path(&n.action) {
                             let rel = repo::relativize(ctx.root, p);
                             for ir in routes.iter() {
+                                // Advice after an edit (a generated file, a lockfile): said once.
+                                if let (Trigger::AfterEdit { paths }, Step::Advise { .. }) =
+                                    (&ir.route.trigger, &ir.route.step)
+                                {
+                                    let hit = glob::Pattern::new(paths).map(|g| g.matches(&rel)).unwrap_or(false);
+                                    if hit && emit_ok(st, &out, &ir.route.id) {
+                                        if let Some(t) = render::route_text(&ir.route, &[]) {
+                                            out.push(directive(ir, t));
+                                        }
+                                    }
+                                    continue;
+                                }
                                 if let (Trigger::AfterEdit { paths }, Step::Run { command }) =
                                     (&ir.route.trigger, &ir.route.step)
                                 {
                                     let hit = glob::Pattern::new(paths).map(|g| g.matches(&rel)).unwrap_or(false);
                                     if !hit {
+                                        continue;
+                                    }
+                                    // An instinct's finish line is advice, never an obligation: no
+                                    // Stop request can come of it. Its directive is judged like
+                                    // any other (followed, derailed, or followed and failed).
+                                    if ir.route.is_instinct() {
+                                        if emit_ok(st, &out, &ir.route.id) {
+                                            if let Some(t) = render::route_text(&ir.route, &[]) {
+                                                st.pending.push(pending_for(ir, command, ctx));
+                                                out.push(directive(ir, t));
+                                            }
+                                        }
                                         continue;
                                     }
                                     if let Some(o) = st.obligations.iter_mut().find(|o| o.route == ir.route.id) {
@@ -421,7 +466,11 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         for ir in routes.iter() {
                             if let Trigger::AfterCommand { command } = &ir.route.trigger {
                                 if meets(command, &key) && emit_ok(st, &out, &ir.route.id) {
-                                    if let Some(t) = bind_result_route(&ir.route, &call.output, ctx.root) {
+                                    let text = match &ir.route.step {
+                                        Step::Advise { .. } => render::route_text(&ir.route, &[]),
+                                        _ => bind_result_route(&ir.route, &call.output, ctx.root),
+                                    };
+                                    if let Some(t) = text {
                                         out.push(directive(ir, t));
                                     }
                                 }
@@ -442,13 +491,26 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             for (key, _) in call_keys(call, ctx) {
                 d.observed.push(format!("{key} !failed"));
                 push_history_capped(st, format!("{key} !failed"), ctx.params.history);
+                // The directed command, run within the follow window, failed.
+                st.pending.retain(|p| {
+                    if meets(&p.expect_key, &key) {
+                        d.judgements.push(Judgement::FollowedFailed { route: p.route.clone() });
+                        false
+                    } else {
+                        true
+                    }
+                });
                 for ir in routes.iter() {
                     if let Trigger::AfterFailure { command, signature } = &ir.route.trigger {
-                        if meets(command, &key)
+                        if failure_matches(&ir.route, command, &key)
                             && call.output.contains(signature.as_str())
                             && emit_ok(st, &out, &ir.route.id)
                         {
                             if let Some(t) = render::route_text(&ir.route, &[]) {
+                                // A run step after a failure is followed, or not, like any other.
+                                if let Step::Run { command } = &ir.route.step {
+                                    st.pending.push(pending_for(ir, command, ctx));
+                                }
                                 out.push(directive(ir, t));
                             }
                         }
@@ -547,6 +609,28 @@ fn push_history_capped(st: &mut SessionState, key: String, cap: usize) {
     }
 }
 
+/// Whether a failed call (canonical key `observed`) fires an after-failure trigger on `command`.
+/// The directed command, or it with options added ([`meets`]); for an instinct, any run of the
+/// same runner (`python3 -m unittest tests.test_billing -v` for `python3 -m unittest`): the binder
+/// binds the bare spellings agents reach for, and what fails is the runner, not the arguments.
+fn failure_matches(r: &Route, command: &str, observed: &str) -> bool {
+    meets(command, observed)
+        || (r.is_instinct()
+            && !EXACT_KEYS.get()
+            && command.strip_prefix("exec ").is_some_and(|runner| pattern::runs_avoided(runner, observed)))
+}
+
+/// A follow judgement for a directed fixed command (no slots).
+fn pending_for(ir: &IndexedRoute, command: &str, ctx: &Ctx) -> Pending {
+    let argv: Vec<String> = command.split_whitespace().map(str::to_string).collect();
+    Pending {
+        route: ir.route.id.clone(),
+        expect_key: command_key(command, ctx.table),
+        expect_head: keys::command_head(&argv),
+        batches_left: ctx.params.follow_window,
+    }
+}
+
 fn directive(ir: &IndexedRoute, text: String) -> Directive {
     Directive {
         route: ir.route.id.clone(),
@@ -556,6 +640,7 @@ fn directive(ir: &IndexedRoute, text: String) -> Directive {
         aspect: adage_tracks::delivered_aspect(&ir.route),
         text,
         kind: adage_tracks::route_kind(&ir.route).to_string(),
+        origin: ir.route.is_instinct().then(|| ir.route.origin()),
     }
 }
 

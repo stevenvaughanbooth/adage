@@ -41,6 +41,9 @@ pub struct LearnConfig {
     pub material_lower_bound: f64,
     /// Stale routes: the exposed share that explains a route's absence ([`crate::stale`]).
     pub stale_exposure: f64,
+    /// Bind instincts per repository after mining ([`crate::instincts`]); `None` binds none (the
+    /// offline eval's default, so its numbers are those of reflexes alone).
+    pub instincts: Option<crate::instincts::Config>,
 }
 
 impl Default for LearnConfig {
@@ -80,6 +83,7 @@ impl LearnConfig {
             intent_contrast: p.intent_contrast,
             material_lower_bound: p.material_lower_bound,
             stale_exposure: p.stale_exposure,
+            instincts: None,
         }
     }
 }

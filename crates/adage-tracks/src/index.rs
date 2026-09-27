@@ -39,6 +39,24 @@ pub fn is_imported(t: &Track) -> bool {
     t.manifest.track.provenance.starts_with("imported")
 }
 
+/// Tracks bound by instincts (`<repo>/instincts`) carry an `instinct:<pack>@<version>` provenance.
+pub fn is_instinct_track(t: &Track) -> bool {
+    t.manifest.track.provenance.starts_with("instinct:")
+}
+
+/// Precedence in de-duplication: first-hand (learned or authored) routes, then imports, then
+/// instincts. An instinct never shadows a route from any other source with its id, whatever the
+/// track names sort to.
+fn precedence(t: &Track, r: &Route) -> u8 {
+    if is_instinct_track(t) || r.is_instinct() {
+        2
+    } else if is_imported(t) {
+        1
+    } else {
+        0
+    }
+}
+
 /// Where `adage add` installs tracks, inside the tracks directory. `@` never appears in a learned
 /// track's directory, so `adage learn` can never write over an import.
 pub const IMPORTED_DIR: &str = "@imported";
@@ -62,7 +80,7 @@ impl Index {
         let live = |r: &Route| r.state.is_live();
         // A first-hand route a person retired still takes part in de-duplication, so an import of
         // the same route cannot slip back in behind the rejection; it is dropped afterwards.
-        let mut routes: Vec<(bool, IndexedRoute)> = tracks
+        let mut routes: Vec<(u8, IndexedRoute)> = tracks
             .iter()
             .flat_map(|t| {
                 let imported = is_imported(t);
@@ -74,14 +92,16 @@ impl Index {
                             version: t.manifest.track.version.clone(),
                             route: r.clone(),
                         };
-                        (is_imported(t), ir)
+                        (precedence(t, r), ir)
                     },
                 )
             })
             .collect();
-        // A route learned here and the same route imported from a teammate share a content-derived
-        // id: keep one, and prefer first-hand evidence over an import (a live first-hand route over
-        // a retired one, and a retired first-hand route over any import).
+        // A route learned here and the same route imported from a teammate, or bound by an
+        // instinct, share a content-derived id: keep one, and prefer first-hand evidence over an
+        // import, and an import over an instinct (a live first-hand route over a retired one, and
+        // a retired first-hand route over any import or instinct). By provenance, never by track
+        // name.
         routes.sort_by(|(ia, a), (ib, b)| {
             (&a.repo, &a.route.id, ia, !live(&a.route), &a.track).cmp(&(
                 &b.repo,

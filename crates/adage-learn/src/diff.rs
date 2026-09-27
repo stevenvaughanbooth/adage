@@ -91,12 +91,35 @@ fn kind(track: &str) -> &'static str {
         "finish-line" => "finish line",
         "dead-ends" => "dead end",
         "intents" => "intent",
+        "instincts" => "instinct",
         _ => "route",
     }
 }
 
 fn sessions(r: &Route) -> String {
+    if r.is_instinct() {
+        return "bound from the repository's declared files".into();
+    }
     format!("{} of {} sessions", r.evidence.support, r.evidence.opportunities)
+}
+
+/// Why an instinct route left service: a learned route took over its id, or agents followed it
+/// and it failed (`adage_learn::instincts`), or it is simply no longer declared.
+fn instinct_gone(id: &str, o: &Route, n: Option<&Route>, after: &Snapshot) -> String {
+    let taken = after
+        .iter()
+        .any(|(name, (t, _))| !name.ends_with("/instincts") && t.routes.iter().any(|r| r.id == id && in_service(r)));
+    if taken {
+        return format!("{} instinct route confirmed by sessions: the learned route takes over", aspect(o.aspect));
+    }
+    let failed = n.and_then(|n| n.evidence.by_origin.get("followed_failed")).copied().unwrap_or(0);
+    if n.is_some_and(|n| n.state == RouteState::Retired) {
+        return format!(
+            "{} instinct route retired automatically: agents followed it and it failed {failed} times, or derailed",
+            aspect(o.aspect)
+        );
+    }
+    format!("{} instinct route retired", aspect(o.aspect))
 }
 
 /// The changes from `before` to `after`, sorted by track, route and kind of change.
@@ -146,7 +169,11 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
                     ChangeKind::Retired,
                     Some(o.aspect),
                     None,
-                    format!("{} {k} route retired", aspect(o.aspect)),
+                    if o.is_instinct() {
+                        instinct_gone(id, o, n, after)
+                    } else {
+                        format!("{} {k} route retired", aspect(o.aspect))
+                    },
                 )),
                 (Some(o), Some(n)) if n.state == RouteState::Stale && o.state != RouteState::Stale => out.push(change(
                     id,

@@ -24,83 +24,69 @@ use crate::detect::{self, Ctx, IdHint, RouteCandidate, BIND_ORDER};
 use crate::files::safe_rel;
 use crate::safety::{command_key, rank, stable};
 use adage_core::{CommandTable, Effect};
-use adage_tracks::{Aspect, Evidence, Gauge, Manifest, Route, RouteState, Scope, Step, Track, TrackInfo, Trigger};
+use adage_tracks::{
+    Aspect, Evidence, Gauge, Manifest, Origin, Route, RouteState, Scope, Step, Track, TrackInfo, Trigger,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-/// An instinct that cannot be a route yet: the model has no advisory step (`Step::Advise`). The
-/// binder detects and validates it now, so the runtime can render it from a fixed template once
-/// the step exists (docs/instincts.md, "Integration plan").
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Advisory {
-    /// `instinct-<tag>-<stable>`.
-    pub id: String,
+/// An advisory route ([`Step::Advise`]) seen through its template: which instinct bound it, the
+/// fixed template, and the validated slot values (`BindResult::advisories`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Advice<'a> {
+    pub id: &'a str,
     /// The catalogue id (U4, U6, N1).
-    pub instinct: String,
-    /// One of [`TEMPLATES`].
-    pub template_id: String,
-    pub trigger: Trigger,
-    /// Validated slot values; only these are interpolated into the template.
-    pub slots: BTreeMap<String, String>,
-    /// `instinct:<pack>@<version>`.
-    pub provenance: String,
+    pub instinct: &'a str,
+    /// One of `adage_tracks::advice::TEMPLATES`.
+    pub template_id: &'a str,
+    pub trigger: &'a Trigger,
+    pub slots: &'a BTreeMap<String, String>,
 }
 
-/// Advisory templates and their slot contracts: `(template id, required slots, optional slots)`.
-pub const TEMPLATES: [(&str, &[&str], &[&str]); 3] = [
-    ("generated-file", &["path"], &["command"]),
-    ("lockfile", &["path", "manager"], &[]),
-    ("package-manager", &["manager", "lockfile"], &[]),
-];
-
-/// The fixed text of each template, by template id and whether the optional `command` slot is
-/// bound. No text in a track or a repository ever reaches the agent; only validated slot values do.
-fn template_text(id: &str, with_command: bool) -> Option<&'static str> {
-    Some(match (id, with_command) {
-        ("generated-file", true) => {
-            "In this repository, {path} is generated: change its inputs and run {command} rather than editing it by hand."
-        }
-        ("generated-file", false) => {
-            "In this repository, {path} is generated: change its inputs and regenerate it rather than editing it by hand."
-        }
-        ("lockfile", _) => {
-            "In this repository, {path} is maintained by {manager}: change the manifest and let {manager} update it rather than editing it by hand."
-        }
-        ("package-manager", _) => {
-            "This repository uses {manager} ({lockfile}), not npm: use {manager} for installs and scripts here."
-        }
-        _ => return None,
-    })
-}
-
-impl Advisory {
-    /// The text the runtime would deliver, from the fixed template and the validated slots.
+impl Advice<'_> {
+    /// The text the runtime delivers, from the fixed template and the validated slots.
     pub fn text(&self) -> Option<String> {
-        let (_, required, optional) = TEMPLATES.iter().find(|(id, ..)| *id == self.template_id)?;
-        let mut s = template_text(&self.template_id, self.slots.contains_key("command"))?.to_string();
-        for k in required.iter().chain(optional.iter()) {
-            if let Some(v) = self.slots.get(*k) {
-                s = s.replace(&format!("{{{k}}}"), v);
-            } else if required.contains(k) {
-                return None;
-            }
-        }
-        (!s.contains('{')).then_some(s)
+        adage_tracks::advice::text(self.template_id, self.slots)
     }
 }
 
 /// Everything one bind produced, sorted.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct BindResult {
+    /// Every bound route, sorted by id: run steps (after a failure or an edit) and advisory
+    /// steps (`Step::Advise`, after an edit or a command).
     pub routes: Vec<Route>,
-    pub advisories: Vec<Advisory>,
     /// `(instinct id, reason)` for each candidate not bound, and each file the binder skipped
     /// (instinct id `declared`).
     pub skipped: Vec<(String, String)>,
-    /// Route or advisory id → the instinct that bound it (route ids equal the miner's, so the id
-    /// alone does not say).
+    /// Route id → the instinct that bound it (route ids equal the miner's, so the id alone does
+    /// not say).
     pub origins: BTreeMap<String, String>,
+}
+
+impl BindResult {
+    /// The advisory routes, through their templates.
+    pub fn advisories(&self) -> Vec<Advice<'_>> {
+        self.routes
+            .iter()
+            .filter_map(|r| match &r.step {
+                Step::Advise { template, slots } => Some(Advice {
+                    id: &r.id,
+                    instinct: self.origins.get(&r.id).map(String::as_str).unwrap_or(""),
+                    template_id: template,
+                    trigger: &r.trigger,
+                    slots,
+                }),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The routes that direct a command (run steps).
+    pub fn runs(&self) -> Vec<&Route> {
+        self.routes.iter().filter(|r| matches!(r.step, Step::Run { .. })).collect()
+    }
 }
 
 /// Per-repository configuration (`instincts.enabled`, `instincts.packs` in Adage's config).
@@ -157,7 +143,6 @@ pub fn bind_facts(
     let cat = catalogue();
     let table = CommandTable::load();
     let ctx = Ctx { facts, table: &table, cat };
-    let provenance = cat.provenance();
     let learned: Vec<&Route> = existing.iter().filter(|r| !r.evidence.provenance.starts_with("instinct:")).collect();
 
     let mut out = BindResult::default();
@@ -202,7 +187,7 @@ pub fn bind_facts(
                 out.skipped.push((c.instinct.clone(), format!("{rid} ({}): {why}", describe(&c))));
                 continue;
             }
-            let route = build(&c, &rid, &provenance);
+            let route = build(&c, &rid, cat);
             match check_route(&route, cat, &table) {
                 Ok(()) => {
                     claimed.insert(slot, c.instinct.clone());
@@ -225,25 +210,29 @@ pub fn bind_facts(
                 out.skipped.push((a.instinct.clone(), format!("{aid}: rejected in review")));
                 continue;
             }
-            let adv = Advisory {
+            let route = Route {
                 id: aid.clone(),
-                instinct: a.instinct.clone(),
-                template_id: a.template_id,
+                summary: format!("Instinct {}: {}", a.instinct, inst.title),
                 trigger: a.trigger,
-                slots: a.slots,
-                provenance: provenance.clone(),
+                step: Step::Advise { template: a.template_id, slots: a.slots },
+                slots: vec![],
+                effect: Effect::Observe,
+                aspect: Aspect::Yellow,
+                state: RouteState::Probation,
+                exit: vec![],
+                evidence: evidence(cat, &a.instinct, a.ecosystem, a.declared),
+                authored: false,
             };
-            match check_advisory(&adv, cat, &table) {
+            match check_advisory(&route, cat, &table) {
                 Ok(()) => {
                     out.origins.insert(aid, a.instinct);
-                    out.advisories.push(adv);
+                    out.routes.push(route);
                 }
                 Err(e) => out.skipped.push((a.instinct, format!("{aid}: {e}"))),
             }
         }
     }
     out.routes.sort_by(|a, b| a.id.cmp(&b.id));
-    out.advisories.sort_by(|a, b| a.id.cmp(&b.id));
     out.skipped.sort();
     out.skipped.dedup();
     out
@@ -306,7 +295,24 @@ fn learned_conflict(c: &RouteCandidate, rid: &str, learned: &[&Route], table: &C
     None
 }
 
-fn build(c: &RouteCandidate, id: &str, provenance: &str) -> Route {
+/// An instinct's evidence: none of its own, its provenance and origin, and the declared fact that
+/// bound it (`by_origin.declared`, roadmap E1).
+fn evidence(cat: &Catalogue, instinct: &str, ecosystem: Option<&str>, declared: Option<String>) -> Evidence {
+    Evidence {
+        provenance: cat.provenance(),
+        origin: Some(Origin::Instinct {
+            pack: cat.pack.name.clone(),
+            version: cat.pack.version.clone(),
+            instinct: instinct.to_string(),
+            ecosystem: ecosystem.map(str::to_string),
+            declared: declared.filter(|d| safe_rel(d)),
+        }),
+        by_origin: [("declared".to_string(), 1)].into_iter().collect(),
+        ..Default::default()
+    }
+}
+
+fn build(c: &RouteCandidate, id: &str, cat: &Catalogue) -> Route {
     Route {
         id: id.to_string(),
         summary: c.summary.clone(),
@@ -318,7 +324,7 @@ fn build(c: &RouteCandidate, id: &str, provenance: &str) -> Route {
         // Design O11: an environment step is delivered only on a route a person approved.
         state: if c.effect == Effect::Environment { RouteState::Draft } else { RouteState::Probation },
         exit: vec![c.exit.clone()],
-        evidence: Evidence { provenance: provenance.to_string(), ..Default::default() },
+        evidence: evidence(cat, &c.instinct, c.ecosystem, c.declared.clone()),
         authored: false,
     }
 }
@@ -392,40 +398,37 @@ pub fn check_route(r: &Route, cat: &Catalogue, table: &CommandTable) -> Result<(
     visible(r)
 }
 
-pub fn check_advisory(a: &Advisory, cat: &Catalogue, table: &CommandTable) -> Result<(), String> {
-    let Some((_, required, optional)) = TEMPLATES.iter().find(|(id, ..)| *id == a.template_id) else {
-        return Err(format!("unknown template {:?}", a.template_id));
+/// An advisory route: track validation (which checks the template and each slot's contract),
+/// then the instinct rules: yellow, observe, probation, a repository-relative glob or a plain
+/// command key for its trigger, the instinct provenance, and nothing invisible.
+pub fn check_advisory(r: &Route, cat: &Catalogue, table: &CommandTable) -> Result<(), String> {
+    let Step::Advise { template, slots } = &r.step else { return Err("not an advisory step".into()) };
+    adage_tracks::advice::check(template, slots, table)?;
+    let t = Track {
+        manifest: Manifest {
+            track: TrackInfo {
+                name: format!("instincts/{}", cat.pack.name),
+                version: cat.pack.version.clone(),
+                description: "instinct validation".into(),
+                provenance: cat.provenance(),
+            },
+            scope: Scope { repo: "instincts".into() },
+            gauge: Gauge::default(),
+        },
+        routes: vec![r.clone()],
     };
-    let allowed: BTreeSet<&str> = required.iter().chain(optional.iter()).copied().collect();
-    for k in *required {
-        if !a.slots.contains_key(*k) {
-            return Err(format!("slot {k} is missing"));
-        }
+    adage_tracks::io::validate(&t).map_err(|e| format!("fails track validation: {e:#}"))?;
+    if (r.aspect, r.effect, r.state) != (Aspect::Yellow, Effect::Observe, RouteState::Probation) {
+        return Err("advice is yellow, observe, in probation".into());
     }
-    let managers: BTreeSet<&str> = cat.lockfiles.values().map(String::as_str).collect();
-    for (k, v) in &a.slots {
-        if !allowed.contains(k.as_str()) {
-            return Err(format!("slot {k} is not in template {}", a.template_id));
-        }
-        let ok = match k.as_str() {
-            "path" => safe_glob(v),
-            "lockfile" => safe_rel(v) && cat.lockfiles.contains_key(v),
-            "manager" => managers.contains(v.as_str()),
-            "command" => plain_command(v) && rank(adage_tracks::io::classify(v, table)) <= rank(Effect::Regenerate),
-            _ => false,
-        };
-        if !ok {
-            return Err(format!("slot {k} value {v:?} fails its contract"));
-        }
-    }
-    match &a.trigger {
+    match &r.trigger {
         Trigger::AfterEdit { paths } if safe_glob(paths) => {}
         Trigger::AfterCommand { command } if command.starts_with("exec ") && plain_command(&command[5..]) => {}
         _ => return Err("advisory trigger is not an edit glob or a plain command key".into()),
     }
-    if !a.provenance.starts_with("instinct:") {
+    if !r.evidence.provenance.starts_with("instinct:") {
         return Err("provenance must name the instinct pack".into());
     }
-    a.text().ok_or_else(|| "template cannot be rendered".to_string())?;
-    visible(a)
+    adage_tracks::advice::text(template, slots).ok_or_else(|| "template cannot be rendered".to_string())?;
+    visible(r)
 }
