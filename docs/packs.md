@@ -1,8 +1,9 @@
 # Track packs (format `adage-pack/1`)
 
-> Status: format reference for Track C milestone C0 ([design](tracks/track-c-compiled-skills.md)).
-> The crate `adage-pack` reads, validates, writes, digests and upgrades packs. `adage share` and
-> `adage add` do not use it yet (milestone C1), and nothing here executes anything.
+> Status: format reference for Track C milestones C0 and C1 ([design](tracks/track-c-compiled-skills.md)).
+> The crate `adage-pack` reads, validates, writes, digests, upgrades and binds packs. `adage share`
+> emits packs and `adage add` installs them ([Using packs](#using-packs)). Nothing here executes
+> anything.
 
 A **pack** is the unit of distribution and approval for compiled skills: one track namespace
 (`owner/name`) in route format v2, closed over everything it references, content-addressed and
@@ -65,7 +66,8 @@ repo_keys = ["github.com/acme/payments", "payments@1a2b3c4d5e6f"]
 #   [[applicability.fingerprint]] package_script  = "codegen"
 #   [[applicability.fingerprint]] path_exists     = "proto/**/*.proto"   # repository-relative glob
 #   [[applicability.fingerprint]] lockfile        = "pnpm-lock.yaml"     # a known root lockfile
-# kind = "detector"   detector = "U5", catalogue = "core@0.2.0"   (instinct packs only)
+# kind = "detector"   detector = "U5", catalogue = "core@0.2.0"   (instinct packs only;
+#                     detector = "*": any enabled detector of the catalogue)
 
 [requires]
 os        = ["linux", "macos"]        # "windows" only when [exec] requested = "E0"
@@ -340,6 +342,133 @@ Without a root, or when the file is missing, that route is skipped and reported 
 gauge, `[exec] requested = "E0"`, and `evidence.json` from each route's support and `by_origin`.
 `state`, `stale_since` and `authored` are dropped.
 
+## Using packs
+
+### Sharing
+
+```sh
+adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format pack|v1]
+```
+
+The source is resolved in this order:
+
+1. A learned track by name. It is upgraded to a pack. Only its live routes and drafts travel;
+   retired and demoted routes stay behind. A repository script is pinned L-ref against the
+   repository `share` runs in, if that repository is the track's; otherwise that route is listed
+   under "Not carried".
+2. An installed pack by name.
+3. A pack directory.
+4. A track directory.
+
+Before anything is written:
+
+- **Redaction.** The redaction check runs over every byte of every pack file, vendored scripts
+  included. It looks for absolute and home-directory paths, tokens, keys and high-entropy
+  strings. The digests a pack holds by construction are not counted as secrets.
+- **Script acknowledgement.** A vendored script is listed, and `share` refuses without
+  `--ack-scripts`, when it names a URL or hostname, runs a network tool (`curl`, `wget`, `ssh`,
+  `nc`, …), uses an absolute path (the shebang aside), or reads a `*_TOKEN`, `*_KEY`, `*_SECRET`
+  or `*_PASSWORD` environment variable.
+- **What never travels.** Approvals, `review.yaml`, proposals, `trust.json` and session state are
+  never part of a pack: the file allowlist has no place for them.
+
+The pack is written in canonical form and re-read as a recipient would read it. Its digest is then
+signed into `pack.sig` in namespace `adage-pack`. `share` prints the `trusted-signers` line
+recipients need, with `namespaces="adage-pack"`.
+
+`--format v1` writes a v1 track (`track.toml`, `routes/`, and `track.sig` in namespace
+`adage-track`) for recipients on an older Adage.
+
+### Adding
+
+```sh
+adage add <pack-or-track-dir> [--trust]
+```
+
+Run it inside the repository the pack is for. It refuses to run inside an agent session.
+
+For a pack, `add`:
+
+1. **Reads the directory strictly.** Only the listed files are read, with no symlinks and no
+   smuggled files.
+2. **Checks the signature.** It computes the digest and checks `pack.sig` in namespace
+   `adage-pack`.
+3. **Checks trust.** The trust anchors are the same as for tracks: `$ADAGE_HOME/trusted-signers`,
+   then the repository's `.adage/trusted-signers` once approved and pinned by hash, then a
+   signer approved with `--trust`. An entry restricted to `namespaces="adage-track"` refuses a
+   pack.
+4. **Validates the pack in full.** The schema and semantics are checked, and the closure is
+   re-derived and compared with `CLOSURE`.
+5. **Re-classifies the steps.** The local command table classifies each step. A repository or
+   vendored script counts as environment.
+6. **Applies policy.** It reads `$ADAGE_HOME/policy.toml`, then the managed file (`ADAGE_POLICY`,
+   else `/etc/adage/policy.toml`). `[publishers] deny = ["SHA256:…"]` refuses a signer, and
+   `[exec] allow_vendor_scripts = false` refuses packs with vendored scripts.
+7. **Installs the pack.** It goes under `tracks/@imported/<owner>/<name>/` exactly as verified,
+   and vendored scripts are copied read-only to `$ADAGE_HOME/cas/<sha256>`.
+8. **Binds the pack** to repositories (below) and recompiles the index.
+
+It creates no execution approvals.
+
+A **v1 track** is verified as before (namespace `adage-track`) and upgraded in place: repository
+scripts are pinned against the repository `add` runs in, and routes that cannot be carried are
+recorded as inert.
+
+### Binding
+
+`adage_pack::bind` produces a `BoundRoute` for each route of the pack: **live**, with the highest
+level it may be approved at, or **inert**, with a reason. It checks, in order:
+
+1. **Applicability.**
+   - `repo`: the target's keys must include one of the pack's. A checkout answers to its
+     `repo_key`, its origin form and its `<name>@<root commit>` form.
+   - `fingerprint`: the predicates are evaluated over `adage_instincts::declared::extract(root)`.
+   - `detector`: the compiled detector must fire.
+
+   A pack that does not apply binds nothing. An unknown detector or catalogue makes every route
+   inert.
+2. **`requires.os`**, then each route's **tools**, by PATH lookup only. Nothing is run.
+3. **Templates and models** must be known to this build.
+4. **L-ref scripts.** The SHA-256 of `root/<path>` must equal the pin. The file must be a regular
+   file inside the root, with no symlink on the way, and at most 1 MiB. `deps` globs must match
+   files, whose hashes join the binding.
+5. **L-vendor scripts** must be in the cas.
+6. **A runtime form.** E0 delivers today's route model. Several steps, a sequence, a read of a
+   step's output, a vendored script, or a type with no runtime contract gives the reason "shape
+   not yet supported at runtime".
+
+Only signature, schema or closure failures refuse a whole pack.
+
+`add` binds to these repositories: each repository key of a `repo` pack, with the checkout when
+`add` runs in it or has bound it before; otherwise the repository `add` runs in, plus every
+checkout bound before. For each, it writes a bound track under
+`tracks/@imported/@bound/<owner>/<name>/<repo>/`:
+
+- `track.toml` and `routes/`: the live routes, at probation and yellow at most, with the
+  recipient's review decisions carried across re-binds;
+- `exec.json`: route id → `ExecBinding` (`route_exec_digest`, resolved `scripts` with SHA-256,
+  `max_level`);
+- `binding.json`: every route live or inert, with the pack digest and how the pack was verified.
+
+The index compiles bound tracks like any imported track. `IndexedRoute.exec` carries the exec
+binding (`Index::compile_root`), and the E0 hot path ignores it.
+
+`adage doctor` (the `packs` check) and `adage review` (text, and `inert` in `--json`) list inert
+routes with the pack, its version and digest, the repository and the reason. To bring an inert
+route back, restore what it needs (the script, the tool) and run `adage add` again. It can be run
+on the installed pack's directory.
+
+### The core instincts pack
+
+The instinct catalogue ships as the pack `adage/core-instincts`
+(`adage_pack::instincts::core_instincts(root, existing, rejections)`). Its applicability is
+`kind = "detector"`, `detector = "*"`, with `catalogue` set to this build's.
+
+The detectors are compiled Rust, so the pack names them and cannot supply them. For each
+repository, the compiled detectors propose the pack's routes, which are upgraded, validated and
+closed like any pack's. Binding that pack gives exactly the routes the instinct binder gives; a
+test pins this.
+
 ## Library
 
 ```rust
@@ -351,6 +480,9 @@ adage_pack::route_exec_digest(&route, &pack.types);
 adage_pack::upgrade_track_with(track_dir, Some(repo_root))?;
 adage_pack::sign_dir(dir, agent_sock, key)?;      // writes pack.sig (namespace adage-pack)
 adage_pack::verify_dir(dir, &allowed_signers, now)?;
+let env = adage_pack::BindEnv::current(Some(cas_dir));
+let binding = adage_pack::bind(&pack, &adage_pack::Target::checkout(root), &env);
+for r in binding.inert() { println!("{}: {}", r.id, r.status.reason().unwrap()); }
 ```
 
 `adage-pack inspect|verify|digest|upgrade` is a small debugging binary over the same API.

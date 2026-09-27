@@ -1,5 +1,18 @@
-//! `adage add <dir> [--trust]` (Design §10.7, §15.2; review finding F9): verify a shared track's
-//! signature against trusted signers, validate it, install it at probation, recompile the index.
+//! `adage add <dir> [--trust]` (Design §10.7, §15.2; review finding F9; Track C §2.2): verify a
+//! shared pack's signature against trusted signers, validate it, install it, bind it to
+//! repositories at probation, recompile the index.
+//!
+//! A **pack** (`pack.toml`, format `adage-pack/1`) is read strictly (no symlinks, no smuggled
+//! files), its digest checked against `pack.sig` in namespace `adage-pack`, and it is validated in
+//! full (schema, semantics, and the closure re-derived and compared with `CLOSURE`); local policy
+//! runs; the pack is installed under `tracks/@imported/<owner>/<name>/` exactly as verified, its
+//! vendored scripts are copied read-only into `$ADAGE_HOME/cas/`, and it is bound to repositories
+//! ([`crate::packs`]): routes whose closure is unsatisfied here become inert, with a reason. No
+//! execution approval is created.
+//!
+//! A **v1 track** (`track.toml`) is verified as before (namespace `adage-track`) and upgraded in
+//! place to a pack (`adage_pack::upgrade_track_with`, pinning repository scripts against the
+//! repository `add` runs in, if any); routes it cannot carry are recorded inert.
 //!
 //! Trust anchors, in order:
 //! 1. `$ADAGE_HOME/trusted-signers` — the person's own `allowed_signers` file.
@@ -8,13 +21,18 @@
 //!    machine with `--trust`, pinned by its SHA-256 in `$ADAGE_HOME/trust.json` (trust on first
 //!    use). Any change to the file needs approval again.
 //! 3. A signer approved with `--trust`, pinned in `trust.json` to the repository key.
+//!
+//! An `allowed_signers` entry restricted to `namespaces="adage-track"` never authorises a pack.
 
-use crate::share::{describe_step, list_files, require_person, SIG};
+use crate::packs::{self, Bound};
+use crate::share::{list_files, require_person, SIG};
 use adage_core::repo::{find_root, repo_key};
+use adage_pack::bind::{Applies, Status};
+use adage_pack::Pack;
 use adage_sign::PublicKey;
-use adage_sign::{allowed_signers, fingerprint, key_line, NAMESPACE};
+use adage_sign::{allowed_signers, fingerprint, key_line, NAMESPACE, PACK_NAMESPACE};
 use adage_store::Paths;
-use adage_tracks::{index::IMPORTED_DIR, io, Aspect, Index, RouteState, Track};
+use adage_tracks::{io, Aspect, Index, RouteState, Track};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -71,7 +89,15 @@ struct Decision {
     record: Option<TrustStore>,
 }
 
-fn decide(paths: &Paths, repo: &str, msg: &[u8], pem: &str, signer: &PublicKey, trust: bool) -> Result<Decision> {
+fn decide(
+    paths: &Paths,
+    repo: &str,
+    msg: &[u8],
+    pem: &str,
+    signer: &PublicKey,
+    trust: bool,
+    namespace: &str,
+) -> Result<Decision> {
     let now = SystemTime::now();
     let fp = fingerprint(signer);
 
@@ -79,7 +105,7 @@ fn decide(paths: &Paths, repo: &str, msg: &[u8], pem: &str, signer: &PublicKey, 
     if personal.is_file() {
         let s = allowed_signers::parse(&std::fs::read_to_string(&personal)?)
             .with_context(|| personal.display().to_string())?;
-        match adage_sign::verify(msg, NAMESPACE, pem, &s, now) {
+        match adage_sign::verify(msg, namespace, pem, &s, now) {
             Ok(e) => {
                 return Ok(Decision {
                     how: format!("{} in {}", e.principals.join(","), personal.display()),
@@ -127,7 +153,7 @@ fn decide(paths: &Paths, repo: &str, msg: &[u8], pem: &str, signer: &PublicKey, 
 
     if let (Some(p), Some(s)) = (&repo_file, &file_signers) {
         let hash = file_hash.as_deref().unwrap_or_default();
-        match adage_sign::verify(msg, NAMESPACE, pem, s, now) {
+        match adage_sign::verify(msg, namespace, pem, s, now) {
             Ok(e) if pin_matches => {
                 return Ok(Decision { how: format!("{} in {} (approved, sha256 {})", e.principals.join(","), p.display(), &hash[..16]), record: None })
             }
@@ -167,15 +193,140 @@ fn decide(paths: &Paths, repo: &str, msg: &[u8], pem: &str, signer: &PublicKey, 
 
 pub fn add(args: &[String], paths: &Paths) -> Result<()> {
     require_person("add")?;
-    let src = PathBuf::from(args.first().filter(|a| !a.starts_with("--")).context("usage: adage add <dir> [--trust]")?);
+    let usage = "usage: adage add <pack-or-track-dir> [--trust]";
+    let src = PathBuf::from(args.first().filter(|a| !a.starts_with("--")).context(usage)?);
     let trust = args.iter().any(|a| a == "--trust");
-    if !src.join("track.toml").is_file() {
-        bail!("{} is not a track directory (no track.toml)", src.display());
+    let cwd_root = std::env::current_dir().ok().and_then(|d| find_root(&d));
+    if src.join(adage_pack::validate::MANIFEST).is_file() {
+        return add_pack(&src, paths, trust, cwd_root.as_deref());
     }
+    if !src.join("track.toml").is_file() {
+        bail!("{} is not a pack (no pack.toml) or a track directory (no track.toml)", src.display());
+    }
+    add_v1(&src, paths, trust, cwd_root.as_deref())
+}
+
+/// The repository key trust decisions are pinned to: the pack's repository this `add` runs in, or
+/// its first; for a pack that applies by fingerprint, detector or anywhere, the repository `add`
+/// runs in (`*` outside one).
+fn trust_scope(pack: &Pack, cwd_root: Option<&Path>) -> String {
+    match &pack.manifest.applicability {
+        adage_pack::Applicability::Repo { repo_keys } => {
+            let here = cwd_root.map(|r| (repo_key(r), adage_pack::bind::local_keys(r)));
+            match here {
+                Some((key, keys)) if repo_keys.iter().any(|k| keys.contains(k)) => key,
+                _ => repo_keys.first().cloned().unwrap_or_default(),
+            }
+        }
+        _ => cwd_root.map(repo_key).unwrap_or_else(|| "*".into()),
+    }
+}
+
+/// Each route's effect as this machine classifies it (Track C §2.2): run steps by the local
+/// command table, and a repository or vendored script as environment whatever it declares.
+/// (Validation has already refused any step declaring less than its classified effect.)
+fn local_effects(pack: &Pack) -> BTreeMap<String, adage_core::Effect> {
+    let table = adage_core::CommandTable::load();
+    let rank = adage_pack::validate::rank;
+    pack.routes
+        .iter()
+        .map(|r| {
+            let e = r
+                .steps
+                .iter()
+                .map(|s| match (&s.run, &s.script) {
+                    (Some(_), Some(_)) => adage_core::Effect::Environment,
+                    (Some(run), None) => {
+                        let c = io::classify(&run.argv.join(" "), &table);
+                        if rank(c) > rank(s.effect) {
+                            c
+                        } else {
+                            s.effect
+                        }
+                    }
+                    _ => s.effect,
+                })
+                .max_by_key(|e| rank(*e))
+                .unwrap_or(adage_core::Effect::Observe);
+            (r.id.clone(), e)
+        })
+        .collect()
+}
+
+fn add_pack(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> Result<()> {
+    // Exactly the listed files, read once: what is checked is what is installed.
+    let files = adage_pack::validate::read_dir_files(src).map_err(|e| anyhow!("refusing: {e:#}"))?;
+    let Some(sig) = files.get(adage_pack::validate::SIG) else {
+        bail!("refusing an unsigned pack: {} has no {}", src.display(), adage_pack::validate::SIG)
+    };
+    let digest = adage_pack::pack_digest(&files);
+    let msg = adage_sign::message(&digest)?;
+    let pem = std::str::from_utf8(sig).context("refusing: pack.sig is not text")?.to_string();
+    let signer = adage_sign::verify_embedded(&msg, PACK_NAMESPACE, &pem).map_err(|e| {
+        anyhow!(
+            "refusing: the signature does not match this pack — it changed after signing, or was not signed as a pack (namespace {PACK_NAMESPACE}) ({e:#})"
+        )
+    })?;
+    let pack = Pack::from_files(&files).map_err(|e| anyhow!("refusing: the pack fails validation: {e:#}"))?;
+    packs::policy_check(paths, &pack, Some(&fingerprint(&signer)))?;
+    let scope = trust_scope(&pack, cwd_root);
+    // One writer of the tracks and index at a time (`adage learn`, automatic learners).
+    let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
+    let decision = decide(paths, &scope, &msg, &pem, &signer, trust, PACK_NAMESPACE)?;
+
+    let name = pack.manifest.pack.name.clone();
+    let dest = packs::pack_dir(paths, &name);
+    let stage = paths.root.join("staging").join(format!("add-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&stage);
+    let staged = (|| -> Result<()> {
+        for (rel, bytes) in &files {
+            let p = stage.join(rel);
+            std::fs::create_dir_all(p.parent().context("a pack file has a parent directory")?)?;
+            std::fs::write(p, bytes)?;
+        }
+        // Re-read what was written: it must be the pack that was verified.
+        if adage_pack::digest_dir(&stage)? != digest {
+            bail!("the staged copy of the pack differs from what was verified");
+        }
+        Ok(())
+    })();
+    if let Err(e) = staged {
+        let _ = std::fs::remove_dir_all(&stage);
+        return Err(e);
+    }
+    if let Some(store) = &decision.record {
+        save_store(paths, store)?;
+    }
+    replace_dir(&stage, &dest)?;
+    let cas = packs::install_cas(paths, &pack)?;
+    let verified = format!("signature by {}, namespace {PACK_NAMESPACE}", fingerprint(&signer));
+    let bound = packs::bind_installed(paths, &pack, &digest, &verified, &[], cwd_root)?;
+    let index = recompile(paths)?;
+
+    let m = &pack.manifest;
+    println!("adage add: pack {} @ {}  from {}", m.pack.name, m.pack.version, src.display());
+    println!("  signature  good, namespace {PACK_NAMESPACE}, key {}", fingerprint(&signer));
+    println!("  trusted    {}", decision.how);
+    println!("  digest     sha256 {digest}");
+    println!("  installed  {}", dest.display());
+    if !pack.scripts.is_empty() {
+        println!(
+            "  scripts    {} vendored script(s) in {} (read-only; {} new); nothing runs them without an approval on this machine",
+            pack.scripts.len(),
+            packs::cas_dir(paths).display(),
+            cas.len()
+        );
+    }
+    print_bound(&pack, &bound, &local_effects(&pack));
+    println!("index generation {}, {} routes", index.generation, index.routes.len());
+    Ok(())
+}
+
+fn add_v1(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> Result<()> {
     if !src.join(SIG).is_file() {
         bail!("refusing an unsigned track: {} has no {SIG}", src.display());
     }
-    let listing = list_files(&src)?;
+    let listing = list_files(src)?;
     if let Some((rel, why)) = listing.other.iter().find(|(r, why)| r != SIG && *why != "hidden") {
         bail!("refusing: {rel} does not belong in a shared track ({why})");
     }
@@ -188,13 +339,13 @@ pub fn add(args: &[String], paths: &Paths) -> Result<()> {
             std::fs::create_dir_all(to.parent().unwrap())?;
             std::fs::copy(src.join(rel), to)?;
         }
-        install(&stage, &src, paths, trust)
+        install_v1(&stage, src, paths, trust, cwd_root)
     })();
     let _ = std::fs::remove_dir_all(&stage);
     result
 }
 
-fn install(stage: &Path, src: &Path, paths: &Paths, trust: bool) -> Result<()> {
+fn install_v1(stage: &Path, src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> Result<()> {
     // One writer of the tracks and index at a time (`adage learn`, automatic learners).
     let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let dir = stage.join("in");
@@ -204,80 +355,136 @@ fn install(stage: &Path, src: &Path, paths: &Paths, trust: bool) -> Result<()> {
     let signer = adage_sign::verify_embedded(&msg, NAMESPACE, &pem).map_err(|e| {
         anyhow!("refusing: the signature does not match this track — it changed after signing, or was not signed as a track ({e:#})")
     })?;
-    let track = io::read(&dir).context("refusing: the track fails validation")?;
+    let track: Track = io::read(&dir).context("refusing: the track fails validation")?;
     let repo = track.manifest.scope.repo.clone();
-    let decision = decide(paths, &repo, &msg, &pem, &signer, trust)?;
+    let decision = decide(paths, &repo, &msg, &pem, &signer, trust, NAMESPACE)?;
 
-    let (imported, was) = at_probation(track);
-    io::validate(&imported)?;
-    let name = imported.manifest.track.name.clone();
-    // Imports live apart from learned tracks, so `adage learn` never overwrites one, and an import
-    // never replaces a learned track (where both hold a route, the index keeps the learned one).
-    let dest = paths.tracks().join(IMPORTED_DIR).join(&name);
-    // A re-import keeps the recipient's own review decisions for routes whose ids survive.
-    let carried = crate::reimport::carry(&dest, imported, &paths.tracks())?;
-    let imported = carried.track;
-    io::validate(&imported)?;
-    let fresh = stage.join("out");
-    io::write(&fresh, &imported)?;
-    adage_tracks::review::save(&fresh, &carried.reviews)?;
-    adage_tracks::proposals::save(&fresh, &carried.proposals)?;
-    for rel in ["evidence.json", "CHANGELOG.md"] {
-        if dir.join(rel).is_file() {
-            std::fs::copy(dir.join(rel), fresh.join(rel))?;
-        }
-    }
-    if dir.join("intents").is_dir() {
-        std::fs::create_dir_all(fresh.join("intents"))?;
-        for e in std::fs::read_dir(dir.join("intents"))? {
-            let e = e?;
-            std::fs::copy(e.path(), fresh.join("intents").join(e.file_name()))?;
-        }
-    }
-
+    // Upgraded in place: a v1 track becomes a pack with no vendored scripts (L-none, or L-ref
+    // pinned against the repository `add` runs in).
+    let up = adage_pack::upgrade_track_with(&dir, cwd_root)
+        .map_err(|e| anyhow!("refusing: the track cannot be carried into a pack: {e:#}"))?;
+    let pack = up.pack;
+    packs::policy_check(paths, &pack, Some(&fingerprint(&signer)))?;
+    let pack_stage = stage.join("pack");
+    pack.write(&pack_stage)?;
+    let pack_digest = pack.digest()?;
+    let dest = packs::pack_dir(paths, &pack.manifest.pack.name);
     if let Some(store) = &decision.record {
         save_store(paths, store)?;
     }
-    if dest.exists() {
-        std::fs::remove_dir_all(&dest)?;
-    }
-    std::fs::create_dir_all(dest.parent().unwrap())?;
-    std::fs::rename(&fresh, &dest)?;
+    replace_dir(&pack_stage, &dest)?;
+    let verified = format!(
+        "v1 track signature by {}, namespace {NAMESPACE} (track digest {}); upgraded in place",
+        fingerprint(&signer),
+        &digest[..16]
+    );
+    let bound = packs::bind_installed(paths, &pack, &pack_digest, &verified, &up.skipped, cwd_root)?;
+    let index = recompile(paths)?;
 
-    // Recompile the index exactly as `adage learn` does.
-    let all = io::read_all(&paths.tracks())?;
-    let index = Index::compile(&all);
-    index.write_atomic(&paths.index())?;
-
-    let m = &imported.manifest;
+    let m = &track.manifest;
     println!("adage add: {} @ {}  (repo {})  from {}", m.track.name, m.track.version, repo, src.display());
     println!("  signature  good, namespace {NAMESPACE}, key {}", fingerprint(&signer));
     println!("  trusted    {}", decision.how);
     println!("  digest     sha256 {digest}");
+    println!("  upgraded   to pack {} (digest sha256 {pack_digest})", pack.manifest.pack.name);
     println!("  installed  {}", dest.display());
-    println!("  routes     imported at probation; never green on import (O2):");
-    for (r, before) in imported.routes.iter().zip(was) {
-        let aspect = format!("{:?}", r.aspect).to_lowercase();
-        let note =
-            if before != r.aspect { format!(" (was {})", format!("{before:?}").to_lowercase()) } else { String::new() };
-        println!("    {:<22} {aspect}{note:<12} {}", r.id, describe_step(&r.step));
+    for (id, why) in &up.skipped {
+        println!("  not carried {id}: {why}");
     }
-    if !carried.kept.is_empty() {
-        let kept: Vec<String> = carried.kept.iter().map(|(id, d)| format!("{id} ({})", d.as_str())).collect();
-        println!("  kept       your review decisions: {}", kept.join(", "));
-    }
-    for id in carried.proposals.routes.keys() {
-        println!("  proposed   {id} is pinned here and the new version differs; see `adage review`");
-    }
+    print_bound(&pack, &bound, &local_effects(&pack));
     println!("index generation {}, {} routes", index.generation, index.routes.len());
     Ok(())
+}
+
+/// Replace `dest` with the directory `from` (on the same filesystem).
+fn replace_dir(from: &Path, dest: &Path) -> Result<()> {
+    if dest.exists() {
+        std::fs::remove_dir_all(dest)?;
+    }
+    std::fs::create_dir_all(dest.parent().context("an install directory has a parent")?)?;
+    std::fs::rename(from, dest)?;
+    Ok(())
+}
+
+/// Recompile the index exactly as `adage learn` does.
+fn recompile(paths: &Paths) -> Result<Index> {
+    let all = io::read_all(&paths.tracks())?;
+    let (index, _) = Index::compile_root(&paths.tracks(), &all);
+    index.write_atomic(&paths.index())?;
+    Ok(index)
+}
+
+fn print_bound(pack: &Pack, bound: &[Bound], effects: &BTreeMap<String, adage_core::Effect>) {
+    if bound.is_empty() {
+        println!(
+            "  bound      nowhere yet: run `adage add` again inside a repository this pack applies to ({})",
+            describe_applicability(&pack.manifest.applicability)
+        );
+        return;
+    }
+    for b in bound {
+        let binding = &b.binding;
+        if let Applies::No(why) = &binding.applies {
+            println!("  repo       {}: not applicable ({why})", binding.repo);
+            continue;
+        }
+        if let Some(d) = &b.dir {
+            println!("  bound      {}", d.display());
+        }
+        println!(
+            "  repo       {}: {} live, {} inert; imported at probation, never green on import (O2):",
+            binding.repo,
+            binding.live().count(),
+            binding.inert().count()
+        );
+        let routes = b.track.as_ref().map(|t| t.routes.as_slice()).unwrap_or_default();
+        for r in &binding.routes {
+            match &r.status {
+                Status::Live { max_level } => {
+                    let Some(rt) = routes.iter().find(|x| x.id == r.id) else { continue };
+                    let aspect = format!("{:?}", rt.aspect).to_lowercase();
+                    let before = b.was.get(&r.id).copied().unwrap_or(rt.aspect);
+                    let note = if before != rt.aspect {
+                        format!(" (was {})", format!("{before:?}").to_lowercase())
+                    } else {
+                        String::new()
+                    };
+                    let effect = effects.get(&r.id).map(|e| e.as_str()).unwrap_or("?");
+                    let draft = if rt.state == RouteState::Draft { " · draft until approved" } else { "" };
+                    println!(
+                        "    {:<22} {aspect}{note:<12} {}  [effect {effect} · exec up to {max_level:?}{draft}]",
+                        r.id,
+                        crate::share::describe_step(&rt.step)
+                    );
+                }
+                Status::Inert { reason } => println!("    {:<22} inert: {reason}", r.id),
+            }
+        }
+        if !b.kept.is_empty() {
+            let kept: Vec<String> = b.kept.iter().map(|(id, d)| format!("{id} ({})", d.as_str())).collect();
+            println!("  kept       your review decisions: {}", kept.join(", "));
+        }
+        for id in &b.proposed {
+            println!("  proposed   {id} is pinned here and the new version differs; see `adage review`");
+        }
+    }
+    println!("  approvals  none: a pack can only request execution; nothing here grants it");
+}
+
+fn describe_applicability(a: &adage_pack::Applicability) -> String {
+    match a {
+        adage_pack::Applicability::Repo { repo_keys } => format!("repositories {}", repo_keys.join(", ")),
+        adage_pack::Applicability::Fingerprint { .. } => "by fingerprint".into(),
+        adage_pack::Applicability::Detector { detector, catalogue } => format!("detector {detector} of {catalogue}"),
+        adage_pack::Applicability::Any => "any repository".into(),
+    }
 }
 
 /// Design O2: imported routes start at probation — yellow for signed, trusted sources, never green.
 /// Routes the author retired or demoted stay out of service. The author's `review.yaml` travels in
 /// the signed package but is not installed: the recipient reviews imports for themselves, so an
 /// environment step waits as a draft until the recipient approves it (O11).
-fn at_probation(mut t: Track) -> (Track, Vec<Aspect>) {
+pub(crate) fn at_probation(mut t: Track) -> (Track, Vec<Aspect>) {
     let was = t.routes.iter().map(|r| r.aspect).collect();
     for r in &mut t.routes {
         if matches!(r.state, RouteState::Active | RouteState::Probation) {

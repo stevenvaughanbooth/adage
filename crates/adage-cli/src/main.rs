@@ -20,8 +20,10 @@
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
 //!                                    print (default) or write a harness's hook registration
-//! adage share <track> --out <dir> [--key <path>]   redaction-check, copy, and sign a track
-//! adage add <dir> [--trust]          verify a shared track and install it at probation
+//! adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format pack|v1]
+//!                                    redaction-check, build and sign a pack (namespace adage-pack)
+//! adage add <dir> [--trust]          verify a pack (or a v1 track, upgraded in place), install it,
+//!                                    and bind it to this repository at probation
 //! adage review [--json]              routes awaiting a person's decision, with evidence and directive text
 //! adage review <approve|reject|demote|promote|pin|dismiss> <track> <route> [--by <name>]
 //! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
@@ -46,12 +48,14 @@ mod init;
 mod install;
 mod learnlog;
 mod models;
+mod packs;
 mod proposal;
 mod redact;
 mod reimport;
 mod review;
 mod serve;
 mod share;
+mod share_pack;
 mod survey;
 mod tty;
 mod ui;

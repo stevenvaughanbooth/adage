@@ -61,11 +61,7 @@ mod once_cell_like {
 /// Lowercase letters, digits and `-`, starting alphanumeric, at most 64 bytes (as
 /// `adage_tracks::io::safe_id`).
 pub fn safe_id(id: &str) -> bool {
-    let b = id.as_bytes();
-    !b.is_empty()
-        && b.len() <= 64
-        && b[0].is_ascii_alphanumeric()
-        && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
+    adage_tracks::io::safe_id(id)
 }
 
 /// `owner/name`, each part lowercase `[a-z0-9._-]` starting alphanumeric (as
@@ -548,10 +544,12 @@ fn validate_manifest(m: &PackManifest, table: &CommandTable) -> Result<()> {
             if i.origin != PackOrigin::Instinct {
                 bail!("applicability: a detector applies only to an instinct pack");
             }
-            let det = detector.len() <= 4
-                && detector.as_bytes().first().is_some_and(|c| c.is_ascii_uppercase())
-                && detector.bytes().skip(1).all(|c| c.is_ascii_digit())
-                && detector.len() >= 2;
+            // `*`: every enabled detector of the catalogue (the core instincts pack).
+            let det = detector == "*"
+                || (detector.len() <= 4
+                    && detector.as_bytes().first().is_some_and(|c| c.is_ascii_uppercase())
+                    && detector.bytes().skip(1).all(|c| c.is_ascii_digit())
+                    && detector.len() >= 2);
             let cat = catalogue.split_once('@').is_some_and(|(n, v)| safe_token(n, 32) && semver_ok(v));
             if !det || !cat {
                 bail!("applicability: detector {detector:?} in catalogue {catalogue:?} is not allowed");

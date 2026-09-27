@@ -1,6 +1,16 @@
-//! `adage share <track-name> --out <dir> [--key <path>]` (Design §10.7, §10.8): copy a track,
-//! check it for anything that must not leave the machine, re-validate it, and sign its canonical
-//! digest into `track.sig`.
+//! `adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format pack|v1]`
+//! (Design §10.7, §10.8; Track C §1.6): emit a signed **pack** (format `adage-pack/1`).
+//!
+//! The source is a learned track (upgraded to a pack: its live routes, repository scripts pinned
+//! L-ref against the repository `share` runs in), an installed pack by name, or a pack or track
+//! directory. Every byte of every pack file, vendored scripts included, goes through the
+//! redaction check; vendored scripts that name URLs or hosts, run network tools, use absolute
+//! paths or read secret environment variables are listed and need `--ack-scripts`. Approvals,
+//! `review.yaml`, proposals and `trust.json` are never part of a pack. The pack digest is signed
+//! into `pack.sig` in namespace `adage-pack`.
+//!
+//! `--format v1` writes a v1 track as before (`track.toml` + `routes/`, `track.sig` in namespace
+//! `adage-track`), for recipients on an older Adage.
 //!
 //! Also the pieces `adage add` shares: the person-at-a-terminal guard (review finding F11) and the
 //! file layout a shared track may have.
@@ -108,7 +118,7 @@ fn why_not(rel: &str) -> &'static str {
 
 /// An installed track by name, or a track directory by path.
 /// A learned track wins over an import of the same name.
-fn find_track(root: &Path, name: &str) -> Result<PathBuf> {
+pub(crate) fn find_track(root: &Path, name: &str) -> Result<PathBuf> {
     let mut stack = vec![root.to_path_buf()];
     let mut import = None;
     while let Some(d) = stack.pop() {
@@ -145,12 +155,22 @@ pub fn describe_step(step: &Step) -> String {
     }
 }
 
+const USAGE: &str = "usage: adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format pack|v1]";
+
 pub fn share(args: &[String], paths: &Paths) -> Result<()> {
     require_person("share")?;
-    let usage = "usage: adage share <track-name> --out <dir> [--key <path>]";
-    let name = args.first().filter(|a| !a.starts_with("--")).context(usage)?;
-    let out = PathBuf::from(crate::flag(args, "--out").context(usage)?);
+    let name = args.first().filter(|a| !a.starts_with("--")).context(USAGE)?;
+    let out = PathBuf::from(crate::flag(args, "--out").context(USAGE)?);
     let key = crate::flag(args, "--key").map(PathBuf::from);
+    match crate::flag(args, "--format").as_deref() {
+        None | Some("pack") => crate::share_pack::share(name, &out, key.as_deref(), args, paths),
+        Some("v1") => share_v1(name, &out, key, paths),
+        Some(other) => bail!("--format {other}: expected pack or v1\n{USAGE}"),
+    }
+}
+
+fn share_v1(name: &str, out: &Path, key: Option<PathBuf>, paths: &Paths) -> Result<()> {
+    let out = out.to_path_buf();
     let src = find_track(&paths.tracks(), name)?;
     let track = io::read(&src).with_context(|| format!("{} fails validation", src.display()))?;
     let listing = list_files(&src)?;

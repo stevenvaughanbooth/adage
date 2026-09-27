@@ -223,7 +223,7 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         p.write()?;
     }
     let all = io::read_all(tracks_root)?;
-    let (index, conflicts) = Index::compile_with_conflicts(&all);
+    let (index, conflicts) = Index::compile_root(tracks_root, &all);
     index.write_atomic(index_path)?;
     report.index_generation = index.generation.clone();
     report.conflicts = conflicts;
