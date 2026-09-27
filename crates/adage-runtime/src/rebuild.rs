@@ -2,13 +2,14 @@
 //! no longer be read.
 //!
 //! Every hook event that reaches [`crate::decide`] appends one spool record after the state is
-//! stored: `{ ts, event, kind, arm, repo, generation, decision }` (`kind` and `repo` since this
+//! stored: `{ ts, event, kind, arm, propensity, repo, generation, decision }` (`propensity` since
+//! E1; `kind` and `repo` since this
 //! module; older records carry only the harness's event name, which [`kind_of`] maps). Replaying
 //! the recorded decisions in order restores what the state is for:
 //!
 //! | Field | From |
 //! | --- | --- |
-//! | `arm`, `repo` | the first record carrying them (`repo` falls back to the caller's key) |
+//! | `arm`, `repo`, `propensity` | the first record carrying them (`repo` falls back to the caller's key) |
 //! | `prompts`, `batches` | the count of prompt and batch events |
 //! | `emitted` | every would-have directive, in order (both arms record them) |
 //! | `history`, `first_edit_at_batch` | the observed call keys, in order |
@@ -59,6 +60,9 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
     for r in records.iter().take(MAX_RECORDS) {
         if st.arm.is_none() {
             st.arm = r.get("arm").and_then(|a| serde_json::from_value::<Arm>(a.clone()).ok());
+        }
+        if st.propensity.is_none() {
+            st.propensity = r.get("propensity").and_then(Value::as_f64).filter(|p| (0.0..=1.0).contains(p));
         }
         if st.repo.is_none() {
             st.repo = r.get("repo").and_then(Value::as_str).map(str::to_string);

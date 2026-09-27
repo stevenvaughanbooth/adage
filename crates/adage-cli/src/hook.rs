@@ -13,7 +13,7 @@ use crate::harness::{self, Output};
 use adage_core::{repo, CommandTable};
 use adage_intent::model::{self, StaticModel};
 use adage_intent::normalize::normalize;
-use adage_runtime::{assign_arm, decide, fast, rebuild, render, Arm, Ctx, SessionState};
+use adage_runtime::{assign, decide, fast, rebuild, render, Arm, Ctx, SessionState};
 use adage_store::{spool, state, Paths};
 use adage_tracks::Index;
 use serde_json::{json, Value};
@@ -116,21 +116,28 @@ fn respond(
         let records: Vec<Value> = if small { spool::read_all(&spool_path).ok()? } else { return None };
         rebuild::rebuild(&records, &index, &repo_key, &table)
     };
-    let (decision, arm) = state::update_or_rebuild::<SessionState, _>(&state_path, rebuild, |st| {
+    let (decision, arm, propensity) = state::update_or_rebuild::<SessionState, _>(&state_path, rebuild, |st| {
         if st.arm.is_none() {
-            st.arm = Some(match arm_env.as_deref() {
-                Some("holdout") => Arm::Holdout,
-                Some("treated") => Arm::Treated,
-                _ => assign_arm(session, share),
-            });
+            let (arm, p) = assign(session, share, arm_env.as_deref());
+            st.arm = Some(arm);
+            st.propensity = Some(p);
             st.repo = Some(repo_key.clone());
         }
-        (decide(&ctx, st, &ev), st.arm)
+        // A state from before propensities were recorded: the arm was drawn with (as far as can
+        // be known) today's share, unless it is forced now.
+        let propensity = st.propensity.unwrap_or_else(|| match (st.arm, arm_env.as_deref()) {
+            (_, Some("holdout" | "treated")) => 1.0,
+            (Some(Arm::Holdout), _) => share.clamp(0.0, 1.0),
+            _ => 1.0 - share.clamp(0.0, 1.0),
+        });
+        (decide(&ctx, st, &ev), st.arm, propensity)
     })
     .map_err(|e| Failure::io("state", "updating the session state", &e))?;
 
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    let mut rec = json!({ "ts": ts, "event": event, "kind": ev.name(), "arm": arm, "repo": repo_key, "generation": index.generation, "decision": decision });
+    // `propensity`: the probability of `arm` at assignment (holdout share, or one minus it; 1 when
+    // `ADAGE_ARM` forced it), for inverse-propensity weighting (Design §11, §14.1).
+    let mut rec = json!({ "ts": ts, "event": event, "kind": ev.name(), "arm": arm, "propensity": propensity, "repo": repo_key, "generation": index.generation, "decision": decision });
     if adapter.name() != "claude" {
         rec["harness"] = json!(adapter.name());
     }
@@ -145,12 +152,7 @@ fn respond(
     if decision.directives.is_empty() {
         return Ok(None);
     }
-    let mut text = decision
-        .directives
-        .iter()
-        .map(|d| render::wrap(&d.track, &d.version, &d.route, d.aspect, &d.text))
-        .collect::<Vec<_>>()
-        .join("\n\n");
+    let mut text = decision.directives.iter().map(render::wrap_directive).collect::<Vec<_>>().join("\n\n");
     // Design W8 (spill overflow to a file) cannot arise: the longest decision validation allows
     // fits every harness's cap (`the_largest_decision_fits_every_harness_cap`). This is a backstop.
     let max = adapter.max_context();
@@ -279,7 +281,8 @@ mod tests {
                     _ => vec![("item".into(), "i".repeat(200))],
                 };
                 let body = render::route_text(r, &bound).expect("renders");
-                render::wrap(&t.manifest.track.name, &t.manifest.track.version, &r.id, r.aspect, &body).len()
+                let kind = adage_tracks::route_kind(r);
+                render::wrap_kind(&t.manifest.track.name, &t.manifest.track.version, &r.id, kind, r.aspect, &body).len()
             })
             .max()
             .unwrap();

@@ -153,7 +153,7 @@ impl MaxRank for Effect {
 }
 
 /// A command's runner, without its targets: `python3 -m pytest tests/a.py -v` → `python3 -m pytest`.
-fn runner(argv: &[String]) -> String {
+pub(crate) fn runner(argv: &[String]) -> String {
     let mut out: Vec<&str> = Vec::new();
     let mut i = 0;
     while i < argv.len() {

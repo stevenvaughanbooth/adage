@@ -44,7 +44,7 @@ pub const IMPORTED_DIR: &str = "@imported";
 
 impl Index {
     pub fn compile(tracks: &[Track]) -> Index {
-        let live = |r: &Route| matches!(r.state, RouteState::Active | RouteState::Probation);
+        let live = |r: &Route| r.state.is_live();
         // A first-hand route a person retired still takes part in de-duplication, so an import of
         // the same route cannot slip back in behind the rejection; it is dropped afterwards.
         let mut routes: Vec<(bool, IndexedRoute)> = tracks

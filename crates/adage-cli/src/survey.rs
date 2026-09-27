@@ -720,6 +720,7 @@ mod tests {
                 steps: vec![],
                 steered: false,
                 directed: BTreeSet::new(),
+                steered_kinds: BTreeSet::new(),
                 outcome: None,
                 harness: "claude-code".into(),
                 prompts: 1,

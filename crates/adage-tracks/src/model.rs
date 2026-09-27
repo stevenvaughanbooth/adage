@@ -20,6 +20,20 @@ pub enum RouteState {
     Active,
     Demoted,
     Retired,
+    /// In service, but no longer re-found by learning *because of its own exposure*: most of the
+    /// sessions where it could apply were steered by routes of its kind, so they are excluded from
+    /// its miner (Design §11), and too few unsteered sessions remain to confirm it. Its last
+    /// evidence is kept, with [`Evidence::stale_since`] set, and it is delivered at yellow at most
+    /// (red dead ends stay red). Re-found, it returns to the state the miner gives it; contrary
+    /// evidence among unsteered sessions drops it as before (`adage_learn`, E1).
+    Stale,
+}
+
+impl RouteState {
+    /// Compiled into the index and delivered (`Active`, `Probation`, `Stale`).
+    pub fn is_live(self) -> bool {
+        matches!(self, RouteState::Active | RouteState::Probation | RouteState::Stale)
+    }
 }
 
 /// Where a slot's value comes from. Values are *proposed* from these sources and must pass the
@@ -122,6 +136,19 @@ pub struct Evidence {
     pub provenance: String,
     /// Models the evidence was gathered on.
     pub models: Vec<String>,
+    /// Distinct sessions where the trigger occurred but which were steered by a route of this
+    /// route's kind, and so are excluded from its evidence (Design §11). Not part of
+    /// `opportunities`. High exposure explains a route that learning can no longer confirm.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub exposed: u32,
+    /// Set while the route is [`RouteState::Stale`]: the UTC date (`YYYY-MM-DD`) of the learn run
+    /// that first kept it on its last evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stale_since: Option<String>,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -177,6 +204,47 @@ pub struct Gauge {
 pub struct Track {
     pub manifest: Manifest,
     pub routes: Vec<Route>,
+}
+
+/// Route kinds: the miner (and learned track `<repo>/<kind>`) a route belongs to.
+pub const KIND_WORK_ITEMS: &str = "work-items";
+pub const KIND_FINISH_LINE: &str = "finish-line";
+pub const KIND_DEAD_ENDS: &str = "dead-ends";
+pub const KIND_INTENTS: &str = "intents";
+/// Anything no miner produces (an imported or hand-written shape): it may influence anything.
+pub const KIND_OTHER: &str = "other";
+/// Every kind a miner learns.
+pub const MINER_KINDS: [&str; 4] = [KIND_WORK_ITEMS, KIND_FINISH_LINE, KIND_DEAD_ENDS, KIND_INTENTS];
+
+/// The kind of a route, from its *shape* (trigger and step), never from its id or track name,
+/// which an imported track chooses freely. Each shape is one a miner produces:
+///
+/// | Trigger | Step | Kind |
+/// | --- | --- | --- |
+/// | `prompt` | `run` | `work-items` (the lookup) |
+/// | `after_command` | `read_batch` | `work-items` (the linked files) |
+/// | `after_edit` | `run` | `finish-line` |
+/// | `session_start` | `avoid` | `dead-ends` |
+/// | `intent` | `run` | `intents` |
+/// | anything else | | `other` |
+pub fn route_kind(r: &Route) -> &'static str {
+    match (&r.trigger, &r.step) {
+        (Trigger::Prompt { .. }, Step::Run { .. }) => KIND_WORK_ITEMS,
+        (Trigger::AfterCommand { .. }, Step::ReadBatch { .. }) => KIND_WORK_ITEMS,
+        (Trigger::AfterEdit { .. }, Step::Run { .. }) => KIND_FINISH_LINE,
+        (Trigger::SessionStart, Step::Avoid { .. }) => KIND_DEAD_ENDS,
+        (Trigger::Intent { .. }, Step::Run { .. }) => KIND_INTENTS,
+        _ => KIND_OTHER,
+    }
+}
+
+/// The aspect a route is delivered at: its own, except that a route on probation or stale is
+/// never delivered green.
+pub fn delivered_aspect(r: &Route) -> Aspect {
+    match (r.state, r.aspect) {
+        (RouteState::Probation | RouteState::Stale, Aspect::Green) => Aspect::Yellow,
+        (_, a) => a,
+    }
 }
 
 /// The strongest aspect an effect class may ever be given (Design §8.6).

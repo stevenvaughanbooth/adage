@@ -28,8 +28,8 @@ const CONTRAST: f64 = 0.3;
 /// No intent route ever matches below this similarity, whatever calibration says.
 const FLOOR: f32 = INTENT_MIN_THRESHOLD;
 
-struct Cand {
-    group: String,
+pub(crate) struct Cand {
+    pub(crate) group: String,
     literal: String,
     position: usize,
     turn: u32,
@@ -37,7 +37,7 @@ struct Cand {
 
 /// Directable commands (observe or verify) a session ran before its first edit, one per command
 /// group, in order.
-fn candidates(s: &Session) -> Vec<Cand> {
+pub(crate) fn candidates(s: &Session) -> Vec<Cand> {
     let from_prompt: BTreeSet<String> = spans::extract(&s.prompt).into_iter().map(|x| x.value).collect();
     let disc = s.discovery();
     let mut seen = BTreeSet::new();

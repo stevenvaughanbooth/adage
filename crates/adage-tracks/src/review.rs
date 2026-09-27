@@ -275,6 +275,50 @@ pub fn reconcile(prev: Option<&Track>, reviews: &Reviews, mut mined: Vec<Route>)
     mined
 }
 
+/// Keep, as [`RouteState::Stale`], the routes of `prev` that learning no longer finds only because
+/// of their own exposure (E1: evidence integrity).
+///
+/// Each miner ignores sessions steered by its own kind of route (Design §11), so a route that is
+/// delivered, and followed, starves itself of evidence: once the transcripts from before it expire,
+/// only the holdout is left to confirm it. `routes` is the track as reconciled from this run;
+/// `verdict` is asked about each route of `prev` that was in service (active, probation or already
+/// stale), is not in `routes`, and was not rejected by a person. It answers `Some(exposed)` when
+/// the route's absence is explained by exposure and nothing unsteered contradicts it
+/// (`adage_learn` decides), and `None` to drop it as before.
+///
+/// A kept route keeps its last evidence (with `exposed` refreshed), is marked `stale_since`
+/// (today, or the date it first went stale), and is held at yellow at most; a red dead end stays
+/// red. A stale route the miner finds again is simply replaced by the mined one, which returns it
+/// to its normal state.
+pub fn keep_stale(
+    prev: Option<&Track>,
+    reviews: &Reviews,
+    mut routes: Vec<Route>,
+    today: &str,
+    mut verdict: impl FnMut(&Route) -> Option<u32>,
+) -> Vec<Route> {
+    let Some(prev) = prev else { return routes };
+    for p in &prev.routes {
+        if !p.state.is_live()
+            || p.authored
+            || routes.iter().any(|r| r.id == p.id)
+            || reviews.routes.get(&p.id).is_some_and(|rv| rv.decision == Decision::Rejected)
+        {
+            continue;
+        }
+        let Some(exposed) = verdict(p) else { continue };
+        let mut s = p.clone();
+        s.state = RouteState::Stale;
+        if s.aspect == Aspect::Green {
+            s.aspect = Aspect::Yellow;
+        }
+        s.evidence.exposed = exposed;
+        s.evidence.stale_since = Some(p.evidence.stale_since.clone().unwrap_or_else(|| today.to_string()));
+        routes.push(s);
+    }
+    routes
+}
+
 /// Today's UTC date as `YYYY-MM-DD`.
 pub fn today() -> String {
     let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
@@ -396,6 +440,54 @@ mod tests {
         a.authored = true;
         let out = reconcile(None, &reviewed(&r, Decision::Rejected), vec![a.clone()]);
         assert_eq!(out, vec![a]);
+    }
+
+    #[test]
+    fn keep_stale_holds_exposed_routes_at_yellow_on_their_last_evidence() {
+        let prev_track = |routes: Vec<Route>| Track {
+            manifest: Manifest {
+                track: TrackInfo {
+                    name: "x/y".into(),
+                    version: "0.1.0".into(),
+                    description: "d".into(),
+                    provenance: "p".into(),
+                },
+                scope: Scope { repo: "x".into() },
+                gauge: Gauge::default(),
+            },
+            routes,
+        };
+        let g = route("a", Aspect::Green, 10, 12);
+        let mut red = route("b", Aspect::Red, 6, 6);
+        red.step = Step::Avoid { avoid: "x".into(), instead: "y".into(), signature: "s".into() };
+        let prev = prev_track(vec![g.clone(), red.clone()]);
+        // Both exposed: kept, stale, green held at yellow, red stays red, evidence as it was.
+        let out = keep_stale(Some(&prev), &Reviews::default(), vec![], "2026-09-27", |_| Some(4));
+        assert_eq!(out.len(), 2);
+        assert_eq!((out[0].state, out[0].aspect), (RouteState::Stale, Aspect::Yellow));
+        assert_eq!((out[1].state, out[1].aspect), (RouteState::Stale, Aspect::Red));
+        assert_eq!((out[0].evidence.support, out[0].evidence.exposed), (10, 4));
+        assert_eq!(out[0].evidence.stale_since.as_deref(), Some("2026-09-27"));
+        // Stale again next run: the date it first went stale is kept.
+        let out2 = keep_stale(Some(&prev_track(out.clone())), &Reviews::default(), vec![], "2026-10-30", |_| Some(5));
+        assert_eq!(out2[0].evidence.stale_since.as_deref(), Some("2026-09-27"));
+        // Re-found: the mined route stands, nothing is added.
+        let out = keep_stale(Some(&prev), &Reviews::default(), vec![g.clone()], "2026-09-27", |r| {
+            assert_ne!(r.id, "a", "a route found again is not judged");
+            None
+        });
+        assert_eq!(out, vec![g.clone()]);
+        // Not exposed, rejected by a person, retired, or authored: never kept stale.
+        assert!(keep_stale(Some(&prev), &Reviews::default(), vec![], "2026-09-27", |_| None).is_empty());
+        let out = keep_stale(Some(&prev), &reviewed(&g, Decision::Rejected), vec![], "2026-09-27", |_| Some(4));
+        assert_eq!(out.iter().map(|r| r.id.as_str()).collect::<Vec<_>>(), vec!["b"]);
+        let mut retired = g.clone();
+        retired.state = RouteState::Retired;
+        let mut authored = red.clone();
+        authored.authored = true;
+        let prev = prev_track(vec![retired, authored]);
+        assert!(keep_stale(Some(&prev), &Reviews::default(), vec![], "2026-09-27", |_| Some(4)).is_empty());
+        assert!(keep_stale(None, &Reviews::default(), vec![], "2026-09-27", |_| Some(4)).is_empty());
     }
 
     #[test]

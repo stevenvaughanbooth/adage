@@ -126,6 +126,27 @@ version as the GitHub Release notes.
 - `adage learn`, automatic learners, review decisions and `adage add` take `$ADAGE_HOME/tracks.lock`
   while they write tracks and the index, so they never interleave.
 - The demo and live eval runners set `ADAGE_AUTO_LEARN=0`, so the index stays fixed within a round.
+- **Evidence integrity (E1).**
+  - *Steering by directive kind.* Directives now carry `kind="…"` in their `<adage-signal>`
+    wrapper (the route's kind, from its trigger and step, never its id). Learning excludes a
+    session from each miner its directives could influence: a dead end also steers the intent
+    miner, and a directive of kind `other`, of unknown kind, or from an old wrapper whose route id
+    no miner produces (an import) is excluded from every miner. Old transcripts fall back to the
+    route id.
+  - *Stale routes.* A route in service that learning no longer finds only because it steered its
+    own evidence away (at least half the sessions where it applies were steered on its kind, or
+    too little unsteered support is left) is kept as `state: stale` on its last evidence, with
+    `evidence.stale_since`, and delivered yellow at most (red stays red). Found again, it returns
+    to its normal state; contrary evidence among unsteered sessions (a support rate below the
+    retain bar) drops it as before. Every learned route records `evidence.exposed`, the steered
+    sessions it could not learn from. `learn.log` has a new change kind, `stale`. Tracks without
+    the new fields read as before.
+  - *Propensity logging.* Every spool record carries `propensity`, the probability of its `arm`
+    at assignment (the holdout share, or one minus it; 1 when `ADAGE_ARM` forces the arm), kept in
+    the session state. Older spools and states still read.
+  - *Finish-line wording.* "CI fails if this is skipped." is said only when sessions that skipped
+    the step are known to have failed (`deviations_failed > 0`); otherwise the directive says
+    "Agents in this repository run it after such changes."
 
 - **`adage learn` writes `learn.log`**: one JSON line per run with the sessions read and used and,
   per repository, the tracks written (version, change, route count). No prompt, command or path.

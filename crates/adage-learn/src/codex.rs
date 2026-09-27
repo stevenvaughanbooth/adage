@@ -21,7 +21,7 @@
 //! output, message, or prompt between them. Compressed rollouts (`.jsonl.zst`, written only with
 //! the `local_thread_store_compression` feature) are not read.
 
-use crate::import::{Session, StepObs};
+use crate::import::{Session, Signals, StepObs};
 use adage_core::keys::{self, template_key};
 use adage_core::tools::{from_codex, normalize_tool};
 use adage_core::{repo, CommandTable};
@@ -29,11 +29,10 @@ use adage_runtime::Call;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json::{json, Value};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::io::{BufRead, Read};
 use std::path::{Path, PathBuf};
 
-static ROUTE_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<adage-signal [^>]*route="([A-Za-z0-9_.-]+)""#).unwrap());
 static EXIT_LINE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(?:Process exited with code|Exit code:) (-?\d+)$").unwrap());
 static CONTEXT_TAG: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?s)^<([a-z_]+)(?:\s[^>]*)?>.*</([a-z_]+)>$").unwrap());
 
@@ -213,17 +212,8 @@ fn exec_result(text: &str) -> (String, bool) {
 }
 
 /// Directives Adage delivered (hook context, or its finish-line continuation prompt).
-fn note(text: &str, steered: &mut bool, directed: &mut BTreeSet<String>) {
-    if text.contains("<adage-signal ") {
-        *steered = true;
-        for c in ROUTE_ATTR.captures_iter(text) {
-            directed.insert(c[1].to_string());
-        }
-    }
-    if text.contains("Adage finish-line check:") {
-        *steered = true;
-        directed.insert("finish-line-stop".to_string());
-    }
+fn note(text: &str, signals: &mut Signals) {
+    signals.note(text);
 }
 
 /// Parse one rollout. `None` for sub-agent threads and sessions without a usable prompt.
@@ -242,8 +232,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
     // Prompts the person typed: counted from `user_message` events when present, else from user
     // messages (the same precedence as the first prompt).
     let (mut event_prompts, mut item_prompts) = (0u32, 0u32);
-    let mut steered = false;
-    let mut directed: BTreeSet<String> = BTreeSet::new();
+    let mut signals = Signals::default();
     let mut calls: Vec<(String, Recorded)> = Vec::new();
     let mut outputs: HashMap<String, String> = HashMap::new();
     let mut turns = 0u32;
@@ -262,7 +251,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
             (Some("event_msg"), Some("user_message")) => {
                 let t = s(p, &["message"]).unwrap_or("");
                 in_calls = false;
-                note(t, &mut steered, &mut directed);
+                note(t, &mut signals);
                 if !t.trim().is_empty() && !own_text(t) {
                     event_prompts += 1;
                     if event_prompt.is_none() {
@@ -290,7 +279,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
                         match s(p, &["role"]) {
                             Some("user") => {
                                 in_calls = false;
-                                note(&t, &mut steered, &mut directed);
+                                note(&t, &mut signals);
                                 if !t.trim().is_empty() && !own_text(&t) && !contextual(&t) {
                                     item_prompts += 1;
                                     if item_prompt.is_none() {
@@ -299,7 +288,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
                                 }
                             }
                             // Hook `additionalContext` is recorded as a developer message.
-                            Some("developer") => note(&t, &mut steered, &mut directed),
+                            Some("developer") => note(&t, &mut signals),
                             _ => in_calls = false,
                         }
                     }
@@ -372,8 +361,9 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
         day,
         prompt,
         steps,
-        steered,
-        directed,
+        steered: signals.steered,
+        directed: signals.directed,
+        steered_kinds: signals.kinds,
         outcome: None,
         harness: "codex".into(),
         prompts,

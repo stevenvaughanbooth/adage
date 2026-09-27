@@ -43,6 +43,24 @@ pub fn assign_arm(session: &str, holdout_share: f64) -> Arm {
     }
 }
 
+/// The arm a session gets, and its **propensity**: the probability that assignment gave it that
+/// arm, recorded in every spool record for inverse-propensity weighting later (Design §11, §14.1).
+/// With the holdout share `h` (clamped to 0..=1): `h` for the holdout arm, `1 - h` for the
+/// treated arm. An arm forced with `ADAGE_ARM` (`forced` = `treated` or `holdout`) was not drawn:
+/// its propensity is 1. Any other `forced` value is ignored.
+pub fn assign(session: &str, holdout_share: f64, forced: Option<&str>) -> (Arm, f64) {
+    match forced {
+        Some("holdout") => return (Arm::Holdout, 1.0),
+        Some("treated") => return (Arm::Treated, 1.0),
+        _ => {}
+    }
+    let h = if holdout_share.is_nan() { 0.0 } else { holdout_share.clamp(0.0, 1.0) };
+    match assign_arm(session, holdout_share) {
+        Arm::Holdout => (Arm::Holdout, h),
+        Arm::Treated => (Arm::Treated, 1.0 - h),
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Call {
     pub tool: String,
@@ -112,6 +130,10 @@ pub struct SessionState {
     /// The intent family the latest prompt matched, carried through the session (Design §8.2.1).
     #[serde(default)]
     pub intent: Option<String>,
+    /// The probability of `arm` at assignment ([`assign`]); `None` in a state written before it
+    /// was recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub propensity: Option<f64>,
 }
 
 /// At most this many stop-hook requests per session, across all obligations.
@@ -136,6 +158,11 @@ pub struct Directive {
     pub version: String,
     pub aspect: Aspect,
     pub text: String,
+    /// The route's kind ([`adage_tracks::route_kind`]), rendered into the directive's wrapper so
+    /// that learning can tell which miners a session's directives could influence. Empty in
+    /// records written before it existed.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub kind: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -217,7 +244,8 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             // 1. Prompt-triggered routes, strongest aspect first.
             let mut prompt_routes: Vec<&&IndexedRoute> =
                 routes.iter().filter(|r| matches!(r.route.trigger, Trigger::Prompt { .. })).collect();
-            prompt_routes.sort_by_key(|r| (r.route.aspect, -(r.route.evidence.support as i64)));
+            prompt_routes
+                .sort_by_key(|r| (adage_tracks::delivered_aspect(&r.route), -(r.route.evidence.support as i64)));
             for ir in prompt_routes {
                 if !emit_ok(st, &out, &ir.route.id) {
                     continue;
@@ -431,8 +459,10 @@ fn directive(ir: &IndexedRoute, text: String) -> Directive {
         route: ir.route.id.clone(),
         track: ir.track.clone(),
         version: ir.version.clone(),
-        aspect: ir.route.aspect,
+        // A route on probation or stale is never delivered green, whatever its track says.
+        aspect: adage_tracks::delivered_aspect(&ir.route),
         text,
+        kind: adage_tracks::route_kind(&ir.route).to_string(),
     }
 }
 
