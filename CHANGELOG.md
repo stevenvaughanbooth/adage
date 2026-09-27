@@ -27,6 +27,42 @@ version as the GitHub Release notes.
   pinned against a repository). Nothing uses packs yet: `adage share` and `adage add` move to them
   in C1, and nothing executes. A debugging binary, `adage-pack inspect|verify|digest|upgrade`, ships
   with the crate. See docs/packs.md.
+- **`adage-exec`: the execution core (Track C, milestone C2)** (new crate and binary, optional;
+  the `adage` binary still never runs a repository or agent command, now checked by a test that
+  scans the adage crates for `Command::new`). `adage-exec run --repo <dir> --argv '<json>'
+  --effect observe --level e1 --output typed --fields '<json>' [--dry-run]` runs a step only when
+  every gate passes, in order: slots bound to values their strict contracts accept (no shell,
+  ever); the declared effect not below the local classification (scripts and interpreters are
+  environment); policy; an approval equal on every field of the key (repository, route exec
+  digest, argv templates, scripts and hashes, effect, level, output mode, sandbox profile id,
+  signer), or automatic approval of the inert-observe class, off by default until gate G3; and an
+  enforced sandbox, else nothing runs. Linux: Landlock (ABI ≥ 1, best effort to 9) plus a seccomp
+  filter applied before `execve`, user and network namespaces where available, and root dropped
+  to nobody; bubblewrap as the fallback; macOS: `sandbox-exec` with a generated SBPL profile;
+  Windows: unavailable. The environment is built from nothing (sanitised `PATH`, scratch `HOME`
+  and `TMPDIR`, fixed locale and git variables; never agent sockets, tokens or cloud
+  credentials); git runs with `-c` hardening, and a repository whose config sets `core.fsmonitor`,
+  `sshCommand`, `filter.*`, textconv, aliases or includes loses git's inert status. Limits per
+  level (E1: 1.5 s, 64 KiB captured, 4 KiB returned; E2: 10 s, 256 KiB, 16 KiB), `RLIMIT_AS`
+  2 GiB, `RLIMIT_NPROC` 256, `RLIMIT_FSIZE` 64 MiB, and the process group killed and reaped.
+  Typed output keeps only declared fields that pass their types (`repo-path` inside the root,
+  `repo-path-list`, `git-rev`, `int`, `bool`, `enum`, `pattern`), re-serialised by Adage; raw
+  output (separately approved, policy-gated) is stripped, defanged and scanned for secrets,
+  canaries and instruction-shaped text; any failure withholds the whole block. Output reaches the
+  agent only in the fixed `<adage-data>` template. `adage-exec approve`/`revoke` refuse inside an
+  agent session and need a terminal; approvals live in `$ADAGE_HOME/approvals.json` (0600, atomic)
+  and lapse with a field diff when the route changes. Policy: `$ADAGE_HOME/policy.toml` plus a
+  managed file whose denies win and whose `require_sandbox` the personal file cannot lower.
+  `adage-exec doctor` reports the sandbox (Landlock ABI, namespaces, bwrap, sandbox-exec). The
+  L0-sec escape suite (`crates/adage-exec/tests/escape/`) runs every payload under each available
+  backend: 0 escapes. See docs/execution.md.
+- **`commands.toml`: an `inert` field** (default false), true only for `cat`, `head`, `tail`,
+  `wc`, `ls`, `rg`, `grep`, `jq` and the `git` subcommands `status`, `log`, `diff`, `show` and
+  `rev-parse`: programs whose behaviour repository files cannot turn into running code. It gates
+  automatic approval in `adage-exec` and is pinned by a test.
+- **`adage_eval::safety::check_data_block`**: the safety oracle for execution data blocks (the
+  fixed template, route, byte count, no tags or control characters in the payload, declared and
+  valid typed fields or no free text, no instruction-shaped raw text, no canaries).
 - **`adage-train`: skill → reflex training** (new crate and binary, optional; the `adage` binary
   still never executes anything). `adage-train plan --from <SKILL.md|CONTRIBUTING.md|Makefile|
   package.json|workflow.yml|runbook.md>` extracts typed claims deterministically (verify,
