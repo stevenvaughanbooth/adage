@@ -27,6 +27,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
+sys.path.insert(0, str(HERE))
+from report import redact_home  # noqa: E402 - demo/report.py
 SANDBOX = HERE / "sandbox"
 ROOT = Path(os.environ.get("DEMO_ROOT", "/tmp/adage-demo"))
 ADAGE_HOME = ROOT / "adage-home"
@@ -63,8 +65,10 @@ STATE = None
 
 
 def save_state():
+    # The home directory is written as `~` (agents' commands sometimes name paths under it), so
+    # the state can be shared or committed as it is.
     tmp = ROOT / "state.json.tmp"
-    tmp.write_text(json.dumps(STATE))
+    tmp.write_text(json.dumps(redact_home(STATE)))
     tmp.replace(ROOT / "state.json")
 
 
