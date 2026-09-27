@@ -467,16 +467,17 @@ file's (`--baseline`, else `evals/baselines/l0-<suite>.jsonl` when present), els
 
 What it says:
 
-- **Only 19 of 65 settings are feasible, and the guardrail that fails is always the fast path.**
-  All 19 have `min_support` 2 or 3; all 46 with `min_support` ≥ 4 fail. They learn no dead end on
-  the adversarial set (and, at 8, on a demo fold), and then the no-match fast path skips the first prompt without counting it, so
-  `prompts` stays 0 where the full decision sets it to 1 (`DIFFERS … UserPromptSubmit: different
-  state for later decisions`). With a fixed index no decision differs; it would if a dead end were
-  learned mid-session (the fast path would announce it at the next prompt, the full path never).
-  The same happens today with `adage eval evals/datasets/adversarial --thresholds default`. Until
-  `adage_runtime::fast` and the replay agree on this, higher support bars cannot be adopted, and they
-  are where the best objectives are (J up to 0.92: fewer false directives).
-- **The feasible gains trade conventions for fewer false directives.** The best settings raise
+- **Fixed: the fast path now decides every session's first prompt in full.** The first sweep found
+  only 19 of 65 settings feasible: with `min_support` ≥ 4 no dead end is learned on the adversarial
+  set, the no-match fast path then skipped the first prompt without counting it, and `prompts`
+  stayed 0 where the full decision set it to 1. With a fixed index no decision differed, but a dead
+  end learned mid-session would have been announced at the next prompt by one path and never by the
+  other. `adage_runtime::fast` now never skips a session's first prompt (one full decision per
+  session). Re-run (`sobol:64 --seed 0`): **65 of 65 feasible**. The best settings raise
+  `min_support` to 5–8 and `dead_end_consistency` to 18–19 of 20: J 0.92 (+0.245), false
+  directives per session 0.47 → 0.27–0.33, temporal final J 0.83–0.99 (baseline 0.61), at the cost
+  of route recall (F1 0.86–0.96). Candidates for a live confirmation, not yet a default change.
+- **Before the fix, the feasible gains traded conventions for fewer false directives.** The best settings raise
   `yellow_rate` to 0.65–0.7, which drops a yellow route on some folds: false directives fall 18%,
   but recall falls from 0.94 to 0.82 and route F1 below 1, and the temporal final check does not
   move (0.6146) for the best one. With 6 folds of 12–21 sessions this is not evidence to change a

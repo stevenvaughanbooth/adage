@@ -15,7 +15,7 @@
 //! | Event | Skipped when |
 //! | --- | --- |
 //! | session start, session end | always: nothing decides on them |
-//! | prompt | no intent routes; no prompt route's span kind in the text; no dead end still to announce (`prompts` > 0) |
+//! | prompt | no intent routes; no prompt route's span kind in the text; not the session's first prompt (`prompts` > 0) |
 //! | batch | no pending judgement and no obligation in the state; no call might match ([`Triggers::call_might_match`]) |
 //! | failure | no call might match (it touches no pending judgement or obligation) |
 //! | stop | no obligation both unmet and not yet requested |
@@ -41,7 +41,10 @@ pub fn skip(t: &Triggers, ev: &Event, cwd: &str, state: impl FnOnce() -> Option<
             if !t.prompt_spans.is_empty() && spans::extract(text).iter().any(|s| t.prompt_spans.contains(&s.kind)) {
                 return false;
             }
-            !t.first_prompt || state().is_some_and(|st| st.prompts > 0)
+            // The first prompt of a session is always decided in full, even with no dead end to
+            // announce: it moves `prompts` off 0, which a later decision reads if a dead end is
+            // learned mid-session. One full decision per session costs little.
+            state().is_some_and(|st| st.prompts > 0)
         }
         Event::Batch { calls } => {
             if t.calls_matter() && calls.iter().any(|c| t.call_might_match(&haystack(cwd, &c.tool, &c.input))) {
@@ -110,7 +113,11 @@ mod tests {
         let never = || -> Option<SessionState> { panic!("the state is not needed") };
         let t = Triggers { prompt_spans: vec![SpanKind::Ticket], ..Default::default() };
         assert!(!skip(&t, &Event::Prompt { text: "Pick up W-2042".into() }, "/r", never));
-        assert!(skip(&t, &Event::Prompt { text: "Tidy the README".into() }, "/r", never));
+        let prompted = || Some(SessionState { prompts: 1, ..Default::default() });
+        assert!(skip(&t, &Event::Prompt { text: "Tidy the README".into() }, "/r", prompted));
+        // The first prompt is always decided in full, dead end or not: it moves `prompts` off 0.
+        let fresh = || Some(SessionState::default());
+        assert!(!skip(&t, &Event::Prompt { text: "Tidy the README".into() }, "/r", fresh));
         let t = Triggers { intent: true, ..Default::default() };
         assert!(!skip(&t, &Event::Prompt { text: "anything".into() }, "/r", never));
         let t = Triggers { words: vec!["pytest".into()], ..Default::default() };
