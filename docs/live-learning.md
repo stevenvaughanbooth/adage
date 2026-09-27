@@ -125,7 +125,7 @@ A learn, one line per repository learned:
 | `repo` | Repository key; `null` only for a manual run that found no usable session |
 | `sessions_read` | Transcripts read (an automatic run counts only its repository's) |
 | `sessions_used` | This repository's sessions with steps |
-| `changes[].change` | `new` (in service, was not), `draft` (waits for approval in `adage review`), `retired`, `aspect`, `evidence` (sessions of support or opportunity changed), `proposal` (a pinned route has a proposed change) |
+| `changes[].change` | `new` (in service, was not), `draft` (waits for approval in `adage review`), `retired`, `stale` (kept on its last evidence because it steered its own evidence away; yellow at most), `aspect`, `evidence` (sessions of support or opportunity changed), `proposal` (a pinned route has a proposed change) |
 | `changes[].from`, `to` | Aspects (`green`, `yellow`, `red`) or `null`: `new`/`draft` have only `to`, `retired` only `from`, `aspect` both |
 | `changes[].summary` | Fixed template text |
 | `version` … `repos` | The fields every line had before live learning, unchanged |
@@ -150,9 +150,12 @@ proves it; an offset past the end (the spool was replaced) starts again from 0. 
 new files in the directory. Each record:
 
 ```text
-{ ts, event, kind, arm, repo, generation, harness?, decision: {
+{ ts, event, kind, arm, propensity, repo, generation, harness?, decision: {
     directives, would_have, continue_reason?, would_continue?, judgements, observed } }
 ```
 
-`observed` holds canonical template keys, not raw commands, and no prompt text is recorded. Events
+`propensity` is the probability of `arm` at assignment: the holdout share for `holdout`, one minus
+it for `treated`, and 1 when `ADAGE_ARM` forced the arm (absent in records written before it). Each
+directive carries its route's `kind` (`work-items`, `finish-line`, `dead-ends`, `intents` or
+`other`). `observed` holds canonical template keys, not raw commands, and no prompt text is recorded. Events
 the no-match fast path skips leave no record.

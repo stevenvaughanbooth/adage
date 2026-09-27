@@ -490,3 +490,121 @@ fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
     let quiet = decide(&ctx, &mut rebuilt, &Event::Stop { stop_hook_active: false });
     assert!(live.continue_reason.is_some() && quiet.continue_reason.is_none());
 }
+
+#[test]
+fn propensity_is_the_probability_of_the_arm_given() {
+    let (mut holdout, mut treated) = (0, 0);
+    for i in 0..400 {
+        let sid = format!("s{i}");
+        let (arm, p) = assign(&sid, 0.1, None);
+        assert_eq!(arm, assign_arm(&sid, 0.1), "the same draw as before");
+        match arm {
+            Arm::Holdout => {
+                holdout += 1;
+                assert_eq!(p, 0.1);
+            }
+            Arm::Treated => {
+                treated += 1;
+                assert!((p - 0.9).abs() < 1e-12);
+            }
+        }
+    }
+    assert!(holdout > 10 && treated > 300, "{holdout} held out of 400");
+    // Forced arms were not drawn; other override values are ignored.
+    assert_eq!(assign("s1", 0.1, Some("holdout")), (Arm::Holdout, 1.0));
+    assert_eq!(assign("s1", 0.1, Some("treated")), (Arm::Treated, 1.0));
+    assert_eq!(assign("s1", 0.1, Some("bogus")), assign("s1", 0.1, None));
+    // Shadow mode (a share of 1 or more) holds every session out, certainly.
+    assert_eq!(assign("s1", 1.5, None), (Arm::Holdout, 1.0));
+    assert_eq!(assign("s1", 0.0, None), (Arm::Treated, 1.0));
+    // A state rebuilt from the spool keeps it.
+    let recs = vec![json!({ "kind": "prompt", "arm": "holdout", "propensity": 0.1, "decision": Decision::default() })];
+    let st = rebuild::rebuild(&recs, &Index::default(), "acme", &CommandTable::load()).unwrap();
+    assert_eq!((st.arm, st.propensity), (Some(Arm::Holdout), Some(0.1)));
+    // Old spools and states, without it, still read.
+    let old = vec![json!({ "kind": "prompt", "arm": "treated", "decision": Decision::default() })];
+    assert_eq!(rebuild::rebuild(&old, &Index::default(), "acme", &CommandTable::load()).unwrap().propensity, None);
+    let st: SessionState =
+        serde_json::from_value(json!({ "arm": "treated", "repo": "acme", "prompts": 1, "batches": 0,
+        "emitted": [], "pending": [], "obligations": [], "history": [], "first_edit_at_batch": null }))
+        .unwrap();
+    assert_eq!(st.propensity, None);
+}
+
+#[test]
+fn finish_line_claims_ci_only_on_evidence() {
+    let mut r = route(
+        "gen",
+        Trigger::AfterEdit { paths: "schema/*.json".into() },
+        Step::Run { command: "make gen".into() },
+        vec![],
+        Effect::Regenerate,
+        Aspect::Green,
+    );
+    r.exit = vec![Exit::ExploratoryChange];
+    // No session is known to have failed for skipping it: say what agents do, nothing more.
+    let t = render::route_text(&r, &[]).unwrap();
+    assert_eq!(
+        t,
+        "In this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\n\
+         Agents in this repository run it after such changes. Ignore this if this is an exploratory or draft change."
+    );
+    assert!(!t.contains("CI fails"));
+    // Sessions that skipped it failed: the claim is earned.
+    r.evidence.deviations_failed = 2;
+    let t = render::route_text(&r, &[]).unwrap();
+    assert_eq!(
+        t,
+        "In this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\n\
+         CI fails if this is skipped. Ignore this if this is an exploratory or draft change."
+    );
+}
+
+#[test]
+fn directives_carry_their_kind_and_stale_routes_are_never_green() {
+    let (dir, index, table) = fixture();
+    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let mut st = SessionState::default();
+    let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042".into() });
+    let kinds: Vec<(&str, &str)> = d.directives.iter().map(|x| (x.route.as_str(), x.kind.as_str())).collect();
+    assert_eq!(kinds, vec![("lookup", "work-items"), ("dead-unittest", "dead-ends")]);
+    let wrapped = render::wrap_directive(&d.directives[0]);
+    assert!(
+        wrapped.starts_with(
+            "<adage-signal track=\"acme/t@0.1.0\" route=\"lookup\" aspect=\"green\" kind=\"work-items\">\n"
+        ),
+        "{wrapped}"
+    );
+    // Without a kind (a preview, an old record), the wrapper is as it always was.
+    assert!(render::wrap("acme/t", "0.1.0", "lookup", Aspect::Green, "x")
+        .starts_with("<adage-signal track=\"acme/t@0.1.0\" route=\"lookup\" aspect=\"green\">\n"));
+    let old: Directive = serde_json::from_value(
+        json!({ "route": "lookup", "track": "acme/t", "version": "0.1.0", "aspect": "green", "text": "x" }),
+    )
+    .unwrap();
+    assert_eq!(old.kind, "");
+
+    // A stale green route (and one on probation) is delivered yellow; red stays red.
+    for state in [RouteState::Stale, RouteState::Probation] {
+        let t = Track {
+            manifest: Manifest {
+                track: TrackInfo {
+                    name: "acme/t".into(),
+                    version: "0.1.0".into(),
+                    description: String::new(),
+                    provenance: "desire-path".into(),
+                },
+                scope: Scope { repo: "acme".into() },
+                gauge: Gauge::default(),
+            },
+            routes: index.routes.iter().map(|r| Route { state, ..r.route.clone() }).collect(),
+        };
+        let index = Index::compile(&[t]);
+        assert_eq!(index.routes.len(), 4, "{state:?} routes are compiled");
+        let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+        let mut st = SessionState::default();
+        let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042".into() });
+        let aspects: Vec<Aspect> = d.directives.iter().map(|x| x.aspect).collect();
+        assert_eq!(aspects, vec![Aspect::Yellow, Aspect::Red], "{state:?}");
+    }
+}

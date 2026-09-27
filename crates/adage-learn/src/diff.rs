@@ -8,6 +8,7 @@
 //! | `new` | A route in service that was not before (new, or back from retirement) | `null` → aspect |
 //! | `draft` | A route that now waits for approval in `adage review` (Design O11) | `null` → aspect |
 //! | `retired` | A route in service before that is gone or retired now | aspect → `null` |
+//! | `stale` | A route in service no longer found only because it steered its own evidence away; kept on its last evidence, yellow at most (E1) | aspect → aspect |
 //! | `aspect` | A route whose aspect changed (e.g. yellow → green) | aspect → aspect |
 //! | `evidence` | A route whose sessions of support or opportunity changed | `null` → `null` |
 //! | `proposal` | A pinned route with a newly proposed change in `adage review` | `null` → `null` |
@@ -27,6 +28,7 @@ pub enum ChangeKind {
     New,
     Draft,
     Retired,
+    Stale,
     Aspect,
     Evidence,
     Proposal,
@@ -71,7 +73,7 @@ fn read(tracks_root: &Path, dir: &Path) -> BTreeMap<String, Snapshot> {
 }
 
 fn in_service(r: &Route) -> bool {
-    matches!(r.state, RouteState::Active | RouteState::Probation)
+    r.state.is_live()
 }
 
 fn aspect(a: Aspect) -> &'static str {
@@ -145,6 +147,18 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
                     Some(o.aspect),
                     None,
                     format!("{} {k} route retired", aspect(o.aspect)),
+                )),
+                (Some(o), Some(n)) if n.state == RouteState::Stale && o.state != RouteState::Stale => out.push(change(
+                    id,
+                    ChangeKind::Stale,
+                    Some(o.aspect),
+                    Some(n.aspect),
+                    format!(
+                        "{} {k} route stale: kept on its last evidence ({}), {} of its sessions were steered by it",
+                        aspect(n.aspect),
+                        sessions(n),
+                        n.evidence.exposed
+                    ),
                 )),
                 (Some(o), Some(n)) if o.aspect != n.aspect => out.push(change(
                     id,
@@ -312,5 +326,20 @@ mod tests {
         let back = diff(&after, &before);
         assert!(back.iter().any(|c| c.route == "finish-line-c" && c.change == ChangeKind::New));
         assert!(!back.iter().any(|c| c.route == "lookup-x" && c.change == ChangeKind::Draft));
+
+        // Going stale is reported once, as such; staying stale is not news.
+        let mut stale = route("finish-line-a", Yellow, Stale, 8);
+        stale.evidence.exposed = 11;
+        let now = snap(&[("acme/finish-line", vec![stale])]);
+        let d = diff(&snap(&[("acme/finish-line", vec![route("finish-line-a", Green, Active, 8)])]), &now);
+        assert_eq!(
+            d.iter().map(|c| (c.change, c.from, c.to)).collect::<Vec<_>>(),
+            vec![(ChangeKind::Stale, Some(Green), Some(Yellow))]
+        );
+        assert_eq!(
+            d[0].summary,
+            "yellow finish line route stale: kept on its last evidence (8 of 8 sessions), 11 of its sessions were steered by it"
+        );
+        assert!(diff(&now, &now).is_empty());
     }
 }

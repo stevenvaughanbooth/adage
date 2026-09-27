@@ -7,6 +7,7 @@ pub mod import;
 pub mod intent;
 pub mod mine;
 pub mod opencode;
+pub mod stale;
 
 use adage_core::CommandTable;
 use adage_intent::model::StaticModel;
@@ -235,7 +236,9 @@ pub fn plan(
             cfg.existing.extend(t.routes.iter().map(|r| r.id.clone()));
         }
         let cfg = &cfg;
-        // Each miner sees only sessions not steered by its own kind of route.
+        // Each miner sees only sessions not steered on its own kind: those that received a
+        // directive which could have influenced it (`import::steers`; a directive of unknown kind
+        // steers every miner).
         let unsteered = |kind: &str| -> Vec<&Session> { ss.iter().copied().filter(|s| !s.steered_by(kind)).collect() };
         let ws = unsteered("work-items");
         let mut work = mine::prompt_routes(&ws, cfg);
@@ -250,25 +253,26 @@ pub fn plan(
         let fs = unsteered("finish-line");
         let fs: Vec<&Session> = fs.into_iter().filter(|s| !s.directed.contains("finish-line-stop")).collect();
         let ds = unsteered("dead-ends");
-        let mut groups: Vec<(&str, &str, Vec<Route>)> = vec![
-            ("work-items", "Context gathering for prompts that name a work item", work),
-            ("finish-line", "Steps this repository requires after certain edits", mine::obligation_routes(&fs, cfg)),
-            (
-                "dead-ends",
-                "Commands that fail in this repository, and what works instead",
-                mine::dead_end_routes(&ds, cfg),
-            ),
+        let fl = mine::obligation_routes(&fs, cfg);
+        let dl = mine::dead_end_routes(&ds, cfg);
+        // (kind, description, mined routes, the sessions that miner saw)
+        let mut groups: Vec<(&str, &str, Vec<Route>, Vec<&Session>)> = vec![
+            ("work-items", "Context gathering for prompts that name a work item", work, ws),
+            ("finish-line", "Steps this repository requires after certain edits", fl, fs),
+            ("dead-ends", "Commands that fail in this repository, and what works instead", dl, ds),
         ];
         if let Some(m) = &model {
-            let mined = intent::intent_routes(&unsteered("intents"), m, cfg);
+            let is = unsteered("intents");
+            let mined = intent::intent_routes(&is, m, cfg);
             rr.intent_families = mined.families;
-            groups.push(("intents", "Commands that requests like these lead to in this repository", mined.routes));
+            groups.push(("intents", "Commands that requests like these lead to in this repository", mined.routes, is));
         }
+        let mut emb = stale::Embeddings::new(model.as_ref());
         // The harnesses these sessions ran in (Claude Code transcripts, OpenCode exports).
         let harness: Vec<String> = ss.iter().map(|s| s.harness.clone()).collect::<BTreeSet<_>>().into_iter().collect();
         let models: Vec<String> =
             ss.iter().filter_map(|s| s.model.clone()).collect::<BTreeSet<_>>().into_iter().collect();
-        for (suffix, description, routes) in groups {
+        for (suffix, description, routes, seen) in groups {
             let name = format!("{}/{suffix}", slug(repo));
             let dir = tracks_root.join(slug(repo)).join(suffix);
             let prev = io::read(&dir).ok();
@@ -278,6 +282,10 @@ pub fn plan(
             // Human-edited routes are preserved; the miner never overwrites them. Where the miner's
             // own version differs materially, it is proposed in `adage review` instead.
             let mut routes = routes;
+            // The sessions each route could not learn from, because they were steered on its kind.
+            for r in routes.iter_mut() {
+                r.evidence.exposed = stale::exposure(r, suffix, ss, &mut emb).exposed;
+            }
             let mut pinned: Vec<(Route, Option<Route>)> = Vec::new();
             if let Some(p) = &prev {
                 for r in p.routes.iter().filter(|r| r.authored) {
@@ -303,7 +311,12 @@ pub fn plan(
                 Proposals::default()
             });
             let proposals = adage_tracks::proposals::propose(&prev_proposals, &pinned, &today);
-            let mut routes = adage_tracks::review::reconcile(prev.as_ref(), &reviews, routes);
+            let routes = adage_tracks::review::reconcile(prev.as_ref(), &reviews, routes);
+            // A route in service that was not found again only because it steered the sessions
+            // that would confirm it is kept, stale, on its last evidence (E1; `stale`).
+            let mut routes = adage_tracks::review::keep_stale(prev.as_ref(), &reviews, routes, &today, |p| {
+                stale::verdict(p, suffix, ss, &seen, cfg, &mut emb)
+            });
             routes.sort_by(|a, b| a.id.cmp(&b.id));
             // Mined routes are built from untrusted session content. One that fails validation
             // (a quoted argument, an unrenderable signature) is dropped on its own; it must not

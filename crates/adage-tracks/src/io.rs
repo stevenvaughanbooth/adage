@@ -265,6 +265,16 @@ pub fn validate(t: &Track) -> Result<()> {
             }
             _ => {}
         }
+        // `stale_since` is shown in `adage review` and `adage status`: a plain date or nothing.
+        // (Any state may carry `exposed`; a stale route is delivered at yellow at most whatever
+        // its stored aspect, so a promote decision on one is not refused here.)
+        if let Some(d) = &r.evidence.stale_since {
+            let date = d.len() == 10
+                && d.bytes().enumerate().all(|(i, c)| if i == 4 || i == 7 { c == b'-' } else { c.is_ascii_digit() });
+            if !date {
+                bail!("{}: stale_since {:?} is not a YYYY-MM-DD date", ctx(), d);
+            }
+        }
     }
     let intents = t.routes.iter().filter(|r| matches!(r.trigger, Trigger::Intent { .. })).count();
     if intents > MAX_INTENT_ROUTES {

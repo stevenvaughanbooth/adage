@@ -301,7 +301,7 @@ decision compile all installed tracks into **one file**, `$ADAGE_HOME/index.json
   the root's path>`. Clones and copies share routes; unrelated repositories with one name do
   not. A bare directory-name key (from before) is still honoured until a repository of that name
   is re-keyed (`repo::lookup_key`).
-- **Live routes only.** `active` and `probation` routes are compiled. When a learned route and an
+- **Live routes only.** `active`, `probation` and `stale` routes are compiled (the last two never delivered green). When a learned route and an
   imported one share an id, the learned one wins. A learned route a person retired still
   suppresses an import of the same id.
 
@@ -359,7 +359,7 @@ flowchart LR
 | --- | --- |
 | **Import** | Through the parse cache (below). Found by content (`read_session`). Claude Code transcripts from `~/.claude/projects` by default (sidechain records skipped). `opencode export` files via `--transcripts` (sub-agent sessions skipped). Codex rollouts via `--codex-sessions` (sub-agent threads and compressed `.zst` rollouts skipped). `--cwd-prefix` filters by recorded working directory |
 | **Normalise** | tree-sitter-bash plus the command table ([§4.7.1](#471-the-normaliser)); native tools mapped per harness (`crates/adage-core/src/tools.rs`) |
-| **Training hygiene** | A session steered by Adage is recognised from the directives in its transcript, and each miner excludes only sessions steered by its own kind of route (`Session::steered_by`). Draft 2's truncation with inverse-propensity weights was not built |
+| **Training hygiene** | A session steered by Adage is recognised from the directives in its transcript, and each miner excludes the sessions whose directives could influence it (`Session::steered_by`, `import::steers`): its own kind, the intent miner also for dead ends, and every miner for a directive of kind `other` or unknown. The kind is read from the wrapper (`kind="…"`), or from the route id in old transcripts. A route learning no longer finds because it steered its own evidence away is kept `stale` ([§4.6](#46-observations-and-evidence-a5); `adage_learn::stale`). Draft 2's truncation with inverse-propensity weights was not built; propensities are now logged for it |
 | **Miners** | Four kinds per repository (`crates/adage-learn/src/mine.rs`, `intent.rs`), each a track named `<repo>/<kind>` |
 | **Reconcile** | Routes a person pinned (`authored`) are kept, and a materially different mined version becomes a proposal. Decisions in `review.yaml` are re-applied |
 | **Validate** | Every mined route is validated alone. One that fails is dropped with a message, rather than failing the repository (eval bug 1) |
@@ -653,7 +653,8 @@ Adage are **not built** [O12, D§10.7; P§8 M5].
   finish-line obligation is **met** when its step runs. In holdout sessions, the same judgements
   measure whether the agent found the path unaided (`adage graph`).
 - **Not built:** hashing on the root session lineage (so `/clear` and forks keep their arm), an
-  install salt, per-route knockouts, propensity logging, and the static-guidance arm (F7, F14).
+  install salt, per-route knockouts, and the static-guidance arm (F7, F14). Every spool record
+  carries `propensity`, the probability of its arm at assignment (1 when `ADAGE_ARM` forced it).
 
 ### 4.15 Version detection (A13)
 
@@ -698,15 +699,15 @@ The records as built, independent of file format:
 ```text
 Route        id, summary, trigger, step, slots[], effect, aspect, state, exit[], evidence, authored
 Evidence     opportunities, support, days, successes, deviations_failed, rate, lower_bound,
-             median_position, turns_saved, provenance, models[]
+             median_position, turns_saved, provenance, models[], exposed, stale_since?
 Track        manifest{ name, version, description, provenance, scope.repo, gauge{harness[], models[]} },
              routes[]
 Index        generation, routes[{ repo, track, version, route }]
 SessionState arm, repo, prompts, batches, emitted[], pending[], obligations[], history[32],
              first_edit_at_batch, stop_requests, intent
-SpoolRecord  ts, event, arm, generation, harness?, decision
+SpoolRecord  ts, event, kind, arm, propensity, repo, generation, harness?, decision
 Decision     directives[], would_have[], continue_reason?, would_continue?, judgements[], observed[]
-Directive    route, track, version, aspect, text
+Directive    route, track, version, aspect, text, kind
 Judgement    followed | derailed | obligation_met, route
 Review       decision, by, on, basis (shape hash, aspect, evidence)
 ```
@@ -1033,7 +1034,7 @@ found that `graph` keyed sessions by an id prefix that OpenCode and Codex ids sh
 | A9 | Harness layer | **Kept** | One `Event`/`Output` pair; one adapter per harness |
 | A10 | Proving ground | **Partial** | Offline replay eval and a live A/B runner script; no product |
 | A11 | Team mode through git | **Partial** | Direct signed sharing only; depots not built |
-| A12 | Experiments | **Simplified** | Session-id hashed holdout, exposure logging; no knockouts or propensities |
+| A12 | Experiments | **Simplified** | Session-id hashed holdout, exposure and propensity logging; no knockouts |
 | A13 | Versioned capability tables | **Not built** | Unknown payloads fail open |
 | A14 | Imports live apart | **New** | `tracks/@imported/`, never written by learn; learned wins on id collisions [P§3a] |
 | A15 | Review decisions travel with the track | **New** | `review.yaml` per track, judged against a recorded basis; recipients' own decisions kept [P§3a] |

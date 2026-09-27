@@ -10,6 +10,7 @@ use adage_core::keys::{self, template_key};
 use adage_core::tools::normalize_tool;
 use adage_core::{repo, CommandTable, Normalized};
 use adage_runtime::Call;
+use adage_tracks::{KIND_DEAD_ENDS, KIND_FINISH_LINE, KIND_INTENTS, KIND_OTHER, KIND_WORK_ITEMS, MINER_KINDS};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -42,6 +43,10 @@ pub struct Session {
     /// Adage routes whose directives this session received. Evidence for a route kind is never
     /// taken from a session steered by that kind (Design §11: never learn from your own influence).
     pub directed: BTreeSet<String>,
+    /// The miner kinds those directives could have influenced ([`steers`]). Each miner ignores
+    /// the sessions steered on its kind ([`Session::steered_by`]).
+    #[serde(default)]
+    pub steered_kinds: BTreeSet<String>,
     pub outcome: Option<bool>,
     /// The harness the session ran in, as recorded in a track's `gauge.harness`: `claude-code`
     /// for Claude Code transcripts, `opencode` for `opencode export` files.
@@ -54,28 +59,113 @@ pub struct Session {
 pub const CLAUDE_CODE: &str = "claude-code";
 pub const OPENCODE: &str = "opencode";
 
-/// The kind of a route, from its id: evidence exclusion works per kind.
+/// The kind of a route, from its id alone: the fallback for directives rendered before the
+/// wrapper carried a `kind` attribute. An id no miner produces is `other`.
 pub fn route_kind(id: &str) -> &'static str {
     if id.starts_with("lookup") || id.starts_with("read-linked") {
-        "work-items"
+        KIND_WORK_ITEMS
     } else if id.starts_with("finish-line") {
-        "finish-line"
+        KIND_FINISH_LINE
     } else if id.starts_with("intent-") {
-        "intents"
+        KIND_INTENTS
     } else if id.starts_with("dead-end") {
-        "dead-ends"
+        KIND_DEAD_ENDS
     } else {
-        "other"
+        KIND_OTHER
     }
 }
+
+/// The miners a directive of route kind `kind` can influence. No miner takes evidence from a
+/// session that received a directive steering it (Design §11: never learn from your own
+/// influence).
+///
+/// | Directive kind | Miners it steers | Why |
+/// | --- | --- | --- |
+/// | `work-items` | `work-items` | The lookup and the linked-file reads it directs |
+/// | `finish-line` | `finish-line` | The step after an edit (and the stop request) |
+/// | `dead-ends` | `dead-ends`, `intents` | Announced at the first prompt, it changes which verify command the agent runs first, which is what the intent miner learns from |
+/// | `intents` | `intents` | The first command after the prompt |
+/// | `other`, unknown, or unreadable | every kind | A shape no miner produces (an import, a hand-written route) could have influenced anything |
+pub fn steers(kind: &str) -> &'static [&'static str] {
+    match kind {
+        KIND_WORK_ITEMS => &[KIND_WORK_ITEMS],
+        KIND_FINISH_LINE => &[KIND_FINISH_LINE],
+        KIND_DEAD_ENDS => &[KIND_DEAD_ENDS, KIND_INTENTS],
+        KIND_INTENTS => &[KIND_INTENTS],
+        _ => &MINER_KINDS,
+    }
+}
+
+/// One `<adage-signal ...>` opening tag, and its `route` and `kind` attributes. Both forms a
+/// transcript holds are read: plain text, and JSON-escaped (`route=\"...\"`).
+static SIGNAL_TAG: Lazy<Regex> = Lazy::new(|| Regex::new(r"<adage-signal\b([^>]*)>").unwrap());
+static ROUTE_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\broute=\\?"([A-Za-z0-9_.-]+)"#).unwrap());
+static KIND_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\bkind=\\?"([a-z-]*)"#).unwrap());
+
+/// The miner kinds one directive steers, from its wrapper's attributes: its `kind` (rendered by
+/// `adage_runtime::render::wrap_kind`); in a wrapper from before `kind`, the kind its route id
+/// implies ([`route_kind`]); with neither, every kind.
+pub fn steered_kinds(attrs: &str) -> &'static [&'static str] {
+    if let Some(k) = KIND_ATTR.captures(attrs) {
+        return steers(&k[1]);
+    }
+    match ROUTE_ATTR.captures(attrs) {
+        Some(r) => steers(route_kind(&r[1])),
+        None => &MINER_KINDS,
+    }
+}
+
+/// What a transcript shows Adage delivered: the directives' routes, and the miners they steered.
+/// Fed each piece of text the harness recorded as coming from Adage's hooks.
+#[derive(Debug, Default)]
+pub struct Signals {
+    pub steered: bool,
+    pub directed: BTreeSet<String>,
+    pub kinds: BTreeSet<String>,
+}
+
+impl Signals {
+    pub fn note(&mut self, text: &str) {
+        if text.contains("<adage-signal") {
+            self.steered = true;
+            let mut tags = 0;
+            for t in SIGNAL_TAG.captures_iter(text) {
+                tags += 1;
+                if let Some(r) = ROUTE_ATTR.captures(&t[1]) {
+                    self.directed.insert(r[1].to_string());
+                }
+                self.kinds.extend(steered_kinds(&t[1]).iter().map(|k| k.to_string()));
+            }
+            if tags == 0 {
+                // A wrapper cut short: it could have been anything.
+                self.kinds.extend(MINER_KINDS.iter().map(|k| k.to_string()));
+            }
+        }
+        if text.contains("Adage finish-line check") {
+            self.steered = true;
+            self.directed.insert(FINISH_LINE_STOP.to_string());
+            self.kinds.insert(KIND_FINISH_LINE.to_string());
+        }
+    }
+}
+
+/// The entry in [`Session::directed`] for a finish-line stop request.
+pub const FINISH_LINE_STOP: &str = "finish-line-stop";
 
 impl Session {
+    /// Whether a directive this session received could have influenced the miner of `kind`
+    /// ([`steers`]).
     pub fn steered_by(&self, kind: &str) -> bool {
-        self.directed.iter().any(|r| route_kind(r) == kind)
+        if !self.steered_kinds.is_empty() {
+            return self.steered_kinds.contains(kind);
+        }
+        // Built without kinds (a caller's own `Session`): judge by the route ids.
+        self.directed.iter().any(|r| {
+            let k = if r == FINISH_LINE_STOP { KIND_FINISH_LINE } else { route_kind(r) };
+            steers(k).contains(&kind)
+        })
     }
 }
-
-static ROUTE_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"route=\\?"([A-Za-z0-9_.-]+)"#).unwrap());
 
 impl Session {
     /// Index of the first step that edits or writes a file.
@@ -117,12 +207,11 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     let mut model: Option<String> = None;
     let mut day = String::new();
     let mut prompt: Option<String> = None;
-    let mut steered = false;
     // (turn, tool_use_id, name, input) in order
     let mut uses: Vec<(u32, String, String, Value)> = Vec::new();
     let mut results: HashMap<String, (String, bool)> = HashMap::new();
     let mut turn_of_msg: HashMap<String, u32> = HashMap::new();
-    let mut directed: BTreeSet<String> = BTreeSet::new();
+    let mut signals = Signals::default();
     let mut prompts = 0u32;
 
     for line in reader.lines() {
@@ -148,15 +237,8 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
         // Directives are delivered as hook attachments; text elsewhere (a tool printing Adage's
         // own docs, say) is not steering.
         let is_attachment = matches!(rec.get("type").and_then(|v| v.as_str()), Some("attachment") | Some("system"));
-        if is_attachment && line.contains("<adage-signal") {
-            steered = true;
-            for c in ROUTE_ATTR.captures_iter(line) {
-                directed.insert(c[1].to_string());
-            }
-        }
-        if is_attachment && line.contains("Adage finish-line check") {
-            steered = true;
-            directed.insert("finish-line-stop".to_string());
+        if is_attachment {
+            signals.note(line);
         }
         match rec.get("type").and_then(|v| v.as_str()) {
             Some("user") => {
@@ -236,8 +318,9 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
         day,
         prompt,
         steps,
-        steered,
-        directed,
+        steered: signals.steered,
+        directed: signals.directed,
+        steered_kinds: signals.kinds,
         outcome: None,
         harness: CLAUDE_CODE.into(),
         prompts,
@@ -259,4 +342,96 @@ pub fn discover(root: &Path) -> Vec<PathBuf> {
     }
     out.sort();
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn kinds(text: &str) -> (Vec<String>, Vec<String>) {
+        let mut s = Signals::default();
+        s.note(text);
+        assert!(s.steered);
+        (s.directed.into_iter().collect(), s.kinds.into_iter().collect())
+    }
+
+    fn v(xs: &[&str]) -> Vec<String> {
+        xs.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn the_wrapper_kind_decides_which_miners_a_directive_steered() {
+        // The kind attribute wins over the id: an imported lookup-shaped id with a dead-end kind.
+        let (d, k) = kinds(r#"<adage-signal track="t@1.0.0" route="lookup-x" aspect="red" kind="dead-ends">…"#);
+        assert_eq!((d, k), (v(&["lookup-x"]), v(&["dead-ends", "intents"])));
+        // JSON-escaped, as a Claude Code transcript line holds it.
+        let (_, k) = kinds(
+            r#"{"content":"<adage-signal track=\"t@1.0.0\" route=\"r\" aspect=\"green\" kind=\"finish-line\">…"}"#,
+        );
+        assert_eq!(k, v(&["finish-line"]));
+        for (kind, want) in [
+            ("work-items", v(&["work-items"])),
+            ("finish-line", v(&["finish-line"])),
+            ("intents", v(&["intents"])),
+            ("dead-ends", v(&["dead-ends", "intents"])),
+            // Other and unknown kinds steer every miner.
+            ("other", v(&["dead-ends", "finish-line", "intents", "work-items"])),
+            ("mystery", v(&["dead-ends", "finish-line", "intents", "work-items"])),
+            ("", v(&["dead-ends", "finish-line", "intents", "work-items"])),
+        ] {
+            let (_, k) = kinds(&format!(r#"<adage-signal track="t@1.0.0" route="r" aspect="yellow" kind="{kind}">"#));
+            assert_eq!(k, want, "{kind}");
+        }
+    }
+
+    #[test]
+    fn old_wrappers_fall_back_to_the_route_id_and_unknown_ids_steer_everything() {
+        let old = |id: &str| kinds(&format!(r#"<adage-signal track="t@1.0.0" route="{id}" aspect="green">…"#)).1;
+        assert_eq!(old("lookup-work-item"), v(&["work-items"]));
+        assert_eq!(old("read-linked-files"), v(&["work-items"]));
+        assert_eq!(old("finish-line-6a01b2"), v(&["finish-line"]));
+        assert_eq!(old("intent-1a2b3c"), v(&["intents"]));
+        assert_eq!(old("dead-end-d41b1e"), v(&["dead-ends", "intents"]));
+        // An imported or authored id no miner produces: excluded from every miner.
+        assert_eq!(old("gen"), v(&["dead-ends", "finish-line", "intents", "work-items"]));
+        // No route at all, or a wrapper cut short: everything.
+        assert_eq!(kinds(r#"<adage-signal aspect="green">"#).1.len(), 4);
+        assert_eq!(kinds("…<adage-signal track=").1.len(), 4);
+        // Several directives in one attachment: the union.
+        let (d, k) = kinds(
+            "<adage-signal track=\"a@1.0.0\" route=\"lookup-work-item\" aspect=\"green\">x</adage-signal>\n\n\
+             <adage-signal track=\"a@1.0.0\" route=\"dead-end-1\" aspect=\"red\" kind=\"dead-ends\">y</adage-signal>",
+        );
+        assert_eq!((d, k), (v(&["dead-end-1", "lookup-work-item"]), v(&["dead-ends", "intents", "work-items"])));
+        // The finish-line stop request steers the finish-line miner.
+        let (d, k) = kinds("Adage finish-line check: this session changed files matching x");
+        assert_eq!((d, k), (v(&[FINISH_LINE_STOP]), v(&["finish-line"])));
+    }
+
+    #[test]
+    fn a_session_is_steered_on_the_kinds_its_directives_steer() {
+        let mut s = Session {
+            id: "s".into(),
+            root: PathBuf::from("/r"),
+            repo: "r".into(),
+            model: None,
+            day: String::new(),
+            prompt: "p".into(),
+            steps: vec![],
+            steered: true,
+            directed: ["dead-end-1".to_string()].into(),
+            steered_kinds: BTreeSet::new(),
+            outcome: None,
+            harness: CLAUDE_CODE.into(),
+            prompts: 1,
+        };
+        // Built without kinds: judged by route ids.
+        assert!(s.steered_by("dead-ends") && s.steered_by("intents"));
+        assert!(!s.steered_by("work-items") && !s.steered_by("finish-line"));
+        s.directed = ["gen".to_string()].into();
+        assert!(MINER_KINDS.iter().all(|k| s.steered_by(k)), "an unknown route steers every miner");
+        // Recorded kinds are authoritative.
+        s.steered_kinds = ["work-items".to_string()].into();
+        assert!(s.steered_by("work-items") && !s.steered_by("intents"));
+    }
 }

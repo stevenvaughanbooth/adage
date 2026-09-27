@@ -45,20 +45,44 @@ fn exit_clause(exits: &[Exit]) -> String {
     }
 }
 
+/// The wrapper around a directive's body, without a kind (as rendered before kinds existed; used
+/// for previews). What the agent receives is [`wrap_directive`].
 pub fn wrap(track: &str, version: &str, route: &str, aspect: Aspect, body: &str) -> String {
+    wrap_kind(track, version, route, "", aspect, body)
+}
+
+/// A directive as the agent receives it.
+pub fn wrap_directive(d: &crate::Directive) -> String {
+    wrap_kind(&d.track, &d.version, &d.route, &d.kind, d.aspect, &d.text)
+}
+
+/// The wrapper around a directive's body: `<adage-signal track="name@version" route="id"
+/// aspect="green" kind="work-items">`. `kind` (the route kind, [`adage_tracks::route_kind`]) comes
+/// last and is left out when empty, so transcripts written before it existed parse as before.
+/// Learning reads it to know which miners a directive could steer, and falls back to the route id
+/// when it is missing (`adage_learn::import::steered_kinds`).
+pub fn wrap_kind(track: &str, version: &str, route: &str, kind: &str, aspect: Aspect, body: &str) -> String {
     let a = match aspect {
         Aspect::Green => "green",
         Aspect::Yellow => "yellow",
         Aspect::Red => "red",
     };
+    let kind: String = kind.chars().filter(|c| c.is_ascii_lowercase() || *c == '-').take(32).collect();
+    let kind = if kind.is_empty() { String::new() } else { format!(" kind=\"{kind}\"") };
     format!(
-        "<adage-signal track=\"{}@{}\" route=\"{}\" aspect=\"{a}\">\n{}\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-signal>",
+        "<adage-signal track=\"{}@{}\" route=\"{}\" aspect=\"{a}\"{kind}>\n{}\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-signal>",
         sanitise(track),
         sanitise(version),
         sanitise(route),
         body
     )
 }
+
+/// The finish-line claim is only as strong as the evidence. That CI fails is said only when
+/// sessions that skipped the step are known to have failed (`deviations_failed`, from outcomes);
+/// otherwise the directive says what the sessions show: agents here run it.
+pub const FINISH_CI_FAILS: &str = "CI fails if this is skipped.";
+pub const FINISH_OBSERVED: &str = "Agents in this repository run it after such changes.";
 
 /// The body text for a route with its slots bound, or `None` if it cannot be rendered safely.
 pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
@@ -84,16 +108,20 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
             exit.trim_start()
         )),
         (Step::Run { command }, Trigger::AfterEdit { paths }) => Some(format!(
-            "In this repository, changes to files matching {} must be followed by running:\n  {}\nCI fails if this is skipped.{}",
+            "In this repository, changes to files matching {} must be followed by running:\n  {}\n{}{}",
             sanitise(paths),
             sanitise(command),
+            if r.evidence.deviations_failed > 0 { FINISH_CI_FAILS } else { FINISH_OBSERVED },
             exit
         )),
-        (Step::Run { command }, _) => Some(format!("A known next step here is:\n  {}{}", sanitise(&bind(command, bound)), exit)),
+        (Step::Run { command }, _) => {
+            Some(format!("A known next step here is:\n  {}{}", sanitise(&bind(command, bound)), exit))
+        }
         (Step::ReadBatch { slot, .. }, _) => {
             // Each path was validated individually; render each whole, never a truncated list.
             let files = bound.iter().find(|(k, _)| k == slot)?.1.clone();
-            let shown: Vec<String> = files.split(", ").map(sanitise).filter(|f| !f.is_empty() && f.len() < MAX_FIELD).collect();
+            let shown: Vec<String> =
+                files.split(", ").map(sanitise).filter(|f| !f.is_empty() && f.len() < MAX_FIELD).collect();
             if shown.is_empty() {
                 return None;
             }

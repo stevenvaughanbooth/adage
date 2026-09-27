@@ -11,18 +11,13 @@
 //! appended to tool output (after a tool); both are recorded in the export. Sub-agent sessions
 //! (`info.parentID` set) are skipped, like Claude Code sidechains.
 
-use crate::import::{Session, StepObs, OPENCODE};
+use crate::import::{Session, Signals, StepObs, OPENCODE};
 use adage_core::keys::{self, template_key};
 use adage_core::tools::{from_opencode, normalize_tool};
 use adage_core::{repo, CommandTable};
 use adage_runtime::Call;
-use once_cell::sync::Lazy;
-use regex::Regex;
 use serde_json::Value;
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-
-static ROUTE_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<adage-signal [^>]*route="([A-Za-z0-9_.-]+)""#).unwrap());
 
 /// Is this parsed file an OpenCode export?
 pub fn is_export(v: &Value) -> bool {
@@ -77,20 +72,7 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
     let day = info.pointer("/time/created").and_then(|t| t.as_i64()).map(day_of).unwrap_or_default();
     let mut model: Option<String> = None;
     let mut prompt: Option<String> = None;
-    let mut steered = false;
-    let mut directed: BTreeSet<String> = BTreeSet::new();
-    let mut note = |text: &str, steered: &mut bool| {
-        if text.contains("<adage-signal ") {
-            *steered = true;
-            for c in ROUTE_ATTR.captures_iter(text) {
-                directed.insert(c[1].to_string());
-            }
-        }
-        if text.contains("Adage finish-line check:") {
-            *steered = true;
-            directed.insert("finish-line-stop".to_string());
-        }
-    };
+    let mut signals = Signals::default();
     // (turn, tool, input, output, failed)
     let mut uses: Vec<(u32, String, Value, String, bool)> = Vec::new();
     let mut turns = 0u32;
@@ -105,7 +87,7 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
                     let text = s(p, &["text"]).unwrap_or("");
                     let synthetic = p.get("synthetic").and_then(|x| x.as_bool()) == Some(true);
                     if synthetic {
-                        note(text, &mut steered);
+                        signals.note(text);
                     } else if p.get("ignored").and_then(|x| x.as_bool()) != Some(true)
                         && !text.trim().is_empty()
                         && !own_text(text)
@@ -137,7 +119,7 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
                         Some("error") => (s(st, &["error"]).unwrap_or("").to_string(), true),
                         _ => continue, // pending or running: the call never finished
                     };
-                    note(&output, &mut steered);
+                    signals.note(&output);
                     any = true;
                     uses.push((
                         turns,
@@ -185,8 +167,9 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
         day,
         prompt,
         steps,
-        steered,
-        directed,
+        steered: signals.steered,
+        directed: signals.directed,
+        steered_kinds: signals.kinds,
         outcome: None,
         harness: OPENCODE.into(),
         prompts,

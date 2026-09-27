@@ -244,6 +244,49 @@ fn claude_scenario(w: &World) -> Vec<(&'static str, Value)> {
     ]
 }
 
+/// Every spool record carries the session's arm and its propensity: the probability assignment
+/// gave it that arm (the holdout share, or one minus it), or 1 when `ADAGE_ARM` forced it.
+#[test]
+fn spool_records_carry_arm_and_propensity() {
+    let w = World::new();
+    let prompt = |sid: &str| json!({ "session_id": sid, "transcript_path": "/dev/null", "cwd": w.repo(), "hook_event_name": "UserPromptSubmit", "prompt": "Pick up W-2042" });
+    let paths = adage_store::Paths::at(w.p("adage"));
+    let records = |sid: &str| adage_store::spool::read_all::<Value>(&paths.spool(sid)).unwrap();
+    // Drawn: ADAGE_ARM is empty, so assignment hashes the session id at a share of 0.25.
+    let mut arms = std::collections::BTreeSet::new();
+    for i in 0..24 {
+        let sid = format!("s-drawn-{i}");
+        let (_, err, code) = w.run(
+            &["hook", "claude", "UserPromptSubmit"],
+            prompt(&sid).to_string().as_bytes(),
+            &[("ADAGE_ARM", ""), ("ADAGE_HOLDOUT", "0.25")],
+        );
+        assert_eq!((code, err.as_str()), (0, ""));
+        let recs = records(&sid);
+        assert_eq!(recs.len(), 1);
+        let arm = recs[0]["arm"].as_str().unwrap().to_string();
+        let want = if arm == "holdout" { 0.25 } else { 0.75 };
+        assert_eq!(recs[0]["propensity"].as_f64(), Some(want), "{arm}: {}", recs[0]);
+        arms.insert(arm);
+    }
+    assert_eq!(arms.len(), 2, "24 sessions at a quarter held out give both arms");
+    // Forced: the arm was not drawn.
+    w.hook("claude", "UserPromptSubmit", &prompt("s-forced"));
+    let recs = records("s-forced");
+    assert_eq!((recs[0]["arm"].as_str(), recs[0]["propensity"].as_f64()), (Some("treated"), Some(1.0)));
+    // Later records of a session repeat the propensity fixed at its first sight.
+    let (_, _, code) = w.run(
+        &["hook", "claude", "UserPromptSubmit"],
+        prompt("s-drawn-0").to_string().as_bytes(),
+        &[("ADAGE_ARM", ""), ("ADAGE_HOLDOUT", "0.5")],
+    );
+    assert_eq!(code, 0);
+    let recs = records("s-drawn-0");
+    assert_eq!(recs.len(), 2);
+    assert_eq!(recs[0]["propensity"], recs[1]["propensity"]);
+    assert_eq!(recs[0]["arm"], recs[1]["arm"]);
+}
+
 #[test]
 fn claude_code_golden() {
     let w = World::new();
