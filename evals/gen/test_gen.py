@@ -266,5 +266,80 @@ class Rehearsal(unittest.TestCase):
             self.assertEqual(rep["decoys_learned"], 0)
 
 
+class IdShapes(unittest.TestCase):
+    """Tracker id shapes (Track G §4.4): `id_shape` in a spec, and the holdout `adage eval types` uses."""
+
+    BASE = {"stack": "python-make", "skin": "billing", "tasks": {"bugfix": 4, "registry": 2, "control": 2}}
+
+    def test_default_shape_leaves_existing_specs_unchanged(self):
+        self.assertNotIn("id_shape", grammar.normalise(self.BASE, STACKS))
+        self.assertNotIn("id_shape", grammar.normalise({**self.BASE, "id_shape": "prefix_dash"}, STACKS))
+        self.assertEqual(grammar.normalise({**self.BASE, "id_shape": "uuid"}, STACKS)["id_shape"], "uuid")
+        with self.assertRaises(grammar.SpecError):
+            grammar.resolve({**self.BASE, "id_shape": "emoji"}, 1, STACKS)
+        # The default shape draws the ids it always drew.
+        a = grammar.resolve(self.BASE, 5, STACKS)
+        b = grammar.resolve({**self.BASE, "id_shape": "prefix_dash"}, 5, STACKS)
+        self.assertEqual([t.id for t in a.tasks], [t.id for t in b.tasks])
+
+    def test_every_shape(self):
+        want = {"prefix_dash": r"BIL-\d+", "hash_num": r"\d+", "uuid": grammar.UUID_RE, "path_num": r"bil/\d+",
+                "branch": r"fix/[a-z]{5}-\d+", "mixed": r"BIL-\d+|\d+"}
+        for shape in grammar.ID_SHAPES:
+            for seed in (1, 2, 3):
+                spec = {**self.BASE, "id_shape": shape}
+                plan, stack = gen.plan_for(spec, seed)
+                ids = [t.id for t in plan.tasks if t.kind != "control"]
+                self.assertEqual(len(set(ids)), len(ids))
+                pattern = re.compile(next(c for c in stack.conventions() if c["kind"] == "lookup")["id_pattern"])
+                found = grammar.mention_regex(shape, "BIL")
+                for t in plan.tasks:
+                    prompts = stack.prompts(t)
+                    if t.kind == "control":
+                        self.assertFalse(any(found.search(p) for p in prompts), (shape, prompts))
+                        continue
+                    self.assertRegex(t.id, f"^(?:{want[shape]})$")
+                    self.assertTrue(pattern.fullmatch(t.id), (shape, t.id, pattern.pattern))
+                    self.assertTrue(all(grammar.mention(t.id) in p for p in prompts))
+                    self.assertEqual({m.group(0) for p in prompts for m in found.finditer(p)}, {grammar.mention(t.id)})
+                if shape == "mixed":
+                    self.assertEqual(sum(i.isdigit() for i in ids), len(ids) // 2)
+                ho = grammar.holdout(plan.spec, ids, seed)
+                self.assertEqual(ho, grammar.holdout(plan.spec, ids, seed))
+                self.assertEqual((len(ho["fresh"]), len(ho["near_miss"])), (200, 200), shape)
+                self.assertTrue(all(pattern.fullmatch(v) for v in ho["fresh"]))
+                self.assertFalse(set(ho["fresh"]) & set(ids))
+                self.assertFalse(any(pattern.fullmatch(n["value"]) for n in ho["near_miss"]))
+                kinds = {n["kind"] for n in ho["near_miss"]}
+                self.assertEqual(kinds, {"wrong_prefix", "shorter", "longer", "leading_dash", "shell"}, shape)
+
+    def test_shaped_bundle_selfchecks_and_rehearses(self):
+        # `bil/412` ids hold a slash: the lookup tool, hidden test names and run directories must cope.
+        with tempfile.TemporaryDirectory() as t, contextlib.redirect_stdout(io.StringIO()):
+            b = gen.build({**self.BASE, "id_shape": "path_num"}, 4, Path(t) / "b")
+            c = selfcheck.Checker(b)
+            try:
+                status = c.run_all()
+            finally:
+                c.tmp.cleanup()
+            self.assertEqual(status, "ok", f"{c.failed}\n" + "\n".join(c.lines))
+            rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, None, learn=False)
+            self.assertTrue(rep["all_passed"])
+            ho = json.loads((b / "rehearsal" / "holdout.json").read_text())
+            self.assertEqual(ho["id_shape"], "path_num")
+            exe = rehearse.find_adage(None)
+            if not exe:
+                self.skipTest("no adage binary (cargo build -p adage-cli)")
+            out = subprocess.run([str(exe), "eval", "types", str(b), "--json"], capture_output=True, text=True)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            r = json.loads(out.stdout)["bundles"][0]
+            self.assertTrue(r["learned"]["slot_found"], r)
+            self.assertTrue(r["learned"]["regex"].startswith("^(?:bil/[0-9]{"), r["learned"]["regex"])
+            self.assertGreaterEqual(r["learned"]["accepted"] / r["learned"]["fresh"], 0.99)
+            self.assertEqual(r["learned"]["rejected"], r["learned"]["near_misses"])
+            self.assertFalse(r["hardcoded"]["slot_found"])
+            self.assertEqual(r["unsafe_accepts"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

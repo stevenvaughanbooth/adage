@@ -36,6 +36,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent.parent
 sys.path.insert(0, str(HERE))
+import grammar  # noqa: E402
 import score as scorer  # noqa: E402
 import selfcheck  # noqa: E402
 
@@ -325,7 +326,7 @@ def rehearse_bundle(bundle, root, repeats, adage, learn):
     i = 0
     for r in range(repeats):
         for n, t in enumerate(b.tasks["tasks"]):
-            run_id = f"train-{t['id']}-r{r + 1}"
+            run_id = f"train-{t['id'].replace('/', '_')}-r{r + 1}"  # ids of some shapes hold a `/`
             cwd = root / "runs" / run_id / workdir
             cwd.parent.mkdir(parents=True)
             shutil.copytree(b.path / "repo", cwd, symlinks=True)
@@ -339,6 +340,11 @@ def rehearse_bundle(bundle, root, repeats, adage, learn):
                              "passed": sc["passed"], "failed_calls": sum(1 for c in s.calls if c["failed"])})
             i += 1
     (root / "outcomes.json").write_text(json.dumps(outcomes, indent=2, sort_keys=True) + "\n")
+    # Fresh ids and near misses from the generator's id distribution, for `adage eval types`.
+    if b.one("lookup"):
+        tracker = [t["id"] for t in b.tasks["tasks"] if t["kind"] != "control"]
+        ho = grammar.holdout(b.spec["spec"], tracker, b.spec["seed"])
+        (root / "holdout.json").write_text(json.dumps(ho, indent=1, sort_keys=True) + "\n")
     report = {"bundle": b.path.name, "stack": b.tasks["stack"], "skin": b.tasks["skin"], "seed": b.tasks["seed"],
               "sessions": sessions, "all_passed": all(x["passed"] for x in sessions)}
     if learn:

@@ -9,8 +9,10 @@ pub mod shell;
 pub mod spans;
 pub mod table;
 pub mod template;
+pub mod tokens;
 pub mod tools;
 pub mod types;
+pub mod vtype;
 
 pub use table::CommandTable;
 pub use types::{CanonicalAction, Effect, Normalized};

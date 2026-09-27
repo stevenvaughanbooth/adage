@@ -8,6 +8,7 @@ fixed order, so the same inputs always give the same plan.
 
 import json
 import random
+import re
 from dataclasses import dataclass, field
 
 import bugs
@@ -22,7 +23,20 @@ DECOY_MODES = ("unused_target", "lookalike_regen", "lookalike_verify", "legacy_s
 TASK_KINDS = ("bugfix", "registry", "control")
 MIN_CONTROL_SHARE = 0.25
 
-SPEC_KEYS = {"name", "stack", "skin", "conventions", "tasks", "id_digits", "description"}
+SPEC_KEYS = {"name", "stack", "skin", "conventions", "tasks", "id_digits", "id_shape", "description"}
+
+# Tracker id shapes (Track G §4.4). The id is always the form the lookup tool takes (the value a
+# learned type must accept); prompts name it by its mention (`#482` for a bare number).
+#   prefix_dash  BIL-1041 (the default; the only shape before Track G, and what adage's hard-coded
+#                ticket detector knows)
+#   hash_num     #482 in prompts, 482 on the command line
+#   uuid         3fa85f64-5717-4562-b3fc-2c963f66afa6 (lowercase, version 4 layout)
+#   path_num     bil/412 (the skin's prefix in lower case, a slash, a number)
+#   branch       fix/<word>-<n>, the word from BRANCH_WORDS
+#   mixed        two trackers in one repository: BIL-1041 and #482 alternate, one lookup tool
+ID_SHAPES = ("prefix_dash", "hash_num", "uuid", "path_num", "branch", "mixed")
+BRANCH_WORDS = ("audit", "batch", "cache", "float", "index", "label", "limit", "login", "merge", "parse", "query",
+                "queue", "retry", "round", "scope", "token")
 CONVENTION_KEYS = {"lookup", "linked_files", "dead_end", "finish_line", "instinct_violation", "decoys"}
 TASK_KEYS = {"bugfix", "registry", "control"}
 
@@ -142,6 +156,9 @@ def normalise(spec, stacks):
     if (not isinstance(digits, list) or len(digits) != 2 or not all(isinstance(d, int) for d in digits)
             or not 1 <= digits[0] <= digits[1] <= 6):
         raise SpecError("spec.id_digits: [min, max] with 1 <= min <= max <= 6")
+    shape = spec.get("id_shape", "prefix_dash")
+    if shape not in ID_SHAPES:
+        raise SpecError(f"spec.id_shape: one of {list(ID_SHAPES)}, got {shape!r}")
     name = spec.get("name") or f"{stack}-{skin}"
     if not isinstance(name, str) or not name.replace("-", "").replace("_", "").isalnum():
         raise SpecError("spec.name: letters, digits, '-' and '_' only")
@@ -152,6 +169,8 @@ def normalise(spec, stacks):
         "tasks": {"bugfix": n_bug, "registry": n_reg, "control": n_ctl},
         "id_digits": digits,
     }
+    if shape != "prefix_dash":  # the default is left out, so existing specs keep their bytes
+        out["id_shape"] = shape
     if spec.get("description"):
         out["description"] = str(spec["description"])
     return out
@@ -173,6 +192,162 @@ def _ids(rng, prefix, digits, n):
         taken.add(num)
         out.append(f"{prefix}-{num}")
     return out
+
+
+def _number(rng, digits):
+    d = rng.randint(digits[0], digits[1])
+    return rng.randint(10 ** (d - 1) if d > 1 else 1, 10 ** d - 1)
+
+
+def make_id(rng, shape, prefix, digits, k):
+    """The k-th id of a shape (any shape but prefix_dash, whose ids `_ids` draws as it always did)."""
+    if shape == "hash_num" or (shape == "mixed" and k % 2 == 1):
+        return str(_number(rng, digits))
+    if shape == "mixed":
+        return f"{prefix}-{_number(rng, digits)}"
+    if shape == "uuid":
+        return (f"{rng.getrandbits(32):08x}-{rng.getrandbits(16):04x}-4{rng.getrandbits(12):03x}-"
+                f"{rng.choice('89ab')}{rng.getrandbits(12):03x}-{rng.getrandbits(48):012x}")
+    if shape == "path_num":
+        return f"{prefix.lower()}/{_number(rng, digits)}"
+    if shape == "branch":
+        return f"fix/{rng.choice(BRANCH_WORDS)}-{_number(rng, digits)}"
+    raise ValueError(shape)
+
+
+def _shaped_ids(rng, shape, prefix, digits, n):
+    if shape == "prefix_dash":
+        return _ids(rng, prefix, digits, n)
+    out = []
+    while len(out) < n:
+        i = make_id(rng, shape, prefix, digits, len(out))
+        if i not in out:
+            out.append(i)
+    return out
+
+
+def mention(item_id):
+    """How a prompt names an item: `#482` for a bare number, else the id itself."""
+    return f"#{item_id}" if item_id.isdigit() else item_id
+
+
+def number_digits(ids):
+    """The digit counts of the trailing numbers of ids, sorted."""
+    return sorted(len(re.search(r"(\d+)$", i).group(1)) for i in ids if re.search(r"(\d+)$", i))
+
+
+def _rep(ds, default):
+    lo, hi = (ds[0], ds[-1]) if ds else tuple(default)
+    return f"{{{lo}}}" if lo == hi else f"{{{lo},{hi}}}"
+
+
+UUID_RE = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+
+
+def id_pattern(shape, prefix, ids, default_digits):
+    """The anchored ground-truth pattern of a lookup's ids (the observed digit range, as today)."""
+    if shape == "prefix_dash":
+        return f"^{re.escape(prefix)}-\\d{_rep(number_digits(ids), default_digits)}$"
+    if shape == "hash_num":
+        return f"^\\d{_rep(number_digits(ids), default_digits)}$"
+    if shape == "uuid":
+        return f"^{UUID_RE}$"
+    if shape == "path_num":
+        return f"^{prefix.lower()}/\\d{_rep(number_digits(ids), default_digits)}$"
+    if shape == "branch":
+        return f"^fix/(?:{'|'.join(BRANCH_WORDS)})-\\d{_rep(number_digits(ids), default_digits)}$"
+    if shape == "mixed":
+        a = number_digits([i for i in ids if not i.isdigit()])
+        b = number_digits([i for i in ids if i.isdigit()])
+        return f"^(?:{re.escape(prefix)}-\\d{_rep(a, default_digits)}|\\d{_rep(b, default_digits)})$"
+    raise ValueError(shape)
+
+
+def mention_regex(shape, prefix):
+    """What an id looks like inside a prompt, for checking that prompts name only their item."""
+    ticket = r"\b[A-Z][A-Z0-9]{0,9}-\d{1,7}\b"  # adage-core's ticket span (stacks/base.py TICKET)
+    return re.compile({
+        "prefix_dash": ticket,
+        "hash_num": r"#\d+\b",
+        "uuid": r"\b" + UUID_RE + r"\b",
+        "path_num": r"\b" + re.escape(prefix.lower()) + r"/\d+\b",
+        "branch": r"\bfix/[a-z]+-\d+\b",
+        "mixed": ticket + r"|#\d+\b",
+    }[shape])
+
+
+def holdout(spec, task_ids, seed, n=200):
+    """Fresh ids and near misses for `adage eval types` (Track G §4.4): `n` fresh ids from the
+    generator's own id function, with the digit range the bundle's `id_pattern` declares, none of
+    them a task's id; and `n` near misses of them: a wrong prefix, one character too few or too
+    many, a leading `-`, shell metacharacters. Every near miss fails `id_pattern`; every fresh id
+    matches it. A pure function of (spec, task ids, seed)."""
+    sk = SKINS[spec["skin"]]
+    shape = spec.get("id_shape", "prefix_dash")
+    pattern = re.compile(id_pattern(shape, sk.id_prefix, task_ids, spec["id_digits"]))
+    rng = random.Random(f"adage-gen/holdout/{canonical(spec)}/{seed}")
+
+    def digits_of(ids):
+        ds = number_digits(ids)
+        return (ds[0], ds[-1]) if ds else tuple(spec["id_digits"])
+
+    fams = {"a": digits_of([i for i in task_ids if not i.isdigit()]), "d": digits_of([i for i in task_ids if i.isdigit()])}
+    fresh, taken = [], set(task_ids)
+    guard = 0
+    while len(fresh) < n and guard < 100 * n:
+        guard += 1
+        k = len(fresh)
+        fam = "d" if shape == "hash_num" or (shape == "mixed" and k % 2 == 1) else "a"
+        if shape == "prefix_dash":
+            i = f"{sk.id_prefix}-{_number(rng, fams['a'])}"
+        else:
+            i = make_id(rng, shape, sk.id_prefix, fams[fam], k)
+        if i not in taken and pattern.fullmatch(i):
+            taken.add(i)
+            fresh.append(i)
+
+    def wrong_prefix(v):
+        if v.isdigit():
+            return rng.choice("xqz") + v
+        if shape == "uuid":
+            return rng.choice("ghjk") + v[1:]
+        head = v.split("/")[0].split("-")[0]
+        pos = rng.randrange(len(head))
+        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" if head[pos].isupper() else "abcdefghijklmnopqrstuvwxyz"
+        c = rng.choice([x for x in alphabet if x != head[pos]])
+        return v[:pos] + c + v[pos + 1:]
+
+    def length(v, delta):
+        if shape == "uuid":
+            groups = v.split("-")
+            g = rng.randrange(len(groups))
+            groups[g] = groups[g][:-1] if delta < 0 else groups[g] + rng.choice("0123456789abcdef")
+            return "-".join(groups)
+        m = re.search(r"(\d+)$", v)
+        body, num = v[:m.start()], m.group(1)
+        return body + (num[:-1] if delta < 0 else num + str(rng.randint(0, 9)))
+
+    shell = (";rm -rf ~", "$(id)", "`id`", "|sh", "&&id", " x", ">out", "\nid")
+    kinds = ("wrong_prefix", "shorter", "longer", "leading_dash", "shell")
+    near, seen = [], set()
+    k = 0
+    while len(near) < n and k < 100 * n:
+        v = fresh[k % len(fresh)]
+        kind = kinds[k % len(kinds)]
+        k += 1
+        if kind == "wrong_prefix":
+            m = wrong_prefix(v)
+        elif kind in ("shorter", "longer"):
+            m = length(v, -1 if kind == "shorter" else 1)
+        elif kind == "leading_dash":
+            m = "-" + v
+        else:
+            s = shell[k % len(shell)]
+            m = f"$({v})" if s == "$(id)" and k % 2 else v + s
+        if m and m not in seen and not pattern.fullmatch(m):
+            seen.add(m)
+            near.append({"value": m, "kind": kind})
+    return {"id_shape": shape, "id_pattern": pattern.pattern, "fresh": fresh, "near_miss": near}
 
 
 def resolve(spec, seed, stacks):
@@ -204,7 +379,8 @@ def resolve(spec, seed, stacks):
     rng.shuffle(reg_pool)
     reg_tasks = reg_pool[:n["registry"]]
 
-    ids = _ids(rng, sk.id_prefix, spec["id_digits"], n["bugfix"] + n["registry"] + len(sk.decoy_items))
+    ids = _shaped_ids(rng, spec.get("id_shape", "prefix_dash"), sk.id_prefix, spec["id_digits"],
+                      n["bugfix"] + n["registry"] + len(sk.decoy_items))
     task_ids, decoy_ids = ids[:n["bugfix"] + n["registry"]], ids[n["bugfix"] + n["registry"]:]
 
     tasks = []

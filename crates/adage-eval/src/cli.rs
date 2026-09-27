@@ -7,6 +7,7 @@
 //!            [--index <index.json>] [--json]
 //! adage eval bench run|sweep|report|bless …   (the L0 bench: `crate::bench::cli`)
 //! adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--json]
+//! adage eval types <gen-dir | dataset-dir> [--json]   (learned value types: `crate::value_types`)
 //! adage eval generate <synthetic|adversarial> <out-dir>
 //!
 //! <split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all
@@ -32,7 +33,7 @@ fn params(args: &[String]) -> Result<Option<serde_json::Value>> {
         .transpose()
 }
 
-const USAGE: &str = "usage: adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--window <n>] [--include-steered] [--index <file>] [--json]\n       adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--index <file>] [--json]\n       adage eval bench run|sweep|report|bless … (adage eval bench --help)\n       adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--json]\n       adage eval generate <synthetic|adversarial> <out-dir>\n<split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all";
+const USAGE: &str = "usage: adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--window <n>] [--include-steered] [--index <file>] [--json]\n       adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--index <file>] [--json]\n       adage eval bench run|sweep|report|bless … (adage eval bench --help)\n       adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--json]\n       adage eval types <gen-dir|dataset-dir> [--json]\n       adage eval generate <synthetic|adversarial> <out-dir>\n<split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all";
 
 pub fn run(args: &[String]) -> Result<()> {
     let json = args.iter().any(|a| a == "--json");
@@ -56,6 +57,16 @@ pub fn run(args: &[String]) -> Result<()> {
                 println!("{}", serde_json::to_string_pretty(&r)?);
             } else {
                 print!("{}", crate::conventions::render_text(&r));
+            }
+            Ok(())
+        }
+        Some("types") => {
+            let dir = args.get(1).filter(|d| !d.starts_with("--")).context(USAGE)?;
+            let r = crate::value_types::run(&PathBuf::from(dir))?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&r)?);
+            } else {
+                print!("{}", crate::value_types::render_text(&r));
             }
             Ok(())
         }

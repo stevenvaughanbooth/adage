@@ -50,6 +50,7 @@ name = "adage-eval"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-graph",
  "adage-learn",
  "adage-runtime",
  "adage-store",
@@ -64,6 +65,18 @@ dependencies = [
  "sha2",
  "tempfile",
  "toml",
+]
+
+[[package]]
+name = "adage-graph"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "proptest",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
 ]
 
 [[package]]

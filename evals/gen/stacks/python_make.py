@@ -206,6 +206,17 @@ class PythonMake(Stack):
 
     # ------------------------------------------------------------------ files
 
+    def shaped_lookup(self, text):
+        """Ids of other shapes are matched case-insensitively and may be typed with a leading `#`."""
+        if self.plan.spec.get("id_shape", "prefix_dash") == "prefix_dash":
+            return text
+        old = ('    key = ids[0].strip().upper()\n'
+               '    item = next((x for x in load() if x["id"] == key), None)\n')
+        new = ('    key = ids[0].strip().lstrip("#").lower()\n'
+               '    item = next((x for x in load() if x["id"].lower() == key), None)\n')
+        assert old in text
+        return text.replace(old, new)
+
     def fill_tool(self, text):
         sk = self.skin
         return bugs.fill(text, pkg=sk.pkg, flag=self.flag, env=sk.env, phrase=sk.tracker_phrase,
@@ -324,7 +335,7 @@ class PythonMake(Stack):
             f[f"tests/test_{sk.registry_module}.py"] = (self.reader_test_text(), False)
             f["tools/gen.py"] = (self.fill_tool(GEN_TOOL), True)
         if c.lookup:
-            f[sk.tool] = (self.fill_tool(LOOKUP), True)
+            f[sk.tool] = (self.shaped_lookup(self.fill_tool(LOOKUP)), True)
         for m in c.decoys:
             name = sk.decoys[m]
             if m == "unused_target":
@@ -378,12 +389,15 @@ class PythonMake(Stack):
         return out
 
     def scoring(self):
+        # score.py names the copied hidden test after the task's slug, which is not a module name
+        # for ids of other shapes (`bil/412`); those use one fixed name (one task is scored at a time).
+        name = "{slug}" if self.plan.spec.get("id_shape", "prefix_dash") == "prefix_dash" else "item"
         return {
             "ci": ["make", "check"],
-            "hidden_dest": "tests/test_hidden_{slug}.py",
-            "explicit": ["{python}", "{bundle}/pristine/runhidden.py", "{sandbox}", "tests.test_hidden_{slug}"],
+            "hidden_dest": f"tests/test_hidden_{name}.py",
+            "explicit": ["{python}", "{bundle}/pristine/runhidden.py", "{sandbox}", f"tests.test_hidden_{name}"],
             "format": "unittest",
-            "ran_marker": "test_hidden_{slug}",
+            "ran_marker": f"test_hidden_{name}",
             "stale": ["{python}", "{bundle}/pristine/gen.py", "--check", "--root", "{sandbox}"] if self.conv.finish_line else None,
             "stale_marker": "is out of date with registry",
             "scrub_env": [self.skin.env],

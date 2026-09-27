@@ -243,6 +243,17 @@ class NodeNpm(Stack):
 
     # ------------------------------------------------------------------ files
 
+    def shaped_lookup(self, text):
+        """Ids of other shapes are matched case-insensitively and may be typed with a leading `#`."""
+        if self.plan.spec.get("id_shape", "prefix_dash") == "prefix_dash":
+            return text
+        old = ('const key = ids[0].trim().toUpperCase();\n'
+               'const item = load().find((x) => x.id === key);\n')
+        new = ('const key = ids[0].trim().replace(/^#/, "").toLowerCase();\n'
+               'const item = load().find((x) => x.id.toLowerCase() === key);\n')
+        assert old in text
+        return text.replace(old, new)
+
     def fill_tool(self, text, **extra):
         sk = self.skin
         return bugs.fill(text, phrase=sk.tracker_phrase, usage=sk.tool.rsplit("/", 1)[-1], store=sk.store,
@@ -371,7 +382,7 @@ class NodeNpm(Stack):
             f["tools/codegen.mjs"] = (CODEGEN, True)
         if c.lookup:
             up = ", ".join(['".."'] * sk.tool.count("/"))
-            f[sk.tool] = (self.fill_tool(LOOKUP, up=up), True)
+            f[sk.tool] = (self.shaped_lookup(self.fill_tool(LOOKUP, up=up)), True)
         for m in c.decoys:
             name = sk.decoys[m]
             if m == "unused_target":
@@ -417,7 +428,7 @@ class NodeNpm(Stack):
 
     def hidden_test(self, t):
         sk = self.skin
-        name = f"{t.id}.test.mjs"
+        name = f"{t.id.replace('/', '_')}.test.mjs"
         head = ['// Hidden check. Kept outside the repository; copied in only while scoring.',
                 'import test from "node:test";', 'import assert from "node:assert/strict";']
         if t.kind == "registry":
@@ -454,7 +465,10 @@ class NodeNpm(Stack):
     def scoring(self):
         return {
             "ci": ["npm", "run", "check"],
-            "hidden_dest": "test/hidden-{task}.test.mjs",
+            # score.py names the copied hidden test after the task, which may contain `/` for ids
+            # of other shapes; those use one fixed name (one task is scored at a time).
+            "hidden_dest": ("test/hidden-{task}.test.mjs" if self.plan.spec.get("id_shape", "prefix_dash") == "prefix_dash"
+                            else "test/hidden-item.test.mjs"),
             "explicit": ["{node}", "--import", "{bundle}/pristine/setup.mjs", "--test", "--test-reporter=tap", "{dest}"],
             "format": "tap",
             "env": {self.skin.env: "test"},

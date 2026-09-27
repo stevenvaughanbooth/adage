@@ -1,0 +1,19 @@
+[package]
+name = "adage-graph"
+description = "Track G graph engine: value-flow induction and learned value types (G1)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# Track G §1.3: adage-graph depends on adage-core (and, from G2, adage-intent and adage-tracks),
+# never on adage-runtime or adage-learn. The runtime never links it.
+[dependencies]
+adage-core = { path = "../adage-core" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+regex.workspace = true
+proptest = { version = "1", default-features = false, features = ["std"] }
