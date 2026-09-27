@@ -161,6 +161,9 @@ pub struct Env {
     pub deterministic: bool,
     /// SHA-256 of each dataset's files, computed once.
     pub dataset_sha: BTreeMap<String, String>,
+    /// Bind instincts after learning (`--instincts`); off by default, so the committed baseline is
+    /// learned routes alone.
+    pub instincts: crate::InstinctMode,
 }
 
 impl Env {
@@ -172,18 +175,29 @@ impl Env {
                 dataset_sha.insert(u.dataset.clone(), content_sha256(&dir)?);
             }
         }
-        Ok(Env { suite, datasets: datasets.to_path_buf(), git_sha, deterministic, dataset_sha })
+        Ok(Env {
+            suite,
+            datasets: datasets.to_path_buf(),
+            git_sha,
+            deterministic,
+            dataset_sha,
+            instincts: crate::InstinctMode::Off,
+        })
     }
 
     /// The deterministic id of a run: the hash of its inputs (schema, suite, datasets, params).
     pub fn run_id(&self, params: &EngineParams) -> String {
-        let inputs = json!({
+        let mut inputs = json!({
             "schema_version": SCHEMA_VERSION,
             "tier": TIER,
             "suite": serde_json::to_value(&self.suite).unwrap_or(Value::Null),
             "datasets": self.dataset_sha,
             "params_hash": params.params_hash(),
         });
+        // Only a run with instincts says so: a run without them keeps the id it always had.
+        if self.instincts != crate::InstinctMode::Off {
+            inputs["instincts"] = json!(self.instincts.as_str());
+        }
         adage_tracks::io::hex(&Sha256::digest(canonical_json(&inputs).as_bytes()))[..16].to_string()
     }
 }
@@ -376,6 +390,7 @@ pub fn measure(env: &Env, params: &EngineParams) -> Result<Measured> {
             thresholds: Some(env.suite.preset.clone()),
             window: env.suite.window,
             params: Some(serde_json::to_value(params)?),
+            instincts: env.instincts,
             ..Default::default()
         };
         let prepared = crate::prepare(&dir, &opts).with_context(|| format!("bench unit {} {}", u.dataset, u.split))?;

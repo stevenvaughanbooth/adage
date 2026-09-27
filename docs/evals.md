@@ -352,6 +352,18 @@ output is deterministic, so each threshold is the measured value less 0.02:
 | same dataset, same report bytes (JSON and text, eval and routes); no temp or dataset paths in the report | yes | yes |
 | committed `conventions.json` files are valid; dataset copies equal `demo/sandbox/conventions.json` | yes | yes |
 | demo dataset redacted; generated datasets match their generators | yes | yes |
+| demo `--instincts-only` (hash:0.3; nothing learned, instincts bound from `evals/sandboxes/acme-billing`): correct dead ends / finish lines; precision; failed verify runs answered | 3 of 4 / 7 of 7; 0.9091; 0.75 | ≥ 1 / ≥ 1; ≥ 0.8891; ≥ 0.73; 0 unsafe; no learned route |
+| `--instincts` (after learning) on demo round 2, synthetic, adversarial: unsafe directives, fast path | 0, 0 differ | = 0, 0 differ |
+
+**Instincts** (docs/instincts.md) are off in every eval by default, so the numbers above and the
+L0 baseline are learned routes alone. `adage eval <dataset> --instincts-only` learns nothing and
+binds only instincts from the repository's real files (`--sandbox-dir`, default
+`evals/sandboxes/<repo>`: a dataset's `sandbox.txt` lists names only); `--instincts` binds them
+after learning. The report gains an `instincts` block: precision of instinct directives (dead
+ends and finish lines apart), advice given, and the share of failed verify runs an instinct
+answered with a command the agent then ran. The oracle checks every directive's whole wrapper
+(`safety::check_wrapper`). `adage eval bench run --instincts` runs the L0 bench with them
+(J 0.6466 against the baseline's 0.6307; 0 unsafe, 0 fast-path mismatches).
 
 When a change moves a number on purpose, re-measure, then update the threshold, this table and the
 gate's comment together, and say why in the commit.

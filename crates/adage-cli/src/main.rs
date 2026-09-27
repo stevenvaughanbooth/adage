@@ -10,6 +10,8 @@
 //! adage ui                           the full-screen app: live feed, routes and review, health fixes, settings
 //! adage learn [options]              mine tracks from agent sessions and compile the index
 //! adage learn --auto --repo-root <path>   learn one repository quietly (what hooks start)
+//! adage learn --instincts-only [--repo-path <dir>]  bind Adage's built-in defaults (instincts) for
+//!                                    a repository from its files alone, with no sessions (day 0)
 //! adage config [get <key> | set <key> <value>] [--json]   settings in $ADAGE_HOME/config.toml
 //! adage status                       installed tracks, routes, aspects, and evidence
 //! adage report [--json]              directives emitted, followed, and derailed, from spools
@@ -123,6 +125,7 @@ fn run(args: &[String]) -> Result<()> {
     adage_core::repo::use_cache(paths.repo_keys());
     match args.first().map(String::as_str) {
         Some("learn") if args.iter().any(|a| a == "--auto") => autolearn::run_auto(&args[1..], &paths),
+        Some("learn") if args.iter().any(|a| a == "--instincts-only") => instincts_only(&args[1..], &paths),
         Some("learn") => learn(&args[1..], &paths),
         Some("config") => config::run(&args[1..], &paths),
         Some("status") => status(&paths),
@@ -239,6 +242,11 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
     } else {
         autolearn::thresholds(settings.learn_thresholds)
     };
+    let mut cfg = cfg;
+    // Instincts are bound after mining, per repository, unless turned off (config, or --no-instincts).
+    if !args.iter().any(|a| a == "--no-instincts") {
+        cfg.instincts = Some(autolearn::instinct_config(&settings, paths));
+    }
     let cache =
         (settings.learn_parse_cache && !args.iter().any(|a| a == "--no-cache")).then(|| paths.cache().join("sessions"));
     transcripts.sort();
@@ -297,6 +305,9 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
                     println!("    · {r}");
                 }
             }
+            if let Some(ir) = &rr.instincts {
+                print_instincts(ir);
+            }
             for c in changes.get(repo).into_iter().flatten() {
                 println!("  changed: {}: {}", c.route, c.summary);
             }
@@ -309,6 +320,77 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         }
         println!("\nindex generation {}", rep.index_generation);
     }
+    Ok(())
+}
+
+/// What binding instincts did for one repository, for the text output of `adage learn`.
+fn print_instincts(ir: &adage_learn::instincts::InstinctReport) {
+    match &ir.not_bound {
+        Some(why) => println!("  instincts: none bound ({why})"),
+        None => println!(
+            "  instincts: {} bound, {} advice, {} awaiting approval in `adage review`{}{}",
+            ir.bound,
+            ir.advice,
+            ir.drafts,
+            if ir.retired.is_empty() { String::new() } else { format!(", {} retired automatically", ir.retired.len()) },
+            if ir.confirmed.is_empty() {
+                String::new()
+            } else {
+                format!(", {} confirmed by sessions", ir.confirmed.len())
+            }
+        ),
+    }
+}
+
+/// `adage learn --instincts-only [--repo-path <dir>] [--json]`: bind a repository's instincts
+/// from its declared files, with no sessions (day 0), and compile the index. The repository is
+/// `--repo-path` (default: the current directory), resolved to its root.
+pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
+    let started = std::time::Instant::now();
+    let dir = match flag(args, "--repo-path").or_else(|| flag(args, "--repo-root")) {
+        Some(d) => PathBuf::from(d),
+        None => std::env::current_dir()?,
+    };
+    let dir = dir.canonicalize().map_err(|e| anyhow::anyhow!("{}: {e}", dir.display()))?;
+    let root = adage_core::repo::find_root(&dir).unwrap_or(dir);
+    let repo = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
+    let settings = adage_store::config::load(paths).config;
+    let ic = autolearn::instinct_config(&settings, paths);
+    std::fs::create_dir_all(&paths.root)?;
+    let tracks_lock = adage_store::lock::exclusive(&paths.tracks_lock())?;
+    let before = adage_learn::diff::snapshot(&paths.tracks(), &repo);
+    let result = adage_learn::instincts::learn_only(&repo, &root, &paths.tracks(), &paths.index(), &ic);
+    let after = adage_learn::diff::snapshot(&paths.tracks(), &repo);
+    drop(tracks_lock);
+    let rep = result?;
+    let changes: BTreeMap<&String, Vec<adage_learn::diff::Change>> =
+        rep.repos.keys().map(|r| (r, adage_learn::diff::diff(&before, &after))).collect();
+    if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64) {
+        eprintln!("adage learn: could not write {}: {e}", paths.learn_log().display());
+    }
+    if args.iter().any(|a| a == "--json") {
+        println!("{}", serde_json::to_string_pretty(&rep)?);
+        return Ok(());
+    }
+    for (repo, rr) in &rep.repos {
+        println!("adage learn --instincts-only: {repo}");
+        for t in &rr.tracks {
+            println!("  {} @ {} ({})", t.name, t.version, t.change);
+            for r in &t.routes {
+                println!("    · {r}");
+            }
+        }
+        if let Some(ir) = &rr.instincts {
+            print_instincts(ir);
+            for s in ir.skipped.iter().take(12) {
+                println!("    not bound: {s}");
+            }
+        }
+        for c in changes.get(repo).into_iter().flatten() {
+            println!("  changed: {}: {}", c.route, c.summary);
+        }
+    }
+    println!("\nindex generation {}", rep.index_generation);
     Ok(())
 }
 
@@ -359,7 +441,13 @@ fn status(paths: &Paths) -> Result<()> {
         return Ok(());
     }
     for t in tracks {
-        let origin = if adage_tracks::index::is_imported(&t) { "  (imported)" } else { "" };
+        let origin = if adage_tracks::index::is_imported(&t) {
+            "  (imported)"
+        } else if adage_tracks::index::is_instinct_track(&t) {
+            "  (instincts: Adage's built-in defaults, from the repository's files)"
+        } else {
+            ""
+        };
         println!("{} @ {}  [{}]{origin}", t.manifest.track.name, t.manifest.track.version, t.manifest.scope.repo);
         for r in &t.routes {
             let dot = match r.aspect {

@@ -141,6 +141,7 @@ pub fn describe_step(step: &Step) -> String {
         Step::Run { command } => format!("run `{command}`"),
         Step::ReadBatch { slot, max } => format!("read up to {max} files listed in {{{slot}}}"),
         Step::Avoid { avoid, instead, .. } => format!("avoid `{avoid}`, use `{instead}`"),
+        Step::Advise { template, .. } => format!("advise ({template})"),
     }
 }
 

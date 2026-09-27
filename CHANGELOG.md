@@ -25,6 +25,26 @@ version as the GitHub Release notes.
   held-out tasks. `adage-train report` says per claim `compiled → route <id>`, `contradicted` (the
   skill is stale), `never exercised` or `unsafe`, with cost and an acceptance table. A pluggable
   `Harness` with a scripted fake runs the whole pipeline end to end in tests. See docs/training.md.
+- **Instincts, integrated end to end.** Adage's built-in defaults (`adage-instincts`: prebuilt
+  routes bound from a repository's Makefile, package.json, lockfiles, pyproject and generated-file
+  markers) now reach agents on day 0. `adage learn` binds them per repository after mining, into the
+  track `<repo>/instincts`; `adage learn --instincts-only [--repo-path <dir>]` binds a repository
+  with no sessions, and so does the first automatic learn; `adage init` shows what would bind.
+  Routes carry their origin (`Evidence.origin`: learned, instinct, imported, authored, synthetic)
+  and origin counts (`Evidence.by_origin`); a new advisory step (`Step::Advise`) renders fixed
+  sentences for generated files, lockfiles and the package manager. Instincts have the lowest
+  precedence (index de-duplication by provenance, interlocking), are always yellow, never make a
+  Stop request, say "Adage default for … repositories (from this repository's Makefile)" instead
+  of "Learned by Adage …", and a finish line from one says "Makefile declares this.". A new
+  judgement, `followed_failed`, retires an instinct route at the next learn after three (or a
+  derail rate whose Wilson lower bound reaches 0.5 over five judgements), recorded in
+  `review.yaml` and `learn.log`. Approving one environment-effect instinct in `adage review`
+  approves its pack's for the repository. `adage doctor` counts instincts per repository; `adage
+  review` lists them with their origin. Config: `instincts.enabled`, `instincts.packs`,
+  `instincts.disabled`. `adage eval --instincts-only` measures day-0 value (demo: 10 of 11
+  directives correct, 3 of 4 failed verify runs answered, 0 unsafe) and is a gate; offline evals
+  and the L0 baseline stay learned-only by default (`--instincts` includes them). See
+  docs/instincts.md.
 
 - **Tunable engine parameters and the L0 optimisation bench.** Every number the runtime and the
   learner tune on (follow window, directive budget, stop requests, history; support, green and

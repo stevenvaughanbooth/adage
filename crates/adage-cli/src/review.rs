@@ -15,6 +15,12 @@
 //! A pinned route whose learned version drifted materially waits with the reason "proposed" and a
 //! diff (see [`crate::proposal`]); `approve` applies the proposed version, which stays pinned.
 //!
+//! Instinct routes (Adage's built-in defaults, bound from a repository's files; track
+//! `<repo>/instincts`) are listed with their origin until a person decides. They stay yellow at
+//! most and can never be promoted. Approving an environment-effect instinct (an install step,
+//! a draft until then) approves every environment step of its pack for that repository, recorded
+//! in the track's `review.yaml` (`packs`); rejecting one keeps it out of later binds.
+//!
 //! `<track>` is a track name (a learned track wins over an import of the same name) or its
 //! directory under the tracks directory, e.g. `@imported/acme/work-items`.
 //!
@@ -130,7 +136,8 @@ fn judgements(paths: &Paths) -> BTreeMap<(String, String), (u32, u32)> {
                 let Some(route) = j["route"].as_str() else { continue };
                 let e = out.entry((repo.clone(), route.to_string())).or_default();
                 match j["kind"].as_str() {
-                    Some("followed") => e.0 += 1,
+                    // Followed, whether or not the command then failed.
+                    Some("followed" | "followed_failed") => e.0 += 1,
                     Some("derailed") => e.1 += 1,
                     _ => {}
                 }
@@ -227,7 +234,22 @@ pub(crate) fn preview(t: &Track, r: &Route) -> (String, BTreeMap<String, String>
     let body = render::route_text(r, &pairs)
         .unwrap_or_else(|| "(this route cannot be rendered safely; Adage would say nothing)".into());
     let m = &t.manifest.track;
-    (render::wrap(&m.name, &m.version, &r.id, r.aspect, &body), bound)
+    let origin = r.is_instinct().then(|| r.origin());
+    let aspect = if origin.is_some() { adage_tracks::delivered_aspect(r) } else { r.aspect };
+    let kind = if origin.is_some() { adage_tracks::route_kind(r) } else { "" };
+    (render::wrap_origin(&m.name, &m.version, &r.id, kind, aspect, &body, origin.as_ref()), bound)
+}
+
+/// Where an instinct route came from, for people: `instinct U1 (from Makefile)`.
+pub(crate) fn origin_label(r: &Route) -> Option<String> {
+    match r.origin() {
+        adage_tracks::Origin::Instinct { instinct, declared, .. } if r.is_instinct() => {
+            let id = if instinct.is_empty() { String::new() } else { format!(" {instinct}") };
+            let from = declared.map(|d| format!(" (from {d})")).unwrap_or_default();
+            Some(format!("instinct{id}{from}"))
+        }
+        _ => None,
+    }
 }
 
 struct Item<'a> {
@@ -252,10 +274,22 @@ fn queue<'a>(all: &'a [Installed], judged: &BTreeMap<(String, String), (u32, u32
                 None => (f0, d0),
             };
             let mut reasons: Vec<(&'static str, String)> = Vec::new();
+            let instinct = origin_label(r);
             match rv {
+                None if r.state == RouteState::Draft && !r.authored && instinct.is_some() => reasons.push((
+                    "approval",
+                    "an environment step Adage would suggest by default: delivered only after a person approves it; approving it approves this pack's environment steps for the repository".into(),
+                )),
                 None if r.state == RouteState::Draft && !r.authored => reasons.push((
                     "approval",
                     "an environment step: it is delivered only after a person approves it (`approve`)".into(),
+                )),
+                None if instinct.is_some() && live(r.state) => reasons.push((
+                    "instinct",
+                    format!(
+                        "{}: Adage's built-in default, bound from this repository's files with no session history; yellow at most, and any learned route overrides it",
+                        instinct.clone().unwrap_or_default()
+                    ),
                 )),
                 None if r.authored || !live(r.state) => {}
                 None if inst.imported => reasons.push((
@@ -323,6 +357,7 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
                     "version": t.manifest.track.version,
                     "repo": t.manifest.scope.repo,
                     "imported": it.inst.imported,
+                    "origin": r.evidence.origin.clone().map(|o| serde_json::to_value(o).unwrap_or_default()).unwrap_or_else(|| json!({ "kind": if it.inst.imported { "imported" } else { "learned" } })),
                     "route": r.id,
                     "reasons": it.reasons.iter().map(|(k, d)| json!({ "kind": k, "detail": d })).collect::<Vec<_>>(),
                     "aspect": aspect_str(r.aspect),
@@ -357,7 +392,11 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     println!("adage review: {} route(s) await a decision\n", items.len());
     for it in &items {
         let (t, r, e) = (&it.inst.track, it.route, &it.route.evidence);
-        let origin = if it.inst.imported { "  (imported)" } else { "" };
+        let origin = match origin_label(r) {
+            Some(l) => format!("  ({l})"),
+            None if it.inst.imported => "  (imported)".into(),
+            None => String::new(),
+        };
         println!(
             "{} @ {}  {}   [{}]{origin}",
             it.inst.reference, t.manifest.track.version, r.id, t.manifest.scope.repo
@@ -419,7 +458,12 @@ fn verbs(r: &Route, proposed: bool) -> Vec<&'static str> {
     if live(r.state) && r.aspect == Aspect::Green {
         v.push("demote");
     }
-    if live(r.state) && r.aspect == Aspect::Yellow && ceiling(r.effect, by_edit(r)) == Some(Aspect::Green) {
+    // An instinct is yellow at most, whatever anyone decides.
+    if live(r.state)
+        && r.aspect == Aspect::Yellow
+        && ceiling(r.effect, by_edit(r)) == Some(Aspect::Green)
+        && !r.is_instinct()
+    {
         v.push("promote");
     }
     if !r.authored {
@@ -570,8 +614,8 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         }
         "approve" if r.state == RouteState::Draft => {
             // An environment step waiting for a person (O11): approval puts it into service,
-            // yellow at most; an import stays at probation.
-            r.state = if inst.imported { RouteState::Probation } else { RouteState::Active };
+            // yellow at most; an import or an instinct stays at probation.
+            r.state = if inst.imported || r.is_instinct() { RouteState::Probation } else { RouteState::Active };
             if r.aspect == Aspect::Green {
                 r.aspect = Aspect::Yellow;
             }
@@ -611,6 +655,9 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
                     lower(r.state)
                 );
             }
+            if r.is_instinct() {
+                bail!("refusing: {route_id} is an instinct (Adage's built-in default), which is yellow at most; a route learned from this repository's sessions can be green");
+            }
             if ceiling(r.effect, by_edit(r)) != Some(Aspect::Green) {
                 bail!(
                     "refusing: {route_id} is a {} step{}, whose ceiling is {}; no one can raise a route above its effect ceiling",
@@ -641,6 +688,21 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         judgements(paths).get(&(repo.clone(), route_id.to_string())).copied().unwrap_or_default();
     let basis = review::basis(r, followed, derailed);
     let after = r.clone();
+    // Pack-level approval: approving one environment-effect instinct approves the pack's
+    // environment steps for this repository, now and when learning binds them again.
+    let mut pack_approved: Vec<String> = Vec::new();
+    if verb == "approve" && before.state == RouteState::Draft && after.is_instinct() {
+        if let adage_tracks::Origin::Instinct { pack, .. } = after.origin() {
+            if !pack.is_empty() {
+                reviews.packs.insert(pack.clone(), review::PackApproval { on: review::today(), by: by.clone() });
+                for other in track.routes.iter_mut().filter(|x| x.state == RouteState::Draft && x.is_instinct()) {
+                    other.state = RouteState::Probation;
+                    pack_approved.push(other.id.clone());
+                }
+                pack_approved.insert(0, format!("pack {pack}"));
+            }
+        }
+    }
     reviews.routes.insert(route_id.to_string(), Review { decision, on: review::today(), by, basis });
     // An import keeps its author's version: it names the release that was shared.
     if after != before && !inst.imported {
@@ -674,6 +736,11 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
     out.push(format!("  state      {}", change(lower(before.state), lower(after.state))));
     if after.authored != before.authored {
         out.push("  authored   yes: `adage learn` will not overwrite it".into());
+    }
+    if let Some((pack, others)) = pack_approved.split_first() {
+        let also =
+            if others.is_empty() { String::new() } else { format!("; also in service now: {}", others.join(", ")) };
+        out.push(format!("  approved   {pack}'s environment steps for {repo}{also}"));
     }
     out.push(format!("  track      {} @ {}", track.manifest.track.name, track.manifest.track.version));
     out.push(format!("  recorded   {}/{}", inst.reference, review::FILE));

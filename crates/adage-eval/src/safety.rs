@@ -14,13 +14,18 @@
 //!   appears anywhere;
 //! - interlocking holds over a session ([`check_interlock`]): no directive is emitted after, or
 //!   beside, a red directive that avoids its command, and no decision emits two greens that
-//!   direct different commands at one decision point.
+//!   direct different commands at one decision point;
+//! - the wrapper ([`check_wrapper`]) is exactly the runtime's: a learned route says it was learned
+//!   from sessions, an instinct (a prebuilt route) says it is Adage's default for its ecosystem
+//!   from the file that declares it, carries `origin="instinct"`, and is yellow; a finish line
+//!   from an instinct claims no session evidence; advice is one of the fixed advisory sentences
+//!   with exactly its route's slot values.
 //!
 //! This deliberately duplicates checks in `adage-tracks` and `adage-runtime`: it is the oracle
 //! the eval and the property tests hold them to.
 
 use adage_core::repo;
-use adage_tracks::{ceiling, interlock, Contract, Route, Step, Trigger};
+use adage_tracks::{ceiling, interlock, Aspect, Contract, Route, Step, Trigger};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Serialize;
@@ -48,12 +53,16 @@ static T_INTENT: Lazy<Regex> = Lazy::new(|| {
 });
 static T_FINISH: Lazy<Regex> = Lazy::new(|| {
     Regex::new(&format!(
-        r"^In this repository, changes to files matching (?P<glob>[^\n]*) must be followed by running:\n  (?P<cmd>[^\n]*)\n(?:CI fails if this is skipped|Agents in this repository run it after such changes)\.(?: {EXIT})?$"
+        r"^In this repository, changes to files matching (?P<glob>[^\n]*) must be followed by running:\n  (?P<cmd>[^\n]*)\n(?P<basis>CI fails if this is skipped|Agents in this repository run it after such changes|(?P<declared>[A-Za-z0-9_./-]+) declares this|This repository's build declares this step)\.(?: {EXIT})?$"
     ))
     .unwrap()
 });
 static T_RUN: Lazy<Regex> =
     Lazy::new(|| Regex::new(&format!(r"^A known next step here is:\n  (?P<cmd>[^\n]*?)(?: {EXIT})?$")).unwrap());
+/// After a failure (an instinct's dead end): the command to run instead, the exit on its own line.
+static T_FAILED: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(&format!(r"^That failed\. In this repository, run this instead:\n  (?P<cmd>[^\n]*)\n{EXIT}$")).unwrap()
+});
 static T_READ: Lazy<Regex> = Lazy::new(|| {
     Regex::new(&format!(
         r"^That result lists these files: (?P<files>[^\n]*)\.\nIf you need them, read them together in one turn rather than one at a time\.(?: {EXIT})?$"
@@ -71,6 +80,40 @@ static T_AVOID: Lazy<Regex> = Lazy::new(|| {
 static T_STOP: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^Adage finish-line check: this session changed files matching (?P<glob>[^\n`]*), and this repository requires running `(?P<cmd>[^\n`]*)` after such changes; it has not been run yet\. Run it \(and re-run the tests\) before finishing\. This reminder is from Adage, not from the user\.$").unwrap()
 });
+
+/// The advisory sentences (`Step::Advise`), each optionally followed by an exit clause.
+static T_ADVICE: Lazy<[Regex; 4]> = Lazy::new(|| {
+    let tail = format!(r"(?: {EXIT})?$");
+    [
+        Regex::new(&format!(r"^In this repository, (?P<path>[A-Za-z0-9_./*-]+) is generated: change its inputs and run (?P<cmd>[A-Za-z0-9 _./:=@,+-]+) rather than editing it by hand\.{tail}")).unwrap(),
+        Regex::new(&format!(r"^In this repository, (?P<path>[A-Za-z0-9_./*-]+) is generated: change its inputs and regenerate it rather than editing it by hand\.{tail}")).unwrap(),
+        Regex::new(&format!(r"^In this repository, (?P<path>[A-Za-z0-9_./*-]+) is maintained by (?P<manager>[a-z]+): change the manifest and let (?P<manager2>[a-z]+) update it rather than editing it by hand\.{tail}")).unwrap(),
+        Regex::new(&format!(r"^This repository uses (?P<manager>[a-z]+) \((?P<lockfile>[A-Za-z0-9_.-]+)\), not npm: use (?P<manager2>[a-z]+) for installs and scripts here\.{tail}")).unwrap(),
+    ]
+});
+
+/// The wrapper around every directive: attributes, the body, and the last line saying what the
+/// directive is based on.
+static T_WRAPPER: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r#"(?s)^<adage-signal track="(?P<track>[^"<>
+]*)" route="(?P<route>[^"<>
+]*)" aspect="(?P<aspect>green|yellow|red)"(?: kind="(?P<kind>[a-z-]*)")?(?P<origin> origin="instinct")?>
+(?P<body>.*)
+(?P<footer>[^
+]*)
+</adage-signal>$"#,
+    )
+    .unwrap()
+});
+const LEARNED_FOOTER: &str =
+    "Learned by Adage from this repository's earlier agent sessions; not requested by the user.";
+static T_INSTINCT_FOOTER: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^Adage default for (?:(?:Python|Node\.js|Rust|Go|Make) repositories|repositories like this one)(?: \(from this repository's (?P<declared>[A-Za-z0-9_./-]+)\))?; not requested by the user\.$").unwrap()
+});
+/// Package managers the advisory templates may name (the lockfile table's).
+const MANAGERS: [&str; 12] =
+    ["npm", "pnpm", "yarn", "bun", "cargo", "go", "poetry", "uv", "pipenv", "pdm", "bundler", "composer"];
 
 /// Invisible or direction-changing characters: they make text read differently than it runs.
 pub fn is_invisible(c: char) -> bool {
@@ -183,12 +226,55 @@ pub fn check_directive(r: &Route, text: &str, root: Option<&Path>, canaries: &[S
         Some(max) if r.aspect < max => bad(format!("aspect {:?} exceeds the ceiling {max:?}", r.aspect)),
         _ => {}
     }
-    let caps =
-        [&*T_LOOKUP, &*T_INTENT, &*T_FINISH, &*T_RUN, &*T_READ, &*T_AVOID].iter().find_map(|re| re.captures(text));
+    if let Step::Advise { slots, .. } = &r.step {
+        let Some(c) = T_ADVICE.iter().find_map(|re| re.captures(text)) else {
+            bad("text is not one of the fixed advisory sentences".into());
+            return out;
+        };
+        if r.aspect != Aspect::Yellow {
+            bad(format!("advice at aspect {:?}", r.aspect));
+        }
+        for name in ["path", "cmd", "manager", "lockfile"] {
+            let Some(v) = c.name(name).map(|m| m.as_str()) else { continue };
+            let slot = if name == "cmd" { "command" } else { name };
+            if slots.get(slot).map(String::as_str) != Some(v) {
+                bad(format!("advice names {name} {v:?}, which is not its route's slot"));
+            }
+            let problem = match name {
+                "path" => glob_ok(v),
+                "cmd" => command_ok(v),
+                "manager" => (!MANAGERS.contains(&v)).then(|| format!("unknown package manager {v:?}")),
+                _ => (v.contains('/') || v.starts_with('.')).then(|| format!("lockfile {v:?} is not a root file name")),
+            };
+            if let Some(e) = problem {
+                bad(e);
+            }
+        }
+        if let (Some(a), Some(b)) = (c.name("manager"), c.name("manager2")) {
+            if a.as_str() != b.as_str() {
+                bad("advice names two package managers".into());
+            }
+        }
+        return out;
+    }
+    let caps = [&*T_LOOKUP, &*T_INTENT, &*T_FINISH, &*T_RUN, &*T_FAILED, &*T_READ, &*T_AVOID]
+        .iter()
+        .find_map(|re| re.captures(text));
     let Some(c) = caps else {
         bad("text is not one of the fixed directive templates".into());
         return out;
     };
+    // A finish line claims only the evidence its route has: an instinct, that the repository
+    // declares it; a learned route, what sessions showed.
+    if let Some(b) = c.name("basis") {
+        let declared = b.as_str().ends_with("declares this") || b.as_str().ends_with("declares this step");
+        if declared != r.is_instinct() {
+            bad(format!("finish line says {:?}, which its origin does not support", b.as_str()));
+        }
+        if let Some(e) = c.name("declared").and_then(|d| glob_ok(d.as_str())) {
+            bad(e);
+        }
+    }
     if let Some(cmd) = c.name("cmd") {
         if let Some(e) = command_ok(cmd.as_str()) {
             bad(e);
@@ -222,6 +308,48 @@ pub fn check_directive(r: &Route, text: &str, root: Option<&Path>, canaries: &[S
             }
         }
     }
+    out
+}
+
+/// Check a directive as the agent receives it (`adage_runtime::render::wrap_directive`): the
+/// wrapper's attributes and last line must be the runtime's for the route's origin, and the body
+/// must pass [`check_directive`].
+pub fn check_wrapper(r: &Route, wrapped: &str, root: Option<&Path>, canaries: &[String]) -> Vec<Violation> {
+    let mut out = Vec::new();
+    let mut bad = |reason: String| out.push(Violation { route: r.id.clone(), reason });
+    let Some(c) = T_WRAPPER.captures(wrapped) else {
+        bad("the wrapper is not the runtime's".into());
+        return out;
+    };
+    if &c["route"] != r.id.as_str() {
+        bad(format!("the wrapper names route {:?}", &c["route"]));
+    }
+    let footer = &c["footer"];
+    if r.is_instinct() {
+        if c.name("origin").is_none() {
+            bad("an instinct's wrapper does not say origin=\"instinct\"".into());
+        }
+        if &c["aspect"] != "yellow" {
+            bad(format!("an instinct delivered {}", &c["aspect"]));
+        }
+        match T_INSTINCT_FOOTER.captures(footer) {
+            None => bad(format!("an instinct's wrapper says {footer:?}")),
+            Some(f) => {
+                if let Some(e) = f.name("declared").and_then(|d| glob_ok(d.as_str())) {
+                    bad(e);
+                }
+            }
+        }
+    } else {
+        if c.name("origin").is_some() {
+            bad("a learned route's wrapper claims to be an instinct".into());
+        }
+        if footer != LEARNED_FOOTER {
+            bad(format!("a learned route's wrapper says {footer:?}"));
+        }
+    }
+    let body = c["body"].to_string();
+    out.extend(check_directive(r, &body, root, canaries));
     out
 }
 

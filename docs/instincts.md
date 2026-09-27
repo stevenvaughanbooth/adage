@@ -11,14 +11,15 @@ into concrete routes for that repository. Nothing comes from session history, so
 first time Adage sees a repository. They are weaker than reflexes by design: yellow at most, never a
 Stop block, and a reflex that says otherwise always wins.
 
-This document is the catalogue, the binding and override model, the safety rules, and the plan for
-wiring the crate into learning, the runtime and the CLI (the crate is self-contained today; nothing
-calls it yet).
+**Status: integrated.** `adage learn` binds instincts per repository after mining (and
+`adage learn --instincts-only` binds them with no sessions at all); the index, the runtime, the CLI
+and the offline eval know them by their provenance. This document is the catalogue, the binding
+and override model, the safety rules, and how the crate is wired in ([Integration](#integration)).
 
 ## Catalogue
 
 `P0` instincts bind now. `P1` instincts are catalogued with their detection and cap, and ship
-disabled with stub detectors, until the model can express them (see [Integration plan](#integration-plan)).
+disabled with stub detectors, until the model can express them (see [Not done yet](#not-done-yet)).
 U2 is P0 on the roadmap but is disabled here: it needs a trigger the model does not have.
 
 | Id | Priority | Instinct | Trigger | Directive (fixed template, sketched) | Cap | Detection (no history) | FP risk | Enabled |
@@ -49,6 +50,9 @@ Deliberately not shipped, ever: "update snapshots on failure", `--no-verify`, `n
 ### What binds on the reference repositories
 
 The crate's tests bind every fixture under `crates/adage-instincts/tests/fixtures/`:
+
+Advisories are routes too (an advisory step, `Step::Advise`, with a fixed template); they are listed
+apart here because they direct no command.
 
 | Fixture | Routes | Advisories |
 | --- | --- | --- |
@@ -139,6 +143,10 @@ Advisories (U4, U6, N1's "uses pnpm") are validated the same way against their t
 contracts: `path` a repository-relative glob, `command` plain argv classifying at regenerate or
 below, `manager` one of the catalogue's lockfile managers, `lockfile` a known lockfile name.
 
+Advisories (U4, U6, N1's "uses pnpm") bind as routes with `Step::Advise { template, slots }`:
+yellow, observe, probation, ids `instinct-<tag>-<stable>`, triggered after an edit (the generated
+file, the lockfile) or after a command (`npm install`).
+
 The API:
 
 ```rust
@@ -147,14 +155,21 @@ pub fn bind_with(repo_root: &Path, existing: &[Route], rejections: &BTreeSet<Str
 pub fn bind_facts(facts: &DeclaredFacts, existing: &[Route], rejections: &BTreeSet<String>, opts: &BindOptions) -> BindResult;
 
 pub struct BindResult {
-    pub routes: Vec<Route>,               // sorted by id
-    pub advisories: Vec<Advisory>,        // sorted by id
+    pub routes: Vec<Route>,               // sorted by id; run steps and advisory steps
     pub skipped: Vec<(String, String)>,   // (instinct id or "declared", reason), sorted
-    pub origins: BTreeMap<String, String>,// route/advisory id → instinct id
+    pub origins: BTreeMap<String, String>,// route id → instinct id
 }
-pub struct Advisory { id, instinct, template_id, trigger, slots: BTreeMap<String, String>, provenance }
+impl BindResult {
+    pub fn advisories(&self) -> Vec<Advice<'_>>;  // the advisory routes, through their templates
+    pub fn runs(&self) -> Vec<&Route>;             // the routes that direct a command
+}
 pub struct BindOptions { pub disabled: BTreeSet<String> }
 ```
+
+Every bound route carries `evidence.provenance = "instinct:<pack>@<version>"`, `evidence.origin =
+Origin::Instinct { pack, version, instinct, ecosystem, declared }` (the catalogue id, the ecosystem
+the wrapper names, and the file that declares what it directs) and `evidence.by_origin =
+{declared: 1}`; `support` and `opportunities` stay 0.
 
 **Determinism.** The same repository files produce byte-identical `BindResult`s, wherever the
 repository lives: every collection is a sorted `Vec` or a `BTreeMap`, walks are sorted, and no
@@ -192,9 +207,11 @@ A repository is untrusted input, exactly like a track.
 
 ## Limits of this version
 
-- **Exact trigger keys.** The runtime matches `after_failure` on the exact canonical key, so
-  `python3 -m unittest discover -s tests` is not `python3 -m unittest`. Instincts bind the bare
-  spellings agents use; see `Trigger::AfterFailure` prefix matching below.
+- **Failure triggers match by runner, for instincts only.** An instinct's `after_failure` trigger
+  fires on any run of the same runner (`adage_core::pattern::runs_avoided`: `python3 -m unittest
+  tests.test_billing -v` for `python3 -m unittest`); learned and imported routes still need the
+  directed key or it with options added.
+- **No repeat-failure trigger.** U2 stays disabled: `Trigger::RepeatFailure` does not exist.
 - **Unclassified runners.** `uv`, `tox`, `nox`, `poetry`, `just` and `task` are not in adage-core's
   command table, so they classify as environment and are never directed; they are detected and
   reported in `skipped`.
@@ -202,109 +219,134 @@ A repository is untrusted input, exactly like a track.
   dynamically is not linked. Declared Makefile prerequisites always take precedence.
 - **Root only.** Workspace packages' own manifests and lockfiles are not read yet (N3).
 
-## Integration plan
+## Integration
 
-The crate is self-contained. Wiring it in touches four crates; each item below is required before
-instincts reach an agent as designed.
+Instincts are wired into every crate that learns, compiles, decides, shows or measures routes. What
+each part does, and where:
 
-### adage-tracks
+### adage-tracks (the model and the index)
 
-1. **Provenance on routes and tracks.** Instinct routes carry `evidence.provenance =
-   "instinct:<pack>@<version>"` today. Add `pub fn is_instinct(r: &Route) -> bool` (the crate has
-   one) and treat a track whose `manifest.track.provenance` starts with `instinct:` like an import
-   in [`Index::compile`](../crates/adage-tracks/src/index.rs): the sort key at `index.rs` ~70–78
-   must rank first-hand routes before instinct routes explicitly (today the learned route wins only
-   because `<repo>/dead-ends` and `<repo>/finish-line` sort before `<repo>/instincts`; the crate's
-   test `the_index_keeps_the_learned_route_over_an_instinct_with_the_same_id` pins that). A retired
-   first-hand route must shadow an instinct with its id, as it shadows imports.
-2. **`Step::Advise { template_id: String, slots: BTreeMap<String, String> }`.** Validation: the
-   template id is one of a fixed set owned by the runtime (`generated-file`, `lockfile`,
-   `package-manager`), each slot is known to the template and passes its contract (the crate's
-   `bind::check_advisory` is the reference), the aspect is yellow, the effect is observe. Then U4,
-   U6 and N1's advisory become routes and `BindResult::advisories` goes away.
-3. **`Trigger::RepeatFailure { command, signature }`** for U2: the same key failing with the same
-   signature twice with no edit in between. Timeouts and connection errors exempt.
-4. **Failure-trigger matching by runner.** Either a `prefix: bool` on `Trigger::AfterFailure` or a
-   separate trigger that matches the runner (`mine::runner`) rather than the exact key, so
-   `python3 -m unittest discover -s tests` and `pytest tests/x.py -q` also fire.
-5. **`Evidence.by_origin`** (roadmap E1): keep `support`/`opportunities` organic only; record
-   instinct, declared and synthetic counts separately. An instinct never earns green on its own.
-6. **`route_kind`** ([`model.rs`](../crates/adage-tracks/src/model.rs)): `after_edit` + `run` is
-   `finish-line`, matching the `finish-line-*` ids instincts bind, but `after_failure` + `run` is
-   `other`, which excludes a session an instinct steered from *every* miner and renders
-   `kind="other"`. Map `after_failure` + `run` to `dead-ends` (the kind of the learned route sharing
-   the `dead-end-*` id; `adage_instincts::intended_kind` gives it, and the test
-   `route_ids_line_up_with_route_kinds` pins today's gap), and advisories to a new `advice` kind.
-7. **A `Stale`-like state for instincts is not needed**: an instinct is re-bound from files on
-   every learn, so it never goes stale; it is retired (below) or overridden.
-
-### adage-runtime
-
-1. **Wrapper text per provenance.** [`render::wrap_kind`](../crates/adage-runtime/src/render.rs)
-   always says "Learned by Adage from this repository's earlier agent sessions", which is false for
-   an instinct. Pass the provenance and render "Adage's built-in default for repositories like this
-   one; not requested by the user." for `instinct:` routes. Put `origin="instinct"` in the
-   `<adage-signal>` attributes, beside `kind`, so transcripts, steering exclusion and evals can
-   tell them apart.
-2. **Render `after_failure` + `run`.** Today it falls through to "A known next step here is:";
-   give it its own template ("That failed. In this repository, run instead: …"), since instincts
-   are the main source of this shape.
-3. **Render `after_command` + `run`/`advise`.** `bind_result_route` renders only `read_batch` after
-   a command; N1's advisory after `npm install` needs the advise step.
-4. **No Stop blocks for instincts.** `decide` turns every `after_edit` + `run` route into an
-   obligation, and `Event::Stop` asks the agent to continue for an unmet one. Skip obligations
-   whose route is an instinct (deliver the after-edit directive only). The finish-line text needs a
-   third sentence for instincts: both `FINISH_CI_FAILS` ("CI fails if this is skipped", said only
-   when `deviations_failed > 0`, which is 0 for an instinct) and `FINISH_OBSERVED` ("Agents in this
-   repository run it after such changes") claim session evidence an instinct does not have. Use
-   "This repository's build declares this step." for `instinct:` routes.
-5. **`FollowedFailed` judgement and auto-retire.** A new judgement when the agent followed an
-   instinct's directive and the directed command then failed. Three `FollowedFailed` judgements
-   retire the instinct route for that repository (recorded like a review rejection, so a re-bind
-   does not bring it back); losing authority is always automatic.
+- **Provenance.** `Evidence.origin: Option<Origin>` (`learned`, `instinct {pack, version,
+  instinct, ecosystem, declared}`, `imported`, `authored`, `synthetic`; serde default, so every
+  older track reads), `Route::origin()` (the recorded origin, else what `provenance` says) and
+  `Route::is_instinct()`. `Evidence.by_origin` (serde default) keeps counts by origin apart from
+  the organic `support`/`opportunities` (roadmap E1): `declared: 1` for an instinct, then its
+  runtime judgements (`followed`, `followed_failed`, `derailed`). Validation checks the origin's
+  fields (a closed ecosystem list, a repository-relative declared file) and refuses an instinct
+  that is not yellow.
+- **`Step::Advise { template, slots }`** with the closed template set in `adage_tracks::advice`
+  (`generated-file`, `lockfile`, `package-manager`) and each slot's contract (`path` a
+  repository-relative glob, `command` plain argv at most regenerate, `manager` and `lockfile` from
+  the lockfile table). Validation refuses an unknown template, an unknown or missing slot, a value
+  that fails its contract, and anything but yellow + observe after an edit, a command or a failure.
+- **`route_kind`**: `after_failure` + `run` is `dead-ends` (the kind of the learned route sharing
+  the `dead-end-*` id), and any advisory step is the new kind `advice`, which steers no miner but
+  its own (`adage_learn::import::steers`).
+- **Index precedence by provenance** (`Index::compile`): on an id collision, a first-hand route
+  (learned or authored) beats an import, which beats an instinct, whatever the track names sort to;
+  a retired first-hand route shadows an instinct with its id, as it shadows imports.
+- **Interlocking** (`interlock::resolve`): instincts have the lowest precedence. An instinct that a
+  route from any other source contradicts at the same decision point (a different command) is left
+  out of the index (`ConflictKind::Instinct`, reported by `adage learn` and `adage doctor`).
+- **No repeat-failure trigger**: U2 stays disabled, so `Trigger::RepeatFailure` was not added.
 
 ### adage-learn
 
-1. **Bind in the plan, per repository.** After mining (so learned routes exist), call
-   `adage_instincts::bind(root, &learned_routes_for_repo, &rejected_ids)` where `rejected_ids` are
-   the ids with `Decision::Rejected` in the repository's `review.yaml` files plus instinct ids
-   auto-retired by `FollowedFailed`. Write the routes as one track `<repo>/instincts`, provenance
-   `instinct:core@<version>`, version bumped by the usual semver rules. Needs the repository's root
-   on disk; skip repositories whose root is gone.
-2. **Never learn from instincts.** Sessions steered by an instinct are steered sessions (Design
-   principle 6): exclude them per `route_kind` as for reflexes, and never count an instinct's
-   directive as support for the learned route with its id.
-3. **Hand-over.** When the miner learns a route with an instinct's id, the instinct route simply
-   loses in the index; nothing else is needed. Log it in `learn.log` as "instinct confirmed by
-   sessions".
-4. **Review.** `adage review` lists instinct routes separately, with `origins` (which instinct) and
-   the declared fact that bound them; rejecting one stores the usual decision.
+- **Bind in the plan, per repository** (`adage_learn::instincts`). After mining and review
+  reconciliation, `plan()` calls `adage_instincts::bind_with(root, others, rejections, opts)` when
+  `LearnConfig::instincts` is set: `others` are the repository's routes just planned plus its other
+  installed tracks and imports; `rejections` are the ids rejected in any of the repository's
+  `review.yaml` files. The routes go to the track `<repo>/instincts`, provenance
+  `instinct:<pack>@<version>`, versioned by the usual semver rules, and appear in the report (`bound`,
+  `advice`, `drafts`, `skipped`, `retired`, `confirmed`) and, as counts, in `learn.log`.
+- **The repository's root** is the working directory most of its sessions recorded that still
+  exists (`instincts::root_of`), or the root the caller names (`Config::roots`: automatic learning
+  names the hook's root). Unknown: nothing is bound, with the reason in the report.
+- **Day 0.** `adage learn --instincts-only [--repo-path <dir>]` binds a repository with no sessions
+  (`instincts::learn_only`), and an automatic learn for a repository with no usable session yet
+  binds its instincts once from the root the hook named.
+- **Never learn from instincts.** A session that received an instinct's directive is steered on its
+  kind (`dead-ends` or `finish-line`, from the wrapper's `kind`), so it is excluded from that miner,
+  exactly as for a reflex; `advice` steers no miner.
+- **Hand-over.** When the miner learns a route with an instinct's id, the instinct leaves its track;
+  `learn.log` says "instinct route confirmed by sessions: the learned route takes over".
+- **Review.** Rejected ids are never bound again, and a rejected instinct stays in the track,
+  retired. Environment steps stay drafts until approved; approving one approves every environment
+  step of its pack for the repository (`review.yaml`, `packs:`). Decisions never raise an instinct
+  above yellow or past probation.
+- **Auto-retire.** The spools' treated judgements are read at learn (as `adage review` reads them).
+  An instinct route with at least 3 `followed_failed`, or whose derail rate has a Wilson lower bound
+  of at least 0.5 over at least 5 judgements, is retired and recorded as a rejection in its
+  `review.yaml` (`by: "adage: followed and failed 3 times"`), so a re-bind does not bring it back;
+  `learn.log` records the retirement.
+
+### adage-runtime
+
+- **Wrapper per provenance.** An instinct's wrapper carries `origin="instinct"` after `kind`, and
+  its last line is `Adage default for <ecosystem> repositories (from this repository's <file>); not
+  requested by the user.` (`repositories like this one` without an ecosystem), never "Learned by
+  Adage from this repository's earlier agent sessions".
+- **Templates.** `after_failure` + `run`: "That failed. In this repository, run this instead:" with
+  the command and the exit on their own lines. An instinct's finish line ends with `<file> declares
+  this.` (or "This repository's build declares this step."), never "CI fails if this is skipped."
+  or "Agents in this repository run it after such changes.". Advice renders its fixed sentence.
+- **Never a Stop request.** An instinct finish line makes no obligation (a follow judgement
+  instead), so no Stop hook ever asks the agent to continue for it; a rebuilt state makes none
+  either. Instincts are delivered yellow whatever a track says (`delivered_aspect`).
+- **`Judgement::FollowedFailed`**: the directed command ran within the follow window and failed
+  (a failure event, or a batch call marked failed). Directives after a failure are judged too. The
+  fast path decides a failure in full whenever a judgement is pending.
 
 ### adage-cli
 
-1. **Config.** `instincts.enabled` (default `true`, per repository overridable) and
-   `instincts.packs` (default `["core"]`); `instincts.disabled = ["U3", …]` maps to
-   `BindOptions::disabled`.
-2. **`adage init`.** Show what would bind for the current repository (a dry `bind`) and ask once
-   for pack-level approval of environment-effect instincts (N1's install route; U7 and U10 later),
-   which otherwise stay drafts.
-3. **`adage doctor`.** Report per repository: instincts bound, skipped with reasons (including
-   files skipped for size or symlinks), and any instinct overridden by a learned route.
-4. **SessionStart bind for unseen repositories** (`hook.rs`). When a session starts in a repository
-   with no index entry, bind instincts in the background learner (never in the hook's hot path:
-   the hook's budget is milliseconds and binding reads files), compile the index, and let the next
-   event use it. The hook itself stays a pure function of the index.
-
-### adage-core
-
-Add command-table entries so wrappers can be directed: `uv` (`run` → classify the wrapped
-command), `tox`/`nox` (verify), `poetry run`, `just`/`task` (classify by recipe body is not
-possible in the table; keep them environment unless the binder vouches for the body, which needs a
-track-level "declared body" field). Until then P1's `uv run`, tox and nox wrappers are reported, not
-bound.
+- **Config**: `instincts.enabled` (default `true`), `instincts.packs` (default `core`),
+  `instincts.disabled` (ids, comma-separated); in `adage config` and the settings tab of `adage ui`.
+  `adage learn --no-instincts` skips them for one run.
+- **`adage init`** shows what would bind for the current repository (a dry bind), explains pack
+  approval, and prints `adage learn --instincts-only`; `adage init --yes` runs it.
+- **`adage doctor`**: an `instincts` check with, per repository, the routes bound and delivered,
+  advice, drafts awaiting approval, and those overridden.
+- **`adage review`** lists instinct routes with their origin (`instinct U1 (from Makefile)`) until a
+  person decides; `promote` is never offered or accepted for them. `adage status` labels the
+  instincts track.
 
 ### adage-eval
 
-An `instincts-only` arm (instincts on, no reflexes) against `off` on the generated sandboxes for
-day-0 lift; decoy and violation sandboxes for the false-route rate (roadmap exit: ≤ 5%) and
-retire latency (≤ 3 sessions); and the adversarial binder set in this crate's fixtures run as a gate.
+- **`adage eval <dataset> --instincts-only`**: nothing is learned from the train split; the index
+  holds only what binds from the repository's real files (`--sandbox-dir`, default
+  `evals/sandboxes/<repo>`; `evals/sandboxes/acme-billing` is the demo sandbox), and the test
+  sessions are replayed. The report's `instincts` block gives precision of instinct directives
+  (dead ends and finish lines separately), advice given, and the share of failed verify runs an
+  instinct answered with a command the agent then ran (day-0 recall). `--instincts` binds them
+  after learning, as `adage learn` does. Instincts are off by default, so the committed numbers and
+  the L0 baseline are learned routes alone; `adage eval bench run --instincts` measures with them.
+- **The oracle** (`safety::check_wrapper`) accepts the instinct wrapper, the declared-source
+  finish-line sentence and the advisory sentences exactly, with each advisory value equal to its
+  route's slot, and rejects anything else; the property tests generate instinct-provenance routes
+  and advisory steps.
+- **Gates** (`tests/gates.rs`): instincts-only on the demo gives at least one correct dead end and
+  one correct finish line, no unsafe directive, and learns nothing; with learning, every directive
+  stays safe on the demo, synthetic and adversarial sets.
+
+Measured on the demo (`demo-haiku45`, instincts only, nothing learned; docs/evals.md):
+
+| Split | Directives | Correct | Dead ends | Finish lines | Failed verify runs answered |
+| --- | --- | --- | --- | --- | --- |
+| hash:0.3 (default) | 11 | 10 (90.9%) | 3/4 | 7/7 | 3/4 |
+| all (steered included) | 55 | 48 (87.3%) | 26/32 | 22/23 | 26/32 |
+
+Advice was never triggered (no agent edited the generated file). The L0 bench (`core` suite): J
+0.6307 without instincts (the baseline, unchanged), 0.6466 with them (`--instincts`); unsafe
+directives and fast-path mismatches 0 either way.
+
+### Not done yet
+
+- **U2 (no blind retry)** needs `Trigger::RepeatFailure`; it stays disabled.
+- **SessionStart bind in the hook**: binding happens in the background learner at the end of a
+  repository's first session, or through `adage learn --instincts-only` / `adage init`; not yet
+  when a session *starts* in an unseen repository.
+- **The interactive `adage init` wizard** does not have an instincts step (the plain `adage init`
+  does).
+- **adage-core command-table entries** for `uv`, `tox`, `nox`, `poetry run`, `just` and `task`, so
+  P1's wrappers can be directed; until then they are reported, not bound.
+- **Workspace packages** (N3) and the other P1 instincts, each with its missing trigger or slot.

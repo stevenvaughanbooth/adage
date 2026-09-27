@@ -120,7 +120,8 @@ flowchart TB
 | `adage-tracks` | The track and route model, validation (tracks are untrusted input), the canonical digest, the compiled index, review decisions and proposals | `src/model.rs`, `src/io.rs`, `src/index.rs`, `src/review.rs`, `src/proposals.rs` |
 | `adage-sign` | Native sshsig signing (ssh-agent first, key file second) and `allowed_signers` verification | `src/lib.rs`, `src/allowed_signers.rs` |
 | `adage-intent` | Prompt normalisation, the static embedding model, exact kNN + deterministic Louvain, the behavioural split/merge | `src/model.rs`, `src/cluster.rs`, `src/purity.rs` |
-| `adage-learn` | Importers (Claude Code, OpenCode export, Codex rollouts), miners, intent routes, versioning | `src/lib.rs`, `src/mine.rs`, `src/intent.rs`, `src/import.rs`, `src/opencode.rs`, `src/codex.rs` |
+| `adage-instincts` | Instincts: prebuilt routes bound per repository from its declared files (Makefile, package.json, lockfiles, …), with no session history | `data/catalogue.toml`, `src/declared.rs`, `src/detect.rs`, `src/bind.rs` |
+| `adage-learn` | Importers (Claude Code, OpenCode export, Codex rollouts), miners, intent routes, instinct binding, versioning | `src/lib.rs`, `src/mine.rs`, `src/intent.rs`, `src/import.rs`, `src/instincts.rs`, `src/opencode.rs`, `src/codex.rs` |
 | `adage-runtime` | Hook-time decisions, fixed-template rendering, holdout assignment, follow/derail judgement | `src/lib.rs`, `src/render.rs` |
 | `adage-cli` | The `adage` binary: the hook client, harness adapters, every command | `src/main.rs`, `src/hook.rs`, `src/harness/` |
 | `adage-eval` | Offline replay eval, datasets, the safety oracle, regression gates, property tests | `src/`, `tests/gates.rs`, `tests/prop_*.rs` |
@@ -501,6 +502,16 @@ sequenceDiagram
   `adage config` and `adage doctor`; `adage config set` refuses inside an agent session.
 - **Experiments.** The demo and live runners set `ADAGE_AUTO_LEARN=0`: their rounds decide when
   learning happens, and the index must not change within one.
+- **Instincts** (docs/instincts.md). After mining and review, each repository's *instincts* —
+  prebuilt routes from `adage-instincts`, bound from the repository's own files — are written as
+  the track `<repo>/instincts` (provenance `instinct:<pack>@<version>`, `Evidence.origin`). They
+  need no history, so a repository gets them on day 0 (`adage learn --instincts-only`, or the
+  first automatic learn). They have the lowest precedence everywhere: the binder skips anything
+  another route covers, the index prefers any other source on an id collision, interlocking
+  suppresses an instinct another route contradicts. They are yellow, never make a Stop request,
+  say in their wrapper that they are Adage's defaults (never "learned"), and are retired
+  automatically when agents follow them into failures (`Judgement::FollowedFailed`, read from the
+  spools at learn). `instincts.enabled`, `instincts.packs` and `instincts.disabled` configure them.
 
 ### 4.8 Embedding model and intent families (A6)
 

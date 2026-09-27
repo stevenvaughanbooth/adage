@@ -10,7 +10,9 @@ use adage_core::keys::{self, template_key};
 use adage_core::tools::normalize_tool;
 use adage_core::{repo, CommandTable, Normalized};
 use adage_runtime::Call;
-use adage_tracks::{KIND_DEAD_ENDS, KIND_FINISH_LINE, KIND_INTENTS, KIND_OTHER, KIND_WORK_ITEMS, MINER_KINDS};
+use adage_tracks::{
+    KIND_ADVICE, KIND_DEAD_ENDS, KIND_FINISH_LINE, KIND_INTENTS, KIND_OTHER, KIND_WORK_ITEMS, MINER_KINDS,
+};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -83,8 +85,9 @@ pub fn route_kind(id: &str) -> &'static str {
 /// | --- | --- | --- |
 /// | `work-items` | `work-items` | The lookup and the linked-file reads it directs |
 /// | `finish-line` | `finish-line` | The step after an edit (and the stop request) |
-/// | `dead-ends` | `dead-ends`, `intents` | Announced at the first prompt, it changes which verify command the agent runs first, which is what the intent miner learns from |
+/// | `dead-ends` | `dead-ends`, `intents` | Announced at the first prompt, it changes which verify command the agent runs first, which is what the intent miner learns from; an instinct's dead end (`after_failure` + `run`, the same route ids) steers the same miners |
 /// | `intents` | `intents` | The first command after the prompt |
+/// | `advice` | none but its own | Fixed advice (a generated file, a lockfile, the package manager) directs no command any miner learns |
 /// | `other`, unknown, or unreadable | every kind | A shape no miner produces (an import, a hand-written route) could have influenced anything |
 pub fn steers(kind: &str) -> &'static [&'static str] {
     match kind {
@@ -92,6 +95,7 @@ pub fn steers(kind: &str) -> &'static [&'static str] {
         KIND_FINISH_LINE => &[KIND_FINISH_LINE],
         KIND_DEAD_ENDS => &[KIND_DEAD_ENDS, KIND_INTENTS],
         KIND_INTENTS => &[KIND_INTENTS],
+        KIND_ADVICE => &[KIND_ADVICE],
         _ => &MINER_KINDS,
     }
 }
@@ -414,6 +418,8 @@ mod tests {
             ("finish-line", v(&["finish-line"])),
             ("intents", v(&["intents"])),
             ("dead-ends", v(&["dead-ends", "intents"])),
+            // Advice steers no miner but its own.
+            ("advice", v(&["advice"])),
             // Other and unknown kinds steer every miner.
             ("other", v(&["dead-ends", "finish-line", "intents", "work-items"])),
             ("mystery", v(&["dead-ends", "finish-line", "intents", "work-items"])),
@@ -422,6 +428,11 @@ mod tests {
             let (_, k) = kinds(&format!(r#"<adage-signal track="t@1.0.0" route="r" aspect="yellow" kind="{kind}">"#));
             assert_eq!(k, want, "{kind}");
         }
+        // An instinct's wrapper carries its origin after the kind; the kind still decides.
+        let (d, k) = kinds(
+            r#"<adage-signal track="acme/instincts@0.1.0" route="dead-end-d41b1e" aspect="yellow" kind="dead-ends" origin="instinct">"#,
+        );
+        assert_eq!((d, k), (v(&["dead-end-d41b1e"]), v(&["dead-ends", "intents"])));
     }
 
     #[test]

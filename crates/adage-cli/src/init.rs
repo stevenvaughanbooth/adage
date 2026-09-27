@@ -73,6 +73,10 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
             _ => String::new(),
         }
     );
+    println!(
+        "  5. show what Adage's built-in defaults (instincts) would bind in this repository, from its files alone{}.",
+        if yes { ", and bind them" } else { "" }
+    );
     if let Some(v) = agent {
         println!("Inside an agent session ({v} is set): printing only.");
     }
@@ -141,6 +145,50 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
     let opts = crate::survey::Options { repo: repo_arg.as_ref().and(repo_key.clone()), ..Default::default() };
     let s = crate::survey::run(&opts, paths)?;
     crate::survey::print_text(&s);
+
+    // 5. Instincts: what Adage's built-in defaults would bind here, from this repository's files.
+    println!("\n5. Instincts (day 0)");
+    instincts(root.as_deref(), yes, paths)?;
     println!("`adage doctor` checks the whole setup at any time.");
+    Ok(())
+}
+
+/// Show what would bind for the repository (a dry bind, nothing written), and offer
+/// `adage learn --instincts-only`; with `--yes`, run it.
+fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result<()> {
+    let Some(root) = root else {
+        println!("  Not inside a repository: instincts bind per repository (run `adage init` inside one).");
+        return Ok(());
+    };
+    let settings = adage_store::config::load(paths).config;
+    if !settings.instincts_enabled {
+        println!("  Off (`adage config set instincts.enabled true` turns them on).");
+        return Ok(());
+    }
+    let opts = adage_instincts::BindOptions { disabled: settings.instincts_disabled.iter().cloned().collect() };
+    let dry = adage_instincts::bind_with(root, &[], &Default::default(), &opts);
+    if dry.routes.is_empty() {
+        println!("  Nothing in this repository's files matches a built-in default.");
+        return Ok(());
+    }
+    println!("  From this repository's files alone, with no session history, Adage would bind:");
+    for r in &dry.routes {
+        let instinct = dry.origins.get(&r.id).map(String::as_str).unwrap_or("?");
+        let draft =
+            if r.state == adage_tracks::RouteState::Draft { "  (needs your approval in `adage review`)" } else { "" };
+        println!("    {instinct:<3} {}{draft}", crate::share::describe_step(&r.step));
+    }
+    println!("  Each is yellow at most, never blocks the agent from stopping, and gives way to anything Adage learns.");
+    let drafts = dry.routes.iter().any(|r| r.state == adage_tracks::RouteState::Draft);
+    if drafts {
+        println!("  Environment steps (installs) stay drafts until you approve one in `adage review`; approving one approves the pack's environment steps for this repository.");
+    }
+    let cmd = format!("adage learn --instincts-only --repo-path {}", detect::tilde(root));
+    if yes {
+        println!("  binding: {cmd}");
+        crate::instincts_only(&["--repo-path".to_string(), root.to_string_lossy().into_owned()], paths)?;
+    } else {
+        println!("  `{cmd}` binds them now (`adage init --yes` does it for you); otherwise the first learn does.");
+    }
     Ok(())
 }

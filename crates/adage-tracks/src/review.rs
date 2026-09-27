@@ -87,6 +87,20 @@ pub struct Review {
 pub struct Reviews {
     #[serde(default)]
     pub routes: BTreeMap<String, Review>,
+    /// Pack-level approvals (instincts): approving one environment-effect instinct of a pack in
+    /// `adage review` approves every environment-effect instinct of that pack for the
+    /// repository, which otherwise stay drafts (Design O11). Pack name → the approval.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub packs: BTreeMap<String, PackApproval>,
+}
+
+/// A person approved an instinct pack's environment steps for one repository.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PackApproval {
+    /// UTC calendar date, `YYYY-MM-DD`.
+    pub on: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub by: Option<String>,
 }
 
 /// A stable hash of what a route directs and when: trigger, step, slots, effect, exit.
@@ -185,6 +199,14 @@ pub fn validate(r: &Reviews) -> Result<()> {
             bail!("{FILE}: {id}: malformed basis");
         }
     }
+    for (pack, a) in &r.packs {
+        if pack.is_empty() || pack.len() > 32 || !pack.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-') {
+            bail!("{FILE}: pack {pack:?} is not allowed");
+        }
+        if !safe_date(&a.on) || a.by.as_deref().is_some_and(|b| !safe_by(b)) {
+            bail!("{FILE}: pack {pack}: malformed approval");
+        }
+    }
     Ok(())
 }
 
@@ -213,7 +235,7 @@ pub fn load(dir: &Path) -> Result<Reviews> {
 pub fn save(dir: &Path, r: &Reviews) -> Result<()> {
     validate(r)?;
     let p = dir.join(FILE);
-    if r.routes.is_empty() {
+    if r.routes.is_empty() && r.packs.is_empty() {
         return match std::fs::remove_file(&p) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.into()),
             _ => Ok(()),

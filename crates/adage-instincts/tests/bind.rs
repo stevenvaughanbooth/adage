@@ -34,8 +34,8 @@ const FIXTURES: [&str; 12] = [
 
 /// `(trigger command key or glob, directed command)` for each route.
 fn shape(r: &BindResult) -> Vec<(String, String, String)> {
-    r.routes
-        .iter()
+    r.runs()
+        .into_iter()
         .map(|x| {
             let t = match &x.trigger {
                 Trigger::AfterFailure { command, signature } => format!("fail {command} [{signature}]"),
@@ -79,7 +79,7 @@ fn acme_recovers_its_dead_end_and_finish_line_on_day_zero() {
     assert_eq!(f.effect, Effect::Regenerate);
     assert_eq!(f.exit, vec![Exit::ExploratoryChange]);
     // U4: the generator's output is advised, with the command that regenerates it.
-    let a = r.advisories.iter().find(|a| a.instinct == "U4").expect("U4 advisory");
+    let a = r.advisories().into_iter().find(|a| a.instinct == "U4").expect("U4 advisory");
     assert_eq!(a.slots["path"], "acme/generated/models.py");
     assert_eq!(a.slots["command"], "make gen");
     // Nothing else: `make lint` runs `python3 -m py_compile`, which classifies as environment.
@@ -95,9 +95,9 @@ fn harbor_recovers_its_dead_end_and_finish_line_on_day_zero() {
     let f = route(&r, "finish-line-04e5d4");
     assert_eq!(f.trigger, Trigger::AfterEdit { paths: "registry/*.csv".into() });
     assert_eq!(f.step, Step::Run { command: "npm run codegen".into() });
-    let a = r.advisories.iter().find(|a| a.instinct == "U4").expect("U4 advisory");
+    let a = r.advisories().into_iter().find(|a| a.instinct == "U4").expect("U4 advisory");
     assert_eq!(a.slots["path"], "src/generated/registry.ts");
-    assert_eq!(r.routes.len(), 3, "{:#?}", shape(&r));
+    assert_eq!(r.runs().len(), 3, "{:#?}", shape(&r));
     // The failing `npm test` is never itself directed.
     assert!(!shape(&r).iter().any(|(_, _, c)| c == "npm test"));
 }
@@ -115,10 +115,10 @@ fn pnpm_repository_gets_package_manager_discipline() {
     assert!(has(&r, "fail exec npm install []", "pnpm install"));
     assert!(has(&r, "fail exec npm test []", "pnpm test"));
     assert_eq!(route(&r, "dead-end-68b3e9").state, RouteState::Probation);
-    let kinds: BTreeSet<&str> = r.advisories.iter().map(|a| a.template_id.as_str()).collect();
+    let kinds: BTreeSet<&str> = r.advisories().iter().map(|a| a.template_id).collect();
     assert_eq!(kinds, ["lockfile", "package-manager"].into_iter().collect());
-    let pm = r.advisories.iter().find(|a| a.template_id == "package-manager").unwrap();
-    assert_eq!(pm.trigger, Trigger::AfterCommand { command: "exec npm install".into() });
+    let pm = r.advisories().into_iter().find(|a| a.template_id == "package-manager").unwrap();
+    assert_eq!(*pm.trigger, Trigger::AfterCommand { command: "exec npm install".into() });
     assert_eq!(
         pm.text().unwrap(),
         "This repository uses pnpm (pnpm-lock.yaml), not npm: use pnpm for installs and scripts here."
@@ -128,19 +128,19 @@ fn pnpm_repository_gets_package_manager_discipline() {
 #[test]
 fn rust_workspace_and_go_generate_bind_advisories_only() {
     let r = bound("rust");
-    assert!(r.routes.is_empty(), "{:#?}", shape(&r));
-    assert_eq!(r.advisories.len(), 1);
-    assert_eq!(r.advisories[0].slots["path"], "Cargo.lock");
+    assert!(r.runs().is_empty(), "{:#?}", shape(&r));
+    assert_eq!(r.advisories().len(), 1);
+    assert_eq!(r.advisories()[0].slots["path"], "Cargo.lock");
     let facts = adage_instincts::extract(&fixture("rust"));
     assert_eq!(facts.cargo.unwrap().members, vec!["crates/ledger", "crates/ledger-cli"]);
     assert!(facts.ci_commands.contains(&"cargo test --workspace --locked".to_string()));
 
     let r = bound("go");
-    assert!(r.routes.is_empty(), "G1 (go generate finish line) ships disabled: {:#?}", shape(&r));
-    let gen = r.advisories.iter().find(|a| a.instinct == "U4").expect("U4 advisory");
+    assert!(r.runs().is_empty(), "G1 (go generate finish line) ships disabled: {:#?}", shape(&r));
+    let gen = r.advisories().into_iter().find(|a| a.instinct == "U4").expect("U4 advisory");
     assert_eq!(gen.slots["path"], "aspect/aspect_string.go");
     assert_eq!(gen.slots["command"], "go generate ./...");
-    assert!(r.advisories.iter().any(|a| a.instinct == "U6" && a.slots["path"] == "go.sum"));
+    assert!(r.advisories().iter().any(|a| a.instinct == "U6" && a.slots["path"] == "go.sum"));
     let facts = adage_instincts::extract(&fixture("go"));
     let go = facts.go.unwrap();
     assert_eq!(go.module, "example.com/signals");
@@ -158,7 +158,7 @@ fn python_wrapper_covers_every_spelling_of_pytest() {
     // $(SCHEMAS) tools/gen.py`.
     assert!(has(&r, "edit schema/*.json", "make gen"));
     assert!(has(&r, "edit tools/gen.py", "make gen"));
-    let a = r.advisories.iter().find(|a| a.instinct == "U4").unwrap();
+    let a = r.advisories().into_iter().find(|a| a.instinct == "U4").unwrap();
     assert_eq!((a.slots["path"].as_str(), a.slots["command"].as_str()), ("quayside/models_gen.py", "make gen"));
 }
 
@@ -168,7 +168,7 @@ fn wrappers_adage_cannot_direct_are_reported_not_bound() {
     std::fs::write(d.path().join("pyproject.toml"), "[tool.pytest.ini_options]\ntestpaths=['t']\n[tool.uv]\n").unwrap();
     std::fs::write(d.path().join("tox.ini"), "[tox]\nenvlist = py312\n[testenv]\ncommands = pytest\n").unwrap();
     let r = bind(d.path(), &[], &BTreeSet::new());
-    assert!(r.routes.is_empty(), "{:#?}", shape(&r));
+    assert!(r.runs().is_empty(), "{:#?}", shape(&r));
     let reasons: Vec<&str> = r.skipped.iter().filter(|(i, _)| i == "P1").map(|(_, w)| w.as_str()).collect();
     assert!(reasons.iter().any(|w| w.contains("tox")) && reasons.iter().any(|w| w.contains("uv")), "{reasons:?}");
     assert!(r.skipped.iter().any(|(i, w)| i == "U3" && w.contains("tox")), "{:?}", r.skipped);
@@ -177,25 +177,25 @@ fn wrappers_adage_cannot_direct_are_reported_not_bound() {
 #[test]
 fn decoy_targets_bind_nothing() {
     let r = bound("decoy");
-    assert!(r.routes.is_empty(), "{:#?}", shape(&r));
-    assert!(r.advisories.is_empty(), "{:#?}", r.advisories);
+    assert!(r.runs().is_empty(), "{:#?}", shape(&r));
+    assert!(r.advisories().is_empty(), "{:#?}", r.advisories());
 }
 
 #[test]
 fn hostile_repositories_never_bind_their_commands() {
     for name in ["hostile-npm", "hostile-hooks", "hostile-make", "hostile-unicode"] {
         let r = bound(name);
-        assert!(r.routes.is_empty(), "{name}: {:#?}", shape(&r));
-        assert!(r.advisories.is_empty(), "{name}: {:#?}", r.advisories);
+        assert!(r.runs().is_empty(), "{name}: {:#?}", shape(&r));
+        assert!(r.advisories().is_empty(), "{name}: {:#?}", r.advisories());
     }
     // A CI file full of injection text: only the repository's plain test target binds, and no
     // text from the workflow reaches anything bound.
     let r = bound("hostile-ci");
     assert!(!r.routes.is_empty());
-    for x in &r.routes {
+    for x in r.runs() {
         assert_eq!(x.step, Step::Run { command: "make test".into() });
     }
-    let json = serde_json::to_string(&(&r.routes, &r.advisories)).unwrap().to_ascii_lowercase();
+    let json = serde_json::to_string(&r.routes).unwrap().to_ascii_lowercase();
     for bad in ["evil", "adage-signal", "ignore", "push", "curl", "token", "green"] {
         assert!(!json.contains(bad), "{bad:?} leaked: {json}");
     }
@@ -222,8 +222,8 @@ fn symlinks_out_of_the_repository_are_never_followed() {
     symlink(outside.join("gen.py"), repo.join("tools/gen.py")).unwrap();
     symlink(outside.join("schema"), repo.join("schema")).unwrap();
     let r = bind(&repo, &[], &BTreeSet::new());
-    assert!(r.routes.is_empty(), "{:#?}", shape(&r));
-    assert!(r.advisories.is_empty());
+    assert!(r.runs().is_empty(), "{:#?}", shape(&r));
+    assert!(r.advisories().is_empty());
     assert!(
         r.skipped.contains(&("declared".into(), "Makefile: symlink escapes the repository".into())),
         "{:?}",
@@ -257,10 +257,10 @@ fn huge_files_are_skipped_and_marker_scans_read_only_the_head() {
     std::fs::create_dir_all(d.path().join("pb")).unwrap();
     std::fs::write(d.path().join("pb/api.pb.go"), big).unwrap();
     let r = bind(d.path(), &[], &BTreeSet::new());
-    assert!(r.routes.is_empty(), "{:#?}", shape(&r));
+    assert!(r.runs().is_empty(), "{:#?}", shape(&r));
     assert!(r.skipped.contains(&("declared".into(), "package.json: larger than 64 KiB".into())), "{:?}", r.skipped);
     assert!(r.skipped.contains(&("declared".into(), "Makefile: larger than 64 KiB".into())));
-    assert!(r.advisories.iter().any(|a| a.slots["path"] == "pb/api.pb.go"), "{:?}", r.advisories);
+    assert!(r.advisories().iter().any(|a| a.slots["path"] == "pb/api.pb.go"), "{:?}", r.advisories());
 }
 
 #[test]
@@ -272,7 +272,7 @@ fn invisible_characters_in_makefile_targets_never_bind() {
     )
     .unwrap();
     let r = bind(d.path(), &[], &BTreeSet::new());
-    assert!(r.routes.is_empty(), "{:#?}", shape(&r));
+    assert!(r.runs().is_empty(), "{:#?}", shape(&r));
 }
 
 #[test]
@@ -284,7 +284,7 @@ fn pathological_manifests_do_not_crash_the_binder() {
     std::fs::write(d.path().join("Makefile"), "A = $(A)$(A)\nB = $(B\ntest:\n\t$(A) $(B) pytest\n".repeat(200))
         .unwrap();
     let r = bind(d.path(), &[], &BTreeSet::new());
-    assert!(r.routes.is_empty(), "{:#?}", shape(&r));
+    assert!(r.runs().is_empty(), "{:#?}", shape(&r));
 }
 
 #[test]
@@ -323,12 +323,21 @@ fn every_bound_route_is_a_valid_capped_instinct() {
             assert_eq!(x.evidence.support, 0);
             assert_eq!(x.aspect, Aspect::Yellow, "{name} {}", x.id);
             assert!(!x.authored && x.slots.is_empty());
-            assert!(matches!(x.step, Step::Run { .. }), "never a red avoid step: {name} {}", x.id);
             assert!(
-                matches!(x.trigger, Trigger::AfterFailure { .. } | Trigger::AfterEdit { .. }),
+                matches!(x.step, Step::Run { .. } | Step::Advise { .. }),
+                "never a red avoid step: {name} {}",
+                x.id
+            );
+            assert!(
+                matches!(
+                    x.trigger,
+                    Trigger::AfterFailure { .. } | Trigger::AfterEdit { .. } | Trigger::AfterCommand { .. }
+                ),
                 "reactive only: {name} {}",
                 x.id
             );
+            assert!(x.is_instinct() && matches!(x.origin(), adage_tracks::Origin::Instinct { .. }));
+            assert_eq!(x.evidence.by_origin.get("declared"), Some(&1));
             match x.effect {
                 Effect::Observe | Effect::Verify | Effect::Regenerate => assert_eq!(x.state, RouteState::Probation),
                 Effect::Environment => assert_eq!(x.state, RouteState::Draft),
@@ -336,7 +345,7 @@ fn every_bound_route_is_a_valid_capped_instinct() {
             }
             assert!(r.origins.contains_key(&x.id));
         }
-        for a in &r.advisories {
+        for a in r.advisories() {
             let text = a.text().expect("renders");
             assert!(text.is_ascii() && !text.contains(['`', '<', '>', '"', '$', '|', ';']), "{text}");
         }
@@ -442,9 +451,8 @@ fn configuration_can_disable_instincts() {
 
 #[test]
 fn the_index_keeps_the_learned_route_over_an_instinct_with_the_same_id() {
-    // Today's index de-duplicates by id and breaks ties between first-hand tracks by track name;
-    // an instinct track named `<repo>/instincts` sorts after `<repo>/dead-ends` and
-    // `<repo>/finish-line`. The integration plan makes this explicit by provenance.
+    // The index de-duplicates by id and prefers first-hand routes over instincts by provenance,
+    // whatever the track names sort to (an instinct track named `aaa` still loses).
     let r = bound("acme");
     let instincts = track("acme/instincts", r.routes.clone());
     let mut l = learned(
@@ -459,6 +467,20 @@ fn the_index_keeps_the_learned_route_over_an_instinct_with_the_same_id() {
     let hit: Vec<_> = idx.routes.iter().filter(|x| x.route.id == "dead-end-d41b1e").collect();
     assert_eq!(hit.len(), 1);
     assert_eq!(hit[0].track, "acme/dead-ends");
+    let mut early = track("acme/aaa", r.routes.clone());
+    early.manifest.track.name = "acme/aaa".into();
+    let mut l2 = learned(
+        "dead-end-d41b1e",
+        Trigger::SessionStart,
+        Step::Avoid { avoid: "python3 -m unittest".into(), instead: "make test".into(), signature: "x".into() },
+    );
+    l2.evidence.provenance = "desire-path".into();
+    let mut late = track("acme/zzz", vec![l2]);
+    late.manifest.track.provenance = "desire-path".into();
+    let idx = Index::compile(&[early, late]);
+    let hit: Vec<_> = idx.routes.iter().filter(|x| x.route.id == "dead-end-d41b1e").collect();
+    assert_eq!(hit.len(), 1);
+    assert_eq!(hit[0].track, "acme/zzz", "learned beats instinct by provenance, not by name");
 }
 
 #[test]
@@ -467,14 +489,20 @@ fn route_ids_line_up_with_route_kinds() {
         for x in bound(name).routes {
             let intended = adage_instincts::intended_kind(&x);
             let today = adage_tracks::route_kind(&x);
+            assert_eq!(intended, today, "{}", x.id);
             if x.id.starts_with("finish-line-") {
-                assert_eq!((intended, today), (adage_tracks::KIND_FINISH_LINE, adage_tracks::KIND_FINISH_LINE));
+                assert_eq!(today, adage_tracks::KIND_FINISH_LINE);
             } else if x.id.starts_with("dead-end-") {
-                // after_failure + run is `other` until route_kind maps it (integration plan).
-                assert_eq!((intended, today), (adage_tracks::KIND_DEAD_ENDS, adage_tracks::KIND_OTHER), "{}", x.id);
+                assert_eq!(today, adage_tracks::KIND_DEAD_ENDS, "{}", x.id);
             } else {
                 assert!(x.id.starts_with("instinct-"), "{}", x.id);
-                assert_eq!(intended, adage_tracks::KIND_OTHER);
+                let advice = matches!(x.step, Step::Advise { .. });
+                assert_eq!(
+                    today,
+                    if advice { adage_tracks::KIND_ADVICE } else { adage_tracks::KIND_DEAD_ENDS },
+                    "{}",
+                    x.id
+                );
             }
         }
     }

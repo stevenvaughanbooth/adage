@@ -17,7 +17,7 @@
 //! | session start, session end | always: nothing decides on them |
 //! | prompt | no intent routes; no prompt route's span kind in the text; not the session's first prompt (`prompts` > 0) |
 //! | batch | no pending judgement and no obligation in the state; no call might match ([`Triggers::call_might_match`]) |
-//! | failure | no call might match (it touches no pending judgement or obligation) |
+//! | failure | no call might match, and no pending judgement (a failure of a directed command judges it `followed_failed`) |
 //! | stop | no obligation both unmet and not yet requested |
 //!
 //! The eval replay checks this on every event of every dataset: a skipped event's full decision
@@ -52,7 +52,11 @@ pub fn skip(t: &Triggers, ev: &Event, cwd: &str, state: impl FnOnce() -> Option<
             }
             state().is_some_and(|st| st.pending.is_empty() && st.obligations.is_empty())
         }
-        Event::Failure { call } => !t.calls_matter() || !t.call_might_match(&haystack(cwd, &call.tool, &call.input)),
+        // A failure can also judge a pending directive (followed, and it failed).
+        Event::Failure { call } => {
+            (!t.calls_matter() || !t.call_might_match(&haystack(cwd, &call.tool, &call.input)))
+                && state().is_some_and(|st| st.pending.is_empty())
+        }
         Event::Stop { .. } => state().is_some_and(|st| !st.obligations.iter().any(|o| !o.met && !o.stop_requested)),
     }
 }
@@ -125,7 +129,10 @@ mod tests {
             call: Call { tool: "Bash".into(), input: json!({ "command": cmd }), output: String::new(), failed: true },
         };
         assert!(!skip(&t, &failed("python -m pytest -q"), "/r", never));
-        assert!(skip(&t, &failed("cargo build"), "/r", never));
+        let fresh = || Some(SessionState::default());
+        assert!(skip(&t, &failed("cargo build"), "/r", fresh));
+        let pending = || Some(SessionState { pending: vec![Pending::default()], ..Default::default() });
+        assert!(!skip(&t, &failed("cargo build"), "/r", pending), "a directed command may have failed");
         let calls_that_might = Event::Batch {
             calls: vec![Call {
                 tool: "Bash".into(),

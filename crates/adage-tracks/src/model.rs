@@ -3,6 +3,7 @@
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -100,6 +101,13 @@ pub enum Step {
     ReadBatch { slot: String, max: usize },
     /// A known dead end: `avoid` fails in this repository; `instead` works.
     Avoid { avoid: String, instead: String, signature: String },
+    /// Advice from a fixed template ([`crate::advice::TEMPLATES`]: `generated-file`, `lockfile`,
+    /// `package-manager`), with validated slot values. No text comes from the track.
+    Advise {
+        template: String,
+        #[serde(default)]
+        slots: BTreeMap<String, String>,
+    },
 }
 
 /// Typed exit predicates, rendered by Adage from fixed templates — never free text from a track.
@@ -145,7 +153,50 @@ pub struct Evidence {
     /// that first kept it on its last evidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stale_since: Option<String>,
+    /// Where the route came from ([`Origin`]); `None` in a route written before origins were
+    /// recorded, whose origin is read from `provenance` ([`Route::origin`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<Origin>,
+    /// Counts by the origin of the evidence (roadmap E1): `support` and `opportunities` are
+    /// organic sessions only; anything else is counted here. An instinct route records
+    /// `declared: 1` (the declared fact that bound it) and, once the runtime has judged it, its
+    /// `followed`, `followed_failed` and `derailed` judgements from treated sessions. An
+    /// instinct never earns green on these.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub by_origin: BTreeMap<String, u32>,
 }
+
+/// Where a route came from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Origin {
+    /// Mined from this repository's agent sessions (a reflex).
+    Learned,
+    /// Bound from the repository's declared files by an instinct (`adage_instincts`).
+    Instinct {
+        /// The instinct pack and its version (`core`, `0.1.0`).
+        pack: String,
+        version: String,
+        /// The catalogue id (`U1`, `U5`, …).
+        instinct: String,
+        /// The ecosystem, one of [`ECOSYSTEMS`], for the directive's wrapper.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ecosystem: Option<String>,
+        /// The repository file that declares what the route directs (`Makefile`,
+        /// `package.json`, a generated file), repository-relative.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        declared: Option<String>,
+    },
+    /// Installed from a shared track (`adage add`).
+    Imported,
+    /// Written or edited by a person.
+    Authored,
+    /// Generated for evaluation (never delivered outside an eval).
+    Synthetic,
+}
+
+/// The ecosystems an instinct's wrapper may name.
+pub const ECOSYSTEMS: [&str; 5] = ["Python", "Node.js", "Rust", "Go", "Make"];
 
 fn is_zero(n: &u32) -> bool {
     *n == 0
@@ -168,6 +219,43 @@ pub struct Route {
     /// A person edited this route; the miner proposes changes instead of overwriting it.
     #[serde(default)]
     pub authored: bool,
+}
+
+impl Route {
+    /// Where this route came from: the recorded origin, else what its provenance says
+    /// (`instinct:<pack>@<version>`, `authored`, `imported…`), else learned.
+    pub fn origin(&self) -> Origin {
+        if let Some(o) = &self.evidence.origin {
+            return o.clone();
+        }
+        let p = self.evidence.provenance.as_str();
+        if let Some(rest) = p.strip_prefix("instinct:") {
+            let (pack, version) = rest.split_once('@').unwrap_or((rest, ""));
+            return Origin::Instinct {
+                pack: pack.into(),
+                version: version.into(),
+                instinct: String::new(),
+                ecosystem: None,
+                declared: None,
+            };
+        }
+        if self.authored || p == "authored" {
+            Origin::Authored
+        } else if p.starts_with("imported") {
+            Origin::Imported
+        } else if p == "synthetic" {
+            Origin::Synthetic
+        } else {
+            Origin::Learned
+        }
+    }
+
+    /// Whether an instinct bound this route (weaker than any reflex: yellow at most, never a
+    /// Stop request, lowest precedence in the index).
+    pub fn is_instinct(&self) -> bool {
+        matches!(self.evidence.origin, Some(Origin::Instinct { .. }))
+            || self.evidence.provenance.starts_with("instinct:")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -211,6 +299,8 @@ pub const KIND_WORK_ITEMS: &str = "work-items";
 pub const KIND_FINISH_LINE: &str = "finish-line";
 pub const KIND_DEAD_ENDS: &str = "dead-ends";
 pub const KIND_INTENTS: &str = "intents";
+/// Advisory steps ([`Step::Advise`]): no miner learns them, and they steer no miner but their own.
+pub const KIND_ADVICE: &str = "advice";
 /// Anything no miner produces (an imported or hand-written shape): it may influence anything.
 pub const KIND_OTHER: &str = "other";
 /// Every kind a miner learns.
@@ -225,7 +315,9 @@ pub const MINER_KINDS: [&str; 4] = [KIND_WORK_ITEMS, KIND_FINISH_LINE, KIND_DEAD
 /// | `after_command` | `read_batch` | `work-items` (the linked files) |
 /// | `after_edit` | `run` | `finish-line` |
 /// | `session_start` | `avoid` | `dead-ends` |
+/// | `after_failure` | `run` | `dead-ends` (the instinct form of a dead end: the ids line up) |
 /// | `intent` | `run` | `intents` |
+/// | any | `advise` | `advice` |
 /// | anything else | | `other` |
 pub fn route_kind(r: &Route) -> &'static str {
     match (&r.trigger, &r.step) {
@@ -233,14 +325,19 @@ pub fn route_kind(r: &Route) -> &'static str {
         (Trigger::AfterCommand { .. }, Step::ReadBatch { .. }) => KIND_WORK_ITEMS,
         (Trigger::AfterEdit { .. }, Step::Run { .. }) => KIND_FINISH_LINE,
         (Trigger::SessionStart, Step::Avoid { .. }) => KIND_DEAD_ENDS,
+        (Trigger::AfterFailure { .. }, Step::Run { .. }) => KIND_DEAD_ENDS,
         (Trigger::Intent { .. }, Step::Run { .. }) => KIND_INTENTS,
+        (_, Step::Advise { .. }) => KIND_ADVICE,
         _ => KIND_OTHER,
     }
 }
 
-/// The aspect a route is delivered at: its own, except that a route on probation or stale is
-/// never delivered green.
+/// The aspect a route is delivered at: its own, except that a route on probation or stale, or
+/// an instinct, is never delivered green (and an instinct never red).
 pub fn delivered_aspect(r: &Route) -> Aspect {
+    if r.is_instinct() {
+        return Aspect::Yellow;
+    }
     match (r.state, r.aspect) {
         (RouteState::Probation | RouteState::Stale, Aspect::Green) => Aspect::Yellow,
         (_, a) => a,

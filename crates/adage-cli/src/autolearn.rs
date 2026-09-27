@@ -229,6 +229,18 @@ fn spawn(paths: &Paths, root: &Path, after: Option<u64>) -> Result<(), Failure> 
     c.spawn().map(drop).map_err(|e| Failure::io("learn", "starting the learner", &e))
 }
 
+/// How learning binds instincts, from `instincts.*` in `config.toml`: judgements are read from
+/// this data directory's spools (auto-retire).
+pub fn instinct_config(cfg: &Config, paths: &Paths) -> adage_learn::instincts::Config {
+    adage_learn::instincts::Config {
+        enabled: cfg.instincts_enabled,
+        packs: cfg.instincts_packs.clone(),
+        disabled: cfg.instincts_disabled.iter().cloned().collect(),
+        spools: Some(paths.sessions()),
+        roots: Default::default(),
+    }
+}
+
 pub fn thresholds(t: Thresholds) -> LearnConfig {
     match t {
         Thresholds::Default => LearnConfig::default(),
@@ -311,7 +323,13 @@ fn learn_once(
         cache: cfg.learn_parse_cache.then(|| paths.cache().join("sessions")),
         only_repo: Some(repo.to_string()),
     };
-    let report = adage_learn::learn(&inputs, &paths.tracks(), &paths.index(), &thresholds(cfg.learn_thresholds))
+    let mut lc = thresholds(cfg.learn_thresholds);
+    // The hook named this repository's root: instincts bind from its files, even before any of
+    // its sessions has steps to learn from (day 0).
+    let mut ic = instinct_config(cfg, paths);
+    ic.roots.insert(repo.to_string(), root.to_path_buf());
+    lc.instincts = Some(ic);
+    let report = adage_learn::learn(&inputs, &paths.tracks(), &paths.index(), &lc)
         .map_err(|e| Failed("learn", learnlog::describe(&e)))?;
     let after = diff::snapshot(&paths.tracks(), repo);
     Ok(Done { report, changes: diff::diff(&before, &after) })

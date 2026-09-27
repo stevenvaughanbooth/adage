@@ -18,6 +18,10 @@
 //!    **demoted** to yellow: learned beats imported or person-authored, then more supporting
 //!    sessions, then a higher lower bound, then the route id. At most one green per decision
 //!    point.
+//! 3. **Instincts last.** An instinct (a prebuilt route, `adage_instincts`) has the lowest
+//!    precedence: where a route from any other source directs a different command at the same
+//!    decision point, the instinct is **suppressed**. (It never wins two greens either: an
+//!    instinct is yellow.)
 //!
 //! Conflicts are reported ([`Conflict`]) for `adage learn` and `adage doctor` to show.
 
@@ -34,6 +38,9 @@ pub enum ConflictKind {
     Polarity,
     /// Two green routes direct different commands at one decision point.
     TwoGreens,
+    /// An instinct and a route from any other source direct different commands at one decision
+    /// point: the instinct gives way (instincts have the lowest precedence).
+    Instinct,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -70,6 +77,7 @@ impl Conflict {
         let what = match self.kind {
             ConflictKind::Polarity => "avoids what",
             ConflictKind::TwoGreens => "stays the one green beside",
+            ConflictKind::Instinct => "overrides the instinct",
         };
         let (repo, winner, loser, command) = (&self.repo, &self.winner, &self.loser, &self.command);
         format!("{repo}: {winner} {what} {loser} directs ({command}); {loser}: {how}")
@@ -135,6 +143,18 @@ fn command_of(r: &Route) -> String {
         Step::Run { command } => command.clone(),
         Step::Avoid { avoid, .. } => avoid.clone(),
         Step::ReadBatch { slot, .. } => format!("read {{{slot}}}"),
+        Step::Advise { template, .. } => format!("advise {template}"),
+    }
+}
+
+/// Whether an instinct route and another route direct different things at one decision point.
+fn overrides(other: &Route, instinct: &Route) -> bool {
+    if other.is_instinct() || !instinct.is_instinct() || !same_point(&other.trigger, &instinct.trigger) {
+        return false;
+    }
+    match (&other.step, &instinct.step) {
+        (Step::Run { command: x }, Step::Run { command: y }) => !pattern::same_command(x, y),
+        _ => false,
     }
 }
 
@@ -148,6 +168,22 @@ pub fn resolve(
     let mut suppressed: BTreeSet<usize> = BTreeSet::new();
     let mut demoted: BTreeSet<usize> = BTreeSet::new();
     let same_repo = |i: usize, j: usize| routes[i].repo == routes[j].repo;
+    // 3. Instincts last: an instinct another route contradicts at its decision point is left out.
+    for (i, other) in routes.iter().enumerate() {
+        for (j, inst) in routes.iter().enumerate() {
+            if i != j && same_repo(i, j) && overrides(&other.route, &inst.route) {
+                suppressed.insert(j);
+                conflicts.push(Conflict {
+                    repo: other.repo.clone(),
+                    kind: ConflictKind::Instinct,
+                    winner: other.route.id.clone(),
+                    loser: inst.route.id.clone(),
+                    command: command_of(&inst.route),
+                    resolution: Resolution::Suppressed,
+                });
+            }
+        }
+    }
     // 1. Polarity: red beats green.
     for (i, red) in routes.iter().enumerate() {
         for (j, other) in routes.iter().enumerate() {
@@ -170,7 +206,7 @@ pub fn resolve(
     }
     // 2. Two greens: the preferred route keeps green; any other green at its decision point with a
     //    different command is demoted.
-    let learned = |i: usize| !imported(&routes[i]) && !routes[i].route.authored;
+    let learned = |i: usize| !imported(&routes[i]) && !routes[i].route.authored && !routes[i].route.is_instinct();
     let mut greens: Vec<usize> =
         (0..routes.len()).filter(|i| !suppressed.contains(i) && routes[*i].route.aspect == Aspect::Green).collect();
     greens.sort_by(|&a, &b| {
@@ -327,5 +363,24 @@ mod tests {
         let (out, conflicts) = resolve(vec![dead_end("npm test"), other], |_| false);
         assert_eq!(out.len(), 2);
         assert!(conflicts.is_empty());
+    }
+
+    #[test]
+    fn instincts_have_the_lowest_precedence() {
+        let edit = || Trigger::AfterEdit { paths: "schema/*.json".into() };
+        let mut inst = route("finish-line-i", edit(), run("make gen"), Aspect::Yellow, 0);
+        inst.route.evidence.provenance = "instinct:core@0.1.0".into();
+        let mut same = inst.clone();
+        same.route.id = "finish-line-j".into();
+        // An import saying something else at the same point wins; one saying the same does not
+        // conflict.
+        let other = route("imported-gen", edit(), run("make schema"), Aspect::Yellow, 0);
+        let (out, conflicts) = resolve(vec![inst.clone(), other.clone()], |r| r.route.id == "imported-gen");
+        assert_eq!(out.iter().map(|r| r.route.id.as_str()).collect::<Vec<_>>(), ["imported-gen"]);
+        assert_eq!((conflicts[0].kind, conflicts[0].resolution), (ConflictKind::Instinct, Resolution::Suppressed));
+        let agree = route("learned-gen", edit(), run("make gen"), Aspect::Green, 5);
+        let (out, conflicts) = resolve(vec![inst, agree, same], |_| false);
+        assert_eq!(out.len(), 3);
+        assert!(conflicts.is_empty(), "{conflicts:?}");
     }
 }

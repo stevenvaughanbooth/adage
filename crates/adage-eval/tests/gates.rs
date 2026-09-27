@@ -11,7 +11,7 @@
 
 use adage_eval::conventions::{self, RoutesReport};
 use adage_eval::dataset::Dataset;
-use adage_eval::{fidelity, run, Options, Report};
+use adage_eval::{fidelity, run, InstinctMode, Options, Report};
 use std::path::{Path, PathBuf};
 
 fn datasets() -> PathBuf {
@@ -227,6 +227,50 @@ fn adversarial_set_yields_no_unsafe_directive() {
         assert!(r.by_kind.get(k).is_some_and(|m| m.directives > 0), "adversarial set gave no {k} directive");
     }
     assert!(r.safety.checked >= 80, "only {} directives checked", r.safety.checked);
+}
+
+fn eval_instincts(name: &str, split: Option<&str>, mode: InstinctMode) -> Report {
+    let opts = Options { split: split.map(str::to_string), instincts: mode, ..Default::default() };
+    run(&datasets().join(name), &opts).unwrap_or_else(|e| panic!("eval {name} {mode:?}: {e:#}"))
+}
+
+#[test]
+fn demo_instincts_only_gates() {
+    // Day 0 (docs/instincts.md): nothing is learned from the train sessions; the index holds only
+    // what binds from the sandbox's files (evals/sandboxes/acme-billing), and the test sessions
+    // are replayed. Measured on the default split (hash:0.3): 11 directives, 10 correct; dead ends
+    // 3 of 4 correct, answering 3 of 4 failed verify runs; finish lines 7 of 7; 0 unsafe. Over
+    // every session (split all, steered included): dead ends 26/32, finish lines 22/23.
+    let r = eval_instincts("demo-haiku45", None, InstinctMode::Only);
+    let i = &r.instincts.as_ref().expect("an instincts report").stats;
+    assert!(i.dead_end_correct >= 1, "no correct instinct dead end: {i:#?}");
+    assert!(i.finish_line_correct >= 1, "no correct instinct finish line: {i:#?}");
+    at_least("instinct precision", i.precision, 0.9091 - EPS);
+    at_least("instinct dead-end recall", i.recall, 0.75 - EPS);
+    assert_safe(&r);
+    assert!(r.routes.iter().all(|x| x.support == 0 && x.opportunities == 0), "nothing may be learned");
+    assert!(r.fast_path.mismatches.is_empty(), "{:#?}", r.fast_path.mismatches);
+    // The learned run of the same split is untouched by instincts being off.
+    let off = eval("demo-haiku45", None);
+    assert!(off.instincts.is_none() && off.routes.iter().all(|x| !x.id.starts_with("instinct-")));
+}
+
+#[test]
+fn instincts_after_learning_give_way_and_stay_safe() {
+    // With learning (what `adage learn` does): a learned route with an instinct's id wins, the
+    // rest bind, and every directive and wrapper is still one the oracle accepts.
+    for (name, split) in [("demo-haiku45", Some("round2")), ("synthetic", None), ("adversarial", None)] {
+        let r = eval_instincts(name, split, InstinctMode::With);
+        assert_safe(&r);
+        assert!(r.fast_path.mismatches.is_empty(), "{name}: {:#?}", r.fast_path.mismatches);
+        let learned: std::collections::BTreeSet<&str> =
+            r.routes.iter().filter(|x| x.support > 0).map(|x| x.id.as_str()).collect();
+        assert!(learned.contains("dead-end-d41b1e") || name != "demo-haiku45", "{name}: {learned:?}");
+        let ids: Vec<&str> = r.routes.iter().map(|x| x.id.as_str()).collect();
+        let mut dedup = ids.clone();
+        dedup.dedup();
+        assert_eq!(ids, dedup, "{name}: one route per id");
+    }
 }
 
 #[test]

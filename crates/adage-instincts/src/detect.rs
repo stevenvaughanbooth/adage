@@ -39,6 +39,52 @@ pub struct RouteCandidate {
     pub summary: String,
     /// The literal command whose failure triggers it, for people and override checks.
     pub runner: Option<String>,
+    /// For the directive's wrapper: the ecosystem (one of `adage_tracks::ECOSYSTEMS`) and the
+    /// file that declares what it directs.
+    pub ecosystem: Option<&'static str>,
+    pub declared: Option<String>,
+}
+
+impl RouteCandidate {
+    fn from(mut self, ecosystem: Option<&'static str>, declared: Option<String>) -> Self {
+        self.ecosystem = ecosystem;
+        self.declared = declared;
+        self
+    }
+}
+
+/// The file a declared entry lives in.
+pub fn source_file(s: Source) -> &'static str {
+    match s {
+        Source::Makefile => "Makefile",
+        Source::PackageJson => "package.json",
+        Source::Justfile => "justfile",
+        Source::Taskfile => "Taskfile.yml",
+        Source::Tox => "tox.ini",
+        Source::Nox => "noxfile.py",
+    }
+}
+
+/// The ecosystem of a runner family (`py:pytest` → Python).
+pub fn ecosystem_of_family(fam: &str) -> Option<&'static str> {
+    if fam.starts_with("py:") {
+        Some("Python")
+    } else if fam.starts_with("node:") || fam.starts_with("js:") {
+        Some("Node.js")
+    } else {
+        None
+    }
+}
+
+/// The ecosystem of a lockfile's manager.
+pub fn ecosystem_of_manager(m: &str) -> Option<&'static str> {
+    match m {
+        "npm" | "pnpm" | "yarn" | "bun" => Some("Node.js"),
+        "cargo" => Some("Rust"),
+        "go" => Some("Go"),
+        "poetry" | "uv" | "pipenv" | "pdm" => Some("Python"),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -48,6 +94,8 @@ pub struct AdvisoryCandidate {
     pub trigger: Trigger,
     pub slots: BTreeMap<String, String>,
     pub id_parts: Vec<String>,
+    pub ecosystem: Option<&'static str>,
+    pub declared: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -276,6 +324,8 @@ fn dead_end(
         exit: Exit::IntentChanges,
         summary: summary.into(),
         runner: Some(runner.into()),
+        ecosystem: None,
+        declared: None,
     })
 }
 
@@ -298,7 +348,7 @@ fn u1(ctx: &Ctx) -> Detected {
         runners.push(w.bare.clone());
         for r in runners {
             if let Some(c) = dead_end("U1", &r, w.signature(), cmd, effect, summary, ctx) {
-                d.routes.push(c);
+                d.routes.push(c.from(ecosystem_of_family(&fam), Some(source_file(w.entry.source).into())));
             }
         }
     }
@@ -320,7 +370,7 @@ fn p1(ctx: &Ctx) -> Detected {
             for p in &ctx.cat.probes.pytest {
                 let summary = "Instinct P1: pytest runs through this repository's declared wrapper";
                 if let Some(c) = dead_end("P1", p, w.signature(), cmd, effect, summary, ctx) {
-                    d.routes.push(c);
+                    d.routes.push(c.from(Some("Python"), Some(source_file(w.entry.source).into())));
                 }
             }
         }
@@ -369,6 +419,12 @@ fn n1(ctx: &Ctx) -> Detected {
             exit: Exit::IntentChanges,
             summary: format!("Instinct N1: this repository installs with {}, not npm", pm.name),
             runner: Some(trig.into()),
+            ecosystem: Some("Node.js"),
+            declared: Some(if pm.declared_by == "package-manager-field" {
+                "package.json".into()
+            } else {
+                pm.declared_by.clone()
+            }),
         });
     }
     if let Some(e) = f.entry(Source::PackageJson, "test") {
@@ -376,7 +432,7 @@ fn n1(ctx: &Ctx) -> Detected {
             (Some(cmd), Some(eff)) if rank(eff) <= rank(Effect::Verify) => {
                 let summary = format!("Instinct N1: this repository runs its tests with {}, not npm", pm.name);
                 if let Some(c) = dead_end("N1", "npm test", String::new(), cmd, eff, &summary, ctx) {
-                    d.routes.push(c);
+                    d.routes.push(c.from(Some("Node.js"), Some("package.json".into())));
                 }
             }
             (Some(cmd), _) => d.skipped.push((
@@ -396,8 +452,12 @@ fn n1(ctx: &Ctx) -> Detected {
             instinct: "N1".into(),
             template_id: "package-manager".into(),
             trigger: Trigger::AfterCommand { command: tkey },
-            slots: [("manager".to_string(), pm.name.clone()), ("lockfile".to_string(), lockfile)].into_iter().collect(),
+            slots: [("manager".to_string(), pm.name.clone()), ("lockfile".to_string(), lockfile.clone())]
+                .into_iter()
+                .collect(),
             id_parts: vec!["npm install".into(), pm.name.clone()],
+            ecosystem: Some("Node.js"),
+            declared: Some(lockfile),
         });
     }
     d
@@ -506,7 +566,8 @@ fn u3(ctx: &Ctx) -> Detected {
             continue;
         }
         if let Some(c) = dead_end("U3", p, String::new(), &command, effect, summary, ctx) {
-            d.routes.push(c);
+            let eco = if ctx.cat.probes.python.contains(p) { Some("Python") } else { Some("Node.js") };
+            d.routes.push(c.from(eco, Some(source_file(chosen.source).into())));
         }
     }
     d
@@ -531,6 +592,8 @@ fn u5(ctx: &Ctx) -> Detected {
                     if g.inputs_from == "declared" { "Makefile prerequisites" } else { "named in its script" }
                 ),
                 runner: None,
+                ecosystem: None,
+                declared: Some(source_file(g.source).into()),
             });
         }
     }
@@ -566,12 +629,22 @@ fn u4(ctx: &Ctx) -> Detected {
                 .map(|l| l.command.clone())
                 .or_else(|| g.path.ends_with(".go").then(|| go_cmd.clone()).flatten())
         };
+        // What declares the file generated: its generator's entry, else its own marker.
+        let declared = |g: &crate::declared::Generated| -> String {
+            f.generators
+                .iter()
+                .find(|l| l.outputs.contains(&g.path))
+                .map(|l| source_file(l.source).to_string())
+                .unwrap_or_else(|| g.path.clone())
+        };
         let cmds: BTreeSet<Option<String>> = gs.iter().map(|g| command(g)).collect();
         if gs.len() >= 3 && cmds.len() == 1 && !ext.is_empty() {
             let glob = if dir.is_empty() { format!("*.{ext}") } else { format!("{dir}/*.{ext}") };
-            out.push((glob, cmds.into_iter().next().flatten()));
+            let decl: BTreeSet<String> = gs.iter().map(|g| declared(g)).filter(|d| !d.contains('/')).collect();
+            let decl = (decl.len() == 1).then(|| decl.into_iter().next()).flatten();
+            out.push((glob, cmds.into_iter().next().flatten(), decl));
         } else {
-            out.extend(gs.iter().map(|g| (g.path.clone(), command(g))));
+            out.extend(gs.iter().map(|g| (g.path.clone(), command(g), Some(declared(g)))));
         }
     }
     if out.len() > MAX_GENERATED_ADVISORIES {
@@ -581,7 +654,7 @@ fn u4(ctx: &Ctx) -> Detected {
         ));
         out.truncate(MAX_GENERATED_ADVISORIES);
     }
-    for (path, command) in out {
+    for (path, command, declared) in out {
         let mut slots: BTreeMap<String, String> = [("path".to_string(), path.clone())].into_iter().collect();
         if let Some(c) = command {
             slots.insert("command".into(), c);
@@ -592,6 +665,8 @@ fn u4(ctx: &Ctx) -> Detected {
             trigger: Trigger::AfterEdit { paths: path.clone() },
             slots,
             id_parts: vec![path],
+            ecosystem: None,
+            declared,
         });
     }
     d
@@ -607,6 +682,8 @@ fn u6(ctx: &Ctx) -> Detected {
             trigger: Trigger::AfterEdit { paths: path.clone() },
             slots: [("path".to_string(), path.clone()), ("manager".to_string(), manager.clone())].into_iter().collect(),
             id_parts: vec![path.clone()],
+            ecosystem: ecosystem_of_manager(manager),
+            declared: Some(path.clone()),
         });
     }
     d

@@ -246,6 +246,46 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
     (pass("index", detail), idx)
 }
 
+/// Instincts per repository: routes bound from its declared files that the index delivers, those
+/// waiting for approval, and those a route from another source overrides.
+fn instincts_check(paths: &Paths, scan: &TrackScan, idx: &Index) -> Check {
+    let cfg = adage_store::config::load(paths).config;
+    let mut per: std::collections::BTreeMap<&str, (usize, usize, usize, usize)> = Default::default();
+    for t in scan.valid.iter().filter(|t| index::is_instinct_track(t)) {
+        let repo = t.manifest.scope.repo.as_str();
+        let e = per.entry(repo).or_default();
+        for r in &t.routes {
+            let served = idx.routes.iter().find(|x| x.repo == repo && x.route.id == r.id);
+            match (r.state, served) {
+                (adage_tracks::RouteState::Draft, _) => e.2 += 1,
+                (s, Some(x)) if s.is_live() && x.track == t.manifest.track.name => {
+                    if matches!(r.step, adage_tracks::Step::Advise { .. }) {
+                        e.1 += 1
+                    } else {
+                        e.0 += 1
+                    }
+                }
+                (s, _) if s.is_live() => e.3 += 1,
+                _ => {}
+            }
+        }
+    }
+    let state = if cfg.instincts_enabled { "on" } else { "off" };
+    if per.is_empty() {
+        return pass(
+            "instincts",
+            format!("{state}; none bound yet (`adage learn --instincts-only` binds them for a repository on day 0)"),
+        );
+    }
+    let parts: Vec<String> = per
+        .iter()
+        .map(|(repo, (bound, advice, drafts, over))| {
+            format!("{repo}: {bound} bound, {advice} advice, {drafts} awaiting approval, {over} overridden")
+        })
+        .collect();
+    pass("instincts", format!("{state}; {}", parts.join("; ")))
+}
+
 fn model_check(paths: &Paths, idx: &Index) -> Check {
     let dir = adage_intent::model::dir_in(&paths.models());
     let wants = idx.routes.iter().any(|r| matches!(r.route.trigger, Trigger::Intent { .. }));
@@ -567,7 +607,14 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
     let (bin, exe) = binary();
     let scan = scan_tracks(&paths.tracks());
     let (index, idx) = index_check(paths, &scan);
-    let mut checks = vec![bin, data_dir(paths), index, tracks_check(&scan), model_check(paths, &idx)];
+    let mut checks = vec![
+        bin,
+        data_dir(paths),
+        index,
+        tracks_check(&scan),
+        instincts_check(paths, &scan, &idx),
+        model_check(paths, &idx),
+    ];
     checks.extend(hooks_checks(repo_root, exe.as_deref()));
     checks.extend(plugin_check(repo_root, exe.as_deref()));
     checks.push(kill_switches(repo_root));
