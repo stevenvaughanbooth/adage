@@ -64,7 +64,7 @@ pub fn run(dir: &Path, round: &str) -> Result<FidelityReport> {
     for s in ds.manifest.sessions.iter().filter(|s| s.phase == "eval" && s.round == Some(n)) {
         let Some(live) = recorded.get(&s.run) else { continue };
         let t = transcript::read(&ds.path(s))?;
-        let r = replay::replay(&t, &index, &ds.manifest.repo, &sandbox.root, &table, s.stopped());
+        let r = replay::replay(&t, &index, &ds.manifest.repo, &sandbox.root, &table, s.stopped(), Default::default());
         let replayed: Sig = r.trace.iter().map(|(e, w, c)| (e.to_string(), w.clone(), *c)).collect();
         let live: Sig = live.iter().map(|x| (x.event.clone(), x.would_have.clone(), x.would_continue)).collect();
         let a = rep.by_arm.entry(s.arm.clone()).or_default();

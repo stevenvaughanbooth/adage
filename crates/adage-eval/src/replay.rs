@@ -8,7 +8,7 @@ use crate::transcript::{self, Transcript};
 use adage_core::keys::{self, template_key};
 use adage_core::tools::normalize_tool;
 use adage_core::{repo, CanonicalAction, CommandTable, Effect};
-use adage_runtime::{decide, fast, Arm, Ctx, Directive, Event, Judgement, SessionState};
+use adage_runtime::{decide, fast, Arm, Ctx, Directive, Event, Judgement, RuntimeParams, SessionState};
 use adage_tracks::Index;
 use serde::Serialize;
 use std::path::Path;
@@ -106,7 +106,8 @@ pub fn actions(t: &Transcript, root: &Path, table: &CommandTable) -> Vec<Action>
     out
 }
 
-/// `stop`: replay the session's final Stop hook (see [`transcript::events`]).
+/// `stop`: replay the session's final Stop hook (see [`transcript::events`]). `params`: the
+/// runtime's limits (the hook's are `RuntimeParams::default()`).
 pub fn replay(
     t: &Transcript,
     index: &Index,
@@ -114,8 +115,9 @@ pub fn replay(
     root: &Path,
     table: &CommandTable,
     stop: bool,
+    params: RuntimeParams,
 ) -> Replayed {
-    let ctx = Ctx { index, repo: repo_key.to_string(), root, table, embed: None };
+    let ctx = Ctx { index, repo: repo_key.to_string(), root, table, embed: None, params };
     let mut st = SessionState { arm: Some(Arm::Holdout), repo: Some(repo_key.to_string()), ..Default::default() };
     let mut r = Replayed {
         id: t.id.clone(),

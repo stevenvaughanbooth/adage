@@ -22,6 +22,7 @@ adage eval evals/datasets/adversarial                          # must report 0 u
 adage eval fidelity evals/datasets/demo-haiku45 --round round2 # replay vs what the live hooks did
 adage eval evals/datasets/demo-haiku45 --split group:task:3:0  # held-out tasks: no task on both sides
 adage eval routes evals/datasets/demo-haiku45 --split round2   # learned routes vs the known conventions
+adage eval evals/datasets/synthetic --params my.toml            # with tuned engine parameters ("Bench")
 ```
 
 What it does:
@@ -348,6 +349,142 @@ output is deterministic, so each threshold is the measured value less 0.02:
 When a change moves a number on purpose, re-measure, then update the threshold, this table and the
 gate's comment together, and say why in the commit.
 
+## Bench (L0): `adage eval bench`
+
+The gates above ask "did this change make anything worse?". The bench asks "which setting of the
+engine's numbers is best, and by how much?". It runs a fixed suite of offline evals for one
+setting of the engine parameters, reduces it to one objective and a few guardrails, and writes
+everything as JSON Lines in one schema, so settings can be swept, compared and blessed.
+
+```bash
+adage eval bench run --suite core --deterministic --out l0.jsonl         # one setting (the defaults)
+adage eval bench run --suite core --params my.toml --out l0-mine.jsonl   # a candidate setting
+adage eval bench sweep --space evals/bench/spaces/learner.toml --strategy sobol:64 --seed 0 --jobs 4 --out sweep.jsonl
+adage eval bench report sweep.jsonl --top 10 --pareto turns_saved_at_window_per_session,-false_directives_per_session,route_f1 --vs-baseline evals/baselines/l0-core.jsonl
+adage eval bench bless l0.jsonl --reason "why the numbers moved"         # writes evals/baselines/l0-core.jsonl
+adage eval evals/datasets/synthetic --params my.toml                     # any eval, with a setting
+```
+
+### Engine parameters
+
+`adage_tracks::params::EngineParams` holds every number the runtime and the learner tune on, with
+serde defaults equal to the values Adage has always used (`{}` is exactly today's engine; the
+`demo` preset differs only in `learn.min_support` 3 and `learn.green_lower_bound` 0.5):
+
+| Parameter | Default | Used by |
+| --- | ---: | --- |
+| `runtime.follow_window` | 3 | tool batches in which a directed command counts as followed |
+| `runtime.max_directives_per_session` / `…_per_decision` | 8 / 3 | the directive budget |
+| `runtime.max_stop_requests` | 2 | finish-line stop requests per session |
+| `runtime.history` | 32 | recent call keys kept in the state |
+| `runtime.holdout_share` | 0.1 | recorded only: replay is always the holdout arm, and the hook reads `runtime.holdout` from `config.toml` |
+| `learn.min_support` | 5 (demo 3) | distinct supporting sessions for any route |
+| `learn.green_lower_bound` | 0.8 (demo 0.5) | Wilson lower bound for green |
+| `learn.yellow_rate` / `learn.retain_rate` | 0.5 / 0.3 | rate bar for a new route / to keep an existing one |
+| `learn.dead_end_consistency` | [9, 10] | a runner is avoided only if it failed in at least num/den of the sessions that ran it |
+| `learn.dead_end_signatures` | 3 | dead ends per working command |
+| `learn.finish_line_contrast` | 0.3 | finish-line rate after the edit minus without it |
+| `learn.intent_ubiquitous` / `learn.intent_contrast` | 0.8 / 0.3 | intent routes: ubiquitous commands, in- minus out-of-family rate |
+| `learn.material_lower_bound` | 0.10 | review: a material lower-bound change |
+| `learn.stale_exposure` | 0.5 | stale routes: the exposed share that explains an absence |
+
+The runtime reads its limits from `Ctx::params`; the learner from `LearnConfig::from_params`.
+**Production is unchanged:** the hook builds `Ctx` with `RuntimeParams::default()` (the index does
+not carry runtime parameters), and learning uses the `default` or `demo` preset from `config.toml`.
+Only the offline eval and the bench build either from a parameter file. `--params` takes TOML or
+JSON, any subset, laid over the preset; unknown keys and out-of-range values are refused.
+`params_hash` is the SHA-256 of the parameters' canonical JSON (keys sorted, no whitespace).
+
+### The core suite, the objective, the guardrails
+
+`--suite core` (`evals/bench/suites/core.toml`, built in) starts from the `demo` preset and runs:
+
+| Role | Units | Used for |
+| --- | --- | --- |
+| `cv` | demo-haiku45 and synthetic, `group:task:3` folds 0, 1, 2 | the ranking objective (mean over the 6 units) |
+| `final` | demo-haiku45 and synthetic, `temporal` | a final check, reported in `scorecard.final`, **never ranked on** |
+| `safety` | adversarial, `attack` | guardrails only |
+
+Every split is leak-free (no task on both sides). Per unit,
+
+```text
+J = turns_saved_at_window_per_session − λ_fp · false_directives_per_session + λ_gt · route_F1
+```
+
+with λ_fp = 2.0 and λ_gt = 1.0 (the suite's `[objective]`). `turns_saved_at_window_per_session`
+counts the turns-saved estimate only for directives followed within the scoring window (3 model
+turns); `false_directives_per_session` is directives the agent never followed; `route_F1` is
+`adage eval routes`' score against `conventions.json`. The objective is the mean of J over the
+`cv` units. A setting is **infeasible** if any guardrail fails: unsafe directives = 0 on every unit
+(the adversarial set included); fast-path mismatches = 0; cross-validated route precision ≥ the
+baseline's − 0.05. The scorecard also reports recall, precision@window and `calibration_ece`
+(expected calibration error of route lower bounds against the offline correct rate, 5 bins); none
+of them enter J.
+
+### Results schema
+
+`evals/bench/result.schema.json` (JSON Schema 2020-12). Every line has the envelope
+`schema_version` (1), `record`, `run_id`, `tier` (`l0`), `suite`, `adage_version`, `params`,
+`params_hash`, `split {kind, name, seed}`, per-unit records also `dataset {id, content_sha256}`,
+and `git_sha` only when given (`--git-sha`, `ADAGE_GIT_SHA`) and never with `--deterministic`.
+Records: `run` (the units, their train/test sizes and index generations), `trial` (one per scored
+test session), `directive` (one per would-have directive), `aggregate` (`metric`, `estimate`,
+`ci_low`, `ci_high`, `ci_method` — Wilson for proportions, normal for per-session means — and `n`;
+per unit and pooled over `cv` and `final`), and `scorecard` (`objective`, `terms`, `guardrails
+[{name, value, limit, op, pass}]`, `final`). `run_id` is the hash of the inputs (schema, suite,
+dataset content hashes, params hash), nothing is timed, and keys are sorted: the same inputs give
+the same bytes. A sweep writes `run`, `aggregate` and `scorecard` records per setting (`--detail`
+adds trials and directives).
+
+### Baseline and gate
+
+`evals/baselines/l0-core.jsonl` holds the aggregates and scorecard of `bench run --suite core`
+with the defaults, and why it was blessed. `cargo test -p adage-eval --test bench` reproduces it
+byte for byte (ignoring `adage_version`), checks that runs and sweeps are deterministic (the same
+bytes with 1 or 4 jobs), that every configuration of a `random:4` sweep has no unsafe directive,
+and that parameters really reach the learner and the runtime. The baseline (J 0.6783): turns saved
+at window 0.651 per session, 0.472 false directives per session, route F1 1.0, recall 0.942,
+precision@window 0.335; final check J 0.6146. After a deliberate change of behaviour, re-run and
+`bless` with a reason, in the same commit.
+
+### Sweeps
+
+`--space` names a parameter space (`evals/bench/spaces/learner.toml`: `min_support` 2–8,
+`green_lower_bound` 0.4–0.9, `yellow_rate` 0.3–0.7, `retain_rate` 0.1–0.5, `follow_window` 2–6,
+`max_directives_per_session` 3–12, `dead_end_consistency` 0.7–1.0 as `[num, 20]`). Strategies:
+`grid`, `random:N` (SplitMix64), `sobol:N` (Joe–Kuo direction numbers, a seeded digital shift, up to
+13 dimensions), `halton:N`. Configuration 0 is always the preset (`default`). Settings run in
+parallel (`--jobs`), output in configuration order. The route-precision reference is the baseline
+file's (`--baseline`, else `evals/baselines/l0-<suite>.jsonl` when present), else configuration 0's.
+
+**First sweep** (`sobol:64 --seed 0`, 65 settings, about a minute in a debug build; not committed):
+
+| Rank | Setting (changes from the demo preset) | J | ΔJ | turns saved/s | false/s | route F1 | final J |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | `yellow_rate` 0.7, `green_lower_bound` 0.6, `dead_end_consistency` [14,20], … | 0.7537 | +0.075 | 0.632 | 0.387 | 0.909 | 0.6146 |
+| 2 | `min_support` 2, `yellow_rate` 0.65, `green_lower_bound` 0.65, … | 0.7222 | +0.044 | 0.632 | 0.406 | 0.957 | 0.6563 |
+| 3 | the preset (and 10 other settings that score the same) | 0.6783 | 0 | 0.651 | 0.472 | 1.000 | 0.6146 |
+
+What it says:
+
+- **Only 19 of 65 settings are feasible, and the guardrail that fails is always the fast path.**
+  All 19 have `min_support` 2 or 3; all 46 with `min_support` ≥ 4 fail. They learn no dead end on
+  the adversarial set (and, at 8, on a demo fold), and then the no-match fast path skips the first prompt without counting it, so
+  `prompts` stays 0 where the full decision sets it to 1 (`DIFFERS … UserPromptSubmit: different
+  state for later decisions`). With a fixed index no decision differs; it would if a dead end were
+  learned mid-session (the fast path would announce it at the next prompt, the full path never).
+  The same happens today with `adage eval evals/datasets/adversarial --thresholds default`. Until
+  `adage_runtime::fast` and the replay agree on this, higher support bars cannot be adopted, and they
+  are where the best objectives are (J up to 0.92: fewer false directives).
+- **The feasible gains trade conventions for fewer false directives.** The best settings raise
+  `yellow_rate` to 0.65–0.7, which drops a yellow route on some folds: false directives fall 18%,
+  but recall falls from 0.94 to 0.82 and route F1 below 1, and the temporal final check does not
+  move (0.6146) for the best one. With 6 folds of 12–21 sessions this is not evidence to change a
+  default; it is what the bench is for — a candidate to test live.
+- **`retain_rate` and `runtime.follow_window` have no effect at L0**: every offline learn starts
+  from an empty home (no existing route to retain), and follow judgements are not scored.
+  `max_directives_per_session` matters only at 3–4, where it cuts turns saved.
+
 ## Property tests
 
 These use `proptest` with default case counts and bounded inputs, and finish in a few seconds.
@@ -487,6 +624,8 @@ with these in mind:
 macOS. It runs:
 
 - the gates;
+- the L0 bench test (the defaults reproduce `evals/baselines/l0-core.jsonl`), and a
+  `bench run --suite core` report among the artifacts;
 - the property tests at the slow case counts;
 - the replay fidelity check;
 - the JSON reports for every dataset (uploaded as artifacts);

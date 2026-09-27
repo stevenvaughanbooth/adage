@@ -107,10 +107,11 @@ pub fn basis(r: &Route, followed: u32, derailed: u32) -> Basis {
     }
 }
 
-/// Why the evidence alone changed materially since `b`, if it did.
-fn evidence_change(b: &Basis, r: &Route) -> Option<String> {
+/// Why the evidence alone changed materially since `b`, if it did. `material` is the lower-bound
+/// movement that counts ([`MATERIAL_LOWER_BOUND`] unless tuned).
+fn evidence_change(b: &Basis, r: &Route, material: f64) -> Option<String> {
     let e = &r.evidence;
-    if (e.lower_bound - b.lower_bound).abs() >= MATERIAL_LOWER_BOUND - 1e-9 {
+    if (e.lower_bound - b.lower_bound).abs() >= material - 1e-9 {
         return Some(format!("lower bound moved from {:.2} to {:.2}", b.lower_bound, e.lower_bound));
     }
     if e.support >= MATERIAL_SUPPORT_FACTOR * b.support.max(1) {
@@ -124,19 +125,29 @@ fn evidence_change(b: &Basis, r: &Route) -> Option<String> {
 
 /// Why `r` changed materially since the decision recorded in `b`, if it did.
 pub fn material_change(b: &Basis, r: &Route) -> Option<String> {
+    material_change_with(b, r, MATERIAL_LOWER_BOUND)
+}
+
+/// [`material_change`] with a tuned lower-bound threshold (`LearnParams::material_lower_bound`).
+pub fn material_change_with(b: &Basis, r: &Route, material: f64) -> Option<String> {
     if shape(r) != b.shape {
         return Some("its trigger, step, slots, effect, or exit changed".into());
     }
     if r.aspect != b.aspect {
         return Some(format!("aspect changed from {} to {}", aspect_str(b.aspect), aspect_str(r.aspect)));
     }
-    evidence_change(b, r)
+    evidence_change(b, r, material)
 }
 
 /// Whether a rejected route has strengthened enough to be proposed again.
 pub fn strengthened(b: &Basis, r: &Route) -> bool {
+    strengthened_with(b, r, MATERIAL_LOWER_BOUND)
+}
+
+/// [`strengthened`] with a tuned lower-bound threshold.
+pub fn strengthened_with(b: &Basis, r: &Route, material: f64) -> bool {
     shape(r) != b.shape
-        || r.evidence.lower_bound >= b.lower_bound + MATERIAL_LOWER_BOUND - 1e-9
+        || r.evidence.lower_bound >= b.lower_bound + material - 1e-9
         || r.evidence.support >= MATERIAL_SUPPORT_FACTOR * b.support.max(1)
 }
 
@@ -231,7 +242,12 @@ pub fn save(dir: &Path, r: &Reviews) -> Result<()> {
 ///
 /// Losing authority stays automatic: a reviewed route the miner no longer finds is dropped like
 /// any other, and its decision re-applies if it comes back.
-pub fn reconcile(prev: Option<&Track>, reviews: &Reviews, mut mined: Vec<Route>) -> Vec<Route> {
+pub fn reconcile(prev: Option<&Track>, reviews: &Reviews, mined: Vec<Route>) -> Vec<Route> {
+    reconcile_with(prev, reviews, mined, MATERIAL_LOWER_BOUND)
+}
+
+/// [`reconcile`] with a tuned material lower-bound threshold (`LearnParams::material_lower_bound`).
+pub fn reconcile_with(prev: Option<&Track>, reviews: &Reviews, mut mined: Vec<Route>, material: f64) -> Vec<Route> {
     for (id, rv) in &reviews.routes {
         let authored = |r: &Route| r.id == *id && r.authored;
         if mined.iter().any(authored) {
@@ -248,7 +264,7 @@ pub fn reconcile(prev: Option<&Track>, reviews: &Reviews, mut mined: Vec<Route>)
             continue;
         };
         match rv.decision {
-            Decision::Rejected if strengthened(&rv.basis, m) => {
+            Decision::Rejected if strengthened_with(&rv.basis, m, material) => {
                 m.state = RouteState::Probation;
                 if m.aspect == Aspect::Green {
                     m.aspect = Aspect::Yellow;
@@ -264,7 +280,7 @@ pub fn reconcile(prev: Option<&Track>, reviews: &Reviews, mut mined: Vec<Route>)
             Decision::Promoted
                 if m.aspect == Aspect::Yellow
                     && shape(m) == rv.basis.shape
-                    && evidence_change(&rv.basis, m).is_none()
+                    && evidence_change(&rv.basis, m, material).is_none()
                     && ceiling(m.effect, matches!(m.trigger, Trigger::AfterEdit { .. })) == Some(rv.basis.aspect) =>
             {
                 m.aspect = rv.basis.aspect;

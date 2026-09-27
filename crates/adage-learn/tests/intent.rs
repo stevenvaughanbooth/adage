@@ -191,7 +191,14 @@ fn mines_intent_routes_and_the_runtime_matches_new_phrasings() {
     };
     let root = tempfile::tempdir().unwrap();
     let table = CommandTable::load();
-    let ctx = Ctx { index: &index, repo: "acme-docs".into(), root: root.path(), table: &table, embed: Some(&embed) };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme-docs".into(),
+        root: root.path(),
+        table: &table,
+        embed: Some(&embed),
+        params: Default::default(),
+    };
     let d1 = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "Broken tests again! Fix?".into() });
     assert!(d1.directives.iter().any(|x| x.text.contains("make test")), "{:?}", d1.directives);
     let d2 =

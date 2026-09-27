@@ -310,8 +310,10 @@ pub fn plan(
                 eprintln!("adage: ignoring unreadable proposals for {name}: {e:#}");
                 Proposals::default()
             });
-            let proposals = adage_tracks::proposals::propose(&prev_proposals, &pinned, &today);
-            let routes = adage_tracks::review::reconcile(prev.as_ref(), &reviews, routes);
+            let proposals =
+                adage_tracks::proposals::propose_with(&prev_proposals, &pinned, &today, cfg.material_lower_bound);
+            let routes =
+                adage_tracks::review::reconcile_with(prev.as_ref(), &reviews, routes, cfg.material_lower_bound);
             // A route in service that was not found again only because it steered the sessions
             // that would confirm it is kept, stale, on its last evidence (E1; `stale`).
             let mut routes = adage_tracks::review::keep_stale(prev.as_ref(), &reviews, routes, &today, |p| {

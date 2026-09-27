@@ -20,11 +20,9 @@ use adage_intent::purity::{self, Purity};
 use adage_tracks::*;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Commands run before the first edit by more than this share of a repository's sessions (of at
-/// least five) are not specific to any intent.
-const UBIQUITOUS: f64 = 0.8;
-/// A family's command must be this much more common among matching prompts than among the rest.
-const CONTRAST: f64 = 0.3;
+// Commands run before the first edit by more than `cfg.intent_ubiquitous` (0.8) of a
+// repository's sessions (of at least five) are not specific to any intent. A family's command
+// must be `cfg.intent_contrast` (0.3) more common among matching prompts than among the rest.
 /// No intent route ever matches below this similarity, whatever calibration says.
 const FLOOR: f32 = INTENT_MIN_THRESHOLD;
 
@@ -107,7 +105,7 @@ pub fn intent_routes(sessions: &[&Session], model: &StaticModel, cfg: &LearnConf
             *df.entry(c.group.clone()).or_default() += 1;
         }
     }
-    let common = |g: &str| n >= 5 && df[g] as f64 > UBIQUITOUS * n as f64;
+    let common = |g: &str| n >= 5 && df[g] as f64 > cfg.intent_ubiquitous * n as f64;
     let routes: Vec<Option<String>> =
         items.iter().map(|it| it.cands.iter().find(|c| !common(&c.group)).map(|c| c.group.clone())).collect();
 
@@ -157,7 +155,7 @@ pub fn intent_routes(sessions: &[&Session], model: &StaticModel, cfg: &LearnConf
         let outside = n as u32 - opp;
         let ran_outside = (0..n).filter(|&i| sims[i] < threshold && ran[i]).count() as f64;
         let rate_out = if outside == 0 { 0.0 } else { ran_outside / outside as f64 };
-        if rate - rate_out < CONTRAST {
+        if rate - rate_out < cfg.intent_contrast {
             continue;
         }
         let mut variants: BTreeMap<String, u32> = BTreeMap::new();

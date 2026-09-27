@@ -11,7 +11,7 @@
 //! (`adage share` copies only track files), and is rewritten by every learn run.
 
 use crate::model::*;
-use crate::review::{basis, material_change, Basis};
+use crate::review::{basis, material_change_with, Basis};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -103,6 +103,11 @@ pub fn save(dir: &Path, p: &Proposals) -> Result<()> {
 /// dismissed an equivalent proposal. An unchanged proposal keeps its original date, so re-learning
 /// the same sessions writes the same bytes.
 pub fn propose(prev: &Proposals, pinned: &[(Route, Option<Route>)], today: &str) -> Proposals {
+    propose_with(prev, pinned, today, crate::review::MATERIAL_LOWER_BOUND)
+}
+
+/// [`propose`] with a tuned material lower-bound threshold (`LearnParams::material_lower_bound`).
+pub fn propose_with(prev: &Proposals, pinned: &[(Route, Option<Route>)], today: &str, material: f64) -> Proposals {
     let mut out = Proposals::default();
     for (p, mined) in pinned {
         let Some(m) = mined else {
@@ -115,9 +120,9 @@ pub fn propose(prev: &Proposals, pinned: &[(Route, Option<Route>)], today: &str)
         let mut m = m.clone();
         m.authored = false;
         let against = basis(p, 0, 0);
-        let Some(reason) = material_change(&against, &m) else { continue };
+        let Some(reason) = material_change_with(&against, &m, material) else { continue };
         if let Some(d) = prev.dismissed.get(&p.id) {
-            if material_change(d, &m).is_none() {
+            if material_change_with(d, &m, material).is_none() {
                 out.dismissed.insert(p.id.clone(), d.clone());
                 continue;
             }

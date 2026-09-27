@@ -43,6 +43,9 @@ jobs:
       - name: gates
         run: cargo test --locked -p adage-eval --test gates
 
+      - name: L0 bench (the default parameters reproduce evals/baselines/l0-core.jsonl)
+        run: cargo test --locked -p adage-eval --test bench
+
       - name: property tests (slow case counts)
         env:
           ADAGE_PROP_TRACE: ${{ runner.temp }}/prop_shell_last.json
@@ -80,6 +83,7 @@ jobs:
             name=${d%%:*}; split=${d#*:}; [ "$split" = "$d" ] && split=""
             $adage eval evals/datasets/$name ${split:+--split $split}
           done
+          $adage eval bench run --suite core --deterministic --out eval-reports/bench-l0-core.jsonl
           # Same dataset, same bytes.
           $adage eval evals/datasets/demo-haiku45 --split round2 --json | cmp - eval-reports/demo-round2.json
 

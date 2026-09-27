@@ -5,6 +5,7 @@
 pub mod index;
 pub mod io;
 pub mod model;
+pub mod params;
 pub mod proposals;
 pub mod review;
 pub mod triggers;

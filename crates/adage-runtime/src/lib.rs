@@ -19,10 +19,11 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::path::Path;
 
-pub const MAX_DIRECTIVES_PER_SESSION: usize = 8;
-pub const MAX_DIRECTIVES_PER_DECISION: usize = 3;
-const HISTORY: usize = 32;
-const FOLLOW_WINDOW: u32 = 3;
+// The defaults of `Ctx::params` (`adage_tracks::params::RuntimeParams`), which is what decides.
+pub use adage_tracks::params::RuntimeParams;
+pub const MAX_DIRECTIVES_PER_SESSION: usize = adage_tracks::params::MAX_DIRECTIVES_PER_SESSION;
+pub const MAX_DIRECTIVES_PER_DECISION: usize = adage_tracks::params::MAX_DIRECTIVES_PER_DECISION;
+const HISTORY: usize = adage_tracks::params::HISTORY;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -136,8 +137,9 @@ pub struct SessionState {
     pub propensity: Option<f64>,
 }
 
-/// At most this many stop-hook requests per session, across all obligations.
-pub const MAX_STOP_REQUESTS: u32 = 2;
+/// At most this many stop-hook requests per session, across all obligations (the default of
+/// `RuntimeParams::max_stop_requests`).
+pub const MAX_STOP_REQUESTS: u32 = adage_tracks::params::MAX_STOP_REQUESTS;
 const MAX_KEY: usize = 256;
 
 fn cap(mut s: String) -> String {
@@ -199,6 +201,9 @@ pub struct Ctx<'a> {
     pub root: &'a Path,
     pub table: &'a CommandTable,
     pub embed: Option<Embed<'a>>,
+    /// Limits: the follow window, directives per session and per decision, stop requests,
+    /// history. The hook always uses [`RuntimeParams::default`]; the offline eval can tune them.
+    pub params: RuntimeParams,
 }
 
 /// The canonical template key of a command string, for matching the agent's calls.
@@ -232,8 +237,8 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     let emit_ok = |st: &SessionState, out: &Vec<Directive>, id: &str| {
         !st.emitted.iter().any(|e| e == id)
             && !out.iter().any(|o| o.route == id)
-            && st.emitted.len() + out.len() < MAX_DIRECTIVES_PER_SESSION
-            && out.len() < MAX_DIRECTIVES_PER_DECISION
+            && st.emitted.len() + out.len() < ctx.params.max_directives_per_session
+            && out.len() < ctx.params.max_directives_per_decision
     };
 
     match ev {
@@ -255,7 +260,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         route: ir.route.id.clone(),
                         expect_key: key,
                         expect_head: head,
-                        batches_left: FOLLOW_WINDOW,
+                        batches_left: ctx.params.follow_window,
                     });
                     out.push(directive(ir, text));
                 }
@@ -270,7 +275,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                             route: ir.route.id.clone(),
                             expect_key: key,
                             expect_head: head,
-                            batches_left: FOLLOW_WINDOW,
+                            batches_left: ctx.params.follow_window,
                         });
                         out.push(directive(ir, text));
                     }
@@ -293,7 +298,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 for (key, n) in call_keys(call, ctx) {
                     let key = cap(key);
                     d.observed.push(key.clone());
-                    push_history(st, key.clone());
+                    push_history_capped(st, key.clone(), ctx.params.history);
                     // Follow / derail judgement.
                     let head = match &n.action {
                         adage_core::CanonicalAction::Exec { argv, .. } => keys::command_head(argv),
@@ -383,7 +388,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
         Event::Failure { call } => {
             for (key, _) in call_keys(call, ctx) {
                 d.observed.push(format!("{key} !failed"));
-                push_history(st, format!("{key} !failed"));
+                push_history_capped(st, format!("{key} !failed"), ctx.params.history);
                 for ir in routes.iter() {
                     if let Trigger::AfterFailure { command, signature } = &ir.route.trigger {
                         if *command == key
@@ -399,7 +404,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             }
         }
         Event::Stop { stop_hook_active } => {
-            if !*stop_hook_active && st.stop_requests < MAX_STOP_REQUESTS {
+            if !*stop_hook_active && st.stop_requests < ctx.params.max_stop_requests {
                 if let Some(o) = st.obligations.iter_mut().find(|o| !o.met && !o.stop_requested) {
                     o.stop_requested = true;
                     st.stop_requests += 1;
@@ -447,9 +452,13 @@ fn match_intent<'a>(ctx: &Ctx, routes: &[&'a IndexedRoute], text: &str) -> Optio
 }
 
 pub(crate) fn push_history(st: &mut SessionState, key: String) {
+    push_history_capped(st, key, HISTORY)
+}
+
+fn push_history_capped(st: &mut SessionState, key: String, cap: usize) {
     st.history.push(key);
-    if st.history.len() > HISTORY {
-        let extra = st.history.len() - HISTORY;
+    if st.history.len() > cap {
+        let extra = st.history.len() - cap;
         st.history.drain(..extra);
     }
 }

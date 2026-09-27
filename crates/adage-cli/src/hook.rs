@@ -104,7 +104,14 @@ fn respond(
         let v = m.embed(&normalize(text))?;
         Some((m.id, v))
     };
-    let ctx = Ctx { index: &index, repo: repo_key.clone(), root, table: &table, embed: Some(&embed) };
+    let ctx = Ctx {
+        index: &index,
+        repo: repo_key.clone(),
+        root,
+        table: &table,
+        embed: Some(&embed),
+        params: Default::default(),
+    };
     let arm_env = std::env::var("ADAGE_ARM").ok();
     // ADAGE_HOLDOUT, else `runtime.holdout` in config.toml, else 0.1.
     let share: f64 = adage_store::config::load(paths).config.runtime_holdout;

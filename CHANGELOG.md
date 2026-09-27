@@ -9,6 +9,22 @@ version as the GitHub Release notes.
 
 ### Added
 
+- **Tunable engine parameters and the L0 optimisation bench.** Every number the runtime and the
+  learner tune on (follow window, directive budget, stop requests, history; support, green and
+  yellow bars, retain rate, dead-end consistency and signatures, finish-line and intent contrasts,
+  review materiality, stale exposure) is now one `EngineParams` (`adage_tracks::params`) with
+  defaults equal to the old constants, a canonical JSON form and a `params_hash`. The hook still
+  decides with the defaults and learning still uses the `default`/`demo` presets: behaviour is
+  byte-identical. `adage eval` and `adage eval routes` take `--params <file.toml|json>`. New
+  `adage eval bench run|sweep|report|bless`: the `core` suite (demo and synthetic on task-grouped
+  folds, a temporal final check, the adversarial set for safety), one objective (turns saved at
+  window − 2 × false directives + route F1, per session, averaged over the folds), guardrails
+  (no unsafe directive, no fast-path mismatch, route precision within 0.05 of the baseline), a
+  deterministic JSON Lines result schema (`evals/bench/result.schema.json`), grid, random, Sobol
+  and Halton sweeps over `evals/bench/spaces/learner.toml`, Pareto and baseline reports, and a
+  committed baseline (`evals/baselines/l0-core.jsonl`) that the defaults must reproduce byte for
+  byte. See docs/evals.md, "Bench".
+
 - **Live learning.** Adage now learns by itself while agents work: when a session stops or ends
   (Claude Code and Codex `Stop`/`SessionEnd`, OpenCode `session.idle`/`session.deleted`), the hook
   starts a detached background learner for that repository, at most once per

@@ -93,7 +93,14 @@ fn bash(cmd: &str, out: &str) -> Call {
 #[test]
 fn prompt_binds_validated_ticket_and_warns_about_dead_end() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
     assert_eq!(d.directives.len(), 2);
@@ -104,7 +111,14 @@ fn prompt_binds_validated_ticket_and_warns_about_dead_end() {
 #[test]
 fn injected_values_never_bind() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "Do W-20421234 and --config=/etc".into() });
     assert!(d.directives.iter().all(|x| x.route != "lookup"), "a value failing the contract must not bind");
@@ -113,7 +127,14 @@ fn injected_values_never_bind() {
 #[test]
 fn follow_judgement_and_linked_files() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     decide(&ctx, &mut st, &Event::Prompt { text: "W-2042".into() });
     let out = r#"{"id":"W-2042","linked_files":["acme/billing.py","../etc/passwd","missing.py"]}"#;
@@ -127,7 +148,14 @@ fn follow_judgement_and_linked_files() {
 #[test]
 fn obligation_triggers_on_edit_and_is_enforced_once_at_stop() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     let edit = Call {
         tool: "Edit".into(),
@@ -146,7 +174,14 @@ fn obligation_triggers_on_edit_and_is_enforced_once_at_stop() {
 #[test]
 fn obligation_met_means_no_stop_request() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     let edit = Call {
         tool: "Write".into(),
@@ -163,7 +198,14 @@ fn obligation_met_means_no_stop_request() {
 #[test]
 fn holdout_logs_exposure_but_emits_nothing() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState { arm: Some(Arm::Holdout), ..Default::default() };
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "W-2042".into() });
     assert!(d.directives.is_empty());
@@ -173,7 +215,14 @@ fn holdout_logs_exposure_but_emits_nothing() {
 #[test]
 fn other_repos_get_nothing() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "other".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "other".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     assert!(decide(&ctx, &mut st, &Event::Prompt { text: "W-2042".into() }).directives.is_empty());
 }
@@ -181,7 +230,14 @@ fn other_repos_get_nothing() {
 #[test]
 fn caps_hold() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     for _ in 0..20 {
         decide(&ctx, &mut st, &Event::Prompt { text: "W-2042".into() });
@@ -200,7 +256,14 @@ fn arm_assignment_is_deterministic() {
 #[test]
 fn linked_files_from_plain_text_output() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     let out = "ID: W-2042\nLinked files: acme/billing.py, ../etc/passwd\nAcceptance: ok";
     let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("./scripts/wi-lookup W-2042 --json", out)] });
@@ -213,7 +276,14 @@ fn linked_files_from_plain_text_output() {
 fn symlinks_out_of_the_repo_are_rejected() {
     let (dir, index, table) = fixture();
     std::os::unix::fs::symlink("/etc/hosts", dir.path().join("acme/notes.md")).unwrap();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     let out = r#"{"linked_files":["acme/notes.md","acme/billing.py"]}"#;
     let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("./scripts/wi-lookup W-2042 --json", out)] });
@@ -224,7 +294,14 @@ fn symlinks_out_of_the_repo_are_rejected() {
 #[test]
 fn obligations_rearm_after_a_new_edit_and_stop_requests_are_bounded() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     let edit = |f: &str| Call {
         tool: "Edit".into(),
@@ -247,7 +324,14 @@ fn obligations_rearm_after_a_new_edit_and_stop_requests_are_bounded() {
 #[test]
 fn hostile_output_does_not_panic() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     let calls = vec![
         bash("./scripts/wi-lookup W-2042 --json", "} {"),
@@ -262,7 +346,14 @@ fn hostile_output_does_not_panic() {
 #[test]
 fn holdout_records_would_continue() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     let edit = Call {
         tool: "Edit".into(),
@@ -327,7 +418,14 @@ fn intent_fixture(model: &str, threshold: f32) -> (tempfile::TempDir, Index, Com
 #[test]
 fn intent_route_fires_on_a_matching_prompt_only() {
     let (dir, index, table) = intent_fixture(MODEL, 0.8);
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: Some(&fake_embed) };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: Some(&fake_embed),
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "the tests are failing again".into() });
     let hit = d.directives.iter().find(|x| x.route == "intent-tests").expect("intent directive");
@@ -348,7 +446,14 @@ fn intent_routes_fail_open_without_a_model() {
     let (dir, index, table) = intent_fixture(MODEL, 0.8);
     let none = |_: &str| -> Option<(String, Vec<f32>)> { None };
     for embed in [None, Some(&none as Embed)] {
-        let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed };
+        let ctx = Ctx {
+            index: &index,
+            repo: "acme".into(),
+            root: dir.path(),
+            table: &table,
+            embed,
+            params: Default::default(),
+        };
         let mut st = SessionState::default();
         let d = decide(&ctx, &mut st, &Event::Prompt { text: "tests failing, W-2042".into() });
         assert!(d.directives.iter().all(|x| x.route != "intent-tests"));
@@ -359,11 +464,25 @@ fn intent_routes_fail_open_without_a_model() {
 #[test]
 fn intent_routes_need_the_same_model_and_the_threshold() {
     let (dir, index, table) = intent_fixture("other-model@000000000000", 0.8);
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: Some(&fake_embed) };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: Some(&fake_embed),
+        params: Default::default(),
+    };
     let d = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "tests failing".into() });
     assert!(d.directives.iter().all(|x| x.route != "intent-tests"), "a vector from another model is meaningless");
     let (dir, index, table) = intent_fixture(MODEL, 0.99);
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: Some(&fake_embed) };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: Some(&fake_embed),
+        params: Default::default(),
+    };
     let d = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "tests failing".into() });
     assert!(d.directives.iter().all(|x| x.route != "intent-tests"), "similarity 0.97 is below a 0.99 threshold");
 }
@@ -376,7 +495,14 @@ fn the_embedder_is_not_called_without_intent_routes() {
         called.set(true);
         None
     };
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: Some(&spy) };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: Some(&spy),
+        params: Default::default(),
+    };
     decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "tests failing".into() });
     assert!(!called.get(), "no intent routes: the model is never loaded");
 }
@@ -416,7 +542,14 @@ fn restored(st: &SessionState) -> serde_json::Value {
 #[test]
 fn state_rebuilt_from_the_spool_matches_the_live_state_after_every_event() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let edit = |f: &str| Call {
         tool: "Edit".into(),
         input: json!({ "file_path": dir.path().join(f).to_string_lossy() }),
@@ -467,7 +600,14 @@ fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
     // A re-arming edit after the obligation was met is invisible in the spool (it keeps call keys,
     // not paths): the rebuilt obligation stays met, so it can miss a request, never add one.
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let edit = |f: &str| Call {
         tool: "Edit".into(),
         input: json!({ "file_path": dir.path().join(f).to_string_lossy() }),
@@ -563,7 +703,14 @@ fn finish_line_claims_ci_only_on_evidence() {
 #[test]
 fn directives_carry_their_kind_and_stale_routes_are_never_green() {
     let (dir, index, table) = fixture();
-    let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042".into() });
     let kinds: Vec<(&str, &str)> = d.directives.iter().map(|x| (x.route.as_str(), x.kind.as_str())).collect();
@@ -601,7 +748,14 @@ fn directives_carry_their_kind_and_stale_routes_are_never_green() {
         };
         let index = Index::compile(&[t]);
         assert_eq!(index.routes.len(), 4, "{state:?} routes are compiled");
-        let ctx = Ctx { index: &index, repo: "acme".into(), root: dir.path(), table: &table, embed: None };
+        let ctx = Ctx {
+            index: &index,
+            repo: "acme".into(),
+            root: dir.path(),
+            table: &table,
+            embed: None,
+            params: Default::default(),
+        };
         let mut st = SessionState::default();
         let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042".into() });
         let aspects: Vec<Aspect> = d.directives.iter().map(|x| x.aspect).collect();
