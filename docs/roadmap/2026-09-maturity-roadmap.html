@@ -118,6 +118,9 @@ footer{margin-top:64px;padding-top:14px;border-top:1px solid var(--rule);color:v
     <a href="#engine">1 · Engine</a>
     <a href="#training">2 · Training &amp; instincts</a>
     <a href="#bench">3 · Benchmarks</a>
+    <a href="#trackg">Track G · Graph engine v2</a>
+    <a href="#trackc">Track C · Compiled skills</a>
+    <a href="#shipped">Shipped this session</a>
     <a href="#roadmap">Sequenced roadmap</a>
     <a href="#decisions">Decisions for you</a>
   </nav>
@@ -419,6 +422,86 @@ adage bench bless   results/&lt;id&gt;.jsonl --reason "..."</pre>
   <p class="small">Prerequisite: <code>EngineParams</code> (new <code>adage-learn/src/params.rs</code>) moves today's hard-coded constants into one swept, hashed object: <code>DEAD_END_CONSISTENCY</code>, <code>FOLLOW_WINDOW</code>, <code>MAX_DIRECTIVES_*</code>, <code>UBIQUITOUS</code>, <code>CONTRAST</code>, <code>MATERIAL_LOWER_BOUND</code>, plus the learn thresholds. Result records are <code>run · trial · directive · aggregate · scorecard</code>, and each carries <code>git_sha</code>, <code>params_hash</code>, a dataset digest, split, harness and model versions, cost and token breakdown, and a harm block. Committed baselines under <code>evals/baselines/</code> replace the hand-edited floors in <code>gates.rs</code>.</p>
 </section>
 
+
+<!-- ============ TRACK G ============ -->
+<section id="trackg">
+  <div class="sec-head"><h2>Track G · Graph and prediction engine v2</h2><span class="tag">docs/tracks/track-g-graph-engine.md</span></div>
+  <div class="callout"><p><b>The learner stops knowing route kinds.</b> Each session becomes a small event graph. Its nodes are prompts, commands, files, outputs, failures and outcomes, and each carries an embedding. Its edges are <i>follows</i>, <i>value flows into</i>, <i>reads/writes</i>, <i>fails with</i> and <i>recovers with</i>. Learning crawls these graphs for <b>common subgraphs</b>, and each useful one becomes a <b>reflex</b>. Its earliest nodes are the trigger, its later nodes the continuation, and its value-flow edges the typed inputs.</p></div>
+  <div class="two">
+    <div class="box">
+      <h4>How the mining works</h4>
+      <ul>
+        <li><b>Prototypes.</b> Nodes are embedded and clustered per type, deterministically (exact kNN + Louvain), so mining runs over labels rather than doing fuzzy matching during the search. A label hierarchy (exact ⊂ prototype ⊂ coarse ⊂ head) provides the "softness".</li>
+        <li><b>Algorithm.</b> PrefixSpan-style episode growth over time-ordered session graphs, rooted at things that could be delivered, keeping closed patterns only. General graph mining (gSpan, GraMi) is rejected: sessions are nearly sequences, so the order is already known.</li>
+        <li><b>Frequent ≠ useful.</b> Patterns are scored by confidence (a Beta posterior that falls back to shorter contexts), lift over background (which removes <code>ls</code>/<code>cat</code>), value per turn, and causal lift from knockouts. An MDL cover picks among overlapping patterns.</li>
+        <li><b>Embeddings widen triggers, never actions.</b> A continuation must compile to one dominant concrete command (≥ 80% of support).</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h4>Kinds survive only at the output boundary</h4>
+      <p>A deterministic compiler maps each reflex to one of six <b>delivery shapes</b>: <code>run</code>, <code>avoid</code>, <code>read-batch</code>, <code>obligation</code>, <code>sequence</code>, <code>advise</code>. Each has a fixed template, typed input contracts, effect ceilings and interlocking.</p>
+      <p><b>Parity test.</b> Today's five kinds must fall out as special cases: prompt→lookup is a value-flow edge, dead end is fail→recover, finish line is last(edit)→regenerate. The new engine must also learn <code>scope</code>, <code>env_sync</code> and multi-step <code>sequence</code> conventions from generated sandboxes with <i>no learner code change</i>.</p>
+      <p><b>Learned input types (G1)</b> replace the hard-coded <code>[A-Z][A-Z0-9]{0,9}-\d{1,7}</code> detector. Tokens that flow from prompts or earlier output into later commands are generalised by anti-unification and MDL into anchored, bounded contracts, covering <code>#482</code>, UUIDs, <code>ops/412</code> and branch names.</p>
+    </div>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Milestone</th><th>Delivers</th><th>Effort</th><th>Gate</th></tr></thead>
+    <tbody>
+      <tr><td class="num">G0</td><td>Event-graph substrate, per-prompt import, shared tokeniser, node embeddings, cached facts</td><td>2–3 wk</td><td>No behaviour change; byte-identical across thread counts</td></tr>
+      <tr><td class="num">G1</td><td>Value flow → learned input types <span class="pill y">in progress</span></td><td>2–3 wk</td><td>Lookup recall on new ID shapes 0 → ≥ 0.95; reject rate 1.00; 0 unsafe</td></tr>
+      <tr><td class="num">G2</td><td>Prototypes, closed-episode mining, scoring, MDL selection</td><td>3–4 wk</td><td>Next-action top-1 ≥ baseline + 5 pts; calibration error ≤ 0.05</td></tr>
+      <tr><td class="num">G3</td><td>Compiler to delivery shapes; shadow mode next to the miners</td><td>3–4 wk</td><td>Parity on conventions; learns new kinds with no learner code change</td></tr>
+      <tr><td class="num">G4</td><td>Runtime context state and discrimination net</td><td>2 wk</td><td>Hook p95 within +0.3 ms; fast-path mismatches 0</td></tr>
+      <tr><td class="num">G5</td><td>Retire the miners one by one; delete route kinds from the learner</td><td>3 wk</td><td>Parity on each kind in two consecutive blessed baselines</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ============ TRACK C ============ -->
+<section id="trackc">
+  <div class="sec-head"><h2>Track C · Compiled skills and the packaged artifact</h2><span class="tag">docs/tracks/track-c-compiled-skills.md</span></div>
+  <div class="callout"><p>Instincts and reflexes are <b>compiled skills</b>: inference turned into signed, content-addressed, reusable artifacts that take typed inputs and may execute. An <b>instinct</b> is a portable compiled skill; its applicability is a detector over repository files. A <b>reflex</b> is repo-bound; its applicability is the repository's identity or a structural fingerprint.</p></div>
+  <div class="two">
+    <div class="box">
+      <h4>Closure of the pack</h4>
+      <ul>
+        <li><b>Contents.</b> The route graph with typed inputs and outputs, the applicability rule, tool and OS requirements, evidence by origin, optional bench attestations, a <code>CLOSURE</code> listing, and an sshsig signature in a new <code>adage-pack</code> namespace.</li>
+        <li><b>Scripts, three levels.</b> <b>L-none</b>: only known commands. <b>L-ref</b>: a repository path plus a SHA-256, re-checked at run time. <b>L-vendor</b>: the bytes are embedded; this needs a signed pack and explicit approval, and is never automatic.</li>
+        <li><b>Closure rules.</b> A command that names a repository script without pinning it is refused. Bytes nothing references are refused. No dependencies between packs in v1.</li>
+        <li><b>Never in a pack:</b> approvals, spools, prompts, bound values, outputs.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h4>Execution levels and approval</h4>
+      <ul>
+        <li><b>E0</b> directive, as today. <b>E1</b> prefetch: run an approved read-only route and inject typed, fenced output. <b>E2</b> routes as MCP tools, so the harness asks permission per call. <b>E3</b> actions: staged, checked against declared outputs, then applied.</li>
+        <li><b>A separate <code>adage-exec</code> binary.</b> The hook binary keeps "spawns nothing", checkable by grep in CI.</li>
+        <li><b>The sandbox is the boundary, not classification:</b> Landlock + seccomp or bubblewrap on Linux; <code>sandbox-exec</code> on macOS; Windows stays at E0.</li>
+        <li><b>Approvals are local.</b> Each is keyed by hashes of the argv, inputs, scripts, effect, level and sandbox profile, and lapses on any change. Auto-approval only for inert, read-only, known commands, after gate G3.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="small">Milestones: C0 format · C1 distribute and bind · C2 execution core and sandbox · C3 E1 prefetch · C4 E2 MCP (needs Track G's learned input types) · C5 actions, vendoring, attestations. About 13–15 weeks. <b>Gates before any default changes:</b> 0 sandbox escapes; E1 saves ≥ 0.5 turns per triggered session with the lower CI bound above 0; injection harm no worse than the agent reading the same output itself.</p>
+</section>
+
+<!-- ============ SHIPPED ============ -->
+<section id="shipped">
+  <div class="sec-head"><h2>Shipped this session</h2><span class="tag">branch claude/repo-maturity-roadmap-l95ohs</span></div>
+  <div class="tw"><table>
+    <thead><tr><th>Area</th><th>What landed</th><th>Measured</th></tr></thead>
+    <tbody>
+      <tr><td>Eval rigour</td><td>Live runner: per-run isolation, seeded arm order, run statuses, task-cluster permutation and bootstrap, Holm correction. Offline: task-grouped and temporal splits with leakage flags, Wilson CIs, <code>conventions.json</code> ground truth and <code>adage eval routes</code>. README caveat and known-limitations section.</td><td>Leak-free demo precision 0.68–0.82, inside round 2's interval: no sign the leak inflated it. The 3 round-1 infra failures were all in the control arm.</td></tr>
+      <tr><td>Bench (L0)</td><td><code>EngineParams</code>, one result schema, <code>adage eval bench run / sweep / report / bless</code>, committed baseline</td><td>The sweep surfaced a real fast-path bug. After the fix all 65 settings are feasible, and the best raise J from 0.68 to 0.92</td></tr>
+      <tr><td>Engine E1</td><td>Steering by directive kind; Stale state instead of self-retirement; propensity logged; evidence-backed finish-line wording</td><td>Gate numbers unchanged; retention-ageing test added</td></tr>
+      <tr><td>Engine E2 + E3</td><td>One command-pattern algebra; <code>**</code> glob lattice; per-sub-action failure attribution; interlocking at compile time and runtime</td><td>Round-2 recall 0.78 → 0.91; linked-files recall 0.54 → 1.0</td></tr>
+      <tr><td>Generator</td><td><code>evals/gen</code> convention grammar: 2 stacks, 3 skins, decoys, instinct violations, selfcheck, rehearsal</td><td>28/28 conventions recovered, 0/13 decoys learned</td></tr>
+      <tr><td>Instincts</td><td><code>adage-instincts</code>: declared-fact extraction and the P0 binder <span class="pill y">integration in progress</span></td><td>Recovers the demo's dead end and finish line on day 0; 0 binds on hostile or decoy fixtures</td></tr>
+      <tr><td>External</td><td><code>evals/external</code>: Harbor agent adapter, pre-registered SWE-bench Pro protocol, leakage and patch checks, paired statistics</td><td>Checked against Harbor's source and a real binary; not yet run in containers</td></tr>
+      <tr><td>Training</td><td><code>adage-train</code> skill → reflex <span class="pill y">in progress</span></td><td>—</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
 <!-- ============ ROADMAP ============ -->
 <section id="roadmap">
   <div class="sec-head"><h2>Sequenced roadmap</h2><span class="tag">≈ 14–16 weeks · three lanes in parallel</span></div>
@@ -487,8 +570,8 @@ adage bench bless   results/&lt;id&gt;.jsonl --reason "..."</pre>
     <div class="phase">
       <div class="when"><b>Beyond</b><span>next session</span></div>
       <div class="what">
-        <h4>Generalised position model</h4>
-        <p style="font-size:15px;margin:0"><b>E7</b> PPM context model as proposer and conformance scorer, and a directly-follows graph in the signal box. <b>E8</b> route FSTs and Datalog-style rule plugins. <b>E9</b> cross-repository templates. Each goes in only if the L0–L3 objective moves.</p>
+        <h4>Superseded by Tracks G and C</h4>
+        <p style="font-size:15px;margin:0">E7 (context model), E8 (multi-step routes) and E9 (cross-repository templates) are folded into <a href="#trackg">Track G</a>: subgraph mining over embedded event graphs, with learned input types first. Execution and packaging move to <a href="#trackc">Track C</a>. Both are gated on the same bench ladder.</p>
       </div>
     </div>
   </div>
