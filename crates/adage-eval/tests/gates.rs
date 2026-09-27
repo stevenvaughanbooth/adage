@@ -9,6 +9,8 @@
 //! handling. The evals workflow runs these on Linux and macOS.
 #![cfg(unix)]
 
+use adage_eval::conventions::{self, RoutesReport};
+use adage_eval::dataset::Dataset;
 use adage_eval::{fidelity, run, Options, Report};
 use std::path::{Path, PathBuf};
 
@@ -38,19 +40,26 @@ fn assert_safe(r: &Report) {
     assert!(r.safety.checked > 0, "nothing was checked");
 }
 
+/// Offline output is deterministic, so a floor sits just under the measured value.
+const EPS: f64 = 0.02;
+
 #[test]
 fn demo_round2_gates() {
-    // Measured: precision 0.742 overall (0.729 before the second dead end); lookup 0.667, linked
-    // files 0.75, dead end 0.778; recall 0.783; finish-line accuracy 1.0 (4 obligations).
+    // Measured: precision 0.7424 overall (0.729 before the second dead end); lookup 0.6667,
+    // linked files 0.75, dead end 0.7778; recall 0.7826; finish-line accuracy 1.0 (4
+    // obligations). Round 2 is leaky by task (it trains on round-1 sessions of the tasks it
+    // tests), and the report must say so.
     let r = eval("demo-haiku45", Some("round2"));
     assert_eq!(r.scored_sessions, 18);
-    at_least("overall precision", r.overall.precision, 0.60);
-    at_least("lookup precision", precision(&r, "lookup"), 0.55);
-    at_least("linked-files precision", precision(&r, "linked-files"), 0.60);
-    at_least("dead-end precision", precision(&r, "dead-end"), 0.65);
-    at_least("recall", r.recall["all"].recall, 0.65);
-    at_least("finish-line accuracy", r.finish_line.accuracy, 0.75);
+    at_least("overall precision", r.overall.precision, 0.7424 - EPS);
+    at_least("lookup precision", precision(&r, "lookup"), 0.6667 - EPS);
+    at_least("linked-files precision", precision(&r, "linked-files"), 0.75 - EPS);
+    at_least("dead-end precision", precision(&r, "dead-end"), 0.7778 - EPS);
+    at_least("recall", r.recall["all"].recall, 0.7826 - EPS);
+    at_least("finish-line accuracy", r.finish_line.accuracy, 1.0 - EPS);
     assert_safe(&r);
+    assert!(r.leaky && r.task_overlap == 6, "round2 must be flagged leaky: {} tasks", r.task_overlap);
+    assert!(r.split_note.as_deref().is_some_and(|n| n.contains("Leaky")));
 }
 
 #[test]
@@ -82,12 +91,13 @@ fn demo_round2_learns_what_the_live_learner_learned() {
 
 #[test]
 fn demo_round1_gates() {
-    // Measured: precision 0.679 overall; lookup 0.5; recall 0.556.
+    // Measured: precision 0.6786 overall; lookup 0.5; recall 0.5556. No task on both sides.
     let r = eval("demo-haiku45", Some("round1"));
-    at_least("overall precision", r.overall.precision, 0.55);
-    at_least("lookup precision", precision(&r, "lookup"), 0.40);
-    at_least("recall", r.recall["all"].recall, 0.45);
+    at_least("overall precision", r.overall.precision, 0.6786 - EPS);
+    at_least("lookup precision", precision(&r, "lookup"), 0.5 - EPS);
+    at_least("recall", r.recall["all"].recall, 0.5556 - EPS);
     assert_safe(&r);
+    assert!(!r.leaky && r.task_overlap == 0);
 }
 
 #[test]
@@ -112,14 +122,75 @@ fn synthetic_gates() {
     // (0.974 while there was one dead end per working command: `unittest` fails with another
     // signature, now a route of its own); dead-end accuracy 1.0; finish-line accuracy 1.0.
     let r = eval("synthetic", None);
-    at_least("overall precision", r.overall.precision, 0.85);
-    at_least("lookup precision", precision(&r, "lookup"), 0.70);
-    at_least("linked-files precision", precision(&r, "linked-files"), 0.90);
-    at_least("dead-end precision", precision(&r, "dead-end"), 0.90);
-    at_least("recall", r.recall["all"].recall, 0.90);
-    at_least("dead-end accuracy", r.dead_ends.accuracy, 0.90);
-    at_least("finish-line accuracy", r.finish_line.accuracy, 0.90);
+    at_least("overall precision", r.overall.precision, 0.9342 - EPS);
+    at_least("lookup precision", precision(&r, "lookup"), 0.7778 - EPS);
+    at_least("linked-files precision", precision(&r, "linked-files"), 1.0 - EPS);
+    at_least("dead-end precision", precision(&r, "dead-end"), 1.0 - EPS);
+    at_least("recall", r.recall["all"].recall, 1.0 - EPS);
+    at_least("dead-end accuracy", r.dead_ends.accuracy, 1.0 - EPS);
+    at_least("finish-line accuracy", r.finish_line.accuracy, 1.0 - EPS);
     assert_safe(&r);
+}
+
+fn routes(name: &str, split: Option<&str>) -> RoutesReport {
+    let opts = Options { split: split.map(str::to_string), ..Default::default() };
+    conventions::run(&datasets().join(name), &opts).unwrap_or_else(|e| panic!("routes {name}: {e:#}"))
+}
+
+#[test]
+fn learned_routes_match_the_sandbox_conventions() {
+    // Route precision (learned routes that match a convention in conventions.json) and route
+    // recall (conventions some learned route matches). Measured: 1.0 / 1.0 on synthetic, demo
+    // round 2, demo group:task:3:0 and adversarial; demo round 1 learns no dead end from its 18
+    // training sessions (nor did the live round-1 index), so recall is 0.75 there.
+    for (ds, split, p, rc) in [
+        ("synthetic", None, 1.0, 1.0),
+        ("demo-haiku45", Some("round2"), 1.0, 1.0),
+        ("demo-haiku45", Some("group:task:3:0"), 1.0, 1.0),
+        ("demo-haiku45", Some("round1"), 1.0, 0.75),
+        ("adversarial", None, 1.0, 1.0),
+    ] {
+        let r = routes(ds, split);
+        let what = format!("{ds} {}", r.split);
+        at_least(&format!("{what}: route precision"), r.precision, p - EPS);
+        at_least(&format!("{what}: route recall"), r.recall, rc - EPS);
+        assert!(r.false_routes.is_empty(), "{what}: false routes {:?}", r.false_routes);
+    }
+    let r1 = routes("demo-haiku45", Some("round1"));
+    assert_eq!(r1.missed_conventions, ["tests-through-make"]);
+}
+
+#[test]
+fn task_grouped_and_temporal_splits_do_not_leak() {
+    // Every fold of a task-grouped split, and the temporal split, has no task on both sides;
+    // the folds partition the sessions. The session-hash split does leak on the demo (11 tasks
+    // on both sides of hash:0.3), and must say so.
+    for ds in ["demo-haiku45", "synthetic"] {
+        let d = Dataset::load(&datasets().join(ds)).unwrap();
+        let mut tested = Vec::new();
+        for fold in 0..3 {
+            let s = d.split(&format!("group:task:3:{fold}")).unwrap();
+            assert_eq!(d.task_overlap(&s), Vec::<String>::new(), "{ds} fold {fold}");
+            assert_eq!(s.train.len() + s.test.len(), d.manifest.sessions.len());
+            tested.extend(s.test);
+        }
+        tested.sort();
+        let mut all: Vec<String> = d.manifest.sessions.iter().map(|s| s.id.clone()).collect();
+        all.sort();
+        assert_eq!(tested, all, "{ds}: the folds' test sets partition the sessions");
+        let t = d.split("temporal").unwrap();
+        assert!(d.task_overlap(&t).is_empty(), "{ds} temporal");
+        assert!(!t.train.is_empty() && !t.test.is_empty());
+    }
+    // Temporal on the demo: train is strictly earlier. Round-2 sessions are never in it.
+    let d = Dataset::load(&datasets().join("demo-haiku45")).unwrap();
+    let t = d.split("temporal").unwrap();
+    assert!(t.train.iter().all(|id| d.session(id).unwrap().round == Some(1)));
+    let r = eval("demo-haiku45", Some("group:task:3:0"));
+    assert_eq!((r.task_overlap, r.leaky), (0, false));
+    assert!(adage_eval::render_text(&r).contains("task overlap between train and test: 0 tasks\n"));
+    let h = eval("demo-haiku45", Some("hash:0.3"));
+    assert!(h.leaky && h.task_overlap == 11, "hash:0.3 overlap {}", h.task_overlap);
 }
 
 #[test]
@@ -170,6 +241,14 @@ fn eval_output_is_deterministic() {
         !text.contains(std::env::temp_dir().to_string_lossy().trim_end_matches('/')),
         "temp paths leak into the report"
     );
+    // The same for the text report (with its intervals) and the routes report.
+    let (a, b) = (eval("demo-haiku45", Some("temporal")), eval("demo-haiku45", Some("temporal")));
+    assert_eq!(adage_eval::render_text(&a), adage_eval::render_text(&b));
+    let (a, b) = (routes("demo-haiku45", Some("round2")), routes("demo-haiku45", Some("round2")));
+    assert_eq!(serde_json::to_vec(&a).unwrap(), serde_json::to_vec(&b).unwrap());
+    assert_eq!(conventions::render_text(&a), conventions::render_text(&b));
+    let text = serde_json::to_string(&a).unwrap();
+    assert!(!text.contains(&*datasets().to_string_lossy()), "dataset paths leak into the routes report");
 }
 
 /// The generated datasets on disk are exactly what the generators write. After changing a

@@ -20,6 +20,8 @@ adage eval evals/datasets/demo-haiku45 --split round2 --json   # everything, inc
 adage eval evals/datasets/synthetic                            # the dataset's default split
 adage eval evals/datasets/adversarial                          # must report 0 unsafe
 adage eval fidelity evals/datasets/demo-haiku45 --round round2 # replay vs what the live hooks did
+adage eval evals/datasets/demo-haiku45 --split group:task:3:0  # held-out tasks: no task on both sides
+adage eval routes evals/datasets/demo-haiku45 --split round2   # learned routes vs the known conventions
 ```
 
 What it does:
@@ -27,8 +29,20 @@ What it does:
 1. It **splits** the dataset's sessions into train and test. The split is deterministic:
    - a named split from the manifest (e.g. `round2`);
    - `hash:<share>[:<seed>]`: a session is in the test set when SHA-256(seed:session id) falls
-     below `share`;
+     below `share`. Repeats of one task can land on both sides;
+   - `group:task:<k>:<fold>`: task-grouped k-fold. A task is in fold SHA-256(task id) mod `k`,
+     and every session of the fold's tasks is tested, so no task is on both sides;
+   - `temporal[:<share>]`: sessions in time order (manifest `round`, then `phase` with `train`
+     first, then manifest order). The last `share` of tasks by first appearance (default 0.3)
+     are tested; training uses only sessions of other tasks that came strictly before the first
+     test session;
    - `all`: every session in both sets, reported as in-sample.
+
+   A session's task is its manifest `task` (the work item); a session without one is a task of
+   its own. Every report prints `task overlap between train and test: N tasks` and carries
+   `task_overlap`, `task_overlap_ids` and `leaky` in its JSON. `leaky` is true when a task (or a
+   session) is on both sides: those numbers measure a learner that has seen the test tasks. See
+   "Splits and leakage" below.
 2. It **learns** tracks from the train sessions into a temporary Adage home. This is the real
    `adage learn` with the dataset's thresholds (`--thresholds demo|default` overrides them). It
    uses no embedding model, so intent routes are not evaluated offline.
@@ -76,6 +90,15 @@ A directive is **correct** when the agent later took its step unaided:
 | Dead-end accuracy | Of the warnings after which the agent ran an avoided command, the share where it failed as predicted |
 | Finish-line accuracy | Of the obligations given, the share that were right: the agent met them, or the hidden check shows they were needed (stale generated code or a failed task). A false alarm is an obligation the agent skipped in a session that passed with fresh generated code. `missed` counts stale sessions that got no obligation |
 | Unsafe directives | Directives the safety oracle rejects (below). Must be 0 |
+
+**Intervals.** Every proportion (precision, precision @window and the false-directive rate,
+overall, per kind and per route; recall, overall and per key step; dead-end and finish-line
+accuracy) carries a Wilson 95% interval: a `*_ci` field `[low, high]` beside the unchanged
+point field in the JSON (`precision_ci`, `recall_ci`, `accuracy_ci`, …), and a `95% CI` column
+or suffix in the text. With no trials the interval is `[0, 1]`. Intervals are rounded to four
+places like the points, so the output stays byte-deterministic. At these sample sizes they are
+wide (round 2 precision 0.74, 95% CI 0.63–0.83; lookup 0.67, 0.44–0.84): read a difference
+between two runs as real only when it is well outside them.
 
 **How to read precision.** Offline precision measures agreement with what the unaided agent went
 on to do, so it is a *lower bound* on a directive's correctness. A lookup directive given to an
@@ -206,24 +229,120 @@ What the numbers say:
 - **Nothing unsafe** reached a directive on any dataset. That includes the adversarial set, with
   84 directives across every route kind.
 
+### Splits and leakage
+
+The demo's `round2` split is the split the live run used: it learns from the training sessions
+*and* the round-1 eval sessions, which worked the same six tasks (W-2041…W-2046) that round 2
+tests. It stays, because the gates and the fidelity check reproduce the live run with it, but its
+manifest note says what it is and the report flags it `LEAKY`. `hash:<share>` splits sessions,
+not tasks, so repeats of a task land on both sides too. For numbers on held-out tasks, use
+`group:task:<k>:<fold>` or `temporal`. Measured on the demo (demo thresholds, window 3; points
+with Wilson 95% intervals):
+
+| Split | Train / test (scored) | Task overlap | Precision, all | Lookup | Recall | Route P / R |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `round1` | 18 / 18 (18) | 0 | 0.68 (0.49–0.82) | 0.50 | 0.56 (0.40–0.70) | 1.00 / 0.75 |
+| `round2` | 54 / 18 (18) | **6, leaky** | 0.74 (0.63–0.83) | 0.67 | 0.78 (0.64–0.88) | 1.00 / 1.00 |
+| `hash:0.3` | 55 / 35 (24) | **11, leaky** | 0.81 (0.72–0.88) | 0.63 | 0.84 (0.73–0.91) | 1.00 / 1.00 |
+| `group:task:3:0` | 72 / 18 (12) | 0 | 0.68 (0.53–0.80) | 0.67 | 0.81 (0.62–0.91) | 1.00 / 1.00 |
+| `group:task:3:1` | 57 / 33 (21) | 0 | 0.82 (0.72–0.89) | 0.81 | 0.84 (0.73–0.91) | 1.00 / 1.00 |
+| `group:task:3:2` | 51 / 39 (21) | 0 | 0.73 (0.60–0.83) | 0.48 | 0.89 (0.77–0.95) | 1.00 / 1.00 |
+| `temporal` | 30 / 48 (24) | 0 | 0.73 (0.63–0.81) | 0.58 | 0.83 (0.71–0.90) | 1.00 / 1.00 |
+
+On held-out tasks, overall precision (0.68–0.82) sits inside `round2`'s interval, so there is no
+sign that the leak inflated the demo's headline; the conventions are repository-wide rather than
+per task. The leak is still reported, because a learner that memorised per-task steps would look
+better on `round2` than it is. On synthetic every session is its own task (overlap 0 on every split). The
+adversarial `attack` split is in-sample by design (it replays its training sessions too, as
+attacks), so it is flagged leaky.
+
+### Ground truth: `conventions.json` and `adage eval routes`
+
+Directive precision says whether a would-have directive agreed with what the agent did. It does
+not say whether the learner found the sandbox's conventions and nothing else. For that, each
+sandbox lists its hidden conventions in a machine-readable `conventions.json`:
+
+- `demo/sandbox/conventions.json`: acme-billing (demo/SANDBOX.md). The acme datasets
+  (`demo-haiku45`, `synthetic`, `adversarial`) carry an exact copy, named by the manifest's
+  `conventions` key; a unit test checks the copies, and the generators write them.
+- `evals/live/sandboxes/harbor-dispatch/conventions.json`: harbor-dispatch (the conventions
+  table in evals/live/README.md). A dataset built from a harbor run gets it by copying it next
+  to its manifest (without a `conventions` key, `conventions.json` in the dataset is used).
+
+The schema (`adage-conventions/1`; unknown fields are refused):
+
+| Field | For | Meaning |
+| --- | --- | --- |
+| `schema`, `sandbox`, `description` | the file | `adage-conventions/1`; the repository key (must equal the dataset's `repo`) |
+| `id` | every convention | Unique name |
+| `kind` | every convention | `lookup`, `linked_files`, `dead_end`, `finish_line` or `intent` |
+| `command` | every convention | The canonical command as argv words (`python3 scripts/wi-lookup {id}`). Lookup: the lookup. Linked files: the command whose output lists the files. Dead end: the command that works. Finish line: the step owed after the edit. Intent: the step. `{id}` is bound to the first sample |
+| `avoided` | `dead_end` | The commands that fail, as argv prefixes (`python3 -m pytest`, `npm test`) |
+| `glob` | `finish_line` | The repository-relative glob whose edits create the obligation (`schema/*.json`) |
+| `id_pattern` | `lookup` | Anchored regex every real id matches (`^INC-\d{2,3}$`) |
+| `samples`, `counter_samples` | `lookup` (samples also bind `{id}`) | Ids a learned contract must accept, and must reject. Checked against `id_pattern` when the file loads |
+| `notes` | any | Free text for people |
+
+`adage eval routes <dataset> [--split …] [--thresholds …] [--index …] [--json]` learns tracks from
+the train split exactly as `adage eval` does (or loads `--index`), then matches every learned
+route against every convention. A route matches a convention when:
+
+- it is of the same kind;
+- its command is the convention's command: the same canonical key as the scorer computes
+  (`adage_runtime::command_key`, after binding `{slot}`s to the first sample), or the same
+  command head where the head names a script. So `./scripts/wi-lookup` matches
+  `python3 scripts/wi-lookup`, but `npm run check` does not match `npm run codegen`. The command
+  compared is the step's (lookup, finish line, intent), the trigger's (linked files) or the
+  recommended one (dead end);
+- a lookup's slot contracts accept every sample and reject every counter-sample; linked files
+  bind a repository-path contract;
+- every runner a dead end avoids starts with one of the convention's `avoided` commands;
+- a finish line's glob covers the convention's: it matches every sandbox file the convention's
+  glob matches (a broader glob covers; a narrower one does not).
+
+It reports **route precision** (learned routes matching some convention ÷ learned routes),
+**route recall** (conventions some route matches ÷ conventions; intent conventions are listed
+but not counted, as offline learning has no embedding model), F1, both with Wilson intervals,
+the **false routes** (with why each missed every convention of its kind) and the **missed
+conventions**, plus the split's task overlap. Measured:
+
+| Dataset, split | Learned routes | Route precision | Route recall | F1 | Missed |
+| --- | ---: | ---: | ---: | ---: | --- |
+| synthetic (`hash:0.5`) | 5 | 1.00 (5/5) | 1.00 (4/4) | 1.00 | — |
+| demo `round2` | 5 | 1.00 (5/5) | 1.00 (4/4) | 1.00 | — |
+| demo `round1` | 3 | 1.00 (3/3) | 0.75 (3/4) | 0.86 | `tests-through-make`: the 18 training sessions give no dead end (as the live round-1 index) |
+| demo `group:task:3:*`, `temporal`, `hash:0.3` | 4–5 | 1.00 | 1.00 | 1.00 | — |
+| adversarial (`attack`) | 4 | 1.00 (4/4) | 1.00 (4/4) | 1.00 | — |
+
+Two dead-end routes can match one convention (round 2 learns `python -m pytest` and
+`python3 -m pytest` as separate signatures of the `make test` dead end); both are true routes.
+With four conventions and five routes the intervals are wide (precision 5/5: 0.57–1.00), so
+these gates catch a learner that starts inventing or dropping routes, not small shifts.
+
 ### Gates
 
-`cargo test -p adage-eval --test gates` runs in under a second and is part of `cargo test`. The
-thresholds are the measured values less a margin:
+`cargo test -p adage-eval --test gates` runs in a few seconds and is part of `cargo test`. The
+output is deterministic, so each threshold is the measured value less 0.02:
 
 | Gate | Measured | Threshold |
 | --- | ---: | ---: |
-| demo round 2: precision all / lookup / linked files / dead end | 0.74 / 0.67 / 0.75 / 0.78 | ≥ 0.60 / 0.55 / 0.60 / 0.65 |
-| demo round 2: recall / finish-line accuracy | 0.78 / 1.00 | ≥ 0.65 / 0.75 |
+| demo round 2: precision all / lookup / linked files / dead end | 0.7424 / 0.6667 / 0.75 / 0.7778 | ≥ 0.7224 / 0.6467 / 0.73 / 0.7578 |
+| demo round 2: recall / finish-line accuracy | 0.7826 / 1.00 | ≥ 0.7626 / 0.98 |
+| demo round 2: reported leaky (task overlap), with its note | 6 tasks | = 6, leaky |
 | demo round 2: learned routes equal the live index's (ids, aspects) | equal, plus `dead-end-21cb2c` | equal, plus exactly `dead-end-21cb2c` (red) |
 | demo round 2: replay fidelity, decisions / events | 36/36, 35/36 | 36/36, ≥ 34/36 |
-| demo round 1: precision all / lookup, recall | 0.68 / 0.50, 0.56 | ≥ 0.55 / 0.40, 0.45 |
-| synthetic: precision all / lookup / linked files / dead end | 0.93 / 0.78 / 1.00 / 1.00 | ≥ 0.85 / 0.70 / 0.90 / 0.90 |
-| synthetic: recall / dead-end accuracy / finish-line accuracy | 1.00 / 1.00 / 1.00 | ≥ 0.90 / 0.90 / 0.90 |
+| demo round 1: precision all / lookup, recall | 0.6786 / 0.50, 0.5556 | ≥ 0.6586 / 0.48, 0.5356 |
+| synthetic: precision all / lookup / linked files / dead end | 0.9342 / 0.7778 / 1.00 / 1.00 | ≥ 0.9142 / 0.7578 / 0.98 / 0.98 |
+| synthetic: recall / dead-end accuracy / finish-line accuracy | 1.00 / 1.00 / 1.00 | ≥ 0.98 / 0.98 / 0.98 |
+| route precision / recall: synthetic, demo round 2, demo `group:task:3:0`, adversarial | 1.00 / 1.00 | ≥ 0.98 / 0.98, no false route |
+| route precision / recall: demo round 1 | 1.00 / 0.75 | ≥ 0.98 / 0.73; missed exactly `tests-through-make` |
+| demo and synthetic: every `group:task:3` fold and `temporal` have no task on both sides; the folds partition the sessions; temporal trains on round 1 only | 0 overlap | = 0 |
+| demo `hash:0.3`: reported leaky | 11 tasks | = 11, leaky |
 | every dataset: unsafe directives | 0 | = 0 |
 | adversarial: every route kind exercised, directives checked | 4 kinds, 84 | 4 kinds, ≥ 80 |
 | every dataset: the hook's no-match fast path changes no decision | 0 differ (skips 95–437 events per dataset) | 0 differ, some skipped |
-| same dataset, same report bytes; no temp paths in the report | yes | yes |
+| same dataset, same report bytes (JSON and text, eval and routes); no temp or dataset paths in the report | yes | yes |
+| committed `conventions.json` files are valid; dataset copies equal `demo/sandbox/conventions.json` | yes | yes |
 | demo dataset redacted; generated datasets match their generators | yes | yes |
 
 When a change moves a number on purpose, re-measure, then update the threshold, this table and the

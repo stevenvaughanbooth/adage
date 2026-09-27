@@ -1,10 +1,14 @@
 //! `adage eval`: the command line.
 //!
 //! ```text
-//! adage eval <dataset-dir> [--split <name>|hash:<share>[:<seed>]|all] [--thresholds demo|default]
+//! adage eval <dataset-dir> [--split <split>] [--thresholds demo|default]
 //!            [--window <turns>] [--include-steered] [--index <index.json>] [--json]
+//! adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default]
+//!            [--index <index.json>] [--json]
 //! adage eval fidelity <dataset-dir> --round <round1|round2> [--json]
 //! adage eval generate <synthetic|adversarial> <out-dir>
+//!
+//! <split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all
 //! ```
 //!
 //! Read-only apart from `generate` (which writes only `<out-dir>`), and it runs nothing: safe
@@ -17,13 +21,29 @@ fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
 }
 
-const USAGE: &str = "usage: adage eval <dataset-dir> [--split <name>|hash:<share>|all] [--thresholds demo|default] [--window <n>] [--include-steered] [--index <file>] [--json]\n       adage eval fidelity <dataset-dir> --round <round1|round2> [--json]\n       adage eval generate <synthetic|adversarial> <out-dir>";
+const USAGE: &str = "usage: adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--window <n>] [--include-steered] [--index <file>] [--json]\n       adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--index <file>] [--json]\n       adage eval fidelity <dataset-dir> --round <round1|round2> [--json]\n       adage eval generate <synthetic|adversarial> <out-dir>\n<split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all";
 
 pub fn run(args: &[String]) -> Result<()> {
     let json = args.iter().any(|a| a == "--json");
     match args.first().map(String::as_str) {
         None | Some("--help") | Some("-h") => {
             println!("{USAGE}");
+            Ok(())
+        }
+        Some("routes") => {
+            let dir = args.get(1).filter(|d| !d.starts_with("--")).context(USAGE)?;
+            let opts = crate::Options {
+                split: flag(args, "--split"),
+                thresholds: flag(args, "--thresholds"),
+                index: flag(args, "--index").map(PathBuf::from),
+                ..Default::default()
+            };
+            let r = crate::conventions::run(&PathBuf::from(dir), &opts)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&r)?);
+            } else {
+                print!("{}", crate::conventions::render_text(&r));
+            }
             Ok(())
         }
         Some("fidelity") => {
