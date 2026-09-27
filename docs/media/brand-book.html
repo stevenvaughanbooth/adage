@@ -1,0 +1,331 @@
+<title>Adage Brand Book</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #050507; --bg2: #0c0c12; --bg3: #14141c; --line: rgba(255,255,255,.12); --line2: rgba(255,255,255,.06);
+  --ink: #f4f4f7; --ink2: #a3a6b3; --ink3: #6b6e7c;
+  --accent: #8b7cff; --accent2: #c9bfff; --rail: #a89cff;
+  --green: #4ade80; --amber: #fbbf24; --red: #fb7185; --gpu: #ff7a59;
+  --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
+  --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+:root[data-theme="light"] { color-scheme: light; --bg: #f7f6fb; --bg2: #ffffff; --bg3: #eeedf5; --line: rgba(20,18,40,.14); --line2: rgba(20,18,40,.07); --ink: #131320; --ink2: #4a4c5c; --ink3: #7b7d8c; --accent: #5b4bd6; --accent2: #4a3ac2; --rail: #6a5cf0; --green: #15803d; --amber: #b45309; --red: #be123c; --gpu: #c2410c; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-weight: 300; font-size: 17px; line-height: 1.55; padding-inline: 16px; padding-block: 0 80px; }
+a { color: var(--accent2); text-decoration: none; } a:hover { text-decoration: underline; }
+.wrap { max-width: 1120px; margin: 0 auto; }
+nav.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line2); margin-inline: -16px; padding: 10px 16px; }
+nav.top .row { max-width: 1120px; margin: 0 auto; display: flex; gap: 6px 18px; flex-wrap: wrap; align-items: center; font-family: var(--mono); font-size: 12.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); }
+nav.top .row b { color: var(--ink); font-weight: 500; margin-right: 8px; }
+nav.top a { color: var(--ink3); } nav.top a:hover { color: var(--ink); text-decoration: none; }
+header.hero { padding: 72px 0 40px; border-bottom: 1px solid var(--line2); }
+.eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink3); }
+h1 { font-family: var(--serif); font-weight: 400; font-size: clamp(56px, 9vw, 128px); line-height: .98; letter-spacing: -.02em; margin: 14px 0 20px; text-wrap: balance; }
+h1 i { font-style: italic; color: var(--accent2); }
+h2 { font-family: var(--serif); font-weight: 400; font-size: clamp(36px, 5vw, 56px); line-height: 1.02; letter-spacing: -.015em; margin: 0 0 18px; text-wrap: balance; }
+h2 i { font-style: italic; }
+h3 { font-family: var(--sans); font-weight: 500; font-size: 19px; margin: 0 0 8px; color: var(--ink); }
+p { max-width: 68ch; margin: 0 0 14px; color: var(--ink2); } p.lead { font-size: 21px; color: var(--ink); max-width: 62ch; }
+section { padding: 64px 0; border-bottom: 1px solid var(--line2); }
+section .num { font-family: var(--mono); font-size: 13px; letter-spacing: .18em; color: var(--accent2); text-transform: uppercase; margin-bottom: 10px; }
+.grid { display: grid; gap: 20px; } .g2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); } .g3 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); } .g4 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.card { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 22px 24px; }
+.card p { margin-bottom: 8px; } .card p:last-child { margin-bottom: 0; }
+.mono { font-family: var(--mono); font-size: 14.5px; color: var(--ink2); }
+code { font-family: var(--mono); font-size: .92em; background: var(--bg3); padding: 1px 6px; border-radius: 5px; color: var(--ink); }
+pre { font-family: var(--mono); font-size: 14px; line-height: 1.55; background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; overflow-x: auto; color: var(--ink2); margin: 0 0 14px; }
+pre b { color: var(--ink); font-weight: 500; } pre .g { color: var(--green); } pre .a { color: var(--amber); } pre .r { color: var(--red); } pre .d { color: var(--ink3); } pre .c { color: #ffd479; }
+:root[data-theme="light"] pre .c { color: #8a5a00; }
+.lamps { display: inline-flex; gap: 14px; align-items: center; } .lamps i { width: 16px; height: 16px; border-radius: 50%; display: block; box-shadow: 0 0 18px 2px currentColor; }
+.wordmark { font-family: var(--serif); font-size: clamp(88px, 16vw, 220px); line-height: 1; letter-spacing: -.03em; background: linear-gradient(180deg, var(--ink) 15%, var(--accent2) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.specimen { background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 36px 32px; display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; position: relative; overflow: hidden; }
+.specimen.dark { background: #050507; color: #f4f4f7; } .specimen.light { background: #f7f6fb; color: #131320; }
+.specimen.light .wordmark { background: linear-gradient(180deg, #131320 15%, #4a3ac2 100%); -webkit-background-clip: text; background-clip: text; }
+.specimen .tag { font-family: var(--sans); font-weight: 300; font-size: 22px; }
+.rail { height: 4px; width: 100%; border-radius: 2px; background: linear-gradient(90deg, transparent, var(--rail) 20%, #fff 50%, var(--rail) 80%, transparent); box-shadow: 0 0 24px 2px color-mix(in srgb, var(--rail) 60%, transparent); }
+.swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+.sw { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: var(--bg2); }
+.sw .chip { height: 84px; } .sw .meta { padding: 10px 12px; font-family: var(--mono); font-size: 12.5px; color: var(--ink2); line-height: 1.5; } .sw .meta b { display: block; color: var(--ink); font-weight: 500; font-family: var(--sans); font-size: 14px; }
+.type .row { display: grid; grid-template-columns: 180px 1fr; gap: 18px; align-items: baseline; padding: 16px 0; border-top: 1px solid var(--line2); }
+.type .row:first-child { border-top: 0; } .type .k { font-family: var(--mono); font-size: 12.5px; color: var(--ink3); letter-spacing: .08em; text-transform: uppercase; }
+.t-display { font-family: var(--serif); font-size: 64px; line-height: 1; letter-spacing: -.02em; } .t-display i { font-style: italic; }
+.t-h { font-family: var(--serif); font-size: 36px; line-height: 1.05; } .t-body { font-family: var(--sans); font-weight: 300; font-size: 19px; } .t-label { font-family: var(--mono); font-size: 13px; letter-spacing: .16em; text-transform: uppercase; } .t-num { font-family: var(--serif); font-size: 96px; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+table { width: 100%; border-collapse: collapse; font-size: 15.5px; } th, td { text-align: left; padding: 10px 12px; border-top: 1px solid var(--line2); vertical-align: top; } th { font-family: var(--mono); font-size: 12.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink3); font-weight: 500; border-top: 0; } td { color: var(--ink2); } td b { color: var(--ink); font-weight: 500; } .tbl { overflow-x: auto; }
+.prim { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.prim .card { position: relative; padding-top: 26px; }
+.prim h3 { font-family: var(--serif); font-weight: 400; font-size: 40px; letter-spacing: -.015em; margin-bottom: 4px; }
+.prim .sub { font-family: var(--mono); font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink3); margin-bottom: 14px; }
+.prim ul { margin: 10px 0 0; padding-left: 18px; color: var(--ink2); } .prim li { margin-bottom: 6px; }
+.icon { width: 56px; height: 56px; display: block; margin-bottom: 14px; }
+.dd { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+.dd ul { margin: 0; padding-left: 0; list-style: none; } .dd li { padding: 9px 0 9px 26px; border-top: 1px solid var(--line2); position: relative; color: var(--ink2); } .dd li:first-child { border-top: 0; }
+.dd li::before { position: absolute; left: 0; top: 9px; font-family: var(--mono); font-weight: 500; } .do li::before { content: "✓"; color: var(--green); } .dont li::before { content: "✕"; color: var(--red); }
+.dd li b { color: var(--ink); font-weight: 500; }
+.pillars .card h3 { font-family: var(--serif); font-size: 30px; font-weight: 400; letter-spacing: -.01em; margin-bottom: 8px; } .pillars .card h3 i { font-style: italic; color: var(--accent2); }
+.pillars .proof { font-family: var(--mono); font-size: 13px; color: var(--ink3); margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line2); }
+.lines li { margin-bottom: 10px; } .lines { padding-left: 18px; color: var(--ink2); } .lines b { color: var(--ink); font-weight: 400; font-family: var(--serif); font-size: 24px; letter-spacing: -.01em; display: block; line-height: 1.15; } .lines b i { font-style: italic; }
+.lines span { font-size: 14.5px; color: var(--ink3); }
+.chips { display: flex; flex-wrap: wrap; gap: 10px; } .chips span { font-family: var(--mono); font-size: 13.5px; color: var(--ink2); background: var(--bg2); border: 1px solid var(--line); padding: 7px 13px; border-radius: 999px; white-space: nowrap; } .chips span b { color: var(--ink); font-weight: 400; }
+.social { border-radius: 14px; overflow: hidden; border: 1px solid var(--line); background: #050507; color: #f4f4f7; aspect-ratio: 1200/630; max-width: 100%; position: relative; display: flex; flex-direction: column; justify-content: flex-end; padding: 6%; }
+.social .wm { font-family: var(--serif); font-size: clamp(40px, 9vw, 96px); line-height: 1; letter-spacing: -.03em; } .social .t { font-family: var(--sans); font-weight: 300; font-size: clamp(14px, 2.4vw, 24px); color: #a3a6b3; margin-top: 8px; }
+.social .rl { position: absolute; left: -5%; right: -5%; top: 38%; height: 6px; border-radius: 3px; background: linear-gradient(90deg, transparent, #a89cff 20%, #fff 45%, #a89cff 70%, transparent); box-shadow: 0 0 40px 6px rgba(139,124,255,.45); transform: rotate(-6deg); }
+.social .lp { position: absolute; right: 6%; top: 8%; display: flex; gap: 10px; } .social .lp i { width: 12px; height: 12px; border-radius: 50%; display: block; box-shadow: 0 0 14px 2px currentColor; }
+.foot { padding-top: 40px; font-family: var(--mono); font-size: 13px; color: var(--ink3); }
+.tile { background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; } .tile .n { font-family: var(--serif); font-size: 64px; line-height: 1; letter-spacing: -.03em; color: var(--ink); } .tile .k { font-size: 16px; color: var(--ink2); margin-top: 4px; } .tile .s { font-family: var(--mono); font-size: 12.5px; color: var(--ink3); margin-top: 8px; }
+.callout { border-left: 3px solid var(--accent); padding: 4px 0 4px 18px; margin: 18px 0; } .callout p { color: var(--ink); }
+.small { font-size: 14.5px; color: var(--ink3); }
+@media (max-width: 640px) { .type .row { grid-template-columns: 1fr; gap: 6px; } .t-display { font-size: 44px; } .t-num { font-size: 64px; } section { padding: 44px 0; } header.hero { padding-top: 40px; } }
+@media (prefers-reduced-motion: no-preference) { .lamps i { animation: breathe 3.2s ease-in-out infinite; } .lamps i:nth-child(2) { animation-delay: .4s; } .lamps i:nth-child(3) { animation-delay: .8s; } @keyframes breathe { 0%, 100% { box-shadow: 0 0 18px 2px currentColor; } 50% { box-shadow: 0 0 8px 0 currentColor; } } }
+</style>
+
+<nav class="top"><div class="row"><b>Adage · brand book · v2</b>
+<a href="#idea">Idea</a><a href="#primitives">Primitives</a><a href="#story">Story</a><a href="#voice">Voice</a><a href="#lexicon">Lexicon</a><a href="#identity">Identity</a><a href="#color">Color</a><a href="#type">Type</a><a href="#motion">Motion</a><a href="#product">Product</a><a href="#proof">Proof</a><a href="#film">Film</a><a href="#guardrails">Guardrails</a></div></nav>
+
+<div class="wrap">
+<header class="hero">
+  <div class="eyebrow">Brand book v2 · Adage · September 2026 · after adversarial review</div>
+  <h1>Put your agent<br><i>on rails.</i></h1>
+  <p class="lead">Adage gives coding agents instincts and reflexes. Instincts come in the box. Reflexes are conditioned from what your agents actually did in your repo. Both fire in five milliseconds on the CPU, so the model only reasons about what is new.</p>
+  <p>This book is the source of truth for how Adage is named, described, drawn and animated. The film, the README, the CLI and the website should all be recognizably the same object after reading it.</p>
+</header>
+
+<section id="idea">
+  <div class="num">01 · The idea</div>
+  <h2>Reasoning is paid every session. <i>A reflex is paid once.</i></h2>
+  <p class="lead">Every coding agent starts every session from zero. It re-discovers the lookup command, re-reads the same files, re-runs the test command that never worked. Each of those decisions is an inference call on a GPU, paid for again and again.</p>
+  <p>Adage records what agents did, learns the moves that repeat, and replays them as text signals through the harness's hooks. The known route runs deterministically on the CPU; the model keeps the novel work. The result is fewer turns, a lower bill, and fewer missed steps, measured on real recorded sessions rather than claimed.</p>
+  <div class="callout"><p>One sentence: <b>Adage puts coding agents on rails. It learns the routes your agents repeat in a repository and replays them as text signals in 5 ms on the CPU, so the model only reasons about what is new.</b></p></div><p class="small">Not memory. Behaviour, with evidence. Rules files are unconditional and rot; a reflex fires at the moment, carries its evidence, and retires when the evidence fades.</p>
+  <div class="grid g3">
+    <div class="card"><h3>What it is</h3><p>A 10 MB Rust binary that wires into your agent harness's hooks (Claude Code today; OpenCode and Codex adapters in progress), records sessions, learns routes, and injects them as signals. Apache-2.0.</p></div>
+    <div class="card"><h3>What it is not</h3><p>Not a model. Not a wrapper. Not an agent. It never runs what it learned, never calls an API at decision time, and fails open. If Adage is wrong, the agent just proceeds as it would have.</p></div>
+    <div class="card"><h3>Who it is for</h3><p>Developers who run coding agents daily and can feel the waste. Engineering leads who pay the inference bill. Platform teams who want their repo's tribal knowledge to survive the next session.</p></div>
+  </div>
+</section>
+
+<section id="primitives">
+  <div class="num">02 · The primitives</div>
+  <h2>Two nouns carry the whole product.</h2>
+  <p>Everything Adage knows is either an instinct or a reflex. An instinct is given; a reflex is conditioned by repetition. In the index the line is the provenance field: shipped or authored routes on one side, routes with desire-path provenance and evidence on the other. Use the words exactly this way, everywhere, and never capitalise either as a product name.</p>
+  <div class="prim">
+    <div class="card">
+      <svg class="icon" viewBox="0 0 56 56" fill="none" aria-hidden="true"><circle cx="28" cy="28" r="22" stroke="var(--accent)" stroke-width="2"/><circle cx="28" cy="28" r="9" fill="var(--accent)"/></svg>
+      <h3>Instincts</h3><div class="sub">born with it · ships in the box</div>
+      <p>Routes Adage comes with, or tracks you install. They work on the first session with zero history: the moves that are true of nearly every repo, and the tracks a team or a community has already learned and shared.</p>
+      <ul><li>Fire from day one. No recording required.</li><li>Arrive amber. Your own sessions confirm them green. That is a trust story, not a limitation.</li><li>A reflex someone else learned becomes your instinct when you adopt it, evidence attached and marked as theirs.</li></ul>
+    </div>
+    <div class="card">
+      <svg class="icon" viewBox="0 0 56 56" fill="none" aria-hidden="true"><path d="M6 40 C 18 40, 20 14, 32 14 S 46 40, 50 40" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round"/><circle cx="32" cy="14" r="5" fill="var(--accent)"/><circle cx="50" cy="40" r="3" fill="var(--green)"/></svg>
+      <h3>Reflexes</h3><div class="sub">learned · from your recorded sessions</div>
+      <p>Routes Adage conditioned from what agents did in this repository, with evidence attached: how many sessions took the move, how often it held, how many turns it saved. A dead end is a reflex too: flinching away from the command that never works here. Nobody writes the first draft.</p>
+      <ul><li>Learned by <code>adage learn</code>, refreshed by auto-learn after every session.</li><li>Carry evidence: 23 of 33 sessions, lower bound 0.53, 8 turns saved.</li><li>Change aspect as evidence changes. Never written by hand.</li></ul>
+    </div>
+  </div>
+  <div class="grid g3" style="margin-top:20px">
+    <div class="card"><h3>Aspects are the lamps</h3><p><span class="lamps"><i style="background:var(--green);color:var(--green)"></i><i style="background:var(--amber);color:var(--amber)"></i><i style="background:var(--red);color:var(--red)"></i></span></p><p><b style="color:var(--green)">Green</b> do this. <b style="color:var(--amber)">Amber</b> consider this. <b style="color:var(--red)">Red</b> dead end: avoid this, do that instead. The lamp encodes the statistical lower bound on the evidence, not the raw rate: green needs enough sessions to be sure. The schema calls amber "yellow"; marketing says amber.</p></div>
+    <div class="card"><h3>Signals are what the agent sees</h3><p>An instinct or reflex that fires becomes a short text block in the agent's context, with its trigger, its step and its provenance. Text only. The agent decides; Adage never executes.</p></div>
+    <div class="card"><h3>Tracks are how they travel</h3><p>Instincts and reflexes are grouped into versioned tracks (<code>acme-billing/work-items@0.1.0</code>). Tracks are what you share, install, pin and diff.</p></div>
+  </div>
+</section>
+
+<section id="story">
+  <div class="num">03 · The story</div>
+  <h2>Want, obstacle, turn, proof, ask.</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Want</h3><p>Agents that get faster at your repo the more they work in it, the way a new engineer does.</p></div>
+    <div class="card"><h3>Obstacle</h3><p>They forget everything between sessions. Same maze, every time, at GPU prices. Rules files help, but someone has to write them and nobody keeps them true.</p></div>
+    <div class="card"><h3>Turn</h3><p>Adage records the wandering, learns the route, and replays it as a reflex the next time the pattern appears. Nobody writes the first draft. The GPU explored once; the route is on disk.</p></div>
+    <div class="card"><h3>Proof</h3><p>On recorded sessions: first edit at turn 2 instead of 20, 61% less per task, hidden checks passed 100% instead of 78%. Same task, same model, same day.</p></div>
+  </div>
+  <div class="card" style="margin-top:20px"><h3>Ask</h3><p><code>brew install stevenvaughanbooth/tap/adage &amp;&amp; adage init</code>. Two commands, under a minute, fail-open. Instincts on day one; the first reflex after a handful of sessions.</p></div>
+  <h3 style="margin-top:32px">Messaging pillars</h3>
+  <div class="grid g3 pillars">
+    <div class="card"><h3>Instincts on <i>day one.</i></h3><p>Useful in the first session, before anything has been recorded. Shipped packs, shared tracks.</p><div class="proof">proof · a track installs with one command · packs are versioned and signed</div></div>
+    <div class="card"><h3>Reflexes by <i>Friday.</i></h3><p>Every session teaches it. Reflexes appear with evidence and change as the evidence changes. Nobody writes the first draft.</p><div class="proof">proof · 54 sessions learned in 0.24 s · 4 reflexes with support and rate on screen</div></div>
+    <div class="card"><h3>The known route <i>skips the GPU.</i></h3><p>A reflex fires in 5 ms on the CPU with no inference. The model reads a hint instead of rediscovering it, and keeps the novel work. The bill falls as the reflexes accumulate.</p><div class="proof">proof · 27.5 → 9 model turns per task (median) · $0.135 → $0.053 per task (mean) · break-even about 60 tasks against $4.87 of training</div></div>
+  </div>
+</section>
+
+<section id="voice">
+  <div class="num">04 · Voice</div>
+  <h2>Plain, physical, <i>measured.</i></h2>
+  <div class="grid g3">
+    <div class="card"><h3>Plain</h3><p>Short sentences. Concrete nouns. A developer should be able to repeat any line to a coworker without translating it.</p></div>
+    <div class="card"><h3>Physical</h3><p>The world is a railway and the nouns run on it: rail, track, signal, lamp, dead end, finish line, and the instincts and reflexes that travel them. Not brains, not magic, not "AI-powered".</p></div>
+    <div class="card"><h3>Measured</h3><p>Every number has a denominator and a source. "Recorded, not staged." If a claim cannot be backed by a session file, it does not go on screen.</p></div>
+  </div>
+  <div class="dd" style="margin-top:20px">
+    <div class="card do"><h3>Say</h3><ul><li><b>"Adage learned a reflex."</b> A concrete event with evidence.</li><li><b>"Known routes skip the GPU."</b> Precise about what moves off the model. Never "skips the brain": a signal goes into the model's context.</li><li><b>"Recorded, not staged."</b> The credibility line. Use it whenever real footage is on screen.</li><li><b>"Fail-open."</b> The safety property, in the industry's own word.</li><li><b>"Text only. Never runs what it learned."</b> The trust property, scoped honestly: auto-learn runs Adage's own learner, never a learned command.</li></ul></div>
+    <div class="card dont"><h3>Never say</h3><ul><li><b>"AI-powered", "intelligent", "smart".</b> Adage's whole point is that decision time has no model in it.</li><li><b>"Replaces the GPU" or "no more inference".</b> The model still does the novel work. Say "skips the GPU for the known route".</li><li><b>"Instinct" or "Reflex" capitalized as a product name.</b> They are feature nouns. See guardrails.</li><li><b>"Memory", "remembers", "forgets".</b> Everyone claims memory. Adage conditions behaviour, with evidence, and never asks the model what it remembers.</li><li><b>"Automates", "autopilot".</b> Adage advises; the agent acts.</li></ul></div>
+  </div>
+</section>
+
+<section id="lexicon">
+  <div class="num">05 · Lexicon</div>
+  <h2>Five words outward. <i>The rest stay in the schema.</i></h2>
+  <p>Marketing, the README's first screen and the UI use only: <b>instinct</b>, <b>reflex</b>, <b>track</b>, <b>signal</b>, <b>lamp</b>. Route, aspect and provenance are schema words. Desire path and dead end are story words. Directive, the word the CLI uses today for a signal, is absorbed by signal at the next release.</p>
+  <div class="tbl"><table>
+    <tr><th>Term</th><th>Meaning</th><th>Use it for</th><th>Retire</th></tr>
+    <tr><td><b>instinct</b></td><td>A route that ships with Adage or is installed from a pack. Works with zero history.</td><td>Marketing, UI, CLI output, docs.</td><td>"built-in route", "authored route", "default rule"</td></tr>
+    <tr><td><b>reflex</b></td><td>A route learned from this repo's recorded sessions, with evidence.</td><td>Marketing, UI, CLI output, docs.</td><td>"learned route", "desire-path route", "mined rule"</td></tr>
+    <tr><td><b>route</b></td><td>The generic schema object behind both. Trigger, step, evidence, aspect, exits.</td><td>Schema fields, index JSON, code, API. Not marketing.</td><td>"rule", "policy", "playbook"</td></tr>
+    <tr><td><b>track</b></td><td>A versioned, shareable bundle of routes for one concern (work-items, finish-line, dead-ends).</td><td>Everywhere. It is what you share and install.</td><td>"pack" (except "instinct pack" for shipped tracks), "bundle"</td></tr>
+    <tr><td><b>signal</b></td><td>The text block an instinct or reflex puts in the agent's context when it fires.</td><td>Everywhere. Explains "text only".</td><td>"injection", "prompt", "hint"</td></tr>
+    <tr><td><b>lamp / aspect</b></td><td>Green do, amber consider, red dead end.</td><td>"Lamp" in marketing and UI, "aspect" in schema.</td><td>"severity", "confidence", "priority"</td></tr>
+    <tr><td><b>dead end</b></td><td>A red reflex: the command that fails here, and what works instead.</td><td>Everywhere. Developers recognise it instantly.</td><td>"anti-pattern", "negative rule"</td></tr>
+    <tr><td><b>finish line</b></td><td>A step that must follow an edit before the task is done (regenerate, format, test).</td><td>Everywhere.</td><td>"post-edit hook", "completion check"</td></tr>
+    <tr><td><b>desire path</b></td><td>The worn path many sessions took. The learning metaphor and the provenance value.</td><td>Story and film. Schema keeps the value.</td><td>—</td></tr>
+    <tr><td><b>signal box</b></td><td>The graph UI (<code>adage graph --serve</code>) where you see the map, the tracks and the evidence.</td><td>Product UI name.</td><td>"brain", "dashboard"</td></tr>
+    <tr><td><b>harness</b></td><td>The agent runtime Adage hooks into (Claude Code, OpenCode, Codex).</td><td>Everywhere.</td><td>"IDE", "platform"</td></tr>
+  </table></div>
+</section>
+
+<section id="identity">
+  <div class="num">06 · Identity</div>
+  <h2>A wordmark, three lamps, <i>one rail.</i></h2>
+  <p>The identity is deliberately spare so the product footage can carry the colour. The wordmark is Instrument Serif with a vertical white-to-violet gradient. The three lamps are the aspects, always in this order, always lit. The rail is a single glowing line: the route, paved. Together they are the only three marks Adage owns. Known risk: near-black, violet and a serif with one italic word is the 2026 default for AI companies. What is ours is the orange-to-violet story (heat cooling into rail) and the lamps; lean on those, not on the palette.</p>
+  <div class="grid g2">
+    <div class="specimen dark"><div class="lamps"><i style="background:#4ade80;color:#4ade80"></i><i style="background:#fbbf24;color:#fbbf24"></i><i style="background:#fb7185;color:#fb7185"></i></div><div class="wordmark">Adage</div><div class="tag">Ships with instincts. Learns reflexes.</div><div class="rail"></div></div>
+    <div class="specimen light"><div class="lamps"><i style="background:#15803d;color:#15803d"></i><i style="background:#b45309;color:#b45309"></i><i style="background:#be123c;color:#be123c"></i></div><div class="wordmark">Adage</div><div class="tag">Ships with instincts. Learns reflexes.</div><div class="rail" style="background:linear-gradient(90deg,transparent,#6a5cf0 20%,#131320 50%,#6a5cf0 80%,transparent);box-shadow:none"></div></div>
+  </div>
+  <div class="grid g3" style="margin-top:20px">
+    <div class="card"><h3>Wordmark rules</h3><p>Always "Adage", never all-caps in prose; the film's giant set is the one exception. Minimum clear space equals the height of the "A". Gradient on dark only; flat ink on light. Never outline, never drop shadow.</p></div>
+    <div class="card"><h3>Lamp rules</h3><p>Green, amber, red, left to right, equal size, 1.4 diameters apart, and at least 1.8 diameters from any window chrome so they never read as macOS controls. On dark they glow; on light they are flat and darkened for contrast. Never fewer than three. Never used as bullet points.</p></div>
+    <div class="card"><h3>Primitive glyphs</h3><p>Instinct: a filled dot inside a ring (born with it). Reflex: a dot at the peak of an arc landing on a green dot (the learned path). Line weight 2.4 at 56 px. Use them in the UI next to the route id, never as logos.</p></div>
+  </div>
+  <h3 style="margin-top:32px">Social card, 1200 × 630</h3>
+  <div class="social"><div class="lp"><i style="background:#4ade80;color:#4ade80"></i><i style="background:#fbbf24;color:#fbbf24"></i><i style="background:#fb7185;color:#fb7185"></i></div><div class="rl"></div><div class="wm">Adage</div><div class="t">Ships with instincts. Learns reflexes. Open source, one binary, fail-open.</div></div>
+</section>
+
+<section id="color">
+  <div class="num">07 · Color</div>
+  <h2>Night, violet, <i>and the lamps.</i></h2>
+  <p>The world is near-black so light can mean something. Violet is the only brand hue; it is the rail, the accent and the CPU. The three lamp colours are semantic and never decorative. GPU orange exists for one job: heat, cost, the thing that goes away. On light surfaces every colour is darkened to keep 4.5:1 contrast on text.</p>
+  <div class="swatches">
+    <div class="sw"><div class="chip" style="background:#050507"></div><div class="meta"><b>Night</b>#050507<br>page and film ground</div></div>
+    <div class="sw"><div class="chip" style="background:#0c0c12"></div><div class="meta"><b>Panel</b>#0c0c12<br>cards, terminals</div></div>
+    <div class="sw"><div class="chip" style="background:#f4f4f7"></div><div class="meta"><b>Ink</b>#f4f4f7<br>headlines, numbers</div></div>
+    <div class="sw"><div class="chip" style="background:#a3a6b3"></div><div class="meta"><b>Ink 2</b>#a3a6b3<br>body, captions</div></div>
+    <div class="sw"><div class="chip" style="background:#8b7cff"></div><div class="meta"><b>Violet</b>#8b7cff<br>rail, accent, CPU</div></div>
+    <div class="sw"><div class="chip" style="background:#c9bfff"></div><div class="meta"><b>Violet light</b>#c9bfff<br>gradient end, CPU stats</div></div>
+    <div class="sw"><div class="chip" style="background:#4ade80"></div><div class="meta"><b>Green lamp</b>#4ade80<br>do this</div></div>
+    <div class="sw"><div class="chip" style="background:#fbbf24"></div><div class="meta"><b>Amber lamp</b>#fbbf24<br>consider this</div></div>
+    <div class="sw"><div class="chip" style="background:#fb7185"></div><div class="meta"><b>Red lamp</b>#fb7185<br>dead end</div></div>
+    <div class="sw"><div class="chip" style="background:#ff7a59"></div><div class="meta"><b>GPU</b>#ff7a59<br>heat and cost only</div></div>
+    <div class="sw"><div class="chip" style="background:#f7f6fb"></div><div class="meta"><b>Day</b>#f7f6fb<br>light ground (docs, README)</div></div>
+    <div class="sw"><div class="chip" style="background:#5b4bd6"></div><div class="meta"><b>Violet on light</b>#5b4bd6<br>accent on Day</div></div>
+  </div>
+  <p class="small" style="margin-top:14px">Light-surface lamps: green #15803d, amber #b45309, red #be123c. Terminal accents inside product footage keep the terminal's own colours; do not restyle real output.</p>
+</section>
+
+<section id="type">
+  <div class="num">08 · Typography</div>
+  <h2>A serif that talks, a sans that explains, <i>a mono that proves.</i></h2>
+  <div class="type card">
+    <div class="row"><div class="k">Display · Instrument Serif</div><div class="t-display">Known pattern. <i>Adage steps in.</i></div></div>
+    <div class="row"><div class="k">Numbers · Instrument Serif</div><div class="t-num">10×</div></div>
+    <div class="row"><div class="k">Heading · Instrument Serif</div><div class="t-h">It learns as it goes.</div></div>
+    <div class="row"><div class="k">Body · IBM Plex Sans 300/400</div><div class="t-body">Same task, same model, same day. Recorded, not staged.</div></div>
+    <div class="row"><div class="k">Label · IBM Plex Mono</div><div class="t-label">Measured · 18 tasks · Claude Haiku 4.5</div></div>
+    <div class="row"><div class="k">Proof · IBM Plex Mono</div><div class="mono">14:02:11 ●f247fa claude   prompt  → lookup-work-item · dead-end-d41b1e</div></div>
+  </div>
+  <div class="grid g3" style="margin-top:20px">
+    <div class="card"><h3>Serif for the claim</h3><p>Headlines and big numbers only. Italic marks the word that carries the turn ("<i>steps in</i>", "<i>Less GPU</i>"). One italic per line, never two.</p></div>
+    <div class="card"><h3>Sans for the explanation</h3><p>Weight 300 for captions and body, 400 for labels under numbers, 500 for UI. Minimum 28 px under any number on film, nothing under 20 px anywhere on film; 16 px in product.</p></div>
+    <div class="card"><h3>Mono for anything real</h3><p>Commands, route ids, hook lines, evidence, timestamps, and the closing chips. If it is mono, it came from the product, the data, or it is a fact chip. Never set a headline or a caption in mono.</p></div>
+  </div>
+</section>
+
+<section id="motion">
+  <div class="num">09 · Motion</div>
+  <h2>Light travels; text <i>arrives.</i></h2>
+  <div class="grid g3">
+    <div class="card"><h3>The rail reveals</h3><p>Routes are drawn by draw-range along their curve, never faded in. A route being learned glows before it is paved. A firing reflex sends a white-hot pulse down the segment ahead.</p></div>
+    <div class="card"><h3>Text rises through a mask</h3><p>Every headline enters from below through a clipped mask with a quartic ease-out over 0.8 s and leaves by rising 18 px while fading. No slides, no scale-pops on text.</p></div>
+    <div class="card"><h3>Camera is a dolly, not a drone</h3><p>Long, steady moves with centripetal easing between keys. Pinned UI never moves with the camera. One push-in per turn of the story, never on a caption.</p></div>
+    <div class="card"><h3>Bloom is the light source</h3><p>Unreal bloom at strength 1.25, radius 0.55, threshold 0.28. Only rails, lamps, the comet, the die and the chip are allowed above threshold. Product panels render after bloom so text stays crisp.</p></div>
+    <div class="card"><h3>Sound follows the picture</h3><p>112 BPM. Hits on reveals, ticks on hook events, a riser before every set piece. Silence under the wordmark.</p></div>
+    <div class="card"><h3>Reduced motion</h3><p>On the web, honour <code>prefers-reduced-motion</code>: lamps stop breathing, rails appear drawn, text fades.</p></div>
+  </div>
+</section>
+
+<section id="product">
+  <div class="num">10 · In the product</div>
+  <h2>The nouns show up where the work is.</h2>
+  <p>The CLI, the watch TUI and the graph view use the same nouns as the marketing. The schema keeps <code>route</code> and <code>provenance</code> until a version bump so shared tracks do not break; only the displayed words change. <b>The screens below are target output for the next release, not captures of today's binary.</b> Today <code>adage status</code> prints tracks with lamp, support, rate and lower bound; there are no bundled tracks, imported tracks arrive amber, and the harness column reads <code>cc</code>.</p>
+  <div class="grid g2">
+    <div><h3>adage status</h3><pre>acme-billing · gen 8dd5ec01 · hooks cc · auto-learn on
+
+<b>instincts</b>  1 track · 2 routes    <span class="d">shipped · adage/finish-line@0.1.0 · amber until confirmed</span>
+<b>reflexes</b>   3 tracks · 4 routes   <span class="d">learned from 54 sessions · 0.24 s</span>
+
+  <span class="g">●</span> lookup-work-item      reflex   23/33  rate 0.70  lb 0.53  8 turns saved
+  <span class="a">●</span> read-linked-files     reflex   15/16  rate 0.94  lb 0.72
+  <span class="g">●</span> finish-line/regenerate instinct 7/7   rate 1.00  lb 0.65  confirmed here
+  <span class="r">●</span> dead-end-d41b1e       reflex   11/43  "No module named pytest" → make test</pre></div>
+    <div><h3>adage watch</h3><pre>14:02:11 <span class="g">●</span>f247fa claude   prompt  <span class="g">→ reflex lookup-work-item</span> <span class="r">· dead-end-d41b1e</span>
+14:02:14 <span class="g">●</span>f247fa claude   tools   · 1 call  <span class="g">✓ followed lookup-work-item</span>
+14:02:14 <span class="g">●</span>f247fa claude   tools   <span class="a">→ reflex read-linked-files</span>
+14:02:20 <span class="g">●</span>f247fa claude   tools   <span class="g">→ instinct finish-line/regenerate</span>
+14:02:31 <span class="g">●</span>f247fa claude   stop    <span class="g">✓ finish line met</span></pre>
+    <h3>The signal, as the agent sees it</h3><pre>&lt;adage-signal track="acme-billing/work-items@0.1.0" route="lookup-work-item" aspect="green"&gt;
+In this repository, work item details are looked up with:
+  python3 scripts/wi-lookup W-2045
+Learned by Adage from this repository's earlier agent sessions; not requested by the user.
+&lt;/adage-signal&gt;</pre></div>
+  </div>
+  <div class="grid g3" style="margin-top:20px">
+    <div class="card"><h3>Commands</h3><p><code>adage learn</code> learns reflexes. <code>adage add</code> installs instincts. <code>adage share</code> publishes a track. Planned: <code>adage reflexes</code> and <code>adage instincts</code> as listing aliases, and <code>directive</code> renamed to <code>signal</code> in <code>adage report</code>.</p></div>
+    <div class="card"><h3>Init copy</h3><p>"Adage will register hooks with Claude Code. Nothing is written without asking during setup. It ships with instincts and will learn reflexes from your sessions. Fail-open: if Adage errors, your agent proceeds normally."</p></div>
+    <div class="card"><h3>README first line</h3><p>"Adage puts your coding agent on rails: instincts that ship, reflexes conditioned from what agents actually did in your repo, replayed as text in 5 ms on the CPU. Fail-open. Never runs what it learned."</p></div>
+  </div>
+</section>
+
+<section id="proof">
+  <div class="num">11 · Proof points</div>
+  <h2>Numbers with <i>denominators.</i></h2>
+  <div class="grid g4">
+    <div class="tile"><div class="n">10×</div><div class="k">fewer turns before the first edit</div><div class="s">median 2 vs 20 · 18 tasks each · Claude Haiku 4.5 · p ≤ 0.0002</div></div>
+    <div class="tile"><div class="n">−61%</div><div class="k">cost per task</div><div class="s">$0.053 vs $0.135 mean · same tasks · Sonnet 5 on a second stack: −24%</div></div>
+    <div class="tile"><div class="n">18 of 18</div><div class="k">hidden checks passed</div><div class="s">vs 14 of 18 · p = 0.11 · not significant at this n</div></div>
+    <div class="tile"><div class="n">5 ms</div><div class="k">per decision, on the CPU</div><div class="s">1.8 to 6.4 ms p95 on an M3 Pro · 10 MB binary · no inference · fail-open</div></div>
+    <div class="tile"><div class="n">0.24 s</div><div class="k">to learn 54 sessions</div><div class="s">no model required</div></div>
+    <div class="tile"><div class="n">3 vs never</div><div class="k">turn of the first edit, with vs without</div><div class="s">W-2045 · same round · the control hit the 30-turn cap · manifest</div></div>
+  </div>
+  <p class="small" style="margin-top:14px">Every tile must be traceable to a file under <code>evals/datasets/demo-haiku45</code>, <code>demo/results</code> or a measured hook run. Add the model and task count whenever a number stands alone. Say once, loudly: a purpose-built demo repo and a weak model are the best case; the Sonnet 5 result is the honest floor. Run the CLAUDE.md control arm before claiming anything against rules files.</p>
+</section>
+
+<section id="film">
+  <div class="num">12 · The film</div>
+  <h2>Copy map for the next cut.</h2>
+  <p>The vision cut (v5) says the primitives, in one railway world, with one title card. Beat by beat:</p>
+  <div class="tbl"><table>
+    <tr><th>Time</th><th>Beat</th><th>Line</th><th>Picture</th></tr>
+    <tr><td>0–4</td><td>Cold open</td><td><b>Your agent has no reflexes.</b></td><td>Black; the city fades in at rail height.</td></tr>
+    <tr><td>4–12</td><td>Wander</td><td><b>Every step is a thought.</b></td><td>Chase cam behind the agent; each node it thinks about flares orange; a counter of thoughts.</td></tr>
+    <tr><td>12–17</td><td>Same maze</td><td><b>Same maze. Every session.</b></td><td>Crane up; sixteen sessions burn the same trench in 1.5 s.</td></tr>
+    <tr><td>17–22</td><td>Reflex</td><td><b>Adage learns a reflex.</b> Nobody wrote a word.</td><td>A lit head paves the trench into a violet rail; signals rise; the dead end locks red.</td></tr>
+    <tr><td>22–28</td><td>Instincts</td><td><b>Ships with instincts.</b> Rails on day one.</td><td><code>adage init</code> lands; a ring sweeps the dark map and rails snap on in its wake.</td></tr>
+    <tr><td>28–43</td><td>Session</td><td><b>Known pattern. A reflex fires.</b> → <b>It knows what comes next.</b> → <b>First edit at turn 3.</b> The other agent never finished.</td><td>Our agent rides the rail, the segment ahead igniting before it moves; the control agent wanders in the dark, burns orange, dies at the cap. Pinned transcript. Two counters.</td></tr>
+    <tr><td>43–50</td><td>Evidence</td><td><b>Every reflex carries its evidence.</b></td><td>Overhead; four cards, bars filling.</td></tr>
+    <tr><td>50–57</td><td>Cooling city</td><td><b>Known routes skip the GPU.</b></td><td>54 sessions replay in three seconds, the grid glows orange; rails lock and the heat drains to violet. 27.5 → 9 turns, $0.135 → $0.053.</td></tr>
+    <tr><td>57–64</td><td>Fleet</td><td><b>A reflex learned once travels everywhere.</b></td><td>Pull back to nine repos; rails run between them; each city cools as the track arrives.</td></tr>
+    <tr><td>64–73</td><td>Numbers</td><td><b>−61% · 10× · 0 dead ends</b></td><td>One numeral at a time over the dimmed fleet.</td></tr>
+    <tr><td>73–80</td><td>Trust</td><td><b>Deterministic. Text only. Fail-open.</b></td><td>The real signal block on the rail.</td></tr>
+    <tr><td>80–91</td><td>Close</td><td><b>Adage · Put your agent on rails.</b> Ships with instincts. Learns reflexes.</td><td>The only title card. Lamps light in sequence; install line; URL; chips.</td></tr>
+  </table></div>
+</section>
+
+<section id="guardrails">
+  <div class="num">13 · Guardrails</div>
+  <h2>What keeps this <i>defensible.</i></h2>
+  <div class="grid g2">
+    <div class="card"><h3>The words are descriptive, not brands</h3><p>"instinct" and "reflex" are lowercase, plural, possessed feature nouns describing what a route is: your agent's instincts, its reflexes. Never "Adage Instinct", "Adage Reflex", "Instinct by Adage", a tier named either, or "reflex layer" as a category label. AMD holds INSTINCT marks for GPUs (and the film shows a GPU), a $2.5B AI-assistant company trades as Instinct, and Pynecone holds a REFLEX application in class 42 for an AI app platform. Descriptive use inside a product called Adage is ordinary; anything that starts to identify the source invites a letter.</p></div>
+    <div class="card"><h3>The name is Adage</h3><p>Adage is the only mark to file, and it is a common word, so clear it first. Class 9 (downloadable software) and class 42 (SaaS, software development tools). adage.dev and adage.sh are registered by someone; adage.ai, adage.run and adage.io looked free at last check. Register before the film ships publicly.</p></div>
+    <div class="card"><h3>Claims are measured</h3><p>Always name the model, the task count and the repo next to a number. "Measured on recorded sessions" is stronger than any adjective and cannot be argued with.</p></div>
+    <div class="card"><h3>Real footage stays real</h3><p>Product panels in the film are captures of the binary or faithful renderings of its output for the recorded session. Where the film or this book shows a screen ahead of the product (instinct badges, listing aliases), it is a target for the next release and the product catches up before the film goes public. Keep the content true to the recorded data even when the chrome is ahead of the binary.</p></div>
+  </div>
+  <div class="foot">Adage brand book v2 · revised after adversarial review (brand strategy, maintainer) · Apache-2.0 product, this document © the Adage project</div>
+</section>
+</div>
