@@ -36,6 +36,8 @@ pub struct ArmFidelity {
 #[derive(Debug, Default, Clone, Serialize)]
 pub struct FidelityReport {
     pub round: String,
+    /// `current`, or `exact-keys`: the matching the recorded hooks used ([`run_with`]).
+    pub matching: String,
     pub index_generation: String,
     pub by_arm: BTreeMap<String, ArmFidelity>,
     pub mismatches: Vec<String>,
@@ -48,8 +50,18 @@ fn decisions(seq: &[(String, Vec<String>, bool)]) -> Sig {
     seq.iter().filter(|(_, w, c)| !w.is_empty() || *c).cloned().collect()
 }
 
-/// Compare replay against the live record for every eval session of `round` (`round1`, `round2`).
+/// Compare replay against the live record for every eval session of `round` (`round1`, `round2`),
+/// deciding with the current matching.
 pub fn run(dir: &Path, round: &str) -> Result<FidelityReport> {
+    run_with(dir, round, false)
+}
+
+/// As [`run`]; with `exact_keys`, decide with the matching the recorded hooks used, before the
+/// command-pattern algebra (`adage_runtime::with_exact_key_matching`). The demo's round-2 hooks
+/// recorded that a linked-files trigger mined from `python3 scripts/wi-lookup {id}` did not fire
+/// when an agent ran `./scripts/wi-lookup W-2042`; the current matching fires it (the same
+/// script), so four holdout sessions replay one more would-have directive than was recorded.
+pub fn run_with(dir: &Path, round: &str, exact_keys: bool) -> Result<FidelityReport> {
     let ds = Dataset::load(dir)?;
     let n: u32 = round.strip_prefix("round").and_then(|x| x.parse().ok()).context("round must be round1 or round2")?;
     let idx_path = dir.join("recorded").join(format!("index-{round}.json"));
@@ -59,12 +71,18 @@ pub fn run(dir: &Path, round: &str) -> Result<FidelityReport> {
     let recorded: BTreeMap<String, Vec<Recorded>> = serde_json::from_slice(&std::fs::read(&rec_path)?)?;
     let table = CommandTable::load();
     let sandbox = crate::dataset::Sandbox::create(&ds.sandbox()?)?;
-    let mut rep =
-        FidelityReport { round: round.into(), index_generation: index.generation.clone(), ..Default::default() };
+    let mut rep = FidelityReport {
+        round: round.into(),
+        matching: if exact_keys { "exact-keys" } else { "current" }.into(),
+        index_generation: index.generation.clone(),
+        ..Default::default()
+    };
     for s in ds.manifest.sessions.iter().filter(|s| s.phase == "eval" && s.round == Some(n)) {
         let Some(live) = recorded.get(&s.run) else { continue };
         let t = transcript::read(&ds.path(s))?;
-        let r = replay::replay(&t, &index, &ds.manifest.repo, &sandbox.root, &table, s.stopped(), Default::default());
+        let go =
+            || replay::replay(&t, &index, &ds.manifest.repo, &sandbox.root, &table, s.stopped(), Default::default());
+        let r = if exact_keys { adage_runtime::with_exact_key_matching(go) } else { go() };
         let replayed: Sig = r.trace.iter().map(|(e, w, c)| (e.to_string(), w.clone(), *c)).collect();
         let live: Sig = live.iter().map(|x| (x.event.clone(), x.would_have.clone(), x.would_continue)).collect();
         let a = rep.by_arm.entry(s.arm.clone()).or_default();
@@ -97,7 +115,7 @@ pub fn run(dir: &Path, round: &str) -> Result<FidelityReport> {
 }
 
 pub fn render_text(r: &FidelityReport) -> String {
-    let mut s = format!("replay fidelity, {} (index {})\n", r.round, r.index_generation);
+    let mut s = format!("replay fidelity, {} (index {}, {} matching)\n", r.round, r.index_generation, r.matching);
     for (arm, a) in &r.by_arm {
         s.push_str(&format!(
             "  {arm:<8} {} sessions: decisions match {}/{}, hook event sequence matches {}/{}\n",

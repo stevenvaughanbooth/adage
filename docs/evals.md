@@ -158,13 +158,13 @@ These were measured on the committed datasets, with demo thresholds and a window
 | | demo round 2 | demo round 1 | demo `hash:0.3` | synthetic | adversarial |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Train / test (scored) | 54 / 18 (18) | 18 / 18 (18) | 55 / 35 (24; 11 steered) | 34 / 18 (18) | 10 / 20 (20) |
-| Directives given | 66 | 28 | 89 | 76 | 74 |
-| Precision, all | 0.74 | 0.68 | 0.81 | 0.93 | 0.73 |
+| Directives given | 70 | 30 | 94 | 76 | 74 |
+| Precision, all | 0.76 | 0.67 | 0.81 | 0.93 | 0.73 |
 | — lookup | 0.67 | 0.50 | 0.63 | 0.78 | 1.00 |
-| — linked files | 0.75 | 1.00 | 1.00 | 1.00 | 0.50 |
+| — linked files | 0.83 | 0.89 | 0.93 | 1.00 | 0.50 |
 | — dead end | 0.78 | — | 0.83 | 1.00 | 1.00 |
 | — finish line | 0.75 | 1.00 | 1.00 | 0.88 | 0.41 |
-| Recall (key steps) | 0.78 (36/46) | 0.56 (20/36) | 0.84 (57/68) | 1.00 (77/77) | 0.57 (50/87) |
+| Recall (key steps) | 0.91 (42/46) | 0.58 (21/36) | 0.93 (63/68) | 1.00 (77/77) | 0.57 (50/87) |
 | Turns saved, lookup (median) | 9 | 10 | 10 | 1 | 0 |
 | Dead-end accuracy | 0/0 | — | 3/3 | 10/10 | 3/3 |
 | Finish-line accuracy | 1.00 (4) | 1.00 (3) | 1.00 (7) | 1.00 (8) | 1.00 (7 met; 10 unlabelled) |
@@ -173,7 +173,13 @@ These were measured on the committed datasets, with demo thresholds and a window
 Replay fidelity, round 2:
 
 - Replaying the 36 round-2 eval sessions (holdout and adage arms) against the live round-2 index
-  reproduces **36/36** sessions' would-have directives and stop requests.
+  reproduces **36/36** sessions' would-have directives and stop requests, deciding with the
+  matching the live hooks used (`--exact-keys`: an observed command key had to equal the
+  directed one). Under the current matching (the command-pattern algebra, `adage_core::pattern`)
+  it is 32/36: in four holdout sessions (`eval2-W-2042-r1`, `eval2-W-2043-r2`, `eval2-W-2046-r1`,
+  `eval2-W-2046-r3`) the agent ran `./scripts/wi-lookup W-…` where the linked-files trigger was
+  mined from `python3 scripts/wi-lookup {id}`. The live hook did not fire it; the same script now
+  does, one more would-have directive each. The gate checks both, and that nothing else differs.
 - It reproduces the exact hook event sequence in **35/36** sessions. In the other session the
   agent ran a forked skill, whose tool calls fired hooks in the session but are recorded in a
   subagent transcript.
@@ -327,19 +333,20 @@ output is deterministic, so each threshold is the measured value less 0.02:
 
 | Gate | Measured | Threshold |
 | --- | ---: | ---: |
-| demo round 2: precision all / lookup / linked files / dead end | 0.7424 / 0.6667 / 0.75 / 0.7778 | ≥ 0.7224 / 0.6467 / 0.73 / 0.7578 |
-| demo round 2: recall / finish-line accuracy | 0.7826 / 1.00 | ≥ 0.7626 / 0.98 |
+| demo round 2: precision all / lookup / linked files / dead end | 0.7571 / 0.6667 / 0.8333 / 0.7778 | ≥ 0.7371 / 0.6467 / 0.8133 / 0.7578 |
+| demo round 2: recall / finish-line accuracy | 0.913 / 1.00 | ≥ 0.893 / 0.98 |
 | demo round 2: reported leaky (task overlap), with its note | 6 tasks | = 6, leaky |
 | demo round 2: learned routes equal the live index's (ids, aspects) | equal, plus `dead-end-21cb2c` | equal, plus exactly `dead-end-21cb2c` (red) |
-| demo round 2: replay fidelity, decisions / events | 36/36, 35/36 | 36/36, ≥ 34/36 |
-| demo round 1: precision all / lookup, recall | 0.6786 / 0.50, 0.5556 | ≥ 0.6586 / 0.48, 0.5356 |
+| demo round 2: replay fidelity (`--exact-keys`), decisions / events | 36/36, 35/36 | 36/36, ≥ 34/36 |
+| demo round 2: replay fidelity (current matching) | 32/36 | exactly the four sessions above differ, each by one linked-files directive |
+| demo round 1: precision all / lookup, recall | 0.6667 / 0.50, 0.5833 | ≥ 0.6467 / 0.48, 0.5633 |
 | synthetic: precision all / lookup / linked files / dead end | 0.9342 / 0.7778 / 1.00 / 1.00 | ≥ 0.9142 / 0.7578 / 0.98 / 0.98 |
 | synthetic: recall / dead-end accuracy / finish-line accuracy | 1.00 / 1.00 / 1.00 | ≥ 0.98 / 0.98 / 0.98 |
 | route precision / recall: synthetic, demo round 2, demo `group:task:3:0`, adversarial | 1.00 / 1.00 | ≥ 0.98 / 0.98, no false route |
 | route precision / recall: demo round 1 | 1.00 / 0.75 | ≥ 0.98 / 0.73; missed exactly `tests-through-make` |
 | demo and synthetic: every `group:task:3` fold and `temporal` have no task on both sides; the folds partition the sessions; temporal trains on round 1 only | 0 overlap | = 0 |
 | demo `hash:0.3`: reported leaky | 11 tasks | = 11, leaky |
-| every dataset: unsafe directives | 0 | = 0 |
+| every dataset: unsafe directives (including interlocking violations) | 0 | = 0 |
 | adversarial: every route kind exercised, directives checked | 4 kinds, 84 | 4 kinds, ≥ 80 |
 | every dataset: the hook's no-match fast path changes no decision | 0 differ (skips 95–437 events per dataset) | 0 differ, some skipped |
 | same dataset, same report bytes (JSON and text, eval and routes); no temp or dataset paths in the report | yes | yes |
@@ -442,10 +449,13 @@ adds trials and directives).
 with the defaults, and why it was blessed. `cargo test -p adage-eval --test bench` reproduces it
 byte for byte (ignoring `adage_version`), checks that runs and sweeps are deterministic (the same
 bytes with 1 or 4 jobs), that every configuration of a `random:4` sweep has no unsafe directive,
-and that parameters really reach the learner and the runtime. The baseline (J 0.6783): turns saved
-at window 0.651 per session, 0.472 false directives per session, route F1 1.0, recall 0.942,
-precision@window 0.335; final check J 0.6146. After a deliberate change of behaviour, re-run and
-`bless` with a reason, in the same commit.
+and that parameters really reach the learner and the runtime. The baseline (J 0.6307): turns saved
+at window 0.660 per session, 0.491 false directives per session, route F1 1.0, recall 0.972,
+precision@window 0.348; final check J 0.5937. It was J 0.6783 (0.651, 0.472, 1.0, 0.942, 0.335;
+final 0.6146) before the command-pattern algebra: the linked-files trigger now also fires when an
+agent runs the lookup script without its interpreter, which raises recall and adds directives,
+some not followed, which the objective charges twice. The sweep table below predates it. After a
+deliberate change of behaviour, re-run and `bless` with a reason, in the same commit.
 
 ### Sweeps
 
@@ -494,7 +504,7 @@ These use `proptest` with default case counts and bounded inputs, and finish in 
 | Test | Property |
 | --- | --- |
 | `prop_shell` | `normalize_shell` never panics and returns within 2 s on a 2 MiB stack. The inputs are arbitrary text, shell-shaped text, recursively nested constructs, 6,000-deep repetitions of 17 constructs, and 200 KB inputs |
-| `prop_tracks` | Random tracks, mostly hostile, go through `io::validate`. Each accepted track is driven through `decide` with hostile prompts and tool output. Every directive and stop request must pass the safety oracle. The test also checks its own coverage: at least 10% of tracks are accepted, and a minimum number of directives is checked |
+| `prop_tracks` | Random tracks, mostly hostile, go through `io::validate`. Each accepted track is driven through `decide` with hostile prompts and tool output. Every directive and stop request must pass the safety oracle, and every session its interlocking invariants. The test also checks its own coverage: at least 10% of tracks are accepted, and a minimum number of directives is checked. A second property builds colliding route sets (one runner directed and avoided, greens at one decision point, learned and imported tracks), compiles and drives them: no directive is ever emitted after or beside a red that avoids its command, nor two greens at one decision point |
 | `prop_store` | A spool cut at any byte loses only the torn record. Flipped bytes never invent a record. A state write torn at any byte reads as a written state. Truncation reads as a written state or as the default |
 | `prop_render` | `render::sanitise` output is bounded, free of forbidden and invisible characters, trimmed, and idempotent |
 

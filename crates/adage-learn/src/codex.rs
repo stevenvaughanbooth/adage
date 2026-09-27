@@ -21,8 +21,7 @@
 //! output, message, or prompt between them. Compressed rollouts (`.jsonl.zst`, written only with
 //! the `local_thread_store_compression` feature) are not read.
 
-use crate::import::{Session, Signals, StepObs};
-use adage_core::keys::{self, template_key};
+use crate::import::{Session, Signals};
 use adage_core::tools::{from_codex, normalize_tool};
 use adage_core::{repo, CommandTable};
 use adage_runtime::Call;
@@ -339,17 +338,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
             }
             let call = Call { tool: tool.clone(), input: input.clone(), output: output.clone(), failed };
             let at = if tool == "Bash" { run_in.as_str() } else { root_str.as_str() };
-            for mut n in keys::flatten(&normalize_tool(&tool, &input, at, table)) {
-                keys::canonicalise(&mut n, &root);
-                let rel_path = keys::action_path(&n.action).map(|p| repo::relativize(&root, p));
-                steps.push(StepObs {
-                    turn: rec.turn,
-                    key: template_key(&n.action),
-                    norm: n,
-                    call: call.clone(),
-                    rel_path,
-                });
-            }
+            steps.extend(crate::import::call_steps(rec.turn, &call, normalize_tool(&tool, &input, at, table), &root));
         }
     }
     let prompts = if event_prompts > 0 { event_prompts } else { item_prompts };

@@ -176,8 +176,27 @@ impl MaxRank for Effect {
     }
 }
 
-/// A command's runner, without its targets: `python3 -m pytest tests/a.py -v` → `python3 -m pytest`.
+/// A command's runner, without its targets: its program and the subcommand it multiplexes to, or
+/// the script an interpreter runs (`adage_core::pattern`). `python3 -m pytest tests/a.py -v` →
+/// `python3 -m pytest`, `node --test src/` → `node --test` (not `node`, which would also name
+/// `node tools/codegen.mjs`), `python3 scripts/check.py` → `python3 scripts/check.py`,
+/// `cargo test --workspace` → `cargo test`.
 pub(crate) fn runner(argv: &[String]) -> String {
+    use adage_core::pattern::{is_slot, Shape};
+    match Shape::of_argv(argv) {
+        Some(s) if !s.identity.iter().any(|t| is_slot(t)) => {
+            if s.identity.first() == Some(&s.program) {
+                s.identity.join(" ")
+            } else {
+                format!("{} {}", s.program, s.identity.join(" "))
+            }
+        }
+        _ => legacy_runner(argv),
+    }
+}
+
+/// The first words of a command, up to its first path, dotted word or flag.
+fn legacy_runner(argv: &[String]) -> String {
     let mut out: Vec<&str> = Vec::new();
     let mut i = 0;
     while i < argv.len() {
@@ -595,8 +614,107 @@ pub fn glob_for(rel: &str) -> Option<String> {
     Some(if dir.is_empty() { format!("*.{ext}") } else { format!("{dir}/*.{ext}") })
 }
 
+/// A generalised finish-line glob (`a/**/*.ext`) and the sibling globs it replaces.
+struct GeneralGlob {
+    glob: String,
+    command: String,
+    parts: Vec<String>,
+    editors: BTreeSet<String>,
+    support: BTreeSet<String>,
+}
+
+/// The glob lattice, kept conservative: `a/b/*.ext` and `a/c/*.ext`, each followed by the same
+/// regenerate command, become `a/**/*.ext` only when the evidence is unanimous. Every session that
+/// edited a `.ext` file anywhere under `a/` ran the command after its last such edit, no session
+/// that ran it after editing `.ext` files edited one outside `a/` (the step belongs to `a/`, not
+/// to the extension), and the general glob has enough support and more than any sibling alone.
+/// The common prefix is never empty: nothing generalises to `**/*.ext`.
+fn generalise_globs(
+    sessions: &[&Session],
+    after: &BTreeMap<(String, String), BTreeSet<String>>,
+    runs: &BTreeMap<String, BTreeSet<String>>,
+    cfg: &LearnConfig,
+) -> Vec<GeneralGlob> {
+    // (command, extension) -> directories of the specific globs followed by it
+    let mut groups: BTreeMap<(String, String), BTreeSet<String>> = BTreeMap::new();
+    for (g, c) in after.keys() {
+        let Some((dir, ext)) = g.split_once("/*.") else { continue };
+        if !dir.contains('*') && !ext.contains(['*', '/']) {
+            groups.entry((c.clone(), ext.to_string())).or_default().insert(dir.to_string());
+        }
+    }
+    let total = sessions.len();
+    let mut out = Vec::new();
+    for ((c, ext), dirs) in groups {
+        if dirs.len() < 2 {
+            continue;
+        }
+        let split: Vec<Vec<&str>> = dirs.iter().map(|d| d.split('/').collect()).collect();
+        let mut prefix: Vec<&str> = split[0].clone();
+        for d in &split[1..] {
+            let n = prefix.iter().zip(d).take_while(|(a, b)| a == b).count();
+            prefix.truncate(n);
+        }
+        if prefix.is_empty() {
+            continue;
+        }
+        let p = prefix.join("/");
+        let (under_p, suffix) = (format!("{p}/"), format!(".{ext}"));
+        let under = |rel: &str| rel.starts_with(&under_p) && rel.ends_with(&suffix);
+        let mut editors = BTreeSet::new();
+        let mut support = BTreeSet::new();
+        let mut outside = false;
+        for s in sessions {
+            let edits: Vec<(usize, &str)> = s
+                .steps
+                .iter()
+                .enumerate()
+                .filter(|(_, st)| adage_core::keys::is_author(&st.norm.action))
+                .filter_map(|(i, st)| st.rel_path.as_deref().map(|r| (i, r)))
+                .collect();
+            let Some(last) = edits.iter().filter(|(_, r)| under(r)).map(|(i, _)| *i).max() else { continue };
+            editors.insert(s.id.clone());
+            let ran = s.steps.iter().skip(last + 1).any(|st| {
+                st.norm.effect == Effect::Regenerate
+                    && !st.call.failed
+                    && argv(st).is_some_and(|av| shell_join(av) == c)
+            });
+            if ran {
+                support.insert(s.id.clone());
+                outside |= edits.iter().any(|(_, r)| r.ends_with(&suffix) && !under(r));
+            }
+        }
+        let best_part = dirs
+            .iter()
+            .filter_map(|d| after.get(&(format!("{d}/*.{ext}"), c.clone())))
+            .map(|ids| ids.len())
+            .max()
+            .unwrap_or(0);
+        let n = support.len();
+        let ran_without = runs.get(&c).map_or(0, |r| r.len()).saturating_sub(n);
+        let not_editing = total.saturating_sub(editors.len());
+        let rate_without = if not_editing == 0 { 0.0 } else { ran_without as f64 / not_editing as f64 };
+        if outside
+            || n != editors.len()
+            || (n as u32) < cfg.min_support
+            || n <= best_part
+            || 1.0 - rate_without < cfg.finish_line_contrast
+        {
+            continue;
+        }
+        out.push(GeneralGlob {
+            glob: format!("{p}/**/*.{ext}"),
+            command: c,
+            parts: dirs.iter().map(|d| format!("{d}/*.{ext}")).collect(),
+            editors,
+            support,
+        });
+    }
+    out
+}
+
 /// Edits to a path pattern followed, in successful sessions, by a regenerate step — and sessions
-/// that skipped it failing.
+/// that skipped it failing. Sibling directories may generalise ([`generalise_globs`]).
 pub fn obligation_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
     // glob -> sessions editing it
     let mut editors: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
@@ -646,6 +764,17 @@ pub fn obligation_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route>
 
     let total = sessions.len() as u32;
     let mut out = Vec::new();
+    // The glob lattice: sibling directories with one regenerate step may generalise.
+    let general = generalise_globs(sessions, &after, &runs, cfg);
+    let generalised = |g: &str, c: &str| general.iter().any(|x| x.command == c && x.parts.iter().any(|p| p == g));
+    let after: Vec<((String, String), BTreeSet<String>)> = after
+        .into_iter()
+        .filter(|((g, c), _)| !generalised(g, c))
+        .chain(general.iter().map(|x| ((x.glob.clone(), x.command.clone()), x.support.clone())))
+        .collect();
+    for x in &general {
+        editors.insert(x.glob.clone(), x.editors.clone());
+    }
     for ((g, c), ids) in after {
         let support = ids.len() as u32;
         let opp = editors.get(&g).map(|s| s.len() as u32).unwrap_or(0);
@@ -700,11 +829,106 @@ mod tests {
         let v = |x: &[&str]| x.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         assert_eq!(runner(&v(&["python3", "-m", "pytest", "tests/a.py", "-v"])), "python3 -m pytest");
         assert_eq!(runner(&v(&["pytest", "tests/", "-v"])), "pytest");
+        assert_eq!(runner(&v(&["node", "--test", "src/"])), "node --test");
+        assert_eq!(runner(&v(&["node", "tools/codegen.mjs"])), "node tools/codegen.mjs");
+        assert_eq!(runner(&v(&["python3", "scripts/check.py", "-q"])), "python3 scripts/check.py");
+        assert_eq!(runner(&v(&["cargo", "test", "--workspace"])), "cargo test");
+        assert_eq!(runner(&v(&["npm", "run", "check", "--", "--fix"])), "npm run check");
         assert_eq!(
             signature_of("/Applications/Xcode.app/x/bin/python3: No module named pytest"),
             "No module named pytest"
         );
         assert_eq!(signature_of("RuntimeError: ACME_ENV is not set"), "RuntimeError: ACME_ENV is not set");
+    }
+
+    fn step(i: u32, action: CanonicalAction, effect: Effect) -> StepObs {
+        let rel_path = adage_core::keys::action_path(&action).map(str::to_string);
+        StepObs {
+            turn: i,
+            key: adage_core::keys::template_key(&action),
+            norm: adage_core::Normalized { action, effect, mutating: false, confidence: 1.0, note: String::new() },
+            call: adage_runtime::Call {
+                tool: "Bash".into(),
+                input: serde_json::Value::Null,
+                output: String::new(),
+                failed: false,
+            },
+            rel_path,
+        }
+    }
+
+    /// A session editing these files, then (if `regen`) running `make gen`.
+    fn editing(id: &str, files: &[&str], regen: bool) -> Session {
+        let mut steps: Vec<StepObs> = files
+            .iter()
+            .enumerate()
+            .map(|(i, f)| step(i as u32, CanonicalAction::Edit { path: f.to_string() }, Effect::Author))
+            .collect();
+        if regen {
+            let argv = vec!["make".to_string(), "gen".to_string()];
+            steps.push(step(9, CanonicalAction::Exec { argv, cwd: "/r".into() }, Effect::Regenerate));
+        }
+        Session {
+            id: id.into(),
+            root: "/r".into(),
+            repo: "acme".into(),
+            model: None,
+            day: "2026-01-01".into(),
+            prompt: "p".into(),
+            steps,
+            steered: false,
+            directed: BTreeSet::new(),
+            steered_kinds: BTreeSet::new(),
+            outcome: None,
+            harness: "claude-code".into(),
+            prompts: 1,
+        }
+    }
+
+    fn finish_globs(sessions: &[Session]) -> Vec<String> {
+        let refs: Vec<&Session> = sessions.iter().collect();
+        obligation_routes(&refs, &LearnConfig::default())
+            .into_iter()
+            .map(|r| match r.trigger {
+                Trigger::AfterEdit { paths } => paths,
+                _ => unreachable!(),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn sibling_globs_generalise_only_on_unanimous_evidence() {
+        let mut ss: Vec<Session> = Vec::new();
+        for i in 0..5 {
+            ss.push(editing(&format!("a{i}"), &["proto/billing/x.proto"], true));
+            ss.push(editing(&format!("b{i}"), &["proto/users/v1/y.proto"], true));
+            ss.push(editing(&format!("n{i}"), &["README.md"], false));
+        }
+        assert_eq!(finish_globs(&ss), ["proto/**/*.proto"]);
+        let g = glob::Pattern::new("proto/**/*.proto").unwrap();
+        assert!(
+            g.matches("proto/billing/x.proto") && g.matches("proto/users/v1/y.proto") && g.matches("proto/z.proto")
+        );
+        assert!(!g.matches("other/proto/z.proto"));
+
+        // One session under the prefix that skipped the step: the siblings stay as they are.
+        let mut skipped = ss.clone();
+        skipped.push(editing("c0", &["proto/admin/z.proto"], false));
+        assert_eq!(finish_globs(&skipped), ["proto/billing/*.proto", "proto/users/v1/*.proto"]);
+
+        // The step also followed edits outside the prefix: it is not the prefix's step.
+        let mut outside = ss.clone();
+        outside.push(editing("o0", &["proto/billing/x.proto", "vendor/w.proto"], true));
+        assert!(!finish_globs(&outside).contains(&"proto/**/*.proto".to_string()));
+
+        // Siblings with no common directory never become `**/*.proto`.
+        let mut apart: Vec<Session> = Vec::new();
+        for i in 0..5 {
+            apart.push(editing(&format!("a{i}"), &["api/x.proto"], true));
+            apart.push(editing(&format!("b{i}"), &["rpc/y.proto"], true));
+            apart.push(editing(&format!("n{i}"), &["README.md"], false));
+        }
+        assert_eq!(finish_globs(&apart), ["api/*.proto", "rpc/*.proto"]);
     }
 
     #[test]

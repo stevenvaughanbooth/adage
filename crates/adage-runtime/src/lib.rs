@@ -9,10 +9,11 @@ pub mod rebuild;
 pub mod render;
 
 use adage_core::keys::{self, template_key};
+use adage_core::pattern;
 use adage_core::spans::{self, SpanKind};
 use adage_core::tools::normalize_tool;
 use adage_core::{repo, CommandTable};
-use adage_tracks::{Aspect, Contract, Index, IndexedRoute, Route, SlotSource, Step, Trigger};
+use adage_tracks::{interlock, Aspect, Contract, Index, IndexedRoute, Route, SlotSource, Step, Trigger};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -97,8 +98,8 @@ impl Event {
 pub struct Pending {
     pub route: String,
     pub expect_key: String,
-    /// The directed command's head; a variant with the same head (added flags, interpreter
-    /// prefix) counts as following.
+    /// The directed command's identity ([`pattern`]), for reading the state; following is judged
+    /// on `expect_key` with [`pattern::meets`] (added options and an interpreter prefix count).
     #[serde(default)]
     pub expect_head: String,
     pub batches_left: u32,
@@ -206,6 +207,34 @@ pub struct Ctx<'a> {
     pub params: RuntimeParams,
 }
 
+thread_local! {
+    static EXACT_KEYS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Compatibility: run `f` deciding with the matching the hooks used before the command-pattern
+/// algebra, where a trigger, an obligation or a follow judgement needed the observed key to equal
+/// the directed one exactly. Only for replaying decisions that hooks of that time recorded (the
+/// eval's fidelity check, `adage_eval::fidelity`); nothing else may use it. Scoped to this thread.
+pub fn with_exact_key_matching<R>(f: impl FnOnce() -> R) -> R {
+    struct Reset(bool);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            EXACT_KEYS.set(self.0);
+        }
+    }
+    let _reset = Reset(EXACT_KEYS.replace(true));
+    f()
+}
+
+/// Whether an observed key meets a directed one ([`pattern::meets`]).
+fn meets(directed: &str, observed: &str) -> bool {
+    if EXACT_KEYS.get() {
+        directed == observed
+    } else {
+        pattern::meets(directed, observed)
+    }
+}
+
 /// The canonical template key of a command string, for matching the agent's calls.
 pub fn command_key(command: &str, table: &CommandTable) -> String {
     let n = adage_core::shell::normalize_shell(command, "/", table);
@@ -246,13 +275,38 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
         Event::Prompt { text } => {
             st.prompts += 1;
             let spans = spans::extract(text);
+            // 0. Red first (Design §10.6): the dead ends to announce at the first prompt are chosen
+            //    before anything else, so the caps never crowd a warning out, and nothing a
+            //    warning contradicts is chosen beside it. They are still emitted last, as before.
+            let announce: Vec<&IndexedRoute> = if st.prompts == 1 {
+                routes.iter().copied().filter(|r| matches!(r.route.trigger, Trigger::SessionStart)).collect()
+            } else {
+                Vec::new()
+            };
+            let (per_session, per_decision) =
+                (ctx.params.max_directives_per_session, ctx.params.max_directives_per_decision);
+            let room = per_decision.min(per_session.saturating_sub(st.emitted.len()));
+            let reds: Vec<&IndexedRoute> = announce
+                .iter()
+                .copied()
+                .filter(|r| r.route.aspect == Aspect::Red && !st.emitted.iter().any(|e| e == &r.route.id))
+                .filter(|r| render::route_text(&r.route, &[]).is_some())
+                .take(room)
+                .collect();
+            let mut reds_left = reds.len();
+            let ok = |st: &SessionState, out: &Vec<Directive>, ir: &IndexedRoute, reserved: usize| {
+                emit_ok(st, out, &ir.route.id)
+                    && st.emitted.len() + out.len() + reserved < per_session
+                    && out.len() + reserved < per_decision
+                    && !reds.iter().any(|red| interlock::avoids(&red.route, &ir.route))
+            };
             // 1. Prompt-triggered routes, strongest aspect first.
             let mut prompt_routes: Vec<&&IndexedRoute> =
                 routes.iter().filter(|r| matches!(r.route.trigger, Trigger::Prompt { .. })).collect();
             prompt_routes
                 .sort_by_key(|r| (adage_tracks::delivered_aspect(&r.route), -(r.route.evidence.support as i64)));
             for ir in prompt_routes {
-                if !emit_ok(st, &out, &ir.route.id) {
+                if !ok(st, &out, ir, reds_left) {
                     continue;
                 }
                 if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, ctx) {
@@ -269,7 +323,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             //    if this repository has such routes; no model, no match (fail open).
             if let Some((family, ir)) = match_intent(ctx, &routes, text) {
                 st.intent = Some(family);
-                if emit_ok(st, &out, &ir.route.id) {
+                if ok(st, &out, ir, reds_left) {
                     if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, ctx) {
                         st.pending.push(Pending {
                             route: ir.route.id.clone(),
@@ -281,13 +335,16 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     }
                 }
             }
-            // 3. Known dead ends, once, at the first prompt.
-            if st.prompts == 1 {
-                for ir in routes.iter().filter(|r| matches!(r.route.trigger, Trigger::SessionStart)) {
-                    if emit_ok(st, &out, &ir.route.id) {
-                        if let Some(t) = render::route_text(&ir.route, &[]) {
-                            out.push(directive(ir, t));
-                        }
+            // 3. Known dead ends, once, at the first prompt: the reds chosen above, and any other
+            //    session-start route there is room for.
+            for ir in announce {
+                let red = reds.iter().any(|r| r.route.id == ir.route.id);
+                if red {
+                    reds_left -= 1;
+                }
+                if red || ok(st, &out, ir, reds_left) {
+                    if let Some(t) = render::route_text(&ir.route, &[]) {
+                        out.push(directive(ir, t));
                     }
                 }
             }
@@ -299,13 +356,9 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     let key = cap(key);
                     d.observed.push(key.clone());
                     push_history_capped(st, key.clone(), ctx.params.history);
-                    // Follow / derail judgement.
-                    let head = match &n.action {
-                        adage_core::CanonicalAction::Exec { argv, .. } => keys::command_head(argv),
-                        _ => String::new(),
-                    };
+                    // Follow / derail judgement: the directed command, or it with options added.
                     st.pending.retain(|p| {
-                        if p.expect_key == key || (!p.expect_head.is_empty() && p.expect_head == head) {
+                        if meets(&p.expect_key, &key) {
                             d.judgements.push(Judgement::Followed { route: p.route.clone() });
                             false
                         } else {
@@ -313,7 +366,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         }
                     });
                     // Obligations met.
-                    for o in st.obligations.iter_mut().filter(|o| !o.met && o.expect_key == key) {
+                    for o in st.obligations.iter_mut().filter(|o| !o.met && meets(&o.expect_key, &key)) {
                         o.met = true;
                         d.judgements.push(Judgement::ObligationMet { route: o.route.clone() });
                     }
@@ -367,7 +420,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     if !call.failed {
                         for ir in routes.iter() {
                             if let Trigger::AfterCommand { command } = &ir.route.trigger {
-                                if *command == key && emit_ok(st, &out, &ir.route.id) {
+                                if meets(command, &key) && emit_ok(st, &out, &ir.route.id) {
                                     if let Some(t) = bind_result_route(&ir.route, &call.output, ctx.root) {
                                         out.push(directive(ir, t));
                                     }
@@ -391,7 +444,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 push_history_capped(st, format!("{key} !failed"), ctx.params.history);
                 for ir in routes.iter() {
                     if let Trigger::AfterFailure { command, signature } = &ir.route.trigger {
-                        if *command == key
+                        if meets(command, &key)
                             && call.output.contains(signature.as_str())
                             && emit_ok(st, &out, &ir.route.id)
                         {
@@ -418,6 +471,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
         }
     }
 
+    let out = approach_lock(&routes, st, out);
     for o in &out {
         st.emitted.push(o.route.clone());
     }
@@ -426,6 +480,36 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
         d.directives = out;
     }
     d
+}
+
+/// Approach locking (Design §10.6, "red beats green"; `adage_tracks::interlock`): once a red
+/// directive (a dead end) has been emitted in a session, or is emitted in this decision, no
+/// directive whose command it avoids is emitted, in this decision or any later one. A directive
+/// dropped here leaves nothing behind: no pending follow judgement and no finish-line obligation,
+/// so there is never a stop request to run a command the session was warned fails. A green
+/// emitted before the warning stays as it was (an obligation it made is not withdrawn: a dead end
+/// is announced at the first prompt, before any edit can make one).
+fn approach_lock(routes: &[&IndexedRoute], st: &mut SessionState, out: Vec<Directive>) -> Vec<Directive> {
+    let route_of = |id: &str| routes.iter().find(|r| r.route.id == id).map(|r| &r.route);
+    let reds: Vec<&Route> = st
+        .emitted
+        .iter()
+        .chain(out.iter().map(|d| &d.route))
+        .filter_map(|id| route_of(id))
+        .filter(|r| matches!(r.step, Step::Avoid { .. }))
+        .collect();
+    if reds.is_empty() {
+        return out;
+    }
+    let (keep, dropped): (Vec<Directive>, Vec<Directive>) = out
+        .into_iter()
+        .partition(|d| route_of(&d.route).is_none_or(|r| !reds.iter().any(|red| interlock::avoids(red, r))));
+    if !dropped.is_empty() {
+        let gone = |id: &String| dropped.iter().any(|d| &d.route == id);
+        st.pending.retain(|p| !gone(&p.route));
+        st.obligations.retain(|o| !gone(&o.route));
+    }
+    keep
 }
 
 /// The most similar intent family whose threshold the prompt clears, if any. Ties keep the first

@@ -11,8 +11,7 @@
 //! appended to tool output (after a tool); both are recorded in the export. Sub-agent sessions
 //! (`info.parentID` set) are skipped, like Claude Code sidechains.
 
-use crate::import::{Session, Signals, StepObs, OPENCODE};
-use adage_core::keys::{self, template_key};
+use crate::import::{Session, Signals, OPENCODE};
 use adage_core::tools::{from_opencode, normalize_tool};
 use adage_core::{repo, CommandTable};
 use adage_runtime::Call;
@@ -152,11 +151,12 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
                 }
             }
             let call = Call { tool: tool.clone(), input: input.clone(), output: output.clone(), failed };
-            for mut n in keys::flatten(&normalize_tool(&tool, &input, &root_str, table)) {
-                keys::canonicalise(&mut n, &root);
-                let rel_path = keys::action_path(&n.action).map(|p| repo::relativize(&root, p));
-                steps.push(StepObs { turn, key: template_key(&n.action), norm: n, call: call.clone(), rel_path });
-            }
+            steps.extend(crate::import::call_steps(
+                turn,
+                &call,
+                normalize_tool(&tool, &input, &root_str, table),
+                &root,
+            ));
         }
     }
     Some(Session {

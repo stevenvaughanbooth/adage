@@ -45,17 +45,19 @@ const EPS: f64 = 0.02;
 
 #[test]
 fn demo_round2_gates() {
-    // Measured: precision 0.7424 overall (0.729 before the second dead end); lookup 0.6667,
-    // linked files 0.75, dead end 0.7778; recall 0.7826; finish-line accuracy 1.0 (4
-    // obligations). Round 2 is leaky by task (it trains on round-1 sessions of the tasks it
-    // tests), and the report must say so.
+    // Measured: precision 0.7571 overall (0.7424 before the command-pattern algebra, 0.729
+    // before the second dead end); lookup 0.6667, linked files 0.8333 (0.75: the trigger now
+    // fires when an agent runs the lookup script without its interpreter, 12 directives, not 8),
+    // dead end 0.7778; recall 0.913 (0.7826); finish-line accuracy 1.0 (4 obligations). Round 2
+    // is leaky by task (it trains on round-1 sessions of the tasks it tests), and the report
+    // must say so.
     let r = eval("demo-haiku45", Some("round2"));
     assert_eq!(r.scored_sessions, 18);
-    at_least("overall precision", r.overall.precision, 0.7424 - EPS);
+    at_least("overall precision", r.overall.precision, 0.7571 - EPS);
     at_least("lookup precision", precision(&r, "lookup"), 0.6667 - EPS);
-    at_least("linked-files precision", precision(&r, "linked-files"), 0.75 - EPS);
+    at_least("linked-files precision", precision(&r, "linked-files"), 0.8333 - EPS);
     at_least("dead-end precision", precision(&r, "dead-end"), 0.7778 - EPS);
-    at_least("recall", r.recall["all"].recall, 0.7826 - EPS);
+    at_least("recall", r.recall["all"].recall, 0.913 - EPS);
     at_least("finish-line accuracy", r.finish_line.accuracy, 1.0 - EPS);
     assert_safe(&r);
     assert!(r.leaky && r.task_overlap == 6, "round2 must be flagged leaky: {} tasks", r.task_overlap);
@@ -91,11 +93,13 @@ fn demo_round2_learns_what_the_live_learner_learned() {
 
 #[test]
 fn demo_round1_gates() {
-    // Measured: precision 0.6786 overall; lookup 0.5; recall 0.5556. No task on both sides.
+    // Measured: precision 0.6667 overall (0.6786 before the command-pattern algebra: two more
+    // linked-files directives, one of them not followed); lookup 0.5; recall 0.5833 (0.5556).
+    // No task on both sides.
     let r = eval("demo-haiku45", Some("round1"));
-    at_least("overall precision", r.overall.precision, 0.6786 - EPS);
+    at_least("overall precision", r.overall.precision, 0.6667 - EPS);
     at_least("lookup precision", precision(&r, "lookup"), 0.5 - EPS);
-    at_least("recall", r.recall["all"].recall, 0.5556 - EPS);
+    at_least("recall", r.recall["all"].recall, 0.5833 - EPS);
     assert_safe(&r);
     assert!(!r.leaky && r.task_overlap == 0);
 }
@@ -104,7 +108,14 @@ fn demo_round1_gates() {
 fn replay_reproduces_the_live_round2_decisions() {
     // Measured: 36/36 sessions decide identically; 35/36 raise the same hook events (in the other,
     // a forked skill's tool calls fired hooks but live in a subagent transcript).
-    let f = fidelity::run(&datasets().join("demo-haiku45"), "round2").unwrap();
+    //
+    // The recorded hooks matched commands by exact template key; replay compares under that
+    // matching (`--exact-keys`, `adage_runtime::with_exact_key_matching`). Under the current
+    // matching (the command-pattern algebra), exactly four holdout sessions differ, each by one
+    // would-have linked-files directive the live hook did not make: the trigger was mined from
+    // `python3 scripts/wi-lookup {id}` and the agent ran `./scripts/wi-lookup W-…`, the same script.
+    let dir = datasets().join("demo-haiku45");
+    let f = fidelity::run_with(&dir, "round2", true).unwrap();
     let (mut sessions, mut decisions, mut events) = (0, 0, 0);
     for a in f.by_arm.values() {
         sessions += a.sessions;
@@ -114,6 +125,20 @@ fn replay_reproduces_the_live_round2_decisions() {
     assert_eq!(sessions, 36);
     assert_eq!(decisions, sessions, "{:#?}", f.mismatches);
     assert!(events + 2 >= sessions, "{:#?}", f.event_mismatches);
+
+    let now = fidelity::run(&dir, "round2").unwrap();
+    let mut differ: Vec<&str> = now.mismatches.iter().map(|m| m.split(':').next().unwrap()).collect();
+    differ.sort();
+    assert_eq!(
+        differ,
+        ["eval2-W-2042-r1-holdout", "eval2-W-2043-r2-holdout", "eval2-W-2046-r1-holdout", "eval2-W-2046-r3-holdout"],
+        "{:#?}",
+        now.mismatches
+    );
+    for m in &now.mismatches {
+        let (replay, live) = m.split_once(" vs live ").unwrap();
+        assert_eq!(replay.matches("read-linked-files").count(), 1 + live.matches("read-linked-files").count(), "{m}");
+    }
 }
 
 #[test]

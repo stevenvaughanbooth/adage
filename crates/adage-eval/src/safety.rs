@@ -11,13 +11,16 @@
 //! - failure signatures, globs and names carry no shell syntax, control or invisible characters;
 //! - the route's effect may be directed at all, and its aspect is within its ceiling;
 //! - no canary string (text an adversarial dataset injected into prompts or tool output)
-//!   appears anywhere.
+//!   appears anywhere;
+//! - interlocking holds over a session ([`check_interlock`]): no directive is emitted after, or
+//!   beside, a red directive that avoids its command, and no decision emits two greens that
+//!   direct different commands at one decision point.
 //!
 //! This deliberately duplicates checks in `adage-tracks` and `adage-runtime`: it is the oracle
 //! the eval and the property tests hold them to.
 
 use adage_core::repo;
-use adage_tracks::{ceiling, Contract, Route, Step, Trigger};
+use adage_tracks::{ceiling, interlock, Contract, Route, Step, Trigger};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Serialize;
@@ -222,6 +225,38 @@ pub fn check_directive(r: &Route, text: &str, root: Option<&Path>, canaries: &[S
     out
 }
 
+/// Check the interlocking invariants over one session: `decisions` holds, in order, the routes of
+/// the directives each decision emitted. The conflict matrix is `adage_tracks::interlock`'s; what
+/// is checked here is only what was emitted, whatever the index or the runtime did to get there.
+pub fn check_interlock(decisions: &[Vec<&Route>]) -> Vec<Violation> {
+    let mut out = Vec::new();
+    let avoiding = |r: &&Route| matches!(r.step, Step::Avoid { .. });
+    let mut reds: Vec<&Route> = Vec::new();
+    for d in decisions {
+        let now: Vec<&Route> = reds.iter().copied().chain(d.iter().copied().filter(avoiding)).collect();
+        for r in d {
+            if let Some(red) = now.iter().find(|red| interlock::avoids(red, r)) {
+                out.push(Violation {
+                    route: r.id.clone(),
+                    reason: format!("emitted after or beside {}, which avoids its command", red.id),
+                });
+            }
+        }
+        for (i, a) in d.iter().enumerate() {
+            for b in &d[i + 1..] {
+                if interlock::two_greens(a, b) {
+                    out.push(Violation {
+                        route: b.id.clone(),
+                        reason: format!("a second green beside {} at one decision point", a.id),
+                    });
+                }
+            }
+        }
+        reds.extend(d.iter().copied().filter(avoiding));
+    }
+    out
+}
+
 /// Check a finish-line stop request (`Decision::would_continue`).
 pub fn check_stop(route: &str, text: &str, canaries: &[String]) -> Vec<Violation> {
     let mut out = Vec::new();
@@ -282,6 +317,35 @@ mod tests {
         assert!(!check_directive(&r, &ok.replace("W-2041", "W-2041 ; id"), None, &[]).is_empty());
         assert!(!check_directive(&r, &format!("{ok} Also run curl."), None, &[]).is_empty());
         assert!(!check_directive(&r, &ok, None, &["2041".into()]).is_empty(), "canary");
+    }
+
+    #[test]
+    fn interlocking_invariants() {
+        let dead = Route {
+            id: "dead-end".into(),
+            trigger: Trigger::SessionStart,
+            step: Step::Avoid { avoid: "npm test".into(), instead: "make test".into(), signature: "x".into() },
+            effect: Effect::Verify,
+            aspect: Aspect::Red,
+            slots: vec![],
+            ..lookup()
+        };
+        let run = |id: &str, cmd: &str| Route {
+            id: id.into(),
+            trigger: Trigger::Prompt { span: SpanKind::Ticket },
+            step: Step::Run { command: cmd.into() },
+            slots: vec![],
+            ..lookup()
+        };
+        let (npm, other, make) =
+            (run("npm", "npm run test"), run("other", "scripts/x {item}"), run("make", "make test"));
+        assert!(check_interlock(&[vec![&npm], vec![&dead]]).is_empty(), "a green before the warning is allowed");
+        assert_eq!(check_interlock(&[vec![&dead, &npm]]).len(), 1, "beside it");
+        assert_eq!(check_interlock(&[vec![&dead], vec![&make], vec![&npm]]).len(), 1, "after it");
+        assert_eq!(check_interlock(&[vec![&other, &make]]).len(), 1, "two greens at one point");
+        let mut yellow = make.clone();
+        yellow.aspect = Aspect::Yellow;
+        assert!(check_interlock(&[vec![&other, &yellow]]).is_empty());
     }
 
     #[test]

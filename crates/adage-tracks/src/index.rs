@@ -4,6 +4,7 @@
 //! installed tracks into `index.json`, written atomically (temp file + rename). The same inputs
 //! always produce the same bytes, and `generation` identifies exactly which inputs decided.
 
+use crate::interlock;
 use crate::io;
 use crate::model::*;
 use crate::triggers::Triggers;
@@ -43,7 +44,21 @@ pub fn is_imported(t: &Track) -> bool {
 pub const IMPORTED_DIR: &str = "@imported";
 
 impl Index {
+    /// Compile tracks into an index (see [`Index::compile_with_conflicts`]).
     pub fn compile(tracks: &[Track]) -> Index {
+        Index::compile_with_conflicts(tracks).0
+    }
+
+    /// Compile tracks into an index, with the interlocking rules applied
+    /// ([`crate::interlock`]): a route a dead end contradicts at the prompt is left out, and of two
+    /// greens at one decision point one is compiled yellow. Returns the conflicts found, for
+    /// `adage learn` and `adage doctor` to report.
+    pub fn compile_with_conflicts(tracks: &[Track]) -> (Index, Vec<interlock::Conflict>) {
+        let imported_tracks: BTreeSet<(&str, &str)> = tracks
+            .iter()
+            .filter(|t| is_imported(t))
+            .map(|t| (t.manifest.scope.repo.as_str(), t.manifest.track.name.as_str()))
+            .collect();
         let live = |r: &Route| r.state.is_live();
         // A first-hand route a person retired still takes part in de-duplication, so an import of
         // the same route cannot slip back in behind the rejection; it is dropped afterwards.
@@ -79,6 +94,8 @@ impl Index {
         routes.dedup_by(|(_, b), (_, a)| a.repo == b.repo && a.route.id == b.route.id);
         let mut routes: Vec<IndexedRoute> = routes.into_iter().map(|(_, r)| r).filter(|r| live(&r.route)).collect();
         routes.sort_by(|a, b| (&a.repo, &a.track, &a.route.id).cmp(&(&b.repo, &b.track, &b.route.id)));
+        let (routes, conflicts) =
+            interlock::resolve(routes, |r| imported_tracks.contains(&(r.repo.as_str(), r.track.as_str())));
         let body = serde_json::to_vec(&routes).unwrap_or_default();
         let generation = io::hex(&Sha256::digest(&body))[..16].to_string();
         let mut triggers: BTreeMap<String, Triggers> = BTreeMap::new();
@@ -86,7 +103,7 @@ impl Index {
         for repo in repos {
             triggers.insert(repo.to_string(), Triggers::of(routes.iter().filter(|r| r.repo == repo).map(|r| &r.route)));
         }
-        Index { generation, routes, triggers }
+        (Index { generation, routes, triggers }, conflicts)
     }
 
     /// What can make `repo`'s routes act: precomputed, or derived from the routes for an index

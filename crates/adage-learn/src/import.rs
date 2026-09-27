@@ -304,11 +304,7 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     for (turn, tid, name, input) in uses {
         let (output, failed) = results.get(&tid).cloned().unwrap_or_default();
         let call = Call { tool: name.clone(), input: input.clone(), output, failed };
-        for mut n in keys::flatten(&normalize_tool(&name, &input, &root_str, table)) {
-            keys::canonicalise(&mut n, &root);
-            let rel_path = keys::action_path(&n.action).map(|p| repo::relativize(&root, p));
-            steps.push(StepObs { turn, key: template_key(&n.action), norm: n, call: call.clone(), rel_path });
-        }
+        steps.extend(call_steps(turn, &call, normalize_tool(&name, &input, &root_str, table), &root));
     }
     Some(Session {
         id,
@@ -325,6 +321,27 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
         harness: CLAUDE_CODE.into(),
         prompts,
     })
+}
+
+/// The steps one tool call contributes: its canonical actions, flattened and canonicalised
+/// against the repository root. A failed call's failure is attributed to its last sub-action only,
+/// unless the command has an `||` ([`keys::sub_action_failed`]): `make gen && pytest` failing
+/// does not make `make gen` a failed run. Every importer (Claude Code, OpenCode, Codex) builds its
+/// steps here.
+pub(crate) fn call_steps(turn: u32, call: &Call, actions: Vec<Normalized>, root: &Path) -> Vec<StepObs> {
+    let flat = keys::flatten(&actions);
+    let count = flat.len();
+    let or_chain = keys::has_or_chain(&call.input);
+    flat.into_iter()
+        .enumerate()
+        .map(|(i, mut n)| {
+            keys::canonicalise(&mut n, root);
+            let rel_path = keys::action_path(&n.action).map(|p| repo::relativize(root, p));
+            let mut call = call.clone();
+            call.failed = keys::sub_action_failed(i, count, call.failed, or_chain);
+            StepObs { turn, key: template_key(&n.action), norm: n, call, rel_path }
+        })
+        .collect()
 }
 
 /// Every top-level (non-sidechain) transcript under a Claude Code projects directory.
@@ -347,6 +364,29 @@ pub fn discover(root: &Path) -> Vec<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn steps(command: &str, failed: bool) -> Vec<(String, bool)> {
+        let table = CommandTable::load();
+        let input = serde_json::json!({ "command": command });
+        let call = Call { tool: "Bash".into(), input: input.clone(), output: String::new(), failed };
+        call_steps(0, &call, normalize_tool("Bash", &input, "/r", &table), Path::new("/r"))
+            .into_iter()
+            .map(|s| (s.key, s.call.failed))
+            .collect()
+    }
+
+    #[test]
+    fn a_failed_chain_fails_at_its_last_step_only() {
+        assert_eq!(
+            steps("make gen && python3 -m pytest", true),
+            [("exec make gen".to_string(), false), ("exec python3 -m pytest".to_string(), true)]
+        );
+        assert_eq!(steps("make gen; make test", true).iter().map(|s| s.1).collect::<Vec<_>>(), [false, true]);
+        assert!(steps("make gen && python3 -m pytest", false).iter().all(|s| !s.1));
+        assert_eq!(steps("python3 -m pytest", true), [("exec python3 -m pytest".to_string(), true)]);
+        // `a || b` failed: `a` failed, then `b` ran and failed too.
+        assert!(steps("python3 -m pytest -q || python3 -m unittest", true).iter().all(|s| s.1));
+    }
 
     fn kinds(text: &str) -> (Vec<String>, Vec<String>) {
         let mut s = Signals::default();

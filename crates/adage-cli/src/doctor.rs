@@ -221,14 +221,18 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
         );
     }
     let repos: std::collections::BTreeSet<&str> = idx.routes.iter().map(|r| r.repo.as_str()).collect();
-    let current = Index::compile(&scan.valid);
-    let detail = format!(
+    let (current, conflicts) = Index::compile_with_conflicts(&scan.valid);
+    let mut detail = format!(
         "generation {}, {} route(s) in {} repositor{}",
         idx.generation,
         idx.routes.len(),
         repos.len(),
         if repos.len() == 1 { "y" } else { "ies" }
     );
+    // Design §10.6 rule 4: tracks that conflict at one decision point are reported.
+    if !conflicts.is_empty() {
+        detail.push_str(&format!("; {} interlocking conflict(s) resolved", conflicts.len()));
+    }
     if current.generation != idx.generation {
         return (
             warn(

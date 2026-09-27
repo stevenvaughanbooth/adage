@@ -301,6 +301,12 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
                 println!("  changed: {}: {}", c.route, c.summary);
             }
         }
+        if !rep.conflicts.is_empty() {
+            println!("\ninterlocking: {} conflict(s) resolved", rep.conflicts.len());
+            for c in &rep.conflicts {
+                println!("  {}", c.describe());
+            }
+        }
         println!("\nindex generation {}", rep.index_generation);
     }
     Ok(())

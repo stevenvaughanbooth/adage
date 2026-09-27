@@ -197,8 +197,7 @@ fn bind(cmd: &str, value: Option<&str>) -> String {
 
 /// A trigger's command template (already a canonical key, e.g. `exec python3 scripts/x {id}`).
 fn template_expect(template: &str) -> Expect {
-    let argv: Vec<String> = template.split_whitespace().skip_while(|w| *w == "exec").map(str::to_string).collect();
-    Expect { key: template.to_string(), head: adage_core::keys::command_head(&argv) }
+    Expect { key: template.to_string() }
 }
 
 struct Ctx<'a> {

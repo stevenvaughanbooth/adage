@@ -355,6 +355,7 @@ fn check(
     let ctx =
         Ctx { index: &index, repo: "acme".into(), root: &root, table: &table, embed: None, params: Default::default() };
     let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+    let mut decisions: Vec<Vec<String>> = Vec::new();
     for ev in events {
         // Edit paths are generated relative to a placeholder root.
         let ev = match ev {
@@ -383,8 +384,208 @@ fn check(
             let v = safety::check_stop("stop", reason, &[]);
             prop_assert!(v.is_empty(), "stop {:?}: {:?}", reason, v);
         }
+        decisions.push(d.directives.iter().map(|x| x.route.clone()).collect());
     }
+    let v = safety::check_interlock(&routes_of(&index, &decisions));
+    prop_assert!(v.is_empty(), "interlocking: {:?}", v);
     Ok(())
+}
+
+/// Each decision's route ids, as the index's routes.
+fn routes_of<'a>(index: &'a Index, decisions: &[Vec<String>]) -> Vec<Vec<&'a Route>> {
+    let find = |id: &String| index.routes.iter().find(|ir| &ir.route.id == id).map(|ir| &ir.route);
+    decisions.iter().map(|d| d.iter().filter_map(find).collect()).collect()
+}
+
+// ---------------------------------------------------------------- interlocking
+
+const MODEL: &str = "fixture@000000000000";
+
+/// Prompts about tests point one way, everything else another.
+fn fake_embed(text: &str) -> Option<(String, Vec<f32>)> {
+    let mut v = vec![0.0f32; 8];
+    v[if text.contains("test") { 0 } else { 7 }] = 1.0;
+    Some((MODEL.to_string(), v))
+}
+
+/// Commands that collide: several spellings of one runner, and runners that are not the same.
+const COMMANDS: &[&str] = &[
+    "npm test",
+    "npm run test",
+    "npm run test --silent",
+    "npm run build",
+    "make test",
+    "make test -j4",
+    "make gen",
+    "make ci",
+    "python3 -m pytest",
+    "python3 -m pytest -q",
+    "python -m pytest",
+    "cargo test",
+];
+
+/// (kind, command, aspect wanted, imported): a route at one of the decision points where
+/// directives collide, in the learned track or the imported one.
+fn colliding_route() -> impl Strategy<Value = (u8, &'static str, bool, bool)> {
+    (0u8..5, prop::sample::select(COMMANDS.to_vec()), any::<bool>(), any::<bool>())
+}
+
+fn colliding(i: usize, (kind, cmd, green, _): (u8, &'static str, bool, bool), table: &CommandTable) -> Route {
+    let effect = io::classify(cmd, table);
+    let (trigger, step, slots) = match kind {
+        // A dead end announced at the first prompt.
+        0 => (
+            Trigger::SessionStart,
+            Step::Avoid { avoid: cmd.into(), instead: "make ci".into(), signature: "ACME_ENV is not set".into() },
+            vec![],
+        ),
+        // An intent route, or a lookup at a prompt naming a work item.
+        1 => (
+            Trigger::Intent {
+                family: "intent-tests".into(),
+                model: MODEL.into(),
+                centroid: vec![10_000, 0, 0, 0, 0, 0, 0, 0],
+                threshold: 0.8,
+            },
+            Step::Run { command: cmd.into() },
+            vec![],
+        ),
+        2 => (
+            Trigger::Prompt { span: SpanKind::Ticket },
+            Step::Run { command: format!("{cmd} {{item}}") },
+            vec![Slot {
+                name: "item".into(),
+                source: SlotSource::Prompt { span: SpanKind::Ticket },
+                contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
+            }],
+        ),
+        // A finish line.
+        3 => (Trigger::AfterEdit { paths: "schema/*.json".into() }, Step::Run { command: cmd.into() }, vec![]),
+        // A step after a failure: a dead end, or a command to run.
+        _ => (
+            Trigger::AfterFailure { command: "exec make lint".into(), signature: "boom".into() },
+            if green {
+                Step::Run { command: cmd.into() }
+            } else {
+                Step::Avoid { avoid: cmd.into(), instead: "make ci".into(), signature: "boom".into() }
+            },
+            vec![],
+        ),
+    };
+    let red = matches!(step, Step::Avoid { .. });
+    let max = ceiling(effect, matches!(trigger, Trigger::AfterEdit { .. }));
+    let aspect = if red {
+        Aspect::Red
+    } else if green && max == Some(Aspect::Green) {
+        Aspect::Green
+    } else {
+        Aspect::Yellow
+    };
+    let mut r =
+        build(&format!("r{i}"), trigger, step, slots, if red { Effect::Verify } else { effect }, aspect, vec![]);
+    r.evidence.support = 5 + i as u32;
+    r
+}
+
+fn colliding_event() -> impl Strategy<Value = Event> {
+    let bash = |c: &str, out: &str, failed: bool| Call {
+        tool: "Bash".into(),
+        input: json!({ "command": c }),
+        output: out.into(),
+        failed,
+    };
+    prop_oneof![
+        3 => prop::sample::select(vec!["run the tests for W-1234", "W-1234 please", "the tests fail", "tidy up"])
+            .prop_map(|t| Event::Prompt { text: t.into() }),
+        2 => Just(Event::Batch {
+            calls: vec![Call { tool: "Edit".into(), input: json!({"file_path": "{root}/schema/invoice.json"}), output: String::new(), failed: false }]
+        }),
+        2 => prop::sample::select(COMMANDS.to_vec()).prop_map(move |c| Event::Batch { calls: vec![bash(c, "ok", false)] }),
+        2 => Just(Event::Failure { call: bash("make lint", "boom", true) }),
+        1 => Just(Event::Stop { stop_hook_active: false }),
+    ]
+}
+
+/// Random sets of routes that collide (the same command directed and avoided, greens at one
+/// decision point, learned and imported), compiled and driven: no session ever emits a directive
+/// after, or beside, a red that avoids its command, nor two greens at one decision point.
+#[test]
+fn interlocking_holds_for_colliding_route_sets() {
+    let table = CommandTable::load();
+    let (sessions, conflicts, reds, emitted) =
+        (AtomicUsize::new(0), AtomicUsize::new(0), AtomicUsize::new(0), AtomicUsize::new(0));
+    let mut runner = TestRunner::new(Config { cases: cases(), ..Config::default() });
+    let strategy = (prop::collection::vec(colliding_route(), 2..7), prop::collection::vec(colliding_event(), 1..16));
+    let result = runner.run(&strategy, |(specs, events)| {
+        let track = |name: &str, provenance: &str, imported: bool| Track {
+            manifest: Manifest {
+                track: TrackInfo {
+                    name: name.into(),
+                    version: "1.0.0".into(),
+                    description: String::new(),
+                    provenance: provenance.into(),
+                },
+                scope: Scope { repo: "acme".into() },
+                gauge: Gauge::default(),
+            },
+            routes: specs
+                .iter()
+                .enumerate()
+                .filter(|(_, s)| s.3 == imported)
+                .map(|(i, s)| colliding(i, *s, &table))
+                .collect(),
+        };
+        let tracks = [track("acme/learned", "desire-path", false), track("acme/imported", "imported:teammate", true)];
+        for t in &tracks {
+            io::validate(t).map_err(|e| TestCaseError::fail(format!("{e:#}")))?;
+        }
+        let (index, found) = Index::compile_with_conflicts(&tracks);
+        conflicts.fetch_add(found.len(), Ordering::Relaxed);
+        let dir = sandbox();
+        let root = dir.path().canonicalize().unwrap();
+        let root_s = root.to_string_lossy().to_string();
+        let ctx = Ctx {
+            index: &index,
+            repo: "acme".into(),
+            root: &root,
+            table: &table,
+            embed: Some(&fake_embed),
+            params: Default::default(),
+        };
+        let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+        let mut decisions: Vec<Vec<String>> = Vec::new();
+        for ev in events {
+            let ev = match ev {
+                Event::Batch { calls } => Event::Batch {
+                    calls: calls
+                        .into_iter()
+                        .map(|mut c| {
+                            c.input = adage_eval::transcript::rebase_value(&c.input, "{root}", &root_s);
+                            c
+                        })
+                        .collect(),
+                },
+                e => e,
+            };
+            let d = decide(&ctx, &mut st, &ev);
+            reds.fetch_add(d.directives.iter().filter(|x| x.aspect == Aspect::Red).count(), Ordering::Relaxed);
+            emitted.fetch_add(d.directives.len(), Ordering::Relaxed);
+            decisions.push(d.directives.iter().map(|x| x.route.clone()).collect());
+        }
+        sessions.fetch_add(1, Ordering::Relaxed);
+        let v = safety::check_interlock(&routes_of(&index, &decisions));
+        prop_assert!(v.is_empty(), "{:?}\nroutes {:#?}\ndecisions {:?}", v, index.routes, decisions);
+        Ok(())
+    });
+    if let Err(e) = result {
+        panic!("{e}");
+    }
+    // Guard the generator: the cases must collide, and must emit, reds included.
+    let n = cases() as usize;
+    assert_eq!(sessions.into_inner(), n);
+    assert!(conflicts.into_inner() >= n / 2, "too few conflicts generated");
+    assert!(reds.into_inner() >= n / 4, "too few red directives emitted");
+    assert!(emitted.into_inner() >= n, "too few directives emitted");
 }
 
 #[test]

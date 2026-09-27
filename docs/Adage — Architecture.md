@@ -227,6 +227,51 @@ the process always exits 0. Hook timeouts in the harness configuration are 5 s (
 plugin's `SessionStart` shim, 2 s for Codex `SessionEnd`), and are a backstop rather than a
 budget. There is no internal per-event deadline.
 
+#### 4.3.1 Matching commands, and interlocking
+
+**One command-pattern algebra** (`crates/adage-core/src/pattern.rs`) decides when an observed
+command is "the same command" as a directed one, everywhere: the follow judgement, a finish-line
+obligation being met, after-command and after-failure triggers, `adage graph`, interlocking, and
+the eval scorer (`score.rs`, `conventions.rs`). A command reads as a *shape*: its program, its
+identity (the program and the subcommand it multiplexes to, from a data table: `npm`/`pnpm`/
+`yarn`/`bun run <script>`, `make <target>`, `cargo`/`go`/`git`/`just`/`task <sub>`,
+`python -m <module>`, `uv`/`poetry run <cmd>`, `npx <tool>`, `docker compose <sub>`,
+`gh <group> <sub>`, interpreter flag modes such as `node --test`; an interpreter running a script
+is the script), its positionals, and its options. Patterns come at three levels, narrow to broad:
+
+| Level | Matches when | Used for |
+| --- | --- | --- |
+| Exact | same identity and positionals, and at least the pattern's options | directed commands |
+| HeadSub | same identity | a dead end's avoided runner |
+| Head | same program | a bare interpreter as a runner |
+
+So a directed D is met by an observed O when O's key equals D's or O adds only options:
+`make gen -j4` meets `make gen`, `./scripts/wi-lookup W-1 --json` meets
+`python3 scripts/wi-lookup W-1`; `npm run build` does not meet `npm run check`, nor `make test`
+`make gen`, nor `pytest tests/a.py` `pytest`. The fast path's trigger words are unchanged: every
+command that meets a trigger contains its word.
+
+**Interlocking** (Design §10.6; `crates/adage-tracks/src/interlock.rs`). `Index::compile`
+computes a conflict matrix per repository, and `Index::compile_with_conflicts` returns the
+conflicts (`adage learn` and `adage doctor` print the count):
+
+- *Polarity.* A dead end (red) that avoids a command another route directs: red beats green,
+  whatever the provenance. A directing route that speaks at the prompt, beside a dead end
+  announced at the first prompt, is left out of the index; any other is filtered at runtime.
+- *Two greens* at one decision point (the same trigger kind, overlapping triggers) directing
+  different commands: one stays green, the other is compiled yellow. Learned beats imported or
+  authored, then more support, then a higher lower bound.
+
+At runtime `decide` chooses the dead ends to announce first, so the caps never crowd a warning
+out (they are still rendered last), and applies **approach locking** after selection: no
+directive is emitted that a red directive already emitted in the session, or emitted in the same
+decision, avoids; a dropped directive leaves no pending judgement and no obligation. The eval's
+safety oracle checks both invariants over every session (`safety::check_interlock`).
+
+**Failure attribution.** A transcript records one result per tool call. When a call with several
+sub-actions fails, the learners and the eval attribute the failure to its last sub-action only
+(`keys::sub_action_failed`), unless the command has an `||`, where every operand ran and failed.
+
 ### 4.4 Session state and spools
 
 Both live in `$ADAGE_HOME/sessions/`, named by the sanitised session id (`adage-store/src/lib.rs`,
@@ -249,7 +294,7 @@ The state (`SessionState` in `adage-runtime`) holds:
 | `arm`, `repo` | Experiment arm and repository key, fixed at first sight |
 | `prompts`, `batches`, `first_edit_at_batch` | Counters |
 | `emitted` | Route ids already delivered (a route fires once per session) |
-| `pending` | Directives awaiting follow/derail judgement, with the expected key, command head and batches left |
+| `pending` | Directives awaiting follow/derail judgement, with the expected key (met as in [§4.3.1](#431-matching-commands-and-interlocking)), its identity and batches left |
 | `obligations` | Finish-line obligations: route, expected key, command, glob, `met`, `stop_requested` |
 | `history` | The last 32 canonical template keys |
 | `stop_requests` | Stop-hook requests made this session |
@@ -364,7 +409,7 @@ flowchart LR
 | **Reconcile** | Routes a person pinned (`authored`) are kept, and a materially different mined version becomes a proposal. Decisions in `review.yaml` are re-applied |
 | **Validate** | Every mined route is validated alone. One that fails is dropped with a message, rather than failing the repository (eval bug 1) |
 | **Version** | Shape changed or removed → major; added → minor; evidence only → patch; nothing → unchanged |
-| **Compile** | All tracks re-read, validated, compiled, and written atomically |
+| **Compile** | All tracks re-read, validated, interlocked ([§4.3.1](#431-matching-commands-and-interlocking)), compiled, and written atomically |
 
 | Track | Trigger → step | Aspect ceiling |
 | --- | --- | --- |

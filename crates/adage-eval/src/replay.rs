@@ -29,7 +29,6 @@ pub struct Action {
     /// Index of the tool call within its turn.
     pub call: usize,
     pub key: String,
-    pub head: String,
     pub argv: Option<Vec<String>>,
     pub effect: Effect,
     pub read: bool,
@@ -81,7 +80,9 @@ pub fn actions(t: &Transcript, root: &Path, table: &CommandTable) -> Vec<Action>
     for (i, calls) in t.turns().enumerate() {
         for (ci, c) in calls.iter().enumerate() {
             let input = transcript::rebase_value(&c.input, &t.cwd, &root_s);
-            for mut n in keys::flatten(&normalize_tool(&c.tool, &input, &root_s, table)) {
+            let flat = keys::flatten(&normalize_tool(&c.tool, &input, &root_s, table));
+            let count = flat.len();
+            for (si, mut n) in flat.into_iter().enumerate() {
                 keys::canonicalise(&mut n, root);
                 let argv = match &n.action {
                     CanonicalAction::Exec { argv, .. } => Some(argv.clone()),
@@ -91,13 +92,13 @@ pub fn actions(t: &Transcript, root: &Path, table: &CommandTable) -> Vec<Action>
                     turn: i as u32 + 1,
                     call: ci,
                     key: template_key(&n.action),
-                    head: argv.as_deref().map(keys::command_head).unwrap_or_default(),
                     effect: n.effect,
                     read: matches!(n.action, CanonicalAction::Read { .. }),
                     author: keys::is_author(&n.action),
                     rel_path: keys::action_path(&n.action).map(|p| repo::relativize(root, p)),
                     argv,
-                    failed: c.failed,
+                    // As the learner attributes it: a failed chain failed at its last step.
+                    failed: keys::sub_action_failed(si, count, c.failed, keys::has_or_chain(&c.input)),
                     output: c.output.replace(&t.cwd, &root_s),
                 });
             }

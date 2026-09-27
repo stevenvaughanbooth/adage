@@ -3,6 +3,7 @@
 //! compiled index the runtime reads.
 
 pub mod index;
+pub mod interlock;
 pub mod io;
 pub mod model;
 pub mod params;

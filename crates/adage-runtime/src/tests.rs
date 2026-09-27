@@ -631,6 +631,322 @@ fn a_rebuilt_state_never_requests_a_stop_the_live_one_would_not() {
     assert!(live.continue_reason.is_some() && quiet.continue_reason.is_none());
 }
 
+// ---------------------------------------------------------------- one command-pattern algebra
+
+fn track(name: &str, provenance: &str, routes: Vec<Route>) -> Track {
+    Track {
+        manifest: Manifest {
+            track: TrackInfo {
+                name: name.into(),
+                version: "1.0.0".into(),
+                description: String::new(),
+                provenance: provenance.into(),
+            },
+            scope: Scope { repo: "acme".into() },
+            gauge: Gauge::default(),
+        },
+        routes,
+    }
+}
+
+fn edit_call(dir: &tempfile::TempDir, f: &str) -> Call {
+    Call {
+        tool: "Edit".into(),
+        input: json!({ "file_path": dir.path().join(f).to_string_lossy() }),
+        output: String::new(),
+        failed: false,
+    }
+}
+
+#[test]
+fn an_obligation_is_met_by_the_step_with_options_added() {
+    let (dir, index, table) = fixture();
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let mut st = SessionState::default();
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "schema/a.json")] });
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make gen -j4", "ok")] });
+    assert!(d.judgements.iter().any(|j| matches!(j, Judgement::ObligationMet { route } if route == "gen")));
+    assert!(
+        decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false }).continue_reason.is_none(),
+        "no spurious stop"
+    );
+    // Another target is not the step.
+    let mut st = SessionState::default();
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "schema/a.json")] });
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make test", "ok")] });
+    assert!(d.judgements.is_empty());
+    assert!(decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false }).continue_reason.is_some());
+}
+
+#[test]
+fn an_after_command_trigger_fires_on_the_command_with_options_added() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("acme")).unwrap();
+    std::fs::write(dir.path().join("acme/billing.py"), "x").unwrap();
+    let table = CommandTable::load();
+    // Mined from runs without `--json`.
+    let key = command_key("./scripts/wi-lookup W-1", &table);
+    let files = Slot {
+        name: "files".into(),
+        source: SlotSource::ResultField { field: "linked_files".into() },
+        contract: Contract::RepoPath,
+    };
+    let linked = route(
+        "read-linked",
+        Trigger::AfterCommand { command: key },
+        Step::ReadBatch { slot: "files".into(), max: 5 },
+        vec![files],
+        Effect::Observe,
+        Aspect::Yellow,
+    );
+    let index = Index::compile(&[track("acme/t", "desire-path", vec![linked])]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let out = r#"{"linked_files":["acme/billing.py"]}"#;
+    for cmd in ["./scripts/wi-lookup W-2042 --json", "python3 scripts/wi-lookup W-2042", "scripts/wi-lookup W-2042"] {
+        let d = decide(&ctx, &mut SessionState::default(), &Event::Batch { calls: vec![bash(cmd, out)] });
+        assert!(d.directives.iter().any(|x| x.route == "read-linked"), "{cmd}");
+    }
+    let other = Event::Batch { calls: vec![bash("./scripts/wi-other W-2042", out)] };
+    assert!(decide(&ctx, &mut SessionState::default(), &other).directives.is_empty());
+}
+
+fn intent_route(id: &str, family: &str, command: &str, aspect: Aspect) -> Route {
+    let centroid = adage_intent::quantize(&adage_intent::unit(vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
+    route(
+        id,
+        Trigger::Intent { family: family.into(), model: MODEL.into(), centroid, threshold: 0.8 },
+        Step::Run { command: command.into() },
+        vec![],
+        Effect::Verify,
+        aspect,
+    )
+}
+
+#[test]
+fn a_different_script_is_not_following() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let routes = vec![intent_route("intent-check", "intent-check", "npm run check", Aspect::Green)];
+    let index = Index::compile(&[track("acme/intents", "desire-path", routes)]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: Some(&fake_embed),
+        params: Default::default(),
+    };
+    let mut st = SessionState::default();
+    let d = decide(&ctx, &mut st, &Event::Prompt { text: "run the tests".into() });
+    assert_eq!(d.directives.len(), 1);
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("npm run build", "ok")] });
+    assert!(d.judgements.is_empty(), "npm run build does not follow npm run check: {:?}", d.judgements);
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("npm run check --silent", "ok")] });
+    assert!(d.judgements.iter().any(|j| matches!(j, Judgement::Followed { route } if route == "intent-check")));
+}
+
+// ---------------------------------------------------------------- interlocking
+
+fn npm_test_dead_end() -> Route {
+    route(
+        "dead-end-npm",
+        Trigger::SessionStart,
+        Step::Avoid { avoid: "npm test".into(), instead: "make test".into(), signature: "ACME_ENV is not set".into() },
+        vec![],
+        Effect::Verify,
+        Aspect::Red,
+    )
+}
+
+/// An index of these routes with no interlocking applied (as an index compiled before it was).
+fn unlocked(tracks: &[&Track]) -> Index {
+    Index {
+        routes: tracks
+            .iter()
+            .flat_map(|t| {
+                t.routes.iter().map(|r| IndexedRoute {
+                    repo: "acme".into(),
+                    track: t.manifest.track.name.clone(),
+                    version: "1.0.0".into(),
+                    route: r.clone(),
+                })
+            })
+            .collect(),
+        ..Default::default()
+    }
+}
+
+/// The hostile case: a teammate's imported intent route says "start with npm test", and this
+/// repository's own sessions learned that `npm test` fails. Only the warning is given.
+#[test]
+fn an_imported_route_a_learned_dead_end_contradicts_is_never_emitted() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let imported = track(
+        "acme/intents",
+        "imported:teammate",
+        vec![intent_route("intent-tests", "intent-tests", "npm test", Aspect::Green)],
+    );
+    let learned = track("acme/dead-ends", "desire-path", vec![npm_test_dead_end()]);
+    let (index, conflicts) = Index::compile_with_conflicts(&[imported.clone(), learned.clone()]);
+    assert_eq!(conflicts.len(), 1, "{conflicts:?}");
+    assert_eq!(
+        (conflicts[0].winner.as_str(), conflicts[0].loser.as_str(), conflicts[0].resolution),
+        ("dead-end-npm", "intent-tests", interlock::Resolution::Suppressed)
+    );
+    // The runtime holds the line too, for an index compiled without interlocking.
+    let unlocked = unlocked(&[&imported, &learned]);
+    for index in [&index, &unlocked] {
+        let ctx = Ctx {
+            index,
+            repo: "acme".into(),
+            root: dir.path(),
+            table: &table,
+            embed: Some(&fake_embed),
+            params: Default::default(),
+        };
+        let mut st = SessionState::default();
+        let d = decide(&ctx, &mut st, &Event::Prompt { text: "the tests are failing".into() });
+        let ids: Vec<&str> = d.directives.iter().map(|x| x.route.as_str()).collect();
+        assert_eq!(ids, ["dead-end-npm"]);
+        assert!(st.pending.is_empty(), "no follow judgement for a directive never given");
+        // Nor later in the session.
+        let d = decide(&ctx, &mut st, &Event::Prompt { text: "tests again".into() });
+        assert!(d.directives.is_empty());
+    }
+}
+
+#[test]
+fn approach_locking_filters_later_directives_and_their_obligations() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let finish = route(
+        "finish-line-npm",
+        Trigger::AfterEdit { paths: "src/*.ts".into() },
+        Step::Run { command: "npm test".into() },
+        vec![],
+        Effect::Verify,
+        Aspect::Green,
+    );
+    let t = track("acme/t", "desire-path", vec![npm_test_dead_end(), finish]);
+    let (index, conflicts) = Index::compile_with_conflicts(&[t]);
+    assert_eq!(conflicts[0].resolution, interlock::Resolution::RuntimeFilter);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let mut st = SessionState::default();
+    let d = decide(&ctx, &mut st, &Event::Prompt { text: "hello".into() });
+    assert_eq!(d.directives.len(), 1);
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "src/a.ts")] });
+    assert!(d.directives.is_empty(), "the warning locks out the step it contradicts");
+    assert!(st.obligations.is_empty());
+    assert!(decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false }).continue_reason.is_none());
+    // Without the warning in the session, the finish line holds.
+    let mut st = SessionState { prompts: 1, ..Default::default() };
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "src/a.ts")] });
+    assert_eq!(d.directives.len(), 1);
+    // A red and what it contradicts in one decision: only the red.
+    let after = || Trigger::AfterFailure { command: "exec make lint".into(), signature: "boom".into() };
+    let avoid = Step::Avoid { avoid: "npm test".into(), instead: "make test".into(), signature: "x".into() };
+    let red = route("red-after", after(), avoid, vec![], Effect::Verify, Aspect::Red);
+    let run = Step::Run { command: "npm test".into() };
+    let green = route("green-after", after(), run, vec![], Effect::Verify, Aspect::Green);
+    let index = Index::compile(&[track("acme/t", "desire-path", vec![red, green])]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let failed = Call { failed: true, ..bash("make lint -q", "boom") };
+    let d = decide(&ctx, &mut SessionState::default(), &Event::Failure { call: failed });
+    let ids: Vec<&str> = d.directives.iter().map(|x| x.route.as_str()).collect();
+    assert_eq!(ids, ["red-after"]);
+}
+
+#[test]
+fn a_generalised_glob_matches_any_depth() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let gen = route(
+        "gen",
+        Trigger::AfterEdit { paths: "proto/**/*.proto".into() },
+        Step::Run { command: "make gen".into() },
+        vec![],
+        Effect::Regenerate,
+        Aspect::Green,
+    );
+    let index = Index::compile(&[track("acme/t", "desire-path", vec![gen])]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    for (f, hit) in [("proto/a.proto", true), ("proto/v1/deep/b.proto", true), ("other/proto/c.proto", false)] {
+        let d = decide(&ctx, &mut SessionState::default(), &Event::Batch { calls: vec![edit_call(&dir, f)] });
+        assert_eq!(d.directives.len(), usize::from(hit), "{f}");
+    }
+    let t = index.triggers("acme");
+    assert!(t.call_might_match(&format!("{} Edit {{\"file_path\":\"proto/v1/deep/b.proto\"}}", dir.path().display())));
+}
+
+#[test]
+fn red_comes_first_under_the_caps() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let slot = || Slot {
+        name: "item".into(),
+        source: SlotSource::Prompt { span: SpanKind::Ticket },
+        contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
+    };
+    let lookup = |id: &str, cmd: &str| {
+        let step = Step::Run { command: cmd.into() };
+        route(id, Trigger::Prompt { span: SpanKind::Ticket }, step, vec![slot()], Effect::Observe, Aspect::Green)
+    };
+    let routes = vec![
+        lookup("a", "scripts/a {item}"),
+        lookup("b", "scripts/b {item}"),
+        lookup("c", "scripts/c {item}"),
+        npm_test_dead_end(),
+    ];
+    // Without interlocking the three lookups stay green and compete for the cap.
+    let index = unlocked(&[&track("acme/t", "desire-path", routes)]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let d = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "W-2042".into() });
+    assert_eq!(d.directives.len(), MAX_DIRECTIVES_PER_DECISION);
+    assert_eq!(d.directives.last().unwrap().route, "dead-end-npm", "the warning is kept, and still rendered last");
+}
 #[test]
 fn propensity_is_the_probability_of_the_arm_given() {
     let (mut holdout, mut treated) = (0, 0);

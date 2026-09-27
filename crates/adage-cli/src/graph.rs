@@ -12,7 +12,7 @@
 //! --serve` serves both from the binary (see `serve.rs`).
 
 use crate::review::{ceiling_str, discover, preview};
-use adage_core::CommandTable;
+use adage_core::{pattern, CommandTable};
 use adage_runtime::{command_key, span_kind_label, SessionState};
 use adage_store::{spool, state, Paths};
 use adage_tracks::{Index, Route, Step, Trigger};
@@ -143,13 +143,10 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
         .iter()
         .flat_map(|i| {
             let repo = i.track.manifest.scope.repo.clone();
-            let table = &table;
             i.track.routes.iter().filter_map(move |r| match &r.step {
-                Step::Avoid { avoid, .. } => Some((
-                    repo.clone(),
-                    r.id.clone(),
-                    avoid.split(" / ").map(|a| command_key(a.trim(), table)).collect(),
-                )),
+                Step::Avoid { avoid, .. } => {
+                    Some((repo.clone(), r.id.clone(), avoid.split(" / ").map(|a| a.trim().to_string()).collect()))
+                }
                 _ => None,
             })
         })
@@ -207,7 +204,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
             for k in d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str()) {
                 let k = k.trim_end_matches(" !failed");
                 for (rrepo, id, keys) in &avoided {
-                    if *rrepo == repo && keys.iter().any(|ak| ak == k || speaks_for(ak, k)) {
+                    if *rrepo == repo && keys.iter().any(|runner| pattern::runs_avoided(runner, k)) {
                         sets(&mut arms, &repo, id, &arm).hit_avoided.insert(sid.clone());
                     }
                 }
@@ -317,7 +314,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
         .into_iter()
         .take(MAX_OBSERVED)
         .map(|(k, (n, s))| {
-            let r = railed.get(k).or_else(|| railed.iter().find(|(rk, _)| speaks_for(rk, k)).map(|(_, v)| v));
+            let r = railed.get(k).or_else(|| railed.iter().find(|(rk, v)| speaks_for(rk, v.1, k)).map(|(_, v)| v));
             json!({ "key": k, "count": n, "sessions": s.len(), "route": r.map(|r| &r.0), "how": r.map(|r| r.1) })
         })
         .collect();
@@ -334,14 +331,19 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
     Ok(out)
 }
 
-/// Whether a route's command key covers an observed key: the route's tokens are a prefix of the
-/// observed ones, with any slot matching any slot (`wi-lookup {item}` covers `wi-lookup {id}`;
-/// `python3 -m pytest` covers `python3 -m pytest {path} -v`).
-fn speaks_for(route_key: &str, observed: &str) -> bool {
-    let slot = |t: &str| t.starts_with('{') && t.ends_with('}');
-    let (r, o): (Vec<&str>, Vec<&str>) =
-        (route_key.split_whitespace().collect(), observed.split_whitespace().collect());
-    r.len() >= 2 && r.len() <= o.len() && r.iter().zip(&o).all(|(a, b)| a == b || (slot(a) && slot(b)))
+/// Whether a route's command key covers an observed key, as the runtime judges it
+/// (`adage_core::pattern`): a directed command is met by the same command with options added
+/// (`wi-lookup {item}` covers `wi-lookup {id} --json`, slots matching slots); an avoided runner
+/// covers any run of its program and subcommand (`python3 -m pytest` covers
+/// `python3 -m pytest {path} -v`).
+fn speaks_for(route_key: &str, how: &str, observed: &str) -> bool {
+    if how == "avoids" {
+        pattern::CommandPattern::exact(route_key)
+            .map(|p| p.at_least(pattern::Level::HeadSub))
+            .is_some_and(|p| p.matches_key(observed))
+    } else {
+        pattern::meets(route_key, observed)
+    }
 }
 
 fn routes_len(v: &Value) -> usize {
@@ -354,11 +356,16 @@ mod tests {
 
     #[test]
     fn route_keys_cover_observed_variants() {
-        assert!(speaks_for("exec python3 scripts/wi-lookup {item}", "exec python3 scripts/wi-lookup {id}"));
-        assert!(speaks_for("exec python3 -m pytest", "exec python3 -m pytest {path} -v"));
-        assert!(speaks_for("exec make test", "exec make test"));
-        assert!(!speaks_for("exec make test", "exec make gen"));
-        assert!(!speaks_for("exec make", "exec"));
-        assert!(!speaks_for("exec python3 -m pytest {path}", "exec python3 -m pytest"));
+        let d = |r: &str, o: &str| speaks_for(r, "directs", o);
+        assert!(d("exec python3 scripts/wi-lookup {item}", "exec python3 scripts/wi-lookup {id}"));
+        assert!(d("exec python3 scripts/wi-lookup {item}", "exec scripts/wi-lookup {id} --json"));
+        assert!(speaks_for("exec python3 -m pytest", "avoids", "exec python3 -m pytest {path} -v"));
+        assert!(d("exec make test", "exec make test"));
+        assert!(d("exec make gen", "exec make gen -j4"));
+        assert!(!d("exec make test", "exec make gen"));
+        assert!(!d("exec npm run check", "exec npm run build"));
+        assert!(!d("exec make", "exec"));
+        assert!(!d("exec python3 -m pytest {path}", "exec python3 -m pytest"));
+        assert!(!d("exec python3 -m pytest", "exec python3 -m pytest {path} -v"), "a directed command is not a runner");
     }
 }

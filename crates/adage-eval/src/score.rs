@@ -3,7 +3,8 @@
 //! Definitions (docs/evals.md has the long form):
 //!
 //! - A directive is **correct** if the agent later took its step unaided: ran the directed
-//!   command (same canonical key, or same command head, as the runtime's follow judgement), read
+//!   command (the runtime's follow judgement, `adage_core::pattern::meets`: the same command, or
+//!   it with options added), read
 //!   at least half of the files a linked-files directive listed, or ran a finish-line route's
 //!   command after the edit that triggered it. For a dead-end warning the step is the command
 //!   it recommends instead.
@@ -24,7 +25,7 @@ use crate::dataset::SessionMeta;
 use crate::replay::{Action, Fired, Replayed};
 use crate::safety::{self, Violation};
 use adage_core::spans::{self, SpanKind};
-use adage_core::{CommandTable, Effect};
+use adage_core::{pattern, CommandTable, Effect};
 use adage_runtime::command_key;
 use adage_tracks::{Index, Route, Step, Trigger};
 use serde::Serialize;
@@ -260,40 +261,40 @@ fn files_in(text: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// A command as the scorer compares it: its canonical key and its command head.
+/// A command as the scorer compares it: its canonical key.
 pub(crate) struct Expect {
     pub(crate) key: String,
-    pub(crate) head: String,
 }
 
 impl Expect {
     pub(crate) fn of(cmd: &str, table: &CommandTable) -> Expect {
-        let argv: Vec<String> = cmd.split_whitespace().map(str::to_string).collect();
-        Expect { key: command_key(cmd, table), head: adage_core::keys::command_head(&argv) }
+        Expect { key: command_key(cmd, table) }
     }
-    /// The same command, for route matching: the same canonical key, or the same head where the
-    /// head names a script (`scripts/wi-lookup`, however it is invoked). Stricter than
-    /// [`Expect::matches`], where a head such as `npm run` would make `npm run check` and
-    /// `npm run codegen` one command.
+    /// The same command, for route matching: either meets the other (`adage_core::pattern`), so
+    /// `python3 scripts/wi-lookup W-1` and `./scripts/wi-lookup W-2 --json` are one command, and
+    /// `npm run check` and `npm run codegen` are two.
     pub(crate) fn same(&self, other: &Expect) -> bool {
-        (!self.key.is_empty() && self.key == other.key) || (self.head.contains('/') && self.head == other.head)
+        !self.key.is_empty() && (pattern::meets(&self.key, &other.key) || pattern::meets(&other.key, &self.key))
     }
+    /// The runtime's own judgement: the directed command, or it with options added.
     fn matches(&self, a: &Action) -> bool {
-        a.argv.is_some() && !a.failed && (a.key == self.key || (!self.head.is_empty() && a.head == self.head))
+        a.argv.is_some() && !a.failed && pattern::meets(&self.key, &a.key)
     }
 }
 
-/// Does a failing runner (`python3 -m pytest`) describe this command?
+/// Does a failing runner (`python3 -m pytest`) describe this command? Any run of the same program
+/// and subcommand does (`adage_core::pattern::CommandPattern::runner`).
 fn runs_runner(a: &Action, runner: &str) -> bool {
-    a.argv.as_ref().is_some_and(|argv| argv_runs(argv, runner))
+    a.argv.is_some() && pattern::runs_avoided(runner, &a.key)
 }
 
-/// Does `argv` start with `runner`'s words (the first may be a path to it)?
+/// Does `argv` run `runner`: the same program and subcommand, or script (`node --test` is not
+/// `node tools/codegen.mjs`)? A bare interpreter (`python3`) is any run of it.
 pub(crate) fn argv_runs(argv: &[String], runner: &str) -> bool {
-    let r: Vec<&str> = runner.split_whitespace().collect();
-    !r.is_empty()
-        && argv.len() >= r.len()
-        && argv.iter().zip(&r).all(|(x, y)| x == y || x.rsplit('/').next() == Some(*y))
+    let (Some(p), Some(o)) = (pattern::CommandPattern::runner(runner), pattern::Shape::of_argv(argv)) else {
+        return false;
+    };
+    p.matches(&o)
 }
 
 fn after(a: &Action, f: &Fired) -> bool {
@@ -375,7 +376,7 @@ pub fn score_session(
                     .find(|a| {
                         a.argv.is_some()
                             && !a.failed
-                            && a.key == key
+                            && pattern::meets(&key, &a.key)
                             && (a.turn > f.turn || (a.turn == f.turn && edit_call.is_some_and(|c| a.call > c)))
                     })
                     .map(|a| a.turn);
@@ -442,6 +443,16 @@ pub fn score_session(
     if meta.is_some_and(|m| m.stale_generated == Some(true)) && !any_obligation {
         tally.finish_line.missed += 1;
     }
+
+    // Interlocking, over the whole session's decisions.
+    let decisions: Vec<Vec<&Route>> = rep
+        .trace
+        .iter()
+        .map(|(_, ids, _)| ids.iter().filter_map(|id| routes.get(id.as_str()).copied()).collect())
+        .collect();
+    let v = safety::check_interlock(&decisions);
+    tally.safety.unsafe_directives += v.len() as u32;
+    tally.safety.violations.extend(v);
 
     let (key_steps, covered) = recall(tally, rep, &routes, root, table);
     tally.sessions.push(SessionScore {

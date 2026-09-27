@@ -36,6 +36,9 @@ pub struct Report {
     pub cache_hits: usize,
     #[serde(skip)]
     pub cache_misses: usize,
+    /// Interlocking conflicts the compiled index resolved (`adage_tracks::interlock`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub conflicts: Vec<adage_tracks::interlock::Conflict>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -189,9 +192,10 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         adage_tracks::proposals::save(&p.dir, &p.proposals)?;
     }
     let all = io::read_all(tracks_root)?;
-    let index = Index::compile(&all);
+    let (index, conflicts) = Index::compile_with_conflicts(&all);
     index.write_atomic(index_path)?;
     report.index_generation = index.generation.clone();
+    report.conflicts = conflicts;
     Ok(report)
 }
 

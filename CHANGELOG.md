@@ -86,6 +86,9 @@ version as the GitHub Release notes.
 
 ### Fixed
 
+- **Failure attribution in command chains.** A failed `make gen && pytest` marked `make gen` as
+  failed too. The learners and the eval now attribute a failed call to its last sub-action (every
+  operand keeps it in an `||` chain, where all of them ran and failed).
 - **Over-broad dead-end warnings.** A dead end named every runner that failed before the working
   command, including `python3 -m unittest`, which passes once `ACME_ENV` is set. Dead ends are now
   keyed by failure signature: a runner is named only if its failures share the route's signature
@@ -137,6 +140,30 @@ version as the GitHub Release notes.
 
 ### Changed
 
+- **One command-pattern algebra** (`adage_core::pattern`) decides when an observed command is
+  the directed one, everywhere: follow judgements, finish-line obligations, after-command and
+  after-failure triggers, `adage graph`, interlocking and the eval scorer. A directed command is
+  met by the same command with options added (`make gen -j4` meets `make gen`;
+  `./scripts/wi-lookup W-1 --json` triggers a route mined from `python3 scripts/wi-lookup W-1`),
+  never by another subcommand or script (`npm run build` no longer counts as following
+  `npm run check`, nor `python3 -m pytest` as `-m pytest`). Multiplexers (npm/pnpm/yarn/bun,
+  make, cargo, go, `python -m`, uv/poetry run, npx, just, task, git, docker compose, gh) and
+  interpreter flag modes (`node --test`) are a data table. A dead end names its runner at that
+  level: `node --test`, not `node`. Eval numbers moved (docs/evals.md): demo round 2 precision
+  0.7424 → 0.7571, recall 0.7826 → 0.913; round 1 precision 0.6786 → 0.6667. Replay fidelity is
+  checked under the matching the recorded hooks used (`adage eval fidelity --exact-keys`, 36/36);
+  under the new matching exactly four holdout sessions gain one linked-files directive.
+- **Interlocking** (Design §10.6, `adage_tracks::interlock`). `Index::compile` computes a conflict
+  matrix per repository: a route that directs a command a dead end avoids loses (left out of the
+  index when both speak at the prompt, otherwise filtered at runtime), and of two greens at one
+  decision point one is compiled yellow (learned beats imported or authored, then evidence).
+  `adage learn` and `adage doctor` report the conflicts. At runtime the first prompt's dead ends
+  are chosen before anything else under the caps, and approach locking never emits a directive
+  that a red directive already emitted in the session, or in the same decision, avoids. The eval's
+  safety oracle and a new property test check both invariants.
+- Finish-line globs generalise, conservatively: `a/b/*.ext` and `a/c/*.ext` followed by the same
+  regenerate step become `a/**/*.ext` when every session editing such a file under `a/` ran it and
+  none ran it after editing one elsewhere.
 - `learn.log` has one line per repository per run instead of one per run (a run that found no
   usable session writes one line with `repo` null).
 - `adage learn`, automatic learners, review decisions and `adage add` take `$ADAGE_HOME/tracks.lock`
