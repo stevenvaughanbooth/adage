@@ -37,6 +37,12 @@ conventions they cannot guess. Adage learned from 18 training sessions, then two
 of held-out work items ran 18 sessions with Adage and 18 without (hooks active, directives withheld).
 Hidden tests scored every run. Round 2 learned from every earlier session.
 
+> **Caveat (2026-09-27 audit).** These runs predate stricter protocol: round 2 re-used the same six
+> work items as round 1, arm order was fixed, both arms shared the operator's Claude Code
+> auto-memory, and p-values treat 18 runs (6 tasks × 3 repeats) as independent. The effects are
+> large enough to survive most of this, but treat the numbers as indicative until the runs are
+> repeated under the corrected runner. See [docs/evals.md](docs/evals.md#known-limitations-of-the-published-numbers).
+
 | Round 2, held-out | With Adage | Without | p (permutation) |
 | --- | ---: | ---: | ---: |
 | Turns before first edit (median) | **2** | 20 | 0.0002 |

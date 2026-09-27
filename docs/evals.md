@@ -330,15 +330,37 @@ See [evals/live/README.md](../evals/live/README.md).
 | | Offline replay | Live A/B (demo, round 2) |
 | --- | --- | --- |
 | Question | Would the directives have been right, and safe? | Does delivering them help? |
-| Control | The agent's own later actions in unsteered sessions | The holdout arm, randomised, same hooks |
+| Control | The agent's own later actions in unsteered sessions | The holdout arm, same hooks (arm order was fixed, not randomised, in the published runs; see Known limitations) |
 | Headline | Lookup directive correct for 12 of 18 held-out agents; they took a median of 9 turns to find the lookup unaided | Turns before the first edit fell from a median of 20 to 2 (p = 0.0002); cost per run fell from $0.135 to $0.053 |
-| Blind spots | Cannot see effects of delivery (anchoring, derailing); precision is a lower bound; no intent routes without the model | Small n (18 per arm); costs tokens; one sandbox |
+| Blind spots | Cannot see effects of delivery (anchoring, derailing); precision is a lower bound; no intent routes without the model | Small n (18 runs per arm, but only 6 tasks); costs tokens; one sandbox |
 
 The offline numbers are the cheap, deterministic early warning; a change that lowers them is
 unlikely to help live. The live proving ground is the judge. A track is published only when it
 is non-inferior on success and faster (Design §12.2). Offline replay is also how a live run is
 audited: its fidelity check confirms that a replay of the recorded sessions reproduces what the
 hooks decided.
+
+### Known limitations of the published numbers
+
+An audit of the demo runs (2026-09-27) found issues that the numbers above do not yet account
+for. They are being fixed (see the roadmap); until the runs are repeated, read the live results
+with these in mind:
+
+- **Round 2 is not held out by task.** Round 2 learns from round-1 eval sessions of the same six
+  work items (W-2041 to W-2046) that it then tests. Routes are repository conventions, not
+  per-task answers, so the effect is smaller than it sounds, but it breaks the Design Spec's rule
+  of held-out tasks for every published number. The offline `round2` split has the same overlap.
+- **Arm order was fixed** (holdout queued before adage for every task and repeat), not randomised.
+- **The arms were not isolated from the operator's Claude Code auto-memory.** Holdout agents read
+  `MEMORY.md` in 23 of 36 Haiku eval runs; Adage-arm agents in none.
+- **Pseudo-replication.** p-values permute individual runs, but 18 runs are 6 tasks × 3 repeats,
+  so the effective sample is closer to 6. No correction was applied across the 11 metrics.
+- **Infrastructure failures counted as task failures**, and runs cut off at `max_turns` entered
+  medians as if complete.
+- **A harm signal went unreported.** In Haiku round 1 the Adage arm hit 26 failed verify runs and
+  the holdout arm 0: skipping exploration also skipped the agent's incidental discovery of
+  `make test`. Round 2 learned the dead end that fixed it, but no metric treated this as a
+  regression.
 
 ## CI
 
