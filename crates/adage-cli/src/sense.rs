@@ -674,7 +674,7 @@ pub fn print_text(s: &Sense) {
             println!("  candidate reflexes        what `adage condition` would form — candidates only, nothing is written{sampled}:");
             for c in &r.candidates {
                 println!(
-                    "    {:<8} {:<9} {}/{}: {} → {}   {}/{} sessions, lower bound {:.2}, {}",
+                    "    {:<8} {:<9} {}/{}: {} → {}   {}/{} traces, lower bound {:.2}, {}",
                     format!("[{}]", c.strength),
                     c.status,
                     c.track,

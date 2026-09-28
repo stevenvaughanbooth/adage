@@ -7,11 +7,11 @@
 //!                                                          E2 actions)
 //! adage delegate off [--repo <dir>]                        hooks call `adage hook` again
 //! adage delegate [status] [--repo <dir>] [--json]          registrations, and grants per repository
-//! adage review delegate <track> <route> --level e1 [--raw] [--fields '<json>']
+//! adage review delegate <track> <reflex> --level e1 [--raw] [--fields '<json>']
 //!                         [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
-//! adage review delegate <track> <route> --level e2 [--outputs <glob>]... [--cache <glob>]...
+//! adage review delegate <track> <reflex> --level e2 [--outputs <glob>]... [--cache <glob>]...
 //!                         [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
-//! adage review revoke <track> <route> [--repo <dir>]
+//! adage review revoke <track> <reflex> [--repo <dir>]
 //! ```
 //!
 //! **E2** (Track C §3.6, §4): an action a hook runs when the reflex's stimulus fires. It is
@@ -51,9 +51,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "usage: adage delegate <on [--bin <adage-exec>] | off | status [--json]> [--repo <dir>]";
-const REVIEW_USAGE: &str = "usage: adage review delegate <track> <route> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
-       adage review delegate <track> <route> --level e2 [--outputs <glob>]... [--cache <glob>]... [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
-       adage review revoke <track> <route> [--repo <dir>]";
+const REVIEW_USAGE: &str = "usage: adage review delegate <track> <reflex> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
+       adage review delegate <track> <reflex> --level e2 [--outputs <glob>]... [--cache <glob>]... [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
+       adage review revoke <track> <reflex> [--repo <dir>]";
 
 /// Harnesses whose registrations `delegate on` swaps.
 const HARNESSES: [&str; 3] = ["claude-code", "codex", "opencode"];
@@ -163,7 +163,7 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
             "the adage-exec plugin (/plugin install adage-exec@adage); with {} present the Adage plugin goes quiet.",
             m.display()
         );
-        println!("Nothing runs until you approve a reflex: adage review delegate <track> <route> --level e1|e2");
+        println!("Nothing runs until you approve a reflex: adage review delegate <track> <reflex> --level e1|e2");
         println!("Recommended: deny your agent edits to {} in the harness's permissions.", paths.root.display());
     } else {
         let _ = std::fs::remove_file(&m);

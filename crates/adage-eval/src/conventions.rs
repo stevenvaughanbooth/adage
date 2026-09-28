@@ -1103,7 +1103,7 @@ mod tests {
                 contract(re),
             )
         };
-        let routes = vec![
+        let routes = [
             lookup("narrow-contract", r"^W-10\d{2}$"),
             lookup("loose-contract", r"^W-\d+$"),
             lookup("disjoint-contract", r"^X-\d{4}$"),

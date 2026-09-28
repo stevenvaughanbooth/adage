@@ -142,10 +142,10 @@ fn change(c: &Value, ts: u64, repo: Option<String>) -> Tick {
         _ => String::new(),
     };
     // Summaries are fixed templates that restate the change and end with the evidence in
-    // parentheses ("finish line route prime → fire (9 of 9 sessions, lower bound 0.70)"): show
+    // parentheses ("reflex prime → fire (9 of 9 traces, lower bound 0.70)"): show
     // that evidence after the arrow, or the whole summary when there is no arrow.
     let summary = match s(c, "summary") {
-        // "fire finish line route evidence 6/8 → 7/8 sessions": the counts say it.
+        // "fire reflex evidence 6/8 → 7/8 traces": the counts say it.
         Some(x) if s(c, "change") == Some("evidence") && x.contains("evidence ") => {
             format!(" {}", &x[x.find("evidence ").unwrap_or(0) + "evidence ".len()..])
         }

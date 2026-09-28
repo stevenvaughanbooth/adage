@@ -10,7 +10,7 @@
 //!  "sessions_read":212,"sessions_used":198,"duration_ms":431,"index_generation":"3f1c…",
 //!  "changes":[{"route":"finish-line-6a01b2","track":"github-com-acme-billing/finish-line",
 //!              "change":"strength","from":"prime","to":"fire",
-//!              "summary":"finish line route prime → fire (9 of 9 sessions, lower bound 0.70)"}],
+//!              "summary":"reflex prime → fire (9 of 9 traces, lower bound 0.70)"}],
 //!  "version":"0.1.0","sessions_steered":3,"thresholds":"min_support=5 …","intent_model":null,
 //!  "repos":{"github.com/acme/billing":{"sessions":198,"tracks":[{"name":"…","version":"1.2.0",
 //!           "change":"route added","routes":4}]}}}

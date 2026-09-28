@@ -114,14 +114,17 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
             if root.is_some() { "this repository" } else { "a repository (run it inside one, or pass --repo <path>)" };
         println!("  {h}: `adage install {h} --write{repo_opt}` registers Adage for {here}; add `--scope user` for every repository.");
         match h {
-            "claude-code" => println!("  {h}: or use the plugin: `claude --plugin-dir plugin/claude-code` (see README). The settings it would write:"),
-            "opencode" => {
-                println!("  {h}: it writes Adage's plugin file (.opencode/plugins/adage.js); `adage install opencode` prints it in full.");
-                continue;
-            }
-            _ => println!("  {h}: the hooks.json entries it would merge (Codex then asks you to approve them in /hooks):"),
+            "claude-code" => println!(
+                "  {h}: or install the plugin: `/plugin marketplace add stevenvaughanbooth/adage`, then `/plugin install adage@adage`. \
+                 `adage install {h}` prints the settings it would write."
+            ),
+            "opencode" => println!(
+                "  {h}: it writes Adage's plugin file (.opencode/plugins/adage.js); `adage install opencode` prints it in full."
+            ),
+            _ => println!(
+                "  {h}: it merges Adage's entries into hooks.json (Codex then asks you to approve them in /hooks); `adage install codex` prints them."
+            ),
         }
-        crate::install::install(&[h.to_string(), "--print".to_string()])?;
     }
 
     // 3. The embedding model.

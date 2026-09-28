@@ -27,8 +27,8 @@
 //! adage add <dir> [--trust]          verify a signed pack, install it,
 //!                                    and bind it to this repository at forming
 //! adage review [--json]              reflexes awaiting a person's decision, with evidence and directive text
-//! adage review delegate <track> <route> --level e1|e2 [--raw] [--fields ..] [--outputs <glob>]   approve an E1 prefetch or an E2 action (a person)
-//! adage review revoke <track> <route>   withdraw that grant
+//! adage review delegate <track> <reflex> --level e1|e2 [--raw] [--fields ..] [--outputs <glob>]   approve an E1 prefetch or an E2 action (a person)
+//! adage review revoke <track> <reflex>   withdraw that grant
 //! adage delegate on|off|status       hooks call adage-exec (E1 prefetch, E2 actions) or adage; grants per repository
 //! adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <route> [--by <name>]
 //! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
@@ -181,6 +181,9 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
             continue;
         }
         i += 1;
+    }
+    if let Some(missing) = transcripts.iter().find(|p| !p.is_file()) {
+        bail!("--transcripts {}: no such file. Name transcript files (Claude Code .jsonl, an `opencode export`, a Codex rollout)", missing.display());
     }
     // Codex rollouts: `--codex-sessions <dir>` (`$CODEX_HOME/sessions`), read only when asked.
     if let Some(dir) = flag(args, "--codex-sessions") {

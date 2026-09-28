@@ -110,14 +110,13 @@ fn init_detects_harnesses_prints_snippets_and_writes_nothing() {
     assert!(o.status.success(), "{t}");
     let claude_found = format!("claude-code  found: ~{}.claude exists", std::path::MAIN_SEPARATOR);
     #[cfg(unix)]
-    assert!(t.contains("codex        found: `codex` on PATH") && t.contains("hook codex"), "{t}");
+    assert!(t.contains("codex        found: `codex` on PATH") && t.contains("`adage install codex` prints them"), "{t}");
     assert!(!t.contains(r"\\?\"), "no verbatim Windows prefix in output:\n{t}");
     for s in [
         "1. Harnesses",
         claude_found.as_str(),
         "opencode     found:",
         "adage install claude-code --write",
-        "\"UserPromptSubmit\"",
         ".opencode/plugins/adage.js",
         "3. Embedding model",
         "`adage models fetch`",

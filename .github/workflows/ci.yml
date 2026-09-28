@@ -158,7 +158,7 @@ jobs:
       - name: NOTICE is current
         run: |
           scripts/notice.sh "$RUNNER_TEMP/NOTICE"
-          diff -u NOTICE "$RUNNER_TEMP/NOTICE" || { echo "::error::NOTICE is stale: run scripts/notice.sh and commit it"; exit 1; }
+          diff -u --strip-trailing-cr NOTICE "$RUNNER_TEMP/NOTICE" || { echo "::error::NOTICE is stale: run scripts/notice.sh and commit it"; exit 1; }
 
   deny:
     runs-on: ubuntu-24.04

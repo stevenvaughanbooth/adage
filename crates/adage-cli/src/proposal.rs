@@ -40,10 +40,7 @@ fn slots(r: &Route) -> String {
 
 fn evidence(r: &Route) -> String {
     let e = &r.evidence;
-    format!(
-        "{}/{} sessions over {} day(s) · Wilson lower bound {:.2}",
-        e.support, e.opportunities, e.days, e.lower_bound
-    )
+    format!("{}/{} traces over {} day(s) · Wilson lower bound {:.2}", e.support, e.opportunities, e.days, e.lower_bound)
 }
 
 /// The fields a person reads, as (label, text).

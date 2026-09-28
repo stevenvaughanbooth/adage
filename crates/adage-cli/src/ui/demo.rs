@@ -333,7 +333,7 @@ fn learn(home: &DemoHome, round: usize) {
     let mut changes = vec![json!({
         "route": "lookup-incident", "track": TRACK, "change": "evidence", "from": null, "to": null,
         "summary": format!(
-            "fire work item route evidence {}/{} → {}/{} sessions",
+            "fire reflex evidence {}/{} → {}/{} traces",
             lookup.support - 1, lookup.opportunities - 1, lookup.support, lookup.opportunities
         ),
     })];
@@ -343,7 +343,7 @@ fn learn(home: &DemoHome, round: usize) {
             json!({
                 "route": "read-linked-files", "track": TRACK, "change": "strength", "from": "prime", "to": "fire",
                 "summary": format!(
-                    "linked files route prime → fire ({} of {} sessions, lower bound {:.2})",
+                    "reflex prime → fire ({} of {} traces, lower bound {:.2})",
                     linked.support, linked.opportunities, linked.lower_bound
                 ),
             }),

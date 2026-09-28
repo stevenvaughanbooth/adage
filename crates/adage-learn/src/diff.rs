@@ -84,15 +84,11 @@ fn strength(a: Strength) -> &'static str {
     }
 }
 
-/// The kind of route, for summaries: the track's kind (`<repo>/<kind>`), in words.
+/// What a track holds, for summaries: instincts (`<repo>/instincts`), else reflexes.
 fn kind(track: &str) -> &'static str {
     match track.rsplit('/').next().unwrap_or("") {
-        "work-items" => "work item",
-        "finish-line" => "finish line",
-        "dead-ends" => "dead end",
-        "intents" => "intent",
         "instincts" => "instinct",
-        _ => "route",
+        _ => "reflex",
     }
 }
 
@@ -100,26 +96,26 @@ fn sessions(r: &Route) -> String {
     if r.is_instinct() {
         return "bound from the repository's declared files".into();
     }
-    format!("{} of {} sessions", r.evidence.support, r.evidence.opportunities)
+    format!("{} of {} traces", r.evidence.support, r.evidence.opportunities)
 }
 
-/// Why an instinct route left service: a learned route took over its id, or agents followed it
+/// Why an instinct left service: a learned route took over its id, or agents followed it
 /// and it failed (`adage_learn::instincts`), or it is simply no longer declared.
 fn instinct_gone(id: &str, o: &Route, n: Option<&Route>, after: &Snapshot) -> String {
     let taken = after
         .iter()
         .any(|(name, (t, _))| !name.ends_with("/instincts") && t.routes.iter().any(|r| r.id == id && in_service(r)));
     if taken {
-        return format!("{} instinct route confirmed by sessions: the learned route takes over", strength(o.strength));
+        return format!("{} instinct confirmed by traces: the conditioned reflex takes over", strength(o.strength));
     }
     let failed = n.and_then(|n| n.evidence.by_origin.get("misfired")).copied().unwrap_or(0);
     if n.is_some_and(|n| n.state == RouteState::Extinguished) {
         return format!(
-            "{} instinct route extinguished automatically: agents followed it and it failed {failed} times, or ignored",
+            "{} instinct extinguished automatically: agents followed it and it failed {failed} times, or ignored",
             strength(o.strength)
         );
     }
-    format!("{} instinct route extinguished", strength(o.strength))
+    format!("{} instinct extinguished", strength(o.strength))
 }
 
 /// The changes from `before` to `after`, sorted by track, route and kind of change.
@@ -152,7 +148,7 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
                         None,
                         Some(n.strength),
                         format!(
-                            "{} {k} route nascent: awaits approval in `adage review` ({})",
+                            "{} {k} nascent: awaits approval in `adage review` ({})",
                             strength(n.strength),
                             sessions(n)
                         ),
@@ -163,7 +159,7 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
                     ChangeKind::New,
                     None,
                     Some(n.strength),
-                    format!("new {} {k} route ({})", strength(n.strength), sessions(n)),
+                    format!("new {} {k} ({})", strength(n.strength), sessions(n)),
                 )),
                 (Some(o), n) if n.is_none_or(|n| !in_service(n)) => out.push(change(
                     id,
@@ -173,7 +169,7 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
                     if o.is_instinct() {
                         instinct_gone(id, o, n, after)
                     } else {
-                        format!("{} {k} route extinguished", strength(o.strength))
+                        format!("{} {k} extinguished", strength(o.strength))
                     },
                 )),
                 (Some(o), Some(n)) if n.state == RouteState::Dormant && o.state != RouteState::Dormant => {
@@ -183,11 +179,11 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
                         Some(o.strength),
                         Some(n.strength),
                         format!(
-                        "{} {k} route dormant: kept on its last evidence ({}), {} of its sessions were steered by it",
-                        strength(n.strength),
-                        sessions(n),
-                        n.evidence.exposed
-                    ),
+                            "{} {k} dormant: kept on its last evidence ({}), {} of its traces were steered by it",
+                            strength(n.strength),
+                            sessions(n),
+                            n.evidence.exposed
+                        ),
                     ))
                 }
                 (Some(o), Some(n)) if o.strength != n.strength => out.push(change(
@@ -196,7 +192,7 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
                     Some(o.strength),
                     Some(n.strength),
                     format!(
-                        "{k} route {} → {} ({}, lower bound {:.2})",
+                        "{k} {} → {} ({}, lower bound {:.2})",
                         strength(o.strength),
                         strength(n.strength),
                         sessions(n),
@@ -213,7 +209,7 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
                         None,
                         None,
                         format!(
-                            "{} {k} route evidence {}/{} → {}/{} sessions",
+                            "{} {k} evidence {}/{} → {}/{} traces",
                             strength(n.strength),
                             o.evidence.support,
                             o.evidence.opportunities,
@@ -234,7 +230,7 @@ pub fn diff(before: &Snapshot, after: &Snapshot) -> Vec<Change> {
                     ChangeKind::Proposal,
                     None,
                     None,
-                    format!("pinned {k} route: a change is proposed in `adage review`"),
+                    format!("pinned {k}: a change is proposed in `adage review`"),
                 ));
             }
         }
@@ -345,9 +341,9 @@ mod tests {
                 ("acme/work-items", "lookup-x", ChangeKind::Nascent, None, Some(Prime)),
             ]
         );
-        assert_eq!(d[1].summary, "finish line route prime → fire (8 of 8 sessions, lower bound 0.50)");
-        assert_eq!(d[2].summary, "fire finish line route evidence 6/8 → 7/8 sessions");
-        assert_eq!(d[7].summary, "prime work item route nascent: awaits approval in `adage review` (5 of 8 sessions)");
+        assert_eq!(d[1].summary, "reflex prime → fire (8 of 8 traces, lower bound 0.50)");
+        assert_eq!(d[2].summary, "fire reflex evidence 6/8 → 7/8 traces");
+        assert_eq!(d[7].summary, "prime reflex nascent: awaits approval in `adage review` (5 of 8 traces)");
         for c in &d {
             assert!(!c.summary.contains("schema") && !c.summary.contains("make"), "no route content: {}", c.summary);
         }
@@ -368,7 +364,7 @@ mod tests {
         );
         assert_eq!(
             d[0].summary,
-            "prime finish line route dormant: kept on its last evidence (8 of 8 sessions), 11 of its sessions were steered by it"
+            "prime reflex dormant: kept on its last evidence (8 of 8 traces), 11 of its traces were steered by it"
         );
         assert!(diff(&now, &now).is_empty());
     }
