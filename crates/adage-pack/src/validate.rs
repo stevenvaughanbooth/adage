@@ -108,6 +108,19 @@ pub fn safe_glob(g: &str) -> bool {
     adage_tracks::advice::safe_glob(g)
 }
 
+/// An E2 action's output or cache glob: a safe repository-relative glob that cannot name `.git`
+/// (its first segment is neither `.git` nor a wildcard that could match it).
+pub fn action_glob_ok(g: &str) -> bool {
+    let first = g.split('/').next().unwrap_or_default();
+    safe_glob(g)
+        && g.len() <= 200
+        && first != ".git"
+        && !first.starts_with('.')
+        && !first.starts_with('*')
+        && !first.starts_with('?')
+        && !first.starts_with('[')
+}
+
 /// Lowercase hex SHA-256.
 pub fn sha256_hex_ok(s: &str) -> bool {
     s.len() == 64 && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
@@ -488,10 +501,21 @@ pub fn validate(p: &Parsed) -> Result<Checked> {
             }
         }
     }
+    if p.attestations.len() > crate::attest::MAX_ATTESTATIONS {
+        bail!(
+            "the pack has {} attestations; at most {} are allowed",
+            p.attestations.len(),
+            crate::attest::MAX_ATTESTATIONS
+        );
+    }
     for (id, a) in &p.attestations {
         if serde_json::to_string(a)?.len() > 64 << 10 {
             bail!("attestation {id} is larger than 64 KiB");
         }
+        if !safe_id(id) {
+            bail!("attestation id {id:?} is not allowed");
+        }
+        crate::attest::check(a).with_context(|| format!("attestation {id} is not a bench result record"))?;
     }
     Ok(checked)
 }
@@ -830,11 +854,25 @@ fn validate_route(
         let ceiling = match x.level {
             Level::E0 => Effect::Publish,
             Level::E1 => Effect::Observe,
-            Level::E2 => Effect::Verify,
-            Level::E3 => Effect::Environment,
+            Level::E2 => Effect::Environment,
         };
         if rank(max_effect) > rank(ceiling) {
             bail!("exec level {:?} can never be granted to a {max_effect:?} route", x.level);
+        }
+        if x.level != Level::E2 && !(x.outputs.is_empty() && x.cache.is_empty()) {
+            bail!("exec outputs and cache globs belong to an E2 action only");
+        }
+        for (what, globs) in [("outputs", &x.outputs), ("cache", &x.cache)] {
+            if globs.len() > MAX_ACTION_GLOBS {
+                bail!("exec {what}: at most {MAX_ACTION_GLOBS} globs");
+            }
+            if let Some(g) = globs.iter().find(|g| !action_glob_ok(g)) {
+                bail!("exec {what}: {g:?} is not a repository-relative glob outside .git");
+            }
+            unique(globs, &format!("exec {what}"))?;
+        }
+        if x.level == Level::E2 && max_effect == Effect::Regenerate && x.outputs.is_empty() {
+            bail!("an E2 regenerate action declares the outputs it may change (exec outputs)");
         }
     }
 

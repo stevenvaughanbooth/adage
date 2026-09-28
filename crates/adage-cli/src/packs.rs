@@ -259,7 +259,16 @@ fn write_bound(
         routes: binding.live().filter_map(|r| r.route.clone()).collect(),
     };
     let was: BTreeMap<String, Aspect> = track.routes.iter().map(|r| (r.id.clone(), r.aspect)).collect();
-    let (track, _) = at_probation(track);
+    let (mut track, _) = at_probation(track);
+    // A reflex that runs a vendored script is exec-only (never directed at E0), so it does not
+    // wait as a draft: running it always needs its own explicit approval (Track C §1.7).
+    let exec_only: BTreeSet<&str> =
+        pack.routes.iter().filter(|r| adage_pack::bind::vendored(r)).map(|r| r.id.as_str()).collect();
+    for r in track.routes.iter_mut().filter(|r| exec_only.contains(r.id.as_str())) {
+        if r.state == adage_tracks::RouteState::Draft {
+            r.state = adage_tracks::RouteState::Probation;
+        }
+    }
     io::validate(&track).context("the bound track fails validation")?;
     let carried = reimport::carry(dest, track, &paths.tracks())?;
     io::validate(&carried.track).context("the bound track fails validation")?;
@@ -312,6 +321,32 @@ fn pack_origin(o: adage_pack::PackOrigin) -> &'static str {
         adage_pack::PackOrigin::Trained => "trained",
         adage_pack::PackOrigin::Authored => "authored",
     }
+}
+
+/// The fingerprint of the key that signed an installed pack (re-verified from its `pack.sig`).
+pub fn signer(paths: &Paths, name: &str) -> Option<String> {
+    let dir = pack_dir(paths, name);
+    let pem = std::fs::read_to_string(dir.join(adage_pack::validate::SIG)).ok()?;
+    let digest = adage_pack::digest_dir(&dir).ok()?;
+    let msg = adage_sign::message(&digest).ok()?;
+    let key = adage_sign::verify_embedded(&msg, adage_sign::PACK_NAMESPACE, &pem).ok()?;
+    Some(adage_sign::fingerprint(&key))
+}
+
+/// An installed pack's attestations (Track C §1.8), one line each, marked self-reported by its
+/// signer. Informational only: nothing reads them to grant a strength, a level or an approval.
+pub fn attestation_lines(paths: &Paths, name: &str) -> Vec<String> {
+    let Ok(pack) = Pack::load(&pack_dir(paths, name)) else { return Vec::new() };
+    if pack.attestations.is_empty() {
+        return Vec::new();
+    }
+    let by = signer(paths, name).unwrap_or_else(|| "an unverified signer".into());
+    pack.attestations
+        .iter()
+        .map(|(id, a)| {
+            format!("{id}: {} (self-reported by signer {by}; informational only)", adage_pack::attest::summary(a))
+        })
+        .collect()
 }
 
 /// Copy a pack's vendored scripts into `$ADAGE_HOME/cas/<sha256>`, read-only. An entry already

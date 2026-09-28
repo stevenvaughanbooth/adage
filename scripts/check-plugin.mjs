@@ -66,30 +66,26 @@ for (const [pluginDir, bin] of [
         } else {
           problems.push(`${pluginDir} ${event}: unexpected command ${cmd}`)
         }
-        expect(typeof h.timeout === "number" && h.timeout <= 10, `${pluginDir} ${event}: timeout must be set and at most 10 s`)
+        // An E2 action runs at the edit and Stop events of the adage-exec plugin (at most 20 s of
+        // its own): those get 30 s; everything else stays at most 10 s.
+        const action = bin === "adage-exec" && (event === "PostToolBatch" || event === "Stop")
+        const limit = action ? 30 : 10
+        expect(typeof h.timeout === "number" && h.timeout <= limit, `${pluginDir} ${event}: timeout must be set and at most ${limit} s`)
+        if (action) expect(h.timeout === 30, `${pluginDir} ${event}: an action event's timeout is 30 s`)
       }
     }
   }
 }
 
-// The adage-exec plugin's MCP server (Track C §3.5, E2): one stdio server named adage, started by
-// a script inside the plugin (MCP servers may start before SessionStart links bin/adage-exec).
-{
-  const dir = "plugin/claude-code-exec"
-  const servers = json(`${dir}/.mcp.json`).mcpServers || {}
-  expect(Object.keys(servers).join(",") === "adage", `${dir}/.mcp.json: expected exactly one server, adage`)
-  const s = servers.adage || {}
-  expect((s.type || "stdio") === "stdio", `${dir}/.mcp.json: adage must be a stdio server`)
-  expect(s.command === "${CLAUDE_PLUGIN_ROOT}/scripts/mcp", `${dir}/.mcp.json: adage must run \${CLAUDE_PLUGIN_ROOT}/scripts/mcp`)
-  expect(executable(path.join(repo, dir, "scripts/mcp")), `${dir}: scripts/mcp is missing or not executable`)
-  expect(read(`${dir}/scripts/mcp`).includes(' mcp'), `${dir}: scripts/mcp does not start adage-exec mcp`)
-  expect(!("mcpServers" in json(`${dir}/.claude-plugin/plugin.json`)), `${dir}: MCP servers belong in .mcp.json only`)
-  let adageMcp = false
+// Neither plugin runs a server: Adage acts only from the hooks it owns (Track C, revised).
+for (const dir of ["plugin/claude-code", "plugin/claude-code-exec"]) {
+  let server = false
   try {
-    readFileSync(path.join(repo, "plugin/claude-code/.mcp.json"))
-    adageMcp = true
+    readFileSync(path.join(repo, dir, ".mcp.json"))
+    server = true
   } catch {}
-  expect(!adageMcp, "plugin/claude-code: the Adage plugin never runs anything, so it has no MCP server")
+  expect(!server, `${dir}: Adage registers no MCP server`)
+  expect(!("mcpServers" in json(`${dir}/.claude-plugin/plugin.json`)), `${dir}: Adage registers no MCP server`)
 }
 
 if (problems.length) {

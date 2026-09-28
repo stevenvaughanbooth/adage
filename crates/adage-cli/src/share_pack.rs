@@ -1,6 +1,14 @@
 //! `adage share` in the pack format (Track C §1.6): resolve the source, build the pack, run the
 //! redaction check over every byte and the script checks over vendored scripts, write, and sign
 //! the pack digest in namespace `adage-pack`.
+//!
+//! - `--vendor` (Track C §1.7, D6) carries each repository script's bytes in the pack
+//!   (`scripts/sha256-<hex>`), read from the repository `share` runs in and checked against its
+//!   pin. Only a script run by an interpreter named in argv (`python3`, `node`, `sh`) can be
+//!   vendored. Vendored scripts need `--ack-scripts` when they reach beyond the repository.
+//! - `--attest <results.jsonl>` (§1.8) embeds bench result records as `attestations/<id>.json`:
+//!   `arms`, `scorecard` and `aggregate` records, at most 16, each validated against the bench
+//!   result schema. Recipients see them marked "self-reported by signer"; they grant nothing.
 
 use crate::redact;
 use crate::share::list_files;
@@ -53,6 +61,16 @@ fn known_digests(pack: &Pack) -> Result<BTreeSet<String>> {
     let mut d: BTreeSet<String> = pack.closure()?.nodes.values().filter(|v| v.len() == 64).cloned().collect();
     d.extend(pack.scripts.keys().cloned());
     d.extend(pack.manifest.requires.repo_files.iter().map(|f| f.sha256.clone()));
+    for a in pack.attestations.values() {
+        for k in ["params_hash"] {
+            if let Some(h) = a.get(k).and_then(|v| v.as_str()) {
+                d.insert(h.to_string());
+            }
+        }
+        if let Some(h) = a.get("dataset").and_then(|v| v.get("content_sha256")).and_then(|v| v.as_str()) {
+            d.insert(h.to_string());
+        }
+    }
     for r in &pack.routes {
         d.extend(r.steps.iter().filter_map(|s| s.script.as_ref().map(|sc| sc.sha256.clone())));
     }
@@ -94,6 +112,24 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
             (up.pack, dir)
         }
     };
+    let mut pack = pack;
+    if args.iter().any(|a| a == "--vendor") {
+        let root = cwd_root.as_deref().context("--vendor reads the scripts from a repository: run it inside one")?;
+        let v = adage_pack::vendor::vendor(&pack, root).context("refusing to vendor")?;
+        for (route, path, sha) in &v.scripts {
+            println!("adage share: vendored {path} (reflex {route}) as scripts/sha256-{}…", &sha[..12]);
+        }
+        pack = v.pack;
+    }
+    let attest: Vec<String> = args.windows(2).filter(|w| w[0] == "--attest").map(|w| w[1].clone()).collect();
+    for file in &attest {
+        for (id, record) in attestations(Path::new(file))? {
+            pack.attestations.insert(id, record);
+        }
+    }
+    if !attest.is_empty() {
+        pack.check().context("the pack with its attestations fails validation")?;
+    }
     let files = pack.files()?;
 
     // Redaction over every byte, vendored scripts included; script checks over the scripts.
@@ -216,6 +252,12 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
             println!("  {rel:<40} {why}");
         }
     }
+    if !pack.attestations.is_empty() {
+        println!("\nAttestations (recipients see them as self-reported by you; they grant nothing):");
+        for (id, a) in &pack.attestations {
+            println!("  {id:<24} {}", adage_pack::attest::summary(a));
+        }
+    }
     if !flags.is_empty() {
         println!("\nAcknowledged (--ack-scripts):");
         for (rel, f) in &flags {
@@ -245,6 +287,53 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
         adage_sign::key_line(&signed.key)
     );
     Ok(())
+}
+
+/// The records of a bench results file to embed as attestations: `arms` and `scorecard` records
+/// first, then `aggregate` records, at most [`adage_pack::attest::MAX_ATTESTATIONS`], each
+/// checked against the bench result schema. Ids are `<file stem>-<n>`.
+fn attestations(file: &Path) -> Result<Vec<(String, serde_json::Value)>> {
+    let text = std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
+    let stem: String = file
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect::<String>()
+        .trim_matches('-')
+        .chars()
+        .take(40)
+        .collect();
+    let stem = if stem.is_empty() { "results".to_string() } else { stem };
+    let mut picked: Vec<(u8, serde_json::Value)> = Vec::new();
+    for (i, line) in text.lines().enumerate().filter(|(_, l)| !l.trim().is_empty()) {
+        let v: serde_json::Value =
+            serde_json::from_str(line).with_context(|| format!("{}:{} is not JSON", file.display(), i + 1))?;
+        let rank = match v.get("record").and_then(|r| r.as_str()) {
+            Some("arms") => 0,
+            Some("scorecard") => 1,
+            Some("aggregate") => 2,
+            _ => continue,
+        };
+        adage_pack::attest::check(&v)
+            .with_context(|| format!("{}:{} is not a bench result record", file.display(), i + 1))?;
+        picked.push((rank, v));
+    }
+    if picked.is_empty() {
+        bail!("{} holds no arms, scorecard or aggregate record to attest", file.display());
+    }
+    picked.sort_by_key(|(r, _)| *r);
+    let max = adage_pack::attest::MAX_ATTESTATIONS;
+    if picked.len() > max {
+        eprintln!(
+            "adage share: {} holds {} records to attest; embedding the first {max}",
+            file.display(),
+            picked.len()
+        );
+        picked.truncate(max);
+    }
+    Ok(picked.into_iter().enumerate().map(|(n, (_, v))| (format!("{stem}-{}", n + 1), v)).collect())
 }
 
 fn write_and_sign(stage: &Path, pack: &Pack, key: Option<&Path>) -> Result<(String, adage_sign::Signed)> {

@@ -532,9 +532,23 @@ fn dead_ends_and_linked_files_state_their_exit_condition() {
 
 /// The fields a rebuild restores, as JSON (Obligation has no PartialEq).
 fn restored(st: &SessionState) -> serde_json::Value {
+    // `edited` and `fresh` describe the latest edit for an E2 action at that event; no later
+    // decision reads them, so a rebuild need not restore them.
+    let obligations: Vec<serde_json::Value> = st
+        .obligations
+        .iter()
+        .map(|o| {
+            let mut v = json!(o);
+            if let Some(m) = v.as_object_mut() {
+                m.remove("edited");
+                m.remove("fresh");
+            }
+            v
+        })
+        .collect();
     json!({
         "arm": st.arm, "repo": st.repo, "prompts": st.prompts, "batches": st.batches,
-        "emitted": st.emitted, "obligations": st.obligations, "history": st.history,
+        "emitted": st.emitted, "obligations": obligations, "history": st.history,
         "first_edit_at_batch": st.first_edit_at_batch, "stop_requests": st.stop_requests,
     })
 }

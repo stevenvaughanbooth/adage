@@ -2,24 +2,37 @@
 //! route; these commands only change which binary the hooks call and what this machine approves.
 //!
 //! ```text
-//! adage exec enable [--bin <adage-exec>] [--repo <dir>]   hooks call `adage-exec hook` (E1 prefetch);
-//!                                                          the MCP server is registered (E2)
-//! adage exec disable [--repo <dir>]                        hooks call `adage hook` again; MCP removed
+//! adage exec enable [--bin <adage-exec>] [--repo <dir>]   hooks call `adage-exec hook` (E1 prefetch,
+//!                                                          E2 actions)
+//! adage exec disable [--repo <dir>]                        hooks call `adage hook` again
 //! adage exec status [--repo <dir>] [--json]                registrations, and grants per repository
-//! adage review allow-exec <track> <route> --level e1|e2 [--raw] [--fields '<json>']
+//! adage review allow-exec <track> <route> --level e1 [--raw] [--fields '<json>']
 //!                         [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
+//! adage review allow-exec <track> <route> --level e2 [--outputs <glob>]... [--cache <glob>]...
+//!                         [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
 //! adage review revoke-exec <track> <route> [--repo <dir>]
 //! ```
+//!
+//! **E2** (Track C §3.6, §4): an action a hook runs when the reflex's stimulus fires. It is
+//! approved explicitly, for one reflex in one repository, never automatically. Before recording
+//! anything, `allow-exec --level e2` stages the action once in the sandbox (nothing is applied)
+//! and shows the full diff it would make to its declared outputs now; a staged run that changes
+//! anything else, or fails, approves nothing. Policy must allow E2 (`max_level = "E2"`: actions
+//! are a beta behind gate G4).
+//!
+//! A reflex that runs a **vendored script** (L-vendor, §1.7) shows the script's full text, from
+//! the read-only CAS, and needs policy's `allow_vendor_scripts`; it is never approved
+//! automatically. A pack's **attestations** are listed, marked self-reported by its signer; they
+//! change nothing.
 //!
 //! `enable` and `disable` rewrite the hook registrations `adage install` wrote (Claude Code
 //! settings, Codex `hooks.json`, the OpenCode plugin), in this repository and in the user scope,
 //! swapping only the binary: `adage-exec hook <harness> <event>` takes exactly the arguments of
 //! `adage hook`. For the Claude Code plugin they write or remove `$ADAGE_HOME/exec/enabled`, the
 //! marker both plugins' session-start shims read: with it the Adage plugin goes quiet and the
-//! `adage-exec` plugin serves; without it the reverse, so hooks never fire twice. They also
-//! register or remove `adage-exec mcp` for Codex and OpenCode (`install::mcp_plan`: a diff shown,
-//! a backup kept, idempotent); the Claude Code plugin's `.mcp.json` serves nothing while the marker
-//! is absent.
+//! `adage-exec` plugin serves; without it the reverse, so hooks never fire twice. A registration
+//! that runs `adage-exec` gives the events an action runs at (the edit and Stop events) a 30 s
+//! timeout; an action's own wall limit is 20 s.
 //!
 //! Every command here that changes anything refuses inside an agent session and needs a terminal.
 
@@ -37,7 +50,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "usage: adage exec <enable [--bin <adage-exec>] | disable | status [--json]> [--repo <dir>]";
-const REVIEW_USAGE: &str = "usage: adage review allow-exec <track> <route> --level e1|e2 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
+const REVIEW_USAGE: &str = "usage: adage review allow-exec <track> <route> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
+       adage review allow-exec <track> <route> --level e2 [--outputs <glob>]... [--cache <glob>]... [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
        adage review revoke-exec <track> <route> [--repo <dir>]";
 
 /// Harnesses whose registrations `enable` swaps.
@@ -135,48 +149,17 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
             }
         }
     }
-    // The MCP server (E2): registered for each harness that has Adage hooks, removed from all.
-    for h in install::MCP_HARNESSES {
-        let hooked = scopes(root.as_deref()).iter().any(|s| registered(h, s, root.as_deref()).is_some());
-        if on && !hooked {
-            continue;
-        }
-        let p = match install::mcp_plan(h, on.then_some(bin.as_path())) {
-            Ok(p) => p,
-            Err(e) => {
-                eprintln!("adage: {h}: the MCP server is not {}: {e:#}", if on { "registered" } else { "removed" });
-                continue;
-            }
-        };
-        let diff = install::line_diff(p.before.as_deref().unwrap_or(""), &p.after);
-        if install::apply_with_backup(&p)? {
-            changed += 1;
-            println!(
-                "{h}: {} the MCP server `adage` in {}{}:",
-                if on { "registered" } else { "removed" },
-                p.target.display(),
-                if p.before.is_some() { " (previous file kept as *.adage-backup)" } else { "" }
-            );
-            for line in diff.lines() {
-                println!("    {line}");
-            }
-        }
-    }
     let m = marker(paths);
     if on {
         std::fs::create_dir_all(m.parent().context("no directory")?)?;
         let body = json!({ "enabled_at": adage_exec::time::now(), "bin": bin.to_string_lossy() });
         std::fs::write(&m, serde_json::to_string_pretty(&body)? + "\n")?;
-        println!("Execution: on (E1 prefetch for approved routes). Claude Code plugin users: enable the adage-exec");
+        println!("Execution: on (E1 prefetch and E2 actions, for approved reflexes). Claude Code plugin users: enable");
         println!(
-            "plugin (/plugin install adage-exec@adage); with {} present the Adage plugin goes quiet.",
+            "the adage-exec plugin (/plugin install adage-exec@adage); with {} present the Adage plugin goes quiet.",
             m.display()
         );
-        println!(
-            "Claude Code: the adage-exec plugin also serves approved E2 routes as MCP tools (its .mcp.json). Without"
-        );
-        println!("the plugin: claude mcp add --scope user adage -- {} mcp", bin.display());
-        println!("Nothing runs until you approve a route: adage review allow-exec <track> <route> --level e1|e2");
+        println!("Nothing runs until you approve a reflex: adage review allow-exec <track> <route> --level e1|e2");
         println!("Recommended: deny your agent edits to {} in the harness's permissions.", paths.root.display());
     } else {
         let _ = std::fs::remove_file(&m);
@@ -199,12 +182,6 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
             }
         }
     }
-    let mcp: Vec<Value> = install::MCP_HARNESSES
-        .iter()
-        .filter_map(|h| {
-            install::mcp_registered(h).map(|(file, bin)| json!({ "harness": h, "file": file, "runs": bin }))
-        })
-        .collect();
     let store = Store::load(&approvals::path(&paths.root))?;
     let mut grants: BTreeMap<String, Vec<Value>> = BTreeMap::new();
     for a in &store.approvals {
@@ -220,7 +197,7 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
     }
     let enabled = marker(paths).is_file();
     if args.iter().any(|a| a == "--json") {
-        let v = json!({ "enabled": enabled, "registrations": regs, "mcp": mcp, "grants": grants });
+        let v = json!({ "enabled": enabled, "registrations": regs, "grants": grants });
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
     }
@@ -230,14 +207,6 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
             "  {} ({}): {} runs {}",
             r["harness"].as_str().unwrap_or(""),
             r["scope"].as_str().unwrap_or(""),
-            r["file"].as_str().unwrap_or(""),
-            r["runs"].as_str().unwrap_or("")
-        );
-    }
-    for r in &mcp {
-        println!(
-            "  {} MCP server: {} runs {} mcp",
-            r["harness"].as_str().unwrap_or(""),
             r["file"].as_str().unwrap_or(""),
             r["runs"].as_str().unwrap_or("")
         );
@@ -276,6 +245,135 @@ fn indexed<'a>(
     route::find(index, &key, track, route_id).with_context(|| format!("no route {route_id} in track {track} for {key}"))
 }
 
+/// When an action runs, in words: its reflex's stimulus.
+fn stimulus_line(r: &adage_tracks::Route) -> String {
+    match &r.trigger {
+        adage_tracks::Trigger::AfterEdit { paths } => {
+            format!("an edit matches {paths} (and at Stop, if its finish line is still unmet)")
+        }
+        _ => "its stimulus fires".to_string(),
+    }
+}
+
+/// A vendored script's full text, from the read-only CAS (Track C §1.7: shown in full at
+/// approval).
+fn print_vendored(paths: &Paths, hex: &str) -> Result<()> {
+    let p = crate::packs::cas_dir(paths).join(hex);
+    let bytes =
+        std::fs::read(&p).with_context(|| format!("vendored script {} is not in {}", &hex[..12], p.display()))?;
+    if adage_pack::digest::sha256_hex(&bytes) != hex {
+        bail!("vendored script {} in the CAS does not match its hash; run `adage add` again", &hex[..12]);
+    }
+    let text = String::from_utf8_lossy(&bytes);
+    println!(
+        "  script:   vendored (L-vendor) sha256 {hex}, {} bytes, run from {} by the interpreter in argv (its shebang is ignored); never approved automatically. Its full text:",
+        bytes.len(),
+        p.display()
+    );
+    for line in text.lines() {
+        let clean: String = line.chars().map(|c| if c.is_control() && c != '\t' { '?' } else { c }).collect();
+        println!("    | {clean}");
+    }
+    Ok(())
+}
+
+/// A pack's attestations, marked self-reported by its signer (Track C §1.8). They grant nothing.
+pub(crate) fn print_attestations(paths: &Paths, ir: &adage_tracks::index::IndexedRoute) {
+    if ir.exec.is_none() {
+        return;
+    }
+    for line in crate::packs::attestation_lines(paths, &ir.track) {
+        println!("  attested: {line}");
+    }
+}
+
+/// Stage the action once, apply nothing, and show the full diff it would make now. Refuses (and
+/// approves nothing) when the staged run fails or changes anything the approval would not cover.
+#[allow(clippy::too_many_arguments)]
+fn preview(
+    paths: &Paths,
+    root: &Path,
+    ir: &adage_tracks::index::IndexedRoute,
+    req: &adage_exec::ExecRequest,
+    label: &str,
+    store: &Store,
+    pol: &adage_exec::policy::Policy,
+    table: &CommandTable,
+) -> Result<()> {
+    let mut trial = store.clone();
+    trial.approve(Approval {
+        key: ApprovalKey::for_request(req, &ir.repo),
+        route: label.to_string(),
+        approved_on: adage_exec::time::now(),
+        by: None,
+        basis: Value::Null,
+        auto: false,
+        terms: None,
+    });
+    let cap = adage_exec::sandbox::detect();
+    let ctx = adage_exec::run::Context {
+        inherited_env: std::env::vars().collect(),
+        policy: pol,
+        store: &trial,
+        capability: &cap,
+        table,
+        repo_key: ir.repo.clone(),
+        cas: Some(crate::packs::cas_dir(paths)).filter(|p| p.is_dir()),
+        home: adage_store::home_dir(),
+        canaries: vec![],
+    };
+    println!("Staging the action once to show what it would change now (nothing is applied)…");
+    let staged = adage_exec::stage::stage(req, &ctx).map_err(|r| {
+        let hint =
+            if r.stage == "policy" { " (E2 is a beta: set max_level = \"E2\" in policy.toml to opt in)" } else { "" };
+        anyhow::anyhow!("the staged run was refused ({r}){hint}; nothing was approved")
+    })?;
+    println!(
+        "  staged:   {} · exit {}",
+        staged.backend.line(),
+        staged.exit.map(|e| e.to_string()).unwrap_or_else(|| "none".into())
+    );
+    if staged.exit != Some(0) {
+        let err = String::from_utf8_lossy(&staged.stderr);
+        for line in err.lines().rev().take(20).collect::<Vec<_>>().into_iter().rev() {
+            let clean: String = line.chars().filter(|c| !c.is_control() || *c == '\t').collect();
+            println!("    ! {clean}");
+        }
+        bail!("the staged run did not succeed; nothing was approved. Fix what it needs, then approve again");
+    }
+    if !staged.plan.refused.is_empty() {
+        for (p, why) in &staged.plan.refused {
+            println!("  refused:  {p} ({why})");
+        }
+        bail!("the staged run changed paths the approval would not cover; nothing was approved. Declare its outputs (--outputs), or leave it at E0");
+    }
+    if staged.plan.apply.is_empty() {
+        println!("  diff:     none: the declared outputs are up to date now");
+    }
+    for c in &staged.plan.apply {
+        let before = std::fs::read(root.join(&c.path)).unwrap_or_default();
+        let after = match &c.after {
+            adage_exec::stage::After::File { bytes, .. } => bytes.clone(),
+            _ => Vec::new(),
+        };
+        println!("  diff:     {} ({:?})", c.path, c.kind);
+        match (std::str::from_utf8(&before), std::str::from_utf8(&after)) {
+            (Ok(a), Ok(b)) => {
+                for line in crate::install::line_diff(a, b).lines() {
+                    let clean: String =
+                        line.chars().map(|c| if c.is_control() && c != '\t' { '?' } else { c }).collect();
+                    println!("    {clean}");
+                }
+            }
+            _ => println!("    (binary: {} bytes before, {} after)", before.len(), after.len()),
+        }
+    }
+    if !staged.plan.discarded.is_empty() {
+        println!("  discarded: {} cache path(s)", staged.plan.discarded.len());
+    }
+    Ok(())
+}
+
 /// `adage review allow-exec` and `revoke-exec`.
 pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     require_person(&format!("review {verb}"))?;
@@ -298,9 +396,19 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     let level = match flag(args, "--level").as_deref().map(str::to_ascii_lowercase).as_deref() {
         Some("e1") => Level::E1,
         Some("e2") => Level::E2,
-        Some("e3") => bail!("E3 (actions, staged and verified) arrives with Track C C5; approve at e1 or e2"),
         _ => bail!("--level e1 or e2 is required\n{REVIEW_USAGE}"),
     };
+    let (outputs, cache) = (flags(args, "--outputs"), flags(args, "--cache"));
+    let effect = match flag(args, "--effect") {
+        Some(e) => Some(adage_core::Effect::parse(&e).with_context(|| format!("--effect {e:?} is not an effect"))?),
+        None => None,
+    };
+    if level != Level::E2 && (!outputs.is_empty() || !cache.is_empty()) {
+        bail!("--outputs and --cache declare an E2 action's change set; they need --level e2");
+    }
+    if ir.exec.is_some() && (!outputs.is_empty() || !cache.is_empty()) {
+        bail!("a pack reflex's outputs and cache globs come from its pack (exec outputs, cache); they are not declared here");
+    }
     let fields: BTreeMap<String, FieldSpec> = match flag(args, "--fields") {
         Some(f) => serde_json::from_str(&f).context("--fields must be a JSON object of field specs")?,
         None => BTreeMap::new(),
@@ -311,12 +419,22 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         exit_when.insert(k.to_string(), v.to_string());
     }
     let timeout_ms = flag(args, "--timeout-ms").map(|t| t.parse::<u64>()).transpose().context("--timeout-ms")?;
-    let terms = Terms { fields, exit_when, timeout_ms, raw: args.iter().any(|a| a == "--raw") };
+    let terms = Terms {
+        fields,
+        exit_when,
+        timeout_ms,
+        raw: args.iter().any(|a| a == "--raw"),
+        outputs,
+        cache,
+        effect: if level == Level::E2 { effect } else { None },
+    };
     let table = CommandTable::load();
     let plan =
         route::plan(ir, &index, &root, &paths.tracks(), level, Some(&terms), &table).map_err(anyhow::Error::msg)?;
     let req = plan.request;
-    req.output.validate()?;
+    if level != Level::E2 || !req.output.fields.is_empty() {
+        req.output.validate()?;
+    }
     for k in plan.exit_when.keys() {
         if !req.output.fields.contains_key(k) {
             bail!("--exit-when names {k}, which is not an output field");
@@ -324,7 +442,16 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     }
     let classified = adage_exec::classify::effect(&req.argv, &table);
     let pol = adage_exec::policy::load(&paths.root)?;
-    pol.permits(&req, classified).map_err(anyhow::Error::msg)?;
+    pol.permits(&req, classified).map_err(|e| {
+        let hint = if level == Level::E2 && e.contains("caps execution") {
+            " (E2 actions are a beta behind gate G4: set max_level = \"E2\" under [exec] in policy.toml to opt in)"
+        } else if e.contains("allow_vendor_scripts") {
+            " (set allow_vendor_scripts = true under [exec] in policy.toml to allow vendored scripts on this machine)"
+        } else {
+            ""
+        };
+        anyhow::anyhow!("{e}{hint}")
+    })?;
     let key = ApprovalKey::for_request(&req, &ir.repo);
     let e = &ir.route.evidence;
 
@@ -336,18 +463,41 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         if level == Level::E1 {
             println!("  input:    {{{k}}} from the prompt, must match {v}");
         } else if plan.repo_paths.contains(k) {
-            println!("  input:    {{{k}}} a tool argument: a repository path that exists, checked at every call");
+            println!(
+                "  input:    {{{k}}} bound from the edited path: a repository path that exists, checked at every run"
+            );
         } else {
-            println!("  input:    {{{k}}} a tool argument, must match {v} (and be a plain token)");
+            println!("  input:    {{{k}}} bound from the edited path, must match {v} (and be a plain token)");
         }
     }
-    println!("  effect:   observe, approved (the classifier says {})", classified.as_str());
-    println!("  sandbox:  {}", req.profile.summary());
     if level == Level::E2 {
+        println!("  effect:   {}, approved (the classifier says {})", req.effect.as_str(), classified.as_str());
+    } else {
+        println!("  effect:   observe, approved (the classifier says {})", classified.as_str());
+    }
+    println!("  sandbox:  {}", req.profile.summary());
+    if let (Level::E2, Some(a)) = (level, &req.action) {
         println!(
-            "  tool:     {} (adage-exec mcp; the agent calls it, and the harness asks per call as configured)",
-            adage_exec::mcp::schema::base_name(route_id)
+            "  runs:     from the hook, when {}; at most one action per hook event, within {} s",
+            stimulus_line(&ir.route),
+            adage_exec::limits::E2_MAX_WALL_MS / 1000
         );
+        println!("  action:   {}; staged in a writable overlay, verified, then applied file by file", a.kind.as_str());
+        match a.kind {
+            adage_exec::request::ActionKind::Regenerate => {
+                println!(
+                    "  outputs:  {} (only these may change; anything else refuses the application)",
+                    a.outputs.join(", ")
+                )
+            }
+            adage_exec::request::ActionKind::Verify => {
+                println!("  outputs:  none (a verify action may not change sources)")
+            }
+        }
+        if !a.cache.is_empty() {
+            println!("  cache:    {}", a.cache.join(", "));
+        }
+        println!("  revoked:  automatically after {} refused change sets", adage_exec::stage::REVOKE_AFTER);
     }
     let hazards = adage_exec::git::hazards(&root);
     let actx = adage_exec::approvals::AutoContext {
@@ -364,7 +514,12 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         println!("  scripts:  none (L-none)");
     }
     for s in &req.scripts {
-        println!("  script:   {} (L-ref) sha256 {}; re-read and checked before every run", s.path, s.sha256);
+        match s.path.strip_prefix("cas:") {
+            Some(hex) => print_vendored(paths, hex)?,
+            None => {
+                println!("  script:   {} (L-ref) sha256 {}; re-read and checked before every run", s.path, s.sha256)
+            }
+        }
     }
     for (name, f) in &req.output.fields {
         println!("  output:   {name}: {}", serde_json::to_string(f)?);
@@ -379,8 +534,14 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         e.days,
         if e.by_origin.is_empty() { String::new() } else { format!(", by origin {:?}", e.by_origin) }
     );
-    if !req.scripts.is_empty() {
+    print_attestations(paths, ir);
+    if req.scripts.iter().any(|s| s.path.starts_with("cas:")) {
+        println!("A vendored script is code from the pack's signer: Adage will run exactly these bytes, read-only, with no network.");
+    } else if !req.scripts.is_empty() {
         println!("A repository script is code: Adage will run the pinned bytes, read-only, with no network.");
+    }
+    if level == Level::E2 {
+        preview(paths, &root, ir, &req, &label, &store, &pol, &table)?;
     }
     store.approve(Approval {
         key,
@@ -397,11 +558,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         store_path.display()
     );
     if !marker(paths).is_file() {
-        if level == Level::E2 {
-            println!("Execution is off: `adage exec enable` turns on the adage-exec MCP server that serves it.");
-        } else {
-            println!("Execution is off: `adage exec enable` makes hooks run it.");
-        }
+        println!("Execution is off: `adage exec enable` makes hooks run it.");
     }
     Ok(())
 }

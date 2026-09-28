@@ -36,7 +36,9 @@ pub enum Read {
 pub enum Write {
     /// Nothing but a fresh scratch directory (`HOME` and `TMPDIR`), removed after the run.
     Scratch,
-    /// A writable overlay of the repository (E3; not implemented in C2, so refused).
+    /// A writable overlay of the repository (E2): the run sees the repository and may change it,
+    /// but every change lands in a staging layer outside the sandbox's reach, never in the
+    /// repository ([`crate::stage`]).
     Overlay,
 }
 
@@ -62,7 +64,7 @@ impl Profile {
     pub fn for_level(level: Level) -> Profile {
         Profile {
             read: vec![Read::Repo, Read::Toolchain, Read::Cas],
-            write: Write::Scratch,
+            write: if level == Level::E2 { Write::Overlay } else { Write::Scratch },
             net: false,
             env: crate::env::names(),
             cwd: None,
@@ -131,16 +133,16 @@ impl Capability {
         !matches!(self.backend, Backend::Unavailable { .. })
     }
 
-    /// One line: "Linux, Landlock ABI 7: E1–E3 available".
+    /// One line: "Linux, Landlock ABI 7: E1–E2 available".
     pub fn line(&self) -> String {
         match &self.backend {
             Backend::Landlock { abi } => format!(
-                "{}, Landlock ABI {abi} + seccomp{}: E1-E3 available",
+                "{}, Landlock ABI {abi} + seccomp{}: E1-E2 available",
                 self.os,
                 if self.user_namespaces { " + user/net namespaces" } else { "" }
             ),
-            Backend::Bwrap { path } => format!("{}, bubblewrap ({}): E1-E3 available", self.os, path.display()),
-            Backend::SandboxExec { path } => format!("{}, sandbox-exec ({}): E1-E3 available", self.os, path.display()),
+            Backend::Bwrap { path } => format!("{}, bubblewrap ({}): E1-E2 available", self.os, path.display()),
+            Backend::SandboxExec { path } => format!("{}, sandbox-exec ({}): E1-E2 available", self.os, path.display()),
             Backend::Unavailable { reason } => format!("{}: E1 and above unavailable ({reason})", self.os),
         }
     }
@@ -285,6 +287,16 @@ pub struct Resolved {
     pub limits: Limits,
     /// The user the run drops to (root runs as nobody, so `RLIMIT_NPROC` applies).
     pub drop_to: Option<(u32, u32)>,
+    /// E2 on Linux: the repository is mounted as a writable overlay whose upper layer is here.
+    pub overlay: Option<Overlay>,
+}
+
+/// An overlay's writable layers (Linux, E2). Both live in a staging directory the sandbox is
+/// never granted: the run reaches them only through the overlay mounted over the repository.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Overlay {
+    pub upper: PathBuf,
+    pub work: PathBuf,
 }
 
 /// Whether a user with no ownership or group claim can reach `p`: every ancestor searchable by
@@ -397,7 +409,17 @@ impl Resolved {
         } else {
             Vec::new()
         };
-        Ok(Resolved { repo, cwd, scratch: scratch.to_path_buf(), read, dev, links, limits: profile.limits, drop_to })
+        Ok(Resolved {
+            repo,
+            cwd,
+            scratch: scratch.to_path_buf(),
+            read,
+            dev,
+            links,
+            limits: profile.limits,
+            drop_to,
+            overlay: None,
+        })
     }
 }
 

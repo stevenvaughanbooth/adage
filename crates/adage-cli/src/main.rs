@@ -21,14 +21,14 @@
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
 //!                                    print (default) or write a harness's hook registration
-//! adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format pack|v1]
+//! adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>] [--ack-scripts] [--format pack|v1]
 //!                                    redaction-check, build and sign a pack (namespace adage-pack)
 //! adage add <dir> [--trust]          verify a pack (or a v1 track, upgraded in place), install it,
 //!                                    and bind it to this repository at probation
 //! adage review [--json]              routes awaiting a person's decision, with evidence and directive text
-//! adage review allow-exec <track> <route> --level e1|e2 [--raw] [--fields ..]   approve E1 prefetch or an E2 tool (a person)
+//! adage review allow-exec <track> <route> --level e1|e2 [--raw] [--fields ..] [--outputs <glob>]   approve an E1 prefetch or an E2 action (a person)
 //! adage review revoke-exec <track> <route>
-//! adage exec enable|disable|status   hooks call adage-exec (E1) or adage; the MCP server (E2); grants per repository
+//! adage exec enable|disable|status   hooks call adage-exec (E1 prefetch, E2 actions) or adage; grants per repository
 //! adage review <approve|reject|demote|promote|pin|dismiss> <track> <route> [--by <name>]
 //! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
 //! adage eval <dataset> [--split ..] [--json]  offline replay eval of what Adage would have said

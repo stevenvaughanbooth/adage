@@ -17,8 +17,9 @@
 //!    inside the root, at most 1 MiB) must equal the pin; `deps` globs must resolve inside the
 //!    root, and their hashes join the binding. **L-vendor** scripts must be in the cas.
 //! 5. **A runtime form**: E0 delivers today's route model (`adage_tracks::Route`). A route whose
-//!    shape has no such form (several steps, a sequence, a read of a step's output, a vendored
-//!    script, which only `adage-exec` could run) is inert: "shape not yet supported at runtime".
+//!    shape has no such form (several steps, a sequence, a read of a step's output) is inert:
+//!    "shape not yet supported at runtime". A route that runs a vendored script is live but
+//!    exec-only: only `adage-exec` runs it, and E0 never directs it.
 //!
 //! The result is a pure function of the pack, the repository's files and the environment
 //! ([`BindEnv`]), so the same repository gives a byte-identical binding.
@@ -365,7 +366,12 @@ pub fn bind(pack: &Pack, target: &Target, env: &BindEnv) -> Binding {
                 if env.os == Os::Windows {
                     max_level = Level::E0; // Track C D10: E0 only on Windows.
                 }
-                (Status::Live { max_level }, Some(route))
+                if vendored(r) && max_level == Level::E0 {
+                    let reason = "it runs a vendored script, which only adage-exec runs, at no execution level here";
+                    (Status::Inert { reason: reason.into() }, None)
+                } else {
+                    (Status::Live { max_level }, Some(route))
+                }
             }
             Err(reason) => (Status::Inert { reason }, None),
         };
@@ -530,11 +536,8 @@ fn to_v1(r: &RouteV2, pack: &Pack, table: &CommandTable) -> Result<Route, String
     let mut effect = s.effect;
     let step = match s.kind().ok_or("a step has no single kind")? {
         StepKind::Run(run) => {
-            if s.script.as_ref().is_some_and(|sc| sc.closure == ClosureLevel::Vendor) {
-                return Err(format!(
-                    "{SHAPE_NOT_SUPPORTED}: a vendored script runs only under adage-exec, so there is nothing to direct at E0"
-                ));
-            }
+            // A vendored script runs only under adage-exec: the route is exec-only (the index
+            // keeps it for E1 and E2, and E0 never directs it; `IndexedRoute::exec_only`).
             let command = run.argv.join(" ");
             // The command table's view wins where it is stronger (as track validation requires).
             let classified = io::classify(&command, table);
@@ -600,12 +603,19 @@ fn to_v1(r: &RouteV2, pack: &Pack, table: &CommandTable) -> Result<Route, String
         slots,
         effect,
         aspect: r.aspect,
-        // A pack carries no per-machine state: an environment step waits for a person (O11).
-        state: if effect == Effect::Environment { RouteState::Draft } else { RouteState::Probation },
+        // A pack carries no per-machine state: an environment step waits for a person (O11). An
+        // exec-only route (a vendored script) is never directed, so it waits for nothing here: its
+        // execution approval is explicit, per machine, and never automatic.
+        state: if effect == Effect::Environment && !vendored(r) { RouteState::Draft } else { RouteState::Probation },
         exit,
         evidence,
         authored: false,
     })
+}
+
+/// Whether a route runs a vendored script (and so is exec-only).
+pub fn vendored(r: &RouteV2) -> bool {
+    r.steps.iter().any(|s| s.script.as_ref().is_some_and(|sc| sc.closure == ClosureLevel::Vendor))
 }
 
 /// The runtime contract of a type, where one exists.

@@ -15,35 +15,55 @@ version as the GitHub Release notes.
 
 ### Added
 
-- **E2: routes as MCP tools (Track C, milestone C4).** `adage-exec mcp` is a hand-written stdio
-  MCP server (JSON-RPC 2.0, no SDK; protocol 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05
-  negotiated). It lists one tool per route live in the index and approved at E2 on this machine
-  for the session's repository (from MCP roots, else the working directory), and none while
-  execution is off.
-  - Tools are `adage_<route-id>` (at most 64 characters of `[a-z0-9_]`, with a hash suffix on
-    collision). Descriptions come from a fixed template, never pack prose. `inputSchema` comes
-    from the slot contracts: a pattern string with `maxLength` 200, an enum, a bounded integer, or
-    a repository path checked on the server. `outputSchema` comes from the typed output fields.
-    Annotations are `readOnlyHint` and not destructive.
-  - Every call checks its arguments against the contracts and `plain_token`. It then plans the
-    route again, recomputing the approval key with the L-ref script hash read at call time, and
-    runs through every gate at E2's limits (10 s, 256 KiB captured, 16 KiB returned). The typed
-    projection is re-checked by `check_data_block`. The result is the `<adage-data>` envelope
-    plus `structuredContent`. Failures come back as tool errors naming the stage, never with
-    output text. There are at most 30 calls a minute per session and at most 4 runs at once on
-    the machine. One record per call goes to `$ADAGE_HOME/exec/mcp.spool`, never the output or
-    the arguments.
-  - `notifications/tools/list_changed` is sent when the index, the approvals, the execution
-    marker, policy, a tool's script or the roots change.
-  - `adage review allow-exec … --level e2` approves a tool. It shows the tool name and whether the
-    route is in the inert-observe class; automatic approval stays off by default.
-  - `adage exec enable` registers the server for Codex (`[mcp_servers.adage]` in
-    `$CODEX_HOME/config.toml`, in a marked block) and OpenCode (`mcp.adage` in
-    `opencode.json`) when they have Adage hooks. It shows a diff and keeps a `.adage-backup`
-    copy. `disable` removes both. The `adage-exec` Claude Code plugin gains `.mcp.json`.
-  - Tests: a stdio conformance suite (`crates/adage-exec/tests/mcp.rs`) and a smoke test with the
-    real `claude` CLI when one is installed. That test checks `claude plugin validate` and that
-    `claude mcp list` / `mcp get` connect, with no model calls.
+- **E2: actions from hooks (Track C, milestone C5).** When an approved action reflex's stimulus
+  fires in a hook Adage already owns (an edit matching its paths arms a finish-line obligation, or
+  that obligation's Stop request is due), `adage-exec hook` runs the response itself:
+  - **Staged** in the sandbox with the repository as a writable overlay: `bwrap --overlay-src`
+    where bubblewrap has overlays (0.10 and later), else an overlayfs (`userxattr`) mounted in the
+    sandbox's own user and mount namespaces under Landlock and seccomp (Landlock treats an overlay
+    as distinct from its layers, so the rule is added on the mount itself); as root, a copy of the
+    worktree owned by nobody; on macOS an APFS `clonefile` copy (compile-checked). The upper layer
+    lives in a staging directory the sandbox is never granted.
+  - **Verified**: the change set is read from the upper layer (whiteouts, opaque directories;
+    redirects and metacopy refuse). `.git` always refuses. A regenerate action may change only
+    regular files under its declared `outputs` globs (cache globs are discarded); a verify action
+    may change no source (cache globs are kept). Symlinks and special files are never applied.
+  - **Applied** atomically per file (temporary file, fsync, rename) and only if each path's state
+    still equals the state recorded before the run; otherwise nothing is applied.
+  - The directive becomes a fixed-template result ("Adage ran `make gen` after your edit to
+    registry/currencies.csv: updated 1 file (…). Nothing else changed.", `exec="e2"` on the
+    wrapper, so the session counts as steered), the obligation is marked met, and no Stop request
+    follows. Refused or failed: the plain E0 directive and the reason. At most one action per
+    hook event, never in the control arm, never under OpenCode (its bridge waits one second),
+    within 20 s; registrations that run `adage-exec` give the edit and Stop events a 30 s hook
+    timeout. The outcome (`applied | refused | failed`) goes to `$ADAGE_HOME/exec/actions.spool`
+    and the event's `exec` record, never the output. Three refused change sets under one approval
+    revoke it automatically; `adage review` lists it as `exec-revoked`.
+  - `adage review allow-exec <track> <route> --level e2 --outputs <glob>… [--cache <glob>…]
+    [--effect verify|regenerate]`: always explicit, per reflex, never automatic. It stages the
+    action once, applies nothing, and shows the full diff of the declared outputs; a staged run
+    that fails or changes anything else approves nothing. Policy must opt in (`max_level = "E2"`;
+    the default is now E1); environment-effect actions need the managed file's
+    `allow_environment_actions`. `adage-exec run --level e2` stages and applies by hand.
+  - Pack routes declare `exec: { level: E2, outputs: [...], cache: [...] }`.
+  - Gate G4: `crates/adage-exec/tests/stage.rs` runs 500 randomised hostile regenerate commands per
+    staging backend (writes outside the outputs, deleted sources, symlink and hardlink tricks,
+    `.git`, huge files, FIFOs, escapes to the parent and outside) and finds 0 writes outside the
+    declared outputs. `crates/adage-cli/tests/actions.rs` drives an `evals/gen` python-make
+    finish-line bundle through `adage review allow-exec` and `adage-exec hook claude …`.
+- **Vendored scripts (L-vendor).** `adage share --vendor` carries each repository script's bytes in
+  the pack as `scripts/sha256-<hex>` (checked against its pin; only scripts run by an interpreter
+  named in argv, `python3`, `node` or `sh`, and without deps). `adage add` installs them read-only
+  in `$ADAGE_HOME/cas/`. A reflex that runs one is exec-only: E0 never directs it, and
+  `adage-exec hook` brings it into play only once it is approved. It runs from the read-only CAS
+  (or a read-only private copy when the sandbox runs as nobody), hash-checked at every run, by the
+  interpreter in argv (the shebang is ignored). Approval needs policy's `allow_vendor_scripts`,
+  shows the script's full text, and is never automatic.
+- **Attestations.** `adage share --attest <results.jsonl>` embeds bench result records (`arms`,
+  `scorecard`, `aggregate`; at most 16) as `attestations/<id>.json`, each validated against the
+  bench result schema (now version 2: tiers `l0-sec`, `l1`, `l2`, `exec_level`, and the `arms`
+  record with deltas and harm counts). `adage review` and `allow-exec` show them marked
+  "self-reported by signer <fingerprint>"; they never grant a strength or a level.
 
 - **E1 prefetch (Track C, milestone C3).** `adage-exec hook <harness> <event>` runs the same hook
   pipeline as `adage hook`, now the shared `adage-hook` library. For a directive whose route has

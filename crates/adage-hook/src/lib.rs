@@ -12,11 +12,13 @@
 //! `fail-open.log` and ignored.
 //!
 //! **Extensions.** `adage hook` runs with no [`Extension`] and its behaviour is exactly the
-//! pipeline above. `adage-exec hook` passes one: after `decide()`, and only when there are
-//! directives to emit, the extension may return a replacement rendering for every directive (the
-//! E1 data blocks) and a value recorded under `exec` in the spool record. An extension that
-//! returns nothing, panics, or returns text that would pass the harness's cap leaves the output
-//! exactly as `adage hook` prints it.
+//! pipeline above. `adage-exec hook` passes one: after `decide()`, when there are directives to
+//! emit or a finish-line obligation was armed or is being enforced at this event ([`Stimulus`]),
+//! the extension may return a replacement rendering for every directive (the E1 data blocks, an
+//! E2 action's result), blocks to add, obligations an action met (recorded in the session state,
+//! so no Stop request follows), a change to the Stop request, and a value recorded under `exec`
+//! in the spool record. An extension that returns nothing, panics, or returns text that would
+//! pass the harness's cap leaves the output exactly as `adage hook` prints it.
 
 pub mod autolearn;
 pub mod failopen;
@@ -25,7 +27,7 @@ pub mod harness;
 use adage_core::{repo, CommandTable};
 use adage_intent::model::{self, StaticModel};
 use adage_intent::normalize::normalize;
-use adage_runtime::{assign, decide, fast, rebuild, render, Arm, Ctx, Directive, Event, SessionState};
+use adage_runtime::{assign, decide, fast, rebuild, render, Arm, Ctx, Directive, Event, Obligation, SessionState};
 use adage_store::{spool, state, Paths};
 use adage_tracks::Index;
 use failopen::Failure;
@@ -51,6 +53,45 @@ pub struct Turn<'a> {
     pub paths: &'a Paths,
     /// The harness's cap on directive text ([`harness::Adapter::max_context`]).
     pub max_context: usize,
+    /// The session's arm: nothing is ever run in the control (holdout) arm.
+    pub arm: Option<Arm>,
+    /// Finish-line obligations an approved E2 action could carry out at this event.
+    pub stimuli: &'a [Stimulus],
+}
+
+/// A finish-line obligation this event armed (an edit matched its paths) or is enforcing (a Stop
+/// request), for an E2 action (Track C §3.6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Stimulus {
+    pub route: String,
+    /// The command the obligation expects, bound.
+    pub command: String,
+    /// The paths glob that armed it.
+    pub paths: String,
+    /// The repository-relative path whose edit armed it (empty at Stop).
+    pub edited: String,
+    /// This event is the Stop request for it.
+    pub at_stop: bool,
+}
+
+/// The obligations `decide()` armed or began enforcing at this event: `before` is each
+/// obligation's `(route, stop_requested)` before it ran.
+pub fn stimuli(before: &[(String, bool)], after: &[Obligation], is_batch: bool) -> Vec<Stimulus> {
+    after
+        .iter()
+        .filter(|o| !o.met)
+        .filter_map(|o| {
+            let at_stop = o.stop_requested && !before.iter().any(|(r, s)| r == &o.route && *s);
+            let armed = is_batch && o.fresh;
+            (armed || at_stop).then(|| Stimulus {
+                route: o.route.clone(),
+                command: o.command.clone(),
+                paths: o.paths.clone(),
+                edited: if at_stop { String::new() } else { o.edited.clone() },
+                at_stop,
+            })
+        })
+        .collect()
 }
 
 /// What an extension adds to a decision's delivery.
@@ -61,11 +102,23 @@ pub struct Delivery {
     pub texts: Option<Vec<String>>,
     /// Recorded under `exec` in this event's spool record.
     pub spool: Option<Value>,
+    /// Blocks delivered after the directives (an action's result when no directive was due).
+    pub extra: Vec<String>,
+    /// Obligations an applied action met: marked met in the session state.
+    pub met: Vec<String>,
+    /// The Stop request: `None` as decided; `Some(None)` withdrawn (an action met it);
+    /// `Some(Some(reason))` with this reason instead.
+    pub stop: Option<Option<String>>,
 }
 
 /// A step after `decide()` that may change what directives are delivered as (Track C §3.2).
 pub trait Extension: Sync {
     fn deliver(&self, turn: &Turn<'_>, directives: &[Directive]) -> Delivery;
+    /// The exec-only reflexes (`(track, route id)`, vendored scripts) this extension would carry
+    /// out in this repository, so `decide()` may direct them. Asked only when the index holds one.
+    fn exec_only(&self, _repo_key: &str, _index: &Index, _paths: &Paths) -> Vec<(String, String)> {
+        Vec::new()
+    }
 }
 
 /// How a binary runs the pipeline.
@@ -217,6 +270,14 @@ fn respond(
     // ADAGE_HOLDOUT, else `runtime.holdout` in config.toml, else 0.1.
     let share: f64 = adage_store::config::load(paths).config.runtime_holdout;
     let spool_path = paths.spool(session);
+    // Exec-only reflexes come into play only under an extension that carries them out.
+    let exec_only: Vec<(String, String)> = match opts.extension {
+        Some(x) if index.for_repo(&repo_key).any(|r| r.exec_only()) => {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.exec_only(&repo_key, &index, paths)))
+                .unwrap_or_default()
+        }
+        _ => Vec::new(),
+    };
     // A state that can no longer be read is rebuilt from the session's spool, if it is small
     // enough to replay quickly (it is read under the state lock).
     let rebuild = || {
@@ -224,29 +285,35 @@ fn respond(
         let records: Vec<Value> = if small { spool::read_all(&spool_path).ok()? } else { return None };
         rebuild::rebuild(&records, &index, &repo_key, &table)
     };
-    let (decision, arm, propensity) = state::update_or_rebuild::<SessionState, _>(&state_path, rebuild, |st| {
-        if st.arm.is_none() {
-            let (arm, p) = assign(session, share, arm_env.as_deref());
-            st.arm = Some(arm);
-            st.propensity = Some(p);
-            st.repo = Some(repo_key.clone());
-        }
-        // A state from before propensities were recorded: the arm was drawn with (as far as can
-        // be known) today's share, unless it is forced now.
-        let propensity = st.propensity.unwrap_or_else(|| match (st.arm, arm_env.as_deref()) {
-            (_, Some("holdout" | "treated")) => 1.0,
-            (Some(Arm::Holdout), _) => share.clamp(0.0, 1.0),
-            _ => 1.0 - share.clamp(0.0, 1.0),
-        });
-        (decide(&ctx, st, &ev), st.arm, propensity)
-    })
-    .map_err(|e| Failure::io("state", "updating the session state", &e))?;
+    let (mut decision, arm, propensity, stims) =
+        state::update_or_rebuild::<SessionState, _>(&state_path, rebuild, |st| {
+            if st.arm.is_none() {
+                let (arm, p) = assign(session, share, arm_env.as_deref());
+                st.arm = Some(arm);
+                st.propensity = Some(p);
+                st.repo = Some(repo_key.clone());
+            }
+            // A state from before propensities were recorded: the arm was drawn with (as far as can
+            // be known) today's share, unless it is forced now.
+            let propensity = st.propensity.unwrap_or_else(|| match (st.arm, arm_env.as_deref()) {
+                (_, Some("holdout" | "treated")) => 1.0,
+                (Some(Arm::Holdout), _) => share.clamp(0.0, 1.0),
+                _ => 1.0 - share.clamp(0.0, 1.0),
+            });
+            let before: Vec<(String, bool)> =
+                st.obligations.iter().map(|o| (o.route.clone(), o.stop_requested)).collect();
+            let d = adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev));
+            let stims = stimuli(&before, &st.obligations, matches!(ev, Event::Batch { .. }));
+            (d, st.arm, propensity, stims)
+        })
+        .map_err(|e| Failure::io("state", "updating the session state", &e))?;
 
-    // An extension (adage-exec's E1 prefetch) sees the directives about to be delivered. A panic
-    // in it delivers E0.
+    // An extension (adage-exec: E1 prefetch, E2 actions) sees the directives about to be
+    // delivered and the obligations armed or enforced now. A panic in it delivers E0.
     let mut delivery = Delivery::default();
     if let Some(x) = opts.extension {
-        if decision.continue_reason.is_none() && !decision.directives.is_empty() {
+        let directives_due = decision.continue_reason.is_none() && !decision.directives.is_empty();
+        if directives_due || !stims.is_empty() {
             let turn = Turn {
                 harness,
                 event,
@@ -258,11 +325,36 @@ fn respond(
                 cwd,
                 paths,
                 max_context: adapter.max_context(),
+                arm,
+                stimuli: &stims,
             };
             delivery =
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.deliver(&turn, &decision.directives)))
                     .unwrap_or_default();
         }
+    }
+
+    // Obligations an action met: no Stop request follows for them.
+    if !delivery.met.is_empty() {
+        let met = delivery.met.clone();
+        let withdrawn = matches!(delivery.stop, Some(None));
+        let marked = state::update::<SessionState, _>(&state_path, |st| {
+            for o in st.obligations.iter_mut().filter(|o| met.contains(&o.route)) {
+                o.met = true;
+                if withdrawn && o.stop_requested {
+                    o.stop_requested = false;
+                    st.stop_requests = st.stop_requests.saturating_sub(1);
+                }
+            }
+        });
+        if let Err(e) = marked {
+            failopen::record(&paths.root, harness, event, &Failure::io("state", "marking obligations met", &e));
+        }
+    }
+    match delivery.stop.take() {
+        Some(None) => decision.continue_reason = None,
+        Some(Some(r)) if decision.continue_reason.is_some() => decision.continue_reason = Some(r),
+        _ => {}
     }
 
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
@@ -283,21 +375,58 @@ fn respond(
     if let Some(reason) = decision.continue_reason {
         return Ok(adapter.render(event, Output::Continue(reason)));
     }
-    if decision.directives.is_empty() {
+    if decision.directives.is_empty() && delivery.extra.is_empty() {
         return Ok(None);
     }
     let max = adapter.max_context();
     let e0 = || decision.directives.iter().map(render::wrap_directive).collect::<Vec<_>>().join("\n\n");
-    let mut text = match delivery.texts {
-        // Whatever an extension adds must fit the cap whole, or it is not delivered at all.
-        Some(t) if t.len() == decision.directives.len() => Some(t.join("\n\n")).filter(|t| t.len() <= max),
-        _ => None,
+    let texts = match delivery.texts {
+        Some(t) if t.len() == decision.directives.len() => t,
+        _ => decision.directives.iter().map(render::wrap_directive).collect(),
+    };
+    let all: Vec<String> = texts.into_iter().chain(delivery.extra).collect();
+    // Whatever an extension adds must fit the cap whole, or it is not delivered at all.
+    let mut text = Some(all.join("\n\n")).filter(|t| t.len() <= max).unwrap_or_else(e0);
+    if text.is_empty() {
+        return Ok(None);
     }
-    .unwrap_or_else(e0);
     // Design W8 (spill overflow to a file) cannot arise: the longest decision validation allows
     // fits every harness's cap (`the_largest_decision_fits_every_harness_cap`). This is a backstop.
     if text.len() > max {
         text.truncate(text.char_indices().take_while(|(i, _)| *i < max).last().map(|(i, _)| i).unwrap_or(0));
     }
     Ok(adapter.render(event, Output::Context(text)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ob(route: &str, met: bool, stop_requested: bool, fresh: bool) -> Obligation {
+        Obligation {
+            route: route.into(),
+            command: "make gen".into(),
+            paths: "schema/*.json".into(),
+            edited: "schema/users.json".into(),
+            met,
+            stop_requested,
+            fresh,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn actions_follow_fresh_edits_and_new_stop_requests_only() {
+        let after = [ob("fresh", false, false, true), ob("stale", false, false, false), ob("met", true, false, true)];
+        let s = stimuli(&[], &after, true);
+        assert_eq!(s.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["fresh"]);
+        assert_eq!(s[0].edited, "schema/users.json");
+        assert!(stimuli(&[], &after, false).is_empty(), "only a tool batch arms an action");
+        // At Stop: the obligation whose request this event makes, not one requested before.
+        let after = [ob("now", false, true, false), ob("earlier", false, true, false)];
+        let before = [("now".to_string(), false), ("earlier".to_string(), true)];
+        let s = stimuli(&before, &after, false);
+        assert_eq!(s.len(), 1);
+        assert!(s[0].at_stop && s[0].route == "now" && s[0].edited.is_empty());
+    }
 }

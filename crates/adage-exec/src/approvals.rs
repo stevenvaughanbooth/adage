@@ -114,11 +114,26 @@ pub struct Store {
     pub version: u32,
     #[serde(default)]
     pub approvals: Vec<Approval>,
+    /// Approvals Adage withdrew by itself, and why (`adage review` lists them as
+    /// `exec-revoked`). Losing authority is always automatic; regaining it never is.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub revoked: Vec<Revocation>,
+}
+
+/// An approval withdrawn automatically (Track C §3.6: an E2 action refused three times).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Revocation {
+    /// `track/route`.
+    pub route: String,
+    pub repo: String,
+    pub level: Level,
+    pub on: String,
+    pub cause: String,
 }
 
 impl Default for Store {
     fn default() -> Self {
-        Store { version: 1, approvals: Vec::new() }
+        Store { version: 1, approvals: Vec::new(), revoked: Vec::new() }
     }
 }
 
@@ -190,8 +205,33 @@ impl Store {
             .collect()
     }
 
-    /// Record an approval, replacing any older one for the same repository, route and level.
+    /// Withdraw the approval for a repository, route and level, recording why. Returns whether
+    /// there was one.
+    pub fn revoke_automatically(&mut self, repo: &str, route: &str, level: Level, cause: &str) -> bool {
+        let before = self.approvals.len();
+        self.approvals.retain(|a| !(a.key.repo == repo && a.route == route && a.key.level == level));
+        if self.approvals.len() == before {
+            return false;
+        }
+        self.revoked.push(Revocation {
+            route: route.to_string(),
+            repo: repo.to_string(),
+            level,
+            on: crate::time::now(),
+            cause: cause.to_string(),
+        });
+        // Bounded: the most recent revocations are what review shows.
+        let n = self.revoked.len();
+        if n > 256 {
+            self.revoked.drain(..n - 256);
+        }
+        true
+    }
+
+    /// Record an approval, replacing any older one for the same repository, route and level. A
+    /// person's approval clears an automatic revocation of the same route and level.
     pub fn approve(&mut self, a: Approval) {
+        self.revoked.retain(|r| !(r.route == a.route && r.repo == a.key.repo && r.level == a.key.level));
         self.approvals.retain(|x| !(x.route == a.route && x.key.repo == a.key.repo && x.key.level == a.key.level));
         self.approvals.push(a);
         self.approvals.sort_by(|x, y| (&x.key.repo, &x.route).cmp(&(&y.key.repo, &y.route)));
@@ -216,7 +256,7 @@ pub struct AutoContext<'a> {
 /// Whether `req` is in the inert-observe class (§4.2); every reason it is not, otherwise.
 pub fn auto_eligible(req: &ExecRequest, ctx: &AutoContext) -> Result<(), Vec<String>> {
     let mut why = Vec::new();
-    if !matches!(req.level, Level::E1 | Level::E2) {
+    if req.level != Level::E1 {
         why.push(format!("level {} is never approved automatically", req.level.as_str()));
     }
     let classified = classify::effect(&req.argv, ctx.table);
@@ -280,6 +320,7 @@ mod tests {
             labels: Labels::default(),
             origin: Origin::Local,
             route_exec_digest: None,
+            action: None,
         }
     }
 
@@ -381,7 +422,7 @@ mod tests {
         assert!(auto_eligible(&req(), &off).is_err(), "off by default");
         let ctx = AutoContext { table: &table, git_hazards: &[], sandbox_enforced: true, policy_auto: true };
         let cases: Vec<Mutation> = vec![
-            Box::new(|r| r.level = Level::E3),
+            Box::new(|r| r.level = Level::E2),
             Box::new(|r| r.argv = vec!["make".into(), "test".into()]),
             Box::new(|r| r.argv = vec!["./scripts/x".into()]),
             Box::new(|r| r.scripts.push(crate::request::ScriptRef { path: "s".into(), sha256: "00".into() })),
