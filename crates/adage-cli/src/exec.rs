@@ -40,6 +40,14 @@ const REVIEW_USAGE: &str = "usage: adage review delegate <track> <reflex> --leve
 /// Harnesses whose registrations `enable` swaps.
 const HARNESSES: [&str; 3] = ["claude-code", "codex", "opencode"];
 
+/// A key and its value, in a key column wide enough for every harness name (`claude-code`) and
+/// `delegations`, with two spaces to spare; never narrower than the usual one.
+fn kv<W: std::io::Write>(o: &mut Out<W>, key: &str, value: Line) -> std::io::Result<()> {
+    let widest = HARNESSES.iter().chain(&["delegations"]).map(|k| k.chars().count()).max().unwrap_or(0);
+    let column = (widest + 2).max(adage_term::out::KEY_WIDTH).max(key.chars().count() + 2);
+    o.line(&Line::new().faint(key).pad_to(column).extend(value))
+}
+
 fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
 }
@@ -144,13 +152,13 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
     }
     o.blank()?;
     for (h, what) in &rows {
-        o.kv(h, Line::new().text(what))?;
+        kv(&mut o, h, Line::new().text(what))?;
     }
     if rows.is_empty() {
-        o.kv("hooks", Line::new().quiet("no registration written by `adage install` needed changing"))?;
+        kv(&mut o, "hooks", Line::new().quiet("no registration written by `adage install` needed changing"))?;
     }
     if on {
-        o.kv(
+        kv(&mut o,
             "plugin",
             Line::new().quiet(format!(
                 "Claude Code plugin users: /plugin install adage-exec@adage; with {} present the Adage plugin goes quiet",
@@ -163,7 +171,7 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
             paths.root.display()
         ))?;
     } else {
-        o.kv("delegations", Line::new().quiet("kept; `adage review undelegate <track> <reflex>` withdraws one"))?;
+        kv(&mut o, "delegations", Line::new().quiet("kept; `adage review undelegate <track> <reflex>` withdraws one"))?;
         o.blank()?;
     }
     o.note("This takes effect in new agent sessions.")?;
@@ -210,7 +218,8 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
     o.header("delegate --status", &[if enabled { "on" } else { "off" }, &crate::words::count(n, "delegated reflex")])?;
     o.blank()?;
     for r in &regs {
-        o.kv(
+        kv(
+            &mut o,
             r["harness"].as_str().unwrap_or(""),
             Line::new().text(format!(
                 "{}: {} runs {}",
@@ -221,10 +230,10 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
         )?;
     }
     if regs.is_empty() {
-        o.kv("hooks", Line::new().quiet("none registered by `adage install` here"))?;
+        kv(&mut o, "hooks", Line::new().quiet("none registered by `adage install` here"))?;
     }
     if enabled {
-        o.kv("plugin", Line::new().quiet("Claude Code: the adage-exec plugin serves"))?;
+        kv(&mut o, "plugin", Line::new().quiet("Claude Code: the adage-exec plugin serves"))?;
     }
     for (repo, gs) in &grants {
         o.blank()?;
