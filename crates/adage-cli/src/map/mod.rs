@@ -27,8 +27,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 const DEFAULT_PORT: u16 = 8765;
-/// Connections served at once; each live page holds one for its event stream.
-pub(crate) const MAX_CONNECTIONS: usize = 16;
+/// Connections served at once. Each live page holds one for its event stream, and at most
+/// [`MAX_STREAMS`] do, so loading a page always has room (a browser fetches about six files at
+/// once).
+pub(crate) const MAX_CONNECTIONS: usize = 48;
+/// Event streams served at once; a page refused one retries (`retry: 2000`).
+pub(crate) const MAX_STREAMS: usize = 24;
+// Room for a page load (about six files at once) beside every stream.
+const _: () = assert!(MAX_STREAMS + 6 <= MAX_CONNECTIONS);
 const USAGE: &str = "usage: adage map [--port N] [--no-open] [--focus <reflex>] [--demo]";
 
 #[derive(Debug, Default, PartialEq)]

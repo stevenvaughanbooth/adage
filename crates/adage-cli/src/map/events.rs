@@ -118,8 +118,14 @@ impl Hub {
         }
     }
 
-    pub(crate) fn join(&self) {
-        self.lock().pages += 1;
+    /// Count a page in, unless `max` are already connected (then it is refused and retries).
+    pub(crate) fn join(&self, max: usize) -> bool {
+        let mut s = self.lock();
+        if s.pages >= max {
+            return false;
+        }
+        s.pages += 1;
+        true
     }
 
     pub(crate) fn leave(&self) {

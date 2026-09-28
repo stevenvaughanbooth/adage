@@ -16,6 +16,9 @@ const READ_TIMEOUT: Duration = Duration::from_secs(5);
 const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
 /// How long an idle event stream waits before a keep-alive comment.
 const KEEP_ALIVE: Duration = Duration::from_secs(15);
+/// How often an idle event stream checks that its page is still there. A closed page's stream
+/// would otherwise hold its connection until the next write fails, up to [`KEEP_ALIVE`] later.
+const LIVENESS: Duration = Duration::from_secs(1);
 
 /// This origin's own files and nothing else: no inline script or style element, no font CDN.
 /// Styles set from script (the graph's positions) are not governed by `style-src`.
@@ -291,31 +294,63 @@ fn stream(mut s: TcpStream, req: &Request, shared: &Shared) -> std::io::Result<(
         return s.flush();
     }
     let hub = &shared.hub;
+    if !hub.join(super::MAX_STREAMS) {
+        // Too many pages: the browser's EventSource retries after `retry`.
+        return s.write_all(b"retry: 2000\n\n").and_then(|()| s.flush());
+    }
     let mut last = req.last_event_id.unwrap_or_else(|| hub.latest());
-    s.write_all(format!("retry: 2000\nid: {last}\nevent: hello\ndata: {{}}\n\n").as_bytes())?;
-    s.flush()?;
-    hub.join();
-    let result = (|| loop {
-        match hub.after(last, KEEP_ALIVE) {
-            Next::Events(ev) => {
-                let mut out = String::new();
-                for e in &ev {
-                    out.push_str(&e.frame());
-                    last = e.id;
-                }
-                s.write_all(out.as_bytes())?;
-            }
-            Next::Reset(latest) => {
-                last = latest;
-                s.write_all(format!("id: {latest}\nevent: reset\ndata: {{}}\n\n").as_bytes())?;
-            }
-            Next::Idle => s.write_all(b": keep-alive\n\n")?,
-            Next::Closed => return Ok(()),
-        }
+    let mut idle = Duration::ZERO;
+    let result = (|| {
+        s.write_all(format!("retry: 2000\nid: {last}\nevent: hello\ndata: {{}}\n\n").as_bytes())?;
         s.flush()?;
+        loop {
+            match hub.after(last, LIVENESS) {
+                Next::Events(ev) => {
+                    let mut out = String::new();
+                    for e in &ev {
+                        out.push_str(&e.frame());
+                        last = e.id;
+                    }
+                    s.write_all(out.as_bytes())?;
+                }
+                Next::Reset(latest) => {
+                    last = latest;
+                    s.write_all(format!("id: {latest}\nevent: reset\ndata: {{}}\n\n").as_bytes())?;
+                }
+                Next::Idle => {
+                    if peer_closed(&s) {
+                        return Ok(());
+                    }
+                    idle += LIVENESS;
+                    if idle < KEEP_ALIVE {
+                        continue;
+                    }
+                    s.write_all(b": keep-alive\n\n")?;
+                }
+                Next::Closed => return Ok(()),
+            }
+            idle = Duration::ZERO;
+            s.flush()?;
+        }
     })();
     hub.leave();
     result
+}
+
+/// Whether the page at the other end has gone: a closed socket reads as end of file at once,
+/// without blocking and without consuming anything (an event stream's page never sends more).
+fn peer_closed(s: &TcpStream) -> bool {
+    if s.set_nonblocking(true).is_err() {
+        return false;
+    }
+    let mut b = [0u8; 1];
+    let gone = match s.peek(&mut b) {
+        Ok(0) => true,
+        Ok(_) => false,
+        Err(e) => e.kind() != std::io::ErrorKind::WouldBlock,
+    };
+    let _ = s.set_nonblocking(false);
+    gone
 }
 
 /// Percent-encoding for a URL query value.
@@ -354,6 +389,36 @@ mod tests {
     use super::*;
     use crate::map::events::Hub;
     use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn a_closed_page_is_noticed_without_a_write() {
+        // An event stream's slot is freed as soon as its page goes, not at the next keep-alive.
+        let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let client = TcpStream::connect(l.local_addr().unwrap()).unwrap();
+        let (server, _) = l.accept().unwrap();
+        assert!(!peer_closed(&server), "an open page is not gone");
+        drop(client);
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while !peer_closed(&server) {
+            assert!(std::time::Instant::now() < deadline, "a closed page was not noticed");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // The socket is blocking again for the writes that follow.
+        let mut b = [0u8; 1];
+        server.set_read_timeout(Some(Duration::from_millis(50))).unwrap();
+        assert_eq!(server.peek(&mut b).unwrap(), 0);
+    }
+
+    #[test]
+    fn event_streams_are_capped_below_connections() {
+        let hub = Hub::new();
+        for _ in 0..3 {
+            assert!(hub.join(3));
+        }
+        assert!(!hub.join(3), "a fourth page waits");
+        hub.leave();
+        assert!(hub.join(3));
+    }
 
     fn shared(dir: &std::path::Path) -> Shared {
         Shared {
