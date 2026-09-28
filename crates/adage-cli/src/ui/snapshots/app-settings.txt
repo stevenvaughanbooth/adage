@@ -10,8 +10,8 @@ learn.thresholds         default  (default)
   evidence bars for `adage condition` and automatic learning: default, or demo (lower)
 learn.claude_projects    ""       (default)
   Claude Code traces to condition on ("" = ~/.claude/projects)
-learn.codex_sessions     ""       (default)
-  Codex rollouts automatic learning reads, e.g. ~/.codex/sessions ("" = none)
+learn.codex_sessions     auto     (default)
+  Codex rollouts to condition on: auto (once Codex hooks are registered), a directory, or "" (none)
 learn.opencode_exports   ""       (default)
   a directory of `opencode export` files automatic learning reads ("" = none)
 learn.parse_cache        true     (default)
@@ -22,9 +22,9 @@ instincts.packs          core     (default)
   instinct packs to bind, comma-separated (only core exists)
 instincts.disabled       ""       (default)
   instinct ids never to bind, comma-separated, e.g. U3,N1 (see docs/instincts.md)
+ui.notices               daily    (default)
+  one-line notices at session start (Claude Code): daily, only when something is new; or off
 runtime.control          0.1      (default)
   share of sessions held out as the control arm (Adage decides but says nothing)
-
-Enter edits (Space toggles on/off and switches thresholds); every value is validated before it is saved.
 
  harbor-dispatch · gen 8216e29f · 4 reflexes · auto-learn on      Enter edit · Space toggle · ? help · q quit

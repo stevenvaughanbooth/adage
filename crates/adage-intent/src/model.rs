@@ -53,9 +53,20 @@ pub const FILES: [Pinned; 3] = [
     },
 ];
 
-/// Where a pinned file is downloaded from.
+/// Where a pinned file is downloaded from: `ADAGE_MODEL_BASE_URL/<name>` when that is set (a
+/// mirror holding the same files; the SHA-256 pins still decide what is installed), else the
+/// pinned upstream revision on huggingface.co.
 pub fn url(name: &str) -> String {
-    format!("https://huggingface.co/{REPO}/resolve/{REVISION}/{name}")
+    match std::env::var("ADAGE_MODEL_BASE_URL").ok().map(|b| b.trim().trim_end_matches('/').to_string()) {
+        Some(base) if !base.is_empty() => format!("{base}/{name}"),
+        _ => format!("https://huggingface.co/{REPO}/resolve/{REVISION}/{name}"),
+    }
+}
+
+/// The host of a download URL (`huggingface.co`), for messages.
+pub fn host(url: &str) -> String {
+    let rest = url.split("://").nth(1).unwrap_or(url);
+    rest.split(['/', ':']).next().unwrap_or(rest).to_string()
 }
 
 /// The model id recorded in every intent trigger: a mismatch at runtime disables intent routes.
