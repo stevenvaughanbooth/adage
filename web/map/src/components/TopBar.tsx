@@ -46,7 +46,7 @@ export function LivePill({ connection, graph, firstRun }: { connection: Connecti
         : "var(--color-lamp-fire)";
   const [word, rest] =
     connection === "offline"
-      ? ["Offline", "· retrying"]
+      ? ["Offline", "· is adage map running? Retrying"]
       : connection === "connecting"
         ? ["Connecting", ""]
         : firstRun
@@ -54,8 +54,9 @@ export function LivePill({ connection, graph, firstRun }: { connection: Connecti
           : ["Live", `· ${n} trace${n === 1 ? "" : "s"} today`];
   return (
     <div
-      className={cx("hidden h-7 shrink-0 items-center gap-2 rounded-full border px-3 text-[12.5px] text-ink-1 lg:flex", tone)}
-      aria-live="polite"
+      className={cx("flex h-7 shrink-0 items-center gap-2 rounded-full border px-3 text-[12.5px] text-ink-1", tone)}
+      role="status"
+      title={connection === "offline" ? "The map stopped hearing from adage map; what it shows may be out of date" : undefined}
       data-testid="live-pill"
     >
       <span
@@ -64,7 +65,7 @@ export function LivePill({ connection, graph, firstRun }: { connection: Connecti
         aria-hidden="true"
       />
       {word}
-      {rest && <span className="text-ink-2">{rest}</span>}
+      {rest && <span className="hidden text-ink-2 lg:inline">{rest}</span>}
     </div>
   );
 }
@@ -86,12 +87,12 @@ export function TopBar({
   const c = graph ? counts(graph, url.repo) : null;
   const Theme = THEME_ICON[theme];
   return (
-    <header className="flex h-14 shrink-0 items-center gap-4 border-b border-line px-5">
+    <header className="flex min-h-14 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b border-line px-4 pt-2 md:h-14 md:flex-nowrap md:px-5 md:pt-0">
       <a href="/" className="wordmark" aria-label="Adage map, home" onClick={(e) => (e.preventDefault(), setUrl({ view: "map" }, true))}>
         Adage
       </a>
       {all.length > 1 ? (
-        <label className="relative flex items-center">
+        <label className="relative hidden items-center sm:flex">
           <span className="sr-only">Repository</span>
           <select
             value={url.repo ?? ""}
@@ -110,9 +111,9 @@ export function TopBar({
           </span>
         </label>
       ) : (
-        all[0] && <span className="font-mono text-[12.5px] text-ink-2">{all[0]}</span>
+        all[0] && <span className="hidden font-mono text-[12.5px] text-ink-2 sm:inline">{all[0]}</span>
       )}
-      <nav aria-label="Views" className="ml-1 flex gap-1">
+      <nav aria-label="Views" className="order-last -ml-3 flex w-full gap-1 overflow-x-auto md:order-none md:ml-1 md:w-auto">
         {NAV.map((n) => (
           <a
             key={n.view}
@@ -147,12 +148,12 @@ export function TopBar({
       <button
         type="button"
         onClick={onPalette}
-        className="flex h-8 w-[220px] shrink items-center gap-2.5 rounded-md border border-line-strong bg-panel px-2.5 text-[13px] text-ink-2 hover:text-ink-1"
+        className="flex h-8 w-8 shrink-0 items-center justify-center gap-2.5 rounded-md border border-line-strong bg-panel text-[13px] text-ink-2 hover:text-ink-1 md:w-[220px] md:shrink md:justify-start md:px-2.5"
         aria-label="Search or jump to (Command K)"
       >
         <Icons.search />
-        <span className="grow truncate text-left">Search or jump to…</span>
-        <kbd>⌘K</kbd>
+        <span className="hidden grow truncate text-left md:inline">Search or jump to…</span>
+        <kbd className="hidden md:inline">⌘K</kbd>
       </button>
       <button
         type="button"

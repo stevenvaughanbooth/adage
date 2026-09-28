@@ -21,3 +21,4 @@ demo/results/*/raw/
 web/map/dist/
 web/map/test-results/
 web/map/playwright-report/
+web/map/review-shots/

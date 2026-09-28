@@ -4,7 +4,7 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { loadHealth } from "../api/client";
 import type { Health as HealthData, HealthCheck } from "../api/types";
 import { Icons } from "../components/glyphs";
-import { CommandButton, cx } from "../components/ui";
+import { CommandButton, Prose, cx } from "../components/ui";
 import { plural } from "../lib/words";
 
 const MARK: Record<HealthCheck["status"], { icon: () => ReactNode; tone: string; word: string }> = {
@@ -35,11 +35,11 @@ export function Health() {
   const order = { fail: 0, warn: 1, pass: 2 } as const;
   const checks = [...(data?.checks ?? [])].sort((a, b) => order[a.status] - order[b.status]);
   return (
-    <main aria-label="Health" className="scroll-thin flex min-h-0 grow flex-col gap-6 overflow-y-auto px-10 py-7">
+    <main aria-label="Health" className="scroll-thin flex min-h-0 grow flex-col gap-6 overflow-y-auto px-4 py-7 sm:px-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="lbl">Health · adage doctor</span>
-          <h1 className="display m-0 text-[44px] leading-[1.05] font-semibold">
+          <h1 className="display m-0 text-[34px] leading-[1.05] font-semibold sm:text-[44px]">
             {!s ? (
               "Checking…"
             ) : s.fail ? (
@@ -62,7 +62,7 @@ export function Health() {
             </span>
           )}
         </div>
-        <div className="flex w-[300px] flex-col gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-[300px]">
           <button
             type="button"
             onClick={() => load(true)}
@@ -86,10 +86,14 @@ export function Health() {
               </span>
               <div className="flex min-w-0 grow flex-col gap-1">
                 <span className="text-[14.5px] text-ink-1">{c.label ?? c.check}</span>
-                <span className="text-[13px] break-words text-ink-2">{c.detail}</span>
+                <span className="text-[13px] break-words text-ink-2">
+                  <Prose text={c.detail} />
+                </span>
                 {c.fix && (
                   <div className="mt-1.5 flex flex-col gap-1.5">
-                    {cmd ? <CommandButton command={cmd} why={c.fix.replace(/`/g, "")} /> : <span className="text-xs text-ink-3">fix: {c.fix}</span>}
+                    {cmd ? <CommandButton command={cmd} why={c.fix.replace(/`/g, "")} /> : <span className="text-xs text-ink-3">
+                        fix: <Prose text={c.fix} />
+                      </span>}
                   </div>
                 )}
               </div>

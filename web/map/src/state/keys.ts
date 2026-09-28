@@ -66,6 +66,9 @@ export function useKeys(handler: KeyHandler) {
         pendingG = now;
         return;
       }
+      // Space presses a focused control (a button, a link, a map node); it plays the replay only
+      // when nothing that Space activates has focus.
+      if (e.key === " " && (e.target as HTMLElement | null)?.closest?.("button, a[href], summary, [role='button'], [tabindex]:not([tabindex='-1'])")) return;
       const k = e.key === " " ? "space" : e.key;
       if (h.current(k, e) === true) e.preventDefault();
     };

@@ -1,8 +1,8 @@
 // Small shared pieces: chips, segmented controls, copy buttons, the toast, dialogs.
 
-import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Icons, Lamp } from "./glyphs";
-import type { Lifecycle, Strength } from "../lib/words";
+import { type Lifecycle, type Strength, prose } from "../lib/words";
 
 export function cx(...c: (string | false | null | undefined)[]): string {
   return c.filter(Boolean).join(" ");
@@ -215,7 +215,9 @@ export function CommandButton({ command, primary = false, why }: { command: stri
   );
 }
 
-/** A modal dialog: focus moves in, Escape and the backdrop close it, focus returns after. */
+const FOCUSABLE = "input, button:not([disabled]), a[href], select, textarea, [tabindex]:not([tabindex='-1'])";
+
+/** A modal dialog: focus moves in and stays, Escape and the backdrop close it, focus returns after. */
 export function Modal({
   label,
   open,
@@ -237,15 +239,36 @@ export function Modal({
     if (!open) return;
     back.current = document.activeElement;
     const el = ref.current;
-    const first = el?.querySelector<HTMLElement>("input, button, [tabindex]");
+    // A field first (the palette's search), else the first control; never a tabindex="-1" wrapper.
+    const first = el?.querySelector<HTMLElement>("input") ?? el?.querySelector<HTMLElement>(FOCUSABLE);
     (first ?? el)?.focus();
     return () => {
       (back.current as HTMLElement | null)?.focus?.();
     };
   }, [open]);
   if (!open) return null;
+  // Tab and Shift-Tab stay inside the dialog while it is open.
+  const trap = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onClose();
+      return;
+    }
+    if (e.key !== "Tab" || !ref.current) return;
+    const items = [...ref.current.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((x) => x.offsetParent !== null);
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (!first || !last) return;
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === ref.current)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
   return (
-    <div className="fixed inset-0 z-40" onKeyDown={(e) => e.key === "Escape" && (e.stopPropagation(), onClose())}>
+    <div className="fixed inset-0 z-40" onKeyDown={trap}>
       <div className="absolute inset-0 bg-base/60 backdrop-blur-[2px]" onClick={onClose} aria-hidden="true" />
       <div
         ref={ref}
@@ -262,6 +285,25 @@ export function Modal({
         {children}
       </div>
     </div>
+  );
+}
+
+/** Stored prose in the lexicon's words, with `commands` set in mono. */
+export function Prose({ text }: { text: string }) {
+  return (
+    <>
+      {prose(text)
+        .split("`")
+        .map((part, i) =>
+          i % 2 === 1 ? (
+            <code key={i} className="font-mono text-[0.95em] text-ink-1">
+              {part}
+            </code>
+          ) : (
+            part
+          ),
+        )}
+    </>
   );
 }
 

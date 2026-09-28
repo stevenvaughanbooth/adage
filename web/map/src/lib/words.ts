@@ -165,6 +165,38 @@ export function plural(n: number, one: string, many = `${one}s`): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
+const PROSE: [RegExp, string][] = [
+  [/\broute\(s\)/g, "reflex(es)"],
+  [/\bsession\(s\)/g, "trace(s)"],
+  [/\bgreen\b/g, "fire"],
+  [/\byellow\b/g, "prime"],
+  [/\bred\b/g, "inhibit"],
+  [/\broutes\b/g, "reflexes"],
+  [/\broute\b/g, "reflex"],
+  [/\bsessions\b/g, "traces"],
+  [/\bholdout\b/g, "control"],
+  [/\bretired\b/g, "extinguished"],
+  [/\bdrafted\b/g, "nascent"],
+  [/\bprobation\b/g, "forming"],
+  [/\blearned\b/g, "conditioned"],
+];
+
+/**
+ * Stored prose (change summaries, review reasons written by the learner) in the lexicon's words,
+ * as `words::prose` in the binary does it. Commands (between backticks) and paths are untouched.
+ */
+export function prose(s: string): string {
+  const words = (t: string) =>
+    t
+      .split(" ")
+      .map((w) => (w.includes("/") || w.includes("\\") ? w : PROSE.reduce((acc, [re, rep]) => acc.replace(re, rep), w)))
+      .join(" ");
+  return s
+    .split("`")
+    .map((part, i) => (i % 2 === 1 ? part : words(part)))
+    .join("`");
+}
+
 /** The trace id as people read it: the first 8 characters. */
 export function shortSession(s: string): string {
   return s.slice(0, 8);

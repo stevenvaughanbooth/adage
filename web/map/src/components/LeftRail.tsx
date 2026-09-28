@@ -82,7 +82,7 @@ export function LeftRail({ graph }: { graph: Graph }) {
   };
 
   return (
-    <aside aria-label="Reflexes and instincts" className="flex min-h-0 flex-col gap-3.5 border-r border-line bg-panel p-4">
+    <aside aria-label="Reflexes and instincts" className="hidden min-h-0 flex-col gap-3.5 border-r border-line bg-panel p-4 lg:flex">
       <div className="flex flex-col gap-1.5">
         <label htmlFor="filter" className="lbl">
           Filter
@@ -151,7 +151,7 @@ export function LeftRail({ graph }: { graph: Graph }) {
                   <Lamp strength={s} hollow={l === "nascent" || l === "extinguished"} size={7} />
                   <KindGlyph instinct={isInstinct(r)} />
                   <span className="grow truncate font-mono text-xs text-ink-1">{r.id}</span>
-                  <span className="shrink-0 font-mono text-[11px] text-ink-3">
+                  <span className={cx("shrink-0 font-mono text-[11px]", sel ? "text-ink-2" : "text-ink-3")}>
                     {r.evidence.support}/{r.evidence.opportunities}
                   </span>
                 </button>

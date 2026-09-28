@@ -29,13 +29,34 @@ function Step({ done, label, detail, last }: { done: boolean; label: string; det
   );
 }
 
+function CommandLine({ command }: { command: string }) {
+  return (
+    <div className="flex h-11 items-center justify-between rounded-[10px] border border-accent/45 bg-panel pr-2 pl-3.5">
+      <code className="font-mono text-sm">
+        <span className="text-ink-3">$ </span>
+        {command}
+      </code>
+      <button
+        type="button"
+        onClick={() => void copyCommand(command)}
+        aria-label={`Copy ${command}`}
+        className="h-[30px] rounded-[7px] bg-accent px-3 text-[13px] font-semibold text-base"
+      >
+        Copy
+      </button>
+    </div>
+  );
+}
+
 export function FirstRun({ graph, connection }: { graph: Graph; connection: Connection }) {
   const [health, setHealth] = useState<Health | null>(null);
   useEffect(() => {
     loadHealth().then(setHealth, () => setHealth(null));
   }, []);
   const hooks = health?.checks.filter((c) => c.check.toLowerCase().startsWith("hooks")) ?? [];
-  const hooksOk = hooks.length > 0 && hooks.every((c) => c.status === "pass");
+  // A harness that is not installed passes with "nothing to check": that is not a hook.
+  const installed = hooks.filter((c) => c.status === "pass" && !/nothing to check/i.test(c.detail));
+  const hooksOk = installed.length > 0 && hooks.every((c) => c.status === "pass");
   const instincts = graph.routes.filter(isInstinct);
   const tracks = [...new Set(instincts.map((r) => `${r.track}@${r.version}`))];
   const need = graph.bars?.min_support ?? 3;
@@ -63,11 +84,11 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
         <circle cx="820" cy="185" r="4" style={{ fill: "var(--color-accent-soft)" }} />
       </svg>
 
-      <div className="scroll-thin relative flex min-h-0 grow flex-col gap-10 overflow-y-auto px-8 py-14 lg:flex-row lg:items-start lg:justify-between lg:px-24 lg:py-[110px]">
+      <div className="scroll-thin relative flex min-h-0 grow flex-col gap-10 overflow-y-auto px-5 py-10 sm:px-8 sm:py-14 lg:flex-row lg:items-start lg:justify-between lg:px-24 lg:py-[110px]">
         <div className="flex w-full max-w-[620px] flex-col gap-7">
           <div className="flex flex-col gap-3.5">
             <span className="lbl">First run{graph.routes[0]?.repo ? ` · ${graph.routes[0].repo}` : ""}</span>
-            <h1 className="display rise m-0 text-5xl leading-none font-semibold xl:text-[64px]">
+            <h1 className="display rise m-0 text-4xl leading-none font-semibold sm:text-5xl xl:text-[64px]">
               Your first reflex forms <span className="text-accent-soft">here.</span>
             </h1>
             <p className="m-0 max-w-[54ch] text-[17px] leading-[1.55] font-light text-ink-2">
@@ -82,8 +103,8 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
               detail={
                 health
                   ? hooksOk
-                    ? hooks.map((h) => h.check.replace(/^hooks\s*\(?/i, "").replace(/\)$/, "")).join(" · ") || "installed"
-                    : "run adage init in the repository"
+                    ? installed.map((h) => h.check.replace(/^hooks\s*:?\s*\(?/i, "").replace(/\)$/, "")).join(" · ") || "installed"
+                    : "not set up: run adage init"
                   : "checking…"
               }
             />
@@ -95,19 +116,14 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
             <Step done={false} label="Waiting for traces" detail={`${graph.sessions.total} of about ${need} to form a reflex`} last />
           </ol>
           <div className="flex flex-col gap-2.5">
+            {health && !hooksOk && (
+              <>
+                <span className="text-sm text-ink-2">Not set up here yet? In the repository, run:</span>
+                <CommandLine command="adage init" />
+              </>
+            )}
             <span className="text-sm text-ink-2">Have earlier agent sessions in this repository? Condition from them now:</span>
-            <div className="flex h-11 items-center justify-between rounded-[10px] border border-accent/45 bg-panel pr-2 pl-3.5">
-              <code className="font-mono text-sm">
-                <span className="text-ink-3">$ </span>adage condition
-              </code>
-              <button
-                type="button"
-                onClick={() => void copyCommand("adage condition")}
-                className="h-[30px] rounded-[7px] bg-accent px-3 text-[13px] font-semibold text-base"
-              >
-                Copy
-              </button>
-            </div>
+            <CommandLine command="adage condition" />
             <span className="text-[13.5px] text-ink-2">
               Or try the map with sample traces:{" "}
               <button type="button" className="font-mono text-accent-soft hover:text-ink-1" onClick={() => void copyCommand("adage map --demo")}>
@@ -138,7 +154,9 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
       <div className="relative flex h-10 shrink-0 items-center gap-4 border-t border-line bg-panel px-5 font-mono text-[11.5px] text-ink-3">
         <span>{port} · read-only · this machine only</span>
         <span className="grow" />
-        <span>{connection === "live" ? "live stream connected" : connection === "offline" ? "live stream offline, retrying" : "connecting…"}</span>
+        <span className="hidden sm:inline">
+          {connection === "live" ? "live stream connected" : connection === "offline" ? "live stream offline: is adage map running? Retrying" : "connecting…"}
+        </span>
       </div>
     </main>
   );

@@ -111,7 +111,7 @@ export function App() {
   });
 
   return (
-    <div className="flex h-full min-w-[1024px] flex-col overflow-hidden">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden">
       <a href="#content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-raised focus:px-3 focus:py-2">
         Skip to content
       </a>
@@ -123,7 +123,7 @@ export function App() {
           firstRun ? (
             <FirstRun graph={graph} connection={connection} />
           ) : (
-            <div className="grid min-h-0 grow grid-cols-[248px_minmax(0,1fr)_336px] xl:grid-cols-[280px_minmax(0,1fr)_380px]">
+            <div className="grid min-h-0 grow grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,42%)] lg:grid-cols-[248px_minmax(0,1fr)_336px] lg:grid-rows-1 xl:grid-cols-[280px_minmax(0,1fr)_380px]">
               <LeftRail graph={graph} />
               <MapCanvas graph={graph} />
               <Inspector graph={graph} />

@@ -81,8 +81,16 @@ export function start() {
   void refresh();
   if (typeof EventSource === "undefined") return;
   source = new EventSource("/api/v1/events");
-  source.addEventListener("open", () => set({ connection: "live" }));
-  source.addEventListener("error", () => set({ connection: source?.readyState === 2 ? "offline" : "connecting" }));
+  source.addEventListener("open", () => {
+    // Back after a drop: what changed meanwhile never streamed, so load it now.
+    if (state.connection === "offline") void refresh();
+    set({ connection: "live" });
+  });
+  // The browser retries on its own (readyState CONNECTING), but once the stream has dropped the
+  // page says so: stale data must not look live.
+  source.addEventListener("error", () =>
+    set({ connection: source?.readyState === 2 || state.connection !== "connecting" || state.graph ? "offline" : "connecting" }),
+  );
   source.addEventListener("hello", () => set({ connection: "live" }));
   source.addEventListener("decision", (m) => {
     try {

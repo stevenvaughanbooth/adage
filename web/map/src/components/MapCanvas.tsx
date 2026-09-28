@@ -185,6 +185,7 @@ function Canvas({ graph }: { graph: Graph }) {
 
   return (
     <main aria-label="Reflex map" className="canvas-grid relative flex min-h-0 min-w-0 flex-col overflow-hidden">
+      <h1 className="sr-only">Reflex map</h1>
       <div ref={wrap} className="relative min-h-0 grow">
         {map.nodes.length === 0 ? (
           <div className="flex h-full items-center justify-center p-8 text-center">
@@ -242,6 +243,7 @@ function Canvas({ graph }: { graph: Graph }) {
               pannable
               zoomable
               ariaLabel="Minimap"
+              className="max-sm:hidden!"
               position="bottom-right"
               style={{ width: 168, height: 104, margin: 16 }}
               nodeClassName={(n) => {
@@ -256,7 +258,7 @@ function Canvas({ graph }: { graph: Graph }) {
         )}
 
         <div className="pointer-events-none absolute inset-x-4 top-3.5 flex items-center gap-2">
-          <div className="pointer-events-auto flex items-center gap-2">
+          <div className="pointer-events-auto flex flex-wrap items-center gap-2">
             <Segmented
               label="Graph mode"
               value={url.mode}

@@ -6,6 +6,7 @@ import type { LearnRun, TraceEvent } from "../api/types";
 import { reducedMotion } from "../state/theme";
 import { Icons } from "./glyphs";
 import { cx, day } from "./ui";
+import { prose } from "../lib/words";
 
 const PLAY_MS = 12000;
 
@@ -130,7 +131,7 @@ export function Replay({
           {learning.map((l, i) => (
             <div
               key={`l${l.ts}-${i}`}
-              title={(l.changes ?? []).map((c) => c.summary ?? c.route).join("\n")}
+              title={(l.changes ?? []).map((c) => (c.summary ? prose(c.summary) : c.route)).join("\n")}
               className="absolute top-px w-0.5 rounded-sm"
               style={{
                 left: `${Math.max(0, Math.min(100, pct(l.ts)))}%`,
@@ -159,8 +160,8 @@ export function Replay({
           />
         </div>
         <div className="flex justify-between gap-4 font-mono text-[10.5px] text-ink-3">
-          <span>{day(sp.from)} · first trace</span>
-          {label && <span className="truncate">{label}</span>}
+          <span className="whitespace-nowrap">{day(sp.from)} · first trace</span>
+          {label && <span className="hidden truncate sm:inline">{label}</span>}
           <span>{at == null ? "now" : new Date(at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
         </div>
       </div>

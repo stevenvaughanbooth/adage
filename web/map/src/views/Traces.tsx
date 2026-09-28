@@ -45,7 +45,7 @@ function Row({ e, graph, fresh }: { e: TraceEvent; graph: Graph; fresh: boolean 
   };
   const directed = new Set(e.directed);
   return (
-    <li className={cx("grid grid-cols-[76px_104px_minmax(0,1fr)] items-start gap-3 border-b border-line px-5 py-2.5", fresh && "rise")}>
+    <li className={cx("grid grid-cols-[64px_minmax(0,1fr)] items-start gap-x-3 gap-y-1 border-b border-line px-4 py-2.5 sm:grid-cols-[76px_104px_minmax(0,1fr)] sm:px-5", fresh && "rise")}>
       <span className="pt-1 font-mono text-[11.5px] text-ink-3" title={new Date(e.ts).toLocaleString()}>
         {clock(e.ts)}
       </span>
@@ -53,7 +53,7 @@ function Row({ e, graph, fresh }: { e: TraceEvent; graph: Graph; fresh: boolean 
         <span className={cx("text-xs", control ? "text-ink-3" : "text-ink-1")}>{arm(e.arm)}</span>
         <span className="font-mono text-[11px] text-ink-3">{shortSession(e.session)}</span>
       </span>
-      <div className="flex min-w-0 flex-col gap-1.5">
+      <div className="col-span-2 flex min-w-0 flex-col gap-1.5 sm:col-span-1">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="lbl mr-1">{EVENT[e.event] ?? e.event}</span>
           {e.directed.map((id) => chip(id, false))}
@@ -108,15 +108,15 @@ export function Traces({ graph }: { graph: Graph }) {
 
   return (
     <main aria-label="Traces" className="flex min-h-0 grow flex-col">
-      <div className="flex flex-wrap items-end justify-between gap-4 px-10 pt-7 pb-5">
+      <div className="flex flex-wrap items-end justify-between gap-4 px-4 pt-7 pb-5 sm:px-10">
         <div className="flex flex-col gap-1.5">
           <span className="lbl">
             Traces · {plural(sessions, "trace")} · {plural(events.length, "decision")}
           </span>
-          <h1 className="display m-0 text-[40px] leading-[1.05] font-semibold">
+          <h1 className="display m-0 text-[32px] leading-[1.05] font-semibold sm:text-[40px]">
             {selected ? (
               <>
-                Where <span className="font-mono text-[34px] text-accent-soft">{selected.id}</span> applied
+                Where <span className="font-mono text-[26px] break-all text-accent-soft sm:text-[34px]">{selected.id}</span> applied
               </>
             ) : (
               <>
@@ -125,7 +125,7 @@ export function Traces({ graph }: { graph: Graph }) {
             )}
           </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {selected && (
             <button type="button" onClick={() => setUrl({ reflex: null })} className="h-8 rounded-md border border-line-strong px-3 text-[12.5px] text-ink-2 hover:text-ink-1">
               All reflexes
@@ -156,7 +156,7 @@ export function Traces({ graph }: { graph: Graph }) {
       </div>
       <div className="scroll-thin min-h-0 grow overflow-y-auto border-t border-line bg-panel">
         {shown.length === 0 ? (
-          <p className="px-10 py-10 text-sm text-ink-2">No decisions in this window yet. They appear here as agents work.</p>
+          <p className="px-4 py-10 text-sm text-ink-2 sm:px-10">No decisions in this window yet. They appear here as agents work.</p>
         ) : (
           [...byDay.entries()].map(([d, es]) => (
             <section key={d} aria-label={d}>

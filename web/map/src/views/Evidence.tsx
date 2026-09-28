@@ -150,20 +150,23 @@ export function Evidence({ graph }: { graph: Graph }) {
   );
 
   return (
-    <main aria-label="Evidence" className="scroll-thin flex min-h-0 grow flex-col gap-[22px] overflow-y-auto px-10 py-7">
+    <main aria-label="Evidence" className="scroll-thin flex min-h-0 grow flex-col gap-[22px] overflow-y-auto px-4 py-7 sm:px-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="lbl">
             Evidence · {plural(arms.treated, "trace")} with reflexes · {arms.control} control
           </span>
-          <h1 className="display m-0 text-[44px] leading-[1.05] font-semibold">
+          <h1 className="display m-0 text-[32px] leading-[1.05] font-semibold sm:text-[44px]">
             {tShare !== null && cShare !== null ? (
               <>
-                With reflexes, agents took the known path in <span className="text-accent-soft">{pct(path!.treated)}</span> of traces.
+                With reflexes, agents took the known path in <span className="text-accent-soft">{pct(path!.treated)}</span> of traces
+                <span className="text-ink-3"> ({path!.treated.k}/{path!.treated.n})</span>; control {pct(path!.control)}
+                <span className="text-ink-3"> ({path!.control.k}/{path!.control.n})</span>.
               </>
             ) : tShare !== null ? (
               <>
-                Agents took the known path in <span className="text-accent-soft">{pct(path!.treated)}</span> of traces.
+                With reflexes, agents took the known path in <span className="text-accent-soft">{pct(path!.treated)}</span> of traces
+                <span className="text-ink-3"> ({path!.treated.k}/{path!.treated.n})</span>.
               </>
             ) : (
               <>
@@ -179,7 +182,7 @@ export function Evidence({ graph }: { graph: Graph }) {
             </p>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="font-mono text-xs text-ink-3">distinct traces · control: reflexes withheld on purpose</span>
           <Segmented<Window>
             label="Window"
@@ -194,20 +197,20 @@ export function Evidence({ graph }: { graph: Graph }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {ks.map((k) => (
           <div key={k.label} className="flex flex-col gap-2 rounded-lg border border-line-strong bg-panel px-5 py-[18px]">
             <span className="text-[13px] text-ink-2">{k.label}</span>
             {k.treated.n >= MIN_TREATED ? (
               <div className="flex items-baseline gap-2.5">
-                <span className="display text-[52px] leading-none font-semibold text-ink-1">{pct(k.treated)}</span>
+                <span className="display text-[44px] leading-none font-semibold text-ink-1 sm:text-[52px]">{pct(k.treated)}</span>
                 <span className="font-mono text-[13px] text-ink-2">
                   vs {k.control.n >= MIN_CONTROL ? pct(k.control) : `${k.control.k}/${k.control.n}`} control
                 </span>
               </div>
             ) : (
               <div className="flex items-baseline gap-2.5" title="Too few traces for a share to mean anything yet">
-                <span className="display text-[52px] leading-none font-semibold text-ink-3">
+                <span className="display text-[44px] leading-none font-semibold text-ink-3 sm:text-[52px]">
                   {k.treated.k}/{k.treated.n}
                 </span>
                 <span className="font-mono text-[13px] text-ink-2">
@@ -225,16 +228,16 @@ export function Evidence({ graph }: { graph: Graph }) {
         <div className="flex flex-col gap-2 rounded-lg border border-line-strong bg-panel px-5 py-[18px]">
           <span className="text-[13px] text-ink-2">Traces in this window</span>
           <div className="flex items-baseline gap-2.5">
-            <span className="display text-[52px] leading-none font-semibold text-ink-1">{arms.treated}</span>
+            <span className="display text-[44px] leading-none font-semibold text-ink-1 sm:text-[52px]">{arms.treated}</span>
             <span className="font-mono text-[13px] text-ink-2">vs {arms.control} control</span>
           </div>
-          <span className="font-mono text-[11.5px] text-ink-3">{graph.stop_requests} finish-line requests · all time</span>
+          <span className="font-mono text-[11.5px] text-ink-3">{plural(graph.stop_requests, "finish-line request")} · all time</span>
         </div>
       </div>
 
       <div className="grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <section aria-label="Traces per day" className="flex flex-col gap-3 rounded-lg border border-line-strong bg-panel px-5 py-[18px]">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="lbl">Traces per day · {url.window === "all" ? "all time" : `last ${url.window.replace("d", " days")}`}</span>
             <div className="flex gap-4 text-[12.5px] text-ink-2">
               <span className="flex items-center gap-1.5">

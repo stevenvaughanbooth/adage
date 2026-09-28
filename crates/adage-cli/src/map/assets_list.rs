@@ -17,12 +17,12 @@ pub(crate) static ASSETS: &[Asset] = &[
         gz: None,
     },
     Asset {
-        path: "assets/index-ZW_CLYms.js",
+        path: "assets/index-EGJi1Rsj.js",
         content_type: "text/javascript; charset=utf-8",
         immutable: true,
         raw: None,
-        br: Some(include_bytes!("../../assets/map/assets/index-ZW_CLYms.js.br")),
-        gz: Some(include_bytes!("../../assets/map/assets/index-ZW_CLYms.js.gz")),
+        br: Some(include_bytes!("../../assets/map/assets/index-EGJi1Rsj.js.br")),
+        gz: Some(include_bytes!("../../assets/map/assets/index-EGJi1Rsj.js.gz")),
     },
     Asset {
         path: "assets/layout.worker-C5z_fNT1.js",
@@ -41,12 +41,12 @@ pub(crate) static ASSETS: &[Asset] = &[
         gz: None,
     },
     Asset {
-        path: "assets/style-BWXSkKm8.css",
+        path: "assets/style-DzI7VjF4.css",
         content_type: "text/css; charset=utf-8",
         immutable: true,
         raw: None,
-        br: Some(include_bytes!("../../assets/map/assets/style-BWXSkKm8.css.br")),
-        gz: Some(include_bytes!("../../assets/map/assets/style-BWXSkKm8.css.gz")),
+        br: Some(include_bytes!("../../assets/map/assets/style-DzI7VjF4.css.br")),
+        gz: Some(include_bytes!("../../assets/map/assets/style-DzI7VjF4.css.gz")),
     },
     Asset {
         path: "index.html",

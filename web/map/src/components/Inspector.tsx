@@ -17,7 +17,7 @@ import {
 } from "../lib/words";
 import { useUrl } from "../state/url";
 import { KindGlyph, Lamp } from "./glyphs";
-import { CommandButton, LifecycleChip, Pill, StrengthChip, cx } from "./ui";
+import { CommandButton, LifecycleChip, Pill, Prose, StrengthChip, cx } from "./ui";
 
 function Section({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -32,7 +32,10 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 export function Directive({ text }: { text: string }) {
   const lines = text.split("\n");
   return (
-    <pre className="scroll-thin m-0 max-h-56 overflow-auto rounded-md border border-line-strong bg-base p-3 font-mono text-[11.5px] leading-[1.6] whitespace-pre-wrap text-ink-2">
+    <pre
+      tabIndex={0}
+      aria-label="The directive, as the agent reads it"
+      className="scroll-thin m-0 max-h-56 overflow-auto rounded-md border border-line-strong bg-base p-3 font-mono text-[11.5px] leading-[1.6] whitespace-pre-wrap text-ink-2">
       {lines.map((l, i) => {
         const tone = /^\s*<\/?adage-/.test(l)
           ? "text-ink-3"
@@ -188,7 +191,7 @@ function Overview({ graph }: { graph: Graph }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-col gap-2">
-        <span className="lbl">The map</span>
+        <h2 className="lbl m-0 font-normal">The map</h2>
         <p className="m-0 text-[13.5px] leading-relaxed font-light text-ink-2">
           Each arc is a reflex: a <span className="text-ink-1">stimulus</span> Adage watches for, and the{" "}
           <span className="text-ink-1">response</span> it tells the agent. Select one to see exactly what the agent reads and the
@@ -214,7 +217,7 @@ function Overview({ graph }: { graph: Graph }) {
             {changes.map(({ ts, c }, i) => (
               <li key={`${ts}${i}`} className="flex flex-col gap-0.5">
                 <span className="font-mono text-xs text-ink-1">{c.route}</span>
-                <span className="text-xs text-ink-3">{c.summary}</span>
+                <span className="text-xs text-ink-3">{c.summary && <Prose text={c.summary} />}</span>
               </li>
             ))}
           </ul>
@@ -229,7 +232,7 @@ export function Inspector({ graph }: { graph: Graph }) {
   const r = findRoute(graph, url.reflex);
   if (!r) {
     return (
-      <aside aria-label="Inspector" className="scroll-thin flex min-h-0 flex-col gap-5 overflow-y-auto border-l border-line bg-panel p-5">
+      <aside aria-label="Inspector" tabIndex={0} className="scroll-thin flex min-h-0 flex-col gap-5 overflow-y-auto border-t border-line bg-panel p-5 lg:border-t-0 lg:border-l">
         <Overview graph={graph} />
       </aside>
     );
@@ -244,7 +247,7 @@ export function Inspector({ graph }: { graph: Graph }) {
   const nTraces = new Set(traces.map((t) => t.session)).size;
   const recent = traces.slice(-4).reverse();
   return (
-    <aside aria-label="Inspector" className="scroll-thin flex min-h-0 flex-col gap-[18px] overflow-y-auto border-l border-line bg-panel p-5" key={routeKey(r)}>
+    <aside aria-label="Inspector" className="scroll-thin flex min-h-0 flex-col gap-[18px] overflow-y-auto border-t border-line bg-panel p-5 lg:border-t-0 lg:border-l" key={routeKey(r)}>
       <div className="flex flex-col gap-2">
         <span className="lbl">{inst ? "Instinct" : "Reflex"}</span>
         <h2 className="m-0 flex min-w-0 items-center gap-2 font-mono text-[17px] font-medium">
@@ -264,12 +267,12 @@ export function Inspector({ graph }: { graph: Graph }) {
         {(r.summary || r.origin) && (
           <p className="m-0 text-[13px] leading-snug text-ink-2">
             {r.summary}
-            {r.origin && <span className="block text-ink-3">{r.origin}</span>}
+            {r.origin && <span className="block text-ink-3"><Prose text={r.origin} /></span>}
           </p>
         )}
         {r.review && r.review.reasons.length > 0 && (
           <p className="m-0 rounded-md border border-prime/30 bg-prime/8 px-2.5 py-1.5 text-xs text-ink-2">
-            <span className="text-ink-1">Waits for review:</span> {r.review.reasons.map((x) => x.why).join("; ")}
+            <span className="text-ink-1">Waits for review:</span> <Prose text={r.review.reasons.map((x) => x.why).join("; ")} />
           </p>
         )}
       </div>
