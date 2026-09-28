@@ -330,3 +330,15 @@
 .how-lamp.inhibit {
   color: var(--color-lamp-inhibit);
 }
+@media (max-width: 639px) {
+  .how-label {
+    font-size: 9.5px;
+  }
+  .how-label.chip {
+    padding: 1px 5px;
+  }
+  .how-label.big {
+    font-size: 10.5px;
+    padding: 3px 6px;
+  }
+}

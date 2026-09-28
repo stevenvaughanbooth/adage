@@ -450,7 +450,7 @@ export class Stage {
     const pitch = cc.pitch + this.user.pitch;
     // Pull back so the scene fits beside the caption, not under it.
     const fit = this.inset > 0 && this.inset < w * 0.6 ? Math.min(1.3, w / (w - this.inset)) : 1;
-    const dist = cc.dist * this.user.zoom * (w < 640 ? 1.25 : fit);
+    const dist = cc.dist * this.user.zoom * (w < 640 ? 1.6 : fit);
     this.camera.position.set(
       cc.target[0] + dist * Math.cos(pitch) * Math.sin(yaw),
       cc.target[1] + dist * Math.sin(pitch),
