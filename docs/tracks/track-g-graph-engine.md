@@ -829,9 +829,12 @@ already owes. The causes, and what changed (`adage-graph/src/compile/{variants,g
 4. **Checks after an edit compile** (shape table: `one Regenerate/Verify Act` after
    `last(edit)`). A verify after an edit compiles to `after_edit → run`, delivered at prime at
    most (never fire, no Stop request). To keep it from being the agent's habit rather than the
-   repository's (the G3 reason for leaving it out), it must beat even the one-sided 90% Wilson
-   upper bound of its rate in traces that made no such edit by `learn.finish_line_contrast`
-   (a handful of such traces proves little), it must span two distinct tasks (below), a check of
+   repository's (the G3 reason for leaving it out), the contrast must hold between the bounds:
+   the one-sided 90% Wilson lower bound of its rate after the edit must beat the upper bound of
+   its rate in traces that made no such edit by `learn.finish_line_contrast` (a handful of
+   traces on either side proves little; this is what keeps the demo's `make ci` after schema
+   edits out on its temporal split, 4 of 4 traces after the edit against 14 of 25 without; a
+   check scoped to the edited part keeps the plain contrast), it must span two distinct tasks (below), a check of
    what an obligation already owes is dropped, and among routes directing the same step on
    different globs, a route is kept only when the traces that edited its files and none of a
    stronger route's still ran the step (**explaining away**: clippy after docs edits).
@@ -840,13 +843,15 @@ already owes. The causes, and what changed (`adage-graph/src/compile/{variants,g
    outranked it and no `edit → check` pattern was grown.
 6. **Distinct tasks** (`engine::one_task`). A directing route's supporting traces must span at
    least two tasks (a trace's task is its normalised first prompt): RepoBench's nascent reflexes
-   were one task's scratch script, repeated by arms and reruns.
+   were one task's scratch script, repeated by arms and reruns. An avoid is exempt: a failing
+   environment (`No module named pytest`) is the same whatever the task.
 7. **Parameterised test runs** (`shapes::segment_template`). A test run whose path argument goes
    on past the edited part (`npm test -- packages/runtime-core/__tests__/x.spec.ts`) also stands
    for its part's directory (`npm test -- packages/{part}`); the template covering most runs wins,
-   bound at runtime from the edited path (`edit_segment`). The parts are the segments the traces
-   edited under the item's parent directory, so one item's single part still shows the part
-   varying. A glob that fixes the segment (`tests/**/*.py`) writes it into the command.
+   bound at runtime from the edited path (`edit_segment`). The parts are the item's own edited
+   segments, or, below a directory they share (never at the top level), the segments the traces
+   edited under it, so one item's single part still shows the part varying. A glob that fixes
+   the segment writes it into the command.
 
 **RepoBench-Local traces** (offline, `--demo`, no instincts, every archived trace; `adage eval
 routes` against `evals/repobench/conventions`):
@@ -857,18 +862,18 @@ routes` against `evals/repobench/conventions`):
 | click | 98 | 0 | 0 | 0/1 |
 | marshmallow | 43 | 0 | 0 | 0/1 |
 | urfave-cli | 43 | 0 | 0 | 0/1 |
-| vue-core | 35 | 0 | `npm test -- packages/{part}` after an edit to `packages/**/*.ts` (prime, 20/30) | 0/2 (scored false: the convention spells it `pnpm test {part} --run`; its notes call `npx vitest run packages/<pkg>` the same) |
+| vue-core | 35 | 0 | `npm test -- packages/{part}` after an edit to `packages/*/*/*.ts` (prime, 20/30) | 0/2 (scored false: the convention spells it `pnpm test {part} --run`; its notes call `npx vitest run packages/<pkg>` the same) |
 
 The Python repositories' convention is a dead end (`pytest` is only in `.venv`), but their traces
 recover by installing (`pip install pytest`, `pip install -e .`), an environment step, not by the
 `.venv` interpreter, so no avoid is learnable from them; click's `.venv/bin/python -m pytest tests
--xvs` after test edits misses the contrast bar (0.29). urfave-cli's `make generate` sequence was
+-xvs` after test edits misses the contrast bar. urfave-cli's `make generate` sequence was
 never run by the agents. No scratch-script reflex forms any more.
 
 **Gates.** L0 bench J 0.6307, unchanged (route precision 1.0; not re-blessed). Parity, gates,
 fidelity, G4 and the gen suites pass with no new false route. `crates/adage-learn/tests/rust_workspace.rs`
 holds an anonymised fixture distilled from the dogfood traces (invented crates, prompts and paths)
-and asserts the three reflexes above form, with no docs reflex, no `--check` beside the
+and asserts the `cargo fmt --all` obligation and a repo-wide check form after Rust edits, with no docs reflex, no `--check` beside the
 obligation and no narrow run directed. `live_learn.rs`: a first learn may now log an instinct the
 traces confirm as extinguished (the learned dead end replaces it).
 
