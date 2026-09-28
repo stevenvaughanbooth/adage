@@ -1,0 +1,168 @@
+{
+ "generation": "17d850cf7939cafe",
+ "routes": [
+  {
+   "repo": "tallyhouse-billing",
+   "route": {
+    "aspect": "yellow",
+    "authored": false,
+    "effect": "verify",
+    "evidence": {
+     "by_origin": {
+      "declared": 1
+     },
+     "days": 0,
+     "deviations_failed": 0,
+     "lower_bound": 0.0,
+     "median_position": 0.0,
+     "models": [],
+     "opportunities": 0,
+     "origin": {
+      "declared": "package.json",
+      "ecosystem": "Node.js",
+      "instinct": "U1",
+      "kind": "instinct",
+      "pack": "core",
+      "version": "0.1.0"
+     },
+     "provenance": "instinct:core@0.1.0",
+     "rate": 0.0,
+     "successes": 0,
+     "support": 0,
+     "turns_saved": 0.0
+    },
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "id": "dead-end-d0ca80",
+    "slots": [],
+    "state": "probation",
+    "step": {
+     "command": "npm run check",
+     "do": "run"
+    },
+    "summary": "Instinct U1: a declared script runs this repository's test runner with the setup it needs",
+    "trigger": {
+     "command": "exec node --test",
+     "on": "after_failure",
+     "signature": "ERR_MODULE_NOT_FOUND"
+    }
+   },
+   "track": "tallyhouse-billing/instincts",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "tallyhouse-billing",
+   "route": {
+    "aspect": "yellow",
+    "authored": false,
+    "effect": "regenerate",
+    "evidence": {
+     "by_origin": {
+      "declared": 1
+     },
+     "days": 0,
+     "deviations_failed": 0,
+     "lower_bound": 0.0,
+     "median_position": 0.0,
+     "models": [],
+     "opportunities": 0,
+     "origin": {
+      "declared": "package.json",
+      "instinct": "U5",
+      "kind": "instinct",
+      "pack": "core",
+      "version": "0.1.0"
+     },
+     "provenance": "instinct:core@0.1.0",
+     "rate": 0.0,
+     "successes": 0,
+     "support": 0,
+     "turns_saved": 0.0
+    },
+    "exit": [
+     {
+      "when": "exploratory_change"
+     }
+    ],
+    "id": "finish-line-04e5d4",
+    "slots": [],
+    "state": "probation",
+    "step": {
+     "command": "npm run codegen",
+     "do": "run"
+    },
+    "summary": "Instinct U5: a declared generator reads these files (named in its script)",
+    "trigger": {
+     "on": "after_edit",
+     "paths": "registry/*.csv"
+    }
+   },
+   "track": "tallyhouse-billing/instincts",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "tallyhouse-billing",
+   "route": {
+    "aspect": "yellow",
+    "authored": false,
+    "effect": "observe",
+    "evidence": {
+     "by_origin": {
+      "declared": 1
+     },
+     "days": 0,
+     "deviations_failed": 0,
+     "lower_bound": 0.0,
+     "median_position": 0.0,
+     "models": [],
+     "opportunities": 0,
+     "origin": {
+      "declared": "package.json",
+      "instinct": "U4",
+      "kind": "instinct",
+      "pack": "core",
+      "version": "0.1.0"
+     },
+     "provenance": "instinct:core@0.1.0",
+     "rate": 0.0,
+     "successes": 0,
+     "support": 0,
+     "turns_saved": 0.0
+    },
+    "exit": [],
+    "id": "instinct-u4-24efa7",
+    "slots": [],
+    "state": "probation",
+    "step": {
+     "do": "advise",
+     "slots": {
+      "command": "npm run codegen",
+      "path": "src/generated/registry.mjs"
+     },
+     "template": "generated-file"
+    },
+    "summary": "Instinct U4: Don't hand-edit generated files",
+    "trigger": {
+     "on": "after_edit",
+     "paths": "src/generated/registry.mjs"
+    }
+   },
+   "track": "tallyhouse-billing/instincts",
+   "version": "0.1.0"
+  }
+ ],
+ "triggers": {
+  "tallyhouse-billing": {
+   "edit_globs": [
+    "registry/*.csv",
+    "src/generated/registry.mjs"
+   ],
+   "words": [
+    "node"
+   ]
+  }
+ }
+}

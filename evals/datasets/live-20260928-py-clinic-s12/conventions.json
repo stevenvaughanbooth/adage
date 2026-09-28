@@ -1,0 +1,62 @@
+{
+ "schema": "adage-conventions/1",
+ "sandbox": "wardline-clinic",
+ "description": "Converted from the gen bundle's conventions.json (evals/gen); decoys are in decoys.json.",
+ "conventions": [
+  {
+   "id": "lookup",
+   "notes": "Task prompts name only an item ID. Items live in the case system: an opaque store (.cases/store.dat) that only tools/case reads. The README mentions only the case system.",
+   "kind": "lookup",
+   "command": "./tools/case {id}",
+   "id_pattern": "^CARE-\\d{3}$",
+   "samples": [
+    "CARE-971",
+    "CARE-297",
+    "CARE-672",
+    "CARE-441",
+    "CARE-807",
+    "CARE-279"
+   ],
+   "counter_samples": [
+    "X-1",
+    "ABCDEFG-123456789",
+    "12",
+    "not-an-id"
+   ]
+  },
+  {
+   "id": "linked-files",
+   "notes": "The lookup output lists the files to change under 'Files:' (the `files` field with --json). Registry items list the CSV and the module that reads it, never the generated file.",
+   "kind": "linked_files",
+   "command": "./tools/case {id}",
+   "samples": [
+    "CARE-971"
+   ]
+  },
+  {
+   "id": "dead-end",
+   "notes": "tests/__init__.py aborts unless tools/testkit.py loaded the fixtures, so any generic runner fails; only `make check` works. The working command is declared in .ci/pipeline.yml.",
+   "kind": "dead_end",
+   "command": "make check",
+   "avoided": [
+    "python3 -m unittest"
+   ]
+  },
+  {
+   "id": "instinct-violation",
+   "notes": "(gen kind instinct_violation) The universal default (make test) is retired here and fails; the suite runs with make check, declared only in .ci/pipeline.yml.",
+   "kind": "dead_end",
+   "command": "make check",
+   "avoided": [
+    "make test"
+   ]
+  },
+  {
+   "id": "finish-line",
+   "notes": "Lookups read wardline/generated/registry.py, generated from registry/*.csv. Editing a CSV requires make gen; make check and the hidden checks fail on stale output.",
+   "kind": "finish_line",
+   "command": "make gen",
+   "glob": "registry/*.csv"
+  }
+ ]
+}

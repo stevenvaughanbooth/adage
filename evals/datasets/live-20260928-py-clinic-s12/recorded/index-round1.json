@@ -1,0 +1,223 @@
+{
+ "generation": "afb72fc43a044fc0",
+ "routes": [
+  {
+   "repo": "wardline-clinic",
+   "route": {
+    "aspect": "yellow",
+    "authored": false,
+    "effect": "verify",
+    "evidence": {
+     "by_origin": {
+      "declared": 1
+     },
+     "days": 0,
+     "deviations_failed": 0,
+     "lower_bound": 0.0,
+     "median_position": 0.0,
+     "models": [],
+     "opportunities": 0,
+     "origin": {
+      "declared": "Makefile",
+      "ecosystem": "Python",
+      "instinct": "U1",
+      "kind": "instinct",
+      "pack": "core",
+      "version": "0.1.0"
+     },
+     "provenance": "instinct:core@0.1.0",
+     "rate": 0.0,
+     "successes": 0,
+     "support": 0,
+     "turns_saved": 0.0
+    },
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "id": "dead-end-60822e",
+    "slots": [],
+    "state": "probation",
+    "step": {
+     "command": "make check",
+     "do": "run"
+    },
+    "summary": "Instinct U1: a declared script runs this repository's test runner with the setup it needs",
+    "trigger": {
+     "command": "exec python3 -m unittest",
+     "on": "after_failure",
+     "signature": ""
+    }
+   },
+   "track": "wardline-clinic/instincts",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "wardline-clinic",
+   "route": {
+    "aspect": "yellow",
+    "authored": false,
+    "effect": "regenerate",
+    "evidence": {
+     "by_origin": {
+      "declared": 1
+     },
+     "days": 0,
+     "deviations_failed": 0,
+     "lower_bound": 0.0,
+     "median_position": 0.0,
+     "models": [],
+     "opportunities": 0,
+     "origin": {
+      "declared": "Makefile",
+      "instinct": "U5",
+      "kind": "instinct",
+      "pack": "core",
+      "version": "0.1.0"
+     },
+     "provenance": "instinct:core@0.1.0",
+     "rate": 0.0,
+     "successes": 0,
+     "support": 0,
+     "turns_saved": 0.0
+    },
+    "exit": [
+     {
+      "when": "exploratory_change"
+     }
+    ],
+    "id": "finish-line-c83ca5",
+    "slots": [],
+    "state": "probation",
+    "step": {
+     "command": "make gen",
+     "do": "run"
+    },
+    "summary": "Instinct U5: a declared generator reads these files (named in its script)",
+    "trigger": {
+     "on": "after_edit",
+     "paths": "registry/*.csv"
+    }
+   },
+   "track": "wardline-clinic/instincts",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "wardline-clinic",
+   "route": {
+    "aspect": "yellow",
+    "authored": false,
+    "effect": "observe",
+    "evidence": {
+     "by_origin": {
+      "declared": 1
+     },
+     "days": 0,
+     "deviations_failed": 0,
+     "lower_bound": 0.0,
+     "median_position": 0.0,
+     "models": [],
+     "opportunities": 0,
+     "origin": {
+      "declared": "Makefile",
+      "instinct": "U4",
+      "kind": "instinct",
+      "pack": "core",
+      "version": "0.1.0"
+     },
+     "provenance": "instinct:core@0.1.0",
+     "rate": 0.0,
+     "successes": 0,
+     "support": 0,
+     "turns_saved": 0.0
+    },
+    "exit": [],
+    "id": "instinct-u4-76ff3c",
+    "slots": [],
+    "state": "probation",
+    "step": {
+     "do": "advise",
+     "slots": {
+      "command": "make gen",
+      "path": "wardline/generated/registry.py"
+     },
+     "template": "generated-file"
+    },
+    "summary": "Instinct U4: Don't hand-edit generated files",
+    "trigger": {
+     "on": "after_edit",
+     "paths": "wardline/generated/registry.py"
+    }
+   },
+   "track": "wardline-clinic/instincts",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "wardline-clinic",
+   "route": {
+    "aspect": "yellow",
+    "authored": false,
+    "effect": "observe",
+    "evidence": {
+     "days": 1,
+     "deviations_failed": 0,
+     "lower_bound": 0.5101091596030786,
+     "median_position": 0.0,
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ],
+     "opportunities": 4,
+     "provenance": "desire-path",
+     "rate": 1.0,
+     "successes": 0,
+     "support": 4,
+     "turns_saved": 0.0
+    },
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "id": "read-linked-files",
+    "slots": [
+     {
+      "contract": {
+       "kind": "repo_path"
+      },
+      "name": "files",
+      "source": {
+       "field": "*paths",
+       "from": "result_field"
+      }
+     }
+    ],
+    "state": "active",
+    "step": {
+     "do": "read_batch",
+     "max": 5,
+     "slot": "files"
+    },
+    "summary": "Read the files the work item links, together",
+    "trigger": {
+     "command": "exec python3 tools/case {id}",
+     "on": "after_command"
+    }
+   },
+   "track": "wardline-clinic/work-items",
+   "version": "0.1.0"
+  }
+ ],
+ "triggers": {
+  "wardline-clinic": {
+   "edit_globs": [
+    "registry/*.csv",
+    "wardline/generated/registry.py"
+   ],
+   "words": [
+    "case",
+    "unittest"
+   ]
+  }
+ }
+}

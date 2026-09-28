@@ -31,7 +31,7 @@ agent runs`.
 | --- | --- |
 | `train` | Round 1 only. Baseline agents work the training tasks with no Adage hooks installed |
 | `learn` | `adage learn` reads the training transcripts. In later rounds it also reads earlier rounds' eval sessions (see below), with each route kind excluded from the sessions it steered |
-| `eval` | Agents work the held-out tasks: every (task, repeat) runs one session per arm, in a seeded random order: `adage` (hooks installed, directives delivered), `holdout` (hooks installed, directives logged but not delivered: the control) and optionally `off` (no hooks: measures hook overhead) |
+| `eval` | Agents work the held-out tasks: every (task, repeat) runs one session per arm, in a seeded random order: `adage` (hooks installed, directives delivered), `holdout` (hooks installed, directives logged but not delivered: the control) and optionally `off` (no hooks: measures hook overhead), `instincts` (hooks installed, directives delivered, from a day-0 index of instincts only: `adage learn --instincts-only` over a fresh sandbox, in `private/instincts-home`) and `e1` (the learned index plus E1 prefetch through `adage-exec`, from `private/e1-home`, which a person prepares: a copy of `adage-home` with `adage review allow-exec ... --level e1` approvals; the runner refuses the arm without it) |
 | `report` | `summary.json` and a results page (below): per-arm aggregates, task-level statistics between `adage` and `holdout` (see [Statistics](#statistics)) |
 
 The phases default to all four. Name some to run only those: for example `eval report --round 2`.
@@ -145,6 +145,17 @@ the index through `ADAGE_HOME`. The home also gets a `.gitconfig` with a neutral
    the login in the Keychain instead, so there use option 1.
 3. Bedrock, Vertex or anything else: name the variables in the config's `forward_env`
    (e.g. `["CLAUDE_CODE_USE_BEDROCK", "AWS_REGION", "AWS_BEARER_TOKEN_BEDROCK"]`).
+4. A host that manages the login itself (Claude Code on the web and similar containers): `--host-auth`
+   (or `"host_auth": true`) forwards exactly `HOST_AUTH_ENV`, when set: `ANTHROPIC_BASE_URL`,
+   `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST`, `CLAUDE_SESSION_INGRESS_TOKEN_FILE`,
+   `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_ORGANIZATION_UUID`, `CLAUDE_CODE_ACCOUNT_UUID`, the
+   proxy variables (both cases) and `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`.
+   Auth is then the host's token (`auth: host`); no credentials file is copied.
+
+`forward_env` never passes an agent session's own markers: `CLAUDECODE`, any `*SESSION_ID*`,
+`CLAUDE_CODE_REMOTE*`, `CLAUDE_CODE_MESSAGING_*`, `CLAUDE_CODE_ENTRYPOINT`, `ADAGE_*` are refused
+when the config loads. A child session that carried the host's session id would attach to, and
+report into, the operator's own session.
 
 `--execute` refuses to start when it finds none of these. `state.json` records which was used
 (`auth`), never the secret.
@@ -154,7 +165,26 @@ transcripts from your `~/.claude/projects`, as the runner used to. It prints a w
 `state.json` says `isolated: false`. Use it only to debug the harness.
 
 This is isolation from accidents, not a security boundary: a session runs as you, can walk the
-filesystem, and sees `ADAGE_HOME` in its environment. Use a container for more.
+filesystem, and sees `ADAGE_HOME` in its environment. Real agents do walk it: in the first corpus run
+(evals/corpus), Haiku sessions ran `find /tmp -name "*hidden*"`, read the hidden test of their own task,
+and read the runner's `state.json` (every other session's commands and prompts). So for anything you
+mean to measure, confine the sessions:
+
+**Confinement** (`"confine": true`, needs bubblewrap). Each `claude -p` runs under `bwrap` in its own
+mount and PID namespace: the whole filesystem read-only, `/tmp`, `/home`, `/root`, `/var/tmp`, `/mnt`
+and `/workspace` (`confine_hide`) replaced by empty directories, then mounted back: the run directory
+(read-write: the sandbox and the session's home), the arm's `ADAGE_HOME` (read-write, hooks write
+spools there), the settings file and the hook binaries (read-only), the directories of the files named
+by `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CLAUDE_SESSION_INGRESS_TOKEN_FILE`
+(directories, because a bind mount pins the inode and the host replaces its token file by rename),
+the `PATH` entries under a hidden directory, and `confine_expose` (e.g. a newer Node). A fresh `/proc`
+hides other processes' environments. The network is shared. The sandbox command and the scorer run
+outside, so the hidden tests, the solutions, other runs and `private/` are out of the agent's reach.
+
+**The tool set.** `claude -p` gets `--tools <allowed_tools>` (or the config's `tools`), not only
+`--allowedTools`: newer Claude Code versions offer more built-in tools, and a session asked to "pick
+up W-1042" called `TaskGet W-1042` (the harness's own task list), found nothing and asked the user
+what to do. Pinning the tool set keeps sessions of different harness versions comparable.
 
 ## Arm order
 
@@ -180,7 +210,11 @@ The config is JSON. `configs/acme-billing.json` is the demo.
 | `eval.tasks_by_round` | One disjoint held-out pool per round (list of lists, or `{"1": [...], "2": [...]}`); replaces `eval.tasks`. Without it later rounds are `leaky` |
 | `rounds` | Learning rounds run by one invocation (default 1) |
 | `seed` | Arm-order seed (`--seed` overrides) |
-| `forward_env` | Extra environment variables passed to isolated sessions (default none) |
+| `forward_env` | Extra environment variables passed to isolated sessions (default none; session markers are refused) |
+| `host_auth` | Forward `HOST_AUTH_ENV`, a host-managed login (`--host-auth`; see [Isolation](#isolation)) |
+| `confine`, `confine_hide`, `confine_expose` | Run sessions under bubblewrap, seeing only their run directory and what they need (see [Isolation](#isolation)) |
+| `tools` | The built-in tools a session has (`claude --tools`); default `allowed_tools` |
+| `adage_exec` | The `adage-exec` binary the `e1` arm's hooks run (default: next to `--adage`) |
 | `model`, `max_turns`, `concurrency` | Passed to `claude -p`, and the number of sessions run in parallel |
 | `learn_args` | Extra `adage learn` arguments (`["--demo"]` for small runs) |
 | `allowed_tools`, `disallowed_tools` | `claude --allowedTools/--disallowedTools` |
