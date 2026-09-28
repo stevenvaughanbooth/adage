@@ -183,10 +183,16 @@ pub fn install(args: &[String]) -> Result<()> {
 
 fn require_person() -> Result<()> {
     if let Some(v) = AGENT_ENV.iter().find(|v| std::env::var_os(v).is_some()) {
-        bail!("`adage install --write` changes what runs in your agent's sessions, so it will not run inside one ({v} is set). Run it yourself, in a terminal.");
+        return Err(crate::hint(
+            format!("`adage install --write` changes what runs in your agent's sessions, so it will not run inside one ({v} is set)"),
+            "run it yourself, in a terminal",
+        ));
     }
     if std::env::var("ADAGE_ALLOW_NONINTERACTIVE").as_deref() != Ok("1") && !std::io::stdin().is_terminal() {
-        bail!("`adage install --write` needs a person at a terminal (stdin is not a terminal); use the printed snippet instead, or set ADAGE_ALLOW_NONINTERACTIVE=1");
+        return Err(crate::hint(
+            "`adage install --write` needs a person at a terminal (stdin is not a terminal)",
+            "use the printed snippet instead, or set ADAGE_ALLOW_NONINTERACTIVE=1",
+        ));
     }
     Ok(())
 }

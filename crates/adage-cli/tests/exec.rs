@@ -112,13 +112,13 @@ fn approving_execution_is_a_persons_decision_and_shows_what_would_run() {
     let (out, err, code) = w.run(&allow(), &[]);
     assert_eq!(code, 0, "{err}");
     for want in [
-        "argv:     python3 scripts/wi-lookup {id} --json",
-        "input:    {id} from the prompt, must match ^W-\\d{4}$",
-        "effect:   observe, approved (the classifier says environment)",
-        "sandbox:  reads: repository, toolchain, cas",
-        "script:   scripts/wi-lookup (L-ref) sha256 ",
-        "exit:     when state is Closed",
-        "evidence: 9 of 10 sessions over 3 days",
+        "argv        python3 scripts/wi-lookup {id} --json",
+        "input       {id} from the prompt, must match ^W-\\d{4}$",
+        "effect      observe, approved (the classifier says environment)",
+        "sandbox     reads: repository, toolchain, cas",
+        "script      scripts/wi-lookup (L-ref) sha256 ",
+        "exit        when state is Closed",
+        "evidence    9 of 10 traces over 3 days",
     ] {
         assert!(out.contains(want), "missing {want:?} in:\n{out}");
     }
@@ -145,7 +145,7 @@ fn approving_execution_is_a_persons_decision_and_shows_what_would_run() {
         w.run(&["review", "undelegate", "acme-billing/work-items", "lookup-work-item"], &[("OPENCODE", "1")]);
     assert_eq!(code, 1, "revoking is a person's decision too");
     let (out, _, code) = w.run(&["review", "undelegate", "acme-billing/work-items", "lookup-work-item"], &[]);
-    assert_eq!((code, out.contains("Revoked 1")), (0, true), "{out}");
+    assert_eq!((code, out.contains("withdrawn   1 delegation")), (0, true), "{out}");
 }
 
 #[test]

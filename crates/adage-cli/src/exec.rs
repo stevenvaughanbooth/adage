@@ -26,15 +26,16 @@ use adage_exec::approvals::{self, Approval, ApprovalKey, Store};
 use adage_exec::request::{FieldSpec, Level};
 use adage_exec::route::{self, Terms};
 use adage_store::Paths;
+use adage_term::{Line, Out, Role};
 use adage_tracks::Index;
 use anyhow::{bail, Context, Result};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const USAGE: &str = "usage: adage exec <enable [--bin <adage-exec>] | disable | status [--json]> [--repo <dir>]";
-const REVIEW_USAGE: &str = "usage: adage review delegate <track> <route> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
-       adage review undelegate <track> <route> [--repo <dir>]";
+const USAGE: &str = "usage: adage delegate [--bin <adage-exec>] | --off | --status [--json]  [--repo <dir>]";
+const REVIEW_USAGE: &str = "usage: adage review delegate <track> <reflex> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
+       adage review undelegate <track> <reflex> [--repo <dir>]";
 
 /// Harnesses whose registrations `enable` swaps.
 const HARNESSES: [&str; 3] = ["claude-code", "codex", "opencode"];
@@ -101,7 +102,7 @@ pub fn exec(args: &[String], paths: &Paths) -> Result<()> {
 }
 
 fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
-    let verb = if on { "exec enable" } else { "exec disable" };
+    let verb = if on { "delegate" } else { "delegate --off" };
     require_person(verb)?;
     let here = std::env::current_exe().context("cannot locate the adage binary")?;
     let bin = if on {
@@ -119,38 +120,58 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
         here
     };
     let root = repo_root(args)?;
-    let mut changed = 0;
+    let mut rows: Vec<(String, String)> = Vec::new();
     for h in HARNESSES {
         for scope in scopes(root.as_deref()) {
             let Some((target, _)) = registered(h, scope, root.as_deref()) else { continue };
             let p = install::plan(h, scope, root.as_deref(), Some(bin.clone()))?;
             if p.before.as_deref() != Some(p.after.as_str()) {
                 install::apply(&p)?;
-                changed += 1;
-                println!("{h} ({scope}): {} now runs {}", target.display(), bin.display());
+                rows.push((h.to_string(), format!("{scope}: {} now runs {}", target.display(), bin.display())));
             }
         }
     }
     let m = marker(paths);
+    let mut o = Out::stdout();
     if on {
         std::fs::create_dir_all(m.parent().context("no directory")?)?;
         let body = json!({ "enabled_at": adage_exec::time::now(), "bin": bin.to_string_lossy() });
         std::fs::write(&m, serde_json::to_string_pretty(&body)? + "\n")?;
-        println!("Execution: on (E1 prefetch for approved routes). Claude Code plugin users: enable the adage-exec");
-        println!(
-            "plugin (/plugin install adage-exec@adage); with {} present the Adage plugin goes quiet.",
-            m.display()
-        );
-        println!("Nothing runs until you approve a route: adage review delegate <track> <route> --level e1");
-        println!("Recommended: deny your agent edits to {} in the harness's permissions.", paths.root.display());
+        o.header("delegate", &["on", "hooks run delegated reflexes (E1 prefetch)"])?;
     } else {
         let _ = std::fs::remove_file(&m);
-        println!("Execution: off. Hooks call adage again (approvals are kept; revoke them with review revoke-exec).");
+        o.header("delegate --off", &["off", "hooks call adage again"])?;
     }
-    if changed == 0 {
-        println!("No hook registration written by `adage install` needed changing.");
+    o.blank()?;
+    for (h, what) in &rows {
+        o.kv(h, Line::new().text(what))?;
     }
-    println!("This takes effect in new agent sessions.");
+    if rows.is_empty() {
+        o.kv("hooks", Line::new().quiet("no registration written by `adage install` needed changing"))?;
+    }
+    if on {
+        o.kv(
+            "plugin",
+            Line::new().quiet(format!(
+                "Claude Code plugin users: /plugin install adage-exec@adage; with {} present the Adage plugin goes quiet",
+                m.display()
+            )),
+        )?;
+        o.blank()?;
+        o.note(&format!(
+            "Recommended: deny your agent edits to {} in the harness's permissions.",
+            paths.root.display()
+        ))?;
+    } else {
+        o.kv("delegations", Line::new().quiet("kept; `adage review undelegate <track> <reflex>` withdraws one"))?;
+    }
+    o.note("This takes effect in new agent sessions.")?;
+    o.blank()?;
+    if on {
+        o.next("adage review delegate <track> <reflex> --level e1", "nothing runs until you delegate a reflex")?;
+    } else {
+        o.next("adage delegate --status", "registrations and delegated reflexes")?;
+    }
     Ok(())
 }
 
@@ -183,33 +204,54 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
     }
-    println!("Execution: {}", if enabled { "on (Claude Code plugin: adage-exec serves)" } else { "off" });
+    let mut o = Out::stdout();
+    let n: usize = grants.values().map(Vec::len).sum();
+    o.header("delegate --status", &[if enabled { "on" } else { "off" }, &crate::words::count(n, "delegated reflex")])?;
+    o.blank()?;
     for r in &regs {
-        println!(
-            "  {} ({}): {} runs {}",
+        o.kv(
             r["harness"].as_str().unwrap_or(""),
-            r["scope"].as_str().unwrap_or(""),
-            r["file"].as_str().unwrap_or(""),
-            r["runs"].as_str().unwrap_or("")
-        );
+            Line::new().text(format!(
+                "{}: {} runs {}",
+                r["scope"].as_str().unwrap_or(""),
+                r["file"].as_str().unwrap_or(""),
+                r["runs"].as_str().unwrap_or("")
+            )),
+        )?;
     }
-    if grants.is_empty() {
-        println!("No execution grants on this machine.");
+    if regs.is_empty() {
+        o.kv("hooks", Line::new().quiet("none registered by `adage install` here"))?;
+    }
+    if enabled {
+        o.kv("plugin", Line::new().quiet("Claude Code: the adage-exec plugin serves"))?;
     }
     for (repo, gs) in &grants {
-        println!("Grants for {repo}:");
+        o.blank()?;
+        o.line(&Line::new().bold(Role::Ink, repo.clone()))?;
         for g in gs {
-            println!(
-                "  {}  {} {}  {}{}",
-                g["route"].as_str().unwrap_or(""),
-                g["level"].as_str().unwrap_or("").to_uppercase(),
-                g["output"].as_str().unwrap_or(""),
-                g["argv"].as_str().unwrap_or(""),
-                if g["auto"] == true { "  (automatic)" } else { "" }
-            );
+            let mut l = Line::new()
+                .text("  ")
+                .text(g["route"].as_str().unwrap_or(""))
+                .sep()
+                .text(g["level"].as_str().unwrap_or("").to_uppercase())
+                .sep()
+                .quiet(g["output"].as_str().unwrap_or(""))
+                .sep()
+                .cmd(g["argv"].as_str().unwrap_or(""));
+            if g["auto"] == true {
+                l = l.sep().faint("automatic");
+            }
+            o.line(&l)?;
         }
     }
-    println!("The sandbox this machine can enforce: adage-exec doctor");
+    o.blank()?;
+    if grants.is_empty() {
+        o.next("adage review delegate <track> <reflex> --level e1", "no reflex is delegated on this machine")?;
+    } else if !enabled {
+        o.next("adage delegate", "hooks run nothing delegated until it is on")?;
+    } else {
+        o.next("adage-exec doctor", "the sandbox this machine can enforce")?;
+    }
     Ok(())
 }
 
@@ -223,17 +265,28 @@ fn indexed<'a>(
 ) -> Result<&'a adage_tracks::index::IndexedRoute> {
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
     let key = repo::lookup_key(root, Some(&paths.repo_keys()), &keys)
-        .with_context(|| format!("no routes are installed for {}", root.display()))?;
-    route::find(index, &key, track, route_id).with_context(|| format!("no route {route_id} in track {track} for {key}"))
+        .with_context(|| format!("no reflexes are installed for {} (see `adage status`)", root.display()))?;
+    route::find(index, &key, track, route_id)
+        .with_context(|| format!("no reflex {route_id} in track {track} for {key} (see `adage status`)"))
 }
 
 /// `adage review delegate` and `revoke-exec`.
 pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
-    require_person(&format!("review {verb}"))?;
-    let (Some(track), Some(route_id)) = (args.first(), args.get(1)) else { bail!("{REVIEW_USAGE}") };
-    if track.starts_with("--") || route_id.starts_with("--") {
-        bail!("{REVIEW_USAGE}");
+    require_person(if verb == "revoke-exec" { "review undelegate" } else { "review delegate" })?;
+    // Positional arguments, wherever the flags are (`--level e1 <track> <reflex>` works too).
+    let mut pos: Vec<&String> = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--level" | "--fields" | "--exit-when" | "--timeout-ms" | "--repo" | "--by" => i += 2,
+            a if a.starts_with("--") => i += 1,
+            _ => {
+                pos.push(&args[i]);
+                i += 1;
+            }
+        }
     }
+    let (Some(track), Some(route_id), None) = (pos.first(), pos.get(1), pos.get(2)) else { bail!("{REVIEW_USAGE}") };
     let root = repo_root(args)?.context("not inside a repository; pass --repo")?;
     let index = Index::load(&paths.index());
     let ir = indexed(&index, &root, paths, track, route_id)?;
@@ -243,8 +296,12 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     if verb == "revoke-exec" {
         let n = store.revoke(&ir.repo, Some(&label));
         store.save(&store_path)?;
-        println!("Revoked {n} execution grant(s) for {label} in {}.", ir.repo);
-        return Ok(());
+        let mut o = Out::stdout();
+        o.header("review undelegate", &[&label, &ir.repo])?;
+        o.blank()?;
+        o.kv("withdrawn", Line::new().text(crate::words::count(n, "delegation")))?;
+        o.blank()?;
+        return Ok(o.next("adage delegate --status", "what stays delegated")?);
     }
     let level = match flag(args, "--level").as_deref().map(str::to_ascii_lowercase).as_deref() {
         Some("e1") => Level::E1,
@@ -278,37 +335,39 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     let key = ApprovalKey::for_request(&req, &ir.repo);
     let e = &ir.route.evidence;
 
-    println!("Approving on this machine, for repository {}:", key.repo);
-    println!("  route:    {label} (track version {})", ir.version);
-    println!("  level:    {}   output: {}", level.as_str().to_uppercase(), req.output.mode.as_str());
-    println!("  argv:     {}", req.argv.join(" "));
+    let mut rows: Vec<(&str, String)> = vec![
+        ("reflex", format!("{label} (track version {})", ir.version)),
+        ("level", format!("{} · output {}", level.as_str().to_uppercase(), req.output.mode.as_str())),
+        ("argv", req.argv.join(" ")),
+    ];
     for (k, v) in &req.contracts {
-        println!("  input:    {{{k}}} from the prompt, must match {v}");
+        rows.push(("input", format!("{{{k}}} from the prompt, must match {v}")));
     }
-    println!("  effect:   observe, approved (the classifier says {})", classified.as_str());
-    println!("  sandbox:  {}", req.profile.summary());
+    rows.push(("effect", format!("observe, approved (the classifier says {})", classified.as_str())));
+    rows.push(("sandbox", req.profile.summary()));
     if req.scripts.is_empty() {
-        println!("  scripts:  none (L-none)");
+        rows.push(("scripts", "none (L-none)".into()));
     }
     for s in &req.scripts {
-        println!("  script:   {} (L-ref) sha256 {}; re-read and checked before every run", s.path, s.sha256);
+        rows.push(("script", format!("{} (L-ref) sha256 {}; re-read and checked before every run", s.path, s.sha256)));
     }
     for (name, f) in &req.output.fields {
-        println!("  output:   {name}: {}", serde_json::to_string(f)?);
+        rows.push(("output", format!("{name}: {}", serde_json::to_string(f)?)));
     }
     for (f, v) in &plan.exit_when {
-        println!("  exit:     when {f} is {v}, nothing further is directed");
+        rows.push(("exit", format!("when {f} is {v}, nothing further is directed")));
     }
-    println!(
-        "  evidence: {} of {} sessions over {} days{}",
-        e.support,
-        e.opportunities,
-        e.days,
-        if e.by_origin.is_empty() { String::new() } else { format!(", by origin {:?}", e.by_origin) }
-    );
-    if !req.scripts.is_empty() {
-        println!("A repository script is code: Adage will run the pinned bytes, read-only, with no network.");
-    }
+    rows.push((
+        "evidence",
+        format!(
+            "{} of {} traces over {} days{}",
+            e.support,
+            e.opportunities,
+            e.days,
+            if e.by_origin.is_empty() { String::new() } else { format!(", by origin {:?}", e.by_origin) }
+        ),
+    ));
+    let repo_key = key.repo.clone();
     store.approve(Approval {
         key,
         route: label.clone(),
@@ -319,12 +378,23 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         terms: Some(terms),
     });
     store.save(&store_path)?;
-    println!(
-        "Recorded in {}. It lapses if the route, its script or its sandbox profile changes.",
-        store_path.display()
-    );
+    let mut o = Out::stdout();
+    o.header("review delegate", &[&label, &format!("for {repo_key} on this machine")])?;
+    o.blank()?;
+    for (k, v) in &rows {
+        o.kv(k, Line::new().text(v.clone()))?;
+    }
+    o.kv("recorded", Line::new().text(store_path.display().to_string()))?;
+    o.blank()?;
+    if !req.scripts.is_empty() {
+        o.note("A repository script is code: Adage will run the pinned bytes, read-only, with no network.")?;
+    }
+    o.note("The delegation lapses if the reflex, its script or its sandbox profile changes.")?;
+    o.blank()?;
     if !marker(paths).is_file() {
-        println!("Execution is off: `adage delegate` makes hooks run it.");
+        o.next("adage delegate", "execution is off; this makes hooks run delegated reflexes")?;
+    } else {
+        o.next("adage delegate --status", "every delegated reflex")?;
     }
     Ok(())
 }

@@ -61,14 +61,35 @@ fn main() {
         Some(Err(e)) => {
             // `error  what failed`, then each cause (adage_term::Out::error).
             let causes: Vec<String> = e.chain().skip(1).map(|c| c.to_string()).collect();
+            let help = e.chain().find_map(|c| c.downcast_ref::<Hint>()).map(|h| h.help.clone());
             let mut err = adage_term::Out::stderr();
-            if err.error(&e.to_string(), &causes, None).is_err() {
+            if err.error(&e.to_string(), &causes, help.as_deref()).is_err() {
                 eprintln!("adage: {e:#}");
             }
             std::process::exit(1);
         }
         None => std::process::exit(1),
     }
+}
+
+/// An error that knows the next step: `main` prints `help` as its `╰─ help` line.
+#[derive(Debug)]
+pub(crate) struct Hint {
+    what: String,
+    help: String,
+}
+
+impl std::fmt::Display for Hint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.what)
+    }
+}
+
+impl std::error::Error for Hint {}
+
+/// `what` failed; `help` says what to run instead.
+pub(crate) fn hint(what: impl Into<String>, help: impl Into<String>) -> anyhow::Error {
+    anyhow::Error::new(Hint { what: what.into(), help: help.into() })
 }
 
 fn flag(args: &[String], name: &str) -> Option<String> {
@@ -258,7 +279,17 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         }
     }
     if transcripts.is_empty() {
-        bail!("no transcripts found");
+        let source = if let Some(p) = flag(args, "--cwd-prefix") {
+            format!("none has a working directory under {p}")
+        } else if explicit || args.iter().any(|a| a == "--claude-projects") {
+            "the sources you named hold no transcripts".to_string()
+        } else {
+            "no Claude Code history in ~/.claude/projects".to_string()
+        };
+        return Err(hint(
+            format!("no transcripts found: {source}"),
+            "name a source: adage condition --transcripts <file>… (or --claude-projects <dir>, --codex-sessions <dir>)",
+        ));
     }
     let outcomes: BTreeMap<String, bool> = match flag(args, "--outcomes") {
         Some(p) => serde_json::from_str(&std::fs::read_to_string(p)?)?,
@@ -587,7 +618,8 @@ fn report(paths: &Paths, json: bool) -> Result<()> {
             "derailed" | "followed_failed" | "misfired" => Role::Inhibit,
             _ => Role::Ink,
         };
-        o.kv(&words::prose(&k.replace('_', " ")), Line::new().push(role, v.to_string()))?;
+        let label = if k == "followed_failed" { "misfired".to_string() } else { words::prose(&k.replace('_', " ")) };
+        o.kv(&label, Line::new().push(role, v.to_string()))?;
     }
     if n("stop_requests") > 0 {
         o.kv(

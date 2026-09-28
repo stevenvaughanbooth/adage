@@ -280,12 +280,12 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
 
     let t = w.ok(&["review"]);
     for s in [
-        "5 route(s) await a decision",
-        "why        new:",
+        "5 reflexes wait for a decision",
+        "why         new:",
         "Wilson lower bound",
         "example values: item = W-1234",
-        "adage review <approve|reject|demote|pin> acme/work-items lookup",
-        "(imported)",
+        "adage review <approve|extinguish|weaken|pin> acme/work-items lookup",
+        " · imported",
     ] {
         assert!(t.contains(s), "listing lacks {s:?}:\n{t}");
     }
@@ -328,7 +328,7 @@ fn decisions_change_track_files_and_index() {
     assert_eq!(rs.routes["lookup"].by, None, "no name unless the person gives one");
     assert_eq!(rs.routes["lookup"].basis.followed, 6, "judgements so far are the new baseline");
     let o = w.run(&["review", "weaken", NAME, "lookup"]);
-    assert!(!o.status.success() && text(&o).contains("only a green route"), "{}", text(&o));
+    assert!(!o.status.success() && text(&o).contains("only a fire reflex"), "{}", text(&o));
 
     // Promote: back to green; a minor bump.
     w.ok(&["review", "strengthen", NAME, "lookup"]);
@@ -413,7 +413,7 @@ fn promotion_never_exceeds_the_effect_ceiling() {
     };
     let untouched = files(&w);
     for (id, why) in
-        [("gen-at-start", "ceiling is yellow"), ("env", "ceiling is yellow"), ("dead", "only a yellow route")]
+        [("gen-at-start", "ceiling is prime"), ("env", "ceiling is prime"), ("dead", "only a prime reflex")]
     {
         let o = w.run(&["review", "strengthen", NAME, id]);
         assert!(!o.status.success(), "{id} must not be promoted");

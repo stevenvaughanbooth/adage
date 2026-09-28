@@ -34,20 +34,22 @@ pub fn require_person(cmd: &str) -> Result<()> {
     // Every harness's marker, not only Claude Code's: an OpenCode or Codex agent must not be able
     // to share, trust, or review either.
     if let Some(var) = crate::install::AGENT_ENV.iter().find(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty())) {
-        bail!(
-            "`adage {cmd}` is a decision for a person (it changes what is shared, trusted or \
-             configured), so it will not run inside an agent session ({var} is set). Run it \
-             yourself, in a terminal."
-        );
+        return Err(crate::hint(
+            format!(
+                "`adage {cmd}` is a decision for a person (it changes what is shared, trusted or \
+                 configured), so it will not run inside an agent session ({var} is set)"
+            ),
+            format!("run `adage {cmd}` yourself, in a terminal"),
+        ));
     }
     if std::env::var("ADAGE_ALLOW_NONINTERACTIVE").as_deref() == Ok("1") {
         return Ok(());
     }
     if !std::io::stdin().is_terminal() {
-        bail!(
-            "`adage {cmd}` needs a person at a terminal (stdin is not a terminal). For CI, set \
-             ADAGE_ALLOW_NONINTERACTIVE=1."
-        );
+        return Err(crate::hint(
+            format!("`adage {cmd}` needs a person at a terminal (stdin is not a terminal)"),
+            "run it from a terminal; for CI, set ADAGE_ALLOW_NONINTERACTIVE=1",
+        ));
     }
     Ok(())
 }

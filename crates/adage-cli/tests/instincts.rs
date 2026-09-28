@@ -299,10 +299,10 @@ fn doctor_review_and_pack_approval() {
         inst.iter().filter(|r| r["state"] == "draft").map(|r| r["route"].as_str().unwrap()).collect();
     assert_eq!(drafts.len(), 2, "npm install and npm ci → pnpm install: {q:#}");
     let text = w.ok(&["review"]);
-    assert!(text.contains("(instinct U1 (from Makefile))"), "{text}");
+    assert!(text.contains(" · instinct U1 (from Makefile)"), "{text}");
     // Approving one environment step approves the pack's for this repository.
     let out = w.ok(&["review", "approve", TRACK, drafts[0]]);
-    assert!(out.contains(&format!("approved   pack core's environment steps for {KEY}")), "{out}");
+    assert!(out.contains(&format!("approved    pack core's environment steps for {KEY}")), "{out}");
     let yaml = std::fs::read_to_string(w.p(&format!("adage/tracks/{TRACK}/review.yaml"))).unwrap();
     assert!(yaml.contains("packs:") && yaml.contains("core:"), "{yaml}");
     // Re-binding keeps both in service.
@@ -313,7 +313,7 @@ fn doctor_review_and_pack_approval() {
     assert_eq!(install, 2, "both environment steps are delivered after pack approval");
     // A rejected instinct stays retired across re-binds.
     let out = w.ok(&["review", "extinguish", TRACK, "finish-line-e7e809"]);
-    assert!(out.contains("rejected"), "{out}");
+    assert!(out.contains("→ extinguished"), "{out}");
     w.bind();
     let idx = std::fs::read_to_string(w.p("adage/index.json")).unwrap();
     assert!(!idx.contains("finish-line-e7e809"), "a rejection holds");

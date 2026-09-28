@@ -29,9 +29,13 @@
 //! re-validates the track and recompiles the index atomically, as `adage condition` and `adage add` do.
 
 use crate::share::{describe_step, require_person};
+use crate::ui::words as words_ui;
+use crate::words;
 use adage_learn::LearnConfig;
 use adage_runtime::{render, SessionState};
 use adage_store::{spool, state, Paths};
+use adage_term::out::KEY_WIDTH;
+use adage_term::{Line, Out, Role};
 use adage_tracks::proposals::{self, Proposal, Proposals};
 use adage_tracks::review::{self, aspect_str, Decision, Review, Reviews};
 use adage_tracks::{
@@ -47,7 +51,7 @@ const MIN_JUDGED: u32 = 5;
 /// A route is flagged when the Wilson lower bound of its derail share reaches this.
 const DERAIL_BAR: f64 = 0.5;
 
-const USAGE: &str = "usage: adage review [--json]\n       adage review <approve|reject|retire|demote|promote|pin|dismiss> <track> <route> [--by <name>]";
+const USAGE: &str = "usage: adage review [--json]\n       adage review <approve|strengthen|weaken|extinguish|pin|dismiss> <track> <reflex> [--by <name>]";
 
 pub(crate) struct Installed {
     pub(crate) dir: PathBuf,
@@ -116,7 +120,7 @@ fn resolve<'a>(all: &'a [Installed], spec: &str) -> Result<&'a Installed> {
         .find(|i| !i.imported)
         .or(named.first())
         .copied()
-        .with_context(|| format!("no installed track {spec:?} (see `adage review` or `adage status`)"))
+        .ok_or_else(|| crate::hint(format!("no installed track {spec:?}"), "`adage status` lists installed tracks"))
 }
 
 /// Followed / derailed judgements per (repository, route), from treated sessions' spools only:
@@ -386,88 +390,127 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&json!({ "count": rows.len(), "queue": rows, "inert": inert }))?);
         return Ok(());
     }
-    print_inert(&inert);
+    let mut o = Out::stdout();
+    let waiting = if items.is_empty() {
+        "nothing waits for a decision".to_string()
+    } else if items.len() == 1 {
+        "1 reflex waits for a decision".to_string()
+    } else {
+        format!("{} reflexes wait for a decision", items.len())
+    };
+    o.header("review", &[&waiting])?;
+    print_inert(&mut o, &inert)?;
     if items.is_empty() {
-        println!("adage review: nothing awaits a decision.");
-        return Ok(());
+        o.blank()?;
+        return Ok(o.next("adage status", "the reflexes in effect")?);
     }
-    println!("adage review: {} route(s) await a decision\n", items.len());
+    let row = |key: &str, value: Line| Line::new().text("  ").faint(key).pad_to(2 + KEY_WIDTH).extend(value);
     for it in &items {
         let (t, r, e) = (&it.inst.track, it.route, &it.route.evidence);
-        let origin = match origin_label(r) {
-            Some(l) => format!("  ({l})"),
-            None if it.inst.imported => "  (imported)".into(),
-            None => String::new(),
-        };
-        println!(
-            "{} @ {}  {}   [{}]{origin}",
-            it.inst.reference, t.manifest.track.version, r.id, t.manifest.scope.repo
-        );
-        for (kind, detail) in &it.reasons {
-            println!("  why        {kind}: {detail}");
+        o.blank()?;
+        let mut head = Line::new()
+            .bold(Role::Ink, it.inst.reference.clone())
+            .faint(format!("@{}", t.manifest.track.version))
+            .sep()
+            .text(r.id.clone())
+            .sep()
+            .quiet(t.manifest.scope.repo.clone());
+        match origin_label(r) {
+            Some(l) => head = head.sep().quiet(l),
+            None if it.inst.imported => head = head.sep().quiet("imported"),
+            None => {}
         }
-        let ceil = if r.aspect == Aspect::Red { String::new() } else { format!(" (ceiling {})", ceiling_str(r)) };
-        println!(
-            "  aspect     {}{ceil} · effect {} · state {}{}",
-            aspect_str(r.aspect),
-            r.effect.as_str(),
-            lower(r.state),
-            if r.authored { " · authored" } else { "" }
-        );
-        println!(
-            "  evidence   {}/{} sessions over {} day(s) · rate {:.2} · Wilson lower bound {:.2}",
-            e.support, e.opportunities, e.days, e.rate, e.lower_bound
-        );
-        println!("  runtime    followed {} · derailed {} (treated sessions)", it.followed, it.derailed);
-        println!("  step       {}", describe_step(&r.step));
+        o.line(&head)?;
+        for (kind, detail) in &it.reasons {
+            let kind = if *kind == "derailing" { "ignored" } else { kind };
+            o.line(&row("why", Line::new().text(format!("{kind}: {}", words::prose(detail)))))?;
+        }
+        let mut strength = Line::new().strength(words::strength(r.aspect));
+        if r.aspect != Aspect::Red {
+            let ceil = ceiling(r.effect, by_edit(r)).map(|a| words::strength(a).word()).unwrap_or("none");
+            strength = strength.quiet(format!(" (ceiling {ceil})"));
+        }
+        strength = strength.sep().quiet(format!("effect {}", r.effect.as_str())).sep().quiet(words::lifecycle(r.state));
+        if r.authored {
+            strength = strength.sep().quiet("pinned");
+        }
+        o.line(&row("strength", strength))?;
+        o.line(&row(
+            "evidence",
+            Line::new().text(format!("{}/{}", e.support, e.opportunities)).quiet(format!(
+                " traces over {} · rate {:.2} · Wilson lower bound {:.2}",
+                words::count(e.days as usize, "day"),
+                e.rate,
+                e.lower_bound
+            )),
+        ))?;
+        o.line(&row(
+            "in use",
+            Line::new().text(format!("followed {} · ignored {}", it.followed, it.derailed)).faint(" (treated traces)"),
+        ))?;
+        o.line(&row("step", Line::new().text(describe_step(&r.step))))?;
         let (directive, examples) = preview(t, r);
         let ex = if examples.is_empty() {
             String::new()
         } else {
             format!(
-                " (example values: {})",
+                "example values: {}",
                 examples.iter().map(|(k, v)| format!("{k} = {v}")).collect::<Vec<_>>().join(", ")
             )
         };
-        println!("  directive{ex}");
+        o.line(&row("directive", Line::new().faint(ex)))?;
         for line in directive.lines() {
-            println!("    {line}");
+            o.line(&Line::new().text("    ").quiet(line))?;
         }
         if let Some(p) = it.proposal {
-            println!("  proposed   `adage review approve` applies these changes (the route stays pinned):");
+            o.line(&row(
+                "proposed",
+                Line::new().text("`adage review approve` applies these changes (the reflex stays pinned):"),
+            ))?;
             for (field, pinned, proposed) in crate::proposal::diff(r, &p.route) {
-                println!("    - {field:<9} {pinned}");
-                println!("    + {field:<9} {proposed}");
+                o.line(&Line::new().text("    ").push(Role::Inhibit, format!("- {field:<9} {pinned}")))?;
+                o.line(&Line::new().text("    ").push(Role::Fire, format!("+ {field:<9} {proposed}")))?;
             }
         }
-        println!(
-            "  decide     adage review <{}> {} {}\n",
-            verbs(r, it.proposal.is_some()).join("|"),
-            it.inst.reference,
-            r.id
-        );
+        let decide = verbs(r, it.proposal.is_some()).iter().map(|v| words_ui::verb(v)).collect::<Vec<_>>().join("|");
+        o.line(&row("decide", Line::new().cmd(format!("adage review <{decide}> {} {}", it.inst.reference, r.id))))?;
     }
+    let first = &items[0];
+    o.blank()?;
+    o.next(
+        &format!("adage review approve {} {}", first.inst.reference, first.route.id),
+        "or another decision listed above",
+    )?;
     Ok(())
 }
 
-/// Routes of installed packs that are inert here (Track C §2.3): never delivered, and no decision
+/// Reflexes of installed packs that are inert here (Track C §2.3): never delivered, and no decision
 /// changes that; restoring what they need (a script, a tool) and running `adage add` again does.
-fn print_inert(inert: &[crate::packs::InertRoute]) {
+fn print_inert<W: std::io::Write>(o: &mut Out<W>, inert: &[crate::packs::InertRoute]) -> Result<()> {
     if inert.is_empty() {
-        return;
+        return Ok(());
     }
-    println!("adage review: {} pack route(s) are inert here (not delivered):\n", inert.len());
+    o.blank()?;
+    o.warn(&format!(
+        "{} inert here: never delivered until what they need is restored and `adage add` runs again",
+        words::count(inert.len(), "pack reflex")
+    ))?;
     for i in inert {
-        println!(
-            "{} @ {}  {}   [{}]  (pack, sha256 {})",
-            i.pack,
-            i.version,
-            i.route,
-            i.repo,
-            &i.digest[..i.digest.len().min(16)]
-        );
-        println!("  why        inert: {}\n", i.reason);
+        o.blank()?;
+        o.line(
+            &Line::new()
+                .bold(Role::Ink, i.pack.clone())
+                .faint(format!("@{}", i.version))
+                .sep()
+                .text(i.route.clone())
+                .sep()
+                .quiet(i.repo.clone())
+                .sep()
+                .faint(format!("pack, sha256 {}", &i.digest[..i.digest.len().min(16)])),
+        )?;
+        o.line(&Line::new().text("  ").faint("why").pad_to(2 + KEY_WIDTH).text(format!("inert: {}", i.reason)))?;
     }
+    Ok(())
 }
 
 /// The decisions that can apply to a route as it stands (promotion of an import may still be
@@ -553,7 +596,7 @@ fn bumped(v: &str, b: Bump) -> String {
 }
 
 fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
-    require_person(&format!("review {verb}"))?;
+    require_person(&format!("review {}", words_ui::verb(verb)))?;
     // One writer of the tracks and index at a time: an automatic learner may be running.
     let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let pos: Vec<&String> = {
@@ -571,21 +614,43 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     };
     let (Some(spec), Some(route_id), None) = (pos.first(), pos.get(1), pos.get(2)) else { bail!("{USAGE}") };
     let by = crate::flag(args, "--by");
-    for line in apply(verb, spec, route_id, by, paths)? {
-        println!("{line}");
+    let d = apply(verb, spec, route_id, by, paths)?;
+    let mut o = Out::stdout();
+    let facts: Vec<&str> = d.facts.iter().map(String::as_str).collect();
+    o.header(&format!("review {}", words_ui::verb(verb)), &facts)?;
+    o.blank()?;
+    for (k, v) in d.rows {
+        o.kv(k, v)?;
+    }
+    o.blank()?;
+    // What waits now, after this decision.
+    let all = discover(&paths.tracks())?;
+    let index = Index::load(&paths.index());
+    let left = queue(&all, &judgements(paths), &index).len();
+    if left > 0 {
+        let why = if left == 1 { "1 reflex still waits".to_string() } else { format!("{left} reflexes still wait") };
+        o.next("adage review", &why)?;
+    } else {
+        o.next("adage status", "the reflexes in effect")?;
     }
     Ok(())
 }
 
 /// A decision from `adage ui`: the same guard and the same code path as `adage review <verb>`.
-pub(crate) fn decide_quietly(verb: &str, spec: &str, route_id: &str, paths: &Paths) -> Result<Vec<String>> {
-    require_person(&format!("review {verb}"))?;
+pub(crate) fn decide_quietly(verb: &str, spec: &str, route_id: &str, paths: &Paths) -> Result<Decided> {
+    require_person(&format!("review {}", words_ui::verb(verb)))?;
     apply(verb, spec, route_id, None, paths)
+}
+
+/// What a decision did: the header's facts and the rows under it.
+pub(crate) struct Decided {
+    pub(crate) facts: Vec<String>,
+    pub(crate) rows: Vec<(&'static str, Line)>,
 }
 
 /// Record one decision and recompile the index; returns the report `adage review` prints. The
 /// caller has checked for a person at the terminal.
-fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Paths) -> Result<Vec<String>> {
+fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Paths) -> Result<Decided> {
     if !matches!(verb, "approve" | "reject" | "retire" | "demote" | "promote" | "pin" | "dismiss") {
         bail!("{USAGE}");
     }
@@ -593,33 +658,39 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         review::check_by(b)?;
     }
     let route_id = &route_id.to_string();
-    let mut out: Vec<String> = Vec::new();
     let all = discover(&paths.tracks())?;
     let inst = resolve(&all, spec)?;
     let mut track = inst.track.clone();
     let mut reviews = inst.reviews.clone();
     let mut props = inst.proposals.clone();
     let repo = track.manifest.scope.repo.clone();
-    let r = track
-        .routes
-        .iter_mut()
-        .find(|r| r.id == **route_id)
-        .with_context(|| format!("{} has no route {route_id:?}", inst.reference))?;
+    let r = track.routes.iter_mut().find(|r| r.id == **route_id).ok_or_else(|| {
+        let ids: Vec<&str> = inst.track.routes.iter().map(|r| r.id.as_str()).collect();
+        crate::hint(
+            format!("{} has no reflex {route_id:?}", inst.reference),
+            format!("its reflexes: {}", ids.join(", ")),
+        )
+    })?;
     let before = r.clone();
     let proposal = crate::proposal::current(props.routes.get(route_id.as_str()), r).cloned();
     if verb == "dismiss" {
-        let p =
-            proposal.with_context(|| format!("{route_id} has no proposed change to dismiss (see `adage review`)"))?;
+        let p = proposal
+            .with_context(|| format!("{route_id} has no proposed change to dismiss (`adage review` lists them)"))?;
         props.routes.remove(route_id.as_str());
         props.dismissed.insert(route_id.to_string(), review::basis(&p.route, 0, 0));
         proposals::save(&inst.dir, &props)?;
-        out.push(format!("adage review: dismissed the proposed change to {} {route_id}", inst.reference));
-        out.push(
-            "  kept       the pinned route as it is; learning proposes again only if its version changes materially"
-                .into(),
-        );
-        out.push(format!("  recorded   {}/{}", inst.reference, proposals::FILE));
-        return Ok(out);
+        return Ok(Decided {
+            facts: vec![inst.reference.clone(), route_id.to_string()],
+            rows: vec![
+                (
+                    "kept",
+                    Line::new().text(
+                        "the pinned reflex as it is; conditioning proposes again only if its version changes materially",
+                    ),
+                ),
+                ("recorded", Line::new().text(format!("{}/{}", inst.reference, proposals::FILE))),
+            ],
+        });
     }
     let (decision, bump) = match verb {
         "approve" if proposal.is_some() => {
@@ -659,12 +730,14 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         }
         "demote" => {
             if r.aspect != Aspect::Green || !live(r.state) {
-                bail!(
-                    "{route_id} is {} ({}); only a green route in service can be demoted. To take it out of service: adage review extinguish {} {route_id}",
-                    aspect_str(r.aspect),
-                    lower(r.state),
-                    inst.reference
-                );
+                return Err(crate::hint(
+                    format!(
+                        "{route_id} is {} ({}); only a fire reflex in service can be weakened",
+                        words::strength(r.aspect).word(),
+                        words::lifecycle(r.state)
+                    ),
+                    format!("to take it out of service: adage review extinguish {} {route_id}", inst.reference),
+                ));
             }
             r.aspect = Aspect::Yellow;
             (Decision::Demoted, Bump::Major)
@@ -672,27 +745,27 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         "promote" => {
             if r.aspect != Aspect::Yellow || !live(r.state) {
                 bail!(
-                    "{route_id} is {} ({}); only a yellow route in service can be promoted",
-                    aspect_str(r.aspect),
-                    lower(r.state)
+                    "{route_id} is {} ({}); only a prime reflex in service can be strengthened",
+                    words::strength(r.aspect).word(),
+                    words::lifecycle(r.state)
                 );
             }
             if r.is_instinct() {
-                bail!("refusing: {route_id} is an instinct (Adage's built-in default), which is yellow at most; a route learned from this repository's sessions can be green");
+                bail!("refusing: {route_id} is an instinct (Adage's built-in default), which is prime at most; a reflex conditioned from this repository's traces can fire");
             }
             if ceiling(r.effect, by_edit(r)) != Some(Aspect::Green) {
                 bail!(
-                    "refusing: {route_id} is a {} step{}, whose ceiling is {}; no one can raise a route above its effect ceiling",
+                    "refusing: {route_id} is a {} step{}, whose ceiling is {}; no one can raise a reflex above its effect ceiling",
                     r.effect.as_str(),
                     if r.effect == adage_core::Effect::Regenerate { " not triggered by an edit" } else { "" },
-                    ceiling_str(r)
+                    ceiling(r.effect, by_edit(r)).map(|a| words::strength(a).word()).unwrap_or("none")
                 );
             }
             if inst.imported && first_hand(&all, &repo, route_id).is_none() {
                 let bar = LearnConfig::default();
                 bail!(
-                    "refusing: {route_id} was imported, and an import cannot be green without local first-hand evidence (Design O2): \
-                     a route learned here with at least {} sessions and a lower bound of at least {:.2}",
+                    "refusing: {route_id} was imported, and an import cannot fire without local first-hand evidence (Design O2): \
+                     a reflex conditioned here with at least {} traces and a lower bound of at least {:.2}",
                     bar.min_support,
                     bar.green_lower_bound
                 );
@@ -742,32 +815,46 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
     let index = Index::compile_root(&paths.tracks(), &tracks).0;
     index.write_atomic(&paths.index())?;
 
-    let change = |a: String, b: String| if a == b { a } else { format!("{a} → {b}") };
+    let mut facts = vec![inst.reference.clone(), route_id.to_string()];
     if proposal.is_some() && verb == "approve" {
-        out.push(format!(
-            "adage review: applied the proposed change to {} {route_id}; it stays pinned",
-            inst.reference
-        ));
-    } else {
-        out.push(format!("adage review: {} {} {}", decision.as_str(), inst.reference, route_id));
+        facts.push("proposed change applied; it stays pinned".into());
+    } else if verb == "reject" && before.state == RouteState::Retired {
+        facts.push("already extinguished".into());
     }
+    let mut rows: Vec<(&'static str, Line)> = Vec::new();
     if verb == "approve" && proposal.is_some() {
-        out.push(format!("  step       {}", change(describe_step(&before.step), describe_step(&after.step))));
+        let (a, b) = (describe_step(&before.step), describe_step(&after.step));
+        rows.push(("step", if a == b { Line::new().text(a) } else { Line::new().quiet(a).text(" → ").text(b) }));
     }
-    out.push(format!("  aspect     {}", change(aspect_str(before.aspect).into(), aspect_str(after.aspect).into())));
-    out.push(format!("  state      {}", change(lower(before.state), lower(after.state))));
+    let mut strength = Line::new().strength(words::strength(before.aspect));
+    if after.aspect != before.aspect {
+        strength = strength.text(" → ").strength(words::strength(after.aspect));
+    }
+    rows.push(("strength", strength));
+    let lifecycle = if before.state == after.state {
+        words::lifecycle(after.state).to_string()
+    } else {
+        format!("{} → {}", words::lifecycle(before.state), words::lifecycle(after.state))
+    };
+    rows.push(("lifecycle", Line::new().text(lifecycle)));
     if after.authored != before.authored {
-        out.push("  authored   yes: `adage condition` will not overwrite it".into());
+        rows.push(("pinned", Line::new().text("yes: `adage condition` will not overwrite it")));
     }
     if let Some((pack, others)) = pack_approved.split_first() {
         let also =
             if others.is_empty() { String::new() } else { format!("; also in service now: {}", others.join(", ")) };
-        out.push(format!("  approved   {pack}'s environment steps for {repo}{also}"));
+        rows.push(("approved", Line::new().text(format!("{pack}'s environment steps for {repo}{also}"))));
     }
-    out.push(format!("  track      {} @ {}", track.manifest.track.name, track.manifest.track.version));
-    out.push(format!("  recorded   {}/{}", inst.reference, review::FILE));
-    out.push(format!("index generation {}, {} routes", index.generation, index.routes.len()));
-    Ok(out)
+    rows.push(("track", Line::new().text(format!("{}@{}", track.manifest.track.name, track.manifest.track.version))));
+    rows.push(("recorded", Line::new().text(format!("{}/{}", inst.reference, review::FILE))));
+    rows.push((
+        "index",
+        Line::new()
+            .text(format!("gen {}", &index.generation[..index.generation.len().min(8)]))
+            .sep()
+            .quiet(words::count(index.routes.len(), "reflex")),
+    ));
+    Ok(Decided { facts, rows })
 }
 
 #[cfg(test)]

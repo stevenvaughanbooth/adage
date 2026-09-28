@@ -70,6 +70,13 @@ pub fn prose(s: &str) -> String {
             (r"\bdrafted\b", "nascent"),
             (r"\bprobation\b", "forming"),
             (r"\blearned\b", "conditioned"),
+            (r"\blearning\b", "conditioning"),
+            (r"\brejected\b", "extinguished"),
+            (r"\bdemoted\b", "weakened"),
+            (r"\bpromoted\b", "strengthened"),
+            (r"\bdemoting\b", "weakening"),
+            (r"\bretiring\b", "extinguishing"),
+            (r"\bderailed\b", "ignored"),
         ]
         .into_iter()
         .map(|(p, w)| (regex::Regex::new(p).expect("static pattern"), w))
@@ -128,6 +135,10 @@ mod tests {
             "finish line reflex prime → fire (8 of 8 traces, lower bound 0.50)"
         );
         assert_eq!(prose("reduced credit"), "reduced credit", "whole words only");
+        assert_eq!(
+            prose("rejected on 2026-09-01; agents derailed, consider demoting it"),
+            "extinguished on 2026-09-01; agents ignored, consider weakening it"
+        );
         assert_eq!(prose("3 spools in /home/me/sessions"), "3 spools in /home/me/sessions", "paths are left alone");
         assert_eq!(prose("run `adage review promote` for 2 routes"), "run `adage review promote` for 2 reflexes");
     }

@@ -34,7 +34,7 @@ mod theme;
 mod view;
 mod watch;
 mod wizard;
-mod words;
+pub(crate) mod words;
 
 #[cfg(test)]
 mod tests;
