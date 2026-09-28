@@ -45,6 +45,22 @@ version as the GitHub Release notes.
     real `claude` CLI when one is installed. That test checks `claude plugin validate` and that
     `claude mcp list` / `mcp get` connect, with no model calls.
 
+- **Graph engine G2 (Track G): prototypes, closed-episode mining, scoring, MDL selection**, in
+  `crates/adage-graph` (not wired into `adage learn` yet). `events.rs`: the miner's event-sequence
+  input (typed events with batches, prompt segments, value-flow and same-artifact edges), with a
+  converter from `input::Session`. `proto.rs`: per-family prototypes (blocked exact kNN,
+  deterministic Louvain, must/cannot-links, singleton rules, a five-level label taxonomy, τ
+  calibrated by successor purity, epoch files). `mine/`: target-rooted, gap-bounded episode growth
+  with flow/same_art/last constraints, taxonomy climb, closure, a per-target node budget, and
+  incremental mining with a negative border (property-tested equal to a full re-mine).
+  `stats.rs` (Beta quantile, Wilson), `score.rs` (Beta posterior with parent-context backoff,
+  lift, contrast, consistency, value, conformance, held-out next-action and ECE), `select.rs`
+  (MDL code tables per delivery shape, `Reflex` with a `why`). `adage eval mine
+  <dataset|gen-dir>` reports reflexes, held-out next-action accuracy against an order-1
+  baseline, ECE and convention parity. On the committed datasets and the six `evals/gen` smoke
+  bundles every lookup, linked-files, dead-end, instinct-violation and finish-line convention is
+  mined and no decoy is selected (`tests/kinds.rs`). Next-action accuracy only matches the
+  order-1 baseline so far, and ECE is 0.06–0.12 on the datasets (targets: +5 points, ≤ 0.05).
 - **E1 prefetch (Track C, milestone C3).** `adage-exec hook <harness> <event>` runs the same hook
   pipeline as `adage hook`, now the shared `adage-hook` library. For a directive whose route has
   an E1 approval, it runs the route in the sandbox (the L-ref script hash is re-read at execution),

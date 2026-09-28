@@ -19,6 +19,7 @@ pub mod dataset;
 pub mod exec_e1;
 pub mod fidelity;
 pub mod generate;
+pub mod graph_mine;
 pub mod replay;
 pub mod safety;
 pub mod score;

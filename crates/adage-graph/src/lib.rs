@@ -17,9 +17,15 @@
 
 pub mod cache;
 pub mod embed;
+pub mod events;
 pub mod facts;
 pub mod flow;
 pub mod input;
+pub mod mine;
+pub mod proto;
+pub mod score;
+pub mod select;
+pub mod stats;
 pub mod types;
 
 use flow::{FlowParams, Slot};

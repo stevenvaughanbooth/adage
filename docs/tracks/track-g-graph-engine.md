@@ -434,3 +434,30 @@ Total is about 15–19 engineer-weeks. G1 can ship alone and is useful even if G
 - /home/user/adage/crates/adage-runtime/src/lib.rs, plus fast.rs and /home/user/adage/crates/adage-tracks/src/triggers.rs (context state, dnet, fast-path equivalence)
 - /home/user/adage/crates/adage-core/src/spans.rs and template.rs, /home/user/adage/crates/adage-intent/src/normalize.rs (the hand-written ID detectors learned value types replace)
 - /home/user/adage/crates/adage-eval/src/conventions.rs and /home/user/adage/evals/gen/grammar.py, skins.py (parity and new-capability ground truth)
+---
+
+## Status note: G2 (2026-09-28)
+
+**Implemented, not integrated.** `crates/adage-graph`: `events.rs` (the miner's own event-sequence input and a converter from `input::Session`; the integration switches the source to `SessionFacts`), `proto.rs`, `mine/{mod,seq,closed,border}.rs`, `stats.rs`, `score.rs`, `select.rs`; `adage eval mine` (`crates/adage-eval/src/graph_mine.rs`); tests `tests/{kinds,mining,border,profile}.rs`.
+
+**Results.**
+
+- **Parity (`tests/kinds.rs`, `adage eval mine`).** Recall 1.00 on every convention of `demo-haiku45` (4), `synthetic` (4) and the six smoke bundles (28: lookup, linked files, dead end, instinct violation, finish line); decoys selected 0 of 13. Reflexes matching no convention: 7 (demo-haiku45), 1 (synthetic), 0–1 per smoke bundle.
+- **Held out** (task-grouped folds, pooled): next-action top-1 engine vs order-1 baseline 0.402 vs 0.399 (demo-haiku45), 0.801 vs 0.801 (synthetic), 0.506 vs 0.506 (smoke mean). The Design §8.5 bar (+5 points) is **not met**. ECE of `conf`: 0.120 (demo-haiku45), 0.063 (synthetic), 0.22 (smoke mean over 33–39 pairs per bundle); the ≤ 0.05 target is **not met**.
+- **Time.** demo-haiku45 (90 sessions): 0.3 s for the whole pipeline in release. Synthetic scale test (2,000 sessions × 200 events, 402k events, 8 threads, release): prototypes 1.9 s, mining 2.0 s, scoring 16.1 s, selection 0.4 s, 20.5 s in all; the 10 s target holds for mining, not for mining plus scoring.
+- **Determinism.** Same bytes for 1 and 4 threads and any input order (`tests/mining.rs`); incremental equals full over random arrival and removal orders (`tests/border.rs`).
+
+**Deviations from this design, decided while building it.**
+
+1. **Constraints join adjacent items only** (`flow(i→i+1)`, `same_art(i→i+1)`, `last(i)` on context edits). Every constraint is then local, so matching is an exact dynamic program and growth by projection agrees with it.
+2. **Levels:** five per event (exact, prototype, coarse, head, kind). Act heads are HeadSub identities; cannot-link is "different HeadSub identity", so an act prototype never spans identities and the taxonomy stays a tree. A kind-level read or edit is an item only with a constraint; continuation reads must be bound (`same_art`/`flow`). Kind labels are never targets.
+3. **Search:** a deterministic **beam** (8 children per node, evidence-carrying extensions first, then P(pattern | label)) and an **equal budget share per target** (2M / targets), so frequent noise targets cannot starve the rest. Truncation is per target.
+4. **Closure** absorbs a pattern only by super-patterns with the same number of context items; longer contexts with the same sessions compete in MDL instead.
+5. **Gates:** consistency ≥ 0.9 replaces contrast for patterns whose context ends with a failed act; V > 0 for directives; guards (context ending in a failed act or `last(edit)`) need a Beta lower bound ≥ 0.5 instead of V > 0 (p_soon is 0 for a failure context). The days gate is capped at the corpus's distinct days.
+6. **MDL:** reflexes code their continuation events (hit/miss stream per context end, offset codes, refinement bits); context events stay free. One code table per delivery shape (avoids per failing runner), filled best-gain-first (lazy greedy); V, support and the canonical string break ties.
+7. **Anchor-level measures** (lift, contrast, p_soon, p_next, Δturns, target variant) use a deterministic sample of at most 300 sessions; support and the posterior use every session. Lift/contrast anchors are events of the context's last item's type.
+8. **Next-action predictor:** a reflex fires while its context ended ≤ G events ago and its act has not happened, if its training hazard beats the order-1 model's training accuracy for its own guess.
+9. **Incremental mining** re-mines when s_min, the alphabet or the target set changes, when more than `border` sessions were added since the last full mine, or when any expansion decision (climb or beam) flips. On small random corpora most additions flip a climb decision, so the full re-mine is the common path there; equality always holds.
+10. **Embeddings:** without substrate embeddings, a 256-d signed feature hash of structural features stands in (the hashed half of §1.2).
+
+**Gaps.** The next-action (+5 points) and ECE (≤ 0.05) targets; scoring cost at 400k events; steering-by-influence is implemented on the input (`Influence`) but no importer fills it yet; Obs/Fail nodes are not emitted (polarity on acts and `same_art` edges carry the dead-end and linked-files evidence); causal lift (E4) is not computed.
