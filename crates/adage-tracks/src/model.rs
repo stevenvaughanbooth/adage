@@ -130,7 +130,37 @@ pub enum Trigger {
     /// Raw prompts never travel in a track; only the centroid does, as integers in units of 1e-4
     /// (`adage_intent::quantize`). A different or missing model means the route never fires.
     Intent { family: String, model: String, centroid: Vec<i16>, threshold: f32 },
+    /// A learned context of two or three events (Track G §6.2): `items` in time order, each
+    /// within `within` alphabet events of the one before, the last one the event that fires the
+    /// route. **Compiled but inert until G4:** the runtime keeps no context state and no
+    /// discrimination net yet, so a context trigger never matches (`adage_runtime::decide`), and
+    /// the hook's fast path adds nothing for it. G4 activates it.
+    Context { items: Vec<CtxItem>, within: u8 },
 }
+
+/// At most this many items in a context trigger, and at most this gap between them.
+pub const CONTEXT_MAX_ITEMS: usize = 3;
+pub const CONTEXT_MAX_WITHIN: u8 = 8;
+
+/// One item of a [`Trigger::Context`] (Track G §6.2): symbolic, never an embedding (an intent
+/// item is the existing intent family test).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "item", rename_all = "snake_case")]
+pub enum CtxItem {
+    /// A successful command whose canonical key meets one of `keys` (`pattern::meets`).
+    Act { keys: Vec<String> },
+    /// A failed command whose key meets one of `keys`, with this failure signature.
+    Fail { keys: Vec<String>, signature: String },
+    /// An edit of a file matching `glob`.
+    Edit { glob: String },
+    /// A prompt holding a token of the learned value type.
+    PromptValue { vtype: ValueType },
+    /// A prompt of an intent family (the [`Trigger::Intent`] test).
+    Intent { family: String, model: String, centroid: Vec<i16>, threshold: f32 },
+}
+
+/// At most this many commands in a [`Step::Sequence`].
+pub const SEQUENCE_MAX_COMMANDS: usize = 3;
 
 /// Bounds on intent triggers (tracks are untrusted input).
 pub const INTENT_MIN_DIM: usize = 8;
@@ -156,6 +186,10 @@ pub enum Step {
         #[serde(default)]
         slots: BTreeMap<String, String>,
     },
+    /// Two or three commands, run in this order (Track G §6.1). Rendered as a numbered list from a
+    /// fixed template; the route's aspect is at most the lowest ceiling of its commands, and
+    /// whether it was followed is judged on the first.
+    Sequence { commands: Vec<String> },
 }
 
 /// Typed exit predicates, rendered by Adage from fixed templates — never free text from a track.

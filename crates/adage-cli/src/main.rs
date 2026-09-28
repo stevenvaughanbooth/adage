@@ -294,6 +294,21 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
             if let Some(ir) = &rr.instincts {
                 print_instincts(ir);
             }
+            if let Some(e) = &rr.engine {
+                println!(
+                    "  graph engine: {} traces, {} reflexes selected, {} routes compiled, {} kept ({} inert until context triggers are live)",
+                    e.sessions, e.reflexes, e.compiled, e.routes, e.inert
+                );
+            }
+            if let Some(sh) = &rr.shadow {
+                print!("{}", adage_learn::shadow::render(repo, sh));
+                let file = paths
+                    .tracks()
+                    .join(adage_learn::slug(repo))
+                    .join(adage_learn::SHADOW_DIR)
+                    .join(adage_learn::shadow::REPORT_FILE);
+                println!("  shadow report: {}", file.display());
+            }
             for c in changes.get(repo).into_iter().flatten() {
                 println!("  changed: {}: {}", c.route, c.summary);
             }

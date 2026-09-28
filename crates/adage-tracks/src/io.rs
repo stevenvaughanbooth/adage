@@ -67,7 +67,9 @@ pub fn read_all(root: &Path) -> Result<Vec<Track>> {
         for e in std::fs::read_dir(&d)? {
             let e = e?;
             // Never follow symlinked directories (loops, and escapes from the tracks directory).
-            if e.file_type()?.is_dir() {
+            // Hidden directories are never tracks in service: `<repo>/.shadow/` holds what the
+            // graph engine would learn under `learn.engine = shadow` (Track G G3).
+            if e.file_type()?.is_dir() && !e.file_name().to_string_lossy().starts_with('.') {
                 stack.push(e.path());
             }
         }
@@ -255,6 +257,51 @@ pub fn validate(t: &Track) -> Result<()> {
                     bail!("{}: the suggested command {:?} is not a verify or regenerate step", ctx(), instead);
                 }
             }
+            Step::Sequence { commands } => {
+                if !(2..=SEQUENCE_MAX_COMMANDS).contains(&commands.len()) {
+                    bail!("{}: a sequence has 2 to {SEQUENCE_MAX_COMMANDS} commands", ctx());
+                }
+                let by_edit = matches!(r.trigger, Trigger::AfterEdit { .. });
+                for command in commands {
+                    if !safe_command(command) {
+                        bail!("{}: command {:?} contains characters a directed command may not", ctx(), command);
+                    }
+                    // Nothing binds a sequence's slots (its commands are fixed).
+                    if !slot_refs(command).is_empty() {
+                        bail!("{}: a sequence step has slots nothing can bind", ctx());
+                    }
+                    let actual = classify(command, &table);
+                    if rank(actual) > rank(r.effect) {
+                        bail!(
+                            "{}: command {:?} is {:?}, but the track declares {:?}",
+                            ctx(),
+                            command,
+                            actual,
+                            r.effect
+                        );
+                    }
+                    // The aspect is at most the lowest ceiling of its commands.
+                    match ceiling(actual, by_edit) {
+                        None => bail!("{}: command {:?} may never be directed", ctx(), command),
+                        Some(max) if r.aspect == Aspect::Green && max != Aspect::Green => {
+                            bail!("{}: aspect green exceeds the ceiling of {:?}", ctx(), command)
+                        }
+                        _ => {}
+                    }
+                }
+                if r.aspect == Aspect::Red {
+                    bail!("{}: a sequence cannot be red", ctx());
+                }
+                if !matches!(
+                    r.trigger,
+                    Trigger::AfterEdit { .. }
+                        | Trigger::AfterCommand { .. }
+                        | Trigger::AfterFailure { .. }
+                        | Trigger::Context { .. }
+                ) {
+                    bail!("{}: a sequence follows an edit, a command, a failure or a context", ctx());
+                }
+            }
             Step::Advise { template, slots } => {
                 crate::advice::check(template, slots, &table).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
                 // Advice directs nothing: yellow, observe, no route slots, and a reactive trigger.
@@ -292,6 +339,14 @@ pub fn validate(t: &Track) -> Result<()> {
                 // (or the track) is interpolated into what the agent reads.
                 if !matches!(r.step, Step::Run { .. }) || !r.slots.is_empty() {
                     bail!("{}: an intent route must be a run step with no slots", ctx());
+                }
+            }
+            Trigger::Context { items, within } => {
+                validate_context(items, *within).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
+                // A context binds no slot in G3 (its items are matched symbolically), so its step
+                // directs fixed commands only.
+                if !r.slots.is_empty() || !matches!(r.step, Step::Run { .. } | Step::Sequence { .. }) {
+                    bail!("{}: a context route is a run or sequence step with no slots", ctx());
                 }
             }
             _ => {}
@@ -427,6 +482,47 @@ fn validate_source(s: &Slot) -> Result<()> {
         }
         SlotSource::Prompt { .. } | SlotSource::ResultField { .. } => Ok(()),
     }
+}
+
+/// A context trigger (Track G §6.2): 2 to 3 items, a gap of 1 to 8 events, and every item safe:
+/// command keys are short plain keys, globs are repository globs (never `**/*.ext`), signatures
+/// are renderable text, and a value type or intent item passes the checks its own trigger or
+/// slot would.
+fn validate_context(items: &[CtxItem], within: u8) -> Result<()> {
+    if !(2..=CONTEXT_MAX_ITEMS).contains(&items.len()) {
+        bail!("a context has 2 to {CONTEXT_MAX_ITEMS} items");
+    }
+    if !(1..=CONTEXT_MAX_WITHIN).contains(&within) {
+        bail!("a context's gap is 1 to {CONTEXT_MAX_WITHIN} events");
+    }
+    let key_ok = |k: &str| {
+        k.len() <= 200 && k.starts_with("exec ") && !k.chars().any(|c| c.is_control() || "`<>\"\\$;|&".contains(c))
+    };
+    let keys_ok = |keys: &[String]| !keys.is_empty() && keys.len() <= 16 && keys.iter().all(|k| key_ok(k));
+    for it in items {
+        match it {
+            CtxItem::Act { keys } => {
+                if !keys_ok(keys) {
+                    bail!("context command keys {keys:?} are not allowed");
+                }
+            }
+            CtxItem::Fail { keys, signature } => {
+                if !keys_ok(keys) || !safe_text(signature) {
+                    bail!("context failure {keys:?} ({signature:?}) is not allowed");
+                }
+            }
+            CtxItem::Edit { glob } => {
+                if !safe_glob(glob) || glob.starts_with("**") {
+                    bail!("context glob {glob:?} is not allowed");
+                }
+            }
+            CtxItem::PromptValue { vtype } => validate_vtype(vtype, &Contract::Pattern { regex: vtype.regex.clone() })?,
+            CtxItem::Intent { family, model, centroid, threshold } => {
+                validate_intent(family, model, centroid, *threshold)?
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Where a route came from: every field is rendered into the directive's wrapper, so each is a

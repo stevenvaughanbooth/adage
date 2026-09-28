@@ -4,12 +4,14 @@ pub mod bridge;
 pub mod cache;
 pub mod codex;
 pub mod diff;
+pub mod engine;
 pub mod graph;
 pub mod import;
 pub mod instincts;
 pub mod intent;
 pub mod mine;
 pub mod opencode;
+pub mod shadow;
 pub mod stale;
 
 use adage_core::CommandTable;
@@ -55,6 +57,12 @@ pub struct RepoReport {
     /// Session facts the graph engine computed (`None` with the miners alone).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub graph: Option<graph::FactsReport>,
+    /// What the graph engine mined, compiled and judged (`shadow` and `graph`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub engine: Option<engine::EngineReport>,
+    /// Under `shadow`: the miners' routes against the graph engine's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shadow: Option<shadow::ShadowReport>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -119,6 +127,29 @@ pub(crate) fn bump(prev: Option<&Track>, routes: &[Route]) -> (String, String) {
     }
 }
 
+/// Where `learn.engine = shadow` writes the graph engine's tracks, inside a repository's tracks
+/// directory. Hidden, so the index and every reader of installed tracks skip it.
+pub const SHADOW_DIR: &str = ".shadow";
+
+/// The routes one track directory would get, and from what.
+struct Group<'a> {
+    suffix: String,
+    description: String,
+    routes: Vec<Route>,
+    /// The sessions the miner saw (the miners' stale verdict reads them).
+    seen: Vec<&'a Session>,
+    /// A graph-engine group: each route's explanation (written to `.why.json`).
+    why: Option<BTreeMap<String, adage_tracks::why::Why>>,
+    /// Written under [`SHADOW_DIR`].
+    shadow: bool,
+}
+
+impl<'a> Group<'a> {
+    fn miner(suffix: &str, description: &str, routes: Vec<Route>, seen: Vec<&'a Session>) -> Group<'a> {
+        Group { suffix: suffix.into(), description: description.into(), routes, seen, why: None, shadow: false }
+    }
+}
+
 /// One track as a learn run would write it, with the proposals it would record for pinned routes.
 #[derive(Debug, Clone)]
 pub struct Planned {
@@ -128,6 +159,8 @@ pub struct Planned {
     /// Decisions to save beside the track (`review.yaml`), when learning made one itself (an
     /// instinct retired automatically).
     pub reviews: Option<adage_tracks::review::Reviews>,
+    /// Why each graph-engine route exists (`.why.json`, for people; never rendered to the agent).
+    pub why: Option<BTreeMap<String, adage_tracks::why::Why>>,
 }
 
 impl Planned {
@@ -137,6 +170,9 @@ impl Planned {
         adage_tracks::proposals::save(&self.dir, &self.proposals)?;
         if let Some(r) = &self.reviews {
             adage_tracks::review::save(&self.dir, r)?;
+        }
+        if let Some(w) = &self.why {
+            adage_tracks::why::save(&self.dir, w)?;
         }
         Ok(())
     }
@@ -233,6 +269,14 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     for p in &planned {
         p.write()?;
     }
+    // `learn.engine = shadow`: the diff report beside the shadow tracks.
+    for (repo, rr) in &report.repos {
+        if let Some(sh) = &rr.shadow {
+            let dir = tracks_root.join(slug(repo)).join(SHADOW_DIR);
+            std::fs::create_dir_all(&dir)?;
+            std::fs::write(dir.join(shadow::REPORT_FILE), serde_json::to_string_pretty(sh)? + "\n")?;
+        }
+    }
     let all = io::read_all(tracks_root)?;
     let (index, conflicts) = Index::compile_root(tracks_root, &all);
     index.write_atomic(index_path)?;
@@ -290,45 +334,94 @@ pub fn plan(
         // steers every miner).
         let unsteered = |kind: &str| -> Vec<&Session> { ss.iter().copied().filter(|s| !s.steered_by(kind)).collect() };
         let ws = unsteered("work-items");
-        let mut work = if cfg.graph() { graph::lookup_routes(&ws, cfg) } else { mine::prompt_routes(&ws, cfg) };
         if cfg.graph() {
             let facts = graph::facts(ss, model.as_ref(), cfg);
             rr.graph = Some(facts);
         }
-        if let Some(r) = work.first() {
-            if let adage_tracks::Step::Run { .. } = &r.step {
-                let typed = r.slots.iter().any(|s| matches!(s.source, adage_tracks::SlotSource::PromptValue { .. }));
-                let key = if typed { graph::lookup_key(&ws, r) } else { lookup_key(&ws, r) };
-                if let Some(k) = key {
-                    work.extend(mine::read_batch_routes(&ws, &k, cfg));
+        // The graph engine (Track G G3): reflexes mined, compiled and judged. Under `graph` its
+        // routes are the repository's; under `shadow` they are written to `<repo>/.shadow/`
+        // beside the miners' and compared with them.
+        let engine_run = cfg.graph().then(|| {
+            let priors: Vec<Route> =
+                io::read(&tracks_root.join(slug(repo)).join(instincts::TRACK)).map(|t| t.routes).unwrap_or_default();
+            engine::run(ss, cfg, &priors)
+        });
+        let mut groups: Vec<Group> = Vec::new();
+        let miners = cfg.engine != "graph";
+        if miners {
+            let mut work = if cfg.graph() { graph::lookup_routes(&ws, cfg) } else { mine::prompt_routes(&ws, cfg) };
+            if let Some(r) = work.first() {
+                if let adage_tracks::Step::Run { .. } = &r.step {
+                    let typed =
+                        r.slots.iter().any(|s| matches!(s.source, adage_tracks::SlotSource::PromptValue { .. }));
+                    let key = if typed { graph::lookup_key(&ws, r) } else { lookup_key(&ws, r) };
+                    if let Some(k) = key {
+                        work.extend(mine::read_batch_routes(&ws, &k, cfg));
+                    }
                 }
             }
+            let fs = unsteered("finish-line");
+            let fs: Vec<&Session> = fs.into_iter().filter(|s| !s.directed.contains("finish-line-stop")).collect();
+            let ds = unsteered("dead-ends");
+            let fl = mine::obligation_routes(&fs, cfg);
+            let dl = mine::dead_end_routes(&ds, cfg);
+            groups.push(Group::miner("work-items", "Context gathering for prompts that name a work item", work, ws));
+            groups.push(Group::miner("finish-line", "Steps this repository requires after certain edits", fl, fs));
+            groups.push(Group::miner(
+                "dead-ends",
+                "Commands that fail in this repository, and what works instead",
+                dl,
+                ds,
+            ));
         }
-        let fs = unsteered("finish-line");
-        let fs: Vec<&Session> = fs.into_iter().filter(|s| !s.directed.contains("finish-line-stop")).collect();
-        let ds = unsteered("dead-ends");
-        let fl = mine::obligation_routes(&fs, cfg);
-        let dl = mine::dead_end_routes(&ds, cfg);
-        // (kind, description, mined routes, the sessions that miner saw)
-        let mut groups: Vec<(&str, &str, Vec<Route>, Vec<&Session>)> = vec![
-            ("work-items", "Context gathering for prompts that name a work item", work, ws),
-            ("finish-line", "Steps this repository requires after certain edits", fl, fs),
-            ("dead-ends", "Commands that fail in this repository, and what works instead", dl, ds),
-        ];
+        if let Some(run) = &engine_run {
+            type Parts = (Vec<Route>, BTreeMap<String, adage_tracks::why::Why>);
+            let mut by_track: BTreeMap<&str, Parts> = BTreeMap::new();
+            for j in &run.routes {
+                let e = by_track.entry(j.track).or_default();
+                e.0.push(j.route.clone());
+                e.1.insert(j.route.id.clone(), j.why.clone());
+            }
+            // Every track the engine may write, so a route it no longer finds can be kept stale
+            // or dropped from its track.
+            for suffix in ["work-items", "finish-line", "dead-ends", "graph"] {
+                let (routes, why) = by_track.remove(suffix).unwrap_or_default();
+                groups.push(Group {
+                    suffix: suffix.to_string(),
+                    description: engine::description(suffix).to_string(),
+                    routes,
+                    seen: ss.to_vec(),
+                    why: Some(why),
+                    shadow: miners,
+                });
+            }
+            rr.engine = Some(run.report.clone());
+        }
         if let Some(m) = &model {
             let is = unsteered("intents");
             let mined = intent::intent_routes(&is, m, cfg);
             rr.intent_families = mined.families;
-            groups.push(("intents", "Commands that requests like these lead to in this repository", mined.routes, is));
+            groups.push(Group::miner(
+                "intents",
+                "Commands that requests like these lead to in this repository",
+                mined.routes,
+                is,
+            ));
         }
         let mut emb = stale::Embeddings::new(model.as_ref());
         // The harnesses these sessions ran in (Claude Code transcripts, OpenCode exports).
         let harness: Vec<String> = ss.iter().map(|s| s.harness.clone()).collect::<BTreeSet<_>>().into_iter().collect();
         let models: Vec<String> =
             ss.iter().filter_map(|s| s.model.clone()).collect::<BTreeSet<_>>().into_iter().collect();
-        for (suffix, description, routes, seen) in groups {
+        let counts = engine_run.as_ref().map(|r| r.counts.clone()).unwrap_or_default();
+        let mut shadow_planned: Vec<Planned> = Vec::new();
+        for g in groups {
+            let Group { suffix, description, routes, seen, why, shadow } = g;
+            let suffix = suffix.as_str();
             let name = format!("{}/{suffix}", slug(repo));
-            let dir = tracks_root.join(slug(repo)).join(suffix);
+            let base =
+                if shadow { tracks_root.join(slug(repo)).join(SHADOW_DIR) } else { tracks_root.join(slug(repo)) };
+            let dir = base.join(suffix);
             let prev = io::read(&dir).ok();
             if routes.is_empty() && prev.is_none() {
                 continue;
@@ -336,9 +429,11 @@ pub fn plan(
             // Human-edited routes are preserved; the miner never overwrites them. Where the miner's
             // own version differs materially, it is proposed in `adage review` instead.
             let mut routes = routes;
-            // The sessions each route could not learn from, because they were steered on its kind.
+            // The sessions each route could not learn from, because they were steered on its kind
+            // (a graph route: the kind of its shape).
             for r in routes.iter_mut() {
-                r.evidence.exposed = stale::exposure(r, suffix, ss, &mut emb).exposed;
+                let kind = if why.is_some() { adage_tracks::route_kind(r) } else { suffix };
+                r.evidence.exposed = stale::exposure(r, kind, ss, &mut emb).exposed;
             }
             let mut pinned: Vec<(Route, Option<Route>)> = Vec::new();
             if let Some(p) = &prev {
@@ -369,9 +464,15 @@ pub fn plan(
             let routes =
                 adage_tracks::review::reconcile_with(prev.as_ref(), &reviews, routes, cfg.material_lower_bound);
             // A route in service that was not found again only because it steered the sessions
-            // that would confirm it is kept, stale, on its last evidence (E1; `stale`).
+            // that would confirm it is kept, stale, on its last evidence (E1; `stale`). A graph
+            // route is judged on the scorer's counts for its own pattern (its `why`).
+            let prev_why = if why.is_some() { adage_tracks::why::load(&dir) } else { BTreeMap::new() };
             let mut routes = adage_tracks::review::keep_stale(prev.as_ref(), &reviews, routes, &today, |p| {
-                stale::verdict(p, suffix, ss, &seen, cfg, &mut emb)
+                if why.is_some() {
+                    engine::verdict(prev_why.get(&p.id), &counts, cfg)
+                } else {
+                    stale::verdict(p, suffix, ss, &seen, cfg, &mut emb)
+                }
             });
             routes.sort_by(|a, b| a.id.cmp(&b.id));
             // Mined routes are built from untrusted session content. One that fails validation
@@ -399,13 +500,28 @@ pub fn plan(
                     }
                 }
             });
+            if routes.is_empty() && prev.is_none() {
+                continue;
+            }
             let (version, change) = bump(prev.as_ref(), &routes);
+            // What explains each route that is still here (one kept stale: its last explanation).
+            let why = why.map(|mut w| {
+                for r in &routes {
+                    if !w.contains_key(&r.id) {
+                        if let Some(p) = prev_why.get(&r.id) {
+                            w.insert(r.id.clone(), p.clone());
+                        }
+                    }
+                }
+                w.retain(|id, _| routes.iter().any(|r| &r.id == id));
+                w
+            });
             let track = Track {
                 manifest: Manifest {
                     track: TrackInfo {
                         name: name.clone(),
                         version: version.clone(),
-                        description: description.into(),
+                        description,
                         provenance: cfg.provenance.clone(),
                     },
                     scope: Scope { repo: repo.clone() },
@@ -419,8 +535,19 @@ pub fn plan(
             lines.extend(
                 proposals.routes.keys().map(|id| format!("{id}: pinned; a change is proposed in `adage review`")),
             );
-            rr.tracks.push(TrackReport { name, version, change, routes: lines });
-            planned.push(Planned { dir, track, proposals, reviews: None });
+            let p = Planned { dir, track, proposals, reviews: None, why };
+            if shadow {
+                shadow_planned.push(p);
+            } else {
+                rr.tracks.push(TrackReport { name, version, change, routes: lines });
+                planned.push(p);
+            }
+        }
+        if miners && engine_run.is_some() {
+            let miner_routes: Vec<&Route> =
+                planned[first_planned..].iter().flat_map(|p| p.track.routes.iter()).collect();
+            let graph_routes: Vec<&Route> = shadow_planned.iter().flat_map(|p| p.track.routes.iter()).collect();
+            rr.shadow = Some(shadow::diff(&miner_routes, &graph_routes));
         }
         // Instincts, after the miners and review: bound from the repository's own files, with
         // every route from another source taking precedence (docs/instincts.md).
@@ -439,6 +566,8 @@ pub fn plan(
             }
             rr.instincts = Some(ir);
         }
+        // The shadow tracks, after instincts (which never see them).
+        planned.extend(shadow_planned);
         report.repos.insert(repo.clone(), rr);
     }
     Ok((report, planned))

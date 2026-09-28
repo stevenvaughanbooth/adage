@@ -16,6 +16,7 @@
 //! facts are computed and cached.
 
 pub mod cache;
+pub mod compile;
 pub mod embed;
 pub mod events;
 pub mod facts;

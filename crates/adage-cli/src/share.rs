@@ -152,6 +152,9 @@ pub fn describe_step(step: &Step) -> String {
         Step::ReadBatch { slot, max } => format!("read up to {max} files listed in {{{slot}}}"),
         Step::Avoid { avoid, instead, .. } => format!("avoid `{avoid}`, use `{instead}`"),
         Step::Advise { template, .. } => format!("advise ({template})"),
+        Step::Sequence { commands } => {
+            format!("run in order: {}", commands.iter().map(|c| format!("`{c}`")).collect::<Vec<_>>().join(", "))
+        }
     }
 }
 

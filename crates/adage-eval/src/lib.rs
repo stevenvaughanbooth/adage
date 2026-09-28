@@ -219,6 +219,7 @@ fn step_text(s: &adage_tracks::Step) -> String {
             let s: Vec<String> = slots.iter().map(|(k, v)| format!("{k}={v}")).collect();
             format!("advise {template} ({})", s.join(", "))
         }
+        adage_tracks::Step::Sequence { commands } => commands.join(" then "),
     }
 }
 

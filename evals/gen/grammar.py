@@ -14,13 +14,19 @@ from dataclasses import dataclass, field
 import bugs
 from skins import SKINS
 
-# Every kind a conventions.json entry may have. `scope` and `env_sync` are reserved in the schema
-# (Adage does not mine them yet) and are not generated.
-KINDS = ("lookup", "linked_files", "dead_end", "finish_line", "scope", "env_sync", "decoy", "instinct_violation")
-GENERATED_KINDS = ("lookup", "linked_files", "dead_end", "finish_line", "decoy", "instinct_violation")
+# Every kind a conventions.json entry may have. `scope`, `env_sync` and `sequence` (Track G G3) are
+# generated on the python-make stack only, and only when a spec asks for them.
+KINDS = ("lookup", "linked_files", "dead_end", "finish_line", "scope", "env_sync", "sequence", "decoy",
+         "instinct_violation")
+GENERATED_KINDS = ("lookup", "linked_files", "dead_end", "finish_line", "scope", "env_sync", "sequence", "decoy",
+                   "instinct_violation")
+# The kinds only python-make generates (Track G G3).
+NEW_KINDS = ("scope", "env_sync", "sequence")
 DEAD_END_MODES = ("env_guard", "path_alias", "wrong_runner")
 DECOY_MODES = ("unused_target", "lookalike_regen", "lookalike_verify", "legacy_script")
-TASK_KINDS = ("bugfix", "registry", "control")
+TASK_KINDS = ("bugfix", "registry", "control", "scoped", "deps")
+# Tasks named by a tracker id (the others name their files in the prompt).
+TRACKER_KINDS = ("bugfix", "registry")
 MIN_CONTROL_SHARE = 0.25
 
 SPEC_KEYS = {"name", "stack", "skin", "conventions", "tasks", "id_digits", "id_shape", "description"}
@@ -37,8 +43,9 @@ SPEC_KEYS = {"name", "stack", "skin", "conventions", "tasks", "id_digits", "id_s
 ID_SHAPES = ("prefix_dash", "hash_num", "uuid", "path_num", "branch", "mixed")
 BRANCH_WORDS = ("audit", "batch", "cache", "float", "index", "label", "limit", "login", "merge", "parse", "query",
                 "queue", "retry", "round", "scope", "token")
-CONVENTION_KEYS = {"lookup", "linked_files", "dead_end", "finish_line", "instinct_violation", "decoys"}
-TASK_KEYS = {"bugfix", "registry", "control"}
+CONVENTION_KEYS = {"lookup", "linked_files", "dead_end", "finish_line", "instinct_violation", "decoys", "scope",
+                   "env_sync", "sequence"}
+TASK_KEYS = {"bugfix", "registry", "control", "scoped", "deps"}
 
 
 class SpecError(ValueError):
@@ -53,6 +60,9 @@ class Conventions:
     finish_line: bool
     instinct_violation: bool
     decoys: list              # modes from DECOY_MODES
+    scope: bool = False       # packages/<name>/ with their own suites (`make -C packages/<name> check`)
+    env_sync: bool = False    # requirements.txt, and `make deps` after changing it
+    sequence: bool = False    # after a registry edit: `make gen`, then `make check` (replaces finish_line)
 
 
 @dataclass
@@ -60,9 +70,11 @@ class Task:
     id: str
     kind: str                 # bugfix | registry | control
     split: str                # train | eval
-    template: object = None   # bugfix/control: a bugs.Template id
+    template: object = None   # bugfix/control/scoped: a bugs.Template id
     module: object = None     # bugfix/control: the module holding the function
     registry: object = None   # registry: a skins.RegistryTask
+    package: object = None    # scoped: the package under packages/
+    dep: object = None        # deps: the (library, version) pinned
 
 
 @dataclass
@@ -128,6 +140,12 @@ def normalise(spec, stacks):
         raise SpecError(f"conventions.dead_end: stack {stack} supports modes {list(modes)} (or \"auto\"), got {dead!r}")
     finish = _bool(c.get("finish_line", True), "conventions.finish_line")
     instinct = _bool(c.get("instinct_violation", True), "conventions.instinct_violation")
+    new = {k: _bool(c.get(k, False), f"conventions.{k}") for k in NEW_KINDS}
+    if any(new.values()) and stack != "python-make":
+        raise SpecError(f"conventions.{', '.join(k for k, v in new.items() if v)}: only the python-make stack "
+                        f"generates {', '.join(NEW_KINDS)}")
+    if new["sequence"] and not finish:
+        raise SpecError("conventions.sequence needs conventions.finish_line (the registry and its generator)")
     decoys = c.get("decoys", ["unused_target", "lookalike_regen"])
     if isinstance(decoys, int) and not isinstance(decoys, bool):
         decoys = list(DECOY_MODES[:_int(decoys, "conventions.decoys", 0, len(DECOY_MODES))])
@@ -140,13 +158,19 @@ def normalise(spec, stacks):
     n_bug = _int(t.get("bugfix", 4), "tasks.bugfix", 0, len(bugs.IDS))
     n_reg = _int(t.get("registry", 2 if finish else 0), "tasks.registry", 0, len(sk.registry_tasks))
     n_ctl = _int(t.get("control", 2), "tasks.control", 0, len(bugs.IDS))
+    n_scoped = _int(t.get("scoped", 3 if new["scope"] else 0), "tasks.scoped", 0, 3)
+    n_deps = _int(t.get("deps", 3 if new["env_sync"] else 0), "tasks.deps", 0, 3)
+    if n_scoped and not new["scope"]:
+        raise SpecError("tasks.scoped needs conventions.scope")
+    if n_deps and not new["env_sync"]:
+        raise SpecError("tasks.deps needs conventions.env_sync")
     if n_bug + n_ctl > len(bugs.IDS):
         raise SpecError(f"tasks.bugfix + tasks.control: at most {len(bugs.IDS)} (one bug template each)")
     if n_reg and not finish:
         raise SpecError("tasks.registry needs conventions.finish_line")
     if (n_bug or n_reg) and not lookup:
         raise SpecError("tasks.bugfix and tasks.registry are named by tracker ID only, so they need conventions.lookup")
-    total = n_bug + n_reg + n_ctl
+    total = n_bug + n_reg + n_ctl + n_scoped + n_deps
     if total == 0:
         raise SpecError("spec.tasks: at least one task")
     if n_ctl < MIN_CONTROL_SHARE * total:
@@ -169,6 +193,14 @@ def normalise(spec, stacks):
         "tasks": {"bugfix": n_bug, "registry": n_reg, "control": n_ctl},
         "id_digits": digits,
     }
+    # The Track G G3 kinds are left out when off, so existing specs keep their bytes.
+    for k, v in new.items():
+        if v:
+            out["conventions"][k] = True
+    if n_scoped:
+        out["tasks"]["scoped"] = n_scoped
+    if n_deps:
+        out["tasks"]["deps"] = n_deps
     if shape != "prefix_dash":  # the default is left out, so existing specs keep their bytes
         out["id_shape"] = shape
     if spec.get("description"):
@@ -362,7 +394,7 @@ def resolve(spec, seed, stacks):
     if dead == "auto":
         dead = rng.choice(list(stacks[spec["stack"]].DEAD_END_MODES))
     conv = Conventions(c["lookup"], c["linked_files"], dead, c["finish_line"], c["instinct_violation"],
-                       list(c["decoys"]))
+                       list(c["decoys"]), c.get("scope", False), c.get("env_sync", False), c.get("sequence", False))
 
     # Lay the twelve bug templates out over the three modules, four each.
     order = list(bugs.IDS)
@@ -393,6 +425,15 @@ def resolve(spec, seed, stacks):
         k += 1
     for i, tid in enumerate(ctl_templates):
         tasks.append(Task(f"ctl-{i + 1}", "control", "", template=tid, module=where[tid]))
+    # Track G G3 tasks, drawn after everything else so existing specs draw exactly what they did.
+    if n.get("scoped"):
+        pk = rng.sample(list(sk.packages), n["scoped"])
+        tpl = rng.sample(list(bugs.IDS), n["scoped"])
+        for i, (p, tid) in enumerate(zip(pk, tpl)):
+            tasks.append(Task(f"pkg-{i + 1}", "scoped", "", template=tid, package=p))
+    if n.get("deps"):
+        for i, d in enumerate(rng.sample(list(sk.deps[2:]), n["deps"])):
+            tasks.append(Task(f"dep-{i + 1}", "deps", "", dep=d))
     # Splits: alternate within each kind, so both splits see every kind (train first).
     for kind in TASK_KINDS:
         for i, t in enumerate(x for x in tasks if x.kind == kind):

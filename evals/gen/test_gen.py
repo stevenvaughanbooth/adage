@@ -69,7 +69,13 @@ class Grammar(unittest.TestCase):
         self.bad({**base, "skin": "space"}, "spec.skin")
         self.bad({**base, "colour": 1}, "unknown keys")
         self.bad({**base, "conventions": {"dead_end": "path_alias"}}, "supports modes")
-        self.bad({**base, "conventions": {"scope": True}}, "unknown keys")
+        self.bad({**base, "conventions": {"scoped": True}}, "unknown keys")
+        # Track G G3 kinds: python-make only; a sequence needs the registry; tasks need their kind.
+        self.bad({**base, "stack": "node-npm", "conventions": {"scope": True}}, "only the python-make stack")
+        self.bad({**base, "conventions": {"sequence": True, "finish_line": False}, "tasks": {"registry": 0}},
+                 "conventions.sequence needs")
+        self.bad({**base, "tasks": {"scoped": 1}}, "tasks.scoped needs conventions.scope")
+        self.bad({**base, "tasks": {"deps": 1}}, "tasks.deps needs conventions.env_sync")
         self.bad({**base, "conventions": {"finish_line": False}, "tasks": {"registry": 1, "control": 2}}, "finish_line")
         self.bad({**base, "conventions": {"lookup": False, "linked_files": False}}, "need conventions.lookup")
         self.bad({**base, "tasks": {"bugfix": 6, "registry": 2, "control": 1}}, "at least 25%")
@@ -299,6 +305,61 @@ class Rehearsal(unittest.TestCase):
             self.assertGreaterEqual(r["all"]["e2e_recall"], 0.95, json.dumps(r["all"]))
             self.assertEqual(r["all"]["e2e_unsafe"], 0)
             self.assertEqual(r["all"]["unsafe_accepts"], 0)
+
+
+class NewKinds(unittest.TestCase):
+    """Track G G3: the scope, env_sync and sequence conventions (`specs/newkinds.json`)."""
+
+    def test_existing_specs_are_unchanged(self):
+        # The new keys are left out of a normalised spec unless asked for, so every existing
+        # bundle keeps its bytes (the smoke suite's are checked against a fresh build in CI by
+        # the determinism tests; here, the specs themselves).
+        for suite in ("smoke", "idshapes"):
+            for entry in gen.load_suite(suite)["sandboxes"]:
+                spec = grammar.normalise(entry["spec"], STACKS)
+                self.assertFalse(set(spec["conventions"]) & set(grammar.NEW_KINDS), (suite, spec["name"]))
+                self.assertFalse(set(spec["tasks"]) & {"scoped", "deps"}, (suite, spec["name"]))
+
+    def test_new_kinds_plan_and_conventions(self):
+        entry = gen.load_suite("newkinds")["sandboxes"][0]
+        plan, stack = gen.plan_for(entry["spec"], entry["seed"])
+        kinds = [t.kind for t in plan.tasks]
+        self.assertEqual((kinds.count("scoped"), kinds.count("deps")), (3, 3))
+        conv = {c["kind"]: c for c in stack.conventions()}
+        self.assertNotIn("finish_line", conv, "the sequence replaces the finish line")
+        self.assertEqual(conv["sequence"]["steps"], ["make gen", "make check"])
+        self.assertEqual(conv["scope"]["command"], "make -C packages/{part} check")
+        self.assertEqual(sorted(conv["scope"]["samples"]), sorted(plan.skin.packages))
+        self.assertEqual((conv["env_sync"]["command"], conv["env_sync"]["glob"]), ("make deps", "requirements.txt"))
+        for t in plan.tasks:
+            if t.kind in ("scoped", "deps"):
+                self.assertFalse(re.search(r"\b[A-Z][A-Z0-9]{0,9}-\d{1,7}\b", " ".join(stack.prompts(t))))
+
+    def test_graph_engine_learns_the_new_kinds_and_the_miners_do_not(self):
+        entry = gen.load_suite("newkinds")["sandboxes"][0]
+        with tempfile.TemporaryDirectory() as t, contextlib.redirect_stdout(io.StringIO()):
+            b = gen.build(entry["spec"], entry["seed"], Path(t) / "b")
+            c = selfcheck.Checker(b)
+            try:
+                status = c.run_all()
+            finally:
+                c.tmp.cleanup()
+            self.assertEqual(status, "ok", f"{c.failed}\n" + "\n".join(c.lines))
+            exe = rehearse.find_adage(None)
+            if not exe:
+                rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, None, learn=False)
+                self.assertTrue(rep["all_passed"])
+                self.skipTest("no adage binary (cargo build -p adage-cli)")
+            graph = rehearse.rehearse_bundle(b, Path(t) / "graph", 2, exe, learn=True, engine="graph")
+            miners = rehearse.rehearse_bundle(b, Path(t) / "miners", 2, exe, learn=True)
+        self.assertTrue(graph["ok"], json.dumps({k: graph.get(k) for k in
+                                                 ("comparison", "unexpected_routes", "learn_error")}, indent=1)[:4000])
+        rows = {r["kind"]: r for r in miners["comparison"]}
+        for kind in grammar.NEW_KINDS:
+            self.assertFalse(rows[kind]["ok"], f"the miners learned {kind}")
+        env = next(r for r in graph["comparison"] if r["kind"] == "env_sync")
+        self.assertEqual(env["learned"]["state"], "draft", "an environment step is nascent until reviewed")
+        self.assertEqual(miners["decoys_learned"], 0)
 
 
 class IdShapes(unittest.TestCase):

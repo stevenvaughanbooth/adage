@@ -409,6 +409,22 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                     }
                                     continue;
                                 }
+                                // A sequence after an edit (Track G §6.1): said once, and judged on its
+                                // first command. It is not an obligation: no Stop request comes of it.
+                                if let (Trigger::AfterEdit { paths }, Step::Sequence { commands }) =
+                                    (&ir.route.trigger, &ir.route.step)
+                                {
+                                    let hit = glob::Pattern::new(paths).map(|g| g.matches(&rel)).unwrap_or(false);
+                                    if hit && emit_ok(st, &out, &ir.route.id) {
+                                        if let (Some(t), Some(first)) =
+                                            (render::route_text(&ir.route, &[]), commands.first())
+                                        {
+                                            st.pending.push(pending_for(ir, first, ctx));
+                                            out.push(directive(ir, t));
+                                        }
+                                    }
+                                    continue;
+                                }
                                 if let (Trigger::AfterEdit { paths }, Step::Run { command }) =
                                     (&ir.route.trigger, &ir.route.step)
                                 {
@@ -472,6 +488,13 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                 if meets(command, &key) && emit_ok(st, &out, &ir.route.id) {
                                     let text = match &ir.route.step {
                                         Step::Advise { .. } => render::route_text(&ir.route, &[]),
+                                        Step::Sequence { commands } => {
+                                            let t = render::route_text(&ir.route, &[]);
+                                            if let (Some(_), Some(first)) = (&t, commands.first()) {
+                                                st.pending.push(pending_for(ir, first, ctx));
+                                            }
+                                            t
+                                        }
                                         // A command with a slot bound from this command's output.
                                         Step::Run { .. } if binds_output(&ir.route) => {
                                             match bind_output_route(&ir.route, &call.output, ctx) {
@@ -526,9 +549,16 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                             && emit_ok(st, &out, &ir.route.id)
                         {
                             if let Some(t) = render::route_text(&ir.route, &[]) {
-                                // A run step after a failure is followed, or not, like any other.
-                                if let Step::Run { command } = &ir.route.step {
-                                    st.pending.push(pending_for(ir, command, ctx));
+                                // A run step after a failure is followed, or not, like any other (a
+                                // sequence on its first command).
+                                match &ir.route.step {
+                                    Step::Run { command } => st.pending.push(pending_for(ir, command, ctx)),
+                                    Step::Sequence { commands } => {
+                                        if let Some(first) = commands.first() {
+                                            st.pending.push(pending_for(ir, first, ctx));
+                                        }
+                                    }
+                                    _ => {}
                                 }
                                 out.push(directive(ir, t));
                             }

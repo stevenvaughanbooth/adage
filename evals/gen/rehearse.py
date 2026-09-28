@@ -20,7 +20,12 @@ routes with conventions.json: each non-decoy convention must be recovered, and n
 a decoy. A lookup is recovered when its command is the convention's and its contract accepts every
 tracker id and fresh holdout id and rejects every near miss (by ids, not by spelling, so any id
 shape can be judged); a dead end when its runner begins the avoided command, as adage canonicalises
-both (`npm test` is `npm run test`). The adage binary is
+both (`npm test` is `npm run test`), or (`--engine graph`) when it runs the working command after the
+avoided one fails; a finish line by its glob and command, or by a sequence whose first step it is; a
+sequence, scope or env_sync convention (Track G G3) by an after-edit route on its glob directing its
+steps, its command with the edited part as a slot, or its environment step (a draft awaiting review,
+as its ceiling requires). A finish line on a sequence's first step is part of it: expected, not a
+recovery. Context-triggered routes are inert until Track G G4 and are neither. The adage binary is
 --adage, else target/release/adage, else target/debug/adage in this repository. It writes
 ROOT/<bundle>/report.json and prints recovered vs expected. The default ROOT is DIR/rehearsal (for
 a bundle) or DIR/<bundle>/rehearsal (for a suite).
@@ -143,7 +148,8 @@ def work(b, s, task, i):
     for k, d in enumerate(decoys):
         if (i + k) % 3 == 0:
             s.bash(d["command"])
-    if task["kind"] == "control":
+    if task["kind"] not in grammar.TRACKER_KINDS:
+        # Control, scoped and deps tasks name their files in the prompt.
         for f in task["files"]:
             s.read(f)
     else:
@@ -164,9 +170,11 @@ def work(b, s, task, i):
     if task["kind"] != "registry" and i % 4 == 2:
         for d in decoys:  # decoys after an edit too, as agents try things (never the regenerate step)
             s.bash(d["command"])
-    if task["kind"] == "registry":
-        if i % 4 == 1:
-            s.bash(b.tasks["verify"])  # CI reports stale output
+    if task["kind"] == "registry" and i % 4 == 1:
+        s.bash(b.tasks["verify"])  # CI reports stale output
+    if task["kind"] in ("registry", "scoped", "deps"):
+        # The regenerate step (then the check, where the sandbox's sequence asks for it), the
+        # package's own suite, or the environment step.
         for cmd in b.sol[task["id"]]["run"]:
             s.bash(cmd)
     variants = b.dead_end_variants()
@@ -297,7 +305,7 @@ def lookup_contract_ok(regex, c, b, holdout):
         rx = re.compile(regex)
     except re.error:
         return False
-    ids = [t["id"] for t in b.tasks["tasks"] if t["kind"] != "control"] + list(c.get("samples", []))
+    ids = [t["id"] for t in b.tasks["tasks"] if t["kind"] in grammar.TRACKER_KINDS] + list(c.get("samples", []))
     ids += list((holdout or {}).get("fresh", []))
     near = [n["value"] for n in (holdout or {}).get("near_miss", [])] + list(c.get("counter_samples", []))
     if not ids:
@@ -305,9 +313,28 @@ def lookup_contract_ok(regex, c, b, holdout):
     return all(rx.fullmatch(i) for i in ids) and not any(rx.fullmatch(n) for n in near)
 
 
+def placeholders(cmd):
+    """A command with every `{slot}` written `{}` (slot names differ between tracks and conventions)."""
+    return re.sub(r"\{[a-z_]+\}", "{}", norm(cmd))
+
+
+def inert(route):
+    """A context trigger: compiled, but inert until Track G G4 (never a true or false route)."""
+    return (route.get("trigger") or {}).get("on") == "context"
+
+
+def commands_of(route):
+    step = route.get("step") or {}
+    if step.get("do") == "sequence":
+        return [norm(c) for c in step.get("commands") or []]
+    return [norm(step.get("command"))] if step.get("command") else []
+
+
 def compare(b, routes, holdout=None):
-    """Match learned routes against conventions.json."""
+    """Match learned routes against conventions.json. A route may match by its miner id or by its
+    shape (the graph engine names new shapes by content: `run-…`, `sequence-…`)."""
     rows, used = [], set()
+    routes = [r for r in routes if not inert(r["route"])]
 
     def take(pred):
         for r in routes:
@@ -315,6 +342,9 @@ def compare(b, routes, holdout=None):
                 used.add(r["route"]["id"])
                 return r["route"]
         return None
+
+    def after_edit(r, glob):
+        return (r.get("trigger") or {}).get("on") == "after_edit" and r["trigger"].get("paths") == glob
 
     for c in b.conv:
         kind, got = c["kind"], None
@@ -329,9 +359,28 @@ def compare(b, routes, holdout=None):
             got = take(lambda r: r["id"].startswith("dead-end")
                        and any(runs(x.strip(), c["avoided"]) for x in str(r["step"].get("avoid", "")).split(" / "))
                        and r["step"].get("instead") == c["command"])
+            # The graph engine announces a dead end most traces do not meet after its failure.
+            got = got or take(lambda r: r["id"].startswith("dead-end") and r["trigger"].get("on") == "after_failure"
+                              and runs(adage_runner(r["trigger"].get("command", "").removeprefix("exec ")), c["avoided"])
+                              and r["step"].get("command") == c["command"])
         elif kind == "finish_line":
             got = take(lambda r: r["id"].startswith("finish-line") and r["trigger"].get("paths") == c["glob"]
                        and r["step"].get("command") == c["command"])
+            # A sequence whose first step is the owed one delivers it too.
+            got = got or take(lambda r: after_edit(r, c["glob"]) and commands_of(r)[:1] == [norm(c["command"])]
+                              and r["step"].get("do") == "sequence")
+        elif kind == "sequence":
+            got = take(lambda r: after_edit(r, c["glob"]) and commands_of(r) == [norm(x) for x in c["steps"]])
+            # A finish line on the sequence's first step delivers part of it: a true route, not a recovery.
+            take(lambda r: after_edit(r, c["glob"]) and commands_of(r) == [norm(c["steps"][0])])
+        elif kind == "scope":
+            got = take(lambda r: after_edit(r, c["glob"]) and placeholders(r["step"].get("command"))
+                       == placeholders(c["command"])
+                       and any((x.get("source") or {}).get("from") == "edit_segment" for x in r.get("slots") or []))
+        elif kind == "env_sync":
+            got = take(lambda r: after_edit(r, c["glob"]) and commands_of(r) == [norm(c["command"])])
+            got = got or take(lambda r: after_edit(r, c["glob"]) and commands_of(r)[:1] == [norm(c["command"])]
+                              and r["step"].get("do") == "sequence")
         if kind == "decoy":
             hits = [r["route"]["id"] for r in routes if norm(c["command"]) in norm(json.dumps(r["route"]))]
             rows.append({"convention": c["id"], "kind": kind, "expected": "no route", "ok": not hits,
@@ -344,14 +393,20 @@ def compare(b, routes, holdout=None):
                 detail.update(command=got["step"]["command"], contract=got["slots"][0]["contract"].get("regex"),
                               declared_pattern=c["id_pattern"])
             elif kind in ("dead_end", "instinct_violation"):
-                detail.update(avoid=got["step"]["avoid"], instead=got["step"]["instead"],
-                              learned_signature=got["step"]["signature"], declared_signature=c["signature"],
+                # The avoid step, or its after-failure form (the runner's key, then the working command).
+                trig, step = got.get("trigger") or {}, got["step"]
+                avoid = step.get("avoid") or trig.get("command", "").removeprefix("exec ")
+                sig = step.get("signature") or trig.get("signature", "")
+                detail.update(avoid=avoid, instead=step.get("instead") or step.get("command"),
+                              learned_signature=sig, declared_signature=c["signature"],
                               declared_avoided=c["avoided"],
                               broadened=all(canonical_argv(x.strip()) != canonical_argv(c["avoided"])
-                                            for x in str(got["step"]["avoid"]).split(" / ")),
-                              signature_matches=c["signature"] in str(got["step"]["signature"]))
+                                            for x in str(avoid).split(" / ")),
+                              signature_matches=c["signature"] in str(sig))
             elif kind == "finish_line":
-                detail.update(paths=got["trigger"]["paths"], command=got["step"]["command"])
+                detail.update(paths=got["trigger"]["paths"], command=" then ".join(commands_of(got)))
+            elif kind in ("sequence", "scope", "env_sync"):
+                detail.update(paths=got["trigger"]["paths"], command=" then ".join(commands_of(got)))
         rows.append({"convention": c["id"], "kind": kind, "expected": "route", "ok": bool(got), "learned": detail})
     unexpected = [r["route"]["id"] for r in routes if r["route"]["id"] not in used]
     return rows, unexpected
@@ -384,7 +439,7 @@ def rehearse_bundle(bundle, root, repeats, adage, learn, engine=None):
     # Fresh ids and near misses from the generator's id distribution, for `adage eval types`.
     ho = None
     if b.one("lookup"):
-        tracker = [t["id"] for t in b.tasks["tasks"] if t["kind"] != "control"]
+        tracker = [t["id"] for t in b.tasks["tasks"] if t["kind"] in grammar.TRACKER_KINDS]
         ho = grammar.holdout(b.spec["spec"], tracker, b.spec["seed"])
         (root / "holdout.json").write_text(json.dumps(ho, indent=1, sort_keys=True) + "\n")
     report = {"bundle": b.path.name, "stack": b.tasks["stack"], "skin": b.tasks["skin"], "seed": b.tasks["seed"],
@@ -407,6 +462,7 @@ def rehearse_bundle(bundle, root, repeats, adage, learn, engine=None):
             report["ok"] = False
         else:
             routes = learned_routes(home)
+            report["inert_routes"] = sorted(r["route"]["id"] for r in routes if inert(r["route"]))
             report["active_in_index"] = sorted(r["route"]["id"] for r in
                                                json.loads((home / "index.json").read_text()).get("routes", []))
             rows, unexpected = compare(b, routes, ho)
@@ -447,7 +503,7 @@ def print_report(rep):
                 extra = f" avoid {d['avoid']!r} instead {d['instead']!r} signature {d['learned_signature']!r}"
                 if d["broadened"]:
                     extra += f" [declared {d['declared_avoided']!r}: adage names the runner only]"
-            elif row["kind"] == "finish_line" and d:
+            elif row["kind"] in ("finish_line", "sequence", "scope", "env_sync") and d:
                 extra = f" {d['paths']} -> {d['command']!r}"
             state = f" [{d['state']}]" if d and d.get("state") != "active" else ""
             print(f"  {mark}  {row['convention']:<22} {row['kind']:<19} "

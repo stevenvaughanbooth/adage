@@ -40,6 +40,7 @@ pub fn kind(r: &Route) -> &'static str {
         (Trigger::AfterFailure { .. }, Step::Run { .. }) => "dead-end",
         (_, Step::Advise { .. }) => "advice",
         (_, Step::ReadBatch { .. }) => "linked-files",
+        (_, Step::Sequence { .. }) => "sequence",
         (Trigger::AfterEdit { .. }, _) => "finish-line",
         (Trigger::Prompt { .. }, _) => "lookup",
         (Trigger::Intent { .. }, _) => "intent",
@@ -445,6 +446,13 @@ pub fn score_session(
                 let m = acts.iter().find(|a| after(a, f) && e.matches(a)).map(|a| a.turn);
                 (m.is_some(), m, m.map(|t| t - f.turn - 1).unwrap_or(0))
             }
+            // A sequence is judged on its first command (Track G §6.1).
+            Step::Sequence { commands } => {
+                let Some(cmd) = commands.first() else { continue };
+                let e = Expect::of(cmd, table);
+                let m = acts.iter().find(|a| after(a, f) && e.matches(a)).map(|a| a.turn);
+                (m.is_some(), m, m.map(|t| t - f.turn - 1).unwrap_or(0))
+            }
         };
         let in_window = correct && matched.is_some_and(|t| t.saturating_sub(f.turn) <= window);
         if route.is_instinct() {
@@ -549,6 +557,11 @@ fn recall(
             Step::Run { .. } => {
                 if let Some(c) = command_in(&f.directive.text) {
                     named.push((f.turn, Expect::of(&c, table), kind(r)));
+                }
+            }
+            Step::Sequence { commands } => {
+                for c in commands {
+                    named.push((f.turn, Expect::of(c, table), kind(r)));
                 }
             }
             Step::ReadBatch { .. } | Step::Advise { .. } => {}

@@ -145,6 +145,7 @@ class Checker:
         self.dead_ends()
         self.tasks_pairs()
         self.finish_lines()
+        self.new_kinds()
         self.decoys()
         self.all_together()
         return "ok" if not self.failed else "failed"
@@ -166,13 +167,13 @@ class Checker:
 
     def lookup(self):
         look = self.conv_of("lookup")
-        tracker = [t for t in self.tasks["tasks"] if t["kind"] != "control"]
+        tracker = [t for t in self.tasks["tasks"] if t["kind"] in grammar.TRACKER_KINDS]
         for t in self.tasks["tasks"]:
             shape = self.spec["spec"].get("id_shape", "prefix_dash")
             found = TICKET if shape == "prefix_dash" else grammar.mention_regex(shape, SKINS[self.tasks["skin"]].id_prefix)
             ids = found.findall(" ".join(t["prompts"]))
-            if t["kind"] == "control":
-                self.check(f"{t['id']}: control prompts contain nothing ID-like", not ids, str(ids))
+            if t["kind"] not in grammar.TRACKER_KINDS:
+                self.check(f"{t['id']}: {t['kind']} prompts contain nothing ID-like", not ids, str(ids))
             else:
                 self.check(f"{t['id']}: prompts name only the ID", set(ids) == {grammar.mention(t["id"])}, str(ids))
         if not look:
@@ -233,7 +234,8 @@ class Checker:
             self.check(f"task {t['id']} ({t['kind']}): fails untouched, passes with its reference solution", ok, detail)
 
     def finish_lines(self):
-        fl = self.conv_of("finish_line")
+        # A sequence (Track G G3) owes the same regenerate step first.
+        fl = self.conv_of("finish_line") or self.conv_of("sequence")
         regs = [t for t in self.tasks["tasks"] if t["kind"] == "registry"]
         if not fl:
             return
@@ -246,6 +248,30 @@ class Checker:
                 and not s["hidden_passed"]
             self.check(f"finish line {t['id']}: the edit without `{fl[0]['command']}` fails CI with the signature, "
                        f"is stale, and fails the hidden check", ok, "" if ok else out[-400:])
+
+    def new_kinds(self):
+        """Track G G3 kinds: every package's own suite passes on a fresh repository (the scope
+        convention's command, bound to each package); a requirements edit without the environment
+        step fails CI with the declared signature, and passes after it."""
+        for c in self.conv_of("scope"):
+            d = self.fresh()
+            for p in c.get("samples", []):
+                cmd = c["command"].replace("{part}", p)
+                rc, out = self.sh(cmd, d)
+                self.check(f"scope: `{cmd}` passes on a fresh repository", rc == 0, "" if rc == 0 else out[-400:])
+            self.check("scope: the package suites leave the tree clean", not self.status(d), self.status(d))
+        for c in self.conv_of("env_sync"):
+            deps = [t for t in self.tasks["tasks"] if t["kind"] == "deps"]
+            if not deps:
+                continue
+            d = self.fresh()
+            self.apply(d, deps[0]["id"], run=False)
+            rc, out = self.sh(self.tasks["verify"], d)
+            self.check(f"env_sync {deps[0]['id']}: the edit without `{c['command']}` fails CI with the signature",
+                       rc != 0 and c["signature"] in out, out[-400:])
+            self.sh(c["command"], d)
+            rc, out = self.sh(self.tasks["verify"], d)
+            self.check(f"env_sync {deps[0]['id']}: after `{c['command']}` CI passes", rc == 0, out[-400:])
 
     def decoys(self):
         regs = [t for t in self.tasks["tasks"] if t["kind"] == "registry"]

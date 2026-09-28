@@ -268,6 +268,33 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
             text.push_str(&exit);
             Some(text)
         }
+        // A sequence (Track G §6.1): fixed commands, numbered, in order. Nothing is bound.
+        (Step::Sequence { commands }, trigger) => {
+            let steps: Vec<String> = commands.iter().map(|c| sanitise(c)).collect();
+            if steps.len() < 2 || steps.iter().zip(commands).any(|(s, c)| s.is_empty() || s != c) {
+                return None;
+            }
+            let lead = match trigger {
+                Trigger::AfterEdit { paths } => {
+                    format!(
+                        "In this repository, changes to files matching {} are followed by these steps, in order:",
+                        sanitise(paths)
+                    )
+                }
+                Trigger::AfterFailure { .. } => {
+                    "That failed. In this repository, run these steps instead, in order:".into()
+                }
+                _ => "Known next steps here, in order:".into(),
+            };
+            let list: Vec<String> = steps.iter().enumerate().map(|(i, s)| format!("  {}. {s}", i + 1)).collect();
+            let mut text = format!("{lead}\n{}", list.join("\n"));
+            // The exit condition on its own line after the steps (as for an avoid).
+            if !exit.is_empty() {
+                text.push('\n');
+                text.push_str(exit.trim_start());
+            }
+            Some(text)
+        }
         (Step::Avoid { avoid, instead, signature }, _) => {
             let mut text = format!(
                 "In this repository, running {} fails (\"{}\"). Use this instead:\n  {}",

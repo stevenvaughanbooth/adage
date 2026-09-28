@@ -1,0 +1,292 @@
+//! The compiler (Track G §6, G3): selected reflexes → delivery shapes → routes.
+//!
+//! A pure, deterministic function of the selected reflexes ([`crate::select::Reflex`]), the traces
+//! they were mined from (summarised in a [`Corpus`]: command literals, effects, failure
+//! signatures, the files the traces touched), the learned value types ([`crate::Learned`], G1)
+//! and the parameters. Nothing here knows a route *kind*: a reflex's structure decides its
+//! delivery shape ([`shapes`]), from a closed set with fixed templates:
+//!
+//! | Continuation | Context | Shape | Route |
+//! | --- | --- | --- | --- |
+//! | one act, a value flowing from a prompt | prompt | `run` | `prompt` → `run`, slot `prompt_value` |
+//! | reads of paths an act's output listed | act | `read-batch` | `after_command` → `read_batch` |
+//! | a working act after a failed one | a failed act | `avoid` | `session_start` → `avoid`, or `after_failure` → `run` |
+//! | one regenerate act | the last edit of a file kind | `obligation` | `after_edit` → `run` |
+//! | one act with a value from the edited path | an edit | `run` | `after_edit` → `run`, slot `edit_segment` |
+//! | one environment act | an edit | `run` (nascent until reviewed) | `after_edit` → `run` |
+//! | 2–3 regenerate/verify acts | an edit, or a longer context | `sequence` | `after_edit` / `context` → `sequence` |
+//! | one fixed act | two or three events | `run` | `context` → `run` (inert until G4) |
+//!
+//! Ceilings are unchanged (`adage_tracks::ceiling`): environment steps are drafts until a person
+//! approves them, author and publish steps are never directed. Every compiled route gets a
+//! content-derived id ([`ids`]) or, for a shape a miner emits today, that miner's id
+//! ([`legacy`]), and a [`adage_tracks::why::Why`] for people.
+
+pub mod glob;
+pub mod ids;
+pub mod legacy;
+pub mod shapes;
+
+use crate::events;
+use crate::input;
+use crate::select::Reflex;
+use adage_core::Effect;
+use adage_tracks::why::Why;
+use adage_tracks::{Route, Step, Trigger};
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
+
+/// Compiler parameters.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CompileParams {
+    /// Green needs the posterior's lower bound at least this (`learn.green_lower_bound`).
+    pub green_lower_bound: f64,
+    /// Yellow needs the posterior mean at least this (`learn.yellow_rate`).
+    pub yellow_rate: f64,
+    /// A context trigger's gap, in alphabet events (the miner's G).
+    pub within: u8,
+    /// The glob lattice's precision bar.
+    pub glob_precision: f64,
+    /// An avoid is announced at session start when at least this share of traces run the
+    /// failing runner; otherwise after its failure.
+    pub announce_at_start: f64,
+    /// A directed command must be the dominant variant of its item (this share of its matches).
+    pub dominant: f64,
+    /// Instinct priors: pseudo-traces and mean.
+    pub prior_kappa: f64,
+    pub prior_mean: f64,
+    /// Compile `after_command` → `run` reflexes (a single successful act as the context). Off by
+    /// default in G3: on the committed datasets such a reflex directs the agent's own next check
+    /// (`make test` after `make gen`), which no convention asks for, so it is a false route; the
+    /// same next steps are delivered as sequences after the edit that owes them.
+    pub after_command_runs: bool,
+    pub provenance: String,
+}
+
+impl Default for CompileParams {
+    fn default() -> Self {
+        CompileParams {
+            green_lower_bound: 0.8,
+            yellow_rate: 0.5,
+            within: 8,
+            glob_precision: 0.9,
+            announce_at_start: 0.5,
+            dominant: 0.8,
+            prior_kappa: 3.0,
+            prior_mean: 0.7,
+            after_command_runs: false,
+            provenance: "desire-path".into(),
+        }
+    }
+}
+
+/// What the traces say about one command key (`exec <template>`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ActStats {
+    /// Literal commands (`shell_join` of the argv) with their argv and run counts.
+    pub literals: BTreeMap<String, (Vec<String>, u32)>,
+    /// Traces that ran it at all.
+    pub sessions: u32,
+    /// The highest effect class of its runs.
+    pub effect: Option<Effect>,
+    /// Failure signatures of its failed runs.
+    pub signatures: BTreeMap<String, u32>,
+    /// The output field that lists files, per successful run.
+    pub fields: BTreeMap<String, u32>,
+}
+
+/// The traces, summarised for the compiler.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Corpus {
+    pub sessions: u32,
+    pub acts: BTreeMap<String, ActStats>,
+    /// Traces that ran each runner (`legacy::runner`), whatever the outcome.
+    pub runners: BTreeMap<String, u32>,
+    /// The repository tree the glob lattice measures precision on: every path read or edited,
+    /// and any repository file given.
+    pub tree: BTreeSet<String>,
+    /// Paths some trace read or edited.
+    pub touched: BTreeSet<String>,
+}
+
+fn effect_of(s: &str) -> Option<Effect> {
+    Some(match s {
+        "observe" => Effect::Observe,
+        "verify" => Effect::Verify,
+        "regenerate" => Effect::Regenerate,
+        "environment" => Effect::Environment,
+        "author" => Effect::Author,
+        "publish" => Effect::Publish,
+        _ => return None,
+    })
+}
+
+fn rank(e: Effect) -> u8 {
+    match e {
+        Effect::Observe => 0,
+        Effect::Verify => 1,
+        Effect::Regenerate => 2,
+        Effect::Environment => 3,
+        Effect::Author => 4,
+        Effect::Publish => 5,
+    }
+}
+
+/// The stronger of two effects.
+pub fn max_effect(a: Effect, b: Effect) -> Effect {
+    if rank(b) > rank(a) {
+        b
+    } else {
+        a
+    }
+}
+
+impl Corpus {
+    /// Summarise traces; `tree` adds repository files the lattice should see.
+    pub fn of(sessions: &[input::Annotated], tree: &[String]) -> Corpus {
+        let table = adage_core::CommandTable::load();
+        let mut c = Corpus { sessions: sessions.len() as u32, ..Default::default() };
+        let mut order: Vec<&input::Annotated> = sessions.iter().collect();
+        order.sort_by(|a, b| a.session.id.cmp(&b.session.id));
+        for a in order {
+            let mut keys: BTreeSet<String> = BTreeSet::new();
+            let mut runners: BTreeSet<String> = BTreeSet::new();
+            for (i, st) in a.session.steps.iter().enumerate().take(input::MAX_STEPS) {
+                match st {
+                    input::Step::Exec { argv, output, failed } => {
+                        if argv.is_empty() {
+                            continue;
+                        }
+                        let key = events::act_key(argv);
+                        let e = c.acts.entry(key.clone()).or_default();
+                        let lit = legacy::shell_join(argv);
+                        e.literals.entry(lit).or_insert_with(|| (argv.clone(), 0)).1 += 1;
+                        let eff = a
+                            .meta
+                            .get(i)
+                            .and_then(|m| effect_of(&m.effect))
+                            .unwrap_or_else(|| events::classify(argv, &table));
+                        e.effect = Some(e.effect.map_or(eff, |x| max_effect(x, eff)));
+                        let out = adage_core::tokens::bounded(output, input::MAX_OUTPUT);
+                        if *failed {
+                            if let Some(sig) = legacy::failure_signature(out) {
+                                *e.signatures.entry(sig).or_default() += 1;
+                            }
+                        } else if let Some(f) = legacy::listed_field(out) {
+                            *e.fields.entry(f).or_default() += 1;
+                        }
+                        keys.insert(key);
+                        runners.insert(legacy::runner(argv));
+                    }
+                    input::Step::Read { path } | input::Step::Edit { path } => {
+                        if !path.is_empty() && !path.starts_with('/') {
+                            c.tree.insert(path.clone());
+                            c.touched.insert(path.clone());
+                        }
+                    }
+                }
+            }
+            for k in keys {
+                c.acts.get_mut(&k).expect("seen").sessions += 1;
+            }
+            for r in runners {
+                *c.runners.entry(r).or_default() += 1;
+            }
+        }
+        c.tree.extend(tree.iter().filter(|p| !p.is_empty() && !p.starts_with('/')).cloned());
+        c
+    }
+
+    /// The literal most traces ran for `key` (ties: the smallest), and its argv.
+    pub fn literal(&self, key: &str) -> Option<(&str, &[String])> {
+        let a = self.acts.get(key)?;
+        a.literals
+            .iter()
+            .max_by(|x, y| x.1 .1.cmp(&y.1 .1).then_with(|| y.0.cmp(x.0)))
+            .map(|(l, (argv, _))| (l.as_str(), argv.as_slice()))
+    }
+
+    /// The effect class of `key` as the traces ran it, never below what Adage assigns the literal.
+    pub fn effect(&self, key: &str) -> Option<Effect> {
+        let (lit, _) = self.literal(key)?;
+        let assigned = adage_tracks::io::classify(lit, &adage_core::CommandTable::load());
+        Some(self.acts.get(key).and_then(|a| a.effect).map_or(assigned, |e| max_effect(e, assigned)))
+    }
+}
+
+/// An instinct route that is a prior for reflexes at its decision point directing its command
+/// (Track G §6.3): `prior_kappa` pseudo-traces at `prior_mean`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Prior {
+    pub route: Route,
+}
+
+/// Everything the compiler reads.
+pub struct Input<'a> {
+    pub reflexes: &'a [Reflex],
+    pub corpus: &'a Corpus,
+    /// G1's learned value slots (the lookup's typed slot), when learned.
+    pub values: Option<&'a crate::Learned>,
+    pub priors: &'a [Prior],
+    pub params: &'a CompileParams,
+}
+
+/// One compiled route.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Compiled {
+    /// The delivery shape (`run`, `obligation`, `avoid`, `read-batch`, `sequence`).
+    pub shape: &'static str,
+    pub route: Route,
+    pub why: Why,
+    /// It has a shape a miner emits today, and that miner's id.
+    pub legacy: bool,
+}
+
+/// A reflex that compiled to nothing, and why.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Dropped {
+    pub pattern: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Output {
+    pub routes: Vec<Compiled>,
+    pub dropped: Vec<Dropped>,
+}
+
+/// At most this many compiled routes per repository (Track G §1.3).
+pub const MAX_ROUTES: usize = 256;
+
+/// Compile selected reflexes into routes (see the module documentation).
+pub fn compile(input: &Input) -> Output {
+    shapes::compile(input)
+}
+
+/// Where a compiled route lives through G3–G4 (Track G §6.3): the legacy track of its shape,
+/// else `graph`.
+pub fn legacy_track(r: &Route) -> &'static str {
+    match adage_tracks::route_kind(r) {
+        adage_tracks::KIND_WORK_ITEMS => adage_tracks::KIND_WORK_ITEMS,
+        adage_tracks::KIND_FINISH_LINE => adage_tracks::KIND_FINISH_LINE,
+        adage_tracks::KIND_DEAD_ENDS => adage_tracks::KIND_DEAD_ENDS,
+        adage_tracks::KIND_INTENTS => adage_tracks::KIND_INTENTS,
+        _ => "graph",
+    }
+}
+
+/// Whether a route's trigger can fire in G3 (a context trigger is compiled but inert until G4).
+pub fn fires_in_g3(r: &Route) -> bool {
+    !matches!(r.trigger, Trigger::Context { .. })
+}
+
+/// The commands a step directs.
+pub fn commands(s: &Step) -> Vec<&str> {
+    match s {
+        Step::Run { command } => vec![command],
+        Step::Sequence { commands } => commands.iter().map(String::as_str).collect(),
+        Step::Avoid { instead, .. } => vec![instead],
+        _ => vec![],
+    }
+}

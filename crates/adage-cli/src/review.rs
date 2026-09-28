@@ -97,7 +97,8 @@ pub(crate) fn discover(root: &Path) -> Result<Vec<Installed>> {
         }
         let Ok(rd) = std::fs::read_dir(&d) else { continue };
         for e in rd.flatten() {
-            if e.file_type().is_ok_and(|t| t.is_dir()) {
+            // Hidden directories hold no track in service (`<repo>/.shadow/`, Track G G3).
+            if e.file_type().is_ok_and(|t| t.is_dir()) && !e.file_name().to_string_lossy().starts_with('.') {
                 stack.push(e.path());
             }
         }
@@ -370,6 +371,7 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
                     "step": describe_step(&r.step),
                     "evidence": { "support": e.support, "opportunities": e.opportunities, "days": e.days, "rate": e.rate, "lower_bound": e.lower_bound },
                     "runtime": { "followed": it.followed, "derailed": it.derailed },
+                    "why": adage_tracks::why::load(&it.inst.dir).remove(&r.id),
                     "directive": directive,
                     "example_values": examples,
                     "last_review": it.inst.reviews.routes.get(&r.id).map(|v| json!({ "decision": v.decision.as_str(), "on": v.on, "by": v.by })),
@@ -419,6 +421,12 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
             e.support, e.opportunities, e.days, e.rate, e.lower_bound
         );
         println!("  runtime    followed {} · derailed {} (treated sessions)", it.followed, it.derailed);
+        // The graph engine's reasons for a reflex (Track G §6.3): for people, never the agent.
+        if let Some(w) = adage_tracks::why::load(&it.inst.dir).get(&r.id) {
+            for (i, line) in w.lines().iter().enumerate() {
+                println!("  {} {line}", if i == 0 { "reflex    " } else { "          " });
+            }
+        }
         println!("  step       {}", describe_step(&r.step));
         let (directive, examples) = preview(t, r);
         let ex = if examples.is_empty() {

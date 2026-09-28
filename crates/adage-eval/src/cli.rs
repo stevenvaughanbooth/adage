@@ -4,8 +4,8 @@
 //! adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>]
 //!            [--window <turns>] [--include-steered] [--index <index.json>] [--exec-e1] [--json]
 //!            [--instincts | --instincts-only] [--sandbox-dir <dir>]
-//! adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>]
-//!            [--index <index.json>] [--json]
+//! adage eval routes <dataset-dir | gen-bundle | gen-suite> [--split <split>] [--thresholds demo|default]
+//!            [--params <file>] [--engine miners|shadow|graph] [--index <index.json>] [--json]
 //! adage eval bench run|sweep|report|bless …   (the L0 bench: `crate::bench::cli`)
 //! adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--json]
 //! adage eval types <gen-dir | dataset-dir> [--end-to-end] [--json]   (learned value types: `crate::value_types`)
@@ -45,14 +45,25 @@ fn instinct_mode(args: &[String]) -> crate::InstinctMode {
     }
 }
 
-/// `--params <file>`: an override object for the engine parameters.
+/// `--params <file>`: an override object for the engine parameters; `--engine <e>` sets
+/// `learn.engine` on top of it (Track G: `miners`, `shadow` or `graph`).
 fn params(args: &[String]) -> Result<Option<serde_json::Value>> {
-    flag(args, "--params")
+    let mut v = flag(args, "--params")
         .map(|p| adage_tracks::params::EngineParams::read_overrides(std::path::Path::new(&p)))
-        .transpose()
+        .transpose()?;
+    if let Some(e) = flag(args, "--engine") {
+        if !adage_tracks::params::ENGINES.contains(&e.as_str()) {
+            bail!("--engine must be one of {:?}", adage_tracks::params::ENGINES);
+        }
+        let o = v.get_or_insert_with(|| serde_json::json!({}));
+        let learn =
+            o.as_object_mut().context("--params must be an object")?.entry("learn").or_insert(serde_json::json!({}));
+        learn.as_object_mut().context("learn must be an object")?.insert("engine".into(), serde_json::json!(e));
+    }
+    Ok(v)
 }
 
-const USAGE: &str = "usage: adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--window <n>] [--include-steered] [--index <file>] [--instincts | --instincts-only] [--sandbox-dir <dir>] [--exec-e1] [--json]\n       adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--index <file>] [--json]\n       adage eval bench run|sweep|report|bless … (adage eval bench --help)\n       adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--json]\n       adage eval types <gen-dir|dataset-dir> [--end-to-end] [--json]\n       adage eval mine <dataset-dir|gen-dir> [--split <split>] [--top <n>] [--json]\n       adage eval generate <synthetic|adversarial> <out-dir>\n<split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all";
+const USAGE: &str = "usage: adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--window <n>] [--include-steered] [--index <file>] [--instincts | --instincts-only] [--sandbox-dir <dir>] [--exec-e1] [--json]\n       adage eval routes <dataset-dir|gen-bundle|gen-suite> [--split <split>] [--thresholds demo|default] [--params <file>] [--engine miners|shadow|graph] [--index <file>] [--json]\n       adage eval bench run|sweep|report|bless … (adage eval bench --help)\n       adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--json]\n       adage eval types <gen-dir|dataset-dir> [--end-to-end] [--json]\n       adage eval mine <dataset-dir|gen-dir> [--split <split>] [--top <n>] [--json]\n       adage eval generate <synthetic|adversarial> <out-dir>\n<split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all";
 
 pub fn run(args: &[String]) -> Result<()> {
     let json = args.iter().any(|a| a == "--json");
@@ -73,7 +84,36 @@ pub fn run(args: &[String]) -> Result<()> {
                 sandbox_dir: flag(args, "--sandbox-dir").map(PathBuf::from),
                 ..Default::default()
             };
-            let r = crate::conventions::run(&PathBuf::from(dir), &opts)?;
+            let dir = PathBuf::from(dir);
+            // A generated bundle or suite (`evals/gen`): its rehearsal transcripts, every route.
+            let bundles: Vec<PathBuf> = if dir.join("spec.json").is_file() {
+                vec![dir.clone()]
+            } else if dir.join("suite.json").is_file() {
+                let mut v: Vec<PathBuf> = std::fs::read_dir(&dir)?
+                    .flatten()
+                    .map(|e| e.path())
+                    .filter(|p| p.join("spec.json").is_file() && p.join("rehearsal/transcripts").is_dir())
+                    .collect();
+                v.sort();
+                v
+            } else {
+                vec![]
+            };
+            if !bundles.is_empty() {
+                let engine =
+                    opts.params.as_ref().and_then(|p| p["learn"]["engine"].as_str()).unwrap_or("miners").to_string();
+                let reports: Vec<crate::conventions::RoutesReport> =
+                    bundles.iter().map(|b| crate::conventions::run_bundle(b, &engine)).collect::<Result<_>>()?;
+                if json {
+                    println!("{}", serde_json::to_string_pretty(&reports)?);
+                } else {
+                    for r in &reports {
+                        print!("{}", crate::conventions::render_text(r));
+                    }
+                }
+                return Ok(());
+            }
+            let r = crate::conventions::run(&dir, &opts)?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&r)?);
             } else {
