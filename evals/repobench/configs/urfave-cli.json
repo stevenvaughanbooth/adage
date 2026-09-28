@@ -1,0 +1,133 @@
+{
+ "name": "repobench-urfave-cli",
+ "repo_key": "github.com/urfave/cli",
+ "workdir": "repo",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/repobench/sandbox.py",
+  "urfave-cli",
+  "{task}",
+  "{dir}",
+  "--arm",
+  "{arm}",
+  "--context",
+  "{repo}/evals/repobench/context/urfave-cli.md"
+ ],
+ "score": [
+  "python3",
+  "{repo}/evals/repobench/score.py",
+  "urfave-cli",
+  "{task}",
+  "{dir}"
+ ],
+ "prompts": [
+  "Fix {id}."
+ ],
+ "task_prompts": {
+  "urfave-cli-49e84c0a": "When the built-in version flag's short alias `-v` clashes with a user-defined flag that also uses `-v` as an alias (e.g. a `--verbose`/`-v` bool flag), `--version` itself stops working. For example:\n\n```go\ncmd := &Command{\n    Name: \"boom\", Version: \"0.1.0\",\n    Flags: []Flag{&BoolFlag{Name: \"verbose\", Aliases: []string{\"v\"}}},\n    Action: func(_ context.Context, _ *Command) error { return nil },\n}\ncmd.Run(context.Background(), []string{\"boom\", \"--version\"})\n```\n\nHere `--version` (the long form) should still print the version and short-circuit the action, even though the `-v` short alias was ceded to the user's `verbose` flag because of the naming clash. Only the clashing alias should be dropped from the version flag, not the whole flag or its primary long name. Please fix this.",
+  "urfave-cli-02bdfb09": "The shell completion subcommands (bash, zsh, fish, pwsh) shown in help output appear in a random order between runs instead of a consistent one, apparently because they're built from a map. This makes generated docs and help text unstable across invocations even though nothing about the command definition changed. Building the completion command repeatedly should always list its subcommands in the same, fixed order (bash, zsh, fish, pwsh), and every registered completion shell should be represented. Please fix this.",
+  "urfave-cli-c5f123b3": "When a Command sets `DefaultCommand`, flags defined on that default subcommand aren't recognized if the subcommand name is omitted from the invocation \u2014 the user gets an error even though the flag belongs to the command that would run by default. For example:\n\n```go\ncmd := &Command{\n    DefaultCommand: \"run1\",\n    Commands: []*Command{\n        {Name: \"run1\", Flags: []Flag{&StringFlag{Name: \"foo\", Required: true}}, Action: func(ctx context.Context, cmd *Command) error { return nil }},\n        {Name: \"run2\", Flags: []Flag{&StringFlag{Name: \"value\", Required: true}}, Action: func(ctx context.Context, cmd *Command) error { return nil }},\n    },\n}\ncmd.Run(context.Background(), []string{\"c\", \"--foo\", \"bar\"})\n```\n\nThis should route to `run1` and accept `--foo bar`, but it fails instead. This also affects short flags and combined short-option handling (e.g. `-f baz` for an aliased flag). Please fix this so a DefaultCommand's own flags work correctly even when its name is omitted.",
+  "urfave-cli-fd8b8c5d": "Shell completion suggestions incorrectly include hidden flags that aren't boolean. It looks like completion only skips hidden flags when they're `BoolFlag`s, but hidden flags of other types (e.g. `StringFlag`) still show up as suggestions. For example, with a `StringFlag{Name: \"excellent\", Hidden: true}` and a `StringFlag{Name: \"excitement\"}` both matching a `--e` prefix, completion should only suggest `--excitement`, but the hidden one leaks through too. All hidden flags, regardless of type, should be excluded from completion suggestions. Please fix this.",
+  "urfave-cli-d5ce7733": "When a flag whose Value type is an interface (like GenericFlag) is left with its zero value, calling flag introspection or parsing it from an env source panics with a nil pointer dereference instead of behaving gracefully. For example:\n\n```go\nfl := &GenericFlag{Name: \"gen\"}\nfl.SchemaItemsType() // panics\n```\n\nSimilarly, parsing a GenericFlag with no Value set but a Sources env var that is empty or set should not panic. Please fix this so interface-typed flags with an unset Value don't cause a panic.",
+  "urfave-cli-f8c26d53": "Calling Run with an empty argument slice causes an index out of range panic instead of running the command's default Action. For example:\n\n```go\ncmd := &Command{Name: \"foo\", Action: func(context.Context, *Command) error { return nil }}\ncmd.Run(context.Background(), []string{})\n```\n\nThis panics even for plain commands and ones with shell completion enabled. Please fix Run so it handles an empty args slice without panicking, still invoking the Action as expected.",
+  "urfave-cli-4c19740a": "BoolWithInverseFlag ignores the DefaultText field when rendering its default value in help output and via GetDefaultText. For example:\n\n```go\nfl := &BoolWithInverseFlag{Name: \"vividly\", DefaultText: \"auto\"}\nfmt.Println(fl.GetDefaultText()) // prints \"false\" instead of \"auto\"\n```\n\nThe rendered flag help also shows `(default: false)` instead of `(default: auto)`. Please make BoolWithInverseFlag honor a custom DefaultText the same way other flag types do.",
+  "urfave-cli-339a3758": "In a mutually exclusive flag group with more than two flags, setting two non-adjacent members doesn't produce the correct conflict error. For example, given a group containing flags `i`, `ai`, and `q`, running with `--i 11 --q` should report that `i` conflicts with `q`, but the error message/behavior is wrong because the conflict check doesn't consider all members of the group. Please fix the mutually exclusive flag validation so it correctly detects and reports conflicts between any pair of set flags in the group, not just adjacent ones.",
+  "urfave-cli-79f8fc7a": "When HideHelpCommand is set to true on a root Command, its subcommands still show the built-in `help` command/topic in their own `--help` output and don't inherit the hidden setting. For example:\n\n```go\ncmd := &Command{\n    HideHelpCommand: true,\n    Commands: []*Command{{Name: \"nully\", Commands: []*Command{{Name: \"nully2\"}}}},\n}\ncmd.Run(ctx, []string{\"cli.test\", \"nully\", \"--help\"}) // still lists \"help, h\"\n```\n\nThis should behave like HideHelp already does: once a command hides the help command, all of its descendant subcommands should inherit that and not be able to opt back in even if they explicitly set HideHelpCommand to false. Please fix this inheritance.",
+  "urfave-cli-69b39a41": "When a Command has nested subcommands several levels deep, running `--help` on a deeply nested subcommand only shows flags inherited from its immediate parent, not from further-up ancestors. For example:\n\n```go\ncmd := &Command{\n    Flags: []Flag{&StringFlag{Name: \"root-persistent\"}, &StringFlag{Name: \"shared\", Usage: \"from root\"}},\n    Commands: []*Command{{\n        Name: \"mid\",\n        Flags: []Flag{&StringFlag{Name: \"mid-persistent\"}, &StringFlag{Name: \"shared\", Usage: \"from intermediate\"}},\n        Commands: []*Command{{Name: \"leaf\"}},\n    }},\n}\ncmd.Run(ctx, []string{\"root\", \"mid\", \"leaf\", \"--help\"})\n```\n\nThe help output for `leaf` is missing `--root-persistent` even though it should be inherited from the root, while `--mid-persistent` and the `shared` flag's usage text from the closer ancestor (`mid`) are correctly shown. Please fix subcommand help so it shows persistent flags inherited from all ancestors, with the closest ancestor's definition winning for flags defined at multiple levels.",
+  "urfave-cli-7fc67828": "Shell completion for a partially-typed flag stops working once a positional argument has already been given, especially for subcommands. For example, with EnableShellCompletion on a command that has a subcommand `sub` with flags `--param-sub-one` and `--param-sub-two`, running `app sub value --pa --generate-shell-completion` should print the matching `--param-sub-*` flag names, but instead nothing useful is produced (and it should also work for deeper nested subcommands and multiple positional args). Completion right after `--` should still produce no flag suggestions. Please fix flag-name completion so it works correctly regardless of preceding positional arguments and at any subcommand depth.",
+  "urfave-cli-9b981a04": "When a flag value is passed using the `--flag=value` equals form, surrounding whitespace in the value is being stripped even though it shouldn't be by default, while the same whitespace is preserved when the value is passed as a separate argument (`--flag value`). This affects string, slice, and map flags, including values with only whitespace, tabs, newlines, unicode spaces, or an embedded `=` character. Whitespace should only be trimmed when a flag explicitly opts into `TrimSpace` via its `StringConfig`. Also check that trailing whitespace after an `=value` for int/bool flags still correctly produces a parse error. Please fix flag value parsing so equals-form values preserve whitespace consistently with space-separated values.",
+  "urfave-cli-b7cfd406": "`BoolWithInverseFlag` miscounts occurrences when an external counter is supplied via `Config.Count`. For example, setting `fl.Config.Count = &count` (with `count` pre-initialized to some value) and then running the command with the flag passed twice (e.g. `--env --env` or via its alias/inverse forms like `--no-env`) should add 2 to the external counter and make `fl.Count()` return 2, but the external counter isn't updated correctly. This should also behave correctly when `OnlyOnce` is set, where a duplicate use should error and the count should only increase by 1. Please fix the counting logic for `BoolWithInverseFlag` when an external count pointer is configured.",
+  "urfave-cli-ae1fde92": "Flags whose name is a single non-ASCII Unicode character (e.g. a Hebrew letter like `\u05e9`) aren't parsed correctly. For example, defining `&StringFlag{Name: \"\u05e9\"}` and then running the command with `-\u05e9 value`, the flag's prefix and parsing should treat `\u05e9` as a single-rune short flag (so `prefixFor(\"\u05e9\")` should return `\"-\"`) and correctly capture `value`, but currently it doesn't. Please fix flag name/prefix handling so single-rune Unicode flag names work the same way single-rune ASCII flag names do.",
+  "urfave-cli-e3f7e35f": "When `UseShortOptionHandling` is enabled, a `BoolWithInverseFlag` cannot be set as part of a combined short option group. For example, given `&BoolWithInverseFlag{Name: \"color\", Aliases: []string{\"c\"}}` and `&BoolFlag{Name: \"verbose\", Aliases: []string{\"v\"}}`, running with `-cv` or `-vc` should set both `color` and `verbose` to true (same as passing `-c -v` separately), but currently the inverse bool flag isn't recognized/set correctly inside the combined group. Please fix short option group parsing to handle `BoolWithInverseFlag` properly.",
+  "urfave-cli-19f06441": "Passing a bare `-` argument on the command line causes everything after it to be dropped or mishandled instead of being kept as regular arguments. For example, running a command with args `cmd - foo bar` should leave `[\"-\", \"foo\", \"bar\"]` as the parsed positional arguments, and `cmd - --option my-option foo` should still parse `--option` as a flag while keeping `[\"-\", \"foo\"]` as arguments; a `--` terminator after the bare dash should still stop flag parsing, and an undefined flag after the bare dash should still error. Please fix argument parsing so a bare dash no longer swallows or mishandles the arguments that follow it.",
+  "urfave-cli-d1d81084": "When `UseShortOptionHandling` is enabled and a short option group ends with a flag whose name is a multi-byte Unicode rune, parsing fails or produces wrong results. For example, with flags `&BoolFlag{Name: \"v\"}` and `&StringFlag{Name: \"\u05e9\"}`, running `app -v\u05e9 value operand` should set `v` to true, capture `\"value\"` for `\u05e9`, and leave `[\"operand\"]` as arguments, but this isn't handled correctly; also running `app -v\u05e9` with no following value should produce a proper 'flag needs an argument' error naming `\u05e9`. Please fix short option group parsing to correctly handle a multi-byte rune flag at the end of the group.",
+  "urfave-cli-58ec406e": "Shell completion for flag names doesn't include flags inherited from parent commands (persistent flags), and this gets worse once a positional argument has already been typed. For example, if the top-level command defines `--config` and a subcommand `add` takes a positional argument, running `app add value --conf --generate-shell-completion` should suggest `--config:path to config file`, but the parent's flags aren't offered. More generally, completing a partial flag name on any subcommand should list matches from that subcommand plus matches from all of its parent commands, not just its own flags. Please fix shell completion so it also considers persistent/inherited flags from ancestor commands."
+ },
+ "train": {
+  "tasks": [
+   "urfave-cli-49e84c0a",
+   "urfave-cli-02bdfb09",
+   "urfave-cli-c5f123b3",
+   "urfave-cli-fd8b8c5d",
+   "urfave-cli-d5ce7733",
+   "urfave-cli-f8c26d53",
+   "urfave-cli-4c19740a",
+   "urfave-cli-339a3758",
+   "urfave-cli-79f8fc7a",
+   "urfave-cli-69b39a41"
+  ],
+  "repeats": 1
+ },
+ "eval": {
+  "tasks": [
+   "urfave-cli-7fc67828",
+   "urfave-cli-9b981a04",
+   "urfave-cli-b7cfd406",
+   "urfave-cli-ae1fde92",
+   "urfave-cli-e3f7e35f",
+   "urfave-cli-19f06441",
+   "urfave-cli-d1d81084",
+   "urfave-cli-58ec406e"
+  ],
+  "repeats": 2,
+  "arms": [
+   "control",
+   "adage",
+   "agents-md"
+  ]
+ },
+ "seed": 20260928,
+ "model": "claude-haiku-4-5-20251001",
+ "max_turns": 30,
+ "concurrency": 3,
+ "budget_usd": 16.0,
+ "host_auth": true,
+ "confine": true,
+ "learn_args": [
+  "--demo"
+ ],
+ "classify": {
+  "lookup": [],
+  "regen": [
+   "make generate",
+   "go generate",
+   "vitest -u",
+   "--update-snapshots"
+  ],
+  "verify": [
+   "pytest",
+   "vitest",
+   "go test",
+   "make test",
+   "npm test",
+   "npm run test",
+   "pnpm test",
+   "pnpm run test",
+   "pnpm vitest",
+   "tox",
+   "nox",
+   "node --test",
+   "unittest",
+   "go vet"
+  ],
+  "bash_edit": [
+   "sed -i",
+   "cat >",
+   "cat <<",
+   "tee ",
+   "write_text(",
+   "patch -p",
+   "git apply",
+   "perl -pi"
+  ],
+  "check_flags": []
+ },
+ "obligation": {
+  "paths": null
+ },
+ "labels": {
+  "lookup": "lookup",
+  "regen": "regenerate"
+ },
+ "split_digest": "249b065bfef76260c351132844a22fcec2e5674b988a10ff8976c33e6dfc9a1c"
+}

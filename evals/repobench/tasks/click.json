@@ -1,0 +1,904 @@
+{
+ "repo": "click",
+ "url": "https://github.com/pallets/click",
+ "repo_key": "github.com/pallets/click",
+ "tasks": [
+  {
+   "id": "click-69a25da0",
+   "sha": "69a25da0c0a8a78564f0fef700e1d6e5b21c1e8a",
+   "base": "81bddecfd32fda82fc8421cd316e55a2db8575d1",
+   "date": "2021-03-03T11:23:58-08:00",
+   "subject": "Merge pull request #1796 from MLH-Fellowship/fix-multiline-help",
+   "src_files": [
+    "src/click/utils.py"
+   ],
+   "test_files": [
+    "tests/test_formatting.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/utils.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_formatting.py",
+   "base_exit": 1,
+   "base_tail": "            This is command with a multiline help text\n            which should not be rewrapped.\n            The output of the short help text should\n            not contain the multiline marker.\n            \"\"\"\n            pass\n    \n        result = runner.invoke(cli, [\"--help\"])\n>       assert \"\\b\" not in result.output\nE       AssertionError: assert '\\x08' not in 'Usage: cli ... not be...\\n'\nE         \nE         '\\x08' is contained here:\nE           :\nE             cmd1  \b This is command with a multiline help text which should not be...\nE         ?         +\n\ntests/test_formatting.py:315: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_formatting.py::test_removing_multiline_marker - AssertionError: assert '\\x08' not in 'Usage: cli ... not be...\\n'\n  \n  '\\x08' is contained here:\n    :\n      cmd1  \b This is command with a multiline help text which should not be...\n  ?         +\n1 failed, 16 passed in 0.06s",
+   "fixed_seconds": 0.24,
+   "n_tests": 17,
+   "prompt": "When a command's docstring uses the `\\b` marker to prevent rewrapping of a multi-line help text, that literal `\\b` character leaks into the short help text shown in a group's `--help` listing. For example:\n\n```python\nimport click\n\n@click.group()\ndef cli():\n    pass\n\n@cli.command()\ndef cmd1():\n    \"\"\"\\b\n    This is a command with multiline help text\n    which should not be rewrapped.\n    \"\"\"\n    pass\n\ncli()\n```\n\nRunning `--help` on the group shows the `\\b` marker mixed into the short help text next to `cmd1`. The marker should be stripped out of the generated short help so it never appears in the output. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-3018f577",
+   "sha": "3018f577cc1d5e7682fd091845df999b86007a6c",
+   "base": "69a25da0c0a8a78564f0fef700e1d6e5b21c1e8a",
+   "date": "2021-03-03T12:36:52-08:00",
+   "subject": "Merge pull request #1142 from CounterPillow/progressbar-hidden-label",
+   "src_files": [
+    "src/click/_termui_impl.py",
+    "src/click/termui.py"
+   ],
+   "test_files": [
+    "tests/test_termui.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/_termui_impl.py",
+    "src/click/termui.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_termui.py",
+   "base_exit": 1,
+   "base_tail": "runner = <click.testing.CliRunner object at 0x7fd033cadc10>\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fd033cadeb0>\n\n    def test_progressbar_hidden(runner, monkeypatch):\n        fake_clock = FakeClock()\n    \n        @click.command()\n        def cli():\n            with _create_progress(label=\"working\") as progress:\n                for _ in progress:\n                    fake_clock.advance_time()\n    \n        monkeypatch.setattr(time, \"time\", fake_clock.time)\n        monkeypatch.setattr(click._termui_impl, \"isatty\", lambda _: False)\n>       assert runner.invoke(cli, []).output == \"working\\n\"\nE       AssertionError: assert '' == 'working\\n'\nE         \nE         - working\n\ntests/test_termui.py:88: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_termui.py::test_progressbar_hidden - AssertionError: assert '' == 'working\\n'\n  \n  - working\n1 failed, 60 passed, 21 skipped in 0.13s",
+   "fixed_seconds": 0.34,
+   "n_tests": 61,
+   "prompt": "There's a regression with `click.progressbar` when the output stream is not a tty (e.g. output is piped/redirected): passing a `label` no longer prints anything at all, even though a label was given. For example:\n\n```python\nimport click\n\nwith click.progressbar(range(10), label=\"working\") as progress:\n    for x in progress:\n        pass\n```\n\nWhen stdout is not a tty, this should still print the label (e.g. \"working\") followed by a newline, but currently it prints nothing. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-1472e3d6",
+   "sha": "1472e3d697215039f499cb0b51d8bea6a9aa3144",
+   "base": "af584b212c25f8479dcedf116f5895ee92c71f2c",
+   "date": "2021-03-03T23:06:17-08:00",
+   "subject": "Merge pull request #1354 from JoelEager/fix-progress-bar",
+   "src_files": [
+    "src/click/_termui_impl.py",
+    "src/click/termui.py"
+   ],
+   "test_files": [
+    "tests/test_termui.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/_termui_impl.py",
+    "src/click/termui.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_termui.py",
+   "base_exit": 1,
+   "base_tail": "_______________________ test_progressbar_item_show_func ________________________\n\nrunner = <click.testing.CliRunner object at 0x7f8700cb2ea0>\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f8700cb31d0>\n\n    def test_progressbar_item_show_func(runner, monkeypatch):\n        \"\"\"item_show_func should show the current item being yielded.\"\"\"\n    \n        @click.command()\n        def cli():\n            with click.progressbar(range(3), item_show_func=lambda x: str(x)) as progress:\n                for item in progress:\n                    click.echo(f\" item {item}\")\n    \n        monkeypatch.setattr(click._termui_impl, \"isatty\", lambda _: True)\n        lines = runner.invoke(cli).output.splitlines()\n    \n        for i, line in enumerate(x for x in lines if \"item\" in x):\n>           assert f\"{i}    item {i}\" in line\nE           AssertionError: assert '0    item 0' in '  [------------------------------------]    0%  None item 0'\n\ntests/test_termui.py:299: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_termui.py::test_progressbar_item_show_func - AssertionError: assert '0    item 0' in '  [------------------------------------]    0%  None item 0'\n1 failed, 60 passed, 21 skipped in 0.16s",
+   "fixed_seconds": 0.34,
+   "n_tests": 61,
+   "prompt": "`click.progressbar`'s `item_show_func` callback is supposed to show the item that's currently being processed, but it appears to lag behind or show the wrong item relative to what the loop body sees. For example:\n\n```python\nimport click\n\nwith click.progressbar(range(3), item_show_func=lambda x: str(x)) as progress:\n    for item in progress:\n        click.echo(f\" item {item}\")\n```\n\nThe progress bar's displayed item index should correspond to the item currently being yielded/processed in the loop, not be offset from it. Please fix this so the displayed item matches the item being handled.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-1cb86096",
+   "sha": "1cb86096124299579156f2c983efe05585f1a01b",
+   "base": "4c7399eaeb77fae762a96e6aaa714ac591d6661a",
+   "date": "2021-03-05T06:40:50-08:00",
+   "subject": "Better error message for bad parameter default (#1805)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_options.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_options.py",
+   "base_exit": 1,
+   "base_tail": "\nrunner = <click.testing.CliRunner object at 0x7f664bd0b560>\n\n    def test_multiple_bad_default(runner):\n        @click.command()\n        @click.option(\"--flags\", multiple=True, default=False)\n        def cli(flags):\n            pass\n    \n        result = runner.invoke(cli, [])\n        assert result.exception\n>       assert (\n            \"Value for parameter with multiple = True or nargs > 1 should be an iterable.\"\n            in result.exception.args\n        )\nE       assert 'Value for parameter with multiple = True or nargs > 1 should be an iterable.' in (\"'bool' object is not iterable\",)\nE        +  where (\"'bool' object is not iterable\",) = TypeError(\"'bool' object is not iterable\").args\nE        +    where TypeError(\"'bool' object is not iterable\") = <Result TypeError(\"'bool' object is not iterable\")>.exception\n\ntests/test_options.py:128: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_options.py::test_multiple_bad_default - assert 'Value for parameter with multiple = True or nargs > 1 should be an iterable.' in (\"'bool' object is not iterable\",)\n +  where (\"'bool' object is not iterable\",) = TypeError(\"'bool' object is not iterable\").args\n +    where TypeError(\"'bool' object is not iterable\") = <Result TypeError(\"'bool' object is not iterable\")>.exception\n1 failed, 74 passed in 0.19s",
+   "fixed_seconds": 0.43,
+   "n_tests": 75,
+   "prompt": "When an option is declared with `multiple=True` (or `nargs > 1`) but is given a non-iterable `default` (like `default=False` instead of a tuple/list), invoking the command raises a confusing/unhelpful error instead of a clear message. For example:\n\n```python\nimport click\n\n@click.command()\n@click.option(\"--flags\", multiple=True, default=False)\ndef cli(flags):\n    pass\n\ncli([])\n```\n\nThis should raise a `TypeError` with a clear message like \"Value for parameter with multiple = True or nargs > 1 should be an iterable.\" so the developer immediately understands the mistake in their option definition. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-08583da1",
+   "sha": "08583da150d9df25f1566c7390ebf7fa4a2a9395",
+   "base": "bf3a945b3a220589c67d55dcb73cc1c9a9a175b3",
+   "date": "2021-03-31T12:26:02-07:00",
+   "subject": "Merge pull request #1816 from BALaka-18/fix-deprecation-notice",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_commands.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_commands.py",
+   "base_exit": 1,
+   "base_tail": "............F.                                                           [100%]\n=================================== FAILURES ===================================\n_______________________ test_deprecated_in_help_messages _______________________\n\nrunner = <click.testing.CliRunner object at 0x7f96f4a03e30>\n\n    def test_deprecated_in_help_messages(runner):\n        @click.command(deprecated=True)\n        def cmd_with_help():\n            \"\"\"CLI HELP\"\"\"\n            pass\n    \n        result = runner.invoke(cmd_with_help, [\"--help\"])\n>       assert \"(Deprecated)\" in result.output\nE       AssertionError: assert '(Deprecated)' in 'Usage: cmd-with-help [OPTIONS]\\n\\n  CLI HELP (DEPRECATED)\\n\\nOptions:\\n  --help  Show this message and exit.\\n'\nE        +  where 'Usage: cmd-with-help [OPTIONS]\\n\\n  CLI HELP (DEPRECATED)\\n\\nOptions:\\n  --help  Show this message and exit.\\n' = <Result okay>.output\n\ntests/test_commands.py:300: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_commands.py::test_deprecated_in_help_messages - AssertionError: assert '(Deprecated)' in 'Usage: cmd-with-help [OPTIONS]\\n\\n  CLI HELP (DEPRECATED)\\n\\nOptions:\\n  --help  Show this message and exit.\\n'\n +  where 'Usage: cmd-with-help [OPTIONS]\\n\\n  CLI HELP (DEPRECATED)\\n\\nOptions:\\n  --help  Show this message and exit.\\n' = <Result okay>.output\n1 failed, 13 passed in 0.06s",
+   "fixed_seconds": 0.27,
+   "n_tests": 14,
+   "prompt": "When a command is marked `deprecated=True`, the deprecation notice is appended at the very end of the help text (after the full description and options), making it easy to miss, and it currently reads as `(DEPRECATED)` in all caps. For example:\n\n```python\nimport click\n\n@click.command(deprecated=True)\ndef cmd():\n    \"\"\"Some help text.\"\"\"\n\ncmd(['--help'], standalone_mode=False)\n```\n\nThe deprecation notice should be shown as `(Deprecated)` and appear prominently near the top of the help text (right after the short help/description) so users notice it immediately, both when a help docstring is present and when it isn't. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-68b3d4f5",
+   "sha": "68b3d4f5b4b752e22e1d7e7ee0c6c02fe8ae1bd5",
+   "base": "b625b9f39082f366dd85ad13024e43c8f5e78b87",
+   "date": "2021-04-06T09:29:34-07:00",
+   "subject": "Merge pull request #1836 from MLH-Fellowship/fix-prompt",
+   "src_files": [
+    "src/click/termui.py"
+   ],
+   "test_files": [
+    "tests/test_utils.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/termui.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_utils.py",
+   "base_exit": 1,
+   "base_tail": "        click.prompt(\"Prompt to stderr\", err=True)\n        out, err = capfd.readouterr()\n>       assert out == \" \"\nE       AssertionError: assert '' == ' '\nE         \nE         Strings contain only whitespace, escaping them using repr()\nE         - ' '\nE         ?  -\nE         + ''\n\ntests/test_utils.py:258: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_utils.py::test_prompts_abort - AssertionError: assert 'Password: \\ninterrupted\\n' == 'Password:\\ninterrupted\\n'\n  \n  - Password:\n  + Password: \n  ?          +\n    interrupted\nFAILED tests/test_utils.py::test_echo_writing_to_standard_error - AssertionError: assert '' == ' '\n  \n  Strings contain only whitespace, escaping them using repr()\n  - ' '\n  ?  -\n  + ''\n2 failed, 69 passed in 0.21s",
+   "fixed_seconds": 0.38,
+   "n_tests": 71,
+   "prompt": "`click.prompt` produces extra/incorrect whitespace around the prompt text when input is interrupted or when the prompt is written to stderr, which breaks scripts/readline integration relying on the exact prompt formatting. For example, aborting a hidden-input prompt currently outputs `\"Password: \\n\"` (trailing space before the newline) instead of `\"Password:\\n\"`, and prompting with `err=True` outputs `\"Prompt to stderr: \"` on stderr with nothing on stdout, whereas it should output `\"Prompt to stderr:\"` on stderr and a single space `\" \"` on stdout. Please investigate how the prompt text and trailing space/newline are emitted and fix the inconsistency so prompt output works correctly with readline.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-e3594e7f",
+   "sha": "e3594e7f8a76dd15109d29570a6f263e56e412f2",
+   "base": "6c7624491911f0b18f869e5d0a989506e7b416f8",
+   "date": "2021-04-12T19:36:03-07:00",
+   "subject": "Merge pull request #1840 from MLH-Fellowship/context-forward",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_commands.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_commands.py",
+   "base_exit": 1,
+   "base_tail": "        @cli.command()\n        @click.option(\"-a\")\n        @click.option(\"-b\")\n        @click.pass_context\n        def second(ctx, **kwargs):\n            click.echo(f\"{ctx.params}\")\n            ctx.forward(first)\n    \n        result = runner.invoke(cli, [\"second\", \"-a\", \"foo\", \"-b\", \"bar\"])\n        assert not result.exception\n>       assert result.output == \"{'a': 'foo', 'b': 'bar'}\\n{'a': 'foo', 'b': 'bar'}\\n\"\nE       assert \"{'a': 'foo',... 'bar'}\\n{}\\n\" == \"{'a': 'foo',...'b': 'bar'}\\n\"\nE         \nE           {'a': 'foo', 'b': 'bar'}\nE         - {'a': 'foo', 'b': 'bar'}\nE         + {}\n\ntests/test_commands.py:61: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_commands.py::test_forwarded_params_consistency - assert \"{'a': 'foo',... 'bar'}\\n{}\\n\" == \"{'a': 'foo',...'b': 'bar'}\\n\"\n  \n    {'a': 'foo', 'b': 'bar'}\n  - {'a': 'foo', 'b': 'bar'}\n  + {}\n1 failed, 14 passed in 0.06s",
+   "fixed_seconds": 0.37,
+   "n_tests": 15,
+   "prompt": "`Context.forward()` doesn't behave consistently with how parameters were originally passed to the source command. For example:\n\n```python\nimport click\n\ncli = click.Group()\n\n@cli.command()\n@click.option(\"-a\")\n@click.pass_context\ndef first(ctx, **kwargs):\n    click.echo(f\"{ctx.params}\")\n\n@cli.command()\n@click.option(\"-a\")\n@click.option(\"-b\")\n@click.pass_context\ndef second(ctx, **kwargs):\n    click.echo(f\"{ctx.params}\")\n    ctx.forward(first)\n\ncli(['second', '-a', 'foo', '-b', 'bar'])\n```\n\nForwarding to `first` currently loses or mishandles the extra `-b` parameter, causing an error or incorrect params dict, when it should simply forward all matching parameters from the calling context (printing `{'a': 'foo', 'b': 'bar'}` both times). Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-30e7f76a",
+   "sha": "30e7f76a383b7ddba23f564f96871261d6f8800e",
+   "base": "0dc6d74df5c984ff923f5d17e97bf94a21b3a3cd",
+   "date": "2021-04-14T07:52:24-07:00",
+   "subject": "Merge pull request #1820 from saebischer/fix-clirunner-echo_stdin",
+   "src_files": [
+    "src/click/testing.py"
+   ],
+   "test_files": [
+    "tests/test_testing.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/testing.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_testing.py",
+   "base_exit": 1,
+   "base_tail": "        @click.command()\n        def test_python_input():\n            foo = input(\"Foo: \")\n            click.echo(f\"foo={foo}\")\n    \n        runner = CliRunner(echo_stdin=True)\n        result = runner.invoke(test_python_input, input=\"bar bar\\n\")\n        assert not result.exception\n>       assert result.output == \"Foo: bar bar\\nfoo=bar bar\\n\"\nE       AssertionError: assert 'Foo: foo=bar bar\\n' == 'Foo: bar bar\\nfoo=bar bar\\n'\nE         \nE         - Foo: bar bar\nE         + Foo: foo=bar bar\nE         ?      ++++\nE         - foo=bar bar\n\ntests/test_testing.py:57: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_testing.py::test_echo_stdin_prompts - AssertionError: assert 'Foo: foo=bar bar\\n' == 'Foo: bar bar\\nfoo=bar bar\\n'\n  \n  - Foo: bar bar\n  + Foo: foo=bar bar\n  ?      ++++\n  - foo=bar bar\n1 failed, 22 passed in 0.08s",
+   "fixed_seconds": 0.26,
+   "n_tests": 23,
+   "prompt": "`CliRunner(echo_stdin=True)` has several issues with echoing input back into the output. Simple binary stream echoing of piped input works, but interactive-style input via Python's built-in `input()`, via `click.option(..., prompt=True)`, and via `click.getchar()` doesn't echo correctly \u2014 the echoed input can be missing, duplicated, or positioned incorrectly relative to the prompt text, and hidden-input prompts (`hide_input=True`) should not echo the typed value at all. For example:\n\n```python\nimport click\nfrom click.testing import CliRunner\n\n@click.command()\n@click.option(\"--foo\", prompt=True)\ndef cmd(foo):\n    click.echo(f\"foo={foo}\")\n\nrunner = CliRunner(echo_stdin=True)\nresult = runner.invoke(cmd, input=\"bar bar\\n\")\nprint(result.output)\n```\n\nThe output should cleanly interleave the prompt text with the echoed input (e.g. `\"Foo: bar bar\\nfoo=bar bar\\n\"`), and similar correct behavior is expected for `input()`-based prompts, multiple sequential prompts, and `click.getchar()` (with and without `echo=True`). Please fix `echo_stdin` handling so it works correctly across these input methods.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-ac655f8a",
+   "sha": "ac655f8ac8a13cd45ce96bdc296bd857654088f0",
+   "base": "5215fc1030ed911c0c67b18e2fcad95fc173dd0e",
+   "date": "2021-05-10T23:09:49-07:00",
+   "subject": "Merge pull request #1872 from janLuke/fix/formatter_write_text",
+   "src_files": [
+    "src/click/formatting.py"
+   ],
+   "test_files": [
+    "tests/test_formatting.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/formatting.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_formatting.py",
+   "base_exit": 1,
+   "base_tail": "        actual = formatter.getvalue()\n        expected = \"  Lorem ipsum dolor sit amet,\\n  consectetur adipiscing elit\\n\"\n>       assert actual == expected\nE       AssertionError: assert '  Lorem ipsu...iscing elit\\n' == '  Lorem ipsu...iscing elit\\n'\nE         \nE         -   Lorem ipsum dolor sit amet,\nE         ?                        ------\nE         +   Lorem ipsum dolor sit\nE         +   amet, consectetur\nE         -   consectetur adipiscing elit\nE         ?  ------------\nE         +   adipiscing elit\n\ntests/test_formatting.py:347: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_formatting.py::test_help_formatter_write_text - AssertionError: assert '  Lorem ipsu...iscing elit\\n' == '  Lorem ipsu...iscing elit\\n'\n  \n  -   Lorem ipsum dolor sit amet,\n  ?                        ------\n  +   Lorem ipsum dolor sit\n  +   amet, consectetur\n  -   consectetur adipiscing elit\n  ?  ------------\n  +   adipiscing elit\n1 failed, 15 passed in 0.06s",
+   "fixed_seconds": 0.25,
+   "n_tests": 16,
+   "prompt": "HelpFormatter.write_text() doesn't use the full available width when wrapping text, leaving the wrapped lines noticeably shorter than the formatter's width would allow. For example:\n\n```python\nimport click\ntext = \"Lorem ipsum dolor sit amet, consectetur adipiscing elit\"\nformatter = click.HelpFormatter(width=len(\"  Lorem ipsum dolor sit amet,\"))\nformatter.current_indent = 2\nformatter.write_text(text)\nprint(formatter.getvalue())\n```\n\nI'd expect the output to wrap using as much of the line width as possible (e.g. \"  Lorem ipsum dolor sit amet,\\n  consectetur adipiscing elit\\n\"), but the wrapping is off. Please fix write_text() so it correctly uses the full line width.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-166b3126",
+   "sha": "166b31261f55ba3126456bbc2ff9e16142115e56",
+   "base": "08ecfd0e7c238a2444886d239de6d0e9d83530ec",
+   "date": "2022-02-20T08:50:16-08:00",
+   "subject": "Merge pull request #1964 from janluke/fix/show_default-priority",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_options.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_options.py",
+   "base_exit": 1,
+   "base_tail": "        (\"ctx_value\", \"opt_value\", \"expect\"),\n        [\n            (None, None, False),\n            (None, False, False),\n            (None, True, True),\n            (False, None, False),\n            (False, False, False),\n            (False, True, True),\n            (True, None, True),\n            (True, False, False),\n            (True, True, True),\n            (False, \"one\", True),\n        ],\n    )\n    def test_show_default_precedence(ctx_value, opt_value, expect):\n        ctx = click.Context(click.Command(\"test\"), show_default=ctx_value)\n        opt = click.Option(\"-a\", default=1, help=\"value\", show_default=opt_value)\n        help = opt.get_help_record(ctx)[1]\n>       assert (\"default:\" in help) is expect\nE       AssertionError: assert ('default:' in 'value  [default: 1]') is False\n\ntests/test_options.py:816: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_options.py::test_show_default_precedence[True-False-False] - AssertionError: assert ('default:' in 'value  [default: 1]') is False\n1 failed, 107 passed in 0.22s",
+   "fixed_seconds": 0.37,
+   "n_tests": 108,
+   "prompt": "The show_default behavior on Option doesn't correctly account for precedence between the option-level show_default and the context-level show_default. Depending on the combination of ctx.show_default and Option(show_default=...), the wrong decision is made about whether to print \"default: ...\" in the help text. For example, setting show_default=True at the Context level should be overridden by an explicit show_default=False on the Option, and vice versa, but currently this isn't handled consistently. Please fix Option.get_help_record() (or wherever the precedence is resolved) so that an explicit per-option show_default always takes priority over the context-level setting, falling back to the context value only when the option doesn't specify one.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-deb1f0e1",
+   "sha": "deb1f0e1d736774ae17ce423ba452de937ffa402",
+   "base": "c01e2b8ed17d3ea65981bc62784363d0e38e3092",
+   "date": "2022-02-21T12:21:20-08:00",
+   "subject": "Merge pull request #2158 from unparalleled-js/fix/allow-empty-when-confirmation-required",
+   "src_files": [
+    "src/click/termui.py"
+   ],
+   "test_files": [
+    "tests/test_termui.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/termui.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_termui.py",
+   "base_exit": -9,
+   "base_tail": "TIMEOUT after 60s",
+   "fixed_seconds": 0.34,
+   "n_tests": 60,
+   "prompt": "When a prompt has confirmation_prompt=True and default=\"\" (empty string), entering an empty string should be accepted as the value, but currently it seems to be rejected or mishandled, forcing a non-empty confirmation to match. For example:\n\n```python\nimport click\n\n@click.command()\n@click.option(\"--password\", prompt=True, hide_input=True, default=\"\", confirmation_prompt=True)\ndef cli(password):\n    click.echo(password)\n\ncli(input=\"\\n\")\n```\n\nEntering nothing (empty string) for both the prompt and confirmation should succeed and return \"\", matching the given default. Please fix prompt() so empty string input is accepted when confirmation_prompt=True and default=\"\".",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-d251cb0a",
+   "sha": "d251cb0abc9b0dbda2402d4d831c18718cfb51bf",
+   "base": "19be092b6db4e4300e31906498e354ec0adf870c",
+   "date": "2022-03-19T11:30:33-07:00",
+   "subject": "Merge pull request #2219 from pallets/paramtype-name",
+   "src_files": [
+    "src/click/types.py"
+   ],
+   "test_files": [
+    "tests/test_info_dict.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "docs/shell-completion.rst",
+    "src/click/types.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_info_dict.py",
+   "base_exit": 1,
+   "base_tail": "tests/test_info_dict.py:275: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nself = <test_info_dict.test_paramtype_no_name.<locals>.TestType object at 0x7f7525e5d430>\n\n    def to_info_dict(self) -> t.Dict[str, t.Any]:\n        \"\"\"Gather information that could be useful for a tool generating\n        user-facing documentation.\n    \n        Use :meth:`click.Context.to_info_dict` to traverse the entire\n        CLI structure.\n    \n        .. versionadded:: 8.0\n        \"\"\"\n        # The class name without the \"ParamType\" suffix.\n        param_type = type(self).__name__.partition(\"ParamType\")[0]\n        param_type = param_type.partition(\"ParameterType\")[0]\n>       return {\"param_type\": param_type, \"name\": self.name}\n                                                  ^^^^^^^^^\nE       AttributeError: 'TestType' object has no attribute 'name'\n\nsrc/click/types.py:66: AttributeError\n=========================== short test summary info ============================\nFAILED tests/test_info_dict.py::test_paramtype_no_name - AttributeError: 'TestType' object has no attribute 'name'\n1 failed, 21 passed in 0.05s",
+   "fixed_seconds": 0.25,
+   "n_tests": 22,
+   "prompt": "When a custom ParamType subclass doesn't explicitly set a `name` attribute, calling `to_info_dict()` on an instance fails or returns an incorrect/missing name instead of falling back to something sensible like the class name. For example:\n\n```python\nimport click\n\nclass TestType(click.ParamType):\n    pass\n\nprint(TestType().to_info_dict()[\"name\"])\n```\n\nI'd expect this to return \"TestType\" (derived from the class), but it doesn't. Please fix ParamType.to_info_dict() to handle types that don't define a name.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-1a4d8c1b",
+   "sha": "1a4d8c1bb1e8f8e214ede7223bd2c05dc2ce006a",
+   "base": "02046e7a19480f85fff7e4577486518abe47e401",
+   "date": "2024-11-02T22:45:03+00:00",
+   "subject": "Fix metavar for Choice options when show_choices=False (#2365)",
+   "src_files": [
+    "src/click/types.py"
+   ],
+   "test_files": [
+    "tests/test_options.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/types.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_options.py",
+   "base_exit": 1,
+   "base_tail": ".output\nE       AssertionError: assert '[foo|1]' in ''\nE        +  where '' = <Result TypeError('sequence item 1: expected str instance, int found')>.output\n\ntests/test_options.py:961: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_options.py::test_usage_show_choices[text choices] - AssertionError: assert '[TEXT]' in 'Usage: cli-without-choices [OPTIONS]\\n\\nOptions:\\n  -g [foo|bar]\\n  --help        Show this message and exit.\\n'\n +  where 'Usage: cli-without-choices [OPTIONS]\\n\\nOptions:\\n  -g [foo|bar]\\n  --help        Show this message and exit.\\n' = <Result okay>.output\nFAILED tests/test_options.py::test_usage_show_choices[int choices] - AssertionError: assert '[1|2]' in ''\n +  where '' = <Result TypeError('sequence item 0: expected str instance, int found')>.output\nFAILED tests/test_options.py::test_usage_show_choices[float choices] - AssertionError: assert '[1.0|2.0]' in ''\n +  where '' = <Result TypeError('sequence item 0: expected str instance, float found')>.output\nFAILED tests/test_options.py::test_usage_show_choices[bool choices] - AssertionError: assert '[True|False]' in ''\n +  where '' = <Result TypeError('sequence item 0: expected str instance, bool found')>.output\nFAILED tests/test_options.py::test_usage_show_choices[text/int choices] - AssertionError: assert '[foo|1]' in ''\n +  where '' = <Result TypeError('sequence item 1: expected str instance, int found')>.output\n5 failed, 113 passed in 0.30s",
+   "fixed_seconds": 0.38,
+   "n_tests": 118,
+   "prompt": "When a Choice option is defined with show_choices=False, the --help output still doesn't show a proper metavar reflecting the choice types\u2014it seems to fall back to something generic instead of a metavar like [TEXT], [INTEGER], [FLOAT], [BOOLEAN], or a combination like [TEXT|INTEGER] based on the actual choice value types. For example:\n\n```python\nimport click\n\n@click.command()\n@click.option(\"-g\", type=click.Choice([1, 2]), show_choices=False)\ndef cli(g):\n    pass\n\ncli([\"--help\"])\n```\n\nI'd expect the help output to show `[INTEGER]` as the metavar in this case (and similarly TEXT/FLOAT/BOOLEAN/combinations for other choice value types), but it doesn't. Please fix the metavar generation for Choice options when show_choices=False.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-1b524bb3",
+   "sha": "1b524bb30d0bd39528369c7029b9296e7663cf19",
+   "base": "0e0c00324a5af35f8995c7ff88df67b0f5594a58",
+   "date": "2024-11-03T12:21:04+00:00",
+   "subject": "show env var in error hint (#2696)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_options.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_options.py",
+   "base_exit": 1,
+   "base_tail": "\nrunner = <click.testing.CliRunner object at 0x7fc9c3ff24e0>\n\n    def test_missing_envvar(runner):\n        cli = click.Command(\n            \"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", required=True)]\n        )\n        result = runner.invoke(cli)\n        assert result.exit_code == 2\n        assert \"Error: Missing option '--foo'.\" in result.output\n        cli = click.Command(\n            \"cli\",\n            params=[click.Option([\"--foo\"], envvar=\"bar\", show_envvar=True, required=True)],\n        )\n        result = runner.invoke(cli)\n        assert result.exit_code == 2\n>       assert \"Error: Missing option '--foo' (env var: 'bar').\" in result.output\nE       assert \"Error: Missing option '--foo' (env var: 'bar').\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo'.\\n\"\nE        +  where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo'.\\n\" = <Result SystemExit(2)>.output\n\ntests/test_options.py:547: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_options.py::test_missing_envvar - assert \"Error: Missing option '--foo' (env var: 'bar').\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo'.\\n\"\n +  where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo'.\\n\" = <Result SystemExit(2)>.output\n1 failed, 118 passed in 0.25s",
+   "fixed_seconds": 0.4,
+   "n_tests": 119,
+   "prompt": "When a required option with an envvar is missing and show_envvar=True is set, the \"Missing option\" error message doesn't mention the environment variable name, even though it's supposed to help users understand where the value could come from. For example:\n\n```python\nimport click\n\ncli = click.Command(\"cli\", params=[click.Option([\"--foo\"], envvar=\"bar\", show_envvar=True, required=True)])\ncli.main([], standalone_mode=False)\n```\n\nRunning this without setting the `bar` env var should produce an error like `Error: Missing option '--foo' (env var: 'bar').`, but the env var hint is missing from the message. Please fix the missing-parameter error message to include the env var name when show_envvar is enabled.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-c326df95",
+   "sha": "c326df95e9e3da0425360e030413f6a3ee25fdee",
+   "base": "a8c05427602d12842c53ce48b03b5d6b5c0c6693",
+   "date": "2024-11-03T12:35:15+00:00",
+   "subject": "Fix closing of callbacks on CLI exit (#2680)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_context.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "docs/advanced.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_context.py",
+   "base_exit": 1,
+   "base_tail": "  Full diff:\n  + []\n  - [\n  -     'ExitingOption',\n  -     'NonExitingOption',\n  - ]\nFAILED tests/test_context.py::test_multiple_eager_callbacks[eagerness_precedence] - AssertionError: assert [] == ['ExitingOption']\n  \n  Right contains one more item: 'ExitingOption'\n  \n  Full diff:\n  + []\n  - [\n  -     'ExitingOption',\n  - ]\nFAILED tests/test_context.py::test_no_state_leaks - assert [] == [True]\n  \n  Right contains one more item: True\n  \n  Full diff:\n  + []\n  - [\n  -     True,\n  - ]\n3 failed, 24 passed in 0.11s",
+   "fixed_seconds": 0.3,
+   "n_tests": 27,
+   "prompt": "When a command calls ctx.exit() (or exits eagerly from within an option callback), any callbacks registered via ctx.call_on_close() don't get run reliably, and in some cases callbacks can leak state or run in the wrong order relative to other eager option callbacks. For example:\n\n```python\nimport click\n\n@click.command()\n@click.pass_context\ndef cli(ctx):\n    ctx.obj = \"test\"\n\n    @ctx.call_on_close\n    def foo():\n        print(click.get_current_context().obj)\n\n    ctx.exit()\n    click.echo(\"aha!\")\n\ncli.main([], standalone_mode=False)\n```\n\nI'd expect the call_on_close callback to still run (with the correct context still active) even though ctx.exit() was called before reaching the end of the command, and this should also hold when multiple eager options each register close callbacks and one of them triggers an early exit. Please fix context handling so close callbacks are always invoked properly on exit, in the correct order, without leaking state.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-17874977",
+   "sha": "1787497713fa389435ed732c9b26274c3cdc458d",
+   "base": "380008389b32ca2b7de7c73f670a9eee1562004e",
+   "date": "2024-11-03T14:40:46+00:00",
+   "subject": "Added functionality to set flag_value correctly when using envvar (#2788)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_arguments.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_arguments.py",
+   "base_exit": 1,
+   "base_tail": "runner = <click.testing.CliRunner object at 0x7f085dde5e20>\n\n    def test_envvar_flag_value(runner):\n        @click.command()\n        # is_flag is implicitly true\n        @click.option(\"--upper\", flag_value=\"upper\", envvar=\"UPPER\")\n        def cmd(upper):\n            click.echo(upper)\n            return upper\n    \n        # For whatever value of the `env` variable, if it exists, the flag should be `upper`\n        result = runner.invoke(cmd, env={\"UPPER\": \"whatever\"})\n>       assert result.output.strip() == \"upper\"\nE       AssertionError: assert 'whatever' == 'upper'\nE         \nE         - upper\nE         + whatever\n\ntests/test_arguments.py:211: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_arguments.py::test_envvar_flag_value - AssertionError: assert 'whatever' == 'upper'\n  \n  - upper\n  + whatever\n1 failed, 37 passed in 0.14s",
+   "fixed_seconds": 0.34,
+   "n_tests": 38,
+   "prompt": "When an option is defined with flag_value and envvar (with is_flag implicitly true), setting the environment variable to any value doesn't correctly set the option's value to the configured flag_value\u2014instead it seems to use the raw env var content or otherwise mishandle it. For example:\n\n```python\nimport click\n\n@click.command()\n@click.option(\"--upper\", flag_value=\"upper\", envvar=\"UPPER\")\ndef cmd(upper):\n    click.echo(upper)\n\ncmd.main([], env={\"UPPER\": \"whatever\"}, standalone_mode=False)\n```\n\nRegardless of what the `UPPER` env var is set to (as long as it exists), I'd expect the output to be \"upper\" (the flag_value), but it isn't behaving that way. Please fix flag_value handling for options that use envvar.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-884af5c2",
+   "sha": "884af5c20fdc95c9c7352df35c37273391464fb9",
+   "base": "011b9f9d190c71310264e6c54bae6259f5e38a9f",
+   "date": "2025-05-20T10:55:39-04:00",
+   "subject": "Fix flag value set when is_flag=True and type is provided (#2930)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_options.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_options.py",
+   "base_exit": 1,
+   "base_tail": "\ntests/test_options.py:1032: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_options.py::test_flag_value_is_correctly_set[opts1-True-True] - AssertionError: assert 'False\\n' == 'True\\n'\n  \n  - True\n  + False\nFAILED tests/test_options.py::test_flag_value_is_correctly_set[opts3-True-False] - AssertionError: assert 'True\\n' == 'False\\n'\n  \n  - False\n  + True\nFAILED tests/test_options.py::test_flag_value_is_correctly_set[opts5-True-True] - AssertionError: assert 'False\\n' == 'True\\n'\n  \n  - True\n  + False\nFAILED tests/test_options.py::test_flag_value_is_correctly_set[opts7-True-False] - AssertionError: assert 'True\\n' == 'False\\n'\n  \n  - False\n  + True\nFAILED tests/test_options.py::test_flag_value_is_correctly_set[opts9-True-True] - AssertionError: assert '\\n' == 'True\\n'\n  \n  Strings contain only whitespace, escaping them using repr()\n  - 'True\\n'\n  + '\\n'\n5 failed, 139 passed in 0.42s",
+   "fixed_seconds": 0.46,
+   "n_tests": 144,
+   "prompt": "When using `click.option(\"--foo\", is_flag=True, ...)` together with an explicit `type=bool` (or `type=click.BOOL`) and a `default`, the value passed to the command callback is wrong \u2014 passing `--foo` doesn't correctly toggle from the given default, and omitting it doesn't give the expected default either. For example:\n```python\nimport click\n\n@click.command()\n@click.option(\"--foo\", is_flag=True, type=bool, default=True)\ndef cmd(foo):\n    click.echo(foo)\n```\nInvoking with `--foo` should print `False` and without it should print `True`, but the actual output is incorrect. Separately, defining a plain (non-flag) option whose `default` is an object that raises when converted to `bool` (e.g. a custom class whose `__bool__` raises `ValueError`) crashes the command entirely, even when the offending default is never used as a flag:\n```python\nclass NonNegatable:\n    def __bool__(self):\n        raise ValueError(\"Cannot negate this object\")\n\n@click.command()\n@click.option(\"--foo\", default=NonNegatable())\ndef cmd(foo):\n    pass\n```\nRunning this command should succeed normally instead of raising an error. Please fix both issues.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-b7cf0697",
+   "sha": "b7cf06970e40a3144eb963ff34ed7c38934afb40",
+   "base": "884af5c20fdc95c9c7352df35c37273391464fb9",
+   "date": "2025-05-20T16:14:36-04:00",
+   "subject": "fix shell completion for nested groups (#2935)",
+   "src_files": [
+    "src/click/shell_completion.py"
+   ],
+   "test_files": [
+    "tests/test_shell_completion.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/shell_completion.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_shell_completion.py",
+   "base_exit": 1,
+   "base_tail": "  Full diff:\n    [\n  -     '--verbose',\n        '--help',\n    ]\nFAILED tests/test_shell_completion.py::test_nested_group[args4--expect4] - AssertionError: assert ['full'] == []\n  \n  Left contains one more item: 'full'\n  \n  Full diff:\n  - []\n  + [\n  +     'full',\n  + ]\nFAILED tests/test_shell_completion.py::test_nested_group[args5---expect5] - AssertionError: assert ['--help'] == ['-a', '--help']\n  \n  At index 0 diff: '--help' != '-a'\n  Right contains one more item: '--help'\n  \n  Full diff:\n    [\n  -     '-a',\n        '--help',\n    ]\n4 failed, 43 passed in 0.17s",
+   "fixed_seconds": 0.29,
+   "n_tests": 47,
+   "prompt": "Shell completion doesn't work correctly for commands nested more than one level deep inside groups. For example, with a group `cli` containing a group `get`, which contains another group `full`, which contains a command `data`, tab-completing after `get full` should suggest `data`, and completing after `get full data` should suggest that command's own options \u2014 but the suggestions returned are wrong or empty for these deeper nesting levels. Please fix shell completion so it works correctly for arbitrarily nested groups.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-a1235aac",
+   "sha": "a1235aacb1be55dc66ddcfefbf64dec44b6ab54d",
+   "base": "565f36d5bc4a15d304337b749e113fb4477b1843",
+   "date": "2025-07-21T20:35:04+01:00",
+   "subject": "Fix Zsh completions with colons (#2846)",
+   "src_files": [
+    "src/click/shell_completion.py"
+   ],
+   "test_files": [
+    "tests/test_shell_completion.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/shell_completion.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_shell_completion.py",
+   "base_exit": 1,
+   "base_tail": "    cee:dee\n    plain\n    c:e\n    _\nFAILED tests/test_shell_completion.py::test_zsh_full_complete_with_colons[env1-plain\\nc\\\\:d\\ncee:dee\\nplain\\nc:e\\n_\\n] - AssertionError: assert 'plain\\nc:d\\n...ain\\nc:e\\n_\\n' == 'plain\\nc\\\\:d...ain\\nc:e\\n_\\n'\n  \n    plain\n  - c\\:d\n  ?  -\n  + c:d\n    cee:dee\n    plain\n    c:e\n    _\nFAILED tests/test_shell_completion.py::test_zsh_full_complete_with_colons[env2-plain\\nc\\\\:d\\ncee:dee\\nplain\\nc:e\\n_\\n] - AssertionError: assert 'plain\\nc:d\\n...ain\\nc:e\\n_\\n' == 'plain\\nc\\\\:d...ain\\nc:e\\n_\\n'\n  \n    plain\n  - c\\:d\n  ?  -\n  + c:d\n    cee:dee\n    plain\n    c:e\n    _\n3 failed, 47 passed in 0.21s",
+   "fixed_seconds": 0.3,
+   "n_tests": 50,
+   "prompt": "Zsh completion output is broken for commands or subcommands whose names contain a colon (`:`). For example, given a group with subcommands named `c:d` and `c:e`, requesting completions (e.g. by setting `COMP_WORDS`/`COMP_CWORD` and invoking with `_CLI_COMPLETE=zsh_complete`) produces malformed output where the colon isn't properly escaped, so Zsh doesn't parse the completion entries correctly. Please fix the Zsh completion output so command names containing colons are handled properly.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-eaf33a95",
+   "sha": "eaf33a957975e7d0943fad8d2b4b905b6bd98cb9",
+   "base": "a1235aacb1be55dc66ddcfefbf64dec44b6ab54d",
+   "date": "2025-07-22T00:30:28-07:00",
+   "subject": "Fix rendering of Enum choices' default (#3004)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_options.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_options.py",
+   "base_exit": 1,
+   "base_tail": " Show this message and exit.\\n'\n +  where 'Usage: cli-with-choices [OPTIONS]\\n\\nOptions:\\n  -g [ONE|TWO]  [default: 2]\\n  --help        Show this message and exit.\\n' = <Result okay>.output\nFAILED tests/test_options.py::test_choice_default_rendering[Letter-b-B] - AssertionError: assert '[default: B]' in 'Usage: cli-with-choices [OPTIONS]\\n\\nOptions:\\n  -g [A|B]  [default: b]\\n  --help    Show this message and exit.\\n'\n +  where 'Usage: cli-with-choices [OPTIONS]\\n\\nOptions:\\n  -g [A|B]  [default: b]\\n  --help    Show this message and exit.\\n' = <Result okay>.output\nFAILED tests/test_options.py::test_choice_default_rendering[Color-Color.GREEN-GREEN] - AssertionError: assert '[default: GREEN]' in 'Usage: cli-with-choices [OPTIONS]\\n\\nOptions:\\n  -g [RED|GREEN|BLUE]  [default: Color.GREEN]\\n  --help               Show this message and exit.\\n'\n +  where 'Usage: cli-with-choices [OPTIONS]\\n\\nOptions:\\n  -g [RED|GREEN|BLUE]  [default: Color.GREEN]\\n  --help               Show this message and exit.\\n' = <Result okay>.output\nFAILED tests/test_options.py::test_choice_default_rendering[ColorInt-2-GREEN] - AssertionError: assert '[default: GREEN]' in 'Usage: cli-with-choices [OPTIONS]\\n\\nOptions:\\n  -g [RED|GREEN|BLUE]  [default: 2]\\n  --help               Show this message and exit.\\n'\n +  where 'Usage: cli-with-choices [OPTIONS]\\n\\nOptions:\\n  -g [RED|GREEN|BLUE]  [default: 2]\\n  --help               Show this message and exit.\\n' = <Result okay>.output\n5 failed, 295 passed in 0.61s",
+   "fixed_seconds": 0.68,
+   "n_tests": 300,
+   "prompt": "When a `click.Choice` is built from a Python `Enum` (including `IntEnum`, `StrEnum`, `Flag`, `IntFlag`), the rendered default value shown in `--help` and the metavar/usage listing don't match the enum's name as expected. For example:\n```python\nimport enum, click\n\nclass HashType(enum.Enum):\n    MD5 = enum.auto()\n    SHA1 = enum.auto()\n\n@click.command()\n@click.option(\"-g\", type=click.Choice(HashType), default=HashType.SHA1, show_default=True)\ndef cli(g):\n    pass\n```\nRunning `--help` should show the choice list and default rendered using the enum member names (e.g. `SHA1`), not the enum's raw value or `repr()`. Please fix how Enum-based `Choice` values are rendered for both the option listing and the default.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-0be2bd38",
+   "sha": "0be2bd385064053bb75f92db317de128db729d52",
+   "base": "c88f333de440c5066ff563f784a6561f4713cf78",
+   "date": "2025-07-22T21:28:59-07:00",
+   "subject": "Don't include envvar in error hint when envvar not configured (#2972)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_options.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_options.py",
+   "base_exit": 1,
+   "base_tail": "r.invoke(cli)\n        assert result.exit_code == 2\n        assert \"Error: Missing option '--foo'.\" in result.output\n        cli = click.Command(\n            \"cli\",\n            params=[click.Option([\"--foo\"], envvar=\"bar\", show_envvar=True, required=True)],\n        )\n        result = runner.invoke(cli)\n        assert result.exit_code == 2\n        assert \"Error: Missing option '--foo' (env var: 'bar').\" in result.output\n    \n        cli = click.Command(\n            \"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)]\n        )\n        result = runner.invoke(cli)\n        assert result.exit_code == 2\n>       assert \"Error: Missing option '--foo'.\" in result.output\nE       assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\"\nE        +  where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output\n\ntests/test_options.py:685: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_options.py::test_missing_envvar - assert \"Error: Missing option '--foo'.\" in \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\"\n +  where \"Usage: cli [OPTIONS]\\nTry 'cli --help' for help.\\n\\nError: Missing option '--foo' (env var: 'None').\\n\" = <Result SystemExit(2)>.output\n1 failed, 299 passed in 0.53s",
+   "fixed_seconds": 0.64,
+   "n_tests": 300,
+   "prompt": "When a required option is missing and `show_envvar=True` is set but the option doesn't actually have an `envvar` configured, the resulting error message still includes a misleading `(env var: ...)` hint. For example:\n```python\nimport click\n\ncli = click.Command(\"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)])\n```\nRunning this command without `--foo` currently prints something like `Error: Missing option '--foo' (env var: 'FOO').` even though no envvar was actually set for the option. The error should just say `Error: Missing option '--foo'.` when there's no real envvar configured. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-4f936ac1",
+   "sha": "4f936ac1981645488f396953bc59e50445de00b6",
+   "base": "1c68e531ef5e45f6facdb777c720d0f984614b81",
+   "date": "2025-08-06T22:57:15-07:00",
+   "subject": "show correct auto complete value for nargs option in combination with flag option (#2816)",
+   "src_files": [
+    "src/click/shell_completion.py"
+   ],
+   "test_files": [
+    "tests/test_shell_completion.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/shell_completion.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_shell_completion.py",
+   "base_exit": 1,
+   "base_tail": "E         -     'p',\nE         ?      ^\nE         +     'b',\nE         ?      ^\nE         -     'q',\nE           ]\n\ntests/test_shell_completion.py:233: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_shell_completion.py::test_flag_option_with_nargs_option - AssertionError: assert ['a1', 'a2', 'b'] == ['p', 'q']\n  \n  At index 0 diff: 'a1' != 'p'\n  Left contains one more item: 'b'\n  \n  Full diff:\n    [\n  +     'a1',\n  +     'a2',\n  -     'p',\n  ?      ^\n  +     'b',\n  ?      ^\n  -     'q',\n    ]\n1 failed, 50 passed in 0.14s",
+   "fixed_seconds": 0.32,
+   "n_tests": 51,
+   "prompt": "Shell completion returns the wrong values for an `nargs`-based choice option when a boolean flag option appears earlier on the command line. For example:\n```python\nfrom click.shell_completion import ShellComplete\nfrom click import Command, Argument, Option, Choice\n\ncli = Command(\n    \"cli\",\n    add_help_option=False,\n    params=[\n        Argument([\"a\"], type=Choice([\"a1\", \"a2\", \"b\"])),\n        Option([\"--flag\"], is_flag=True),\n        Option([\"-c\"], type=Choice([\"p\", \"q\"]), nargs=2),\n    ],\n)\n```\nCompleting after `a1 --flag -c ` should suggest `p` and `q` (the choices for `-c`), but instead the completion doesn't correctly recognize that `-c` is awaiting its argument, presumably because the preceding flag option throws off the parsing. Please fix shell completion so `nargs` options work correctly after a flag option.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-701b3131",
+   "sha": "701b313160be12752e49b3f7cea32402c0969a69",
+   "base": "3be1f33c8e0b13295853f6aa64d1f7412b5312df",
+   "date": "2025-08-09T14:43:46+01:00",
+   "subject": "Fix completions for quoted/escaped parameters in Fish (#3013)",
+   "src_files": [
+    "src/click/shell_completion.py"
+   ],
+   "test_files": [
+    "tests/test_shell_completion.py"
+   ],
+   "gold_files": [
+    "src/click/shell_completion.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_shell_completion.py",
+   "base_exit": 1,
+   "base_tail": "            (\"fish\", {\"COMP_WORDS\": \"\", \"COMP_CWORD\": \"\"}, \"plain,a\\nplain,b\\tbee\\n\"),\n            (\"fish\", {\"COMP_WORDS\": \"a b\", \"COMP_CWORD\": \"b\"}, \"plain,b\\tbee\\n\"),\n            (\"fish\", {\"COMP_WORDS\": 'a \"b', \"COMP_CWORD\": '\"b'}, \"plain,b\\tbee\\n\"),\n        ],\n    )\n    @pytest.mark.usefixtures(\"_patch_for_completion\")\n    def test_full_complete(runner, shell, env, expect):\n        cli = Group(\"cli\", commands=[Command(\"a\"), Command(\"b\", help=\"bee\")])\n        env[\"_CLI_COMPLETE\"] = f\"{shell}_complete\"\n        result = runner.invoke(cli, env=env)\n>       assert result.output == expect\nE       AssertionError: assert '\\n' == 'plain,b\\tbee\\n'\nE         \nE         Strings contain only whitespace, escaping them using repr()\nE         - 'plain,b\\tbee\\n'\nE         + '\\n'\n\ntests/test_shell_completion.py:370: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_shell_completion.py::test_full_complete[fish-env6-plain,b\\tbee\\n] - AssertionError: assert '\\n' == 'plain,b\\tbee\\n'\n  \n  Strings contain only whitespace, escaping them using repr()\n  - 'plain,b\\tbee\\n'\n  + '\\n'\n1 failed, 51 passed in 0.20s",
+   "fixed_seconds": 0.31,
+   "n_tests": 52,
+   "prompt": "Fish shell completion breaks when a parameter on the command line contains quote or escape characters. For example, when the current word being completed is something like `\"b` (a value with an embedded/unclosed quote), Fish completion should still correctly suggest the matching command (e.g. `b`, described as `bee`) instead of failing to match or returning nothing. Please fix Fish shell completion to correctly handle quoted/escaped parameters.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-27aaed3f",
+   "sha": "27aaed3fe5bcd6adedd6e91de234914af9859cf1",
+   "base": "2ed395b0b5ac4d56553ff715335f456f812cdc78",
+   "date": "2025-09-24T10:07:42-07:00",
+   "subject": "Fix default handling to defer `UNSET` normalization (#3079)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_defaults.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_defaults.py",
+   "base_exit": 1,
+   "base_tail": "    def test_shared_param_prefers_first_default(runner):\n        \"\"\"test that the first default is chosen when multiple flags share a param name\"\"\"\n    \n        @click.command\n        @click.option(\"--red\", \"color\", flag_value=\"red\")\n        @click.option(\"--green\", \"color\", flag_value=\"green\", default=True)\n        def prefers_green(color):\n            click.echo(color)\n    \n        @click.command\n        @click.option(\"--red\", \"color\", flag_value=\"red\", default=True)\n        @click.option(\"--green\", \"color\", flag_value=\"green\")\n        def prefers_red(color):\n            click.echo(color)\n    \n        result = runner.invoke(prefers_green, [])\n>       assert \"green\" in result.output\nE       AssertionError: assert 'green' in '\\n'\nE        +  where '\\n' = <Result okay>.output\n\ntests/test_defaults.py:105: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_defaults.py::test_shared_param_prefers_first_default - AssertionError: assert 'green' in '\\n'\n +  where '\\n' = <Result okay>.output\n1 failed, 5 passed in 0.04s",
+   "fixed_seconds": 0.25,
+   "n_tests": 6,
+   "prompt": "When multiple `@click.option` flags share the same destination parameter name and more than one of them sets `default=True`, the resulting default value is inconsistent/unpredictable depending on decorator order, instead of consistently honoring the first one declared. For example:\n```python\nimport click\n\n@click.command()\n@click.option(\"--red\", \"color\", flag_value=\"red\")\n@click.option(\"--green\", \"color\", flag_value=\"green\", default=True)\ndef cli(color):\n    click.echo(color)\n```\nRunning this with no arguments should print `green` (the first-declared default), and running with `--red` should print `red`; reversing which option has `default=True` should analogously prefer the newly-first one. Please fix default resolution so the first flag declared with a default is consistently preferred.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-8533c966",
+   "sha": "8533c966b84783718e74286aa7b098f3ff1e9221",
+   "base": "5f86603a84e12bdec1584c15c9f982740e613c45",
+   "date": "2025-10-01T22:56:42-07:00",
+   "subject": "Fix rendering when `prompt_suffix` is empty (#3021)",
+   "src_files": [
+    "src/click/termui.py"
+   ],
+   "test_files": [
+    "tests/test_utils.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/termui.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_utils.py",
+   "base_exit": 1,
+   "base_tail": "    \n        emulate_input(\"asdlkj\\n\")\n        click.prompt(\"Prompt to stdin\")\n        out, err = capfd.readouterr()\n        assert out == \"Prompt to stdin: \"\n        assert err == \"\"\n    \n        emulate_input(\"asdlkj\\n\")\n        click.prompt(\"Prompt to stdin with no suffix\", prompt_suffix=\"\")\n        out, err = capfd.readouterr()\n>       assert out == \"Prompt to stdin with no suffix\"\nE       AssertionError: assert 'Prompt to st...th no suffix ' == 'Prompt to st...ith no suffix'\nE         \nE         - Prompt to stdin with no suffix\nE         + Prompt to stdin with no suffix \nE         ?                               +\n\ntests/test_utils.py:487: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_utils.py::test_echo_writing_to_standard_error - AssertionError: assert 'Prompt to st...th no suffix ' == 'Prompt to st...ith no suffix'\n  \n  - Prompt to stdin with no suffix\n  + Prompt to stdin with no suffix \n  ?                               +\n1 failed, 142 passed in 0.42s",
+   "fixed_seconds": 0.64,
+   "n_tests": 143,
+   "prompt": "click.prompt() and click.confirm() render incorrectly when prompt_suffix is set to an empty string. For example:\n\n```python\nclick.prompt(\"Name\", prompt_suffix=\"\")\nclick.confirm(\"OK\", prompt_suffix=\"\", err=True)\n```\n\nInstead of printing the text cleanly, part of the message ends up missing or displayed on the wrong stream (stdout vs stderr), and characters near the end of the prompt seem to get truncated or misplaced. Please investigate and fix the handling of an empty prompt_suffix so the full prompt text is always written to the correct stream.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-8d4051e9",
+   "sha": "8d4051e9e57be1bfb5421e3eb5a93b4b42077b0c",
+   "base": "06f52a45782a0bd2cb9aa5f289afb68ac3b2b2e5",
+   "date": "2025-10-08T19:41:28-07:00",
+   "subject": "Ensure that `type_cast_value` never gets `UNSET` (#3090)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_arguments.py",
+    "tests/test_options.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_arguments.py tests/test_options.py",
+   "base_exit": 1,
+   "base_tail": "erride_type_cast_value_and_never_sees_unset[argument_kwargs1-pass_argv1] - AssertionError: assert not AssertionError('assert Sentinel.UNSET is not Sentinel.UNSET')\n +  where AssertionError('assert Sentinel.UNSET is not Sentinel.UNSET') = <Result AssertionError('assert Sentinel.UNSET is not Sentinel.UNSET')>.exception\nFAILED tests/test_arguments.py::test_argument_custom_class_can_override_type_cast_value_and_never_sees_unset[argument_kwargs4-pass_argv4] - AssertionError: assert not AssertionError('assert Sentinel.UNSET is not Sentinel.UNSET')\n +  where AssertionError('assert Sentinel.UNSET is not Sentinel.UNSET') = <Result AssertionError('assert Sentinel.UNSET is not Sentinel.UNSET')>.exception\nFAILED tests/test_options.py::test_option_custom_class_can_override_type_cast_value_and_never_sees_unset[--opt-option_kwargs0-pass_argv0] - AssertionError: assert not AssertionError('assert Sentinel.UNSET is not Sentinel.UNSET')\n +  where AssertionError('assert Sentinel.UNSET is not Sentinel.UNSET') = <Result AssertionError('assert Sentinel.UNSET is not Sentinel.UNSET')>.exception\nFAILED tests/test_options.py::test_option_custom_class_can_override_type_cast_value_and_never_sees_unset[--opt-option_kwargs1-pass_argv1] - AssertionError: assert not AssertionError('assert Sentinel.UNSET is not Sentinel.UNSET')\n +  where AssertionError('assert Sentinel.UNSET is not Sentinel.UNSET') = <Result AssertionError('assert Sentinel.UNSET is not Sentinel.UNSET')>.exception\n4 failed, 618 passed in 1.25s",
+   "fixed_seconds": 1.1,
+   "n_tests": 622,
+   "prompt": "When a custom Argument or Option subclass overrides `type_cast_value(self, ctx, value)`, the `value` it receives is sometimes an internal placeholder sentinel instead of the actual value that should be passed through (e.g. it can happen with `nargs=-1` and no args given, or `required=False` with no argv). For example:\n\n```python\nfrom click._utils import UNSET\n\nclass CustomArgument(click.Argument):\n    def type_cast_value(self, ctx, value):\n        assert value is not UNSET\n        return value\n\n@click.command()\n@click.argument(\"myarg\", nargs=-1, cls=CustomArgument)\ndef cmd(myarg):\n    click.echo(\"ok\")\n```\n\nRunning this command (with or without an argument) can trigger the assertion. `type_cast_value` overrides should never observe this internal placeholder for Arguments or Options. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-ebcd548d",
+   "sha": "ebcd548d50662bc8fa4f8b9ec7fe13cb8310bfaa",
+   "base": "7f7bbe4569ea68e8dabee232eade069ef3310aea",
+   "date": "2025-11-19T19:49:37-08:00",
+   "subject": "Fix handling of options which set both is_flag=False and flag_value=... (#3152)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_options.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_options.py",
+   "base_exit": 1,
+   "base_tail": "        elif flag_type is int:\n            flagopt = click.option(\n                \"--theflag\", type=int, is_flag=False, flag_value=1, default=0\n            )\n        else:\n            raise NotImplementedError(flag_type)\n    \n        @click.command()\n        @flagopt\n        def cmd(theflag):\n            click.echo(theflag)\n    \n        runner = CliRunner()\n        result = runner.invoke(cmd, args)\n>       assert result.exit_code == 0\nE       assert 2 == 0\nE        +  where 2 = <Result SystemExit(2)>.exit_code\n\ntests/test_options.py:2320: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_options.py::test_flag_value_on_option_with_zero_or_one_args[str-args1-FlagValue\\n] - assert 2 == 0\n +  where 2 = <Result SystemExit(2)>.exit_code\nFAILED tests/test_options.py::test_flag_value_on_option_with_zero_or_one_args[int-args4-1\\n] - assert 2 == 0\n +  where 2 = <Result SystemExit(2)>.exit_code\n2 failed, 535 passed in 0.90s",
+   "fixed_seconds": 1.11,
+   "n_tests": 537,
+   "prompt": "An option defined with both `is_flag=False` and a `flag_value=...` doesn't behave correctly across its three usage forms (omitted, bare flag, flag with an explicit value). For example:\n\n```python\n@click.command()\n@click.option(\"--theflag\", type=str, is_flag=False, flag_value=\"FlagValue\", default=\"Default\")\ndef cmd(theflag):\n    click.echo(theflag)\n```\n\nRunning `cmd` with no args should print `Default`, `cmd --theflag` should print `FlagValue`, and `cmd --theflag value` should print `value`. The same pattern should also work correctly with an int type and a flag_value like `1`. Currently these three cases don't all produce the expected output. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-5850ef97",
+   "sha": "5850ef97230f84c74d0234ab0f30f23b398a6eee",
+   "base": "ae46cfd6bc997804893adc799589248eadcdbc29",
+   "date": "2026-03-01T15:41:05-08:00",
+   "subject": "Fix callable ``flag_value`` being instantiated when used as a default (#3225)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_defaults.py",
+    "tests/test_options.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_defaults.py tests/test_options.py",
+   "base_exit": 1,
+   "base_tail": "_options[opt1_params3-opt2_params3-args3-<class 'test_options.Class1'>] - assert \"'<test_optio...f5c8648d4c0>'\" == '\"<class \\'te...ns.Class1\\'>\"'\n  \n  - \"<class 'test_options.Class1'>\"\n  + '<test_options.Class1 object at 0x7f5c8648d4c0>'\nFAILED tests/test_options.py::test_custom_type_flag_value_dual_options[opt1_params8-opt2_params8-args8-Class1] - assert '<test_option...7f5c86429040>' == \"<class 'test...ions.Class1'>\"\n  \n  - <class 'test_options.Class1'>\n  + <test_options.Class1 object at 0x7f5c86429040>\nFAILED tests/test_options.py::test_callable_flag_value_not_instantiated[opt_params0-args0-Class1] - assert '<test_option...7f5c8642ade0>' == \"<class 'test...ions.Class1'>\"\n  \n  - <class 'test_options.Class1'>\n  + <test_options.Class1 object at 0x7f5c8642ade0>\nFAILED tests/test_options.py::test_callable_flag_value_not_instantiated[opt_params2-args2-<class 'test_options.Class1'>] - assert \"'<test_optio...f5c8642a8a0>'\" == '\"<class \\'te...ns.Class1\\'>\"'\n  \n  - \"<class 'test_options.Class1'>\"\n  + '<test_options.Class1 object at 0x7f5c8642a8a0>'\nFAILED tests/test_options.py::test_callable_flag_value_get_default_override[opt_params0-True-Class1] - AssertionError: assert <class 'test_options.Class1'> is True\n +  where <class 'test_options.Class1'> = <Option value>.default\nFAILED tests/test_options.py::test_callable_flag_value_get_default_override[opt_params1-True-upper] - AssertionError: assert 'upper' is True\n +  where 'upper' = <Option value>.default\n7 failed, 577 passed in 1.41s",
+   "fixed_seconds": 1.07,
+   "n_tests": 584,
+   "prompt": "When an option's `flag_value` is a callable (e.g. a class), and that option is not passed on the command line, its auto-aligned default incorrectly ends up calling/instantiating the callable instead of returning it as-is. For example:\n\n```python\nclass Marker:\n    pass\n\n@click.command()\n@click.option(\"--opt\", \"value\", flag_value=Marker, type=click.UNPROCESSED, default=True)\ndef cli(value):\n    click.echo(repr(value), nl=False)\n```\n\nRunning `cli` with no arguments should print `<class '...Marker'>` (the class object itself), but instead an instance of `Marker` gets created and printed. This should also correctly respect any override coming from `default_map`. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-14588004",
+   "sha": "1458800409ed12076f18451889b0857db36aa522",
+   "base": "04ef3a6f473deb2499721a8d11f92a7d2c0912f2",
+   "date": "2026-04-08T14:30:46-07:00",
+   "subject": "Fix speculative empty string check (#3299)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_options.py"
+   ],
+   "gold_files": [
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_options.py",
+   "base_exit": 1,
+   "base_tail": "        ctx = click.Context(click.Command(\"cli\"))\n>       message = opt.get_help_record(ctx)[1]\n                  ^^^^^^^^^^^^^^^^^^^^^^^^\n\ntests/test_options.py:1290: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \nsrc/click/core.py:3033: in get_help_record\n    extra = self.get_help_extra(ctx)\n            ^^^^^^^^^^^^^^^^^^^^^^^^\nsrc/click/core.py:3113: in get_help_extra\n    elif default_value == \"\":\n         ^^^^^^^^^^^^^^^^^^^\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nself = <test_options._StrictEq object at 0x7feb3120cbc0>, other = ''\n\n    def __eq__(self, other):\n        if isinstance(other, str):\n>           raise ValueError(\"cannot compare to string\")\nE           ValueError: cannot compare to string\n\ntests/test_options.py:1267: ValueError\n=========================== short test summary info ============================\nFAILED tests/test_options.py::test_show_default_with_empty_string[non-string-comparable-object] - ValueError: cannot compare to string\n1 failed, 551 passed in 0.97s",
+   "fixed_seconds": 1.05,
+   "n_tests": 552,
+   "prompt": "Rendering help text with `show_default=True` can crash when the option's default is an object whose `__eq__` raises for non-string operands (instead of returning `NotImplemented`/`False`), because click internally compares the default against an empty string to decide how to format it. For example:\n\n```python\nclass Strict:\n    def __eq__(self, other):\n        if isinstance(other, str):\n            raise ValueError(\"cannot compare to string\")\n        return NotImplemented\n    def __str__(self):\n        return \"strict\"\n\nopt = click.Option([\"--limit\"], default=Strict(), show_default=True)\nctx = click.Context(click.Command(\"cli\"))\nopt.get_help_record(ctx)\n```\n\nThis raises an unexpected ValueError instead of producing `[default: strict]`. Please fix the default-rendering logic so it doesn't break on such objects, while a genuine empty-string default still correctly renders as `[default: \"\"]`.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-0cd28d65",
+   "sha": "0cd28d6548f92e46396e0ffdd19ec5ea75b4b5e4",
+   "base": "8d3449517a97b6fd457a025bd9c3d2acfd301fa4",
+   "date": "2026-04-29T00:01:41-07:00",
+   "subject": "fix help hint showing shadowed option name (#3208)",
+   "src_files": [
+    "src/click/exceptions.py"
+   ],
+   "test_files": [
+    "tests/test_formatting.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/exceptions.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_formatting.py",
+   "base_exit": 1,
+   "base_tail": "assert result.exit_code == 2\n        lines = result.output.splitlines()\n        assert lines[0] == \"Usage: cli foo [OPTIONS] REQUIRED_ARG\"\n        assert lines[-1] == \"Error: Missing argument 'REQUIRED_ARG'.\"\n        if expected_hint is not None:\n>           assert expected_hint in lines\nE           assert \"Try 'cli foo --help' for help.\" in ['Usage: cli foo [OPTIONS] REQUIRED_ARG', \"Try 'cli foo -h' for help.\", '', \"Error: Missing argument 'REQUIRED_ARG'.\"]\n\ntests/test_formatting.py:311: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_formatting.py::test_formatting_usage_error_help_hint[help_names0-extra_options0-Try 'cli foo --help' for help.] - assert \"Try 'cli foo --help' for help.\" in ['Usage: cli foo [OPTIONS] REQUIRED_ARG', \"Try 'cli foo -h' for help.\", '', \"Error: Missing argument 'REQUIRED_ARG'.\"]\nFAILED tests/test_formatting.py::test_formatting_usage_error_help_hint[help_names1-extra_options1-Try 'cli foo --help' for help.] - assert \"Try 'cli foo --help' for help.\" in ['Usage: cli foo [OPTIONS] REQUIRED_ARG', \"Try 'cli foo -h' for help.\", '', \"Error: Missing argument 'REQUIRED_ARG'.\"]\nFAILED tests/test_formatting.py::test_formatting_usage_error_help_hint[help_names5-extra_options5-Try 'cli foo --help' for help.] - assert \"Try 'cli foo --help' for help.\" in ['Usage: cli foo [OPTIONS] REQUIRED_ARG', \"Try 'cli foo -h' for help.\", '', \"Error: Missing argument 'REQUIRED_ARG'.\"]\n3 failed, 20 passed in 0.08s",
+   "fixed_seconds": 0.27,
+   "n_tests": 23,
+   "prompt": "When a group uses custom `help_option_names` (e.g. `-h` and `--help`) and a subcommand defines its own option that reuses one of those names, the 'Try ... for help' hint shown on usage errors can point to a help flag name that is actually shadowed and unusable on that subcommand. For example, if a subcommand has `click.option(\"--help-file\", \"--help\")`, running it with a missing required argument should suggest `-h` (the still-available help name), not `--help`. If every configured help name is shadowed, no hint should be shown at all. Please fix the error hint so it only ever references a help option name that is actually available on that command, preferring the longest available name.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-2468b709",
+   "sha": "2468b70997a6ec27ced4b4867954c90da3f92075",
+   "base": "ddede2147c9370ab8275f81db4826b6895d2e7dc",
+   "date": "2026-04-30T00:20:22+01:00",
+   "subject": "Fix readline backspace/line-wrapping on linux (#2969)",
+   "src_files": [
+    "src/click/termui.py"
+   ],
+   "test_files": [
+    "tests/test_utils.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/termui.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_utils.py",
+   "base_exit": 1,
+   "base_tail": "  \n  At index 0 diff: '.' != 'IP.'\n  \n  Full diff:\n    [\n  -     'IP.',\n  ?      --\n  +     '.',\n    ]\nFAILED tests/test_utils.py::test_full_prompt_passed_to_readline[confirm] - AssertionError: assert [' '] == ['OK [y/N]: ']\n  \n  At index 0 diff: ' ' != 'OK [y/N]: '\n  \n  Full diff:\n    [\n  -     'OK [y/N]: ',\n  +     ' ',\n    ]\nFAILED tests/test_utils.py::test_echo_writing_to_standard_error - AssertionError: assert ' ' == ''\n  \n  Strings contain only whitespace, escaping them using repr()\n  - ''\n  + ' '\n  ?  +\n6 failed, 141 passed in 0.48s",
+   "fixed_seconds": 0.66,
+   "n_tests": 147,
+   "prompt": "On non-Windows platforms, `click.prompt()` and `click.confirm()` print the prompt text separately from calling the input function, which breaks readline features like backspace and line-wrapping while typing at the prompt. Additionally, when `err=True` and/or `prompt_suffix=\"\"` is used, output ends up split incorrectly between stdout and stderr. For example:\n\n```python\nclick.prompt(\"Prompt to stderr with no suffix\", prompt_suffix=\"\", err=True)\n```\n\nshould write the full prompt text `\"Prompt to stderr with no suffix\"` cleanly to stderr with nothing leaking to stdout, but currently part of the text is misplaced. The full prompt (including any suffix) should be passed directly to the underlying input function so terminal line-editing behaves correctly. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-19fd4d6e",
+   "sha": "19fd4d6e18bc9fce451f92f422696b11169faa57",
+   "base": "c69643b60cf971cd5d8e5d3902632807ceab9b8f",
+   "date": "2026-04-30T00:37:31+01:00",
+   "subject": "Fix: Ensure fish completion handles multiline help strings correctly (#3126)",
+   "src_files": [
+    "src/click/shell_completion.py"
+   ],
+   "test_files": [
+    "tests/test_shell_completion.py"
+   ],
+   "gold_files": [
+    ".gitignore",
+    "CHANGES.rst",
+    "src/click/shell_completion.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_shell_completion.py",
+   "base_exit": 1,
+   "base_tail": "FAILED tests/test_shell_completion.py::test_full_complete[fish-env4-plain\\na\\n_\\nplain\\nb\\nbee\\n] - AssertionError: assert 'plain,a\\nplain,b\\tbee\\n' == 'plain\\na\\n_\\nplain\\nb\\nbee\\n'\n  \n  - plain\n  + plain,a\n  ?      ++\n  + plain,b\tbee\n  - a\n  - _\n  - plain\n  - b\n  - bee\nFAILED tests/test_shell_completion.py::test_full_complete[fish-env5-plain\\nb\\nbee\\n] - AssertionError: assert 'plain,b\\tbee\\n' == 'plain\\nb\\nbee\\n'\n  \n  + plain,b\tbee\n  - plain\n  - b\n  - bee\nFAILED tests/test_shell_completion.py::test_full_complete[fish-env6-plain\\nb\\nbee\\n] - AssertionError: assert 'plain,b\\tbee\\n' == 'plain\\nb\\nbee\\n'\n  \n  + plain,b\tbee\n  - plain\n  - b\n  - bee\nFAILED tests/test_shell_completion.py::test_fish_multiline_help_complete - Failed: --at completion not found in output\n4 failed, 49 passed in 0.18s",
+   "fixed_seconds": 0.34,
+   "n_tests": 53,
+   "prompt": "Fish shell completion breaks when an option's help text contains literal newlines (e.g. using a `\\b` preformatted block). For example:\n\n```python\nOption(\n    [\"--at\", \"--attachment-type\"],\n    type=(str, str),\n    multiple=True,\n    help=\"\\b\\nAttachment with explicit mimetype,\\n--at image.jpg image/jpeg\",\n)\n```\n\nWhen generating fish completions for a command using this option, the multiline help text isn't escaped, resulting in malformed completion output (extra/garbled lines) instead of a single completion entry with the newlines escaped as `\\n`. Please fix the fish completion output so multiline help strings are handled correctly.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-c943271a",
+   "sha": "c943271a269e6941fcc51e3506ead074b9dda6be",
+   "base": "fc6c7c47edd6110b6bd5a1a5297b2035214b0cd1",
+   "date": "2026-05-13T22:01:09-07:00",
+   "subject": "Show custom error message in prompt with `hide_input=True` (#3256)",
+   "src_files": [
+    "src/click/termui.py"
+   ],
+   "test_files": [
+    "tests/test_termui.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/termui.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_termui.py",
+   "base_exit": 1,
+   "base_tail": "re 'Password: \\nError: The value you entered was invalid.\\nPassword: \\n\\nAborted!\\n' = <Result SystemExit(1)>.output\nFAILED tests/test_termui.py::test_hide_input_error_message[regex-special-chars-must-be-escaped] - assert \"'***' is too short\" in 'Password: \\nError: The value you entered was invalid.\\nPassword: \\n\\nAborted!\\n'\n +  where 'Password: \\nError: The value you entered was invalid.\\nPassword: \\n\\nAborted!\\n' = <Result SystemExit(1)>.output\nFAILED tests/test_termui.py::test_hide_input_error_message[unicode-value-masked] - assert \"'***' is too short\" in 'Password: \\nError: The value you entered was invalid.\\nPassword: \\n\\nAborted!\\n'\n +  where 'Password: \\nError: The value you entered was invalid.\\nPassword: \\n\\nAborted!\\n' = <Result SystemExit(1)>.output\nFAILED tests/test_termui.py::test_hide_input_error_message[apostrophe-in-value-uses-double-quote-repr] - assert \"rejected '***'\" in 'Password: \\nError: The value you entered was invalid.\\nPassword: \\n\\nAborted!\\n'\n +  where 'Password: \\nError: The value you entered was invalid.\\nPassword: \\n\\nAborted!\\n' = <Result SystemExit(1)>.output\nFAILED tests/test_termui.py::test_hide_input_error_message[mixed-quoted-and-raw-mask-both] - assert \"got '***' which is the same as '***'\" in 'Password: \\nError: The value you entered was invalid.\\nPassword: \\n\\nAborted!\\n'\n +  where 'Password: \\nError: The value you entered was invalid.\\nPassword: \\n\\nAborted!\\n' = <Result SystemExit(1)>.output\n14 failed, 187 passed, 23 skipped in 0.57s",
+   "fixed_seconds": 0.55,
+   "n_tests": 201,
+   "prompt": "When using click.prompt(..., hide_input=True) together with a custom ParamType whose convert() calls self.fail() with a message built from the typed value, the error message shown to the user doesn't behave correctly with input hiding. For example:\n```python\nimport click\n\nclass Password(click.ParamType):\n    name = \"password\"\n    def convert(self, value, param, ctx):\n        if len(value) < 10:\n            self.fail(f\"{value} is too short\", param, ctx)\n        return value\n\nclick.prompt(\"Password\", type=Password(), hide_input=True)\n```\nWith hide_input=True, click should still surface the custom validation message, but any occurrence of the raw typed value inside that message (whether it appears quoted via repr or bare) must be masked out (e.g. replaced with '***') rather than leaked in plain text or dropped entirely, including cases where the value appears multiple times or mixed with a static message that never references it. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-3bb230dc",
+   "sha": "3bb230dcd5d751f8605b46e9df5a541639d5fd4e",
+   "base": "63274a79d08fdc5c19220696144489f7144a8547",
+   "date": "2026-05-16T08:53:39-07:00",
+   "subject": "WIP: Fix `HelpFormatter.write_usage` producing spurious characters (#3434)",
+   "src_files": [
+    "src/click/formatting.py"
+   ],
+   "test_files": [
+    "tests/test_formatting.py"
+   ],
+   "gold_files": [
+    "CHANGES.rst",
+    "src/click/formatting.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_formatting.py",
+   "base_exit": 1,
+   "base_tail": "  - 'Run: Program\\n'\n  + '\\n'\nFAILED tests/test_formatting.py::test_help_formatter_write_usage[empty-args-indented] - AssertionError: assert '\\n' == 'Usage: Program\\n'\n  \n  Strings contain only whitespace, escaping them using repr()\n  - 'Usage: Program\\n'\n  + '\\n'\nFAILED tests/test_formatting.py::test_help_formatter_write_usage[empty-args-long-prog] - AssertionError: assert 'Usage: VeryL...gramName \\n\\n' == 'Usage: VeryLongProgramName\\n'\n  \n  - Usage: VeryLongProgramName\n  + Usage: VeryLongProgramName \n  ?                           +\n  +\nFAILED tests/test_formatting.py::test_help_formatter_write_usage_without_args_styled_prefix - AssertionError: assert '\\n' == 'Usage: cli\\n'\n  \n  Strings contain only whitespace, escaping them using repr()\n  - 'Usage: cli\\n'\n  + '\\n'\nFAILED tests/test_formatting.py::test_command_write_usage_no_args[empty-options-metavar-no-params] - AssertionError: assert '' == 'Usage: cli'\n  \n  - Usage: cli\nFAILED tests/test_formatting.py::test_command_write_usage_no_args[none-options-metavar-no-params] - AssertionError: assert '' == 'Usage: cli'\n  \n  - Usage: cli\n7 failed, 28 passed in 0.18s",
+   "fixed_seconds": 0.31,
+   "n_tests": 35,
+   "prompt": "HelpFormatter.write_usage produces a broken usage line when there are no args to show. For example:\n```python\nimport click\nf = click.HelpFormatter()\nf.write_usage(\"myprog\", \"\")\nprint(repr(f.getvalue()))\n```\nThis currently prints just a blank line instead of \"Usage: myprog\\n\". The same problem shows up end-to-end: a Command created with `options_metavar=\"\"` and no parameters renders a blank/garbled usage line in its --help output instead of \"Usage: cli\". A custom or styled prefix passed to write_usage should also still be honored correctly even when args is empty. Please fix this so the usage line renders correctly regardless of whether args is empty.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-c3535905",
+   "sha": "c3535905c77a29afc84861b29d3ad366ce5451bd",
+   "base": "bc36cd1a2b3bc18f401a98476154dbc5a2d212c9",
+   "date": "2026-05-23T09:05:16+02:00",
+   "subject": "Fix broken fish completion and multiline help string",
+   "src_files": [
+    "src/click/shell_completion.py"
+   ],
+   "test_files": [
+    "tests/test_shell_completion.py"
+   ],
+   "gold_files": [
+    "src/click/shell_completion.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_shell_completion.py",
+   "base_exit": 1,
+   "base_tail": "=========================== short test summary info ============================\nFAILED tests/test_shell_completion.py::test_full_complete[fish-env4-plain,a\\nplain,b\\tbee\\n] - AssertionError: assert 'plain\\na\\n_\\nplain\\nb\\nbee\\n' == 'plain,a\\nplain,b\\tbee\\n'\n  \n  - plain,a\n  ?      --\n  + plain\n  - plain,b\tbee\n  + a\n  + _\n  + plain\n  + b\n  + bee\nFAILED tests/test_shell_completion.py::test_full_complete[fish-env5-plain,b\\tbee\\n] - AssertionError: assert 'plain\\nb\\nbee\\n' == 'plain,b\\tbee\\n'\n  \n  - plain,b\tbee\n  + plain\n  + b\n  + bee\nFAILED tests/test_shell_completion.py::test_full_complete[fish-env6-plain,b\\tbee\\n] - AssertionError: assert 'plain\\nb\\nbee\\n' == 'plain,b\\tbee\\n'\n  \n  - plain,b\tbee\n  + plain\n  + b\n  + bee\n3 failed, 50 passed in 0.19s",
+   "fixed_seconds": 0.31,
+   "n_tests": 53,
+   "prompt": "Shell completion for fish is broken (a recent change regressed it) and multi-line option help also causes bad output. Reproduce by invoking a CLI with a command that has options with help text under fish completion, e.g. setting `_CLI_COMPLETE=fish_complete` with `COMP_WORDS`/`COMP_CWORD` env vars for a CLI that has an option whose help string contains multiple lines (using the `\\b` no-rewrap marker). The completion output is emitted in the wrong format for fish (newline-separated blocks instead of fish's expected `type,value` / `type,value\\thelp` lines), and when an option's help text spans multiple lines it either breaks completion or leaks literal newlines into the output instead of escaping them. Please fix fish completion so it produces correctly formatted, single-line entries even when help text contains newlines.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-b67832c2",
+   "sha": "b67832c2167e5b0ff6764a8c04a0a9087e697b5a",
+   "base": "8c1a0a7abbc1c36f70d1f65f3604acc46c5ce6ab",
+   "date": "2026-07-09T20:24:08-07:00",
+   "subject": "Fix parsing when a parameter is named `help` (#3678)",
+   "src_files": [
+    "src/click/core.py"
+   ],
+   "test_files": [
+    "tests/test_basic.py",
+    "tests/test_info_dict.py",
+    "tests/test_options.py"
+   ],
+   "gold_files": [
+    "CHANGES.md",
+    "docs/documentation.md",
+    "src/click/core.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_basic.py tests/test_info_dict.py tests/test_options.py",
+   "base_exit": 1,
+   "base_tail": "                    'default': False,\n                    'envvar': None,\n                    'help': 'Show this message and exit.',\n                    'prompt': None,\n                    'is_flag': True,\n                    'flag_value': True,\n                    'count': False,\n                    'hidden': False,\n                },\n            ],\n            'help': None,\n            'epilog': None,\n            'short_help': None,\n            'hidden': False,\n            'deprecated': False,\n        },\n        'info_name': None,\n        'allow_extra_args': False,\n        'allow_interspersed_args': True,\n        'ignore_unknown_options': False,\n        'auto_envvar_prefix': None,\n    }\nFAILED tests/test_options.py::test_argument_sharing_param_name_warning - Failed: DID NOT WARN. No warnings of type (<class 'UserWarning'>,) were emitted.\n Emitted warnings: [].\n10 failed, 766 passed in 1.48s",
+   "fixed_seconds": 1.31,
+   "n_tests": 776,
+   "prompt": "Defining a command parameter literally named `help` breaks argument parsing because it collides with click's automatic --help option. For example:\n```python\nimport click\n\n@click.command()\n@click.argument(\"help\")\ndef cli(help):\n    click.echo(help)\n\ncli([\"value\"])\n```\nThis should print \"value\", but the parameter named `help` conflicts internally with the automatically generated help option, so parsing fails or behaves incorrectly. The same problem occurs with an option named `help` (e.g. `click.Option(['--assist'], 'help')`) or when a custom `help_option_names` is configured. Additionally, if a user parameter happens to use whatever internal name click reserves for its automatic help option, the collision should be reported with a clear warning instead of silently breaking. Separately, if a user explicitly defines their own `--help` option, it should replace the automatic one entirely rather than conflicting with it. Please fix the parsing so parameters named `help` (or reusing the help flag) work correctly.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "click-fc5c7f45",
+   "sha": "fc5c7f45da0a4443f60ba2d322fe4bf829977739",
+   "base": "150d1071d69c5cdad7de78590013ffe56cf9e3bb",
+   "date": "2026-08-16T16:40:02-07:00",
+   "subject": "Fix error reporting on Windows when an error is raised in the pager  (#3764)",
+   "src_files": [
+    "src/click/_termui_impl.py"
+   ],
+   "test_files": [
+    "tests/test_termui.py"
+   ],
+   "gold_files": [
+    "CHANGES.md",
+    "src/click/_termui_impl.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_termui.py",
+   "base_exit": 1,
+   "base_tail": "E         At index 0 diff: [False] != [True]\nE         \nE         Full diff:\nE           [\nE               [\nE         -         True,\nE         +         False,\nE               ],\nE           ]\n\ntests/test_termui.py:1091: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_termui.py::test_tempfile_pager_closes_file_before_unlink - AssertionError: temp file still open when unlink ran; on Windows this raises PermissionError [WinError 32] and masks the real error\nassert [[False]] == [[True]]\n  \n  At index 0 diff: [False] != [True]\n  \n  Full diff:\n    [\n        [\n  -         True,\n  +         False,\n        ],\n    ]\n1 failed, 237 passed, 23 skipped in 0.56s",
+   "fixed_seconds": 0.66,
+   "n_tests": 238,
+   "prompt": "When an exception is raised while content is being displayed through click's pager (the code path used via `click.echo_via_pager` / `click.get_pager_file`), the original exception can get replaced by an unrelated error on Windows. Reproduce with:\n```python\nimport click\n\nwith click.get_pager_file():\n    raise RuntimeError(\"boom\")\n```\nThe RuntimeError should propagate normally. Instead, on the Windows temp-file pager backend, the temporary file is not closed before it is unlinked in the cleanup path when an exception occurs, so deleting it raises `PermissionError: [WinError 32] The process cannot access the file because it is being used by another process`, which masks the real error the user was trying to see. Please fix this so the temp file is always closed before cleanup runs, even when an exception is raised.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  }
+ ]
+}

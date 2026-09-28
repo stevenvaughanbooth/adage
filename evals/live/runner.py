@@ -16,6 +16,8 @@ and each session gets a fresh sandbox and its own empty home directory:
             adage    hooks installed, directives delivered
             control  hooks installed, directives computed and logged but not delivered (the control)
             off      no hooks at all (to measure hook overhead, if wanted)
+            instincts, e1, agents-md   see evals/live/README.md (agents-md: the control's hooks
+                     plus a context file the sandbox command commits when given `{arm}`)
   report  summary.json (per-arm aggregates, task-level permutation p-values with Holm adjustment,
           task-bootstrap CIs, per round) and a results page like demo/results:
           <root>/results/{index.html, summary.json, state.json}
@@ -80,7 +82,7 @@ import report as demo_report  # noqa: E402 - demo/report.py: statuses, statistic
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 EXPLORE_TOOLS = {"Read", "Glob", "Grep", "LS"}
 EXPLORE_COMMANDS = ("ls", "find", "cat", "grep", "rg", "head", "tail", "tree", "sed -n", "wc")
-ARMS = ("adage", "control", "off", "instincts", "e1")
+ARMS = ("adage", "control", "off", "instincts", "e1", "agents-md")
 SPOOL_MAGIC = bytes([0xAD, 0xA6, 0xE5, 0x01])
 DEFAULTS = {
     "model": "claude-haiku-4-5-20251001",
@@ -195,8 +197,9 @@ def load_config(path, overrides):
 
 
 def expand(argv, **kv):
-    """Fill `{repo}`, `{dir}`, `{task}` placeholders in a command given as an argv list."""
+    """Fill `{repo}`, `{dir}`, `{task}`, `{arm}` placeholders in a command given as an argv list."""
     kv.setdefault("repo", str(REPO))
+    kv.setdefault("arm", "")
     return [a.format(**kv) for a in argv]
 
 
@@ -227,6 +230,13 @@ def arm_order(arms, seed, round_, task, repeat):
     return order
 
 
+def task_prompt(cfg, task, template):
+    """A task's own prompt (`task_prompts`, e.g. a paraphrased issue in RepoBench), braces escaped
+    so that `.format(id=...)` leaves it as written; else the rotating template."""
+    own = (cfg.get("task_prompts") or {}).get(task)
+    return own.replace("{", "{{").replace("}", "}}") if own is not None else template
+
+
 def plan(cfg, phases, round_):
     """Every session one round would run, in order: (run id, phase, arm, task, prompt)."""
     out = []
@@ -235,13 +245,14 @@ def plan(cfg, phases, round_):
         t = cfg["train"]
         for r in range(t.get("repeats", 1)):
             for i, task in enumerate(t["tasks"]):
-                out.append((f"train-{task}-r{r + 1}", "train", "train", task, prompts[(i + r) % len(prompts)]))
+                out.append((f"train-{task}-r{r + 1}", "train", "train", task,
+                            task_prompt(cfg, task, prompts[(i + r) % len(prompts)])))
     if "eval" in phases:
         e = cfg["eval"]
         tag = "eval" if round_ == 1 else f"eval{round_}"
         for r in range(e.get("repeats", 1)):
             for i, task in enumerate(tasks_for_round(cfg, round_)):
-                prompt = prompts[(i + r) % len(prompts)]
+                prompt = task_prompt(cfg, task, prompts[(i + r) % len(prompts)])
                 for arm in arm_order(e.get("arms", ["control", "adage"]), cfg.get("seed") or 0, round_, task, r + 1):
                     out.append((f"{tag}-{task}-r{r + 1}-{arm}", "eval", arm, task, prompt))
     return out
@@ -295,7 +306,9 @@ def env_for(arm, home):
         return {"ADAGE_HOME": str(instincts_home(home)), "ADAGE_ARM": "treated", "ADAGE_AUTO_LEARN": "0"}
     if arm == "e1":
         return {"ADAGE_HOME": str(e1_home(home)), "ADAGE_ARM": "treated", "ADAGE_AUTO_LEARN": "0"}
-    return {"ADAGE_HOME": str(home), "ADAGE_ARM": "control" if arm == "control" else "treated",
+    # `agents-md`: the control's hooks (directives logged, not delivered) plus a context file the
+    # sandbox command commits (it gets `{arm}`): an up-front CLAUDE.md against just-in-time reflexes.
+    return {"ADAGE_HOME": str(home), "ADAGE_ARM": "control" if arm in ("control", "agents-md") else "treated",
             "ADAGE_AUTO_LEARN": "0"}
 
 
@@ -437,7 +450,7 @@ def describe(cfg, phases, rounds, root, adage, isolate=True):
                 "run": run_id, "round": round_, "phase": phase, "arm": arm, "task": task, "prompt": text,
                 "cwd": str(workdir),
                 "home": str(root / "runs" / run_id / "home") if isolate else None,
-                "sandbox": expand(cfg["sandbox"], dir=str(workdir), task=task),
+                "sandbox": expand(cfg["sandbox"], dir=str(workdir), task=task, arm=arm),
                 "command": claude_command(cfg, text, private / f"settings-{settings_kind(arm)}.json"),
                 "env": env_for(arm, private / "adage-home"),
                 "score": expand(cfg["score"], dir=str(workdir), task=task),
@@ -876,7 +889,7 @@ class Live:
         run_home = run_dir / "home"
         self.update(run_id, id=run_id, phase=phase, arm=arm, task=task, prompt=prompt_t.format(id=task), round=self.round,
                     seed=self.cfg.get("seed"), status="running", t0=time.time(), events=[], directives=[])
-        subprocess.run(expand(self.cfg["sandbox"], dir=str(workdir), task=task), check=True, capture_output=True)
+        subprocess.run(expand(self.cfg["sandbox"], dir=str(workdir), task=task, arm=arm), check=True, capture_output=True)
         prompt = prompt_t.format(id=task)
         env = session_env(arm, run_home, self.home, self.isolate, self.base_env, self.forward)
         if self.isolate:
@@ -1020,7 +1033,8 @@ class Live:
         work = self.private / "instincts-sandbox" / self.cfg["workdir"]
         shutil.rmtree(work.parent, ignore_errors=True)
         work.parent.mkdir(parents=True)
-        subprocess.run(expand(self.cfg["sandbox"], dir=str(work), task=task), check=True, capture_output=True)
+        subprocess.run(expand(self.cfg["sandbox"], dir=str(work), task=task, arm="instincts"), check=True,
+                       capture_output=True)
         # Keyed as `adage condition --repo` keys the reflexes, so both indexes of one sandbox agree.
         out = subprocess.run([str(self.adage), "condition", "--instincts-only", "--repo-path", str(work),
                               "--repo", self.cfg["repo_key"], "--json"],

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280" width="720" height="280" font-family="system-ui, -apple-system, Segoe UI, sans-serif" role="img" aria-label="vue-core: cost per task as sessions accumulate">
+<rect width="100%" height="100%" fill="#fcfcfb"/>
+<text x="56" y="20" font-size="14" font-weight="600" fill="#1f1f1e">vue-core: cost per task as sessions accumulate</text>
+<text x="56" y="36" font-size="11" fill="#6b6a64">USD per session: dots are sessions, lines the mean of the last 4</text>
+<line x1="56" x2="630" y1="240.0" y2="240.0" stroke="#e4e3dc"/>
+<text x="50" y="244.0" font-size="11" fill="#6b6a64" text-anchor="end">$0.00</text>
+<line x1="56" x2="630" y1="191.0" y2="191.0" stroke="#e4e3dc"/>
+<text x="50" y="195.0" font-size="11" fill="#6b6a64" text-anchor="end">$0.12</text>
+<line x1="56" x2="630" y1="142.0" y2="142.0" stroke="#e4e3dc"/>
+<text x="50" y="146.0" font-size="11" fill="#6b6a64" text-anchor="end">$0.25</text>
+<line x1="56" x2="630" y1="93.0" y2="93.0" stroke="#e4e3dc"/>
+<text x="50" y="97.0" font-size="11" fill="#6b6a64" text-anchor="end">$0.38</text>
+<line x1="56" x2="630" y1="44.0" y2="44.0" stroke="#e4e3dc"/>
+<text x="50" y="48.0" font-size="11" fill="#6b6a64" text-anchor="end">$0.50</text>
+<text x="56.0" y="256" font-size="11" fill="#6b6a64" text-anchor="middle">1</text>
+<text x="176.8" y="256" font-size="11" fill="#6b6a64" text-anchor="middle">5</text>
+<text x="327.9" y="256" font-size="11" fill="#6b6a64" text-anchor="middle">10</text>
+<text x="478.9" y="256" font-size="11" fill="#6b6a64" text-anchor="middle">15</text>
+<text x="630.0" y="256" font-size="11" fill="#6b6a64" text-anchor="middle">20</text>
+<text x="343.0" y="274" font-size="11" fill="#6b6a64" text-anchor="middle">sessions seen (task order = fix date)</text>
+<circle cx="56.0" cy="132.1" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 1: $0.28</title></circle>
+<circle cx="86.2" cy="140.9" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 2: $0.25</title></circle>
+<circle cx="116.4" cy="169.5" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 3: $0.18</title></circle>
+<circle cx="146.6" cy="115.4" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 4: $0.32</title></circle>
+<circle cx="176.8" cy="200.1" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 5: $0.10</title></circle>
+<circle cx="207.1" cy="105.2" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 6: $0.34</title></circle>
+<circle cx="237.3" cy="155.6" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 7: $0.22</title></circle>
+<circle cx="267.5" cy="145.9" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 8: $0.24</title></circle>
+<circle cx="297.7" cy="177.3" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 9: $0.16</title></circle>
+<circle cx="327.9" cy="140.7" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 10: $0.25</title></circle>
+<circle cx="358.1" cy="133.1" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 11: $0.27</title></circle>
+<circle cx="388.3" cy="127.0" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 12: $0.29</title></circle>
+<circle cx="418.5" cy="190.6" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 13: $0.13</title></circle>
+<circle cx="448.7" cy="156.5" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 14: $0.21</title></circle>
+<circle cx="478.9" cy="165.7" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 15: $0.19</title></circle>
+<circle cx="509.2" cy="142.6" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 16: $0.25</title></circle>
+<circle cx="539.4" cy="108.8" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 17: $0.33</title></circle>
+<circle cx="569.6" cy="151.8" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 18: $0.22</title></circle>
+<circle cx="599.8" cy="106.3" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 19: $0.34</title></circle>
+<circle cx="630.0" cy="171.3" r="4" fill="#2a78d6" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>control session 20: $0.18</title></circle>
+<path d="M56.0,132.1 L86.2,136.5 L116.4,147.5 L146.6,139.5 L176.8,156.4 L207.1,147.5 L237.3,144.0 L267.5,151.7 L297.7,146.0 L327.9,154.9 L358.1,149.2 L388.3,144.5 L418.5,147.8 L448.7,151.8 L478.9,160.0 L509.2,163.9 L539.4,143.4 L569.6,142.2 L599.8,127.4 L630.0,134.6" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round"/>
+<text x="638.0" y="138.6" font-size="11" fill="#1f1f1e">control $0.27</text>
+<circle cx="56.0" cy="136.2" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 1: $0.26</title></circle>
+<circle cx="86.2" cy="143.0" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 2: $0.25</title></circle>
+<circle cx="116.4" cy="211.1" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 3: $0.07</title></circle>
+<circle cx="146.6" cy="129.4" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 4: $0.28</title></circle>
+<circle cx="176.8" cy="200.2" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 5: $0.10</title></circle>
+<circle cx="207.1" cy="97.2" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 6: $0.36</title></circle>
+<circle cx="237.3" cy="166.4" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 7: $0.19</title></circle>
+<circle cx="267.5" cy="139.4" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 8: $0.26</title></circle>
+<circle cx="297.7" cy="166.6" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 9: $0.19</title></circle>
+<circle cx="327.9" cy="133.2" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 10: $0.27</title></circle>
+<circle cx="358.1" cy="130.8" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 11: $0.28</title></circle>
+<circle cx="388.3" cy="78.3" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 12: $0.41</title></circle>
+<circle cx="418.5" cy="189.0" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 13: $0.13</title></circle>
+<circle cx="448.7" cy="102.8" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 14: $0.35</title></circle>
+<circle cx="478.9" cy="143.7" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 15: $0.25</title></circle>
+<circle cx="509.2" cy="133.3" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 16: $0.27</title></circle>
+<circle cx="539.4" cy="149.4" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 17: $0.23</title></circle>
+<circle cx="569.6" cy="153.7" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 18: $0.22</title></circle>
+<circle cx="599.8" cy="110.3" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 19: $0.33</title></circle>
+<circle cx="630.0" cy="159.0" r="4" fill="#eb6834" fill-opacity="0.45" stroke="#fcfcfb" stroke-width="2"><title>adage session 20: $0.21</title></circle>
+<path d="M56.0,136.2 L86.2,139.6 L116.4,163.4 L146.6,154.9 L176.8,170.9 L207.1,159.5 L237.3,148.3 L267.5,150.8 L297.7,142.4 L327.9,151.4 L358.1,142.5 L388.3,127.2 L418.5,132.8 L448.7,125.2 L478.9,128.4 L509.2,142.2 L539.4,132.3 L569.6,145.0 L599.8,136.7 L630.0,143.1" fill="none" stroke="#eb6834" stroke-width="2" stroke-linejoin="round"/>
+<text x="638.0" y="147.1" font-size="11" fill="#1f1f1e">adage $0.25</text>
+<line x1="56" x2="630" y1="240" y2="240" stroke="#6b6a64"/>
+</svg>

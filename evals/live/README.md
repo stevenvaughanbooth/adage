@@ -31,7 +31,7 @@ agent runs`.
 | --- | --- |
 | `train` | Round 1 only. Baseline agents work the training tasks with no Adage hooks installed |
 | `learn` | `adage condition` reads the training transcripts. In later rounds it also reads earlier rounds' eval sessions (see below), with each route kind excluded from the sessions it steered |
-| `eval` | Agents work the held-out tasks: every (task, repeat) runs one session per arm, in a seeded random order: `adage` (hooks installed, directives delivered), `control` (hooks installed, directives logged but not delivered: the control) and optionally `off` (no hooks: measures hook overhead), `instincts` (hooks installed, directives delivered, from a day-0 index of instincts only: `adage condition --instincts-only` over a fresh sandbox, in `private/instincts-home`) and `e1` (the learned index plus E1 prefetch through `adage-exec`, from `private/e1-home`, which a person prepares: a copy of `adage-home` with `adage review delegate ... --level e1` approvals; the runner refuses the arm without it) |
+| `eval` | Agents work the held-out tasks: every (task, repeat) runs one session per arm, in a seeded random order: `adage` (hooks installed, directives delivered), `control` (hooks installed, directives logged but not delivered: the control) and optionally `off` (no hooks: measures hook overhead), `instincts` (hooks installed, directives delivered, from a day-0 index of instincts only: `adage condition --instincts-only` over a fresh sandbox, in `private/instincts-home`) and `e1` (the learned index plus E1 prefetch through `adage-exec`, from `private/e1-home`, which a person prepares: a copy of `adage-home` with `adage review delegate ... --level e1` approvals; the runner refuses the arm without it) and `agents-md` (the control's hooks, directives withheld, plus a context file the sandbox command commits as `CLAUDE.md` when it gets `{arm}` = `agents-md`: an up-front context file against just-in-time reflexes; see evals/repobench) |
 | `report` | `summary.json` and a results page (below): per-arm aggregates, task-level statistics between `adage` and `control` (see [Statistics](#statistics)) |
 
 The phases default to all four. Name some to run only those: for example `eval report --round 2`.
@@ -203,9 +203,10 @@ The config is JSON. `configs/acme-billing.json` is the demo.
 | --- | --- |
 | `name`, `repo_key` | The run's name, and the repository key tracks are learned under (`adage condition --repo`) |
 | `workdir` | The sandbox directory name inside each run directory |
-| `sandbox` | argv that creates a fresh sandbox at `{dir}` for task `{task}` (`{repo}` = this repository) |
+| `sandbox` | argv that creates a fresh sandbox at `{dir}` for task `{task}` (`{repo}` = this repository, `{arm}` = the session's arm) |
 | `score` | argv that scores a finished sandbox and prints JSON with `passed` (and optionally `stale_generated`, `ci_passed`, `hidden_passed`) |
 | `prompts` | Prompt templates, with `{id}` replaced by the task. Tasks rotate through them |
+| `task_prompts` | `{task: prompt}`: a task's own prompt, used as written instead of the templates (RepoBench's issue paraphrases) |
 | `train`, `eval` | `{"tasks": [...], "repeats": n}`. `eval.arms` defaults to `["control", "adage"]` |
 | `eval.tasks_by_round` | One disjoint held-out pool per round (list of lists, or `{"1": [...], "2": [...]}`); replaces `eval.tasks`. Without it later rounds are `leaky` |
 | `rounds` | Learning rounds run by one invocation (default 1) |
