@@ -666,7 +666,14 @@ fn interlocking_holds_for_colliding_route_sets() {
     let table = CommandTable::load();
     let (sessions, conflicts, reds, emitted) =
         (AtomicUsize::new(0), AtomicUsize::new(0), AtomicUsize::new(0), AtomicUsize::new(0));
-    let mut runner = TestRunner::new(Config { cases: cases(), ..Config::default() });
+    // As below: the generator guards need a reproducible sample (fixed seed), except in the slow
+    // profile, whose 4,000 random cases clear them by a wide margin.
+    let config = Config { cases: cases(), ..Config::default() };
+    let mut runner = if cfg!(feature = "slow") {
+        TestRunner::new(config)
+    } else {
+        TestRunner::new_with_rng(config, TestRng::deterministic_rng(RngAlgorithm::ChaCha))
+    };
     let strategy = (prop::collection::vec(colliding_route(), 2..7), prop::collection::vec(colliding_event(), 1..16));
     let result = runner.run(&strategy, |(specs, events)| {
         let track = |name: &str, provenance: &str, imported: bool| Track {
