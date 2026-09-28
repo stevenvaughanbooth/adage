@@ -196,14 +196,21 @@ fn an_environment_step_after_an_edit_is_a_nascent() {
     );
 }
 
+/// A check after an edit compiles as a prime run (the judge then asks that agents do not run it
+/// anyway); an observation after an edit does not compile.
 #[test]
-fn a_check_or_an_observation_after_an_edit_is_not_compiled() {
+fn a_check_after_an_edit_is_a_prime_run_and_an_observation_is_not_compiled() {
     let out = compile(&[
         reflex(vec![edit("registry/currencies.csv")], vec![act("exec make check")], Some("exec make check")),
         reflex(vec![edit("requirements.txt")], vec![act("exec ls")], Some("exec ls")),
     ]);
-    assert!(out.routes.is_empty(), "{:?}", out.routes);
-    assert_eq!(out.dropped.len(), 2);
+    assert_eq!(out.routes.len(), 1, "{:?}", out.routes);
+    let r = &out.routes[0];
+    assert_eq!(r.shape, "run");
+    assert_eq!(r.route.trigger, Trigger::AfterEdit { paths: "registry/*.csv".into() });
+    assert_eq!(r.route.step, Step::Run { command: "make check".into() });
+    assert_eq!((r.route.effect, r.route.strength), (adage_core::Effect::Verify, Strength::Prime));
+    assert_eq!(out.dropped.len(), 1);
 }
 
 #[test]

@@ -112,18 +112,109 @@ pub fn exposed(s: &Session, r: &Route) -> bool {
     s.exposed_to(&refs, matches!(r.step, Step::ReadBatch { .. }))
 }
 
+/// The commands a step ran successfully, each with its own effect class: the step's command, or
+/// every part of a compound one (`cargo fmt --all && cargo test --workspace`). A failed compound
+/// is failed in every part (which part failed is not recorded).
+fn ok_parts(st: &crate::import::StepObs) -> Vec<(String, Effect)> {
+    fn walk(n: &adage_core::Normalized, out: &mut Vec<(String, Effect)>) {
+        match &n.action {
+            CanonicalAction::Exec { argv, .. } if !argv.is_empty() => {
+                out.push((shell_join(argv), bridge::effect_of(n)));
+            }
+            CanonicalAction::Compound { actions, .. } => actions.iter().for_each(|a| walk(a, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    if !st.call.failed {
+        walk(&st.norm, &mut out);
+    }
+    out
+}
+
+/// Whether a step runs a command at all (a compound one included).
+fn runs_command(st: &crate::import::StepObs) -> bool {
+    match &st.norm.action {
+        CanonicalAction::Exec { .. } => true,
+        CanonicalAction::Compound { actions, .. } => {
+            actions.iter().any(|a| matches!(a.action, CanonicalAction::Exec { .. }))
+        }
+        _ => false,
+    }
+}
+
+/// A directed command, read once for matching observed runs of its family.
+struct Want {
+    command: String,
+    shape: Option<adage_core::pattern::Shape>,
+    effect: Effect,
+}
+
+impl Want {
+    fn new(command: String) -> Want {
+        let shape = compile::variants::shape(&command);
+        let effect = io::classify(&command, &adage_core::CommandTable::load());
+        Want { command, shape, effect }
+    }
+
+    /// Whether step `st` ran this command or a variant it covers (`compile::variants`: an
+    /// extension with options, or, for a repo-wide command, a narrowing of the same effect):
+    /// traces that ran `cargo test -p adage-cli` after an edit are evidence for
+    /// `cargo test --workspace --locked`, the family's covering form.
+    fn hit(&self, st: &crate::import::StepObs) -> bool {
+        ok_parts(st).iter().any(|(lit, e)| {
+            *lit == self.command
+                || self.shape.as_ref().is_some_and(|w| {
+                    compile::variants::shape(lit).is_some_and(|v| compile::variants::covers(w, &v, *e == self.effect))
+                })
+        })
+    }
+}
+
 /// Whether `steps` ran what `step` directs after position `from` (a sequence in order), with
 /// `{part}` bound to `part`.
 fn ran_after(steps: &[crate::import::StepObs], from: usize, step: &Step, part: Option<&str>) -> bool {
     let bind = |c: &str| part.map_or(c.to_string(), |p| c.replace("{part}", p));
-    let want: Vec<String> = compile::commands(step).into_iter().map(bind).collect();
+    let want: Vec<Want> = compile::commands(step).into_iter().map(|c| Want::new(bind(c))).collect();
     let mut i = 0;
     for st in steps.iter().skip(from + 1) {
-        if i < want.len() && ok_literal(st).as_deref() == Some(want[i].as_str()) {
+        if i < want.len() && want[i].hit(st) {
             i += 1;
         }
     }
     !want.is_empty() && i == want.len()
+}
+
+/// Whether the first run of `want` after position `from` recovered from a failed check: a
+/// different check failed after the edit and before it (`python -m pytest` fails, then
+/// `make test`). That run answers the failure, a dead end's evidence, not the edit.
+fn recovered(steps: &[crate::import::StepObs], from: usize, want: &Want) -> bool {
+    let Some(hit) = steps.iter().enumerate().skip(from + 1).find(|(_, st)| want.hit(st)).map(|(i, _)| i) else {
+        return false;
+    };
+    let runner = |st: &crate::import::StepObs| argv(st).map(|a| crate::evidence::runner(a));
+    let own = runner(&steps[hit]);
+    steps[from + 1..hit]
+        .iter()
+        .any(|st| st.call.failed && st.norm.effect == Effect::Verify && runner(st).is_some() && runner(st) != own)
+}
+
+/// The traces in which `command` (or a variant it covers) ran successfully within five steps of a
+/// different check's failure: the recovery `count_avoid` counts for a dead end.
+fn recovery_traces(command: &str, ss: &[&Session]) -> u32 {
+    let want = Want::new(command.to_string());
+    let runner = |st: &crate::import::StepObs| argv(st).map(|a| crate::evidence::runner(a));
+    let own = compile::variants::shape(command).map(|s| s.identity.join(" "));
+    ss.iter()
+        .filter(|s| {
+            s.steps.iter().enumerate().any(|(i, st)| {
+                st.call.failed
+                    && st.norm.effect == Effect::Verify
+                    && runner(st).is_some_and(|r| Some(&r) != own.as_ref() && !command.starts_with(&r))
+                    && s.steps.iter().skip(i + 1).take(5).any(|b| want.hit(b))
+            })
+        })
+        .count() as u32
 }
 
 struct Count {
@@ -132,6 +223,8 @@ struct Count {
     open: BTreeSet<String>,
     support: BTreeSet<String>,
     rate_without: f64,
+    /// (ran the step, traces) among the traces the trigger did not occur in.
+    without: (u32, u32),
     deviations_failed: u32,
 }
 
@@ -143,6 +236,10 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
         _ => None,
     });
     let first = compile::commands(&r.step).first().map(|c| c.to_string())?;
+    let want_first = Want::new(first.clone());
+    // A plain check after an edit: its run is evidence only when the edit, not a failed check,
+    // called for it.
+    let check = r.effect == Effect::Verify && r.slots.is_empty() && matches!(r.step, Step::Run { .. });
     let (mut opp, mut support, mut ran_without, mut not_editing, mut failed) = (0, BTreeSet::new(), 0u32, 0u32, 0u32);
     let mut open = BTreeSet::new();
     for s in sessions {
@@ -161,7 +258,7 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
                 if depth.is_some() && part.is_none() {
                     continue;
                 }
-                if ran_after(&s.steps, i, &r.step, part) {
+                if ran_after(&s.steps, i, &r.step, part) && !(check && recovered(&s.steps, i, &want_first)) {
                     support.insert(s.id.clone());
                 } else if s.outcome == Some(false) {
                     failed += 1;
@@ -170,19 +267,24 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
             None => {
                 not_editing += 1;
                 let head = first.split('{').next().unwrap_or_default().to_string();
-                let ran = s.steps.iter().filter_map(ok_literal).any(|l| {
-                    if depth.is_some() {
-                        l.starts_with(&head)
-                    } else {
-                        l == first
-                    }
-                });
+                let ran = if depth.is_some() {
+                    s.steps.iter().flat_map(ok_parts).any(|(l, _)| l.starts_with(&head))
+                } else {
+                    s.steps.iter().any(|st| want_first.hit(st))
+                };
                 ran_without += u32::from(ran);
             }
         }
     }
     let rate_without = if not_editing == 0 { 0.0 } else { ran_without as f64 / not_editing as f64 };
-    Some(Count { opportunities: opp, open, support, rate_without, deviations_failed: failed })
+    Some(Count {
+        opportunities: opp,
+        open,
+        support,
+        rate_without,
+        without: (ran_without, not_editing),
+        deviations_failed: failed,
+    })
 }
 
 /// The share of an after-edit sequence's traces that must run its steps one right after another
@@ -202,7 +304,8 @@ fn together(r: &Route, sessions: &[&Session]) -> (u32, u32) {
         let mut at = Vec::new();
         let mut from = last + 1;
         for c in commands {
-            match s.steps.iter().enumerate().skip(from).find(|(_, st)| ok_literal(st).as_deref() == Some(c.as_str())) {
+            let want = Want::new(c.clone());
+            match s.steps.iter().enumerate().skip(from).find(|(_, st)| want.hit(st)) {
                 Some((i, _)) => {
                     at.push(i);
                     from = i + 1;
@@ -215,7 +318,7 @@ fn together(r: &Route, sessions: &[&Session]) -> (u32, u32) {
         }
         of += 1;
         let next_command =
-            |i: usize| s.steps.iter().enumerate().skip(i + 1).find(|(_, st)| argv(st).is_some()).map(|(j, _)| j);
+            |i: usize| s.steps.iter().enumerate().skip(i + 1).find(|(_, st)| runs_command(st)).map(|(j, _)| j);
         together += u32::from(at.windows(2).all(|w| next_command(w[0]) == Some(w[1])));
     }
     (together, of)
@@ -234,7 +337,7 @@ fn count_after_command(r: &Route, sessions: &[&Session]) -> Option<Count> {
             support.insert(s.id.clone());
         }
     }
-    Some(Count { opportunities: opp, open, support, rate_without: 0.0, deviations_failed: 0 })
+    Some(Count { opportunities: opp, open, support, rate_without: 0.0, without: (0, 0), deviations_failed: 0 })
 }
 
 /// An avoid over the traces: those that ran an avoided runner (the opportunities), and those
@@ -273,7 +376,14 @@ fn count_avoid(runners: &[&str], instead: &str, sessions: &[&Session]) -> Count 
             support.insert(s.id.clone());
         }
     }
-    Count { opportunities: opp, open: BTreeSet::new(), support, rate_without: 0.0, deviations_failed: 0 }
+    Count {
+        opportunities: opp,
+        open: BTreeSet::new(),
+        support,
+        rate_without: 0.0,
+        without: (0, 0),
+        deviations_failed: 0,
+    }
 }
 
 /// A read batch over the traces: those whose run of `key` listed files (in JSON, or repository
@@ -364,6 +474,56 @@ pub fn judge_read_batch(r: &Route, sessions: &[&Session], cfg: &LearnConfig) -> 
     })
 }
 
+/// The z of the one-sided 90% bound a check after an edit is contrasted with.
+const CHECK_Z: f64 = 1.2816;
+
+/// A check after an edit is suggested only when at least this many traces, and this share of
+/// them, missed it after such an edit: otherwise agents already run it unaided.
+const CHECK_MISSED: u32 = 2;
+const CHECK_MISSED_SHARE: f64 = 0.1;
+
+/// The Wilson score interval's upper bound at `z` (1 with no trials).
+fn wilson_upper(k: u32, n: u32, z: f64) -> f64 {
+    if n == 0 {
+        return 1.0;
+    }
+    let (n, p) = (n as f64, k as f64 / n as f64);
+    let z2 = z * z;
+    ((p + z2 / (2.0 * n) + z * (p * (1.0 - p) / n + z2 / (4.0 * n * n)).sqrt()) / (1.0 + z2 / n)).min(1.0)
+}
+
+/// At least this many distinct tasks must support a directing route.
+const MIN_TASKS: usize = 2;
+
+/// The task a trace worked on, as far as the trace shows it: its first prompt, normalised (case
+/// and spacing). Repeats of one task (arms, retries, reruns) share it; a trace with no prompt is a
+/// task of its own.
+fn task_of(s: &Session) -> String {
+    let p: String =
+        s.prompt.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase().chars().take(240).collect();
+    if p.is_empty() {
+        format!("\u{0}{}", s.id)
+    } else {
+        p
+    }
+}
+
+/// Support must span distinct tasks (`MIN_TASKS`): steps repeated by reruns of one task (its
+/// scratch script, run after each edit in every attempt at it) are that task's, not the
+/// repository's. It applies to the steps a trigger directs (after an edit or a command); an
+/// avoid is a failure of the environment (`No module named pytest`), the same whatever the task.
+fn one_task(ss: &[&Session], support: &BTreeSet<String>) -> Result<(), String> {
+    let tasks: BTreeSet<String> = ss.iter().filter(|s| support.contains(&s.id)).map(|s| task_of(s)).collect();
+    if tasks.len() < MIN_TASKS {
+        return Err(format!(
+            "its {} supporting traces worked on {} task(s), fewer than {MIN_TASKS}",
+            support.len(),
+            tasks.len()
+        ));
+    }
+    Ok(())
+}
+
 /// Judge one compiled route (see the module documentation); `Err` drops it.
 fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], prior: bool) -> Result<Route, String> {
     let seen: Vec<&Session> = ss.iter().copied().filter(|s| !exposed(s, &r)).collect();
@@ -452,8 +612,34 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
     if n < cfg.min_support && outcome_gate(r.effect, by_edit, lift.as_ref(), cfg).is_none() {
         return Err(format!("{n} supporting traces, fewer than {}", cfg.min_support));
     }
+    one_task(&seen, &c.support)?;
     if by_edit && rate - c.rate_without < cfg.finish_line_contrast {
         return Err(format!("contrast {:.2} below {}", rate - c.rate_without, cfg.finish_line_contrast));
+    }
+    // A check after an edit must not be what agents run anyway: the contrast must hold between
+    // the bounds, the one-sided 90% lower bound of its rate after the edit against the upper bound
+    // of its rate in the traces that made no such edit (a handful of traces on either side proves
+    // little). A regeneration owed by an edit is not run without one, and a check scoped to the
+    // edited part names what was edited: both keep the plain contrast.
+    if by_edit && r.effect == Effect::Verify && r.slots.is_empty() {
+        let (k, m) = c.without;
+        let upper = wilson_upper(k, m, CHECK_Z);
+        let lower = 1.0 - wilson_upper(c.opportunities - n, c.opportunities, CHECK_Z);
+        if lower - upper < cfg.finish_line_contrast {
+            return Err(format!(
+                "a check agents may run anyway: {n} of {} traces after the edit (lower bound {lower:.2}), {k} of {m} without it (upper bound {upper:.2})",
+                c.opportunities
+            ));
+        }
+        // A suggestion's worth is in the traces that would miss it (Track G §5: V has the factor
+        // 1 − p_soon): a check agents already ran after (nearly) every such edit adds nothing.
+        let missed = c.opportunities - n;
+        if missed < CHECK_MISSED || (missed as f64) < CHECK_MISSED_SHARE * c.opportunities as f64 {
+            return Err(format!(
+                "a check agents already run after the edit: {n} of {} traces ran it, {missed} missed it",
+                c.opportunities
+            ));
+        }
     }
     let lb = wilson_lower(n, c.opportunities);
     // An instinct's prior enters the prime test only (3 traces at 0.7).
@@ -470,6 +656,12 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
         (if n >= cfg.min_support { strength_for(effect, by_edit, lb, prime_rate.max(rate), cfg, &r.id) } else { None })
             .or_else(|| outcome_gate(effect, by_edit, lift.as_ref(), cfg))
             .ok_or_else(|| format!("rate {rate:.2} below the bar and no outcome lift, or may never be directed"))?;
+    // A check after an edit is suggested, never fired at every edit (`compile::shapes`).
+    let strength = if by_edit && effect == Effect::Verify && matches!(r.step, Step::Run { .. }) {
+        Strength::Prime
+    } else {
+        strength
+    };
     r.strength = strength;
     r.evidence = Evidence {
         opportunities: c.opportunities,
@@ -500,6 +692,66 @@ fn outcome_gate(
         ..Default::default()
     };
     compile::outcome_gate(effect, by_edit, lift, &p)
+}
+
+/// After-edit routes that direct the same step on different globs compete for one explanation:
+/// agents who edit `crates/**/*.rs` and `docs/*.md` in one trace, then run
+/// `cargo clippy --workspace …`, show the check after both kinds of edit, but only one kind calls
+/// for it. Strongest first (support, then id), a route is kept only when the traces that edited
+/// its files and **none** of a kept route's still ran its step after their last matching edit at
+/// the prime bar: its files predict the step on their own. Without such traces nothing tells the
+/// two apart, and the stronger explanation stands alone.
+fn explain_away(routes: &mut Vec<Judged>, ss: &[&Session], cfg: &LearnConfig, report: &mut EngineReport) {
+    let glob_of = |r: &Route| match &r.trigger {
+        Trigger::AfterEdit { paths } if r.slots.is_empty() => Some(paths.clone()),
+        _ => None,
+    };
+    let mut order: Vec<usize> = (0..routes.len()).filter(|&i| glob_of(&routes[i].route).is_some()).collect();
+    order.sort_by(|&a, &b| {
+        let (x, y) = (&routes[a].route, &routes[b].route);
+        y.evidence.support.cmp(&x.evidence.support).then_with(|| x.id.cmp(&y.id))
+    });
+    let mut kept: Vec<usize> = Vec::new();
+    let mut gone: BTreeSet<usize> = BTreeSet::new();
+    for i in order {
+        let r = &routes[i].route;
+        let g = glob_of(r).expect("after-edit");
+        let rival = kept.iter().map(|&k| &routes[k].route).find(|k| {
+            k.step == r.step && glob_of(k).is_some_and(|kg| kg != g) && {
+                let kg = glob_of(k).expect("after-edit");
+                let alone: Vec<&Session> = ss
+                    .iter()
+                    .copied()
+                    .filter(|s| {
+                        !exposed(s, r) && !s.steps.iter().any(|st| edited(st).is_some_and(|p| glob_hit(&kg, p)))
+                    })
+                    .collect();
+                let c = count_after_edit(r, &alone);
+                let (n, opp) = c.map_or((0, 0), |c| (c.support.len() as u32, c.opportunities));
+                opp == 0 || (n as f64) < cfg.bar(&r.id) * opp as f64
+            }
+        });
+        match rival {
+            Some(k) => {
+                report.dropped.push(Dropped {
+                    pattern: routes[i].why.pattern.clone(),
+                    reason: format!(
+                        "{}: explained by {} (the traces that edited {g} but no file of {} did not run it)",
+                        r.id,
+                        k.id,
+                        glob_of(k).unwrap_or_default()
+                    ),
+                });
+                gone.insert(i);
+            }
+            None => kept.push(i),
+        }
+    }
+    let mut i = 0;
+    routes.retain(|_| {
+        i += 1;
+        !gone.contains(&(i - 1))
+    });
 }
 
 /// Learn, compile and judge the routes for one repository's traces. `model` is the pinned
@@ -597,6 +849,57 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
             });
         }
         keep
+    });
+    explain_away(&mut routes, ss, cfg, &mut report);
+    let instead: Vec<String> = routes
+        .iter()
+        .filter_map(|j| match &j.route.step {
+            Step::Avoid { instead, .. } => Some(instead.clone()),
+            Step::Run { command } if matches!(j.route.trigger, Trigger::AfterFailure { .. }) => Some(command.clone()),
+            _ => None,
+        })
+        .collect();
+    // A check after an edit that an obligation on the same trigger already makes (the check
+    // meets the obligation's command: `cargo fmt --all --check` after `cargo fmt --all`) adds
+    // nothing: the obligation is delivered alone.
+    routes.retain(|j| {
+        let (Trigger::AfterEdit { .. }, Step::Run { command }) = (&j.route.trigger, &j.route.step) else {
+            return true;
+        };
+        // (A check scoped to the edited part names that part: not the dead end's repo-wide command.)
+        if j.route.effect != Effect::Verify || !j.route.slots.is_empty() {
+            return true;
+        }
+        // A check an avoid already names as what to run instead is delivered at session start; so
+        // is one the traces show as a dead end's working command (the check agents turned to after
+        // another check failed, in at least `min_support` traces): it belongs to that dead end,
+        // learned or not, not to the edit.
+        let recoveries = recovery_traces(command, ss);
+        if let Some(a) = instead.iter().find(|i| adage_core::pattern::same_command(i, command)) {
+            report.dropped.push(Dropped {
+                pattern: j.why.pattern.clone(),
+                reason: format!("{}: a dead end already names {a:?} as the check to run", j.route.id),
+            });
+            return false;
+        }
+        if recoveries >= cfg.min_support {
+            report.dropped.push(Dropped {
+                pattern: j.why.pattern.clone(),
+                reason: format!(
+                    "{}: {recoveries} traces ran {command:?} after another check failed: a dead end's working command",
+                    j.route.id
+                ),
+            });
+            return false;
+        }
+        let checked = owed.iter().find(|(t, c)| *t == j.route.trigger && adage_core::pattern::same_command(c, command));
+        if let Some((_, c)) = checked {
+            report.dropped.push(Dropped {
+                pattern: j.why.pattern.clone(),
+                reason: format!("{}: it checks what the obligation to run {c:?} already owes", j.route.id),
+            });
+        }
+        checked.is_none()
     });
     // A value-flow reflex MDL did not select on its own (a longer pattern holding it was chosen,
     // or none): its route is the value slot's, with the slot's own evidence.

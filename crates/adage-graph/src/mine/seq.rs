@@ -356,9 +356,24 @@ impl Ctx<'_> {
         interest.sort_by(|a, b| recovers(&b.0).cmp(&recovers(&a.0)).then(beam_cmp(db, (a.1, &a.0), (b.1, &b.0))));
         // The beam: only the best `max_children` frequent, kept children are expanded.
         let mut rank = 0usize;
+        let root = n_back == 0 && n_fwd == 0;
+        // At the root, the best edit of a file kind (an edit at the head level, `crates/**/*.rs`)
+        // is expanded as well, whatever its rank: an edit, anywhere before the target, is the
+        // context of the after-edit shapes, and in a busy trace the housekeeping between the last
+        // edit and the finishing steps (`echo`, `git status`, `wc`) outranks it on
+        // P(pattern | label). One slot more, never one of the beam's taken.
+        let mut edit_slot = root;
         for x in interest.iter_mut() {
             if x.2 && x.1 >= db.s_min {
-                x.2 = rank < p.max_children;
+                let edit = edit_slot
+                    && !x.0.fwd
+                    && !x.0.last
+                    && db.ty(x.0.label) == NodeType::Edit
+                    && db.level(x.0.label) == Level::Head;
+                x.2 = rank < p.max_children || edit;
+                if edit {
+                    edit_slot = false;
+                }
                 rank += 1;
             }
         }

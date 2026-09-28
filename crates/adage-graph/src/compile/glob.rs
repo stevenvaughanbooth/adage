@@ -106,6 +106,87 @@ pub fn lattice(
     out.into_iter().collect()
 }
 
+/// The globs of an after-edit route whose commands are **repo-wide** (no argument selects a part
+/// of the repository: `cargo fmt --all`, `cargo test --workspace`), generalised across sibling
+/// directories. Such a command answers an edit anywhere its files are, so evidence split per
+/// directory (`crates/a/src/*.rs`, `crates/b/src/*.rs`) is one reflex. Per extension, the
+/// directory globs (`d/*.ext`, `p/**/*.ext`) become the least general glob covering them that is
+/// precise over the tree (precision over the tree's files of that extension, as every candidate
+/// ends in `*.ext`), least general first:
+///
+/// 1. the siblings' glob: directories of one depth under one top-level directory, the segments
+///    they differ in replaced by `*` (`crates/*/src/*.rs`);
+/// 2. their common prefix, `p/**/*.ext` (never empty).
+///
+/// As in the lattice, a glob is never rooted in a wildcard (`**/*.ext`, `*/*.ext`): directories
+/// with nothing in common are different parts of the repository, and keep their own globs.
+///
+/// When none is precise the globs are kept as they are. A single directory, a file glob and a file
+/// without an extension never widen.
+pub fn widen(globs: &[String], tree: &BTreeSet<String>, touched: &BTreeSet<String>, min_precision: f64) -> Vec<String> {
+    let ok = |g: &str| precision(g, tree, touched) >= min_precision;
+    let mut out: BTreeSet<String> = BTreeSet::new();
+    // extension → (directory, deep: a `p/**` glob) of each directory glob.
+    let mut by_ext: BTreeMap<&str, Vec<(&str, bool)>> = BTreeMap::new();
+    for g in globs {
+        let (dir, file) = split(g);
+        let parsed = file.strip_prefix("*.").filter(|e| !e.is_empty() && !e.contains('*')).map(|e| match dir {
+            "**" => (e, "", true),
+            d => match d.strip_suffix("/**") {
+                Some(p) => (e, p, true),
+                None => (e, d, false),
+            },
+        });
+        match parsed {
+            Some((e, d, deep)) if !d.contains('*') => by_ext.entry(e).or_default().push((d, deep)),
+            _ => {
+                out.insert(g.clone());
+            }
+        }
+    }
+    for (e, dirs) in by_ext {
+        let original = || dirs.iter().map(|(d, deep)| glob_of(d, *deep, e)).collect::<Vec<_>>();
+        if dirs.len() < 2 {
+            out.extend(original());
+            continue;
+        }
+        let mut candidates: Vec<String> = Vec::new();
+        let segs: Vec<Vec<&str>> = dirs.iter().map(|(d, _)| d.split('/').collect()).collect();
+        if dirs.iter().all(|(d, deep)| !deep && !d.is_empty()) && segs.iter().all(|s| s.len() == segs[0].len()) {
+            let sib: Vec<&str> = (0..segs[0].len())
+                .map(|i| if segs.iter().all(|s| s[i] == segs[0][i]) { segs[0][i] } else { "*" })
+                .collect();
+            if sib[0] != "*" {
+                candidates.push(format!("{}/*.{e}", sib.join("/")));
+            }
+        }
+        let mut prefix: Vec<&str> = segs[0].clone();
+        for s in &segs[1..] {
+            let n = prefix.iter().zip(s).take_while(|(a, b)| a == b).count();
+            prefix.truncate(n);
+        }
+        let prefix: Vec<&str> = prefix.into_iter().filter(|p| !p.is_empty()).collect();
+        if !prefix.is_empty() {
+            candidates.push(format!("{}/**/*.{e}", prefix.join("/")));
+        }
+        match candidates.into_iter().find(|g| ok(g)) {
+            Some(g) => {
+                out.insert(g);
+            }
+            None => out.extend(original()),
+        }
+    }
+    out.into_iter().collect()
+}
+
+fn glob_of(dir: &str, deep: bool, ext: &str) -> String {
+    match (dir.is_empty(), deep) {
+        (true, _) => format!("**/*.{ext}"),
+        (false, true) => format!("{dir}/**/*.{ext}"),
+        (false, false) => format!("{dir}/*.{ext}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -30,6 +30,7 @@ pub mod ids;
 pub mod intent;
 pub mod shapes;
 pub mod stable;
+pub mod variants;
 
 use crate::events;
 use crate::input;
@@ -57,8 +58,11 @@ pub struct CompileParams {
     /// session start, before the first wasted run, as dead ends always were: an after-failure
     /// avoid names one runner, and fires only once the run was wasted.
     pub announce_at_start: f64,
-    /// A directed command must be the dominant variant of its item (this share of its matches).
+    /// A directed command must cover this share of its item's matches: the dominant variant, or
+    /// the family's covering variant ([`variants`]).
     pub dominant: f64,
+    /// A directed command must have succeeded in at least this many traces (`learn.min_support`).
+    pub min_sessions: u32,
     /// Instinct priors: pseudo-traces and mean.
     pub prior_kappa: f64,
     pub prior_mean: f64,
@@ -90,6 +94,7 @@ impl Default for CompileParams {
             glob_precision: 0.9,
             announce_at_start: 0.0,
             dominant: 0.8,
+            min_sessions: 5,
             prior_kappa: 3.0,
             prior_mean: 0.7,
             after_command_runs: false,
@@ -109,6 +114,12 @@ pub struct ActStats {
     pub literals: BTreeMap<String, (Vec<String>, u32)>,
     /// Traces that ran it at all.
     pub sessions: u32,
+    /// Traces in which a run of it succeeded.
+    #[serde(default)]
+    pub ok_sessions: u32,
+    /// Per literal, the traces in which a run of it succeeded.
+    #[serde(default)]
+    pub literal_ok: BTreeMap<String, u32>,
     /// The highest effect class of its runs.
     pub effect: Option<Effect>,
     /// Failure signatures of its failed runs.
@@ -132,6 +143,9 @@ pub struct Corpus {
     pub tree: BTreeSet<String>,
     /// Paths some trace read or edited.
     pub touched: BTreeSet<String>,
+    /// Paths some trace edited.
+    #[serde(default)]
+    pub edited: BTreeSet<String>,
 }
 
 fn effect_of(s: &str) -> Option<Effect> {
@@ -175,6 +189,8 @@ impl Corpus {
         order.sort_by(|a, b| a.session.id.cmp(&b.session.id));
         for a in order {
             let mut keys: BTreeSet<String> = BTreeSet::new();
+            let mut ok_keys: BTreeSet<String> = BTreeSet::new();
+            let mut ok_lits: BTreeSet<(String, String)> = BTreeSet::new();
             let mut runners: BTreeSet<String> = BTreeSet::new();
             let mut passed: BTreeSet<String> = BTreeSet::new();
             for (i, st) in a.session.steps.iter().enumerate().take(input::MAX_STEPS) {
@@ -186,6 +202,9 @@ impl Corpus {
                         let key = events::act_key(argv);
                         let e = c.acts.entry(key.clone()).or_default();
                         let lit = stable::shell_join(argv);
+                        if !*failed {
+                            ok_lits.insert((key.clone(), lit.clone()));
+                        }
                         e.literals.entry(lit).or_insert_with(|| (argv.clone(), 0)).1 += 1;
                         let eff = a
                             .meta
@@ -201,6 +220,9 @@ impl Corpus {
                         } else if let Some(f) = stable::listed_field(out) {
                             *e.fields.entry(f).or_default() += 1;
                         }
+                        if !*failed {
+                            ok_keys.insert(key.clone());
+                        }
                         keys.insert(key);
                         runners.insert(stable::runner(argv));
                         if !*failed {
@@ -211,12 +233,21 @@ impl Corpus {
                         if !path.is_empty() && !path.starts_with('/') {
                             c.tree.insert(path.clone());
                             c.touched.insert(path.clone());
+                            if matches!(st, input::Step::Edit { .. }) {
+                                c.edited.insert(path.clone());
+                            }
                         }
                     }
                 }
             }
             for k in keys {
                 c.acts.get_mut(&k).expect("seen").sessions += 1;
+            }
+            for k in ok_keys {
+                c.acts.get_mut(&k).expect("seen").ok_sessions += 1;
+            }
+            for (k, l) in ok_lits {
+                *c.acts.get_mut(&k).expect("seen").literal_ok.entry(l).or_default() += 1;
             }
             for r in runners {
                 *c.runners.entry(r).or_default() += 1;

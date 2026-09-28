@@ -103,6 +103,7 @@ on real and generated repositories include:
 | **Regenerate after an edit** | A regenerate step that follows edits to a path pattern | 🟢 after the edit, and once at Stop if still unmet: "changes to `schema/*.json` must be followed by `make gen`" |
 | **Steps in order** | Commands run one after another after edits to a path pattern | 🟢/🟡 "changes to `registry/*.csv` are followed by these steps, in order: `make gen`, `make check`" |
 | **Check the part you edited** | A command naming the directory an edit touched | 🟢/🟡 after an edit under `packages/ledger/`: `make -C packages/ledger check` |
+| **Run the repository's checks** | The checks agents run after editing a kind of file, in the repo-wide form some of them ran (their `cargo test -p <crate>` and `cargo test --workspace --locked -j4` runs are one `cargo test --workspace --locked`) | 🟡 after an edit to `crates/**/*.rs`: `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo fmt --all` owed as a finish line |
 | **Sync the environment** | A dependency step after a dependency file changes | 🟡 after review, once `requirements.txt` changes: `make deps then make check` |
 | **Start like others did** | Prompts that mean the same thing whose sessions ran the same command first | 🟢/🟡 "Requests like this one usually start by running: `make test`" (optional; needs `adage models fetch`) |
 

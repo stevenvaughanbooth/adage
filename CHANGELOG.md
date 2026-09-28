@@ -80,6 +80,15 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   agents took but the successful ones did forms at prime through outcome lift. Scripts the command
   table does not know are classified observe from what the traces show them doing, with the
   evidence recorded.
+- Real traces form real reflexes. Agents' command variants (`cargo test -p <crate>`,
+  `cargo test --workspace --locked -j4`) direct the family's covering form, a command agents ran
+  that covers the narrowings (`cargo test --workspace --locked`); after-edit reflexes split across
+  sibling directories generalise to one precise glob (`crates/**/*.rs`); a check after an edit
+  forms as a prime run when agents neither run it anyway nor already run it after every such edit; compound (`a && b`) and redirected
+  commands keep each step's own effect; a scoped test run binds the edited part
+  (`npm test -- packages/{part}`); and a directing reflex needs support from at least two
+  distinct tasks. On Adage's own traces: `cargo fmt --all` owed after Rust edits, then
+  `cargo clippy … -D warnings` and `cargo test --workspace --locked` suggested.
 - Steering is by influence: what a delivered directive named is no evidence from the point it
   arrived. Only hook output counts as a directive.
 - Strengths: **fire** (do this), **prime** (consider this), **inhibit** (a known dead end).
