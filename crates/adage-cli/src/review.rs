@@ -35,7 +35,7 @@ use adage_learn::LearnConfig;
 use adage_runtime::{render, SessionState};
 use adage_store::{spool, state, Paths};
 use adage_term::out::KEY_WIDTH;
-use adage_term::{Line, Out, Role};
+use adage_term::{Glyph, Line, Out, Role};
 use adage_tracks::proposals::{self, Proposal, Proposals};
 use adage_tracks::review::{self, aspect_str, Decision, Review, Reviews};
 use adage_tracks::{
@@ -437,16 +437,21 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
         o.line(&row("strength", strength))?;
         o.line(&row(
             "evidence",
-            Line::new().text(format!("{}/{}", e.support, e.opportunities)).quiet(format!(
-                " traces over {} · rate {:.2} · Wilson lower bound {:.2}",
-                words::count(e.days as usize, "day"),
-                e.rate,
-                e.lower_bound
-            )),
+            Line::new()
+                .text(format!("{}/{}", e.support, e.opportunities))
+                .quiet(format!(" traces over {}", words::count(e.days as usize, "day")))
+                .sep()
+                .quiet(format!("rate {:.2}", e.rate))
+                .sep()
+                .quiet(format!("Wilson lower bound {:.2}", e.lower_bound)),
         ))?;
         o.line(&row(
             "in use",
-            Line::new().text(format!("followed {} · ignored {}", it.followed, it.derailed)).faint(" (treated traces)"),
+            Line::new()
+                .text(format!("followed {}", it.followed))
+                .sep()
+                .text(format!("ignored {}", it.derailed))
+                .faint(" (treated traces)"),
         ))?;
         o.line(&row("step", Line::new().text(describe_step(&r.step))))?;
         let (directive, examples) = preview(t, r);
@@ -824,19 +829,31 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
     let mut rows: Vec<(&'static str, Line)> = Vec::new();
     if verb == "approve" && proposal.is_some() {
         let (a, b) = (describe_step(&before.step), describe_step(&after.step));
-        rows.push(("step", if a == b { Line::new().text(a) } else { Line::new().quiet(a).text(" → ").text(b) }));
+        rows.push((
+            "step",
+            if a == b {
+                Line::new().text(a)
+            } else {
+                Line::new().quiet(a).text(" ").glyph(Role::Ink3, Glyph::Arrow).text(" ").text(b)
+            },
+        ));
     }
     let mut strength = Line::new().strength(words::strength(before.aspect));
     if after.aspect != before.aspect {
-        strength = strength.text(" → ").strength(words::strength(after.aspect));
+        strength = strength.text(" ").glyph(Role::Ink3, Glyph::Arrow).text(" ").strength(words::strength(after.aspect));
     }
     rows.push(("strength", strength));
     let lifecycle = if before.state == after.state {
-        words::lifecycle(after.state).to_string()
+        Line::new().text(words::lifecycle(after.state))
     } else {
-        format!("{} → {}", words::lifecycle(before.state), words::lifecycle(after.state))
+        Line::new()
+            .quiet(words::lifecycle(before.state))
+            .text(" ")
+            .glyph(Role::Ink3, Glyph::Arrow)
+            .text(" ")
+            .text(words::lifecycle(after.state))
     };
-    rows.push(("lifecycle", Line::new().text(lifecycle)));
+    rows.push(("lifecycle", lifecycle));
     if after.authored != before.authored {
         rows.push(("pinned", Line::new().text("yes: `adage condition` will not overwrite it")));
     }

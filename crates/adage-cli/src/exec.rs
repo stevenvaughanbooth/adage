@@ -338,7 +338,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
 
     let mut rows: Vec<(&str, String)> = vec![
         ("reflex", format!("{label} (track version {})", ir.version)),
-        ("level", format!("{} · output {}", level.as_str().to_uppercase(), req.output.mode.as_str())),
+        ("level", format!("{}, output {}", level.as_str().to_uppercase(), req.output.mode.as_str())),
         ("argv", req.argv.join(" ")),
     ];
     for (k, v) in &req.contracts {

@@ -222,26 +222,70 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
     if args.iter().any(|a| a == "--json") {
         println!("{out}");
     } else {
+        use adage_term::{Glyph, Line, Out, Role, Strength};
         let s = &out["sessions"];
-        println!(
-            "adage graph: {} routes, {} sessions ({} treated, {} holdout)",
-            routes_len(&out),
-            s["total"],
-            s["treated"],
-            s["holdout"]
-        );
-        for r in out["routes"].as_array().into_iter().flatten() {
-            let l = &r["live"];
-            println!(
-                "  [{}] {} → {} → {}   directed {} · followed {} · derailed {} │ holdout: would-have {} · unaided {} · not reached {}",
-                r["aspect"].as_str().unwrap_or(""),
-                r["trigger"]["label"].as_str().unwrap_or(""),
-                r["id"].as_str().unwrap_or(""),
-                r["step"]["label"].as_str().unwrap_or(""),
-                l["emitted"], l["followed"], l["derailed"], l["would_have"], l["holdout"]["unaided"], l["holdout"]["not_reached"]
-            );
+        let mut o = Out::stdout();
+        o.header(
+            "graph",
+            &[
+                &crate::words::count(routes_len(&out), "reflex"),
+                &format!(
+                    "{} ({} treated, {} control)",
+                    crate::words::count(s["total"].as_u64().unwrap_or(0) as usize, "trace"),
+                    s["treated"],
+                    s["holdout"]
+                ),
+            ],
+        )?;
+        let routes: Vec<&Value> = out["routes"].as_array().into_iter().flatten().collect();
+        if !routes.is_empty() {
+            o.blank()?;
         }
-        println!("Use --json for the full graph (routes, observed commands, recent events).");
+        for r in routes {
+            let l = &r["live"];
+            let strength = match r["aspect"].as_str().unwrap_or("") {
+                "green" | "fire" => Strength::Fire,
+                "red" | "inhibit" => Strength::Inhibit,
+                _ => Strength::Prime,
+            };
+            o.line(
+                &Line::new()
+                    .text("  ")
+                    .strength(strength)
+                    .pad_to(13)
+                    .quiet(r["trigger"]["label"].as_str().unwrap_or(""))
+                    .text(" ")
+                    .glyph(Role::Ink3, Glyph::Arrow)
+                    .text(" ")
+                    .text(r["id"].as_str().unwrap_or(""))
+                    .text(" ")
+                    .glyph(Role::Ink3, Glyph::Arrow)
+                    .text(" ")
+                    .cmd(r["step"]["label"].as_str().unwrap_or("")),
+            )?;
+            o.line(
+                &Line::new()
+                    .pad_to(13)
+                    .faint(format!("directed {}", l["emitted"]))
+                    .sep()
+                    .faint(format!("followed {}", l["followed"]))
+                    .sep()
+                    .faint(format!("ignored {}", l["derailed"]))
+                    .faint("   control: ")
+                    .faint(format!("would have {}", l["would_have"]))
+                    .sep()
+                    .faint(format!("unaided {}", l["holdout"]["unaided"]))
+                    .sep()
+                    .faint(format!("not reached {}", l["holdout"]["not_reached"])),
+            )?;
+        }
+        o.blank()?;
+        if routes_len(&out) == 0 {
+            o.next("adage condition", "form reflexes from your agents' past traces")?;
+        } else {
+            o.next("adage map", "the same graph, drawn in your browser")?;
+            o.also("adage graph --json", "all of it: reflexes, observed commands, recent events")?;
+        }
     }
     Ok(())
 }

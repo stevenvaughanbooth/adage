@@ -58,6 +58,14 @@ fn main() {
     }
     match on_big_stack(move || run(&args)) {
         Some(Ok(())) => {}
+        // The reader went away (`adage status | head`): nothing is wrong, and there is no one to tell.
+        Some(Err(e))
+            if e.chain().any(|c| {
+                c.downcast_ref::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::BrokenPipe)
+            }) =>
+        {
+            std::process::exit(0)
+        }
         Some(Err(e)) => {
             // `error  what failed`, then each cause (adage_term::Out::error).
             let causes: Vec<String> = e.chain().skip(1).map(|c| c.to_string()).collect();
@@ -234,6 +242,12 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         }
         i += 1;
     }
+    if let Some(missing) = transcripts.iter().find(|p| !p.is_file()) {
+        return Err(hint(
+            format!("{} is not a transcript file", missing.display()),
+            "pass files that exist, or a directory with --claude-projects <dir> or --codex-sessions <dir>",
+        ));
+    }
     // Codex rollouts: `--codex-sessions <dir>` (`$CODEX_HOME/sessions`), read only when asked.
     if let Some(dir) = flag(args, "--codex-sessions") {
         let (found, compressed) = adage_learn::codex::discover(std::path::Path::new(&dir));
@@ -360,6 +374,7 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
             after: &after,
             changes: &changes,
             elapsed_ms: started.elapsed().as_millis() as u64,
+            waiting: waiting(paths),
         };
         condition_out::render(&mut adage_term::Out::stdout(), &run)?;
     }
@@ -403,9 +418,15 @@ pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
         after: &after,
         changes: &changes,
         elapsed_ms: started.elapsed().as_millis() as u64,
+        waiting: waiting(paths),
     };
     condition_out::render(&mut adage_term::Out::stdout(), &run)?;
     Ok(())
+}
+
+/// Reflexes that wait for a decision in `adage review`.
+fn waiting(paths: &Paths) -> usize {
+    review::standings(paths).map(|s| s.values().filter(|s| !s.reasons.is_empty()).count()).unwrap_or(0)
 }
 
 /// Append one `learn.log` line per repository this `adage condition` learned (`crate::learnlog`), or
@@ -503,16 +524,22 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
             &words::count(n_instinct, "instinct"),
         ],
     )?;
-    o.blank()?;
     match &model {
-        Some(id) => o.kv("intent model", Line::new().text(id))?,
-        None if has_intents => o.kv(
-            "intent model",
-            Line::new().push(Role::Prime, "not installed").sep().quiet("intent reflexes cannot fire"),
-        )?,
+        Some(id) => {
+            o.blank()?;
+            o.kv("intent model", Line::new().text(id))?
+        }
+        None if has_intents => {
+            o.blank()?;
+            o.kv(
+                "intent model",
+                Line::new().push(Role::Prime, "not installed").sep().quiet("intent reflexes cannot fire"),
+            )?
+        }
         None => {}
     }
     if tracks.is_empty() {
+        o.blank()?;
         o.note(&format!("No tracks yet in {}.", paths.tracks().display()))?;
         o.blank()?;
         o.next("adage condition", "form reflexes from your agents' past traces")?;
@@ -520,7 +547,6 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
     }
     let id_w =
         tracks.iter().flat_map(|t| t.routes.iter().map(|r| r.id.chars().count())).max().unwrap_or(16).clamp(16, 34);
-    let mut nascent = 0;
     for t in &tracks {
         o.blank()?;
         let mut head = Line::new()
@@ -547,20 +573,21 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
             if r.state != adage_tracks::RouteState::Active {
                 l = l.sep().quiet(words::lifecycle(r.state));
             }
-            if r.state == adage_tracks::RouteState::Draft {
-                nascent += 1;
-            }
             o.line(&l)?;
         }
     }
-    if nascent > 0 {
-        o.blank()?;
-        let why = if nascent == 1 {
-            "1 nascent reflex waits for you".to_string()
+    // Nascent reflexes, and new or changed ones nobody has decided on yet.
+    let waiting = waiting(paths);
+    o.blank()?;
+    if waiting > 0 {
+        let why = if waiting == 1 {
+            "1 reflex waits for a decision".to_string()
         } else {
-            format!("{nascent} nascent reflexes wait for you")
+            format!("{waiting} reflexes wait for a decision")
         };
         o.next("adage review", &why)?;
+    } else {
+        o.next("adage report", "what Adage told agents, and what they did")?;
     }
     Ok(())
 }

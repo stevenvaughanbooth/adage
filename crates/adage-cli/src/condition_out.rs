@@ -15,7 +15,7 @@
 //!
 //! index       gen 8dd5ec01
 //!
-//! next  adage review · 1 nascent reflex waits for you
+//! next  adage review · 1 reflex waits for a decision
 //! ```
 
 use crate::words;
@@ -34,6 +34,8 @@ pub struct Run<'a> {
     pub after: &'a BTreeMap<String, Snapshot>,
     pub changes: &'a BTreeMap<&'a String, Vec<Change>>,
     pub elapsed_ms: u64,
+    /// Reflexes that wait for a decision in `adage review` after this run.
+    pub waiting: usize,
 }
 
 pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
@@ -53,7 +55,7 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
     facts.push(&secs);
     o.header(run.command, &facts)?;
     if run.command == "condition" {
-        o.kv("thresholds", Line::new().text(rep.thresholds.clone()))?;
+        o.kv("thresholds", Line::new().text(thresholds(&rep.thresholds)))?;
         o.kv(
             "intent",
             match &rep.intent_model {
@@ -62,7 +64,6 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
             },
         )?;
     }
-    let mut nascent = 0usize;
     for (repo, rr) in &rep.repos {
         o.blank()?;
         let mut head = Line::new().bold(Role::Ink, repo.clone());
@@ -92,9 +93,6 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
             )?;
             let Some((track, _)) = snap.and_then(|s| s.get(&t.name)) else { continue };
             for r in &track.routes {
-                if r.state == RouteState::Draft {
-                    nascent += 1;
-                }
                 let glyph = if r.is_instinct() { Glyph::Instinct } else { Glyph::Reflex };
                 let mut l = Line::new()
                     .text("    ")
@@ -120,7 +118,6 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
             o.line(&Line::new().text("  ").extend(change_line(c, id_w)))?;
         }
         if let Some(ir) = &rr.instincts {
-            nascent += ir.drafts;
             o.line(&Line::new().text("  ").extend(instincts_line(ir)))?;
             if run.command != "condition" {
                 for s in ir.skipped.iter().take(12) {
@@ -140,11 +137,16 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
     o.kv("index", Line::new().text(format!("gen {}", &rep.index_generation[..rep.index_generation.len().min(8)])))?;
     // What to do next: decisions first, then what would make conditioning see more.
     let mut nexts: Vec<(String, String)> = Vec::new();
-    if nascent > 0 {
-        let why = if nascent == 1 {
-            "1 nascent reflex waits for you".to_string()
+    if run.command == "condition" && rep.repos.is_empty() {
+        o.blank()?;
+        o.note("No reflexes formed: none of these traces could be used.")?;
+        nexts.push(("adage sense".into(), "with the same sources: what those traces hold".into()));
+    }
+    if run.waiting > 0 {
+        let why = if run.waiting == 1 {
+            "1 reflex waits for a decision".to_string()
         } else {
-            format!("{nascent} nascent reflexes wait for you")
+            format!("{} reflexes wait for a decision", run.waiting)
         };
         nexts.push(("adage review".into(), why));
     }
@@ -163,6 +165,20 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+/// The evidence bars in the lexicon's words: `min_support=3 green_lower_bound=0.5
+/// yellow_rate=0.5` → `support ≥ 3 · fire at lb ≥ 0.5 · prime at rate ≥ 0.5`.
+fn thresholds(s: &str) -> String {
+    s.split_whitespace()
+        .map(|kv| match kv.split_once('=') {
+            Some(("min_support", v)) => format!("support ≥ {v}"),
+            Some(("green_lower_bound", v)) => format!("fire at lb ≥ {v}"),
+            Some(("yellow_rate", v)) => format!("prime at rate ≥ {v}"),
+            _ => kv.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(" · ")
 }
 
 /// A learned track's name without its repository prefix (`acme-billing/work-items` → `work-items`).
@@ -207,6 +223,14 @@ fn instincts_line(ir: &InstinctReport) -> Line {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn thresholds_read_in_the_lexicon() {
+        assert_eq!(
+            thresholds("min_support=3 green_lower_bound=0.5 yellow_rate=0.5"),
+            "support ≥ 3 · fire at lb ≥ 0.5 · prime at rate ≥ 0.5"
+        );
+    }
 
     #[test]
     fn short_names_drop_the_repository() {
