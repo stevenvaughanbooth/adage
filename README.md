@@ -1,21 +1,40 @@
 # Adage
 
-**Agentic DAG Engine** — put your agent on rails.
+**Agent traces become reflexes.**
 
-Adage learns the routes coding agents take to get work done, packages the good ones as shareable
-**tracks**, and at each decision point tells the agent — deterministically — what to do next. It
-never executes anything itself: the agent runs every command through its own tools, under its
-harness's own permissions.
+Adage reads the traces your coding agents leave behind (Claude Code, OpenCode and Codex session
+transcripts), finds the paths that actually get work done, and compiles them into **reflexes**:
+small, typed, deterministic routes with their evidence attached. At each decision point, the
+matching reflex tells the agent what to do next, so the agent spends turns on the task instead of
+rediscovering the repository.
+
+Reflexes come from three places:
+
+- **Traces.** `adage learn` mines real sessions in a repository.
+- **Instincts.** Reflexes that ship with Adage and work on day 0, read from the repository's own
+  Makefile, `package.json`, CI and lockfiles, with no history needed. A learned reflex always
+  overrides the matching instinct.
+- **Skills.** `adage-train` runs your agent headlessly on a skill (a `SKILL.md`, `CONTRIBUTING.md`
+  or runbook), in a sandboxed clone, and compiles the sessions into reflexes. It also tells you
+  which claims in the skill are stale.
+
+Reflexes live in **tracks** on disk, and travel as signed, closed **packs** you can review, commit
+and share. The `adage` binary never executes anything: the agent runs every command through its
+own tools, under its harness's own permissions. Execution is a separate, opt-in component
+(`adage-exec`) that runs only routes you approved on that machine, inside an OS sandbox.
 
 ```text
-  your agents' sessions ──► adage learn ──► tracks ──► index ──► hooks ──► directives
-        (transcripts)          (mine)       (files)   (compiled)  (Claude Code,  (text only)
-                                                                   OpenCode, Codex)
+  agent traces ──► adage learn ──► reflexes ──► index ──► hooks ──► directives
+  (transcripts)     (mine)        (tracks,    (compiled) (Claude Code,  (text; typed data
+  + instincts                      packs)                 OpenCode,     where you approved
+  + adage-train                                           Codex)        execution)
 ```
 
 ## What it does, concretely
 
-From real sessions in a repository, Adage learns five kinds of route:
+From real sessions in a repository, Adage learns five kinds of reflex today (a general
+subgraph-mining engine that learns them without hand-written kinds is in progress:
+[Track G](docs/tracks/track-g-graph-engine.md)):
 
 | Route | Learned from | At runtime |
 | --- | --- | --- |

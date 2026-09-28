@@ -250,6 +250,12 @@ class Rehearsal(unittest.TestCase):
         self.assertEqual(rehearse.yaml_load(text), {
             "id": "x", "step": {"do": "avoid", "avoid": "node", "signature": "error: 'test failed'"}, "slots": [],
             "exit": [{"when": "intent_changes"}], "evidence": {"rate": 1.0, "models": ["a"]}})
+        # A learned value type's branches: a list of lists.
+        text = ("runs:\n  branches:\n  - - run: lit\n      text: '#'\n    - run: class\n      lo: 3\n"
+                "  - - run: class\n      lo: 2\nregex: ^x$\n")
+        self.assertEqual(rehearse.yaml_load(text), {
+            "runs": {"branches": [[{"run": "lit", "text": "#"}, {"run": "class", "lo": 3}], [{"run": "class", "lo": 2}]]},
+            "regex": "^x$"})
 
     def test_learn_recovers_every_convention(self):
         exe = rehearse.find_adage(None)
@@ -264,6 +270,35 @@ class Rehearsal(unittest.TestCase):
                                                    ("comparison", "unexpected_routes", "learn_error")}, indent=1)[:4000])
             self.assertEqual(rep["recovered"], rep["expected"])
             self.assertEqual(rep["decoys_learned"], 0)
+
+    def test_graph_engine_recovers_every_id_shape(self):
+        """Track G G1 gate: with `--engine graph`, every convention of every idshapes bundle is
+        recovered (the lookup included, whatever the id's shape), and end to end (learn, then the
+        hook's decision on every prompt and on fresh and adversarial ids) lookup recall is at least
+        0.95 with no unsafe bind."""
+        exe = rehearse.find_adage(None)
+        if not exe:
+            self.skipTest("no adage binary (cargo build -p adage-cli)")
+        if not NODE_OK:
+            self.skipTest(f"the idshapes suite has node-npm bundles: {NODE_WHY}")
+        with tempfile.TemporaryDirectory() as t:
+            with contextlib.redirect_stdout(io.StringIO()):
+                suite = gen.build_suite("idshapes", Path(t) / "suite")
+            for b in selfcheck.bundles(suite):
+                if not usable(b):
+                    continue
+                rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, exe, learn=True, engine="graph")
+                self.assertTrue(rep["ok"], json.dumps({k: rep.get(k) for k in
+                                                       ("bundle", "comparison", "unexpected_routes", "learn_error")},
+                                                      indent=1)[:4000])
+                self.assertEqual(rep["recovered"], rep["expected"])
+            out = subprocess.run([str(exe), "eval", "types", str(suite), "--end-to-end", "--json"],
+                                 capture_output=True, text=True)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            r = json.loads(out.stdout)
+            self.assertGreaterEqual(r["all"]["e2e_recall"], 0.95, json.dumps(r["all"]))
+            self.assertEqual(r["all"]["e2e_unsafe"], 0)
+            self.assertEqual(r["all"]["unsafe_accepts"], 0)
 
 
 class IdShapes(unittest.TestCase):

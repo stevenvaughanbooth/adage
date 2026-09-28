@@ -28,6 +28,11 @@ const PASSPHRASE_TRIES: usize = 3;
 /// be replayed as a track signature.
 pub const NAMESPACE: &str = "adage-track";
 
+/// The sshsig namespace for track packs (format `adage-pack/1`, Track C §1.5). A pack can request
+/// an execution level, so an `allowed_signers` entry restricted to [`NAMESPACE`] never authorises
+/// one: a signer opts in to packs explicitly, with `namespaces="adage-pack"`.
+pub const PACK_NAMESPACE: &str = "adage-pack";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
     Agent,

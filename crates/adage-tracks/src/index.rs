@@ -32,6 +32,69 @@ pub struct IndexedRoute {
     pub track: String,
     pub version: String,
     pub route: Route,
+    /// For a route bound from a pack (Track C §2.3): what an execution approval would be keyed by.
+    /// Filled at compile time from the bound track's [`EXEC_FILE`]; the E0 hot path ignores it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exec: Option<ExecBinding>,
+}
+
+/// Execution levels (Track C §3.1). A pack may only *request* one; only a machine grants it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum Level {
+    /// Directive text only (today).
+    #[default]
+    E0,
+    /// Prefetch: run at the trigger, inject typed output.
+    E1,
+    /// An MCP tool the agent calls.
+    E2,
+    /// An MCP tool with real effects, staged and verified.
+    E3,
+}
+
+/// A pack route's binding on this machine (Track C §2.3): the route exec digest, the scripts it
+/// resolved to with their SHA-256 (repository-relative for L-ref, `cas/<hex>` under `$ADAGE_HOME`
+/// for L-vendor), and the highest level it may be approved at. Grants nothing by itself.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecBinding {
+    pub route_exec_digest: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scripts: Vec<(String, String)>,
+    pub max_level: Level,
+}
+
+/// Tracks bound from installed packs live under `<tracks>/@imported/@bound/<owner>/<name>/<repo>`
+/// (`@` never starts an owner name, so no import can collide with it).
+pub const BOUND_DIR: &str = "@bound";
+/// Beside a bound track's `track.toml`: route id → [`ExecBinding`].
+pub const EXEC_FILE: &str = "exec.json";
+
+/// Every bound track's exec bindings under `tracks_root`, keyed by (repository, track, route id).
+/// Symlinks are never followed; unreadable files are skipped (fail open: no binding).
+pub fn exec_bindings(tracks_root: &Path) -> BTreeMap<(String, String, String), ExecBinding> {
+    let mut out = BTreeMap::new();
+    let mut stack = vec![tracks_root.join(IMPORTED_DIR).join(BOUND_DIR)];
+    while let Some(d) = stack.pop() {
+        let (toml, exec) = (d.join("track.toml"), d.join(EXEC_FILE));
+        if toml.is_file() {
+            let manifest = std::fs::read_to_string(&toml).ok().and_then(|t| toml::from_str::<Manifest>(&t).ok());
+            let routes = std::fs::read(&exec)
+                .ok()
+                .and_then(|b| serde_json::from_slice::<BTreeMap<String, ExecBinding>>(&b).ok());
+            if let (Some(m), Some(routes)) = (manifest, routes) {
+                for (id, b) in routes {
+                    out.insert((m.scope.repo.clone(), m.track.name.clone(), id), b);
+                }
+            }
+            continue;
+        }
+        for e in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+            if e.file_type().is_ok_and(|t| t.is_dir()) {
+                stack.push(e.path());
+            }
+        }
+    }
+    out
 }
 
 /// Tracks installed by `adage add` carry an `imported:` provenance and live under [`IMPORTED_DIR`].
@@ -91,6 +154,7 @@ impl Index {
                             track: t.manifest.track.name.clone(),
                             version: t.manifest.track.version.clone(),
                             route: r.clone(),
+                            exec: None,
                         };
                         (precedence(t, r), ir)
                     },
@@ -124,6 +188,28 @@ impl Index {
             triggers.insert(repo.to_string(), Triggers::of(routes.iter().filter(|r| r.repo == repo).map(|r| &r.route)));
         }
         (Index { generation, routes, triggers }, conflicts)
+    }
+
+    /// [`Index::compile_with_conflicts`], then the exec bindings of pack-sourced routes read from
+    /// the bound tracks under `tracks_root` ([`exec_bindings`]). What `adage learn`, `add`,
+    /// `review` and `doctor` compile.
+    pub fn compile_root(tracks_root: &Path, tracks: &[Track]) -> (Index, Vec<interlock::Conflict>) {
+        let (mut index, conflicts) = Index::compile_with_conflicts(tracks);
+        let bindings = exec_bindings(tracks_root);
+        if !bindings.is_empty() {
+            index.attach_exec(&bindings);
+        }
+        (index, conflicts)
+    }
+
+    /// Set each route's [`IndexedRoute::exec`] from `bindings` and recompute the generation (which
+    /// covers the bindings: an approval keyed by them must see a new index when they change).
+    pub fn attach_exec(&mut self, bindings: &BTreeMap<(String, String, String), ExecBinding>) {
+        for r in &mut self.routes {
+            r.exec = bindings.get(&(r.repo.clone(), r.track.clone(), r.route.id.clone())).cloned();
+        }
+        let body = serde_json::to_vec(&self.routes).unwrap_or_default();
+        self.generation = io::hex(&Sha256::digest(&body))[..16].to_string();
     }
 
     /// What can make `repo`'s routes act: precomputed, or derived from the routes for an index

@@ -7,8 +7,127 @@ version as the GitHub Release notes.
 
 ## Unreleased
 
+### Changed
+
+- Branding: the pitch is now **"Agent traces become reflexes."** Reflexes (learned) and instincts
+  (shipped) are the units; tracks and packs are the artefacts. "Put your agent on rails" is retired
+  as the tagline (README, plugin and npm descriptions, Design Spec §17).
+
 ### Added
 
+- **E1 prefetch (Track C, milestone C3).** `adage-exec hook <harness> <event>` runs the same hook
+  pipeline as `adage hook`, now the shared `adage-hook` library. For a directive whose route has
+  an E1 approval, it runs the route in the sandbox (the L-ref script hash is re-read at execution),
+  re-checks the typed `<adage-data>` block with `check_data_block`, and delivers it beside the
+  directive ("That lookup has been run; its result is below."; `exec="e1"` on the wrapper). Exit
+  predicates are evaluated on the projected fields. Any failure delivers exactly the E0 output;
+  with nothing approved the output equals `adage hook`'s byte for byte (the goldens run against
+  both binaries). Spools record `exec` (level, exit, bytes, sha256, truncated, duration), never
+  the output. E1 sessions count as steered for the route's kinds and the intent miner.
+  - `adage review allow-exec <track> <route> --level e1 [--raw] [--fields] [--exit-when]
+    [--timeout-ms]` and `revoke-exec`, and `adage exec enable|disable|status`: a person's
+    decisions, refused inside agent sessions. `enable` swaps installed hook registrations to
+    `adage-exec hook` and writes the marker the Claude Code plugins coordinate on.
+  - A second Claude Code plugin, `adage-exec` (`plugin/claude-code-exec`); the Adage plugin's
+    session-start shim goes quiet while execution is on, so hooks never fire twice.
+  - `adage eval <dataset> --exec-e1`: an offline estimate of the lookup calls E1 would have
+    replaced and the turns saved beyond E0.
+  - `crates/adage-exec/examples/exec_latency.rs`: no-match latency of `adage-exec hook` against
+    `adage hook` (within 1 ms at p95), and what a delivered E1 adds.
+
+- **Packs are what `adage share` and `adage add` exchange (Track C, milestone C1).**
+  - `adage share` emits a signed pack, not a v1 track. It upgrades a learned track (live routes
+    only, with repository scripts pinned L-ref against the repository it runs in), re-signs an
+    installed pack, or signs a pack directory. The redaction check runs over every byte, vendored
+    scripts included. A vendored script that names URLs or hosts, runs network tools, uses
+    absolute paths or reads `*_TOKEN`/`*_KEY`-style variables is listed and needs `--ack-scripts`.
+    Approvals, `review.yaml`, proposals and `trust.json` never travel. The signature uses the
+    namespace `adage-pack` (`adage_sign::PACK_NAMESPACE`). `--format v1` still writes a v1 track.
+  - `adage add` accepts packs. It reads the directory strictly: no symlinks and no smuggled files.
+    It verifies the digest and signature against the trust anchors: personal `trusted-signers`,
+    then the TOFU-pinned repository file, then `--trust`. An `allowed_signers` entry restricted to
+    `adage-track` does not authorise a pack. The pack is validated in full, including its closure.
+    Scripts are re-classified locally as environment, and a minimal policy file is honoured
+    (`[publishers] deny`, `[exec] allow_vendor_scripts`). The pack is installed exactly as verified
+    under `tracks/@imported/<owner>/<name>/`, and its vendored scripts are copied read-only to
+    `$ADAGE_HOME/cas/<sha256>`. It creates no execution approvals. v1 tracks are still accepted
+    (namespace `adage-track`) and are upgraded in place to a pack.
+  - Resolution against a repository (`adage_pack::bind`) gives each route either live, with the
+    highest level it may be approved at, or inert, with a reason. It checks, in turn:
+    - applicability by repository key (including the `<name>@<root commit>` form), by fingerprint
+      over the declared facts, or by a compiled detector;
+    - `requires.os`, and tools by PATH lookup only (nothing is run);
+    - that templates and models are known to this build;
+    - the SHA-256 of each L-ref script, which must be a regular file inside the root with no
+      symlink on the way and at most 1 MiB, plus its deps;
+    - that the route has a runtime form. A shape with none becomes inert with the reason "shape
+      not yet supported at runtime".
+
+    Only a signature, schema or closure failure refuses a whole pack. Live routes compile into the
+    index as bound tracks under `tracks/@imported/@bound/<owner>/<name>/<repo>/`, at probation and
+    yellow at most, and the recipient's review decisions carry across re-binds. Each carries
+    `IndexedRoute.exec` (route exec digest, resolved scripts and hashes, `max_level`), which the E0
+    hot path ignores. `adage doctor` (a new `packs` check) and `adage review` (text and `--json`)
+    show inert routes with their reasons and the pack's version and digest.
+  - The core instincts ship as the pack `adage/core-instincts` (`adage_pack::instincts`), with
+    detector applicability (`detector = "*"` over this build's catalogue). Binding it gives exactly
+    the instinct binder's routes; a test pins this.
+  - `adage_tracks::index::Index::compile_root` attaches the exec bindings. `adage learn`, `add`,
+    `review` and `doctor` all compile through it.
+- **Track packs, format `adage-pack/1` (Track C, milestone C0).** A new crate, `adage-pack`,
+  defines the pack: one track namespace in route format v2 (shapes run, avoid, after, read,
+  advise, obligation and sequence; typed inputs and outputs; argv steps; exit predicates; an
+  execution request that grants nothing), closed over everything it references and
+  content-addressed. It reads packs as untrusted input (a file allowlist with no symlinks and at
+  most 256 files, 1 MiB per file and 64 KiB per script; UTF-8 without NUL, control or invisible
+  characters; unknown fields refused; strict, anchored and bounded contract types; plain argv
+  tokens; repository-relative paths and globs; effects re-classified locally), computes the
+  closure (types, L-ref and L-vendor scripts, tools, templates, models, links, the implicit
+  after-command and avoid-instead edges; no dangling references, no unreferenced bytes, no after
+  cycles or chains over four) and checks it against the pack's `CLOSURE` byte for byte. It
+  computes the route exec digest (canonical JSON without evidence and aspect, with type
+  definitions and script hashes inlined: the future approval key) and the pack digest (the track
+  digest algorithm, with `CLOSURE` included and `pack.sig` excluded), signs and verifies in the new
+  sshsig namespace `adage-pack`, and upgrades v1 track directories to packs (L-none, or L-ref
+  pinned against a repository). Nothing uses packs yet: `adage share` and `adage add` move to them
+  in C1, and nothing executes. A debugging binary, `adage-pack inspect|verify|digest|upgrade`, ships
+  with the crate. See docs/packs.md.
+- **`adage-exec`: the execution core (Track C, milestone C2)** (new crate and binary, optional;
+  the `adage` binary still never runs a repository or agent command, now checked by a test that
+  scans the adage crates for `Command::new`). `adage-exec run --repo <dir> --argv '<json>'
+  --effect observe --level e1 --output typed --fields '<json>' [--dry-run]` runs a step only when
+  every gate passes, in order: slots bound to values their strict contracts accept (no shell,
+  ever); the declared effect not below the local classification (scripts and interpreters are
+  environment); policy; an approval equal on every field of the key (repository, route exec
+  digest, argv templates, scripts and hashes, effect, level, output mode, sandbox profile id,
+  signer), or automatic approval of the inert-observe class, off by default until gate G3; and an
+  enforced sandbox, else nothing runs. Linux: Landlock (ABI ≥ 1, best effort to 9) plus a seccomp
+  filter applied before `execve`, user and network namespaces where available, and root dropped
+  to nobody; bubblewrap as the fallback; macOS: `sandbox-exec` with a generated SBPL profile;
+  Windows: unavailable. The environment is built from nothing (sanitised `PATH`, scratch `HOME`
+  and `TMPDIR`, fixed locale and git variables; never agent sockets, tokens or cloud
+  credentials); git runs with `-c` hardening, and a repository whose config sets `core.fsmonitor`,
+  `sshCommand`, `filter.*`, textconv, aliases or includes loses git's inert status. Limits per
+  level (E1: 1.5 s, 64 KiB captured, 4 KiB returned; E2: 10 s, 256 KiB, 16 KiB), `RLIMIT_AS`
+  2 GiB, `RLIMIT_NPROC` 256, `RLIMIT_FSIZE` 64 MiB, and the process group killed and reaped.
+  Typed output keeps only declared fields that pass their types (`repo-path` inside the root,
+  `repo-path-list`, `git-rev`, `int`, `bool`, `enum`, `pattern`), re-serialised by Adage; raw
+  output (separately approved, policy-gated) is stripped, defanged and scanned for secrets,
+  canaries and instruction-shaped text; any failure withholds the whole block. Output reaches the
+  agent only in the fixed `<adage-data>` template. `adage-exec approve`/`revoke` refuse inside an
+  agent session and need a terminal; approvals live in `$ADAGE_HOME/approvals.json` (0600, atomic)
+  and lapse with a field diff when the route changes. Policy: `$ADAGE_HOME/policy.toml` plus a
+  managed file whose denies win and whose `require_sandbox` the personal file cannot lower.
+  `adage-exec doctor` reports the sandbox (Landlock ABI, namespaces, bwrap, sandbox-exec). The
+  L0-sec escape suite (`crates/adage-exec/tests/escape/`) runs every payload under each available
+  backend: 0 escapes. See docs/execution.md.
+- **`commands.toml`: an `inert` field** (default false), true only for `cat`, `head`, `tail`,
+  `wc`, `ls`, `rg`, `grep`, `jq` and the `git` subcommands `status`, `log`, `diff`, `show` and
+  `rev-parse`: programs whose behaviour repository files cannot turn into running code. It gates
+  automatic approval in `adage-exec` and is pinned by a test.
+- **`adage_eval::safety::check_data_block`**: the safety oracle for execution data blocks (the
+  fixed template, route, byte count, no tags or control characters in the payload, declared and
+  valid typed fields or no free text, no instruction-shaped raw text, no canaries).
 - **`adage-train`: skill → reflex training** (new crate and binary, optional; the `adage` binary
   still never executes anything). `adage-train plan --from <SKILL.md|CONTRIBUTING.md|Makefile|
   package.json|workflow.yml|runbook.md>` extracts typed claims deterministically (verify,
@@ -63,6 +182,28 @@ version as the GitHub Release notes.
   types reach lookup recall 1.00, accept 1.00 and reject 1.00 with no unsafe acceptance on every
   shape; the hard-coded detector finds nothing outside `X-123` ids. See
   docs/tracks/track-g-graph-engine.md, "Status".
+- **Track G, G0 (event-graph substrate) and G1 integration (learned value types made live).**
+  Importers keep every prompt (`Session.prompts: Vec<PromptObs { text, at_step }>`,
+  `StepObs.prompt`; `Session.prompt` is still the first; the parse cache re-parses older entries,
+  `cache::SESSION_FORMAT`). `adage-graph` gains session facts (`facts.rs`: prompt and act events,
+  artifact, output and failure nodes, `follows`/`binds`/`reads`/`writes`/`yields`/`fails_with`/
+  `recovers_with` edges, token occurrences, bounded), node embeddings (`embed.rs`: SHA-256-seeded
+  feature hashing plus the static model when installed, quantised) and a content-keyed,
+  owner-only facts cache (`$ADAGE_HOME/cache/facts`). `adage-learn/src/bridge.rs` converts
+  sessions for the graph engine. New `adage graph --learned --dump <repo>`. New learn parameter
+  `learn.engine` (`miners`, the default and unchanged, `shadow`, `graph`) and `adage learn
+  --engine`: under `shadow`/`graph` the lookup route (`lookup-work-item`, same id) takes its slot
+  from a learned value type (`SlotSource::PromptValue`, with `OutputValue` and `EditSegment` also
+  added and bound by the runtime), effect ceilings are applied before any typed slot can direct,
+  and session facts are computed. The hook binds a typed slot with the shared tokeniser and the
+  O(len) matcher, compiling no regex for it; `plain_token` and the contract stay the final gate;
+  the fast path accounts for typed prompt slots exactly. `io::validate` checks that a type's
+  runs and regex agree and that each run step's slot is bound by its trigger. `adage eval types
+  --end-to-end` learns with the graph engine and replays prompts through the hook: on
+  `specs/idshapes.json` lookup recall 1.00 and 0 unsafe binds. `rehearse.py` takes `--engine`,
+  learns without instincts, matches lookups by ids and dead ends by canonical runner (this fixes
+  `test_learn_recovers_every_convention`, which failed on instinct routes and on `node --test` /
+  `npm test` runners). With default parameters the L0 baseline is reproduced exactly.
 
 - **Tunable engine parameters and the L0 optimisation bench.** Every number the runtime and the
   learner tune on (follow window, directive budget, stop requests, history; support, green and
@@ -195,6 +336,12 @@ version as the GitHub Release notes.
 
 ### Changed
 
+- Design Spec principle 1 is now "The agent is the only actor, unless you delegate" (Track C
+  §5.1), and Architecture Q4 splits into Q4a (`adage` spawns nothing) and Q4b (`adage-exec` runs
+  only approved, sandboxed routes).
+- Repository scripts run by `adage-exec` run from a private copy inside a shadow of the
+  repository in scratch, so scripts that find their data relative to themselves work.
+- Execution approvals are filed under `<track>/<route>` without the track's version.
 - **One command-pattern algebra** (`adage_core::pattern`) decides when an observed command is
   the directed one, everywhere: follow judgements, finish-line obligations, after-command and
   after-failure triggers, `adage graph`, interlocking and the eval scorer. A directed command is

@@ -44,6 +44,12 @@ pub struct LearnConfig {
     /// Bind instincts per repository after mining ([`crate::instincts`]); `None` binds none (the
     /// offline eval's default, so its numbers are those of reflexes alone).
     pub instincts: Option<crate::instincts::Config>,
+    /// The learning engine (`LearnParams::engine`): `miners`, `shadow` or `graph`. Anything but
+    /// `miners` takes the lookup's slot and contract from learned value types ([`crate::graph`]).
+    pub engine: String,
+    /// Where session facts are cached (`$ADAGE_HOME/cache/facts`) when the engine computes them;
+    /// `None` computes them without a cache.
+    pub facts_cache: Option<std::path::PathBuf>,
 }
 
 impl Default for LearnConfig {
@@ -60,6 +66,11 @@ impl LearnConfig {
         } else {
             self.yellow_rate
         }
+    }
+
+    /// Whether the graph engine takes part in learning (`engine` is `shadow` or `graph`).
+    pub fn graph(&self) -> bool {
+        self.engine != "miners"
     }
 
     /// Thresholds for small demonstrations; the report always states which were used.
@@ -84,6 +95,8 @@ impl LearnConfig {
             material_lower_bound: p.material_lower_bound,
             stale_exposure: p.stale_exposure,
             instincts: None,
+            engine: p.engine.clone(),
+            facts_cache: None,
         }
     }
 }
@@ -858,6 +871,7 @@ mod tests {
                 failed: false,
             },
             rel_path,
+            prompt: 0,
         }
     }
 
@@ -885,7 +899,7 @@ mod tests {
             steered_kinds: BTreeSet::new(),
             outcome: None,
             harness: "claude-code".into(),
-            prompts: 1,
+            prompts: vec![crate::import::PromptObs { text: "p".into(), at_step: 0 }],
         }
     }
 

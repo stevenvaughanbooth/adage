@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Rehearse learning on generated sandboxes with scripted sessions. Spends no tokens.
 
-  python3 evals/gen/rehearse.py DIR [--out ROOT] [--repeats N] [--adage PATH] [--no-learn] [--json]
+  python3 evals/gen/rehearse.py DIR [--out ROOT] [--repeats N] [--adage PATH] [--engine miners|shadow|graph]
+                                    [--no-learn] [--json]
 
 DIR is a bundle or a suite. For each bundle, a scripted "agent" (plain Python, no model) works every
 task `--repeats` times (default 2), each in a fresh copy of the repository, the way unaided agents
@@ -13,9 +14,13 @@ and finishes with the working verify command. Every command really runs in the s
 session is written as a Claude Code transcript (JSONL) with the real output, in the layout the live
 runner uses (ROOT/<bundle>/transcripts/<project>/<session>.jsonl, outcomes.json).
 
-Then, unless --no-learn, it runs `adage learn --demo` on those transcripts with an isolated
-ADAGE_HOME (ROOT/<bundle>/adage-home) and compares the learned routes with conventions.json:
-each non-decoy convention must be recovered, and no route may mention a decoy. The adage binary is
+Then, unless --no-learn, it runs `adage learn --demo --no-instincts` (with `--engine`, when given) on
+those transcripts with an isolated ADAGE_HOME (ROOT/<bundle>/adage-home) and compares the learned
+routes with conventions.json: each non-decoy convention must be recovered, and no route may mention
+a decoy. A lookup is recovered when its command is the convention's and its contract accepts every
+tracker id and fresh holdout id and rejects every near miss (by ids, not by spelling, so any id
+shape can be judged); a dead end when its runner begins the avoided command, as adage canonicalises
+both (`npm test` is `npm run test`). The adage binary is
 --adage, else target/release/adage, else target/debug/adage in this repository. It writes
 ROOT/<bundle>/report.json and prints recovered vs expected. The default ROOT is DIR/rehearsal (for
 a bundle) or DIR/<bundle>/rehearsal (for a suite).
@@ -186,9 +191,27 @@ def norm(cmd):
     return " ".join(x[2:] if x.startswith("./") else x for x in (cmd or "").split())
 
 
+def canonical_argv(cmd):
+    """The spellings adage canonicalises before it names a runner (adage_core::shell): `npm test`
+    and `npm t` are `npm run test`; a leading `./` is dropped."""
+    argv = norm(cmd).split()
+    if argv[:1] == ["npm"] and argv[1:2] in (["test"], ["t"]):
+        argv = ["npm", "run", "test", *argv[2:]]
+    return argv
+
+
+def runs(runner, avoided):
+    """Whether the runner adage named in a dead end (`node --test`, `python3 -m unittest`) runs the
+    command a convention avoids: its words begin the avoided command's (the Rust runner keeps
+    identity flags such as `--test`; the legacy one stops at the first flag)."""
+    r, a = canonical_argv(runner), canonical_argv(avoided)
+    return bool(r) and a[:len(r)] == r
+
+
 def adage_runner(cmd):
-    """adage-learn's runner generalisation (crates/adage-learn/src/mine.rs `runner`): a command's
-    runner without its targets. `python3 -m unittest -v` -> `python3 -m unittest`, `node --test` -> `node`."""
+    """adage-learn's legacy runner generalisation (crates/adage-learn/src/mine.rs `legacy_runner`):
+    a command's runner without its targets. `python3 -m unittest -v` -> `python3 -m unittest`,
+    `node --test` -> `node`. The command-pattern runner may keep more (`node --test`); see `runs`."""
     argv, out = cmd.split(), []
     for i, t in enumerate(argv):
         if i > 0 and ("/" in t or "." in t or (t.startswith("-") and t != "-m")):
@@ -232,7 +255,8 @@ def yaml_load(text):
             out = []
             while pos < len(lines) and ind(lines[pos]) == indent and lines[pos].lstrip().startswith("- "):
                 item = lines[pos].lstrip()[2:]
-                if re.match(r"^[\w.-]+:( |$)", item):
+                # A mapping, or a nested list (`- - run: lit`, a value type's branches), opens a block.
+                if re.match(r"^[\w.-]+:( |$)", item) or item.startswith("- "):
                     lines[pos] = " " * (indent + 2) + item
                     out.append(block(indent + 2))
                 else:
@@ -264,7 +288,24 @@ def learned_routes(home):
     return routes
 
 
-def compare(b, routes):
+def lookup_contract_ok(regex, c, b, holdout):
+    """A lookup's learned contract matches a convention by its ids, not its spelling: it accepts
+    every tracker id the tasks name (and the convention's `samples`) and rejects every near miss
+    (the holdout's, else the convention's `counter_samples`). Python's `re` reads the learned
+    regexes (anchored, explicit ASCII classes) as the Rust regex crate does."""
+    try:
+        rx = re.compile(regex)
+    except re.error:
+        return False
+    ids = [t["id"] for t in b.tasks["tasks"] if t["kind"] != "control"] + list(c.get("samples", []))
+    ids += list((holdout or {}).get("fresh", []))
+    near = [n["value"] for n in (holdout or {}).get("near_miss", [])] + list(c.get("counter_samples", []))
+    if not ids:
+        ids = []
+    return all(rx.fullmatch(i) for i in ids) and not any(rx.fullmatch(n) for n in near)
+
+
+def compare(b, routes, holdout=None):
     """Match learned routes against conventions.json."""
     rows, used = [], set()
 
@@ -278,16 +319,15 @@ def compare(b, routes):
     for c in b.conv:
         kind, got = c["kind"], None
         if kind == "lookup":
-            prefix = c["id_pattern"].split("-\\d")[0]
             got = take(lambda r: r["id"] == "lookup-work-item"
                        and norm(r["step"].get("command")).split(" --json")[0] == norm(c["command"])
-                       and any(x["contract"].get("regex", "").startswith(prefix + "-") for x in r.get("slots", [])))
+                       and any(lookup_contract_ok(x["contract"].get("regex", ""), c, b, holdout)
+                               for x in r.get("slots", [])))
         elif kind == "linked_files":
             got = take(lambda r: r["id"] == "read-linked-files")
         elif kind in ("dead_end", "instinct_violation"):
-            runner = adage_runner(c["avoided"])
             got = take(lambda r: r["id"].startswith("dead-end")
-                       and runner in [x.strip() for x in str(r["step"].get("avoid", "")).split(" / ")]
+                       and any(runs(x.strip(), c["avoided"]) for x in str(r["step"].get("avoid", "")).split(" / "))
                        and r["step"].get("instead") == c["command"])
         elif kind == "finish_line":
             got = take(lambda r: r["id"].startswith("finish-line") and r["trigger"].get("paths") == c["glob"]
@@ -307,7 +347,8 @@ def compare(b, routes):
                 detail.update(avoid=got["step"]["avoid"], instead=got["step"]["instead"],
                               learned_signature=got["step"]["signature"], declared_signature=c["signature"],
                               declared_avoided=c["avoided"],
-                              broadened=adage_runner(c["avoided"]) != c["avoided"],
+                              broadened=all(canonical_argv(x.strip()) != canonical_argv(c["avoided"])
+                                            for x in str(got["step"]["avoid"]).split(" / ")),
                               signature_matches=c["signature"] in str(got["step"]["signature"]))
             elif kind == "finish_line":
                 detail.update(paths=got["trigger"]["paths"], command=got["step"]["command"])
@@ -316,7 +357,7 @@ def compare(b, routes):
     return rows, unexpected
 
 
-def rehearse_bundle(bundle, root, repeats, adage, learn):
+def rehearse_bundle(bundle, root, repeats, adage, learn, engine=None):
     b = Bundle(bundle)
     root = Path(root).resolve()
     shutil.rmtree(root, ignore_errors=True)
@@ -341,6 +382,7 @@ def rehearse_bundle(bundle, root, repeats, adage, learn):
             i += 1
     (root / "outcomes.json").write_text(json.dumps(outcomes, indent=2, sort_keys=True) + "\n")
     # Fresh ids and near misses from the generator's id distribution, for `adage eval types`.
+    ho = None
     if b.one("lookup"):
         tracker = [t["id"] for t in b.tasks["tasks"] if t["kind"] != "control"]
         ho = grammar.holdout(b.spec["spec"], tracker, b.spec["seed"])
@@ -350,11 +392,16 @@ def rehearse_bundle(bundle, root, repeats, adage, learn):
     if learn:
         tx = sorted(str(p) for p in (root / "transcripts").glob("*/*.jsonl"))
         home = root / "adage-home"
-        argv = [str(adage), "learn", "--demo", "--json", "--repo", b.tasks["repo"], "--outcomes",
-                str(root / "outcomes.json"), "--transcripts", *tx]
+        # Learned routes only: instincts are bound from the repository's files, not learned from
+        # the sessions, so they are not what a rehearsal measures (and would be unexpected routes).
+        argv = [str(adage), "learn", "--demo", "--json", "--no-instincts", "--repo", b.tasks["repo"]]
+        if engine:
+            argv += ["--engine", engine]
+        argv += ["--outcomes", str(root / "outcomes.json"), "--transcripts", *tx]
         env = dict(scorer.env(), ADAGE_HOME=str(home), ADAGE_AUTO_LEARN="0")
         out = subprocess.run(argv, capture_output=True, text=True, env=env)
-        report["learn_argv"] = ["adage", *argv[1:9], f"<{len(tx)} transcripts>"]
+        report["learn_argv"] = ["adage", *argv[1:-len(tx) - 1], f"<{len(tx)} transcripts>"]
+        report["engine"] = engine or "miners"
         if out.returncode != 0:
             report["learn_error"] = out.stderr[-2000:]
             report["ok"] = False
@@ -362,7 +409,7 @@ def rehearse_bundle(bundle, root, repeats, adage, learn):
             routes = learned_routes(home)
             report["active_in_index"] = sorted(r["route"]["id"] for r in
                                                json.loads((home / "index.json").read_text()).get("routes", []))
-            rows, unexpected = compare(b, routes)
+            rows, unexpected = compare(b, routes, ho)
             expected = [x for x in rows if x["expected"] == "route"]
             report.update(
                 learn=json.loads(out.stdout), routes=[r["route"] for r in routes], comparison=rows,
@@ -421,6 +468,7 @@ def main(argv):
         return v
 
     out, repeats, adage = take("--out"), int(take("--repeats", "2")), take("--adage")
+    engine = take("--engine")
     learn = "--no-learn" not in args
     as_json = "--json" in args
     args = [a for a in args if not a.startswith("--")]
@@ -446,7 +494,7 @@ def main(argv):
                 reports.append({"bundle": b.name, "skipped": why, "ok": True})
                 continue
         root = Path(out) / b.name if out and len(found) > 1 else Path(out) if out else b / "rehearsal"
-        rep = rehearse_bundle(b, root, repeats, exe, learn)
+        rep = rehearse_bundle(b, root, repeats, exe, learn, engine)
         reports.append(rep)
         if not as_json:
             print_report(rep)

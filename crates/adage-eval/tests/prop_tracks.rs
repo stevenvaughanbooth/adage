@@ -16,7 +16,7 @@ use adage_eval::safety;
 use adage_runtime::{decide, Arm, Call, Ctx, Event, SessionState};
 use adage_tracks::*;
 use proptest::prelude::*;
-use proptest::test_runner::{Config, TestRunner};
+use proptest::test_runner::{Config, RngAlgorithm, TestRng, TestRunner};
 use serde_json::json;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -401,7 +401,7 @@ fn plausible_route() -> impl Strategy<Value = Route> {
 }
 
 fn route() -> impl Strategy<Value = Route> {
-    prop_oneof![3 => plausible_route(), 1 => random_route(), 1 => instinct_route()]
+    prop_oneof![3 => plausible_route(), 1 => random_route(), 2 => instinct_route()]
 }
 
 fn event() -> impl Strategy<Value = Event> {
@@ -743,7 +743,14 @@ fn interlocking_holds_for_colliding_route_sets() {
 #[test]
 fn accepted_tracks_only_ever_render_fixed_templates() {
     let (accepted, checked) = (AtomicUsize::new(0), AtomicUsize::new(0));
-    let mut runner = TestRunner::new(Config { cases: cases(), ..Config::default() });
+    // The coverage guards below need a reproducible sample: a fixed seed by default, a fresh random
+    // one in the slow profile (whose 4,000 cases clear the guards by a wide margin).
+    let config = Config { cases: cases(), ..Config::default() };
+    let mut runner = if cfg!(feature = "slow") {
+        TestRunner::new(config)
+    } else {
+        TestRunner::new_with_rng(config, TestRng::deterministic_rng(RngAlgorithm::ChaCha))
+    };
     let strategy = (prop::collection::vec(route(), 1..3), prop::collection::vec(event(), 1..24));
     if let Err(e) = runner.run(&strategy, |(routes, events)| check(routes, events, &accepted, &checked)) {
         panic!("{e}");

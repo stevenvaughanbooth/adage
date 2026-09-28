@@ -184,6 +184,34 @@ fn out(call: &str, code: i32, body: &str) -> Value {
 }
 
 #[test]
+fn every_prompt_is_kept_and_anchored() {
+    let t = CommandTable::load();
+    let lines = vec![
+        meta(json!({})),
+        user("Pick up W-2042 please"),
+        exec("c1", "python3 scripts/wi-lookup W-2042"),
+        out("c1", 0, "ID: W-2042"),
+        user("now run the tests"),
+        exec("c2", "make test"),
+        exec("c3", "ls"),
+        out("c2", 0, "ok"),
+        out("c3", 0, "Makefile"),
+        user("thanks"),
+    ];
+    let s = parse_rollout(&lines, &t, None).expect("parses");
+    let got: Vec<(&str, u32)> = s.prompts.iter().map(|p| (p.text.as_str(), p.at_step)).collect();
+    assert_eq!(got, [("Pick up W-2042 please", 0), ("now run the tests", 1), ("thanks", 3)]);
+    assert_eq!(s.steps.iter().map(|x| x.prompt).collect::<Vec<_>>(), [0, 1, 1]);
+    assert_eq!(s.prompt, s.prompts[0].text);
+    // The committed fixtures: every step serves a prompt the session has.
+    for (path, _, _) in fixtures() {
+        let s = parse_rollout(&read_rollout(&path).unwrap(), &t, None).unwrap();
+        assert_eq!(s.prompts[0].text, s.prompt, "{}", path.display());
+        assert!(s.steps.iter().all(|x| (x.prompt as usize) < s.prompts.len()));
+    }
+}
+
+#[test]
 fn steering_subagents_paginated_prompts_and_hostile_rollouts() {
     let t = CommandTable::load();
     // Paginated history mode records no `user_message` event: the prompt comes from the response

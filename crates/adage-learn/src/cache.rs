@@ -6,9 +6,9 @@
 //!
 //! - `manifest.json` maps each transcript path to its size and modification time when parsed, the
 //!   repository root the parse found (`null` if the file held no usable session), and the file
-//!   holding the parsed session. It is stamped with the parser's identity (this build's version
-//!   and the running executable's size and modification time), and a different stamp empties the
-//!   cache: a new build may parse differently.
+//!   holding the parsed session. It is stamped with the parser's identity (this build's version,
+//!   the session format [`SESSION_FORMAT`], and the running executable's size and modification
+//!   time), and a different stamp empties the cache: a new build may parse differently.
 //! - `<16 hex digits>.json` holds one parsed [`Session`] (SHA-256 of the path names it).
 //!
 //! A hit gives exactly what parsing would: the session's repository key is derived afresh from its
@@ -64,11 +64,17 @@ pub enum Read {
     Elsewhere,
 }
 
+/// The version of the parsed session's format. Bumped whenever [`Session`] gains or changes what
+/// a parse records, so an entry written before is never read as if it had it, even by a build
+/// whose executable happens to match (format 2: per-prompt import, `Session::prompts` and
+/// `StepObs::prompt`, Track G G0).
+pub const SESSION_FORMAT: u32 = 2;
+
 /// The identity of this parser: a cache written by any other build is not trusted.
 fn parser_id() -> String {
     let exe = std::env::current_exe().ok().and_then(|p| std::fs::metadata(p).ok());
     let (size, mtime) = exe.map(|m| (m.len(), stamp(&m))).unwrap_or((0, 0));
-    format!("{} exe {size} {mtime}", env!("CARGO_PKG_VERSION"))
+    format!("{} format {SESSION_FORMAT} exe {size} {mtime}", env!("CARGO_PKG_VERSION"))
 }
 
 fn stamp(m: &std::fs::Metadata) -> u128 {

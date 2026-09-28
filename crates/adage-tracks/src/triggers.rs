@@ -17,6 +17,10 @@ pub struct Triggers {
     /// Span kinds that prompt routes bind from.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prompt_spans: Vec<SpanKind>,
+    /// Learned value types that prompt routes bind from (`SlotSource::PromptValue`): a prompt
+    /// with no token any of them accepts cannot bind one ([`Triggers::prompt_might_bind`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub prompt_types: Vec<adage_core::vtype::Runs>,
     /// Intent routes: every prompt must be embedded.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub intent: bool,
@@ -98,7 +102,21 @@ impl Triggers {
         let mut t = Triggers::default();
         for r in routes {
             match &r.trigger {
-                Trigger::Prompt { span } => t.prompt_spans.push(*span),
+                Trigger::Prompt { span } => {
+                    // A typed slot binds from its own type, not from the (legacy) span kind.
+                    let typed: Vec<&adage_core::vtype::Runs> = r
+                        .slots
+                        .iter()
+                        .filter_map(|s| match &s.source {
+                            crate::model::SlotSource::PromptValue { vtype, .. } => Some(&vtype.runs),
+                            _ => None,
+                        })
+                        .collect();
+                    if typed.is_empty() || r.slots.iter().any(|s| s.source.vtype().is_none()) {
+                        t.prompt_spans.push(*span);
+                    }
+                    t.prompt_types.extend(typed.into_iter().cloned());
+                }
                 Trigger::Intent { .. } => t.intent = true,
                 Trigger::SessionStart => t.first_prompt = true,
                 Trigger::AfterCommand { command } | Trigger::AfterFailure { command, .. } => match key_word(command) {
@@ -119,6 +137,8 @@ impl Triggers {
         }
         t.prompt_spans.sort();
         t.prompt_spans.dedup();
+        t.prompt_types.sort();
+        t.prompt_types.dedup();
         t.words.sort();
         t.words.dedup();
         t.edit_globs.sort();
@@ -134,6 +154,16 @@ impl Triggers {
         self.any_call
             || self.words.iter().any(|w| haystack.contains(w.as_str()))
             || self.edit_globs.iter().any(|g| glob_fragments(g).iter().all(|f| haystack.contains(f.as_str())))
+    }
+
+    /// Whether a prompt might bind a learned value type: one of its tokens (as the runtime
+    /// tokenises it, `adage_core::tokens`) is accepted by one of the types. Exact, not coarse:
+    /// the runtime binds only such a token.
+    pub fn prompt_might_bind(&self, text: &str) -> bool {
+        !self.prompt_types.is_empty()
+            && adage_core::tokens::tokens(text, adage_core::tokens::PROMPT_TOKENS)
+                .iter()
+                .any(|tok| self.prompt_types.iter().any(|t| adage_core::vtype::matches(t, &tok.text)))
     }
 
     /// Whether any call at all could matter (no word, glob or opaque trigger).

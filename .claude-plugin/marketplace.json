@@ -2,14 +2,22 @@
   "name": "adage",
   "owner": { "name": "stevenvaughanbooth" },
   "metadata": {
-    "description": "Adage: put your agent on rails.",
+    "description": "Adage: agent traces become reflexes.",
     "version": "0.1.0"
   },
   "plugins": [
     {
       "name": "adage",
       "source": "./plugin/claude-code",
-      "description": "Put your agent on rails: Adage learns the routes your agents take and tells them, deterministically, what to do next. Needs the adage binary on PATH (npm, Homebrew, or the release installers).",
+      "description": "Agent traces become reflexes: Adage compiles the paths your agents take into reflexes and tells them, deterministically, what to do next. Needs the adage binary on PATH (npm, Homebrew, or the release installers).",
+      "version": "0.1.0",
+      "repository": "https://github.com/stevenvaughanbooth/adage",
+      "homepage": "https://github.com/stevenvaughanbooth/adage"
+    },
+    {
+      "name": "adage-exec",
+      "source": "./plugin/claude-code-exec",
+      "description": "Adage with execution (E1 prefetch, opt-in): after `adage exec enable` and an approval per route, observe-only lookups run in an OS sandbox at the trigger and their typed output arrives beside the directive. Replaces the Adage plugin's hooks while execution is on. Needs the adage and adage-exec binaries.",
       "version": "0.1.0",
       "repository": "https://github.com/stevenvaughanbooth/adage",
       "homepage": "https://github.com/stevenvaughanbooth/adage"

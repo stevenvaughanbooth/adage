@@ -21,6 +21,12 @@ fn slots(r: &Route) -> String {
             let from = match &s.source {
                 SlotSource::Prompt { span } => format!("prompt {span:?}").to_lowercase(),
                 SlotSource::ResultField { field } => format!("result field {field}"),
+                SlotSource::PromptValue { vtype, .. } => format!("prompt value of type {}", vtype.id),
+                SlotSource::OutputValue { field: Some(f), vtype } => {
+                    format!("output field {f} of type {}", vtype.id)
+                }
+                SlotSource::OutputValue { field: None, vtype } => format!("output value of type {}", vtype.id),
+                SlotSource::EditSegment { glob, depth } => format!("segment {depth} of the edited {glob}"),
             };
             let contract = match &s.contract {
                 Contract::Pattern { regex } => regex.clone(),

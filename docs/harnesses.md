@@ -38,7 +38,7 @@ Design context: Design Spec §13.1 and decisions O8 and O14; Architecture §4.2,
 
 Unchanged by this slice; recorded for comparison. Hooks, payloads, and `additionalContext` are
 documented at <https://code.claude.com/docs/en/hooks>. Adage's adapter is
-`crates/adage-cli/src/harness/claude.rs`; its output is pinned byte for byte by
+`crates/adage-hook/src/harness/claude.rs`; its output is pinned byte for byte by
 `crates/adage-cli/tests/golden/claude-code.txt`.
 
 ## OpenCode
@@ -76,7 +76,7 @@ documented at <https://code.claude.com/docs/en/hooks>. Adage's adapter is
 
 ### What Adage does
 
-**Adapter** — `adage hook opencode <event>` (`crates/adage-cli/src/harness/opencode.rs`) reads a
+**Adapter** — `adage hook opencode <event>` (`crates/adage-hook/src/harness/opencode.rs`) reads a
 small JSON payload that Adage's own plugin builds; the table of events and fields is in that file.
 The response is `{"context": text}` or `{"continue": reason}`.
 
@@ -171,7 +171,7 @@ the plugin with the binary's absolute path embedded, to `.opencode/plugins/adage
 ### What Adage does
 
 Codex's hook contract mirrors Claude Code's, so the adapter
-(`crates/adage-cli/src/harness/codex.rs`) is Claude Code's with three differences:
+(`crates/adage-hook/src/harness/codex.rs`) is Claude Code's with three differences:
 
 - `apply_patch` is split into one `Edit`/`Write` call per file named in the patch, so finish-line
   routes trigger on Codex edits (`adage_core::tools::from_codex`, `patch_files`).
@@ -258,7 +258,7 @@ payloads it records against `adage_sim::codex::turn_hooks`; confirm a Stop `bloc
 ## Normalised events
 
 All three adapters translate into `adage_runtime::Event`; the decision core
-(`crates/adage-cli/src/hook.rs`) never sees a native payload.
+(`crates/adage-hook/src/lib.rs`) never sees a native payload.
 
 | Normalised | Claude Code | OpenCode (plugin → adage) | Codex |
 | --- | --- | --- | --- |

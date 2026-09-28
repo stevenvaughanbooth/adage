@@ -87,4 +87,22 @@ fi
 run "" "" "$BASE"
 check "no args: exits 0 silently" sh -c "[ '$code' = 0 ] && [ ! -s '$W/out' ]"
 
+# 6. Execution on or off: exactly one of the two plugins serves (Track C D2).
+XS="$REPO/plugin/claude-code-exec/scripts/session-start"
+XR="$REPO/plugin/claude-code-exec"
+runx() { set +e; echo "$PAYLOAD" | PATH="$2" "$XS" "$XR" "$1" >"$W/out" 2>"$W/err"; code=$?; set -e; }
+runx "$W/xdata1" "$W/pathbin:$BASE"
+check "exec off: exec plugin exits 0 silently" sh -c "[ '$code' = 0 ] && [ ! -s '$W/out' ]"
+check "exec off: exec plugin is quiet" [ "$(target_of "$W/xdata1/bin/adage-exec")" = "$XR/scripts/quiet" ]
+mkdir -p "$ADAGE_HOME/exec"; echo '{}' >"$ADAGE_HOME/exec/enabled"
+run "$R3" "$W/data6" "$W/pathbin:$BASE"
+check "exec on: adage plugin exits 0 silently" sh -c "[ '$code' = 0 ] && [ ! -s '$W/out' ]"
+check "exec on: adage plugin is quiet" [ "$(target_of "$W/data6/bin/adage")" = "$R3/scripts/quiet" ]
+mkdir -p "$W/xpath"; ln -s "$BIN" "$W/xpath/adage"
+if [ -x "$(dirname "$BIN")/adage-exec" ]; then ln -s "$(dirname "$BIN")/adage-exec" "$W/xpath/adage-exec"; fi
+runx "$W/xdata2" "$W/xpath:$BASE"
+check "exec on: exec plugin exits 0" [ "$code" = 0 ]
+check "exec on: exec plugin serves" sh -c "readlink '$W/xdata2/bin/adage-exec' | grep -q '/adage'"
+rm -f "$ADAGE_HOME/exec/enabled"
+
 [ "$fails" = 0 ] && echo "session-start ok" || { echo "$fails failure(s)"; exit 1; }

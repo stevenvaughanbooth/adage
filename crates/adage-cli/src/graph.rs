@@ -99,7 +99,123 @@ fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
     }
 }
 
+/// `adage graph --learned --dump <repo> [--transcripts <file>...] [--claude-projects <dir>] [--json]`:
+/// the graph engine's session facts for one repository (Track G G0), as counts: events, prompts,
+/// acts, artifacts, edges by kind, token occurrences, embeddings, truncations, and the value slots
+/// learned from them. Sessions are read as `adage learn` reads them (Claude Code history by
+/// default); facts go through the facts cache (`$ADAGE_HOME/cache/facts`). Read-only apart from
+/// that cache.
+fn dump_learned(args: &[String], paths: &Paths) -> Result<()> {
+    let at = args.iter().position(|a| a == "--dump").unwrap_or(0);
+    let repo = args.get(at + 1).filter(|r| !r.starts_with("--")).cloned();
+    let Some(repo) = repo else {
+        anyhow::bail!("usage: adage graph --learned --dump <repo> [--transcripts <file>...] [--json]")
+    };
+    let mut files: Vec<PathBuf> = Vec::new();
+    if let Some(i) = args.iter().position(|a| a == "--transcripts") {
+        files.extend(args[i + 1..].iter().take_while(|a| !a.starts_with("--")).map(PathBuf::from));
+    } else {
+        let dir = crate::flag(args, "--claude-projects")
+            .map(PathBuf::from)
+            .or_else(|| adage_store::home_dir().map(|h| h.join(".claude").join("projects")));
+        if let Some(d) = dir {
+            files.extend(adage_learn::import::discover(&d));
+        }
+    }
+    let table = CommandTable::load();
+    let mut sessions: Vec<adage_learn::import::Session> = files
+        .iter()
+        .filter_map(|p| adage_learn::read_session(p, &table, None))
+        .filter(|s| s.repo == repo && !s.steps.is_empty())
+        .collect();
+    sessions.sort_by(|a, b| a.id.cmp(&b.id));
+    let refs: Vec<&adage_learn::import::Session> = sessions.iter().collect();
+    let model = adage_intent::model::StaticModel::load(&adage_intent::model::dir_in(&paths.models())).ok();
+    let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).min(8);
+    let facts_dir = paths.cache().join("facts");
+    let (facts, hits, misses) = adage_learn::graph::compute_facts(&refs, model.as_ref(), Some(&facts_dir), threads);
+    let stats = adage_graph::facts::Stats::of(&facts);
+    let inputs: Vec<adage_graph::input::Session> = refs.iter().map(|s| adage_learn::bridge::to_input(s)).collect();
+    let learned = adage_graph::learn(&inputs, &adage_graph::Params { threads, ..Default::default() });
+    let slots: Vec<Value> = learned
+        .slots
+        .iter()
+        .map(|s| {
+            let contract = match &s.contract {
+                adage_graph::Contract::Pattern(i) => i.vtype.regex.clone(),
+                adage_graph::Contract::RepoPath => "repo_path".into(),
+                adage_graph::Contract::None(r) => format!("none: {r:?}"),
+            };
+            json!({ "sink": s.slot.sink.name(), "sessions": s.slot.sessions, "distinct": s.slot.distinct,
+                    "flow_rate": s.slot.flow_rate, "sources": s.slot.sources, "contract": contract })
+        })
+        .collect();
+    // Every sink that saw a flow, with the value slot test's numbers, for the ones that failed it.
+    let all = adage_graph::flow::fold(&adage_graph::flow::observe_all(&inputs, threads), &Default::default());
+    let rejected: Vec<Value> = all
+        .iter()
+        .filter(|s| !s.is_slot)
+        .map(|s| {
+            json!({ "sink": s.sink.name(), "sessions": s.sessions, "distinct": s.distinct,
+                    "flow_rate": s.flow_rate, "top_share": s.top_share, "sources": s.sources })
+        })
+        .collect();
+    let out = json!({
+        "repo": repo, "sessions": sessions.len(), "model": model.as_ref().map(|m| m.id.clone()),
+        "facts": stats, "cache": { "dir": facts_dir, "hits": hits, "misses": misses },
+        "sinks": learned.sinks, "slots": slots, "not_slots": rejected,
+    });
+    if args.iter().any(|a| a == "--json") {
+        println!("{}", serde_json::to_string_pretty(&out)?);
+        return Ok(());
+    }
+    println!(
+        "adage graph --learned: {repo}: {} sessions (facts cache: {hits} hits, {misses} computed)",
+        sessions.len()
+    );
+    println!(
+        "  events {} (prompts {}, acts {}, failed {}), max per session {}",
+        stats.events, stats.prompts, stats.acts, stats.failed_acts, stats.max_events
+    );
+    println!(
+        "  artifacts {} ({} distinct), distinct act keys {}, observations {}, failures {}",
+        stats.arts, stats.distinct_arts, stats.distinct_act_keys, stats.obs, stats.fails
+    );
+    let edges: Vec<String> = stats.edges.iter().map(|(k, v)| format!("{k} {v}")).collect();
+    println!("  edges: {}", if edges.is_empty() { "none".into() } else { edges.join(", ") });
+    println!(
+        "  token occurrences {}, embeddings {} (model: {}), truncated sessions {}",
+        stats.tokens,
+        stats.embeddings,
+        model.as_ref().map(|m| m.id.as_str()).unwrap_or("none; prompts not embedded"),
+        stats.truncated_sessions
+    );
+    println!("  value flow: {} sinks, {} value slots", learned.sinks, learned.slots.len());
+    for s in &slots {
+        println!(
+            "    {}  {}  ({} sessions)",
+            s["sink"].as_str().unwrap_or(""),
+            s["contract"].as_str().unwrap_or(""),
+            s["sessions"]
+        );
+    }
+    for s in &rejected {
+        println!(
+            "    not a slot: {}  ({} sessions, {} distinct, flow rate {:.2}, top share {:.2})",
+            s["sink"].as_str().unwrap_or(""),
+            s["sessions"],
+            s["distinct"],
+            s["flow_rate"].as_f64().unwrap_or(0.0),
+            s["top_share"].as_f64().unwrap_or(0.0)
+        );
+    }
+    Ok(())
+}
+
 pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
+    if args.iter().any(|a| a == "--learned") && args.iter().any(|a| a == "--dump") {
+        return dump_learned(args, paths);
+    }
     let max_events: usize = crate::flag(args, "--events").and_then(|n| n.parse().ok()).unwrap_or(80).min(1000);
     let out = build(paths, max_events)?;
     if args.iter().any(|a| a == "--json") {

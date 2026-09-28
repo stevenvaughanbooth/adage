@@ -81,7 +81,7 @@ pub fn slot_refs(command: &str) -> Vec<String> {
     re.captures_iter(command).map(|c| c[1].to_string()).collect()
 }
 
-fn safe_id(id: &str) -> bool {
+pub fn safe_id(id: &str) -> bool {
     let b = id.as_bytes();
     !b.is_empty()
         && b.len() <= 64
@@ -89,7 +89,7 @@ fn safe_id(id: &str) -> bool {
         && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
 }
 
-fn safe_name(n: &str) -> bool {
+pub fn safe_name(n: &str) -> bool {
     n.len() <= 128
         && n.split('/').count() <= 2
         && n.split('/').all(|p| {
@@ -102,7 +102,7 @@ fn safe_name(n: &str) -> bool {
 /// Directed commands are plain argv: no shell operators, substitutions, redirections, or quoting,
 /// and no path outside the repository (absolute, or with a `..` segment), in an argument or in a
 /// flag's value.
-fn safe_command(c: &str) -> bool {
+pub fn safe_command(c: &str) -> bool {
     let inside = |part: &str| !part.starts_with('/') && !part.split('/').any(|seg| seg == "..");
     // Words separated by single spaces: a blank or padded command renders as nothing.
     !c.is_empty()
@@ -157,7 +157,7 @@ pub fn classify(command: &str, table: &CommandTable) -> Effect {
 }
 
 /// A contract must reject values that could carry shell syntax, whitespace, traversal, or flags.
-fn contract_is_strict(regex: &str) -> bool {
+pub fn contract_is_strict(regex: &str) -> bool {
     let Ok(re) = Regex::new(regex) else { return false };
     let probes = ["a b", "a;b", "a|b", "$(x)", "`x`", "a&b", "a\nb", "../x", "-x", "a>b", "a<b", "a'b", "a\"b", ""];
     regex.starts_with('^') && regex.ends_with('$') && !probes.iter().any(|p| re.is_match(p))
@@ -197,6 +197,7 @@ pub fn validate(t: &Track) -> Result<()> {
                     bail!("{}: slot {} contract {:?} is not anchored and strict", ctx(), s.name, regex);
                 }
             }
+            validate_source(s).map_err(|e| anyhow::anyhow!("{}: slot {}: {e}", ctx(), s.name))?;
         }
         let declared = |n: &str| r.slots.iter().any(|s| s.name == n);
         match &r.step {
@@ -209,10 +210,15 @@ pub fn validate(t: &Track) -> Result<()> {
                         bail!("{}: command references undeclared slot {{{n}}}", ctx());
                     }
                 }
-                // Only a prompt binds a run step's slots; any other trigger would render the
-                // placeholder itself (`make {item}`) as the directed command.
-                if !slot_refs(command).is_empty() && !matches!(r.trigger, Trigger::Prompt { .. }) {
-                    bail!("{}: command {:?} has slots its trigger cannot bind", ctx(), command);
+                // Every slot a run step names must be bound by its trigger's event (Track G §4.3):
+                // a prompt binds prompt spans and prompt values, a command its output values, an
+                // edit its path's segments. Anything else would render the placeholder itself
+                // (`make {item}`) as the directed command.
+                for n in slot_refs(command) {
+                    let Some(s) = r.slots.iter().find(|s| s.name == n) else { continue };
+                    if !trigger_binds(&r.trigger, &s.source) {
+                        bail!("{}: command {:?} has slots its trigger cannot bind", ctx(), command);
+                    }
                 }
                 // Never trust a declared effect: classify the command ourselves.
                 let actual = classify(command, &table);
@@ -306,6 +312,121 @@ pub fn validate(t: &Track) -> Result<()> {
         bail!("track {} has {intents} intent routes; at most {MAX_INTENT_ROUTES} are allowed", t.manifest.track.name);
     }
     Ok(())
+}
+
+/// Whether a trigger's event supplies what a slot source binds from.
+pub fn trigger_binds(t: &Trigger, s: &SlotSource) -> bool {
+    matches!(
+        (t, s),
+        (Trigger::Prompt { .. }, SlotSource::Prompt { .. } | SlotSource::PromptValue { .. })
+            | (Trigger::AfterCommand { .. }, SlotSource::OutputValue { .. })
+            | (Trigger::AfterEdit { .. }, SlotSource::EditSegment { .. })
+    )
+}
+
+/// Strings a learned type must accept: for each branch, its shortest and its longest member
+/// (first literal of a set, first character of a class).
+fn type_examples(runs: &adage_core::vtype::Runs) -> Vec<String> {
+    use adage_core::vtype::Run;
+    let fill = |class: adage_core::vtype::Class, n: u8| {
+        let c = ['A', 'a', '0', '0', 'A'][class as usize];
+        std::iter::repeat_n(c, n as usize).collect::<String>()
+    };
+    let mut out = Vec::new();
+    for b in &runs.branches {
+        for long in [false, true] {
+            let mut s = String::new();
+            for r in b {
+                match r {
+                    Run::Lit { text } => s.push_str(text),
+                    Run::Set { texts } => s.push_str(texts.first().map(String::as_str).unwrap_or("")),
+                    Run::Class { class, lo, hi } => s.push_str(&fill(*class, if long { *hi } else { *lo })),
+                    Run::Star { sep, class, lo, hi, min, max } => {
+                        for _ in 0..(if long { *max } else { *min }) {
+                            s.push(*sep);
+                            s.push_str(&fill(*class, if long { *hi } else { *lo }));
+                        }
+                    }
+                }
+            }
+            out.push(s);
+        }
+    }
+    out
+}
+
+/// A learned value type is only as good as the agreement between what the hook runs (the
+/// matcher over `runs`) and what the contract says (the regex): they must be the same language.
+fn validate_vtype(t: &ValueType, contract: &Contract) -> Result<()> {
+    use adage_core::vtype;
+    let hex = |s: &str| s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c));
+    if !(t.id.len() == 19 && t.id.starts_with("vt-") && hex(&t.id[3..])) {
+        bail!("value type id {:?} is not allowed", t.id);
+    }
+    if !(t.samples_hash.is_empty() || (t.samples_hash.len() == 64 && hex(&t.samples_hash))) {
+        bail!("value type samples_hash is not a SHA-256");
+    }
+    let branches = t.runs.branches.len();
+    if branches == 0 || branches > vtype::MAX_BRANCHES || t.runs.branches.iter().any(|b| b.is_empty() || b.len() > 64) {
+        bail!("value type {} has {branches} branches; 1..={} are allowed", t.id, vtype::MAX_BRANCHES);
+    }
+    if vtype::max_len(&t.runs) > vtype::MAX_LEN {
+        bail!("value type {} accepts values longer than {} bytes", t.id, vtype::MAX_LEN);
+    }
+    if vtype::to_regex(&t.runs) != t.regex {
+        bail!("value type {}: runs and regex {:?} disagree", t.id, t.regex);
+    }
+    if *contract != (Contract::Pattern { regex: t.regex.clone() }) {
+        bail!("value type {}: the slot's contract is not its regex", t.id);
+    }
+    let re = Regex::new(&t.regex).map_err(|e| anyhow::anyhow!("value type {}: {e}", t.id))?;
+    for ex in type_examples(&t.runs) {
+        if !vtype::matches(&t.runs, &ex) || !re.is_match(&ex) {
+            bail!("value type {}: runs and regex disagree on {ex:?}", t.id);
+        }
+    }
+    // The matcher must refuse what a strict contract refuses (the regex already does).
+    let probes = ["a b", "a;b", "a|b", "$(x)", "`x`", "a&b", "a\nb", "-x", "a>b", "a<b", "a'b", "a\"b", ""];
+    if let Some(p) = probes.iter().find(|p| vtype::matches(&t.runs, p)) {
+        bail!("value type {} accepts {p:?}", t.id);
+    }
+    Ok(())
+}
+
+/// Checks on a slot's source beyond its contract: a learned value type agrees with its contract,
+/// and an edit segment names a safe glob.
+fn validate_source(s: &Slot) -> Result<()> {
+    match &s.source {
+        SlotSource::PromptValue { vtype, mentions } => {
+            let affix =
+                |a: &str| a.len() <= 16 && a.bytes().all(|c| c.is_ascii_alphanumeric() || b"-_./#:@+=".contains(&c));
+            if mentions.len() > 4 || !mentions.iter().all(|m| affix(&m.prefix) && affix(&m.suffix)) {
+                bail!("prompt mentions {mentions:?} are not allowed");
+            }
+            validate_vtype(vtype, &s.contract)
+        }
+        SlotSource::OutputValue { field, vtype } => {
+            if let Some(f) = field {
+                let ok = !f.is_empty()
+                    && f.len() <= 128
+                    && f.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.-[]".contains(&c));
+                if !ok {
+                    bail!("output field {f:?} is not allowed");
+                }
+            }
+            validate_vtype(vtype, &s.contract)
+        }
+        SlotSource::EditSegment { glob, depth } => {
+            if !safe_glob(glob) || *depth > 32 {
+                bail!("edit segment {glob:?} at depth {depth} is not allowed");
+            }
+            if !matches!(s.contract, Contract::Pattern { .. }) {
+                bail!("an edit segment needs a pattern contract");
+            }
+            Ok(())
+        }
+        SlotSource::Prompt { .. } | SlotSource::ResultField { .. } => Ok(()),
+    }
 }
 
 /// Where a route came from: every field is rendered into the directive's wrapper, so each is a

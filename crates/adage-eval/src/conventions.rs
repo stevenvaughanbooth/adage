@@ -297,6 +297,18 @@ fn matches(route: &Route, c: &Convention, cx: &Ctx) -> std::result::Result<(), S
                 if let Some(s) = c.counter_samples.iter().find(|s| re.is_match(s)) {
                     return Err(format!("contract {regex:?} accepts counter-sample {s:?}"));
                 }
+                // A learned value type binds with its matcher, not the regex (Track G §4.3): the
+                // matcher must say the same on the convention's ids.
+                let vtype = route.slots.iter().find(|s| s.name == name).and_then(|s| s.source.vtype());
+                if let Some(t) = vtype {
+                    let ok = |v: &str| adage_core::vtype::matches(&t.runs, v);
+                    if let Some(s) = c.samples.iter().find(|s| !ok(s)) {
+                        return Err(format!("value type {} rejects sample {s:?}", t.id));
+                    }
+                    if let Some(s) = c.counter_samples.iter().find(|s| ok(s)) {
+                        return Err(format!("value type {} accepts counter-sample {s:?}", t.id));
+                    }
+                }
             }
             Ok(())
         }

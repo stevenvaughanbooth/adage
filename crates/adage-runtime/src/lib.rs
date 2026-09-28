@@ -325,7 +325,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 if !ok(st, &out, ir, reds_left) {
                     continue;
                 }
-                if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, ctx) {
+                if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, text, ctx) {
                     st.pending.push(Pending {
                         route: ir.route.id.clone(),
                         expect_key: key,
@@ -340,7 +340,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             if let Some((family, ir)) = match_intent(ctx, &routes, text) {
                 st.intent = Some(family);
                 if ok(st, &out, ir, reds_left) {
-                    if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, ctx) {
+                    if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, text, ctx) {
                         st.pending.push(Pending {
                             route: ir.route.id.clone(),
                             expect_key: key,
@@ -416,12 +416,16 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                     if !hit {
                                         continue;
                                     }
+                                    // Slots bound from the edited path's segments (none for a
+                                    // fixed command); a slot that cannot bind drops the route.
+                                    let Some(bound) = bind_edit_slots(&ir.route, &rel, ctx) else { continue };
+                                    let command = &render::bind(command, &bound);
                                     // An instinct's finish line is advice, never an obligation: no
                                     // Stop request can come of it. Its directive is judged like
                                     // any other (followed, derailed, or followed and failed).
                                     if ir.route.is_instinct() {
                                         if emit_ok(st, &out, &ir.route.id) {
-                                            if let Some(t) = render::route_text(&ir.route, &[]) {
+                                            if let Some(t) = render::route_text(&ir.route, &bound) {
                                                 st.pending.push(pending_for(ir, command, ctx));
                                                 out.push(directive(ir, t));
                                             }
@@ -439,7 +443,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                     // Only enforce a rule the agent was actually told about.
                                     let announced = st.emitted.iter().any(|e| e == &ir.route.id);
                                     let emitted_now = !announced && emit_ok(st, &out, &ir.route.id) && {
-                                        match render::route_text(&ir.route, &[]) {
+                                        match render::route_text(&ir.route, &bound) {
                                             Some(t) => {
                                                 out.push(directive(ir, t));
                                                 true
@@ -468,6 +472,21 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                 if meets(command, &key) && emit_ok(st, &out, &ir.route.id) {
                                     let text = match &ir.route.step {
                                         Step::Advise { .. } => render::route_text(&ir.route, &[]),
+                                        // A command with a slot bound from this command's output.
+                                        Step::Run { .. } if binds_output(&ir.route) => {
+                                            match bind_output_route(&ir.route, &call.output, ctx) {
+                                                Some((t, key, head)) => {
+                                                    st.pending.push(Pending {
+                                                        route: ir.route.id.clone(),
+                                                        expect_key: key,
+                                                        expect_head: head,
+                                                        batches_left: ctx.params.follow_window,
+                                                    });
+                                                    Some(t)
+                                                }
+                                                None => None,
+                                            }
+                                        }
                                         _ => bind_result_route(&ir.route, &call.output, ctx.root),
                                     };
                                     if let Some(t) = text {
@@ -653,11 +672,24 @@ fn plain_token(v: &str) -> bool {
 }
 
 fn contract_ok(c: &Contract, v: &str, root: &Path) -> bool {
+    contract_ok_typed(c, None, v, root)
+}
+
+/// [`contract_ok`], where a slot with a learned value type is checked by the O(len) matcher
+/// instead of a compiled regex: only when the type's runs write exactly the contract's regex
+/// (`io::validate` refuses a track where they do not), so the two are the same language and no
+/// regex is compiled in the hook (Track G §4.3, §7.4).
+fn contract_ok_typed(c: &Contract, t: Option<&adage_tracks::ValueType>, v: &str, root: &Path) -> bool {
     if !plain_token(v) {
         return false;
     }
     match c {
-        Contract::Pattern { regex } => Regex::new(regex).map(|r| r.is_match(v)).unwrap_or(false),
+        Contract::Pattern { regex } => match t {
+            Some(t) if t.regex == *regex && adage_core::vtype::to_regex(&t.runs) == *regex => {
+                adage_core::vtype::matches(&t.runs, v)
+            }
+            _ => Regex::new(regex).map(|r| r.is_match(v)).unwrap_or(false),
+        },
         Contract::RepoPath => {
             if !repo::is_safe_relative(v) {
                 return false;
@@ -671,19 +703,116 @@ fn contract_ok(c: &Contract, v: &str, root: &Path) -> bool {
     }
 }
 
-/// Bind a prompt route's slots from prompt spans; every slot must validate.
-fn bind_prompt_route(r: &Route, spans: &[spans::Span], ctx: &Ctx) -> Option<(String, String, String)> {
+/// Bind a prompt route's slots from the prompt: a span slot from its typed spans, a learned
+/// value type's slot from the first prompt token the type accepts (`adage_core::tokens`, at most
+/// `PROMPT_TOKENS`, sub-tokens included). Every slot must validate ([`contract_ok_typed`], whose
+/// `plain_token` check is the final gate).
+fn bind_prompt_route(r: &Route, spans: &[spans::Span], text: &str, ctx: &Ctx) -> Option<(String, String, String)> {
+    let Step::Run { command } = &r.step else { return None };
+    let mut bound: Vec<(String, String)> = Vec::new();
+    let mut toks: Option<Vec<(adage_core::tokens::Token, adage_core::tokens::Mention)>> = None;
+    for s in &r.slots {
+        let v = match &s.source {
+            SlotSource::Prompt { span } => {
+                spans.iter().find(|x| x.kind == *span && contract_ok(&s.contract, &x.value, ctx.root))?.value.clone()
+            }
+            SlotSource::PromptValue { vtype, mentions } => {
+                let toks = toks
+                    .get_or_insert_with(|| adage_core::tokens::with_mentions(text, adage_core::tokens::PROMPT_TOKENS));
+                toks.iter()
+                    .find(|(t, m)| {
+                        (mentions.is_empty() || mentions.contains(m))
+                            && adage_core::vtype::matches(&vtype.runs, &t.text)
+                            && contract_ok_typed(&s.contract, Some(vtype), &t.text, ctx.root)
+                    })?
+                    .0
+                    .text
+                    .clone()
+            }
+            _ => return None,
+        };
+        bound.push((s.name.clone(), v));
+    }
+    bound_run(r, command, &bound, ctx)
+}
+
+/// A bound command: the directive's text, the key a follow is judged on, and its head.
+fn bound_run(r: &Route, command: &str, bound: &[(String, String)], ctx: &Ctx) -> Option<(String, String, String)> {
+    let text = render::route_text(r, bound)?;
+    let rendered = render::bind(command, bound);
+    let argv: Vec<String> = rendered.split_whitespace().map(str::to_string).collect();
+    Some((text, command_key(&rendered, ctx.table), keys::command_head(&argv)))
+}
+
+/// Whether a route's slots are all bound from its triggering command's output (and it has one).
+fn binds_output(r: &Route) -> bool {
+    !r.slots.is_empty() && r.slots.iter().all(|s| matches!(s.source, SlotSource::OutputValue { .. }))
+}
+
+/// The candidate values of an output: the JSON leaves at a dotted `field` (through arrays), or
+/// the tokens of the text (`adage_core::tokens`), bounded.
+fn output_values(output: &str, field: Option<&str>) -> Vec<String> {
+    let out = adage_core::tokens::bounded(output, 64 * 1024);
+    let Some(field) = field else {
+        return adage_core::tokens::tokens(out, 512).into_iter().map(|t| t.text).collect();
+    };
+    let Some(json) = extract_json(out) else { return Vec::new() };
+    let mut cur = vec![&json];
+    for part in field.split('.') {
+        let (name, each) = match part.strip_suffix("[]") {
+            Some(n) => (n, true),
+            None => (part, false),
+        };
+        let mut next = Vec::new();
+        for v in cur {
+            let Some(x) = (if name.is_empty() { Some(v) } else { v.get(name) }) else { continue };
+            match (each, x.as_array()) {
+                (true, Some(a)) => next.extend(a.iter()),
+                _ => next.push(x),
+            }
+        }
+        cur = next;
+    }
+    cur.into_iter()
+        .take(512)
+        .filter_map(|v| match v {
+            Value::String(s) => Some(s.clone()),
+            Value::Number(n) => Some(n.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Bind a run step's slots from the triggering command's output; every slot must validate.
+fn bind_output_route(r: &Route, output: &str, ctx: &Ctx) -> Option<(String, String, String)> {
     let Step::Run { command } = &r.step else { return None };
     let mut bound: Vec<(String, String)> = Vec::new();
     for s in &r.slots {
-        let SlotSource::Prompt { span } = &s.source else { return None };
-        let v = spans.iter().find(|x| x.kind == *span && contract_ok(&s.contract, &x.value, ctx.root))?;
-        bound.push((s.name.clone(), v.value.clone()));
+        let SlotSource::OutputValue { field, vtype } = &s.source else { return None };
+        let v = output_values(output, field.as_deref()).into_iter().find(|v| {
+            adage_core::vtype::matches(&vtype.runs, v) && contract_ok_typed(&s.contract, Some(vtype), v, ctx.root)
+        })?;
+        bound.push((s.name.clone(), v));
     }
-    let text = render::route_text(r, &bound)?;
-    let rendered = render::bind(command, &bound);
-    let argv: Vec<String> = rendered.split_whitespace().map(str::to_string).collect();
-    Some((text, command_key(&rendered, ctx.table), keys::command_head(&argv)))
+    bound_run(r, command, &bound, ctx)
+}
+
+/// Bind a run step's slots from the edited path: segment `depth` of `rel`, which must match the
+/// slot's glob and validate. `Some(empty)` for a route with no slots.
+fn bind_edit_slots(r: &Route, rel: &str, ctx: &Ctx) -> Option<Vec<(String, String)>> {
+    let mut bound = Vec::new();
+    for s in &r.slots {
+        let SlotSource::EditSegment { glob, depth } = &s.source else { return None };
+        if !glob::Pattern::new(glob).is_ok_and(|g| g.matches(rel)) {
+            return None;
+        }
+        let seg = rel.split('/').filter(|x| !x.is_empty()).nth(*depth as usize)?;
+        if !contract_ok(&s.contract, seg, ctx.root) {
+            return None;
+        }
+        bound.push((s.name.clone(), seg.to_string()));
+    }
+    Some(bound)
 }
 
 /// Bind a route's result-field slot from the triggering command's JSON output.

@@ -373,7 +373,7 @@ fn the_dry_run_plans_exactly_what_learn_writes_and_writes_nothing() {
     let sessions: Vec<_> =
         files.iter().filter_map(|p| adage_learn::read_session(p, &table, Some("acme-billing"))).collect();
     assert_eq!(sessions[0].harness, "claude-code");
-    assert_eq!(sessions[0].prompts, 1);
+    assert_eq!(sessions[0].prompt_count(), 1);
     let (rep, planned) = adage_learn::plan(sessions, None, &home.join("tracks"), &LearnConfig::demo()).unwrap();
     assert_eq!(rep.sessions_used, 6);
     assert!(!home.exists(), "a plan writes nothing");

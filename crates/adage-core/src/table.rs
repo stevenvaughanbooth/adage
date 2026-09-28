@@ -31,6 +31,8 @@ struct RawCommand {
     #[serde(default)]
     pattern_effects: Vec<(String, String)>,
     #[serde(default)]
+    inert: bool,
+    #[serde(default)]
     subcommands: Vec<RawCommand>,
 }
 
@@ -41,6 +43,9 @@ pub struct CommandSpec {
     pub regenerate_flags: Vec<String>,
     pub publish_flags: Vec<String>,
     pub pattern_effects: Vec<(Regex, Effect)>,
+    /// True only when repository files cannot make this program run code (Track C §4.2).
+    /// Gates automatic approval in `adage-exec`; never inherited by subcommands or parents.
+    pub inert: bool,
     pub subcommands: HashMap<String, CommandSpec>,
 }
 
@@ -67,6 +72,7 @@ fn build_spec(raw: RawCommand) -> CommandSpec {
         regenerate_flags: raw.regenerate_flags,
         publish_flags: raw.publish_flags,
         pattern_effects,
+        inert: raw.inert,
         subcommands,
     }
 }
@@ -81,5 +87,57 @@ impl CommandTable {
 
     pub fn get(&self, name: &str) -> Option<&CommandSpec> {
         self.commands.get(name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn inert_names(table: &CommandTable) -> Vec<String> {
+        let mut out = Vec::new();
+        for (name, spec) in &table.commands {
+            if spec.inert {
+                out.push(name.clone());
+            }
+            for (sub, s) in &spec.subcommands {
+                if s.inert {
+                    out.push(format!("{name} {sub}"));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    #[test]
+    fn inert_is_exactly_the_reviewed_set() {
+        // Track C §4.2: widening this set widens what can be approved automatically, so it is
+        // pinned here and any change must be a deliberate edit to this list.
+        let table = CommandTable::load();
+        assert_eq!(
+            inert_names(&table),
+            [
+                "cat",
+                "git diff",
+                "git log",
+                "git rev-parse",
+                "git show",
+                "git status",
+                "grep",
+                "head",
+                "jq",
+                "ls",
+                "rg",
+                "tail",
+                "wc"
+            ]
+        );
+        assert!(!table.get("git").unwrap().inert, "git itself is never inert");
+        for never in ["make", "npm", "cargo", "pytest", "python", "python3", "node", "sh", "bash"] {
+            if let Some(spec) = table.get(never) {
+                assert!(!spec.inert, "{never} must never be inert");
+            }
+        }
     }
 }

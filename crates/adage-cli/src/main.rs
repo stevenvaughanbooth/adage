@@ -17,12 +17,18 @@
 //! adage report [--json]              directives emitted, followed, and derailed, from spools
 //! adage graph [--json] [--events <n>] situations → routes → steps → agent responses, with live counts
 //! adage graph --serve [--port <n>]   serve the signal box at http://127.0.0.1:<n>/ (default 8765)
+//! adage graph --learned --dump <repo> [--transcripts <file>...] [--json]   the graph engine's session facts
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
 //!                                    print (default) or write a harness's hook registration
-//! adage share <track> --out <dir> [--key <path>]   redaction-check, copy, and sign a track
-//! adage add <dir> [--trust]          verify a shared track and install it at probation
+//! adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format pack|v1]
+//!                                    redaction-check, build and sign a pack (namespace adage-pack)
+//! adage add <dir> [--trust]          verify a pack (or a v1 track, upgraded in place), install it,
+//!                                    and bind it to this repository at probation
 //! adage review [--json]              routes awaiting a person's decision, with evidence and directive text
+//! adage review allow-exec <track> <route> --level e1 [--raw] [--fields ..]   approve E1 prefetch (a person)
+//! adage review revoke-exec <track> <route>
+//! adage exec enable|disable|status   hooks call adage-exec (E1) or adage; grants per repository
 //! adage review <approve|reject|demote|promote|pin|dismiss> <track> <route> [--by <name>]
 //! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
 //! adage eval <dataset> [--split ..] [--json]  offline replay eval of what Adage would have said
@@ -38,24 +44,29 @@ mod autolearn;
 mod config;
 mod detect;
 mod doctor;
-mod failopen;
+mod exec;
+use adage_hook::failopen;
 mod graph;
-mod harness;
+use adage_hook::harness;
 mod hook;
 mod init;
 mod install;
 mod learnlog;
 mod models;
+mod packs;
 mod proposal;
 mod redact;
 mod reimport;
 mod review;
 mod serve;
 mod share;
+mod share_pack;
 mod survey;
 mod tty;
 mod ui;
 
+// Commands run on the hook's stack size (`adage_hook::STACK`).
+use adage_hook::on_big_stack;
 use adage_learn::{Inputs, LearnConfig};
 use adage_store::Paths;
 use adage_tracks::{io, Aspect};
@@ -67,32 +78,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("hook") {
         // Fail open, always: no panic, error, or timeout may block or disturb the agent.
-        let harness = args.get(1).cloned().unwrap_or_default();
-        let event = args.get(2).cloned().unwrap_or_default();
-        // Nothing may reach the harness but our JSON: silence panic messages entirely.
-        failopen::install_panic_hook();
-        let (h, e) = (harness.clone(), event.clone());
-        let out = match on_big_stack(move || std::panic::catch_unwind(|| hook::run(&h, &e))) {
-            Some(Ok(Ok(out))) => out,
-            Some(Ok(Err(f))) => {
-                failopen::record(&Paths::from_env().root, &harness, &event, &f);
-                None
-            }
-            Some(Err(_)) => {
-                failopen::record(&Paths::from_env().root, &harness, &event, &failopen::panic_failure());
-                None
-            }
-            None => {
-                let f = failopen::Failure::new("thread", "the hook thread could not start");
-                failopen::record(&Paths::from_env().root, &harness, &event, &f);
-                None
-            }
-        };
-        if let Some(o) = out {
-            use std::io::Write;
-            let _ = writeln!(std::io::stdout(), "{o}");
-        }
-        std::process::exit(0);
+        hook::main(args.get(1).cloned().unwrap_or_default(), args.get(2).cloned().unwrap_or_default());
     }
     match on_big_stack(move || run(&args)) {
         Some(Ok(())) => {}
@@ -102,17 +88,6 @@ fn main() {
         }
         None => std::process::exit(1),
     }
-}
-
-/// The stack every command runs on. Main-thread stacks differ by platform (8 MiB on Linux and
-/// macOS, 1 MiB on Windows); normalising hostile commands recurses to a bounded depth that fits
-/// easily in release builds, but should not depend on which platform's default it got.
-const STACK: usize = 8 << 20;
-
-/// Run `f` on a thread with [`STACK`] bytes of stack. `None` if the thread could not be started
-/// or `f` panicked.
-fn on_big_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> Option<T> {
-    std::thread::Builder::new().stack_size(STACK).spawn(f).ok()?.join().ok()
 }
 
 fn flag(args: &[String], name: &str) -> Option<String> {
@@ -132,7 +107,11 @@ fn run(args: &[String]) -> Result<()> {
         Some("report") => report(&paths, args.iter().any(|a| a == "--json")),
         Some("share") => share::share(&args[1..], &paths),
         Some("add") => add::add(&args[1..], &paths),
+        Some("review") if matches!(args.get(1).map(String::as_str), Some("allow-exec" | "revoke-exec")) => {
+            exec::review(&args[1], &args[2..], &paths)
+        }
         Some("review") => review::review(&args[1..], &paths),
+        Some("exec") => exec::exec(&args[1..], &paths),
         Some("graph") if args.iter().any(|a| a == "--serve") => serve::serve(&args[1..], &paths),
         Some("graph") => graph::graph(&args[1..], &paths),
         Some("eval") => adage_eval::cli::run(&args[1..]),
@@ -156,7 +135,7 @@ fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         _ => {
-            println!("usage: adage <init|survey|learn|status|report|graph|review|share|add|install|models|doctor|watch|ui|config|hooks-config|version|hook>");
+            println!("usage: adage <init|survey|learn|status|report|graph|review|exec|share|add|install|models|doctor|watch|ui|config|hooks-config|version|hook>");
             println!("       adage watch   live pane for a split terminal: health, hook activity, learning");
             println!("       adage ui      full-screen app: live feed, routes and review, health fixes, settings");
             Ok(())
@@ -165,7 +144,7 @@ fn run(args: &[String]) -> Result<()> {
 }
 
 /// `adage learn [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
-///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--json]`
+///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--engine <miners|shadow|graph>] [--json]`
 ///
 /// Thresholds: `--demo`, else `learn.thresholds` (`adage config`). Parses are cached under
 /// `$ADAGE_HOME/cache/sessions` unless `--no-cache` or `learn.parse_cache = false` (the result is
@@ -243,6 +222,13 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         autolearn::thresholds(settings.learn_thresholds)
     };
     let mut cfg = cfg;
+    // The learning engine (Track G): `miners` (the default), `shadow` or `graph`.
+    if let Some(e) = flag(args, "--engine") {
+        if !adage_tracks::params::ENGINES.contains(&e.as_str()) {
+            bail!("--engine must be one of {:?}", adage_tracks::params::ENGINES);
+        }
+        cfg.engine = e;
+    }
     // Instincts are bound after mining, per repository, unless turned off (config, or --no-instincts).
     if !args.iter().any(|a| a == "--no-instincts") {
         cfg.instincts = Some(autolearn::instinct_config(&settings, paths));

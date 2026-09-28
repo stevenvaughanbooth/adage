@@ -7,9 +7,18 @@
 //! Learning is a pure function of the *set* of sessions and the parameters: the same bytes
 //! whatever the input order or the thread count (`tests/determinism.rs`).
 //!
-//! Not wired into `adage learn`, the runtime or the track model yet (G1 integration).
+//! G0, the substrate: [`facts`] turns one session into a small typed event graph (events,
+//! value-flow and file edges, token occurrences) with node embeddings from [`embed`], cached by
+//! content in [`cache`].
+//!
+//! `adage learn` uses both when `LearnParams::engine` is `shadow` or `graph`
+//! (`adage-learn/src/graph.rs`): the lookup route's slot is a learned value type, and session
+//! facts are computed and cached.
 
+pub mod cache;
+pub mod embed;
 pub mod events;
+pub mod facts;
 pub mod flow;
 pub mod input;
 pub mod mine;

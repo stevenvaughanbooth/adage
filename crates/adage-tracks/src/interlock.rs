@@ -273,6 +273,7 @@ mod tests {
                 evidence: Evidence { support, ..Default::default() },
                 authored: false,
             },
+            exec: None,
         }
     }
 
