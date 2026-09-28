@@ -167,3 +167,29 @@ jobs:
         run: |
           claude plugin validate --strict plugin/claude-code
           claude plugin validate --strict .
+
+  design:
+    # The design tokens and the embedded web map are generated files: fail when either is stale.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: tokens are current and pass contrast
+        run: cargo xtask tokens --check
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/map/package.json
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/map/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: web/map
+      - run: pnpm typecheck
+        working-directory: web/map
+      - name: embedded map matches web/map
+        run: pnpm drift
+        working-directory: web/map

@@ -917,7 +917,7 @@ an attacker can influence), and **the agent itself**, which may be steered into 
 | **Share path** | No symlinks, a file allowlist, size caps, a redaction scan over the exact bytes, and re-validation of the copy before signing | `share.rs`, `redact.rs` |
 | **Harness configuration** | `install --write` writes only the documented location. It merges JSON, replacing only Adage's own entries, and refuses a file that is not a JSON object. It refuses to write through a symlinked path inside the repository, writes atomically, and replaces the OpenCode plugin only if it is Adage's | `install.rs` |
 | **Binary provenance** | The plugin shim links a bundled binary only if it matches `dist/SHA256SUMS`, and never downloads. The model's digests are compiled into the binary, and `models fetch` uses HTTPS only with size caps | `plugin/claude-code/scripts/session-start`, `adage-intent/src/model.rs` |
-| **Signal box** | Bound to 127.0.0.1, GET and HEAD only, read-only. Requests whose `Host` is not that address are refused (DNS rebinding). A strict CSP | `crates/adage-cli/src/serve.rs` |
+| **Map** | Bound to 127.0.0.1, GET and HEAD only, read-only. Requests whose `Host` is not that address are refused (DNS rebinding). A strict CSP | `crates/adage-cli/src/map/` |
 | **Data at rest** | Spools hold decisions, canonical keys and the directive text sent. No prompt text is stored. `survey` prints only short prompt snippets, with home paths and secret-looking strings scrubbed | `hook.rs`, `survey.rs`, `redact.rs` |
 | **Supply chain** | `cargo deny` in CI (one advisory ignored with a written reason), `--locked` builds, attestations, SBOMs, npm provenance, no install scripts | `deny.toml`, `dist-workspace.toml` |
 
@@ -1002,7 +1002,7 @@ Everything is local, and nothing leaves the machine.
 | **Spools** | One record per hook call: event, arm, index generation, delivered and would-have directives, stop requests, judgements, observed keys | `sessions/*.spool` |
 | **`adage report`** | Totals across spools: directives, would-have, followed, derailed, obligations met, stop requests | `crates/adage-cli/src/main.rs` |
 | **`adage graph`** | Situations → routes → steps → agent responses, with live counts **split by arm**. In holdout sessions, "followed" means the agent found the path unaided. JSON for tools | `crates/adage-cli/src/graph.rs` |
-| **Signal box** | `adage map` serves the live page (`assets/brain.html`) and `/graph.json` from the binary | `serve.rs` |
+| **Map** | `adage map` serves the web app (`web/map`, built into `assets/map`), `/api/v1/graph`, `/api/v1/events` (SSE) and `/api/v1/health` from the binary | `map/` |
 | **`adage review`** | Routes waiting for a person, including derail flags computed from spools | [§4.16](#416-review) |
 | **`adage status`** | Installed tracks, aspects, evidence, and whether the intent model is present | `main.rs` |
 | **`adage doctor`** | Pass/warn/fail with a fix for each: the binary; the data directory is writable; the index is present, parses, and its generation matches its routes; tracks validate; model checksums; each harness's hook registrations point at an existing adage binary; the plugin's staged binary; kill switches and experiment settings; total spool size (warns over 256 MiB); fail-open errors; `config.toml` problems; live learning: on or off, each repository's last automatic learn and its outcome, a learner holding its lock over 15 minutes, requests left waiting | `crates/adage-cli/src/doctor.rs` |

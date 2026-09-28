@@ -134,20 +134,23 @@ Code, add the plugin marketplace with `/plugin marketplace add stevenvaughanboot
 
 ```bash
 cargo build --release -p adage-cli
-target/release/adage init             # guided setup at a terminal: hooks, model, first learn, auto-learn
-target/release/adage watch            # run in a split pane: Adage's health, hook activity, and learning, live
-target/release/adage sense           # what your agents actually do, per repository (read-only)
-target/release/adage doctor           # check binary, data dir, index, tracks, model, hooks, kill switches
-target/release/adage map    # the signal box at http://127.0.0.1:8765 (read-only, loopback only)
+target/release/adage init      # guided setup: hooks, embedding model, first condition, auto-condition
+target/release/adage watch     # live pane for a split terminal: health, hook activity, conditioning
+target/release/adage ui        # the full terminal app: reflexes, map, health, settings
+target/release/adage map       # the live map of instincts and reflexes in your browser (read-only, loopback)
+target/release/adage sense     # what your agents actually do, per repository (read-only)
+target/release/adage doctor    # check binary, data dir, index, tracks, model, hooks, kill switches
 ```
 
-At a terminal, `init` is a wizard: it detects your harnesses and, one step at a time, asks before
-it registers hooks (showing the exact file and diff), fetches the embedding model, runs a first
-learn of the repository, and turns auto-learning on if it is off; it ends with the doctor's
-summary. Piped, inside an agent session, or with `--print`, it prints the same report as before and
-writes nothing unless you pass `--yes` (which only downloads the embedding model). `survey` reads the same history `learn` does and
-lists the routes `learn` would build as candidates, with prompts shown only as short redacted
-snippets. `doctor` exits non-zero only when a check fails.
+At a terminal, `init` is a guided setup that stays in your scrollback. It detects your harnesses
+and, one step at a time, asks before it registers hooks (showing the exact file and diff), fetches
+the embedding model, conditions from your agents' past traces, and turns auto-condition on if it is
+off. It ends with the doctor's findings and what to run next. Piped, inside an agent session, or
+with `--print`, it prints the same steps as text and writes nothing unless you pass `--yes` (which
+only downloads the embedding model). `sense` reads the same history `condition` does and lists the
+reflexes it would form, with prompts shown only as short redacted snippets. `doctor` exits non-zero
+only when a check fails. Every command ends with the next one to run; `--plain` drops colour and
+glyphs, and `NO_COLOR` is honoured.
 
 ### Watch it live
 
@@ -312,8 +315,8 @@ python3 demo/run.py all                  # train (no Adage) → learn → held-o
 python3 demo/dashboard/serve.py          # live dashboard at http://127.0.0.1:8765
 ```
 
-The signal box page lives with the binary (`crates/adage-cli/assets/brain.html`); `adage graph
---serve` serves it without the Python server.
+For your own repositories, `adage map` opens the live map of instincts and reflexes in the
+browser; it is served by the binary, no Python needed.
 
 See [demo/SANDBOX.md](demo/SANDBOX.md). `python3 demo/sandbox/selfcheck.py` proves every work item
 fails untouched and passes with its reference solution.
