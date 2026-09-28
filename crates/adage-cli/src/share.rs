@@ -1,4 +1,5 @@
-//! `adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format pack|v1]`
+//! `adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>]...
+//! [--ack-scripts] [--format pack|v1]`
 //! (Design §10.7, §10.8; Track C §1.6): emit a signed **pack** (format `adage-pack/1`).
 //!
 //! The source is a learned track (upgraded to a pack: its live routes, repository scripts pinned
@@ -158,7 +159,7 @@ pub fn describe_step(step: &Step) -> String {
     }
 }
 
-const USAGE: &str = "usage: adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format pack|v1]";
+const USAGE: &str = "usage: adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>]... [--ack-scripts] [--format pack|v1]";
 
 pub fn share(args: &[String], paths: &Paths) -> Result<()> {
     require_person("share")?;

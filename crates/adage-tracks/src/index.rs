@@ -38,6 +38,14 @@ pub struct IndexedRoute {
     pub exec: Option<ExecBinding>,
 }
 
+impl IndexedRoute {
+    /// A route only `adage-exec` can carry out: it runs a vendored script (`cas/<hex>`), which
+    /// has no path in the repository an agent could run, so E0 never directs it (Track C §1.7).
+    pub fn exec_only(&self) -> bool {
+        self.exec.as_ref().is_some_and(|b| b.scripts.iter().any(|(p, _)| p.starts_with("cas/")))
+    }
+}
+
 /// Execution levels (Track C §3.1). A pack may only *request* one; only a machine grants it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Level {
@@ -46,10 +54,9 @@ pub enum Level {
     E0,
     /// Prefetch: run at the trigger, inject typed output.
     E1,
-    /// An MCP tool the agent calls.
+    /// An action a hook runs when its stimulus fires: staged, verified against its declared
+    /// outputs, applied atomically (Track C §3.6).
     E2,
-    /// An MCP tool with real effects, staged and verified.
-    E3,
 }
 
 /// A pack route's binding on this machine (Track C §2.3): the route exec digest, the scripts it

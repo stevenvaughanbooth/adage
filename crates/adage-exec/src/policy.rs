@@ -5,11 +5,12 @@
 //!
 //! ```toml
 //! [exec]
-//! max_level = "E2"             # never above
+//! max_level = "E1"             # never above (E2: actions from hooks, a beta opt-in)
 //! auto_approve = "off"         # or "inert-observe"
 //! allow_vendor_scripts = false
 //! allow_raw_output = false
 //! require_sandbox = true       # the personal file cannot set this false
+//! allow_environment_actions = false  # E2 actions with the environment effect; managed file only
 //! env = ["JAVA_HOME"]          # variables routes may receive (never secrets: env::forbidden)
 //! [publishers]
 //! allow = ["SHA256:…"]
@@ -44,6 +45,9 @@ pub struct RawExec {
     pub allow_vendor_scripts: Option<bool>,
     pub allow_raw_output: Option<bool>,
     pub require_sandbox: Option<bool>,
+    /// E2 actions with the environment effect (Track C §3.1): only a managed (team) file may
+    /// turn this on; the personal file's value is ignored.
+    pub allow_environment_actions: Option<bool>,
     pub env: Option<Vec<String>>,
 }
 
@@ -72,6 +76,8 @@ pub struct Policy {
     pub allow_vendor_scripts: bool,
     pub allow_raw_output: bool,
     pub require_sandbox: bool,
+    /// E2 actions with the environment effect: a team-policy opt-in (managed file only).
+    pub allow_environment_actions: bool,
     pub env: Vec<String>,
     pub publishers_allow: Vec<String>,
     pub publishers_deny: Vec<String>,
@@ -80,8 +86,9 @@ pub struct Policy {
     pub sources: Vec<String>,
 }
 
-/// The default ceiling: E3 needs a staging overlay that C2 does not have.
-pub const DEFAULT_MAX_LEVEL: Level = Level::E2;
+/// The default ceiling. E2 actions (staged, verified, applied from hooks) are a beta behind gate
+/// G4: a person opts in with `max_level = "E2"`, and each action is still approved explicitly.
+pub const DEFAULT_MAX_LEVEL: Level = Level::E1;
 
 impl Default for Policy {
     fn default() -> Self {
@@ -92,7 +99,7 @@ impl Default for Policy {
 fn level(s: &Option<String>, what: &str) -> Result<Option<Level>> {
     match s {
         None => Ok(None),
-        Some(v) => Level::parse(v).map(Some).with_context(|| format!("{what}: max_level {v:?} is not E1, E2 or E3")),
+        Some(v) => Level::parse(v).map(Some).with_context(|| format!("{what}: max_level {v:?} is not E1 or E2")),
     }
 }
 
@@ -111,7 +118,7 @@ pub fn merge(personal: Option<&RawPolicy>, managed: Option<&RawPolicy>) -> Resul
     let m = managed.cloned().unwrap_or_default();
     let p_level = level(&p.exec.max_level, "personal policy")?;
     let m_level = level(&m.exec.max_level, "managed policy")?;
-    let max_level = p_level.unwrap_or(DEFAULT_MAX_LEVEL).min(m_level.unwrap_or(Level::E3));
+    let max_level = p_level.unwrap_or(DEFAULT_MAX_LEVEL).min(m_level.unwrap_or(Level::E2));
     let p_auto = auto(&p.exec.auto_approve, "personal policy")?;
     let m_auto = auto(&m.exec.auto_approve, "managed policy")?;
     let auto_approve = m_auto != Some(false) && p_auto.or(m_auto).unwrap_or(false);
@@ -119,6 +126,7 @@ pub fn merge(personal: Option<&RawPolicy>, managed: Option<&RawPolicy>) -> Resul
     let allow = |pv: Option<bool>, mv: Option<bool>| mv != Some(false) && pv.or(mv).unwrap_or(false);
     let allow_vendor_scripts = allow(p.exec.allow_vendor_scripts, m.exec.allow_vendor_scripts);
     let allow_raw_output = allow(p.exec.allow_raw_output, m.exec.allow_raw_output);
+    let allow_environment_actions = m.exec.allow_environment_actions == Some(true);
     // Only the managed file can lower it; the personal file can only raise it.
     let require_sandbox = m.exec.require_sandbox.unwrap_or(true) || p.exec.require_sandbox == Some(true);
     let mut env: Vec<String> = p
@@ -159,6 +167,7 @@ pub fn merge(personal: Option<&RawPolicy>, managed: Option<&RawPolicy>) -> Resul
         allow_vendor_scripts,
         allow_raw_output,
         require_sandbox,
+        allow_environment_actions,
         env,
         publishers_allow,
         publishers_deny,
@@ -244,7 +253,7 @@ mod tests {
     #[test]
     fn defaults_are_conservative() {
         let p = Policy::default();
-        assert_eq!(p.max_level, Level::E2);
+        assert_eq!(p.max_level, Level::E1);
         assert!(!p.auto_approve && !p.allow_raw_output && !p.allow_vendor_scripts);
         assert!(p.require_sandbox);
     }
@@ -252,7 +261,7 @@ mod tests {
     #[test]
     fn managed_denies_win() {
         let personal = raw(
-            "[exec]\nmax_level = \"E3\"\nauto_approve = \"inert-observe\"\nallow_raw_output = true\nrequire_sandbox = false\n\
+            "[exec]\nmax_level = \"E2\"\nauto_approve = \"inert-observe\"\nallow_raw_output = true\nrequire_sandbox = false\n\
              [publishers]\nallow = [\"SHA256:a\", \"SHA256:b\"]\n",
         );
         let managed = raw(
@@ -269,9 +278,12 @@ mod tests {
         assert_eq!(p.effects_deny, vec![Effect::Environment]);
         let alone = merge(Some(&personal), None).unwrap();
         assert!(alone.auto_approve && alone.allow_raw_output && alone.require_sandbox);
-        assert_eq!(alone.max_level, Level::E3);
+        assert_eq!(alone.max_level, Level::E2);
         let lowered = merge(None, Some(&raw("[exec]\nrequire_sandbox = false\n"))).unwrap();
         assert!(!lowered.require_sandbox, "only the managed file can lower it");
+        let env_actions = raw("[exec]\nallow_environment_actions = true\n");
+        assert!(!merge(Some(&env_actions), None).unwrap().allow_environment_actions, "a team opt-in only");
+        assert!(merge(None, Some(&env_actions)).unwrap().allow_environment_actions);
     }
 
     #[test]

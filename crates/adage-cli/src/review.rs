@@ -347,6 +347,10 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     let index = Index::compile_root(&paths.tracks(), &all.iter().map(|i| i.track.clone()).collect::<Vec<_>>()).0;
     let items = queue(&all, &judged, &index);
     let inert = crate::packs::inert_routes(paths);
+    let attested = attestations(paths);
+    let revoked = adage_exec::approvals::Store::load(&adage_exec::approvals::path(&paths.root))
+        .map(|s| s.revoked)
+        .unwrap_or_default();
     if as_json {
         let rows: Vec<Value> = items
             .iter()
@@ -385,10 +389,25 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
                 })
             })
             .collect();
-        println!("{}", serde_json::to_string_pretty(&json!({ "count": rows.len(), "queue": rows, "inert": inert }))?);
+        let attestations: Vec<Value> = attested
+            .iter()
+            .map(|(pack, lines)| json!({ "pack": pack, "attestations": lines, "note": "self-reported by signer; informational only" }))
+            .collect();
+        let revoked: Vec<Value> = revoked
+            .iter()
+            .map(|r| json!({ "kind": "exec-revoked", "route": r.route, "repo": r.repo, "level": r.level.as_str(), "on": r.on, "cause": r.cause }))
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(
+                &json!({ "count": rows.len(), "queue": rows, "inert": inert, "attestations": attestations, "exec_revoked": revoked })
+            )?
+        );
         return Ok(());
     }
     print_inert(&inert);
+    print_revoked(&revoked);
+    print_attested(&attested);
     if items.is_empty() {
         println!("adage review: nothing awaits a decision.");
         return Ok(());
@@ -456,6 +475,50 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Each installed pack's attestations (Track C §1.8), one line each, marked self-reported by its
+/// signer.
+fn attestations(paths: &Paths) -> Vec<(String, Vec<String>)> {
+    let mut packs: Vec<String> = crate::packs::bindings(paths).into_iter().map(|(_, b)| b.pack).collect();
+    packs.sort();
+    packs.dedup();
+    packs
+        .into_iter()
+        .map(|p| {
+            let lines = crate::packs::attestation_lines(paths, &p);
+            (p, lines)
+        })
+        .filter(|(_, l)| !l.is_empty())
+        .collect()
+}
+
+fn print_attested(attested: &[(String, Vec<String>)]) {
+    for (pack, lines) in attested {
+        println!("adage review: {pack} carries {} attestation(s), self-reported by its signer:\n", lines.len());
+        for l in lines {
+            println!("  attested   {l}");
+        }
+        println!("  note       attestations are informational only: they never set a reflex's strength or an execution level\n");
+    }
+}
+
+/// Execution grants Adage withdrew by itself (Track C §3.6): losing authority is automatic,
+/// regaining it never is.
+fn print_revoked(revoked: &[adage_exec::approvals::Revocation]) {
+    if revoked.is_empty() {
+        return;
+    }
+    println!("adage review: {} execution grant(s) were revoked automatically:\n", revoked.len());
+    for r in revoked {
+        let (track, route) = r.route.rsplit_once('/').unwrap_or((&r.route, ""));
+        println!("{}  {}   [{}]", r.route, r.level.as_str().to_uppercase(), r.repo);
+        println!("  why        exec-revoked: {} (on {})", r.cause, r.on);
+        println!(
+            "  decide     adage review allow-exec {track} {route} --level {} (after fixing what it changes)\n",
+            r.level.as_str()
+        );
+    }
 }
 
 /// Routes of installed packs that are inert here (Track C §2.3): never delivered, and no decision

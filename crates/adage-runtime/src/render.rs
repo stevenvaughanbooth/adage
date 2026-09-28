@@ -146,6 +146,56 @@ fn wrap_exec(
     )
 }
 
+/// Most changed paths an action's result names.
+pub const ACTION_LISTED: usize = 10;
+
+/// A repository path as an action's result may name it: plain characters only.
+fn plain_path(p: &str) -> Option<&str> {
+    (!p.is_empty() && p.len() <= 200 && p.chars().all(|c| c.is_ascii_alphanumeric() || "_./@+-".contains(c)))
+        .then_some(p)
+}
+
+/// The result of an E2 action Adage ran from a hook (Track C §3.6): which edit it followed, the
+/// command, and the files it changed, from one fixed template, in the directive's wrapper with
+/// `exec="e2"` (so learning counts the session as steered). `edited` is empty when the action ran
+/// at Stop.
+pub fn action_applied(d: &crate::Directive, edited: &str, command: &str, changed: &[String]) -> String {
+    let after = match plain_path(edited) {
+        Some(p) => format!("after your edit to {p}"),
+        None => "after the edits in this session".to_string(),
+    };
+    let named: Vec<&str> = changed.iter().filter_map(|c| plain_path(c)).take(ACTION_LISTED).collect();
+    let body = if changed.is_empty() {
+        format!("Adage ran `{}` {after}: what it generates was already up to date. Nothing changed.", sanitise(command))
+    } else {
+        let more = changed.len().saturating_sub(named.len());
+        let list = if more > 0 { format!("{}, and {more} more", named.join(", ")) } else { named.join(", ") };
+        format!(
+            "Adage ran `{}` {after}: updated {} file{} ({list}). Nothing else changed.",
+            sanitise(command),
+            changed.len(),
+            if changed.len() == 1 { "" } else { "s" }
+        )
+    };
+    wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.aspect, &body, d.origin.as_ref(), "e2")
+}
+
+/// A directive whose approved action Adage could not complete: the plain E0 directive, and why
+/// (a refusal reason, which never carries command output).
+pub fn action_not_run(d: &crate::Directive, reason: &str) -> String {
+    let text = format!("{}\nAdage did not run it: {}.", d.text, sanitise(reason).trim_end_matches('.'));
+    wrap_origin(&d.track, &d.version, &d.route, &d.kind, d.aspect, &text, d.origin.as_ref())
+}
+
+/// [`stop_reason`], when the approved action for the obligation could not complete.
+pub fn stop_reason_not_run(paths: &str, command: &str, reason: &str) -> String {
+    format!(
+        "{} Adage could not run it itself: {}.",
+        stop_reason(paths, command),
+        sanitise(reason).trim_end_matches('.')
+    )
+}
+
 /// The sentence an E1 directive gains after its command (Track C §3.4): the lookup it directs has
 /// been run by Adage, and its typed result follows as data.
 pub const E1_RAN: &str = "That lookup has been run; its result is below.";

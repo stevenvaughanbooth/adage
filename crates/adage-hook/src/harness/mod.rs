@@ -10,6 +10,22 @@ pub mod codex;
 pub mod opencode;
 
 use adage_runtime::Call;
+
+/// The hook timeout, in seconds, of the events an E2 action runs at (the edit and Stop events)
+/// when the registration runs `adage-exec`: an action's wall limit (20 s) stays well under it.
+/// Every other event, and every `adage` registration, keeps 5 s. OpenCode's bridge waits 1 s, so
+/// actions never run under OpenCode.
+pub const ACTION_HOOK_TIMEOUT_S: u32 = 30;
+
+/// The timeout for an action event of a registration running `bin`.
+pub fn action_timeout(bin: &str) -> u32 {
+    let name = bin.rsplit(['/', '\\']).next().unwrap_or(bin);
+    if name == "adage-exec" || name == "adage-exec.exe" {
+        ACTION_HOOK_TIMEOUT_S
+    } else {
+        5
+    }
+}
 pub use adage_runtime::Event;
 use serde_json::Value;
 use std::path::PathBuf;

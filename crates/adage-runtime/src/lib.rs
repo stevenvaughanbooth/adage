@@ -113,6 +113,13 @@ pub struct Obligation {
     pub paths: String,
     pub met: bool,
     pub stop_requested: bool,
+    /// The repository-relative path whose edit last armed it (what an E2 action reports).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub edited: String,
+    /// An edit in the latest tool batch matched it (cleared at the next batch): an E2 action
+    /// may carry it out now.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fresh: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -225,6 +232,27 @@ pub struct Ctx<'a> {
 
 thread_local! {
     static EXACT_KEYS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static EXEC_ONLY: std::cell::RefCell<Vec<(String, String)>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Run `f` deciding with these exec-only routes (`(track, route id)`: reflexes that run a vendored
+/// script) in play. Only `adage-exec hook` does, for the ones approved on this machine, because it
+/// carries them out itself (Track C §1.7); everywhere else they are never directed. Scoped to
+/// this thread.
+pub fn with_exec_only<R>(allowed: Vec<(String, String)>, f: impl FnOnce() -> R) -> R {
+    struct Reset(Vec<(String, String)>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            EXEC_ONLY.with(|e| *e.borrow_mut() = std::mem::take(&mut self.0));
+        }
+    }
+    let _reset = Reset(EXEC_ONLY.with(|e| std::mem::replace(&mut *e.borrow_mut(), allowed)));
+    f()
+}
+
+/// Whether an index entry may be directed here: not exec-only, or an exec-only route in play.
+fn in_play(r: &IndexedRoute) -> bool {
+    !r.exec_only() || EXEC_ONLY.with(|e| e.borrow().iter().any(|(t, id)| t == &r.track && id == &r.route.id))
 }
 
 /// Compatibility: run `f` deciding with the matching the hooks used before the command-pattern
@@ -277,7 +305,9 @@ fn call_keys(call: &Call, ctx: &Ctx) -> Vec<(String, adage_core::Normalized)> {
 
 pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     let mut d = Decision::default();
-    let routes: Vec<&IndexedRoute> = ctx.index.for_repo(&ctx.repo).collect();
+    // Exec-only routes (vendored scripts) are carried out by adage-exec, never directed on their
+    // own ([`with_exec_only`]).
+    let routes: Vec<&IndexedRoute> = ctx.index.for_repo(&ctx.repo).filter(|r| in_play(r)).collect();
     let mut out: Vec<Directive> = Vec::new();
     let emit_ok = |st: &SessionState, out: &Vec<Directive>, id: &str| {
         !st.emitted.iter().any(|e| e == id)
@@ -367,6 +397,9 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
         }
         Event::Batch { calls } => {
             st.batches += 1;
+            for o in st.obligations.iter_mut() {
+                o.fresh = false;
+            }
             for call in calls {
                 for (key, n) in call_keys(call, ctx) {
                     let key = cap(key);
@@ -454,6 +487,8 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                             o.met = false;
                                             o.stop_requested = false;
                                         }
+                                        o.edited = rel.clone();
+                                        o.fresh = true;
                                         continue;
                                     }
                                     // Only enforce a rule the agent was actually told about.
@@ -475,6 +510,8 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                             paths: paths.clone(),
                                             met: false,
                                             stop_requested: false,
+                                            edited: rel.clone(),
+                                            fresh: true,
                                         });
                                     }
                                 }
