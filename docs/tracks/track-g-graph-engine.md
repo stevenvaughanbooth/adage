@@ -819,8 +819,10 @@ already owes. The causes, and what changed (`adage-graph/src/compile/{variants,g
    routes that direct the same repo-wide step (no operand or option selects a part), or the same
    scoped step with its `{part}` slot, are generalised together to the least general glob that
    covers them and is precise over the tree (precision over the tree's files of that extension):
-   the siblings' glob (`crates/*/src/*.rs`), their common prefix (`crates/**/*.rs`), then, for a
-   repo-wide command only, `**/*.rs`. Evidence is counted again on the new glob.
+   the siblings' glob (`crates/*/src/*.rs`), then their common prefix (`crates/**/*.rs`). As in
+   the lattice, a glob is never rooted in a wildcard (`**/*.rs`, `*/*.py`): top-level
+   directories with nothing in common keep their own globs. Evidence is counted again on the new
+   glob.
 3. **Effects of compound and redirected commands** (`bridge::effect_of`). `cargo fmt --all &&
    cargo clippy …` was classified as a whole (author, when a later part commits or the output is
    redirected), so every part was dropped as a target. Each part now keeps its own class, and a
@@ -834,10 +836,19 @@ already owes. The causes, and what changed (`adage-graph/src/compile/{variants,g
    its rate in traces that made no such edit by `learn.finish_line_contrast` (a handful of
    traces on either side proves little; this is what keeps the demo's `make ci` after schema
    edits out on its temporal split, 4 of 4 traces after the edit against 14 of 25 without; a
-   check scoped to the edited part keeps the plain contrast), it must span two distinct tasks (below), a check of
-   what an obligation already owes is dropped, and among routes directing the same step on
-   different globs, a route is kept only when the traces that edited its files and none of a
-   stronger route's still ran the step (**explaining away**: clippy after docs edits).
+   check scoped to the edited part keeps the plain contrast). It must also be worth suggesting
+   (V's factor 1 − p_soon): at least 2 traces, and a tenth of them, missed it after such an edit;
+   a check every trace already ran after the edit (`make ci` after `acme/*.py` on the adversarial
+   set, 10 of 10) adds nothing. Its runs count only when the edit called for them, not a failed
+   check just before (`python -m pytest` fails, then `make test`), and a check the traces show
+   as a dead end's working command (run within five steps of a different check's failure in at
+   least `min_support` traces), or one a learned avoid already names, is left to that dead end.
+   It must span two distinct tasks (below), a check of what an obligation already owes is
+   dropped, and among routes directing the same step on different globs, a route is kept only
+   when the traces that edited its files and none of a stronger route's still ran the step
+   (**explaining away**: clippy after docs edits). Where agents always ran the checks in order
+   after the format step, they form a sequence instead (`cargo fmt --all`, then clippy, then the
+   tests: the anonymised fixture).
 5. **The miner's beam** (`mine::seq`) keeps one slot, at the root, for the best head-level edit
    before the target: in busy traces housekeeping between the last edit and the finishing steps
    outranked it and no `edit → check` pattern was grown.
@@ -873,9 +884,9 @@ never run by the agents. No scratch-script reflex forms any more.
 **Gates.** L0 bench J 0.6307, unchanged (route precision 1.0; not re-blessed). Parity, gates,
 fidelity, G4 and the gen suites pass with no new false route. `crates/adage-learn/tests/rust_workspace.rs`
 holds an anonymised fixture distilled from the dogfood traces (invented crates, prompts and paths)
-and asserts the `cargo fmt --all` obligation and a repo-wide check form after Rust edits, with no docs reflex, no `--check` beside the
+and asserts the `cargo fmt --all` obligation and a repo-wide check (a run, or the later steps of a sequence) form after Rust edits, with no docs reflex, no `--check` beside the
 obligation and no narrow run directed. `live_learn.rs`: a first learn may now log an instinct the
-traces confirm as extinguished (the learned dead end replaces it).
+traces confirm as extinguished (the learned dead end replaces it). `compile.rs`: a check after an edit is now a prime run (G3 dropped it).
 
 **Gaps.** Dead ends whose working command varies (a per-trace test file) direct the covering form
 only when agents ran it; none did on RepoBench. A parameterised command is bound only from an

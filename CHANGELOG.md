@@ -84,7 +84,7 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   `cargo test --workspace --locked -j4`) direct the family's covering form, a command agents ran
   that covers the narrowings (`cargo test --workspace --locked`); after-edit reflexes split across
   sibling directories generalise to one precise glob (`crates/**/*.rs`); a check after an edit
-  forms as a prime run when agents do not run it anyway; compound (`a && b`) and redirected
+  forms as a prime run when agents neither run it anyway nor already run it after every such edit; compound (`a && b`) and redirected
   commands keep each step's own effect; a scoped test run binds the edited part
   (`npm test -- packages/{part}`); and a directing reflex needs support from at least two
   distinct tasks. On Adage's own traces: `cargo fmt --all` owed after Rust edits, then
