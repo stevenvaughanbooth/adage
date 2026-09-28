@@ -344,17 +344,15 @@ impl Db {
         if a.seg != b.seg || p.abs_diff(q) > self.gap as usize {
             return false;
         }
-        let rel = if it.same {
-            a.batch == b.batch && (prev.label, p) < (it.label, q)
-        } else {
-            q > p && b.batch > a.batch
-        };
+        let rel =
+            if it.same { a.batch == b.batch && (prev.label, p) < (it.label, q) } else { q > p && b.batch > a.batch };
         rel && (!it.flow || s.has_flow(p, q)) && (!it.same_art || s.has_same_art(p, q))
     }
 
     /// Reachable end positions of each prefix of `items` (an exact dynamic program: every
     /// constraint is unary or joins adjacent items). Items from `cont_from` on are continuation
     /// items. `avail`, when given, masks the positions continuation items may use.
+    #[allow(clippy::needless_range_loop)]
     pub fn reach(&self, s: &DbSession, items: &[Item], cont_from: usize, avail: Option<&[bool]>) -> Vec<Vec<u32>> {
         let n = s.len();
         let mut out: Vec<Vec<u32>> = Vec::with_capacity(items.len());
@@ -363,7 +361,9 @@ impl Db {
         }
         let ok_pos = |q: usize, i: usize| i < cont_from || avail.is_none_or(|a| a[q]);
         let first = items[0];
-        out.push((0..n).filter(|&q| ok_pos(q, 0) && self.node_ok(s, q, &first, cont_from == 0)).map(|q| q as u32).collect());
+        out.push(
+            (0..n).filter(|&q| ok_pos(q, 0) && self.node_ok(s, q, &first, cont_from == 0)).map(|q| q as u32).collect(),
+        );
         let g = self.gap as usize;
         let mut mark = vec![false; n];
         for i in 1..items.len() {
@@ -438,7 +438,9 @@ impl Db {
             let mut next: Vec<usize> = Vec::new();
             for &p in &cur {
                 for r in p.saturating_sub(g)..=(p + g).min(n.saturating_sub(1)) {
-                    if !next.contains(&r) && self.node_ok(s, r, &ys[i], cont) && self.edge_ok(s, p, &ys[i - 1], r, &ys[i])
+                    if !next.contains(&r)
+                        && self.node_ok(s, r, &ys[i], cont)
+                        && self.edge_ok(s, p, &ys[i - 1], r, &ys[i])
                     {
                         next.push(r);
                     }

@@ -66,7 +66,8 @@ pub fn to_events(s: &adage_learn::import::Session, task: Option<String>, table: 
             _ => {}
         }
     }
-    let inp = input::Session { id: s.id.clone(), prompts: vec![input::Prompt { text: s.prompt.clone(), at_step: 0 }], steps };
+    let inp =
+        input::Session { id: s.id.clone(), prompts: vec![input::Prompt { text: s.prompt.clone(), at_step: 0 }], steps };
     let meta = events::Meta {
         day: Some(s.day.clone()),
         task,
@@ -244,7 +245,10 @@ fn gen_bundle(dir: &Path, table: &CommandTable) -> Result<BundleReport> {
     let repo = tasks["repo"].as_str().unwrap_or_default().to_string();
     let tdir = dir.join("rehearsal").join("transcripts");
     if !tdir.is_dir() {
-        bail!("{name}: no rehearsal transcripts: run `python3 evals/gen/rehearse.py {} --no-learn` first", dir.display());
+        bail!(
+            "{name}: no rehearsal transcripts: run `python3 evals/gen/rehearse.py {} --no-learn` first",
+            dir.display()
+        );
     }
     let mut files = Vec::new();
     for p in std::fs::read_dir(&tdir)?.flatten() {
@@ -261,7 +265,12 @@ fn gen_bundle(dir: &Path, table: &CommandTable) -> Result<BundleReport> {
         .as_array()
         .map(|a| {
             a.iter()
-                .map(|t| (t["id"].as_str().unwrap_or_default().to_string(), t["split"].as_str().unwrap_or("train").to_string()))
+                .map(|t| {
+                    (
+                        t["id"].as_str().unwrap_or_default().to_string(),
+                        t["split"].as_str().unwrap_or("train").to_string(),
+                    )
+                })
                 .collect()
         })
         .unwrap_or_default();
@@ -309,7 +318,9 @@ fn dataset(dir: &Path, split: Option<&str>, table: &CommandTable) -> Result<Bund
         let sp = ds.split(n)?;
         let test_ids: BTreeSet<&str> = sp.test.iter().map(String::as_str).collect();
         let train_ids: BTreeSet<&str> = sp.train.iter().map(String::as_str).collect();
-        let pick = |ids: &BTreeSet<&str>| all.iter().filter(|(m, _)| ids.contains(m.as_str())).map(|(_, e)| e.clone()).collect();
+        let pick = |ids: &BTreeSet<&str>| {
+            all.iter().filter(|(m, _)| ids.contains(m.as_str())).map(|(_, e)| e.clone()).collect()
+        };
         folds.push((pick(&train_ids), pick(&test_ids)));
     }
     let every: Vec<EventSession> = all.into_iter().map(|(_, e)| e).collect();
@@ -409,7 +420,13 @@ pub fn render_text(r: &Report, top: usize) -> String {
         }
         let p = &b.parity;
         for (id, kind, m) in &p.found {
-            s.push_str(&format!("   {:<9} {:<20} {:<18} {}\n", if m.is_some() { "FOUND" } else { "MISSING" }, id, kind, m.as_deref().unwrap_or("")));
+            s.push_str(&format!(
+                "   {:<9} {:<20} {:<18} {}\n",
+                if m.is_some() { "FOUND" } else { "MISSING" },
+                id,
+                kind,
+                m.as_deref().unwrap_or("")
+            ));
         }
         s.push_str(&format!(
             "   parity: recall {:.2}; decoys selected {}/{} {:?}; reflexes matching no convention {}\n\n",

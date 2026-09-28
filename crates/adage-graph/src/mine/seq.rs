@@ -91,6 +91,7 @@ impl Ext {
 }
 
 /// Target labels and their supports (sessions with an ok occurrence), after the climb.
+#[allow(clippy::needless_range_loop)]
 pub fn targets(db: &Db) -> Vec<(u32, u32)> {
     let n = db.labels.len();
     let mut sup = vec![0u32; n];
@@ -110,10 +111,7 @@ pub fn targets(db: &Db) -> Vec<(u32, u32)> {
     }
     // Kind-level labels (`read`) are never targets: alone they direct nothing.
     let ok = |l: usize| {
-        db.alphabet[l]
-            && sup[l] >= db.s_min
-            && target_label(&db.labels, l as u32)
-            && db.labels.level[l] != Level::Kind
+        db.alphabet[l] && sup[l] >= db.s_min && target_label(&db.labels, l as u32) && db.labels.level[l] != Level::Kind
     };
     let mut maxchild = vec![0u32; n];
     for l in 0..n {
@@ -160,11 +158,13 @@ pub fn refinements(db: &Db, counts: impl Iterator<Item = (Ext, u32)>) -> HashMap
     maxref
 }
 
-/// The beam's order of sibling extensions: by informativeness, the support of the child over
-/// the support of the label it adds (P(pattern | label)), then support, then the extension.
+/// The beam's order of sibling extensions: extensions carrying evidence of a relation first (an
+/// edge constraint, `last`, a failed run), then by informativeness, the support of the child
+/// over the support of the label it adds (P(pattern | label)), then support, then the extension.
 pub fn beam_cmp(db: &Db, a: (u32, &Ext), b: (u32, &Ext)) -> std::cmp::Ordering {
     let r = |c: u32, e: &Ext| c as f64 / db.support[e.label as usize].max(1) as f64;
-    r(b.0, b.1).total_cmp(&r(a.0, a.1)).then(b.0.cmp(&a.0)).then(a.1.cmp(b.1))
+    let evidence = |e: &Ext| usize::from(e.flow || e.same_art || e.last) + usize::from(e.pol == Pol::Fail);
+    evidence(b.1).cmp(&evidence(a.1)).then(r(b.0, b.1).total_cmp(&r(a.0, a.1))).then(b.0.cmp(&a.0)).then(a.1.cmp(b.1))
 }
 
 struct Ctx<'a> {
@@ -245,22 +245,30 @@ fn keys_at(
             }
             _ => &[Pol::Any],
         };
+        // Only the subsets of the constraints that hold here.
+        let avail = u8::from(flow) | (u8::from(same_art) << 1) | (u8::from(last) << 2);
         for &pol in pols {
-            for mask in 0u8..8 {
-                let (f, sa, la) = (mask & 1 != 0, mask & 2 != 0, mask & 4 != 0);
-                if (f && !flow) || (sa && !same_art) || (la && !last) || (bound && !f && !sa) {
+            let mut mask = avail;
+            loop {
+                let m = mask;
+                mask = if mask == 0 { u8::MAX } else { (mask - 1) & avail };
+                let (f, sa, la) = (m & 1 != 0, m & 2 != 0, m & 4 != 0);
+                if bound && !f && !sa {
+                    if m == 0 {
+                        break;
+                    }
                     continue;
                 }
                 // A read or an edit at the kind level says nothing on its own: it is an item
                 // only with a constraint (a read of a listed path, the last edit).
-                if l == Level::Kind as usize && e.ty != NodeType::Prompt && mask == 0 {
-                    continue;
-                }
                 let k = Ext { fwd, label, pol, same, flow: f, same_art: sa, last: la };
-                if k.flags() > room {
-                    continue;
+                let skip = (l == Level::Kind as usize && e.ty != NodeType::Prompt && m == 0) || k.flags() > room;
+                if !skip {
+                    out.push((k, q as u32));
                 }
-                out.push((k, q as u32));
+                if m == 0 {
+                    break;
+                }
             }
         }
     }
@@ -446,7 +454,7 @@ pub fn mine(db: &Db, p: &MineParams, record_all: bool) -> Run {
     // Every target gets an equal share of the budget, so the most frequent targets (often the
     // least informative) cannot starve the rest; a share a target leaves unused is not passed on,
     // which keeps targets independent (parallel, and the same for any thread count).
-    let share = if ts.is_empty() { 0 } else { (p.budget / ts.len() as u64).max(1) };
+    let share = if ts.is_empty() { 0 } else { p.budget / ts.len() as u64 };
     let threads = p.threads.max(1).min(ts.len().max(1));
     let results: Vec<(Vec<Found>, u64, bool)> = if threads <= 1 {
         ts.iter().map(|&(t, _)| grow(db, p, t, share, record_all)).collect()
@@ -457,7 +465,10 @@ pub fn mine(db: &Db, p: &MineParams, record_all: bool) -> Run {
                 .map(|w| {
                     let ts = &ts;
                     scope.spawn(move || {
-                        (w..ts.len()).step_by(threads).map(|i| (i, grow(db, p, ts[i].0, share, record_all))).collect::<Vec<_>>()
+                        (w..ts.len())
+                            .step_by(threads)
+                            .map(|i| (i, grow(db, p, ts[i].0, share, record_all)))
+                            .collect::<Vec<_>>()
                     })
                 })
                 .collect();

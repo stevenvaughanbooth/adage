@@ -58,8 +58,11 @@ fn check(name: &str, sessions: &[EventSession], convs: &[Conv]) -> Result {
     let l = select::learn(sessions, &Params::demo());
     let hit = |r: &Reflex, c: &Conv| matches_convention(r, &c.kind, &c.command, &c.avoided, c.glob.as_deref());
     let truth: Vec<&Conv> = convs.iter().filter(|c| KINDS.contains(&c.kind.as_str())).collect();
-    let missing: Vec<String> =
-        truth.iter().filter(|c| !l.reflexes.iter().any(|r| hit(r, c))).map(|c| format!("{} ({})", c.id, c.kind)).collect();
+    let missing: Vec<String> = truth
+        .iter()
+        .filter(|c| !l.reflexes.iter().any(|r| hit(r, c)))
+        .map(|c| format!("{} ({})", c.id, c.kind))
+        .collect();
     let decoys: Vec<String> = convs
         .iter()
         .filter(|c| c.kind == "decoy" && l.reflexes.iter().any(|r| hit(r, c)))
@@ -125,7 +128,8 @@ fn smoke_suite() -> Option<(PathBuf, Option<tempfile_dir::Dir>)> {
         eprintln!("gen.py failed (skipped): {}", String::from_utf8_lossy(&gen.stderr));
         return None;
     }
-    let reh = Command::new("python3").arg(root.join("evals/gen/rehearse.py")).arg(&out).arg("--no-learn").output().ok()?;
+    let reh =
+        Command::new("python3").arg(root.join("evals/gen/rehearse.py")).arg(&out).arg("--no-learn").output().ok()?;
     if !reh.status.success() {
         eprintln!("rehearse.py failed (skipped): {}", String::from_utf8_lossy(&reh.stderr));
         return None;

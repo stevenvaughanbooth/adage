@@ -151,13 +151,7 @@ pub fn read_transcript(path: &Path, table: &CommandTable, task: Option<String>) 
         .map(|(u, text)| Prompt { text, at_step: step_of_use[u.min(step_of_use.len() - 1)] as u32 })
         .collect();
     let input = Session { id, prompts, steps };
-    let meta = events::Meta {
-        day: Some(day),
-        task,
-        turns: Some(turns),
-        effects: Some(effects),
-        ..Default::default()
-    };
+    let meta = events::Meta { day: Some(day), task, turns: Some(turns), effects: Some(effects), ..Default::default() };
     Some(Read { session: events::from_input(&input, &meta, table), root })
 }
 
@@ -198,7 +192,8 @@ pub fn bundle(dir: &Path) -> Vec<EventSession> {
         }
     }
     files.sort();
-    let mut out: Vec<EventSession> = files.iter().filter_map(|f| read_transcript(f, &table, None)).map(|r| r.session).collect();
+    let mut out: Vec<EventSession> =
+        files.iter().filter_map(|f| read_transcript(f, &table, None)).map(|r| r.session).collect();
     out.sort_by(|a, b| a.id.cmp(&b.id));
     out
 }
@@ -267,13 +262,21 @@ pub fn synthetic_sessions(n: usize, events: usize, seed: u64) -> Vec<EventSessio
             if len == 2 && tracker {
                 let a = files[rng.below(files.len() as u64) as usize].clone();
                 let b = files[rng.below(files.len() as u64) as usize].clone();
-                push(exec(&format!("./scripts/wi-lookup {id}"), &format!("{id}\nFiles: {a} {b}"), false), Some(Effect::Observe), turn);
+                push(
+                    exec(&format!("./scripts/wi-lookup {id}"), &format!("{id}\nFiles: {a} {b}"), false),
+                    Some(Effect::Observe),
+                    turn,
+                );
                 turn += 1;
                 push(Step::Read { path: a }, None, turn);
                 push(Step::Read { path: b }, None, turn);
                 len += 3;
             } else if r < 8 {
-                push(exec("python3 -m pytest", "E ImportError: no module named acme", true), Some(Effect::Verify), turn);
+                push(
+                    exec("python3 -m pytest", "E ImportError: no module named acme", true),
+                    Some(Effect::Verify),
+                    turn,
+                );
                 turn += 1;
                 push(exec("make test", "ok", false), Some(Effect::Verify), turn);
                 len += 2;

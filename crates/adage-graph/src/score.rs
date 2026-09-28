@@ -60,6 +60,10 @@ pub struct ScoreParams {
     /// A guard (obligation, avoid) needs this Beta lower bound: it may stop the agent or name a
     /// runner as broken, so a coin flip is not enough.
     pub guard_lower_bound: f64,
+    /// Anchor-level measures (lift, contrast, p_soon, p_next, Δturns, the target variant) are
+    /// computed on at most this many sessions: every k-th session by id, k = ⌈N / this⌉.
+    /// Support, days and the Beta posterior always use every session.
+    pub anchor_sessions: usize,
     pub threads: usize,
 }
 
@@ -76,6 +80,7 @@ impl Default for ScoreParams {
             consistency: 0.9,
             dominant: 0.8,
             guard_lower_bound: 0.5,
+            anchor_sessions: 300,
             threads: 1,
         }
     }
@@ -123,7 +128,10 @@ pub struct Stats {
     pub total_weight: f64,
     /// Sessions containing each label (at its level), sorted.
     pub postings: Vec<Vec<u32>>,
+    /// Alphabet events in the anchor sample.
     pub positions: u64,
+    /// Sessions in the anchor sample.
+    pub sample: Vec<bool>,
     /// Alphabet events per node type.
     pub by_type: BTreeMap<NodeType, u64>,
     pub days: u32,
@@ -131,13 +139,63 @@ pub struct Stats {
     pub fails: Vec<u32>,
     /// Sessions with any exposed event.
     pub exposed: Vec<u32>,
+    /// Supporting sessions of every mined pattern, by (items, cut).
+    pub known: HashMap<(Vec<Item>, usize), Vec<u32>>,
 }
 
-/// Per-thread memo of the background counts, keyed by (anchor item, continuation).
-pub type Cache = HashMap<(Item, Vec<Item>), (u64, u64)>;
+/// Per-thread memo: background counts keyed by (the anchor's label when the continuation
+/// starts in its batch, else nothing; the continuation), and the sessions
+/// where an item list occurs keyed by (items, first continuation index). Patterns share contexts
+/// and continuations, so most lookups hit. Pure values: the memo never changes a result.
+#[derive(Default)]
+pub struct Cache {
+    background: HashMap<(u32, Vec<Item>), BTreeMap<NodeType, u64>>,
+    occurs: HashMap<(Vec<Item>, usize), std::rc::Rc<Vec<u32>>>,
+}
+
+impl Cache {
+    pub fn new() -> Cache {
+        Cache::default()
+    }
+
+    /// Sessions (sorted) where `items` occur; the DP runs only on sessions holding every item's
+    /// label, and only inside `within` when given (a superset's sessions lie inside its part's).
+    fn occurs(
+        &mut self,
+        db: &Db,
+        st: &Stats,
+        items: &[Item],
+        cont_from: usize,
+        within: Option<&[u32]>,
+    ) -> std::rc::Rc<Vec<u32>> {
+        let key = (items.to_vec(), cont_from);
+        if let Some(v) = self.occurs.get(&key) {
+            return v.clone();
+        }
+        let mut lists: Vec<&[u32]> = items.iter().map(|i| st.postings[i.label as usize].as_slice()).collect();
+        if let Some(w) = within {
+            lists.push(w);
+        }
+        lists.sort_by_key(|v| v.len());
+        let mut out = Vec::new();
+        if let Some((first, rest)) = lists.split_first() {
+            for &si in first.iter() {
+                if rest.iter().all(|l| l.binary_search(&si).is_ok())
+                    && db.occurs(&db.sessions[si as usize], items, cont_from)
+                {
+                    out.push(si);
+                }
+            }
+        }
+        let v = std::rc::Rc::new(out);
+        self.occurs.insert(key, v.clone());
+        v
+    }
+}
 
 impl Stats {
-    pub fn new(db: &Db, p: &ScoreParams) -> Stats {
+    pub fn new(db: &Db, p: &ScoreParams, known: &[MinedPattern]) -> Stats {
+        let known = known.iter().map(|m| ((m.pattern.items.clone(), m.pattern.cut), m.sessions.clone())).collect();
         let maxday = db.sessions.iter().map(|s| s.day).max().unwrap_or(0);
         let weight: Vec<f64> = db
             .sessions
@@ -152,10 +210,16 @@ impl Stats {
         let (mut runs, mut fails) = (vec![0u32; n], vec![0u32; n]);
         let mut positions = 0u64;
         let mut by_type: BTreeMap<NodeType, u64> = BTreeMap::new();
+        let stride = db.sessions.len().div_ceil(p.anchor_sessions.max(1)).max(1);
+        let sample: Vec<bool> = (0..db.sessions.len()).map(|i| i % stride == 0).collect();
         for (si, s) in db.sessions.iter().enumerate() {
-            positions += s.len() as u64;
+            if sample[si] {
+                positions += s.len() as u64;
+            }
             for e in &s.ev {
-                *by_type.entry(e.ty).or_default() += 1;
+                if sample[si] {
+                    *by_type.entry(e.ty).or_default() += 1;
+                }
                 for &l in e.lab.iter() {
                     if l == NONE {
                         continue;
@@ -172,13 +236,16 @@ impl Stats {
             }
         }
         let days: BTreeSet<u32> = db.sessions.iter().map(|s| s.day).collect();
-        let exposed = (0..db.sessions.len() as u32).filter(|&i| db.sessions[i as usize].exposed.iter().any(|&x| x)).collect();
+        let exposed =
+            (0..db.sessions.len() as u32).filter(|&i| db.sessions[i as usize].exposed.iter().any(|&x| x)).collect();
         Stats {
+            known,
             exposed,
             total_weight: weight.iter().sum(),
             weight,
             postings,
             positions,
+            sample,
             by_type,
             days: days.len() as u32,
             runs,
@@ -189,28 +256,19 @@ impl Stats {
     pub fn positions_of(&self, ty: NodeType) -> u64 {
         self.by_type.get(&ty).copied().unwrap_or(0)
     }
-
-    /// Candidate sessions for `items`: the shortest posting list among them.
-    fn candidates(&self, items: &[Item]) -> &[u32] {
-        items.iter().map(|i| self.postings[i.label as usize].as_slice()).min_by_key(|v| v.len()).unwrap_or(&[])
-    }
 }
 
 /// Sessions (weighted) where `items` occur, and where `items ++ ys` occur.
-fn opp_succ(db: &Db, st: &Stats, xs: &[Item], ys: &[Item]) -> (f64, f64, u32) {
+fn opp_succ(db: &Db, st: &Stats, xs: &[Item], ys: &[Item], cache: &mut Cache) -> (f64, f64, u32) {
     let full: Vec<Item> = xs.iter().chain(ys.iter()).copied().collect();
-    let (mut n, mut s, mut c) = (0.0, 0.0, 0u32);
-    for &si in st.candidates(xs) {
-        let sess = &db.sessions[si as usize];
-        if db.occurs(sess, xs, xs.len()) {
-            n += st.weight[si as usize];
-            c += 1;
-            if db.occurs(sess, &full, xs.len()) {
-                s += st.weight[si as usize];
-            }
-        }
-    }
-    (n, s, c)
+    let opp = cache.occurs(db, st, xs, xs.len(), None);
+    // A mined pattern's sessions are known (mining and the matcher agree exactly).
+    let succ = match st.known.get(&(full.clone(), xs.len())) {
+        Some(v) => std::rc::Rc::new(v.clone()),
+        None => cache.occurs(db, st, &full, xs.len(), Some(&opp)),
+    };
+    let w = |v: &[u32]| v.iter().map(|&i| st.weight[i as usize]).sum::<f64>();
+    (w(&opp), w(&succ), opp.len() as u32)
 }
 
 /// Score one pattern.
@@ -222,12 +280,7 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &mu
     let y_alone: Vec<Item> = std::iter::once(ys[0].first()).chain(ys[1..].iter().copied()).collect();
     // Base rate of Y, then the backoff chain over context suffixes.
     let mut prior = {
-        let mut w = 0.0;
-        for &si in st.candidates(&y_alone) {
-            if db.occurs(&db.sessions[si as usize], &y_alone, 0) {
-                w += st.weight[si as usize];
-            }
-        }
+        let w: f64 = cache.occurs(db, st, &y_alone, 0, None).iter().map(|&i| st.weight[i as usize]).sum();
         if st.total_weight > 0.0 {
             w / st.total_weight
         } else {
@@ -238,7 +291,7 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &mu
     for k in 1..=cut {
         let mut xk: Vec<Item> = xs[cut - k..].to_vec();
         xk[0] = xk[0].first();
-        let (n, s, c) = opp_succ(db, st, &xk, ys);
+        let (n, s, c) = opp_succ(db, st, &xk, ys, cache);
         last = (n, s, c);
         if k < cut {
             prior = (s + p.kappa * prior) / (n + p.kappa);
@@ -253,20 +306,18 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &mu
     let x_last = xs[cut - 1];
     let (mut x_ends, mut x_follow, mut soon, mut next) = (0u64, 0u64, 0u64, 0u64);
     let mut gaps: Vec<f64> = Vec::new();
-    let mut opp_list: Vec<u32> = Vec::new();
     let mut variants: BTreeMap<u32, u32> = BTreeMap::new();
     let first_x: Vec<Item> = {
         let mut v = xs.to_vec();
         v[0] = v[0].first();
         v
     };
-    for &si in st.candidates(&first_x) {
+    let x_sessions = cache.occurs(db, st, &first_x, cut, None);
+    let opp_list: Vec<u32> = x_sessions.to_vec();
+    for &si in x_sessions.iter().filter(|&&si| st.sample[si as usize]) {
         let sess = &db.sessions[si as usize];
         let r = db.reach(sess, &first_x, cut, None);
         let ends = r.last().cloned().unwrap_or_default();
-        if !ends.is_empty() {
-            opp_list.push(si);
-        }
         for &q in &ends {
             x_ends += 1;
             if let Some((gap, y0)) = follows_at(db, sess, q as usize, &x_last, ys) {
@@ -284,7 +335,12 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &mu
     }
     // Background: anchors of X's last item's type (every alphabet event when X ends at every
     // one of them); only anchors near a match of Y's first item can be followed.
-    let (bg_any, bg_same) = *cache.entry((x_last, ys.to_vec())).or_insert_with(|| background(db, st, &x_last, ys));
+    // The anchor matters to the background only through same-batch ordering (its label) and
+    // its type (counted separately), so continuations share one count across contexts.
+    let key_label = if ys[0].same { x_last.label } else { NONE };
+    let by_type = cache.background.entry((key_label, ys.to_vec())).or_insert_with(|| background(db, st, &x_last, ys));
+    let bg_any: u64 = by_type.values().sum();
+    let bg_same = by_type.get(&db.ty(x_last.label)).copied().unwrap_or(0);
     let conf_anchor = if x_ends > 0 { x_follow as f64 / x_ends as f64 } else { 0.0 };
     let same_n = st.positions_of(db.ty(x_last.label));
     let (bg, bg_n) = if same_n > x_ends { (bg_same, same_n) } else { (bg_any, st.positions) };
@@ -390,14 +446,13 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &mu
     }
 }
 
-/// Alphabet events followed by `ys` as if they were `x_last`: (any type, `x_last`'s type).
-fn background(db: &Db, st: &Stats, x_last: &Item, ys: &[Item]) -> (u64, u64) {
+/// Alphabet events followed by `ys` as if they were `x_last`, per event type.
+fn background(db: &Db, st: &Stats, x_last: &Item, ys: &[Item]) -> BTreeMap<NodeType, u64> {
     let y0 = ys[0];
-    let ty = db.ty(x_last.label);
-    let (mut bg_follow, mut bg_same) = (0u64, 0u64);
+    let mut out: BTreeMap<NodeType, u64> = BTreeMap::new();
     let g = db.gap as usize;
     let mut cand: Vec<usize> = Vec::new();
-    for &si in &st.postings[y0.label as usize] {
+    for &si in st.postings[y0.label as usize].iter().filter(|&&si| st.sample[si as usize]) {
         let sess = &db.sessions[si as usize];
         cand.clear();
         for q in 0..sess.len() {
@@ -409,12 +464,11 @@ fn background(db: &Db, st: &Stats, x_last: &Item, ys: &[Item]) -> (u64, u64) {
         cand.dedup();
         for &a in &cand {
             if follows_at(db, sess, a, x_last, ys).is_some() {
-                bg_follow += 1;
-                bg_same += u64::from(sess.ev[a].ty == ty);
+                *out.entry(sess.ev[a].ty).or_default() += 1;
             }
         }
     }
-    (bg_follow, bg_same)
+    out
 }
 
 /// `Db::follows`, also returning the first continuation event.
@@ -439,8 +493,9 @@ fn follows_at(db: &Db, s: &DbSession, p: usize, prev: &Item, ys: &[Item]) -> Opt
 }
 
 /// Score every closed pattern (in parallel when `threads > 1`; the result is in input order).
-pub fn score_all(db: &Db, closed: &[&MinedPattern], p: &ScoreParams) -> Vec<Scored> {
-    let st = Stats::new(db, p);
+/// `known` is every mined pattern, whose supporting sessions need no matching.
+pub fn score_all(db: &Db, closed: &[&MinedPattern], known: &[MinedPattern], p: &ScoreParams) -> Vec<Scored> {
+    let st = Stats::new(db, p, known);
     let threads = p.threads.max(1).min(closed.len().max(1));
     if threads <= 1 {
         let mut cache = Cache::new();

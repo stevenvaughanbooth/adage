@@ -280,7 +280,8 @@ pub fn signature(output: &str) -> String {
         .map(|w| {
             if w.contains('/') {
                 "{path}"
-            } else if w.chars().any(|c| c.is_ascii_digit()) && w.chars().all(|c| c.is_ascii_digit() || ".:,-".contains(c))
+            } else if w.chars().any(|c| c.is_ascii_digit())
+                && w.chars().all(|c| c.is_ascii_digit() || ".:,-".contains(c))
             {
                 "{n}"
             } else {
@@ -361,9 +362,10 @@ pub fn from_input(s: &input::Session, meta: &Meta, table: &CommandTable) -> Even
                     .and_then(|e| e.get(i).copied().flatten())
                     .unwrap_or_else(|| classify(argv, table));
                 for (_, _, value) in crate::flow::sinks(argv) {
-                    let src = sources.get(&value).copied().or_else(|| {
-                        tokens::subs(&value).into_iter().find_map(|(_, sub)| sources.get(sub).copied())
-                    });
+                    let src = sources
+                        .get(&value)
+                        .copied()
+                        .or_else(|| tokens::subs(&value).into_iter().find_map(|(_, sub)| sources.get(sub).copied()));
                     if let Some(src) = src {
                         flows.insert((src, at));
                     }
@@ -514,8 +516,7 @@ pub struct Corpus {
 pub fn build_corpus(sessions: &[EventSession], names: &dyn Fn(&Event) -> [Option<String>; LEVELS]) -> Corpus {
     let mut order: Vec<&EventSession> = sessions.iter().collect();
     order.sort_by(|a, b| a.id.cmp(&b.id));
-    let per: Vec<Vec<[Option<String>; LEVELS]>> =
-        order.iter().map(|s| s.events.iter().map(names).collect()).collect();
+    let per: Vec<Vec<[Option<String>; LEVELS]>> = order.iter().map(|s| s.events.iter().map(names).collect()).collect();
     let mut set: BTreeMap<String, (NodeType, Level)> = BTreeMap::new();
     for (s, evs) in order.iter().zip(&per) {
         for (e, ns) in s.events.iter().zip(evs) {
@@ -602,7 +603,8 @@ mod tests {
                 Step::Exec { argv: argv("python3 -m unittest"), output: "RuntimeError: env".into(), failed: true },
             ],
         };
-        let meta = Meta { day: Some("2026-08-29T10:40:00Z".into()), turns: Some(vec![0, 1, 2, 2, 3]), ..Default::default() };
+        let meta =
+            Meta { day: Some("2026-08-29T10:40:00Z".into()), turns: Some(vec![0, 1, 2, 2, 3]), ..Default::default() };
         let e = from_input(&s, &meta, &CommandTable::load());
         assert_eq!(e.events.len(), 6);
         assert_eq!(e.events[0].ty, NodeType::Prompt);

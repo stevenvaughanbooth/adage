@@ -61,7 +61,7 @@ impl Default for Params {
             mine: MineParams::default(),
             score: ScoreParams::default(),
             max_reflexes: 256,
-            max_closed: 4_000,
+            max_closed: 20_000,
             threads: 1,
         }
     }
@@ -558,7 +558,7 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
     let mut closed: Vec<&mine::MinedPattern> = mined.closed().collect();
     closed.sort_by(|a, b| b.sessions.len().cmp(&a.sessions.len()).then(a.pattern.cmp(&b.pattern)));
     closed.truncate(p.max_closed);
-    let scored = score::score_all(&db, &closed, &p.score);
+    let scored = score::score_all(&db, &closed, &mined.patterns, &p.score);
     let t3 = Instant::now();
     let kept = select(&db, &scored, p.max_reflexes);
     let reflexes: Vec<Reflex> = kept.iter().map(|&(i, g)| reflex(&db, &scored[i], g)).collect();
@@ -609,7 +609,10 @@ pub fn candidates(sessions: &[EventSession], p: &Params) -> Vec<(String, Scored)
     let mut closed: Vec<&mine::MinedPattern> = mined.closed().collect();
     closed.sort_by(|a, b| b.sessions.len().cmp(&a.sessions.len()).then(a.pattern.cmp(&b.pattern)));
     closed.truncate(p.max_closed);
-    score::score_all(&db, &closed, &p.score).into_iter().map(|s| (s.pattern.render(&db.labels), s)).collect()
+    score::score_all(&db, &closed, &mined.patterns, &p.score)
+        .into_iter()
+        .map(|s| (s.pattern.render(&db.labels), s))
+        .collect()
 }
 
 /// Learn reflexes from sessions.

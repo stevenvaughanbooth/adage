@@ -398,7 +398,8 @@ fn cluster_family(family: &str, nodes: &[Node], tau: f32, p: &ProtoParams) -> Fa
                 if part.len() < p.min_size.max(2) {
                     continue;
                 }
-                let members: Vec<(String, u32)> = part.iter().map(|&i| (nodes[i].key.clone(), nodes[i].count)).collect();
+                let members: Vec<(String, u32)> =
+                    part.iter().map(|&i| (nodes[i].key.clone(), nodes[i].count)).collect();
                 let c = centroid(&part.iter().map(|&i| vecs[i].as_slice()).collect::<Vec<_>>());
                 protos.push(Proto {
                     name: dominant(&members),
@@ -415,11 +416,8 @@ fn cluster_family(family: &str, nodes: &[Node], tau: f32, p: &ProtoParams) -> Fa
         let mut kept: BTreeMap<String, Vec<(String, u32)>> = BTreeMap::new();
         for &i in idxs {
             let n = &nodes[i];
-            let hit = nearest(&refs, &n.emb).filter(|&(j, s, margin)| {
-                s >= tau
-                    && margin >= p.delta
-                    && (family != "act" || refs[j].head == n.head)
-            });
+            let hit = nearest(&refs, &n.emb)
+                .filter(|&(j, s, margin)| s >= tau && margin >= p.delta && (family != "act" || refs[j].head == n.head));
             match hit {
                 Some((j, _, _)) => kept.entry(refs[j].name.clone()).or_default().push((n.key.clone(), n.count)),
                 None => fe.singletons += 1,
@@ -692,7 +690,10 @@ mod tests {
         assert!(act.assign.contains_key("exec pytest tests/c.py"));
         assert!(!act.assign.contains_key("exec pytest -x"));
         // make gen and make proto: identical embeddings, different identities: never one prototype.
-        assert_ne!(act.assign.get("exec make gen").cloned().unwrap_or("gen".into()), act.assign.get("exec make proto").cloned().unwrap_or("proto".into()));
+        assert_ne!(
+            act.assign.get("exec make gen").cloned().unwrap_or("gen".into()),
+            act.assign.get("exec make proto").cloned().unwrap_or("proto".into())
+        );
         // Taxonomy: exact → proto → head.
         let corpus = e.label(&sessions);
         let t = &corpus.labels;
@@ -734,7 +735,8 @@ mod tests {
         let f = dir.join(".epoch.json");
         e.write(&f).unwrap();
         assert_eq!(Epoch::read(&f).unwrap(), e);
-        let new = ev(NodeType::Read, "schema/c.json", "schema/**/*.config", "schema:config", Some(vec![0.995, 0.05, 0.0]));
+        let new =
+            ev(NodeType::Read, "schema/c.json", "schema/**/*.config", "schema:config", Some(vec![0.995, 0.05, 0.0]));
         assert!(e.names(&new)[1].is_some(), "a new node joins the nearest prototype");
         let _ = std::fs::remove_dir_all(dir);
     }

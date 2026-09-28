@@ -105,7 +105,13 @@ fn largest_dataset_is_mined() {
     let Some(ds) = support::dataset("demo-haiku45") else { return };
     let t = Instant::now();
     let l = select::learn(&ds, &params());
-    eprintln!("demo-haiku45: {} sessions in {:?} ({:?}), selected {}", ds.len(), t.elapsed(), l.timings, l.reflexes.len());
+    eprintln!(
+        "demo-haiku45: {} sessions in {:?} ({:?}), selected {}",
+        ds.len(),
+        t.elapsed(),
+        l.timings,
+        l.reflexes.len()
+    );
     assert!(!l.truncated);
     assert!(!l.reflexes.is_empty());
 }
