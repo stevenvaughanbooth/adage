@@ -248,7 +248,7 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
     assert!(item["decisions"].as_array().unwrap().iter().any(|d| d == "dismiss"));
     let listing = w.ok("recipient", &["review"]);
     assert!(
-        listing.contains("why        proposed:") && listing.contains("- step") && listing.contains("+ step"),
+        listing.contains("why         proposed:") && listing.contains("- step") && listing.contains("+ step"),
         "{listing}"
     );
 
@@ -263,7 +263,7 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
     w.add("out3");
     assert_eq!(reasons(&w.queue(), "lookup"), vec!["proposed"]);
     let out = w.ok("recipient", &["review", "approve", NAME, "lookup"]);
-    assert!(out.contains("applied the proposed change"), "{out}");
+    assert!(out.contains("proposed change applied"), "{out}");
     let lookup = w.route("lookup");
     assert_eq!(lookup.step, Step::Run { command: "./scripts/wi-lookup {item} --full".into() });
     assert!(lookup.authored, "an applied proposal stays pinned");

@@ -164,6 +164,7 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
         ))?;
     } else {
         o.kv("delegations", Line::new().quiet("kept; `adage review undelegate <track> <reflex>` withdraws one"))?;
+        o.blank()?;
     }
     o.note("This takes effect in new agent sessions.")?;
     o.blank()?;

@@ -139,7 +139,7 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
             }
             _ => println!("  {h}: the hooks.json entries it would merge (Codex then asks you to approve them in /hooks):"),
         }
-        crate::install::install(&[h.to_string(), "--print".to_string()])?;
+        crate::install::print_only(h, None)?;
     }
 
     // 3. The embedding model.
@@ -196,7 +196,7 @@ fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result
     let opts = adage_instincts::BindOptions { disabled: settings.instincts_disabled.iter().cloned().collect() };
     let dry = adage_instincts::bind_with(root, &[], &Default::default(), &opts);
     if dry.routes.is_empty() {
-        println!("  Nothing in this repository's files matches a built-in default.");
+        println!("  Nothing in this repository's files matches an instinct.");
         return Ok(());
     }
     println!("  From this repository's files alone, with no session history, Adage would bind:");
@@ -206,10 +206,12 @@ fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result
             if r.state == adage_tracks::RouteState::Draft { "  (needs your approval in `adage review`)" } else { "" };
         println!("    {instinct:<3} {}{draft}", crate::share::describe_step(&r.step));
     }
-    println!("  Each primes at most, never blocks the agent from stopping, and gives way to anything Adage learns.");
+    println!(
+        "  Each primes at most, never blocks the agent from stopping, and gives way to any reflex Adage conditions."
+    );
     let drafts = dry.routes.iter().any(|r| r.state == adage_tracks::RouteState::Draft);
     if drafts {
-        println!("  Environment steps (installs) stay drafts until you approve one in `adage review`; approving one approves the pack's environment steps for this repository.");
+        println!("  Environment steps (installs) stay nascent until you approve one in `adage review`; approving one approves the pack's environment steps for this repository.");
     }
     let cmd = format!("adage condition --instincts-only --repo-path {}", detect::tilde(root));
     if yes {

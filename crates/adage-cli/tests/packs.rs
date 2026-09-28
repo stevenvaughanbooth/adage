@@ -322,7 +322,7 @@ fn share_then_add_binds_lref_scripts_and_marks_changes_inert() {
     assert_eq!(ids, ["dead-end-unittest", "finish-line-tests"]);
     // `adage review` shows it, with the pack's version and digest.
     let t = ok(w.run("recipient", &w.p("checkout"), &["review"]));
-    assert!(t.contains("acme/billing @ 1.0.0  lookup") && t.contains("has changed"), "{t}");
+    assert!(t.contains("acme/billing@1.0.0 · lookup") && t.contains("has changed"), "{t}");
     let v: Value = serde_json::from_str(&ok(w.run("recipient", &w.p("checkout"), &["review", "--json"]))).unwrap();
     let inert = v["inert"].as_array().unwrap();
     assert!(inert.iter().any(|i| i["route"] == "lookup" && i["reason"].as_str().unwrap().contains("has changed")));

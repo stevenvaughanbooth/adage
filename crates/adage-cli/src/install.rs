@@ -44,7 +44,7 @@ fn env_dir(var: &str, home_rel: &str) -> Result<PathBuf> {
 }
 
 /// A harness's registration for one binary: what to write, and where each scope puts it.
-struct Registration {
+pub(crate) struct Registration {
     content: String,
     project_rel: &'static str,
     user_path: fn() -> Result<PathBuf>,
@@ -137,6 +137,16 @@ pub(crate) fn apply(p: &Plan) -> Result<()> {
     write_atomic(&p.target, &p.after)
 }
 
+/// Print one harness's registration to stdout, as it would be written; returns it.
+pub(crate) fn print_only(harness: &str, bin: Option<PathBuf>) -> Result<Registration> {
+    let reg = registration(harness, &hook_binary(bin)?)?;
+    print!("{}", reg.content);
+    if !reg.content.ends_with('\n') {
+        println!();
+    }
+    Ok(reg)
+}
+
 pub fn install(args: &[String]) -> Result<()> {
     let harness = args.first().map(String::as_str).unwrap_or("");
     let write = args.iter().any(|a| a == "--write");
@@ -153,31 +163,36 @@ pub fn install(args: &[String]) -> Result<()> {
     }
 
     if !write {
-        let reg = registration(harness, &hook_binary(bin)?)?;
-        let content = reg.content;
-        print!("{content}");
-        if !content.ends_with('\n') {
-            println!();
-        }
+        let reg = print_only(harness, bin)?;
         let target = if scope == "user" {
             (reg.user_path)()?.display().to_string()
         } else {
             format!("<repo>/{}", reg.project_rel)
         };
-        eprintln!(
-            "adage install: printed only. `adage install {harness} --write --scope {scope}` would write {target}"
-        );
+        // The registration goes to stdout, so it can be piped; this goes to stderr.
+        let mut e = adage_term::Out::stderr();
+        e.line(
+            &adage_term::Line::new().faint(format!("adage install: printed only; nothing was written to {target}")),
+        )?;
+        e.next(&format!("adage install {harness} --write --scope {scope}"), "writes it")?;
         return Ok(());
     }
 
     require_person()?;
     let repo = flag(args, "--repo").map(PathBuf::from);
     let p = plan(harness, &scope, repo.as_deref(), bin)?;
+    let unchanged = p.before.as_deref() == Some(p.after.as_str());
     write_atomic(&p.target, &p.after)?;
-    println!("adage install: wrote {}", p.target.display());
+    let mut o = adage_term::Out::stdout();
+    o.header("install", &[harness, &scope, if unchanged { "already registered" } else { "registered" }])?;
+    o.blank()?;
+    o.kv(if unchanged { "checked" } else { "wrote" }, adage_term::Line::new().text(p.target.display().to_string()))?;
     if harness == "codex" {
-        println!("Codex asks you to review new hooks before they run: open /hooks in Codex to approve them.");
+        o.blank()?;
+        o.note("Codex asks you to review new hooks before they run: open /hooks in Codex to approve them.")?;
     }
+    o.blank()?;
+    o.next("adage doctor", "checks that the hooks are registered and healthy")?;
     Ok(())
 }
 

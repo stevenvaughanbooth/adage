@@ -208,7 +208,7 @@ pub enum ReviewDecision {
     Dismiss(Decide),
     /// Approve a reflex for delegated execution (E1 prefetch).
     Delegate(DelegateRoute),
-    /// Withdraw a reflex's execution approval.
+    /// Withdraw a reflex's delegation.
     Undelegate(UndelegateRoute),
 }
 
@@ -225,7 +225,9 @@ pub struct Decide {
 
 #[derive(Args, Debug)]
 pub struct DelegateRoute {
+    /// The track (name, or path).
     pub track: String,
+    /// The reflex id.
     pub reflex: String,
     /// Execution level (only `e1`).
     #[arg(long, value_name = "LEVEL")]
@@ -242,16 +244,21 @@ pub struct DelegateRoute {
     /// Time limit in milliseconds.
     #[arg(long = "timeout-ms", value_name = "MS")]
     pub timeout_ms: Option<u64>,
+    /// The repository (default: the current one).
     #[arg(long, value_name = "DIR")]
     pub repo: Option<PathBuf>,
+    /// Who decided (recorded with the delegation).
     #[arg(long, value_name = "NAME")]
     pub by: Option<String>,
 }
 
 #[derive(Args, Debug)]
 pub struct UndelegateRoute {
+    /// The track (name, or path).
     pub track: String,
+    /// The reflex id.
     pub reflex: String,
+    /// The repository (default: the current one).
     #[arg(long, value_name = "DIR")]
     pub repo: Option<PathBuf>,
 }
@@ -309,7 +316,7 @@ pub struct ConditionArgs {
     /// Do not bind instincts.
     #[arg(long)]
     pub no_instincts: bool,
-    /// The learning engine.
+    /// The conditioning engine.
     #[arg(long, value_name = "ENGINE", value_parser = ["miners", "shadow", "graph"])]
     pub engine: Option<String>,
     /// Bind only instincts, from the repository's files, with no traces (day 0).
@@ -341,10 +348,13 @@ pub struct GraphArgs {
     /// The graph engine's facts for one repository.
     #[arg(long)]
     pub learned: bool,
+    /// The repository key whose facts --learned prints.
     #[arg(long, value_name = "REPO", requires = "learned")]
     pub dump: Option<String>,
+    /// Transcript files for --learned.
     #[arg(long, value_name = "FILE", num_args = 1..)]
     pub transcripts: Vec<PathBuf>,
+    /// Claude Code history for --learned.
     #[arg(long, value_name = "DIR")]
     pub claude_projects: Option<PathBuf>,
 }
@@ -377,15 +387,16 @@ pub struct AddArgs {
 
 #[derive(Args, Debug)]
 pub struct DelegateArgs {
-    /// Stop: hooks call adage again (approvals are kept).
+    /// Stop: hooks call adage again (delegations are kept).
     #[arg(long, conflicts_with = "status")]
     pub off: bool,
-    /// Show registrations and approvals instead of changing anything.
+    /// Show registrations and delegated reflexes instead of changing anything.
     #[arg(long)]
     pub status: bool,
     /// The adage-exec binary.
     #[arg(long, value_name = "PATH")]
     pub bin: Option<PathBuf>,
+    /// The repository whose hook registrations change (default: the current one).
     #[arg(long, value_name = "DIR")]
     pub repo: Option<PathBuf>,
     /// Machine-readable output (with --status).
@@ -403,6 +414,7 @@ pub enum Harness {
 
 #[derive(Args, Debug)]
 pub struct InstallArgs {
+    /// The agent harness to register Adage's hooks with.
     pub harness: Harness,
     /// Print the registration (the default).
     #[arg(long, conflicts_with = "write")]
@@ -410,10 +422,13 @@ pub struct InstallArgs {
     /// Write it.
     #[arg(long)]
     pub write: bool,
+    /// This repository only (project, the default) or every repository (user).
     #[arg(long, value_parser = ["project", "user"])]
     pub scope: Option<String>,
+    /// The adage binary the hooks run (default: this one).
     #[arg(long, value_name = "PATH")]
     pub bin: Option<PathBuf>,
+    /// The repository for --scope project (default: the current one).
     #[arg(long, value_name = "DIR")]
     pub repo: Option<PathBuf>,
 }
@@ -429,7 +444,10 @@ pub enum ModelsAction {
     /// Download the pinned model and verify it.
     Fetch,
     /// Install from a directory you downloaded yourself.
-    Install { dir: PathBuf },
+    Install {
+        /// Holds model.safetensors, tokenizer.json and config.json.
+        dir: PathBuf,
+    },
     /// Whether it is installed.
     Status,
 }
@@ -446,9 +464,18 @@ pub struct ConfigArgs {
 #[derive(Subcommand, Debug)]
 pub enum ConfigAction {
     /// One key's effective value.
-    Get { key: String },
+    Get {
+        /// A key, e.g. learn.auto (`adage config` lists them).
+        key: String,
+    },
     /// Validate and store a value.
-    Set { key: String, value: String },
+    Set {
+        /// A key, e.g. learn.auto (`adage config` lists them).
+        key: String,
+        /// The new value.
+        #[arg(allow_hyphen_values = true)]
+        value: String,
+    },
 }
 
 #[derive(Args, Debug)]
@@ -459,6 +486,7 @@ pub struct HooksConfigArgs {
 
 #[derive(Args, Debug)]
 pub struct CompletionsArgs {
+    /// The shell to complete for.
     pub shell: clap_complete::Shell,
 }
 
@@ -520,7 +548,7 @@ fn overview(t: &Theme) -> StyledStr {
             ],
         ),
         (
-            "Learning",
+            "Conditioning",
             &[
                 ("sense", "what your agents actually do (read-only)"),
                 ("condition", "condition reflexes from traces"),

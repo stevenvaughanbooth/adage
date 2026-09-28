@@ -17,7 +17,7 @@ Every day:
   map          open the map in your browser
   review       reflexes waiting for you
 
-Learning:
+Conditioning:
   sense        what your agents actually do (read-only)
   condition    condition reflexes from traces
   report       what Adage said, and what agents did

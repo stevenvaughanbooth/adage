@@ -8,6 +8,7 @@
 
 use adage_intent::model;
 use adage_store::Paths;
+use adage_term::{Line, Out, Role};
 use anyhow::{bail, Context, Result};
 use std::path::Path;
 
@@ -21,15 +22,24 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
             install(Path::new(dir), paths)
         }
         Some("status") | None => {
+            let mut o = Out::stdout();
             match model::status(&paths.models()) {
-                Ok(m) => println!(
-                    "intent model: {} ({} x {}) in {}",
-                    m.id,
-                    m.vocab_size,
-                    m.dim,
-                    model::dir_in(&paths.models()).display()
-                ),
-                Err(e) => println!("intent model: {e:#}"),
+                Ok(m) => {
+                    o.header("models", &["installed"])?;
+                    o.blank()?;
+                    o.kv("model", Line::new().text(m.id).sep().quiet(format!("{} x {}", m.vocab_size, m.dim)))?;
+                    o.kv("in", Line::new().text(crate::detect::tilde(&model::dir_in(&paths.models()))))?;
+                    o.kv("enables", Line::new().quiet("intent families: similar prompts share a reflex"))?;
+                }
+                Err(e) => {
+                    o.header("models", &["not installed"])?;
+                    o.blank()?;
+                    o.kv("model", Line::new().push(Role::Prime, format!("{e:#}")))?;
+                    o.kv("without it", Line::new().quiet("everything works except intent families"))?;
+                    o.blank()?;
+                    o.next("adage models fetch", "downloads and verifies it (31 MB, SHA-256 checked)")?;
+                    o.also("adage models install <dir>", "offline: from files you downloaded yourself")?;
+                }
             }
             Ok(())
         }
@@ -38,19 +48,37 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
 }
 
 fn install(dir: &Path, paths: &Paths) -> Result<()> {
+    if !dir.is_dir() {
+        return Err(crate::hint(
+            format!("{} is not a directory", dir.display()),
+            "download model.safetensors, tokenizer.json and config.json into one directory, or run `adage models fetch`",
+        ));
+    }
     let m = model::install(dir, &paths.models())?;
-    println!("installed {} into {}", m.id, model::dir_in(&paths.models()).display());
+    let mut o = Out::stdout();
+    o.header("models install", &["SHA-256 verified"])?;
+    o.blank()?;
+    installed(&mut o, &m.id, paths)
+}
+
+fn installed<W: std::io::Write>(o: &mut Out<W>, id: &str, paths: &Paths) -> Result<()> {
+    o.kv("installed", Line::new().text(id))?;
+    o.kv("in", Line::new().text(crate::detect::tilde(&model::dir_in(&paths.models()))))?;
+    o.blank()?;
+    o.next("adage condition", "forms intent families from your traces")?;
     Ok(())
 }
 
 fn fetch(paths: &Paths) -> Result<()> {
+    let mut o = Out::stdout();
+    let _ = o.header("models fetch", &["pinned model, SHA-256 verified"]);
+    let _ = o.blank();
     let m = fetch_with(paths, &mut |p| {
         if p.file_done == 0 {
-            println!("fetching {} ({} bytes)", p.url, p.file_bytes);
+            let _ = o.kv("fetching", Line::new().text(p.url).sep().quiet(format!("{} bytes", p.file_bytes)));
         }
     })?;
-    println!("installed {} into {}", m, model::dir_in(&paths.models()).display());
-    Ok(())
+    installed(&mut o, &m, paths)
 }
 
 /// Download progress, reported about five times a second while `curl` runs.
