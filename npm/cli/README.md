@@ -1,6 +1,6 @@
 # Adage
 
-**Agentic DAG Engine**: put your agent on rails.
+**Agent traces become reflexes.** (Adage: *Agentic DAG Engine*)
 
 Adage learns the routes coding agents take to get work done, packages the good ones as shareable
 **tracks**, and at each decision point tells the agent, deterministically, what to do next. It never

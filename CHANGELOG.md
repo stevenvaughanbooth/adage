@@ -7,6 +7,12 @@ version as the GitHub Release notes.
 
 ## Unreleased
 
+### Changed
+
+- Branding: the pitch is now **"Agent traces become reflexes."** Reflexes (learned) and instincts
+  (shipped) are the units; tracks and packs are the artefacts. "Put your agent on rails" is retired
+  as the tagline (README, plugin and npm descriptions, Design Spec §17).
+
 ### Added
 
 - **Packs are what `adage share` and `adage add` exchange (Track C, milestone C1).**

@@ -2,8 +2,9 @@
 
 **Status:** Design phase, draft 7 — decisions closed except O9; architecture review changes applied · **Date:** 2026-09-22 · **Supersedes:** *Interaction Graph Compiler — Design v2*
 
-> **Adage** — *Agentic DAG Engine.* An adage is wisdom distilled from long experience; a track is
-> an adage for your agents. **Put your agent on rails.** Brand system in [§17](#17-naming-and-brand).
+> **Adage** — *Agentic DAG Engine.* **Agent traces become reflexes.** An adage is wisdom distilled
+> from long experience; a reflex is what your agents' traces distil into. Brand system in
+> [§17](#17-naming-and-brand).
 
 ---
 
@@ -37,7 +38,7 @@ a schema change, the affected package's tests — before CI has to tell them. Tr
 can read them, review them, commit them to a repo, and share them with a teammate. A team can give
 a new hire a set of starter tracks so their agent is on the right path from the first prompt.
 
-> *Put your agent on rails.*
+> *Agent traces become reflexes.*
 
 Adage never executes anything itself. Every command is run by the agent, through the agent's own
 tools, under the harness's own permissions, in plain view. Adage only decides what to say, and when.
@@ -1180,20 +1181,24 @@ narrows to the other.
 
 **Adage** — *Agentic DAG Engine.*
 
-An adage is a short piece of wisdom distilled from long experience. That is exactly what a track
-is: what an organisation's agents learned, the hard way, across thousands of sessions — compressed
-into something the next agent can act on at once. The backronym carries the rest: it is for
+An adage is a short piece of wisdom distilled from long experience. That is exactly what a reflex
+is: what an organisation's agents learned, the hard way, across thousands of sessions — compiled
+from their traces into something the next agent can act on at once. The backronym carries the rest: it is for
 *agents*, it models their work as a *decision graph*, and it is an *engine*, not a document.
 
 ### 17.2 The system
 
-Three layers, each with one job:
+Four layers, each with one job (revised 2026-09-28):
 
 | Layer | Word | Role |
 | --- | --- | --- |
 | **Product** | **Adage** | The name on the box |
-| **Artefact** | **Tracks** | What you install, share, review, and commit. The word people will use most |
-| **Idiom** | **On rails** | What it does for you: *"Put your agent on rails." "I run Claude on rails."* |
+| **Pitch** | **Agent traces become reflexes** | What it does, in one line. Traces go in (session transcripts); reflexes come out |
+| **Units** | **Reflexes** and **instincts** | A *reflex* is a route learned from traces — organic history or sessions `adage-train` drove from a skill. An *instinct* is a route that ships with Adage and works on day 0 from the repository's own files. Both are compiled skills: typed, deterministic, reviewable |
+| **Artefact** | **Tracks** and **packs** | Tracks hold reflexes and instincts on disk; a pack is the signed, closed form you share and install (docs/packs.md) |
+
+"On rails" (the previous idiom) is retired from headlines and taglines. It may still appear as a
+lowercase phrase in running copy.
 
 The railway vocabulary — tracks, routes, switches, signals and their aspects, gauge, derail,
 interlocking, proving ground, desire paths — is the product's internal language (§5). It maps
@@ -1204,14 +1209,15 @@ railway word is less clear than a plain one, the plain one wins.
 
 - **Evidence over enthusiasm.** Every claim about a track comes with its numbers. "Saved 1.8 turns
   per session against holdout, 412 sessions" — never "supercharges your agent".
-- **The agent drives.** Adage signals; it never takes the wheel. Copy should never imply Adage
-  acts on its own.
+- **The agent drives.** Adage signals; it takes the wheel only where a person delegated it, route
+  by route, on that machine (Track C). Copy should never imply Adage acts on its own.
 - **Plain, short, calm.** It is infrastructure. It should sound like it.
 
 **Example lines:**
 
-- *Put your agent on rails.*
-- *Your agents already know the way. Adage writes it down.*
+- *Agent traces become reflexes.*
+- *Your agents already know the way. Adage turns it into reflexes.*
+- *Skills cost inference every time. Reflexes are compiled once.*
 - *The beaten path, proven.*
 - *Tracks: what your best sessions learned, ready for everyone's next one.*
 
@@ -1230,7 +1236,8 @@ railway word is less clear than a plain one, the plain one wins.
 | Item | Finding | Action |
 | --- | --- | --- |
 | **"Adage" in developer tools** | No AI or developer tool using the name found | Commission a trademark search before public launch; "adage" is a common English word, so the mark may be narrow |
-| **"On rails" as an idiom** | "Claude on Rails" is an existing open-source framework (`obie/claude-on-rails`); "Rails" is a registered trademark of the Ruby on Rails project | Use "on rails" as a lowercase phrase in copy only. Never as a product, package, or command name, and never "Claude on Rails" as a title |
+| **"On rails" as an idiom** | "Claude on Rails" is an existing open-source framework (`obie/claude-on-rails`); "Rails" is a registered trademark of the Ruby on Rails project | Retired as the tagline (2026-09-28). Lowercase in running copy only; never a product, package, or command name, and never "Claude on Rails" as a title |
+| **"Reflex" / "instinct"** | Common words; no developer-tool mark found in a quick check | Use as common nouns for Adage's units; not as product names. Include in the pre-launch trademark search |
 | **Harness names** | Claude, Codex, and OpenCode are other companies' marks | Descriptive use only — "Adage for Claude Code" — never a combined product name |
 | **"Tracks"** | No conflict found | Keep. It is the most important word in the system |
 
@@ -1270,7 +1277,7 @@ design. Decided 2026-09-22.
 
 | # | Decision | Outcome | Why |
 | --- | --- | --- | --- |
-| O1 | Product name | **Adage** (*Agentic DAG Engine*); artefacts are tracks; "on rails" is the idiom | Catchy, carries agent + decision graph; no developer-tool collision found. Trademark search before public launch (§17.5) |
+| O1 | Product name | **Adage** (*Agentic DAG Engine*); pitch "agent traces become reflexes"; units are reflexes and instincts; artefacts are tracks and packs (revised 2026-09-28; "on rails" retired as the idiom) | Catchy, carries agent + decision graph; no developer-tool collision found. Trademark search before public launch (§17.5) |
 | O2 | Imported-track default | **Yellow for tracks signed by a trusted team source; shadow for everything else** | Starter tracks help a newcomer from day one; untrusted text never reaches the agent until local evidence confirms it |
 | O3 | Track-bundled scripts | **Repo-committed tracks only** | Every script goes through the repository's own code review; portable tracks reference only commands the repo already has |
 | O4 | Declarative step runner (`adage run`) | **Later, only if the Survey shows chained discovery is common** | Avoids building a component that must be safe to run from any track before the data justifies it |
