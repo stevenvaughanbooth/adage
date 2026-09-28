@@ -133,6 +133,28 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
         let _ =
             out.kv("demo", Line::new().text("sample traces play in a temporary home").sep().quiet("removed on exit"));
     }
+    // An unknown --focus would open a map with nothing selected and no reason why. (The demo's
+    // reflexes arrive as it plays, so there is nothing to check against yet.)
+    if let (Some(id), None) = (&opts.focus, &demo) {
+        let ids: Vec<String> = crate::graph::build(&paths, 0)
+            .map(|g| {
+                g["routes"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|r| r["id"].as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !ids.iter().any(|r| r == id) {
+            let known = if ids.is_empty() {
+                "there are no reflexes yet".to_string()
+            } else {
+                format!("known: {}", ids.join(", "))
+            };
+            let _ = out.warn(&format!("no reflex {id} to focus on; the map opens unfocused ({known})"));
+        }
+    }
     let _ = out.line(&Line::new().faint("Ctrl-C stops it."));
     let _ = out.flush();
 

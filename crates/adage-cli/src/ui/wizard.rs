@@ -103,6 +103,8 @@ pub struct Wizard {
     pub output: Vec<String>,
     pub health: Option<Health>,
     pub scroll: u16,
+    /// How far the body can scroll, as last drawn (the body's length is known only then).
+    pub max_scroll: std::cell::Cell<u16>,
     pub has_repo: bool,
     /// The highlighted choice of the current step.
     pub choice: usize,
@@ -131,6 +133,7 @@ impl Wizard {
             output: vec![],
             health: None,
             scroll: 0,
+            max_scroll: Default::default(),
             has_repo,
             choice: 0,
         }
@@ -227,7 +230,7 @@ impl Wizard {
                 return None;
             }
             KeyCode::PageDown => {
-                self.scroll = self.scroll.saturating_add(5);
+                self.scroll = self.scroll.saturating_add(5).min(self.max_scroll.get());
                 return None;
             }
             _ => {}
@@ -503,6 +506,7 @@ fn render(area: Rect, buf: &mut ratatui::buffer::Buffer, w: &Wizard, ctx: &Ctx) 
     let fixed = 1 + 1 + if choices.len() > 1 || w.progress.is_some() { choices.len() + 1 } else { 0 } + 2;
     let room = (area.height as usize).saturating_sub(fixed);
     let b = body(w, t, width);
+    w.max_scroll.set(b.len().saturating_sub(room) as u16);
     let start = (w.scroll as usize).min(b.len().saturating_sub(room));
     for l in b.into_iter().skip(start).take(room) {
         let mut spans = vec![rail(t, true)];

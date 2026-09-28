@@ -487,7 +487,7 @@ fn spools(paths: &Paths) -> Check {
         sessions += usize::from(e.path().extension().is_some_and(|x| x == "spool"));
     }
     let mb = bytes as f64 / (1 << 20) as f64;
-    let detail = format!("{sessions} session spool(s), {mb:.1} MB in {}", detect::tilde(&paths.sessions()));
+    let detail = format!("{sessions} trace spool(s), {mb:.1} MB in {}", detect::tilde(&paths.sessions()));
     if bytes > SPOOL_WARN_BYTES {
         warn(
             "session spools",
