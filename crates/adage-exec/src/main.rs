@@ -380,7 +380,7 @@ fn main() {
         // Before anything else: the no-match path must cost what `adage hook`'s does.
         adage_exec::hook::main(args.get(1).cloned().unwrap_or_default(), args.get(2).cloned().unwrap_or_default());
     }
-    if args.is_empty() || args[0] == "--help" || args[0] == "-h" {
+    if args.is_empty() || args.iter().any(|a| a == "--help" || a == "-h") {
         println!("{USAGE}");
         std::process::exit(if args.is_empty() { 2 } else { 0 });
     }
