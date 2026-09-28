@@ -18,7 +18,9 @@ ci = "github"
 installers = ["shell", "powershell", "homebrew"]
 tap = "stevenvaughanbooth/homebrew-tap"
 formula = "adage"
-publish-jobs = ["homebrew", "./publish-npm"]
+# ./publish-marketplace writes the `marketplace` branch: the Claude Code plugins with verified
+# binaries for every target bundled, which `/plugin install adage@adage` installs.
+publish-jobs = ["homebrew", "./publish-npm", "./publish-marketplace"]
 targets = [
   "aarch64-apple-darwin",
   "x86_64-apple-darwin",
@@ -35,7 +37,7 @@ cargo-cyclonedx = true
 # PRs only check that the release would plan; tags build and publish.
 pr-run-mode = "plan"
 # The npm job checks out npm/ (contents) and publishes with provenance (id-token).
-github-custom-job-permissions = { "publish-npm" = { contents = "read", id-token = "write" } }
+github-custom-job-permissions = { "publish-npm" = { contents = "read", id-token = "write" }, "publish-marketplace" = { contents = "write" } }
 # LICENSE ships in every archive automatically; NOTICE (third-party licenses, scripts/notice.sh)
 # is included explicitly.
 include = ["NOTICE"]
