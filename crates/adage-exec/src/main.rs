@@ -2,6 +2,7 @@
 //!
 //! ```text
 //! adage-exec hook    <claude|opencode|codex> <Event>   (a superset of `adage hook`: E1 prefetch)
+//! adage-exec mcp     [--repo <dir>] [--list]            (E2: approved routes as MCP tools, on stdio)
 //! adage-exec run     --repo <dir> --argv '<json array>' [request flags] [--dry-run] [--record]
 //! adage-exec approve --repo <dir> --argv '<json array>' [request flags] [--by <name>]
 //! adage-exec revoke  --repo <dir> [--track <t> --route <r>]
@@ -27,6 +28,7 @@ use std::path::PathBuf;
 
 const USAGE: &str = "usage:
   adage-exec hook    <claude|opencode|codex> <Event>
+  adage-exec mcp     [--repo <dir>] [--list]
   adage-exec run     --repo <dir> --argv '<json array>' [--input k=v]... [--contract k=<regex>]...
                      [--effect observe] [--level e1|e2] [--output typed|raw] [--fields '<json>']
                      [--script <path>=<sha256>]... [--track t --route r --step s]
@@ -336,6 +338,9 @@ fn main() {
     if args.is_empty() || args[0] == "--help" || args[0] == "-h" {
         println!("{USAGE}");
         std::process::exit(if args.is_empty() { 2 } else { 0 });
+    }
+    if args[0] == "mcp" {
+        std::process::exit(adage_exec::mcp::main(&args[1..]));
     }
     let cmd = args.remove(0);
     let a = Args { list: args };

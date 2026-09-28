@@ -30,6 +30,8 @@ pub struct Limits {
 
 /// E1's wall timeout may be raised to at most this (§3.3 table).
 pub const E1_MAX_WALL_MS: u64 = 3_000;
+/// E2 (an observe tool the agent calls) runs at most this long (§3.3 table: "E2 observe").
+pub const E2_MAX_WALL_MS: u64 = 10_000;
 /// No level runs longer than this.
 pub const MAX_WALL_MS: u64 = 600_000;
 
@@ -53,7 +55,11 @@ impl Limits {
 
     /// A route may ask for a different wall timeout, within the level's bounds.
     pub fn with_timeout(mut self, level: Level, ms: u64) -> Limits {
-        let max = if level == Level::E1 { E1_MAX_WALL_MS } else { MAX_WALL_MS };
+        let max = match level {
+            Level::E1 => E1_MAX_WALL_MS,
+            Level::E2 => E2_MAX_WALL_MS,
+            Level::E3 => MAX_WALL_MS,
+        };
         self.wall_ms = ms.clamp(1, max);
         self
     }
@@ -72,6 +78,7 @@ mod tests {
         let e3 = Limits::for_level(Level::E3);
         assert_eq!((e3.capture_bytes, e3.return_bytes), (1_048_576, 16_384));
         assert_eq!(e1.with_timeout(Level::E1, 60_000).wall_ms, 3_000);
+        assert_eq!(e2.with_timeout(Level::E2, 60_000).wall_ms, 10_000);
         assert_eq!((e1.address_space, e1.nproc, e1.file_size), (2 << 30, 256, 64 << 20));
     }
 }

@@ -15,6 +15,36 @@ version as the GitHub Release notes.
 
 ### Added
 
+- **E2: routes as MCP tools (Track C, milestone C4).** `adage-exec mcp` is a hand-written stdio
+  MCP server (JSON-RPC 2.0, no SDK; protocol 2025-11-25, 2025-06-18, 2025-03-26 and 2024-11-05
+  negotiated). It lists one tool per route live in the index and approved at E2 on this machine
+  for the session's repository (from MCP roots, else the working directory), and none while
+  execution is off.
+  - Tools are `adage_<route-id>` (at most 64 characters of `[a-z0-9_]`, with a hash suffix on
+    collision). Descriptions come from a fixed template, never pack prose. `inputSchema` comes
+    from the slot contracts: a pattern string with `maxLength` 200, an enum, a bounded integer, or
+    a repository path checked on the server. `outputSchema` comes from the typed output fields.
+    Annotations are `readOnlyHint` and not destructive.
+  - Every call checks its arguments against the contracts and `plain_token`. It then plans the
+    route again, recomputing the approval key with the L-ref script hash read at call time, and
+    runs through every gate at E2's limits (10 s, 256 KiB captured, 16 KiB returned). The typed
+    projection is re-checked by `check_data_block`. The result is the `<adage-data>` envelope
+    plus `structuredContent`. Failures come back as tool errors naming the stage, never with
+    output text. There are at most 30 calls a minute per session and at most 4 runs at once on
+    the machine. One record per call goes to `$ADAGE_HOME/exec/mcp.spool`, never the output or
+    the arguments.
+  - `notifications/tools/list_changed` is sent when the index, the approvals, the execution
+    marker, policy, a tool's script or the roots change.
+  - `adage review allow-exec … --level e2` approves a tool. It shows the tool name and whether the
+    route is in the inert-observe class; automatic approval stays off by default.
+  - `adage exec enable` registers the server for Codex (`[mcp_servers.adage]` in
+    `$CODEX_HOME/config.toml`, in a marked block) and OpenCode (`mcp.adage` in
+    `opencode.json`) when they have Adage hooks. It shows a diff and keeps a `.adage-backup`
+    copy. `disable` removes both. The `adage-exec` Claude Code plugin gains `.mcp.json`.
+  - Tests: a stdio conformance suite (`crates/adage-exec/tests/mcp.rs`) and a smoke test with the
+    real `claude` CLI when one is installed. That test checks `claude plugin validate` and that
+    `claude mcp list` / `mcp get` connect, with no model calls.
+
 - **E1 prefetch (Track C, milestone C3).** `adage-exec hook <harness> <event>` runs the same hook
   pipeline as `adage hook`, now the shared `adage-hook` library. For a directive whose route has
   an E1 approval, it runs the route in the sandbox (the L-ref script hash is re-read at execution),

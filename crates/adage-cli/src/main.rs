@@ -26,9 +26,9 @@
 //! adage add <dir> [--trust]          verify a pack (or a v1 track, upgraded in place), install it,
 //!                                    and bind it to this repository at probation
 //! adage review [--json]              routes awaiting a person's decision, with evidence and directive text
-//! adage review allow-exec <track> <route> --level e1 [--raw] [--fields ..]   approve E1 prefetch (a person)
+//! adage review allow-exec <track> <route> --level e1|e2 [--raw] [--fields ..]   approve E1 prefetch or an E2 tool (a person)
 //! adage review revoke-exec <track> <route>
-//! adage exec enable|disable|status   hooks call adage-exec (E1) or adage; grants per repository
+//! adage exec enable|disable|status   hooks call adage-exec (E1) or adage; the MCP server (E2); grants per repository
 //! adage review <approve|reject|demote|promote|pin|dismiss> <track> <route> [--by <name>]
 //! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
 //! adage eval <dataset> [--split ..] [--json]  offline replay eval of what Adage would have said

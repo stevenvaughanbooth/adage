@@ -2,10 +2,11 @@
 //! route; these commands only change which binary the hooks call and what this machine approves.
 //!
 //! ```text
-//! adage exec enable [--bin <adage-exec>] [--repo <dir>]   hooks call `adage-exec hook` (E1 prefetch)
-//! adage exec disable [--repo <dir>]                        hooks call `adage hook` again
+//! adage exec enable [--bin <adage-exec>] [--repo <dir>]   hooks call `adage-exec hook` (E1 prefetch);
+//!                                                          the MCP server is registered (E2)
+//! adage exec disable [--repo <dir>]                        hooks call `adage hook` again; MCP removed
 //! adage exec status [--repo <dir>] [--json]                registrations, and grants per repository
-//! adage review allow-exec <track> <route> --level e1 [--raw] [--fields '<json>']
+//! adage review allow-exec <track> <route> --level e1|e2 [--raw] [--fields '<json>']
 //!                         [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
 //! adage review revoke-exec <track> <route> [--repo <dir>]
 //! ```
@@ -15,7 +16,10 @@
 //! swapping only the binary: `adage-exec hook <harness> <event>` takes exactly the arguments of
 //! `adage hook`. For the Claude Code plugin they write or remove `$ADAGE_HOME/exec/enabled`, the
 //! marker both plugins' session-start shims read: with it the Adage plugin goes quiet and the
-//! `adage-exec` plugin serves; without it the reverse, so hooks never fire twice.
+//! `adage-exec` plugin serves; without it the reverse, so hooks never fire twice. They also
+//! register or remove `adage-exec mcp` for Codex and OpenCode (`install::mcp_plan`: a diff shown,
+//! a backup kept, idempotent); the Claude Code plugin's `.mcp.json` serves nothing while the marker
+//! is absent.
 //!
 //! Every command here that changes anything refuses inside an agent session and needs a terminal.
 
@@ -33,7 +37,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "usage: adage exec <enable [--bin <adage-exec>] | disable | status [--json]> [--repo <dir>]";
-const REVIEW_USAGE: &str = "usage: adage review allow-exec <track> <route> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
+const REVIEW_USAGE: &str = "usage: adage review allow-exec <track> <route> --level e1|e2 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
        adage review revoke-exec <track> <route> [--repo <dir>]";
 
 /// Harnesses whose registrations `enable` swaps.
@@ -131,6 +135,33 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
             }
         }
     }
+    // The MCP server (E2): registered for each harness that has Adage hooks, removed from all.
+    for h in install::MCP_HARNESSES {
+        let hooked = scopes(root.as_deref()).iter().any(|s| registered(h, s, root.as_deref()).is_some());
+        if on && !hooked {
+            continue;
+        }
+        let p = match install::mcp_plan(h, on.then_some(bin.as_path())) {
+            Ok(p) => p,
+            Err(e) => {
+                eprintln!("adage: {h}: the MCP server is not {}: {e:#}", if on { "registered" } else { "removed" });
+                continue;
+            }
+        };
+        let diff = install::line_diff(p.before.as_deref().unwrap_or(""), &p.after);
+        if install::apply_with_backup(&p)? {
+            changed += 1;
+            println!(
+                "{h}: {} the MCP server `adage` in {}{}:",
+                if on { "registered" } else { "removed" },
+                p.target.display(),
+                if p.before.is_some() { " (previous file kept as *.adage-backup)" } else { "" }
+            );
+            for line in diff.lines() {
+                println!("    {line}");
+            }
+        }
+    }
     let m = marker(paths);
     if on {
         std::fs::create_dir_all(m.parent().context("no directory")?)?;
@@ -141,7 +172,11 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
             "plugin (/plugin install adage-exec@adage); with {} present the Adage plugin goes quiet.",
             m.display()
         );
-        println!("Nothing runs until you approve a route: adage review allow-exec <track> <route> --level e1");
+        println!(
+            "Claude Code: the adage-exec plugin also serves approved E2 routes as MCP tools (its .mcp.json). Without"
+        );
+        println!("the plugin: claude mcp add --scope user adage -- {} mcp", bin.display());
+        println!("Nothing runs until you approve a route: adage review allow-exec <track> <route> --level e1|e2");
         println!("Recommended: deny your agent edits to {} in the harness's permissions.", paths.root.display());
     } else {
         let _ = std::fs::remove_file(&m);
@@ -164,6 +199,12 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
             }
         }
     }
+    let mcp: Vec<Value> = install::MCP_HARNESSES
+        .iter()
+        .filter_map(|h| {
+            install::mcp_registered(h).map(|(file, bin)| json!({ "harness": h, "file": file, "runs": bin }))
+        })
+        .collect();
     let store = Store::load(&approvals::path(&paths.root))?;
     let mut grants: BTreeMap<String, Vec<Value>> = BTreeMap::new();
     for a in &store.approvals {
@@ -179,7 +220,7 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
     }
     let enabled = marker(paths).is_file();
     if args.iter().any(|a| a == "--json") {
-        let v = json!({ "enabled": enabled, "registrations": regs, "grants": grants });
+        let v = json!({ "enabled": enabled, "registrations": regs, "mcp": mcp, "grants": grants });
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(());
     }
@@ -189,6 +230,14 @@ fn status(args: &[String], paths: &Paths) -> Result<()> {
             "  {} ({}): {} runs {}",
             r["harness"].as_str().unwrap_or(""),
             r["scope"].as_str().unwrap_or(""),
+            r["file"].as_str().unwrap_or(""),
+            r["runs"].as_str().unwrap_or("")
+        );
+    }
+    for r in &mcp {
+        println!(
+            "  {} MCP server: {} runs {} mcp",
+            r["harness"].as_str().unwrap_or(""),
             r["file"].as_str().unwrap_or(""),
             r["runs"].as_str().unwrap_or("")
         );
@@ -248,8 +297,9 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     }
     let level = match flag(args, "--level").as_deref().map(str::to_ascii_lowercase).as_deref() {
         Some("e1") => Level::E1,
-        Some("e2" | "e3") => bail!("E2 and E3 arrive with adage-exec mcp (Track C C4, C5); approve at e1"),
-        _ => bail!("--level e1 is required\n{REVIEW_USAGE}"),
+        Some("e2") => Level::E2,
+        Some("e3") => bail!("E3 (actions, staged and verified) arrives with Track C C5; approve at e1 or e2"),
+        _ => bail!("--level e1 or e2 is required\n{REVIEW_USAGE}"),
     };
     let fields: BTreeMap<String, FieldSpec> = match flag(args, "--fields") {
         Some(f) => serde_json::from_str(&f).context("--fields must be a JSON object of field specs")?,
@@ -283,10 +333,33 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     println!("  level:    {}   output: {}", level.as_str().to_uppercase(), req.output.mode.as_str());
     println!("  argv:     {}", req.argv.join(" "));
     for (k, v) in &req.contracts {
-        println!("  input:    {{{k}}} from the prompt, must match {v}");
+        if level == Level::E1 {
+            println!("  input:    {{{k}}} from the prompt, must match {v}");
+        } else if plan.repo_paths.contains(k) {
+            println!("  input:    {{{k}}} a tool argument: a repository path that exists, checked at every call");
+        } else {
+            println!("  input:    {{{k}}} a tool argument, must match {v} (and be a plain token)");
+        }
     }
     println!("  effect:   observe, approved (the classifier says {})", classified.as_str());
     println!("  sandbox:  {}", req.profile.summary());
+    if level == Level::E2 {
+        println!(
+            "  tool:     {} (adage-exec mcp; the agent calls it, and the harness asks per call as configured)",
+            adage_exec::mcp::schema::base_name(route_id)
+        );
+    }
+    let hazards = adage_exec::git::hazards(&root);
+    let actx = adage_exec::approvals::AutoContext {
+        table: &table,
+        git_hazards: &hazards,
+        sandbox_enforced: adage_exec::sandbox::detect().available(),
+        policy_auto: pol.auto_approve,
+    };
+    match adage_exec::approvals::auto_eligible(&req, &actx) {
+        Ok(()) => println!("  automatic: in the inert-observe class, and policy approves that class automatically"),
+        Err(why) => println!("  automatic: no ({})", why.join("; ")),
+    }
     if req.scripts.is_empty() {
         println!("  scripts:  none (L-none)");
     }
@@ -324,7 +397,11 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         store_path.display()
     );
     if !marker(paths).is_file() {
-        println!("Execution is off: `adage exec enable` makes hooks run it.");
+        if level == Level::E2 {
+            println!("Execution is off: `adage exec enable` turns on the adage-exec MCP server that serves it.");
+        } else {
+            println!("Execution is off: `adage exec enable` makes hooks run it.");
+        }
     }
     Ok(())
 }

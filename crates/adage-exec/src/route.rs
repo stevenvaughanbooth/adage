@@ -47,7 +47,14 @@ pub struct Terms {
 pub struct Plan {
     pub request: ExecRequest,
     pub exit_when: BTreeMap<String, String>,
+    /// Slots whose contract is a repository path (E2 only): the value must also name something
+    /// that exists inside the repository, checked at call time.
+    pub repo_paths: std::collections::BTreeSet<String>,
 }
+
+/// The contract a repository-path slot is bound with at E2 (strict: it passes the hostile
+/// probes); the value must also exist inside the repository ([`crate::project::repo_path_ok`]).
+pub const REPO_PATH_CONTRACT: &str = r"^[A-Za-z0-9_][A-Za-z0-9_./@+-]{0,199}$";
 
 /// The step label every derived request carries (`step="lookup"` in the data block).
 pub const STEP: &str = "lookup";
@@ -198,18 +205,30 @@ pub fn plan(
         return Err("only a route that runs a command can be prefetched".into());
     };
     if matches!(ir.route.trigger, Trigger::AfterEdit { .. }) {
-        return Err("a finish-line step changes the repository; it is never prefetched".into());
+        return Err("a finish-line step changes the repository; it never runs at E1 or E2".into());
     }
     let argv: Vec<String> = command.split_whitespace().map(String::from).collect();
     let used = crate::request::slots(&argv);
     let mut contracts = BTreeMap::new();
+    let mut repo_paths = std::collections::BTreeSet::new();
     for name in &used {
         let s = ir.route.slots.iter().find(|s| &s.name == name).ok_or(format!("slot {{{name}}} is not declared"))?;
-        match (&s.source, &s.contract) {
-            (SlotSource::Prompt { .. }, Contract::Pattern { regex }) => {
+        match (&s.source, &s.contract, level) {
+            (SlotSource::Prompt { .. }, Contract::Pattern { regex }, _) => {
                 contracts.insert(name.clone(), regex.clone());
             }
-            _ => return Err(format!("slot {{{name}}} has no E1 form (a prompt value with a pattern contract)")),
+            // At E2 the agent supplies every input as a tool argument, so where the route binds
+            // it from at E0 does not matter; its contract does.
+            (_, Contract::Pattern { regex }, Level::E2 | Level::E3) => {
+                contracts.insert(name.clone(), regex.clone());
+            }
+            (_, Contract::RepoPath, Level::E2 | Level::E3) => {
+                contracts.insert(name.clone(), REPO_PATH_CONTRACT.to_string());
+                repo_paths.insert(name.clone());
+            }
+            (_, _, Level::E1) => {
+                return Err(format!("slot {{{name}}} has no E1 form (a prompt value with a pattern contract)"))
+            }
         }
     }
     let from_pack = ir.exec.as_ref().map(|_| pack_terms(tracks, ir));
@@ -274,6 +293,7 @@ pub fn plan(
             route_exec_digest: digest,
         },
         exit_when,
+        repo_paths,
     })
 }
 

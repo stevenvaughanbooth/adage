@@ -1,0 +1,30 @@
+#!/bin/sh
+# adage-exec plugin MCP server (Track C §3.5, E2). .mcp.json runs this with the plugin's root and
+# data directories. It starts `adage-exec mcp`, which lists a tool for each route a person
+# approved at E2 for the session's repository, and none while execution is off
+# ($ADAGE_HOME/exec/enabled, written only by `adage exec enable`).
+#
+# The binary: the one session-start linked at ${CLAUDE_PLUGIN_DATA}/bin/adage-exec when it is a
+# real adage-exec (the bundled, checksum-verified copy, or adage-exec on PATH); else adage-exec on
+# PATH; else beside adage on PATH. MCP servers may start before SessionStart runs, so this does
+# not rely on the link alone. With no adage-exec anywhere it exits (the harness shows the server
+# as failed; nothing else is affected). Nothing is ever downloaded.
+ROOT="$1"; DATA="$2"
+BIN=""
+if [ -n "$DATA" ] && [ -x "$DATA/bin/adage-exec" ]; then
+  T=$(readlink "$DATA/bin/adage-exec" 2>/dev/null)
+  case "$(basename "${T:-none}")" in
+    adage-exec|adage-exec-*) BIN="$DATA/bin/adage-exec" ;;
+  esac
+fi
+if [ -z "$BIN" ] && P=$(command -v adage-exec 2>/dev/null) && [ -n "$P" ] && [ -f "$P" ]; then
+  BIN="$P"
+fi
+if [ -z "$BIN" ] && P=$(command -v adage 2>/dev/null) && [ -n "$P" ] && [ -x "$(dirname "$P")/adage-exec" ]; then
+  BIN="$(dirname "$P")/adage-exec"
+fi
+if [ -z "$BIN" ]; then
+  echo "adage-exec: no adage-exec binary found; install Adage with adage-exec to serve E2 tools" >&2
+  exit 1
+fi
+exec "$BIN" mcp
