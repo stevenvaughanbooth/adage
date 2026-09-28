@@ -567,7 +567,7 @@ def main(argv=None) -> int:
                 passed = [1.0 if e["metrics"].get("passed") else 0.0 for e in es]
                 md.append(f"| {rid} | {arm} | {len(es)} | {f(statistics.fmean(passed))} | {f(statistics.fmean(c5) if c5 else None, 3)} | "
                           f"{f(statistics.fmean(cl) if cl else None, 3)} | {f(statistics.median(t5) if t5 else None, 1)} | "
-                          f"{f(statistics.median(tl) if tl else None, 1)} | {', '.join(ends) if arm == 'adage' else '–'} |")
+                          f"{f(statistics.median(tl) if tl else None, 1)} | {(', '.join(ends) or 'none') if arm == 'adage' else '–'} |")
             (out / f"curve-{rid}-cost.svg").write_text(svg_curve(f"{rid}: cost per task as sessions accumulate",
                                                                  series_cost, "USD per session", lambda v: f"${v:.2f}"))
             (out / f"curve-{rid}-turns.svg").write_text(svg_curve(f"{rid}: turns per task as sessions accumulate",

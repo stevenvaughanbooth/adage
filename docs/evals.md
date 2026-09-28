@@ -7,6 +7,7 @@ Adage is evaluated in three layers. Each one answers a different question.
 | **Offline replay** (`adage eval`) | Would Adage have told the agent the right thing, at the right moment, safely? | Recorded sessions through the real runtime | None | `crates/adage-eval`, `evals/datasets/` |
 | **Property tests** | Can any input break the parts that run in every hook? | Random and hostile inputs | None | `crates/adage-eval/tests/prop_*.rs` |
 | **Live evals** | Does delivering the directives make real agents faster, and not worse? | Real `claude` agents, with and without Adage | Real tokens | `evals/live/` |
+| **RepoBench-Local** (tier L3) | On real open-source repositories and real bug fixes, is Adage an upgrade over no Adage and over an AGENTS.md? | Real agents, real fixes, hidden upstream tests | Real tokens | `evals/repobench/`, results in `evals/bench/results/` |
 
 The offline replay is the Design §16 credibility test run over recorded history. The live eval
 is the Design §12 loop, measured as in §14. The offline layer is fast and deterministic

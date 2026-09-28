@@ -34,7 +34,7 @@ def transcripts(rid: str, runs: Path, curves: Path) -> list[str]:
     return out
 
 
-def learn(rid: str, files: list[str]) -> dict:
+def learn(rid: str, files: list[str], keep: bool = False) -> dict:
     home = Path(tempfile.mkdtemp(prefix=f"rb-offline-{rid}-", dir=str(common.cache_dir())))
     try:
         env = dict(os.environ, ADAGE_HOME=str(home), HOME=str(home))
@@ -53,9 +53,27 @@ def learn(rid: str, files: list[str]) -> dict:
                 "steered": rep.get("sessions_steered"), "candidates": eng.get("reflexes"),
                 "compiled": eng.get("compiled"), "routes": eng.get("routes"),
                 "kept": [r for t in v.get("tracks", []) for r in t.get("routes", [])],
-                "top_drop_reasons": reasons.most_common(5)}
+                "top_drop_reasons": reasons.most_common(5),
+                "steps": [{"id": f.stem, "trigger": y.get("trigger"), "step": y.get("step"), "state": y.get("state")}
+                          for f in sorted(home.glob("tracks/*/learned/routes/*.yaml")) for y in [route_yaml(f)]],
+                "home": str(home) if keep else None}
     finally:
-        shutil.rmtree(home, ignore_errors=True)
+        if not keep:
+            shutil.rmtree(home, ignore_errors=True)
+
+
+def route_yaml(p: Path) -> dict:
+    """The top-level trigger/step/state of a route file (a flat YAML subset; no dependency)."""
+    out, cur = {}, None
+    for line in p.read_text().splitlines():
+        if not line.startswith(" ") and ":" in line:
+            k, _, v = line.partition(":")
+            cur = k.strip()
+            out[cur] = v.strip() or {}
+        elif cur and isinstance(out.get(cur), dict) and ":" in line and line.startswith("  ") and not line.startswith("   "):
+            k, _, v = line.strip().partition(":")
+            out[cur][k.strip()] = v.strip()
+    return out
 
 
 def main(argv=None) -> int:
@@ -63,6 +81,7 @@ def main(argv=None) -> int:
     ap.add_argument("--runs", default=str(common.cache_dir() / "runs"))
     ap.add_argument("--curves", default=str(common.cache_dir() / "curves"))
     ap.add_argument("--out")
+    ap.add_argument("--keep", action="store_true", help="keep each scratch ADAGE_HOME")
     ap.add_argument("repos", nargs="*")
     a = ap.parse_args(argv)
     res = {}
@@ -70,10 +89,12 @@ def main(argv=None) -> int:
         files = transcripts(rid, Path(a.runs), Path(a.curves))
         if not files:
             continue
-        res[rid] = learn(rid, files)
+        res[rid] = learn(rid, files, a.keep)
         r = res[rid]
         print(f"{rid}: {r.get('traces')} traces (used {r.get('used')}, steered {r.get('steered')}); candidates "
-              f"{r.get('candidates')}, compiled {r.get('compiled')}, routes {r.get('routes')}: {r.get('kept')}")
+              f"{r.get('candidates')}, compiled {r.get('compiled')}, routes {r.get('routes')}")
+        for st in r.get("steps") or []:
+            print(f"    {st['id']} [{st['state']}]: on {st['trigger']} -> {st['step']}")
     if a.out:
         Path(a.out).write_text(json.dumps(res, indent=1) + "\n")
     return 0
