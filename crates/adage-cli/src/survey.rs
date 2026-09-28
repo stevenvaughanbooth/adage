@@ -726,6 +726,7 @@ mod tests {
                 outcome: None,
                 harness: "claude-code".into(),
                 prompts: vec![],
+                ending: Default::default(),
             });
             assert!(a.mined.len() < MINED_PER_REPO * 2 && a.samples.len() <= SAMPLES * 4);
         }

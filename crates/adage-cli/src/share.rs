@@ -1,9 +1,9 @@
 //! `adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>]...
-//! [--ack-scripts] [--format pack|v1]`
+//! [--ack-scripts] [--repo-root <dir>] [--format pack|v1]`
 //! (Design §10.7, §10.8; Track C §1.6): emit a signed **pack** (format `adage-pack/1`).
 //!
 //! The source is a learned track (upgraded to a pack: its live routes, repository scripts pinned
-//! L-ref against the repository `share` runs in), an installed pack by name, or a pack or track
+//! L-ref against `--repo-root <dir>` or else the repository `share` runs in), an installed pack by name, or a pack or track
 //! directory. Every byte of every pack file, vendored scripts included, goes through the
 //! redaction check; vendored scripts that name URLs or hosts, run network tools, use absolute
 //! paths or read secret environment variables are listed and need `--ack-scripts`. Approvals,
@@ -159,7 +159,7 @@ pub fn describe_step(step: &Step) -> String {
     }
 }
 
-const USAGE: &str = "usage: adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>]... [--ack-scripts] [--format pack|v1]";
+const USAGE: &str = "usage: adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>]... [--ack-scripts] [--repo-root <dir>] [--format pack|v1]";
 
 pub fn share(args: &[String], paths: &Paths) -> Result<()> {
     require_person("share")?;

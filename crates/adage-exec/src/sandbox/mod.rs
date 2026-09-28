@@ -289,6 +289,11 @@ pub struct Resolved {
     pub drop_to: Option<(u32, u32)>,
     /// E2 on Linux: the repository is mounted as a writable overlay whose upper layer is here.
     pub overlay: Option<Overlay>,
+    /// E1 on Linux (Landlock), running as root: where the repository is bind-mounted read-only
+    /// for a run as nobody who cannot reach it where it is (a mode-700 ancestor): an empty
+    /// directory in scratch, which the run's own mount namespace mounts it over
+    /// ([`Resolved::bind_repo`]).
+    pub bind: Option<PathBuf>,
 }
 
 /// An overlay's writable layers (Linux, E2). Both live in a staging directory the sandbox is
@@ -419,7 +424,52 @@ impl Resolved {
             limits: profile.limits,
             drop_to,
             overlay: None,
+            bind: None,
         })
+    }
+
+    /// Where the run sees the repository: the bind mount when there is one, else where it is.
+    pub fn seen_repo(&self) -> &Path {
+        self.bind.as_deref().unwrap_or(&self.repo)
+    }
+
+    /// For a run as nobody (root drops to it) that cannot reach the repository where it is: bind
+    /// the repository read-only at `<scratch>/repo`, a path nobody can reach, in the run's own mount
+    /// namespace (Linux, the Landlock backend). The repository directory itself must be readable
+    /// and searchable by others: a bind mount changes where it is, not who may read it.
+    pub fn bind_repo(&mut self, backend: &Backend) -> Result<(), String> {
+        let Some((uid, gid)) = self.drop_to else { return Ok(()) };
+        if others_can_reach(&self.repo) {
+            return Ok(());
+        }
+        if !matches!(backend, Backend::Landlock { .. }) {
+            return Err(format!(
+                "the sandbox runs as nobody, who cannot reach {} (an ancestor is not searchable by others), \
+                 and only the Landlock backend can bind it where nobody can; run as an ordinary user, or make \
+                 its ancestors searchable (chmod o+x)",
+                self.repo.display()
+            ));
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&self.repo).map(|m| m.permissions().mode()).unwrap_or(0);
+            if mode & 0o005 != 0o005 {
+                return Err(format!(
+                    "the sandbox runs as nobody, and {} itself is not readable by others (mode {:o})",
+                    self.repo.display(),
+                    mode & 0o777
+                ));
+            }
+            let target = self.scratch.join("repo");
+            std::fs::create_dir(&target).map_err(|e| format!("bind mount point: {e}"))?;
+            let _ = std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755));
+            let _ = std::os::unix::fs::chown(&target, Some(uid), Some(gid));
+            self.bind = Some(target);
+        }
+        #[cfg(not(unix))]
+        let _ = (uid, gid);
+        Ok(())
     }
 }
 

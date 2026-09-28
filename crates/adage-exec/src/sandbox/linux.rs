@@ -349,6 +349,26 @@ fn overlay_mount(res: &Resolved) -> Result<Option<OverlayMount>, String> {
     }))
 }
 
+/// E1 as root: the repository bind-mounted read-only where the run (as nobody) can reach it,
+/// in a mount namespace of its own (`Resolved::bind`).
+struct BindMount {
+    source: std::ffi::CString,
+    target: std::ffi::CString,
+    /// The working directory, entered again through the bind mount.
+    cwd: std::ffi::CString,
+}
+
+fn bind_mount(res: &Resolved) -> Result<Option<BindMount>, String> {
+    let Some(target) = &res.bind else { return Ok(None) };
+    if res.overlay.is_some() {
+        return Err("a repository is bind-mounted for E1 only".into());
+    }
+    let rel = res.cwd.strip_prefix(&res.repo).map_err(|_| "the working directory is outside the repository")?;
+    let c =
+        |p: &std::path::Path| std::ffi::CString::new(p.to_string_lossy().into_owned()).map_err(|_| "a path holds NUL");
+    Ok(Some(BindMount { source: c(&res.repo)?, target: c(target)?, cwd: c(&target.join(rel))? }))
+}
+
 /// Everything the `pre_exec` hook needs, prepared in the parent.
 pub struct Prepared {
     ruleset: Option<RulesetCreated>,
@@ -362,6 +382,8 @@ pub struct Prepared {
     nproc: u64,
     /// E2: the overlay to mount over the repository.
     overlay: Option<OverlayMount>,
+    /// E1 as root: the repository bind-mounted where nobody can reach it.
+    bind: Option<BindMount>,
 }
 
 pub fn prepare(res: &Resolved, userns: bool) -> Result<Prepared, String> {
@@ -381,6 +403,7 @@ pub fn prepare(res: &Resolved, userns: bool) -> Result<Prepared, String> {
         gid_map: format!("{gid} {gid} 1").into_bytes(),
         nproc: super::nproc_budget(res),
         overlay,
+        bind: bind_mount(res)?,
     })
 }
 
@@ -421,7 +444,7 @@ unsafe fn rlimit(res: Resource, v: u64) -> io::Result<()> {
 
 /// Install the sandbox on `cmd`: the hook runs in the child, after `fork`, before `execve`.
 pub fn install(cmd: &mut Command, prepared: Prepared) {
-    let Prepared { mut ruleset, filters, limits, drop_to, userns, uid_map, gid_map, nproc, overlay } = prepared;
+    let Prepared { mut ruleset, filters, limits, drop_to, userns, uid_map, gid_map, nproc, overlay, bind } = prepared;
     // SAFETY: the closure only makes system calls on data prepared before the fork. The one
     // library call, `restrict_self`, wraps `prctl` and `landlock_restrict_self`.
     unsafe {
@@ -432,6 +455,33 @@ pub fn install(cmd: &mut Command, prepared: Prepared) {
             rlimit(libc::RLIMIT_FSIZE, limits.file_size)?;
             rlimit(libc::RLIMIT_NOFILE, limits.open_files)?;
             rlimit(libc::RLIMIT_CORE, 0)?;
+            if let Some(b) = &bind {
+                // Still root: a mount namespace of the run's own, the repository bound read-only
+                // at a path nobody can reach, and the working directory entered through it.
+                check(libc::unshare(libc::CLONE_NEWNS))?;
+                check(libc::mount(
+                    std::ptr::null(),
+                    c"/".as_ptr(),
+                    std::ptr::null(),
+                    libc::MS_REC | libc::MS_PRIVATE,
+                    std::ptr::null(),
+                ))?;
+                check(libc::mount(
+                    b.source.as_ptr(),
+                    b.target.as_ptr(),
+                    std::ptr::null(),
+                    libc::MS_BIND | libc::MS_REC,
+                    std::ptr::null(),
+                ))?;
+                check(libc::mount(
+                    std::ptr::null(),
+                    b.target.as_ptr(),
+                    std::ptr::null(),
+                    libc::MS_BIND | libc::MS_REMOUNT | libc::MS_RDONLY | libc::MS_NOSUID | libc::MS_NODEV,
+                    std::ptr::null(),
+                ))?;
+                check(libc::chdir(b.cwd.as_ptr()))?;
+            }
             if let Some((uid, gid)) = drop_to {
                 drop_root(uid, gid)?;
             }

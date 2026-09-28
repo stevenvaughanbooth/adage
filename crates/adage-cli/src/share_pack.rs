@@ -79,6 +79,15 @@ fn known_digests(pack: &Pack) -> Result<BTreeSet<String>> {
 
 pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths: &Paths) -> Result<()> {
     let ack = args.iter().any(|a| a == "--ack-scripts");
+    // `--repo-root <dir>`: the repository the track's scripts are pinned (L-ref) and vendored
+    // against, whatever its key; else the repository `share` runs in, when it is the track's.
+    let given_root = match crate::flag(args, "--repo-root") {
+        Some(d) => {
+            let p = PathBuf::from(&d).canonicalize().with_context(|| format!("--repo-root {d}"))?;
+            Some(adage_core::repo::find_root(&p).unwrap_or(p))
+        }
+        None => None,
+    };
     let cwd_root = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d));
     let mut skipped: Vec<(String, String)> = Vec::new();
     let mut not_included: Vec<(String, &'static str)> = Vec::new();
@@ -94,10 +103,21 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
                 }
                 keep
             });
-            // Repository scripts are pinned against the repository `share` runs in, if it is the
-            // track's.
-            let root =
-                cwd_root.as_deref().filter(|r| adage_pack::bind::local_keys(r).contains(&track.manifest.scope.repo));
+            // Repository scripts are pinned against `--repo-root`, else the repository `share`
+            // runs in, if it is the track's (its key, as `adage_core::repo::key_for` derives it).
+            let root = given_root.as_deref().or_else(|| {
+                cwd_root.as_deref().filter(|r| adage_pack::bind::local_keys(r).contains(&track.manifest.scope.repo))
+            });
+            if let Some(r) = given_root.as_deref() {
+                if !adage_pack::bind::local_keys(r).contains(&track.manifest.scope.repo) {
+                    println!(
+                        "adage share: pinning {}'s scripts against {} (--repo-root; its own key differs from the track's {})",
+                        track.manifest.track.name,
+                        r.display(),
+                        track.manifest.scope.repo
+                    );
+                }
+            }
             let up = adage_pack::upgrade::upgrade(&track, root)
                 .with_context(|| format!("{} cannot be carried into a pack", track.manifest.track.name))?;
             skipped.extend(up.skipped);
@@ -114,7 +134,10 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
     };
     let mut pack = pack;
     if args.iter().any(|a| a == "--vendor") {
-        let root = cwd_root.as_deref().context("--vendor reads the scripts from a repository: run it inside one")?;
+        let root = given_root
+            .as_deref()
+            .or(cwd_root.as_deref())
+            .context("--vendor reads the scripts from a repository: run it inside one, or pass --repo-root <dir>")?;
         let v = adage_pack::vendor::vendor(&pack, root).context("refusing to vendor")?;
         for (route, path, sha) in &v.scripts {
             println!("adage share: vendored {path} (reflex {route}) as scripts/sha256-{}…", &sha[..12]);

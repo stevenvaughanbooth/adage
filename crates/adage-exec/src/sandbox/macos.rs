@@ -76,6 +76,7 @@ mod tests {
             limits: Limits::for_level(Level::E1),
             drop_to: None,
             overlay: None,
+            bind: None,
         };
         let p = sbpl(&res);
         assert!(p.starts_with("(version 1)\n(deny default)\n"));

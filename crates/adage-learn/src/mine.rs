@@ -5,6 +5,7 @@ use crate::import::{Session, StepObs};
 use adage_core::spans::{self, SpanKind};
 use adage_core::{CanonicalAction, Effect};
 use adage_runtime::extract_json;
+use adage_tracks::lift::OutcomeLift;
 use adage_tracks::params::LearnParams;
 use adage_tracks::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -41,6 +42,10 @@ pub struct LearnConfig {
     pub material_lower_bound: f64,
     /// Stale routes: the exposed share that explains a route's absence ([`crate::stale`]).
     pub stale_exposure: f64,
+    /// The outcome-lift path (`adage_tracks::lift`): the lower bound on the success difference a
+    /// step needs, and the traces that must have taken it.
+    pub outcome_lift_lower_bound: f64,
+    pub outcome_min_support: u32,
     /// Bind instincts per repository after mining ([`crate::instincts`]); `None` binds none (the
     /// offline eval's default, so its numbers are those of reflexes alone).
     pub instincts: Option<crate::instincts::Config>,
@@ -94,6 +99,8 @@ impl LearnConfig {
             intent_contrast: p.intent_contrast,
             material_lower_bound: p.material_lower_bound,
             stale_exposure: p.stale_exposure,
+            outcome_lift_lower_bound: p.outcome_lift_lower_bound,
+            outcome_min_support: p.outcome_min_support.unwrap_or(p.min_support),
             instincts: None,
             engine: p.engine.clone(),
             facts_cache: None,
@@ -125,6 +132,72 @@ pub(crate) fn aspect_for(
     } else {
         None
     }
+}
+
+/// [`aspect_for`], with the outcome-lift path (`adage_tracks::lift`) as a second gate: a step
+/// that fails the rate bar (or has too little support for it) still gets yellow (prime) when the
+/// traces that took it succeeded significantly more often than those that did not. Never green:
+/// green reads the rate's lower bound alone.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn aspect_with_lift(
+    effect: Effect,
+    by_edit: bool,
+    support: u32,
+    lb: f64,
+    rate: f64,
+    cfg: &LearnConfig,
+    id: &str,
+    lift: Option<&OutcomeLift>,
+) -> Option<Aspect> {
+    if support >= cfg.min_support {
+        if let Some(a) = aspect_for(effect, by_edit, lb, rate, cfg, id) {
+            return Some(a);
+        }
+    }
+    lift_aspect(effect, by_edit, cfg, lift)
+}
+
+/// The outcome-lift path alone: yellow (prime) when the lift qualifies and the effect may be
+/// directed.
+pub(crate) fn lift_aspect(
+    effect: Effect,
+    by_edit: bool,
+    cfg: &LearnConfig,
+    lift: Option<&OutcomeLift>,
+) -> Option<Aspect> {
+    lift.filter(|l| l.qualifies(cfg.outcome_min_support, cfg.outcome_lift_lower_bound))
+        .and_then(|_| adage_tracks::lift::aspect(effect, by_edit))
+}
+
+/// The outcomes lift is judged on: the recorded ones (`--outcomes`, a dataset's `passed`) when
+/// any of these sessions has one, else the transcript proxies ([`Session::proxy_outcome`]).
+pub(crate) fn known_outcomes<'a>(sessions: &[&'a Session]) -> (BTreeMap<&'a str, bool>, &'static str) {
+    let recorded: BTreeMap<&str, bool> =
+        sessions.iter().filter_map(|s| s.outcome.map(|o| (s.id.as_str(), o))).collect();
+    if !recorded.is_empty() {
+        return (recorded, "outcomes");
+    }
+    (sessions.iter().filter_map(|s| s.proxy_outcome().map(|o| (s.id.as_str(), o))).collect(), "proxies")
+}
+
+/// The outcome lift of a step: among the sessions where it was open (`opportunity`), those that
+/// took it (`took`) against those that did not, on known outcomes only.
+pub(crate) fn outcome_lift(
+    sessions: &[&Session],
+    opportunity: &BTreeSet<String>,
+    took: &BTreeSet<String>,
+) -> Option<OutcomeLift> {
+    let (known, source) = known_outcomes(sessions);
+    let (mut with, mut without) = (Vec::new(), Vec::new());
+    for id in opportunity {
+        let Some(o) = known.get(id.as_str()) else { continue };
+        if took.contains(id) {
+            with.push(*o);
+        } else {
+            without.push(*o);
+        }
+    }
+    OutcomeLift::of(&with, &without, source)
 }
 
 /// A short, stable id suffix derived from content, so a route keeps its identity across versions.
@@ -262,6 +335,7 @@ pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
         variants: BTreeMap<String, u32>,
     }
     let mut opportunities = 0u32;
+    let mut open: BTreeSet<String> = BTreeSet::new();
     let mut cands: BTreeMap<String, C> = BTreeMap::new();
     for s in sessions {
         let tickets: Vec<String> =
@@ -270,6 +344,7 @@ pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             continue;
         }
         opportunities += 1;
+        open.insert(s.id.clone());
         let mut seen = BTreeSet::new();
         for (i, step) in s.discovery().iter().enumerate() {
             let Some(av) = argv(step) else { continue };
@@ -295,65 +370,87 @@ pub fn prompt_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
             }
         }
     }
-    let Some((_head, mut best)) =
-        cands.into_iter().max_by(|a, b| a.1.sessions.len().cmp(&b.1.sessions.len()).then_with(|| b.0.cmp(&a.0)))
-    else {
-        return vec![];
+    // One candidate's route, or `None` when it passes no gate. `lift_only`: judged on the
+    // outcome-lift path alone (a candidate other than the most common one).
+    let judge = |best: &C, lift_only: bool| -> Option<Route> {
+        // The representative command: the most common variant.
+        let command = best
+            .variants
+            .iter()
+            .max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0)))
+            .map(|(k, _)| k.clone())
+            .unwrap_or_default();
+        let support = best.sessions.len() as u32;
+        let rate = support as f64 / opportunities.max(1) as f64;
+        let lb = wilson_lower(support, opportunities);
+        // Re-derive the effect from the command that will actually be directed; never inherit it.
+        let classified = adage_tracks::io::classify(&command, &adage_core::CommandTable::load());
+        let (effect, effect_evidence) = crate::effects::effect_of(
+            best.effect.unwrap_or(Effect::Environment).max_by_rank(classified),
+            &command,
+            sessions,
+        );
+        let lift = outcome_lift(sessions, &open, &best.sessions);
+        let aspect = if lift_only {
+            lift_aspect(effect, false, cfg, lift.as_ref())?
+        } else {
+            aspect_with_lift(effect, false, support, lb, rate, cfg, "lookup-work-item", lift.as_ref())?
+        };
+        let contract = spans::ticket_contract(&best.values)?;
+        let (mut turns, mut positions) = (best.turns.clone(), best.positions.clone());
+        Some(Route {
+            id: "lookup-work-item".into(),
+            summary: "Look up the work item named in the prompt".into(),
+            trigger: Trigger::Prompt { span: SpanKind::Ticket },
+            step: Step::Run { command },
+            slots: vec![Slot {
+                name: "item".into(),
+                source: SlotSource::Prompt { span: SpanKind::Ticket },
+                contract: Contract::Pattern { regex: contract },
+            }],
+            effect,
+            aspect,
+            state: initial_state(effect),
+            exit: vec![Exit::IntentChanges],
+            evidence: Evidence {
+                opportunities,
+                support,
+                days: days(sessions, &best.sessions),
+                rate,
+                lower_bound: lb,
+                median_position: median(&mut positions),
+                turns_saved: median(&mut turns),
+                provenance: cfg.provenance.clone(),
+                models: models(sessions),
+                outcome_lift: lift,
+                effect_evidence,
+                ..Default::default()
+            },
+            authored: false,
+        })
     };
-    // The representative command: the most common variant.
-    let command = best
-        .variants
-        .iter()
-        .max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0)))
-        .map(|(k, _)| k.clone())
-        .unwrap_or_default();
-    let support = best.sessions.len() as u32;
-    if support < cfg.min_support {
-        return vec![];
+    // The most common candidate first (ties: the smallest head), as the miner has always chosen.
+    let mut ranked: Vec<(String, C)> = cands.into_iter().collect();
+    ranked.sort_by(|a, b| b.1.sessions.len().cmp(&a.1.sessions.len()).then_with(|| a.0.cmp(&b.0)));
+    let Some((_, best)) = ranked.first() else { return vec![] };
+    if let Some(r) = judge(best, false) {
+        return vec![r];
     }
-    let rate = support as f64 / opportunities.max(1) as f64;
-    let lb = wilson_lower(support, opportunities);
-    // Re-derive the effect from the command that will actually be directed; never inherit it.
-    let effect = best
-        .effect
-        .unwrap_or(Effect::Environment)
-        .max_by_rank(adage_tracks::io::classify(&command, &adage_core::CommandTable::load()));
-    let Some(aspect) = aspect_for(effect, false, lb, rate, cfg, "lookup-work-item") else { return vec![] };
-    let Some(contract) = spans::ticket_contract(&best.values) else { return vec![] };
-    let mut turns = best.turns.clone();
-    vec![Route {
-        id: "lookup-work-item".into(),
-        summary: "Look up the work item named in the prompt".into(),
-        trigger: Trigger::Prompt { span: SpanKind::Ticket },
-        step: Step::Run { command },
-        slots: vec![Slot {
-            name: "item".into(),
-            source: SlotSource::Prompt { span: SpanKind::Ticket },
-            contract: Contract::Pattern { regex: contract },
-        }],
-        effect,
-        aspect,
-        state: initial_state(effect),
-        exit: vec![Exit::IntentChanges],
-        evidence: Evidence {
-            opportunities,
-            support,
-            days: days(sessions, &best.sessions),
-            rate,
-            lower_bound: lb,
-            median_position: median(&mut best.positions),
-            turns_saved: median(&mut turns),
-            provenance: cfg.provenance.clone(),
-            models: models(sessions),
-            ..Default::default()
-        },
-        authored: false,
-    }]
+    // None is common enough: the candidate with the strongest outcome lift, if one qualifies.
+    let mut lifted: Vec<(f64, Route)> = ranked
+        .iter()
+        .skip(1)
+        .filter_map(|(_, c)| judge(c, true))
+        .map(|r| (r.evidence.outcome_lift.as_ref().map_or(0.0, |l| l.lower_bound), r))
+        .collect();
+    lifted.sort_by(|a, b| b.0.total_cmp(&a.0));
+    lifted.into_iter().next().map(|(_, r)| vec![r]).unwrap_or_default()
 }
 
 /// After a lookup whose JSON output lists files, agents read those files — often one per turn.
 pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnConfig) -> Vec<Route> {
     let mut opportunities = 0u32;
+    let mut open: BTreeSet<String> = BTreeSet::new();
     let mut support: BTreeSet<String> = BTreeSet::new();
     let mut fields: BTreeMap<String, u32> = BTreeMap::new();
     let mut saved: Vec<f64> = Vec::new();
@@ -383,6 +480,7 @@ pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnCon
         }
         let Some((field, files)) = listed.into_iter().next() else { continue };
         opportunities += 1;
+        open.insert(s.id.clone());
         let mut read_turns: BTreeSet<u32> = BTreeSet::new();
         let mut covered: BTreeSet<String> = BTreeSet::new();
         for st in s.steps.iter().skip(pos + 1).take(16) {
@@ -400,11 +498,12 @@ pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnCon
         }
     }
     let n = support.len() as u32;
-    if n < cfg.min_support {
-        return vec![];
-    }
     let rate = n as f64 / opportunities.max(1) as f64;
-    if rate < cfg.bar("read-linked-files") {
+    let lift = outcome_lift(sessions, &open, &support);
+    // The rate gate, else the outcome-lift path (yellow either way: a read is only suggested).
+    if (n < cfg.min_support || rate < cfg.bar("read-linked-files"))
+        && lift_aspect(Effect::Observe, false, cfg, lift.as_ref()).is_none()
+    {
         return vec![];
     }
     let field = fields.into_iter().max_by_key(|(_, c)| *c).map(|(f, _)| f).unwrap_or_default();
@@ -432,6 +531,7 @@ pub fn read_batch_routes(sessions: &[&Session], lookup_key: &str, cfg: &LearnCon
             turns_saved: median(&mut saved),
             provenance: cfg.provenance.clone(),
             models: models(sessions),
+            outcome_lift: lift,
             ..Default::default()
         },
         authored: false,
@@ -837,9 +937,117 @@ pub fn obligation_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route>
     out
 }
 
+/// The glob a claimed verify step is owed after: any edit.
+pub const ANY_EDIT: &str = "**/*";
+
+/// A verify step a source *claims* is owed before finishing ("run `make check` before you
+/// finish"), compiled when the traces show it: `adage-train` calls this for each plain verify
+/// claim of a skill, never as a general miner (a check after an edit is otherwise the agent's
+/// habit, not a convention, and is not learned; Track G G3).
+///
+/// The rule is the finish line's, with the edit glob widened to any edit and the contrast taken
+/// in time: among the traces that edited a file (the opportunities), those that ran `command`
+/// successfully after their last edit (support) against those that ran it only earlier, with
+/// edits still to come (the step is owed at the end, not anywhere). Support's rate minus that
+/// one's must reach `finish_line_contrast`. The rate bar, or else the outcome-lift path, decides;
+/// the step must classify as verify.
+pub fn claimed_verify_route(sessions: &[&Session], command: &str, cfg: &LearnConfig) -> Option<Route> {
+    let table = adage_core::CommandTable::load();
+    if adage_tracks::io::classify(command, &table) != Effect::Verify {
+        return None;
+    }
+    let want: Vec<String> = command.split_whitespace().map(str::to_string).collect();
+    let is_it = |st: &StepObs| !st.call.failed && argv(st).is_some_and(|av| *av == want);
+    let (mut open, mut support, mut only_before) = (BTreeSet::new(), BTreeSet::new(), 0u32);
+    for s in sessions {
+        let Some(last) = s.steps.iter().rposition(|st| adage_core::keys::is_author(&st.norm.action)) else { continue };
+        open.insert(s.id.clone());
+        if s.steps[last + 1..].iter().any(is_it) {
+            support.insert(s.id.clone());
+        } else if s.steps[..last].iter().any(is_it) {
+            only_before += 1;
+        }
+    }
+    let (n, opp) = (support.len() as u32, open.len() as u32);
+    if opp == 0 {
+        return None;
+    }
+    let rate = n as f64 / opp as f64;
+    if rate - (only_before as f64 / opp as f64) < cfg.finish_line_contrast {
+        return None;
+    }
+    let id = format!("finish-check-{}", stable(&[ANY_EDIT, command]));
+    let lb = wilson_lower(n, opp);
+    let lift = outcome_lift(sessions, &open, &support);
+    let aspect = aspect_with_lift(Effect::Verify, true, n, lb, rate, cfg, &id, lift.as_ref())?;
+    Some(Route {
+        id,
+        summary: "A check this repository asks for before finishing, after any edit".into(),
+        trigger: Trigger::AfterEdit { paths: ANY_EDIT.into() },
+        step: Step::Run { command: command.to_string() },
+        slots: vec![],
+        effect: Effect::Verify,
+        aspect,
+        state: RouteState::Active,
+        exit: vec![Exit::ExploratoryChange],
+        evidence: Evidence {
+            opportunities: opp,
+            support: n,
+            days: days(sessions, &support),
+            rate,
+            lower_bound: lb,
+            provenance: cfg.provenance.clone(),
+            models: models(sessions),
+            outcome_lift: lift,
+            ..Default::default()
+        },
+        authored: false,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_claimed_verify_step_compiles_when_traces_run_it_after_their_edits() {
+        let with_check = |id: &str, check: bool| {
+            let mut s = editing(id, &["acme/billing.py"], false);
+            if check {
+                let argv = vec!["make".to_string(), "check".to_string()];
+                s.steps.push(step(9, CanonicalAction::Exec { argv, cwd: "/r".into() }, Effect::Verify));
+            }
+            s
+        };
+        let ss: Vec<Session> = (0..4).map(|i| with_check(&format!("s{i}"), i < 3)).collect();
+        let refs: Vec<&Session> = ss.iter().collect();
+        let r = claimed_verify_route(&refs, "make check", &LearnConfig::demo()).expect("3 of 4 ran it at the end");
+        assert_eq!(r.trigger, Trigger::AfterEdit { paths: ANY_EDIT.into() });
+        assert_eq!(r.step, Step::Run { command: "make check".into() });
+        assert_eq!((r.evidence.support, r.evidence.opportunities), (3, 4));
+        // Too few traces ran it.
+        let few: Vec<Session> = (0..4).map(|i| with_check(&format!("s{i}"), i < 1)).collect();
+        assert!(claimed_verify_route(&few.iter().collect::<Vec<_>>(), "make check", &LearnConfig::demo()).is_none());
+        // Not a verify step: never compiled this way.
+        assert!(claimed_verify_route(&refs, "make deploy", &LearnConfig::demo()).is_none());
+        // Traces that edited nothing and checked anyway neither count nor hurt.
+        let mut idle: Vec<Session> = ss.clone();
+        for i in 0..4 {
+            let mut s = with_check(&format!("n{i}"), true);
+            s.steps.retain(|st| !adage_core::keys::is_author(&st.norm.action));
+            idle.push(s);
+        }
+        assert!(claimed_verify_route(&idle.iter().collect::<Vec<_>>(), "make check", &LearnConfig::demo()).is_some());
+        // No contrast in time: as many traces ran it only before edits still to come.
+        let mut early: Vec<Session> = ss.clone();
+        for i in 0..3 {
+            let mut s = with_check(&format!("e{i}"), true);
+            let check = s.steps.pop().unwrap();
+            s.steps.insert(0, check);
+            early.push(s);
+        }
+        assert!(claimed_verify_route(&early.iter().collect::<Vec<_>>(), "make check", &LearnConfig::demo()).is_none());
+    }
 
     #[test]
     fn runners_and_signatures_are_generalised() {
@@ -900,6 +1108,7 @@ mod tests {
             outcome: None,
             harness: "claude-code".into(),
             prompts: vec![crate::import::PromptObs { text: "p".into(), at_step: 0 }],
+            ending: Default::default(),
         }
     }
 
@@ -947,6 +1156,74 @@ mod tests {
             apart.push(editing(&format!("n{i}"), &["README.md"], false));
         }
         assert_eq!(finish_globs(&apart), ["api/*.proto", "rpc/*.proto"]);
+    }
+
+    /// A session whose prompt names `W-10{i}`, which (if `lookup`) looks it up before editing,
+    /// with outcome `passed`.
+    fn ticket_session(i: usize, lookup: bool, passed: Option<bool>) -> Session {
+        let ticket = format!("W-10{i:02}");
+        let mut s = editing(&format!("s{i:02}"), &["acme/billing.py"], false);
+        s.prompt = format!("Pick up {ticket}");
+        s.prompts[0].text = s.prompt.clone();
+        if lookup {
+            let argv = vec!["python3".to_string(), "scripts/wi-lookup".to_string(), ticket];
+            s.steps.insert(0, step(0, CanonicalAction::Exec { argv, cwd: "/r".into() }, Effect::Observe));
+        }
+        s.outcome = passed;
+        s
+    }
+
+    #[test]
+    fn a_rare_step_that_successful_traces_took_forms_a_prime_reflex() {
+        // 5 of 12 traces used the lookup (below the 0.5 rate bar); all 5 passed, 1 of 7 others did.
+        let ss: Vec<Session> =
+            (0..12).map(|i| ticket_session(i, i < 5, Some(if i < 5 { true } else { i == 11 }))).collect();
+        let refs: Vec<&Session> = ss.iter().collect();
+        let r = prompt_routes(&refs, &LearnConfig::default());
+        assert_eq!(r.len(), 1, "the lift path forms the lookup");
+        assert_eq!(r[0].aspect, Aspect::Yellow, "prime at most on lift alone");
+        let l = r[0].evidence.outcome_lift.as_ref().expect("evidence records the lift");
+        assert_eq!((l.with, l.with_passed, l.without, l.without_passed), (5, 5, 7, 1));
+        assert_eq!(l.source, "outcomes");
+        assert!(r[0].evidence.rate < 0.5);
+
+        // Without outcomes (and no transcript proxy: no check ran), the rate bar alone decides.
+        let blind: Vec<Session> = (0..12).map(|i| ticket_session(i, i < 5, None)).collect();
+        assert!(prompt_routes(&blind.iter().collect::<Vec<_>>(), &LearnConfig::default()).is_empty());
+
+        // No lift: the step's takers did no better.
+        let flat: Vec<Session> = (0..12).map(|i| ticket_session(i, i < 5, Some(i % 2 == 0))).collect();
+        assert!(prompt_routes(&flat.iter().collect::<Vec<_>>(), &LearnConfig::default()).is_empty());
+
+        // Too few takers for the outcome-lift support bar (`min_support`: 5 by default).
+        let few: Vec<Session> = (0..12).map(|i| ticket_session(i, i < 3, Some(i < 3))).collect();
+        assert!(prompt_routes(&few.iter().collect::<Vec<_>>(), &LearnConfig::default()).is_empty());
+        // The demo thresholds take 3.
+        assert_eq!(prompt_routes(&few.iter().collect::<Vec<_>>(), &LearnConfig::demo()).len(), 1);
+
+        // Common enough for the rate bar: the lift is recorded, and green stays possible.
+        let common: Vec<Session> = (0..30).map(|i| ticket_session(i, i < 29, Some(i < 29))).collect();
+        let r = prompt_routes(&common.iter().collect::<Vec<_>>(), &LearnConfig::default());
+        assert_eq!(r[0].aspect, Aspect::Green);
+        assert!(r[0].evidence.outcome_lift.is_some());
+    }
+
+    #[test]
+    fn transcript_proxies_stand_in_for_missing_outcomes() {
+        // No recorded outcomes: the takers' last check passed, the others asked for help.
+        let mut ss: Vec<Session> = (0..12).map(|i| ticket_session(i, i < 5, None)).collect();
+        for s in ss.iter_mut() {
+            if s.steps.len() > 1 {
+                let argv = vec!["make".to_string(), "test".to_string()];
+                s.steps.push(step(20, CanonicalAction::Exec { argv, cwd: "/r".into() }, Effect::Verify));
+            } else {
+                s.ending.asked_for_help = true;
+            }
+        }
+        let refs: Vec<&Session> = ss.iter().collect();
+        let r = prompt_routes(&refs, &LearnConfig::default());
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].evidence.outcome_lift.as_ref().unwrap().source, "proxies");
     }
 
     #[test]

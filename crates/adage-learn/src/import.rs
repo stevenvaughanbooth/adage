@@ -8,7 +8,7 @@
 
 use adage_core::keys::{self, template_key};
 use adage_core::tools::normalize_tool;
-use adage_core::{repo, CommandTable, Normalized};
+use adage_core::{repo, tokens, CommandTable, Normalized};
 use adage_runtime::Call;
 use adage_tracks::{
     KIND_ADVICE, KIND_DEAD_ENDS, KIND_FINISH_LINE, KIND_INTENTS, KIND_OTHER, KIND_WORK_ITEMS, MINER_KINDS,
@@ -113,6 +113,57 @@ pub struct Session {
     /// §1.1). The first is also [`Session::prompt`].
     #[serde(default)]
     pub prompts: Vec<PromptObs>,
+    /// How the session ended, as far as the transcript shows (outcome proxies,
+    /// [`Session::proxy_outcome`]).
+    #[serde(default)]
+    pub ending: Ending,
+}
+
+/// How a session ended, read from its transcript: the evidence outcome proxies use when no
+/// outcome was recorded.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Ending {
+    /// The agent's last message asks the person for help or for what to do (`Could you tell me
+    /// what W-1043 involves?`) instead of reporting work done.
+    #[serde(default)]
+    pub asked_for_help: bool,
+    /// The transcript ends on a tool call or its result with no final reply: the session was cut
+    /// off (a turn limit, a kill).
+    #[serde(default)]
+    pub cut_off: bool,
+}
+
+/// Phrases of a final message that asks the person for help, in its last question.
+const HELP_PHRASES: [&str; 14] = [
+    "could you",
+    "can you",
+    "would you",
+    "please provide",
+    "please share",
+    "please clarify",
+    "please let me know",
+    "do you have",
+    "what would you like",
+    "what should i",
+    "should i",
+    "which ",
+    "tell me",
+    "more details",
+];
+
+/// Whether a final reply asks the person for help: its last sentence that ends in `?` holds a
+/// help phrase, and it is near the end. "Would you like me to also …?" after a report of done work
+/// counts too; that is why this is only a proxy, used when no outcome was recorded.
+pub fn asks_for_help(text: &str) -> bool {
+    let t = text.trim_end();
+    let tail: String = t.chars().rev().take(600).collect::<Vec<_>>().into_iter().rev().collect();
+    let Some(q) = tail.rfind('?') else { return false };
+    let start = tail[..q].rfind(['.', '!', '\n', '?']).map(|i| i + 1).unwrap_or(0);
+    let question = tail[start..=q].to_ascii_lowercase();
+    // Only when the question is the last thing said (a list of questions counts).
+    let after = tail[q + 1..].trim();
+    let trailing_ok = after.is_empty() || after.len() < 200;
+    trailing_ok && HELP_PHRASES.iter().any(|p| question.contains(p))
 }
 
 /// `gauge.harness` names, per session source.
@@ -244,6 +295,20 @@ impl Session {
 }
 
 impl Session {
+    /// The session's outcome as its transcript suggests it, for when none was recorded: failed if
+    /// the agent ended by asking the person for help or was cut off, or if its last check failed;
+    /// succeeded if its last check passed; unknown otherwise (no check ran).
+    pub fn proxy_outcome(&self) -> Option<bool> {
+        if self.ending.asked_for_help || self.ending.cut_off {
+            return Some(false);
+        }
+        let last_check = self.steps.iter().rev().find(|s| {
+            s.norm.effect == adage_core::Effect::Verify
+                && matches!(s.norm.action, adage_core::CanonicalAction::Exec { .. })
+        })?;
+        Some(!last_check.call.failed)
+    }
+
     /// How many prompts the person typed.
     pub fn prompt_count(&self) -> u32 {
         self.prompts.len() as u32
@@ -294,6 +359,10 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     let mut turn_of_msg: HashMap<String, u32> = HashMap::new();
     let mut signals = Signals::default();
     let mut prompts = Prompts::default();
+    // The last thing the transcript records: the agent's final reply (its text), or a tool call or
+    // result with no reply after it.
+    let mut last_reply: Option<String> = None;
+    let mut ends_on_tool = false;
 
     for line in reader.lines() {
         let Ok(line) = line else { break };
@@ -335,6 +404,8 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
                     let mut typed: Option<&str> = None;
                     for it in items {
                         if it.get("type").and_then(|v| v.as_str()) == Some("tool_result") {
+                            ends_on_tool = true;
+                            last_reply = None;
                             let tid = it.get("tool_use_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                             let failed = it.get("is_error").and_then(|v| v.as_bool()).unwrap_or(false);
                             results.insert(tid, (text_of(it.get("content").unwrap_or(&Value::Null)), failed));
@@ -360,7 +431,15 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
                 let mid = msg.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
                 if let Some(items) = msg.get("content").and_then(|c| c.as_array()) {
                     for it in items {
+                        if it.get("type").and_then(|v| v.as_str()) == Some("text") {
+                            if let Some(t) = it.get("text").and_then(|v| v.as_str()).filter(|t| !t.trim().is_empty()) {
+                                last_reply = Some(tokens::bounded(t, 4096).to_string());
+                                ends_on_tool = false;
+                            }
+                        }
                         if it.get("type").and_then(|v| v.as_str()) == Some("tool_use") {
+                            ends_on_tool = true;
+                            last_reply = None;
                             let next = turn_of_msg.len() as u32;
                             let turn = *turn_of_msg.entry(mid.clone()).or_insert(next);
                             uses.push((
@@ -382,7 +461,7 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     let prompt = prompt?;
     let cwd_path = PathBuf::from(&cwd);
     let root = repo::find_root(&cwd_path).unwrap_or(cwd_path);
-    let repo_key = repo_override.map(str::to_string).unwrap_or_else(|| repo::repo_key(&root));
+    let repo_key = repo::key_for(&root, repo_override);
     let root_str = root.to_string_lossy().to_string();
     let mut steps = Vec::new();
     for (turn, tid, name, input, at) in uses {
@@ -391,6 +470,10 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
         steps.extend(call_steps(turn, at, &call, normalize_tool(&name, &input, &root_str, table), &root));
     }
     let prompts = prompts.anchor(&steps);
+    let ending = Ending {
+        asked_for_help: last_reply.as_deref().is_some_and(asks_for_help),
+        cut_off: ends_on_tool && !steps.is_empty(),
+    };
     Some(Session {
         id,
         root,
@@ -405,6 +488,7 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
         outcome: None,
         harness: CLAUDE_CODE.into(),
         prompts,
+        ending,
     })
 }
 
@@ -609,6 +693,7 @@ mod tests {
             outcome: None,
             harness: CLAUDE_CODE.into(),
             prompts: vec![PromptObs { text: "p".into(), at_step: 0 }],
+            ending: Default::default(),
         };
         // Built without kinds: judged by route ids.
         assert!(s.steered_by("dead-ends") && s.steered_by("intents"));
@@ -618,5 +703,73 @@ mod tests {
         // Recorded kinds are authoritative.
         s.steered_kinds = ["work-items".to_string()].into();
         assert!(s.steered_by("work-items") && !s.steered_by("intents"));
+    }
+
+    fn transcript(lines: &[serde_json::Value]) -> Session {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("t.jsonl");
+        let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+        std::fs::write(&p, text.join("\n")).unwrap();
+        parse_transcript(&p, &CommandTable::load(), Some("acme")).unwrap()
+    }
+
+    fn user(text: &str) -> serde_json::Value {
+        serde_json::json!({"type": "user", "sessionId": "s1", "cwd": "/tmp/acme", "message": {"role": "user", "content": text}})
+    }
+
+    fn tool(id: &str, cmd: &str) -> serde_json::Value {
+        serde_json::json!({"type": "assistant", "sessionId": "s1", "cwd": "/tmp/acme",
+            "message": {"id": format!("m{id}"), "content": [{"type": "tool_use", "id": id, "name": "Bash", "input": {"command": cmd}}]}})
+    }
+
+    fn result(id: &str, out: &str, error: bool) -> serde_json::Value {
+        serde_json::json!({"type": "user", "sessionId": "s1", "cwd": "/tmp/acme",
+            "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": id, "content": out, "is_error": error}]}})
+    }
+
+    fn reply(text: &str) -> serde_json::Value {
+        serde_json::json!({"type": "assistant", "sessionId": "s1", "cwd": "/tmp/acme",
+            "message": {"id": "mz", "content": [{"type": "text", "text": text}]}})
+    }
+
+    #[test]
+    fn outcome_proxies_are_read_from_how_the_transcript_ends() {
+        // Asked for help instead of acting.
+        let s = transcript(&[
+            user("Pick up W-1043"),
+            tool("a", "ls"),
+            result("a", "Makefile", false),
+            reply("I don't have details about W-1043. Could you tell me what W-1043 involves?"),
+        ]);
+        assert!(s.ending.asked_for_help && !s.ending.cut_off);
+        assert_eq!(s.proxy_outcome(), Some(false));
+        // Cut off after a tool call (a turn limit).
+        let s = transcript(&[user("Pick up W-1043"), tool("a", "make test"), result("a", "ok", false)]);
+        assert!(s.ending.cut_off);
+        assert_eq!(s.proxy_outcome(), Some(false));
+        // Finished, with the last check passing; then failing.
+        let done = |failed: bool| {
+            transcript(&[
+                user("Pick up W-1043"),
+                tool("a", "make test"),
+                result("a", "FAILED", true),
+                tool("b", "make test"),
+                result("b", if failed { "FAILED" } else { "OK" }, failed),
+                reply("Done: the fix is in acme/billing.py and the tests pass."),
+            ])
+        };
+        assert_eq!(done(false).proxy_outcome(), Some(true));
+        assert_eq!(done(true).proxy_outcome(), Some(false));
+        // No check ran: unknown.
+        let s = transcript(&[user("Pick up W-1043"), tool("a", "ls"), result("a", "x", false), reply("Done.")]);
+        assert_eq!(s.proxy_outcome(), None);
+    }
+
+    #[test]
+    fn a_question_is_a_request_for_help_only_with_a_help_phrase() {
+        assert!(asks_for_help("I looked around.\n\nCould you tell me what W-1043 involves?"));
+        assert!(asks_for_help("Which file should I change?"));
+        assert!(!asks_for_help("Done. All tests pass."));
+        assert!(!asks_for_help("Is it done? Yes: all tests pass, and the change is committed."));
     }
 }

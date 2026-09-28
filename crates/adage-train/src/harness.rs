@@ -289,6 +289,12 @@ impl Harness for ClaudeCode {
             c.push("--append-system-prompt".into());
             c.push(t.clone());
         }
+        // `--tools` is the set of tools the model sees at all. `--allowedTools` only pre-approves:
+        // Claude Code 2.1 still exposes TaskGet/TaskList, Cron* and ToolSearch beside them, and an
+        // agent asked to "pick up W-1042" looked for it with TaskGet, found nothing and asked what
+        // to do (the live corpus, evals/corpus/README.md finding 2). As the live runner does.
+        c.push("--tools".into());
+        c.push(ALLOWED_TOOLS.join(","));
         c.push("--allowedTools".into());
         c.extend(ALLOWED_TOOLS.iter().map(|t| t.to_string()));
         c.push("--disallowedTools".into());

@@ -506,6 +506,39 @@ class Rounds(unittest.TestCase):
         self.assertEqual(len(runner.learning_runs(runs, 2, None)), 4, "without pools: every earlier session (leaky)")
 
 
+class Resume(unittest.TestCase):
+    def test_a_rerun_skips_finished_sessions(self):
+        cfg = runner.load_config(CONFIG, {})
+        sessions = runner.plan(cfg, ["train", "eval"], 1)
+        done = lambda phase, arm, task, status="passed", m_status="ok": {  # noqa: E731
+            "phase": phase, "arm": arm, "task": task, "round": 1, "status": status,
+            "metrics": {"status": m_status, "session_id": "s"}}
+        (t0, t1), ev = sessions[:2], next(s for s in sessions if s[1] == "eval")
+        state = {"runs": {
+            t0[0]: done("train", "train", t0[3]),                          # passed: finished
+            t1[0]: done("train", "train", t1[3], "failed", "error_max_turns"),  # a cutoff is a result too
+            ev[0]: done("eval", ev[2], ev[3], "failed", "infra_error"),    # an infra error runs again
+        }}
+        todo = runner.pending(state, sessions, 1)
+        self.assertNotIn(t0, todo)
+        self.assertNotIn(t1, todo)
+        self.assertIn(ev, todo)
+        self.assertEqual(len(todo), len(sessions) - 2)
+        # Killed mid-run (still "running", no metrics) or skipped for the spend cap: runs again.
+        state["runs"][t0[0]] = {"phase": "train", "arm": "train", "task": t0[3], "round": 1, "status": "running"}
+        state["runs"][t1[0]]["status"] = "skipped"
+        self.assertEqual(len(runner.pending(state, sessions, 1)), len(sessions))
+        # Another round's run of the same id does not count.
+        state["runs"][t0[0]] = {**done("train", "train", t0[3]), "round": 2}
+        self.assertIn(t0, runner.pending(state, sessions, 1))
+
+    def test_no_resume_is_an_option(self):
+        _, opts = runner.parse([CONFIG, "--no-resume"])
+        self.assertFalse(opts["resume"])
+        _, opts = runner.parse([CONFIG])
+        self.assertTrue(opts["resume"])
+
+
 class Redaction(unittest.TestCase):
     def test_home_is_redacted(self):
         state = {"runs": {"x": {"events": [{"cmd": "ls /Users/op/.claude/projects"}]}}}

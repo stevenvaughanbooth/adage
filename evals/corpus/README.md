@@ -211,6 +211,13 @@ and `adage eval routes` run on each. Raw run roots (runs, homes, streams) are no
 
 ## Problems found in Adage during real use
 
+Since fixed (CHANGELOG, "Fixed (what the first live corpus exposed)"): 2 for `adage-train`
+(`--tools`), 5 (outcome lift), 6 (effect classes from evidence; nascent reflexes marked), 7 and 8
+(one repository key; `adage share --repo-root`), 9 (typed text projection, a bind mount for a
+repository nobody can reach, a reason for every withheld stage), 10, 11, 12 (resume), 13 (one
+conventions format; the gen-derived datasets here were regenerated with it) and 15 (plain verify
+claims compile). The numbers below are the corpus as run, before these fixes.
+
 1. **Agents walk out of their sandbox.** Unconfined, Haiku sessions ran `find /tmp -name "*hidden*"`,
    read their own task's hidden test (`gen/.../hidden/test_hidden_bil_7793.py`) and read the runner's
    `state.json` (other sessions' prompts and commands), then "fixed" the ticket from it. The first 62

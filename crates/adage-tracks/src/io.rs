@@ -158,6 +158,16 @@ pub fn classify(command: &str, table: &CommandTable) -> Effect {
         .unwrap_or(Effect::Environment)
 }
 
+/// Whether a run step declared observe over the table's `environment` is a repository script
+/// learning classified from the traces (`adage_learn::effects`): the command runs an unlisted
+/// repository script whose name says nothing of changing anything, and the route says why.
+pub fn inferred_observe(r: &Route, command: &str, actual: Effect, table: &CommandTable) -> bool {
+    r.effect == Effect::Observe
+        && actual == Effect::Environment
+        && r.evidence.effect_evidence.as_deref().is_some_and(|n| !n.trim().is_empty())
+        && adage_core::shell::unlisted_repo_script(command, table).is_some()
+}
+
 /// A contract must reject values that could carry shell syntax, whitespace, traversal, or flags.
 pub fn contract_is_strict(regex: &str) -> bool {
     let Ok(re) = Regex::new(regex) else { return false };
@@ -222,9 +232,11 @@ pub fn validate(t: &Track) -> Result<()> {
                         bail!("{}: command {:?} has slots its trigger cannot bind", ctx(), command);
                     }
                 }
-                // Never trust a declared effect: classify the command ourselves.
+                // Never trust a declared effect: classify the command ourselves. The one exception
+                // is a repository script the table does not know, which learning classified
+                // observe from the traces and says why (`evidence.effect_evidence`).
                 let actual = classify(command, &table);
-                if rank(actual) > rank(r.effect) {
+                if rank(actual) > rank(r.effect) && !inferred_observe(r, command, actual, &table) {
                     bail!("{}: command {:?} is {:?}, but the track declares {:?}", ctx(), command, actual, r.effect);
                 }
                 if r.aspect == Aspect::Red {

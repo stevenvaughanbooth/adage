@@ -400,7 +400,8 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
         println!(
             "{}",
             serde_json::to_string_pretty(
-                &json!({ "count": rows.len(), "queue": rows, "inert": inert, "attestations": attestations, "exec_revoked": revoked })
+                &json!({ "count": rows.len(), "queue": rows, "inert": inert, "attestations": attestations, "exec_revoked": revoked,
+                         "exec_last_withheld": adage_exec::last_withheld(&paths.root) })
             )?
         );
         return Ok(());
@@ -408,6 +409,14 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     print_inert(&inert);
     print_revoked(&revoked);
     print_attested(&attested);
+    // Why the last prefetch or action was not delivered (every withheld stage records a reason).
+    if let Some(w) = adage_exec::last_withheld(&paths.root) {
+        println!(
+            "adage review: last reflex run by Adage {}
+",
+            w.line()
+        );
+    }
     if items.is_empty() {
         println!("adage review: nothing awaits a decision.");
         return Ok(());

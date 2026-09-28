@@ -108,12 +108,12 @@ class Bundle:
         self.path = Path(path).resolve()
         self.spec = json.loads((self.path / "spec.json").read_text())
         self.tasks = json.loads((self.path / "tasks.json").read_text())
-        self.conv = json.loads((self.path / "conventions.json").read_text())
+        self.conv = grammar.entries(json.loads((self.path / "conventions.json").read_text()))
         self.sol = json.loads((self.path / "solutions.json").read_text())
         self.sc = json.loads((self.path / "scoring.json").read_text())
         self.by_kind = {}
         for c in self.conv:
-            self.by_kind.setdefault(c["kind"], []).append(c)
+            self.by_kind.setdefault(grammar.kind_of(c), []).append(c)
 
     def one(self, kind):
         return (self.by_kind.get(kind) or [None])[0]
@@ -122,7 +122,7 @@ class Bundle:
         c = self.one("dead_end")
         if not c:
             return []
-        runner = c["avoided"]
+        runner = c["avoided"][0]
         if runner.startswith("python3"):
             return [runner, f"{runner} discover -s tests", f"{runner} -v"]
         return [runner, f"{runner} test/", f"{runner} test/*.test.mjs"]
@@ -182,7 +182,7 @@ def work(b, s, task, i):
         s.bash(variants[i % len(variants)])  # the dead end
     inst = b.one("instinct_violation")
     if inst and i % 3 != 1:
-        s.bash(inst["avoided"])  # the universal default
+        s.bash(inst["avoided"][0])  # the universal default
     s.bash(b.tasks["verify"])
 
 
@@ -347,7 +347,7 @@ def compare(b, routes, holdout=None):
         return (r.get("trigger") or {}).get("on") == "after_edit" and r["trigger"].get("paths") == glob
 
     for c in b.conv:
-        kind, got = c["kind"], None
+        kind, got = grammar.kind_of(c), None
         if kind == "lookup":
             got = take(lambda r: r["id"] == "lookup-work-item"
                        and norm(r["step"].get("command")).split(" --json")[0] == norm(c["command"])
@@ -357,11 +357,13 @@ def compare(b, routes, holdout=None):
             got = take(lambda r: r["id"] == "read-linked-files")
         elif kind in ("dead_end", "instinct_violation"):
             got = take(lambda r: r["id"].startswith("dead-end")
-                       and any(runs(x.strip(), c["avoided"]) for x in str(r["step"].get("avoid", "")).split(" / "))
+                       and any(runs(x.strip(), a) for x in str(r["step"].get("avoid", "")).split(" / ")
+                               for a in c["avoided"])
                        and r["step"].get("instead") == c["command"])
             # The graph engine announces a dead end most traces do not meet after its failure.
             got = got or take(lambda r: r["id"].startswith("dead-end") and r["trigger"].get("on") == "after_failure"
-                              and runs(adage_runner(r["trigger"].get("command", "").removeprefix("exec ")), c["avoided"])
+                              and any(runs(adage_runner(r["trigger"].get("command", "").removeprefix("exec ")), a)
+                                      for a in c["avoided"])
                               and r["step"].get("command") == c["command"])
         elif kind == "finish_line":
             got = take(lambda r: r["id"].startswith("finish-line") and r["trigger"].get("paths") == c["glob"]
@@ -399,8 +401,8 @@ def compare(b, routes, holdout=None):
                 sig = step.get("signature") or trig.get("signature", "")
                 detail.update(avoid=avoid, instead=step.get("instead") or step.get("command"),
                               learned_signature=sig, declared_signature=c["signature"],
-                              declared_avoided=c["avoided"],
-                              broadened=all(canonical_argv(x.strip()) != canonical_argv(c["avoided"])
+                              declared_avoided=c["avoided"][0],
+                              broadened=all(canonical_argv(x.strip()) != canonical_argv(c["avoided"][0])
                                             for x in str(avoid).split(" / ")),
                               signature_matches=c["signature"] in str(sig))
             elif kind == "finish_line":

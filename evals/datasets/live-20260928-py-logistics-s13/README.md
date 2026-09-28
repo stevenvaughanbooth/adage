@@ -26,7 +26,7 @@ Training: 6/9 passed; 3/9 used the sandbox's lookup. Spend: $2.34 (the sessions'
 | live index (reflexes + instincts) | 7 | 3 | 4 | 2/4 |
 | instincts-only (day 0) | 7 | 3 | 4 | 2/4 |
 
-No route names a decoy command (`decoys.json`).
+No route names a decoy command (the `decoys` in `conventions.json`).
 
 ## Effect on held-out tasks
 
@@ -48,7 +48,7 @@ Task-clustered: the CI resamples tasks, p permutes arms within tasks, Holm acros
 
 - `manifest.json`, `sessions/`, `sandbox.txt`, `recorded/` as `evals/datasets/tools/build_demo.py` writes them (see `evals/datasets/demo-haiku45/README.md`); the split `round1` trains on the training sessions and tests on the holdout arm. `manifest.json` also names `conventions` and the `arms`.
 - `recorded/index-round1.json`: the live index (the adage arm's); `recorded/index-instincts-only.json`: the instincts arm's (keyed `<name>@<root commit>`, as `adage learn --instincts-only` keys a repository).
-- `conventions.json`: ground truth in `adage-conventions/1` (converted from the gen bundle's; its decoys, which that schema has no kind for, are in `decoys.json`).
+- `conventions.json`: ground truth in `adage-conventions/1`, as `evals/gen` writes it (decoys included, under `decoys`).
 - `packs/`: the learned reflex tracks as signed packs (`adage share`), when any was learned. They are signed by a throwaway **test signer** made for this corpus, never trust it for anything else:
 
 ```text

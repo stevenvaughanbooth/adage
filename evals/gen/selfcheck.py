@@ -85,7 +85,7 @@ class Checker:
         self.lines = []
         self.spec = json.loads((self.b / "spec.json").read_text())
         self.tasks = json.loads((self.b / "tasks.json").read_text())
-        self.conv = json.loads((self.b / "conventions.json").read_text())
+        self.conv = grammar.entries(json.loads((self.b / "conventions.json").read_text()))
         self.sol = json.loads((self.b / "solutions.json").read_text())
         self.sc = json.loads((self.b / "scoring.json").read_text())
         self.tmp = tempfile.TemporaryDirectory(prefix="adage-gen-selfcheck-")
@@ -126,7 +126,7 @@ class Checker:
                     raise SystemExit(f"{tid}: `{cmd}` failed:\n{out}")
 
     def conv_of(self, kind):
-        return [c for c in self.conv if c["kind"] == kind]
+        return [c for c in self.conv if grammar.kind_of(c) == kind]
 
     # ------------------------------------------------------------------------------ the checks
 
@@ -210,12 +210,12 @@ class Checker:
     def dead_ends(self):
         for c in self.conv_of("dead_end") + self.conv_of("instinct_violation"):
             d = self.fresh()
-            rc, out = self.sh(c["avoided"], d)
-            self.check(f"{c['kind']}: `{c['avoided']}` fails with the declared signature",
+            rc, out = self.sh(c["avoided"][0], d)
+            self.check(f"{c['id']}: `{c['avoided'][0]}` fails with the declared signature",
                        rc != 0 and c["signature"] in out, "" if rc != 0 and c["signature"] in out else out[-400:])
             rc, out = self.sh(c["command"], d)
-            self.check(f"{c['kind']}: `{c['command']}` passes", rc == 0, "" if rc == 0 else out[-400:])
-            self.check(f"{c['kind']}: the probes leave the tree clean", not self.status(d), self.status(d))
+            self.check(f"{c['id']}: `{c['command']}` passes", rc == 0, "" if rc == 0 else out[-400:])
+            self.check(f"{c['id']}: the probes leave the tree clean", not self.status(d), self.status(d))
 
     def tasks_pairs(self):
         picked, seen = [], set()

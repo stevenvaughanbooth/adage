@@ -325,7 +325,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
     let prompt = event_prompt.or(item_prompt)?;
     let cwd_path = PathBuf::from(&cwd);
     let root = repo::find_root(&cwd_path).unwrap_or(cwd_path);
-    let repo_key = repo_override.map(str::to_string).unwrap_or_else(|| repo::repo_key(&root));
+    let repo_key = repo::key_for(&root, repo_override);
     let root_str = root.to_string_lossy().to_string();
     // Prompts from `user_message` events when there are any, else from user messages (the same
     // precedence as the first prompt).
@@ -369,6 +369,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
         outcome: None,
         harness: "codex".into(),
         prompts,
+        ending: Default::default(),
     })
 }
 

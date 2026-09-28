@@ -103,6 +103,17 @@ pub struct LearnParams {
     /// Stale routes: the share of occurrences that must be exposed for a route's absence to be
     /// put down to exposure alone.
     pub stale_exposure: f64,
+    /// The outcome-lift path (`crate::lift`): a step that too few traces took for the rate bar
+    /// still forms a reflex, capped at yellow (prime), when the traces that took it succeeded
+    /// more often than those that did not, with the 95% lower bound on the difference at least
+    /// this. Outcomes are the recorded ones (`--outcomes`), else transcript proxies. Omitted from
+    /// the canonical JSON at its default (0.2), so the presets' hashes are unchanged.
+    #[serde(skip_serializing_if = "is_default_lift")]
+    pub outcome_lift_lower_bound: f64,
+    /// The outcome-lift path needs at least this many traces that took the step; `None` (the
+    /// default, omitted from the canonical JSON) is `min_support`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome_min_support: Option<u32>,
     /// The learning engine (Track G §10): `miners` (today's miners, the default), `shadow` or
     /// `graph`. Under `shadow` and `graph` the lookup miner takes its slot and contract from the
     /// graph engine's learned value types, and session facts are computed (and cached).
@@ -113,6 +124,13 @@ pub struct LearnParams {
 
 /// The engines `LearnParams::engine` may name.
 pub const ENGINES: [&str; 3] = ["miners", "shadow", "graph"];
+
+/// The default `outcome_lift_lower_bound`.
+pub const OUTCOME_LIFT_LOWER_BOUND: f64 = 0.2;
+
+fn is_default_lift(x: &f64) -> bool {
+    *x == OUTCOME_LIFT_LOWER_BOUND
+}
 
 fn is_miners(e: &str) -> bool {
     e == "miners"
@@ -132,6 +150,8 @@ impl Default for LearnParams {
             intent_contrast: 0.3,
             material_lower_bound: crate::review::MATERIAL_LOWER_BOUND,
             stale_exposure: 0.5,
+            outcome_lift_lower_bound: OUTCOME_LIFT_LOWER_BOUND,
+            outcome_min_support: None,
             engine: "miners".into(),
         }
     }
@@ -176,6 +196,9 @@ impl EngineParams {
         if den == 0 || num > den {
             bail!("learn: dead_end_consistency [num, den] needs 0 < den and num <= den");
         }
+        if l.outcome_min_support == Some(0) {
+            bail!("learn: outcome_min_support must be at least 1");
+        }
         if l.dead_end_signatures == 0 {
             bail!("learn: dead_end_signatures must be at least 1");
         }
@@ -192,6 +215,7 @@ impl EngineParams {
             ("learn.intent_contrast", l.intent_contrast),
             ("learn.material_lower_bound", l.material_lower_bound),
             ("learn.stale_exposure", l.stale_exposure),
+            ("learn.outcome_lift_lower_bound", l.outcome_lift_lower_bound),
         ] {
             if !(0.0..=1.0).contains(&x) {
                 bail!("{name} must be within 0..=1 (got {x})");
@@ -305,6 +329,12 @@ mod tests {
         assert_eq!(from_toml, d);
         let demo = EngineParams::demo();
         assert_eq!((demo.learn.min_support, demo.learn.green_lower_bound), (3, 0.5));
+        assert_eq!((d.learn.outcome_min_support, demo.learn.outcome_min_support), (None, None));
+        assert_eq!(d.learn.outcome_lift_lower_bound, 0.2);
+        // At their defaults the outcome-lift settings leave the canonical JSON (and hash) as it was.
+        assert!(!d.canonical_json().contains("outcome") && !demo.canonical_json().contains("outcome"));
+        let o = d.with_overrides(&serde_json::json!({"learn": {"outcome_min_support": 4}})).unwrap();
+        assert!(o.canonical_json().contains("\"outcome_min_support\":4"));
         assert_eq!(demo.runtime, d.runtime);
     }
 

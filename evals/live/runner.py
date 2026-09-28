@@ -49,6 +49,9 @@ Options:
   --host-auth          forward the variables of a host-managed login to isolated sessions (HOST_AUTH_ENV:
                        the ingress token file, organisation, account, base URL, proxies and CA
                        bundles; never CLAUDECODE or a session id). Same as `"host_auth": true`
+  --no-resume          run every session of each phase again; by default a phase skips its sessions
+                       that already finished in this root (a pass or a fail, a max-turns cutoff
+                       included) and runs only the rest: new repeats, runs cut short, infra errors
   --json               print the plan as JSON (dry run)
   --adage PATH         the adage binary (default: target/release/adage in this repository)
 
@@ -698,6 +701,25 @@ def run_metrics(cfg, events, result, score, workdir, elapsed, sid, spool):
 ARCHIVE = ("adage-home", "transcripts", "outcomes.json")
 
 
+def finished(run, phase, arm, task, round_):
+    """Whether a recorded run is this session, and it finished: it ran to a result the summary
+    counts (passed or failed, a max-turns cutoff included), with a session id. A run still marked
+    running (the runner was killed), skipped for the spend cap, or an infrastructure error is not
+    finished, and runs again."""
+    if not run or (run.get("phase"), run.get("arm"), run.get("task"), run.get("round", 1)) != (phase, arm, task, round_):
+        return False
+    m = run.get("metrics") or {}
+    status = m.get("status") or run.get("run_status")
+    return (run.get("status") in ("passed", "failed") and bool(m.get("session_id"))
+            and status not in (None, "infra_error", "running"))
+
+
+def pending(state, sessions, round_):
+    """The sessions of a phase still to run (resume): those without a finished run in `state`."""
+    runs = state.get("runs", {})
+    return [s for s in sessions if not finished(runs.get(s[0]), s[1], s[2], s[3], round_)]
+
+
 def learning_runs(runs, round_, pool=None):
     """The finished runs round `round_` learns from: in round 1 the training sessions; in later
     rounds also every earlier round's eval sessions. With a held-out `pool` (the round's tasks,
@@ -740,8 +762,10 @@ def harness_version(env=None):
 
 
 class Live:
-    def __init__(self, cfg, root, adage, round_, isolate=True):
+    def __init__(self, cfg, root, adage, round_, isolate=True, resume=True):
         self.cfg, self.root, self.adage, self.round, self.isolate = cfg, root, adage, round_, isolate
+        # Re-running a phase skips its sessions that already finished (`pending`).
+        self.resume = resume
         self.private = root / "private"
         self.private.mkdir(parents=True, exist_ok=True)
         # A root written before private/ existed: move its archive in, once.
@@ -935,6 +959,12 @@ class Live:
     def phase(self, name, sessions):
         unlink_archive(self.root)
         self.set_phase(name)
+        if self.resume:
+            todo = pending(self.state, sessions, self.round)
+            if len(todo) < len(sessions):
+                print(f"  resume: {len(sessions) - len(todo)} of {len(sessions)} {name} session(s) already finished; "
+                      f"running {len(todo)} (--no-resume runs them all again)", flush=True)
+            sessions = todo
         with ThreadPoolExecutor(max_workers=self.cfg["concurrency"]) as ex:
             futures = [(s, ex.submit(self.run_one, *s)) for s in sessions]
             for s, f in futures:
@@ -991,7 +1021,9 @@ class Live:
         shutil.rmtree(work.parent, ignore_errors=True)
         work.parent.mkdir(parents=True)
         subprocess.run(expand(self.cfg["sandbox"], dir=str(work), task=task), check=True, capture_output=True)
-        out = subprocess.run([str(self.adage), "learn", "--instincts-only", "--repo-path", str(work), "--json"],
+        # Keyed as `learn --repo` keys the reflexes, so both indexes of one sandbox agree.
+        out = subprocess.run([str(self.adage), "learn", "--instincts-only", "--repo-path", str(work),
+                              "--repo", self.cfg["repo_key"], "--json"],
                              capture_output=True, text=True, env=dict(os.environ, ADAGE_HOME=str(home)))
         if out.returncode != 0:
             raise SystemExit(out.stderr)
@@ -1057,7 +1089,7 @@ def redact_home(state):
 def parse(argv):
     opts = {"execute": False, "dry_run": False, "json": False, "root": None, "model": None, "round": None,
             "adage": None, "phases": [], "config": None, "seed": None, "isolate": True,
-            "host_auth": None}
+            "host_auth": None, "resume": True}
     it = iter(argv)
     for a in it:
         if a == "--execute":
@@ -1070,6 +1102,8 @@ def parse(argv):
             opts["isolate"] = False
         elif a == "--host-auth":
             opts["host_auth"] = True
+        elif a == "--no-resume":
+            opts["resume"] = False
         elif a in ("--root", "--model", "--round", "--adage", "--config", "--seed"):
             v = next(it, None)
             if v is None:
@@ -1151,7 +1185,7 @@ def main(argv):
     if p["leaky_rounds"]:
         print(leak_warning(p["leaky_rounds"]), flush=True)
     root.mkdir(parents=True, exist_ok=True)
-    live = Live(cfg, root, adage, rounds[0], opts["isolate"])
+    live = Live(cfg, root, adage, rounds[0], opts["isolate"], opts["resume"])
     print(f"seed {cfg['seed']}  harness {live.state['harness_version']}  isolation {'on' if opts['isolate'] else 'OFF'}"
           f"{' (auth: ' + live.auth[0] + ')' if live.auth else ''}", flush=True)
     summaries = {}

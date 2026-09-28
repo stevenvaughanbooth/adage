@@ -1,62 +1,83 @@
 {
- "schema": "adage-conventions/1",
- "sandbox": "tallyhouse-billing",
- "description": "Converted from the gen bundle's conventions.json (evals/gen); decoys are in decoys.json.",
  "conventions": [
   {
-   "id": "lookup",
-   "notes": "Task prompts name only an item ID. Items live in the internal tracker: an opaque store (.tracker/cache.bin) that only scripts/wi-lookup reads. The README mentions only the internal tracker.",
-   "kind": "lookup",
-   "command": "./scripts/wi-lookup {id}",
-   "id_pattern": "^BIL-\\d{3,4}$",
-   "samples": [
-    "BIL-135",
-    "BIL-209",
-    "BIL-495",
-    "BIL-4812",
-    "BIL-908",
-    "BIL-7310"
-   ],
+   "command": "./scripts/wi-lookup {item}",
    "counter_samples": [
     "X-1",
     "ABCDEFG-123456789",
     "12",
     "not-an-id"
+   ],
+   "id": "lookup",
+   "id_pattern": "^BIL-\\d{3,4}$",
+   "kind": "lookup",
+   "notes": "Task prompts name only an item ID. Items live in the internal tracker: an opaque store (.tracker/cache.bin) that only scripts/wi-lookup reads. The README mentions only the internal tracker.",
+   "samples": [
+    "BIL-135",
+    "BIL-4812",
+    "BIL-209",
+    "BIL-908",
+    "BIL-495",
+    "BIL-7310"
    ]
   },
   {
+   "command": "./scripts/wi-lookup {item}",
    "id": "linked-files",
-   "notes": "The lookup output lists the files to change under 'Files:' (the `files` field with --json). Registry items list the CSV and the module that reads it, never the generated file.",
    "kind": "linked_files",
-   "command": "./scripts/wi-lookup {id}",
+   "notes": "The lookup output lists the files to change under 'Files:' (the `files` field with --json). Registry items list the CSV and the module that reads it, never the generated file.",
    "samples": [
     "BIL-135"
    ]
   },
   {
-   "id": "dead-end",
-   "notes": "Test files import tools/testing/env.mjs, which throws unless TALLY_ENV=test (set only by `npm run check`). The working command is declared in .ci/pipeline.yml.",
-   "kind": "dead_end",
-   "command": "npm run check",
    "avoided": [
     "node --test"
-   ]
+   ],
+   "command": "npm run check",
+   "id": "dead-end",
+   "kind": "dead_end",
+   "mode": "env_guard",
+   "notes": "Test files import tools/testing/env.mjs, which throws unless TALLY_ENV=test (set only by `npm run check`). The working command is declared in .ci/pipeline.yml.",
+   "signature": "TALLY_ENV is not set, run the suite with npm run check"
   },
   {
-   "id": "instinct-violation",
-   "notes": "(gen kind instinct_violation) The universal default (npm test) is retired here and fails; the suite runs with npm run check, declared only in .ci/pipeline.yml.",
-   "kind": "dead_end",
-   "command": "npm run check",
    "avoided": [
     "npm test"
-   ]
+   ],
+   "command": "npm run check",
+   "id": "instinct-violation",
+   "kind": "dead_end",
+   "mode": "instinct_violation",
+   "notes": "The universal default (npm test) is retired here and fails; the suite runs with npm run check, declared only in .ci/pipeline.yml.",
+   "signature": "error: npm test is retired here, the suite runs with npm run check"
   },
   {
-   "id": "finish-line",
-   "notes": "Lookups read src/generated/registry.mjs, generated from registry/*.csv. Editing a CSV requires npm run codegen; npm run check and the hidden checks fail on stale output.",
-   "kind": "finish_line",
    "command": "npm run codegen",
-   "glob": "registry/*.csv"
+   "glob": "registry/*.csv",
+   "id": "finish-line",
+   "kind": "finish_line",
+   "notes": "Lookups read src/generated/registry.mjs, generated from registry/*.csv. Editing a CSV requires npm run codegen; npm run check and the hidden checks fail on stale output.",
+   "signature": "error: src/generated/registry.mjs is out of date with registry/*.csv, run npm run codegen"
   }
- ]
+ ],
+ "decoys": [
+  {
+   "command": "npm run lint",
+   "id": "decoy-lookalike-verify",
+   "kind": "decoy",
+   "mode": "lookalike_verify",
+   "notes": "A lint step that always passes; it is not the test suite and not a dead end."
+  },
+  {
+   "command": "node tools/legacy-export.mjs",
+   "id": "decoy-legacy-script",
+   "kind": "decoy",
+   "mode": "legacy_script",
+   "notes": "A leftover script that does nothing; no task needs it."
+  }
+ ],
+ "description": "The hidden conventions of the tallyhouse-billing sandbox (evals/gen, node-npm, seed 22): what a learner should find. Decoys are planted commands no route may direct.",
+ "sandbox": "tallyhouse-billing",
+ "schema": "adage-conventions/1"
 }

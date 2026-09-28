@@ -6,6 +6,7 @@ pub mod advice;
 pub mod index;
 pub mod interlock;
 pub mod io;
+pub mod lift;
 pub mod model;
 pub mod params;
 pub mod proposals;

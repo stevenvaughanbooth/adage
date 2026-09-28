@@ -10,7 +10,7 @@
 //! adage ui                           the full-screen app: live feed, routes and review, health fixes, settings
 //! adage learn [options]              mine tracks from agent sessions and compile the index
 //! adage learn --auto --repo-root <path>   learn one repository quietly (what hooks start)
-//! adage learn --instincts-only [--repo-path <dir>]  bind Adage's built-in defaults (instincts) for
+//! adage learn --instincts-only [--repo-path <dir>] [--repo <key>]  bind Adage's built-in defaults (instincts) for
 //!                                    a repository from its files alone, with no sessions (day 0)
 //! adage config [get <key> | set <key> <value>] [--json]   settings in $ADAGE_HOME/config.toml
 //! adage status                       installed tracks, routes, aspects, and evidence
@@ -21,7 +21,7 @@
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
 //!                                    print (default) or write a harness's hook registration
-//! adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>] [--ack-scripts] [--format pack|v1]
+//! adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>] [--ack-scripts] [--repo-root <dir>] [--format pack|v1]
 //!                                    redaction-check, build and sign a pack (namespace adage-pack)
 //! adage add <dir> [--trust]          verify a pack (or a v1 track, upgraded in place), install it,
 //!                                    and bind it to this repository at probation
@@ -313,6 +313,18 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
                 println!("  changed: {}: {}", c.route, c.summary);
             }
         }
+        let nascent = rep
+            .repos
+            .values()
+            .flat_map(|rr| rr.tracks.iter())
+            .flat_map(|t| t.routes.iter())
+            .filter(|l| l.contains(" NASCENT: "))
+            .count();
+        if nascent > 0 {
+            println!(
+                "\n{nascent} nascent reflex(es) learned but not delivered: each waits for a person. Review them with `adage review`."
+            );
+        }
         if !rep.conflicts.is_empty() {
             println!("\ninterlocking: {} conflict(s) resolved", rep.conflicts.len());
             for c in &rep.conflicts {
@@ -343,9 +355,10 @@ fn print_instincts(ir: &adage_learn::instincts::InstinctReport) {
     }
 }
 
-/// `adage learn --instincts-only [--repo-path <dir>] [--json]`: bind a repository's instincts
+/// `adage learn --instincts-only [--repo-path <dir>] [--repo <key>] [--json]`: bind a repository's instincts
 /// from its declared files, with no sessions (day 0), and compile the index. The repository is
-/// `--repo-path` (default: the current directory), resolved to its root.
+/// `--repo-path` (default: the current directory), resolved to its root; its key is `--repo <key>` when
+/// given (as `adage learn --repo` keys reflexes), else derived from the root.
 pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
     let dir = match flag(args, "--repo-path").or_else(|| flag(args, "--repo-root")) {
@@ -354,7 +367,12 @@ pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
     };
     let dir = dir.canonicalize().map_err(|e| anyhow::anyhow!("{}: {e}", dir.display()))?;
     let root = adage_core::repo::find_root(&dir).unwrap_or(dir);
-    let repo = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
+    // The same key `adage learn --repo <key>` stores reflexes under, so both indexes of one
+    // repository agree (`adage_core::repo::key_with`).
+    let explicit = flag(args, "--repo");
+    let repo = adage_core::repo::key_with(explicit.as_deref(), || {
+        adage_core::repo::repo_key_cached(&root, &paths.repo_keys())
+    });
     let settings = adage_store::config::load(paths).config;
     let ic = autolearn::instinct_config(&settings, paths);
     std::fs::create_dir_all(&paths.root)?;

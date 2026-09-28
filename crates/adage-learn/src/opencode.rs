@@ -143,7 +143,7 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
     let prompt = prompt?;
     let cwd_path = PathBuf::from(&cwd);
     let root = repo::find_root(&cwd_path).unwrap_or(cwd_path);
-    let repo_key = repo_override.map(str::to_string).unwrap_or_else(|| repo::repo_key(&root));
+    let repo_key = repo::key_for(&root, repo_override);
     let root_str = root.to_string_lossy().to_string();
     let mut steps = Vec::new();
     for (turn, at, native, input, output, failed) in uses {
@@ -178,6 +178,7 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
         outcome: None,
         harness: OPENCODE.into(),
         prompts,
+        ending: Default::default(),
     })
 }
 

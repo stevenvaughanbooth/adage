@@ -288,7 +288,17 @@ The schema (`adage-conventions/1`; unknown fields are refused):
 | `glob` | `finish_line` | The repository-relative glob whose edits create the obligation (`schema/*.json`) |
 | `id_pattern` | `lookup` | Anchored regex every real id matches (`^INC-\d{2,3}$`) |
 | `samples`, `counter_samples` | `lookup` (samples also bind `{id}`) | Ids a learned contract must accept, and must reject. Checked against `id_pattern` when the file loads |
+| `steps` | `sequence` | The commands, in order (`command` is the first) |
+| `mode`, `signature` | any (informational) | How a generator planted it (`env_guard`, …; `instinct_violation` for a dead end that is the retired universal default), and the failure or staleness text the sandbox prints |
 | `notes` | any | Free text for people |
+| `decoys` | the file | Planted commands that are no convention (`{id, kind: "decoy", mode, command, notes}`): a learned route directing one is a **decoy hit**, reported by `adage eval routes` |
+
+`evals/gen` writes its bundles' `conventions.json` in exactly this schema (the kinds `scope`,
+`env_sync` and `sequence` included), so a gen bundle's ground truth is read like any other and a
+dataset built from a gen run copies it as is; there is no converter.
+
+With `--index <file>`, `adage eval routes` scores that index: it reports "scored the given index",
+never train sessions, leakage or an engine, since nothing was learned from the dataset.
 
 `adage eval routes <dataset> [--split …] [--thresholds …] [--index …] [--json]` learns tracks from
 the train split exactly as `adage eval` does (or loads `--index`), then matches every learned
@@ -406,6 +416,19 @@ serde defaults equal to the values Adage has always used (`{}` is exactly today'
 | `learn.intent_ubiquitous` / `learn.intent_contrast` | 0.8 / 0.3 | intent routes: ubiquitous commands, in- minus out-of-family rate |
 | `learn.material_lower_bound` | 0.10 | review: a material lower-bound change |
 | `learn.stale_exposure` | 0.5 | stale routes: the exposed share that explains an absence |
+| `learn.outcome_lift_lower_bound` | 0.2 | outcome-lift path: the 95% lower bound (Newcombe) on success-with-the-step minus success-without it |
+| `learn.outcome_min_support` | `min_support` (5, demo 3) | outcome-lift path: sessions that took the step |
+
+**Outcome lift.** The rate bar learns what most agents did. A step few agents took, but that the
+successful ones took, forms a reflex on a second path: where the trigger occurred, the sessions
+that took the step passed more often than those that did not, and the lower bound on that
+difference reaches `outcome_lift_lower_bound`, with at least `outcome_min_support` takers. Such a
+reflex is **prime** (yellow) at most, whatever the ceiling: green reads the rate's lower bound
+alone. Outcomes are the recorded ones (`adage learn --outcomes`, a dataset's `passed`) when any
+session has one, else transcript proxies (the last check passed; the agent did not end by asking
+for help; it was not cut off mid-tool-call). The lookup (both engines), the linked-files read and
+the graph compiler's after-edit and after-command judgements take this path; the route's evidence
+records `outcome_lift` either way.
 
 The runtime reads its limits from `Ctx::params`; the learner from `LearnConfig::from_params`.
 **Production is unchanged:** the hook builds `Ctx` with `RuntimeParams::default()` (the index does

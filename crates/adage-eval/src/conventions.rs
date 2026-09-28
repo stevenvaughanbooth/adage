@@ -120,6 +120,25 @@ pub struct Conventions {
     #[serde(default)]
     pub description: String,
     pub conventions: Vec<Convention>,
+    /// Commands the sandbox plants that are no convention (`evals/gen` decoys): a learned route
+    /// directing one is a decoy hit, and false.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub decoys: Vec<Decoy>,
+}
+
+/// A planted command that is no convention.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Decoy {
+    pub id: String,
+    /// Always `decoy`.
+    pub kind: String,
+    /// How the generator planted it (`unused_target`, `lookalike_regen`, …).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    pub command: String,
+    #[serde(default)]
+    pub notes: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -150,6 +169,13 @@ pub struct Convention {
     /// Sequence: the commands, in order (`command` is the first).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub steps: Vec<String>,
+    /// How a generator planted it (`evals/gen`: a dead end's `mode`, `instinct_violation` for the
+    /// retired universal default). Informational.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<String>,
+    /// The failure (or staleness) signature the sandbox prints. Informational.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<String>,
     #[serde(default)]
     pub notes: String,
 }
@@ -225,8 +251,38 @@ impl Conventions {
                 _ => {}
             }
         }
+        for d in &self.decoys {
+            if d.kind != "decoy" || d.id.is_empty() || !ids.insert(d.id.as_str()) {
+                bail!("decoy {:?}: kind must be `decoy` and its id unique", d.id);
+            }
+            if d.command.split_whitespace().next().is_none() {
+                bail!("decoy {:?}: empty command", d.id);
+            }
+        }
         Ok(())
     }
+}
+
+/// Learned routes that direct a decoy's command (`route: decoy`): each is a false route.
+pub fn decoy_hits(routes: &[&Route], conv: &Conventions, table: &CommandTable) -> Vec<String> {
+    let mut out = Vec::new();
+    for r in routes {
+        let mut cmds: Vec<&str> = match &r.step {
+            Step::Run { command } => vec![command],
+            Step::Sequence { commands } => commands.iter().map(String::as_str).collect(),
+            Step::Avoid { instead, .. } => vec![instead],
+            _ => vec![],
+        };
+        if let Trigger::AfterCommand { command } = &r.trigger {
+            cmds.push(command.trim_start_matches("exec "));
+        }
+        for d in &conv.decoys {
+            if cmds.iter().any(|c| Expect::of(c, table).same(&Expect::of(&d.command, table))) {
+                out.push(format!("{}: {}", r.id, d.id));
+            }
+        }
+    }
+    out
 }
 
 /// Bind every `{slot}` in a command to `value`.
@@ -474,6 +530,10 @@ pub struct RoutesReport {
     pub task_overlap_ids: Vec<String>,
     pub leaky: bool,
     pub split_note: Option<String>,
+    /// The index scored, when one was given (`--index`): nothing was learned from the dataset,
+    /// so there are no train sessions and no leakage to report.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub index_file: Option<String>,
     /// The conventions file, relative to the dataset.
     pub conventions_file: String,
     pub sandbox: String,
@@ -498,6 +558,12 @@ pub struct RoutesReport {
     pub f1: f64,
     pub routes: Vec<RouteMatch>,
     pub conventions: Vec<ConventionMatch>,
+    /// Learned routes that direct a planted decoy's command ([`decoy_hits`]).
+    #[serde(default)]
+    pub decoy_hits: Vec<String>,
+    /// Decoys the conventions file lists.
+    #[serde(default)]
+    pub decoys: usize,
 }
 
 /// Score an index's routes for `repo` against `conv`. `files` are the sandbox's files.
@@ -567,72 +633,10 @@ pub fn run(dir: &Path, opts: &Options) -> Result<RoutesReport> {
 }
 
 impl Conventions {
-    /// A generated bundle's ground truth (`evals/gen`: `conventions.json` is a list, `tasks.json`
-    /// names the repository and the tracker ids). Decoys are no convention (a route directing one
-    /// matches nothing, so it is false); an instinct violation is a dead end; a lookup's samples are
-    /// the tracker tasks' ids.
+    /// A generated bundle's ground truth: `evals/gen` writes `conventions.json` in this schema,
+    /// decoys included, so it is read like any other.
     pub fn from_bundle(dir: &Path) -> Result<Conventions> {
-        let read = |f: &str| -> Result<serde_json::Value> {
-            let p = dir.join(f);
-            serde_json::from_str(&std::fs::read_to_string(&p).with_context(|| p.display().to_string())?)
-                .with_context(|| p.display().to_string())
-        };
-        let (list, tasks) = (read("conventions.json")?, read("tasks.json")?);
-        let tracker: Vec<String> = tasks["tasks"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|t| matches!(t["kind"].as_str(), Some("bugfix" | "registry")))
-            .filter_map(|t| t["id"].as_str().map(str::to_string))
-            .collect();
-        let strs = |v: &serde_json::Value| -> Vec<String> {
-            match v {
-                serde_json::Value::String(s) => vec![s.clone()],
-                serde_json::Value::Array(a) => a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect(),
-                _ => vec![],
-            }
-        };
-        let mut out = Vec::new();
-        for c in list.as_array().context("conventions.json: a list")? {
-            let kind = match c["kind"].as_str().unwrap_or_default() {
-                "lookup" => Kind::Lookup,
-                "linked_files" => Kind::LinkedFiles,
-                "dead_end" | "instinct_violation" => Kind::DeadEnd,
-                "finish_line" => Kind::FinishLine,
-                "scope" => Kind::Scope,
-                "env_sync" => Kind::EnvSync,
-                "sequence" => Kind::Sequence,
-                _ => continue,
-            };
-            out.push(Convention {
-                id: c["id"].as_str().unwrap_or_default().to_string(),
-                kind,
-                command: c["command"].as_str().unwrap_or_default().to_string(),
-                avoided: strs(&c["avoided"]),
-                glob: c["glob"].as_str().map(str::to_string),
-                id_pattern: c["id_pattern"].as_str().map(str::to_string),
-                // A command with the tracker's `{item}` binds to the tracker's ids.
-                samples: match strs(&c["samples"]) {
-                    v if v.is_empty()
-                        && (kind == Kind::Lookup || c["command"].as_str().is_some_and(|x| x.contains('{'))) =>
-                    {
-                        tracker.clone()
-                    }
-                    v => v,
-                },
-                counter_samples: vec![],
-                steps: strs(&c["steps"]),
-                notes: String::new(),
-            });
-        }
-        let conv = Conventions {
-            schema: SCHEMA.into(),
-            sandbox: tasks["repo"].as_str().unwrap_or_default().to_string(),
-            description: String::new(),
-            conventions: out,
-        };
-        conv.validate()?;
-        Ok(conv)
+        Conventions::load(&dir.join("conventions.json"))
     }
 }
 
@@ -707,6 +711,7 @@ pub fn run_bundle(dir: &Path, engine: &str) -> Result<RoutesReport> {
     let (live, inert_routes) = live_and_inert(&refs);
     let files = repo_files(&dir.join("repo"));
     let (rms, cms) = score_routes(&live, &conv, &files, &CommandTable::load());
+    let decoy_hits = decoy_hits(&live, &conv, &CommandTable::load());
     let true_routes = rms.iter().filter(|r| !r.matches.is_empty() || !r.partial.is_empty()).count();
     let false_routes: Vec<String> =
         rms.iter().filter(|r| r.matches.is_empty() && r.partial.is_empty()).map(|r| r.id.clone()).collect();
@@ -727,6 +732,7 @@ pub fn run_bundle(dir: &Path, engine: &str) -> Result<RoutesReport> {
         task_overlap_ids: vec![],
         leaky: false,
         split_note: Some("every rehearsal transcript; routes in any state but retired".into()),
+        index_file: None,
         conventions_file: "conventions.json".into(),
         sandbox: conv.sandbox.clone(),
         index_generation: report.index_generation,
@@ -745,13 +751,19 @@ pub fn run_bundle(dir: &Path, engine: &str) -> Result<RoutesReport> {
         f1,
         routes: rms,
         conventions: cms,
+        decoy_hits,
+        decoys: conv.decoys.len(),
     })
 }
 
 /// Score the routes of a prepared dataset's index against its conventions (the second half of
 /// [`run`]).
 pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
-    let Prepared { ds, split_name, split, thresholds, index, overlap, .. } = p;
+    let Prepared { ds, split_name, split, thresholds, index, overlap, index_file, .. } = p;
+    // A given index learned nothing from this dataset: no train side, no leakage.
+    let given = index_file.as_ref().map(|f| f.to_string_lossy().into_owned());
+    let (train_sessions, overlap) =
+        if given.is_some() { (0, Vec::new()) } else { (split.train.len(), overlap.clone()) };
     let file = ds.conventions_file()?.with_context(|| {
         format!("dataset {} has no conventions file (manifest `conventions`, or conventions.json)", ds.manifest.name)
     })?;
@@ -772,6 +784,7 @@ pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
     let routes: Vec<&Route> = index.for_repo(&ds.manifest.repo).map(|ir| &ir.route).collect();
     let (routes, inert_routes) = live_and_inert(&routes);
     let (rms, cms) = score_routes(&routes, &conv, &files, &table);
+    let decoy_hits = decoy_hits(&routes, &conv, &table);
     let true_routes = rms.iter().filter(|r| !r.matches.is_empty() || !r.partial.is_empty()).count();
     let false_routes: Vec<String> =
         rms.iter().filter(|r| r.matches.is_empty() && r.partial.is_empty()).map(|r| r.id.clone()).collect();
@@ -790,12 +803,13 @@ pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
         dataset: ds.manifest.name.clone(),
         split: split_name.clone(),
         thresholds: thresholds.clone(),
-        train_sessions: split.train.len(),
+        train_sessions,
         test_sessions: split.test.len(),
         task_overlap: overlap.len(),
         leaky: !overlap.is_empty(),
-        task_overlap_ids: overlap.clone(),
-        split_note: split.note.clone(),
+        task_overlap_ids: overlap,
+        split_note: if given.is_some() { None } else { split.note.clone() },
+        index_file: given,
         conventions_file,
         sandbox: conv.sandbox.clone(),
         index_generation: index.generation.clone(),
@@ -814,6 +828,8 @@ pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
         f1,
         routes: rms,
         conventions: cms,
+        decoy_hits,
+        decoys: conv.decoys.len(),
     })
 }
 
@@ -838,10 +854,23 @@ pub fn render_text(r: &RoutesReport) -> String {
         "adage eval routes: {} (split {}, thresholds {}; conventions {}, {})",
         r.dataset, r.split, r.thresholds, r.conventions_file, r.sandbox
     );
-    let _ = writeln!(s, "learned from {} train sessions ({} test sessions unused)", r.train_sessions, r.test_sessions);
-    s.push_str(&crate::leakage_text(r.split_note.as_deref(), &r.task_overlap_ids, r.leaky));
+    match &r.index_file {
+        Some(f) => {
+            let _ = writeln!(s, "scored the given index {f}: nothing was learned from this dataset's sessions");
+        }
+        None => {
+            let _ = writeln!(
+                s,
+                "learned from {} train sessions ({} test sessions unused)",
+                r.train_sessions, r.test_sessions
+            );
+            s.push_str(&crate::leakage_text(r.split_note.as_deref(), &r.task_overlap_ids, r.leaky));
+        }
+    }
     let _ = writeln!(s, "index {} with {} routes", r.index_generation, r.learned_routes);
-    let _ = writeln!(s, "engine {}", r.engine);
+    if r.index_file.is_none() {
+        let _ = writeln!(s, "engine {}", r.engine);
+    }
     for x in &r.routes {
         let verdict = match (x.matches.is_empty(), x.partial.is_empty()) {
             (false, _) => format!("= {}", x.matches.join(", ")),
@@ -879,6 +908,9 @@ pub fn render_text(r: &RoutesReport) -> String {
     let none = || "none".to_string();
     let list = |v: &[String]| if v.is_empty() { none() } else { v.join(", ") };
     let _ = writeln!(s, "false routes: {}", list(&r.false_routes));
+    if r.decoys > 0 {
+        let _ = writeln!(s, "decoy hits ({} decoys): {}", r.decoys, list(&r.decoy_hits));
+    }
     if !r.inert_routes.is_empty() {
         let _ = writeln!(s, "inert until context triggers are live (G4): {}", r.inert_routes.join(", "));
     }
@@ -1005,6 +1037,25 @@ mod tests {
             let copy = std::fs::read_to_string(root.join("evals/datasets").join(ds).join("conventions.json")).unwrap();
             assert_eq!(copy, crate::generate::ACME_CONVENTIONS, "{ds}/conventions.json differs from demo/sandbox's");
         }
+    }
+
+    #[test]
+    fn a_given_index_is_reported_as_given_not_as_learned() {
+        let dir =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../evals/datasets/live-20260928-acme-billing");
+        let opts = crate::Options {
+            split: Some("round1".into()),
+            index: Some(dir.join("recorded/index-round1.json")),
+            ..Default::default()
+        };
+        let r = run(&dir, &opts).unwrap();
+        let t = render_text(&r);
+        assert!(t.contains("scored the given index"), "{t}");
+        assert!(!t.contains("train sessions") && !t.contains("LEAKY") && !t.contains("\nengine "), "{t}");
+        assert_eq!((r.train_sessions, r.leaky), (0, false));
+        // Learning from the split still says so.
+        let r = run(&dir, &crate::Options { split: Some("round1".into()), ..Default::default() }).unwrap();
+        assert!(render_text(&r).contains("learned from 12 train sessions"));
     }
 
     #[test]

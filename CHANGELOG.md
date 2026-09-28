@@ -13,6 +13,65 @@ version as the GitHub Release notes.
   (shipped) are the units; tracks and packs are the artefacts. "Put your agent on rails" is retired
   as the tagline (README, plugin and npm descriptions, Design Spec §17).
 
+### Fixed (what the first live corpus exposed, evals/corpus/README.md)
+
+- **Outcome-aware learning.** A step few agents took but the successful ones took now forms a
+  reflex: where the trigger occurred, the sessions that took it passed significantly more often
+  than those that did not (Newcombe 95% lower bound on the difference ≥
+  `learn.outcome_lift_lower_bound`, 0.2; at least `learn.outcome_min_support` takers, by default
+  `min_support`: 5, demo 3; both omitted from the canonical parameters at their defaults, so the
+  presets' `params_hash` is unchanged).
+  Such a reflex is prime (yellow) at most. Outcomes are `--outcomes` / a dataset's `passed`, else
+  transcript proxies (last check passed, no request for help at the end, not cut off; a parse now
+  records how a session ended, cache format 3). The lookup (miners and the value-type lookup), the
+  linked-files read and the graph compiler's judgements (`adage_graph::compile::outcome_gate`) take
+  this path; evidence records `outcome_lift` (`adage_tracks::lift`). On the committed live
+  datasets (`adage eval routes --split round1`), acme-billing now learns its lookup (3/3 takers
+  passed vs 1/9). py-billing-s11 learns the lookup's command too, but from three 4-digit training
+  ids its contract (`^BIL-\d{4}$`) rejects the held-out 3-digit ids, which the scorer counts as a
+  false route. node-billing-s22, py-billing-hash-s32, node-billing-uuid-s42 and py-logistics-s13
+  still learn nothing: their takers did no better, or too few took the step.
+- **Effect classes from evidence.** A repository script the command table does not know
+  (`python3 tools/case {item}`) is classified observe when the traces show it only reads: at least
+  3 traces ran it, no run was followed by changes it caused, what it printed was read next in two
+  thirds of them, its name says nothing of changing or sending anything, and its text (where a trace
+  shows it) uses no network or process library and writes no file. The route records why
+  (`evidence.effect_evidence`), and track validation accepts that declaration for such a script
+  only. The clinic sandboxes' lookups are now firm reflexes, not drafts. `adage learn`'s summary
+  names strengths as fire / prime / inhibit, marks each nascent (draft) reflex `NASCENT` with the
+  `adage review approve` line that puts it in service, and counts them at the end.
+- **One repository key.** `adage_core::repo::key_with` / `key_for` is the one derivation: an
+  explicit `--repo <key>` exactly as given, else the key of the root. `adage learn
+  --instincts-only` takes `--repo <key>` (the live runner passes it), so both indexes of a sandbox
+  agree. `adage share --repo-root <dir>` pins (and `--vendor` reads) repository scripts against
+  that checkout whatever its key, and the "not carried" message names the flag.
+- **E1 prefetch in practice.** A plain-text lookup is approved typed: a `repo-path-list` field can
+  be read from text (`"text": true`: the repository paths the output's lines name, each validated;
+  nothing else passes), learned `*paths` fields map to it, and a lookup nothing reads gets a
+  `files` field of that kind, so no `--raw` is needed. As root, a repository nobody can reach (a
+  mode-700 ancestor) is bind-mounted read-only at a path nobody can reach, in the run's own mount
+  namespace, and the script's shadow links lead there (Landlock backend; other backends refuse
+  with the reason); as an ordinary user the sandbox runs as that user. Every withheld stage now
+  records a reason in the spool (`reason`, never output text; `render` says which check failed),
+  and `adage-exec doctor` and `adage review` show the last one.
+- **`adage eval routes --index`** says it scored the given index; it no longer prints train
+  sessions, a LEAKY warning or an engine for it.
+- **One conventions format.** `evals/gen` writes `adage-conventions/1` directly (samples and
+  counter-samples, `avoided` as a list, the instinct violation as a dead end with
+  `mode: instinct_violation`, decoys under `decoys`); `adage eval routes` reports decoy hits; the
+  list-format reader is gone. The committed gen-derived live datasets carry the regenerated files
+  (their `decoys.json` folded in).
+- **adage-train** compiles a plain verify claim ("run `make check` before you finish") when the
+  exploration sessions ran it after their last edit, more often than only before edits still to
+  come (`adage_learn::mine::claimed_verify_route`, a check owed after any edit), and its Claude
+  Code harness passes `--tools`, so TaskGet/TaskList and the like are not offered.
+- **build_demo.py** redacts paths as paths (`/root` never rewrites "root commit" or `rootDir`),
+  Claude Code's encoded project paths (`-tmp-…-runs-…`) and the account name as a whole word only
+  (never a generic one such as `root`), with tests.
+- **Live runner: resume.** Re-running a phase skips its sessions that already finished (a pass or a
+  fail, a max-turns cutoff included) and runs the rest: new repeats, runs cut short, infra errors.
+  `--no-resume` runs them all again.
+
 ### Added
 
 - **E2: actions from hooks (Track C, milestone C5).** When an approved action reflex's stimulus

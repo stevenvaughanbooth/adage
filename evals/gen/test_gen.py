@@ -131,31 +131,46 @@ class Determinism(unittest.TestCase):
 
 
 class Schema(unittest.TestCase):
-    CONV_KEYS = {"id", "kind", "command", "avoided", "signature", "glob", "id_pattern", "notes", "mode"}
+    # `adage-conventions/1` (docs/evals.md), the schema `adage eval routes` reads.
+    CONV_KEYS = {"id", "kind", "command", "avoided", "signature", "glob", "id_pattern", "samples", "counter_samples",
+                 "steps", "notes", "mode"}
+    DOC_KEYS = {"schema", "sandbox", "description", "conventions", "decoys"}
+    # The schema's kinds (an instinct violation is a dead end with that mode; decoys are apart).
+    SCHEMA_KINDS = {"lookup", "linked_files", "dead_end", "finish_line", "scope", "env_sync", "sequence"}
 
     def test_conventions(self):
         for b in bundles():
-            conv = json.loads((b / "conventions.json").read_text())
-            ids = [c["id"] for c in conv]
+            doc = json.loads((b / "conventions.json").read_text())
+            self.assertLessEqual(set(doc), self.DOC_KEYS)
+            self.assertEqual(doc["schema"], grammar.CONVENTIONS_SCHEMA)
+            self.assertEqual(doc["sandbox"], json.loads((b / "tasks.json").read_text())["repo"])
+            ids = [c["id"] for c in grammar.entries(doc)]
             self.assertEqual(len(ids), len(set(ids)))
-            for c in conv:
+            for c in doc["conventions"]:
                 self.assertLessEqual(set(c), self.CONV_KEYS, c)
-                self.assertIn(c["kind"], grammar.KINDS)
+                self.assertIn(c["kind"], self.SCHEMA_KINDS)
                 self.assertTrue(c["command"] and c["notes"])
-                if c["kind"] in ("dead_end", "instinct_violation"):
+                if "{" in c["command"]:
+                    self.assertTrue(c["samples"], c)
+                if c["kind"] == "dead_end":
                     self.assertTrue(c["avoided"] and c["signature"])
+                    self.assertIsInstance(c["avoided"], list)
+                    self.assertIn(c["mode"], grammar.DEAD_END_MODES + ("instinct_violation",))
                 if c["kind"] == "finish_line":
                     self.assertTrue(c["glob"] and c["signature"])
                 if c["kind"] == "lookup":
-                    re.compile(c["id_pattern"])
+                    rx = re.compile(c["id_pattern"])
                     self.assertIn("{item}", c["command"])
-                if c["kind"] == "dead_end":
-                    self.assertIn(c["mode"], grammar.DEAD_END_MODES)
+                    self.assertTrue(all(rx.fullmatch(x) for x in c["samples"]))
+                    self.assertFalse(any(rx.fullmatch(x) for x in c["counter_samples"]))
+            for d in doc.get("decoys", []):
+                self.assertEqual(d["kind"], "decoy")
+                self.assertIn(d["mode"], grammar.DECOY_MODES)
 
     def test_tasks(self):
         for b in bundles():
             tasks = json.loads((b / "tasks.json").read_text())
-            conv_ids = {c["id"] for c in json.loads((b / "conventions.json").read_text())}
+            conv_ids = {c["id"] for c in grammar.entries(json.loads((b / "conventions.json").read_text()))}
             ts = tasks["tasks"]
             control = [t for t in ts if t["kind"] == "control"]
             self.assertGreaterEqual(len(control) * 4, len(ts), "at least 25% control tasks")
@@ -325,7 +340,7 @@ class NewKinds(unittest.TestCase):
         plan, stack = gen.plan_for(entry["spec"], entry["seed"])
         kinds = [t.kind for t in plan.tasks]
         self.assertEqual((kinds.count("scoped"), kinds.count("deps")), (3, 3))
-        conv = {c["kind"]: c for c in stack.conventions()}
+        conv = {c["kind"]: c for c in stack.conventions()["conventions"]}
         self.assertNotIn("finish_line", conv, "the sequence replaces the finish line")
         self.assertEqual(conv["sequence"]["steps"], ["make gen", "make check"])
         self.assertEqual(conv["scope"]["command"], "make -C packages/{part} check")
@@ -387,7 +402,7 @@ class IdShapes(unittest.TestCase):
                 plan, stack = gen.plan_for(spec, seed)
                 ids = [t.id for t in plan.tasks if t.kind != "control"]
                 self.assertEqual(len(set(ids)), len(ids))
-                pattern = re.compile(next(c for c in stack.conventions() if c["kind"] == "lookup")["id_pattern"])
+                pattern = re.compile(next(c for c in stack.conventions()["conventions"] if c["kind"] == "lookup")["id_pattern"])
                 found = grammar.mention_regex(shape, "BIL")
                 for t in plan.tasks:
                     prompts = stack.prompts(t)

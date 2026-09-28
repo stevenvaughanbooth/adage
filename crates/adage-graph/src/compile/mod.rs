@@ -61,6 +61,10 @@ pub struct CompileParams {
     /// (`make test` after `make gen`), which no convention asks for, so it is a false route; the
     /// same next steps are delivered as sequences after the edit that owes them.
     pub after_command_runs: bool,
+    /// The outcome-lift gate ([`outcome_gate`], `learn.outcome_lift_lower_bound` and
+    /// `learn.outcome_min_support`).
+    pub outcome_lift_lower_bound: f64,
+    pub outcome_min_support: u32,
     pub provenance: String,
 }
 
@@ -76,6 +80,8 @@ impl Default for CompileParams {
             prior_kappa: 3.0,
             prior_mean: 0.7,
             after_command_runs: false,
+            outcome_lift_lower_bound: 0.2,
+            outcome_min_support: 5,
             provenance: "desire-path".into(),
         }
     }
@@ -264,6 +270,25 @@ pub fn compile(input: &Input) -> Output {
     shapes::compile(input)
 }
 
+/// The compiler's second gate (Track G §6, outcome lift): a reflex that fails the rate gate,
+/// counted on its own trigger and step, still compiles at yellow (prime) when the traces that
+/// took its step succeeded significantly more often than those where its trigger occurred and
+/// they did not (`adage_tracks::lift`): at least `outcome_min_support` traces took it and the 95%
+/// lower bound on the difference is at least `outcome_lift_lower_bound`. Never green, never above
+/// the effect's ceiling, never for a step that may not be directed at all.
+pub fn outcome_gate(
+    effect: Effect,
+    by_edit: bool,
+    lift: Option<&adage_tracks::lift::OutcomeLift>,
+    p: &CompileParams,
+) -> Option<adage_tracks::Aspect> {
+    let l = lift?;
+    if !l.qualifies(p.outcome_min_support, p.outcome_lift_lower_bound) {
+        return None;
+    }
+    adage_tracks::lift::aspect(effect, by_edit)
+}
+
 /// Where a compiled route lives through G3–G4 (Track G §6.3): the legacy track of its shape,
 /// else `graph`.
 pub fn legacy_track(r: &Route) -> &'static str {
@@ -288,5 +313,33 @@ pub fn commands(s: &Step) -> Vec<&str> {
         Step::Sequence { commands } => commands.iter().map(String::as_str).collect(),
         Step::Avoid { instead, .. } => vec![instead],
         _ => vec![],
+    }
+}
+
+#[cfg(test)]
+mod outcome_gate_tests {
+    use super::*;
+    use adage_tracks::lift::OutcomeLift;
+    use adage_tracks::Aspect;
+
+    fn lift(with: (usize, usize), without: (usize, usize)) -> OutcomeLift {
+        let v = |(p, f): (usize, usize)| {
+            std::iter::repeat_n(true, p).chain(std::iter::repeat_n(false, f)).collect::<Vec<_>>()
+        };
+        OutcomeLift::of(&v(with), &v(without), "outcomes").unwrap()
+    }
+
+    #[test]
+    fn a_significant_lift_compiles_at_prime_and_never_above_the_ceiling() {
+        let p = CompileParams::default();
+        let strong = lift((5, 0), (1, 9));
+        assert_eq!(outcome_gate(Effect::Observe, false, Some(&strong), &p), Some(Aspect::Yellow));
+        assert_eq!(outcome_gate(Effect::Regenerate, true, Some(&strong), &p), Some(Aspect::Yellow));
+        // Never for a step that may not be directed.
+        assert_eq!(outcome_gate(Effect::Author, false, Some(&strong), &p), None);
+        // Too few takers, or no significant difference, or no outcomes at all.
+        assert_eq!(outcome_gate(Effect::Observe, false, Some(&lift((3, 0), (0, 9))), &p), None);
+        assert_eq!(outcome_gate(Effect::Observe, false, Some(&lift((4, 1), (3, 3))), &p), None);
+        assert_eq!(outcome_gate(Effect::Observe, false, None, &p), None);
     }
 }

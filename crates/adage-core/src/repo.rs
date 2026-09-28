@@ -38,6 +38,23 @@ pub fn repo_key(root: &Path) -> String {
     origin_key(root).unwrap_or_else(|| no_origin_key(root, CACHE.get().map(PathBuf::as_path)))
 }
 
+/// The one derivation of the key a repository's tracks are stored under, used by every path that
+/// learns, binds or shares (`adage learn`, `adage learn --instincts-only`, `adage share`, the
+/// importers): the explicit key a person gave (`--repo <key>`) when there is one, used exactly as
+/// given, else [`repo_key`] of the root. `derive` computes the latter (so a caller can remember
+/// keys per root); [`key_for`] is the plain form.
+pub fn key_with(explicit: Option<&str>, derive: impl FnOnce() -> String) -> String {
+    match explicit.map(str::trim).filter(|k| !k.is_empty()) {
+        Some(k) => k.to_string(),
+        None => derive(),
+    }
+}
+
+/// [`key_with`] for a root: `explicit`, else [`repo_key`]`(root)`.
+pub fn key_for(root: &Path, explicit: Option<&str>) -> String {
+    key_with(explicit, || repo_key(root))
+}
+
 /// Where [`repo_key`] remembers root commits for the rest of this process. The CLI sets
 /// `$ADAGE_HOME/repo-keys`, so the history `adage learn` walks is not walked again by a hook.
 static CACHE: OnceLock<PathBuf> = OnceLock::new();

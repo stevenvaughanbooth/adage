@@ -4,6 +4,7 @@ pub mod bridge;
 pub mod cache;
 pub mod codex;
 pub mod diff;
+pub mod effects;
 pub mod engine;
 pub mod graph;
 pub mod import;
@@ -530,8 +531,7 @@ pub fn plan(
                 routes,
             };
             io::validate(&track)?;
-            let mut lines: Vec<String> =
-                track.routes.iter().map(|r| format!("{} [{:?}]", r.id, r.aspect).to_lowercase()).collect();
+            let mut lines: Vec<String> = track.routes.iter().map(|r| route_line(&name, r)).collect();
             lines.extend(
                 proposals.routes.keys().map(|id| format!("{id}: pinned; a change is proposed in `adage review`")),
             );
@@ -573,6 +573,34 @@ pub fn plan(
     Ok((report, planned))
 }
 
+/// One route in `adage learn`'s summary: its id and strength, and, for a reflex that is not
+/// delivered yet, what it waits for and how to decide it (docs/lexicon.md: a draft is *nascent*).
+/// A reflex that formed on outcome lift alone says so.
+pub fn route_line(track: &str, r: &Route) -> String {
+    let strength = match r.aspect {
+        adage_tracks::Aspect::Green => "fire",
+        adage_tracks::Aspect::Yellow => "prime",
+        adage_tracks::Aspect::Red => "inhibit",
+    };
+    let mut s = format!("{} [{}]", r.id, strength);
+    if let Some(l) = &r.evidence.outcome_lift {
+        s.push_str(&format!(
+            " (outcome lift: {}/{} passed with it, {}/{} without; lower bound {:+.2})",
+            l.with_passed, l.with, l.without_passed, l.without, l.lower_bound
+        ));
+    }
+    if r.evidence.effect_evidence.is_some() {
+        s.push_str(" (observe, from the traces)");
+    }
+    if r.state == adage_tracks::RouteState::Draft {
+        s.push_str(&format!(
+            " NASCENT: not delivered until a person approves it; review with `adage review`, then `adage review approve {track} {}`",
+            r.id
+        ));
+    }
+    s
+}
+
 /// The canonical key of the mined lookup command — the same key the runtime computes for the
 /// agent's call, so the linked-files route triggers on exactly this command.
 fn lookup_key(_ss: &[&Session], r: &Route) -> Option<String> {
@@ -583,4 +611,33 @@ fn lookup_key(_ss: &[&Session], r: &Route) -> Option<String> {
 
 pub fn is_prompt_route(r: &Route) -> bool {
     matches!(r.trigger, Trigger::Prompt { .. })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use adage_tracks::{Aspect, Evidence, RouteState, Step};
+
+    #[test]
+    fn the_summary_marks_nascent_reflexes_and_says_how_to_review_them() {
+        let mut r = Route {
+            id: "lookup-work-item".into(),
+            summary: String::new(),
+            trigger: Trigger::Prompt { span: adage_core::spans::SpanKind::Ticket },
+            step: Step::Run { command: "python3 tools/case {item}".into() },
+            slots: vec![],
+            effect: adage_core::Effect::Environment,
+            aspect: Aspect::Yellow,
+            state: RouteState::Draft,
+            exit: vec![],
+            evidence: Evidence::default(),
+            authored: false,
+        };
+        let line = route_line("clinic/work-items", &r);
+        assert!(line.starts_with("lookup-work-item [prime] NASCENT: not delivered"), "{line}");
+        assert!(line.contains("`adage review approve clinic/work-items lookup-work-item`"), "{line}");
+        r.state = RouteState::Active;
+        r.aspect = Aspect::Green;
+        assert_eq!(route_line("clinic/work-items", &r), "lookup-work-item [fire]");
+    }
 }
