@@ -494,20 +494,41 @@ impl AppState {
                 None
             }
             Fix::EnableAutoLearn => {
-                self.confirm(
-                    "Turn auto-condition on",
-                    vec![
-                        Line::raw("Set learn.auto = true in config.toml: Adage then conditions in the background"),
-                        Line::raw("whenever an agent's trace in a repository stops or ends."),
-                        Line::raw(""),
-                        same("adage config set learn.auto true"),
-                        hint,
-                    ],
-                    Action::SetConfig { key: "learn.auto", value: "true".into() },
-                );
+                self.confirm_auto_condition(true);
                 None
             }
         }
+    }
+
+    /// Ask before turning auto-condition on or off: the Health fix and the Settings toggle say
+    /// the same thing.
+    pub fn confirm_auto_condition(&mut self, on: bool) {
+        let t = Theme::from_env();
+        let (title, value, what) = if on {
+            ("Turn auto-condition on", "true", "Adage then conditions in the background")
+        } else {
+            ("Turn auto-condition off", "false", "Adage then no longer conditions in the background")
+        };
+        self.confirm(
+            title,
+            vec![
+                Line::raw(format!("Set learn.auto = {value} in config.toml: {what}")),
+                Line::raw("whenever an agent's trace in a repository stops or ends."),
+                Line::raw(""),
+                Line::from(vec![
+                    Span::styled("same as ", t.dim()),
+                    Span::styled(format!("adage config set learn.auto {value}"), t.command()),
+                    Span::styled(" from any shell", t.dim()),
+                ]),
+                Line::from(vec![
+                    Span::styled("y", t.key()),
+                    Span::styled(format!(" confirm{}", t.sep()), t.dim()),
+                    Span::styled("n", t.key()),
+                    Span::styled(" cancel", t.dim()),
+                ]),
+            ],
+            Action::SetConfig { key: "learn.auto", value: value.into() },
+        );
     }
 }
 

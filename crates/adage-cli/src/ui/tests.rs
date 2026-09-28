@@ -1341,11 +1341,29 @@ fn tabs_toasts_and_health_keys() {
     assert!(matches!(s.key(KeyCode::Char('y'), NONE), Some(Cmd::Do(app::Action::LearnNow))));
     // Settings: a boolean toggles; thresholds switch with Space; a number opens the editor, whose
     // value `adage_store::config::set` validates when it is saved.
+    // learn.auto asks first, in the words Health's fix uses.
     s.key(KeyCode::Char('5'), NONE);
+    assert!(s.key(KeyCode::Enter, NONE).is_none());
+    let asked = |s: &AppState| match &s.modal {
+        Some(Modal::Confirm { title, lines, .. }) => {
+            format!("{title}\n{}", lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n"))
+        }
+        _ => panic!("expected a confirmation"),
+    };
+    let off = asked(&s);
+    assert!(off.starts_with("Turn auto-condition off") && off.contains("adage config set learn.auto false"), "{off}");
     assert!(matches!(
-        s.key(KeyCode::Enter, NONE),
+        s.key(KeyCode::Char('y'), NONE),
         Some(Cmd::Do(app::Action::SetConfig { key: "learn.auto", ref value })) if value == "false"
     ));
+    s.settings[0].value = "false".into();
+    s.key(KeyCode::Char(' '), NONE);
+    let on = asked(&s);
+    s.modal = None;
+    s.start_fix(Fix::EnableAutoLearn);
+    assert_eq!(on, asked(&s), "the Settings toggle and the Health fix ask the same");
+    assert!(on.starts_with("Turn auto-condition on"), "{on}");
+    s.modal = None;
     s.key(KeyCode::Down, NONE);
     assert!(s.key(KeyCode::Enter, NONE).is_none());
     assert!(matches!(&s.modal, Some(Modal::Edit { key: "learn.min_interval_secs", .. })));

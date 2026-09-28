@@ -16,6 +16,12 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
         KeyCode::Down | KeyCode::Char('j') => s.setting_sel = (s.setting_sel + 1).min(n.saturating_sub(1)),
         KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('e') => {
             let row = s.settings.get(s.setting_sel)?;
+            // Auto-condition starts or stops background work: it asks first, as Health's fix does.
+            if row.key == "learn.auto" {
+                let on = row.value != "true";
+                s.confirm_auto_condition(on);
+                return None;
+            }
             if row.boolean() {
                 let next = if row.value == "true" { "false" } else { "true" };
                 return Some(Cmd::Do(Action::SetConfig { key: row.key, value: next.into() }));
