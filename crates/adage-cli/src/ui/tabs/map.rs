@@ -9,7 +9,7 @@ use crate::ui::app::{AppState, Cmd, Tab, WantKind};
 use crate::ui::routes::RouteRow;
 use crate::ui::theme::Theme;
 use crate::ui::view::{self, Ctx};
-use crate::ui::words::{fit, pad};
+use crate::ui::words::fit_with;
 use adage_term::Glyph;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -179,6 +179,8 @@ struct Canvas {
     /// Edge connections per cell: up 1, down 2, left 4, right 8.
     links: Vec<Vec<u8>>,
     hot: Vec<Vec<bool>>,
+    /// The ellipsis for text cut to its box.
+    more: &'static str,
 }
 
 const U: u8 = 1;
@@ -187,9 +189,10 @@ const L: u8 = 4;
 const R: u8 = 8;
 
 impl Canvas {
-    fn new(w: usize, h: usize) -> Canvas {
+    fn new(w: usize, h: usize, more: &'static str) -> Canvas {
         Canvas {
             w,
+            more,
             cells: vec![vec![(" ".to_string(), Style::default()); w]; h],
             links: vec![vec![0; w]; h],
             hot: vec![vec![false; w]; h],
@@ -215,7 +218,7 @@ impl Canvas {
             if left == 0 {
                 break;
             }
-            x0 = self.put(y, x0, &fit(&s.content, left), s.style);
+            x0 = self.put(y, x0, &fit_with(&s.content, left, self.more), s.style);
         }
     }
 
@@ -353,21 +356,21 @@ fn reflex_spans(r: &RouteRow, t: &Theme, chosen: bool) -> Vec<Span<'static>> {
     ]
 }
 
-fn reflex_facts(r: &RouteRow, long: bool) -> String {
+fn reflex_facts(r: &RouteRow, long: bool, t: &Theme) -> String {
     let mut v = vec![
         Theme::strength_word(r.aspect).to_string(),
         if r.instinct { "instinct".into() } else { r.lifecycle().to_string() },
-        r.count(),
+        t.text(&r.count()),
     ];
     if long && r.opportunities > 0 {
         v.push(format!("lb {:.2}", r.lower_bound));
     }
-    v.join(" · ")
+    v.join(&t.sep())
 }
 
 fn end_text(e: &End, t: &Theme) -> Vec<Span<'static>> {
     let style = if e.kind == "run" || e.kind == "avoid" { t.command() } else { Style::default() };
-    vec![Span::styled(e.text.clone(), style)]
+    vec![Span::styled(t.text(&e.text), style)]
 }
 
 fn boxes(s: &AppState, g: &Graph, sel: usize, t: &Theme, width: usize) -> Option<(Vec<Line<'static>>, [usize; 3])> {
@@ -379,7 +382,7 @@ fn boxes(s: &AppState, g: &Graph, sel: usize, t: &Theme, width: usize) -> Option
     let cols = [1, 1 + bw + gap, 1 + 2 * (bw + gap)];
     let rows = s.route_rows();
     let n = g.reflexes.len();
-    let mut b = Board { canvas: Canvas::new(width, n * STEP), arrows: vec![] };
+    let mut b = Board { canvas: Canvas::new(width, n * STEP, t.more()), arrows: vec![] };
     let (sel_st, sel_rs) = (g.stim_of.get(sel).copied(), g.resp_of.get(sel).copied());
     for (k, e) in g.stimuli.iter().enumerate() {
         let style = if Some(k) == sel_st { t.accent() } else { t.rule() };
@@ -400,7 +403,7 @@ fn boxes(s: &AppState, g: &Graph, sel: usize, t: &Theme, width: usize) -> Option
             k * STEP,
             cols[1],
             bw,
-            [reflex_spans(r, t, chosen), vec![Span::styled(reflex_facts(r, true), t.ink2())]],
+            [reflex_spans(r, t, chosen), vec![Span::styled(reflex_facts(r, true, t), t.ink2())]],
             style,
             t,
         );
@@ -442,7 +445,7 @@ fn compact(s: &AppState, g: &Graph, sel: usize, t: &Theme, width: usize) -> Vec<
             let mut spans = vec![
                 Span::styled(if chosen { t.ch("▌", ">") } else { " " }, t.accent()),
                 Span::raw(" "),
-                Span::raw(pad(&st.text, w)),
+                Span::raw(t.pad(&t.text(&st.text), w)),
                 Span::styled(arrow.clone(), if chosen { t.command() } else { t.rule() }),
             ];
             let head = reflex_spans(r, t, chosen);
@@ -450,7 +453,7 @@ fn compact(s: &AppState, g: &Graph, sel: usize, t: &Theme, width: usize) -> Vec<
             spans.extend(head);
             spans.push(Span::raw(" ".repeat(w.saturating_sub(used))));
             spans.push(Span::styled(arrow.clone(), if chosen { t.command() } else { t.rule() }));
-            spans.extend(end_text(rs, t).into_iter().map(|s| Span::styled(fit(&s.content, w), s.style)));
+            spans.extend(end_text(rs, t).into_iter().map(|s| Span::styled(t.fit(&s.content, w), s.style)));
             Line::from(spans)
         })
         .collect()
@@ -460,7 +463,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let t = &ctx.theme;
     let routes = match &s.routes {
         None => {
-            f.render_widget(Paragraph::new(Span::styled(" loading the map…", t.dim())), area);
+            f.render_widget(Paragraph::new(Span::styled(format!(" loading the map{}", t.more()), t.dim())), area);
             return;
         }
         Some(Err(e)) => {
@@ -492,10 +495,11 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let instincts = g.reflexes.iter().filter(|&&i| s.route_rows()[i].instinct).count();
     let reflexes = g.reflexes.len() - instincts;
     let counts = format!(
-        "{reflexes} reflex{} · {instincts} instinct{} · {} traces ",
+        "{reflexes} reflex{}{sep}{instincts} instinct{}{sep}{} traces ",
         if reflexes == 1 { "" } else { "es" },
         if instincts == 1 { "" } else { "s" },
-        routes.traces
+        routes.traces,
+        sep = t.sep()
     );
     let focus = if s.map.focus { format!("2 hops around {}", r.id) } else { "off".into() };
     let mut left = vec![
@@ -528,8 +532,8 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
             let w = (canvas_a.width as usize).saturating_sub(12) / 3;
             let head = Line::from(vec![
                 Span::raw("  "),
-                Span::styled(pad("STIMULUS", w + 4), t.dim().patch(t.bold())),
-                Span::styled(pad("REFLEX", w + 4), t.dim().patch(t.bold())),
+                Span::styled(t.pad("STIMULUS", w + 4), t.dim().patch(t.bold())),
+                Span::styled(t.pad("REFLEX", w + 4), t.dim().patch(t.bold())),
                 Span::styled("RESPONSE", t.dim().patch(t.bold())),
             ]);
             f.render_widget(Paragraph::new(head), heads);
@@ -552,7 +556,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         Line::from(vec![
             Span::styled(format!(" {} ", t.ch("▸", ">")), t.accent()),
             Span::styled(r.id.clone(), t.bold()),
-            Span::styled(format!("  {}", facts.join(" · ")), t.ink2()),
+            Span::styled(format!("  {}", facts.join(&t.sep())), t.ink2()),
         ]),
         Line::from(vec![
             Span::raw(" "),

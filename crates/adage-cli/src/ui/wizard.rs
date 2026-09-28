@@ -296,7 +296,7 @@ impl Wizard {
             }
             out.extend(record(s, &t).iter().map(line_text));
         }
-        out.extend(finish_card(self, &t, true).iter().map(line_text));
+        out.extend(finish_card(self, &t, true, 100).iter().map(line_text));
         out
     }
 }
@@ -536,11 +536,11 @@ fn render(area: Rect, buf: &mut ratatui::buffer::Buffer, w: &Wizard, ctx: &Ctx) 
     }
     lines.push(Line::from(rail(t, true)));
     lines.push(Line::from(vec![Span::styled(t.ch("└  ", "+  "), t.accent()), Span::styled(hint(w), t.dim())]));
-    Paragraph::new(lines).render(area, buf);
+    Paragraph::new(t.lines(lines)).render(area, buf);
 }
 
 /// The closing lines, printed into the scrollback when the flow ends.
-pub fn finish_card(w: &Wizard, t: &Theme, completed: bool) -> Vec<Line<'static>> {
+pub fn finish_card(w: &Wizard, t: &Theme, completed: bool, cols: usize) -> Vec<Line<'static>> {
     let mut out = vec![Line::from(Span::styled(t.glyph(Glyph::Rail), t.dim()))];
     if !completed {
         out.push(Line::from(vec![
@@ -607,25 +607,49 @@ pub fn finish_card(w: &Wizard, t: &Theme, completed: bool) -> Vec<Line<'static>>
         }
     }
     out.push(Line::raw(""));
-    let next = |first: bool, cmd: &str, why: &str| {
-        Line::from(vec![
-            Span::styled(if first { "   next  " } else { "         " }, t.accent().patch(t.bold())),
-            Span::styled(format!("{cmd:<14}"), t.command()),
-            Span::styled(format!("  {why}"), t.dim()),
-        ])
-    };
-    let mut first = true;
+    let mut next: Vec<(String, &str)> = Vec::new();
     if failing > 0 {
-        out.push(next(true, "adage doctor", "what needs fixing, and how"));
-        first = false;
+        next.push(("adage doctor".into(), "what needs fixing, and how"));
     }
     if let Some(h) = unhooked.first() {
-        out.push(next(first, &format!("adage install {h} --write"), "registers the hooks (or run `adage init` again)"));
-        first = false;
+        next.push((format!("adage install {h} --write"), "registers the hooks (or run `adage init` again)"));
     }
-    out.push(next(first, "adage watch", "live pane for a split terminal"));
-    out.push(next(false, "adage map", "explore reflexes in the browser"));
-    out.push(next(false, "adage ui", "review, health and settings in one place"));
+    next.push(("adage watch".into(), "live pane for a split terminal"));
+    next.push(("adage map".into(), "explore reflexes in the browser"));
+    next.push(("adage ui".into(), "review, health and settings in one place"));
+    out.extend(next_lines(&next, t, cols));
+    out
+}
+
+/// The `next` rows: commands in one column as wide as the longest, each description wrapped to
+/// `cols` under its own first line. Too narrow for both columns, a description goes under its
+/// command instead.
+fn next_lines(rows: &[(String, &str)], t: &Theme, cols: usize) -> Vec<Line<'static>> {
+    const LEAD: usize = 9; // `   next  `
+    let cmd_w = rows.iter().map(|(c, _)| c.chars().count()).max().unwrap_or(0).max(14);
+    let (indent, room) = match cols.saturating_sub(LEAD + cmd_w + 2) {
+        room if room >= 20 => (LEAD + cmd_w + 2, room),
+        _ => (LEAD + 2, cols.saturating_sub(LEAD + 2).max(20)),
+    };
+    let beside = indent > LEAD + 2;
+    let mut out = Vec::new();
+    for (k, (cmd, why)) in rows.iter().enumerate() {
+        let lead = Span::styled(if k == 0 { "   next  " } else { "         " }, t.accent().patch(t.bold()));
+        let mut parts = wrap(why, room).into_iter();
+        if beside {
+            let first = parts.next().unwrap_or_default();
+            out.push(Line::from(vec![
+                lead,
+                Span::styled(format!("{cmd:<cmd_w$}"), t.command()),
+                Span::styled(format!("  {first}"), t.dim()),
+            ]));
+        } else {
+            out.push(Line::from(vec![lead, Span::styled(cmd.clone(), t.command())]));
+        }
+        for p in parts {
+            out.push(Line::from(vec![Span::raw(" ".repeat(indent)), Span::styled(p, t.dim())]));
+        }
+    }
     out
 }
 
@@ -635,12 +659,17 @@ pub fn finish_card(w: &Wizard, t: &Theme, completed: bool) -> Vec<Line<'static>>
 /// Height of the inline viewport: enough for a hooks diff and its choices.
 const VIEW_HEIGHT: u16 = 18;
 
-fn insert(t: &mut Term, lines: Vec<Line<'static>>) -> Result<()> {
+/// The terminal's width, for text printed into the scrollback.
+fn cols(t: &Term) -> usize {
+    t.terminal.size().map(|s| s.width).unwrap_or(80).max(20) as usize
+}
+
+fn insert(t: &mut Term, lines: Vec<Line<'static>>, theme: &Theme) -> Result<()> {
     if lines.is_empty() {
         return Ok(());
     }
-    let cols = t.terminal.size().map(|s| s.width).unwrap_or(80).max(20) as usize;
-    let lines: Vec<Line<'static>> = lines.into_iter().flat_map(|l| fold(l, cols)).collect();
+    let cols = cols(t);
+    let lines: Vec<Line<'static>> = theme.lines(lines).into_iter().flat_map(|l| fold(l, cols)).collect();
     let h = lines.len() as u16;
     t.terminal.insert_before(h, |buf| {
         Paragraph::new(lines).render(buf.area, buf);
@@ -696,7 +725,7 @@ pub fn run(ctx: Ctx) -> Result<()> {
             "this terminal could not run the interactive setup ({e:#}); `adage init --print` shows every step as text"
         )
     })?;
-    insert(&mut t, header(&ctx))?;
+    insert(&mut t, header(&ctx), &ctx.theme)?;
     let replan = |w: &mut Wizard| {
         if let Kind::Hooks(h) = w.current().clone() {
             // A new plan starts at its top: the file it writes, then the diff.
@@ -710,7 +739,7 @@ pub fn run(ctx: Ctx) -> Result<()> {
     loop {
         while recorded < w.cur && recorded < w.steps.len() {
             if w.steps[recorded].status != StepStatus::Todo {
-                insert(&mut t, record(&w.steps[recorded], &ctx.theme))?;
+                insert(&mut t, record(&w.steps[recorded], &ctx.theme), &ctx.theme)?;
             }
             recorded += 1;
         }
@@ -798,11 +827,12 @@ pub fn run(ctx: Ctx) -> Result<()> {
     // The steps not yet in the scrollback (the last ones), then the closing card.
     while recorded < w.steps.len() {
         if w.steps[recorded].kind != Kind::Finish && w.steps[recorded].status != StepStatus::Todo {
-            insert(&mut t, record(&w.steps[recorded], &ctx.theme))?;
+            insert(&mut t, record(&w.steps[recorded], &ctx.theme), &ctx.theme)?;
         }
         recorded += 1;
     }
-    insert(&mut t, finish_card(&w, &ctx.theme, completed))?;
+    let card = finish_card(&w, &ctx.theme, completed, cols(&t));
+    insert(&mut t, card, &ctx.theme)?;
     t.close_inline()?;
     drop(t);
     for n in super::take_notices() {

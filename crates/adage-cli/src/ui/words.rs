@@ -65,23 +65,26 @@ pub fn short_track(t: &str) -> &str {
     t.rsplit('/').next().unwrap_or(t)
 }
 
-/// Cut `s` to `n` display columns, with an ellipsis when it was longer.
-pub fn fit(s: &str, n: usize) -> String {
+/// Cut `s` to `n` display columns, with `more` (an ellipsis: `…`, or `...` where that cannot be
+/// drawn) when it was longer. Views call it through `Theme::fit`, which picks the ellipsis.
+pub fn fit_with(s: &str, n: usize, more: &str) -> String {
     let count = s.chars().count();
     if count <= n {
         return s.to_string();
     }
-    if n == 0 {
-        return String::new();
+    let m = more.chars().count();
+    if n < m {
+        return s.chars().take(n).collect();
     }
-    let mut out: String = s.chars().take(n - 1).collect();
-    out.push('…');
+    let mut out: String = s.chars().take(n - m).collect();
+    out.push_str(more);
     out
 }
 
-/// `s` as a column `n` wide: padded, or cut so at least one space separates it from the next.
-pub fn pad(s: &str, n: usize) -> String {
-    let f = if s.chars().count() < n { s.to_string() } else { fit(s, n.saturating_sub(1)) };
+/// `s` as a column `n` wide: padded, or cut (with `more`) so at least one space separates it
+/// from the next. Views call it through `Theme::pad`.
+pub fn pad_with(s: &str, n: usize, more: &str) -> String {
+    let f = if s.chars().count() < n { s.to_string() } else { fit_with(s, n.saturating_sub(1), more) };
     let w = f.chars().count();
     format!("{f}{}", " ".repeat(n.saturating_sub(w)))
 }
@@ -104,7 +107,11 @@ mod tests {
             assert_eq!(lifecycle(s), w);
         }
         assert_eq!(review_command("demote", "acme/work", "lookup"), "adage review weaken acme/work lookup");
-        assert_eq!(fit("abcdef", 4), "abc…");
-        assert_eq!(pad("ab", 4), "ab  ");
+        assert_eq!(fit_with("abcdef", 4, "…"), "abc…");
+        assert_eq!(fit_with("abcdef", 5, "..."), "ab...");
+        assert_eq!(fit_with("abcdef", 2, "..."), "ab");
+        assert_eq!(fit_with("abcdef", 0, "…"), "");
+        assert_eq!(pad_with("ab", 4, "…"), "ab  ");
+        assert_eq!(pad_with("abcdef", 5, "..."), "a... ");
     }
 }

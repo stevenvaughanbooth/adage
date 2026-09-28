@@ -6,7 +6,6 @@ use super::app::{AppState, Tab};
 use super::fuzzy;
 use super::keys;
 use super::theme::Theme;
-use super::words::{fit, pad};
 use adage_term::Glyph;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -162,7 +161,7 @@ pub fn matches(s: &AppState, query: &str) -> Vec<(Entry, Vec<usize>)> {
 
 /// A title with its matched characters in the command colour.
 fn highlighted(title: &str, positions: &[usize], base: Style, t: &Theme, w: usize) -> Vec<Span<'static>> {
-    let text = pad(title, w);
+    let text = t.pad(&t.text(title), w);
     let mut spans = Vec::new();
     for (i, c) in text.chars().enumerate() {
         let style = if positions.contains(&i) { t.key() } else { base };
@@ -257,7 +256,8 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, p: &Palette, t: &Theme) {
         }
         let used: usize = spans.iter().map(|s| s.width()).sum();
         let key_w = e.key.map_or(0, |k| k.len() + 1);
-        spans.push(Span::styled(fit(&format!(" {}", e.note), inner_w.saturating_sub(used + key_w)), t.dim()));
+        spans
+            .push(Span::styled(t.fit(&t.text(&format!(" {}", e.note)), inner_w.saturating_sub(used + key_w)), t.dim()));
         if let Some(k) = e.key {
             let used: usize = spans.iter().map(|s| s.width()).sum();
             spans.push(Span::raw(" ".repeat(inner_w.saturating_sub(used + k.len()))));
@@ -281,7 +281,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, p: &Palette, t: &Theme) {
     hint.insert(0, Span::raw(""));
     lines.push(row(hint));
     lines.push(row(vec![Span::styled(
-        fit("every action also shows the adage command that does the same thing", inner_w),
+        t.fit("every action also shows the adage command that does the same thing", inner_w),
         t.dim(),
     )]));
     lines.push(edge(bl, br));

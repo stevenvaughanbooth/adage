@@ -11,7 +11,7 @@ use crate::ui::fuzzy;
 use crate::ui::routes::{RouteRow, ACTIONS};
 use crate::ui::theme::Theme;
 use crate::ui::view::{self, Ctx};
-use crate::ui::words::{self, fit, pad};
+use crate::ui::words;
 use adage_term::Glyph;
 use adage_tracks::Aspect;
 use ratatui::crossterm::event::KeyCode;
@@ -370,7 +370,7 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
                 ]),
                 Line::from(vec![
                     Span::styled("y", t.key()),
-                    Span::styled(" confirm · ", t.dim()),
+                    Span::styled(format!(" confirm{}", t.sep()), t.dim()),
                     Span::styled("n", t.key()),
                     Span::styled(" cancel", t.dim()),
                 ]),
@@ -413,7 +413,7 @@ fn chips(s: &AppState, t: &Theme, width: usize) -> Line<'static> {
             spans.push(Span::styled(format!("{w} {n}  "), if on { t.bold() } else { t.dim() }));
         }
     }
-    let states = format!("{} ▾", STATES[s.reflexes.states]);
+    let states = format!("{} {}", STATES[s.reflexes.states], t.ch("▾", "v"));
     spans.push(Span::styled(states, if s.reflexes.states == 0 { t.dim() } else { t.accent() }));
     let used: usize = spans.iter().map(|s| s.width()).sum();
     if used > width {
@@ -440,6 +440,7 @@ fn tree_lines(s: &AppState, nodes: &[Node], sel: usize, t: &Theme, width: usize)
                 }
                 let arrow = if *open { t.ch("▾", "v") } else { t.ch("▸", ">") };
                 let sub = if !open && key.starts_with("track:") { format!("{sub} · {count}") } else { sub.clone() };
+                let sub = t.text(&sub);
                 let title_style = if key == "extinguished" {
                     t.dim()
                 } else if chosen {
@@ -450,8 +451,8 @@ fn tree_lines(s: &AppState, nodes: &[Node], sel: usize, t: &Theme, width: usize)
                 out.push(Line::from(vec![
                     bar,
                     Span::styled(format!("{arrow} "), t.dim()),
-                    Span::styled(fit(title, width.saturating_sub(4)), title_style),
-                    Span::styled(fit(&sub, width.saturating_sub(4 + title.chars().count())), t.dim()),
+                    Span::styled(t.fit(&t.text(title), width.saturating_sub(4)), title_style),
+                    Span::styled(t.fit(&sub, width.saturating_sub(4 + title.chars().count())), t.dim()),
                 ]));
             }
             Node::Reflex(i) => {
@@ -461,9 +462,9 @@ fn tree_lines(s: &AppState, nodes: &[Node], sel: usize, t: &Theme, width: usize)
                 }
                 let mut spans = vec![bar, Span::raw("  ")];
                 spans.extend(lamp_spans(r, t));
-                spans.push(Span::styled(pad(&r.id, id_w), if chosen { t.bold() } else { Style::default() }));
-                spans.push(Span::styled(pad(r.lifecycle(), 9), t.ink2()));
-                spans.push(Span::styled(r.count(), t.dim()));
+                spans.push(Span::styled(t.pad(&r.id, id_w), if chosen { t.bold() } else { Style::default() }));
+                spans.push(Span::styled(t.pad(r.lifecycle(), 9), t.ink2()));
+                spans.push(Span::styled(t.text(&r.count()), t.dim()));
                 out.push(Line::from(spans));
             }
         }
@@ -472,9 +473,9 @@ fn tree_lines(s: &AppState, nodes: &[Node], sel: usize, t: &Theme, width: usize)
 }
 
 fn kv2(a: (&str, String), b: Option<(&str, String)>, t: &Theme) -> Line<'static> {
-    let mut spans = vec![Span::raw("  "), Span::styled(pad(a.0, 14), t.dim()), Span::raw(pad(&a.1, 18))];
+    let mut spans = vec![Span::raw("  "), Span::styled(t.pad(a.0, 14), t.dim()), Span::raw(t.pad(&a.1, 18))];
     if let Some((k, v)) = b {
-        spans.push(Span::styled(pad(k, 14), t.dim()));
+        spans.push(Span::styled(t.pad(k, 14), t.dim()));
         spans.push(Span::styled(v, t.bold()));
     }
     Line::from(spans)
@@ -509,13 +510,13 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
     } else {
         line.push(Span::styled(Theme::strength_word(r.aspect).to_ascii_uppercase(), t.bold()));
     }
-    line.push(Span::styled(format!(" · {}", facts.join(" · ")), t.ink2()));
+    line.push(Span::styled(format!("{}{}", t.sep(), facts.join(&t.sep())), t.ink2()));
     v.push(Line::from(line));
     for (k, d) in &r.reasons {
         v.push(Line::from(vec![
             Span::styled(format!("{} waits for review: ", t.glyph(Glyph::Off)), t.yellow()),
-            Span::styled(format!("{k} · "), t.yellow().patch(t.bold())),
-            Span::styled(d.clone(), t.ink2()),
+            Span::styled(format!("{k}{}", t.sep()), t.yellow().patch(t.bold())),
+            Span::styled(t.text(d), t.ink2()),
         ]));
     }
     v.push(Line::raw(""));
@@ -552,7 +553,7 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
     let l = &r.live;
     v.push(Line::from(vec![
         Span::raw("  "),
-        Span::styled(pad("live", 14), t.dim()),
+        Span::styled(t.pad("live", 14), t.dim()),
         Span::raw(format!(
             "fired {} · followed {} · ignored {} · finish line met {}",
             l.emitted, l.followed, l.derailed, l.met
@@ -563,15 +564,15 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
         v.push(head("WITH THE REFLEX vs CONTROL", t));
         v.push(Line::from(vec![
             Span::raw("  "),
-            Span::styled(pad("took the step", 16), t.dim()),
-            Span::styled(pad("with", 9), t.ink2()),
+            Span::styled(t.pad("took the step", 16), t.dim()),
+            Span::styled(t.pad("with", 9), t.ink2()),
             bar(r.with.took, r.with.applied, t.accent(), t),
             Span::raw(format!("  {}/{}", r.with.took, r.with.applied)),
         ]));
         v.push(Line::from(vec![
             Span::raw("  "),
             Span::raw(" ".repeat(16)),
-            Span::styled(pad("control", 9), t.ink2()),
+            Span::styled(t.pad("control", 9), t.ink2()),
             bar(r.control.took, r.control.applied, t.dim(), t),
             Span::styled(format!("  {}/{}", r.control.took, r.control.applied), t.ink2()),
         ]));
@@ -615,7 +616,7 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
     if !r.in_index {
         notes.push("not in the index".into());
     }
-    v.push(Line::from(Span::styled(format!("  {}", notes.join(" · ")), t.dim())));
+    v.push(Line::from(Span::styled(format!("  {}", notes.join(&t.sep())), t.dim())));
     v.push(Line::raw(""));
     v.push(head("ACTIONS", t));
     let mut acts = vec![Span::raw("  ")];
@@ -675,7 +676,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let t = &ctx.theme;
     let rows = match &s.routes {
         None => {
-            f.render_widget(Paragraph::new(Span::styled(" loading reflexes…", t.dim())), area);
+            f.render_widget(Paragraph::new(Span::styled(format!(" loading reflexes{}", t.more()), t.dim())), area);
             return;
         }
         Some(Err(e)) => {
@@ -744,6 +745,6 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         Node::Reflex(i) => detail(&rows[*i], s, ctx),
         g => group_detail(g, t),
     };
-    let d = view::wrap_lines(d, detail_a.width);
+    let d = view::wrap_lines(t.lines(d), detail_a.width);
     f.render_widget(Paragraph::new(d).scroll((s.reflexes.detail_scroll, 0)), detail_a);
 }

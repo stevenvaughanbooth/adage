@@ -79,7 +79,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         if i == sel_line {
             sel_line = rows.len();
         }
-        rows.extend(view::wrap_lines(vec![l], area.width));
+        rows.extend(view::wrap_lines(t.lines(vec![l]), area.width));
     }
     let offset = sel_line.saturating_sub((area.height as usize).saturating_sub(3));
     f.render_widget(Paragraph::new(rows).scroll((offset as u16, 0)), area);

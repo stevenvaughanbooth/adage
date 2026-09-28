@@ -29,7 +29,7 @@ use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Gauge, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Frame;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -443,7 +443,7 @@ impl AppState {
         let t = Theme::from_env();
         let hint = Line::from(vec![
             Span::styled("y", t.key()),
-            Span::styled(" confirm · ", t.dim()),
+            Span::styled(format!(" confirm{}", t.sep()), t.dim()),
             Span::styled("n", t.key()),
             Span::styled(" cancel", t.dim()),
         ]);
@@ -519,7 +519,7 @@ pub fn draw(f: &mut Frame, s: &AppState, ctx: &Ctx) {
     let area = f.area();
     if area.width < 40 || area.height < 10 {
         f.render_widget(
-            Paragraph::new("adage ui: make the terminal larger (40×10 at least)").wrap(Wrap { trim: true }),
+            Paragraph::new(t.text("adage ui: make the terminal larger (40×10 at least)")).wrap(Wrap { trim: true }),
             area,
         );
         return;
@@ -587,9 +587,9 @@ fn draw_tabs(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let full = tabs(false);
     let mut spans =
         if full.iter().map(|s| s.width()).sum::<usize>() <= area.width as usize { full } else { tabs(true) };
-    let mut right = vec![Span::styled(format!("{} · ", ctx.label), t.ink2())];
+    let mut right = vec![Span::styled(format!("{}{}", ctx.label, t.sep()), t.ink2())];
     if ctx.demo {
-        right.insert(0, Span::styled("demo · ", t.holdout()));
+        right.insert(0, Span::styled(format!("demo{}", t.sep()), t.holdout()));
     }
     if s.live.paused {
         right.push(Span::styled(
@@ -625,7 +625,7 @@ fn draw_status(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         spans.push(Span::styled("/ ", t.key()));
         spans.push(Span::raw(q.clone()));
         spans.push(Span::styled(t.ch("▌", "_"), t.accent()));
-        spans.push(Span::styled("   enter keep · esc clear", t.dim()));
+        spans.push(Span::styled(format!("   enter keep{}esc clear", t.sep()), t.dim()));
     } else {
         spans.extend(keys::bar(&[keys::GLOBAL, s.tab.keys()], t, room));
     }
@@ -643,7 +643,7 @@ fn draw_toasts(f: &mut Frame, body: Rect, s: &AppState, t: &Theme) {
             break;
         }
         let (mark, style) = if toast.ok { (t.glyph(Glyph::Ok), t.green()) } else { (t.glyph(Glyph::Fail), t.red()) };
-        let text = words::fit(&toast.text, (body.width as usize).saturating_sub(8));
+        let text = t.fit(&t.text(&toast.text), (body.width as usize).saturating_sub(8));
         let line =
             Line::from(vec![Span::styled(format!(" {mark} "), style.patch(t.bold())), Span::raw(format!("{text} "))]);
         let w = (line.width() as u16).min(body.width);
@@ -664,7 +664,7 @@ fn app_help(tab: Tab, t: &Theme) -> Vec<Line<'static>> {
 
 fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
     match m {
-        Modal::Help { scroll } => view::popup(f, area, "keys", app_help(s.tab, t), t, *scroll),
+        Modal::Help { scroll } => view::popup_keys(f, area, app_help(s.tab, t), t, *scroll),
         Modal::Confirm { title, lines, scroll, .. } => view::popup(f, area, title, lines.clone(), t, *scroll),
         Modal::Message { title, lines, error, scroll } => {
             let style = if *error { t.red() } else { Style::default() };
@@ -675,7 +675,7 @@ fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
         }
         Modal::Viewer { title, lines, scroll } => {
             let mut ls: Vec<Line> = lines.iter().map(|l| Line::raw(l.clone())).collect();
-            ls.push(Line::from(Span::styled("↑ ↓ scroll · esc closes", t.dim())));
+            ls.push(Line::from(Span::styled(format!("{} scroll{}esc closes", t.arrows(), t.sep()), t.dim())));
             view::popup(f, area, title, ls, t, *scroll)
         }
         Modal::Progress { title, status, ratio } => {
@@ -683,13 +683,25 @@ fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
             f.render_widget(ratatui::widgets::Clear, r);
             let block = Block::default()
                 .borders(Borders::ALL)
+                .border_set(t.border())
                 .border_style(t.accent())
-                .title(Span::styled(format!(" {title} "), t.command().patch(t.bold())));
+                .title(Span::styled(format!(" {} ", t.text(title)), t.command().patch(t.bold())));
             let inner = block.inner(r);
             f.render_widget(block, r);
             let [g, st] = Layout::vertical([Constraint::Length(1), Constraint::Length(2)]).areas(inner);
-            f.render_widget(Gauge::default().gauge_style(t.accent()).ratio(*ratio), g);
-            f.render_widget(Paragraph::new(Span::styled(status.clone(), t.dim())).wrap(Wrap { trim: true }), st);
+            // The bar as the wizard draws it, so ADAGE_ASCII reaches it too.
+            let pct = format!(" {:>3.0}%", ratio.clamp(0.0, 1.0) * 100.0);
+            let bar_w = (g.width as usize).saturating_sub(pct.len());
+            let done = (ratio.clamp(0.0, 1.0) * bar_w as f64).round() as usize;
+            f.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled(t.ch("━", "=").repeat(done), t.accent()),
+                    Span::styled(t.ch("─", "-").repeat(bar_w - done), t.dim()),
+                    Span::styled(pct, t.dim()),
+                ])),
+                g,
+            );
+            f.render_widget(Paragraph::new(Span::styled(t.text(status), t.dim())).wrap(Wrap { trim: true }), st);
         }
         Modal::Scope { harness } => view::popup(
             f,
@@ -725,7 +737,7 @@ fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
                 Span::styled("same as ", t.dim()),
                 Span::styled(format!("adage config set {key} <value>"), t.command()),
             ]));
-            ls.push(Line::from(Span::styled("enter saves · esc cancels", t.dim())));
+            ls.push(Line::from(Span::styled(format!("enter saves{}esc cancels", t.sep()), t.dim())));
             view::popup(f, area, "Edit setting", ls, t, 0)
         }
     }
@@ -761,7 +773,7 @@ pub fn install_confirm(p: &Plan, t: &Theme) -> Vec<Line<'static>> {
     if p.harness == "codex" {
         lines.push(Line::raw("Codex then asks you to approve new hooks: open /hooks in Codex."));
     }
-    lines.push(Line::from(Span::styled("y write · n cancel · ↑ ↓ scroll", t.dim())));
+    lines.push(Line::from(Span::styled(format!("y write{s}n cancel{s}{} scroll", t.arrows(), s = t.sep()), t.dim())));
     lines
 }
 

@@ -605,6 +605,121 @@ fn ascii_glyphs_when_the_terminal_cannot_draw_them() {
     assert!(!text.chars().any(|ch| matches!(ch, '●' | '◠' | '─' | '→' | '✓')), "{text}");
 }
 
+/// Every screen under `ADAGE_ASCII=1`: each tab, the popups, the palette, a toast, the watch
+/// pane, and every step of the setup wizard, with its scrollback, draw nothing but ASCII.
+#[test]
+fn ascii_reaches_every_screen() {
+    use crate::detect::Detected;
+    let d = tempfile::tempdir().unwrap();
+    let paths = fixture(d.path());
+    let c = Ctx { theme: Theme::with_color(false).ascii(), ..ctx(paths.clone(), false) };
+    let colour = Ctx { theme: Theme::with_color(true).ascii(), ..ctx(paths.clone(), false) };
+    let ascii = |what: &str, text: &str| {
+        let bad: String = text.chars().filter(|ch| !ch.is_ascii() && *ch != '\u{a0}').collect();
+        assert!(bad.is_empty(), "{what} draws {bad:?} under ADAGE_ASCII:\n{text}");
+    };
+    let mut s = app_state();
+    s.live = live_from(&paths);
+    s.notices.push("a notice… with → arrows".into());
+    s.toast("read-linked-files: strengthen recorded · 1 change", true);
+    for tab in [Tab::Live, Tab::Reflexes, Tab::Map, Tab::Health, Tab::Settings] {
+        s.tab = tab;
+        for (w, h) in [(150, 35), (80, 24), (44, 12)] {
+            for cx in [&c, &colour] {
+                ascii(&format!("{tab:?} {w}x{h}"), &app_frame(&s, cx, w, h));
+            }
+            s.key(KeyCode::Char('?'), NONE);
+            ascii(&format!("{tab:?} keys {w}x{h}"), &app_frame(&s, &c, w, h));
+            s.key(KeyCode::Esc, NONE);
+        }
+    }
+    // Compact map rows, the Reflexes filter, a group, a closed track.
+    s.tab = Tab::Map;
+    s.map.compact = true;
+    ascii("map rows", &app_frame(&s, &c, 100, 30));
+    s.tab = Tab::Reflexes;
+    s.reflexes.sel = Some("group:nascent".into());
+    s.key(KeyCode::Enter, NONE);
+    ascii("a closed group", &app_frame(&s, &c, 150, 35));
+    s.key(KeyCode::Char('/'), NONE);
+    s.key(KeyCode::Char('z'), NONE);
+    ascii("the filter", &app_frame(&s, &c, 150, 35));
+    s.key(KeyCode::Esc, NONE);
+    // Popups: a review confirmation, a message, the traces viewer, the palette, each fix.
+    tabs::reflexes::select(&mut s, "harbor-dispatch/intents", "start-with-npm-check");
+    for k in ['s', 't', 'o', 'd', 'w'] {
+        s.key(KeyCode::Char(k), NONE);
+        ascii(&format!("reflexes {k}"), &app_frame(&s, &c, 100, 30));
+        s.modal = None;
+    }
+    s.key(KeyCode::Char(':'), NONE);
+    ascii("the palette", &app_frame(&s, &c, 150, 35));
+    s.key(KeyCode::Char('s'), NONE);
+    ascii("the palette, typed", &app_frame(&s, &c, 150, 35));
+    s.palette = None;
+    for fix in [super::health::Fix::FetchModel, super::health::Fix::LearnNow, super::health::Fix::EnableAutoLearn] {
+        s.start_fix(fix);
+        ascii("a fix", &app_frame(&s, &c, 100, 30));
+        s.modal = None;
+    }
+    s.modal = Some(Modal::Progress { title: "Fetch…".into(), status: "reading traces…".into(), ratio: 0.5 });
+    ascii("progress", &app_frame(&s, &c, 100, 30));
+    s.modal = Some(Modal::Scope { harness: "codex".into() });
+    ascii("scope", &app_frame(&s, &c, 100, 30));
+    s.modal = Some(Modal::Edit { key: "learn.min_interval_secs", buffer: "120".into(), error: Some("no…".into()) });
+    ascii("edit", &app_frame(&s, &c, 100, 30));
+    s.modal = None;
+
+    // The watch pane: every size, each popup, filtered, empty.
+    let mut live = live_from(&paths);
+    let h = health();
+    for (w, hgt) in [(110, 30), (80, 24), (60, 20), (40, 12), (30, 8)] {
+        ascii("watch", &render(w, hgt, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true)).0);
+    }
+    for k in ['?', 'm'] {
+        live.key(k);
+        watch::live_key(&mut live, KeyCode::Char(k), NONE);
+        ascii("watch popup", &render(100, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true)).0);
+        watch::live_key(&mut live, KeyCode::Esc, NONE);
+    }
+    watch::live_key(&mut live, KeyCode::Enter, NONE);
+    ascii("inspect", &render(100, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true)).0);
+    watch::live_key(&mut live, KeyCode::Esc, NONE);
+    live.filter = "nothing-like-it".into();
+    ascii("no match", &render(100, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true)).0);
+    let mut empty = Live::default();
+    empty.waiting = Some(2);
+    empty.learning = vec!["x".into()];
+    ascii("empty", &render(40, 12, |f| view::draw_live(f, f.area(), &empty, None, &c, true)).0);
+
+    // The wizard, every step, then its scrollback.
+    let detected = vec![Detected { harness: "claude-code", evidence: vec!["~/.claude exists".into()] }];
+    let mut w = Wizard::new(detected, vec![], true);
+    w.config_path = "~/.config/adage/config.toml".into();
+    w.auto_learn = Some((false, "default".into()));
+    ascii("wizard header", &c.theme.lines(wizard::header(&c)).iter().map(|l| l.to_string()).collect::<String>());
+    loop {
+        ascii(&format!("wizard {:?}", w.current()), &render(80, 18, |f| wizard::draw(f, &w, &c)).0);
+        w.progress = Some(("reading traces…".into(), 0.4));
+        ascii("wizard progress", &render(80, 18, |f| wizard::draw(f, &w, &c)).0);
+        w.progress = None;
+        if *w.current() == wizard::Kind::Finish {
+            break;
+        }
+        w.advance(wizard::StepStatus::Done("on · learn.auto = true".into()));
+    }
+    w.health = Some(health());
+    ascii("wizard summary", &render(80, 18, |f| wizard::draw(f, &w, &c)).0);
+    for step in &w.steps {
+        ascii(
+            "wizard record",
+            &c.theme.lines(wizard::record(step, &c.theme)).iter().map(|l| l.to_string()).collect::<String>(),
+        );
+    }
+    let card = c.theme.lines(wizard::finish_card(&w, &c.theme, true, 80));
+    ascii("finish card", &card.iter().map(|l| l.to_string()).collect::<String>());
+}
+
 #[test]
 fn the_newest_firing_pulses_once() {
     let d = tempfile::tempdir().unwrap();
@@ -708,6 +823,21 @@ fn empty_home_says_what_to_do() {
     );
     let (tiny, _) = render(25, 6, |f| view::draw_live(f, f.area(), &live, None, &c, true));
     assert!(tiny.contains("larger"), "{tiny}");
+    // Short panes keep each section's next command, and the review line, on screen.
+    let mut live = Live::default();
+    live.waiting = Some(4);
+    let h = health();
+    for (w, hgt) in [(40, 12), (40, 10), (30, 8), (60, 14)] {
+        let (text, _) = render(w, hgt, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
+        for want in ["adage init", "adage condition", "adage review", "q quit"] {
+            assert!(text.contains(want), "{w}x{hgt} lacks {want:?}:\n{text}");
+        }
+    }
+    let paths = fixture(d.path());
+    let mut busy = live_from(&paths);
+    busy.waiting = Some(4);
+    let (text, _) = render(40, 12, |f| view::draw_live(f, f.area(), &busy, Some(&h), &c, true));
+    assert!(text.contains("4 to review · adage review") && text.contains("adage watch"), "{text}");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1162,6 +1292,21 @@ fn keys_overlay_and_status_bar_come_from_one_table() {
 }
 
 #[test]
+fn keys_overlay_wraps_under_the_description_column() {
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let mut s = app_state();
+    s.tab = Tab::Reflexes;
+    s.key(KeyCode::Char('?'), NONE);
+    let (text, buf) = render(60, 60, |f| app::draw(f, &s, &c));
+    let (x, y) = find(&buf, "fuzzy filter reflexes").expect("the / key's description");
+    let next: Vec<String> = (0..buf.area.width).map(|x| buf[(x, y + 1)].symbol().to_string()).collect();
+    let border = next.iter().position(|c| c == "│").expect("inside the popup");
+    let starts = (border + 1..next.len()).find(|&i| next[i] != " ").map(|i| i as u16);
+    assert_eq!(starts, Some(x), "the continuation starts under the description, not the key:\n{text}");
+}
+
+#[test]
 fn tabs_toasts_and_health_keys() {
     let mut s = app_state();
     for (k, tab) in [('1', Tab::Live), ('3', Tab::Map), ('4', Tab::Health), ('5', Tab::Settings), ('2', Tab::Reflexes)]
@@ -1271,6 +1416,28 @@ fn wizard_walks_every_step() {
     );
     assert!(report.contains("adage watch"));
     assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Quit)));
+}
+
+#[test]
+fn wizard_next_commands_keep_their_columns() {
+    let mut w = Wizard::new(vec![], vec![], true);
+    w.health = Some(health()); // codex's hooks are not registered: a long `next` command
+    let t = Theme::with_color(false);
+    for cols in [100, 64] {
+        let card: Vec<String> = wizard::finish_card(&w, &t, true, cols).iter().map(|l| l.to_string()).collect();
+        let next: Vec<&String> = card.iter().skip_while(|l| !l.starts_with("   next")).collect();
+        assert!(next[0].contains("adage install codex --write  registers the hooks"), "{card:#?}");
+        let desc = next[0].find("registers").unwrap();
+        for l in &next {
+            assert!(l.chars().count() <= cols, "{l:?} is wider than {cols}");
+            // A command row's description, or a continuation, starts in the description column.
+            let lead = &l[..desc];
+            assert!(
+                (lead.ends_with("  ") || lead.trim().is_empty()) && !l[desc..].starts_with(' '),
+                "every description, and each continuation, starts in one column: {card:#?}"
+            );
+        }
+    }
 }
 
 #[test]

@@ -12,7 +12,6 @@ use super::keys;
 use super::learnlog::{self, Tick, Tone};
 use super::tail::Record;
 use super::theme::{Lamp, Theme};
-use super::words::{fit, pad};
 use adage_core::repo;
 use adage_store::Paths;
 use adage_term::Glyph;
@@ -312,7 +311,7 @@ pub fn rule(label: &str, note: Option<Span<'static>>, width: u16, t: &Theme) -> 
     let mut spans =
         vec![Span::styled(format!("{dash} "), t.rule()), Span::styled(label.to_string(), t.ink2().patch(t.bold()))];
     if let Some(n) = note {
-        spans.push(Span::styled(" · ", t.dim()));
+        spans.push(Span::styled(t.sep(), t.dim()));
         spans.push(n);
     }
     let used: usize = spans.iter().map(|s| s.width()).sum();
@@ -327,10 +326,10 @@ fn strength_cell(a: Aspect, t: &Theme, w: usize, bold: bool) -> Vec<Span<'static
     if t.color {
         vec![
             Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.aspect(a)),
-            Span::styled(pad(Theme::strength_word(a), w.saturating_sub(2)), style),
+            Span::styled(t.pad(Theme::strength_word(a), w.saturating_sub(2)), style),
         ]
     } else {
-        vec![Span::styled(pad(&Theme::strength_word(a).to_ascii_uppercase(), w), style)]
+        vec![Span::styled(t.pad(&Theme::strength_word(a).to_ascii_uppercase(), w), style)]
     }
 }
 
@@ -374,7 +373,7 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
             let mut v = vec![
                 Span::styled(format!("{} ", t.glyph(Glyph::Arrow)), t.accent()),
                 Span::styled(format!("{} ", t.glyph(glyph)), t.accent()),
-                Span::styled(pad(route, id_w), id_style),
+                Span::styled(t.pad(route, id_w), id_style),
             ];
             let cell_w = if narrow { Theme::strength_word(*aspect).len() + 3 } else { 11 };
             let mut cell = strength_cell(*aspect, t, cell_w, hot > 0);
@@ -386,7 +385,7 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
             v.extend(cell);
             if !narrow && !detail.is_empty() {
                 let used: usize = v.iter().map(|s| s.width()).sum();
-                v.push(Span::styled(fit(detail, room.saturating_sub(used)), t.ink2()));
+                v.push(Span::styled(t.fit(&t.text(detail), room.saturating_sub(used)), t.ink2()));
             }
             v
         }
@@ -429,7 +428,7 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
         if used + w > room {
             let trimmed = s.content.trim_end().to_string();
             s.content =
-                if trimmed.chars().count() <= room - used { trimmed } else { fit(&trimmed, room - used) }.into();
+                if trimmed.chars().count() <= room - used { trimmed } else { t.fit(&trimmed, room - used) }.into();
         }
         used += w;
         true
@@ -446,9 +445,9 @@ pub fn feed_lines(items: &[&FeedItem], ctx: &Ctx, width: u16, pulse: &Pulse) -> 
         let dimmed = i.holdout;
         let st = |s: Style| if dimmed { t.holdout() } else { s };
         let (sid_n, harness) = match f {
-            Fit::Wide => (6, pad(feed::harness_name(&i.harness), 9)),
-            Fit::Mid => (6, pad(feed::harness_short(&i.harness), 3)),
-            Fit::Narrow => (4, pad(feed::harness_short(&i.harness), 3)),
+            Fit::Wide => (6, t.pad(feed::harness_name(&i.harness), 9)),
+            Fit::Mid => (6, t.pad(feed::harness_short(&i.harness), 3)),
+            Fit::Narrow => (4, t.pad(feed::harness_short(&i.harness), 3)),
         };
         let gap = if f == Fit::Wide { "  " } else { " " };
         let hot = if pulse.seq == i.seq { pulse.level } else { 0 };
@@ -461,19 +460,19 @@ pub fn feed_lines(items: &[&FeedItem], ctx: &Ctx, width: u16, pulse: &Pulse) -> 
             Span::raw(gap),
             Span::styled(harness, st(t.ink2())),
             Span::raw(gap),
-            Span::styled(pad(&i.event, 8), st(Style::default())),
+            Span::styled(t.pad(&i.event, 8), st(Style::default())),
             Span::raw(" "),
         ];
         let indent: usize = prefix.iter().map(|s| s.width()).sum();
         let room = (width as usize).saturating_sub(indent);
         if i.acts.is_empty() {
             let what = match i.observed {
-                0 => "· nothing to say".to_string(),
-                1 => "· 1 call, nothing to say".to_string(),
-                n => format!("· {n} calls, nothing to say"),
+                0 => format!("{} nothing to say", t.glyph(Glyph::Sep)),
+                1 => format!("{} 1 call, nothing to say", t.glyph(Glyph::Sep)),
+                n => format!("{} {n} calls, nothing to say", t.glyph(Glyph::Sep)),
             };
             let mut spans = prefix;
-            spans.push(Span::styled(fit(&what, room), t.dim()));
+            spans.push(Span::styled(t.fit(&what, room), t.dim()));
             out.push((i.seq, Line::from(spans)));
             continue;
         }
@@ -495,7 +494,10 @@ pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16) -> Line<'static> {
         (Tone::Error, _, _) => Line::from(vec![
             Span::styled(format!(" {} ", t.glyph(Glyph::Fail)), t.red()),
             Span::styled(format!("{} ", clock(k.ts, ctx.tz, false)), t.dim()),
-            Span::styled(fit(if wide { &k.text } else { &k.short }, (width as usize).saturating_sub(9)), t.red()),
+            Span::styled(
+                t.fit(&t.text(if wide { &k.text } else { &k.short }), (width as usize).saturating_sub(9)),
+                t.red(),
+            ),
         ]),
         (Tone::Change, Some(c), _) => {
             let id_w = if wide { 26 } else { 20 };
@@ -503,7 +505,7 @@ pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16) -> Line<'static> {
             let mut spans = vec![
                 Span::raw("   "),
                 Span::styled(format!("{glyph} "), t.accent()),
-                Span::styled(pad(&c.route, id_w), t.bold()),
+                Span::styled(t.pad(&c.route, id_w), t.bold()),
             ];
             let word_style = |w: &str| match w {
                 "fire" | "firm" => t.green().patch(t.bold()),
@@ -513,34 +515,34 @@ pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16) -> Line<'static> {
                 _ => t.dim(),
             };
             match c.what {
-                "evidence" => spans.push(Span::styled(pad("evidence", 19), t.ink2())),
-                "proposal" => spans.push(Span::styled(pad("change proposed", 19), t.ink2())),
+                "evidence" => spans.push(Span::styled(t.pad("evidence", 19), t.ink2())),
+                "proposal" => spans.push(Span::styled(t.pad("change proposed", 19), t.ink2())),
                 "new" => {
-                    spans.push(Span::styled("new · ", t.ink2()));
+                    spans.push(Span::styled(format!("new{}", t.sep()), t.ink2()));
                     let to = c.to.clone().unwrap_or_default();
-                    spans.push(Span::styled(pad(&to, 13), word_style(&to)));
+                    spans.push(Span::styled(t.pad(&to, 13), word_style(&to)));
                 }
-                "written" => spans.push(Span::styled(pad(&c.to.clone().unwrap_or_default(), 19), t.ink2())),
+                "written" => spans.push(Span::styled(t.pad(&c.to.clone().unwrap_or_default(), 19), t.ink2())),
                 _ => {
                     let from = c.from.as_deref().map(|f| format!("{f} {} ", t.glyph(Glyph::Arrow))).unwrap_or_default();
                     let to = c.to.clone().unwrap_or_default();
                     let fw = from.chars().count();
                     spans.push(Span::styled(from, t.ink2()));
                     spans.push(Span::styled(
-                        pad(&to, 19usize.saturating_sub(fw).max(to.chars().count() + 1)),
+                        t.pad(&to, 19usize.saturating_sub(fw).max(to.chars().count() + 1)),
                         word_style(&to),
                     ));
                 }
             }
             if !c.numbers.is_empty() {
                 let used: usize = spans.iter().map(|s| s.width()).sum();
-                spans.push(Span::styled(fit(&c.numbers, (width as usize).saturating_sub(used)), t.ink2()));
+                spans.push(Span::styled(t.fit(&t.text(&c.numbers), (width as usize).saturating_sub(used)), t.ink2()));
             }
             if wide && !c.track.is_empty() && c.what != "written" {
                 let used: usize = spans.iter().map(|s| s.width()).sum();
                 let room = (width as usize).saturating_sub(used + 4);
                 if room > 8 {
-                    spans.push(Span::styled(format!("   {}", fit(&c.track, room)), t.dim()));
+                    spans.push(Span::styled(format!("   {}", t.fit(&c.track, room)), t.dim()));
                 }
             }
             Line::from(spans)
@@ -571,14 +573,14 @@ pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16) -> Line<'static> {
                 (Some(r), true) => format!(" {r}"),
                 _ => String::new(),
             };
-            let tail = if facts.is_empty() { String::new() } else { format!(" · {}", facts.join(" · ")) };
+            let tail = if facts.is_empty() { String::new() } else { format!("{}{}", t.sep(), facts.join(&t.sep())) };
             let lead = format!(" {} {} ", t.glyph(Glyph::Active), clock(k.ts, ctx.tz, false));
             let room = (width as usize).saturating_sub(lead.chars().count() + head.len() + repo.len());
             Line::from(vec![
                 Span::styled(format!(" {} ", t.glyph(Glyph::Active)), t.accent()),
                 Span::styled(format!("{} ", clock(k.ts, ctx.tz, false)), t.dim()),
                 Span::raw(format!("{head}{repo}")),
-                Span::styled(fit(&tail, room), t.ink2()),
+                Span::styled(t.fit(&tail, room), t.ink2()),
             ])
         }
     }
@@ -586,16 +588,16 @@ pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16) -> Line<'static> {
 
 /// The health lamps, each with its fixing command, wrapped to `width` (a lamp never splits).
 pub fn lights_lines(h: Option<&Health>, t: &Theme, width: u16) -> Vec<Line<'static>> {
-    let Some(h) = h else { return vec![Line::from(Span::styled(" checking health…", t.dim()))] };
+    let Some(h) = h else { return vec![Line::from(Span::styled(format!(" checking health{}", t.more()), t.dim()))] };
     let mut out: Vec<Line<'static>> = Vec::new();
     let mut cur: Vec<Span<'static>> = vec![Span::raw(" ")];
     for l in &h.lights {
         let mut one = vec![
             Span::styled(format!("{} ", t.lamp_mark(l.lamp)), t.lamp(l.lamp)),
-            Span::styled(l.label.clone(), t.ink2()),
+            Span::styled(t.text(&l.label), t.ink2()),
         ];
         if let Some(cmd) = &l.hint {
-            one.push(Span::styled(" · ", t.dim()));
+            one.push(Span::styled(t.sep(), t.dim()));
             one.push(Span::styled(cmd.clone(), t.command()));
         }
         let used: usize = cur.iter().map(|s| s.width()).sum();
@@ -616,6 +618,12 @@ pub fn lights_lines(h: Option<&Health>, t: &Theme, width: u16) -> Vec<Line<'stat
 /// line's indent (its leading spaces), so wrapped text stays aligned under the text it continues.
 /// A word longer than the room is broken at the edge.
 pub fn wrap_lines(lines: Vec<Line<'static>>, width: u16) -> Vec<Line<'static>> {
+    wrap_hanging(lines, width, false)
+}
+
+/// [`wrap_lines`]; with `hang`, a line of two or more spans continues under its second span
+/// (a key column's description, say), not under its first.
+pub fn wrap_hanging(lines: Vec<Line<'static>>, width: u16, hang: bool) -> Vec<Line<'static>> {
     let width = width as usize;
     let mut out = Vec::with_capacity(lines.len());
     for line in lines {
@@ -632,7 +640,9 @@ pub fn wrap_lines(lines: Vec<Line<'static>>, width: u16) -> Vec<Line<'static>> {
                 s.content.chars().map(move |c| (c, st))
             })
             .collect();
-        let indent = cells.iter().take_while(|(c, _)| *c == ' ').count().min(width / 2);
+        let lead = cells.iter().take_while(|(c, _)| *c == ' ').count();
+        let first = line.spans.first().map_or(0, |s| s.width());
+        let indent = if hang && line.spans.len() > 1 { first.max(lead) } else { lead }.min(width / 2);
         let mut rows: Vec<Vec<(char, Style)>> = vec![];
         let mut cur: Vec<(char, Style)> = vec![];
         let mut i = 0;
@@ -691,6 +701,16 @@ pub fn centered(area: Rect, w: u16, h: u16) -> Rect {
 
 /// A bordered popup over `area` with `lines`.
 pub fn popup(f: &mut Frame, area: Rect, title: &str, lines: Vec<Line<'static>>, t: &Theme, scroll: u16) {
+    popup_with(f, area, title, lines, t, scroll, false)
+}
+
+/// The keys overlay: a popup whose wrapped descriptions stay under the description column.
+pub fn popup_keys(f: &mut Frame, area: Rect, lines: Vec<Line<'static>>, t: &Theme, scroll: u16) {
+    popup_with(f, area, "keys", lines, t, scroll, true)
+}
+
+fn popup_with(f: &mut Frame, area: Rect, title: &str, lines: Vec<Line<'static>>, t: &Theme, scroll: u16, hang: bool) {
+    let lines = t.lines(lines);
     let w = lines
         .iter()
         .map(|l| l.width() as u16)
@@ -699,7 +719,7 @@ pub fn popup(f: &mut Frame, area: Rect, title: &str, lines: Vec<Line<'static>>, 
         .saturating_add(4)
         .clamp(30, area.width.saturating_sub(4).max(10));
     // Wrapped before sizing, so the last line (often the keys that answer the popup) is counted.
-    let lines = wrap_lines(lines, w.saturating_sub(4));
+    let lines = wrap_hanging(t.lines(lines), w.saturating_sub(4), hang);
     let h = (lines.len() as u16).saturating_add(2).min(area.height.saturating_sub(2).max(3));
     let r = centered(area, w, h);
     f.render_widget(Clear, r);
@@ -707,19 +727,15 @@ pub fn popup(f: &mut Frame, area: Rect, title: &str, lines: Vec<Line<'static>>, 
     let scroll = scroll.min(hidden);
     let mut block = Block::default()
         .borders(Borders::ALL)
-        .border_type(if t.ch("╭", "+") == "╭" {
-            ratatui::widgets::BorderType::Rounded
-        } else {
-            ratatui::widgets::BorderType::Plain
-        })
+        .border_set(t.border())
         .border_style(t.accent())
-        .title(Span::styled(format!(" {title} "), t.command().patch(t.bold())));
+        .title(Span::styled(format!(" {} ", t.text(title)), t.command().patch(t.bold())));
     if hidden > 0 {
         // More than fits: say so, and which keys reach it.
         let more = match (scroll > 0, scroll < hidden) {
-            (true, true) => format!(" {} more · j/k scroll ", t.ch("↑↓", "^v")),
-            (false, _) => format!(" {} more · j/k scroll ", t.ch("↓", "v")),
-            (true, false) => format!(" {} more · j/k scroll ", t.ch("↑", "^")),
+            (true, true) => format!(" {} more{}j/k scroll ", t.arrows(), t.sep()),
+            (false, _) => format!(" {} more{}j/k scroll ", t.ch("↓", "v"), t.sep()),
+            (true, false) => format!(" {} more{}j/k scroll ", t.ch("↑", "^"), t.sep()),
         };
         block = block.title_bottom(Line::from(Span::styled(more, t.dim())).right_aligned());
     }
@@ -764,11 +780,12 @@ pub fn inspect_lines(i: &FeedItem, ctx: &Ctx, width: u16) -> Vec<Line<'static>> 
         Span::styled(format!("trace {}", feed::short_session(&i.session, 12)), t.bold()),
         Span::styled(
             format!(
-                " · {} · {} · {}{}",
+                "{sep}{}{sep}{}{sep}{}{}",
                 feed::harness_name(&i.harness),
                 i.event,
                 clock(i.ts, ctx.tz, true),
-                if i.repo.is_empty() { String::new() } else { format!(" · {}", i.repo) }
+                if i.repo.is_empty() { String::new() } else { format!("{}{}", t.sep(), i.repo) },
+                sep = t.sep()
             ),
             t.ink2(),
         ),
@@ -790,7 +807,7 @@ pub fn inspect_lines(i: &FeedItem, ctx: &Ctx, width: u16) -> Vec<Line<'static>> 
         let head = if i.holdout { "WHAT THE AGENT WOULD HAVE SEEN (WITHHELD)" } else { "WHAT THE AGENT SAW" };
         v.push(Line::from(vec![
             Span::styled(head, t.dim().patch(t.bold())),
-            Span::styled(format!(" · {route}"), t.dim()),
+            Span::styled(format!("{}{route}", t.sep()), t.dim()),
         ]));
         v.extend(directive_lines(text, t, "  "));
     }
@@ -798,7 +815,7 @@ pub fn inspect_lines(i: &FeedItem, ctx: &Ctx, width: u16) -> Vec<Line<'static>> 
     v.push(Line::from(vec![
         Span::styled("evidence and review: ", t.dim()),
         Span::styled("adage ui", t.command()),
-        Span::styled(" (Reflexes) · esc closes", t.dim()),
+        Span::styled(format!(" (Reflexes){}esc closes", t.sep()), t.dim()),
     ]));
     v
 }
@@ -818,14 +835,14 @@ pub fn directive_lines(text: &str, t: &Theme, indent: &str) -> Vec<Line<'static>
             } else {
                 Style::default()
             };
-            Line::from(vec![Span::raw(indent.to_string()), Span::styled(l.to_string(), style)])
+            Line::from(vec![Span::raw(indent.to_string()), Span::styled(t.text(l), style)])
         })
         .collect()
 }
 
 fn map_hint_lines(t: &Theme) -> Vec<Line<'static>> {
     vec![
-        Line::raw("The map shows every stimulus → reflex → response, with evidence."),
+        Line::raw(t.text("The map shows every stimulus → reflex → response, with evidence.")),
         Line::raw(""),
         Line::from(vec![Span::styled("  adage map", t.command()), Span::styled("   in a browser", t.dim())]),
         Line::from(vec![Span::styled("  adage ui", t.command()), Span::styled("    tab 3, in the terminal", t.dim())]),
@@ -880,9 +897,9 @@ fn header(live: &Live, health: Option<&Health>, key: Option<&str>, ctx: &Ctx, wi
         let mut v = vec![Span::styled(" adage", t.title()), Span::styled(" watch", t.bold())];
         let mut parts = vec![ctx.label.clone()];
         parts.extend(facts.iter().filter_map(|f| (*f).clone()));
-        v.push(Span::styled(format!("  {}", parts.join(" · ")), t.ink2()));
+        v.push(Span::styled(format!("  {}", parts.join(&t.sep())), t.ink2()));
         if ctx.demo {
-            v.push(Span::styled(" · demo", t.holdout()));
+            v.push(Span::styled(format!("{}demo", t.sep()), t.holdout()));
         }
         v
     };
@@ -910,7 +927,7 @@ fn footer(live: &Live, t: &Theme, width: u16) -> Line<'static> {
             Span::styled(" / ", t.key()),
             Span::raw(live.filter.clone()),
             Span::styled(t.ch("▌", "_"), t.accent()),
-            Span::styled("   enter keep · esc clear", t.dim()),
+            Span::styled(format!("   enter keep{}esc clear", t.sep()), t.dim()),
         ]);
     }
     let quit = [Span::styled("q", t.key()), Span::styled(" quit ", t.dim())];
@@ -930,21 +947,29 @@ fn draw_feed(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &Ct
     if items.is_empty() {
         let lines = if !live.filter.is_empty() {
             vec![Line::from(Span::styled(
-                format!(" Nothing matches “{}”. esc clears the filter.", live.filter),
+                format!(" Nothing matches {}. esc clears the filter.", t.quote(&live.filter)),
                 t.dim(),
             ))]
         } else {
             let scope = if live.all_repos || key.is_none() { "any repository".to_string() } else { ctx.label.clone() };
-            vec![
-                Line::from(Span::styled(format!(" No traces yet for {scope}."), t.dim())),
-                Line::from(vec![
-                    Span::styled(
-                        " Start an agent there: each hook call appears here as it happens. No hooks yet? ",
-                        t.dim(),
-                    ),
-                    Span::styled("adage init", t.command()),
-                ]),
-            ]
+            let title = Line::from(Span::styled(format!(" No traces yet for {scope}."), t.dim()));
+            let next = |why: &'static str| {
+                Line::from(vec![Span::styled(why, t.dim()), Span::styled("adage init", t.command())])
+            };
+            let full = wrap_lines(
+                vec![
+                    title.clone(),
+                    next(" Start an agent there: each hook call appears here as it happens. No hooks yet? "),
+                ],
+                area.width,
+            );
+            // Short of room, the explanation goes first and the next command stays.
+            if full.len() <= area.height as usize {
+                full
+            } else {
+                let short = wrap_lines(vec![title, next(" No hooks yet? ")], area.width);
+                short[short.len().saturating_sub(area.height as usize)..].to_vec()
+            }
         };
         f.render_widget(Paragraph::new(wrap_lines(lines, area.width)), area);
         return;
@@ -969,26 +994,41 @@ fn draw_ticker(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &
     let ticks = live.visible_ticks(key);
     let mut tail: Vec<Line> = Vec::new();
     if let Some(n) = live.waiting.filter(|n| *n > 0) {
-        tail.push(Line::from(vec![
-            Span::styled(format!("   {} ", t.glyph(Glyph::Off)), t.dim()),
-            Span::styled(
-                format!(
-                    "{n} reflex{} wait{} for review · ",
-                    if n == 1 { "" } else { "es" },
-                    if n == 1 { "s" } else { "" }
-                ),
-                t.ink2(),
-            ),
-            Span::styled("adage review", t.command()),
-        ]));
+        let line = |what: String, lead: &str| {
+            Line::from(vec![
+                Span::styled(format!("{lead}{} ", t.glyph(Glyph::Off)), t.dim()),
+                Span::styled(format!("{what}{}", t.sep()), t.ink2()),
+                Span::styled("adage review", t.command()),
+            ])
+        };
+        let full = line(
+            format!("{n} reflex{} wait{} for review", if n == 1 { "" } else { "es" }, if n == 1 { "s" } else { "" }),
+            "   ",
+        );
+        // Narrow panes keep the command whole.
+        tail.push(if full.width() <= area.width as usize { full } else { line(format!("{n} to review"), " ") });
     }
     if ticks.is_empty() {
-        let mut lines = vec![Line::from(vec![
-            Span::styled(" Nothing conditioned yet. Runs appear here as they finish · ", t.dim()),
-            Span::styled("adage condition", t.command()),
-        ])];
+        let intro =
+            |why: String| Line::from(vec![Span::styled(why, t.dim()), Span::styled("adage condition", t.command())]);
+        let tail = wrap_lines(tail, area.width);
+        let room = (area.height as usize).saturating_sub(tail.len()).max(1);
+        // Short of room, the explanation goes and the command (and the review line) stay.
+        let whys = [
+            format!(" Nothing conditioned yet. Runs appear here as they finish{}", t.sep()),
+            format!(" Nothing conditioned yet{}", t.sep()),
+            " ".to_string(),
+        ];
+        let mut lines = vec![];
+        for why in whys {
+            lines = wrap_lines(vec![intro(why)], area.width);
+            if lines.len() <= room {
+                break;
+            }
+        }
+        lines.truncate(room);
         lines.extend(tail);
-        f.render_widget(Paragraph::new(wrap_lines(lines, area.width)), area);
+        f.render_widget(Paragraph::new(lines), area);
         return;
     }
     let h = (area.height as usize).saturating_sub(tail.len());
@@ -1004,28 +1044,50 @@ pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>
     let t = &ctx.theme;
     if area.width < 30 || area.height < 8 {
         f.render_widget(
-            Paragraph::new("adage watch: make this pane larger (30×8 at least)").wrap(Wrap { trim: true }),
+            Paragraph::new(t.text("adage watch: make this pane larger (30×8 at least)")).wrap(Wrap { trim: true }),
             area,
         );
         return;
     }
     let key = health.and_then(|h| h.repo_key.as_deref());
     let lights = lights_lines(health, t, area.width);
-    let lights_h = (lights.len() as u16).clamp(1, 3);
-    let ticker_h = match area.height {
+    let waiting = u16::from(live.waiting.is_some_and(|n| n > 0));
+    let mut lights_h = (lights.len() as u16).clamp(1, 3);
+    let mut ticker_h = match area.height {
         0..=17 => 2,
         18..=26 => 3,
         27..=40 => 4,
         _ => 8,
-    } + u16::from(live.waiting.is_some_and(|n| n > 0));
-    let roomy = area.height >= 24;
-    let gap = u16::from(roomy);
-    let (header_h, keys_h) = if chrome { (1, 2) } else { (0, 0) };
+    } + waiting;
+    let mut gap = u16::from(area.height >= 24);
+    let (mut header_h, mut keys_h) = if chrome { (1, 2) } else { (0, 0) };
+    // Short panes shed rows until the feed has two: the gaps, the key line's rule, extra lamp
+    // rows, the ticker's history (its next command and the review line stay), the header, and
+    // at the very least a feed row. The next command in each section keeps its row.
+    let mut feed_min = 2;
+    let used = |g: u16, hh: u16, kh: u16, th: u16, lh: u16| hh + g * (2 + u16::from(chrome)) + 3 + th + lh + kh;
+    while used(gap, header_h, keys_h, ticker_h, lights_h) + feed_min > area.height {
+        if gap > 0 {
+            gap = 0;
+        } else if keys_h == 2 {
+            keys_h = 1;
+        } else if lights_h > 1 {
+            lights_h -= 1;
+        } else if ticker_h > 1 + waiting {
+            ticker_h -= 1;
+        } else if header_h > 0 {
+            header_h = 0;
+        } else if feed_min > 1 {
+            feed_min = 1;
+        } else {
+            break;
+        }
+    }
     let [header_a, _, now_rule, feed_area, _, cond_rule, ticker, _, health_rule, lamps, keys_a] = Layout::vertical([
         Constraint::Length(header_h),
         Constraint::Length(if chrome { gap } else { 0 }),
         Constraint::Length(1),
-        Constraint::Min(3),
+        Constraint::Min(feed_min),
         Constraint::Length(gap),
         Constraint::Length(1),
         Constraint::Length(ticker_h),
@@ -1044,20 +1106,20 @@ pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>
         notes.push("all repositories".to_string());
     }
     if !live.filter.is_empty() {
-        notes.push(format!("filter “{}”", live.filter));
+        notes.push(format!("filter {}", t.quote(&live.filter)));
     }
     if live.hide_quiet {
         notes.push("quiet hidden".to_string());
     }
-    let note = (!notes.is_empty()).then(|| Span::styled(notes.join(" · "), t.dim()));
+    let note = (!notes.is_empty()).then(|| Span::styled(notes.join(&t.sep()), t.dim()));
     f.render_widget(Paragraph::new(rule("now", note, area.width, t)), now_rule);
     draw_feed(f, feed_area, live, key, ctx);
 
     let running = (!live.learning.is_empty()).then(|| {
         let what = if live.learning.len() == 1 {
-            "running now…".to_string()
+            format!("running now{}", t.more())
         } else {
-            format!("{} running…", live.learning.len())
+            format!("{} running{}", live.learning.len(), t.more())
         };
         Span::styled(what, t.yellow().patch(t.bold()))
     });
@@ -1068,12 +1130,12 @@ pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>
     f.render_widget(Paragraph::new(lights), lamps);
 
     if chrome {
-        let [r, k] = Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(keys_a);
+        let [r, k] = Layout::vertical([Constraint::Length(keys_h - 1), Constraint::Length(1)]).areas(keys_a);
         f.render_widget(Paragraph::new(rule("", None, area.width, t)), r);
         f.render_widget(Paragraph::new(footer(live, t, area.width)), k);
     }
     if live.help {
-        popup(f, area, "keys", watch_help(t), t, live.popup_scroll);
+        popup_keys(f, area, watch_help(t), t, live.popup_scroll);
     } else if live.map_hint {
         popup(f, area, "the map", map_hint_lines(t), t, live.popup_scroll);
     } else if live.inspect {

@@ -109,14 +109,15 @@ pub fn bar(tables: &[&[Key]], t: &Theme, width: usize) -> Vec<Span<'static>> {
     let mut used = 0;
     for key in tables.iter().flat_map(|k| k.iter()).filter(|k| k.bar) {
         let sep = if spans.is_empty() { 0 } else { 3 };
-        let w = key.keys.chars().count() + 1 + key.label.chars().count();
+        let keys = t.text(key.keys);
+        let w = keys.chars().count() + 1 + key.label.chars().count();
         if used + sep + w > width {
             break;
         }
         if sep > 0 {
-            spans.push(Span::styled(" · ", t.dim()));
+            spans.push(Span::styled(t.sep(), t.dim()));
         }
-        spans.push(Span::styled(key.keys, t.key()));
+        spans.push(Span::styled(keys, t.key()));
         spans.push(Span::styled(format!(" {}", key.label), t.dim()));
         used += sep + w;
     }
@@ -125,7 +126,7 @@ pub fn bar(tables: &[&[Key]], t: &Theme, width: usize) -> Vec<Span<'static>> {
 
 /// The `?` overlay: each section's keys, aligned.
 pub fn overlay(sections: &[(&str, &[Key])], t: &Theme) -> Vec<Line<'static>> {
-    let w = sections.iter().flat_map(|(_, ks)| ks.iter()).map(|k| k.keys.chars().count()).max().unwrap_or(4);
+    let w = sections.iter().flat_map(|(_, ks)| ks.iter()).map(|k| t.text(k.keys).chars().count()).max().unwrap_or(4);
     let mut out = Vec::new();
     for (i, (title, ks)) in sections.iter().enumerate() {
         if i > 0 {
@@ -133,9 +134,10 @@ pub fn overlay(sections: &[(&str, &[Key])], t: &Theme) -> Vec<Line<'static>> {
         }
         out.push(Line::from(Span::styled(title.to_uppercase(), t.dim().patch(t.bold()))));
         for key in ks.iter() {
+            // Two spans: a wrapped description continues under the second (`view::popup_keys`).
             out.push(Line::from(vec![
-                Span::styled(format!("  {:>w$}  ", key.keys), t.key()),
-                Span::raw(key.about.to_string()),
+                Span::styled(format!("  {:>w$}  ", t.text(key.keys)), t.key()),
+                Span::raw(t.text(key.about)),
             ]));
         }
     }

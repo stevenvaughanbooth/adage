@@ -4,7 +4,6 @@ use crate::doctor::Status;
 use crate::ui::app::{AppState, Cmd, WantKind};
 use crate::ui::health::Fix;
 use crate::ui::view::{self, Ctx};
-use crate::ui::words::{self, pad};
 use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
@@ -60,7 +59,7 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
 pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let t = &ctx.theme;
     let Some(h) = &s.health else {
-        f.render_widget(Paragraph::new(Span::styled(" running checks…", t.dim())), area);
+        f.render_widget(Paragraph::new(Span::styled(format!(" running checks{}", t.more()), t.dim())), area);
         return;
     };
     let [summary, list, _, detail] =
@@ -69,12 +68,12 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(format!(" {} passed", h.count(Status::Pass)), t.ink2()),
-            Span::styled(" · ", t.dim()),
+            Span::styled(t.sep(), t.dim()),
             Span::styled(
                 format!("{} warnings", h.count(Status::Warn)),
                 if h.count(Status::Warn) > 0 { t.yellow() } else { t.ink2() },
             ),
-            Span::styled(" · ", t.dim()),
+            Span::styled(t.sep(), t.dim()),
             Span::styled(
                 format!("{} failures", h.count(Status::Fail)),
                 if h.count(Status::Fail) > 0 { t.red() } else { t.ink2() },
@@ -94,14 +93,14 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
             Span::styled(if sel { t.ch("▌", ">") } else { " " }, t.accent()),
             Span::raw(" "),
             Span::styled(format!("{} ", t.lamp_mark(lamp)), t.lamp(lamp)),
-            Span::styled(pad(&c.label, name_w), if sel { t.bold() } else { ratatui::style::Style::default() }),
+            Span::styled(t.pad(&c.label, name_w), if sel { t.bold() } else { ratatui::style::Style::default() }),
             Span::styled(if fixable { t.ch(" ⏎ ", " > ") } else { "   " }, t.command()),
             // Cut with an ellipsis, not the pane's edge: the whole text is in the detail below.
-            Span::styled(words::fit(&c.detail, (list.width as usize).saturating_sub(name_w + 7)), t.ink2()),
+            Span::styled(t.fit(&t.text(&c.detail), (list.width as usize).saturating_sub(name_w + 7)), t.ink2()),
         ]));
     }
     for n in s.notices.iter().rev().take(3) {
-        lines.push(Line::from(Span::styled(format!("   {n}"), t.yellow())));
+        lines.push(Line::from(Span::styled(format!("   {}", t.text(n)), t.yellow())));
     }
     let hgt = list.height as usize;
     let offset = s.check_sel.saturating_sub(hgt.saturating_sub(1));
@@ -121,5 +120,5 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
             d.push(Line::from(vec![Span::styled(" enter", t.key()), Span::raw(format!(" {}", fix.label()))]));
         }
     }
-    f.render_widget(Paragraph::new(view::wrap_lines(d, detail.width)), detail);
+    f.render_widget(Paragraph::new(view::wrap_lines(t.lines(d), detail.width)), detail);
 }

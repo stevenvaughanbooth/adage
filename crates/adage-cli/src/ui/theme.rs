@@ -9,6 +9,7 @@
 use adage_term::{Caps, Glyph, Level, Role};
 use adage_tracks::Aspect;
 use ratatui::style::{Modifier, Style};
+use ratatui::text::Line;
 
 /// A health lamp.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -117,6 +118,89 @@ impl Theme {
         } else {
             ascii
         }
+    }
+    /// The separator between facts, with its spaces: ` · `, or ` - `.
+    pub fn sep(&self) -> String {
+        format!(" {} ", self.glyph(Glyph::Sep))
+    }
+    /// `s` in quotation marks: “s”, or "s".
+    pub fn quote(&self, s: &str) -> String {
+        format!("{}{s}{}", self.ch("“", "\""), self.ch("”", "\""))
+    }
+    /// Arrow keys, as a hint: `↑↓`, or `^v`.
+    pub fn arrows(&self) -> &'static str {
+        self.ch("↑↓", "^v")
+    }
+    /// A popup's border: rounded, or `+`, `-` and `|`.
+    pub fn border(&self) -> ratatui::symbols::border::Set<'static> {
+        if self.term.caps.unicode {
+            ratatui::symbols::border::ROUNDED
+        } else {
+            ratatui::symbols::border::Set {
+                top_left: "+",
+                top_right: "+",
+                bottom_left: "+",
+                bottom_right: "+",
+                vertical_left: "|",
+                vertical_right: "|",
+                horizontal_top: "-",
+                horizontal_bottom: "-",
+            }
+        }
+    }
+    /// A trailing ellipsis: `…`, or `...`.
+    pub fn more(&self) -> &'static str {
+        self.ch("…", "...")
+    }
+    /// Cut `s` to `n` columns with this theme's ellipsis ([`super::words::fit_with`]).
+    pub fn fit(&self, s: &str, n: usize) -> String {
+        super::words::fit_with(s, n, self.more())
+    }
+    /// `s` as a column `n` wide, with this theme's ellipsis ([`super::words::pad_with`]).
+    pub fn pad(&self, s: &str, n: usize) -> String {
+        super::words::pad_with(s, n, self.more())
+    }
+    /// Swap the typographic characters in `text` (separators, arrows, ellipses, quotes, dashes)
+    /// for their ASCII fallbacks when this terminal cannot draw them. For text written once and
+    /// shown on every screen: tables of keys, palette entries, messages.
+    pub fn text(&self, text: &str) -> String {
+        if self.term.caps.unicode {
+            return text.to_string();
+        }
+        let mut out = String::with_capacity(text.len());
+        for c in text.chars() {
+            match c {
+                '·' => out.push_str(self.glyph(Glyph::Sep)),
+                '→' => out.push_str(self.glyph(Glyph::Arrow)),
+                '…' => out.push_str("..."),
+                '↑' => out.push('^'),
+                '↓' | '▾' => out.push('v'),
+                '▸' | '›' | '⏎' => out.push('>'),
+                '“' | '”' => out.push('"'),
+                '‘' | '’' => out.push('\''),
+                '–' | '—' => out.push('-'),
+                '×' => out.push('x'),
+                '≤' => out.push_str("<="),
+                '≥' => out.push_str(">="),
+                c => out.push(c),
+            }
+        }
+        out
+    }
+    /// [`Theme::text`] over every span of `lines`: for a whole popup or card at once.
+    pub fn lines(&self, lines: Vec<Line<'static>>) -> Vec<Line<'static>> {
+        if self.term.caps.unicode {
+            return lines;
+        }
+        lines
+            .into_iter()
+            .map(|mut l| {
+                for s in &mut l.spans {
+                    s.content = self.text(&s.content).into();
+                }
+                l
+            })
+            .collect()
     }
     pub fn bold(&self) -> Style {
         Style::default().add_modifier(Modifier::BOLD)
