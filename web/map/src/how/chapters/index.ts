@@ -2,7 +2,9 @@
 
 import type { Chapter } from "../types";
 import { storyboard } from "./storyboard";
+import { seal } from "./seal";
 import { subgraphs } from "./subgraphs";
+import { train } from "./train";
 
 const readTraces = storyboard({
   id: "read",
@@ -60,34 +62,6 @@ const choose = storyboard({
     { title: "Confidence is calibrated", body: "Isotonic regression bends raw confidence to match what happened in held-out traces.", chips: ["200 bins", "3 folds"] },
     { title: "Compression chooses", body: "A code table fills greedily; each candidate stays only if it saves bits.", chips: ["≤ 256 reflexes", "≤ 20,000 patterns scored"] },
     { title: "Winners take a shape", body: "Run, read-batch, avoid, obligation, scope, env_sync, sequence or context.", chips: ["8 shapes"] },
-  ],
-});
-
-const train = storyboard({
-  id: "train",
-  title: "Train on a skill",
-  status: "Built",
-  kind: "built",
-  summary: "A SKILL.md, Makefile or CI file becomes typed claims. Your agent runs headlessly on generated tasks in disposable clones, and each claim gets a verdict.",
-  source: "crates/adage-train · docs/training.md",
-  beats: [
-    { title: "A skill becomes claims", body: "Each instruction becomes a typed claim: verify, regenerate after a path, look up, avoid, environment.", chips: ["claims are typed"] },
-    { title: "Agents run in sandboxes", body: "Disposable clones with no remote, their own home and a tool allowlist; a budget cap and a timeout per session.", chips: ["≥ 25% controls", "timeout 1,800 s"] },
-    { title: "Claims get verdicts", body: "Compiled, contradicted (the skill is stale), never exercised, or not compiled.", chips: ["stale: fails ≥ 9/10"] },
-  ],
-});
-
-const seal = storyboard({
-  id: "index",
-  title: "Seal the index",
-  status: "Built",
-  kind: "built",
-  summary: "Every installed track compiles into one index. Collisions resolve by rule, and the result is identified by a hash of its contents.",
-  source: "crates/adage-tracks/src/{index,interlock}.rs",
-  beats: [
-    { title: "Tracks merge", body: "First-hand reflexes win over imported ones, and both win over instincts.", chips: ["first-hand > imported > instinct"] },
-    { title: "Collisions resolve", body: "Inhibit beats fire at the same point; of two fires at one point, one drops to prime.", chips: ["interlock"] },
-    { title: "The index seals", body: "The generation is the first 16 hex digits of the SHA-256 of its reflexes.", chips: ["generation sha256[..16]"] },
   ],
 });
 
