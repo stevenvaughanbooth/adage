@@ -206,6 +206,10 @@ pub use adage_graph::compile::stable::{runner, shell_join, stable};
 
 /// The path pattern an edit to `rel` stands for: `schema/invoice.json` → `schema/*.json`.
 pub fn glob_for(rel: &str) -> Option<String> {
+    // A path outside the repository (a scratch file, say) is no pattern of the repository's.
+    if !adage_core::repo::is_safe_relative(rel) {
+        return None;
+    }
     let (dir, file) = rel.rsplit_once('/').unwrap_or(("", rel));
     let ext = file.rsplit_once('.').map(|(_, e)| e)?;
     Some(if dir.is_empty() { format!("*.{ext}") } else { format!("{dir}/*.{ext}") })

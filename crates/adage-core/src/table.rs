@@ -27,6 +27,8 @@ struct RawCommand {
     #[serde(default)]
     regenerate_flags: Vec<String>,
     #[serde(default)]
+    check_flags: Vec<String>,
+    #[serde(default)]
     publish_flags: Vec<String>,
     #[serde(default)]
     pattern_effects: Vec<(String, String)>,
@@ -41,6 +43,8 @@ pub struct CommandSpec {
     pub value_flags: Vec<String>,
     pub mutating_flags: Vec<String>,
     pub regenerate_flags: Vec<String>,
+    /// Flags whose presence makes a rewriting tool only check (`cargo fmt --check`): verify.
+    pub check_flags: Vec<String>,
     pub publish_flags: Vec<String>,
     pub pattern_effects: Vec<(Regex, Effect)>,
     /// True only when repository files cannot make this program run code (Track C §4.2).
@@ -70,6 +74,7 @@ fn build_spec(raw: RawCommand) -> CommandSpec {
         value_flags: raw.value_flags,
         mutating_flags: raw.mutating_flags,
         regenerate_flags: raw.regenerate_flags,
+        check_flags: raw.check_flags,
         publish_flags: raw.publish_flags,
         pattern_effects,
         inert: raw.inert,

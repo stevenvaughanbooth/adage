@@ -282,10 +282,15 @@ impl Acc {
             }
         }
         // Failing commands, and what the session ran successfully next instead (the dead-end
-        // learner's pairing: a different command of the same effect within five steps).
+        // learner's pairing: a different command of the same effect within five steps). One-off
+        // inline code and housekeeping (`echo`, `cat`, `mkdir`) are no conventions: neither a dead
+        // end nor what works instead.
+        let noise = |k: &str| {
+            k.contains("{code}") || adage_graph::compile::shapes::housekeeping(k.strip_prefix("exec ").unwrap_or(k))
+        };
         let mut failed_here = BTreeSet::new();
         for (i, a) in s.steps.iter().enumerate() {
-            if !a.call.failed || !is_exec(&a.norm.action) {
+            if !a.call.failed || !is_exec(&a.norm.action) || noise(&a.key) {
                 continue;
             }
             let e = self.failures.entry(a.key.clone()).or_default();
@@ -293,7 +298,11 @@ impl Acc {
             if failed_here.insert(a.key.clone()) {
                 e.0 += 1;
                 if let Some(b) = s.steps.iter().skip(i + 1).take(5).find(|b| {
-                    is_exec(&b.norm.action) && !b.call.failed && b.norm.effect == a.norm.effect && b.key != a.key
+                    is_exec(&b.norm.action)
+                        && !b.call.failed
+                        && b.norm.effect == a.norm.effect
+                        && b.key != a.key
+                        && !noise(&b.key)
                 }) {
                     *e.2.entry(b.key.clone()).or_default() += 1;
                 }
@@ -685,7 +694,16 @@ pub fn print_text(s: &Sense) {
             println!("  prompt intents            {} usable", r.intent_families);
         }
     }
-    println!("\nNext: `adage condition` forms these reflexes, and `adage review` lists each one for your decision.");
+    if s.repos.iter().any(|r| !r.candidates.is_empty()) {
+        println!(
+            "\nNext: `adage condition` forms these reflexes, and `adage review` lists each one for your decision."
+        );
+    } else {
+        println!(
+            "\nNext: nothing clears the bars yet. Adage keeps conditioning as sessions end (`adage condition` runs it now); \
+             `adage condition --instincts-only` binds Adage's instincts from your repository's files today."
+        );
+    }
 }
 
 #[cfg(test)]

@@ -174,6 +174,19 @@ fn route(
     }
 }
 
+/// Programs an agent runs to look around or tidy up (count lines, list a directory, print, wait,
+/// make a directory): how agents work, never a step of the repository's to direct.
+const HOUSEKEEPING: &[&str] = &[
+    "cat", "clear", "date", "df", "du", "echo", "env", "false", "head", "ls", "mkdir", "printenv", "printf", "pwd",
+    "sleep", "stat", "tail", "touch", "tree", "true", "wc", "which", "whoami",
+];
+
+/// Whether `command` runs a housekeeping program ([`HOUSEKEEPING`]).
+pub fn housekeeping(command: &str) -> bool {
+    let head = command.split_whitespace().next().unwrap_or("");
+    HOUSEKEEPING.contains(&head.rsplit('/').next().unwrap_or(head))
+}
+
 /// A command a continuation item directs: its dominant variant's literal, when that has no
 /// placeholder (a variable argument with no bound source is not directable).
 fn fixed_command(v: &ItemView, target: Option<&str>, input: &Input) -> Result<(String, String, Effect), String> {
@@ -184,6 +197,9 @@ fn fixed_command(v: &ItemView, target: Option<&str>, input: &Input) -> Result<(S
     let (lit, _) = input.corpus.literal(&key).ok_or_else(|| format!("no trace ran {key}"))?;
     if lit.contains('{') || lit.contains('\'') || !io::safe_command(lit) {
         return Err(format!("{lit:?} is not a fixed, plain command"));
+    }
+    if housekeeping(lit) {
+        return Err(format!("{lit:?} is housekeeping, not a step to direct"));
     }
     // A key with a placeholder stands for a variable argument: directable only as one dominant
     // literal (else it needs a bound source, which a fixed command does not have).
@@ -600,6 +616,10 @@ impl<'a> Builder<'a> {
             }
             if !matches!(fixed[0].2, Effect::Verify | Effect::Regenerate) {
                 self.drop(r, "after a command, only a check or a regeneration is directed");
+                return false;
+            }
+            if member_keys(v).contains(&fixed[0].0) {
+                self.drop(r, format!("{} is directed after itself", fixed[0].1));
                 return false;
             }
             Trigger::AfterCommand { command: most_common(v) }

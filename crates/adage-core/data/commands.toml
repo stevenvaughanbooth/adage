@@ -13,6 +13,8 @@
 #   value_flags     - flags that consume the following token as their value (command-specific:
 #                      -n is boolean for rg but takes a value for head).
 #   mutating_flags  - flags whose presence alone forces effect to "author" (e.g. sed -i).
+#   check_flags     - flags whose presence makes a rewriting tool only check: "verify"
+#                     (cargo fmt --check, black --check).
 #   publish_flags   - flags whose presence forces effect to "publish" (e.g. git reset --hard,
 #                      curl -X POST).
 #   inert           - (default false) true only when the program's behaviour cannot be changed
@@ -635,6 +637,7 @@ effect = "verify"
 [[commands.subcommands]]
 name = "fmt"
 effect = "regenerate"
+check_flags = ["--check"]
 [[commands.subcommands]]
 name = "run"
 effect = "verify"
@@ -813,6 +816,7 @@ effect = "verify"
 [[commands]]
 name = "black"
 effect = "regenerate"       # black rewrites by default unless --check
+check_flags = ["--check", "--diff"]
 
 [[commands]]
 name = "clippy"

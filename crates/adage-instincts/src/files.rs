@@ -22,7 +22,8 @@ pub const MAX_WALK_ENTRIES: usize = 5_000;
 /// Directory depth below the root a walk descends to.
 pub const MAX_WALK_DEPTH: usize = 8;
 
-/// Directories a walk never enters: dependencies, build outputs, virtual environments, VCS data.
+/// Directories a walk never enters: dependencies, build outputs, virtual environments, VCS data,
+/// test fixtures.
 const SKIP_DIRS: &[&str] = &[
     ".git",
     ".hg",
@@ -44,6 +45,11 @@ const SKIP_DIRS: &[&str] = &[
     ".next",
     ".cache",
     "coverage",
+    // Test fixtures and test data: sample repositories and files a test suite reads, not this
+    // repository's own conventions (a generated file in a fixture is no advice for its authors).
+    "fixtures",
+    "__fixtures__",
+    "testdata",
 ];
 
 pub struct RepoFiles {
