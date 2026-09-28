@@ -110,7 +110,7 @@ fn init_without_a_terminal_keeps_the_printed_report() {
         .output()
         .unwrap();
     let t = text(&o);
-    assert!(o.status.success() && t.contains("1. Harnesses") && t.contains("4. Survey"), "{t}");
+    assert!(o.status.success() && t.contains("1  Harnesses") && t.contains("4  Sense your traces"), "{t}");
     let o = run(&root, &root.join("work"), &["init", "--nope"]);
     assert!(!o.status.success() && text(&o).contains("unexpected argument '--nope'"), "{}", text(&o));
 }

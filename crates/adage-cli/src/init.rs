@@ -20,6 +20,7 @@
 use crate::detect;
 use adage_core::repo;
 use adage_store::Paths;
+use adage_term::{Line, Out, Role};
 use anyhow::{bail, Context, Result};
 use std::path::PathBuf;
 
@@ -59,30 +60,47 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
     }
     let repo_key = root.as_deref().map(repo::repo_key);
 
-    println!("adage init: set Adage up on this machine. It will:");
-    println!("  1. detect the agent harnesses installed here (read-only);");
-    println!("  2. show how to register Adage's hooks with each (`adage install <harness>`; nothing is written);");
-    println!(
+    let mut out = Out::stdout();
+    let label = repo_key.clone().unwrap_or_else(|| "this machine".into());
+    out.header("init", &[&label, if yes { "setting up" } else { "printing only" }])?;
+    out.note("Adage ships with instincts and forms reflexes from your traces. This shows each step of setting it up; nothing is written unless you pass --yes.")?;
+    out.blank()?;
+    out.line(&Line::new().faint("It will:"))?;
+    out.line(&Line::new().faint("  1. detect the agent harnesses installed here (read-only);"))?;
+    out.line(
+        &Line::new().faint(
+            "  2. show how to register Adage's hooks with each (`adage install <harness>`; nothing is written);",
+        ),
+    )?;
+    out.line(&Line::new().faint(format!(
         "  3. {} the optional embedding model for intent families (`adage models fetch`);",
         if yes { "download" } else { "offer" }
-    );
-    println!(
-        "  4. survey your existing agent history{} — read-only.",
+    )))?;
+    out.line(&Line::new().faint(format!(
+        "  4. sense your existing agent traces{} — read-only;",
         match (&repo_arg, &repo_key) {
             (Some(_), Some(k)) => format!(" for {k}"),
             _ => String::new(),
         }
-    );
-    println!(
-        "  5. show what Adage's built-in defaults (instincts) would bind in this repository, from its files alone{}.",
+    )))?;
+    out.line(&Line::new().faint(format!(
+        "  5. show which instincts would bind in this repository, from its files alone{}.",
         if yes { ", and bind them" } else { "" }
-    );
+    )))?;
     if let Some(v) = agent {
-        println!("Inside an agent session ({v} is set): printing only.");
+        out.note(&format!("Inside an agent session ({v} is set): printing only."))?;
     }
+    out.flush()?;
+    let step = |n: u8, title: &str| -> Result<()> {
+        let mut o = Out::stdout();
+        o.blank()?;
+        o.line(&Line::new().bold(Role::Accent, format!("{n}")).pad_to(3).bold(Role::Ink, title))?;
+        o.flush()?;
+        Ok(())
+    };
 
     // 1. Harnesses.
-    println!("\n1. Harnesses");
+    step(1, "Harnesses")?;
     let found = detect::harnesses();
     for d in &found {
         if d.found() {
@@ -93,7 +111,7 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
     }
 
     // 2. Hook registration.
-    println!("\n2. Hooks");
+    step(2, "Hooks")?;
     let regs = detect::registrations(root.as_deref());
     let repo_opt = repo_arg.as_ref().map(|p| format!(" --repo {}", p.display())).unwrap_or_default();
     let installed: Vec<&detect::Detected> = found.iter().filter(|d| d.found()).collect();
@@ -125,7 +143,7 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
     }
 
     // 3. The embedding model.
-    println!("\n3. Embedding model (optional)");
+    step(3, "Embedding model (optional)")?;
     match adage_intent::model::status(&paths.models()) {
         Ok(m) => println!("  installed: {}", m.id),
         Err(_) if yes => {
@@ -140,16 +158,26 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
         ),
     }
 
-    // 4. Survey.
-    println!("\n4. Survey\n");
+    // 4. Sense.
+    step(4, "Sense your traces")?;
+    println!();
     let opts = crate::survey::Options { repo: repo_arg.as_ref().and(repo_key.clone()), ..Default::default() };
     let s = crate::survey::run(&opts, paths)?;
     crate::survey::print_text(&s)?;
 
     // 5. Instincts: what Adage's built-in defaults would bind here, from this repository's files.
-    println!("\n5. Instincts (day 0)");
+    step(5, "Instincts (day 0)")?;
     instincts(root.as_deref(), yes, paths)?;
-    println!("`adage doctor` checks the whole setup at any time.");
+    let mut out = Out::stdout();
+    out.blank()?;
+    if agent.is_none() && !yes {
+        out.next("adage init", "in your own terminal, to set this up step by step")?;
+        out.also("adage doctor", "checks the whole setup at any time")?;
+    } else {
+        out.next("adage doctor", "checks the whole setup at any time")?;
+        out.also("adage watch", "live pane for a split terminal")?;
+    }
+    out.flush()?;
     Ok(())
 }
 
@@ -178,7 +206,7 @@ fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result
             if r.state == adage_tracks::RouteState::Draft { "  (needs your approval in `adage review`)" } else { "" };
         println!("    {instinct:<3} {}{draft}", crate::share::describe_step(&r.step));
     }
-    println!("  Each is yellow at most, never blocks the agent from stopping, and gives way to anything Adage learns.");
+    println!("  Each primes at most, never blocks the agent from stopping, and gives way to anything Adage learns.");
     let drafts = dry.routes.iter().any(|r| r.state == adage_tracks::RouteState::Draft);
     if drafts {
         println!("  Environment steps (installs) stay drafts until you approve one in `adage review`; approving one approves the pack's environment steps for this repository.");
@@ -188,7 +216,7 @@ fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result
         println!("  binding: {cmd}");
         crate::instincts_only(&["--repo-path".to_string(), root.to_string_lossy().into_owned()], paths)?;
     } else {
-        println!("  `{cmd}` binds them now (`adage init --yes` does it for you); otherwise the first learn does.");
+        println!("  `{cmd}` binds them now (`adage init --yes` does it for you); otherwise the first `adage condition` does.");
     }
     Ok(())
 }

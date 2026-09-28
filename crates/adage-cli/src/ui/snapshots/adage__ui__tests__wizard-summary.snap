@@ -1,30 +1,13 @@
 ---
 source: crates/adage-cli/src/ui/tests.rs
+assertion_line: 231
 expression: text
 ---
- adage init · set Adage up for harbor-dispatch
- ✓ Harnesses           │ Summary
- – Hooks: claude-code  │ adage doctor: 4 passed, 2 warning(s), 0 failure(s)
- – Embedding model     │ ● embedding model: not installed, so the index's intent routes cannot fire
- ✓ First learn         │     fix: run `adage models fetch`
- ✓ Auto-learn          │ ● hooks: codex: codex is installed, but Adage's hooks are not registered
- ▸ Summary             │ with it
-                       │     fix: `adage install codex --write`
-                       │
-                       │ Next: run adage watch in a split pane to see Adage work live, and adage ui
-                       │ for routes, review, health and settings.
-                       │
-                       │
-                       │
-                       │
-                       │
-                       │
-                       │
-                       │
-                       │
-                       │
-                       │
-                       │
-                       │
-                       │
- Enter or q exits
+◆  Ready
+│  ✓ adage doctor · 4 passed · 2 to look at · 0 failing
+│  ! embedding model  not installed, so the index's intent routes cannot fire
+│    fix run `adage models fetch`
+│  ! hooks: codex  codex is installed, but Adage's hooks are not registered with it
+│    fix `adage install codex --write`
+│
+└  enter finishes

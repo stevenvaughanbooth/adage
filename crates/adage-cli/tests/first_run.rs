@@ -113,15 +113,15 @@ fn init_detects_harnesses_prints_snippets_and_writes_nothing() {
     assert!(t.contains("codex        found: `codex` on PATH") && t.contains("hook codex"), "{t}");
     assert!(!t.contains(r"\\?\"), "no verbatim Windows prefix in output:\n{t}");
     for s in [
-        "1. Harnesses",
+        "1  Harnesses",
         claude_found.as_str(),
         "opencode     found:",
         "adage install claude-code --write",
         "\"UserPromptSubmit\"",
         ".opencode/plugins/adage.js",
-        "3. Embedding model",
+        "3  Embedding model",
         "`adage models fetch`",
-        "4. Survey",
+        "4  Sense your traces",
         "No traces to sense in that source",
     ] {
         assert!(t.contains(s), "init output lacks {s:?}:\n{t}");
@@ -155,7 +155,7 @@ fn init_yes_fetches_the_model_and_survives_a_failed_download() {
     let o = w.run(&["init", "--yes"]);
     let t = text(&o);
     assert!(o.status.success(), "{t}");
-    assert!(t.contains("fetching") && t.contains("could not fetch it") && t.contains("4. Survey"), "{t}");
+    assert!(t.contains("fetching") && t.contains("could not fetch it") && t.contains("Sense your traces"), "{t}");
     assert!(!w.p("data/models/potion-base-8m").exists());
 }
 
@@ -163,7 +163,7 @@ fn init_yes_fetches_the_model_and_survives_a_failed_download() {
 fn init_scopes_the_survey_to_a_repository() {
     let w = World::new();
     let o = w.run(&["init", "--repo", w.p("work").to_str().unwrap()]);
-    assert!(o.status.success() && text(&o).contains("survey your existing agent history for work"), "{}", text(&o));
+    assert!(o.status.success() && text(&o).contains("sense your existing agent traces for work"), "{}", text(&o));
     let o = w.run(&["init", "--repo", w.p("home").to_str().unwrap()]);
     assert!(!o.status.success() && text(&o).contains("not inside a git repository"), "{}", text(&o));
 }

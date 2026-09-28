@@ -1265,11 +1265,38 @@ fn wizard_walks_every_step() {
     snap("wizard-summary", &text);
     let report = w.report().join("\n");
     assert!(
-        report.contains("– Hooks: claude-code: skipped") && report.contains("✓ First learn: 12 sessions read"),
+        report.contains("◇  Hooks · claude-code · skipped")
+            && report.contains("◇  Condition from past traces · 12 sessions read"),
         "{report}"
     );
     assert!(report.contains("adage watch"));
     assert!(matches!(w.key(KeyCode::Enter, NONE), Some(wizard::Cmd::Quit)));
+}
+
+#[test]
+fn wizard_choices_follow_the_arrows() {
+    use crate::detect::Detected;
+    let detected = vec![Detected { harness: "codex", evidence: vec!["~/.codex exists".into()] }];
+    let mut w = Wizard::new(detected, vec![], true);
+    w.key(KeyCode::Enter, NONE);
+    assert_eq!(w.choices().len(), 3, "{:?}", w.choices());
+    assert_eq!(w.scope, "project");
+    // Down to "for this user" replans; down again to the skip does not.
+    assert!(matches!(w.key(KeyCode::Down, NONE), Some(wizard::Cmd::Replan)));
+    assert_eq!(w.scope, "user");
+    assert!(w.key(KeyCode::Down, NONE).is_none());
+    assert!(w.key(KeyCode::Down, NONE).is_none(), "the last choice stays selected");
+    // Enter on the skip skips.
+    w.key(KeyCode::Enter, NONE);
+    assert_eq!(w.steps[1].status, wizard::StepStatus::Skipped);
+    assert_eq!(*w.current(), wizard::Kind::Model);
+    assert_eq!(w.choice, 0, "each step starts on its first choice");
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), true);
+    let (text, _) = render(80, 14, |f| wizard::draw(f, &w, &c));
+    assert!(text.contains("◆  Embedding model"), "{text}");
+    assert!(text.contains("› Fetch it"), "{text}");
+    assert!(text.contains("└  ↑↓ choose"), "{text}");
 }
 
 #[test]
