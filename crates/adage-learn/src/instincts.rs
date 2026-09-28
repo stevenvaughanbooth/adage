@@ -411,7 +411,8 @@ mod tests {
         let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &none, "2026-09-27").unwrap();
         let (tr, p) = plan.expect("a track");
         assert_eq!((tr.name.as_str(), tr.version.as_str(), tr.change.as_str()), ("acme/instincts", "0.1.0", "created"));
-        assert_eq!((rep.bound, rep.advice, rep.nascent), (6, 1, 0), "{rep:#?}");
+        // One route per failure signature (docs/instincts.md, Failure signatures).
+        assert_eq!((rep.bound, rep.advice, rep.nascent), (17, 1, 0), "{rep:#?}");
         assert!(p.track.manifest.track.provenance.starts_with("instinct:core@"));
         assert!(p.track.routes.iter().all(|r| r.is_instinct() && r.strength == Strength::Prime));
         p.write().unwrap();

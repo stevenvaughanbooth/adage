@@ -56,6 +56,14 @@ fn has(r: &BindResult, trigger: &str, command: &str) -> bool {
     shape(r).iter().any(|(_, t, c)| t == trigger && c == command)
 }
 
+/// Whether any route directs `command` after `key` fails, whatever the signature.
+fn has_any(r: &BindResult, key: &str, command: &str) -> bool {
+    r.runs().iter().any(|x| {
+        matches!(&x.trigger, Trigger::AfterFailure { command: k, .. } if k == key)
+            && x.step == Step::Run { command: command.into() }
+    })
+}
+
 #[test]
 fn acme_recovers_its_dead_end_and_finish_line_on_day_zero() {
     let r = bound("acme");
@@ -69,9 +77,12 @@ fn acme_recovers_its_dead_end_and_finish_line_on_day_zero() {
     );
     assert_eq!(d.step, Step::Run { command: "make test".into() });
     assert_eq!(r.origins["dead-end-d41b1e"], "U1");
-    // U3: the other runners an agent tries first (round 1 of the demo: pytest, 1.44 times a session).
-    assert!(has(&r, "fail exec pytest []", "make test"));
-    assert!(has(&r, "fail exec python3 -m pytest []", "make test"));
+    // U3: the other runners an agent tries first (round 1 of the demo: pytest, 1.44 times a session),
+    // on the wrapper's signature or the repository's message naming `make test`, never on any
+    // failure.
+    assert!(has(&r, "fail exec pytest [ACME_ENV]", "make test"), "{:#?}", shape(&r));
+    assert!(has(&r, "fail exec pytest [make test]", "make test"));
+    assert!(has(&r, "fail exec python3 -m pytest [ACME_ENV]", "make test"));
     // U5: the generator reads schema/*.json (named in tools/gen.py); same id as the learned route.
     let f = route(&r, "finish-line-e7e809");
     assert_eq!(f.trigger, Trigger::AfterEdit { paths: "schema/*.json".into() });
@@ -97,7 +108,11 @@ fn harbor_recovers_its_dead_end_and_finish_line_on_day_zero() {
     assert_eq!(f.step, Step::Run { command: "npm run codegen".into() });
     let a = r.advisories().into_iter().find(|a| a.instinct == "U4").expect("U4 advisory");
     assert_eq!(a.slots["path"], "src/generated/registry.ts");
-    assert_eq!(r.runs().len(), 3, "{:#?}", shape(&r));
+    // A missing loader may also fail in the repository's own words, naming the wrapper; `npm test`
+    // is not bound on that (npm echoes its scripts).
+    assert!(has(&r, "fail exec node --test [npm run check]", "npm run check"));
+    assert!(!has(&r, "fail exec npm test [npm run check]", "npm run check"));
+    assert_eq!(r.runs().len(), 4, "{:#?}", shape(&r));
     // The failing `npm test` is never itself directed.
     assert!(!shape(&r).iter().any(|(_, _, c)| c == "npm test"));
 }
@@ -107,13 +122,22 @@ fn pnpm_repository_gets_package_manager_discipline() {
     let r = bound("pnpm");
     let install: Vec<&Route> =
         r.routes.iter().filter(|x| x.step == Step::Run { command: "pnpm install".into() }).collect();
-    assert_eq!(install.len(), 2, "npm install and npm ci");
-    for x in install {
+    for x in &install {
         // An environment step waits for a person (Design O11).
         assert_eq!((x.effect, x.state), (Effect::Environment, RouteState::Nascent));
     }
-    assert!(has(&r, "fail exec npm install []", "pnpm install"));
-    assert!(has(&r, "fail exec npm test []", "pnpm test"));
+    // Each on npm's (or yarn's) own refusal, never on any failure: `workspace:*` in the manifest,
+    // `npm ci` with no package-lock.json, yarn missing or refused by corepack.
+    assert!(has(&r, "fail exec npm install [Unsupported URL Type]", "pnpm install"), "{:#?}", shape(&r));
+    assert!(has(&r, "fail exec npm ci [Unsupported URL Type]", "pnpm install"));
+    assert!(has(&r, "fail exec npm ci [an existing package-lock.json]", "pnpm install"));
+    assert!(has(&r, "fail exec yarn install [configured to use pnpm]", "pnpm install"));
+    assert!(has(&r, "fail exec yarn test [yarn: command not found]", "pnpm test"));
+    assert_eq!(install.len(), 6, "{:#?}", shape(&r));
+    // `npm test` runs the same `vitest run` as `pnpm test` and fails the same way: nothing binds
+    // (RepoBench: vue-core's N1 fired on genuine test failures).
+    assert!(!has_any(&r, "exec npm test", "pnpm test"), "{:#?}", shape(&r));
+    assert!(r.skipped.iter().any(|(i, w)| i == "N1" && w.starts_with("npm test runs the same script")));
     assert_eq!(route(&r, "dead-end-68b3e9").state, RouteState::Forming);
     let kinds: BTreeSet<&str> = r.advisories().iter().map(|a| a.template_id).collect();
     assert_eq!(kinds, ["lockfile", "package-manager"].into_iter().collect());
@@ -163,15 +187,175 @@ fn python_wrapper_covers_every_spelling_of_pytest() {
 }
 
 #[test]
-fn wrappers_adage_cannot_direct_are_reported_not_bound() {
+fn tox_wraps_pytest_when_its_test_environment_runs_plain_commands() {
     let d = tempfile::tempdir().unwrap();
     std::fs::write(d.path().join("pyproject.toml"), "[tool.pytest.ini_options]\ntestpaths=['t']\n[tool.uv]\n").unwrap();
-    std::fs::write(d.path().join("tox.ini"), "[tox]\nenvlist = py312\n[testenv]\ncommands = pytest\n").unwrap();
+    std::fs::write(d.path().join("tox.ini"), "[tox]\nenvlist = py312\n[testenv]\ncommands = pytest {posargs}\n")
+        .unwrap();
+    std::fs::create_dir_all(d.path().join("src/tidal")).unwrap();
+    std::fs::write(d.path().join("src/tidal/__init__.py"), "").unwrap();
+    let r = bind(d.path(), &[], &BTreeSet::new());
+    // No dependency group has pytest, so `uv run pytest` would not find it: U11 says why.
+    assert!(
+        r.skipped.iter().any(|(i, w)| i == "U11" && w.contains("no dependency group has pytest")),
+        "{:?}",
+        r.skipped
+    );
+    // P1: tox is the declared wrapper, on the signatures of a missing environment only.
+    for t in [
+        "fail exec pytest [pytest: command not found]",
+        "fail exec pytest [command not found: pytest]",
+        "fail exec python -m pytest [No module named pytest]",
+        "fail exec python3 -m pytest [No module named 'tidal']",
+    ] {
+        assert!(has(&r, t, "tox -e py"), "{t}: {:#?}", shape(&r));
+    }
+    assert!(r.origins.values().any(|o| o == "P1"));
+    // U3: the one declared test entry point, `tox -e py`, where the output names it.
+    assert!(has(&r, "fail exec pytest [tox -e py]", "tox -e py"), "{:#?}", shape(&r));
+    assert!(r.runs().iter().all(|x| x.step == Step::Run { command: "tox -e py".into() }));
+
+    // Factor-conditional commands (`tests: pytest`) are not what `tox -e py` runs: reported.
+    std::fs::write(
+        d.path().join("tox.ini"),
+        "[tox]\nenv_list = py3{11,12}-tests\n[testenv]\ncommands =\n    tests: pytest\n",
+    )
+    .unwrap();
     let r = bind(d.path(), &[], &BTreeSet::new());
     assert!(r.runs().is_empty(), "{:#?}", shape(&r));
-    let reasons: Vec<&str> = r.skipped.iter().filter(|(i, _)| i == "P1").map(|(_, w)| w.as_str()).collect();
-    assert!(reasons.iter().any(|w| w.contains("tox")) && reasons.iter().any(|w| w.contains("uv")), "{reasons:?}");
-    assert!(r.skipped.iter().any(|(i, w)| i == "U3" && w.contains("tox")), "{:?}", r.skipped);
+    assert!(r.skipped.iter().any(|(i, w)| i == "P1" && w.contains("factors")), "{:?}", r.skipped);
+
+    // nox sessions are code: reported, never bound.
+    std::fs::remove_file(d.path().join("tox.ini")).unwrap();
+    std::fs::write(
+        d.path().join("noxfile.py"),
+        "import nox\n\n@nox.session\ndef tests(session):\n    session.run('pytest')\n",
+    )
+    .unwrap();
+    let r = bind(d.path(), &[], &BTreeSet::new());
+    assert!(r.runs().is_empty(), "{:#?}", shape(&r));
+    assert!(r.skipped.iter().any(|(i, w)| i == "P1" && w.contains("nox")), "{:?}", r.skipped);
+}
+
+#[test]
+fn the_project_environment_answers_a_runner_that_ran_outside_it() {
+    // RepoBench's Python sandboxes: a `.venv` made by `uv venv`, not activated; tox and uv declared.
+    let d = tempfile::tempdir().unwrap();
+    std::fs::write(
+        d.path().join("pyproject.toml"),
+        "[project]\nname = 'click'\n[dependency-groups]\ntests = ['pytest']\ndev = ['tox', {include-group = 'tests'}]\n[tool.pytest.ini_options]\ntestpaths = ['tests']\n",
+    )
+    .unwrap();
+    std::fs::write(d.path().join("uv.lock"), "version = 1\n").unwrap();
+    std::fs::write(
+        d.path().join("tox.ini"),
+        "[tox]\nenv_list = py3{11,12}-tests\n[testenv]\ncommands =\n    tests: pytest\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(d.path().join("src/click")).unwrap();
+    std::fs::write(d.path().join("src/click/__init__.py"), "").unwrap();
+    std::fs::create_dir_all(d.path().join("tests")).unwrap();
+    std::fs::write(d.path().join("tests/test_a.py"), "import click\n").unwrap();
+
+    // Without the virtual environment: `uv run pytest` (pytest is in the default group, `dev`).
+    let r = bind(d.path(), &[], &BTreeSet::new());
+    assert!(has(&r, "fail exec pytest [pytest: command not found]", "uv run pytest"), "{:#?}", shape(&r));
+    assert!(has(&r, "fail exec python3 -m pytest [No module named 'click']", "uv run pytest"));
+    assert!(has(&r, "fail exec tox [tox: command not found]", "uv run pytest"));
+
+    // With it: its own interpreter, which needs no network and changes nothing.
+    std::fs::create_dir_all(d.path().join(".venv/bin")).unwrap();
+    std::fs::write(d.path().join(".venv/pyvenv.cfg"), "home = /usr/bin\n").unwrap();
+    let r = bind(d.path(), &[], &BTreeSet::new());
+    for t in [
+        "fail exec pytest [pytest: command not found]",
+        "fail exec pytest [command not found: pytest]",
+        "fail exec pytest [No module named 'click']",
+        "fail exec python -m pytest [No module named pytest]",
+        "fail exec python -m pytest [python: command not found]",
+        "fail exec python3 -m pytest [No module named pytest]",
+        "fail exec python3 -m pytest [No module named 'click']",
+        "fail exec tox [tox: command not found]",
+    ] {
+        assert!(has(&r, t, ".venv/bin/python -m pytest"), "{t}: {:#?}", shape(&r));
+    }
+    for x in r.runs() {
+        assert_eq!(r.origins[&x.id], "U11");
+        assert_eq!((x.effect, x.state), (Effect::Verify, RouteState::Forming));
+        let adage_tracks::Origin::Instinct { declared, .. } = x.origin() else { panic!("{:?}", x.origin()) };
+        assert_eq!(declared.as_deref(), Some(".venv/pyvenv.cfg"));
+    }
+    // The key keeps the interpreter's path, so the learner's id for this working command matches.
+    let key = adage_instincts::safety::command_key(".venv/bin/python -m pytest", &adage_core::CommandTable::load());
+    assert_eq!(key.as_deref(), Some("exec .venv/bin/python -m pytest"));
+
+    // The uv group that has pytest is named when the default groups lack it.
+    std::fs::remove_dir_all(d.path().join(".venv")).unwrap();
+    std::fs::write(
+        d.path().join("pyproject.toml"),
+        "[project]\nname = 'click'\n[dependency-groups]\ndev = ['ruff']\ntests = ['pytest-xdist', 'pytest>=8']\n[tool.pytest.ini_options]\n",
+    )
+    .unwrap();
+    let r = bind(d.path(), &[], &BTreeSet::new());
+    assert!(has(&r, "fail exec pytest [pytest: command not found]", "uv run --group tests pytest"), "{:#?}", shape(&r));
+}
+
+/// Output of runs that failed on their assertions, or on a bug in the code under test: no instinct
+/// may fire on any of them (RepoBench: N1 fired on vitest failures in vue-core).
+const GENUINE_FAILURES: [&str; 6] = [
+    "FAILED tests/test_formatting.py::test_removing_multiline_marker - AssertionError: assert '\\x08' not in 'Usage: cli'\n1 failed, 12 passed in 0.31s",
+    "E   ModuleNotFoundError: No module named 'click.nonexistent'\nERROR collecting tests/test_x.py",
+    " FAIL  packages/runtime-core/__tests__/apiWatch.spec.ts > watch > basic\nAssertionError: expected 1 to be 2\n Test Files  1 failed (1)",
+    "--- FAIL: TestCommand_Run (0.00s)\n    command_test.go:42: expected true\nFAIL\nexit status 1\nFAIL\tgithub.com/urfave/cli/v3\t0.4s",
+    "FAIL: test_invoice_total (tests.test_billing.TestBilling)\nAssertionError: 3 != 4\nFAILED (failures=1)",
+    "npm error Lifecycle script `test` failed with error:\nnpm error code 1\nnpm error command failed\nnpm error command sh -c vitest run",
+];
+
+#[test]
+fn no_instinct_fires_on_a_genuine_test_failure() {
+    let mut routes: Vec<Route> = Vec::new();
+    for name in FIXTURES {
+        routes.extend(bound(name).routes);
+    }
+    let mut failures = 0;
+    for x in &routes {
+        let Trigger::AfterFailure { signature, .. } = &x.trigger else { continue };
+        failures += 1;
+        assert!(!signature.trim().is_empty(), "{}: an instinct fires on its signature, never on any failure", x.id);
+        for out in GENUINE_FAILURES {
+            assert!(!out.contains(signature.as_str()), "{} ({signature:?}) would fire on {out:?}", x.id);
+        }
+    }
+    assert!(failures >= 20, "{failures}");
+}
+
+#[test]
+fn a_failure_route_without_a_signature_is_refused() {
+    let r = bound("acme");
+    let mut x = route(&r, "dead-end-d41b1e").clone();
+    x.trigger = Trigger::AfterFailure { command: "exec python3 -m unittest".into(), signature: String::new() };
+    let err = adage_instincts::bind::check_route(&x, adage_instincts::catalogue(), &adage_core::CommandTable::load())
+        .unwrap_err();
+    assert!(err.contains("without a signature"), "{err}");
+}
+
+#[test]
+fn large_go_test_files_are_scanned_not_skipped() {
+    // urfave/cli: command_test.go and flag_test.go are over 64 KiB. A go:generate scan reads a
+    // line at a time, so it reads their first 64 KiB instead of skipping them.
+    let d = tempfile::tempdir().unwrap();
+    std::fs::write(d.path().join("go.mod"), "module example.com/big\n\ngo 1.24\n").unwrap();
+    let mut big = String::from("package big\n\n//go:generate stringer -type=Mode\n");
+    while big.len() < 170 * 1024 {
+        big.push_str("func TestX(t *testing.T) { if 1 != 1 { t.Fatal(\"x\") } }\n");
+    }
+    std::fs::write(d.path().join("command_test.go"), &big).unwrap();
+    let facts = adage_instincts::extract(d.path());
+    assert!(facts.skipped_files.is_empty(), "{:?}", facts.skipped_files);
+    assert_eq!(facts.partial_files, vec!["command_test.go".to_string()]);
+    assert_eq!(facts.go.unwrap().generate, vec![("command_test.go".to_string(), "stringer -type=Mode".to_string())]);
+    let r = bind(d.path(), &[], &BTreeSet::new());
+    assert!(!r.skipped.iter().any(|(_, w)| w.contains("64 KiB")), "{:?}", r.skipped);
 }
 
 #[test]
@@ -422,10 +606,10 @@ fn learned_routes_and_review_rejections_override_instincts() {
     let r = bind(&fixture("acme"), &[same, other, fl, avoid_it], &rejected);
     let ids: BTreeSet<&str> = r.routes.iter().map(|x| x.id.as_str()).collect();
     assert!(!ids.contains("dead-end-d41b1e"), "learned wins on the same id");
-    assert!(!has(&r, "fail exec pytest []", "make test"), "a learned route directs make ci after pytest");
+    assert!(!has_any(&r, "exec pytest", "make test"), "a learned route directs make ci after pytest");
     assert!(!ids.contains("finish-line-e7e809"), "a learned finish line covers schema/*.json");
     assert!(!ids.contains("dead-end-e8eb22"), "rejected in review");
-    assert!(!has(&r, "fail exec python -m unittest []", "make test"), "learned route names python -m unittest");
+    assert!(!has_any(&r, "exec python -m unittest", "make test"), "learned route names python -m unittest");
     let why = |needle: &str| r.skipped.iter().any(|(_, w)| w.contains(needle));
     assert!(
         why("has this id (learned wins)") && why("directs make ci") && why("rejected in review"),

@@ -77,11 +77,33 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
                 }
                 "dead_end" => {
                     dead_ends += 1;
-                    let key = adage_instincts::safety::command_key(c["avoided"][0].as_str().unwrap(), &table);
-                    let hit = r.routes.iter().any(|x| {
-                        matches!(&x.trigger, Trigger::AfterFailure { command: k, .. } if Some(k) == key.as_ref())
-                            && x.step == Step::Run { command: command.into() }
+                    let avoided = c["avoided"][0].as_str().unwrap();
+                    let key = adage_instincts::safety::command_key(avoided, &table);
+                    let sigs: Vec<&str> = r
+                        .routes
+                        .iter()
+                        .filter_map(|x| match &x.trigger {
+                            Trigger::AfterFailure { command: k, signature }
+                                if Some(k) == key.as_ref() && x.step == Step::Run { command: command.into() } =>
+                            {
+                                Some(signature.as_str())
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    // The route must fire on what the dead end really prints: run it.
+                    let head = avoided.split(' ').next().unwrap();
+                    let output = available(head).then(|| {
+                        let o =
+                            Command::new("sh").arg("-c").arg(avoided).current_dir(sb.join("repo")).output().unwrap();
+                        assert!(!o.status.success(), "{name}: {avoided} is a dead end but succeeded");
+                        format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))
                     });
+                    let hit = match &output {
+                        Some(out) => sigs.iter().any(|s| out.contains(s)),
+                        None => !sigs.is_empty(),
+                    };
+                    assert!(sigs.iter().all(|s| !s.is_empty()), "{name}: a dead end with no signature");
                     eprintln!(
                         "{name}: dead end {} -> {command}: {}",
                         c["avoided"],

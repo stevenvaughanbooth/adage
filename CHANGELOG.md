@@ -48,6 +48,27 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   `package.json`, CI, lockfiles and generators (not its test fixtures), prime at most, and giving
   way to any conditioned reflex (docs/instincts.md). `adage condition --instincts-only` binds them
   before any trace exists.
+- Instincts after a failure fire only on a **failure signature** that says the command itself was
+  the wrong one (`pytest: command not found`, `No module named '<the project's package>'`,
+  `Unsupported URL Type`, an env guard's variable, the repository's message naming the declared
+  command), never on a bare non-zero exit: on RepoBench-Local, vuejs/core's `npm test` → `pnpm test`
+  fired on genuine vitest failures. A failure route with an empty signature fails validation.
+- **U11, use the project's environment**, is enabled: after pytest, tox or nox fails outside the
+  project's environment, `.venv/bin/python -m pytest` (a `.venv` made but not activated, as
+  RepoBench's Python sandboxes had), else `uv run pytest` (`--group tests` when only that group has
+  pytest). P1 directs `tox -e py` when tox's base test environment runs plain commands; nox is
+  reported. click, attrs and marshmallow, which bound nothing but a lockfile advisory, now bind
+  their `.venv` convention.
+- N1 binds `npm install`/`npm ci` → `pnpm install` on npm's own refusals (`Unsupported URL Type`,
+  an `only-allow` guard, `EBADDEVENGINES`, no `package-lock.json`), the other of yarn/pnpm on
+  `command not found` or corepack's refusal, and `npm test` only on `EBADDEVENGINES`.
+- The command table knows Python project managers and task runners: `uv run X`, `uvx`,
+  `poetry run`, `pdm run`, `hatch run`, `pipenv run`, `npm exec`, `pnpm exec`, `bunx` classify as
+  the program they run; `uv sync`/`uv pip install`/`poetry install` are environment; `tox` and
+  `nox` verify; `just` and `task` by recipe name; `pnpm check` and `pnpm --filter x test` as the
+  script they run; `cargo nextest` verifies.
+- Declared `.go` files over 64 KiB (urfave/cli's `command_test.go`) are scanned for `go:generate`
+  up to their first 64 KiB instead of skipped; whole-file parses keep the cap.
 - **Training:** `adage train` runs your agent headlessly on a skill, runbook or Makefile in a
   sandboxed clone (the separate `adage-train` binary), compiles the sessions into reflexes, and
   reports which of the skill's claims are stale; `adage train plan` estimates the cost and runs

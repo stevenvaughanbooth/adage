@@ -35,6 +35,12 @@ struct RawCommand {
     #[serde(default)]
     inert: bool,
     #[serde(default)]
+    wraps: bool,
+    #[serde(default)]
+    run_shorthand: bool,
+    #[serde(default)]
+    leading_value_flags: Vec<String>,
+    #[serde(default)]
     subcommands: Vec<RawCommand>,
 }
 
@@ -50,6 +56,18 @@ pub struct CommandSpec {
     /// True only when repository files cannot make this program run code (Track C §4.2).
     /// Gates automatic approval in `adage-exec`; never inherited by subcommands or parents.
     pub inert: bool,
+    /// The command runs another program, named by its first operand after its own flags
+    /// (`uv run pytest`, `poetry run pytest`, `pnpm exec vitest`, `uvx ruff`): it classifies as
+    /// the program it runs when the table knows that program. `value_flags` say which of its own
+    /// flags take a value.
+    pub wraps: bool,
+    /// A package manager that runs a script, or a local binary, named as its first word
+    /// (`pnpm check`, `yarn vitest`): an unknown first word is classified as the program when the
+    /// table knows it, else as `run <word>`.
+    pub run_shorthand: bool,
+    /// Flags that may come before the subcommand and take a value (`pnpm --filter pkg test`);
+    /// every leading flag is skipped to find the subcommand, these with their value.
+    pub leading_value_flags: Vec<String>,
     pub subcommands: HashMap<String, CommandSpec>,
 }
 
@@ -78,6 +96,9 @@ fn build_spec(raw: RawCommand) -> CommandSpec {
         publish_flags: raw.publish_flags,
         pattern_effects,
         inert: raw.inert,
+        wraps: raw.wraps,
+        run_shorthand: raw.run_shorthand,
+        leading_value_flags: raw.leading_value_flags,
         subcommands,
     }
 }

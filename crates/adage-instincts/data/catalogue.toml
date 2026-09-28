@@ -107,9 +107,9 @@ priority = "P0"
 enabled = true
 title = "Package manager discipline (node)"
 trigger = "after_failure"
-directive = "This repository uses pnpm (yarn, bun): after npm install or npm test fails, use the declared package manager"
+directive = "This repository uses pnpm (yarn, bun): after npm install, npm ci, npm test (or the other of pnpm and yarn) fails because it is the wrong package manager, use the declared one"
 cap = "prime"
-detection = "packageManager field or a pnpm/yarn/bun lockfile, and no npm lockfile"
+detection = "packageManager field or a pnpm/yarn/bun lockfile, and no npm lockfile; each route needs the wrong tool's own refusal as its signature (Unsupported URL Type, an only-allow guard, EBADDEVENGINES, no package-lock.json, corepack, command not found)"
 fp_risk = "very-low"
 kind = "route"
 needs = []
@@ -122,7 +122,7 @@ title = "Python runner wrapper / uv run"
 trigger = "after_failure"
 directive = "After pytest fails (in any of its spellings), run the declared wrapper that sets its environment"
 cap = "prime"
-detection = "pytest configured (pyproject, pytest.ini, setup.cfg, tox.ini, conftest.py) and a Makefile wrapper that sets env or flags; tox, nox and uv wrappers are detected but cannot yet be directed"
+detection = "pytest configured (pyproject, pytest.ini, setup.cfg, tox.ini, conftest.py) and a Makefile wrapper that sets env or flags (bound on the wrapper's signatures), else tox -e py when tox's base test environment runs plain commands (bound on a missing environment's signatures); nox sessions are code and are reported, not bound"
 fp_risk = "low"
 kind = "route"
 needs = []
@@ -181,16 +181,16 @@ needs = ["slot bound from failure output", "pack-level approval in adage init"]
 
 [[instinct]]
 id = "U11"
-priority = "P1"
-enabled = false
+priority = "P0"
+enabled = true
 title = "Use the project's environment"
 trigger = "after_failure"
-directive = "That tool lives in the project's environment; run it through it"
+directive = "After pytest, tox or nox fails outside the project's environment (command not found, No module named pytest or the project's own package), run pytest inside it: .venv/bin/python -m pytest, else uv run pytest"
 cap = "prime"
-detection = ".venv, uv.lock, node_modules/.bin"
+detection = "A .venv or venv with pyvenv.cfg, else a uv project (uv.lock or tool.uv) whose dependency groups have pytest; Python only (node_modules/.bin is not bound yet)"
 fp_risk = "low"
 kind = "route"
-needs = ["uv/poetry/npx entries in adage-core's command table"]
+needs = []
 
 [[instinct]]
 id = "N2"

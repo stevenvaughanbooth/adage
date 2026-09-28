@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// specific instincts (a wrapper that explains a failure) come before generic ones (the one test
 /// command). Every catalogue id appears exactly once.
 pub const BIND_ORDER: [&str; 19] = [
-    "U1", "P1", "N1", "U3", "U5", "U4", "U6", "U2", "U7", "U8", "U9", "U10", "U11", "N2", "N3", "R1", "R2", "G1", "X1",
+    "U1", "U11", "P1", "N1", "U3", "U5", "U4", "U6", "U2", "U7", "U8", "U9", "U10", "N2", "N3", "R1", "R2", "G1", "X1",
 ];
 
 /// How a candidate route's id is formed.
@@ -120,8 +120,9 @@ pub fn detect(id: &str, ctx: &Ctx) -> Detected {
         "U5" => u5(ctx),
         "U4" => u4(ctx),
         "U6" => u6(ctx),
+        "U11" => u11(ctx),
         // Catalogued, not yet bindable: the model cannot express them (see docs/instincts.md).
-        "U2" | "U7" | "U8" | "U9" | "U10" | "U11" | "N2" | "N3" | "R1" | "R2" | "G1" | "X1" => Detected::default(),
+        "U2" | "U7" | "U8" | "U9" | "U10" | "N2" | "N3" | "R1" | "R2" | "G1" | "X1" => Detected::default(),
         other => Detected {
             skipped: vec![(other.to_string(), "no detector for this instinct".into())],
             ..Default::default()
@@ -131,6 +132,11 @@ pub fn detect(id: &str, ctx: &Ctx) -> Detected {
 
 fn basename(t: &str) -> &str {
     t.rsplit('/').next().unwrap_or(t)
+}
+
+/// The program a command runs (`npm ci` → `npm`).
+fn basename_of(command: &str) -> &str {
+    command.split(' ').next().map(basename).unwrap_or(command)
 }
 
 /// A verify runner's family and its bare spelling: `ACME_ENV=test python3 -m unittest discover`
@@ -204,19 +210,101 @@ pub struct Wrapper<'a> {
 }
 
 impl Wrapper<'_> {
-    /// What the failure of the bare runner names, if it names what the wrapper sets.
-    pub fn signature(&self) -> String {
-        if self.env.len() == 1 {
-            return self.env[0].clone();
-        }
+    /// What the bare runner's failure prints when it failed for want of what the wrapper sets, one
+    /// signature per route: each env variable the wrapper sets (a guard names it); else the
+    /// module-resolution error of a missing `--import`/`--require` loader, and the wrapper's own
+    /// command (the repository's failure message tells the agent to run it). Never empty: an
+    /// assertion failure names none of these.
+    pub fn signatures(&self) -> Vec<String> {
+        let mut out: Vec<String> = self.env.iter().take(MAX_SIGNATURES).cloned().collect();
         if self.flags.iter().any(|f| LOADER_FLAGS.contains(&f.as_str())) {
-            return "ERR_MODULE_NOT_FOUND".into();
+            out.push("ERR_MODULE_NOT_FOUND".into());
         }
         if self.flags.iter().any(|f| REQUIRE_FLAGS.contains(&f.as_str())) {
-            return "Cannot find module".into();
+            out.push("Cannot find module".into());
         }
-        String::new()
+        // A missing loader may fail in the repository's own words instead (`the test fixtures are
+        // not loaded, this suite runs through npm run check`). An env guard names its variable.
+        if self.env.is_empty() {
+            out.extend(self.entry.command.iter().filter_map(|c| mention(c)));
+        }
+        out
     }
+}
+
+/// At most this many env-variable signatures per wrapper.
+pub const MAX_SIGNATURES: usize = 3;
+
+/// A directed command as a failure signature: the failure's own output tells the agent to run it
+/// (`run the suite with 'make check'`). Only a command of two words or more, so the signature is
+/// never a bare program name that output mentions in passing.
+pub fn mention(command: &str) -> Option<String> {
+    (command.contains(' ') && command.len() >= 6 && adage_tracks::io::safe_text(command)).then(|| command.to_string())
+}
+
+/// What a shell prints when `program` is not installed: bash (`pytest: command not found`), then
+/// zsh (`command not found: pytest`).
+pub fn not_found(program: &str) -> [String; 2] {
+    [format!("{program}: command not found"), format!("command not found: {program}")]
+}
+
+/// What a Python runner's failure prints when it ran outside the project's environment: the
+/// runner itself missing (`pytest: command not found`, `No module named pytest`, `python: command
+/// not found`), or the project's own package not importable (`No module named 'click'`). None of
+/// these is printed by a test that fails on its assertions, or by a mistake in the code under
+/// test: the project's package is never missing from its own environment.
+pub fn environment_signatures(probe: &str, facts: &DeclaredFacts) -> Vec<String> {
+    let mut out = runner_missing_signatures(probe);
+    if ["pytest", "python", "python3"].contains(&basename_of(probe)) {
+        out.extend(facts.python.packages.iter().map(|p| format!("No module named '{p}'")));
+    }
+    out
+}
+
+/// What a runner's failure prints when the runner itself is not installed (the first half of
+/// [`environment_signatures`]): any command that does not run that runner answers it.
+pub fn runner_missing_signatures(probe: &str) -> Vec<String> {
+    let seg = crate::safety::segments(probe).into_iter().next();
+    let argv = seg.map(|s| s.argv).unwrap_or_default();
+    let head = argv.first().map(|h| basename(h)).unwrap_or("");
+    let module = argv.iter().position(|t| t == "-m").and_then(|i| argv.get(i + 1)).map(String::as_str);
+    let mut out: Vec<String> = Vec::new();
+    match (head, module) {
+        ("pytest", _) | ("tox", _) | ("nox", _) => out.extend(not_found(head)),
+        ("python" | "python3", Some("pytest")) => {
+            out.push("No module named pytest".into());
+            if head == "python" {
+                out.extend(not_found("python"));
+            }
+        }
+        ("python" | "python3", Some(_)) if head == "python" => out.extend(not_found("python")),
+        _ => {}
+    }
+    out
+}
+
+/// Whether any of `entries` runs the runner family `fam` (bare or not).
+fn runs_family(entries: &[&Entry], fam: &str) -> bool {
+    entries.iter().flat_map(|e| e.lines.iter().flat_map(|l| &l.segments)).filter_map(family).any(|(f, _)| f == fam)
+}
+
+/// Whether an entry runs its tests inside a managed environment (`uv run`, `poetry run`, tox, a
+/// virtual environment's own interpreter), so it works where the bare runner lacks the
+/// environment.
+fn managed_environment(e: &Entry) -> bool {
+    const MANAGERS: [&str; 8] = ["uv", "uvx", "poetry", "pdm", "hatch", "pipenv", "tox", "nox"];
+    e.source == Source::Tox
+        || e.lines.iter().flat_map(|l| &l.segments).any(|s| {
+            s.argv
+                .first()
+                .is_some_and(|h| MANAGERS.contains(&basename(h)) || h.starts_with(".venv/") || h.starts_with("venv/"))
+        })
+}
+
+/// Distinct, in order.
+fn dedup(v: Vec<String>) -> Vec<String> {
+    let mut seen = BTreeSet::new();
+    v.into_iter().filter(|x| !x.is_empty() && seen.insert(x.clone())).collect()
 }
 
 /// Names a repository gives its main verification entry point. A wrapper with any other name
@@ -346,48 +434,125 @@ fn u1(ctx: &Ctx) -> Detected {
             }
         }
         runners.push(w.bare.clone());
+        let sigs = w.signatures();
+        if sigs.is_empty() {
+            d.skipped.push(("U1".into(), format!("{cmd}: no failure signature says the bare runner lacks its setup")));
+        }
         for r in runners {
-            if let Some(c) = dead_end("U1", &r, w.signature(), cmd, effect, summary, ctx) {
-                d.routes.push(c.from(ecosystem_of_family(&fam), Some(source_file(w.entry.source).into())));
+            for sig in &sigs {
+                // A package manager echoes the script it runs: its output names a mentioned command
+                // on every failure (see U3).
+                if Some(sig) == mention(cmd).as_ref() && ["npm", "pnpm", "yarn", "bun"].contains(&basename_of(&r)) {
+                    continue;
+                }
+                if let Some(c) = dead_end("U1", &r, sig.clone(), cmd, effect, summary, ctx) {
+                    d.routes.push(c.from(ecosystem_of_family(&fam), Some(source_file(w.entry.source).into())));
+                }
             }
         }
     }
     d
 }
 
-/// P1: pytest is configured, and a wrapper sets what it needs: every spelling of pytest leads to
-/// the wrapper. Wrappers Adage cannot direct (tox, nox, uv run) are reported, not bound.
+/// P1: pytest is configured, and a declared wrapper runs it with what it needs: every spelling of
+/// pytest leads to the wrapper. A Makefile or package.json wrapper binds on its own signatures
+/// (U1's); tox (`tox -e py`, when its base test environment runs plain commands) binds on the
+/// signatures of a missing environment. nox is reported, never bound: its sessions are code.
 fn p1(ctx: &Ctx) -> Detected {
     let mut d = Detected::default();
-    let py = &ctx.facts.python;
+    let f = ctx.facts;
+    let py = &f.python;
     if !py.pytest_configured {
         return d;
     }
-    let ws = wrappers(ctx.facts);
-    match ws.get("py:pytest") {
-        Some(w) => {
-            let (Some(cmd), Some(effect)) = (&w.entry.command, w.entry.effect()) else { return d };
-            for p in &ctx.cat.probes.pytest {
-                let summary = "Instinct P1: pytest runs through this repository's declared wrapper";
-                if let Some(c) = dead_end("P1", p, w.signature(), cmd, effect, summary, ctx) {
+    let summary = "Instinct P1: pytest runs through this repository's declared wrapper";
+    let ws = wrappers(f);
+    if let Some(w) = ws.get("py:pytest") {
+        let (Some(cmd), Some(effect)) = (&w.entry.command, w.entry.effect()) else { return d };
+        for p in &ctx.cat.probes.pytest {
+            for sig in w.signatures() {
+                if let Some(c) = dead_end("P1", p, sig, cmd, effect, summary, ctx) {
                     d.routes.push(c.from(Some("Python"), Some(source_file(w.entry.source).into())));
                 }
             }
         }
-        None => {
-            if py.tox {
-                d.skipped
-                    .push(("P1".into(), "tox wraps pytest here, but tox is not in adage-core's command table".into()));
+        return d;
+    }
+    if let Some(e) = f.entries.iter().find(|e| e.source == Source::Tox) {
+        match (&e.command, e.effect()) {
+            (Some(cmd), Some(effect)) if rank(effect) <= rank(Effect::Verify) => {
+                for p in &ctx.cat.probes.pytest {
+                    for sig in environment_signatures(p, f) {
+                        if let Some(c) = dead_end("P1", p, sig, cmd, effect, summary, ctx) {
+                            d.routes.push(c.from(Some("Python"), Some(tox_file(f))));
+                        }
+                    }
+                }
             }
-            if py.nox {
-                d.skipped
-                    .push(("P1".into(), "nox wraps pytest here, but nox is not in adage-core's command table".into()));
-            }
-            if py.uv {
-                d.skipped.push((
-                    "P1".into(),
-                    "uv run would wrap pytest, but uv is not in adage-core's command table".into(),
-                ));
+            _ => d.skipped.push((
+                "P1".into(),
+                format!("tox wraps pytest here, but {}", refusal(e).unwrap_or_else(|| "cannot be directed".into())),
+            )),
+        }
+    }
+    if let Some(e) = f.entries.iter().find(|e| e.source == Source::Nox) {
+        d.skipped.push(("P1".into(), format!("nox wraps pytest here, but {}", refusal(e).unwrap_or_default())));
+    }
+    d
+}
+
+/// The file that declares tox's environments.
+fn tox_file(f: &DeclaredFacts) -> String {
+    if f.python.tox_ini {
+        "tox.ini".into()
+    } else {
+        "pyproject.toml".into()
+    }
+}
+
+/// U11: use the project's environment. A Python project with its own virtual environment (made
+/// but not activated), or a uv project: after pytest (any spelling), tox or nox fails because it
+/// ran outside that environment ([`environment_signatures`]), run pytest inside it:
+/// `.venv/bin/python -m pytest`, else `uv run pytest` (`uv run --group tests pytest` when pytest is
+/// only in a non-default group).
+fn u11(ctx: &Ctx) -> Detected {
+    let mut d = Detected::default();
+    let f = ctx.facts;
+    let py = &f.python;
+    if !(py.pyproject || py.pytest_configured) {
+        return d;
+    }
+    let (command, declared) = match (&py.venv, &py.uv_pytest_group) {
+        (Some(v), _) if py.pytest_configured || py.uv_pytest_group.is_some() => {
+            (format!("{v}/bin/python -m pytest"), format!("{v}/pyvenv.cfg"))
+        }
+        (_, Some(g)) if py.uv => (
+            if g.is_empty() { "uv run pytest".to_string() } else { format!("uv run --group {g} pytest") },
+            if f.lockfiles.iter().any(|(p, _)| p == "uv.lock") { "uv.lock".into() } else { "pyproject.toml".into() },
+        ),
+        (None, None) if py.uv => {
+            d.skipped.push(("U11".into(), "a uv project, but no dependency group has pytest".into()));
+            return d;
+        }
+        _ => return d,
+    };
+    let effect = adage_tracks::io::classify(&command, ctx.table);
+    if rank(effect) > rank(Effect::Verify) {
+        d.skipped.push(("U11".into(), format!("{command} classifies as {}", effect.as_str())));
+        return d;
+    }
+    let mut probes: Vec<String> = ctx.cat.probes.pytest.clone();
+    if py.tox {
+        probes.push("tox".into());
+    }
+    if py.nox {
+        probes.push("nox".into());
+    }
+    let summary = "Instinct U11: the project's environment has what this runner needs";
+    for p in &probes {
+        for sig in environment_signatures(p, f) {
+            if let Some(c) = dead_end("U11", p, sig, &command, effect, summary, ctx) {
+                d.routes.push(c.from(Some("Python"), Some(declared.clone())));
             }
         }
     }
@@ -408,31 +573,79 @@ fn n1(ctx: &Ctx) -> Detected {
     }
     let install = format!("{} install", pm.name);
     let install_effect = adage_tracks::io::classify(&install, ctx.table);
-    for trig in ["npm install", "npm ci"] {
-        let Some(tkey) = command_key(trig, ctx.table) else { continue };
-        d.routes.push(RouteCandidate {
-            instinct: "N1".into(),
-            id: IdHint::Own { tag: "n1".into(), parts: vec![tkey.clone(), install.clone()] },
-            trigger: Trigger::AfterFailure { command: tkey, signature: String::new() },
-            command: install.clone(),
-            effect: install_effect,
-            exit: Exit::IntentChanges,
-            summary: format!("Instinct N1: this repository installs with {}, not npm", pm.name),
-            runner: Some(trig.into()),
-            ecosystem: Some("Node.js"),
-            declared: Some(if pm.declared_by == "package-manager-field" {
-                "package.json".into()
-            } else {
-                pm.declared_by.clone()
-            }),
-        });
+    let declared_pm =
+        if pm.declared_by == "package-manager-field" { "package.json".to_string() } else { pm.declared_by.clone() };
+    // What each other tool prints when it is the wrong package manager here. Never a bare
+    // non-zero exit: an install that fails on the network, or a test that fails on its
+    // assertions, fails the same way under the right package manager.
+    let mut npm_wrong: Vec<String> = Vec::new();
+    if f.dev_engines_manager.as_deref() == Some(pm.name.as_str()) {
+        npm_wrong.push("EBADDEVENGINES".into());
+    }
+    let mut npm_install_wrong = npm_wrong.clone();
+    if f.non_npm_protocol {
+        npm_install_wrong.push("Unsupported URL Type".into());
+    }
+    if f.only_allow.as_deref() == Some(pm.name.as_str()) {
+        // only-allow prints: Use "pnpm install" for installation in this project.
+        npm_install_wrong.push("for installation in this project".into());
+    }
+    // Corepack refuses a package manager the packageManager field does not name; or it is not
+    // installed at all.
+    let other_wrong = |tool: &str| -> Vec<String> {
+        let mut v: Vec<String> = not_found(tool).into();
+        if pm.declared_by == "package-manager-field" {
+            v.push(format!("configured to use {}", pm.name));
+        }
+        v
+    };
+    let others: Vec<&str> = ["pnpm", "yarn"].into_iter().filter(|t| *t != pm.name).collect();
+    let mut npm_ci_wrong = npm_install_wrong.clone();
+    // `npm ci` needs a package-lock.json, which a repository of another package manager lacks.
+    npm_ci_wrong.push("an existing package-lock.json".into());
+    let mut installs: Vec<(String, Vec<String>)> =
+        vec![("npm install".into(), npm_install_wrong), ("npm ci".into(), npm_ci_wrong)];
+    installs.extend(others.iter().map(|t| (format!("{t} install"), other_wrong(t))));
+    for (trig, sigs) in installs {
+        let Some(tkey) = command_key(&trig, ctx.table) else { continue };
+        if sigs.is_empty() {
+            d.skipped.push(("N1".into(), format!("{trig}: nothing here makes it refuse to install")));
+        }
+        for sig in sigs {
+            d.routes.push(RouteCandidate {
+                instinct: "N1".into(),
+                id: IdHint::Own { tag: "n1".into(), parts: vec![tkey.clone(), install.clone()] },
+                trigger: Trigger::AfterFailure { command: tkey.clone(), signature: sig },
+                command: install.clone(),
+                effect: install_effect,
+                exit: Exit::IntentChanges,
+                summary: format!("Instinct N1: this repository installs with {}, not {}", pm.name, basename_of(&trig)),
+                runner: Some(trig.clone()),
+                ecosystem: Some("Node.js"),
+                declared: Some(declared_pm.clone()),
+            });
+        }
     }
     if let Some(e) = f.entry(Source::PackageJson, "test") {
         match (&e.command, e.effect()) {
             (Some(cmd), Some(eff)) if rank(eff) <= rank(Effect::Verify) => {
-                let summary = format!("Instinct N1: this repository runs its tests with {}, not npm", pm.name);
-                if let Some(c) = dead_end("N1", "npm test", String::new(), cmd, eff, &summary, ctx) {
-                    d.routes.push(c.from(Some("Node.js"), Some("package.json".into())));
+                let summary = format!("Instinct N1: this repository runs its tests with {}", pm.name);
+                // `npm test` runs the same script as `pnpm test` and fails the same way, unless npm
+                // itself refuses to run here.
+                let mut tests: Vec<(String, Vec<String>)> = vec![("npm test".into(), npm_wrong)];
+                tests.extend(others.iter().map(|t| (format!("{t} test"), other_wrong(t))));
+                for (trig, sigs) in tests {
+                    if sigs.is_empty() {
+                        d.skipped.push((
+                            "N1".into(),
+                            format!("{trig} runs the same script as {cmd}, and nothing here makes npm refuse to"),
+                        ));
+                    }
+                    for sig in sigs {
+                        if let Some(c) = dead_end("N1", &trig, sig, cmd, eff, &summary, ctx) {
+                            d.routes.push(c.from(Some("Node.js"), Some("package.json".into())));
+                        }
+                    }
                 }
             }
             (Some(cmd), _) => d.skipped.push((
@@ -521,23 +734,31 @@ fn u3(ctx: &Ctx) -> Detected {
     let ws = wrappers(f);
     // An alias (`"test": "npm run check"`) is directed as what it runs.
     let target = chosen.alias_of.as_ref().and_then(|a| f.entry(chosen.source, a));
-    let (command, effect) = match families.iter().find_map(|fam| ws.get(fam).filter(|_| runs_bare(chosen, fam))) {
+    let wrapper = families.iter().find_map(|fam| ws.get(fam).filter(|_| runs_bare(chosen, fam)));
+    let (command, effect, via) = match wrapper {
         Some(w) => match (&w.entry.command, w.entry.effect()) {
-            (Some(c), Some(e)) => (c.clone(), e),
-            _ => (cmd.clone(), eff),
+            (Some(c), Some(e)) => (c.clone(), e, Some(w)),
+            _ => (cmd.clone(), eff, None),
         },
         None => match target.and_then(|t| Some((t.command.clone()?, t.effect()?))) {
-            Some((c, e)) if rank(e) <= rank(Effect::Verify) => (c, e),
-            _ => (cmd.clone(), eff),
+            Some((c, e)) if rank(e) <= rank(Effect::Verify) => (c, e, None),
+            _ => (cmd.clone(), eff, None),
         },
     };
+    // The declared test command may itself be the wrapper (`test: ACME_ENV=test python3 -m …`).
+    let via = via.or_else(|| ws.values().find(|w| w.entry.command.as_deref() == Some(command.as_str())));
     let python = families.iter().any(|x| x.starts_with("py:"))
         || (chosen.source != Source::PackageJson && (f.python.pyproject || f.python.pytest_configured));
-    let node =
-        families.iter().any(|x| x.starts_with("node:") || x.starts_with("js:")) || chosen.source == Source::PackageJson;
+    // In a pnpm, yarn or bun repository another package manager's test is N1's to answer.
+    let node = (families.iter().any(|x| x.starts_with("node:") || x.starts_with("js:"))
+        || chosen.source == Source::PackageJson)
+        && f.package_manager.as_ref().is_none_or(|pm| pm.name == "npm");
     let mut probes: Vec<&String> = Vec::new();
     if python {
-        probes.extend(&ctx.cat.probes.python);
+        // In a pytest project an agent does not reach for unittest; a unittest failure there says
+        // nothing the declared command answers.
+        let pytest_project = f.python.pytest_configured && !families.iter().any(|x| x == "py:unittest");
+        probes.extend(ctx.cat.probes.python.iter().filter(|p| !(pytest_project && p.contains("unittest"))));
     }
     if node {
         probes.extend(&ctx.cat.probes.node);
@@ -548,26 +769,47 @@ fn u3(ctx: &Ctx) -> Detected {
     }
     let summary = "Instinct U3: this repository declares one test command";
     // A runner the test command itself runs bare is no undeclared attempt: the command would fail
-    // the same way.
+    // the same way. (Not so inside a managed environment: tox's `pytest` runs in tox's.)
     let bare: BTreeSet<String> = f
         .entries
         .iter()
-        .filter(|e| e.command.as_deref() == Some(command.as_str()))
+        .filter(|e| e.command.as_deref() == Some(command.as_str()) && !managed_environment(e))
         .flat_map(families_run_bare)
         .collect();
     for p in probes {
         let pf =
             family(&crate::safety::segments(p).into_iter().next().unwrap_or(Segment { env: vec![], argv: vec![] }));
-        if pf.is_some_and(|(fam, _)| bare.contains(&fam)) {
+        if pf.as_ref().is_some_and(|(fam, _)| bare.contains(fam)) {
             continue;
         }
         // The declared entry itself, when it only runs what is directed, works already.
         if chosen.alias_of.is_some() && p == cmd {
             continue;
         }
-        if let Some(c) = dead_end("U3", p, String::new(), &command, effect, summary, ctx) {
-            let eco = if ctx.cat.probes.python.contains(p) { Some("Python") } else { Some("Node.js") };
-            d.routes.push(c.from(eco, Some(source_file(chosen.source).into())));
+        // Only a failure that says the runner was the wrong way in: the setup a wrapper supplies,
+        // a missing environment the declared command provides, or the repository's own message
+        // naming the declared command. Never a test failing on its assertions.
+        let mut sigs: Vec<String> = via.map(|w| w.signatures()).unwrap_or_default();
+        let directed: Vec<&Entry> =
+            f.entries.iter().filter(|e| e.command.as_deref() == Some(command.as_str())).collect();
+        if directed.iter().any(|e| managed_environment(e)) {
+            sigs.extend(environment_signatures(p, f));
+        } else if !directed.is_empty() && pf.as_ref().is_some_and(|(fam, _)| !runs_family(&directed, fam)) {
+            // The runner is missing and the declared command does not use it (the demo: pytest is
+            // not installed, `make test` runs unittest).
+            sigs.extend(runner_missing_signatures(p));
+        }
+        // A package manager echoes the script it runs (`> npm run check`), so a script's output
+        // would name the directed command on every failure.
+        sigs.extend(mention(&command));
+        if ["npm", "pnpm", "yarn", "bun"].contains(&basename_of(p)) {
+            sigs.retain(|s| Some(s) != mention(&command).as_ref());
+        }
+        for sig in dedup(sigs) {
+            if let Some(c) = dead_end("U3", p, sig, &command, effect, summary, ctx) {
+                let eco = if ctx.cat.probes.python.contains(p) { Some("Python") } else { Some("Node.js") };
+                d.routes.push(c.from(eco, Some(source_file(chosen.source).into())));
+            }
         }
     }
     d

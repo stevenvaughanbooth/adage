@@ -115,11 +115,12 @@ pub fn bind_with(
     bind_facts(&facts, existing, rejections, opts)
 }
 
-/// A trigger's identity for "one directive per trigger": a failure trigger is its command,
-/// whatever the signature.
+/// A trigger's identity for "one directive per trigger": a failure trigger is its command and
+/// the signature that says why it failed (`pytest: command not found` and `DJANGO_SETTINGS_MODULE`
+/// are different failures of `pytest`, with different answers).
 fn trigger_slot(t: &Trigger) -> String {
     match t {
-        Trigger::AfterFailure { command, .. } => format!("failure:{command}"),
+        Trigger::AfterFailure { command, signature } => format!("failure:{command}\u{0}{signature}"),
         Trigger::AfterCommand { command } => format!("command:{command}"),
         Trigger::AfterEdit { paths } => format!("edit:{paths}"),
         other => serde_json::to_string(other).unwrap_or_default(),
@@ -129,6 +130,9 @@ fn trigger_slot(t: &Trigger) -> String {
 fn describe(c: &RouteCandidate) -> String {
     match (&c.trigger, &c.runner) {
         (Trigger::AfterEdit { paths }, _) => format!("after editing {paths}, {}", c.command),
+        (Trigger::AfterFailure { signature, .. }, Some(r)) => {
+            format!("after {r} fails with {signature:?}, {}", c.command)
+        }
         (_, Some(r)) => format!("after {r} fails, {}", c.command),
         _ => c.command.clone(),
     }
@@ -239,21 +243,34 @@ pub fn bind_facts(
 }
 
 fn route_id(c: &RouteCandidate, used: &BTreeSet<String>) -> Option<String> {
-    let id = match &c.id {
+    // Further failures of the same command, with other signatures, add the signature.
+    let signature = match &c.trigger {
+        Trigger::AfterFailure { signature, .. } => Some(signature.as_str()),
+        _ => None,
+    };
+    let (first, then) = match &c.id {
         IdHint::DeadEnd { wkey } => {
             let first = format!("dead-end-{}", stable(&[wkey]));
+            let Trigger::AfterFailure { command, .. } = &c.trigger else {
+                return (!used.contains(&first)).then_some(first);
+            };
             if !used.contains(&first) {
                 return Some(first);
             }
-            let Trigger::AfterFailure { command, .. } = &c.trigger else { return None };
-            format!("dead-end-{}", stable(&[wkey, command]))
+            (
+                format!("dead-end-{}", stable(&[wkey, command])),
+                signature.map(|s| format!("dead-end-{}", stable(&[wkey, command, s]))),
+            )
         }
-        IdHint::FinishLine { glob } => format!("finish-line-{}", stable(&[glob, &c.command])),
+        IdHint::FinishLine { glob } => (format!("finish-line-{}", stable(&[glob, &c.command])), None),
         IdHint::Own { tag, parts } => {
-            format!("instinct-{tag}-{}", stable(&parts.iter().map(String::as_str).collect::<Vec<_>>()))
+            let mut p: Vec<&str> = parts.iter().map(String::as_str).collect();
+            let first = format!("instinct-{tag}-{}", stable(&p));
+            p.extend(signature);
+            (first, signature.map(|_| format!("instinct-{tag}-{}", stable(&p))))
         }
     };
-    (!used.contains(&id)).then_some(id)
+    [Some(first), then].into_iter().flatten().find(|id| !used.contains(id))
 }
 
 /// Why a learned (or imported, or authored) route overrides this candidate, if one does.
@@ -388,6 +405,11 @@ pub fn check_route(r: &Route, cat: &Catalogue, table: &CommandTable) -> Result<(
             if !command.starts_with("exec ") || !adage_tracks::io::safe_text(signature) =>
         {
             return Err("failure trigger is not a plain command key".into())
+        }
+        // Any non-zero exit includes a test failing on its assertions, which no other command
+        // fixes: an instinct fires only on the failure it answers.
+        Trigger::AfterFailure { signature, .. } if signature.trim().is_empty() => {
+            return Err("a failure trigger without a signature would fire on any failure".into())
         }
         Trigger::AfterEdit { .. } | Trigger::AfterFailure { .. } => {}
         _ => return Err("an instinct is reactive: after a failure or an edit".into()),

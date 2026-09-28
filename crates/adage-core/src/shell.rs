@@ -492,6 +492,47 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
         return (Effect::Environment, 0.5, format!("'{cmd}' has no flag-grammar entry — defaulted to environment"));
     };
 
+    // `pnpm --filter pkg test`, `npm --prefix web test`: skip the flags before the subcommand.
+    let mut args = args;
+    if !spec.leading_value_flags.is_empty() {
+        let mut i = 0;
+        while i < args.len() && args[i].starts_with('-') && args[i] != "--" {
+            i += if spec.leading_value_flags.iter().any(|f| *f == args[i]) { 2 } else { 1 };
+        }
+        args = &args[i.min(args.len())..];
+    }
+
+    // `uv run pytest`, `uvx ruff check`, `pnpm exec vitest`: the program a wrapper runs.
+    if spec.wraps {
+        if let Some(r) = wrapped_effect(cmd, spec, args, table) {
+            return r;
+        }
+    }
+    if let Some(sub) = args.first().and_then(|s| spec.subcommands.get(s)).filter(|s| s.wraps) {
+        if let Some(r) = wrapped_effect(cmd, sub, &args[1..], table) {
+            return r;
+        }
+    }
+    // `pnpm check`, `yarn vitest`: a package manager's first word runs a script or a local binary.
+    if spec.run_shorthand {
+        if let Some(word) = args.first().filter(|w| !w.starts_with('-') && !spec.subcommands.contains_key(*w)) {
+            let base = basename(word);
+            if base != *cmd && table.get(&base).is_some() {
+                let (effect, _, _) = classify_effect(&base, &args[1..], table);
+                return (effect, 0.8, format!("'{cmd} {base}' runs {base}"));
+            }
+            if let Some(run) = spec.subcommands.get("run") {
+                let mut effect = run.effect;
+                for (re, eff) in &run.pattern_effects {
+                    if re.is_match(word) {
+                        effect = *eff;
+                    }
+                }
+                return (effect, 0.8, format!("'{cmd} {word}' classified as '{cmd} run {word}'"));
+            }
+        }
+    }
+
     let mut effect = spec.effect;
     let mut confidence = 0.85;
     let mut note = String::new();
@@ -549,6 +590,36 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
         }
     }
     (effect, confidence, note)
+}
+
+/// The effect of the program a wrapper runs (`uv run pytest -x` → pytest's), if the table knows
+/// that program. `args` follow the wrapper (and its subcommand); `spec.value_flags` are the
+/// wrapper's own flags that take a value. `None` leaves the wrapper to its own classification.
+fn wrapped_effect(
+    wrapper: &str,
+    spec: &crate::table::CommandSpec,
+    args: &[String],
+    table: &CommandTable,
+) -> Option<(Effect, f64, String)> {
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        if a == "--" {
+            i += 1;
+            break;
+        }
+        if !a.starts_with('-') {
+            break;
+        }
+        i += if !a.contains('=') && spec.value_flags.iter().any(|f| f == a) { 2 } else { 1 };
+    }
+    let program = args.get(i)?;
+    let base = basename(program);
+    if base == wrapper || table.get(&base).is_none() {
+        return None;
+    }
+    let (effect, _, _) = classify_effect(program, &args[i + 1..], table);
+    Some((effect, 0.8, format!("'{wrapper}' runs '{base}'")))
 }
 
 /// The head command name of a pipeline stage, without a full walk — used only to decide whether
@@ -1124,6 +1195,77 @@ mod shadow_tests {
         assert_eq!(effect("cargo fmt --all"), Effect::Regenerate);
         assert_eq!(effect("black --check ."), Effect::Verify);
         assert_eq!(effect("black ."), Effect::Regenerate);
+    }
+
+    /// Python project managers, task runners and package-manager shorthands classify by what they
+    /// run: a wrapper as its program, an environment sync as environment, tox and nox as verify.
+    #[test]
+    fn wrappers_and_task_runners_classify_by_what_they_run() {
+        let t = CommandTable::load();
+        let effect = |cmd: &str| normalize_shell(cmd, "/repo", &t)[0].effect;
+        use crate::Effect::*;
+        for (cmd, want) in [
+            ("uv run pytest -x tests/test_a.py", Verify),
+            ("uv run --group dev tox run", Verify),
+            ("uv run python -m pytest", Verify),
+            ("uv run -- pytest", Verify),
+            ("uv run --with rich scripts/x.py", Environment),
+            ("uv run black .", Regenerate),
+            ("uv run rm -rf build", Publish),
+            ("uv sync", Environment),
+            ("uv pip install -e .", Environment),
+            ("uv pip list", Observe),
+            ("uv lock", Environment),
+            ("uv publish", Publish),
+            ("uvx ruff check .", Verify),
+            ("tox", Verify),
+            ("tox -e py", Verify),
+            ("tox run -e py312", Verify),
+            ("tox list", Observe),
+            ("tox exec -e py -- pytest", Verify),
+            ("nox -s tests", Verify),
+            ("poetry run pytest", Verify),
+            ("poetry install", Environment),
+            ("poetry publish", Publish),
+            ("hatch run test", Verify),
+            ("hatch run pytest", Verify),
+            ("hatch test", Verify),
+            ("hatch fmt --check", Verify),
+            ("pdm run pytest", Verify),
+            ("pdm install", Environment),
+            ("pipenv run pytest", Verify),
+            ("just test", Verify),
+            ("just gen", Regenerate),
+            ("just deploy", Environment),
+            ("just --list", Observe),
+            ("task test", Verify),
+            ("task release", Environment),
+            ("coverage run -m pytest", Verify),
+            ("pytest -q", Verify),
+            ("vitest run", Verify),
+            ("jest --ci", Verify),
+            ("go test ./...", Verify),
+            ("cargo nextest run", Verify),
+            ("pnpm vitest run", Verify),
+            ("pnpm exec vitest", Verify),
+            ("pnpm test-unit", Verify),
+            ("pnpm check", Verify),
+            ("pnpm --filter runtime-core test", Verify),
+            ("pnpm -r build", Verify),
+            ("pnpm deploy out", Environment),
+            ("pnpm publish", Publish),
+            ("yarn lint", Verify),
+            ("yarn npm publish", Publish),
+            ("npm run lint", Verify),
+            ("npm --prefix web test", Verify),
+            ("npm exec -- jest", Verify),
+            ("bun run test", Verify),
+            ("bun publish", Publish),
+            ("bunx vitest", Verify),
+            ("make test", Verify),
+        ] {
+            assert_eq!(effect(cmd), want, "{cmd}");
+        }
     }
 
     #[test]

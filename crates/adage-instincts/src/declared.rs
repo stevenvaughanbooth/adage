@@ -97,9 +97,22 @@ pub struct PythonFacts {
     /// tox.ini `[pytest]`, or a conftest.py.
     pub pytest_configured: bool,
     pub tox: bool,
+    /// tox is configured in tox.ini (else in pyproject.toml).
+    pub tox_ini: bool,
     pub nox: bool,
     pub uv: bool,
     pub poetry: bool,
+    /// The project's own virtual environment (`.venv` or `venv` holding a `pyvenv.cfg`), created
+    /// but perhaps not activated: its interpreter has the project's dependencies.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub venv: Option<String>,
+    /// For a uv project, the dependency group `uv run` needs for pytest: `""` when a default group
+    /// has it, else the group to name (`tests`). `None` when no group has pytest.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uv_pytest_group: Option<String>,
+    /// Import packages the project itself provides (`src/click/__init__.py` → `click`): a
+    /// `No module named '<package>'` names the environment, never the code under test.
+    pub packages: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -167,6 +180,19 @@ pub struct DeclaredFacts {
     pub script_runners: BTreeMap<String, String>,
     pub generated: Vec<Generated>,
     pub generators: Vec<GeneratorLink>,
+    /// Node: the package manager a `preinstall` `only-allow` guard insists on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub only_allow: Option<String>,
+    /// Node: the package manager `devEngines.packageManager` names (npm refuses to run for
+    /// another, with `EBADDEVENGINES`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dev_engines_manager: Option<String>,
+    /// Node: the root manifest depends through a protocol npm does not support (`workspace:`,
+    /// `catalog:`, `link:`, `patch:`, `portal:`), so `npm install` fails with
+    /// `Unsupported URL Type`.
+    pub non_npm_protocol: bool,
+    /// Files larger than the whole-file cap of which a line scan read the first 64 KiB.
+    pub partial_files: Vec<String>,
     /// Files skipped, and why.
     pub skipped_files: BTreeMap<String, String>,
 }
@@ -211,6 +237,7 @@ pub fn extract_from(files: &RepoFiles) -> DeclaredFacts {
         let (pm, conflict) = package_manager(pkg, &f.lockfiles);
         f.package_manager = Some(pm);
         f.package_manager_conflict = conflict;
+        node_guards(pkg, &mut f);
     }
 
     // Makefile.
@@ -260,14 +287,25 @@ pub fn extract_from(files: &RepoFiles) -> DeclaredFacts {
         || files.is_file("conftest.py")
         || files.is_file("tests/conftest.py");
     f.python.tox = tool("tox") || ini_has(&tox_ini, &|s| s == "tox" || s.starts_with("testenv"));
+    f.python.tox_ini = ini_has(&tox_ini, &|s| s == "tox" || s.starts_with("testenv"));
     f.python.nox = files.is_file("noxfile.py");
     f.python.uv = tool("uv") || files.is_file("uv.lock");
     f.python.poetry = tool("poetry") || files.is_file("poetry.lock");
+    f.python.venv = [".venv", "venv"]
+        .into_iter()
+        .find(|d| files.is_file(&format!("{d}/pyvenv.cfg")) && files.is_dir(&format!("{d}/bin")))
+        .map(str::to_string);
+    if f.python.uv {
+        f.python.uv_pytest_group = pyproject.as_ref().and_then(uv_pytest_group);
+    }
     if f.python.tox {
-        f.entries.push(unclassified(Source::Tox, "tox", "tox is not in adage-core's command table"));
+        f.entries.push(tox_entry(tox_ini.as_deref(), pyproject.as_ref(), files, generators, &table));
     }
     if f.python.nox {
-        f.entries.push(unclassified(Source::Nox, "nox", "nox is not in adage-core's command table"));
+        match files.read("noxfile.py").as_deref().and_then(nox_entry) {
+            Some(e) => f.entries.push(e),
+            None => f.entries.push(unclassified(Source::Nox, "nox", "noxfile.py declares no tests session")),
+        }
     }
 
     // Cargo.
@@ -294,7 +332,12 @@ pub fn extract_from(files: &RepoFiles) -> DeclaredFacts {
             .unwrap_or_default();
         let mut generate = Vec::new();
         for rel in all.iter().filter(|p| p.ends_with(".go")).take(MAX_GO_FILES) {
-            if let Some(text) = files.read(rel) {
+            // A directive is one line: a large file (a long `_test.go`) is scanned as far as the
+            // whole-file cap, not skipped.
+            if let Some((text, partial)) = files.read_lines_prefix(rel) {
+                if partial {
+                    f.partial_files.push(rel.clone());
+                }
                 for l in text.lines() {
                     if let Some(cmd) = l.strip_prefix("//go:generate ") {
                         generate.push((rel.clone(), cmd.trim().to_string()));
@@ -333,6 +376,11 @@ pub fn extract_from(files: &RepoFiles) -> DeclaredFacts {
                 f.generated.push(Generated { path: rel.clone(), marker: marker.into() });
             }
         }
+    }
+
+    // The project's own import packages.
+    if f.python.pyproject || f.python.pytest_configured {
+        f.python.packages = project_packages(&all);
     }
 
     // Scripts that are test runners in disguise.
@@ -375,6 +423,203 @@ pub fn script_runner(text: &str) -> Option<&'static str> {
     } else {
         None
     }
+}
+
+/// Import packages the project provides: `src/<name>/__init__.py`, else `<name>/__init__.py` at
+/// the root (not tests, docs or tooling). At most three, sorted.
+pub fn project_packages(all: &[String]) -> Vec<String> {
+    const NOT: [&str; 10] =
+        ["tests", "test", "testing", "docs", "doc", "examples", "bench", "benchmarks", "scripts", "tools"];
+    let ident = |n: &str| {
+        !n.is_empty()
+            && n.len() <= 48
+            && !n.as_bytes()[0].is_ascii_digit()
+            && n.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_')
+            && !NOT.contains(&n)
+    };
+    let pick = |prefix: &str| -> Vec<String> {
+        all.iter()
+            .filter_map(|p| p.strip_prefix(prefix)?.strip_suffix("/__init__.py"))
+            .filter(|n| !n.contains('/') && ident(n))
+            .map(str::to_string)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .take(3)
+            .collect()
+    };
+    let src = pick("src/");
+    if src.is_empty() {
+        pick("")
+    } else {
+        src
+    }
+}
+
+/// A requirement's distribution name, normalised (`pytest-xdist[psutil]>=3` → `pytest-xdist`).
+fn requirement_name(r: &str) -> String {
+    r.trim()
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || "-_.".contains(*c))
+        .collect::<String>()
+        .to_ascii_lowercase()
+        .replace(['_', '.'], "-")
+}
+
+/// Whether the PEP 735 dependency group `group` (with its `include-group`s) has pytest.
+fn group_has_pytest(groups: &toml::Value, group: &str, depth: usize) -> bool {
+    if depth > 4 {
+        return false;
+    }
+    let Some(items) = groups.get(group).and_then(|g| g.as_array()) else { return false };
+    items.iter().any(|x| match x {
+        toml::Value::String(r) => requirement_name(r) == "pytest",
+        toml::Value::Table(t) => {
+            t.get("include-group").and_then(|g| g.as_str()).is_some_and(|g| group_has_pytest(groups, g, depth + 1))
+        }
+        _ => false,
+    })
+}
+
+/// For a uv project: `""` if `uv run` has pytest as it syncs by default (a default group, or the
+/// legacy `tool.uv.dev-dependencies`), else the one group to name: `tests`, `test` or `testing`,
+/// else the first group by name that has pytest. `None` if no group has it.
+fn uv_pytest_group(pyproject: &toml::Value) -> Option<String> {
+    let uv = pyproject.get("tool").and_then(|t| t.get("uv"));
+    let legacy = uv.and_then(|u| u.get("dev-dependencies")).and_then(|d| d.as_array());
+    if legacy.is_some_and(|d| d.iter().any(|r| r.as_str().is_some_and(|r| requirement_name(r) == "pytest"))) {
+        return Some(String::new());
+    }
+    let groups = pyproject.get("dependency-groups")?;
+    let names: Vec<&String> = groups.as_table()?.keys().collect();
+    let defaults: Vec<String> = match uv.and_then(|u| u.get("default-groups")) {
+        Some(toml::Value::Array(a)) => a.iter().filter_map(|g| g.as_str().map(str::to_string)).collect(),
+        Some(toml::Value::String(s)) if s == "all" => names.iter().map(|n| n.to_string()).collect(),
+        _ => vec!["dev".into()],
+    };
+    if defaults.iter().any(|g| group_has_pytest(groups, g, 0)) {
+        return Some(String::new());
+    }
+    let preferred = ["tests", "test", "testing"].into_iter().find(|p| names.iter().any(|n| n == p));
+    let chosen = match preferred {
+        Some(p) if group_has_pytest(groups, p, 0) => Some(p.to_string()),
+        _ => names.into_iter().find(|n| group_has_pytest(groups, n, 0)).cloned(),
+    };
+    chosen.filter(|g| safe_entry_name(g))
+}
+
+/// tox's test environment as one declared entry, `tox -e py`, whose body is the base test
+/// environment's commands (`[testenv] commands` in tox.ini, `[tool.tox.env_run_base] commands` in
+/// pyproject.toml) with `{posargs}` removed. Refused when those commands depend on factors
+/// (`tests: pytest`) or cannot be read: `tox -e py` would then not run what they say.
+fn tox_entry(
+    tox_ini: Option<&str>,
+    pyproject: Option<&toml::Value>,
+    files: &RepoFiles,
+    generators: &[String],
+    table: &CommandTable,
+) -> Entry {
+    let none = || "tox's base test environment declares no commands".to_string();
+    let lines = match tox_ini {
+        Some(ini) if ini.lines().any(|l| l.trim() == "[testenv]") => tox_ini_commands(ini),
+        _ => pyproject
+            .and_then(|p| p.get("tool")?.get("tox")?.get("env_run_base")?.get("commands").cloned())
+            .map_or_else(|| Err(none()), |c| tox_toml_commands(&c)),
+    };
+    let lines = lines.and_then(|l| if l.is_empty() { Err(none()) } else { Ok(l) });
+    entry(Source::Tox, "py", Some("tox -e py".into()), lines, vec![], files, generators, table)
+}
+
+static POSARGS: Lazy<Regex> = Lazy::new(|| Regex::new(r"\{posargs(:[^{}]*)?\}").unwrap());
+static FACTOR: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[A-Za-z0-9_.{},!-]+:\s").unwrap());
+
+fn tox_ini_commands(ini: &str) -> Result<Vec<String>, String> {
+    let (mut in_testenv, mut in_commands) = (false, false);
+    let mut out = Vec::new();
+    for raw in ini.lines() {
+        let t = raw.trim();
+        if let Some(sec) = t.strip_prefix('[').and_then(|x| x.strip_suffix(']')) {
+            in_testenv = sec == "testenv";
+            in_commands = false;
+            continue;
+        }
+        if !in_testenv || t.starts_with('#') || t.starts_with(';') {
+            continue;
+        }
+        if !raw.starts_with([' ', '\t']) {
+            in_commands = false;
+            if let Some((k, v)) = t.split_once('=') {
+                if k.trim() == "commands" {
+                    in_commands = true;
+                    if !v.trim().is_empty() {
+                        out.push(v.trim().to_string());
+                    }
+                }
+            }
+        } else if in_commands && !t.is_empty() {
+            out.push(t.to_string());
+        }
+    }
+    if out.iter().any(|l| FACTOR.is_match(l)) {
+        return Err("tox's test commands depend on factors, so no one tox command runs them".into());
+    }
+    Ok(out.iter().map(|l| POSARGS.replace_all(l, "").trim().to_string()).filter(|l| !l.is_empty()).collect())
+}
+
+fn tox_toml_commands(v: &toml::Value) -> Result<Vec<String>, String> {
+    let Some(cmds) = v.as_array() else { return Err("tox's commands are not a list".into()) };
+    let mut out = Vec::new();
+    for c in cmds {
+        let Some(argv) = c.as_array() else { return Err("a tox command is not a list".into()) };
+        let mut words = Vec::new();
+        for a in argv {
+            match a {
+                toml::Value::String(w) if !w.is_empty() && !w.contains(char::is_whitespace) => words.push(w.clone()),
+                toml::Value::Table(t) if t.get("replace").and_then(|r| r.as_str()) == Some("posargs") => {}
+                _ => return Err("a tox command has an argument Adage cannot read".into()),
+            }
+        }
+        out.push(words.join(" "));
+    }
+    Ok(out)
+}
+
+/// nox's test session (`@nox.session` over `def tests(` or `def test(`), as `nox -s <name>`. A
+/// nox session is Python code, so its body can never be checked plain: it is refused, and
+/// reported.
+fn nox_entry(text: &str) -> Option<Entry> {
+    let lines: Vec<&str> = text.lines().collect();
+    let name = lines.iter().enumerate().find_map(|(i, l)| {
+        let n = ["tests", "test"].into_iter().find(|n| l.trim_start().starts_with(&format!("def {n}(")))?;
+        lines[..i].iter().rev().take(3).any(|p| p.trim_start().starts_with("@nox.session")).then_some(n)
+    })?;
+    let mut e = unclassified(Source::Nox, name, "a nox session is Python code, so its body cannot be checked");
+    e.command = Some(format!("nox -s {name}"));
+    Some(e)
+}
+
+/// Guards a node repository puts on its package manager: a `preinstall` `only-allow`,
+/// `devEngines.packageManager`, and dependencies through protocols npm does not support.
+fn node_guards(pkg: &serde_json::Value, f: &mut DeclaredFacts) {
+    let node = ["npm", "pnpm", "yarn", "bun"];
+    if let Some(pre) = pkg.get("scripts").and_then(|s| s.get("preinstall")).and_then(|v| v.as_str()) {
+        let w = safety::words(pre);
+        if let Some(i) = w.iter().position(|x| x == "only-allow") {
+            f.only_allow = w.get(i + 1).filter(|m| node.contains(&m.as_str())).cloned();
+        }
+    }
+    let de = pkg.get("devEngines").and_then(|d| d.get("packageManager"));
+    let de = match de {
+        Some(serde_json::Value::Array(a)) => a.first(),
+        other => other,
+    };
+    f.dev_engines_manager =
+        de.and_then(|d| d.get("name")).and_then(|n| n.as_str()).filter(|n| node.contains(n)).map(str::to_string);
+    let protocols = ["workspace:", "catalog:", "link:", "patch:", "portal:"];
+    f.non_npm_protocol = ["dependencies", "devDependencies", "optionalDependencies"].iter().any(|k| {
+        pkg.get(*k)
+            .and_then(|d| d.as_object())
+            .is_some_and(|d| d.values().any(|v| v.as_str().is_some_and(|v| protocols.iter().any(|p| v.starts_with(p)))))
+    });
 }
 
 fn unclassified(source: Source, name: &str, why: &str) -> Entry {

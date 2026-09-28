@@ -96,7 +96,7 @@ mod tests {
             assert!(["route", "advisory"].contains(&i.kind.as_str()), "{}", i.id);
         }
         let enabled: Vec<&str> = c.instincts.iter().filter(|i| i.enabled).map(|i| i.id.as_str()).collect();
-        assert_eq!(enabled, ["U1", "U3", "U4", "U5", "U6", "N1", "P1"]);
+        assert_eq!(enabled, ["U1", "U3", "U4", "U5", "U6", "N1", "P1", "U11"]);
         assert_eq!(c.provenance(), "instinct:core@0.1.0");
     }
 }

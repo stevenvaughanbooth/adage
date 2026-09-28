@@ -284,7 +284,7 @@ fn doctor_review_and_pack_approval() {
     assert!(
         detail.starts_with(&format!("on; {KEY}: "))
             && detail.contains(" bound, ")
-            && detail.contains("2 awaiting approval"),
+            && detail.contains("4 awaiting approval"),
         "{detail}"
     );
     // review lists instinct routes with their origin; environment steps wait for approval.
@@ -297,7 +297,9 @@ fn doctor_review_and_pack_approval() {
     assert!(inst.iter().all(|r| !r["decisions"].as_array().unwrap().iter().any(|d| d == "strengthen")));
     let nascent: Vec<&str> =
         inst.iter().filter(|r| r["state"] == "nascent").map(|r| r["route"].as_str().unwrap()).collect();
-    assert_eq!(nascent.len(), 2, "npm install and npm ci → pnpm install: {q:#}");
+    // `npm ci` (no package-lock.json) and `yarn install` (missing, or refused by corepack) →
+    // `pnpm install`; `npm install` refuses nothing here, so it binds nothing.
+    assert_eq!(nascent.len(), 4, "npm ci and yarn install → pnpm install: {q:#}");
     let text = w.ok(&["review"]);
     assert!(text.contains("(instinct U1 (from Makefile))"), "{text}");
     // Approving one environment step approves the pack's for this repository.
@@ -310,7 +312,7 @@ fn doctor_review_and_pack_approval() {
     let idx: Value = serde_json::from_str(&std::fs::read_to_string(w.p("adage/index.json")).unwrap()).unwrap();
     let install =
         idx["routes"].as_array().unwrap().iter().filter(|r| r["route"]["step"]["command"] == "pnpm install").count();
-    assert_eq!(install, 2, "both environment steps are delivered after pack approval");
+    assert_eq!(install, 4, "every environment step is delivered after pack approval");
     // An extinguished instinct stays extinguished across re-binds.
     let out = w.ok(&["review", "extinguish", TRACK, "finish-line-e7e809"]);
     assert!(out.contains("extinguished"), "{out}");

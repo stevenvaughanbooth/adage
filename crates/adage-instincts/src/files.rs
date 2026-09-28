@@ -162,6 +162,43 @@ impl RepoFiles {
         }
     }
 
+    /// The whole of `rel`, or, for a file larger than [`MAX_FILE_BYTES`], its first
+    /// [`MAX_FILE_BYTES`] cut back to the last complete line, with `true` for "partial". Only for
+    /// scans that read line by line and lose nothing but what lies past the cut (`//go:generate`
+    /// directives); a whole-file parse (a Makefile, JSON, TOML) must use [`RepoFiles::read`].
+    pub fn read_lines_prefix(&self, rel: &str) -> Option<(String, bool)> {
+        let real = match self.resolve(rel) {
+            Ok(p) => p,
+            Err("missing") => return None,
+            Err(why) => {
+                self.note(rel, why);
+                return None;
+            }
+        };
+        if !std::fs::metadata(&real).ok()?.is_file() {
+            self.note(rel, "not a regular file");
+            return None;
+        }
+        if !self.take_read(rel) {
+            return None;
+        }
+        let mut buf = Vec::new();
+        std::fs::File::open(&real).ok()?.take(MAX_FILE_BYTES + 1).read_to_end(&mut buf).ok()?;
+        let partial = buf.len() as u64 > MAX_FILE_BYTES;
+        if partial {
+            buf.truncate(MAX_FILE_BYTES as usize);
+            let end = buf.iter().rposition(|b| *b == b'\n').map_or(0, |i| i + 1);
+            buf.truncate(end);
+        }
+        match String::from_utf8(buf) {
+            Ok(s) => Some((s, partial)),
+            Err(_) => {
+                self.note(rel, "not UTF-8");
+                None
+            }
+        }
+    }
+
     /// At most the first [`HEAD_BYTES`] of `rel` (lossy UTF-8), for marker scans.
     pub fn head(&self, rel: &str) -> Option<String> {
         let real = self.resolve(rel).ok()?;
@@ -223,5 +260,24 @@ mod tests {
         for bad in ["", "/etc/passwd", "../x", "a/../../b", "a//b", "a\\b", "a b", "te\u{200b}st"] {
             assert!(!safe_rel(bad), "{bad:?}");
         }
+    }
+
+    #[test]
+    fn a_line_scan_reads_the_first_64_kib_of_a_large_file_up_to_a_whole_line() {
+        let d = tempfile::tempdir().unwrap();
+        let mut big = String::from("//go:generate stringer -type=Color\n");
+        while big.len() < 3 * MAX_FILE_BYTES as usize {
+            big.push_str("func TestSomething(t *testing.T) { t.Log(\"x\") }\n");
+        }
+        std::fs::write(d.path().join("big_test.go"), &big).unwrap();
+        std::fs::write(d.path().join("small.go"), "package x\n").unwrap();
+        let f = RepoFiles::open(d.path()).unwrap();
+        let (text, partial) = f.read_lines_prefix("big_test.go").unwrap();
+        assert!(partial && text.len() as u64 <= MAX_FILE_BYTES && text.ends_with('\n'));
+        assert!(text.starts_with("//go:generate stringer"));
+        assert_eq!(f.read_lines_prefix("small.go").unwrap(), ("package x\n".to_string(), false));
+        // A whole-file read still refuses it, and says so.
+        assert!(f.read("big_test.go").is_none());
+        assert_eq!(f.notes().get("big_test.go").map(String::as_str), Some("larger than 64 KiB"));
     }
 }
