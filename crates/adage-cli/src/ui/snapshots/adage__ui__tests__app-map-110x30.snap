@@ -4,7 +4,7 @@ expression: text
 ---
  adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings                    harbor-dispatch · LIVE
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
- focus off    zoom boxes    layout stimulus → reflex → response           4 reflexes · 1 instinct · 54 traces
+ focus off    zoom boxes (max)    layout stimulus → reflex → response     4 reflexes · 1 instinct · 54 traces
 
    STIMULUS                               REFLEX                                 RESPONSE
  ╭────────────────────────────╮         ╭────────────────────────────╮         ╭────────────────────────────╮

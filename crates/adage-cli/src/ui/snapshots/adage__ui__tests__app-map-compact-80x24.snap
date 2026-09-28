@@ -4,7 +4,7 @@ expression: text
 ---
  adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings
 ────────────────────────────────────────────────────────────────────────────────
- focus off    zoom rows    layout stimulus → reflex → response
+ focus off    zoom rows (min)    layout stimulus → reflex → response
 
   STIMULUS                  REFLEX                    RESPONSE
 ▌ names a ticket         ─▶ F ◠ lookup-incident    ─▶ bin/fetch-incident {i…

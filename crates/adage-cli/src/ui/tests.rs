@@ -1202,8 +1202,15 @@ fn map_layers_share_ends_focus_and_keys() {
     let ids: Vec<&str> = g.reflexes.iter().map(|&i| s.route_rows()[i].id.as_str()).collect();
     assert_eq!(ids, ["dead-end-npm-test", "start-with-npm-check"]);
     assert_eq!(tabs::map::selected(&s).unwrap().id, "dead-end-npm-test", "the selection survives focus");
+    // Zoom: + at boxes, - at rows, say they are at the end; the info line names the level.
+    assert!(app_frame(&s, &c, 150, 35).contains("zoom boxes (max)"));
+    s.key(KeyCode::Char('+'), NONE);
+    assert!(!s.map.compact && s.toasts.last().is_some_and(|t| t.text.contains("boxes is the largest")));
     s.key(KeyCode::Char('-'), NONE);
     assert!(s.map.compact);
+    s.key(KeyCode::Char('-'), NONE);
+    assert!(s.map.compact && s.toasts.last().is_some_and(|t| t.text.contains("rows is the smallest")));
+    assert!(app_frame(&s, &c, 150, 35).contains("zoom rows (min)"));
     // `o` names the web map command; enter opens the reflex in the Reflexes tab.
     s.key(KeyCode::Char('o'), NONE);
     assert!(

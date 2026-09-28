@@ -143,6 +143,11 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
             go(s, cur);
             s.map.focus = !s.map.focus;
         }
+        // Two zoom levels; at either end the key says so rather than nothing.
+        KeyCode::Char('+') | KeyCode::Char('=') if !s.map.compact => {
+            s.toast("zoom: boxes is the largest; - shows compact rows", false)
+        }
+        KeyCode::Char('-') if s.map.compact => s.toast("zoom: rows is the smallest; + shows boxes", false),
         KeyCode::Char('+') | KeyCode::Char('=') => s.map.compact = false,
         KeyCode::Char('-') => s.map.compact = true,
         KeyCode::Char('R') => return Some(Cmd::Want(WantKind::Routes)),
@@ -502,11 +507,17 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         sep = t.sep()
     );
     let focus = if s.map.focus { format!("2 hops around {}", r.id) } else { "off".into() };
+    let drawn = if s.map.compact { None } else { boxes(s, &g, sel, t, canvas_a.width as usize) };
+    let zoom = match (&drawn, s.map.compact) {
+        (Some(_), _) => "boxes (max)",
+        (None, true) => "rows (min)",
+        (None, false) => "rows (too narrow for boxes)",
+    };
     let mut left = vec![
         Span::styled(" focus ", t.dim()),
         Span::raw(focus),
         Span::styled("    zoom ", t.dim()),
-        Span::raw(if s.map.compact { "rows" } else { "boxes" }),
+        Span::raw(zoom),
         Span::styled("    layout ", t.dim()),
         Span::raw(format!("stimulus {} reflex {} response", t.glyph(Glyph::Arrow), t.glyph(Glyph::Arrow))),
     ];
@@ -517,7 +528,6 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     }
     f.render_widget(Paragraph::new(Line::from(left)), info);
 
-    let drawn = if s.map.compact { None } else { boxes(s, &g, sel, t, canvas_a.width as usize) };
     let (lines, top_of_sel, step) = match drawn {
         Some((lines, cols)) => {
             let mut h = vec![Span::raw(" ".repeat(cols[0] + 2)), Span::styled("STIMULUS", t.dim().patch(t.bold()))];
