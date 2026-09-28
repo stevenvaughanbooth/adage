@@ -47,7 +47,7 @@ from them. Instincts are innate responses that ship with Adage.
 | Command | Themed | Notes |
 | --- | --- | --- |
 | `adage survey` | `adage sense` | Read-only: which reflexes your traces would form |
-| `adage learn` | `adage condition` | `learn` stays as a documented alias; help reads "condition (learn)" |
+| `adage learn` | `adage condition` | Removed: `learn` is gone |
 | `adage-train run` | `adage train` | Grow reflexes from a skill |
 | `adage review promote` / `demote` / `reject` | `adage review strengthen` / `weaken` / `extinguish` | |
 | `adage graph --serve` | `adage map` | |
