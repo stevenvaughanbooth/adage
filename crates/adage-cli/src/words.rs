@@ -57,27 +57,45 @@ pub fn prose(s: &str) -> String {
     static SUBS: OnceLock<Vec<(regex::Regex, &'static str)>> = OnceLock::new();
     let subs = SUBS.get_or_init(|| {
         [
+            (r"\broute\(s\)", "reflex(es)"),
+            (r"\bsession\(s\)", "trace(s)"),
             (r"\bgreen\b", "fire"),
             (r"\byellow\b", "prime"),
             (r"\bred\b", "inhibit"),
             (r"\broutes\b", "reflexes"),
             (r"\broute\b", "reflex"),
             (r"\bsessions\b", "traces"),
-            (r"\bsession\b", "trace"),
             (r"\bholdout\b", "control"),
             (r"\bretired\b", "extinguished"),
             (r"\bdrafted\b", "nascent"),
             (r"\bprobation\b", "forming"),
+            (r"\blearned\b", "conditioned"),
         ]
         .into_iter()
         .map(|(p, w)| (regex::Regex::new(p).expect("static pattern"), w))
         .collect()
     });
-    let mut out = s.to_string();
-    for (re, w) in subs {
-        out = re.replace_all(&out, *w).into_owned();
-    }
-    out
+    // Commands (between backticks) and paths (any word with a slash) are never touched.
+    let words = |t: &str| {
+        t.split(' ')
+            .map(|w| {
+                if w.contains('/') || w.contains('\\') {
+                    return w.to_string();
+                }
+                let mut out = w.to_string();
+                for (re, rep) in subs {
+                    out = re.replace_all(&out, *rep).into_owned();
+                }
+                out
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
+    s.split('`')
+        .enumerate()
+        .map(|(i, part)| if i % 2 == 1 { part.to_string() } else { words(part) })
+        .collect::<Vec<_>>()
+        .join("`")
 }
 
 #[cfg(test)]
@@ -110,5 +128,7 @@ mod tests {
             "finish line reflex prime → fire (8 of 8 traces, lower bound 0.50)"
         );
         assert_eq!(prose("reduced credit"), "reduced credit", "whole words only");
+        assert_eq!(prose("3 spools in /home/me/sessions"), "3 spools in /home/me/sessions", "paths are left alone");
+        assert_eq!(prose("run `adage review promote` for 2 routes"), "run `adage review promote` for 2 reflexes");
     }
 }

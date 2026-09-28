@@ -85,7 +85,7 @@ export function Health() {
                 <span className="sr-only">{m.word}</span>
               </span>
               <div className="flex min-w-0 grow flex-col gap-1">
-                <span className="text-[14.5px] text-ink-1">{c.check}</span>
+                <span className="text-[14.5px] text-ink-1">{c.label ?? c.check}</span>
                 <span className="text-[13px] break-words text-ink-2">{c.detail}</span>
                 {c.fix && (
                   <div className="mt-1.5 flex flex-col gap-1.5">

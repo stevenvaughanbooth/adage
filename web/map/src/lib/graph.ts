@@ -263,7 +263,7 @@ export function focus(
   };
 }
 
-export const NODE_W = 200;
+export const NODE_W = 232;
 export const NODE_H = 76;
 export const COL_GAP = 62;
 export const ROW_GAP = 24;

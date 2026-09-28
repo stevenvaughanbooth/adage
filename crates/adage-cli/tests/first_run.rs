@@ -174,7 +174,7 @@ fn doctor_on_a_fresh_machine_warns_but_does_not_fail() {
     let (v, ok) = doctor(&w);
     assert!(ok, "{v:#}");
     assert_eq!(check(&v, "binary")["status"], "pass");
-    assert_eq!(check(&v, "data directory")["status"], "warn");
+    assert_eq!(check(&v, "data directory")["status"], "pass", "not created yet is not a problem");
     assert_eq!(check(&v, "index")["status"], "warn");
     assert_eq!(check(&v, "tracks")["status"], "warn");
     assert_eq!(check(&v, "embedding model")["status"], "pass");
@@ -186,7 +186,7 @@ fn doctor_on_a_fresh_machine_warns_but_does_not_fail() {
     }
     assert!(!w.p("data").exists(), "doctor creates nothing");
     let o = w.run(&["doctor"]);
-    assert!(text(&o).contains("adage doctor") && text(&o).contains("0 failure(s)"), "{}", text(&o));
+    assert!(text(&o).contains("adage doctor") && text(&o).contains("0 failing"), "{}", text(&o));
 }
 
 #[test]

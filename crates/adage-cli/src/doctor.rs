@@ -40,21 +40,47 @@ pub enum Status {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Check {
+    /// A stable identifier (the UI and tools match on it); `label` is what people read.
     pub check: String,
+    /// The check's name in the lexicon's words (`auto-condition`, not `auto-learn`).
+    pub label: String,
     pub status: Status,
     pub detail: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fix: Option<String>,
 }
 
+/// A check's name as people read it.
+pub fn label(check: &str) -> String {
+    if let Some(rest) = check.strip_prefix("auto-learn") {
+        return format!("auto-condition{rest}");
+    }
+    match check {
+        "session spools" => "trace spools".into(),
+        other => other.into(),
+    }
+}
+
 fn pass(check: &str, detail: impl Into<String>) -> Check {
-    Check { check: check.into(), status: Status::Pass, detail: detail.into(), fix: None }
+    Check { check: check.into(), label: label(check), status: Status::Pass, detail: detail.into(), fix: None }
 }
 fn warn(check: &str, detail: impl Into<String>, fix: impl Into<String>) -> Check {
-    Check { check: check.into(), status: Status::Warn, detail: detail.into(), fix: Some(fix.into()) }
+    Check {
+        check: check.into(),
+        label: label(check),
+        status: Status::Warn,
+        detail: detail.into(),
+        fix: Some(fix.into()),
+    }
 }
 fn fail(check: &str, detail: impl Into<String>, fix: impl Into<String>) -> Check {
-    Check { check: check.into(), status: Status::Fail, detail: detail.into(), fix: Some(fix.into()) }
+    Check {
+        check: check.into(),
+        label: label(check),
+        status: Status::Fail,
+        detail: detail.into(),
+        fix: Some(fix.into()),
+    }
 }
 
 fn sha256_file(p: &Path) -> Option<String> {
@@ -84,10 +110,10 @@ fn data_dir(paths: &Paths) -> Check {
     if !root.exists() {
         let ancestor = root.ancestors().skip(1).find(|a| a.is_dir());
         return match ancestor {
-            Some(a) if probe(a) => warn(
+            // Nothing to fix: the first hook call or `adage condition` creates it.
+            Some(a) if probe(a) => pass(
                 name,
-                format!("{} does not exist yet", detect::tilde(root)),
-                "`adage condition` creates it; nothing to do",
+                format!("{} will be created by the first hook call or `adage condition`", detect::tilde(root)),
             ),
             _ => fail(
                 name,
@@ -670,7 +696,56 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
     checks.push(spools(paths));
     checks.push(fail_open(paths));
     checks.extend(live_learning(paths));
+    // What people read is in the lexicon's words; the check ids stay as they are.
+    for c in &mut checks {
+        c.detail = crate::words::prose(&c.detail);
+        c.fix = c.fix.as_deref().map(crate::words::prose);
+    }
     checks
+}
+
+/// `adage doctor`'s report in the output grammar: a lamp row per check, its fix as a command
+/// under it, and `next` for the first thing to fix.
+pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, checks: &[Check]) -> std::io::Result<()> {
+    use adage_term::{Glyph, Line, Role};
+    let count = |s: Status| checks.iter().filter(|c| c.status == s).count();
+    let (p, w, f) = (count(Status::Pass), count(Status::Warn), count(Status::Fail));
+    let summary = format!("{p} passed · {w} to look at · {f} failing");
+    o.header("doctor", &[&summary])?;
+    o.blank()?;
+    let name_w = checks.iter().map(|c| c.label.chars().count()).max().unwrap_or(10).clamp(10, 26);
+    for c in checks {
+        let (role, glyph, word) = match c.status {
+            Status::Pass => (Role::Fire, Glyph::Ok, "PASS"),
+            Status::Warn => (Role::Prime, Glyph::Lamp, "WARN"),
+            Status::Fail => (Role::Inhibit, Glyph::Fail, "FAIL"),
+        };
+        let mark = if o.theme.color() { Line::new().glyph(role, glyph) } else { Line::new().push(role, word) };
+        o.line(
+            &Line::new()
+                .text("  ")
+                .extend(mark)
+                .pad_to(8)
+                .text(c.label.clone())
+                .pad_to(10 + name_w)
+                .quiet(c.detail.clone()),
+        )?;
+        if let Some(fix) = &c.fix {
+            o.line(&Line::new().pad_to(10 + name_w).faint("fix ").push(Role::Command, fix.clone()))?;
+        }
+    }
+    o.blank()?;
+    // The first failing check's fix, else the first warning's; else what to do next.
+    let first =
+        checks.iter().find(|c| c.status == Status::Fail).or_else(|| checks.iter().find(|c| c.status == Status::Warn));
+    match first.and_then(|c| c.fix.as_ref().map(|fx| (c, fx))) {
+        Some((c, fx)) => {
+            let cmd = fx.split('`').nth(1).filter(|s| s.starts_with("adage ")).unwrap_or(fx);
+            o.next(cmd, &format!("fixes {}", c.label))?
+        }
+        None => o.next("adage status", "everything checks out; see the reflexes in effect")?,
+    }
+    Ok(())
 }
 
 pub fn doctor(args: &[String], paths: &Paths) -> Result<()> {
@@ -689,19 +764,7 @@ pub fn doctor(args: &[String], paths: &Paths) -> Result<()> {
             serde_json::to_string_pretty(&json!({ "checks": checks, "summary": { "pass": p, "warn": w, "fail": f } }))?
         );
     } else {
-        println!("adage doctor");
-        for c in &checks {
-            let tag = match c.status {
-                Status::Pass => "pass",
-                Status::Warn => "WARN",
-                Status::Fail => "FAIL",
-            };
-            println!("  {tag}  {:<26} {}", c.check, c.detail);
-            if let Some(fix) = &c.fix {
-                println!("        {:<26} fix: {fix}", "");
-            }
-        }
-        println!("\n{p} passed, {w} warning(s), {f} failure(s)");
+        render(&mut adage_term::Out::stdout(), &checks)?;
     }
     if f > 0 {
         bail!("{f} check(s) failed");

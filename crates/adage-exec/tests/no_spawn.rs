@@ -25,6 +25,10 @@ const ALLOWED: &[(&str, usize, &str)] = &[
     ("adage-cli/src/models.rs", 1, "curl for `adage models download`"),
     // Terminal mode switching for the interactive UI (stty on the controlling terminal).
     ("adage-cli/src/tty.rs", 1, "stty for the terminal UI"),
+    // `adage map`: opens the person's browser on the local page (`open`, `cmd /c start` or
+    // `xdg-open`, one per platform), at their request; `--no-open` skips it. A URL, never a
+    // repository or agent command.
+    ("adage-cli/src/map/mod.rs", 3, "the platform's URL opener for `adage map`"),
 ];
 
 fn rs_files(dir: &Path, out: &mut Vec<PathBuf>) {

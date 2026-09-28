@@ -132,6 +132,8 @@ export interface Graph {
 
 export interface HealthCheck {
   check: string;
+  /** The check's name as people read it (the lexicon's words); `check` is its id. */
+  label?: string;
   status: "pass" | "warn" | "fail";
   detail: string;
   fix?: string;

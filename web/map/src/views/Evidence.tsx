@@ -66,13 +66,24 @@ function Chart({ data, markers }: { data: { day: number; treated: number; contro
         <circle key={d.day} cx={x(d.day)} cy={y(d.treated)} r="3" style={{ fill: "var(--color-accent-base)" }} />
       ))}
       {last && (
-        <text x={x(last.day) - 6} y={y(last.treated) - 10} textAnchor="end" className="font-mono" fontSize="11" style={{ fill: "var(--color-ink-1)" }}>
+        <text
+          x={x(last.day) < L + 90 ? x(last.day) + 8 : x(last.day) - 6}
+          y={y(last.treated) - 10}
+          textAnchor={x(last.day) < L + 90 ? "start" : "end"}
+          className="font-mono"
+          fontSize="11"
+          style={{ fill: "var(--color-ink-1)" }}
+        >
           {plural(last.treated, "trace")}
         </text>
       )}
     </svg>
   );
 }
+
+/** Traces with the reflex, and control traces, before a share is stated as a headline. */
+const MIN_TREATED = 10;
+const MIN_CONTROL = 5;
 
 export function Evidence({ graph }: { graph: Graph }) {
   const [url, setUrl] = useUrl();
@@ -92,8 +103,11 @@ export function Evidence({ graph }: { graph: Graph }) {
     )
     .slice(-3);
   const path = ks[0];
-  const tShare = path ? share(path.treated) : null;
-  const cShare = path ? share(path.control) : null;
+  // Evidence over enthusiasm: a headline claims a share only once enough traces back it.
+  const enough = (n: number, min: number) => n >= min;
+  const tShare = path && enough(path.treated.n, MIN_TREATED) ? share(path.treated) : null;
+  const cShare = path && enough(path.control.n, MIN_CONTROL) ? share(path.control) : null;
+  const needed = path ? Math.max(0, MIN_TREATED - path.treated.n) : MIN_TREATED;
 
   const rows = useMemo(() => {
     const val = (r: Route): number | string => {
@@ -157,9 +171,16 @@ export function Evidence({ graph }: { graph: Graph }) {
               </>
             )}
           </h1>
+          {tShare === null && (
+            <p className="m-0 text-sm text-ink-2">
+              {needed > 0
+                ? `About ${plural(needed, "more trace")} where a reflex applies before the comparison means anything. The numbers below are counts, not claims.`
+                : "Too few control traces to compare yet; the numbers below are counts, not claims."}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="font-mono text-xs text-ink-3">distinct traces · control is the holdout arm</span>
+          <span className="font-mono text-xs text-ink-3">distinct traces · control: reflexes withheld on purpose</span>
           <Segmented<Window>
             label="Window"
             value={url.window === "24h" ? "7d" : url.window}
@@ -177,12 +198,27 @@ export function Evidence({ graph }: { graph: Graph }) {
         {ks.map((k) => (
           <div key={k.label} className="flex flex-col gap-2 rounded-lg border border-line-strong bg-panel px-5 py-[18px]">
             <span className="text-[13px] text-ink-2">{k.label}</span>
-            <div className="flex items-baseline gap-2.5">
-              <span className="display text-[52px] leading-none font-semibold text-ink-1">{pct(k.treated)}</span>
-              <span className="font-mono text-[13px] text-ink-2">vs {pct(k.control)} control</span>
-            </div>
+            {k.treated.n >= MIN_TREATED ? (
+              <div className="flex items-baseline gap-2.5">
+                <span className="display text-[52px] leading-none font-semibold text-ink-1">{pct(k.treated)}</span>
+                <span className="font-mono text-[13px] text-ink-2">
+                  vs {k.control.n >= MIN_CONTROL ? pct(k.control) : `${k.control.k}/${k.control.n}`} control
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-baseline gap-2.5" title="Too few traces for a share to mean anything yet">
+                <span className="display text-[52px] leading-none font-semibold text-ink-3">
+                  {k.treated.k}/{k.treated.n}
+                </span>
+                <span className="font-mono text-[13px] text-ink-2">
+                  vs {k.control.k}/{k.control.n} control
+                </span>
+              </div>
+            )}
             <span className="font-mono text-[11.5px] text-ink-3">
-              {k.treated.k}/{k.treated.n} · control {k.control.k}/{k.control.n} · {k.note}
+              {k.treated.n >= MIN_TREATED
+                ? `${k.treated.k}/${k.treated.n} · control ${k.control.k}/${k.control.n} · ${k.note}`
+                : `too few traces to compare · ${k.note}`}
             </span>
           </div>
         ))}
@@ -196,7 +232,7 @@ export function Evidence({ graph }: { graph: Graph }) {
         </div>
       </div>
 
-      <div className="grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+      <div className="grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <section aria-label="Traces per day" className="flex flex-col gap-3 rounded-lg border border-line-strong bg-panel px-5 py-[18px]">
           <div className="flex items-center justify-between">
             <span className="lbl">Traces per day · {url.window === "all" ? "all time" : `last ${url.window.replace("d", " days")}`}</span>
@@ -241,7 +277,7 @@ export function Evidence({ graph }: { graph: Graph }) {
                   const k = (a: typeof t) => (a ? (avoid ? a.hit_avoided : a.followed) : 0);
                   return (
                     <tr key={routeKey(r)} className="hover:bg-raised">
-                      <td className="border-b border-line px-3 py-[11px]">
+                      <td className="border-b border-line px-3 py-[11px] whitespace-nowrap">
                         <button
                           type="button"
                           onClick={() => setUrl({ reflex: routeKey(r), view: "map" }, true)}

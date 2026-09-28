@@ -168,6 +168,7 @@ fn fixture(dir: &Path) -> Paths {
 fn health() -> Health {
     let check = |name: &str, status, detail: &str, fix: Option<&str>| Check {
         check: name.into(),
+        label: crate::doctor::label(name),
         status,
         detail: detail.into(),
         fix: fix.map(String::from),

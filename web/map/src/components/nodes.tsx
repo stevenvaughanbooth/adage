@@ -56,7 +56,7 @@ function Card({ data }: { data: NodeData }) {
     return (
       <div
         className={cx(
-          "flex h-[76px] w-[200px] items-center justify-center gap-3 rounded-full border bg-panel transition-opacity duration-200",
+          "flex h-[76px] w-[232px] items-center justify-center gap-3 rounded-full border bg-panel transition-opacity duration-200",
           selected ? "border-accent" : "border-line-strong",
           (dim || n.unformed) && "opacity-35",
         )}
@@ -70,7 +70,7 @@ function Card({ data }: { data: NodeData }) {
     <div
       key={pulse}
       className={cx(
-        "flex h-[76px] w-[200px] flex-col gap-[5px] rounded-[10px] border bg-panel px-3 py-2.5 transition-[opacity,border-color,box-shadow] duration-200",
+        "flex h-[76px] w-[232px] flex-col gap-[5px] rounded-[10px] border bg-panel px-3 py-2.5 transition-[opacity,border-color,box-shadow] duration-200",
         selected
           ? "border-[1.5px] border-accent shadow-[0_0_0_4px_var(--sel),0_8px_30px_var(--sel)]"
           : "border-line-strong hover:border-accent/45",
@@ -86,7 +86,7 @@ function Card({ data }: { data: NodeData }) {
       <div className="flex h-4 min-w-0 items-center gap-1.5">
         {reflexish && <Lamp strength={n.strength} hollow={hollow} glow={!hollow} />}
         {reflexish && <KindGlyph instinct={n.kind === "instinct"} />}
-        <span className={cx("truncate text-[12.5px] leading-4 text-ink-1", n.kind === "stimulus" ? "font-body" : "font-mono")}>{n.title}</span>
+        <span title={n.title} className={cx("truncate text-[12.5px] leading-4 text-ink-1", n.kind === "stimulus" ? "font-body" : "font-mono")}>{n.title}</span>
       </div>
       <div
         className={cx(

@@ -66,7 +66,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         ])),
         summary,
     );
-    let name_w = h.checks.iter().map(|c| c.check.chars().count()).max().unwrap_or(10).min(28);
+    let name_w = h.checks.iter().map(|c| c.label.chars().count()).max().unwrap_or(10).min(28);
     let mut lines: Vec<Line> = Vec::new();
     for (i, c) in h.checks.iter().enumerate() {
         let lamp = view::lamp_of(c.status);
@@ -76,7 +76,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
             Span::styled(if sel { t.ch("▌", ">") } else { " " }, t.accent()),
             Span::raw(" "),
             Span::styled(format!("{} ", t.lamp_mark(lamp)), t.lamp(lamp)),
-            Span::styled(pad(&c.check, name_w), if sel { t.bold() } else { ratatui::style::Style::default() }),
+            Span::styled(pad(&c.label, name_w), if sel { t.bold() } else { ratatui::style::Style::default() }),
             Span::styled(if fixable { t.ch(" ⏎ ", " > ") } else { "   " }, t.command()),
             Span::styled(c.detail.clone(), t.ink2()),
         ]));
@@ -92,7 +92,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     if let Some(c) = h.checks.get(s.check_sel) {
         d.push(Line::from(vec![
             Span::raw(" "),
-            Span::styled(c.check.clone(), t.bold()),
+            Span::styled(c.label.clone(), t.bold()),
             Span::styled(format!("  {}", c.detail), t.ink2()),
         ]));
         if let Some(fx) = &c.fix {
