@@ -159,6 +159,8 @@ pub struct Live {
     pub inspect: bool,
     /// The "open the map" popup is open.
     pub map_hint: bool,
+    /// Lines scrolled in the open popup.
+    pub popup_scroll: u16,
     /// Reflexes waiting for review (nascent, or flagged), once known.
     pub waiting: Option<usize>,
     pub pulse: Pulse,
@@ -610,6 +612,77 @@ pub fn lights_lines(h: Option<&Health>, t: &Theme, width: u16) -> Vec<Line<'stat
     out
 }
 
+/// Word-wrap `lines` to `width` columns. Unlike ratatui's own wrapping, a continuation keeps its
+/// line's indent (its leading spaces), so wrapped text stays aligned under the text it continues.
+/// A word longer than the room is broken at the edge.
+pub fn wrap_lines(lines: Vec<Line<'static>>, width: u16) -> Vec<Line<'static>> {
+    let width = width as usize;
+    let mut out = Vec::with_capacity(lines.len());
+    for line in lines {
+        if width < 2 || line.width() <= width {
+            out.push(line);
+            continue;
+        }
+        let base = line.style;
+        let cells: Vec<(char, Style)> = line
+            .spans
+            .iter()
+            .flat_map(|s| {
+                let st = base.patch(s.style);
+                s.content.chars().map(move |c| (c, st))
+            })
+            .collect();
+        let indent = cells.iter().take_while(|(c, _)| *c == ' ').count().min(width / 2);
+        let mut rows: Vec<Vec<(char, Style)>> = vec![];
+        let mut cur: Vec<(char, Style)> = vec![];
+        let mut i = 0;
+        while i < cells.len() {
+            // A token: the spaces before a word, then the word.
+            let mut j = i;
+            while j < cells.len() && cells[j].0 == ' ' {
+                j += 1;
+            }
+            let word_at = j;
+            while j < cells.len() && cells[j].0 != ' ' {
+                j += 1;
+            }
+            let mut token = &cells[i..j];
+            i = j;
+            if cur.len() + token.len() > width && cur.len() > indent {
+                if word_at == j {
+                    continue; // trailing spaces at the edge
+                }
+                rows.push(std::mem::take(&mut cur));
+                cur = vec![(' ', Style::default()); indent];
+                token = &cells[word_at..j];
+            }
+            for &c in token {
+                if cur.len() >= width {
+                    rows.push(std::mem::take(&mut cur));
+                    cur = vec![(' ', Style::default()); indent];
+                }
+                cur.push(c);
+            }
+        }
+        rows.push(cur);
+        out.extend(rows.into_iter().map(|row| {
+            let mut spans: Vec<Span<'static>> = vec![];
+            let mut text = String::new();
+            let mut style = row.first().map_or(Style::default(), |c| c.1);
+            for (c, st) in row {
+                if st != style && !text.is_empty() {
+                    spans.push(Span::styled(std::mem::take(&mut text), style));
+                }
+                style = st;
+                text.push(c);
+            }
+            spans.push(Span::styled(text, style));
+            Line::from(spans)
+        }));
+    }
+    out
+}
+
 pub fn centered(area: Rect, w: u16, h: u16) -> Rect {
     let w = w.min(area.width);
     let h = h.min(area.height);
@@ -625,10 +698,14 @@ pub fn popup(f: &mut Frame, area: Rect, title: &str, lines: Vec<Line<'static>>, 
         .unwrap_or(20)
         .saturating_add(4)
         .clamp(30, area.width.saturating_sub(4).max(10));
+    // Wrapped before sizing, so the last line (often the keys that answer the popup) is counted.
+    let lines = wrap_lines(lines, w.saturating_sub(4));
     let h = (lines.len() as u16).saturating_add(2).min(area.height.saturating_sub(2).max(3));
     let r = centered(area, w, h);
     f.render_widget(Clear, r);
-    let block = Block::default()
+    let hidden = (lines.len() as u16).saturating_sub(h.saturating_sub(2));
+    let scroll = scroll.min(hidden);
+    let mut block = Block::default()
         .borders(Borders::ALL)
         .border_type(if t.ch("╭", "+") == "╭" {
             ratatui::widgets::BorderType::Rounded
@@ -637,9 +714,18 @@ pub fn popup(f: &mut Frame, area: Rect, title: &str, lines: Vec<Line<'static>>, 
         })
         .border_style(t.accent())
         .title(Span::styled(format!(" {title} "), t.command().patch(t.bold())));
+    if hidden > 0 {
+        // More than fits: say so, and which keys reach it.
+        let more = match (scroll > 0, scroll < hidden) {
+            (true, true) => format!(" {} more · j/k scroll ", t.ch("↑↓", "^v")),
+            (false, _) => format!(" {} more · j/k scroll ", t.ch("↓", "v")),
+            (true, false) => format!(" {} more · j/k scroll ", t.ch("↑", "^")),
+        };
+        block = block.title_bottom(Line::from(Span::styled(more, t.dim())).right_aligned());
+    }
     let inner = block.inner(r).inner(ratatui::layout::Margin { horizontal: 1, vertical: 0 });
     f.render_widget(block, r);
-    f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).scroll((scroll, 0)), inner);
+    f.render_widget(Paragraph::new(lines).scroll((scroll, 0)), inner);
 }
 
 /// The watch pane's `?` overlay: its keys, from the keymap, and what the marks mean.
@@ -860,7 +946,7 @@ fn draw_feed(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &Ct
                 ]),
             ]
         };
-        f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
+        f.render_widget(Paragraph::new(wrap_lines(lines, area.width)), area);
         return;
     }
     let lines = feed_lines(&items, ctx, area.width, &live.pulse);
@@ -902,7 +988,7 @@ fn draw_ticker(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &
             Span::styled("adage condition", t.command()),
         ])];
         lines.extend(tail);
-        f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
+        f.render_widget(Paragraph::new(wrap_lines(lines, area.width)), area);
         return;
     }
     let h = (area.height as usize).saturating_sub(tail.len());
@@ -987,12 +1073,14 @@ pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>
         f.render_widget(Paragraph::new(footer(live, t, area.width)), k);
     }
     if live.help {
-        popup(f, area, "keys", watch_help(t), t, 0);
+        popup(f, area, "keys", watch_help(t), t, live.popup_scroll);
     } else if live.map_hint {
-        popup(f, area, "the map", map_hint_lines(t), t, 0);
+        popup(f, area, "the map", map_hint_lines(t), t, live.popup_scroll);
     } else if live.inspect {
         match live.current(key, ctx, feed_area.width) {
-            Some(i) => popup(f, area, "inspect", inspect_lines(i, ctx, area.width.saturating_sub(8)), t, 0),
+            Some(i) => {
+                popup(f, area, "inspect", inspect_lines(i, ctx, area.width.saturating_sub(8)), t, live.popup_scroll)
+            }
             None => popup(f, area, "inspect", vec![Line::from(Span::styled("Nothing to inspect yet.", t.dim()))], t, 0),
         }
     }

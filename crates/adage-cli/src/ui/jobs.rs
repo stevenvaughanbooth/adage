@@ -187,12 +187,21 @@ pub fn learn_now(paths: Paths, root: Option<PathBuf>) -> Job {
             )]);
         }
         let mut lines = Vec::new();
+        let mut none_read = false;
         for l in &mine {
             let ticks = super::learnlog::parse(&l.to_string());
             if let Some(e) = ticks.iter().find(|t| t.tone == super::learnlog::Tone::Error) {
                 anyhow::bail!("{}", e.text);
             }
+            none_read |= ticks.iter().any(|t| t.run.as_ref().is_some_and(|r| r.read == Some(0)));
             lines.extend(ticks.into_iter().map(|t| t.text));
+        }
+        if none_read {
+            // An empty run names what fills it, instead of a bare 0/0.
+            lines.push(
+                "No traces for this repository yet: reflexes form as your agents work here (adage watch shows them)."
+                    .into(),
+            );
         }
         Ok(lines)
     })

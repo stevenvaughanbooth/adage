@@ -1,12 +1,12 @@
 //! The Settings tab: `config.toml`, as `adage config` shows it, edited in place.
 
 use crate::ui::app::{Action, AppState, Cmd, Modal};
-use crate::ui::view::Ctx;
+use crate::ui::view::{self, Ctx};
 use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Wrap};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
@@ -73,6 +73,14 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         " enter edits (space toggles on/off and switches thresholds); every value is validated before it is saved.",
         t.dim(),
     )));
+    // Wrapped here, each continuation under its own text, so the scroll counts screen rows.
+    let mut rows = Vec::new();
+    for (i, l) in lines.into_iter().enumerate() {
+        if i == sel_line {
+            sel_line = rows.len();
+        }
+        rows.extend(view::wrap_lines(vec![l], area.width));
+    }
     let offset = sel_line.saturating_sub((area.height as usize).saturating_sub(3));
-    f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).scroll((offset as u16, 0)), area);
+    f.render_widget(Paragraph::new(rows).scroll((offset as u16, 0)), area);
 }

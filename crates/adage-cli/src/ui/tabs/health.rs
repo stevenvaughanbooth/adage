@@ -4,11 +4,11 @@ use crate::doctor::Status;
 use crate::ui::app::{AppState, Cmd, WantKind};
 use crate::ui::health::Fix;
 use crate::ui::view::{self, Ctx};
-use crate::ui::words::pad;
+use crate::ui::words::{self, pad};
 use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Wrap};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
@@ -27,8 +27,26 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
             s.check_sel = (s.check_sel + 1).min(n.saturating_sub(1));
             return None;
         }
-        KeyCode::Char('R') => return Some(Cmd::Want(WantKind::Health)),
-        KeyCode::Enter => s.health.as_ref()?.fixes.get(s.check_sel).cloned().flatten(),
+        KeyCode::Char('R') => {
+            s.toast("running the checks again", true);
+            return Some(Cmd::Want(WantKind::Health));
+        }
+        KeyCode::Enter => {
+            let h = s.health.as_ref()?;
+            let found = h.fixes.get(s.check_sel).cloned().flatten();
+            if found.is_none() {
+                // Say why nothing happened, rather than nothing.
+                let c = h.checks.get(s.check_sel)?;
+                let why = match (c.status, &c.fix) {
+                    (Status::Pass, _) => format!("{}: passes, nothing to fix", c.label),
+                    (_, Some(fx)) => format!("{}: no one-key fix; run {fx}", c.label),
+                    (_, None) => format!("{}: no one-key fix", c.label),
+                };
+                s.toast(why, c.status == Status::Pass);
+                return None;
+            }
+            found
+        }
         KeyCode::Char('i') => fix_of(s, &|f| matches!(f, Fix::InstallHooks(_))),
         KeyCode::Char('m') => Some(Fix::FetchModel),
         KeyCode::Char('c') => Some(Fix::LearnNow),
@@ -78,7 +96,8 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
             Span::styled(format!("{} ", t.lamp_mark(lamp)), t.lamp(lamp)),
             Span::styled(pad(&c.label, name_w), if sel { t.bold() } else { ratatui::style::Style::default() }),
             Span::styled(if fixable { t.ch(" ⏎ ", " > ") } else { "   " }, t.command()),
-            Span::styled(c.detail.clone(), t.ink2()),
+            // Cut with an ellipsis, not the pane's edge: the whole text is in the detail below.
+            Span::styled(words::fit(&c.detail, (list.width as usize).saturating_sub(name_w + 7)), t.ink2()),
         ]));
     }
     for n in s.notices.iter().rev().take(3) {
@@ -102,5 +121,5 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
             d.push(Line::from(vec![Span::styled(" enter", t.key()), Span::raw(format!(" {}", fix.label()))]));
         }
     }
-    f.render_widget(Paragraph::new(d).wrap(Wrap { trim: false }), detail);
+    f.render_widget(Paragraph::new(view::wrap_lines(d, detail.width)), detail);
 }

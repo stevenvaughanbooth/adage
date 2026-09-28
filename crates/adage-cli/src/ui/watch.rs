@@ -68,10 +68,21 @@ pub fn live_key(live: &mut Live, code: KeyCode, mods: KeyModifiers) -> bool {
         return false;
     }
     if live.help || live.inspect || live.map_hint {
-        live.help = false;
-        live.inspect = false;
-        live.map_hint = false;
-        return matches!(code, KeyCode::Char('q'));
+        // A popup scrolls when it is taller than the pane; any other key closes it.
+        match code {
+            KeyCode::Up | KeyCode::Char('k') => live.popup_scroll = live.popup_scroll.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => live.popup_scroll = live.popup_scroll.saturating_add(1),
+            KeyCode::PageUp => live.popup_scroll = live.popup_scroll.saturating_sub(10),
+            KeyCode::PageDown => live.popup_scroll = live.popup_scroll.saturating_add(10),
+            _ => {
+                live.help = false;
+                live.inspect = false;
+                live.map_hint = false;
+                live.popup_scroll = 0;
+                return matches!(code, KeyCode::Char('q'));
+            }
+        }
+        return false;
     }
     match code {
         KeyCode::Char('q') => return true,
@@ -169,7 +180,7 @@ pub fn snapshot(ctx: &Ctx, size: Option<(u16, u16)>) -> String {
         Ok(t) => t,
         Err(e) => return format!("adage watch: {e}\n"),
     };
-    let plain = Ctx { theme: super::theme::Theme::with_color(false), ..ctx.clone() };
+    let plain = Ctx { theme: ctx.theme.uncoloured(), ..ctx.clone() };
     let _ = term.draw(|f| view::draw_live(f, f.area(), &live, Some(&health), &plain, true));
     buffer_text(term.backend().buffer())
 }

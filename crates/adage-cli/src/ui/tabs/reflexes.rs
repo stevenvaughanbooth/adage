@@ -563,14 +563,14 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
         v.push(head("WITH THE REFLEX vs CONTROL", t));
         v.push(Line::from(vec![
             Span::raw("  "),
-            Span::styled(pad("took the step", 22), t.dim()),
+            Span::styled(pad("took the step", 16), t.dim()),
             Span::styled(pad("with", 9), t.ink2()),
             bar(r.with.took, r.with.applied, t.accent(), t),
             Span::raw(format!("  {}/{}", r.with.took, r.with.applied)),
         ]));
         v.push(Line::from(vec![
             Span::raw("  "),
-            Span::raw(" ".repeat(22)),
+            Span::raw(" ".repeat(16)),
             Span::styled(pad("control", 9), t.ink2()),
             bar(r.control.took, r.control.applied, t.dim(), t),
             Span::styled(format!("  {}/{}", r.control.took, r.control.applied), t.ink2()),
@@ -690,7 +690,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     };
     if rows.is_empty() {
         let lines = empty("No reflexes yet.", "Agents' traces arrive automatically; or run", "adage condition", t);
-        f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
+        f.render_widget(Paragraph::new(view::wrap_lines(lines, area.width)), area);
         return;
     }
     let wide = area.width >= 90;
@@ -705,7 +705,8 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         let [l, rule, d] =
             Layout::vertical([Constraint::Percentage(45), Constraint::Length(1), Constraint::Min(5)]).areas(area);
         f.render_widget(Paragraph::new(view::rule("", None, area.width, t)), rule);
-        (l, d)
+        // The same one-column margin as every other pane's text.
+        (l, d.inner(ratatui::layout::Margin { horizontal: 1, vertical: 0 }))
     };
     let [filter_a, chips_a, _, tree_a] =
         Layout::vertical([Constraint::Length(1), Constraint::Length(1), Constraint::Length(1), Constraint::Min(1)])
@@ -743,5 +744,6 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         Node::Reflex(i) => detail(&rows[*i], s, ctx),
         g => group_detail(g, t),
     };
-    f.render_widget(Paragraph::new(d).wrap(Wrap { trim: false }).scroll((s.reflexes.detail_scroll, 0)), detail_a);
+    let d = view::wrap_lines(d, detail_a.width);
+    f.render_widget(Paragraph::new(d).scroll((s.reflexes.detail_scroll, 0)), detail_a);
 }

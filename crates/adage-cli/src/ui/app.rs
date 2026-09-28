@@ -90,7 +90,7 @@ pub enum Action {
 }
 
 pub enum Modal {
-    Help,
+    Help { scroll: u16 },
     Confirm { title: String, lines: Vec<Line<'static>>, action: Action, scroll: u16 },
     Message { title: String, lines: Vec<String>, error: bool, scroll: u16 },
     Progress { title: String, status: String, ratio: f64 },
@@ -266,7 +266,7 @@ impl AppState {
                 }
                 KeyCode::Char('q') => return Some(Cmd::Quit),
                 KeyCode::Char('?') => {
-                    self.modal = Some(Modal::Help);
+                    self.modal = Some(Modal::Help { scroll: 0 });
                     return None;
                 }
                 KeyCode::Tab | KeyCode::BackTab | KeyCode::Char('1'..='5') => {
@@ -357,7 +357,20 @@ impl AppState {
             _ => {}
         };
         match m {
-            Modal::Help => None,
+            Modal::Help { mut scroll } => match code {
+                // Scrolls when taller than the screen; any other key closes it.
+                KeyCode::Up
+                | KeyCode::Char('k')
+                | KeyCode::Down
+                | KeyCode::Char('j')
+                | KeyCode::PageUp
+                | KeyCode::PageDown => {
+                    nudge(&mut scroll);
+                    self.modal = Some(Modal::Help { scroll });
+                    None
+                }
+                _ => None,
+            },
             Modal::Confirm { title, lines, action, mut scroll } => match code {
                 KeyCode::Char('y') | KeyCode::Enter => Some(Cmd::Do(action)),
                 KeyCode::Char('n') | KeyCode::Esc | KeyCode::Char('q') => None,
@@ -541,27 +554,39 @@ pub fn draw(f: &mut Frame, s: &AppState, ctx: &Ctx) {
 
 fn draw_tabs(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let t = &ctx.theme;
-    let mut spans = vec![Span::styled(" adage", t.title()), Span::raw("   ")];
-    for (i, (tab, name)) in TABS.iter().enumerate() {
-        let badge = match tab {
-            Tab::Health => s.health.as_ref().map_or(0, |h| h.count(Status::Warn) + h.count(Status::Fail)),
-            Tab::Reflexes => match &s.routes {
-                Some(Ok(r)) => r.waiting(),
+    // Narrow terminals name only the current tab (the others keep their number), so where you
+    // are is never cut off the edge.
+    let tabs = |compact: bool| {
+        let mut spans = vec![Span::styled(" adage", t.title()), Span::raw(if compact { " " } else { "   " })];
+        for (i, (tab, name)) in TABS.iter().enumerate() {
+            let badge = match tab {
+                Tab::Health => s.health.as_ref().map_or(0, |h| h.count(Status::Warn) + h.count(Status::Fail)),
+                Tab::Reflexes => match &s.routes {
+                    Some(Ok(r)) => r.waiting(),
+                    _ => 0,
+                },
                 _ => 0,
-            },
-            _ => 0,
-        };
-        if *tab == s.tab {
-            spans.push(Span::styled(format!(" {} {name} ", i + 1), t.accent().patch(t.selected()).patch(t.bold())));
-        } else {
-            spans.push(Span::styled(format!(" {} ", i + 1), t.dim()));
-            spans.push(Span::styled(format!("{name} "), t.ink2()));
+            };
+            if *tab == s.tab {
+                spans.push(Span::styled(format!(" {} {name} ", i + 1), t.accent().patch(t.selected()).patch(t.bold())));
+            } else if compact {
+                spans.push(Span::styled(format!(" {}", i + 1), t.ink2()));
+            } else {
+                spans.push(Span::styled(format!(" {} ", i + 1), t.dim()));
+                spans.push(Span::styled(format!("{name} "), t.ink2()));
+            }
+            if badge > 0 {
+                spans.push(Span::styled(format!("({badge})"), t.yellow()));
+            }
+            if !compact {
+                spans.push(Span::raw(" "));
+            }
         }
-        if badge > 0 {
-            spans.push(Span::styled(format!("({badge})"), t.yellow()));
-        }
-        spans.push(Span::raw(" "));
-    }
+        spans
+    };
+    let full = tabs(false);
+    let mut spans =
+        if full.iter().map(|s| s.width()).sum::<usize>() <= area.width as usize { full } else { tabs(true) };
     let mut right = vec![Span::styled(format!("{} · ", ctx.label), t.ink2())];
     if ctx.demo {
         right.insert(0, Span::styled("demo · ", t.holdout()));
@@ -639,7 +664,7 @@ fn app_help(tab: Tab, t: &Theme) -> Vec<Line<'static>> {
 
 fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
     match m {
-        Modal::Help => view::popup(f, area, "keys", app_help(s.tab, t), t, 0),
+        Modal::Help { scroll } => view::popup(f, area, "keys", app_help(s.tab, t), t, *scroll),
         Modal::Confirm { title, lines, scroll, .. } => view::popup(f, area, title, lines.clone(), t, *scroll),
         Modal::Message { title, lines, error, scroll } => {
             let style = if *error { t.red() } else { Style::default() };

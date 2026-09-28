@@ -19,7 +19,7 @@
 //! Steps: harnesses (read-only); hooks, per harness found (the exact file and diff first; this
 //! repository or every repository); the embedding model (optional); a first `adage condition`;
 //! auto-condition; then the doctor's summary and what to run next. `y` takes the first choice,
-//! `n` skips, `q` stops: nothing already done is undone, and nothing else is written.
+//! `n` skips, `q` (or esc) stops: nothing already done is undone, and nothing else is written.
 
 use super::app::install_confirm;
 use super::health::{self, Health};
@@ -31,6 +31,7 @@ use crate::detect::{self, Detected, Registration};
 use crate::doctor::Status;
 use crate::install::Plan;
 use adage_store::config;
+use adage_term::Glyph;
 use anyhow::Result;
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::layout::Rect;
@@ -157,7 +158,7 @@ impl Wizard {
             }
             Kind::Model if self.model.is_some() => vec!["Continue".into()],
             Kind::Model => vec!["Fetch it · 31 MB, SHA-256 verified".into(), "Skip for now".into()],
-            Kind::Learn => vec!["Condition now".into(), "Skip · it runs by itself after sessions".into()],
+            Kind::Learn => vec!["Condition now".into(), "Skip · it runs by itself as traces end".into()],
             Kind::AutoLearn if self.auto_learn.as_ref().is_some_and(|(on, _)| *on) => vec!["Keep it on".into()],
             Kind::AutoLearn => vec!["Turn it on".into(), "Leave it off".into()],
             Kind::Finish => vec!["Done".into()],
@@ -194,7 +195,9 @@ impl Wizard {
     }
 
     pub fn key(&mut self, code: KeyCode, mods: KeyModifiers) -> Option<Cmd> {
-        if code == KeyCode::Char('c') && mods.contains(KeyModifiers::CONTROL) || code == KeyCode::Char('q') {
+        if code == KeyCode::Char('c') && mods.contains(KeyModifiers::CONTROL)
+            || matches!(code, KeyCode::Char('q') | KeyCode::Esc)
+        {
             return Some(Cmd::Quit);
         }
         if self.progress.is_some() {
@@ -265,7 +268,7 @@ impl Wizard {
             }
             Kind::AutoLearn if yes => Some(Cmd::AutoLearn),
             Kind::Model | Kind::Learn | Kind::AutoLearn if skip => self.advance(StepStatus::Skipped),
-            Kind::Finish if yes || code == KeyCode::Esc => Some(Cmd::Quit),
+            Kind::Finish if yes => Some(Cmd::Quit),
             _ => None,
         }
     }
@@ -304,7 +307,7 @@ fn line_text(l: &Line) -> String {
 // The rail
 
 fn rail<'a>(t: &Theme, active: bool) -> Span<'a> {
-    Span::styled("│  ", if active { t.accent() } else { t.dim() })
+    Span::styled(format!("{}  ", t.glyph(Glyph::Rail)), if active { t.accent() } else { t.dim() })
 }
 
 /// Wrap `text` to `width` columns (by words; long words are left whole).
@@ -331,7 +334,7 @@ pub fn header(ctx: &Ctx) -> Vec<Line<'static>> {
     let t = &ctx.theme;
     vec![
         Line::from(vec![
-            Span::styled("┌  ", t.dim()),
+            Span::styled(t.ch("┌  ", "+  "), t.dim()),
             Span::styled("adage init", t.title()),
             Span::styled(format!(" · {}", ctx.label), t.dim()),
         ]),
@@ -351,10 +354,10 @@ pub fn header(ctx: &Ctx) -> Vec<Line<'static>> {
 /// A finished step as it stays in the scrollback: `◇  Title · what happened`.
 pub fn record(s: &Step, t: &Theme) -> Vec<Line<'static>> {
     let (mark, style, note) = match &s.status {
-        StepStatus::Done(n) => ("◇", t.green(), n.clone()),
-        StepStatus::Skipped => ("◇", t.dim(), "skipped".to_string()),
-        StepStatus::Failed(e) => ("✗", t.red(), e.clone()),
-        StepStatus::Todo => ("·", t.dim(), "not reached".to_string()),
+        StepStatus::Done(n) => (t.glyph(Glyph::Done), t.green(), n.clone()),
+        StepStatus::Skipped => (t.glyph(Glyph::Done), t.dim(), "skipped".to_string()),
+        StepStatus::Failed(e) => (t.glyph(Glyph::Fail), t.red(), e.clone()),
+        StepStatus::Todo => (t.glyph(Glyph::Sep), t.dim(), "not reached".to_string()),
     };
     let mut first = vec![Span::styled(format!("{mark}  "), style), Span::styled(s.title(), t.bold())];
     if !note.is_empty() {
@@ -375,13 +378,13 @@ fn body(w: &Wizard, t: &Theme, width: usize) -> Vec<Line<'static>> {
             for d in &w.detected {
                 if d.found() {
                     out.push(Line::from(vec![
-                        Span::styled("● ", t.green()),
+                        Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.green()),
                         Span::styled(format!("{:<13}", d.harness), t.bold()),
                         Span::styled(d.evidence.join("; "), t.dim()),
                     ]));
                 } else {
                     out.push(Line::from(vec![
-                        Span::styled("○ ", t.dim()),
+                        Span::styled(format!("{} ", t.glyph(Glyph::Off)), t.dim()),
                         Span::styled(format!("{:<13}", d.harness), t.dim()),
                         Span::styled("not found", t.dim()),
                     ]));
@@ -414,12 +417,12 @@ fn body(w: &Wizard, t: &Theme, width: usize) -> Vec<Line<'static>> {
             )),
         },
         Kind::Learn => out.extend(text(
-            "Read your agents' past sessions (Claude Code history under ~/.claude/projects) and form reflexes from what they repeat. It reads transcripts; it never runs anything in them.",
+            "Read your agents' past traces (Claude Code history under ~/.claude/projects) and form reflexes from what they repeat. It only reads them; it never runs anything in them.",
             plain,
         )),
         Kind::AutoLearn => {
             out.extend(text(
-                "Condition in the background whenever an agent session ends, so reflexes keep up with how your agents work.",
+                "Condition in the background whenever an agent's trace ends, so reflexes keep up with how your agents work.",
                 plain,
             ));
             let now = match &w.auto_learn {
@@ -436,7 +439,10 @@ fn body(w: &Wizard, t: &Theme, width: usize) -> Vec<Line<'static>> {
             Some(h) => {
                 let (p, wn, f) = (h.count(Status::Pass), h.count(Status::Warn), h.count(Status::Fail));
                 out.push(Line::from(vec![
-                    Span::styled(if f > 0 { "✗ " } else { "✓ " }, if f > 0 { t.red() } else { t.green() }),
+                    Span::styled(
+                        format!("{} ", t.glyph(if f > 0 { Glyph::Fail } else { Glyph::Ok })),
+                        if f > 0 { t.red() } else { t.green() },
+                    ),
                     Span::styled(format!("adage doctor · {p} passed · {wn} to look at · {f} failing"), t.bold()),
                 ]));
                 for c in h.checks.iter().filter(|c| c.status != Status::Pass) {
@@ -456,7 +462,7 @@ fn body(w: &Wizard, t: &Theme, width: usize) -> Vec<Line<'static>> {
     if !w.output.is_empty() {
         out.push(Line::raw(""));
         for l in &w.output {
-            out.push(Line::from(Span::styled(l.clone(), t.dim())));
+            out.extend(text(l, t.dim()));
         }
     }
     out
@@ -488,8 +494,10 @@ pub fn draw(f: &mut Frame, w: &Wizard, ctx: &Ctx) {
 fn render(area: Rect, buf: &mut ratatui::buffer::Buffer, w: &Wizard, ctx: &Ctx) {
     let t = &ctx.theme;
     let width = (area.width as usize).saturating_sub(4).max(20);
-    let mut lines: Vec<Line> =
-        vec![Line::from(vec![Span::styled("◆  ", t.accent()), Span::styled(w.steps[w.cur].title(), t.bold())])];
+    let mut lines: Vec<Line> = vec![Line::from(vec![
+        Span::styled(format!("{}  ", t.glyph(Glyph::Active)), t.accent()),
+        Span::styled(w.steps[w.cur].title(), t.bold()),
+    ])];
     // The body scrolls (PgUp/PgDn) inside what is left once the choices and hint are placed.
     let choices = w.choices();
     let fixed = 1 + 1 + if choices.len() > 1 || w.progress.is_some() { choices.len() + 1 } else { 0 } + 2;
@@ -507,8 +515,8 @@ fn render(area: Rect, buf: &mut ratatui::buffer::Buffer, w: &Wizard, ctx: &Ctx) 
         lines.push(Line::from(rail(t, true)));
         lines.push(Line::from(vec![
             rail(t, true),
-            Span::styled("━".repeat(done), t.accent()),
-            Span::styled("─".repeat(bar_w - done), t.dim()),
+            Span::styled(t.ch("━", "=").repeat(done), t.accent()),
+            Span::styled(t.ch("─", "-").repeat(bar_w - done), t.dim()),
             Span::styled(format!("  {status}"), t.dim()),
         ]));
     } else if choices.len() > 1 {
@@ -517,22 +525,22 @@ fn render(area: Rect, buf: &mut ratatui::buffer::Buffer, w: &Wizard, ctx: &Ctx) 
             let sel = i == w.choice;
             lines.push(Line::from(vec![
                 rail(t, true),
-                Span::styled(if sel { "› " } else { "  " }, t.accent()),
+                Span::styled(if sel { format!("{} ", t.glyph(Glyph::Pointer)) } else { "  ".into() }, t.accent()),
                 Span::styled(c.clone(), if sel { t.bold() } else { t.dim() }),
             ]));
         }
     }
     lines.push(Line::from(rail(t, true)));
-    lines.push(Line::from(vec![Span::styled("└  ", t.accent()), Span::styled(hint(w), t.dim())]));
+    lines.push(Line::from(vec![Span::styled(t.ch("└  ", "+  "), t.accent()), Span::styled(hint(w), t.dim())]));
     Paragraph::new(lines).render(area, buf);
 }
 
 /// The closing lines, printed into the scrollback when the flow ends.
 pub fn finish_card(w: &Wizard, t: &Theme, completed: bool) -> Vec<Line<'static>> {
-    let mut out = vec![Line::from(Span::styled("│", t.dim()))];
+    let mut out = vec![Line::from(Span::styled(t.glyph(Glyph::Rail), t.dim()))];
     if !completed {
         out.push(Line::from(vec![
-            Span::styled("└  ", t.dim()),
+            Span::styled(t.ch("└  ", "+  "), t.dim()),
             Span::styled("Stopped.", t.bold()),
             Span::styled(
                 " Steps already done stay done; nothing else was changed. `adage init` picks up again any time.",
@@ -555,10 +563,10 @@ pub fn finish_card(w: &Wizard, t: &Theme, completed: bool) -> Vec<Line<'static>>
         })
         .unwrap_or_default();
     let (mark, mark_style, title, why) = if failing > 0 {
-        ("✗ ", t.red(), "Set up, with problems to fix.", " Each one and its fix is below.".to_string())
+        (t.glyph(Glyph::Fail), t.red(), "Set up, with problems to fix.", " Each one and its fix is below.".to_string())
     } else if !unhooked.is_empty() {
         (
-            "! ",
+            "!",
             t.yellow(),
             "Almost ready.",
             format!(
@@ -568,15 +576,15 @@ pub fn finish_card(w: &Wizard, t: &Theme, completed: bool) -> Vec<Line<'static>>
         )
     } else {
         (
-            "✓ ",
+            t.glyph(Glyph::Ok),
             t.green(),
             "Ready.",
-            " Your next agent session gets Adage's instincts, and reflexes as they form.".to_string(),
+            " Your agents' next traces get Adage's instincts, and reflexes as they form.".to_string(),
         )
     };
     out.push(Line::from(vec![
-        Span::styled("└  ", t.dim()),
-        Span::styled(mark, mark_style),
+        Span::styled(t.ch("└  ", "+  "), t.dim()),
+        Span::styled(format!("{mark} "), mark_style),
         Span::styled(title, t.bold()),
         Span::raw(why),
     ]));
@@ -644,8 +652,8 @@ fn fold(line: Line<'static>, cols: usize) -> Vec<Line<'static>> {
     }
     // The first span is the rail or mark (`│  `, `└  `, `   ! `): continuation lines indent past it.
     let indent = line.spans.first().map_or(0, |s| s.content.chars().count()).min(cols / 2);
-    let pad = if line.spans.first().is_some_and(|s| s.content.starts_with('│')) {
-        Span::styled("│  ", line.spans[0].style)
+    let pad = if line.spans.first().is_some_and(|s| s.content.starts_with(['│', '|'])) {
+        line.spans[0].clone()
     } else {
         Span::raw(" ".repeat(indent))
     };
@@ -687,6 +695,8 @@ pub fn run(ctx: Ctx) -> Result<()> {
     insert(&mut t, header(&ctx))?;
     let replan = |w: &mut Wizard| {
         if let Kind::Hooks(h) = w.current().clone() {
+            // A new plan starts at its top: the file it writes, then the diff.
+            w.scroll = 0;
             w.plan = Some(crate::install::plan(h, w.scope, ctx.root.as_deref(), None).map_err(|e| format!("{e:#}")));
         }
     };

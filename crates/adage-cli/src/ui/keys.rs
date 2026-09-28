@@ -29,7 +29,7 @@ pub const WATCH: &[Key] = &[
     k("j/k ↑↓", "scroll", "scroll the feed", false),
     k("G", "newest", "back to the newest event", false),
     k("v", "quiet", "hide or show events where Adage said nothing", false),
-    k("esc", "clear", "clear the filter, close a popup", false),
+    k("esc", "clear", "clear the filter, close a popup; with neither, quit", false),
     k("q", "quit", "quit", false),
 ];
 

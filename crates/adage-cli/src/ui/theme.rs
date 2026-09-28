@@ -51,6 +51,13 @@ impl Theme {
         self
     }
 
+    /// No colour, with this theme's glyphs: `--once` frames honour `ADAGE_ASCII` too.
+    pub fn uncoloured(&self) -> Theme {
+        let mut t = Theme::with_color(false);
+        t.term.caps.unicode = self.term.caps.unicode;
+        t
+    }
+
     fn role(&self, r: Role) -> Style {
         self.term.tui(r)
     }
@@ -157,10 +164,14 @@ impl Theme {
         }
     }
 
+    /// A health lamp's mark. Its shape says the state as well as its colour does, so a
+    /// colour-blind reader (or a monochrome palette) loses nothing.
     pub fn lamp_mark(&self, l: Lamp) -> &'static str {
         match (self.color, l) {
             (true, Lamp::Off) => self.glyph(Glyph::Off),
-            (true, _) => self.glyph(Glyph::Lamp),
+            (true, Lamp::Ok) => self.glyph(Glyph::Ok),
+            (true, Lamp::Warn) => "!",
+            (true, Lamp::Fail) => self.glyph(Glyph::Fail),
             (false, Lamp::Ok) => "+",
             (false, Lamp::Warn) => "!",
             (false, Lamp::Fail) => "x",

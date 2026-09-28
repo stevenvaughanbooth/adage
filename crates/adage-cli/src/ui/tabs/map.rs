@@ -476,7 +476,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let g = graph(s);
     if g.reflexes.is_empty() {
         let lines = empty("Nothing to map yet.", "Agents' traces arrive automatically; or run", "adage condition", t);
-        f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
+        f.render_widget(Paragraph::new(view::wrap_lines(lines, area.width)), area);
         return;
     }
     let sel = selected_index(s, &g.reflexes);
