@@ -1345,3 +1345,60 @@ fn loader_delivers_health_at_once_and_reflexes_on_request() {
         _ => panic!("no reflexes"),
     }
 }
+
+#[test]
+fn narrow_screens_keep_indents_answers_and_the_current_tab() {
+    use ratatui::text::{Line, Span};
+    // Continuations stay under the text they continue; a word wider than the room breaks.
+    let wrapped = view::wrap_lines(vec![Line::from(vec![Span::raw("   alpha beta "), Span::raw("gamma delta")])], 13);
+    let text: Vec<String> =
+        wrapped.iter().map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect::<String>()).collect();
+    assert_eq!(text, ["   alpha beta", "   gamma", "   delta"]);
+    let long = view::wrap_lines(vec![Line::raw("  abcdefghij")], 8);
+    assert!(long.iter().all(|l| l.width() <= 8), "{long:?}");
+
+    // A confirmation whose explanation wraps still shows the keys that answer it.
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let mut s = app_state();
+    s.confirm(
+        "Extinguish",
+        vec![
+            Line::raw(
+                "Extinguish: retire the reflex; conditioning keeps it extinguished unless it strengthens materially.",
+            ),
+            Line::raw(""),
+            Line::raw("y confirm · n cancel"),
+        ],
+        app::Action::LearnNow,
+    );
+    assert!(app_frame(&s, &c, 60, 20).contains("y confirm · n cancel"));
+
+    // The keys overlay scrolls when it is taller than the screen, and says so.
+    s.modal = None;
+    s.tab = Tab::Reflexes;
+    s.key(KeyCode::Char('?'), NONE);
+    let before = app_frame(&s, &c, 60, 16);
+    assert!(before.contains("more · j/k scroll"), "{before}");
+    s.key(KeyCode::Char('j'), NONE);
+    assert!(matches!(s.modal, Some(Modal::Help { scroll: 1 })));
+    s.key(KeyCode::Esc, NONE);
+    assert!(s.modal.is_none());
+
+    // Narrow: the current tab is named, the others keep their numbers.
+    s.tab = Tab::Settings;
+    let bar = app_frame(&s, &c, 44, 12).lines().next().unwrap_or_default().to_string();
+    assert!(bar.contains("5 Settings") && bar.contains(" 1 2"), "{bar}");
+
+    // Health lamps differ in shape, not only colour; enter on a check with no fix answers.
+    let t = Theme::with_color(true);
+    let marks: Vec<&str> = [Lamp::Ok, Lamp::Warn, Lamp::Fail, Lamp::Off].iter().map(|l| t.lamp_mark(*l)).collect();
+    assert_eq!(marks, ["✓", "!", "✗", "○"]);
+    s.health = Some(health());
+    s.tab = Tab::Health;
+    s.check_sel = s.health.as_ref().unwrap().fixes.iter().position(|f| f.is_none()).unwrap();
+    s.toasts.clear();
+    assert!(s.key(KeyCode::Enter, NONE).is_none());
+    assert!(s.modal.is_none());
+    assert_eq!(s.toasts.len(), 1, "enter on a check with no fix says why");
+}
