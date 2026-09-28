@@ -18,3 +18,6 @@ plugin/claude-code/dist/
 plugin/claude-code-exec/dist/
 *.egg-info/
 demo/results/*/raw/
+web/map/dist/
+web/map/test-results/
+web/map/playwright-report/

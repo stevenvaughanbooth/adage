@@ -8,20 +8,21 @@
 //! direct, and how agents responded. Every count comes from the installed tracks and the session
 //! spools under `$ADAGE_HOME`; nothing is estimated. Read-only, so agents may run it.
 //!
-//! The JSON is what the signal box (`crates/adage-cli/assets/brain.html`) draws; `adage graph
-//! --serve` serves both from the binary (see `serve.rs`).
+//! The JSON is what the map draws (`web/map/`); `adage map` serves both from the binary (see
+//! `map/`), at `/api/v1/graph`, and streams new decisions shaped as [`event`] records.
 
-use crate::review::{ceiling_str, discover, preview};
+use crate::review::{ceiling_str, discover, origin_label, preview, standings};
 use adage_core::{pattern, CommandTable};
 use adage_runtime::{command_key, span_kind_label, SessionState};
 use adage_store::{spool, state, Paths};
-use adage_tracks::{Index, Route, Step, Trigger};
+use adage_tracks::{index, Index, Route, Step, Trigger};
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 const MAX_OBSERVED: usize = 18;
+const MAX_LEARNING: usize = 60;
 
 #[derive(Default)]
 struct Live {
@@ -250,6 +251,8 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
     let table = CommandTable::load();
     let installed = discover(&paths.tracks())?;
     let index = Index::load(&paths.index());
+    // The decisions a person can make about each route; the map offers them as commands to copy.
+    let standings = standings(paths).unwrap_or_default();
 
     // Routes, keyed by (repo, route id) as the runtime identifies them.
     let mut live: BTreeMap<(String, String), Live> = BTreeMap::new();
@@ -328,7 +331,6 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                     }
                 }
             }
-            let mut judged = Vec::new();
             for j in d["judgements"].as_array().into_iter().flatten() {
                 let (Some(kind), Some(id)) = (j["kind"].as_str(), j["route"].as_str()) else { continue };
                 let l = live.entry((repo.clone(), id.to_string())).or_default();
@@ -341,23 +343,14 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                     ("obligation_met", true) => l.obligation_met_unaided += 1,
                     _ => {}
                 }
-                judged.push(json!([kind, id]));
             }
-            let keys: Vec<String> =
-                d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str().map(String::from)).collect();
-            for k in &keys {
-                let e = observed.entry(k.clone()).or_default();
+            for k in d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str()) {
+                let e = observed.entry(k.to_string()).or_default();
                 e.0 += 1;
                 e.1.insert(sid.clone());
             }
-            let cont = d["continue_reason"].is_string();
-            stops += cont as u64;
-            if !directed.is_empty() || !would.is_empty() || !judged.is_empty() || !keys.is_empty() || cont {
-                events.push(json!({
-                    "ts": r["ts"], "session": sid, "arm": r["arm"], "event": r["event"], "repo": repo,
-                    "directed": directed, "would": would, "judged": judged, "observed": keys, "continue": cont,
-                }));
-            }
+            stops += d["continue_reason"].is_string() as u64;
+            events.extend(event(&repo, &sid, r));
         }
     }
     events.sort_by_key(|e| e["ts"].as_u64().unwrap_or(0));
@@ -392,8 +385,16 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                 .collect();
             let l = live.get(&(repo.clone(), r.id.clone()));
             let e = &r.evidence;
+            let standing = standings.get(&(inst.reference.clone(), r.id.clone()));
+            let reasons: Vec<Value> = standing
+                .map(|s| s.reasons.iter().map(|(k, why)| json!({ "kind": k, "why": why })).collect())
+                .unwrap_or_default();
             routes.push(json!({
                 "id": r.id,
+                "summary": r.summary,
+                "instinct": r.is_instinct() || index::is_instinct_track(t),
+                "origin": origin_label(r),
+                "review": { "verbs": standing.map(|s| s.verbs.clone()).unwrap_or_default(), "reasons": reasons },
                 "track": t.manifest.track.name,
                 "version": t.manifest.track.version,
                 "reference": inst.reference,
@@ -408,7 +409,11 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                 "trigger": trigger(&r.trigger),
                 "step": step(&r.step),
                 "directive": preview(t, r).0,
-                "evidence": { "support": e.support, "opportunities": e.opportunities, "rate": e.rate, "lower_bound": e.lower_bound, "turns_saved": e.turns_saved },
+                "evidence": {
+                    "support": e.support, "opportunities": e.opportunities, "rate": e.rate, "lower_bound": e.lower_bound,
+                    "turns_saved": e.turns_saved, "days": e.days, "exposed": e.exposed, "stale_since": e.stale_since,
+                    "provenance": e.provenance,
+                },
                 "live": {
                     "emitted": l.map_or(0, |l| l.emitted),
                     "would_have": l.map_or(0, |l| l.would_have),
@@ -427,6 +432,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
         }
     }
 
+    let bar = adage_learn::LearnConfig::default();
     let mut obs: Vec<(&String, &(u64, BTreeSet<String>))> = observed.iter().collect();
     obs.sort_by(|a, b| b.1 .1.len().cmp(&a.1 .1.len()).then(b.1 .0.cmp(&a.1 .0)).then(a.0.cmp(b.0)));
     let observed: Vec<Value> = obs
@@ -446,8 +452,59 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
         "routes": routes,
         "observed": observed,
         "events": events,
+        "learning": learning(paths),
+        "bars": { "min_support": bar.min_support, "fire_lower_bound": bar.green_lower_bound },
     });
     Ok(out)
+}
+
+/// One spool record as a timeline event (`None` when nothing happened in it): the routes it
+/// directed, would have directed (holdout, or over a limit), the judgements it made as
+/// `[kind, route]`, the command keys it observed, and whether it asked the agent to continue. The
+/// same shape in the graph's `events` and in the map's live stream.
+pub(crate) fn event(repo: &str, sid: &str, r: &Value) -> Option<Value> {
+    let d = &r["decision"];
+    let ids = |k: &str| -> Vec<String> {
+        d[k].as_array().into_iter().flatten().filter_map(|x| x["route"].as_str().map(String::from)).collect()
+    };
+    let (directed, would) = (ids("directives"), ids("would_have"));
+    let judged: Vec<Value> = d["judgements"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|j| Some(json!([j["kind"].as_str()?, j["route"].as_str()?])))
+        .collect();
+    let keys: Vec<String> =
+        d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str().map(String::from)).collect();
+    let cont = d["continue_reason"].is_string();
+    if directed.is_empty() && would.is_empty() && judged.is_empty() && keys.is_empty() && !cont {
+        return None;
+    }
+    Some(json!({
+        "ts": r["ts"], "session": sid, "arm": r["arm"], "event": r["event"], "repo": repo,
+        "directed": directed, "would": would, "judged": judged, "observed": keys, "continue": cont,
+    }))
+}
+
+/// The most recent live-learning runs from `learn.log` (JSON lines), oldest first: when each ran,
+/// for which repository, and what changed.
+fn learning(paths: &Paths) -> Vec<Value> {
+    use std::io::{Read, Seek, SeekFrom};
+    const TAIL: u64 = 64 << 10;
+    let Ok(mut f) = std::fs::File::open(paths.learn_log()) else { return vec![] };
+    let len = f.metadata().map(|m| m.len()).unwrap_or(0);
+    let start = len.saturating_sub(TAIL);
+    let mut buf = Vec::new();
+    if f.seek(SeekFrom::Start(start)).is_err() || f.take(TAIL).read_to_end(&mut buf).is_err() {
+        return vec![];
+    }
+    let text = String::from_utf8_lossy(&buf);
+    let mut lines: Vec<&str> = text.lines().collect();
+    if start > 0 && !lines.is_empty() {
+        lines.remove(0); // mid-line
+    }
+    let parsed: Vec<Value> = lines.iter().filter_map(|l| serde_json::from_str::<Value>(l).ok()).collect();
+    parsed[parsed.len().saturating_sub(MAX_LEARNING)..].to_vec()
 }
 
 /// Whether a route's command key covers an observed key, as the runtime judges it

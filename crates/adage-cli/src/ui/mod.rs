@@ -17,7 +17,7 @@
 //! (docs/lexicon.md) at display time; stored values keep their names ([`words`]).
 
 mod app;
-mod demo;
+pub(crate) mod demo;
 mod diff;
 mod feed;
 mod fuzzy;
@@ -28,7 +28,7 @@ mod learnlog;
 mod palette;
 mod routes;
 mod tabs;
-mod tail;
+pub(crate) mod tail;
 mod term;
 mod theme;
 mod view;

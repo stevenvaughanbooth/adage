@@ -1,0 +1,277 @@
+@import "tailwindcss";
+/* The one token source (design/tokens/adage.tokens.json → cargo xtask tokens). Never a colour here. */
+@import "../../../design/build/tokens.css";
+@import "@xyflow/react/dist/base.css";
+
+/* "Workshop" type, self-hosted (SIL OFL): latin, variable weight. */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url("@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2")
+    format("woff2-variations");
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("@fontsource-variable/hanken-grotesk/files/hanken-grotesk-latin-wght-normal.woff2")
+    format("woff2-variations");
+}
+@font-face {
+  font-family: "Red Hat Mono";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url("@fontsource-variable/red-hat-mono/files/red-hat-mono-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+/* Tailwind utilities that read the tokens (nothing is emitted: tokens.css defines the values). */
+@theme inline reference {
+  --color-*: initial;
+  --font-*: initial;
+  --radius-*: initial;
+  --color-base: var(--color-bg-base);
+  --color-panel: var(--color-bg-panel);
+  --color-raised: var(--color-bg-raised);
+  --color-ink-1: var(--color-ink-1);
+  --color-ink-2: var(--color-ink-2);
+  --color-ink-3: var(--color-ink-3);
+  --color-accent: var(--color-accent-base);
+  --color-accent-soft: var(--color-accent-soft);
+  --color-fire: var(--color-lamp-fire);
+  --color-prime: var(--color-lamp-prime);
+  --color-inhibit: var(--color-lamp-inhibit);
+  --color-cost: var(--color-cost);
+  --color-line: var(--color-line-soft);
+  --color-line-strong: var(--color-line-strong);
+  --color-transparent: transparent;
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-full: 9999px;
+  --ease-out: var(--easing-out);
+}
+
+/* Derived surfaces: mixes of tokens, never new colours. */
+:root {
+  --sel: color-mix(in oklab, var(--color-accent-base) 16%, transparent);
+  --sel-ring: color-mix(in oklab, var(--color-accent-base) 50%, transparent);
+  --glyph-arc: color-mix(in oklab, var(--color-accent-base) 70%, var(--color-accent-soft));
+  --canvas: color-mix(in oklab, var(--color-bg-base) 88%, var(--color-bg-panel));
+  --dot: color-mix(in oklab, var(--color-ink-1) 9%, transparent);
+  --edge: color-mix(in oklab, var(--color-ink-1) 24%, transparent);
+  --control: color-mix(in oklab, var(--color-ink-3) 45%, var(--color-bg-raised));
+  --shadow: 0 30px 80px color-mix(in oklab, var(--color-bg-base) 70%, transparent);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg-base);
+    color: var(--color-ink-1);
+    font-family: var(--font-body);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  button {
+    font-family: inherit;
+    cursor: pointer;
+  }
+  a {
+    color: var(--color-accent-soft);
+    text-decoration: none;
+  }
+  a:hover {
+    color: var(--color-ink-1);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent-base);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--sel);
+  }
+  kbd {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 1px 6px;
+    border: 1px solid var(--color-line-strong);
+    border-radius: 5px;
+    color: var(--color-ink-2);
+    background: var(--color-bg-base);
+  }
+}
+
+@layer components {
+  .lbl {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--color-ink-3);
+  }
+  .wordmark {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 26px;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    background: linear-gradient(180deg, var(--color-ink-1) 15%, var(--color-accent-soft) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .display {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
+  }
+  .canvas-grid {
+    background-color: var(--canvas);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+  .lamp-glow {
+    box-shadow: 0 0 8px currentColor;
+  }
+  .scroll-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+/* React Flow, in tokens. */
+.react-flow {
+  --xy-background-color: transparent;
+  --xy-node-border-radius: 10px;
+  --xy-minimap-background-color: var(--color-bg-panel);
+  --xy-minimap-mask-background-color: color-mix(in oklab, var(--color-bg-base) 55%, transparent);
+  --xy-minimap-mask-stroke-color: var(--sel-ring);
+  --xy-minimap-mask-stroke-width: 1;
+  --xy-edge-stroke: var(--edge);
+  --xy-selection-background-color: var(--sel);
+  --xy-selection-border: 1px dotted var(--sel-ring);
+}
+.react-flow__node {
+  cursor: pointer;
+}
+.react-flow__node:focus-visible {
+  outline: none;
+}
+.react-flow__node:focus-visible > div {
+  outline: 2px solid var(--color-accent-base);
+  outline-offset: 3px;
+}
+.react-flow__attribution {
+  display: none;
+}
+.react-flow__handle {
+  opacity: 0;
+  pointer-events: none;
+  min-width: 1px;
+  min-height: 1px;
+}
+.react-flow__minimap-node.mm-node {
+  fill: color-mix(in oklab, var(--color-accent-base) 22%, var(--color-bg-panel));
+}
+.react-flow__minimap-node.mm-inhibit {
+  fill: color-mix(in oklab, var(--color-lamp-inhibit) 30%, var(--color-bg-panel));
+}
+.react-flow__minimap-node.mm-sel {
+  fill: var(--color-accent-base);
+}
+.react-flow__minimap {
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+/* Motion: a firing reflex pulses once; new reflexes draw in along their curve. */
+@keyframes draw-in {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.edge-draw {
+  stroke-dasharray: 1;
+  animation: draw-in var(--duration-rise) var(--easing-out) both;
+}
+@keyframes live-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.live-dot {
+  animation: live-dot 2.4s ease-in-out infinite;
+}
+@keyframes rise {
+  from {
+    transform: translateY(0.6em);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.rise {
+  animation: rise var(--duration-rise) var(--easing-out) both;
+}
+@keyframes node-flash {
+  0% {
+    box-shadow: 0 0 0 0 var(--sel-ring);
+  }
+  100% {
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+.node-flash {
+  animation: node-flash var(--duration-pulse) var(--easing-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
+[data-motion="off"] *,
+[data-motion="off"] *::before,
+[data-motion="off"] *::after {
+  animation-duration: 1ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 1ms !important;
+}

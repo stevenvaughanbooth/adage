@@ -1,0 +1,60 @@
+{
+ "checks": [
+  {
+   "check": "binary",
+   "status": "pass",
+   "detail": "adage 0.1.0 at ~/.local/bin/adage"
+  },
+  {
+   "check": "data directory",
+   "status": "pass",
+   "detail": "~/.adage is writable"
+  },
+  {
+   "check": "index",
+   "status": "pass",
+   "detail": "generation 8dd5ec01a3f2b7c4, 8 route(s) in 1 repository"
+  },
+  {
+   "check": "tracks",
+   "status": "pass",
+   "detail": "4 track(s) (1 imported), 8 route(s), all valid"
+  },
+  {
+   "check": "instincts",
+   "status": "pass",
+   "detail": "on; 1 bound for acme-billing"
+  },
+  {
+   "check": "hooks (Claude Code)",
+   "status": "pass",
+   "detail": "installed in .claude/settings.local.json"
+  },
+  {
+   "check": "hooks (Codex)",
+   "status": "pass",
+   "detail": "installed in .codex/hooks.json"
+  },
+  {
+   "check": "model",
+   "status": "warn",
+   "detail": "no intent model installed; intent reflexes are off",
+   "fix": "`adage models install` fetches it (34 MB)"
+  },
+  {
+   "check": "spools",
+   "status": "pass",
+   "detail": "54 session spool(s), 1.2 MB"
+  },
+  {
+   "check": "fail-open",
+   "status": "pass",
+   "detail": "no fail-open events in 7 days"
+  }
+ ],
+ "summary": {
+  "pass": 9,
+  "warn": 1,
+  "fail": 0
+ }
+}

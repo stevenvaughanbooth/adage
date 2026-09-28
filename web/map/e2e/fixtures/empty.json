@@ -1,0 +1,93 @@
+{
+ "generation": "8dd5ec01a3f2b7c4",
+ "home": "~/.adage",
+ "sessions": {
+  "total": 0,
+  "treated": 0,
+  "holdout": 0
+ },
+ "stop_requests": 0,
+ "routes": [
+  {
+   "id": "finish-line/regenerate",
+   "summary": "edits to schema/*.json must be followed by make gen",
+   "track": "adage/finish-line",
+   "version": "0.1.0",
+   "reference": "acme-billing/instincts",
+   "repo": "acme-billing",
+   "imported": false,
+   "in_index": true,
+   "instinct": true,
+   "origin": "instinct U1 (from Makefile)",
+   "review": {
+    "verbs": [
+     "approve",
+     "reject",
+     "pin"
+    ],
+    "reasons": []
+   },
+   "aspect": "yellow",
+   "ceiling": "yellow",
+   "effect": "regenerate",
+   "state": "active",
+   "authored": false,
+   "trigger": {
+    "kind": "after_edit",
+    "label": "an edit touches schema/*.json"
+   },
+   "step": {
+    "kind": "run",
+    "label": "make gen"
+   },
+   "directive": "<adage-reflex reflex=\"finish-line/regenerate\" strength=\"prime\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "evidence": {
+    "support": 7,
+    "opportunities": 7,
+    "rate": 1,
+    "lower_bound": 0.65,
+    "turns_saved": 0.6,
+    "days": 9,
+    "exposed": 0,
+    "stale_since": null,
+    "provenance": "instinct"
+   },
+   "live": {
+    "emitted": 0,
+    "would_have": 0,
+    "followed": 0,
+    "derailed": 1,
+    "obligation_met": 0,
+    "holdout": {
+     "unaided": 0,
+     "not_reached": 0,
+     "obligation_met": 0
+    },
+    "sessions": 0
+   },
+   "arms": {
+    "treated": {
+     "sessions": 0,
+     "applied": 0,
+     "followed": 0,
+     "met": 0,
+     "hit_avoided": 0
+    },
+    "holdout": {
+     "sessions": 0,
+     "applied": 0,
+     "followed": 0,
+     "met": 0,
+     "hit_avoided": 0
+    }
+   }
+  }
+ ],
+ "observed": [],
+ "events": [],
+ "learning": [],
+ "bars": {
+  "min_support": 3,
+  "fire_lower_bound": 0.5
+ }
+}

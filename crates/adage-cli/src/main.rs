@@ -27,13 +27,13 @@ mod hook;
 mod init;
 mod install;
 mod learnlog;
+mod map;
 mod models;
 mod packs;
 mod proposal;
 mod redact;
 mod reimport;
 mod review;
-mod serve;
 mod share;
 mod share_pack;
 mod survey;
@@ -153,7 +153,7 @@ fn run(args: &[String]) -> Result<()> {
                 .collect();
             exec::exec(&a, &paths)
         }
-        Some("map") => serve::serve(rest, &paths),
+        Some("map") => map::run(rest, &paths),
         Some("graph") => graph::graph(rest, &paths),
         Some("eval") => adage_eval::cli::run(rest),
         Some("models") => models::run(rest, &paths),

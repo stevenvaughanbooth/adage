@@ -1,0 +1,3682 @@
+{
+ "generation": "8dd5ec01a3f2b7c4",
+ "home": "~/.adage",
+ "sessions": {
+  "total": 54,
+  "treated": 43,
+  "holdout": 11
+ },
+ "stop_requests": 0,
+ "routes": [
+  {
+   "id": "lookup-work-item",
+   "summary": "work items are looked up with scripts/wi-lookup",
+   "track": "acme-billing/work-items",
+   "version": "0.3.0",
+   "reference": "acme-billing/work-items",
+   "repo": "acme-billing",
+   "imported": false,
+   "in_index": true,
+   "instinct": false,
+   "origin": null,
+   "review": {
+    "verbs": [
+     "approve",
+     "reject",
+     "demote",
+     "pin"
+    ],
+    "reasons": []
+   },
+   "aspect": "green",
+   "ceiling": "green",
+   "effect": "observe",
+   "state": "active",
+   "authored": false,
+   "trigger": {
+    "kind": "prompt",
+    "label": "a prompt names a work item"
+   },
+   "step": {
+    "kind": "run",
+    "label": "python3 scripts/wi-lookup {item}"
+   },
+   "directive": "<adage-reflex reflex=\"lookup-work-item\" strength=\"fire\">\nIn this repository, work item details are looked up with:\n  python3 scripts/wi-lookup W-2045\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "evidence": {
+    "support": 23,
+    "opportunities": 33,
+    "rate": 0.697,
+    "lower_bound": 0.53,
+    "turns_saved": 8,
+    "days": 9,
+    "exposed": 0,
+    "stale_since": null,
+    "provenance": "desire-path"
+   },
+   "live": {
+    "emitted": 31,
+    "would_have": 9,
+    "followed": 26,
+    "derailed": 4,
+    "obligation_met": 0,
+    "holdout": {
+     "unaided": 3,
+     "not_reached": 6,
+     "obligation_met": 0
+    },
+    "sessions": 18
+   },
+   "arms": {
+    "treated": {
+     "sessions": 43,
+     "applied": 18,
+     "followed": 15,
+     "met": 0,
+     "hit_avoided": 0
+    },
+    "holdout": {
+     "sessions": 11,
+     "applied": 9,
+     "followed": 3,
+     "met": 0,
+     "hit_avoided": 0
+    }
+   }
+  },
+  {
+   "id": "read-linked-files",
+   "summary": "files a lookup lists are read together",
+   "track": "acme-billing/work-items",
+   "version": "0.3.0",
+   "reference": "acme-billing/work-items",
+   "repo": "acme-billing",
+   "imported": false,
+   "in_index": true,
+   "instinct": false,
+   "origin": null,
+   "review": {
+    "verbs": [
+     "approve",
+     "reject",
+     "demote",
+     "pin"
+    ],
+    "reasons": []
+   },
+   "aspect": "green",
+   "ceiling": "green",
+   "effect": "observe",
+   "state": "active",
+   "authored": false,
+   "trigger": {
+    "kind": "after_command",
+    "label": "`python3 scripts/wi-lookup {item}` succeeds"
+   },
+   "step": {
+    "kind": "read_batch",
+    "label": "read ≤5 listed files at once",
+    "slot": "files"
+   },
+   "directive": "<adage-reflex reflex=\"read-linked-files\" strength=\"fire\">\nThat result lists these files: src/billing/invoice.py, docs/billing.md.\nIf you need them, read them together in one turn rather than one at a time.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "evidence": {
+    "support": 15,
+    "opportunities": 16,
+    "rate": 0.9375,
+    "lower_bound": 0.72,
+    "turns_saved": 1.9,
+    "days": 9,
+    "exposed": 0,
+    "stale_since": null,
+    "provenance": "desire-path"
+   },
+   "live": {
+    "emitted": 22,
+    "would_have": 7,
+    "followed": 19,
+    "derailed": 2,
+    "obligation_met": 0,
+    "holdout": {
+     "unaided": 2,
+     "not_reached": 4,
+     "obligation_met": 0
+    },
+    "sessions": 14
+   },
+   "arms": {
+    "treated": {
+     "sessions": 43,
+     "applied": 14,
+     "followed": 12,
+     "met": 0,
+     "hit_avoided": 0
+    },
+    "holdout": {
+     "sessions": 11,
+     "applied": 6,
+     "followed": 2,
+     "met": 0,
+     "hit_avoided": 0
+    }
+   }
+  },
+  {
+   "id": "dead-end-d41b1e",
+   "summary": "unittest cannot run here; make test works",
+   "track": "acme-billing/work-items",
+   "version": "0.3.0",
+   "reference": "acme-billing/work-items",
+   "repo": "acme-billing",
+   "imported": false,
+   "in_index": true,
+   "instinct": false,
+   "origin": null,
+   "review": {
+    "verbs": [
+     "approve",
+     "reject",
+     "pin"
+    ],
+    "reasons": []
+   },
+   "aspect": "red",
+   "ceiling": "red",
+   "effect": "observe",
+   "state": "active",
+   "authored": false,
+   "trigger": {
+    "kind": "after_failure",
+    "label": "`python3 -m unittest` fails: No module named pytest"
+   },
+   "step": {
+    "kind": "avoid",
+    "label": "make test",
+    "avoid": "python3 -m unittest",
+    "signature": "No module named pytest"
+   },
+   "directive": "<adage-reflex reflex=\"dead-end-d41b1e\" strength=\"inhibit\">\nIn this repository `python3 -m unittest` fails (No module named pytest). Run instead:\n  make test\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "evidence": {
+    "support": 11,
+    "opportunities": 43,
+    "rate": 0.2558,
+    "lower_bound": 0.61,
+    "turns_saved": 2.4,
+    "days": 9,
+    "exposed": 0,
+    "stale_since": null,
+    "provenance": "desire-path"
+   },
+   "live": {
+    "emitted": 14,
+    "would_have": 5,
+    "followed": 10,
+    "derailed": 2,
+    "obligation_met": 0,
+    "holdout": {
+     "unaided": 1,
+     "not_reached": 4,
+     "obligation_met": 0
+    },
+    "sessions": 12
+   },
+   "arms": {
+    "treated": {
+     "sessions": 43,
+     "applied": 12,
+     "followed": 10,
+     "met": 0,
+     "hit_avoided": 1
+    },
+    "holdout": {
+     "sessions": 11,
+     "applied": 5,
+     "followed": 1,
+     "met": 0,
+     "hit_avoided": 4
+    }
+   }
+  },
+  {
+   "id": "start-with-make-test",
+   "summary": "“run the tests” means make test",
+   "track": "acme-billing/intents",
+   "version": "0.1.0",
+   "reference": "acme-billing/intents",
+   "repo": "acme-billing",
+   "imported": false,
+   "in_index": true,
+   "instinct": false,
+   "origin": null,
+   "review": {
+    "verbs": [
+     "approve",
+     "reject",
+     "promote",
+     "pin"
+    ],
+    "reasons": []
+   },
+   "aspect": "yellow",
+   "ceiling": "green",
+   "effect": "observe",
+   "state": "probation",
+   "authored": false,
+   "trigger": {
+    "kind": "intent",
+    "label": "a prompt means: run the tests"
+   },
+   "step": {
+    "kind": "run",
+    "label": "make test"
+   },
+   "directive": "<adage-reflex reflex=\"start-with-make-test\" strength=\"prime\">\nAgents in this repository usually start the tests with:\n  make test\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "evidence": {
+    "support": 6,
+    "opportunities": 9,
+    "rate": 0.6667,
+    "lower_bound": 0.41,
+    "turns_saved": 0.4,
+    "days": 9,
+    "exposed": 0,
+    "stale_since": null,
+    "provenance": "desire-path"
+   },
+   "live": {
+    "emitted": 8,
+    "would_have": 3,
+    "followed": 5,
+    "derailed": 3,
+    "obligation_met": 0,
+    "holdout": {
+     "unaided": 1,
+     "not_reached": 2,
+     "obligation_met": 0
+    },
+    "sessions": 7
+   },
+   "arms": {
+    "treated": {
+     "sessions": 43,
+     "applied": 7,
+     "followed": 5,
+     "met": 0,
+     "hit_avoided": 0
+    },
+    "holdout": {
+     "sessions": 11,
+     "applied": 3,
+     "followed": 1,
+     "met": 0,
+     "hit_avoided": 0
+    }
+   }
+  },
+  {
+   "id": "finish-line/regenerate",
+   "summary": "edits to schema/*.json must be followed by make gen",
+   "track": "adage/finish-line",
+   "version": "0.1.0",
+   "reference": "acme-billing/instincts",
+   "repo": "acme-billing",
+   "imported": false,
+   "in_index": true,
+   "instinct": true,
+   "origin": "instinct U1 (from Makefile)",
+   "review": {
+    "verbs": [
+     "approve",
+     "reject",
+     "pin"
+    ],
+    "reasons": []
+   },
+   "aspect": "yellow",
+   "ceiling": "yellow",
+   "effect": "regenerate",
+   "state": "active",
+   "authored": false,
+   "trigger": {
+    "kind": "after_edit",
+    "label": "an edit touches schema/*.json"
+   },
+   "step": {
+    "kind": "run",
+    "label": "make gen"
+   },
+   "directive": "<adage-reflex reflex=\"finish-line/regenerate\" strength=\"prime\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "evidence": {
+    "support": 7,
+    "opportunities": 7,
+    "rate": 1,
+    "lower_bound": 0.65,
+    "turns_saved": 0.6,
+    "days": 9,
+    "exposed": 0,
+    "stale_since": null,
+    "provenance": "instinct"
+   },
+   "live": {
+    "emitted": 12,
+    "would_have": 4,
+    "followed": 0,
+    "derailed": 1,
+    "obligation_met": 9,
+    "holdout": {
+     "unaided": 0,
+     "not_reached": 0,
+     "obligation_met": 0
+    },
+    "sessions": 10
+   },
+   "arms": {
+    "treated": {
+     "sessions": 43,
+     "applied": 10,
+     "followed": 0,
+     "met": 9,
+     "hit_avoided": 0
+    },
+    "holdout": {
+     "sessions": 11,
+     "applied": 4,
+     "followed": 0,
+     "met": 2,
+     "hit_avoided": 0
+    }
+   }
+  },
+  {
+   "id": "regen-openapi-client",
+   "summary": "openapi edits need make client",
+   "track": "acme-billing/work-items",
+   "version": "0.3.0",
+   "reference": "acme-billing/work-items",
+   "repo": "acme-billing",
+   "imported": false,
+   "in_index": false,
+   "instinct": false,
+   "origin": null,
+   "review": {
+    "verbs": [
+     "approve",
+     "reject",
+     "pin"
+    ],
+    "reasons": [
+     {
+      "kind": "draft",
+      "why": "an environment step, a draft until a person approves it"
+     }
+    ]
+   },
+   "aspect": "yellow",
+   "ceiling": "green",
+   "effect": "regenerate",
+   "state": "draft",
+   "authored": false,
+   "trigger": {
+    "kind": "after_edit",
+    "label": "an edit touches api/openapi.yaml"
+   },
+   "step": {
+    "kind": "run",
+    "label": "make client"
+   },
+   "directive": "<adage-reflex reflex=\"regen-openapi-client\" strength=\"prime\">\nIn this repository, changes to api/openapi.yaml are followed by:\n  make client\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "evidence": {
+    "support": 3,
+    "opportunities": 4,
+    "rate": 0.75,
+    "lower_bound": 0.3,
+    "turns_saved": 0.9,
+    "days": 9,
+    "exposed": 0,
+    "stale_since": null,
+    "provenance": "desire-path"
+   },
+   "live": {
+    "emitted": 0,
+    "would_have": 0,
+    "followed": 0,
+    "derailed": 0,
+    "obligation_met": 0,
+    "holdout": {
+     "unaided": 0,
+     "not_reached": 0,
+     "obligation_met": 0
+    },
+    "sessions": 0
+   },
+   "arms": {
+    "treated": {
+     "sessions": 43,
+     "applied": 0,
+     "followed": 0,
+     "met": 0,
+     "hit_avoided": 0
+    },
+    "holdout": {
+     "sessions": 11,
+     "applied": 0,
+     "followed": 0,
+     "met": 0,
+     "hit_avoided": 0
+    }
+   }
+  },
+  {
+   "id": "read-adr-before-schema",
+   "summary": "schema changes start from ADR 0007",
+   "track": "acme-billing/work-items",
+   "version": "0.3.0",
+   "reference": "acme-billing/work-items",
+   "repo": "acme-billing",
+   "imported": false,
+   "in_index": false,
+   "instinct": false,
+   "origin": null,
+   "review": {
+    "verbs": [
+     "approve",
+     "reject",
+     "pin"
+    ],
+    "reasons": [
+     {
+      "kind": "new",
+      "why": "learned by `adage condition` and never reviewed"
+     }
+    ]
+   },
+   "aspect": "yellow",
+   "ceiling": "green",
+   "effect": "observe",
+   "state": "draft",
+   "authored": false,
+   "trigger": {
+    "kind": "after_edit",
+    "label": "an edit touches schema/*.json"
+   },
+   "step": {
+    "kind": "advise",
+    "label": "read docs/adr/0007-schema.md first",
+    "template": "read_first"
+   },
+   "directive": "<adage-reflex reflex=\"read-adr-before-schema\" strength=\"prime\">\nBefore changing the schema, agents here read:\n  docs/adr/0007-schema.md\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "evidence": {
+    "support": 3,
+    "opportunities": 5,
+    "rate": 0.6,
+    "lower_bound": 0.23,
+    "turns_saved": 0.5,
+    "days": 9,
+    "exposed": 0,
+    "stale_since": null,
+    "provenance": "desire-path"
+   },
+   "live": {
+    "emitted": 0,
+    "would_have": 0,
+    "followed": 0,
+    "derailed": 0,
+    "obligation_met": 0,
+    "holdout": {
+     "unaided": 0,
+     "not_reached": 0,
+     "obligation_met": 0
+    },
+    "sessions": 0
+   },
+   "arms": {
+    "treated": {
+     "sessions": 43,
+     "applied": 0,
+     "followed": 0,
+     "met": 0,
+     "hit_avoided": 0
+    },
+    "holdout": {
+     "sessions": 11,
+     "applied": 0,
+     "followed": 0,
+     "met": 0,
+     "hit_avoided": 0
+    }
+   }
+  },
+  {
+   "id": "prefer-uv-pip",
+   "summary": "pip is externally managed here; uv works",
+   "track": "team/python-basics",
+   "version": "1.2.0",
+   "reference": "@imported/team/python-basics",
+   "repo": "acme-billing",
+   "imported": true,
+   "in_index": true,
+   "instinct": false,
+   "origin": null,
+   "review": {
+    "verbs": [
+     "approve",
+     "reject",
+     "pin"
+    ],
+    "reasons": []
+   },
+   "aspect": "yellow",
+   "ceiling": "red",
+   "effect": "observe",
+   "state": "active",
+   "authored": false,
+   "trigger": {
+    "kind": "after_failure",
+    "label": "`pip install` fails: externally-managed-environment"
+   },
+   "step": {
+    "kind": "avoid",
+    "label": "uv pip install",
+    "avoid": "pip install",
+    "signature": "externally-managed-environment"
+   },
+   "directive": "<adage-reflex reflex=\"prefer-uv-pip\" strength=\"prime\">\nHere `pip install` fails (externally-managed-environment). Consider instead:\n  uv pip install\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "evidence": {
+    "support": 4,
+    "opportunities": 6,
+    "rate": 0.6667,
+    "lower_bound": 0.3,
+    "turns_saved": 0.7,
+    "days": 9,
+    "exposed": 0,
+    "stale_since": null,
+    "provenance": "desire-path"
+   },
+   "live": {
+    "emitted": 3,
+    "would_have": 2,
+    "followed": 2,
+    "derailed": 1,
+    "obligation_met": 0,
+    "holdout": {
+     "unaided": 0,
+     "not_reached": 1,
+     "obligation_met": 0
+    },
+    "sessions": 3
+   },
+   "arms": {
+    "treated": {
+     "sessions": 43,
+     "applied": 3,
+     "followed": 2,
+     "met": 0,
+     "hit_avoided": 0
+    },
+    "holdout": {
+     "sessions": 11,
+     "applied": 2,
+     "followed": 0,
+     "met": 0,
+     "hit_avoided": 1
+    }
+   }
+  }
+ ],
+ "observed": [
+  {
+   "key": "exec python3 scripts/wi-lookup {id}",
+   "count": 41,
+   "sessions": 38,
+   "route": "lookup-work-item",
+   "how": "directs"
+  },
+  {
+   "key": "edit {path}",
+   "count": 30,
+   "sessions": 17,
+   "route": null,
+   "how": null
+  },
+  {
+   "key": "exec python3 -m unittest !failed",
+   "count": 14,
+   "sessions": 14,
+   "route": "dead-end-d41b1e",
+   "how": "avoids"
+  }
+ ],
+ "events": [
+  {
+   "ts": 1789393013681,
+   "session": "98d8aa68-4c9c-48ad-afcb-ac1458000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789393123444,
+   "session": "98d8aa68-4c9c-48ad-afcb-ac1458000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [
+    "search:content {pattern}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789393160845,
+   "session": "98d8aa68-4c9c-48ad-afcb-ac1458000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789393215410,
+   "session": "98d8aa68-4c9c-48ad-afcb-ac1458000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "finish-line/regenerate"
+   ],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789393241889,
+   "session": "98d8aa68-4c9c-48ad-afcb-ac1458000000",
+   "arm": "treated",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789415700317,
+   "session": "ac769240-ec8c-4cf4-abdc-104f7e000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789415800625,
+   "session": "ac769240-ec8c-4cf4-abdc-104f7e000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789415892870,
+   "session": "ac769240-ec8c-4cf4-abdc-104f7e000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789415915318,
+   "session": "ac769240-ec8c-4cf4-abdc-104f7e000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "start-with-make-test"
+   ],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789431161447,
+   "session": "bd213400-dcfb-4d14-ad5f-be14f4000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789431240743,
+   "session": "bd213400-dcfb-4d14-ad5f-be14f4000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789458737206,
+   "session": "50198000-dfdb-48ed-a335-764600800000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789458832829,
+   "session": "50198000-dfdb-48ed-a335-764600800000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789480693129,
+   "session": "963d0e00-6643-492d-a3cc-16146e800000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789480739679,
+   "session": "963d0e00-6643-492d-a3cc-16146e800000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789480829085,
+   "session": "963d0e00-6643-492d-a3cc-16146e800000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "start-with-make-test"
+   ],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789480859943,
+   "session": "963d0e00-6643-492d-a3cc-16146e800000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "finish-line/regenerate"
+   ],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789480934291,
+   "session": "963d0e00-6643-492d-a3cc-16146e800000",
+   "arm": "treated",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789502902389,
+   "session": "9e190000-eea5-43fa-a7af-64bd80000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789502939673,
+   "session": "9e190000-eea5-43fa-a7af-64bd80000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789502985156,
+   "session": "9e190000-eea5-43fa-a7af-64bd80000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "start-with-make-test"
+   ],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789521013623,
+   "session": "c42e2400-6e9d-45df-a826-4100e4000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789521087147,
+   "session": "c42e2400-6e9d-45df-a826-4100e4000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789521185956,
+   "session": "c42e2400-6e9d-45df-a826-4100e4000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789547940301,
+   "session": "2c961a00-d3d5-449c-a38a-748360800000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789547998202,
+   "session": "2c961a00-d3d5-449c-a38a-748360800000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789548107349,
+   "session": "2c961a00-d3d5-449c-a38a-748360800000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789563793575,
+   "session": "97c8b000-e613-4b89-af97-41b830000000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789563859167,
+   "session": "97c8b000-e613-4b89-af97-41b830000000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [
+    "list {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789586773609,
+   "session": "ea455600-63b9-4959-ae37-765936000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789586809842,
+   "session": "ea455600-63b9-4959-ae37-765936000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "derailed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "list {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789586860502,
+   "session": "ea455600-63b9-4959-ae37-765936000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789586892763,
+   "session": "ea455600-63b9-4959-ae37-765936000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "start-with-make-test"
+   ],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789611371321,
+   "session": "d0c19000-3c4a-48d6-a491-2f850e000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789611413382,
+   "session": "d0c19000-3c4a-48d6-a491-2f850e000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "derailed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "list {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789611507483,
+   "session": "d0c19000-3c4a-48d6-a491-2f850e000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "start-with-make-test"
+   ],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789629612467,
+   "session": "4fd8b200-b180-41c5-ad83-5aed88000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789629682502,
+   "session": "4fd8b200-b180-41c5-ad83-5aed88000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789656674414,
+   "session": "13078800-95a5-4a67-a29a-9b9dae800000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789656775010,
+   "session": "13078800-95a5-4a67-a29a-9b9dae800000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789672470479,
+   "session": "c17daa00-284d-4e63-a532-18e8c8000000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789672542516,
+   "session": "c17daa00-284d-4e63-a532-18e8c8000000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "derailed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "list {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789672599123,
+   "session": "c17daa00-284d-4e63-a532-18e8c8000000",
+   "arm": "holdout",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789695282785,
+   "session": "2ee4ae00-3862-4290-a993-94e8d4000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789695379676,
+   "session": "2ee4ae00-3862-4290-a993-94e8d4000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789695488788,
+   "session": "2ee4ae00-3862-4290-a993-94e8d4000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789695532045,
+   "session": "2ee4ae00-3862-4290-a993-94e8d4000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "start-with-make-test"
+   ],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789695614187,
+   "session": "2ee4ae00-3862-4290-a993-94e8d4000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "finish-line/regenerate"
+   ],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789695695264,
+   "session": "2ee4ae00-3862-4290-a993-94e8d4000000",
+   "arm": "treated",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789714373630,
+   "session": "081a1c00-0fa6-4001-a1ec-7e2ed8000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789714407378,
+   "session": "081a1c00-0fa6-4001-a1ec-7e2ed8000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789714456485,
+   "session": "081a1c00-0fa6-4001-a1ec-7e2ed8000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789744015925,
+   "session": "faf1b400-b5c2-498d-a286-486d74800000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789744043756,
+   "session": "faf1b400-b5c2-498d-a286-486d74800000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789744073929,
+   "session": "faf1b400-b5c2-498d-a286-486d74800000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "finish-line/regenerate"
+   ],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789744113767,
+   "session": "faf1b400-b5c2-498d-a286-486d74800000",
+   "arm": "treated",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789766476632,
+   "session": "42a87780-a324-48e8-adaf-8a6b4a000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789766554610,
+   "session": "42a87780-a324-48e8-adaf-8a6b4a000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789788851524,
+   "session": "fc9cb800-9eca-4b06-ae13-53c4b8000000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789788955672,
+   "session": "fc9cb800-9eca-4b06-ae13-53c4b8000000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "derailed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "list {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789789039088,
+   "session": "fc9cb800-9eca-4b06-ae13-53c4b8000000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789789113487,
+   "session": "fc9cb800-9eca-4b06-ae13-53c4b8000000",
+   "arm": "holdout",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789801173708,
+   "session": "08f51400-f471-4031-ad96-d79a4a000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789801240179,
+   "session": "08f51400-f471-4031-ad96-d79a4a000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789801290963,
+   "session": "08f51400-f471-4031-ad96-d79a4a000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789801349054,
+   "session": "08f51400-f471-4031-ad96-d79a4a000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "start-with-make-test"
+   ],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789827959459,
+   "session": "c754f200-ece7-45cd-ad21-8ac692000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789828026866,
+   "session": "c754f200-ece7-45cd-ad21-8ac692000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789828071174,
+   "session": "c754f200-ece7-45cd-ad21-8ac692000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789828106382,
+   "session": "c754f200-ece7-45cd-ad21-8ac692000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "start-with-make-test"
+   ],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789854075386,
+   "session": "4e1d2600-87fd-4fc3-a87d-947ae0000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789854162185,
+   "session": "4e1d2600-87fd-4fc3-a87d-947ae0000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "derailed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "list {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789854195837,
+   "session": "4e1d2600-87fd-4fc3-a87d-947ae0000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789873843961,
+   "session": "a66fb000-052e-4311-ac04-c8eb40000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789873867635,
+   "session": "a66fb000-052e-4311-ac04-c8eb40000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789873947941,
+   "session": "a66fb000-052e-4311-ac04-c8eb40000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789897847307,
+   "session": "9e07ec00-3b47-44aa-a036-e0d52a700000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789897936591,
+   "session": "9e07ec00-3b47-44aa-a036-e0d52a700000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "derailed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "search:content {pattern}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789897975269,
+   "session": "9e07ec00-3b47-44aa-a036-e0d52a700000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789898056179,
+   "session": "9e07ec00-3b47-44aa-a036-e0d52a700000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789898121993,
+   "session": "9e07ec00-3b47-44aa-a036-e0d52a700000",
+   "arm": "holdout",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789916520568,
+   "session": "fb496600-3f54-4ae7-afc5-f707b0000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789916615768,
+   "session": "fb496600-3f54-4ae7-afc5-f707b0000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789942051577,
+   "session": "833eb000-1b51-447f-aff0-dcb430000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789942131292,
+   "session": "833eb000-1b51-447f-aff0-dcb430000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789942240778,
+   "session": "833eb000-1b51-447f-aff0-dcb430000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789942346269,
+   "session": "833eb000-1b51-447f-aff0-dcb430000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "finish-line/regenerate"
+   ],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789942382016,
+   "session": "833eb000-1b51-447f-aff0-dcb430000000",
+   "arm": "treated",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789961740530,
+   "session": "c0fa5e80-0a65-40ac-a5c1-b02c57000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789961815048,
+   "session": "c0fa5e80-0a65-40ac-a5c1-b02c57000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789961879557,
+   "session": "c0fa5e80-0a65-40ac-a5c1-b02c57000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "start-with-make-test"
+   ],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789983894851,
+   "session": "2783c800-aa0c-44be-a248-1b9dee800000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789983993654,
+   "session": "2783c800-aa0c-44be-a248-1b9dee800000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789984100001,
+   "session": "2783c800-aa0c-44be-a248-1b9dee800000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "start-with-make-test"
+   ],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1789984161263,
+   "session": "2783c800-aa0c-44be-a248-1b9dee800000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "finish-line/regenerate"
+   ],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1789984234678,
+   "session": "2783c800-aa0c-44be-a248-1b9dee800000",
+   "arm": "treated",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790003665634,
+   "session": "191e8400-1636-4717-a2b4-f4c2d3800000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790003739707,
+   "session": "191e8400-1636-4717-a2b4-f4c2d3800000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790003771458,
+   "session": "191e8400-1636-4717-a2b4-f4c2d3800000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790019687463,
+   "session": "10af3000-9b37-4db4-aa89-9017d6000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790019717054,
+   "session": "10af3000-9b37-4db4-aa89-9017d6000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790019739972,
+   "session": "10af3000-9b37-4db4-aa89-9017d6000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790019801007,
+   "session": "10af3000-9b37-4db4-aa89-9017d6000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "finish-line/regenerate"
+   ],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790019902561,
+   "session": "10af3000-9b37-4db4-aa89-9017d6000000",
+   "arm": "treated",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790040164051,
+   "session": "27451800-55bb-41c5-afef-c14b74000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790040200837,
+   "session": "27451800-55bb-41c5-afef-c14b74000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790040304128,
+   "session": "27451800-55bb-41c5-afef-c14b74000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790065727221,
+   "session": "c2266000-9b97-4d4e-aaaf-ac40e0000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790065780096,
+   "session": "c2266000-9b97-4d4e-aaaf-ac40e0000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790065814866,
+   "session": "c2266000-9b97-4d4e-aaaf-ac40e0000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "finish-line/regenerate"
+   ],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790065885808,
+   "session": "c2266000-9b97-4d4e-aaaf-ac40e0000000",
+   "arm": "treated",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790093053266,
+   "session": "b2b3fe00-6207-4ac0-ae51-9b0a5e000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790093085360,
+   "session": "b2b3fe00-6207-4ac0-ae51-9b0a5e000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790112357503,
+   "session": "20ba4400-4807-4c1d-ae71-97c02a000000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790112457194,
+   "session": "20ba4400-4807-4c1d-ae71-97c02a000000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790112499447,
+   "session": "20ba4400-4807-4c1d-ae71-97c02a000000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790112552259,
+   "session": "20ba4400-4807-4c1d-ae71-97c02a000000",
+   "arm": "holdout",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790127196110,
+   "session": "ad6f3400-f231-44d4-a052-6542f4700000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790127229405,
+   "session": "ad6f3400-f231-44d4-a052-6542f4700000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790127263636,
+   "session": "ad6f3400-f231-44d4-a052-6542f4700000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "start-with-make-test"
+   ],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790152862180,
+   "session": "2a50ac00-a0c1-4fb1-aead-bbb838000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790152941627,
+   "session": "2a50ac00-a0c1-4fb1-aead-bbb838000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790152966010,
+   "session": "2a50ac00-a0c1-4fb1-aead-bbb838000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "finish-line/regenerate"
+   ],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790153020847,
+   "session": "2a50ac00-a0c1-4fb1-aead-bbb838000000",
+   "arm": "treated",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790174637369,
+   "session": "42abf200-f2f2-4498-aea9-e48d92000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790174686517,
+   "session": "42abf200-f2f2-4498-aea9-e48d92000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790203079589,
+   "session": "9fc00000-84c0-4632-a4a1-59d480000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790203168440,
+   "session": "9fc00000-84c0-4632-a4a1-59d480000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790203271962,
+   "session": "9fc00000-84c0-4632-a4a1-59d480000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790219348662,
+   "session": "67428e00-129a-49d2-a72c-2017ec000000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790219444060,
+   "session": "67428e00-129a-49d2-a72c-2017ec000000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790219483918,
+   "session": "67428e00-129a-49d2-a72c-2017ec000000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790219568168,
+   "session": "67428e00-129a-49d2-a72c-2017ec000000",
+   "arm": "holdout",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790241136153,
+   "session": "968f8e00-ac63-455b-a8d1-090eee000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790241156753,
+   "session": "968f8e00-ac63-455b-a8d1-090eee000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790241211030,
+   "session": "968f8e00-ac63-455b-a8d1-090eee000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "finish-line/regenerate"
+   ],
+   "would": [
+    "finish-line/regenerate"
+   ],
+   "judged": [],
+   "observed": [
+    "edit {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790241260375,
+   "session": "968f8e00-ac63-455b-a8d1-090eee000000",
+   "arm": "treated",
+   "event": "Stop",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "obligation_met",
+     "finish-line/regenerate"
+    ]
+   ],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790264857111,
+   "session": "2b549a00-55f1-45ee-abb5-e0a9e0000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790264961305,
+   "session": "2b549a00-55f1-45ee-abb5-e0a9e0000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790264995780,
+   "session": "2b549a00-55f1-45ee-abb5-e0a9e0000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790287823388,
+   "session": "afd7bc00-0223-43bf-aaba-4ec80c000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790287865648,
+   "session": "afd7bc00-0223-43bf-aaba-4ec80c000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790305836247,
+   "session": "cf2e8c00-ad79-4efb-a5e0-9f9fcc000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790305859427,
+   "session": "cf2e8c00-ad79-4efb-a5e0-9f9fcc000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790327078574,
+   "session": "4f4d8200-ed9c-4c86-ace9-41b822000000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790327166836,
+   "session": "4f4d8200-ed9c-4c86-ace9-41b822000000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "derailed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "search:content {pattern}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790348782805,
+   "session": "4c11f600-209a-40ac-a51d-6cc441000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790348846578,
+   "session": "4c11f600-209a-40ac-a51d-6cc441000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790348895394,
+   "session": "4c11f600-209a-40ac-a51d-6cc441000000",
+   "arm": "treated",
+   "event": "PostToolUseFailure",
+   "repo": "acme-billing",
+   "directed": [
+    "dead-end-d41b1e"
+   ],
+   "would": [
+    "dead-end-d41b1e"
+   ],
+   "judged": [],
+   "observed": [
+    "exec python3 -m unittest !failed"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790376850262,
+   "session": "68c4ee00-b05d-4695-a3f5-b93a4e000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790376919356,
+   "session": "68c4ee00-b05d-4695-a3f5-b93a4e000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790393242636,
+   "session": "cdc83c00-0889-430a-a111-1a98e7800000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790393333281,
+   "session": "cdc83c00-0889-430a-a111-1a98e7800000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790418132291,
+   "session": "9c78da00-0de1-4321-a0e0-26b565800000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790418213233,
+   "session": "9c78da00-0de1-4321-a0e0-26b565800000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790418237779,
+   "session": "9c78da00-0de1-4321-a0e0-26b565800000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "start-with-make-test"
+   ],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790438880207,
+   "session": "45dcce00-59c8-434e-a79b-631764000000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790438901060,
+   "session": "45dcce00-59c8-434e-a79b-631764000000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "derailed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "search:content {pattern}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790438970131,
+   "session": "45dcce00-59c8-434e-a79b-631764000000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790458897095,
+   "session": "6732b800-b4a8-4a3e-a654-d1bab8000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790458939564,
+   "session": "6732b800-b4a8-4a3e-a654-d1bab8000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790481832381,
+   "session": "5daf4e00-a168-49b3-a678-826aae000000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790481930510,
+   "session": "5daf4e00-a168-49b3-a678-826aae000000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "derailed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "search:content {pattern}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790501738259,
+   "session": "ea234200-7b1f-45f9-a00b-1429e2720000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790501839517,
+   "session": "ea234200-7b1f-45f9-a00b-1429e2720000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [
+    "read-linked-files"
+   ],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790527548634,
+   "session": "f4df0000-34f3-4f2e-a202-d0097e800000",
+   "arm": "treated",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [
+    "lookup-work-item"
+   ],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790527587907,
+   "session": "f4df0000-34f3-4f2e-a202-d0097e800000",
+   "arm": "treated",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [],
+   "judged": [
+    [
+     "derailed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "list {path}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790547712825,
+   "session": "6323e200-f123-4a11-a23a-2c9482800000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "lookup-work-item"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  },
+  {
+   "ts": 1790547804525,
+   "session": "6323e200-f123-4a11-a23a-2c9482800000",
+   "arm": "holdout",
+   "event": "PostToolBatch",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "read-linked-files"
+   ],
+   "judged": [
+    [
+     "followed",
+     "lookup-work-item"
+    ]
+   ],
+   "observed": [
+    "exec python3 scripts/wi-lookup {id}"
+   ],
+   "continue": false
+  },
+  {
+   "ts": 1790547896938,
+   "session": "6323e200-f123-4a11-a23a-2c9482800000",
+   "arm": "holdout",
+   "event": "UserPromptSubmit",
+   "repo": "acme-billing",
+   "directed": [],
+   "would": [
+    "start-with-make-test"
+   ],
+   "judged": [],
+   "observed": [],
+   "continue": false
+  }
+ ],
+ "learning": [
+  {
+   "ts": 1789560000000,
+   "kind": "learn",
+   "trigger": "auto",
+   "repo": "acme-billing",
+   "sessions_read": 10,
+   "sessions_used": 9,
+   "duration_ms": 640,
+   "index_generation": "19f4a00000000000",
+   "changes": [
+    {
+     "route": "lookup-work-item",
+     "track": "acme-billing/work-items",
+     "change": "added",
+     "from": null,
+     "to": "yellow",
+     "summary": "work item route added at prime (6 of 9 traces)"
+    }
+   ]
+  },
+  {
+   "ts": 1789830000000,
+   "kind": "learn",
+   "trigger": "auto",
+   "repo": "acme-billing",
+   "sessions_read": 22,
+   "sessions_used": 21,
+   "duration_ms": 640,
+   "index_generation": "55e8808000000000",
+   "changes": [
+    {
+     "route": "lookup-work-item",
+     "track": "acme-billing/work-items",
+     "change": "aspect",
+     "from": "yellow",
+     "to": "green",
+     "summary": "work item route prime → fire (lower bound 0.51)"
+    }
+   ]
+  },
+  {
+   "ts": 1790078400000,
+   "kind": "learn",
+   "trigger": "auto",
+   "repo": "acme-billing",
+   "sessions_read": 34,
+   "sessions_used": 33,
+   "duration_ms": 640,
+   "index_generation": "4e26160000000000",
+   "changes": [
+    {
+     "route": "read-linked-files",
+     "track": "acme-billing/work-items",
+     "change": "aspect",
+     "from": "yellow",
+     "to": "green",
+     "summary": "linked files route prime → fire (15 of 16 traces)"
+    }
+   ]
+  },
+  {
+   "ts": 1790337600000,
+   "kind": "learn",
+   "trigger": "auto",
+   "repo": "acme-billing",
+   "sessions_read": 46,
+   "sessions_used": 45,
+   "duration_ms": 640,
+   "index_generation": "e4ebbe0000000000",
+   "changes": [
+    {
+     "route": "lookup-work-item",
+     "track": "acme-billing/work-items",
+     "change": "evidence",
+     "summary": "evidence 22/32 → 23/33 traces"
+    }
+   ]
+  }
+ ],
+ "bars": {
+  "min_support": 3,
+  "fire_lower_bound": 0.5
+ }
+}
