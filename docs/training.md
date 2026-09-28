@@ -106,7 +106,7 @@ Per claim, one of:
 | `compiled → route <id>` | a staged reflex does what the claim says (same glob and command; same working command; same lookup tool) |
 | `contradicted` | the skill says X; X failed in at least 9 in 10 of the exploration sessions that ran it, and a dead end X → Y was learned: **your skill is stale** |
 | `never exercised` | nothing could trigger it (no matching file, no example id, no session gave it a chance) |
-| `not compiled` | exercised, but no reflex met the learning thresholds (e.g. a correct `verify` claim followed without any failure to learn from: no miner compiles a plain verify step) |
+| `not compiled` | exercised, but no reflex met the learning thresholds (e.g. a `verify` claim that sessions ran, but not after their last edit, or as often without editing anything). A plain verify claim ("run `make check` before finishing") compiles to a check owed after any edit when the exploration sessions ran it after their last edit (`adage_learn::mine::claimed_verify_route`) |
 | `unsafe` | above regenerate, or not one plain command; never exercised |
 
 Plus sessions by arm, skipped (budget) and failed sessions, reported cost against the cap, the

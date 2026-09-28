@@ -94,29 +94,34 @@ pub struct Conv {
     pub glob: Option<String>,
 }
 
-/// Read `conventions.json` in either schema (a dataset's object, or a bundle's list).
+/// Read `conventions.json` (`adage-conventions/1`, a dataset's or a generated bundle's): its
+/// conventions, then its decoys (kind `decoy`). A dead end planted as the retired universal
+/// default (`mode: instinct_violation`) is kind `instinct_violation` here, as the G2 parity counts it.
 pub fn read_conventions(path: &Path) -> Result<Vec<Conv>> {
-    let v: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(path).with_context(|| path.display().to_string())?)?;
-    let list = v.get("conventions").cloned().unwrap_or(v);
-    let arr = list.as_array().with_context(|| format!("{}: no conventions", path.display()))?;
-    Ok(arr
+    let c = crate::conventions::Conventions::load(path)?;
+    let mut out: Vec<Conv> = c
+        .conventions
         .iter()
-        .map(|c| {
-            let avoided = match &c["avoided"] {
-                serde_json::Value::String(s) => vec![s.clone()],
-                serde_json::Value::Array(a) => a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect(),
-                _ => vec![],
-            };
-            Conv {
-                id: c["id"].as_str().unwrap_or_default().to_string(),
-                kind: c["kind"].as_str().unwrap_or_default().to_string(),
-                command: c["command"].as_str().unwrap_or_default().to_string(),
-                avoided,
-                glob: c["glob"].as_str().map(str::to_string),
-            }
+        .map(|x| Conv {
+            id: x.id.clone(),
+            kind: if x.mode.as_deref() == Some("instinct_violation") {
+                "instinct_violation".to_string()
+            } else {
+                x.kind.name().to_string()
+            },
+            command: x.command.clone(),
+            avoided: x.avoided.clone(),
+            glob: x.glob.clone(),
         })
-        .collect())
+        .collect();
+    out.extend(c.decoys.iter().map(|d| Conv {
+        id: d.id.clone(),
+        kind: "decoy".into(),
+        command: d.command.clone(),
+        avoided: vec![],
+        glob: None,
+    }));
+    Ok(out)
 }
 
 /// Parity of mined reflexes with the conventions.

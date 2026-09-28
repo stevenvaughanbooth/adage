@@ -247,6 +247,14 @@ pub struct Evidence {
     /// instinct never earns green on these.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub by_origin: BTreeMap<String, u32>,
+    /// The outcome lift the step showed (`crate::lift`): recorded whenever the traces' outcomes
+    /// were known, and the reason the route exists when it formed on lift alone (yellow at most).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome_lift: Option<crate::lift::OutcomeLift>,
+    /// Why a repository script's step was classified observe from the traces rather than by its
+    /// name or the command table (`adage_learn::effects`); `None` for every other route.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_evidence: Option<String>,
 }
 
 /// Where a route came from.

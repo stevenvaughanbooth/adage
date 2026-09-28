@@ -514,9 +514,11 @@ const SHADOW_ENTRIES: usize = 4096;
 /// yet a script that finds its data relative to itself (`Path(__file__).parent.parent /
 /// ".tracker"`) still finds the repository's. The shadow lives in scratch; the symlinks lead only
 /// into the repository, which the sandbox already lets the run read.
-fn shadow_copy(repo: &Path, shadow: &Path, rel: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
+fn shadow_copy(repo: &Path, link_to: &Path, shadow: &Path, rel: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
     let parts: Vec<&str> = rel.split('/').collect();
-    let (mut real, mut fake) = (repo.to_path_buf(), shadow.to_path_buf());
+    // `real` is read here; the links lead to `link_to`, where the run sees the same directory
+    // (the repository itself, or its bind mount).
+    let (mut real, mut seen, mut fake) = (repo.to_path_buf(), link_to.to_path_buf(), shadow.to_path_buf());
     let make_dir = |d: &Path| -> std::io::Result<()> {
         match std::fs::symlink_metadata(d) {
             Ok(m) if m.file_type().is_symlink() => {
@@ -536,7 +538,7 @@ fn shadow_copy(repo: &Path, shadow: &Path, rel: &str, bytes: &[u8]) -> std::io::
                 continue;
             }
             #[cfg(unix)]
-            std::os::unix::fs::symlink(real.join(&name), &link)?;
+            std::os::unix::fs::symlink(seen.join(&name), &link)?;
         }
         if i + 1 == parts.len() {
             let copy = fake.join(part);
@@ -547,6 +549,7 @@ fn shadow_copy(repo: &Path, shadow: &Path, rel: &str, bytes: &[u8]) -> std::io::
             return Ok(copy);
         }
         real = real.join(part);
+        seen = seen.join(part);
         fake = fake.join(part);
         make_dir(&fake)?;
     }
@@ -664,7 +667,7 @@ pub(crate) fn resolve_program(
         if hash != s.sha256 {
             return refuse("script", format!("script {rel} changed since it was approved (sha256 {hash})"));
         }
-        let copy = shadow_copy(repo, &scratch.join("shadow"), rel, &bytes)
+        let copy = shadow_copy(repo, res.seen_repo(), &scratch.join("shadow"), rel, &bytes)
             .map_err(|e| Refusal { stage: "script", reason: format!("copying {rel} into scratch: {e}") })?;
         #[cfg(unix)]
         {
@@ -701,7 +704,7 @@ pub(crate) fn resolve_program(
             .ok_or_else(|| Refusal { stage: "request", reason: format!("{} is not on the sanitised PATH", argv[0]) })?
     };
     let is_git = program.file_name().is_some_and(|n| n == "git");
-    let full = if is_git { git::harden(&argv, res.drop_to.map(|_| repo)) } else { argv };
+    let full = if is_git { git::harden(&argv, res.drop_to.map(|_| res.seen_repo())) } else { argv };
     Ok((program, full))
 }
 
@@ -722,8 +725,11 @@ pub fn execute(req: &ExecRequest, ctx: &Context) -> Result<Delivered, Refusal> {
         .map_err(|e| Refusal { stage: "request", reason: format!("repository root: {e}") })?;
     let environment = env::build(&ctx.inherited_env, &repo, &scratch.path, &ctx.policy.env);
     let path_dirs: Vec<PathBuf> = environment["PATH"].split(':').map(PathBuf::from).collect();
-    let res = Resolved::new(&req.profile, &repo, &scratch.path, &path_dirs, ctx.cas.as_deref(), ctx.home.as_deref())
-        .map_err(|e| Refusal { stage: "sandbox", reason: format!("resolving the profile: {e}") })?;
+    let mut res =
+        Resolved::new(&req.profile, &repo, &scratch.path, &path_dirs, ctx.cas.as_deref(), ctx.home.as_deref())
+            .map_err(|e| Refusal { stage: "sandbox", reason: format!("resolving the profile: {e}") })?;
+    // As root the run is nobody's: a repository nobody can reach is bound where it can.
+    res.bind_repo(&ctx.capability.backend).map_err(|e| Refusal { stage: "sandbox", reason: e })?;
     let (program, full) = resolve_program(req, &checked.bound, &repo, &scratch.path, &res, &environment, ctx)?;
     let o = spawn_sandboxed(&program, &full[1..], &environment, &res, ctx.capability)?;
     if o.timed_out {
@@ -739,7 +745,7 @@ pub fn execute(req: &ExecRequest, ctx: &Context) -> Result<Delivered, Refusal> {
     };
     let payload = project::project(&o.stdout, &req.output, &repo, &ctx.canaries, req.profile.limits.return_bytes)
         .map_err(|w| Refusal { stage: "output", reason: format!("{w} (exit {exit})") })?;
-    let block = render::data_block(
+    let block = render::data_block_checked(
         &req.labels.track,
         &req.labels.route,
         &req.labels.step,
@@ -748,10 +754,7 @@ pub fn execute(req: &ExecRequest, ctx: &Context) -> Result<Delivered, Refusal> {
         &checked.bound,
         &payload,
     )
-    .ok_or_else(|| Refusal {
-        stage: "render",
-        reason: "a label or argv element is outside the template's character set".into(),
-    })?;
+    .map_err(|why| Refusal { stage: "render", reason: why.into() })?;
     Ok(Delivered {
         block,
         record: Record {

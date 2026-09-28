@@ -117,6 +117,13 @@ pub struct FieldSpec {
     /// When true, a missing field is left out instead of withholding the block.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub optional: bool,
+    /// `repo-path-list` only: read from line-oriented **text** output, not JSON: the repository
+    /// paths its lines mention, in order, each validated as a `repo-path` (an existing file or
+    /// directory inside the repository); nothing else of the text passes. So a plain-text lookup
+    /// (`Linked files: acme/customers.py, tests/test_customers.py`) is approved typed, no raw
+    /// output needed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub text: bool,
 }
 
 /// The output contract: typed fields, or raw text.
@@ -300,6 +307,9 @@ impl OutputSpec {
         for (name, f) in &self.fields {
             if !safe_id(name) {
                 bail!("field name {name:?} is not a safe id");
+            }
+            if f.text && (f.ty != FieldType::RepoPathList || f.json.is_some()) {
+                bail!("field {name}: only a repo-path-list with no json path is read from text output");
             }
             if let Some(j) = &f.json {
                 if j.is_empty() || !j.split('.').all(safe_id) {

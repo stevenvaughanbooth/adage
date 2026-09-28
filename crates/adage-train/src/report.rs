@@ -249,8 +249,10 @@ pub fn build(dir: &Path, plan: &Plan, state: &RunState) -> Result<Report> {
         } else {
             let reason = match &c.kind {
                 ClaimKind::Verify { command } if followed > 0 => format!(
-                    "`{command}` was followed in {followed}/{exercised} sessions without a failure to learn from; \
-                     no miner compiles a plain verify step yet"
+                    "`{command}` was followed in {followed}/{exercised} sessions, but not after the last edit in \
+                     enough of them, or as often without an edit (a claimed check is compiled when sessions run it \
+                     after their edits; thresholds {})",
+                    state.thresholds
                 ),
                 _ => format!(
                     "followed in {followed}/{exercised} exploration sessions; below the learning thresholds ({})",

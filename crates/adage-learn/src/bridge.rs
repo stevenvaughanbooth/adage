@@ -162,6 +162,7 @@ mod tests {
                 PromptObs { text: "second".into(), at_step: 2 },
                 PromptObs { text: "after".into(), at_step: 4 },
             ],
+            ending: Default::default(),
         };
         let a = annotate(&s);
         assert_eq!(a.session.steps.len(), 3);

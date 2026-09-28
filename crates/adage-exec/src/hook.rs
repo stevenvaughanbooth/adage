@@ -173,11 +173,13 @@ fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
     let Some((s, a, ir)) = turn.stimuli.iter().find_map(|s| approved(s).map(|(a, ir)| (s, a, ir))) else { return out };
     let label = a.route.clone();
     let Some(dir) = directive_for(ir, directives, &s.command) else {
-        out.records.push(json!({ "route": label, "level": "e2", "withheld": "render" }));
+        out.records.push(json!({ "route": label, "level": "e2", "withheld": "render",
+                                 "reason": "the action's directive could not be rendered" }));
         return out;
     };
     let not_run = |out: &mut Acted, stage: &str, reason: &str| {
-        out.records.push(json!({ "route": label, "level": "e2", "withheld": stage }));
+        out.records
+            .push(json!({ "route": label, "level": "e2", "withheld": stage, "reason": crate::reason_text(reason) }));
         if s.at_stop && ir.exec_only() {
             // The agent cannot run a vendored script itself: asking it to would be unfollowable.
             out.stop = Some(None);
@@ -279,8 +281,10 @@ fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
     out
 }
 
-fn withheld(route: &str, stage: &str) -> Value {
-    json!({ "route": route, "level": "e1", "withheld": stage })
+/// A withheld attempt's spool record: the stage that refused it and why (never output text), so
+/// `adage-exec doctor` and `adage review` can say what went wrong ([`crate::last_withheld`]).
+fn withheld(route: &str, stage: &str, reason: &str) -> Value {
+    json!({ "route": route, "level": "e1", "withheld": stage, "reason": crate::reason_text(reason) })
 }
 
 /// The oracle's view of a declared field.
@@ -308,7 +312,7 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
     let home = &turn.paths.root;
     let store = match Store::load(&approvals::path(home)) {
         Ok(s) => s,
-        Err(_) => return Err(vec![withheld("*", "approvals")]),
+        Err(e) => return Err(vec![withheld("*", "approvals", &format!("the approvals file is unreadable: {e:#}"))]),
     };
     let label = |d: &Directive| format!("{}/{}", d.track, d.route);
     let grant = |d: &Directive| -> Option<&Approval> {
@@ -319,7 +323,8 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
     }
     let started = Instant::now();
     let mut records = Vec::new();
-    let pol = policy::load(home).map_err(|_| vec![withheld("*", "policy")])?;
+    let pol = policy::load(home)
+        .map_err(|e| vec![withheld("*", "policy", &format!("the execution policy is unreadable: {e:#}"))])?;
     let cap = sandbox::detect();
     let table = CommandTable::load();
     let cas = Some(home.join("cas")).filter(|p| p.is_dir());
@@ -342,36 +347,41 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
             continue;
         };
         let name = label(d);
-        let fail = |mut records: Vec<Value>, stage: &str| {
-            records.push(withheld(&name, stage));
+        let fail = |mut records: Vec<Value>, stage: &str, reason: &str| {
+            records.push(withheld(&name, stage, reason));
             records
         };
         let Some(ir) = route::find(turn.index, turn.repo_key, &d.track, &d.route) else {
-            return Err(fail(records, "route"));
+            return Err(fail(records, "route", "the index holds no such route for this repository"));
         };
         let plan = match route::plan(ir, turn.index, turn.root, &tracks, Level::E1, a.terms.as_ref(), &table) {
             Ok(p) => p,
-            Err(_) => return Err(fail(records, "route")),
+            Err(e) => return Err(fail(records, "route", &e)),
         };
         let mut req = plan.request;
         match route::bound_inputs(&req.argv, &d.text) {
             Some(inputs) => req.inputs = inputs,
-            None => return Err(fail(records, "bind")),
+            None => {
+                return Err(fail(records, "bind", "the directive's command line does not match the route's template"))
+            }
         }
         // All E1 runs of one event together stay within E1's longest wall timeout.
         let left = limits::E1_MAX_WALL_MS.saturating_sub(started.elapsed().as_millis() as u64);
         if left < req.profile.limits.wall_ms {
-            return Err(fail(records, "limits"));
+            let why = format!("{left} ms left of the event's {} ms for prefetches", limits::E1_MAX_WALL_MS);
+            return Err(fail(records, "limits", &why));
         }
         let delivered = match run::execute(&req, &ctx) {
             Ok(x) => x,
-            Err(r) => return Err(fail(records, r.stage)),
+            Err(r) => return Err(fail(records, r.stage, &r.reason)),
         };
         let fields: Vec<(String, DataType)> =
             req.output.fields.iter().map(|(k, f)| (k.clone(), data_type(f))).collect();
         let decl = (req.output.mode == OutputMode::Typed).then_some(fields.as_slice());
-        if !check_data_block(&d.route, &delivered.block, decl, Some(turn.root), &ctx.canaries).is_empty() {
-            return Err(fail(records, "oracle"));
+        let violations = check_data_block(&d.route, &delivered.block, decl, Some(turn.root), &ctx.canaries);
+        if !violations.is_empty() {
+            let why: Vec<String> = violations.iter().map(|v| v.reason.clone()).collect();
+            return Err(fail(records, "oracle", &format!("the safety oracle refused the block: {}", why.join("; "))));
         }
         // Exit predicates, on the projected fields.
         let projected: BTreeMap<String, Value> = payload(&delivered.block)
@@ -384,16 +394,18 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
             .find(|(f, v)| projected.get(f.as_str()).and_then(|x| x.as_str()) == Some(v.as_str()))
             .and_then(|(f, v)| render::e1_exit_note(f, v));
         let Some(text) = render::wrap_directive_e1(d, &delivered.block, note.as_deref()) else {
-            return Err(fail(records, "render"));
+            return Err(fail(records, "render", "the data block is not one whole <adage-data> block"));
         };
         texts.push(text);
         let mut rec = serde_json::to_value(&delivered.record).unwrap_or(Value::Null);
         rec["route"] = json!(name);
         records.push(rec);
     }
-    if texts.join("\n\n").len() > turn.max_context {
+    let size = texts.join("\n\n").len();
+    if size > turn.max_context {
         return Err({
-            records.push(withheld("*", "size"));
+            let why = format!("{size} bytes with the data blocks, over the harness's {} bytes", turn.max_context);
+            records.push(withheld("*", "size", &why));
             records
         });
     }

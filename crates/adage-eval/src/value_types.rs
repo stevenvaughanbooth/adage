@@ -324,11 +324,14 @@ fn read_sessions(files: &[PathBuf], repo: &str) -> Vec<adage_learn::import::Sess
 
 fn gen_bundle(dir: &Path, e2e: bool) -> Result<BundleReport> {
     let name = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-    let conv: Vec<serde_json::Value> = serde_json::from_str(
-        &std::fs::read_to_string(dir.join("conventions.json")).with_context(|| format!("{name}: conventions.json"))?,
-    )?;
-    let look = conv.iter().find(|c| c["kind"] == "lookup").with_context(|| format!("{name}: no lookup convention"))?;
-    let command = look["command"].as_str().unwrap_or_default().to_string();
+    let conv =
+        crate::conventions::Conventions::from_bundle(dir).with_context(|| format!("{name}: conventions.json"))?;
+    let look = conv
+        .conventions
+        .iter()
+        .find(|c| c.kind == crate::conventions::Kind::Lookup)
+        .with_context(|| format!("{name}: no lookup convention"))?;
+    let command = look.command.clone();
     let tasks: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(dir.join("tasks.json"))?)?;
     let repo = tasks["repo"].as_str().unwrap_or_default().to_string();
     let reh = dir.join("rehearsal");

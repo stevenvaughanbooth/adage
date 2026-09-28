@@ -1,53 +1,72 @@
 {
- "schema": "adage-conventions/1",
- "sandbox": "wardline-clinic",
- "description": "Converted from the gen bundle's conventions.json (evals/gen); decoys are in decoys.json.",
  "conventions": [
   {
-   "id": "lookup",
-   "notes": "Task prompts name only an item ID. Items live in the case system: an opaque store (.cases/store.dat) that only tools/case reads. The README mentions only the case system.",
-   "kind": "lookup",
-   "command": "./tools/case {id}",
-   "id_pattern": "^CARE-\\d{3}$",
-   "samples": [
-    "CARE-945",
-    "CARE-781",
-    "CARE-279",
-    "CARE-375",
-    "CARE-633",
-    "CARE-242"
-   ],
+   "command": "./tools/case {item}",
    "counter_samples": [
     "X-1",
     "ABCDEFG-123456789",
     "12",
     "not-an-id"
+   ],
+   "id": "lookup",
+   "id_pattern": "^CARE-\\d{3}$",
+   "kind": "lookup",
+   "notes": "Task prompts name only an item ID. Items live in the case system: an opaque store (.cases/store.dat) that only tools/case reads. The README mentions only the case system.",
+   "samples": [
+    "CARE-945",
+    "CARE-375",
+    "CARE-781",
+    "CARE-633",
+    "CARE-279",
+    "CARE-242"
    ]
   },
   {
+   "command": "./tools/case {item}",
    "id": "linked-files",
-   "notes": "The lookup output lists the files to change under 'Files:' (the `files` field with --json). Registry items list the CSV and the module that reads it, never the generated file.",
    "kind": "linked_files",
-   "command": "./tools/case {id}",
+   "notes": "The lookup output lists the files to change under 'Files:' (the `files` field with --json). Registry items list the CSV and the module that reads it, never the generated file.",
    "samples": [
     "CARE-945"
    ]
   },
   {
-   "id": "dead-end",
-   "notes": "Test files import tools/testing/fixtures.mjs, which throws unless the fixtures were preloaded by `npm run check` (--import ./tools/testing/setup.mjs), so any generic runner fails. The working command is declared in .ci/pipeline.yml.",
-   "kind": "dead_end",
-   "command": "npm run check",
    "avoided": [
     "node --test"
-   ]
+   ],
+   "command": "npm run check",
+   "id": "dead-end",
+   "kind": "dead_end",
+   "mode": "wrong_runner",
+   "notes": "Test files import tools/testing/fixtures.mjs, which throws unless the fixtures were preloaded by `npm run check` (--import ./tools/testing/setup.mjs), so any generic runner fails. The working command is declared in .ci/pipeline.yml.",
+   "signature": "the test fixtures are not loaded, this suite runs through npm run check"
   },
   {
-   "id": "finish-line",
-   "notes": "Lookups read src/generated/registry.mjs, generated from registry/*.csv. Editing a CSV requires npm run codegen; npm run check and the hidden checks fail on stale output.",
-   "kind": "finish_line",
    "command": "npm run codegen",
-   "glob": "registry/*.csv"
+   "glob": "registry/*.csv",
+   "id": "finish-line",
+   "kind": "finish_line",
+   "notes": "Lookups read src/generated/registry.mjs, generated from registry/*.csv. Editing a CSV requires npm run codegen; npm run check and the hidden checks fail on stale output.",
+   "signature": "error: src/generated/registry.mjs is out of date with registry/*.csv, run npm run codegen"
   }
- ]
+ ],
+ "decoys": [
+  {
+   "command": "npm run bench",
+   "id": "decoy-unused-target",
+   "kind": "decoy",
+   "mode": "unused_target",
+   "notes": "A plausible target nothing depends on. Running it changes nothing."
+  },
+  {
+   "command": "npm run gen:docs",
+   "id": "decoy-lookalike-regen",
+   "kind": "decoy",
+   "mode": "lookalike_regen",
+   "notes": "Looks like a regeneration step but generates nothing tracked; it is never required after any edit."
+  }
+ ],
+ "description": "The hidden conventions of the wardline-clinic sandbox (evals/gen, node-npm, seed 23): what a learner should find. Decoys are planted commands no route may direct.",
+ "sandbox": "wardline-clinic",
+ "schema": "adage-conventions/1"
 }

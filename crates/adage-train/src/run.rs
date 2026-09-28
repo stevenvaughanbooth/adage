@@ -392,9 +392,12 @@ pub fn mine(dir: &Path, plan: &Plan, state: &RunState) -> Result<Staged> {
     };
     std::fs::create_dir_all(&tracks)?;
     let report = adage_learn::learn(&inputs, &tracks, &index, &cfg).context("mining the exploration transcripts")?;
+    let mut all = io::read_all(&tracks)?;
+    // Plain verify claims ("run `make check` before finishing"): compiled where the exploration
+    // sessions ran the step after their last edit (`adage_learn::mine::claimed_verify_route`).
+    add_claimed_verify_steps(&mut all, &transcripts, plan, &cfg);
     // The synthetic-origin cap (docs/training.md): never green, never more than probation. A
     // dead end stays red (the model requires it of an avoid step); review decides.
-    let mut all = io::read_all(&tracks)?;
     for t in all.iter_mut() {
         for r in t.routes.iter_mut() {
             if r.aspect == adage_tracks::Aspect::Green {
@@ -439,6 +442,48 @@ pub fn mine(dir: &Path, plan: &Plan, state: &RunState) -> Result<Staged> {
         routes,
         sessions_used: report.sessions_used,
     })
+}
+
+/// Each plain verify claim the exploration sessions followed after their edits, as a finish-line
+/// route in the repository's `finish-line` track (created if learning wrote none). A route
+/// already directing the step is left as it is.
+fn add_claimed_verify_steps(
+    all: &mut Vec<adage_tracks::Track>,
+    transcripts: &[PathBuf],
+    plan: &Plan,
+    cfg: &LearnConfig,
+) {
+    use crate::claims::ClaimKind;
+    let table = adage_core::CommandTable::load();
+    let sessions: Vec<adage_learn::import::Session> =
+        transcripts.iter().filter_map(|p| adage_learn::read_session(p, &table, Some(&plan.repo.key))).collect();
+    let refs: Vec<&adage_learn::import::Session> = sessions.iter().filter(|s| !s.steps.is_empty()).collect();
+    let name = format!("{}/finish-line", adage_learn::slug(&plan.repo.key));
+    for c in plan.claims.iter().filter(|c| !c.is_unsafe()) {
+        let ClaimKind::Verify { command } = &c.kind else { continue };
+        let Some(route) = adage_learn::mine::claimed_verify_route(&refs, command, cfg) else { continue };
+        let directs =
+            |r: &adage_tracks::Route| matches!(&r.step, adage_tracks::Step::Run { command: x } if x == command);
+        if all.iter().any(|t| t.routes.iter().any(directs)) {
+            continue;
+        }
+        match all.iter_mut().find(|t| t.manifest.track.name == name) {
+            Some(t) => t.routes.push(route),
+            None => all.push(adage_tracks::Track {
+                manifest: adage_tracks::Manifest {
+                    track: adage_tracks::TrackInfo {
+                        name: name.clone(),
+                        version: "0.1.0".into(),
+                        description: "Steps this repository requires after certain edits".into(),
+                        provenance: cfg.provenance.clone(),
+                    },
+                    scope: adage_tracks::Scope { repo: plan.repo.key.clone() },
+                    gauge: adage_tracks::Gauge::default(),
+                },
+                routes: vec![route],
+            }),
+        }
+    }
 }
 
 /// The reflex arm's ADAGE_HOME: the staged tracks re-keyed to the clone's repository key (a

@@ -18,7 +18,7 @@
 
 use crate::bridge;
 use crate::import::Session;
-use crate::mine::{aspect_for, days, median, models, shell_join, LearnConfig, MaxRank};
+use crate::mine::{aspect_with_lift, days, median, models, outcome_lift, shell_join, LearnConfig, MaxRank};
 use adage_core::spans::SpanKind;
 use adage_core::{tokens, vtype, Effect};
 use adage_graph::embed::Embedder;
@@ -148,6 +148,7 @@ fn route_for(
 ) -> Option<Route> {
     let slot = format!("{}{{item}}{}", sink.prefix, sink.suffix);
     let mut opportunities = 0u32;
+    let mut open: BTreeSet<String> = BTreeSet::new();
     let mut support: BTreeSet<String> = BTreeSet::new();
     let (mut positions, mut turns) = (Vec::new(), Vec::new());
     let mut variants: BTreeMap<String, u32> = BTreeMap::new();
@@ -160,6 +161,7 @@ fn route_for(
             continue;
         }
         opportunities += 1;
+        open.insert(s.id.clone());
         'steps: for (i, step) in s.discovery().iter().enumerate() {
             let Some(av) = crate::mine::argv(step) else { continue };
             if step.call.failed {
@@ -190,14 +192,15 @@ fn route_for(
     let effect = effect
         .unwrap_or(Effect::Environment)
         .max_by_rank(adage_tracks::io::classify(&command, &adage_core::CommandTable::load()));
+    // A repository script the table does not know: classified by what the traces show it doing.
+    let (effect, effect_evidence) = crate::effects::effect_of(effect, &command, sessions);
     ceiling(effect, false)?;
     let n = support.len() as u32;
-    if n < cfg.min_support {
-        return None;
-    }
     let rate = n as f64 / opportunities.max(1) as f64;
     let lb = wilson_lower(n, opportunities);
-    let aspect = aspect_for(effect, false, lb, rate, cfg, "lookup-work-item")?;
+    // The rate gate, else the outcome-lift path (prime at most).
+    let lift = outcome_lift(sessions, &open, &support);
+    let aspect = aspect_with_lift(effect, false, n, lb, rate, cfg, "lookup-work-item", lift.as_ref())?;
     Some(Route {
         id: "lookup-work-item".into(),
         summary: "Look up the work item named in the prompt".into(),
@@ -222,6 +225,8 @@ fn route_for(
             turns_saved: median(&mut turns),
             provenance: cfg.provenance.clone(),
             models: models(sessions),
+            outcome_lift: lift,
+            effect_evidence,
             ..Default::default()
         },
         authored: false,
@@ -320,6 +325,7 @@ mod tests {
             outcome: None,
             harness: "claude-code".into(),
             prompts: vec![PromptObs { text: prompt.into(), at_step: 0 }],
+            ending: Default::default(),
         }
     }
 

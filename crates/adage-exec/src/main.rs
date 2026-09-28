@@ -331,6 +331,7 @@ fn cmd_doctor(a: &Args) -> Result<i32> {
             "stage": adage_exec::stage::backend(&cap),
             "policy": pol.as_ref().ok(),
             "policy_error": pol.as_ref().err().map(|e| e.to_string()),
+            "last_withheld": adage_exec::last_withheld(&home),
         });
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(0);
@@ -351,7 +352,10 @@ fn cmd_doctor(a: &Args) -> Result<i32> {
         cap.sandbox_exec.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "not present".into())
     );
     if cap.running_as_root {
-        println!("  running as root:    sandboxed commands run as nobody (65534); repositories must be world-readable");
+        println!(
+            "  running as root:    sandboxed commands run as nobody (65534); a repository nobody can reach is \
+             bind-mounted read-only where it can (E1)"
+        );
     }
     match pol {
         Ok(p) => println!(
@@ -362,6 +366,10 @@ fn cmd_doctor(a: &Args) -> Result<i32> {
             if p.sources.is_empty() { "defaults".to_string() } else { p.sources.join(", ") }
         ),
         Err(e) => println!("Policy: unreadable ({e:#}); execution refuses until it is fixed"),
+    }
+    match adage_exec::last_withheld(&home) {
+        Some(w) => println!("Last withheld: {}", w.line()),
+        None => println!("Last withheld: none recorded"),
     }
     Ok(0)
 }

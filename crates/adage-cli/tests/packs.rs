@@ -555,3 +555,74 @@ fn the_core_instincts_detector_pack_travels_and_binds() {
     let t = ok(w.add("out", &empty));
     assert!(t.contains("not applicable"), "{t}");
 }
+
+/// A Claude Code transcript: the prompt names `ticket`, the agent looks it up, then edits.
+fn lookup_transcript(id: &str, cwd: &Path, ticket: &str) -> String {
+    let line = |v: Value| v.to_string();
+    let cwd = cwd.to_string_lossy();
+    [
+        line(serde_json::json!({"type": "user", "sessionId": id, "cwd": cwd, "timestamp": "2026-09-28T10:00:00Z",
+            "message": {"role": "user", "content": format!("Pick up {ticket}")}})),
+        line(serde_json::json!({"type": "assistant", "sessionId": id, "cwd": cwd,
+            "message": {"id": "m1", "model": "m", "content": [{"type": "tool_use", "id": "t1", "name": "Bash",
+                "input": {"command": format!("python3 scripts/wi-lookup {ticket}")}}]}})),
+        line(serde_json::json!({"type": "user", "sessionId": id, "cwd": cwd,
+            "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1",
+                "content": "{\"files\": [\"acme/billing.py\"]}", "is_error": false}]}})),
+        line(serde_json::json!({"type": "assistant", "sessionId": id, "cwd": cwd,
+            "message": {"id": "m2", "model": "m", "content": [{"type": "tool_use", "id": "t2", "name": "Edit",
+                "input": {"file_path": format!("{cwd}/acme/billing.py"), "old_string": "a", "new_string": "b"}}]}})),
+        line(serde_json::json!({"type": "user", "sessionId": id, "cwd": cwd,
+            "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "ok"}]}})),
+    ]
+    .join("\n")
+}
+
+#[test]
+fn learn_then_share_carries_the_lookup_with_its_script_pinned_against_repo_root() {
+    // Reflexes learned with `--repo <key>` (as the live runner learns them), a key no checkout
+    // derives; `adage share --repo-root <dir>` still pins the lookup's script (L-ref).
+    let w = World::new();
+    keygen(&w);
+    let traces = w.p("traces");
+    std::fs::create_dir_all(&traces).unwrap();
+    let mut files = Vec::new();
+    for (i, t) in ["W-1041", "W-1042", "W-1043", "W-1044"].iter().enumerate() {
+        let f = traces.join(format!("s{i}.jsonl"));
+        std::fs::write(&f, lookup_transcript(&format!("s{i}"), &w.p("checkout"), t)).unwrap();
+        files.push(f.to_string_lossy().into_owned());
+    }
+    let mut args = vec!["learn", "--demo", "--no-instincts", "--no-cache", "--repo", "acme-billing", "--transcripts"];
+    args.extend(files.iter().map(String::as_str));
+    let t = ok(w.run("sender", &w.p("elsewhere"), &args));
+    assert!(t.contains("lookup-work-item"), "{t}");
+
+    // Without a root, the lookup cannot be carried (the only route here), and the message names
+    // the flag that fixes it.
+    refused(w.share(Path::new("acme-billing/work-items"), "no-root", &[]), "adage share --repo-root <dir>");
+    // With it, the pack holds the lookup, its script pinned by hash.
+    let root = w.p("checkout");
+    let t = ok(w.share(Path::new("acme-billing/work-items"), "out", &["--repo-root", root.to_str().unwrap()]));
+    assert!(!t.contains("Not carried:\n  lookup-work-item"), "{t}");
+    let pack = adage_pack::Pack::load(&w.p("out")).unwrap();
+    let lookup = pack.routes.iter().find(|r| r.id == "lookup-work-item").expect("the lookup is carried");
+    let script = lookup.steps[0].script.as_ref().expect("its script is pinned");
+    assert_eq!(script.path, "scripts/wi-lookup");
+    assert_eq!(script.sha256, sha256_hex(LOOKUP.as_bytes()));
+    assert!(pack.manifest.requires.repo_files.iter().any(|f| f.path == "scripts/wi-lookup"));
+}
+
+#[test]
+fn instincts_only_keys_the_repository_as_learn_does() {
+    // `--repo <key>` names the same key for both learn paths (adage_core::repo::key_with).
+    let w = World::new();
+    std::fs::write(w.p("checkout/Makefile"), "test:\n\tpython3 -m pytest\n").unwrap();
+    let dir = w.p("checkout");
+    let dir = dir.to_str().unwrap();
+    let args = ["learn", "--instincts-only", "--repo-path", dir, "--repo", "acme-billing"];
+    let t = ok(w.run("sender", &w.p("elsewhere"), &args));
+    assert!(t.contains("adage learn --instincts-only: acme-billing\n"), "{t}");
+    // Without it, the key is derived from the checkout (its origin here).
+    let t = ok(w.run("sender2", &w.p("elsewhere"), &["learn", "--instincts-only", "--repo-path", dir]));
+    assert!(t.contains(&format!("adage learn --instincts-only: {REPO}")), "{t}");
+}

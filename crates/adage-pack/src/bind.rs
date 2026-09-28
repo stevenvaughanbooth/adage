@@ -594,6 +594,8 @@ fn to_v1(r: &RouteV2, pack: &Pack, table: &CommandTable) -> Result<Route, String
             RouteOrigin::Synthetic => Origin::Synthetic,
         }),
         by_origin: e.by_origin,
+        outcome_lift: None,
+        effect_evidence: None,
     };
     Ok(Route {
         id: r.id.clone(),

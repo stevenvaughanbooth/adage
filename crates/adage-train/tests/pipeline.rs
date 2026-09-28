@@ -242,6 +242,45 @@ fn fake_end_to_end_compiles_the_right_claim_and_flags_the_stale_one() {
 }
 
 #[test]
+fn a_plain_verify_claim_the_sessions_follow_compiles() {
+    // "Run `make test` before you finish": the exploration sessions edit, then run it. The real
+    // run in evals/corpus (finding 15) staged nothing for such a claim.
+    let tmp = tempfile::tempdir().unwrap();
+    let r = repo(tmp.path());
+    let skill = tmp.path().join("SKILL.md");
+    std::fs::write(
+        &skill,
+        "---\nname: acme-billing\ndescription: Working in acme billing.\n---\n\n# Acme billing\n\n\
+         Always run `make test` before you finish.\n\nAfter editing `schema/*.json`, always run `make gen`.\n",
+    )
+    .unwrap();
+    let p = plan::build(&plan::PlanOptions {
+        from: skill,
+        repo: Some(r.clone()),
+        seed: 3,
+        sessions: 24,
+        model: "claude-haiku-4-5".into(),
+    })
+    .unwrap();
+    let c = p.claims.iter().find(|c| c.kind.describe() == "verify: `make test`").expect("the verify claim");
+    let home = tmp.path().join("adage-home");
+    let (dir, state) =
+        run::execute(&p, &options(&home, "verify", 0), &Fake { world: world() }, &base(tmp.path()), &|_| {}).unwrap();
+    let staged = adage_tracks::io::read_all(&dir.join("staged/tracks")).unwrap();
+    let route = staged
+        .iter()
+        .flat_map(|t| t.routes.iter())
+        .find(|r| r.id.starts_with("finish-check-"))
+        .expect("the claimed check is staged");
+    assert_eq!(route.step, adage_tracks::Step::Run { command: "make test".into() });
+    assert!(matches!(&route.trigger, adage_tracks::Trigger::AfterEdit { .. }));
+    assert_eq!(route.state, adage_tracks::RouteState::Probation, "the synthetic cap applies");
+    let rep = report::build(&dir, &p, &state).unwrap();
+    let v = rep.claims.iter().find(|x| x.id == c.id).unwrap().verdict.clone();
+    assert!(matches!(&v, Verdict::Compiled { route } if route.starts_with("finish-check-")), "{v:?}");
+}
+
+#[test]
 fn the_budget_stops_new_sessions() {
     let tmp = tempfile::tempdir().unwrap();
     let r = repo(tmp.path());
@@ -289,6 +328,9 @@ fn the_dry_run_writes_nothing_and_shows_exact_commands() {
     ] {
         assert!(args.contains(&want), "{want}: {args:?}");
     }
+    // The model sees exactly the allowed tools (no TaskGet/TaskList from the harness).
+    let at = args.iter().position(|a| *a == "--tools").expect("--tools");
+    assert_eq!(args[at + 1], adage_train::harness::ALLOWED_TOOLS.join(","));
     let reflex: Vec<&str> =
         d["examples"]["reflex"]["command"].as_array().unwrap().iter().map(|a| a.as_str().unwrap()).collect();
     assert!(!reflex.contains(&"--append-system-prompt"));

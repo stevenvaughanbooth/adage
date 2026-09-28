@@ -104,6 +104,8 @@ fn ran_after(steps: &[crate::import::StepObs], from: usize, step: &Step, part: O
 
 struct Count {
     opportunities: u32,
+    /// The traces where the trigger occurred (for the outcome lift).
+    open: BTreeSet<String>,
     support: BTreeSet<String>,
     rate_without: f64,
     deviations_failed: u32,
@@ -118,6 +120,7 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
     });
     let first = compile::commands(&r.step).first().map(|c| c.to_string())?;
     let (mut opp, mut support, mut ran_without, mut not_editing, mut failed) = (0, BTreeSet::new(), 0u32, 0u32, 0u32);
+    let mut open = BTreeSet::new();
     for s in sessions {
         let last = s
             .steps
@@ -129,6 +132,7 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
         match last {
             Some((i, p)) => {
                 opp += 1;
+                open.insert(s.id.clone());
                 let part = depth.and_then(|d| p.split('/').filter(|x| !x.is_empty()).nth(d));
                 if depth.is_some() && part.is_none() {
                     continue;
@@ -154,22 +158,23 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
         }
     }
     let rate_without = if not_editing == 0 { 0.0 } else { ran_without as f64 / not_editing as f64 };
-    Some(Count { opportunities: opp, support, rate_without, deviations_failed: failed })
+    Some(Count { opportunities: opp, open, support, rate_without, deviations_failed: failed })
 }
 
 /// An after-command run over the traces: those that ran the command, and those that then ran the
 /// directed one within the next eight steps.
 fn count_after_command(r: &Route, sessions: &[&Session]) -> Option<Count> {
     let Trigger::AfterCommand { command: key } = &r.trigger else { return None };
-    let (mut opp, mut support) = (0, BTreeSet::new());
+    let (mut opp, mut support, mut open) = (0, BTreeSet::new(), BTreeSet::new());
     for s in sessions {
         let Some(i) = s.steps.iter().position(|st| &st.key == key && !st.call.failed) else { continue };
         opp += 1;
+        open.insert(s.id.clone());
         if ran_after(&s.steps[..(i + 9).min(s.steps.len())], i, &r.step, None) {
             support.insert(s.id.clone());
         }
     }
-    Some(Count { opportunities: opp, support, rate_without: 0.0, deviations_failed: 0 })
+    Some(Count { opportunities: opp, open, support, rate_without: 0.0, deviations_failed: 0 })
 }
 
 /// An avoid over the traces: those that ran an avoided runner (the opportunities), and those
@@ -213,7 +218,7 @@ fn count_avoid(runners: &[&str], instead: &str, sessions: &[&Session]) -> Count 
             support.insert(s.id.clone());
         }
     }
-    Count { opportunities: opp, support, rate_without: 0.0, deviations_failed: 0 }
+    Count { opportunities: opp, open: BTreeSet::new(), support, rate_without: 0.0, deviations_failed: 0 }
 }
 
 /// Judge one compiled route (see the module documentation); `None` drops it.
@@ -304,10 +309,13 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
     }
     .ok_or_else(|| "no counter for this shape".to_string())?;
     let n = c.support.len() as u32;
-    if n < cfg.min_support {
+    let rate = n as f64 / c.opportunities.max(1) as f64;
+    // The outcome lift over the traces where the trigger occurred: the compiler's second gate
+    // (`adage_graph::compile::outcome_gate`), for a reflex too few traces show for the rate bar.
+    let lift = crate::mine::outcome_lift(&seen, &c.open, &c.support);
+    if n < cfg.min_support && outcome_gate(r.effect, by_edit, lift.as_ref(), cfg).is_none() {
         return Err(format!("{n} supporting traces, fewer than {}", cfg.min_support));
     }
-    let rate = n as f64 / c.opportunities.max(1) as f64;
     if by_edit && rate - c.rate_without < cfg.finish_line_contrast {
         return Err(format!("contrast {:.2} below {}", rate - c.rate_without, cfg.finish_line_contrast));
     }
@@ -322,8 +330,10 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
             .fold(Effect::Observe, |a, e| if ceiling(e, by_edit) == Some(Aspect::Green) { a } else { e }),
         _ => r.effect,
     };
-    let aspect = aspect_for(effect, by_edit, lb, yellow_rate.max(rate), cfg, &r.id)
-        .ok_or_else(|| format!("rate {rate:.2} below the bar, or may never be directed"))?;
+    let aspect =
+        (if n >= cfg.min_support { aspect_for(effect, by_edit, lb, yellow_rate.max(rate), cfg, &r.id) } else { None })
+            .or_else(|| outcome_gate(effect, by_edit, lift.as_ref(), cfg))
+            .ok_or_else(|| format!("rate {rate:.2} below the bar and no outcome lift, or may never be directed"))?;
     r.aspect = aspect;
     r.evidence = Evidence {
         opportunities: c.opportunities,
@@ -335,9 +345,25 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
         provenance: cfg.provenance.clone(),
         models: models(&seen),
         origin: r.evidence.origin.clone(),
+        outcome_lift: lift,
         ..Default::default()
     };
     Ok(r)
+}
+
+/// The compiler's outcome-lift gate with the learn thresholds.
+fn outcome_gate(
+    effect: Effect,
+    by_edit: bool,
+    lift: Option<&adage_tracks::lift::OutcomeLift>,
+    cfg: &LearnConfig,
+) -> Option<Aspect> {
+    let p = CompileParams {
+        outcome_lift_lower_bound: cfg.outcome_lift_lower_bound,
+        outcome_min_support: cfg.outcome_min_support,
+        ..Default::default()
+    };
+    compile::outcome_gate(effect, by_edit, lift, &p)
 }
 
 /// Learn, compile and judge the graph engine's routes for one repository's traces.
@@ -362,6 +388,8 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route]) -> EngineRun {
     let params = CompileParams {
         green_lower_bound: cfg.green_lower_bound,
         yellow_rate: cfg.yellow_rate,
+        outcome_lift_lower_bound: cfg.outcome_lift_lower_bound,
+        outcome_min_support: cfg.outcome_min_support,
         provenance: cfg.provenance.clone(),
         ..Default::default()
     };

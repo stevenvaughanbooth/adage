@@ -1075,3 +1075,80 @@ mod shadow_tests {
         let _ = normalize_shell("echo {\u{1F600}..}", "/repo", &CommandTable::load());
     }
 }
+
+/// Interpreters whose first path argument is the script they run.
+pub const SCRIPT_INTERPRETERS: [&str; 9] = ["python", "python3", "node", "bash", "sh", "zsh", "ruby", "perl", "deno"];
+
+/// Words in a script's name that say it changes something, reaches the network, or runs other
+/// programs: such a script is never classified observe from the traces.
+const MUTATING_WORDS: [&str; 34] = [
+    "set", "update", "write", "delete", "del", "remove", "rm", "create", "add", "apply", "deploy", "push", "publish",
+    "install", "sync", "migrate", "gen", "generate", "build", "fix", "format", "fmt", "commit", "reset", "clean",
+    "init", "post", "send", "upload", "download", "curl", "wget", "http", "exec",
+];
+
+/// The repository script a plain command runs, when the command table does not know it:
+/// `python3 tools/case {item}` and `./tools/case {item}` → `tools/case`. `None` for a known
+/// program, anything with shell syntax, a path outside the repository, or a script whose name
+/// says it changes something ([`MUTATING_WORDS`]).
+pub fn unlisted_repo_script(command: &str, table: &CommandTable) -> Option<String> {
+    let words: Vec<&str> = command.split_whitespace().collect();
+    if words.is_empty()
+        || words
+            .iter()
+            .any(|w| w.contains(['|', ';', '&', '<', '>', '$', '`', '(', ')', '\'', '"', '\\']) || w.contains("://"))
+    {
+        return None;
+    }
+    let script = if SCRIPT_INTERPRETERS.contains(&words[0]) {
+        let s = words.get(1)?;
+        if s.starts_with('-') {
+            return None;
+        }
+        *s
+    } else {
+        words[0]
+    };
+    let rel = script.strip_prefix("./").unwrap_or(script);
+    if !script.contains('/')
+        || rel.starts_with('/')
+        || rel.split('/').any(|p| p.is_empty() || p == "..")
+        || rel.contains('{')
+    {
+        return None;
+    }
+    let base = basename(rel);
+    if table.get(&base).is_some() {
+        return None;
+    }
+    let lower = base.to_ascii_lowercase();
+    if lower.split(['-', '_', '.']).any(|p| MUTATING_WORDS.contains(&p)) {
+        return None;
+    }
+    Some(rel.to_string())
+}
+
+#[cfg(test)]
+mod repo_script_tests {
+    use super::*;
+
+    #[test]
+    fn unlisted_repo_scripts_are_found_and_known_programs_are_not() {
+        let t = CommandTable::load();
+        assert_eq!(unlisted_repo_script("python3 tools/case {item}", &t).as_deref(), Some("tools/case"));
+        assert_eq!(unlisted_repo_script("./tools/case {item}", &t).as_deref(), Some("tools/case"));
+        assert_eq!(
+            unlisted_repo_script("node bin/fetch-ticket {item} --json", &t).as_deref(),
+            Some("bin/fetch-ticket")
+        );
+        assert_eq!(unlisted_repo_script("make test", &t), None);
+        assert_eq!(unlisted_repo_script("python3 -m pytest", &t), None);
+        assert_eq!(unlisted_repo_script("cat tools/case", &t), None);
+        assert_eq!(unlisted_repo_script("python3 tools/case {item} | sh", &t), None);
+        assert_eq!(unlisted_repo_script("python3 /usr/bin/case x", &t), None);
+        assert_eq!(unlisted_repo_script("python3 ../case x", &t), None);
+        assert_eq!(unlisted_repo_script("python3 scripts/update-case x", &t), None);
+        assert_eq!(unlisted_repo_script("python3 tools/gen.py", &t), None);
+        assert_eq!(unlisted_repo_script("./scripts/deploy x", &t), None);
+    }
+}

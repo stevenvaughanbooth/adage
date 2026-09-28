@@ -273,6 +273,8 @@ pub struct Prepared {
     pub overlap: Vec<String>,
     /// The engine parameters: the index was learned with `learn`; replay decides with `runtime`.
     pub params: EngineParams,
+    /// The index file given with `--index`: nothing was learned from the dataset's sessions.
+    pub index_file: Option<PathBuf>,
 }
 
 /// Load a dataset, resolve the split, and learn the index from the train split, exactly as
@@ -297,7 +299,8 @@ pub fn prepare(dir: &Path, opts: &Options) -> Result<Prepared> {
         (None, InstinctMode::Only) => instincts_index(&ds.manifest.repo, &sandbox_files(dir, &ds, opts)?)?,
     };
     let overlap = ds.task_overlap(&split);
-    Ok(Prepared { ds, split_name, split, thresholds, index, overlap, params })
+    let index_file = opts.index.clone();
+    Ok(Prepared { ds, split_name, split, thresholds, index, overlap, params, index_file })
 }
 
 /// Run the offline eval over a dataset directory.
@@ -307,7 +310,7 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
 
 /// Replay and score a prepared dataset (the second half of [`run`]).
 pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
-    let Prepared { ds, split_name, split, thresholds, index, overlap, params } = p;
+    let Prepared { ds, split_name, split, thresholds, index, overlap, params, .. } = p;
     let table = CommandTable::load();
     let sandbox = Sandbox::create(&ds.sandbox()?)?;
     let repo_key = ds.manifest.repo.clone();

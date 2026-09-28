@@ -39,23 +39,43 @@ pub fn data_block(
     argv: &[String],
     payload: &str,
 ) -> Option<String> {
+    data_block_checked(track, route, step, exit, mode, argv, payload).ok()
+}
+
+/// [`data_block`], or why it refuses (never the offending text): what the spool records when a
+/// block is withheld at `render`.
+pub fn data_block_checked(
+    track: &str,
+    route: &str,
+    step: &str,
+    exit: i32,
+    mode: OutputMode,
+    argv: &[String],
+    payload: &str,
+) -> Result<String, &'static str> {
     if ![track, route, step].iter().all(|s| label_ok(s)) {
-        return None;
+        return Err("a track, route or step label is outside its character set");
     }
     let command = argv.join(" ");
     if !command_ok(&command) {
-        return None;
+        return Err("the bound command line is outside the directive templates' character set");
     }
     // The payload was projected or scanned already; a closer or a stray control here is a bug
     // upstream, and still refuses.
-    if payload.is_empty()
-        || payload.to_ascii_lowercase().contains("<adage-")
-        || payload.to_ascii_lowercase().contains("</adage-")
-        || payload.chars().any(|c| (c.is_control() && c != '\n') || crate::scan::invisible(c))
-    {
-        return None;
+    if payload.is_empty() {
+        return Err("the payload is empty");
     }
-    Some(format!(
+    if payload.to_ascii_lowercase().contains("<adage-") || payload.to_ascii_lowercase().contains("</adage-") {
+        return Err("the payload holds an Adage tag");
+    }
+    if let Some(c) = payload.chars().find(|c| (c.is_control() && *c != '\n') || crate::scan::invisible(*c)) {
+        return Err(if c == '\t' || c == '\r' {
+            "the payload holds a tab or carriage return (a control character)"
+        } else {
+            "the payload holds a control or invisible character"
+        });
+    }
+    Ok(format!(
         "<adage-data track=\"{track}\" route=\"{route}\" step=\"{step}\" exit=\"{exit}\" mode=\"{}\" bytes=\"{}\">\n{}\n{payload}\n</adage-data>",
         mode.as_str(),
         payload.len(),

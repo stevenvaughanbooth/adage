@@ -37,8 +37,16 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
     let table = adage_core::CommandTable::load();
     for sb in sandboxes {
         let name = sb.file_name().unwrap().to_string_lossy().to_string();
-        let conv: Vec<serde_json::Value> =
+        // `adage-conventions/1`: the conventions, then the decoys (evals/gen).
+        let doc: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(sb.join("conventions.json")).unwrap()).unwrap();
+        let conv: Vec<serde_json::Value> = doc["conventions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .chain(doc["decoys"].as_array().into_iter().flatten())
+            .cloned()
+            .collect();
         let r = adage_instincts::bind(&sb.join("repo"), &[], &BTreeSet::new());
         let directed: Vec<String> = r
             .routes
@@ -53,7 +61,9 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
             eprintln!("{name}: {} {:?} -> {:?}", x.id, x.trigger, x.step);
         }
         for c in &conv {
-            let kind = c["kind"].as_str().unwrap_or("");
+            // A dead end planted as the retired universal default says so in its mode.
+            let kind =
+                if c["mode"] == "instinct_violation" { "instinct_violation" } else { c["kind"].as_str().unwrap_or("") };
             let command = c["command"].as_str().unwrap_or("");
             match kind {
                 "decoy" => {
@@ -62,12 +72,12 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
                 }
                 "instinct_violation" => {
                     violations += 1;
-                    let avoided = c["avoided"].as_str().unwrap();
+                    let avoided = c["avoided"][0].as_str().unwrap();
                     assert!(!directed.iter().any(|d| d == avoided), "{name}: retired {avoided} was bound");
                 }
                 "dead_end" => {
                     dead_ends += 1;
-                    let key = adage_instincts::safety::command_key(c["avoided"].as_str().unwrap(), &table);
+                    let key = adage_instincts::safety::command_key(c["avoided"][0].as_str().unwrap(), &table);
                     let hit = r.routes.iter().any(|x| {
                         matches!(&x.trigger, Trigger::AfterFailure { command: k, .. } if Some(k) == key.as_ref())
                             && x.step == Step::Run { command: command.into() }

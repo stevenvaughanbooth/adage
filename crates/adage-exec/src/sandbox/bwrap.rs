@@ -67,6 +67,7 @@ mod tests {
             limits: Limits::for_level(Level::E1),
             drop_to: None,
             overlay: None,
+            bind: None,
         };
         let a = args(&res).join(" ");
         assert_eq!(

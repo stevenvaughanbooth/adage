@@ -109,26 +109,61 @@ pub fn implicit_outputs(ir: &IndexedRoute, index: &Index, table: &CommandTable) 
         };
         for s in &r.route.slots {
             if let (SlotSource::ResultField { field }, Contract::RepoPath) = (&s.source, &s.contract) {
-                if field.starts_with('*') || !crate::request::safe_id(&s.name) {
+                if !crate::request::safe_id(&s.name) {
+                    continue;
+                }
+                // `*paths`: the repository paths the command's text output mentions (the learner's
+                // pseudo-field for a plain-text lookup), read from its lines.
+                let text = field == PATHS_FIELD;
+                if field.starts_with('*') && !text {
                     continue;
                 }
                 out.insert(
                     s.name.clone(),
                     FieldSpec {
                         ty: FieldType::RepoPathList,
-                        json: (field != &s.name).then(|| field.clone()),
+                        json: (!text && field != &s.name).then(|| field.clone()),
                         max: max.map(|m| m.clamp(1, crate::request::MAX_LIST)),
                         values: vec![],
                         regex: None,
                         min: None,
                         max_value: None,
                         optional: false,
+                        text,
                     },
                 );
             }
         }
     }
     out
+}
+
+/// The learner's pseudo-field for "repository paths mentioned in the command's text output"
+/// (`adage_learn::mine::PATHS_FIELD`, spelled here: this crate does not depend on the learner).
+pub const PATHS_FIELD: &str = "*paths";
+
+/// The typed output of a lookup (a prompt-triggered observe step) that no later route reads and
+/// no person declared: the repository paths its output mentions, read from its lines (a
+/// `repo-path-list` field `files`, [`FieldSpec::text`]). Only existing repository paths pass, so
+/// it holds whatever the lookup's output shape; `None` for any other route.
+pub fn lookup_outputs(ir: &IndexedRoute) -> Option<BTreeMap<String, FieldSpec>> {
+    let lookup = matches!(ir.route.trigger, Trigger::Prompt { .. })
+        && matches!(ir.route.step, Step::Run { .. })
+        && ir.route.effect == adage_core::Effect::Observe;
+    lookup.then(|| {
+        let f = FieldSpec {
+            ty: FieldType::RepoPathList,
+            json: None,
+            max: Some(crate::request::DEFAULT_LIST),
+            values: vec![],
+            regex: None,
+            min: None,
+            max_value: None,
+            optional: false,
+            text: true,
+        };
+        [("files".to_string(), f)].into()
+    })
 }
 
 /// A pack route's typed outputs and exits, read from the installed pack (`tracks/@imported/<name>`).
@@ -177,6 +212,7 @@ fn field_of_type(
         min: None,
         max_value: None,
         optional: false,
+        text: false,
     };
     Some(match ty {
         "repo-path" => base,
@@ -286,7 +322,15 @@ pub fn plan(
     let terms = pack.as_ref().or(terms);
     let fields = match terms {
         Some(t) if !t.fields.is_empty() => t.fields.clone(),
-        _ => implicit_outputs(ir, index, table),
+        _ => {
+            let implicit = implicit_outputs(ir, index, table);
+            // A lookup nothing reads: the paths its output names, whatever its shape.
+            if implicit.is_empty() && level == Level::E1 && pack.is_none() {
+                lookup_outputs(ir).unwrap_or_default()
+            } else {
+                implicit
+            }
+        }
     };
     let mode = if terms.is_some_and(|t| t.raw) { OutputMode::Raw } else { OutputMode::Typed };
     if level == Level::E2 && mode == OutputMode::Raw {

@@ -31,6 +31,24 @@ MIN_CONTROL_SHARE = 0.25
 
 SPEC_KEYS = {"name", "stack", "skin", "conventions", "tasks", "id_digits", "id_shape", "description"}
 
+# conventions.json is `adage-conventions/1`, the schema `adage eval routes` reads (docs/evals.md):
+# `conventions` holds what a learner should find, `decoys` the planted commands no route may
+# direct. An instinct violation is a dead end with `mode: instinct_violation`.
+CONVENTIONS_SCHEMA = "adage-conventions/1"
+# Ids no tracker ever issues: a learned lookup contract must reject them.
+COUNTER_SAMPLES = ("X-1", "ABCDEFG-123456789", "12", "not-an-id")
+
+
+def entries(doc):
+    """Every entry of a conventions.json document: the conventions, then the decoys."""
+    return list(doc["conventions"]) + list(doc.get("decoys", []))
+
+
+def kind_of(entry):
+    """The generator's kind of an entry: `instinct_violation` for the retired universal default
+    (a `dead_end` with that mode), else its kind (`decoy` for a decoy)."""
+    return "instinct_violation" if entry.get("mode") == "instinct_violation" else entry["kind"]
+
 # Tracker id shapes (Track G §4.4). The id is always the form the lookup tool takes (the value a
 # learned type must accept); prompts name it by its mention (`#482` for a bare number).
 #   prefix_dash  BIL-1041 (the default; the only shape before Track G, and what adage's hard-coded

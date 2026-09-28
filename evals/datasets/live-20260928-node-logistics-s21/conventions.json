@@ -1,62 +1,83 @@
 {
- "schema": "adage-conventions/1",
- "sandbox": "portside-dispatch",
- "description": "Converted from the gen bundle's conventions.json (evals/gen); decoys are in decoys.json.",
  "conventions": [
   {
-   "id": "lookup",
-   "notes": "Task prompts name only an item ID. Items live in the ops queue: an opaque store (.ops/queue.pack) that only bin/fetch-ticket reads. The README mentions only the ops queue.",
-   "kind": "lookup",
-   "command": "./bin/fetch-ticket {id}",
-   "id_pattern": "^OPS-\\d{2,3}$",
-   "samples": [
-    "OPS-53",
-    "OPS-861",
-    "OPS-74",
-    "OPS-90",
-    "OPS-453",
-    "OPS-959"
-   ],
+   "command": "./bin/fetch-ticket {item}",
    "counter_samples": [
     "X-1",
     "ABCDEFG-123456789",
     "12",
     "not-an-id"
+   ],
+   "id": "lookup",
+   "id_pattern": "^OPS-\\d{2,3}$",
+   "kind": "lookup",
+   "notes": "Task prompts name only an item ID. Items live in the ops queue: an opaque store (.ops/queue.pack) that only bin/fetch-ticket reads. The README mentions only the ops queue.",
+   "samples": [
+    "OPS-53",
+    "OPS-90",
+    "OPS-861",
+    "OPS-453",
+    "OPS-74",
+    "OPS-959"
    ]
   },
   {
+   "command": "./bin/fetch-ticket {item}",
    "id": "linked-files",
-   "notes": "The lookup output lists the files to change under 'Files:' (the `files` field with --json). Registry items list the CSV and the module that reads it, never the generated file.",
    "kind": "linked_files",
-   "command": "./bin/fetch-ticket {id}",
+   "notes": "The lookup output lists the files to change under 'Files:' (the `files` field with --json). Registry items list the CSV and the module that reads it, never the generated file.",
    "samples": [
     "OPS-53"
    ]
   },
   {
-   "id": "dead-end",
-   "notes": "Sources and tests import @portside/dispatch/*, an alias in jsconfig.json that Node resolves only through the hook `npm run check` preloads (--import ./tools/testing/setup.mjs). Plain `node --test` fails with ERR_MODULE_NOT_FOUND. The working command is declared in .ci/pipeline.yml.",
-   "kind": "dead_end",
-   "command": "npm run check",
    "avoided": [
     "node --test"
-   ]
+   ],
+   "command": "npm run check",
+   "id": "dead-end",
+   "kind": "dead_end",
+   "mode": "path_alias",
+   "notes": "Sources and tests import @portside/dispatch/*, an alias in jsconfig.json that Node resolves only through the hook `npm run check` preloads (--import ./tools/testing/setup.mjs). Plain `node --test` fails with ERR_MODULE_NOT_FOUND. The working command is declared in .ci/pipeline.yml.",
+   "signature": "Cannot find package '@portside/dispatch'"
   },
   {
-   "id": "instinct-violation",
-   "notes": "(gen kind instinct_violation) The universal default (npm test) is retired here and fails; the suite runs with npm run check, declared only in .ci/pipeline.yml.",
-   "kind": "dead_end",
-   "command": "npm run check",
    "avoided": [
     "npm test"
-   ]
+   ],
+   "command": "npm run check",
+   "id": "instinct-violation",
+   "kind": "dead_end",
+   "mode": "instinct_violation",
+   "notes": "The universal default (npm test) is retired here and fails; the suite runs with npm run check, declared only in .ci/pipeline.yml.",
+   "signature": "error: npm test is retired here, the suite runs with npm run check"
   },
   {
-   "id": "finish-line",
-   "notes": "Lookups read src/generated/registry.mjs, generated from registry/*.csv. Editing a CSV requires npm run codegen; npm run check and the hidden checks fail on stale output.",
-   "kind": "finish_line",
    "command": "npm run codegen",
-   "glob": "registry/*.csv"
+   "glob": "registry/*.csv",
+   "id": "finish-line",
+   "kind": "finish_line",
+   "notes": "Lookups read src/generated/registry.mjs, generated from registry/*.csv. Editing a CSV requires npm run codegen; npm run check and the hidden checks fail on stale output.",
+   "signature": "error: src/generated/registry.mjs is out of date with registry/*.csv, run npm run codegen"
   }
- ]
+ ],
+ "decoys": [
+  {
+   "command": "npm run bench",
+   "id": "decoy-unused-target",
+   "kind": "decoy",
+   "mode": "unused_target",
+   "notes": "A plausible target nothing depends on. Running it changes nothing."
+  },
+  {
+   "command": "npm run gen:docs",
+   "id": "decoy-lookalike-regen",
+   "kind": "decoy",
+   "mode": "lookalike_regen",
+   "notes": "Looks like a regeneration step but generates nothing tracked; it is never required after any edit."
+  }
+ ],
+ "description": "The hidden conventions of the portside-dispatch sandbox (evals/gen, node-npm, seed 21): what a learner should find. Decoys are planted commands no route may direct.",
+ "sandbox": "portside-dispatch",
+ "schema": "adage-conventions/1"
 }

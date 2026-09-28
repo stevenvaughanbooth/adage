@@ -47,31 +47,64 @@ MAGIC = bytes([0xAD, 0xA6, 0xE5, 0x01])
 
 # Machine-specific text -> placeholders, longest first: the run root (whatever directory the
 # runner used, found from each session's cwd), then this machine's home directory and account name.
+#
+# Paths are replaced as paths only: `/root` becomes `/home/user` in `/root/.claude/x` and at the
+# end of a word, never inside `/rootDir`, and a bare word `root` ("root commit") is left alone.
+# Claude Code also writes project paths encoded (every character but a letter or digit becomes
+# `-`: `/tmp/a.b/runs/x` is `-tmp-a-b-runs-x`), which agents' `ls ~/.claude/projects` output
+# shows; those are replaced in their encoded form. The account name is replaced as a whole word,
+# unless it is a word that names no one (`root`, `user`, ...), which would rewrite ordinary text.
 HOME = str(Path.home())
-REDACTIONS = []
+REDACTIONS = []  # (compiled pattern, replacement)
+GENERIC_ACCOUNTS = {"root", "user", "admin", "ubuntu", "runner", "vagrant", "node", "ec2-user", "nobody", "sandbox"}
+# A character that continues a path segment (or an encoded path).
+SEGMENT = r"[A-Za-z0-9_.@+~-]"
 
 
-def set_redactions(roots):
+def encode_project(path):
+    """Claude Code's encoding of a project path for `~/.claude/projects/<encoded>/`."""
+    return re.sub(r"[^A-Za-z0-9]", "-", path)
+
+
+def path_pattern(p):
+    """`p` as a path: not preceded by a segment character, followed by `/` or the end of the path."""
+    return re.compile(r"(?<![A-Za-z0-9_.@+~-])" + re.escape(p) + r"(?=/|(?!" + SEGMENT + r"))")
+
+
+def encoded_pattern(p):
+    """`p` encoded: a run of the encoding bounded by a non-segment character or a `-` after it."""
+    e = encode_project(p)
+    return re.compile(r"(?<![A-Za-z0-9_.@+~])" + re.escape(e) + r"(?=-|(?!" + SEGMENT + r"))")
+
+
+def set_redactions(roots, home=None):
+    home = home or HOME
     REDACTIONS.clear()
-    for r in sorted(roots, key=len, reverse=True):
-        REDACTIONS.append((r, "/sandbox"))
+    pairs = []
+    for r in roots:
+        pairs.append((r, "/sandbox"))
         if r.startswith("/private/"):
-            REDACTIONS.append((r[len("/private"):], "/sandbox"))
-    REDACTIONS.append(("/private/var/folders", "/tmp"))
-    REDACTIONS.append((HOME, "/home/user"))
-    name = Path(HOME).name
-    if len(name) >= 4 and name != "user":
-        REDACTIONS.append((name, "user"))
+            pairs.append((r[len("/private"):], "/sandbox"))
+    pairs.append(("/private/var/folders", "/tmp"))
+    if home not in ("/", ""):
+        pairs.append((home, "/home/user"))
+    for a, b in sorted(pairs, key=lambda x: len(x[0]), reverse=True):
+        REDACTIONS.append((path_pattern(a), b))
+    for a, b in sorted(pairs, key=lambda x: len(encode_project(x[0])), reverse=True):
+        if len(encode_project(a).strip("-")) >= 4:
+            REDACTIONS.append((encoded_pattern(a), encode_project(b)))
+    name = Path(home).name
+    if len(name) >= 4 and name.lower() not in GENERIC_ACCOUNTS:
+        REDACTIONS.append((re.compile(r"\b" + re.escape(name) + r"\b"), "user"))
 
 
 def forbidden():
-    pats = [re.escape(a) for a, _ in REDACTIONS] + [r"/Users/", r"/var/folders"]
-    return re.compile("|".join(pats), re.I)
+    return re.compile("|".join([p.pattern for p, _ in REDACTIONS] + [r"/Users/", r"/var/folders"]))
 
 
 def redact(s):
-    for a, b in REDACTIONS:
-        s = s.replace(a, b)
+    for p, b in REDACTIONS:
+        s = p.sub(b, s)
     return s
 
 

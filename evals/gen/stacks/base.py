@@ -239,8 +239,10 @@ class Stack:
     # ------------------------------------------------------------------ ground truth
 
     def conventions(self):
+        """conventions.json: the ground truth in `adage-conventions/1` (grammar.CONVENTIONS_SCHEMA),
+        exactly what `adage eval routes` reads, decoys included (grammar.entries lists both)."""
         c, sk = self.conv, self.skin
-        out = []
+        out, decoys = [], []
         ids = [t.id for t in self.plan.tasks if t.kind in grammar.TRACKER_KINDS]
         if c.lookup:
             shape = self.plan.spec.get("id_shape", "prefix_dash")
@@ -251,23 +253,27 @@ class Stack:
                 pattern = f"^{re.escape(sk.id_prefix)}-\\d{rep}$"
             else:
                 pattern = grammar.id_pattern(shape, sk.id_prefix, ids, self.plan.spec["id_digits"])
+            rx = re.compile(pattern)
             out.append({"id": "lookup", "kind": "lookup", "command": self.lookup_cmd(),
-                        "id_pattern": pattern,
+                        "id_pattern": pattern, "samples": ids,
+                        "counter_samples": [x for x in grammar.COUNTER_SAMPLES if not rx.fullmatch(x)],
                         "notes": f"Task prompts name only an item ID. Items live in {sk.tracker_phrase}: an opaque "
                                  f"store ({sk.store}) that only {sk.tool} reads. The README mentions only "
                                  f"{sk.tracker_phrase}."})
         if c.linked_files:
             out.append({"id": "linked-files", "kind": "linked_files", "command": self.lookup_cmd(),
+                        "samples": ids[:1],
                         "notes": "The lookup output lists the files to change under 'Files:' (the `files` field "
                                  "with --json). Registry items list the CSV and the module that reads it, never "
                                  "the generated file."})
         if c.dead_end:
             out.append({"id": "dead-end", "kind": "dead_end", "mode": c.dead_end, "command": self.verify_cmd,
-                        "avoided": self.dead_end_runner(), "signature": self.dead_end_signature(),
+                        "avoided": [self.dead_end_runner()], "signature": self.dead_end_signature(),
                         "notes": self.dead_end_notes()})
         if c.instinct_violation:
-            out.append({"id": "instinct-violation", "kind": "instinct_violation", "command": self.verify_cmd,
-                        "avoided": self.instinct_cmd, "signature": self.instinct_signature(),
+            out.append({"id": "instinct-violation", "kind": "dead_end", "mode": "instinct_violation",
+                        "command": self.verify_cmd, "avoided": [self.instinct_cmd],
+                        "signature": self.instinct_signature(),
                         "notes": f"The universal default ({self.instinct_cmd}) is retired here and fails; the suite "
                                  f"runs with {self.verify_cmd}, declared only in .ci/pipeline.yml."})
         if c.sequence:
@@ -296,9 +302,16 @@ class Stack:
                                  f"requires {self.regen_cmd}; {self.verify_cmd} and the hidden checks fail on stale "
                                  f"output."})
         for mode in c.decoys:
-            out.append({"id": f"decoy-{mode.replace('_', '-')}", "kind": "decoy", "mode": mode,
-                        "command": self.decoy_command(mode), "notes": self.decoy_notes(mode)})
-        return out
+            decoys.append({"id": f"decoy-{mode.replace('_', '-')}", "kind": "decoy", "mode": mode,
+                           "command": self.decoy_command(mode), "notes": self.decoy_notes(mode)})
+        doc = {"schema": grammar.CONVENTIONS_SCHEMA, "sandbox": sk.repo,
+               "description": f"The hidden conventions of the {sk.repo} sandbox (evals/gen, {self.NAME}, seed "
+                              f"{self.plan.seed}): what a learner should find. Decoys are planted commands no route "
+                              f"may direct.",
+               "conventions": out}
+        if decoys:
+            doc["decoys"] = decoys
+        return doc
 
     def decoy_notes(self, mode):
         return {
