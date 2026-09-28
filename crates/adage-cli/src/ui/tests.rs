@@ -1356,6 +1356,22 @@ fn tabs_toasts_and_health_keys() {
         s.tick();
     }
     assert!(s.toasts.is_empty());
+    // A toast covers nothing: the newest sits on the rule above the status bar, older ones take
+    // rows of their own.
+    for tab in ['1', '2', '4', '5'] {
+        s.key(KeyCode::Char(tab), NONE);
+        let before: Vec<String> = app_frame(&s, &c, 60, 20).lines().map(String::from).collect();
+        s.toast("read-linked-files: strengthen recorded", true);
+        let after: Vec<String> = app_frame(&s, &c, 60, 20).lines().map(String::from).collect();
+        assert_eq!(before[..18], after[..18], "the tab is untouched:\n{}", after.join("\n"));
+        assert!(after[18].contains("✓ read-linked-files: strengthen recorded"), "{}", after.join("\n"));
+        s.toast("learn.auto = false", true);
+        let two = app_frame(&s, &c, 60, 20);
+        let rows: Vec<&str> = two.lines().collect();
+        assert!(rows[17].contains("strengthen recorded") && rows[18].contains("learn.auto = false"), "{two}");
+        s.toasts.clear();
+    }
+    s.key(KeyCode::Char('2'), NONE);
     // Health: enter on a fixable check starts its fix; install asks for a scope first; c conditions.
     s.key(KeyCode::Char('4'), NONE);
     s.check_sel = 4;

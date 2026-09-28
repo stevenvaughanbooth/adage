@@ -581,17 +581,21 @@ pub fn draw(f: &mut Frame, s: &AppState, ctx: &Ctx) {
         Constraint::Length(1),
     ])
     .areas(area);
+    // Toasts never cover the tab: the newest sits on the rule above the status bar, and any
+    // older ones take rows from the bottom of the tab while they last.
+    let extra = (s.toasts.len() as u16).saturating_sub(1).min(body.height.saturating_sub(5));
+    let [content, _] = Layout::vertical([Constraint::Min(1), Constraint::Length(extra)]).areas(body);
     draw_tabs(f, tabs_a, s, ctx);
     f.render_widget(Paragraph::new(view::rule("", None, area.width, t)), rule_a);
     match s.tab {
-        Tab::Live => view::draw_live(f, body, &s.live, s.health.as_ref(), ctx, false),
-        Tab::Reflexes => tabs::reflexes::draw(f, body, s, ctx),
-        Tab::Map => tabs::map::draw(f, body, s, ctx),
-        Tab::Health => tabs::health::draw(f, body, s, ctx),
-        Tab::Settings => tabs::settings::draw(f, body, s, ctx),
+        Tab::Live => view::draw_live(f, content, &s.live, s.health.as_ref(), ctx, false),
+        Tab::Reflexes => tabs::reflexes::draw(f, content, s, ctx),
+        Tab::Map => tabs::map::draw(f, content, s, ctx),
+        Tab::Health => tabs::health::draw(f, content, s, ctx),
+        Tab::Settings => tabs::settings::draw(f, content, s, ctx),
     }
-    draw_toasts(f, body, s, t);
     f.render_widget(Paragraph::new(view::rule("", None, area.width, t)), rule_b);
+    draw_toasts(f, Rect { height: extra + 1, y: rule_b.y - extra, ..rule_b }, s, t);
     draw_status(f, status, s, ctx);
     if let Some(m) = &s.modal {
         draw_modal(f, body, m, s, t);
@@ -685,6 +689,7 @@ fn draw_status(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     f.render_widget(Paragraph::new(Line::from(spans)), area);
 }
 
+/// The toasts, newest at the bottom of `body`, right-aligned.
 fn draw_toasts(f: &mut Frame, body: Rect, s: &AppState, t: &Theme) {
     for (k, toast) in s.toasts.iter().rev().enumerate() {
         let y = body.bottom().saturating_sub(1 + k as u16);
