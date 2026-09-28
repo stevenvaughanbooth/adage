@@ -1,7 +1,7 @@
 //! Effect classes from evidence, for repository scripts the command table does not know.
 //!
 //! The command table is authoritative for every program it lists, and an unlisted command
-//! defaults to `environment` (Design §8.6), which leaves its reflex a nascent draft until a person
+//! defaults to `environment` (Design §8.6), which leaves its reflex a nascent nascent until a person
 //! approves it. A repository script is classified observe by its name only when the name leads
 //! with a read verb (`wi-lookup`, `fetch-incident`); `tools/case` is not, however plainly the
 //! traces show it only reads. So a script is also classified observe **from the traces** when all

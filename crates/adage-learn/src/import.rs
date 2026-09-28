@@ -166,9 +166,9 @@ pub fn asks_for_help(text: &str) -> bool {
 pub const CLAUDE_CODE: &str = "claude-code";
 pub const OPENCODE: &str = "opencode";
 
-/// One `<adage-signal ...>` opening tag, and its `route` attribute. Text is read plain; a JSON
+/// One `<adage-reflex ...>` opening tag, and its `route` attribute. Text is read plain; a JSON
 /// record (a Claude Code attachment line) is read through its string values.
-static SIGNAL_TAG: Lazy<Regex> = Lazy::new(|| Regex::new(r"<adage-signal\b([^>]*)>").unwrap());
+static SIGNAL_TAG: Lazy<Regex> = Lazy::new(|| Regex::new(r"<adage-reflex\b([^>]*)>").unwrap());
 static ROUTE_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\broute=\\?"([A-Za-z0-9_.-]+)"#).unwrap());
 /// `exec="e1"`: Adage ran the directed route itself and delivered its output (Track C §3.4).
 static EXEC_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\bexec=\\?""#).unwrap());
@@ -259,7 +259,7 @@ impl Signals {
     }
 
     pub fn note(&mut self, text: &str) {
-        if !(text.contains("<adage-signal") || text.contains("<adage-data") || text.contains("Adage finish-line check"))
+        if !(text.contains("<adage-reflex") || text.contains("<adage-data") || text.contains("Adage finish-line check"))
         {
             return;
         }
@@ -282,7 +282,7 @@ impl Signals {
     }
 
     fn note_text(&mut self, text: &str) {
-        if text.contains("<adage-signal") {
+        if text.contains("<adage-reflex") {
             self.steered = true;
             let tags: Vec<(usize, usize, String)> = SIGNAL_TAG
                 .captures_iter(text)
@@ -301,7 +301,7 @@ impl Signals {
                     self.directed.insert(route.clone());
                 }
                 let body =
-                    text[end..].split("</adage-signal>").next().filter(|_| text[end..].contains("</adage-signal>"));
+                    text[end..].split("</adage-reflex>").next().filter(|_| text[end..].contains("</adage-reflex>"));
                 let named = body.map(adage_runtime::render::named);
                 self.push(route, named, EXEC_ATTR.is_match(&attrs) || body.is_none());
             }
@@ -678,22 +678,22 @@ mod tests {
     #[test]
     fn a_directive_is_read_for_what_it_named_and_where() {
         let (d, f) = read(
-            "<adage-signal track=\"t@1.0.0\" route=\"finish-line-1\" aspect=\"green\" kind=\"obligation\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nx\n</adage-signal>",
+            "<adage-reflex track=\"t@1.0.0\" route=\"finish-line-1\" strength=\"fire\" kind=\"obligation\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nx\n</adage-reflex>",
         );
         assert_eq!(d, v(&["finish-line-1"]));
         assert_eq!(f.len(), 1);
         assert_eq!((f[0].at_step, f[0].commands.clone(), f[0].all), (5, v(&["make gen"]), false));
         assert_eq!(f[0].identities(), v(&["make gen"]));
         // JSON-escaped, as a Claude Code attachment line holds it: read through its strings.
-        let line = serde_json::json!({"type": "attachment", "content": "<adage-signal track=\"t@1.0.0\" route=\"dead-end-1\" aspect=\"red\" kind=\"avoid\">\nIn this repository, running python3 -m pytest fails (\"No module\"). Use this instead:\n  make test\n</adage-signal>"}).to_string();
+        let line = serde_json::json!({"type": "attachment", "content": "<adage-reflex track=\"t@1.0.0\" route=\"dead-end-1\" strength=\"inhibit\" kind=\"avoid\">\nIn this repository, running python3 -m pytest fails (\"No module\"). Use this instead:\n  make test\n</adage-reflex>"}).to_string();
         let (_, f) = read(&line);
         assert_eq!((f[0].avoided.clone(), f[0].commands.clone()), (v(&["python3 -m pytest"]), v(&["make test"])));
         // A wrapper cut short, or a data block without its directive: it named everything.
-        assert!(read("…<adage-signal track=").1[0].all);
-        assert!(read("<adage-signal track=\"t@1\" route=\"r\" aspect=\"green\">no end").1[0].all);
+        assert!(read("…<adage-reflex track=").1[0].all);
+        assert!(read("<adage-reflex track=\"t@1\" route=\"r\" strength=\"fire\">no end").1[0].all);
         assert!(read("<adage-data track=\"t@1.0.0\" route=\"r\">{}").1.iter().any(|d| d.all));
         // A directive Adage ran itself: everything, from there on.
-        let (_, f) = read("<adage-signal track=\"t@1.0.0\" route=\"lookup-work-item\" aspect=\"green\" kind=\"run\" exec=\"e1\">\nIn this repository, work item details are looked up with:\n  ./scripts/wi-lookup W-1\n</adage-signal>\n<adage-data track=\"t@1.0.0\" route=\"lookup-work-item\">{}</adage-data>");
+        let (_, f) = read("<adage-reflex track=\"t@1.0.0\" route=\"lookup-work-item\" strength=\"fire\" kind=\"run\" exec=\"e1\">\nIn this repository, work item details are looked up with:\n  ./scripts/wi-lookup W-1\n</adage-reflex>\n<adage-data track=\"t@1.0.0\" route=\"lookup-work-item\">{}</adage-data>");
         assert!(f[0].all);
         // The finish-line stop request names its step.
         let (d, f) = read("Adage finish-line check: this session changed files matching x, and this repository requires running `make gen` after such changes");

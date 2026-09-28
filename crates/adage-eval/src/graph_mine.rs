@@ -33,7 +33,7 @@ use adage_core::types::CanonicalAction;
 use adage_core::CommandTable;
 use adage_graph::events::{self, EventSession};
 use adage_graph::input;
-use adage_graph::score::Holdout;
+use adage_graph::score::HeldOut;
 use adage_graph::select::{self, Learned, Params, Reflex};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -95,7 +95,7 @@ pub struct Conv {
 }
 
 /// Read `conventions.json` (`adage-conventions/1`, a dataset's or a generated bundle's): its
-/// conventions, then its decoys (kind `decoy`). A dead end planted as the retired universal
+/// conventions, then its decoys (kind `decoy`). A dead end planted as the superseded universal
 /// default (`mode: instinct_violation`) is kind `instinct_violation` here, as the G2 parity counts it.
 pub fn read_conventions(path: &Path) -> Result<Vec<Conv>> {
     let c = crate::conventions::Conventions::load(path)?;
@@ -169,7 +169,7 @@ pub struct BundleReport {
     pub sessions: usize,
     pub folds: usize,
     pub learned: Learned,
-    pub holdout: Option<Holdout>,
+    pub held_out: Option<HeldOut>,
     pub parity: Parity,
     /// Milliseconds: prototypes, mining, scoring, selection.
     pub timings_ms: [u64; 4],
@@ -178,7 +178,7 @@ pub struct BundleReport {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Report {
     pub bundles: Vec<BundleReport>,
-    /// Means over bundles with a holdout.
+    /// Means over bundles with a held-out set.
     pub top1_engine: f64,
     pub top1_baseline: f64,
     pub top1_order2: f64,
@@ -206,12 +206,12 @@ fn evaluate(
 ) -> BundleReport {
     let learned = select::learn(all, p);
     let parity = parity(&learned.reflexes, convs);
-    let parts: Vec<Holdout> = folds
+    let parts: Vec<HeldOut> = folds
         .iter()
         .filter(|(tr, te)| !tr.is_empty() && !te.is_empty())
         .filter_map(|(tr, te)| select::learn_split(tr, te, p).1)
         .collect();
-    let holdout = (!parts.is_empty()).then(|| Holdout::merge(&parts));
+    let held_out = (!parts.is_empty()).then(|| HeldOut::merge(&parts));
     let t = &learned.timings;
     BundleReport {
         name: name.to_string(),
@@ -220,7 +220,7 @@ fn evaluate(
         folds: parts.len(),
         timings_ms: [t.proto_ms, t.mine_ms, t.score_ms, t.select_ms],
         learned,
-        holdout,
+        held_out,
         parity,
     }
 }
@@ -361,8 +361,8 @@ pub fn run(dir: &Path, split: Option<&str>) -> Result<Report> {
             bundles.push(gen_bundle(&d, &table)?);
         }
     }
-    let with: Vec<&Holdout> = bundles.iter().filter_map(|b| b.holdout.as_ref()).collect();
-    let mean = |f: &dyn Fn(&Holdout) -> f64| {
+    let with: Vec<&HeldOut> = bundles.iter().filter_map(|b| b.held_out.as_ref()).collect();
+    let mean = |f: &dyn Fn(&HeldOut) -> f64| {
         if with.is_empty() {
             0.0
         } else {
@@ -415,7 +415,7 @@ pub fn render_text(r: &Report, top: usize) -> String {
                 x.shape, x.support, x.days, x.conf, x.conf_lb, x.lift, x.contrast, x.value, x.gain, x.pattern
             ));
         }
-        if let Some(h) = &b.holdout {
+        if let Some(h) = &b.held_out {
             s.push_str(&format!(
                 "   held out: next-action top-1 engine {:.3} vs order-1 {:.3} vs order-2 {:.3} ({} positions; chains chosen {:?}); oracle ceilings (order 1/2/3) {}; conformance {:.3} vs {:.3} nats\n   calibration: ECE {:.3} over {} (session, candidate) pairs (raw {:.3}); selected reflexes {:.3} over {} pairs (90% CI {:.3}–{:.3})\n",
                 h.top1_engine,
@@ -484,6 +484,6 @@ mod tests {
         let b = &r.bundles[0];
         assert!(b.sessions > 0 && b.folds > 0);
         assert!(!b.learned.reflexes.is_empty());
-        assert!(b.holdout.is_some());
+        assert!(b.held_out.is_some());
     }
 }

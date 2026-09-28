@@ -16,16 +16,16 @@ runs/<run>/stream.jsonl, state.json, outcomes.json, adage-home/). The archive is
 modified. The output (default evals/datasets/demo-haiku45) holds:
 
   manifest.json          sessions, labels, named train/test splits, learn thresholds
-  sessions/<run>.jsonl   one Claude Code transcript per run, the format `adage learn` reads
+  sessions/<run>.jsonl   one Claude Code transcript per run, the format `adage condition` reads
   sandbox.txt            the sandbox repository's files (for repository-path contracts)
   recorded/              what the live hooks actually decided (for replay fidelity)
 
-Sessions come from the real Claude Code transcripts (`transcripts/`, what `adage learn` read
+Sessions come from the real Claude Code transcripts (`transcripts/`, what `adage condition` read
 live). Each is curated: only prompts, tool calls, tool results (with the hook-visible
 `toolUseResult`) and Adage's own hook attachments are kept; harness context (environment,
 skill listings, dates, file history, costs), thinking blocks and signatures are dropped; long
 tool output is trimmed; machine-specific text is redacted. Subagent transcripts are left out
-(`adage learn` never reads them).
+(`adage condition` never reads them).
 
 Archives without transcripts fall back to converting `runs/<run>/stream.jsonl` (the `claude -p
 --output-format stream-json` console stream, which has no prompt record and no `cwd` per record:
@@ -361,11 +361,11 @@ def main():
     train = lambda s: s["phase"] == "train"
     eval_round = lambda s, n: s["phase"] == "eval" and s["round"] == n
     # Round n learned from the training sessions and every earlier round's eval sessions (both arms),
-    # then ran held-out work; its test set is that round's control (holdout) arm.
+    # then ran held-out work; its test set is that round's control arm.
     last_round = max([s["round"] for s in sessions if s["phase"] == "eval"] or [1])
     splits = {
         f"round{n}": {"train": ids(lambda s, n=n: train(s) or (s["phase"] == "eval" and s["round"] < n)),
-                      "test": ids(lambda s, n=n: eval_round(s, n) and s["arm"] == "holdout")}
+                      "test": ids(lambda s, n=n: eval_round(s, n) and s["arm"] == "control")}
         for n in range(1, last_round + 1)
     }
     manifest = {

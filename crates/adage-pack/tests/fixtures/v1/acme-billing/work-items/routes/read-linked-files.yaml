@@ -15,8 +15,8 @@ slots:
   contract:
     kind: repo_path
 effect: observe
-aspect: yellow
-state: active
+strength: prime
+state: firm
 exit:
 - when: intent_changes
 evidence:

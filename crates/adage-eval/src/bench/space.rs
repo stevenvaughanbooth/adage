@@ -11,7 +11,7 @@
 //! max = 8
 //!
 //! [[dims]]
-//! param = "learn.green_lower_bound"
+//! param = "learn.fire_lower_bound"
 //! kind = "float"
 //! min = 0.4
 //! max = 0.9
@@ -403,7 +403,7 @@ mod tests {
             min = 2
             max = 8
             [[dims]]
-            param = "learn.green_lower_bound"
+            param = "learn.fire_lower_bound"
             kind = "float"
             min = 0.4
             max = 0.9

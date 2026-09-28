@@ -3,7 +3,7 @@ use adage_core::Effect;
 use adage_tracks::*;
 use serde_json::json;
 
-fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, aspect: Aspect) -> Route {
+fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, strength: Strength) -> Route {
     Route {
         id: id.into(),
         summary: String::new(),
@@ -11,8 +11,8 @@ fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effec
         step,
         slots,
         effect,
-        aspect,
-        state: RouteState::Active,
+        strength,
+        state: RouteState::Firm,
         exit: vec![Exit::IntentChanges],
         evidence: Evidence { support: 5, ..Default::default() },
         authored: false,
@@ -47,7 +47,7 @@ fn fixture() -> (tempfile::TempDir, Index, CommandTable) {
                     contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
                 }],
                 Effect::Observe,
-                Aspect::Green,
+                Strength::Fire,
             ),
             route(
                 "read-linked",
@@ -59,7 +59,7 @@ fn fixture() -> (tempfile::TempDir, Index, CommandTable) {
                     contract: Contract::RepoPath,
                 }],
                 Effect::Observe,
-                Aspect::Yellow,
+                Strength::Prime,
             ),
             route(
                 "gen",
@@ -67,7 +67,7 @@ fn fixture() -> (tempfile::TempDir, Index, CommandTable) {
                 Step::Run { command: "make gen".into() },
                 vec![],
                 Effect::Regenerate,
-                Aspect::Green,
+                Strength::Fire,
             ),
             route(
                 "dead-unittest",
@@ -79,7 +79,7 @@ fn fixture() -> (tempfile::TempDir, Index, CommandTable) {
                 },
                 vec![],
                 Effect::Verify,
-                Aspect::Red,
+                Strength::Inhibit,
             ),
         ],
     };
@@ -105,7 +105,7 @@ fn prompt_binds_validated_ticket_and_warns_about_dead_end() {
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042 please".into() });
     assert_eq!(d.directives.len(), 2);
     assert!(d.directives[0].text.contains("./scripts/wi-lookup W-2042 --json"));
-    assert!(d.directives.iter().any(|x| x.aspect == Aspect::Red && x.text.contains("make test")));
+    assert!(d.directives.iter().any(|x| x.strength == Strength::Inhibit && x.text.contains("make test")));
 }
 
 #[test]
@@ -196,7 +196,7 @@ fn obligation_met_means_no_stop_request() {
 }
 
 #[test]
-fn holdout_logs_exposure_but_emits_nothing() {
+fn control_logs_exposure_but_emits_nothing() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
         index: &index,
@@ -206,7 +206,7 @@ fn holdout_logs_exposure_but_emits_nothing() {
         embed: None,
         params: Default::default(),
     };
-    let mut st = SessionState { arm: Some(Arm::Holdout), ..Default::default() };
+    let mut st = SessionState { arm: Some(Arm::Control), ..Default::default() };
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "W-2042".into() });
     assert!(d.directives.is_empty());
     assert!(!d.would_have.is_empty());
@@ -250,7 +250,7 @@ fn caps_hold() {
 fn arm_assignment_is_deterministic() {
     assert_eq!(assign_arm("abc", 0.5), assign_arm("abc", 0.5));
     assert_eq!(assign_arm("abc", 0.0), Arm::Treated);
-    assert_eq!(assign_arm("abc", 1.0), Arm::Holdout);
+    assert_eq!(assign_arm("abc", 1.0), Arm::Control);
 }
 
 #[test]
@@ -344,7 +344,7 @@ fn hostile_output_does_not_panic() {
 }
 
 #[test]
-fn holdout_records_would_continue() {
+fn control_records_would_continue() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
         index: &index,
@@ -362,7 +362,7 @@ fn holdout_records_would_continue() {
         failed: false,
     };
     decide(&ctx, &mut st, &Event::Batch { calls: vec![edit] });
-    st.arm = Some(Arm::Holdout);
+    st.arm = Some(Arm::Control);
     let d = decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false });
     assert!(d.continue_reason.is_none() && d.would_continue.is_some());
 }
@@ -396,7 +396,7 @@ fn intent_fixture(model: &str, threshold: f32) -> (tempfile::TempDir, Index, Com
         Step::Run { command: "make test".into() },
         vec![],
         Effect::Verify,
-        Aspect::Yellow,
+        Strength::Prime,
     ));
     let track = Track {
         manifest: Manifest {
@@ -512,7 +512,7 @@ fn the_embedder_is_not_called_without_intent_routes() {
 #[test]
 fn dead_ends_and_linked_files_state_their_exit_condition() {
     let avoid = Step::Avoid { avoid: "python3 -m pytest".into(), instead: "make test".into(), signature: "x".into() };
-    let mut r = route("d", Trigger::SessionStart, avoid, vec![], Effect::Verify, Aspect::Red);
+    let mut r = route("d", Trigger::SessionStart, avoid, vec![], Effect::Verify, Strength::Inhibit);
     assert_eq!(
         render::route_text(&r, &[]).unwrap(),
         "In this repository, running python3 -m pytest fails (\"x\"). Use this instead:\n  make test\nIgnore this if the user is asking for something else."
@@ -525,7 +525,7 @@ fn dead_ends_and_linked_files_state_their_exit_condition() {
         contract: Contract::RepoPath,
     };
     let read = Step::ReadBatch { slot: "files".into(), max: 5 };
-    let r = route("r", Trigger::SessionStart, read, vec![files], Effect::Observe, Aspect::Yellow);
+    let r = route("r", Trigger::SessionStart, read, vec![files], Effect::Observe, Strength::Prime);
     let text = render::route_text(&r, &[("files".into(), "a.py, b.py".into())]).unwrap();
     assert!(text.ends_with("one at a time. Ignore this if the user is asking for something else."), "{text}");
 }
@@ -583,9 +583,9 @@ fn state_rebuilt_from_the_spool_matches_the_live_state_after_every_event() {
         ("Stop", Event::Stop { stop_hook_active: false }),
         ("UserPromptSubmit", Event::Prompt { text: "and W-2043".into() }),
     ];
-    for holdout in [false, true] {
+    for control in [false, true] {
         let mut st = SessionState {
-            arm: Some(if holdout { Arm::Holdout } else { Arm::Treated }),
+            arm: Some(if control { Arm::Control } else { Arm::Treated }),
             repo: Some("acme".into()),
             ..Default::default()
         };
@@ -602,7 +602,7 @@ fn state_rebuilt_from_the_spool_matches_the_live_state_after_every_event() {
             }
             records.push(rec);
             let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
-            assert_eq!(restored(&rebuilt), restored(&st), "after event {i} ({name}), holdout {holdout}");
+            assert_eq!(restored(&rebuilt), restored(&st), "after event {i} ({name}), control {control}");
         }
         assert_eq!(st.emitted.len(), 4, "lookup, dead end, linked files, finish line");
         assert_eq!((st.stop_requests, st.obligations[0].met), (1, true));
@@ -718,7 +718,7 @@ fn an_after_command_trigger_fires_on_the_command_with_options_added() {
         Step::ReadBatch { slot: "files".into(), max: 5 },
         vec![files],
         Effect::Observe,
-        Aspect::Yellow,
+        Strength::Prime,
     );
     let index = Index::compile(&[track("acme/t", "desire-path", vec![linked])]);
     let ctx = Ctx {
@@ -738,7 +738,7 @@ fn an_after_command_trigger_fires_on_the_command_with_options_added() {
     assert!(decide(&ctx, &mut SessionState::default(), &other).directives.is_empty());
 }
 
-fn intent_route(id: &str, family: &str, command: &str, aspect: Aspect) -> Route {
+fn intent_route(id: &str, family: &str, command: &str, strength: Strength) -> Route {
     let centroid = adage_intent::quantize(&adage_intent::unit(vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
     route(
         id,
@@ -746,7 +746,7 @@ fn intent_route(id: &str, family: &str, command: &str, aspect: Aspect) -> Route 
         Step::Run { command: command.into() },
         vec![],
         Effect::Verify,
-        aspect,
+        strength,
     )
 }
 
@@ -754,7 +754,7 @@ fn intent_route(id: &str, family: &str, command: &str, aspect: Aspect) -> Route 
 fn a_different_script_is_not_following() {
     let dir = tempfile::tempdir().unwrap();
     let table = CommandTable::load();
-    let routes = vec![intent_route("intent-check", "intent-check", "npm run check", Aspect::Green)];
+    let routes = vec![intent_route("intent-check", "intent-check", "npm run check", Strength::Fire)];
     let index = Index::compile(&[track("acme/intents", "desire-path", routes)]);
     let ctx = Ctx {
         index: &index,
@@ -782,7 +782,7 @@ fn npm_test_dead_end() -> Route {
         Step::Avoid { avoid: "npm test".into(), instead: "make test".into(), signature: "ACME_ENV is not set".into() },
         vec![],
         Effect::Verify,
-        Aspect::Red,
+        Strength::Inhibit,
     )
 }
 
@@ -814,7 +814,7 @@ fn an_imported_route_a_learned_dead_end_contradicts_is_never_emitted() {
     let imported = track(
         "acme/intents",
         "imported:teammate",
-        vec![intent_route("intent-tests", "intent-tests", "npm test", Aspect::Green)],
+        vec![intent_route("intent-tests", "intent-tests", "npm test", Strength::Fire)],
     );
     let learned = track("acme/dead-ends", "desire-path", vec![npm_test_dead_end()]);
     let (index, conflicts) = Index::compile_with_conflicts(&[imported.clone(), learned.clone()]);
@@ -855,7 +855,7 @@ fn approach_locking_filters_later_directives_and_their_obligations() {
         Step::Run { command: "npm test".into() },
         vec![],
         Effect::Verify,
-        Aspect::Green,
+        Strength::Fire,
     );
     let t = track("acme/t", "desire-path", vec![npm_test_dead_end(), finish]);
     let (index, conflicts) = Index::compile_with_conflicts(&[t]);
@@ -879,13 +879,13 @@ fn approach_locking_filters_later_directives_and_their_obligations() {
     let mut st = SessionState { prompts: 1, ..Default::default() };
     let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "src/a.ts")] });
     assert_eq!(d.directives.len(), 1);
-    // A red and what it contradicts in one decision: only the red.
+    // An inhibit and what it contradicts in one decision: only the inhibit.
     let after = || Trigger::AfterFailure { command: "exec make lint".into(), signature: "boom".into() };
     let avoid = Step::Avoid { avoid: "npm test".into(), instead: "make test".into(), signature: "x".into() };
-    let red = route("red-after", after(), avoid, vec![], Effect::Verify, Aspect::Red);
+    let inhibit = route("inhibit-after", after(), avoid, vec![], Effect::Verify, Strength::Inhibit);
     let run = Step::Run { command: "npm test".into() };
-    let green = route("green-after", after(), run, vec![], Effect::Verify, Aspect::Green);
-    let index = Index::compile(&[track("acme/t", "desire-path", vec![red, green])]);
+    let fire = route("fire-after", after(), run, vec![], Effect::Verify, Strength::Fire);
+    let index = Index::compile(&[track("acme/t", "desire-path", vec![inhibit, fire])]);
     let ctx = Ctx {
         index: &index,
         repo: "acme".into(),
@@ -897,7 +897,7 @@ fn approach_locking_filters_later_directives_and_their_obligations() {
     let failed = Call { failed: true, ..bash("make lint -q", "boom") };
     let d = decide(&ctx, &mut SessionState::default(), &Event::Failure { call: failed });
     let ids: Vec<&str> = d.directives.iter().map(|x| x.route.as_str()).collect();
-    assert_eq!(ids, ["red-after"]);
+    assert_eq!(ids, ["inhibit-after"]);
 }
 
 #[test]
@@ -910,7 +910,7 @@ fn a_generalised_glob_matches_any_depth() {
         Step::Run { command: "make gen".into() },
         vec![],
         Effect::Regenerate,
-        Aspect::Green,
+        Strength::Fire,
     );
     let index = Index::compile(&[track("acme/t", "desire-path", vec![gen])]);
     let ctx = Ctx {
@@ -930,7 +930,7 @@ fn a_generalised_glob_matches_any_depth() {
 }
 
 #[test]
-fn red_comes_first_under_the_caps() {
+fn inhibit_comes_first_under_the_caps() {
     let dir = tempfile::tempdir().unwrap();
     let table = CommandTable::load();
     let slot = || Slot {
@@ -940,7 +940,7 @@ fn red_comes_first_under_the_caps() {
     };
     let lookup = |id: &str, cmd: &str| {
         let step = Step::Run { command: cmd.into() };
-        route(id, Trigger::Prompt { span: SpanKind::Ticket }, step, vec![slot()], Effect::Observe, Aspect::Green)
+        route(id, Trigger::Prompt { span: SpanKind::Ticket }, step, vec![slot()], Effect::Observe, Strength::Fire)
     };
     let routes = vec![
         lookup("a", "scripts/a {item}"),
@@ -948,7 +948,7 @@ fn red_comes_first_under_the_caps() {
         lookup("c", "scripts/c {item}"),
         npm_test_dead_end(),
     ];
-    // Without interlocking the three lookups stay green and compete for the cap.
+    // Without interlocking the three lookups stay fire and compete for the cap.
     let index = unlocked(&[&track("acme/t", "desire-path", routes)]);
     let ctx = Ctx {
         index: &index,
@@ -964,14 +964,14 @@ fn red_comes_first_under_the_caps() {
 }
 #[test]
 fn propensity_is_the_probability_of_the_arm_given() {
-    let (mut holdout, mut treated) = (0, 0);
+    let (mut control, mut treated) = (0, 0);
     for i in 0..400 {
         let sid = format!("s{i}");
         let (arm, p) = assign(&sid, 0.1, None);
         assert_eq!(arm, assign_arm(&sid, 0.1), "the same draw as before");
         match arm {
-            Arm::Holdout => {
-                holdout += 1;
+            Arm::Control => {
+                control += 1;
                 assert_eq!(p, 0.1);
             }
             Arm::Treated => {
@@ -980,18 +980,18 @@ fn propensity_is_the_probability_of_the_arm_given() {
             }
         }
     }
-    assert!(holdout > 10 && treated > 300, "{holdout} held out of 400");
+    assert!(control > 10 && treated > 300, "{control} held out of 400");
     // Forced arms were not drawn; other override values are ignored.
-    assert_eq!(assign("s1", 0.1, Some("holdout")), (Arm::Holdout, 1.0));
+    assert_eq!(assign("s1", 0.1, Some("control")), (Arm::Control, 1.0));
     assert_eq!(assign("s1", 0.1, Some("treated")), (Arm::Treated, 1.0));
     assert_eq!(assign("s1", 0.1, Some("bogus")), assign("s1", 0.1, None));
     // Shadow mode (a share of 1 or more) holds every session out, certainly.
-    assert_eq!(assign("s1", 1.5, None), (Arm::Holdout, 1.0));
+    assert_eq!(assign("s1", 1.5, None), (Arm::Control, 1.0));
     assert_eq!(assign("s1", 0.0, None), (Arm::Treated, 1.0));
     // A state rebuilt from the spool keeps it.
-    let recs = vec![json!({ "kind": "prompt", "arm": "holdout", "propensity": 0.1, "decision": Decision::default() })];
+    let recs = vec![json!({ "kind": "prompt", "arm": "control", "propensity": 0.1, "decision": Decision::default() })];
     let st = rebuild::rebuild(&recs, &Index::default(), "acme", &CommandTable::load()).unwrap();
-    assert_eq!((st.arm, st.propensity), (Some(Arm::Holdout), Some(0.1)));
+    assert_eq!((st.arm, st.propensity), (Some(Arm::Control), Some(0.1)));
     // Old spools and states, without it, still read.
     let old = vec![json!({ "kind": "prompt", "arm": "treated", "decision": Decision::default() })];
     assert_eq!(rebuild::rebuild(&old, &Index::default(), "acme", &CommandTable::load()).unwrap().propensity, None);
@@ -1010,7 +1010,7 @@ fn finish_line_claims_ci_only_on_evidence() {
         Step::Run { command: "make gen".into() },
         vec![],
         Effect::Regenerate,
-        Aspect::Green,
+        Strength::Fire,
     );
     r.exit = vec![Exit::ExploratoryChange];
     // No session is known to have failed for skipping it: say what agents do, nothing more.
@@ -1032,7 +1032,7 @@ fn finish_line_claims_ci_only_on_evidence() {
 }
 
 #[test]
-fn directives_carry_their_shape_and_stale_routes_are_never_green() {
+fn directives_carry_their_shape_and_stale_routes_are_never_fire() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
         index: &index,
@@ -1048,20 +1048,20 @@ fn directives_carry_their_shape_and_stale_routes_are_never_green() {
     assert_eq!(kinds, vec![("lookup", "run"), ("dead-unittest", "avoid")]);
     let wrapped = render::wrap_directive(&d.directives[0]);
     assert!(
-        wrapped.starts_with("<adage-signal track=\"acme/t@0.1.0\" route=\"lookup\" aspect=\"green\" kind=\"run\">\n"),
+        wrapped.starts_with("<adage-reflex track=\"acme/t@0.1.0\" route=\"lookup\" strength=\"fire\" kind=\"run\">\n"),
         "{wrapped}"
     );
     // Without a kind (a preview, an old record), the wrapper is as it always was.
-    assert!(render::wrap("acme/t", "0.1.0", "lookup", Aspect::Green, "x")
-        .starts_with("<adage-signal track=\"acme/t@0.1.0\" route=\"lookup\" aspect=\"green\">\n"));
+    assert!(render::wrap("acme/t", "0.1.0", "lookup", Strength::Fire, "x")
+        .starts_with("<adage-reflex track=\"acme/t@0.1.0\" route=\"lookup\" strength=\"fire\">\n"));
     let old: Directive = serde_json::from_value(
-        json!({ "route": "lookup", "track": "acme/t", "version": "0.1.0", "aspect": "green", "text": "x" }),
+        json!({ "route": "lookup", "track": "acme/t", "version": "0.1.0", "strength": "fire", "text": "x" }),
     )
     .unwrap();
     assert_eq!(old.kind, "");
 
-    // A stale green route (and one on probation) is delivered yellow; red stays red.
-    for state in [RouteState::Stale, RouteState::Probation] {
+    // A dormant fire route (and one on forming) is delivered prime; inhibit stays inhibit.
+    for state in [RouteState::Dormant, RouteState::Forming] {
         let t = Track {
             manifest: Manifest {
                 track: TrackInfo {
@@ -1087,8 +1087,8 @@ fn directives_carry_their_shape_and_stale_routes_are_never_green() {
         };
         let mut st = SessionState::default();
         let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042".into() });
-        let aspects: Vec<Aspect> = d.directives.iter().map(|x| x.aspect).collect();
-        assert_eq!(aspects, vec![Aspect::Yellow, Aspect::Red], "{state:?}");
+        let strengths: Vec<Strength> = d.directives.iter().map(|x| x.strength).collect();
+        assert_eq!(strengths, vec![Strength::Prime, Strength::Inhibit], "{state:?}");
     }
 }
 
@@ -1150,7 +1150,7 @@ mod typed_slots {
                 Step::Run { command: "./scripts/wi-lookup {item}".into() },
                 vec![slot("item", SlotSource::PromptValue { vtype: t.clone(), mentions: vec![] }, &t)],
                 Effect::Observe,
-                Aspect::Green,
+                Strength::Fire,
             ),
             route(
                 "show-owner",
@@ -1158,7 +1158,7 @@ mod typed_slots {
                 Step::Run { command: "./scripts/wi-lookup {id} --json".into() },
                 vec![slot("id", SlotSource::OutputValue { field: Some("owner.id".into()), vtype: t.clone() }, &t)],
                 Effect::Observe,
-                Aspect::Yellow,
+                Strength::Prime,
             ),
             route(
                 "test-crate",
@@ -1166,7 +1166,7 @@ mod typed_slots {
                 Step::Run { command: "cargo test -p {p}".into() },
                 vec![slot("p", SlotSource::EditSegment { glob: "crates/*/src/*.rs".into(), depth: 1 }, &c)],
                 Effect::Verify,
-                Aspect::Green,
+                Strength::Fire,
             ),
         ]
     }
@@ -1299,7 +1299,7 @@ mod typed_slots {
 // ---------------------------------------------------------------- context triggers (Track G G4)
 
 fn ctx_route(id: &str, items: Vec<CtxItem>, within: u8, step: Step, effect: Effect) -> Route {
-    route(id, Trigger::Context { items, within }, step, vec![], effect, Aspect::Yellow)
+    route(id, Trigger::Context { items, within }, step, vec![], effect, Strength::Prime)
 }
 
 fn act_item(k: &str) -> CtxItem {
@@ -1318,7 +1318,7 @@ fn context_index(within: u8) -> Index {
             Step::Sequence { commands: vec!["make gen".into(), "make check".into()] },
             vec![],
             Effect::Regenerate,
-            Aspect::Green,
+            Strength::Fire,
         ),
         ctx_route(
             "run-ctx",

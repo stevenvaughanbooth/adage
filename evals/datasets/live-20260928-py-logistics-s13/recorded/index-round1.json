@@ -4,7 +4,7 @@
   {
    "repo": "portside-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -38,7 +38,7 @@
     ],
     "id": "dead-end-1abe52",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make check",
      "do": "run"
@@ -56,7 +56,7 @@
   {
    "repo": "portside-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -90,7 +90,7 @@
     ],
     "id": "dead-end-60822e",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make check",
      "do": "run"
@@ -108,7 +108,7 @@
   {
    "repo": "portside-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -142,7 +142,7 @@
     ],
     "id": "dead-end-68c78d",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make check",
      "do": "run"
@@ -160,7 +160,7 @@
   {
    "repo": "portside-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -194,7 +194,7 @@
     ],
     "id": "dead-end-6a9b12",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make check",
      "do": "run"
@@ -212,7 +212,7 @@
   {
    "repo": "portside-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -246,7 +246,7 @@
     ],
     "id": "dead-end-fbe967",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make check",
      "do": "run"
@@ -264,7 +264,7 @@
   {
    "repo": "portside-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "regenerate",
     "evidence": {
@@ -297,7 +297,7 @@
     ],
     "id": "finish-line-c83ca5",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make gen",
      "do": "run"
@@ -314,7 +314,7 @@
   {
    "repo": "portside-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "observe",
     "evidence": {
@@ -343,7 +343,7 @@
     "exit": [],
     "id": "instinct-u4-297928",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "do": "advise",
      "slots": {
@@ -364,7 +364,7 @@
   {
    "repo": "portside-dispatch@32a49972369b",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -398,7 +398,7 @@
     ],
     "id": "dead-end-1abe52",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make check",
      "do": "run"
@@ -416,7 +416,7 @@
   {
    "repo": "portside-dispatch@32a49972369b",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -450,7 +450,7 @@
     ],
     "id": "dead-end-60822e",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make check",
      "do": "run"
@@ -468,7 +468,7 @@
   {
    "repo": "portside-dispatch@32a49972369b",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -502,7 +502,7 @@
     ],
     "id": "dead-end-68c78d",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make check",
      "do": "run"
@@ -520,7 +520,7 @@
   {
    "repo": "portside-dispatch@32a49972369b",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -554,7 +554,7 @@
     ],
     "id": "dead-end-6a9b12",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make check",
      "do": "run"
@@ -572,7 +572,7 @@
   {
    "repo": "portside-dispatch@32a49972369b",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -606,7 +606,7 @@
     ],
     "id": "dead-end-fbe967",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make check",
      "do": "run"
@@ -624,7 +624,7 @@
   {
    "repo": "portside-dispatch@32a49972369b",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "regenerate",
     "evidence": {
@@ -657,7 +657,7 @@
     ],
     "id": "finish-line-c83ca5",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make gen",
      "do": "run"
@@ -674,7 +674,7 @@
   {
    "repo": "portside-dispatch@32a49972369b",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "observe",
     "evidence": {
@@ -703,7 +703,7 @@
     "exit": [],
     "id": "instinct-u4-297928",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "do": "advise",
      "slots": {

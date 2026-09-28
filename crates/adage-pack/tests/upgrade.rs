@@ -1,4 +1,4 @@
-//! Upgrading v1 tracks: the tracks `adage learn --demo` learns from the committed simulator
+//! Upgrading v1 tracks: the tracks `adage condition --demo` learns from the committed simulator
 //! fixtures (`sim/fixtures/claude`, copied to `tests/fixtures/v1`), and the instinct catalogue
 //! bound on the acme fixture repository.
 
@@ -115,7 +115,7 @@ fn the_instinct_catalogue_bound_on_acme_becomes_an_instinct_pack() {
         shapes.contains(&Shape::After) && shapes.contains(&Shape::Obligation) && shapes.contains(&Shape::Advise),
         "{shapes:?}"
     );
-    assert!(p.routes.iter().all(|r| r.aspect == adage_pack::Aspect::Yellow));
+    assert!(p.routes.iter().all(|r| r.strength == adage_pack::Strength::Prime));
     assert!(p.manifest.requires.templates.iter().any(|t| t == "advise:generated-file@1"));
     // The dead end the demo learned keeps its id and its failing-command trigger.
     let de = p.routes.iter().find(|r| r.id == "dead-end-d41b1e").unwrap();

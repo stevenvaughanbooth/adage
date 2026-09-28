@@ -5,7 +5,7 @@ Real headless Claude Code sessions (`claude -p`, Claude Code 2.1.283, model `cla
 | Phase | Arm | Sessions | Notes |
 | --- | --- | ---: | --- |
 | train | no hooks | 9 | 3 training tasks x 3 |
-| eval | holdout | 6 | 3 held-out tasks x 2; control: hooks on, directives computed and logged, not delivered |
+| eval | control | 6 | 3 held-out tasks x 2; control: hooks on, directives computed and logged, not delivered |
 | eval | adage | 6 | 3 held-out tasks x 2; learned reflexes and instincts delivered |
 | eval | instincts | 6 | 3 held-out tasks x 2; day-0 index: instincts bound from the repository's files, no learned reflex |
 
@@ -13,10 +13,10 @@ Training: 5/9 passed; 6/9 used the sandbox's lookup. Spend: $1.87 (the sessions'
 
 ## What was learned
 
-`adage learn --demo` over the 9 training transcripts (the runner's learn phase):
+`adage condition --demo` over the 9 training transcripts (the runner's learn phase):
 
 - reflexes (active): `work-items/read-linked-files`
-- reflexes left as drafts (awaiting review, never delivered): `work-items/lookup-work-item`
+- reflexes left as nascent reflexes (awaiting review, never delivered): `work-items/lookup-work-item`
 - instincts bound: 3
 
 `adage eval routes` against `conventions.json` (the sandbox's ground truth):
@@ -33,9 +33,9 @@ No route names a decoy command (the `decoys` in `conventions.json`).
 
 Task-clustered: the CI resamples tasks, p permutes arms within tasks, Holm across the metrics. With 3 tasks per sandbox these are wide; see the corpus README for pooled numbers.
 
-**adage vs holdout**
+**adage vs control**
 
-| Metric | adage / holdout | diff [95% CI] | p (Holm) |
+| Metric | adage / control | diff [95% CI] | p (Holm) |
 | --- | --- | --- | --- |
 | pass_rate | 0.67 / 0.83 | -0.17 [-0.50, 0.00] | 1.00 |
 | hidden_pass_rate | 0.67 / 0.83 | -0.17 [-0.50, 0.00] | 1.00 |
@@ -45,9 +45,9 @@ Task-clustered: the CI resamples tasks, p permutes arms within tasks, Holm acros
 | dead_end_hits | 0.00 / 0.00 | 0.00 [0.00, 0.00] | 1.00 |
 | follow_rate | 0.17 / 0.00 | 0.17 [0.00, 0.50] | 1.00 |
 
-**instincts vs holdout**
+**instincts vs control**
 
-| Metric | instincts / holdout | diff [95% CI] | p (Holm) |
+| Metric | instincts / control | diff [95% CI] | p (Holm) |
 | --- | --- | --- | --- |
 | pass_rate | 0.67 / 0.83 | -0.17 [-0.50, 0.00] | 1.00 |
 | hidden_pass_rate | 0.67 / 0.83 | -0.17 [-0.50, 0.00] | 1.00 |
@@ -71,13 +71,13 @@ Task-clustered: the CI resamples tasks, p permutes arms within tasks, Holm acros
 
 ## Files
 
-- `manifest.json`, `sessions/`, `sandbox.txt`, `recorded/` as `evals/datasets/tools/build_demo.py` writes them (see `evals/datasets/demo-haiku45/README.md`); the split `round1` trains on the training sessions and tests on the holdout arm. `manifest.json` also names `conventions` and the `arms`.
-- `recorded/index-round1.json`: the live index (the adage arm's); `recorded/index-instincts-only.json`: the instincts arm's (keyed `<name>@<root commit>`, as `adage learn --instincts-only` keys a repository).
+- `manifest.json`, `sessions/`, `sandbox.txt`, `recorded/` as `evals/datasets/tools/build_demo.py` writes them (see `evals/datasets/demo-haiku45/README.md`); the split `round1` trains on the training sessions and tests on the control arm. `manifest.json` also names `conventions` and the `arms`.
+- `recorded/index-round1.json`: the live index (the adage arm's); `recorded/index-instincts-only.json`: the instincts arm's (keyed `<name>@<root commit>`, as `adage condition --instincts-only` keys a repository).
 - `conventions.json`: ground truth in `adage-conventions/1`, as `evals/gen` writes it (decoys included, under `decoys`).
 - `packs/`: the learned reflex tracks as signed packs (`adage share`), when any was learned. They are signed by a throwaway **test signer** made for this corpus, never trust it for anything else:
 
 ```text
-adage-corpus-test-signer namespaces="adage-pack" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAig8V6VAqWQra6pKAJiHOhIgqfOYdKPHneZLsEb++Ox
+adage-corpus-test-signer namespaces="adage-pack" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPfFX/VS3I6LwImxGgMiwQmJtrWmGJqifLcJrzqE6rtf
 ```
 
 - Instincts-arm decisions are not in `recorded/decisions.json` (build_demo.py reads adage-home's spools only).

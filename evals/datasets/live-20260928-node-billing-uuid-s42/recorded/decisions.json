@@ -91,7 +91,7 @@
 ],
 "eval-0446a156-3dba-459a-810d-b88db2716f02-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -99,7 +99,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -107,7 +107,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -115,7 +115,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -123,7 +123,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -131,7 +131,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -139,7 +139,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -147,7 +147,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -155,7 +155,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -163,7 +163,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -171,7 +171,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -179,7 +179,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -187,7 +187,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -195,7 +195,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -203,7 +203,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -211,7 +211,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -219,7 +219,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -227,7 +227,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -235,7 +235,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -243,7 +243,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -251,7 +251,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -259,7 +259,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -267,7 +267,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -275,7 +275,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -283,7 +283,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -291,7 +291,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -299,7 +299,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -307,7 +307,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -315,7 +315,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -335,7 +335,7 @@
 ],
 "eval-0446a156-3dba-459a-810d-b88db2716f02-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -355,7 +355,7 @@
 ],
 "eval-d900c63f-9ac3-4b4b-999f-58660ad17d2e-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -363,7 +363,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -371,7 +371,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -379,7 +379,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -387,7 +387,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -395,7 +395,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -403,7 +403,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -411,7 +411,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -419,7 +419,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -427,7 +427,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -435,7 +435,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -443,7 +443,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -451,7 +451,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -459,7 +459,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -467,7 +467,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -475,7 +475,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -483,7 +483,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -491,7 +491,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -499,7 +499,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -507,7 +507,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -515,7 +515,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -535,7 +535,7 @@
 ],
 "eval-d900c63f-9ac3-4b4b-999f-58660ad17d2e-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -555,7 +555,7 @@
 ],
 "eval-e7de87ac-3f47-4c93-8dad-8607aa7c23d5-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -767,7 +767,7 @@
 ],
 "eval-e7de87ac-3f47-4c93-8dad-8607aa7c23d5-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -775,7 +775,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -783,7 +783,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -791,7 +791,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -799,7 +799,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -807,7 +807,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -815,7 +815,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -823,7 +823,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -831,7 +831,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -839,7 +839,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -847,7 +847,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -855,7 +855,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -863,7 +863,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -871,7 +871,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -879,7 +879,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -887,7 +887,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -895,7 +895,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -903,7 +903,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -911,7 +911,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -919,7 +919,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -927,7 +927,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -935,7 +935,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -943,7 +943,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -951,7 +951,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -959,7 +959,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -967,7 +967,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -975,7 +975,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -983,7 +983,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -991,7 +991,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -999,7 +999,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -1007,7 +1007,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -1015,7 +1015,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],
@@ -1023,7 +1023,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "17d850cf7939cafe",
 "judgements": [],

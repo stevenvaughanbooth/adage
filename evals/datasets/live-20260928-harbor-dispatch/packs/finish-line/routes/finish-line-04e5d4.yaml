@@ -12,7 +12,7 @@ steps:
     - run
     - codegen
   effect: regenerate
-aspect: yellow
+strength: prime
 exit:
 - when: exploratory_change
 evidence:

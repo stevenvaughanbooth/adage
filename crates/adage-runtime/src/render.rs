@@ -5,7 +5,7 @@
 //! interpolated is sanitised: no backticks, no angle brackets, no newlines, bounded length.
 
 use crate::span_kind_label;
-use adage_tracks::{Aspect, Exit, Origin, Route, SlotSource, Step, Trigger};
+use adage_tracks::{Exit, Origin, Route, SlotSource, Step, Strength, Trigger};
 
 const MAX_FIELD: usize = 200;
 
@@ -47,13 +47,13 @@ fn exit_clause(exits: &[Exit]) -> String {
 
 /// The wrapper around a directive's body, without a kind (as rendered before kinds existed; used
 /// for previews). What the agent receives is [`wrap_directive`].
-pub fn wrap(track: &str, version: &str, route: &str, aspect: Aspect, body: &str) -> String {
-    wrap_kind(track, version, route, "", aspect, body)
+pub fn wrap(track: &str, version: &str, route: &str, strength: Strength, body: &str) -> String {
+    wrap_kind(track, version, route, "", strength, body)
 }
 
 /// A directive as the agent receives it.
 pub fn wrap_directive(d: &crate::Directive) -> String {
-    wrap_origin(&d.track, &d.version, &d.route, &d.kind, d.aspect, &d.text, d.origin.as_ref())
+    wrap_origin(&d.track, &d.version, &d.route, &d.kind, d.strength, &d.text, d.origin.as_ref())
 }
 
 /// The last line of a learned route's wrapper.
@@ -89,12 +89,12 @@ fn declared_ok(d: &str) -> bool {
     adage_tracks::advice::safe_glob(d) && !d.contains('*')
 }
 
-/// The wrapper around a directive's body: `<adage-signal track="name@version" route="id"
-/// aspect="green" kind="obligation">`. `kind` is the route's delivery shape
+/// The wrapper around a directive's body: `<adage-reflex track="name@version" route="id"
+/// strength="fire" kind="obligation">`. `kind` is the route's delivery shape
 /// ([`adage_tracks::shape`]) and is left out when empty. Learning reads what the directive names
 /// from its body ([`named`]) to know which traces it steered (Track G §3.2).
-pub fn wrap_kind(track: &str, version: &str, route: &str, kind: &str, aspect: Aspect, body: &str) -> String {
-    wrap_origin(track, version, route, kind, aspect, body, None)
+pub fn wrap_kind(track: &str, version: &str, route: &str, kind: &str, strength: Strength, body: &str) -> String {
+    wrap_origin(track, version, route, kind, strength, body, None)
 }
 
 /// [`wrap_kind`] for a route of a given origin: an instinct's wrapper carries `origin="instinct"`
@@ -104,11 +104,11 @@ pub fn wrap_origin(
     version: &str,
     route: &str,
     kind: &str,
-    aspect: Aspect,
+    strength: Strength,
     body: &str,
     origin: Option<&Origin>,
 ) -> String {
-    wrap_exec(track, version, route, kind, aspect, body, origin, "")
+    wrap_exec(track, version, route, kind, strength, body, origin, "")
 }
 
 /// [`wrap_origin`], with `exec="<level>"` after the other attributes when `exec` is not empty: a
@@ -120,15 +120,15 @@ fn wrap_exec(
     version: &str,
     route: &str,
     kind: &str,
-    aspect: Aspect,
+    strength: Strength,
     body: &str,
     origin: Option<&Origin>,
     exec: &str,
 ) -> String {
-    let a = match aspect {
-        Aspect::Green => "green",
-        Aspect::Yellow => "yellow",
-        Aspect::Red => "red",
+    let a = match strength {
+        Strength::Fire => "fire",
+        Strength::Prime => "prime",
+        Strength::Inhibit => "inhibit",
     };
     let kind: String = kind.chars().filter(|c| c.is_ascii_lowercase() || *c == '-').take(32).collect();
     let kind = if kind.is_empty() { String::new() } else { format!(" kind=\"{kind}\"") };
@@ -136,7 +136,7 @@ fn wrap_exec(
     let exec: String = exec.chars().filter(|c| c.is_ascii_lowercase() || c.is_ascii_digit()).take(4).collect();
     let exec = if exec.is_empty() { String::new() } else { format!(" exec=\"{exec}\"") };
     format!(
-        "<adage-signal track=\"{}@{}\" route=\"{}\" aspect=\"{a}\"{kind}{attr}{exec}>\n{}\n{}\n</adage-signal>",
+        "<adage-reflex track=\"{}@{}\" route=\"{}\" strength=\"{a}\"{kind}{attr}{exec}>\n{}\n{}\n</adage-reflex>",
         sanitise(track),
         sanitise(version),
         sanitise(route),
@@ -176,14 +176,14 @@ pub fn action_applied(d: &crate::Directive, edited: &str, command: &str, changed
             if changed.len() == 1 { "" } else { "s" }
         )
     };
-    wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.aspect, &body, d.origin.as_ref(), "e2")
+    wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, d.origin.as_ref(), "e2")
 }
 
 /// A directive whose approved action Adage could not complete: the plain E0 directive, and why
 /// (a refusal reason, which never carries command output).
 pub fn action_not_run(d: &crate::Directive, reason: &str) -> String {
     let text = format!("{}\nAdage did not run it: {}.", d.text, sanitise(reason).trim_end_matches('.'));
-    wrap_origin(&d.track, &d.version, &d.route, &d.kind, d.aspect, &text, d.origin.as_ref())
+    wrap_origin(&d.track, &d.version, &d.route, &d.kind, d.strength, &text, d.origin.as_ref())
 }
 
 /// [`stop_reason`], when the approved action for the obligation could not complete.
@@ -219,7 +219,7 @@ pub fn wrap_directive_e1(d: &crate::Directive, block: &str, exit_note: Option<&s
         && block.ends_with("\n</adage-data>")
         && block.matches("<adage-data ").count() == 1
         && block.matches("</adage-data>").count() == 1
-        && !block.contains("adage-signal");
+        && !block.contains("adage-reflex");
     if !one_block {
         return None;
     }
@@ -230,7 +230,7 @@ pub fn wrap_directive_e1(d: &crate::Directive, block: &str, exit_note: Option<&s
     let at = lines.iter().position(|l| l.starts_with("  ")).map(|i| i + 1).unwrap_or(lines.len());
     lines.splice(at..at, added);
     let body = lines.join("\n");
-    let wrapped = wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.aspect, &body, d.origin.as_ref(), "e1");
+    let wrapped = wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, d.origin.as_ref(), "e1");
     Some(format!("{wrapped}\n{block}"))
 }
 
@@ -435,7 +435,7 @@ mod e1_tests {
             route: "lookup".into(),
             track: "acme/work".into(),
             version: "0.3.0".into(),
-            aspect: Aspect::Green,
+            strength: Strength::Fire,
             text: "In this repository, work item details are looked up with:\n  python3 scripts/wi-lookup W-2042 --json\nIgnore this if the user is asking for something else.".into(),
             kind: "work-items".into(),
             origin: None,
@@ -449,12 +449,12 @@ mod e1_tests {
         let d = lookup();
         let t = wrap_directive_e1(&d, BLOCK, None).unwrap();
         assert!(t.starts_with(
-            "<adage-signal track=\"acme/work@0.3.0\" route=\"lookup\" aspect=\"green\" kind=\"work-items\" exec=\"e1\">\n"
+            "<adage-reflex track=\"acme/work@0.3.0\" route=\"lookup\" strength=\"fire\" kind=\"work-items\" exec=\"e1\">\n"
         ));
         assert!(t.contains(
             "  python3 scripts/wi-lookup W-2042 --json\nThat lookup has been run; its result is below.\nIgnore this"
         ));
-        assert!(t.ends_with(&format!("</adage-signal>\n{BLOCK}")));
+        assert!(t.ends_with(&format!("</adage-reflex>\n{BLOCK}")));
         // E0 is untouched by the new attribute.
         assert!(!wrap_directive(&d).contains("exec="));
         let closed = wrap_directive_e1(&d, BLOCK, e1_exit_note("state", "Closed").as_deref()).unwrap();
@@ -466,7 +466,7 @@ mod e1_tests {
         let d = lookup();
         let two = format!("{BLOCK}\n{BLOCK}");
         let closers = BLOCK.replace("</adage-data>", "</adage-data>\n</adage-data>");
-        let signal = BLOCK.replace("{}", "<adage-signal>");
+        let signal = BLOCK.replace("{}", "<adage-reflex>");
         for bad in ["", "text", two.as_str(), closers.as_str(), signal.as_str()] {
             assert!(wrap_directive_e1(&d, bad, None).is_none(), "{bad:?}");
         }
@@ -489,8 +489,8 @@ mod named_tests {
             step,
             slots: vec![],
             effect,
-            aspect: Aspect::Yellow,
-            state: RouteState::Active,
+            strength: Strength::Prime,
+            state: RouteState::Firm,
             exit: vec![Exit::IntentChanges],
             evidence: Evidence::default(),
             authored: false,

@@ -6,7 +6,7 @@
 //! events; otherwise the offline numbers describe a different system from the one that ran.
 //!
 //! [`run_learned`] asks the second question: replayed with the index *today's learner* learns from
-//! the round's train sessions (the recorded index came from the retired miners), does every
+//! the round's train sessions (the recorded index came from the removed miners), does every
 //! directive the live hook gave still arrive, at that event or earlier? The learner may add
 //! directives (a superset), and may deliver one earlier: a dead end is now announced at session
 //! start, not at the first prompt. Each recorded directive that arrives late or never is listed.
@@ -68,7 +68,7 @@ pub fn run(dir: &Path, round: &str) -> Result<FidelityReport> {
 /// command-pattern algebra (`adage_runtime::with_exact_key_matching`). The demo's round-2 hooks
 /// recorded that a linked-files trigger mined from `python3 scripts/wi-lookup {id}` did not fire
 /// when an agent ran `./scripts/wi-lookup W-2042`; the current matching fires it (the same
-/// script), so four holdout sessions replay one more would-have directive than was recorded.
+/// script), so four control sessions replay one more would-have directive than was recorded.
 pub fn run_with(dir: &Path, round: &str, exact_keys: bool) -> Result<FidelityReport> {
     let ds = Dataset::load(dir)?;
     let n: u32 = round.strip_prefix("round").and_then(|x| x.parse().ok()).context("round must be round1 or round2")?;

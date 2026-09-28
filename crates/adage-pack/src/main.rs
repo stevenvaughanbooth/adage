@@ -38,7 +38,7 @@ fn run(args: &[String]) -> Result<()> {
                     "  {:<24} {:<10} {:<7} exec {}",
                     r.id,
                     r.shape.as_str(),
-                    format!("{:?}", r.aspect).to_lowercase(),
+                    format!("{:?}", r.strength).to_lowercase(),
                     &p.route_exec_digest(&r.id).unwrap_or_default()[..16]
                 );
             }

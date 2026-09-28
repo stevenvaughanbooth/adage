@@ -75,29 +75,29 @@ fn demo_round2_gates() {
 #[test]
 fn demo_round2_learns_what_the_live_learner_learned() {
     // The offline learner, fed the curated transcripts of the same 54 sessions, must learn the
-    // routes the live round-2 index held (ids, aspects). Measured: identical routes except two
+    // routes the live round-2 index held (ids, strengths). Measured: identical routes except two
     // deliberate changes since: the dead end's avoided runners and evidence (keyed by
     // signature), and the exit condition dead ends and linked files now carry (Design W2). Before
     // them, identical index bytes (generation 8dd5ec01ed76c4bd).
     //
     // One route is added, deliberately: dead ends are now one per (working command, signature),
     // so the second signature before `make test` (`python -m pytest`, "command not found", 4 of
-    // 5 sessions) is a route of its own, `dead-end-21cb2c`. The live route keeps its id and aspect
+    // 5 sessions) is a route of its own, `dead-end-21cb2c`. The live route keeps its id and strength
     // (`dead-end-d41b1e`, the most common signature).
     //
     // And one since the graph engine became the only learner (Track G G5): the sessions that ran
     // `make gen` after a schema edit and then `make test` and `make ci` did so one right after
     // another (`adage_learn::engine`'s together rule), so beside the obligation to regenerate the
-    // sequence `make gen then make test then make ci` is learned, yellow. Nothing else may differ.
+    // sequence `make gen then make test then make ci` is learned, prime. Nothing else may differ.
     let r = eval("demo-haiku45", Some("round2"));
     let live: adage_tracks::Index =
         serde_json::from_slice(&std::fs::read(datasets().join("demo-haiku45/recorded/index-round2.json")).unwrap())
             .unwrap();
     let mut want: Vec<(String, String)> =
-        live.routes.iter().map(|ir| (ir.route.id.clone(), format!("{:?}", ir.route.aspect).to_lowercase())).collect();
-    want.push(("dead-end-21cb2c".into(), "red".into()));
-    want.push(("sequence-a36be6".into(), "yellow".into()));
-    let mut got: Vec<(String, String)> = r.routes.iter().map(|x| (x.id.clone(), x.aspect.clone())).collect();
+        live.routes.iter().map(|ir| (ir.route.id.clone(), format!("{:?}", ir.route.strength).to_lowercase())).collect();
+    want.push(("dead-end-21cb2c".into(), "inhibit".into()));
+    want.push(("sequence-a36be6".into(), "prime".into()));
+    let mut got: Vec<(String, String)> = r.routes.iter().map(|x| (x.id.clone(), x.strength.clone())).collect();
     want.sort();
     got.sort();
     assert_eq!(got, want);
@@ -125,7 +125,7 @@ fn replay_reproduces_the_live_round2_decisions() {
     //
     // The recorded hooks matched commands by exact template key; replay compares under that
     // matching (`--exact-keys`, `adage_runtime::with_exact_key_matching`). Under the current
-    // matching (the command-pattern algebra), exactly four holdout sessions differ, each by one
+    // matching (the command-pattern algebra), exactly four control sessions differ, each by one
     // would-have linked-files directive the live hook did not make: the trigger was mined from
     // `python3 scripts/wi-lookup {id}` and the agent ran `./scripts/wi-lookup W-…`, the same script.
     let dir = datasets().join("demo-haiku45");
@@ -157,17 +157,17 @@ fn replay_reproduces_the_live_round2_decisions() {
 
 #[test]
 fn replay_with_the_learned_index_gives_every_recorded_directive() {
-    // Track G G5: the recorded decisions came from the retired miners' index. Replayed against
+    // Track G G5: the recorded decisions came from the removed miners' index. Replayed against
     // the index the graph engine learns from the same round's train sessions, every directive the
     // live hook gave must still arrive, at its event or earlier. Measured, both rounds: 36/36.
     // What differs, precisely:
-    // - round 1: 34/36 identical; two holdout sessions get one more linked-files directive (the
+    // - round 1: 34/36 identical; two control sessions get one more linked-files directive (the
     //   command-pattern algebra, as in the test above); the live `finish-line-1` is today's
     //   `finish-line-e7e809` (same trigger and step, an id from before content-derived ids).
     // - round 2: none identical, because every session also gets the second dead end
     //   (`dead-end-21cb2c`) at its first prompt; sessions that edit a schema get the sequence
-    //   `make gen then make test then make ci` beside the obligation (10); four holdout sessions
-    //   get one more linked-files directive; and one (`eval2-W-2045-r2-holdout`) gets its lookup
+    //   `make gen then make test then make ci` beside the obligation (10); four control sessions
+    //   get one more linked-files directive; and one (`eval2-W-2045-r2-holdout`, a recorded run id) gets its lookup
     //   and dead end at session start, one event earlier than live.
     let dir = datasets().join("demo-haiku45");
     for (round, identical) in [("round1", 34), ("round2", 0)] {
@@ -301,7 +301,7 @@ fn demo_instincts_only_gates() {
 
 #[test]
 fn instincts_after_learning_give_way_and_stay_safe() {
-    // With learning (what `adage learn` does): a learned route with an instinct's id wins, the
+    // With learning (what `adage condition` does): a learned route with an instinct's id wins, the
     // rest bind, and every directive and wrapper is still one the oracle accepts.
     for (name, split) in [("demo-haiku45", Some("round2")), ("synthetic", None), ("adversarial", None)] {
         let r = eval_instincts(name, split, InstinctMode::With);

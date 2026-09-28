@@ -115,8 +115,8 @@ pub struct BoundRoute {
     /// `cas/<hex>` (L-vendor).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub scripts: Vec<(String, String)>,
-    /// The runtime form of a live route (at probation state rules: an environment step is a
-    /// draft).
+    /// The runtime form of a live route (at forming state rules: an environment step is a
+    /// nascent).
     #[serde(skip)]
     pub route: Option<Route>,
 }
@@ -586,7 +586,7 @@ fn to_v1(r: &RouteV2, pack: &Pack, table: &CommandTable) -> Result<Route, String
         provenance: e.provenance,
         models: e.models,
         exposed: e.exposed,
-        stale_since: None,
+        dormant_since: None,
         origin: e.origin.map(|o| match o {
             RouteOrigin::Learned => Origin::Learned,
             RouteOrigin::Instinct { pack, version, instinct, ecosystem, declared } => {
@@ -607,11 +607,11 @@ fn to_v1(r: &RouteV2, pack: &Pack, table: &CommandTable) -> Result<Route, String
         step,
         slots,
         effect,
-        aspect: r.aspect,
+        strength: r.strength,
         // A pack carries no per-machine state: an environment step waits for a person (O11). An
         // exec-only route (a vendored script) is never directed, so it waits for nothing here: its
         // execution approval is explicit, per machine, and never automatic.
-        state: if effect == Effect::Environment && !vendored(r) { RouteState::Draft } else { RouteState::Probation },
+        state: if effect == Effect::Environment && !vendored(r) { RouteState::Nascent } else { RouteState::Forming },
         exit,
         evidence,
         authored: false,

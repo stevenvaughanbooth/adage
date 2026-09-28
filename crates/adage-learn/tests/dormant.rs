@@ -1,10 +1,10 @@
-//! Evidence integrity (E1): a route that steers the sessions which would confirm it goes stale
-//! instead of retiring itself, and directives of unknown kind are excluded from the learner.
+//! Evidence integrity (E1): a route that steers the sessions which would confirm it goes dormant
+//! instead of extinguishing itself, and directives of unknown kind are excluded from the learner.
 //!
 //! Synthetic Claude Code transcripts in the real on-disk format, as in `golden.rs`.
 
 use adage_learn::{learn, Inputs, LearnConfig};
-use adage_tracks::{io, Aspect, Index, Route, RouteState, Track};
+use adage_tracks::{io, Index, Route, RouteState, Strength, Track};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -33,7 +33,7 @@ impl Tx {
             "…".to_string()
         };
         self.lines.push(json!({"type":"attachment","sessionId":self.sid,"cwd":CWD,
-            "content": format!("{wrapper}\n{body}\n</adage-signal>")}));
+            "content": format!("{wrapper}\n{body}\n</adage-reflex>")}));
         self
     }
     fn call(&mut self, name: &str, input: Value, output: &str) -> &mut Self {
@@ -57,7 +57,7 @@ impl Tx {
 }
 
 const LOOKUP: &str =
-    r#"<adage-signal track="acme-billing/learned@0.1.0" route="lookup-work-item" aspect="green" kind="run">"#;
+    r#"<adage-reflex track="acme-billing/learned@0.1.0" route="lookup-work-item" strength="fire" kind="run">"#;
 
 /// A session whose prompt names a work item. `steered`: the lookup directive was delivered.
 /// `looks_up`: the agent ran the lookup (as nearly every agent does once told to).
@@ -113,7 +113,7 @@ impl World {
 }
 
 #[test]
-fn a_route_that_steers_its_own_evidence_away_goes_stale_not_retired() {
+fn a_route_that_steers_its_own_evidence_away_goes_stale_not_extinguished() {
     let w = World::new();
 
     // 1. Before Adage: eight unsteered sessions look the work item up. The route is learned.
@@ -121,32 +121,32 @@ fn a_route_that_steers_its_own_evidence_away_goes_stale_not_retired() {
     let before: Vec<PathBuf> = (0..8).map(|i| session(&h, &format!("u{i}"), i, None, true)).collect();
     let index = w.learn(&before);
     let r = w.lookup().expect("learned");
-    assert_eq!((r.state, r.aspect), (RouteState::Active, Aspect::Green));
+    assert_eq!((r.state, r.strength), (RouteState::Firm, Strength::Fire));
     assert_eq!((r.evidence.support, r.evidence.opportunities, r.evidence.exposed), (8, 8, 0));
     assert!(index.routes.iter().any(|x| x.route.id == r.id));
     let learned = r.evidence.clone();
 
     // 2. The old transcripts expire. What is left: nine sessions the route steered (they looked
     //    the item up, as told) and one held-out session (~10%) that found it unaided. The learner
-    //    sees one unsteered session: too little support. Before E1 the route retired itself.
+    //    sees one unsteered session: too little support. Before E1 the route extinguished itself.
     let h = w.history("after");
     let mut after: Vec<PathBuf> = (0..9).map(|i| session(&h, &format!("t{i}"), 20 + i, Some(LOOKUP), true)).collect();
     after.push(session(&h, "h0", 40, None, true));
     let index = w.learn(&after);
-    let r = w.lookup().expect("kept, stale");
-    assert_eq!(r.state, RouteState::Stale);
-    assert_eq!(r.aspect, Aspect::Yellow, "a stale route is never green");
+    let r = w.lookup().expect("kept, dormant");
+    assert_eq!(r.state, RouteState::Dormant);
+    assert_eq!(r.strength, Strength::Prime, "a dormant route is never fire");
     let today = adage_tracks::review::today();
-    assert_eq!(r.evidence.stale_since.as_deref(), Some(today.as_str()));
+    assert_eq!(r.evidence.dormant_since.as_deref(), Some(today.as_str()));
     assert_eq!(r.evidence.exposed, 9, "the steered sessions it could not learn from");
     // Its last evidence is kept as it was.
     assert_eq!((r.evidence.support, r.evidence.opportunities), (learned.support, learned.opportunities));
     assert_eq!(r.evidence.lower_bound, learned.lower_bound);
-    // Still delivered (at yellow), and the track still validates and re-reads.
-    let ir = index.routes.iter().find(|x| x.route.id == r.id).expect("stale routes are compiled");
-    assert_eq!(adage_tracks::delivered_aspect(&ir.route), Aspect::Yellow);
+    // Still delivered (at prime), and the track still validates and re-reads.
+    let ir = index.routes.iter().find(|x| x.route.id == r.id).expect("dormant routes are compiled");
+    assert_eq!(adage_tracks::delivered_strength(&ir.route), Strength::Prime);
     io::validate(&w.track()).unwrap();
-    // Learning the same history again changes nothing, and keeps the date it went stale.
+    // Learning the same history again changes nothing, and keeps the date it went dormant.
     let bytes = std::fs::read(w.home().join("index.json")).unwrap();
     let version = w.track().manifest.track.version;
     w.learn(&after);
@@ -158,13 +158,13 @@ fn a_route_that_steers_its_own_evidence_away_goes_stale_not_retired() {
     refound.extend((1..5).map(|i| session(&h, &format!("h{i}"), 40 + i, None, true)));
     w.learn(&refound);
     let r = w.lookup().unwrap();
-    assert_eq!((r.state, r.evidence.stale_since.clone()), (RouteState::Active, None));
+    assert_eq!((r.state, r.evidence.dormant_since.clone()), (RouteState::Firm, None));
     assert_eq!((r.evidence.support, r.evidence.opportunities, r.evidence.exposed), (5, 5, 9));
 
-    // 4. Stale again, then contrary evidence: unsteered sessions that name a work item and do
+    // 4. Dormant again, then contrary evidence: unsteered sessions that name a work item and do
     //    not look it up (1 of 6 did). That is not exposure; the route is dropped as before.
     w.learn(&after);
-    assert_eq!(w.lookup().unwrap().state, RouteState::Stale);
+    assert_eq!(w.lookup().unwrap().state, RouteState::Dormant);
     let mut contrary = after.clone();
     contrary.extend((0..5).map(|i| session(&h, &format!("c{i}"), 60 + i, None, false)));
     let index = w.learn(&contrary);
@@ -196,8 +196,8 @@ fn directives_that_name_nothing_readable_steer_everything() {
     let mut files: Vec<PathBuf> = (0..6).map(|i| session(&h, &format!("u{i}"), i, None, true)).collect();
     // Steered by directives whose wrapper was cut short (no body to read what they named): either
     // could have steered the first command, so none of these traces is lookup evidence.
-    let old = r#"<adage-signal track="team/tricks@1.0.0" route="avoid-legacy-runner" aspect="red">"#;
-    let other = r#"<adage-signal track="team/tricks@1.0.0" route="dead-end-9" aspect="red" kind="other">"#;
+    let old = r#"<adage-reflex track="team/tricks@1.0.0" route="avoid-legacy-runner" strength="inhibit">"#;
+    let other = r#"<adage-reflex track="team/tricks@1.0.0" route="dead-end-9" strength="inhibit" kind="other">"#;
     for i in 0..3 {
         files.push(session(&h, &format!("o{i}"), 10 + i, Some(old), true));
         files.push(session(&h, &format!("k{i}"), 20 + i, Some(other), true));

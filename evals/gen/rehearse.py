@@ -13,14 +13,14 @@ and finishes with the working verify command. Every command really runs in the s
 session is written as a Claude Code transcript (JSONL) with the real output, in the layout the live
 runner uses (ROOT/<bundle>/transcripts/<project>/<session>.jsonl, outcomes.json).
 
-Then, unless --no-learn, it runs `adage learn --demo --no-instincts` on those transcripts with an isolated ADAGE_HOME (ROOT/<bundle>/adage-home) and compares the learned
+Then, unless --no-learn, it runs `adage condition --demo --no-instincts` on those transcripts with an isolated ADAGE_HOME (ROOT/<bundle>/adage-home) and compares the learned
 routes with conventions.json: each non-decoy convention must be recovered, and no route may mention
 a decoy. A lookup is recovered when its command is the convention's and its contract accepts every
-tracker id and fresh holdout id and rejects every near miss (by ids, not by spelling, so any id
+tracker id and fresh held-out id and rejects every near miss (by ids, not by spelling, so any id
 shape can be judged); a dead end when its runner begins the avoided command, as adage canonicalises
 both (`npm test` is `npm run test`), or when it runs the working command after the avoided one fails; a finish line by its glob and command, or by a sequence whose first step it is; a
 sequence, scope or env_sync convention (Track G G3) by an after-edit route on its glob directing its
-steps, its command with the edited part as a slot, or its environment step (a draft awaiting review,
+steps, its command with the edited part as a slot, or its environment step (nascent, awaiting review,
 as its ceiling requires). A finish line on a sequence's first step is part of it: expected, not a
 recovery. Context-triggered routes are neither (this rehearsal does not score them). The adage binary is
 --adage, else target/release/adage, else target/debug/adage in this repository. It writes
@@ -285,7 +285,7 @@ def yaml_load(text):
 
 
 def learned_routes(home):
-    """Every learned route in any state (the index holds only active ones; drafts await review)."""
+    """Every learned route in any state (the index holds only live ones; nascent ones await review)."""
     routes = []
     for p in sorted((Path(home) / "tracks").glob("*/*/routes/*.yaml")):
         r = yaml_load(p.read_text())
@@ -293,18 +293,18 @@ def learned_routes(home):
     return routes
 
 
-def lookup_contract_ok(regex, c, b, holdout):
+def lookup_contract_ok(regex, c, b, held_out):
     """A lookup's learned contract matches a convention by its ids, not its spelling: it accepts
     every tracker id the tasks name (and the convention's `samples`) and rejects every near miss
-    (the holdout's, else the convention's `counter_samples`). Python's `re` reads the learned
+    (the held-out set's, else the convention's `counter_samples`). Python's `re` reads the learned
     regexes (anchored, explicit ASCII classes) as the Rust regex crate does."""
     try:
         rx = re.compile(regex)
     except re.error:
         return False
     ids = [t["id"] for t in b.tasks["tasks"] if t["kind"] in grammar.TRACKER_KINDS] + list(c.get("samples", []))
-    ids += list((holdout or {}).get("fresh", []))
-    near = [n["value"] for n in (holdout or {}).get("near_miss", [])] + list(c.get("counter_samples", []))
+    ids += list((held_out or {}).get("fresh", []))
+    near = [n["value"] for n in (held_out or {}).get("near_miss", [])] + list(c.get("counter_samples", []))
     if not ids:
         ids = []
     return all(rx.fullmatch(i) for i in ids) and not any(rx.fullmatch(n) for n in near)
@@ -327,7 +327,7 @@ def commands_of(route):
     return [norm(step.get("command"))] if step.get("command") else []
 
 
-def compare(b, routes, holdout=None):
+def compare(b, routes, held_out=None):
     """Match learned routes against conventions.json. A route matches by its fixed id form
     (`lookup-work-item`, `dead-end-…`, `finish-line-…`) or by its shape (other shapes are named by
     content: `run-…`, `sequence-…`)."""
@@ -349,7 +349,7 @@ def compare(b, routes, holdout=None):
         if kind == "lookup":
             got = take(lambda r: r["id"] == "lookup-work-item"
                        and norm(r["step"].get("command")).split(" --json")[0] == norm(c["command"])
-                       and any(lookup_contract_ok(x["contract"].get("regex", ""), c, b, holdout)
+                       and any(lookup_contract_ok(x["contract"].get("regex", ""), c, b, held_out)
                                for x in r.get("slots", [])))
         elif kind == "linked_files":
             got = take(lambda r: r["id"] == "read-linked-files")
@@ -388,7 +388,7 @@ def compare(b, routes, holdout=None):
             continue
         detail = None
         if got:
-            detail = {"id": got["id"], "aspect": got.get("aspect"), "state": got.get("state")}
+            detail = {"id": got["id"], "strength": got.get("strength"), "state": got.get("state")}
             if kind == "lookup":
                 detail.update(command=got["step"]["command"], contract=got["slots"][0]["contract"].get("regex"),
                               declared_pattern=c["id_pattern"])
@@ -440,8 +440,8 @@ def rehearse_bundle(bundle, root, repeats, adage, learn):
     ho = None
     if b.one("lookup"):
         tracker = [t["id"] for t in b.tasks["tasks"] if t["kind"] in grammar.TRACKER_KINDS]
-        ho = grammar.holdout(b.spec["spec"], tracker, b.spec["seed"])
-        (root / "holdout.json").write_text(json.dumps(ho, indent=1, sort_keys=True) + "\n")
+        ho = grammar.held_out(b.spec["spec"], tracker, b.spec["seed"])
+        (root / "held_out.json").write_text(json.dumps(ho, indent=1, sort_keys=True) + "\n")
     report = {"bundle": b.path.name, "stack": b.tasks["stack"], "skin": b.tasks["skin"], "seed": b.tasks["seed"],
               "sessions": sessions, "all_passed": all(x["passed"] for x in sessions)}
     if learn:
@@ -449,7 +449,7 @@ def rehearse_bundle(bundle, root, repeats, adage, learn):
         home = root / "adage-home"
         # Learned routes only: instincts are bound from the repository's files, not learned from
         # the sessions, so they are not what a rehearsal measures (and would be unexpected routes).
-        argv = [str(adage), "learn", "--demo", "--json", "--no-instincts", "--repo", b.tasks["repo"]]
+        argv = [str(adage), "condition", "--demo", "--json", "--no-instincts", "--repo", b.tasks["repo"]]
         argv += ["--outcomes", str(root / "outcomes.json"), "--transcripts", *tx]
         env = dict(scorer.env(), ADAGE_HOME=str(home), ADAGE_AUTO_LEARN="0")
         out = subprocess.run(argv, capture_output=True, text=True, env=env)
@@ -502,7 +502,7 @@ def print_report(rep):
                     extra += f" [declared {d['declared_avoided']!r}: adage names the runner only]"
             elif row["kind"] in ("finish_line", "sequence", "scope", "env_sync") and d:
                 extra = f" {d['paths']} -> {d['command']!r}"
-            state = f" [{d['state']}]" if d and d.get("state") != "active" else ""
+            state = f" [{d['state']}]" if d and d.get("state") != "firm" else ""
             print(f"  {mark}  {row['convention']:<22} {row['kind']:<19} "
                   f"{('recovered ' + d['id'] + state + extra) if d else 'NOT recovered'}")
     print(f"  recovered {rep['recovered']}/{rep['expected']} conventions, {rep['decoys_learned']} decoys learned, "

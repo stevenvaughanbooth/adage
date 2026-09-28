@@ -2,7 +2,7 @@
 //! outcome verification), vendored-script packs from `adage share --vendor` to an action on
 //! another checkout, and attestations from `adage share --attest` to `adage review`.
 //!
-//! Approvals go through the real `adage review allow-exec`; hook events through the real
+//! Approvals go through the real `adage review delegate`; hook events through the real
 //! `adage-exec hook claude <event>` (the binary built beside `adage`; without it, as in a
 //! `cargo test -p adage-cli` that did not build it, the hook legs are skipped and say so).
 
@@ -168,8 +168,8 @@ fn finish_line_track(repo: &str) -> Track {
             step: Step::Run { command: "make gen".into() },
             slots: vec![],
             effect: Effect::Regenerate,
-            aspect: Aspect::Green,
-            state: RouteState::Active,
+            strength: Strength::Fire,
+            state: RouteState::Firm,
             exit: vec![Exit::ExploratoryChange],
             evidence: Evidence { support: 7, opportunities: 8, days: 3, ..Default::default() },
             authored: false,
@@ -208,7 +208,7 @@ fn finish_line_sandbox_make_gen_as_an_e2_action_from_the_hook() {
     assert!(!generated.is_empty(), "the sandbox has a generated registry module");
     let key = adage_core::repo::repo_key(&repo);
     Index::compile(&[finish_line_track(&key)]).write_atomic(&home.join("index.json")).unwrap();
-    let allow = ["review", "allow-exec", TRACK, REGEN, "--level", "e2", "--outputs", generated.as_str()];
+    let allow = ["review", "delegate", TRACK, REGEN, "--level", "e2", "--outputs", generated.as_str()];
 
     // E2 is a beta: the default policy caps execution at E1.
     refused(adage(&home, &repo, &allow), "max_level = \"E2\"");
@@ -225,7 +225,7 @@ fn finish_line_sandbox_make_gen_as_an_e2_action_from_the_hook() {
     // is recorded. An approval whose outputs do not cover the change records nothing.
     let csv = repo.join("registry/currencies.csv");
     add_row(&csv, "ZZQ,Adage Test Unit,3");
-    let wrong = ["review", "allow-exec", TRACK, REGEN, "--level", "e2", "--outputs", "docs/*.md"];
+    let wrong = ["review", "delegate", TRACK, REGEN, "--level", "e2", "--outputs", "docs/*.md"];
     refused(adage(&home, &repo, &wrong), "the approval would not cover");
     assert!(!home.join("approvals.json").exists());
     let out = ok(adage(&home, &repo, &allow));
@@ -240,7 +240,7 @@ fn finish_line_sandbox_make_gen_as_an_e2_action_from_the_hook() {
         "+         'ZZQ': {'minor_units': 3, 'name': 'Adage Test Unit'},",
         "Recorded in",
     ] {
-        assert!(out.contains(want), "allow-exec output lacks {want:?}:\n{out}");
+        assert!(out.contains(want), "delegate output lacks {want:?}:\n{out}");
     }
     assert!(!std::fs::read_to_string(repo.join(&generated)).unwrap().contains("ZZQ"), "the preview applies nothing");
     let store = adage_exec::approvals::Store::load(&home.join("approvals.json")).unwrap();
@@ -390,7 +390,7 @@ requested = "E2"
     f.insert(
         "routes/count-lines.yaml".into(),
         format!(
-            "id: count-lines\nshape: obligation\ntrigger: {{ on: after_edit, paths: \"data/*.txt\" }}\nsteps:\n  - id: count\n    run: {{ argv: [python3, scripts/count.py] }}\n    effect: regenerate\n    script: {{ path: scripts/count.py, closure: ref, sha256: \"{sha}\" }}\naspect: yellow\nexec: {{ level: E2, outputs: [\"out/count.txt\"] }}\nevidence: {{ opportunities: 6, support: 5, days: 2 }}\n"
+            "id: count-lines\nshape: obligation\ntrigger: {{ on: after_edit, paths: \"data/*.txt\" }}\nsteps:\n  - id: count\n    run: {{ argv: [python3, scripts/count.py] }}\n    effect: regenerate\n    script: {{ path: scripts/count.py, closure: ref, sha256: \"{sha}\" }}\nstrength: prime\nexec: {{ level: E2, outputs: [\"out/count.txt\"] }}\nevidence: {{ opportunities: 6, support: 5, days: 2 }}\n"
         )
         .into_bytes(),
     );
@@ -453,7 +453,7 @@ fn vendored_scripts_and_attestations_round_trip() {
 
     // A hostile attestation is refused at share time.
     let bad = base.join("bad.jsonl");
-    results(&bad, Some(("grants", json!("green"))));
+    results(&bad, Some(("grants", json!("fire"))));
     refused(share(&["--vendor", "--attest", bad.to_str().unwrap()], "x"), "is not a bench result record");
 
     // share --vendor --attest, in the checkout that holds the script.
@@ -482,7 +482,7 @@ fn vendored_scripts_and_attestations_round_trip() {
     let index = Index::load(&recipient.join("index.json"));
     let ir = index.routes.iter().find(|r| r.route.id == "count-lines").expect("live in the index");
     assert!(ir.exec_only(), "E0 never directs a vendored script");
-    assert_eq!(ir.route.aspect, Aspect::Yellow, "an attestation grants no strength");
+    assert_eq!(ir.route.strength, Strength::Prime, "an attestation grants no strength");
     assert_eq!(ir.exec.as_ref().unwrap().max_level, adage_tracks::index::Level::E2);
 
     // (d) review shows the attestation as self-reported by the signer.
@@ -500,7 +500,7 @@ fn vendored_scripts_and_attestations_round_trip() {
     assert_eq!(v["attestations"][0]["note"], "self-reported by signer; informational only");
 
     // Approval: never automatic; policy must allow vendored scripts; the full text is shown.
-    let allow = ["review", "allow-exec", PACK, "count-lines", "--level", "e2", "--effect", "regenerate"];
+    let allow = ["review", "delegate", PACK, "count-lines", "--level", "e2", "--effect", "regenerate"];
     std::fs::write(recipient.join("policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
     refused(adage(&recipient, &recipient_repo, &allow), "allow_vendor_scripts");
     std::fs::write(recipient.join("policy.toml"), "[exec]\nmax_level = \"E2\"\nallow_vendor_scripts = true\n").unwrap();
@@ -524,7 +524,7 @@ fn vendored_scripts_and_attestations_round_trip() {
         "diff:     out/count.txt (Created)",
         "    + 2",
     ] {
-        assert!(out.contains(want), "allow-exec output lacks {want:?}:\n{out}");
+        assert!(out.contains(want), "delegate output lacks {want:?}:\n{out}");
     }
     assert!(!recipient_repo.join("out").exists(), "the preview applies nothing");
 

@@ -3,7 +3,7 @@
 //!
 //! The detectors are Rust compiled into Adage, so a detector pack names them and never supplies
 //! them. The core pack's routes are therefore not fixed bytes: for a repository, the compiled
-//! detectors run over its declared facts (`adage_instincts::bind`, the same binder `adage learn`
+//! detectors run over its declared facts (`adage_instincts::bind`, the same binder `adage condition`
 //! uses), and the routes they propose become the pack's routes for that repository, upgraded to
 //! route v2, validated and closed like any pack's, with applicability `detector = "*"` over this
 //! build's catalogue. Binding that pack ([`crate::bind`]) gives back exactly the binder's routes

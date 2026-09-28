@@ -1,5 +1,5 @@
 //! Repository keys end to end: two unrelated repositories without `origin` that share a directory
-//! name. `adage learn` keys one's routes by `<name>@<root commit>`, its hooks draw them, and the
+//! name. `adage condition` keys one's routes by `<name>@<root commit>`, its hooks draw them, and the
 //! other's do not; routes learned under the bare name before the change keep working until a
 //! repository of that name is re-keyed. Needs git to build the repositories (skipped without it);
 //! Adage itself never runs git.
@@ -93,7 +93,7 @@ fn unrelated_repositories_with_one_name_do_not_share_routes() {
     let home = root.join("home");
     let files: Vec<String> =
         (0..3).map(|i| transcript(&root, &format!("s{i}"), &a).to_string_lossy().to_string()).collect();
-    let mut args = vec!["learn", "--demo", "--json", "--transcripts"];
+    let mut args = vec!["condition", "--demo", "--json", "--transcripts"];
     args.extend(files.iter().map(String::as_str));
     let report: Value = serde_json::from_str(&adage(&home, &args, "")).unwrap();
     let key = format!("app@{}", &root_a[..12]);

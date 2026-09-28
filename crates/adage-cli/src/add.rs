@@ -1,6 +1,6 @@
 //! `adage add <dir> [--trust]` (Design §10.7, §15.2; review finding F9; Track C §2.2): verify a
 //! shared pack's signature against trusted signers, validate it, install it, bind it to
-//! repositories at probation, recompile the index.
+//! repositories at forming, recompile the index.
 //!
 //! A **pack** (`pack.toml`, format `adage-pack/1`) is read strictly (no symlinks, no smuggled
 //! files), its digest checked against `pack.sig` in namespace `adage-pack`, and it is validated in
@@ -32,7 +32,7 @@ use adage_pack::Pack;
 use adage_sign::PublicKey;
 use adage_sign::{allowed_signers, fingerprint, key_line, NAMESPACE, PACK_NAMESPACE};
 use adage_store::Paths;
-use adage_tracks::{io, Aspect, Index, RouteState, Track};
+use adage_tracks::{io, Index, RouteState, Strength, Track};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -270,7 +270,7 @@ fn add_pack(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> 
     let pack = Pack::from_files(&files).map_err(|e| anyhow!("refusing: the pack fails validation: {e:#}"))?;
     packs::policy_check(paths, &pack, Some(&fingerprint(&signer)))?;
     let scope = trust_scope(&pack, cwd_root);
-    // One writer of the tracks and index at a time (`adage learn`, automatic learners).
+    // One writer of the tracks and index at a time (`adage condition`, automatic learners).
     let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let decision = decide(paths, &scope, &msg, &pem, &signer, trust, PACK_NAMESPACE)?;
 
@@ -318,7 +318,7 @@ fn add_pack(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> 
         );
     }
     print_bound(&pack, &bound, &local_effects(&pack));
-    println!("index generation {}, {} routes", index.generation, index.routes.len());
+    println!("index generation {}, {} reflexes", index.generation, index.routes.len());
     Ok(())
 }
 
@@ -346,7 +346,7 @@ fn add_v1(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> Re
 }
 
 fn install_v1(stage: &Path, src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> Result<()> {
-    // One writer of the tracks and index at a time (`adage learn`, automatic learners).
+    // One writer of the tracks and index at a time (`adage condition`, automatic learners).
     let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let dir = stage.join("in");
     let digest = io::digest(&dir)?;
@@ -392,7 +392,7 @@ fn install_v1(stage: &Path, src: &Path, paths: &Paths, trust: bool, cwd_root: Op
         println!("  not carried {id}: {why}");
     }
     print_bound(&pack, &bound, &local_effects(&pack));
-    println!("index generation {}, {} routes", index.generation, index.routes.len());
+    println!("index generation {}, {} reflexes", index.generation, index.routes.len());
     Ok(())
 }
 
@@ -406,7 +406,7 @@ fn replace_dir(from: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Recompile the index exactly as `adage learn` does.
+/// Recompile the index exactly as `adage condition` does.
 fn recompile(paths: &Paths) -> Result<Index> {
     let all = io::read_all(&paths.tracks())?;
     let (index, _) = Index::compile_root(&paths.tracks(), &all);
@@ -432,7 +432,7 @@ fn print_bound(pack: &Pack, bound: &[Bound], effects: &BTreeMap<String, adage_co
             println!("  bound      {}", d.display());
         }
         println!(
-            "  repo       {}: {} live, {} inert; imported at probation, never green on import (O2):",
+            "  repo       {}: {} live, {} inert; imported at forming, never fire on import (O2):",
             binding.repo,
             binding.live().count(),
             binding.inert().count()
@@ -442,17 +442,17 @@ fn print_bound(pack: &Pack, bound: &[Bound], effects: &BTreeMap<String, adage_co
             match &r.status {
                 Status::Live { max_level } => {
                     let Some(rt) = routes.iter().find(|x| x.id == r.id) else { continue };
-                    let aspect = format!("{:?}", rt.aspect).to_lowercase();
-                    let before = b.was.get(&r.id).copied().unwrap_or(rt.aspect);
-                    let note = if before != rt.aspect {
+                    let strength = format!("{:?}", rt.strength).to_lowercase();
+                    let before = b.was.get(&r.id).copied().unwrap_or(rt.strength);
+                    let note = if before != rt.strength {
                         format!(" (was {})", format!("{before:?}").to_lowercase())
                     } else {
                         String::new()
                     };
                     let effect = effects.get(&r.id).map(|e| e.as_str()).unwrap_or("?");
-                    let draft = if rt.state == RouteState::Draft { " · draft until approved" } else { "" };
+                    let nascent = if rt.state == RouteState::Nascent { " · nascent until approved" } else { "" };
                     println!(
-                        "    {:<22} {aspect}{note:<12} {}  [effect {effect} · exec up to {max_level:?}{draft}]",
+                        "    {:<22} {strength}{note:<12} {}  [effect {effect} · exec up to {max_level:?}{nascent}]",
                         r.id,
                         crate::share::describe_step(&rt.step)
                     );
@@ -480,21 +480,21 @@ fn describe_applicability(a: &adage_pack::Applicability) -> String {
     }
 }
 
-/// Design O2: imported routes start at probation — yellow for signed, trusted sources, never green.
-/// Routes the author retired or demoted stay out of service. The author's `review.yaml` travels in
+/// Design O2: imported routes start at forming — prime for signed, trusted sources, never fire.
+/// Routes the author extinguished or weakened stay out of service. The author's `review.yaml` travels in
 /// the signed package but is not installed: the recipient reviews imports for themselves, so an
-/// environment step waits as a draft until the recipient approves it (O11).
-pub(crate) fn at_probation(mut t: Track) -> (Track, Vec<Aspect>) {
-    let was = t.routes.iter().map(|r| r.aspect).collect();
+/// environment step waits as nascent until the recipient approves it (O11).
+pub(crate) fn at_forming(mut t: Track) -> (Track, Vec<Strength>) {
+    let was = t.routes.iter().map(|r| r.strength).collect();
     for r in &mut t.routes {
-        if matches!(r.state, RouteState::Active | RouteState::Probation) {
+        if matches!(r.state, RouteState::Firm | RouteState::Forming) {
             r.state = match adage_tracks::initial_state(r.effect) {
-                RouteState::Draft => RouteState::Draft,
-                _ => RouteState::Probation,
+                RouteState::Nascent => RouteState::Nascent,
+                _ => RouteState::Forming,
             };
         }
-        if r.aspect == Aspect::Green {
-            r.aspect = Aspect::Yellow;
+        if r.strength == Strength::Fire {
+            r.strength = Strength::Prime;
         }
     }
     let p = &mut t.manifest.track.provenance;
@@ -510,15 +510,15 @@ mod tests {
     use adage_tracks::{Evidence, Gauge, Manifest, Route, Scope, Step, TrackInfo, Trigger};
 
     #[test]
-    fn probation_never_revives_retired_routes() {
-        let route = |id: &str, aspect, state| Route {
+    fn forming_never_revives_extinguished_routes() {
+        let route = |id: &str, strength, state| Route {
             id: id.into(),
             summary: "s".into(),
             trigger: Trigger::SessionStart,
             step: Step::Run { command: "make test".into() },
             slots: vec![],
             effect: adage_core::Effect::Verify,
-            aspect,
+            strength,
             state,
             exit: vec![],
             evidence: Evidence::default(),
@@ -536,16 +536,20 @@ mod tests {
                 gauge: Gauge::default(),
             },
             routes: vec![
-                route("live", Aspect::Green, RouteState::Active),
-                route("gone", Aspect::Yellow, RouteState::Retired),
-                Route { effect: adage_core::Effect::Environment, ..route("setup", Aspect::Yellow, RouteState::Active) },
+                route("live", Strength::Fire, RouteState::Firm),
+                route("gone", Strength::Prime, RouteState::Extinguished),
+                Route { effect: adage_core::Effect::Environment, ..route("setup", Strength::Prime, RouteState::Firm) },
             ],
         };
-        let (t, was) = at_probation(t);
-        assert_eq!(was, vec![Aspect::Green, Aspect::Yellow, Aspect::Yellow]);
-        assert_eq!(t.routes[2].state, RouteState::Draft, "an imported environment step waits for the recipient (O11)");
-        assert_eq!((t.routes[0].state, t.routes[0].aspect), (RouteState::Probation, Aspect::Yellow));
-        assert_eq!(t.routes[1].state, RouteState::Retired, "a route its author rejected stays retired");
+        let (t, was) = at_forming(t);
+        assert_eq!(was, vec![Strength::Fire, Strength::Prime, Strength::Prime]);
+        assert_eq!(
+            t.routes[2].state,
+            RouteState::Nascent,
+            "an imported environment step waits for the recipient (O11)"
+        );
+        assert_eq!((t.routes[0].state, t.routes[0].strength), (RouteState::Forming, Strength::Prime));
+        assert_eq!(t.routes[1].state, RouteState::Extinguished, "a route its author rejected stays extinguished");
         assert_eq!(t.manifest.track.provenance, "imported:desire-path");
     }
 }

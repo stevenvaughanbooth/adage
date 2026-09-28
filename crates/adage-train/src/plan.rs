@@ -1,4 +1,4 @@
-//! `adage-train plan`: claims, tasks and a budget estimate from one source file. Free: it reads
+//! `adage train plan`: claims, tasks and a budget estimate from one source file. Free: it reads
 //! files and executes nothing.
 
 use crate::claims::{self, Claim, SourceKind};
@@ -137,7 +137,7 @@ pub fn build(o: &PlanOptions) -> Result<Plan> {
 pub fn load(path: &Path) -> Result<Plan> {
     let p: Plan =
         serde_json::from_str(&std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?)
-            .with_context(|| format!("{} is not an adage-train plan", path.display()))?;
+            .with_context(|| format!("{} is not an adage train plan", path.display()))?;
     if p.format != FORMAT {
         bail!("{}: plan format {} (this adage-train reads {FORMAT})", path.display(), p.format);
     }
@@ -149,7 +149,7 @@ pub fn load(path: &Path) -> Result<Plan> {
 
 pub fn render(p: &Plan) -> String {
     let mut s = String::new();
-    let _ = writeln!(s, "adage-train plan (free: nothing was executed)");
+    let _ = writeln!(s, "adage train plan (free: nothing was executed)");
     let _ = writeln!(s, "source  {} ({:?}, skill `{}`)", p.source.path.display(), p.source.kind, p.source.name);
     let _ = writeln!(s, "        sha256 {}", p.source.sha256);
     let _ = writeln!(s, "repo    {} (key {})", p.repo.root.display(), p.repo.key);

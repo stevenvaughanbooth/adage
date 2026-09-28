@@ -1,4 +1,4 @@
-//! Learning inside `adage learn` (Track G): reflexes mined from the traces, compiled to delivery
+//! Learning inside `adage condition` (Track G): reflexes mined from the traces, compiled to delivery
 //! shapes, judged on the traces. This is the only learner; it knows no route kinds.
 //!
 //! 1. **Mine** (G2): every trace becomes an event sequence ([`crate::bridge::events`]), with the
@@ -13,19 +13,19 @@
 //!    ([`crate::graph::lookup_routes`]), a read batch over the traces that ran its command, an
 //!    after-edit route over the traces that edited a file of its glob (run after the last such
 //!    edit, contrast against the traces that did not), an after-command route over the traces
-//!    that ran the command, an avoid over the traces that ran an avoided runner. Its aspect is
-//!    the Wilson rule over those counts (a lower bound for green, a rate for yellow, capped by the
+//!    that ran the command, an avoid over the traces that ran an avoided runner. Its strength is
+//!    the Wilson rule over those counts (a lower bound for fire, a rate for prime, capped by the
 //!    ceiling), with the outcome-lift path as a second gate. Context routes keep the reflex's own
 //!    evidence. A trace that received a directive naming what a route directs is left out of its
 //!    count ([`exposed`]).
 //!
 //! **Instincts as priors.** The repository's installed instinct routes are pseudo-evidence on the
-//! reflex at the same decision point directing the same command: 3 traces at 0.7 in the yellow
-//! test only; green reads the organic lower bound alone, so no reflex is delivered green from
+//! reflex at the same decision point directing the same command: 3 traces at 0.7 in the prime
+//! test only; fire reads the organic lower bound alone, so no reflex is delivered fire from
 //! prior mass, and a reflex that says otherwise always wins (interlocking puts instincts last).
 
 use crate::bridge;
-use crate::evidence::{argv, aspect_for, days, median, models, outcome_lift, shell_join, LearnConfig, PATHS_FIELD};
+use crate::evidence::{argv, days, median, models, outcome_lift, shell_join, strength_for, LearnConfig, PATHS_FIELD};
 use crate::import::Session;
 use adage_core::spans::{self, SpanKind};
 use adage_core::{CanonicalAction, Effect};
@@ -332,9 +332,9 @@ pub fn judge_read_batch(r: &Route, sessions: &[&Session], cfg: &LearnConfig) -> 
     let n = support.len() as u32;
     let rate = n as f64 / opportunities.max(1) as f64;
     let lift = outcome_lift(sessions, &open, &support);
-    // The rate gate, else the outcome-lift path (yellow either way: a read is only suggested).
+    // The rate gate, else the outcome-lift path (prime either way: a read is only suggested).
     if (n < cfg.min_support || rate < cfg.bar(&r.id))
-        && crate::evidence::lift_aspect(Effect::Observe, false, cfg, lift.as_ref()).is_none()
+        && crate::evidence::lift_strength(Effect::Observe, false, cfg, lift.as_ref()).is_none()
     {
         return None;
     }
@@ -345,8 +345,8 @@ pub fn judge_read_batch(r: &Route, sessions: &[&Session], cfg: &LearnConfig) -> 
             source: SlotSource::ResultField { field },
             contract: Contract::RepoPath,
         }],
-        aspect: Aspect::Yellow,
-        state: RouteState::Active,
+        strength: Strength::Prime,
+        state: RouteState::Firm,
         evidence: Evidence {
             opportunities,
             support: n,
@@ -413,7 +413,7 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
             }
             let opp = c.opportunities.max(n);
             let (rate, lb) = (n as f64 / opp as f64, wilson_lower(n, opp));
-            r.aspect = aspect_for(Effect::Verify, false, lb, rate, cfg, &r.id)
+            r.strength = strength_for(Effect::Verify, false, lb, rate, cfg, &r.id)
                 .ok_or_else(|| format!("rate {rate:.2} below the bar"))?;
             r.evidence = Evidence {
                 opportunities: opp,
@@ -456,21 +456,21 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
         return Err(format!("contrast {:.2} below {}", rate - c.rate_without, cfg.finish_line_contrast));
     }
     let lb = wilson_lower(n, c.opportunities);
-    // An instinct's prior enters the yellow test only (3 traces at 0.7).
-    let yellow_rate = if prior { (n as f64 + 3.0 * 0.7) / (c.opportunities as f64 + 3.0) } else { rate };
+    // An instinct's prior enters the prime test only (3 traces at 0.7).
+    let prime_rate = if prior { (n as f64 + 3.0 * 0.7) / (c.opportunities as f64 + 3.0) } else { rate };
     // A sequence is capped by its lowest ceiling.
     let effect = match &r.step {
         Step::Sequence { commands } => commands
             .iter()
             .map(|x| io::classify(x, &adage_core::CommandTable::load()))
-            .fold(Effect::Observe, |a, e| if ceiling(e, by_edit) == Some(Aspect::Green) { a } else { e }),
+            .fold(Effect::Observe, |a, e| if ceiling(e, by_edit) == Some(Strength::Fire) { a } else { e }),
         _ => r.effect,
     };
-    let aspect =
-        (if n >= cfg.min_support { aspect_for(effect, by_edit, lb, yellow_rate.max(rate), cfg, &r.id) } else { None })
+    let strength =
+        (if n >= cfg.min_support { strength_for(effect, by_edit, lb, prime_rate.max(rate), cfg, &r.id) } else { None })
             .or_else(|| outcome_gate(effect, by_edit, lift.as_ref(), cfg))
             .ok_or_else(|| format!("rate {rate:.2} below the bar and no outcome lift, or may never be directed"))?;
-    r.aspect = aspect;
+    r.strength = strength;
     r.evidence = Evidence {
         opportunities: c.opportunities,
         support: n,
@@ -493,7 +493,7 @@ fn outcome_gate(
     by_edit: bool,
     lift: Option<&adage_tracks::lift::OutcomeLift>,
     cfg: &LearnConfig,
-) -> Option<Aspect> {
+) -> Option<Strength> {
     let p = CompileParams {
         outcome_lift_lower_bound: cfg.outcome_lift_lower_bound,
         outcome_min_support: cfg.outcome_min_support,
@@ -524,8 +524,8 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
     // is on this machine (see `adage_graph::compile::glob`).
     let corpus = Corpus::of(&annotated, &[]);
     let params = CompileParams {
-        green_lower_bound: cfg.green_lower_bound,
-        yellow_rate: cfg.yellow_rate,
+        fire_lower_bound: cfg.fire_lower_bound,
+        prime_rate: cfg.prime_rate,
         outcome_lift_lower_bound: cfg.outcome_lift_lower_bound,
         outcome_min_support: cfg.outcome_min_support,
         max_signatures: cfg.dead_end_signatures,
@@ -628,8 +628,8 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
             ubiquitous: cfg.intent_ubiquitous,
             contrast: cfg.intent_contrast,
         };
-        let aspect = |effect: Effect, lb: f64, rate: f64, id: &str| aspect_for(effect, false, lb, rate, cfg, id);
-        let found = compile::intent::compile(&annotated, &influence, m, &ip, &cfg.provenance, &aspect);
+        let strength = |effect: Effect, lb: f64, rate: f64, id: &str| strength_for(effect, false, lb, rate, cfg, id);
+        let found = compile::intent::compile(&annotated, &influence, m, &ip, &cfg.provenance, &strength);
         report.intent_families = found.families;
         let all_models = models(ss);
         for mut x in found.routes {
@@ -644,8 +644,8 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
 /// For a route that was in service and was not learned again: `Some(verdict)` from the scorer's
 /// counts for its own pattern (its `why`; the verdict is `Some(exposed)` to keep it dormant),
 /// `None` when the scorer has none for it (the caller then judges it on the traces,
-/// [`crate::stale::verdict`]).
+/// [`crate::dormant::verdict`]).
 pub fn verdict(why: Option<&Why>, counts: &BTreeMap<String, Counts>, cfg: &LearnConfig) -> Option<Option<u32>> {
     let c = counts.get(&why?.pattern)?;
-    Some(crate::stale::verdict_counts(c.exposed, c.opportunities, c.support, cfg))
+    Some(crate::dormant::verdict_counts(c.exposed, c.opportunities, c.support, cfg))
 }

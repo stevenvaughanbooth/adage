@@ -2,12 +2,12 @@
 //!
 //! `adage eval` is the credibility test run over recorded history: learn tracks from a train
 //! split into a temporary home, replay each held-out session event by event through the real
-//! runtime (`adage_runtime::decide`, holdout arm), and score every directive Adage would have
+//! runtime (`adage_runtime::decide`, control arm), and score every directive Adage would have
 //! given against what the agent actually did later in that session. Nothing runs: no agent, no
 //! command, no model. The same dataset gives the same bytes on every run.
 //!
 //! Modules: [`dataset`] (manifests, splits, sandboxes), [`transcript`] (transcripts as hook
-//! events), [`replay`] (the runtime, holdout arm), [`score`] (metrics), [`safety`] (the
+//! events), [`replay`] (the runtime, control arm), [`score`] (metrics), [`safety`] (the
 //! directive oracle), [`fidelity`] (replay versus what the live hooks recorded), [`conventions`]
 //! (learned routes versus a sandbox's known conventions), [`generate`] (the synthetic and
 //! adversarial datasets), [`cli`].
@@ -94,7 +94,7 @@ pub enum InstinctMode {
     /// Learned routes only (the default; the committed numbers).
     #[default]
     Off,
-    /// Learned routes, then instincts bound from the sandbox (`--instincts`): what `adage learn`
+    /// Learned routes, then instincts bound from the sandbox (`--instincts`): what `adage condition`
     /// does by default.
     With,
     /// Instincts only (`--instincts-only`): nothing is learned from the train sessions; the index
@@ -129,7 +129,7 @@ pub fn sandbox_files(dir: &Path, ds: &Dataset, opts: &Options) -> Result<PathBuf
 }
 
 /// The instinct configuration for an eval: the default packs, the sandbox as the repository's root,
-/// and no spools (nothing to retire).
+/// and no spools (nothing to extinguish).
 fn instinct_config(repo: &str, root: &Path) -> adage_learn::instincts::Config {
     let mut c = adage_learn::instincts::Config::default();
     c.roots.insert(repo.to_string(), root.to_path_buf());
@@ -154,7 +154,7 @@ pub fn instincts_index(repo: &str, root: &Path) -> Result<Index> {
 pub struct LearnedRoute {
     pub id: String,
     pub shape: String,
-    pub aspect: String,
+    pub strength: String,
     pub step: String,
     pub support: u32,
     pub opportunities: u32,
@@ -355,7 +355,7 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
         .map(|ir| LearnedRoute {
             id: ir.route.id.clone(),
             shape: score::point(&ir.route),
-            aspect: format!("{:?}", ir.route.aspect).to_lowercase(),
+            strength: format!("{:?}", ir.route.strength).to_lowercase(),
             step: step_text(&ir.route.step),
             support: ir.route.evidence.support,
             opportunities: ir.route.evidence.opportunities,
@@ -444,7 +444,7 @@ pub fn render_text(r: &Report) -> String {
         let _ = writeln!(
             s,
             "  {:<22} {:<12} {:<6} {:>3}/{:<3} {}",
-            x.id, x.shape, x.aspect, x.support, x.opportunities, x.step
+            x.id, x.shape, x.strength, x.support, x.opportunities, x.step
         );
     }
     let _ = writeln!(

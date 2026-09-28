@@ -84,7 +84,7 @@ pub fn adapter(harness: &str) -> Option<&'static dyn Adapter> {
 /// be mistaken for the user's prompt.
 pub fn is_own_text(prompt: &str) -> bool {
     let t = prompt.trim_start();
-    t.starts_with("Adage finish-line check:") || t.starts_with("<adage-signal ")
+    t.starts_with("Adage finish-line check:") || t.starts_with("<adage-reflex ")
 }
 
 /// Calls for translated `(tool, input)` pairs, with relative file paths anchored at the session's

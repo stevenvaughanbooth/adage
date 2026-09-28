@@ -53,7 +53,7 @@ pub struct Turn<'a> {
     pub paths: &'a Paths,
     /// The harness's cap on directive text ([`harness::Adapter::max_context`]).
     pub max_context: usize,
-    /// The session's arm: nothing is ever run in the control (holdout) arm.
+    /// The session's arm: nothing is ever run in the control (control) arm.
     pub arm: Option<Arm>,
     /// Finish-line obligations an approved E2 action could carry out at this event.
     pub stimuli: &'a [Stimulus],
@@ -124,7 +124,7 @@ pub trait Extension: Sync {
 /// How a binary runs the pipeline.
 #[derive(Clone, Copy, Default)]
 pub struct Options {
-    /// The adage binary live learning starts (`<learner> learn --auto …`); `None`: this binary.
+    /// The adage binary live learning starts (`<learner> condition --auto …`); `None`: this binary.
     pub learner: Option<fn() -> Option<PathBuf>>,
     pub extension: Option<&'static dyn Extension>,
 }
@@ -210,8 +210,8 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
     if adapter.is_learn_point(event) {
         let transcript = p.get("transcript_path").and_then(|v| v.as_str());
         let learner = match opts.learner {
-            Some(find) => find().ok_or_else(|| Failure::new("learn", "finding the adage binary: not found")),
-            None => std::env::current_exe().map_err(|e| Failure::io("learn", "finding the adage binary", &e)),
+            Some(find) => find().ok_or_else(|| Failure::new("condition", "finding the adage binary: not found")),
+            None => std::env::current_exe().map_err(|e| Failure::io("condition", "finding the adage binary", &e)),
         };
         let learned =
             learner.and_then(|l| autolearn::on_turn_end(&paths, &root, adapter.name(), transcript, &l).map(drop));
@@ -267,8 +267,8 @@ fn respond(
         params: Default::default(),
     };
     let arm_env = std::env::var("ADAGE_ARM").ok();
-    // ADAGE_HOLDOUT, else `runtime.holdout` in config.toml, else 0.1.
-    let share: f64 = adage_store::config::load(paths).config.runtime_holdout;
+    // ADAGE_CONTROL, else `runtime.control` in config.toml, else 0.1.
+    let share: f64 = adage_store::config::load(paths).config.runtime_control;
     let spool_path = paths.spool(session);
     // Exec-only reflexes come into play only under an extension that carries them out.
     let exec_only: Vec<(String, String)> = match opts.extension {
@@ -296,8 +296,8 @@ fn respond(
             // A state from before propensities were recorded: the arm was drawn with (as far as can
             // be known) today's share, unless it is forced now.
             let propensity = st.propensity.unwrap_or_else(|| match (st.arm, arm_env.as_deref()) {
-                (_, Some("holdout" | "treated")) => 1.0,
-                (Some(Arm::Holdout), _) => share.clamp(0.0, 1.0),
+                (_, Some("control" | "treated")) => 1.0,
+                (Some(Arm::Control), _) => share.clamp(0.0, 1.0),
                 _ => 1.0 - share.clamp(0.0, 1.0),
             });
             let before: Vec<(String, bool)> =
@@ -358,7 +358,7 @@ fn respond(
     }
 
     let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
-    // `propensity`: the probability of `arm` at assignment (holdout share, or one minus it; 1 when
+    // `propensity`: the probability of `arm` at assignment (control share, or one minus it; 1 when
     // `ADAGE_ARM` forced it), for inverse-propensity weighting (Design §11, §14.1).
     let mut rec = json!({ "ts": ts, "event": event, "kind": ev.name(), "arm": arm, "propensity": propensity, "repo": repo_key, "generation": index.generation, "decision": decision });
     if adapter.name() != "claude" {

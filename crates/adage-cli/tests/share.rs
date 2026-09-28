@@ -88,7 +88,7 @@ fn keygen(w: &World, name: &str) -> ssh_key::PublicKey {
     k.public_key().clone()
 }
 
-fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, aspect: Aspect) -> Route {
+fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, strength: Strength) -> Route {
     Route {
         id: id.into(),
         summary: format!("route {id}"),
@@ -96,8 +96,8 @@ fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effec
         step,
         slots,
         effect,
-        aspect,
-        state: RouteState::Active,
+        strength,
+        state: RouteState::Firm,
         exit: vec![Exit::IntentChanges],
         evidence: Evidence { support: 7, opportunities: 8, provenance: "desire-path".into(), ..Default::default() },
         authored: false,
@@ -127,7 +127,7 @@ fn track() -> Track {
                     contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
                 }],
                 Effect::Observe,
-                Aspect::Green,
+                Strength::Fire,
             ),
             route(
                 "dead-unittest",
@@ -139,7 +139,7 @@ fn track() -> Track {
                 },
                 vec![],
                 Effect::Verify,
-                Aspect::Red,
+                Strength::Inhibit,
             ),
         ],
     }
@@ -154,7 +154,7 @@ fn setup() -> (World, ssh_key::PublicKey) {
 }
 
 #[test]
-fn share_then_add_installs_routes_at_probation() {
+fn share_then_add_installs_routes_at_forming() {
     let (w, pk) = setup();
     std::fs::write(w.p("sender/tracks").join(NAME).join(".DS_Store"), "junk").unwrap();
     let o = w.share();
@@ -180,7 +180,7 @@ fn share_then_add_installs_routes_at_probation() {
     w.trust_personally(&pk);
     let o = w.add(&[]);
     assert!(o.status.success(), "{}", text(&o));
-    assert!(text(&o).contains("was green"), "{}", text(&o));
+    assert!(text(&o).contains("was fire"), "{}", text(&o));
     // Upgraded in place: the pack is installed as verified, and bound to this repository.
     assert!(adage_pack::Pack::load(&w.p("recipient/tracks/@imported").join(NAME)).is_ok());
     let installed =
@@ -190,11 +190,11 @@ fn share_then_add_installs_routes_at_probation() {
     let index = Index::load(&w.p("recipient/index.json"));
     assert_eq!(index.routes.len(), 2);
     for r in &index.routes {
-        assert_eq!(r.route.state, RouteState::Probation, "{}", r.route.id);
-        assert_ne!(r.route.aspect, Aspect::Green, "{}", r.route.id);
+        assert_eq!(r.route.state, RouteState::Forming, "{}", r.route.id);
+        assert_ne!(r.route.strength, Strength::Fire, "{}", r.route.id);
     }
     let lookup = index.for_repo(REPO).find(|r| r.route.id == "lookup").unwrap();
-    assert_eq!(lookup.route.aspect, Aspect::Yellow);
+    assert_eq!(lookup.route.strength, Strength::Prime);
     assert!(!w.p("recipient/trust.json").exists(), "personal trust changes nothing");
     assert!(walk(&w.p("recipient/staging")).is_empty(), "the staging copy is removed");
 
@@ -206,7 +206,7 @@ fn share_then_add_installs_routes_at_probation() {
     let index = Index::compile(&all);
     assert_eq!(index.routes.len(), 2, "one route per id");
     let lookup = index.for_repo(REPO).find(|r| r.route.id == "lookup").unwrap();
-    assert_eq!(lookup.route.aspect, Aspect::Green, "the learned route wins over the import");
+    assert_eq!(lookup.route.strength, Strength::Fire, "the learned route wins over the import");
 }
 
 #[test]

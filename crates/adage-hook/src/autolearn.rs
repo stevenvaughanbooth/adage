@@ -1,4 +1,4 @@
-//! The hook's part of live learning (Architecture §4.7.2; the learner itself is `adage learn
+//! The hook's part of live learning (Architecture §4.7.2; the learner itself is `adage condition
 //! --auto`, in `adage-cli/src/autolearn.rs`, which documents the queue files).
 //!
 //! When a session stops or ends, after its normal decision, the hook calls [`on_turn_end`]. If
@@ -130,8 +130,8 @@ pub fn on_turn_end(
         harness: harness.to_string(),
         requested_at: now,
     };
-    write_json(&q.request(), &req).map_err(|e| Failure::io("learn", "recording a learn request", &e))?;
-    if lock::is_held(&q.lock()).map_err(|e| Failure::io("learn", "checking the learner lock", &e))? {
+    write_json(&q.request(), &req).map_err(|e| Failure::io("condition", "recording a learn request", &e))?;
+    if lock::is_held(&q.lock()).map_err(|e| Failure::io("condition", "checking the learner lock", &e))? {
         return Ok(Triggered::Running);
     }
     let last: Spawned = read_json(&q.spawned()).unwrap_or_default();
@@ -146,11 +146,11 @@ pub fn on_turn_end(
     Ok(Triggered::Started(after))
 }
 
-/// Start `<learner> learn --auto --repo-root <root> [--after <ms>]` (the adage binary), detached,
+/// Start `<learner> condition --auto --repo-root <root> [--after <ms>]` (the adage binary), detached,
 /// and do not wait.
 fn spawn(paths: &Paths, root: &Path, after: Option<u64>, learner: &Path) -> Result<(), Failure> {
     let mut args: Vec<String> =
-        vec!["learn".into(), "--auto".into(), "--repo-root".into(), root.to_string_lossy().into()];
+        vec!["condition".into(), "--auto".into(), "--repo-root".into(), root.to_string_lossy().into()];
     if let Some(a) = after {
         args.extend(["--after".to_string(), a.to_string()]);
     }
@@ -164,12 +164,12 @@ fn spawn(paths: &Paths, root: &Path, after: Option<u64>, learner: &Path) -> Resu
                 .create(true)
                 .append(true)
                 .open(paths.learn_queue().join(SPAWN_RECORD))
-                .map_err(|e| Failure::io("learn", "recording a spawn", &e))?;
+                .map_err(|e| Failure::io("condition", "recording a spawn", &e))?;
             return f
                 .write_all(format!("{line}\n").as_bytes())
-                .map_err(|e| Failure::io("learn", "recording a spawn", &e));
+                .map_err(|e| Failure::io("condition", "recording a spawn", &e));
         }
-        Ok("fail") => return Err(Failure::new("learn", "starting the learner: injected failure")),
+        Ok("fail") => return Err(Failure::new("condition", "starting the learner: injected failure")),
         _ => {}
     }
     let _ = paths;
@@ -192,5 +192,5 @@ fn spawn(paths: &Paths, root: &Path, after: Option<u64>, learner: &Path) -> Resu
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
         c.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
     }
-    c.spawn().map(drop).map_err(|e| Failure::io("learn", "starting the learner", &e))
+    c.spawn().map(drop).map_err(|e| Failure::io("condition", "starting the learner", &e))
 }

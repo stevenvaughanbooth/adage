@@ -1,18 +1,18 @@
-//! `adage survey` (Design J1): "what does my agent actually do?" — a read-only report over
+//! `adage sense` (Design J1): "what does my agent actually do?" — a read-only report over
 //! existing session history, per repository.
 //!
 //! ```text
-//! adage survey [--repo <key>] [--since <days>] [--json] [--demo]
+//! adage sense [--repo <key>] [--since <days>] [--json] [--demo]
 //!              [--claude-projects <dir>] [--codex-sessions <dir>] [--transcripts <file>...]
 //! ```
 //!
-//! Sessions are found as `adage learn` finds them (Claude Code history under
+//! Sessions are found as `adage condition` finds them (Claude Code history under
 //! `~/.claude/projects`, or `--transcripts` files, including `opencode export` output). `--repo`
 //! keeps one repository key; `--since` keeps sessions from the last N days. For each repository
 //! the report shows sessions and prompts, the most common command templates, turns before the
 //! first edit, repeated failing commands (dead-end candidates), edits followed by regeneration
 //! (finish-line candidates), what prompts name (work items, files, commits, links), and the routes
-//! `adage learn` would build from the same sessions — computed by learn's own dry run
+//! `adage condition` would build from the same sessions — computed by learn's own dry run
 //! ([`adage_learn::plan`]) and marked as candidates. Nothing is written.
 //!
 //! Large histories: files are streamed one at a time and folded into bounded per-repository
@@ -27,7 +27,7 @@ use adage_core::{keys, CanonicalAction, CommandTable, Effect};
 use adage_learn::import::Session;
 use adage_learn::LearnConfig;
 use adage_store::Paths;
-use adage_tracks::review::aspect_str;
+use adage_tracks::review::strength_str;
 use adage_tracks::{io, Route};
 use anyhow::{bail, Result};
 use serde::Serialize;
@@ -88,7 +88,7 @@ impl Options {
 }
 
 #[derive(Debug, Default, Serialize)]
-pub struct Survey {
+pub struct Sense {
     /// Where sessions came from (home directory redacted).
     pub source: String,
     pub files: usize,
@@ -97,11 +97,11 @@ pub struct Survey {
     pub since: Option<String>,
     pub thresholds: String,
     pub intent_model: Option<String>,
-    pub repos: Vec<RepoSurvey>,
+    pub repos: Vec<RepoSense>,
 }
 
 #[derive(Debug, Default, Serialize)]
-pub struct RepoSurvey {
+pub struct RepoSense {
     pub repo: String,
     pub sessions: u32,
     pub prompts: u32,
@@ -172,7 +172,7 @@ pub struct Candidate {
     /// `new`, `installed` (identical to what is installed), `update`, or `proposed` (a pinned
     /// route whose learned version differs).
     pub status: String,
-    pub aspect: String,
+    pub strength: String,
     pub effect: String,
     pub trigger: String,
     pub step: String,
@@ -208,7 +208,7 @@ fn home() -> Option<String> {
     adage_store::paths::home_dir().map(|h| h.to_string_lossy().into_owned()).filter(|h| !h.is_empty())
 }
 
-fn red(s: &str) -> String {
+fn redacted(s: &str) -> String {
     scrub(s, home().as_deref())
 }
 
@@ -221,7 +221,7 @@ fn shape(v: &str) -> String {
 /// leaves part of a path or secret behind.
 fn snippet(p: &str) -> String {
     let head: String = p.chars().take(SNIPPET * 8).collect();
-    let flat = red(&head.split_whitespace().collect::<Vec<_>>().join(" "));
+    let flat = redacted(&head.split_whitespace().collect::<Vec<_>>().join(" "));
     let mut s: String = flat.chars().take(SNIPPET).collect();
     if flat.chars().count() > SNIPPET || p.chars().count() > SNIPPET * 8 {
         s.push('…');
@@ -363,10 +363,10 @@ fn percentile(sorted: &[u32], p: f64) -> Option<u32> {
     (!sorted.is_empty()).then(|| sorted[((sorted.len() - 1) as f64 * p).round() as usize])
 }
 
-/// Session files, as `adage learn` finds them, and a description of where they came from.
+/// Session files, as `adage condition` finds them, and a description of where they came from.
 fn discover(o: &Options) -> (Vec<PathBuf>, String) {
     let mut files = o.transcripts.clone();
-    // Default to Claude Code history only when no source was named, as `adage learn` does.
+    // Default to Claude Code history only when no source was named, as `adage condition` does.
     let explicit = !o.transcripts.is_empty() || o.codex_sessions.is_some();
     let dir = o
         .claude_projects
@@ -375,14 +375,14 @@ fn discover(o: &Options) -> (Vec<PathBuf>, String) {
     let mut source: Vec<String> = Vec::new();
     if let Some(d) = &o.codex_sessions {
         let (found, _) = adage_learn::codex::discover(d);
-        source.push(format!("{} Codex rollout(s) in {}", found.len(), red(&d.display().to_string())));
+        source.push(format!("{} Codex rollout(s) in {}", found.len(), redacted(&d.display().to_string())));
         files.extend(found);
     }
     if !o.transcripts.is_empty() {
         source.push(format!("{} file(s) given with --transcripts", o.transcripts.len()));
     }
     if let Some(d) = dir {
-        source.push(format!("Claude Code history in {}", red(&d.display().to_string())));
+        source.push(format!("Claude Code history in {}", redacted(&d.display().to_string())));
         files.extend(adage_learn::import::discover(&d));
     }
     (files, source.join(" and "))
@@ -401,14 +401,14 @@ fn modified_before(p: &Path, cutoff_days: i64) -> bool {
         .is_some_and(|d| ((d.as_secs() / 86_400) as i64) < cutoff_days)
 }
 
-/// Run the survey. Reads history and installed tracks; writes nothing.
-pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
+/// Run `adage sense`. Reads history and installed tracks; writes nothing.
+pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
     let (files, source) = discover(o);
     let table = CommandTable::load();
     let cutoff = o.since_days.map(|d| today_days() - i64::from(d));
     let since = cutoff.map(adage_tracks::review::civil_date);
     let mut accs: BTreeMap<String, Acc> = BTreeMap::new();
-    let mut survey = Survey { source, files: files.len(), since: since.clone(), ..Default::default() };
+    let mut sense = Sense { source, files: files.len(), since: since.clone(), ..Default::default() };
     for p in &files {
         // A file last written before the window cannot hold a session inside it.
         if cutoff.is_some_and(|c| modified_before(p, c)) {
@@ -424,7 +424,7 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
         if since.as_ref().is_some_and(|d| s.day.is_empty() || s.day < *d) {
             continue;
         }
-        survey.sessions += 1;
+        sense.sessions += 1;
         accs.entry(s.repo.clone()).or_default().add(s);
     }
 
@@ -436,8 +436,8 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
     }
     let cfg = if o.demo { LearnConfig::demo() } else { LearnConfig::default() };
     let (report, planned) = adage_learn::plan(mined, Some(&paths.models()), &paths.tracks(), &cfg)?;
-    survey.thresholds = report.thresholds.clone();
-    survey.intent_model = report.intent_model.clone();
+    sense.thresholds = report.thresholds.clone();
+    sense.intent_model = report.intent_model.clone();
 
     for (repo, a) in accs {
         let mut turns = a.turns.clone();
@@ -447,7 +447,7 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
             v.sort_by(|x, y| y.1.cmp(x.1).then(x.0.cmp(y.0)));
             v.into_iter()
                 .take(TOP)
-                .map(|(k, (s, r))| CommandCount { template: red(k), sessions: *s, runs: *r })
+                .map(|(k, (s, r))| CommandCount { template: redacted(k), sessions: *s, runs: *r })
                 .collect()
         };
         let mut failures: Vec<(&String, &FailCount)> =
@@ -457,10 +457,10 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
             .into_iter()
             .take(TOP)
             .map(|(k, (s, r, next))| Failure {
-                template: red(k),
+                template: redacted(k),
                 sessions: *s,
                 runs: *r,
-                then_worked: next.iter().max_by(|x, y| x.1.cmp(y.1).then(y.0.cmp(x.0))).map(|(k, _)| red(k)),
+                then_worked: next.iter().max_by(|x, y| x.1.cmp(y.1).then(y.0.cmp(x.0))).map(|(k, _)| redacted(k)),
             })
             .collect();
         let mut regen: Vec<(&(String, String), &u32)> = a.regen.iter().filter(|(_, n)| **n >= 2).collect();
@@ -469,8 +469,8 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
             .into_iter()
             .take(TOP)
             .map(|((g, c), n)| Regeneration {
-                edits: red(g),
-                then_ran: red(c),
+                edits: redacted(g),
+                then_ran: redacted(c),
                 sessions: *n,
                 editing_sessions: a.editors.get(g).copied().unwrap_or(0),
             })
@@ -484,15 +484,15 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
                 SpanCount {
                     kind: k.to_string(),
                     sessions: *n,
-                    shapes: sh.into_iter().take(3).map(|(s, _)| red(s)).collect(),
+                    shapes: sh.into_iter().take(3).map(|(s, _)| redacted(s)).collect(),
                 }
             })
             .collect();
         let mut samples = a.samples.clone();
         samples.sort_by(|x, y| (&y.0, &y.1).cmp(&(&x.0, &x.1)));
         let candidates = planned.iter().filter(|p| p.track.manifest.scope.repo == repo).flat_map(candidates).collect();
-        survey.repos.push(RepoSurvey {
-            repo: red(&repo),
+        sense.repos.push(RepoSense {
+            repo: redacted(&repo),
             sessions: a.sessions,
             prompts: a.prompts,
             harnesses: a.harnesses.into_iter().collect(),
@@ -516,7 +516,7 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
             intent_families: report.repos.get(&repo).map_or(0, |r| r.intent_families),
         });
     }
-    Ok(survey)
+    Ok(sense)
 }
 
 fn candidates(p: &adage_learn::Planned) -> Vec<Candidate> {
@@ -526,10 +526,10 @@ fn candidates(p: &adage_learn::Planned) -> Vec<Candidate> {
         track: suffix.clone(),
         route: r.id.clone(),
         status: status.into(),
-        aspect: aspect_str(r.aspect).into(),
+        strength: strength_str(r.strength).into(),
         effect: r.effect.as_str().into(),
-        trigger: red(crate::graph::trigger(&r.trigger)["label"].as_str().unwrap_or_default()),
-        step: red(&crate::share::describe_step(&r.step)),
+        trigger: redacted(crate::graph::trigger(&r.trigger)["label"].as_str().unwrap_or_default()),
+        step: redacted(&crate::share::describe_step(&r.step)),
         support: r.evidence.support,
         opportunities: r.evidence.opportunities,
         lower_bound: (r.evidence.lower_bound * 100.0).round() / 100.0,
@@ -538,15 +538,15 @@ fn candidates(p: &adage_learn::Planned) -> Vec<Candidate> {
     for r in p.track.routes.iter().filter(|r| {
         matches!(
             r.state,
-            adage_tracks::RouteState::Active | adage_tracks::RouteState::Probation | adage_tracks::RouteState::Draft
+            adage_tracks::RouteState::Firm | adage_tracks::RouteState::Forming | adage_tracks::RouteState::Nascent
         )
     }) {
         if let Some(prop) = p.proposals.routes.get(&r.id) {
             out.push(row(&prop.route, "proposed"));
             continue;
         }
-        // An environment step learn would build as a draft: never delivered until approved (O11).
-        if r.state == adage_tracks::RouteState::Draft {
+        // An environment step learn would build as nascent: never delivered until approved (O11).
+        if r.state == adage_tracks::RouteState::Nascent {
             out.push(row(r, "needs approval"));
             continue;
         }
@@ -560,7 +560,7 @@ fn candidates(p: &adage_learn::Planned) -> Vec<Candidate> {
     out
 }
 
-pub fn survey(args: &[String], paths: &Paths) -> Result<()> {
+pub fn sense(args: &[String], paths: &Paths) -> Result<()> {
     let o = Options::parse(args)?;
     let s = run(&o, paths)?;
     if args.iter().any(|a| a == "--json") {
@@ -579,8 +579,8 @@ fn plural(n: u32, one: &str) -> String {
     }
 }
 
-pub fn print_text(s: &Survey) {
-    println!("adage survey: what your agents actually do. Read-only: nothing is installed or written.");
+pub fn print_text(s: &Sense) {
+    println!("adage sense: what your agents actually do, and which reflexes their traces would form. Read-only: nothing is installed or written.");
     let window = s.since.as_ref().map(|d| format!(" since {d}")).unwrap_or_default();
     println!(
         "Read {} session file(s) from {}; {} session(s){window} in {} repository(ies).",
@@ -590,9 +590,7 @@ pub fn print_text(s: &Survey) {
         s.repos.len()
     );
     if s.repos.is_empty() {
-        println!(
-            "\nNo sessions to survey. Point it at history with --claude-projects <dir> or --transcripts <file>..."
-        );
+        println!("\nNo traces to sense. Point it at history with --claude-projects <dir> or --transcripts <file>...");
         return;
     }
     for r in &s.repos {
@@ -662,13 +660,13 @@ pub fn print_text(s: &Survey) {
         let sampled =
             if r.sampled { format!(", from the {} most recent sessions", r.mined_sessions) } else { String::new() };
         if r.candidates.is_empty() {
-            println!("  candidate routes          none yet: no behaviour clears the bars ({}){sampled}", s.thresholds);
+            println!("  candidate reflexes        none yet: no behaviour clears the bars ({}){sampled}", s.thresholds);
         } else {
-            println!("  candidate routes          what `adage learn` would build — candidates only, nothing is written{sampled}:");
+            println!("  candidate reflexes        what `adage condition` would form — candidates only, nothing is written{sampled}:");
             for c in &r.candidates {
                 println!(
                     "    {:<8} {:<9} {}/{}: {} → {}   {}/{} sessions, lower bound {:.2}, {}",
-                    format!("[{}]", c.aspect),
+                    format!("[{}]", c.strength),
                     c.status,
                     c.track,
                     c.route,
@@ -687,7 +685,7 @@ pub fn print_text(s: &Survey) {
             println!("  prompt intents            {} usable", r.intent_families);
         }
     }
-    println!("\nNext: `adage learn` builds these tracks, and `adage review` lists each route for your decision.");
+    println!("\nNext: `adage condition` forms these reflexes, and `adage review` lists each one for your decision.");
 }
 
 #[cfg(test)]

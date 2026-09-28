@@ -1,21 +1,22 @@
-//! Execution, from the person's side (Track C §3.2, §4.4). The `adage` binary never runs a
-//! route; these commands only change which binary the hooks call and what this machine approves.
+//! Delegation: letting approved reflexes act, from the person's side (Track C §3.2, §4.4). The
+//! `adage` binary never runs a reflex; these commands only change which binary the hooks call and
+//! what this machine approves.
 //!
 //! ```text
-//! adage exec enable [--bin <adage-exec>] [--repo <dir>]   hooks call `adage-exec hook` (E1 prefetch,
+//! adage delegate on [--bin <adage-exec>] [--repo <dir>]   hooks call `adage-exec hook` (E1 prefetch,
 //!                                                          E2 actions)
-//! adage exec disable [--repo <dir>]                        hooks call `adage hook` again
-//! adage exec status [--repo <dir>] [--json]                registrations, and grants per repository
-//! adage review allow-exec <track> <route> --level e1 [--raw] [--fields '<json>']
+//! adage delegate off [--repo <dir>]                        hooks call `adage hook` again
+//! adage delegate [status] [--repo <dir>] [--json]          registrations, and grants per repository
+//! adage review delegate <track> <route> --level e1 [--raw] [--fields '<json>']
 //!                         [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
-//! adage review allow-exec <track> <route> --level e2 [--outputs <glob>]... [--cache <glob>]...
+//! adage review delegate <track> <route> --level e2 [--outputs <glob>]... [--cache <glob>]...
 //!                         [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
-//! adage review revoke-exec <track> <route> [--repo <dir>]
+//! adage review revoke <track> <route> [--repo <dir>]
 //! ```
 //!
 //! **E2** (Track C §3.6, §4): an action a hook runs when the reflex's stimulus fires. It is
 //! approved explicitly, for one reflex in one repository, never automatically. Before recording
-//! anything, `allow-exec --level e2` stages the action once in the sandbox (nothing is applied)
+//! anything, `delegate --level e2` stages the action once in the sandbox (nothing is applied)
 //! and shows the full diff it would make to its declared outputs now; a staged run that changes
 //! anything else, or fails, approves nothing. Policy must allow E2 (`max_level = "E2"`: actions
 //! are a beta behind gate G4).
@@ -25,7 +26,7 @@
 //! automatically. A pack's **attestations** are listed, marked self-reported by its signer; they
 //! change nothing.
 //!
-//! `enable` and `disable` rewrite the hook registrations `adage install` wrote (Claude Code
+//! `delegate on` and `delegate off` rewrite the hook registrations `adage install` wrote (Claude Code
 //! settings, Codex `hooks.json`, the OpenCode plugin), in this repository and in the user scope,
 //! swapping only the binary: `adage-exec hook <harness> <event>` takes exactly the arguments of
 //! `adage hook`. For the Claude Code plugin they write or remove `$ADAGE_HOME/exec/enabled`, the
@@ -49,12 +50,12 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const USAGE: &str = "usage: adage exec <enable [--bin <adage-exec>] | disable | status [--json]> [--repo <dir>]";
-const REVIEW_USAGE: &str = "usage: adage review allow-exec <track> <route> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
-       adage review allow-exec <track> <route> --level e2 [--outputs <glob>]... [--cache <glob>]... [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
-       adage review revoke-exec <track> <route> [--repo <dir>]";
+const USAGE: &str = "usage: adage delegate <on [--bin <adage-exec>] | off | status [--json]> [--repo <dir>]";
+const REVIEW_USAGE: &str = "usage: adage review delegate <track> <route> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
+       adage review delegate <track> <route> --level e2 [--outputs <glob>]... [--cache <glob>]... [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
+       adage review revoke <track> <route> [--repo <dir>]";
 
-/// Harnesses whose registrations `enable` swaps.
+/// Harnesses whose registrations `delegate on` swaps.
 const HARNESSES: [&str; 3] = ["claude-code", "codex", "opencode"];
 
 fn flag(args: &[String], name: &str) -> Option<String> {
@@ -109,17 +110,20 @@ fn scopes(root: Option<&Path>) -> Vec<&'static str> {
     }
 }
 
-pub fn exec(args: &[String], paths: &Paths) -> Result<()> {
+/// `adage delegate <on|off|status>`; bare `adage delegate` (or only flags) is `status`.
+pub fn delegate(args: &[String], paths: &Paths) -> Result<()> {
     match args.first().map(String::as_str) {
-        Some("enable") => switch(true, &args[1..], paths),
-        Some("disable") => switch(false, &args[1..], paths),
+        Some("on") => switch(true, &args[1..], paths),
+        Some("off") => switch(false, &args[1..], paths),
         Some("status") => status(&args[1..], paths),
+        None => status(args, paths),
+        Some(a) if a.starts_with("--") => status(args, paths),
         _ => bail!("{USAGE}"),
     }
 }
 
 fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
-    let verb = if on { "exec enable" } else { "exec disable" };
+    let verb = if on { "delegate on" } else { "delegate off" };
     require_person(verb)?;
     let here = std::env::current_exe().context("cannot locate the adage binary")?;
     let bin = if on {
@@ -159,11 +163,11 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
             "the adage-exec plugin (/plugin install adage-exec@adage); with {} present the Adage plugin goes quiet.",
             m.display()
         );
-        println!("Nothing runs until you approve a reflex: adage review allow-exec <track> <route> --level e1|e2");
+        println!("Nothing runs until you approve a reflex: adage review delegate <track> <route> --level e1|e2");
         println!("Recommended: deny your agent edits to {} in the harness's permissions.", paths.root.display());
     } else {
         let _ = std::fs::remove_file(&m);
-        println!("Execution: off. Hooks call adage again (approvals are kept; revoke them with review revoke-exec).");
+        println!("Execution: off. Hooks call adage again (approvals are kept; revoke them with review revoke).");
     }
     if changed == 0 {
         println!("No hook registration written by `adage install` needed changing.");
@@ -374,7 +378,7 @@ fn preview(
     Ok(())
 }
 
-/// `adage review allow-exec` and `revoke-exec`.
+/// `adage review delegate` and `revoke`.
 pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     require_person(&format!("review {verb}"))?;
     let (Some(track), Some(route_id)) = (args.first(), args.get(1)) else { bail!("{REVIEW_USAGE}") };
@@ -387,7 +391,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     let store_path = approvals::path(&paths.root);
     let mut store = Store::load(&store_path)?;
     let label = format!("{track}/{route_id}");
-    if verb == "revoke-exec" {
+    if verb == "revoke" {
         let n = store.revoke(&ir.repo, Some(&label));
         store.save(&store_path)?;
         println!("Revoked {n} execution grant(s) for {label} in {}.", ir.repo);
@@ -558,7 +562,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         store_path.display()
     );
     if !marker(paths).is_file() {
-        println!("Execution is off: `adage exec enable` makes hooks run it.");
+        println!("Execution is off: `adage delegate on` makes hooks run it.");
     }
     Ok(())
 }

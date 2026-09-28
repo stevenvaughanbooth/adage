@@ -3,7 +3,7 @@
 This directory runs Adage on public agent benchmarks through
 [Harbor](https://github.com/harbor-framework/harbor), the harness behind Terminal-Bench 2. The target
 suites are SWE-bench Pro, SWE-Gym, SWE-smith, swe-gen-js and Terminal-Bench. The offline replay eval
-(`adage eval`) and the live proving ground (`evals/live/`) measure Adage on repositories we built.
+(`adage eval`) and the live eval runner (`evals/live/`) measure Adage on repositories we built.
 This tier (L4 in the trial records) asks the question those can't: does a frozen Adage index,
 learned only from earlier agent sessions in a real open-source repository, change how often later
 sessions in that repository resolve their task, and what does that cost?
@@ -27,15 +27,15 @@ in what Adage contributes.
 | Arm | Hooks | What the agent gets |
 | --- | --- | --- |
 | `off` | none | Plain Claude Code. This is the baseline, and it also measures hook overhead. |
-| `holdout` | installed, `ADAGE_ARM=holdout` | Nothing. Adage decides and spools every directive but never delivers one. **This is the primary control.** |
+| `control` | installed, `ADAGE_ARM=control` | Nothing. Adage decides and spools every directive but never delivers one. **This is the primary control.** |
 | `adage` | installed, `ADAGE_ARM=treated` | Directives through `additionalContext`, as in production. |
 | `agents-md` | none | The learned routes' summaries, appended to the system prompt. This is the "just write it in AGENTS.md" baseline, and it writes nothing into the repository. |
 | `adage-lro` | as `adage` | Another repository's index. This is the leave-repo-out control: it separates repository-specific knowledge from generic "be careful" nudging. |
 
-The primary contrast is `adage` against `holdout`. Both run identical hook processes, so the only
+The primary contrast is `adage` against `control`. Both run identical hook processes, so the only
 difference is whether the text is delivered. `adage` against `off` gives the net effect, hook
 overhead included. `adage` against `adage-lro` and `adage` against `agents-md` are secondary. For
-the secondary arms, pass `--arms off,holdout,adage,agents-md` and `--leave-repo-out` to `plan.py phases`.
+the secondary arms, pass `--arms off,control,adage,agents-md` and `--leave-repo-out` to `plan.py phases`.
 
 **Chronological split.** The split is made per repository, by base-commit date, with a buffer.
 - Each task's base commit is dated with `git show -s --format=%cI` in a cached partial clone of the
@@ -49,7 +49,7 @@ the secondary arms, pass `--arms off,holdout,adage,agents-md` and `--leave-repo-
   first eval job.
 
 **What training means.** Training is `off`-arm agents solving the training tasks. Their transcripts
-are harvested per repository, and `adage learn --repo adage-eval:<suite>/<owner>__<name>` is run
+are harvested per repository, and `adage condition --repo adage-eval:<suite>/<owner>__<name>` is run
 once per repository with the default thresholds and its own `ADAGE_HOME`. The result is frozen as a
 tarball, recorded in `MANIFEST.sha256`, and nothing is learned after that point. Every eval trial sets
 `ADAGE_AUTO_LEARN=0`. No gold patches, hints, test names or upstream history are given to Adage.
@@ -110,7 +110,7 @@ to the number of distinct assistant messages in the transcript.
 - 95% CIs come from a two-stage cluster bootstrap: repositories with replacement, then tasks within
   each drawn repository.
 - Holm correction is applied across all (comparison × metric) tests.
-- The primary endpoint is `delta_resolve` for `adage` against `holdout`. Cost and turns are secondary.
+- The primary endpoint is `delta_resolve` for `adage` against `control`. Cost and turns are secondary.
 
 ## Power
 
@@ -145,7 +145,7 @@ What SWE-bench Pro can support:
 
 ```sh
 cargo build --release --target x86_64-unknown-linux-musl -p adage-cli   # the static binary for the containers
-cargo build --release -p adage-cli                                     # the host binary for `adage learn`
+cargo build --release -p adage-cli                                     # the host binary for `adage condition`
 uv tool install harbor   # or: pip install -e <harbor checkout>; Harbor needs Python >= 3.12
 export PYTHONPATH=$PWD/evals/external   # so Harbor can import adage_harbor:AdageClaudeCode
 ```
@@ -164,7 +164,7 @@ python3 evals/external/plan.py phases --registry $R --dataset swebenchpro@1.0 --
 
 1. train job
 2. harvest
-3. one `adage learn` per repository
+3. one `adage condition` per repository
 4. freeze and leakage check
 5. seeded eval jobs
 6. `check-patches`, `emit`, `analyse`
@@ -235,7 +235,7 @@ Counts were checked in Harbor's `registry.json` at commit 3c82380.
   - Its `hooks-config` output equals `hooks_settings`.
   - For two scratch repositories, one without `origin` and one with it, `PROBE_SCRIPT` was run, the
     index was re-keyed with `candidate_keys`, and the real `adage hook claude UserPromptSubmit`
-    (`ADAGE_ARM=holdout`) found the routes and spooled under the expected key.
+    (`ADAGE_ARM=control`) found the routes and spooled under the expected key.
   - With a wrong key it spooled nothing.
 
 **Assumed, not verified by a run:**

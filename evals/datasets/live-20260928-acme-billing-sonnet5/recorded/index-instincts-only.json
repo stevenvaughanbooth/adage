@@ -4,7 +4,7 @@
   {
    "repo": "acme-billing@c0834e44b8c5",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -38,7 +38,7 @@
     ],
     "id": "dead-end-d41b1e",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make test",
      "do": "run"
@@ -56,7 +56,7 @@
   {
    "repo": "acme-billing@c0834e44b8c5",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -90,7 +90,7 @@
     ],
     "id": "dead-end-e51242",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make test",
      "do": "run"
@@ -108,7 +108,7 @@
   {
    "repo": "acme-billing@c0834e44b8c5",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -142,7 +142,7 @@
     ],
     "id": "dead-end-e8eb22",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make test",
      "do": "run"
@@ -160,7 +160,7 @@
   {
    "repo": "acme-billing@c0834e44b8c5",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -194,7 +194,7 @@
     ],
     "id": "dead-end-fed777",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make test",
      "do": "run"
@@ -212,7 +212,7 @@
   {
    "repo": "acme-billing@c0834e44b8c5",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -246,7 +246,7 @@
     ],
     "id": "dead-end-ff691d",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make test",
      "do": "run"
@@ -264,7 +264,7 @@
   {
    "repo": "acme-billing@c0834e44b8c5",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "regenerate",
     "evidence": {
@@ -297,7 +297,7 @@
     ],
     "id": "finish-line-e7e809",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make gen",
      "do": "run"
@@ -314,7 +314,7 @@
   {
    "repo": "acme-billing@c0834e44b8c5",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "observe",
     "evidence": {
@@ -343,7 +343,7 @@
     "exit": [],
     "id": "instinct-u4-23bde3",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "do": "advise",
      "slots": {

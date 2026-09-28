@@ -272,7 +272,7 @@ fn print_summary(
         println!(
             "  {:<22} {:<6} {:<11} {}  [{}/{} sessions]",
             r.id,
-            format!("{:?}", r.aspect).to_lowercase(),
+            format!("{:?}", r.strength).to_lowercase(),
             format!("{:?}", r.effect).to_lowercase(),
             describe_step(&r.step),
             e.support,

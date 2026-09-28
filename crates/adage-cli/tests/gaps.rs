@@ -108,7 +108,7 @@ fn keygen(w: &World) -> ssh_key::PrivateKey {
     k
 }
 
-fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, aspect: Aspect) -> Route {
+fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, strength: Strength) -> Route {
     let slots = match &step {
         Step::Run { command } if command.contains("{item}") => vec![Slot {
             name: "item".into(),
@@ -124,8 +124,8 @@ fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, aspect: Aspect)
         step,
         slots,
         effect,
-        aspect,
-        state: RouteState::Active,
+        strength,
+        state: RouteState::Firm,
         exit: vec![Exit::IntentChanges],
         evidence: Evidence {
             support: 7,
@@ -148,7 +148,7 @@ fn track(version: &str, lookup: &str, extra: bool) -> Track {
             Trigger::Prompt { span: SpanKind::Ticket },
             Step::Run { command: lookup.into() },
             Effect::Observe,
-            Aspect::Green,
+            Strength::Fire,
         ),
         route(
             "dead-unittest",
@@ -159,14 +159,14 @@ fn track(version: &str, lookup: &str, extra: bool) -> Track {
                 signature: "ACME_ENV is not set".into(),
             },
             Effect::Verify,
-            Aspect::Red,
+            Strength::Inhibit,
         ),
         route(
             "check",
             Trigger::SessionStart,
             Step::Run { command: "make check".into() },
             Effect::Verify,
-            Aspect::Yellow,
+            Strength::Prime,
         ),
     ];
     if extra {
@@ -175,7 +175,7 @@ fn track(version: &str, lookup: &str, extra: bool) -> Track {
             Trigger::SessionStart,
             Step::Run { command: "make lint".into() },
             Effect::Verify,
-            Aspect::Yellow,
+            Strength::Prime,
         ));
     }
     Track {
@@ -206,7 +206,7 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
     keygen(&w);
     w.publish(&track("1.0.0", "./scripts/wi-lookup {item} --json", false), "out1");
     w.add("out1");
-    w.ok("recipient", &["review", "reject", NAME, "dead-unittest"]);
+    w.ok("recipient", &["review", "extinguish", NAME, "dead-unittest"]);
     w.ok("recipient", &["review", "pin", NAME, "lookup"]);
     w.ok("recipient", &["review", "approve", NAME, "check", "--by", "bob"]);
 
@@ -219,10 +219,14 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
     let decisions: Vec<(&str, Decision)> = reviews.routes.iter().map(|(k, v)| (k.as_str(), v.decision)).collect();
     assert_eq!(
         decisions,
-        vec![("check", Decision::Approved), ("dead-unittest", Decision::Rejected), ("lookup", Decision::Pinned)]
+        vec![("check", Decision::Approved), ("dead-unittest", Decision::Extinguished), ("lookup", Decision::Pinned)]
     );
     assert_eq!(reviews.routes["check"].by.as_deref(), Some("bob"));
-    assert_eq!(w.route("dead-unittest").state, RouteState::Retired, "a rejection survives the re-import");
+    assert_eq!(
+        w.route("dead-unittest").state,
+        RouteState::Extinguished,
+        "an extinguish decision survives the re-import"
+    );
     let lookup = w.route("lookup");
     assert!(lookup.authored);
     assert_eq!(
@@ -230,7 +234,7 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
         Step::Run { command: "./scripts/wi-lookup {item} --json".into() },
         "the recipient's pinned copy is kept"
     );
-    assert_eq!(w.route("lint").state, RouteState::Probation);
+    assert_eq!(w.route("lint").state, RouteState::Forming);
 
     // The queue: the pin's drift is proposed with a diff; the new route waits as an import.
     let q = w.queue();
@@ -267,7 +271,7 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
     let lookup = w.route("lookup");
     assert_eq!(lookup.step, Step::Run { command: "./scripts/wi-lookup {item} --full".into() });
     assert!(lookup.authored, "an applied proposal stays pinned");
-    assert_ne!(lookup.aspect, Aspect::Green, "an import never becomes green by a proposal");
+    assert_ne!(lookup.strength, Strength::Fire, "an import never becomes fire by a proposal");
     assert!(reasons(&w.queue(), "lookup").is_empty());
     assert!(
         !w.installed().join(adage_tracks::proposals::FILE).exists()

@@ -47,7 +47,7 @@ class DryRun(unittest.TestCase):
     def test_the_demo_plan(self):
         p = self.plan()
         self.assertEqual(p["totals"]["sessions"], 54)
-        self.assertEqual(p["totals"]["by_arm"], {"adage": 18, "holdout": 18, "train": 18})
+        self.assertEqual(p["totals"]["by_arm"], {"adage": 18, "control": 18, "train": 18})
         for s in p["sessions"]:
             self.assertEqual(s["command"][:3], ["claude", "-p", s["prompt"]])
             self.assertIn("claude-haiku-4-5-20251001", s["command"])
@@ -55,9 +55,9 @@ class DryRun(unittest.TestCase):
             self.assertTrue(s["cwd"].startswith(str(self.root.resolve())))
         by_arm = {s["arm"]: s["env"] for s in p["sessions"]}
         self.assertEqual(by_arm["train"], {}, "training sessions run without hooks")
-        self.assertEqual(by_arm["holdout"]["ADAGE_ARM"], "holdout")
+        self.assertEqual(by_arm["control"]["ADAGE_ARM"], "control")
         self.assertEqual(by_arm["adage"]["ADAGE_ARM"], "treated")
-        self.assertIn("learn", p["learn"])
+        self.assertIn("condition", p["learn"])
 
     def test_a_dry_run_writes_nothing(self):
         text = dry("--root", str(self.root))
@@ -90,7 +90,7 @@ class DryRun(unittest.TestCase):
         self.assertEqual(p["estimate"]["total_runs"], 84)
         self.assertEqual(p["estimate"]["train"]["runs"], 12)
         self.assertEqual(p["estimate"]["eval"]["runs"], 72)
-        self.assertEqual(p["totals"]["by_arm"], {"adage": 36, "holdout": 36, "train": 12})
+        self.assertEqual(p["totals"]["by_arm"], {"adage": 36, "control": 36, "train": 12})
         self.assertEqual(p["totals"]["by_round"], {"1": 48, "2": 36})
         self.assertTrue(all("claude-sonnet-5" in s["command"] for s in p["sessions"]))
         self.assertTrue(all(s["run"].startswith("eval2-") for s in p["sessions"] if s["round"] == 2))
@@ -101,7 +101,7 @@ class DryRun(unittest.TestCase):
         text = dry_with("--config", HARBOR, "--dry-run", "--root", str(self.root))
         self.assertIn("DRY RUN", text)
         self.assertIn("total 84 agent runs", text)
-        self.assertIn("6 tasks x 3 repeats x 2 arms (holdout, adage) x 2 rounds = 72", text)
+        self.assertIn("6 tasks x 3 repeats x 2 arms (control, adage) x 2 rounds = 72", text)
         self.assertFalse(self.root.exists())
         with self.assertRaises(SystemExit):
             runner.main(["--config", HARBOR, "--dry-run", "--execute"])
@@ -140,7 +140,7 @@ class DryRun(unittest.TestCase):
                                wd, 12.0, "sid", spool)
         self.assertEqual((m["turns_to_first_edit"], m["dead_end_hits"], m["lookup_turn"]), (2, 1, 1))
         self.assertEqual((m["obligation_applies"], m["obligation_met"]), (True, True))
-        self.assertEqual(m["follow"], {"exposed": 2, "followed": 1, "derailed": 0})
+        self.assertEqual(m["follow"], {"exposed": 2, "followed": 1, "ignored": 0})
         m2 = runner.run_metrics(cfg, events[:4], {}, {"passed": False, "stale_generated": True}, wd, 1.0, "sid", [])
         self.assertEqual((m2["obligation_applies"], m2["obligation_met"]), (True, False))
 
@@ -209,13 +209,13 @@ class ArmOrder(unittest.TestCase):
         self.assertEqual(a, b, "the same seed gives the same order")
         self.assertEqual(len(a), 18)
         for arms in a.values():
-            self.assertEqual(sorted(arms), ["adage", "holdout"], "every (task, repeat) runs each arm once")
+            self.assertEqual(sorted(arms), ["adage", "control"], "every (task, repeat) runs each arm once")
         firsts = [arms[0] for arms in a.values()]
-        self.assertTrue(0 < firsts.count("holdout") < len(firsts), "neither arm always goes first")
+        self.assertTrue(0 < firsts.count("control") < len(firsts), "neither arm always goes first")
         other = self.pairs(runner.load_config(HARBOR, {"seed": 12}))
         self.assertNotEqual(a, other, "another seed gives another order")
-        self.assertEqual(runner.arm_order(["holdout", "adage"], 11, 1, "INC-86", 1),
-                         runner.arm_order(["holdout", "adage"], 11, 1, "INC-86", 1))
+        self.assertEqual(runner.arm_order(["control", "adage"], 11, 1, "INC-86", 1),
+                         runner.arm_order(["control", "adage"], 11, 1, "INC-86", 1))
 
     def test_the_seed_is_in_the_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -263,23 +263,23 @@ class Status(unittest.TestCase):
                     "dead_end_hits": 0, "explore_calls_before_edit": 2}
             base.update(m)
             return f"{task}-{rep}-{arm}", {"phase": "eval", "round": 1, "arm": arm, "task": task, "metrics": base}
-        runs = dict([run(t, a, r) for t in ("T1", "T2", "T3") for a in ("adage", "holdout") for r in (1, 2)])
-        runs.update([run("T1", "holdout", 3, tool_calls=0, turns=1, passed=False),  # infra: not a failure
+        runs = dict([run(t, a, r) for t in ("T1", "T2", "T3") for a in ("adage", "control") for r in (1, 2)])
+        runs.update([run("T1", "control", 3, tool_calls=0, turns=1, passed=False),  # infra: not a failure
                      run("T2", "adage", 3, status="scorer_error"),
-                     run("T3", "holdout", 3, turns=31, tool_turns=30, result_subtype="error_max_turns",
+                     run("T3", "control", 3, turns=31, tool_turns=30, result_subtype="error_max_turns",
                          turns_to_first_edit=None, time_to_first_edit=None, passed=False, elapsed=90.0)])
-        runs["T3-9-holdout"] = {"phase": "eval", "round": 1, "arm": "holdout", "task": "T3", "status": "skipped"}
+        runs["T3-9-control"] = {"phase": "eval", "round": 1, "arm": "control", "task": "T3", "status": "skipped"}
         s = runner.summarise({"runs": runs, "max_turns": 30}, 1, n_perm=200, n_boot=200)
-        self.assertEqual(s["excluded"], {"adage": 1, "holdout": 1})
-        self.assertEqual(s["n_censored"], {"adage": 0, "holdout": 1})
-        self.assertEqual(s["status_counts"]["holdout"]["infra_error"], 1)
-        self.assertEqual(s["unfinished"], {"adage": 0, "holdout": 1})
+        self.assertEqual(s["excluded"], {"adage": 1, "control": 1})
+        self.assertEqual(s["n_censored"], {"adage": 0, "control": 1})
+        self.assertEqual(s["status_counts"]["control"]["infra_error"], 1)
+        self.assertEqual(s["unfinished"], {"adage": 0, "control": 1})
         pr = s["metrics"]["pass_rate"]
-        self.assertEqual(pr["n"], {"adage": 6, "holdout": 7}, "the infra error is not a failed task")
-        self.assertAlmostEqual(pr["holdout"], 6 / 7)
+        self.assertEqual(pr["n"], {"adage": 6, "control": 7}, "the infra error is not a failed task")
+        self.assertAlmostEqual(pr["control"], 6 / 7)
         fe = s["metrics"]["turns_to_first_edit"]
-        self.assertEqual(fe["n"]["holdout"], 7, "a censored run without an edit is kept, not dropped")
-        self.assertEqual(fe["n_imputed"]["holdout"], 1)
+        self.assertEqual(fe["n"]["control"], 7, "a censored run without an edit is kept, not dropped")
+        self.assertEqual(fe["n_imputed"]["control"], 1)
         tt = [r for r in runs.values() if r.get("metrics", {}).get("result_subtype") == "error_max_turns"]
         self.assertEqual(runner.demo_report.METRICS["total_turns"][0](tt[0]["metrics"], "censored", 30), (30, False))
         for row in s["metrics"].values():
@@ -290,7 +290,7 @@ class Statistics(unittest.TestCase):
     # Four tasks, two runs per arm each; adage is 2 better in every task, and the tasks differ a lot.
     TOY = [(t, arm, base + (0 if arm == "adage" else 2) + e)
            for t, base in (("a", 1), ("b", 10), ("c", 50), ("d", 100))
-           for arm in ("adage", "holdout") for e in (0.0, 0.5)]
+           for arm in ("adage", "control") for e in (0.0, 0.5)]
 
     def test_the_permutation_is_within_tasks(self):
         p = runner.cluster_perm_p(self.TOY, n=2000)
@@ -304,7 +304,7 @@ class Statistics(unittest.TestCase):
 
     def test_the_task_level_test_is_limited_by_the_number_of_tasks(self):
         self.assertAlmostEqual(runner.task_signflip_p(self.TOY), 2 / 16, msg="4 tasks: the smallest p is 2/2^4")
-        many = [(f"t{i}", arm, v) for i in range(6) for arm, v in (("adage", 1.0), ("holdout", 2.0))]
+        many = [(f"t{i}", arm, v) for i in range(6) for arm, v in (("adage", 1.0), ("control", 2.0))]
         self.assertAlmostEqual(runner.task_signflip_p(many), 2 / 64)
 
     def test_the_bootstrap_resamples_tasks(self):
@@ -333,14 +333,14 @@ class Isolation(unittest.TestCase):
 
     def test_the_environment_is_built_from_scratch(self):
         root = Path("/r")
-        env = runner.session_env("holdout", root / "runs" / "x" / "home", root / "private" / "adage-home", True, self.BASE)
+        env = runner.session_env("control", root / "runs" / "x" / "home", root / "private" / "adage-home", True, self.BASE)
         self.assertEqual(env["HOME"], "/r/runs/x/home")
         for k in ("CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "CODEX_HOME", "TMPDIR"):
             self.assertTrue(env[k].startswith("/r/runs/x/home/"), k)
             self.assertFalse(env[k].startswith("/r/private"), k)
         self.assertEqual(env["ANTHROPIC_API_KEY"], "sk-test", "auth is forwarded explicitly")
         self.assertEqual(env["PATH"], self.BASE["PATH"])
-        self.assertEqual(env["ADAGE_ARM"], "holdout")
+        self.assertEqual(env["ADAGE_ARM"], "control")
         self.assertEqual(env["ADAGE_HOME"], "/r/private/adage-home")
         for k in ("CLAUDECODE", "AWS_SECRET_ACCESS_KEY"):
             self.assertNotIn(k, env)
@@ -465,7 +465,7 @@ class Rounds(unittest.TestCase):
         self.assertEqual(p["estimate"]["eval"]["runs"], 36)
         text = dry_with(path, "--root", self.tmp.name)
         self.assertNotIn("WARNING", text)
-        self.assertIn("eval 3 tasks x 3 repeats x 2 arms (holdout, adage) x 2 rounds = 36", text)
+        self.assertIn("eval 3 tasks x 3 repeats x 2 arms (control, adage) x 2 rounds = 36", text)
 
     def test_uneven_pools_as_a_dict(self):
         path = write_config(self.tmp.name, tasks_by_round={"1": ["INC-86", "INC-94"], "2": ["INC-219", "INC-245", "INC-268"]})
@@ -495,8 +495,8 @@ class Rounds(unittest.TestCase):
     def test_learning_leaves_out_the_rounds_own_tasks(self):
         def r(phase, task, rnd, arm="train"):
             return {"phase": phase, "task": task, "round": rnd, "arm": arm, "metrics": {"session_id": f"{phase}{task}{rnd}{arm}"}}
-        runs = [r("train", "T0", 1), r("eval", "A", 1, "adage"), r("eval", "A", 1, "holdout"), r("eval", "B", 1, "holdout"),
-                r("eval", "C", 2, "holdout"), {"phase": "eval", "task": "B", "round": 1, "arm": "adage"}]
+        runs = [r("train", "T0", 1), r("eval", "A", 1, "adage"), r("eval", "A", 1, "control"), r("eval", "B", 1, "control"),
+                r("eval", "C", 2, "control"), {"phase": "eval", "task": "B", "round": 1, "arm": "adage"}]
         tasks = lambda rs: sorted((x["phase"], x["task"], x["round"]) for x in rs)  # noqa: E731
         self.assertEqual(tasks(runner.learning_runs(runs, 1)), [("train", "T0", 1)])
         self.assertEqual(tasks(runner.learning_runs(runs, 2, {"C", "D"})),

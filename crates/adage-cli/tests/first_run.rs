@@ -35,7 +35,7 @@ impl World {
             .env("PATH", format!("{}:/usr/bin:/bin", self.p("bin").display()))
             .env_remove("CLAUDE_CONFIG_DIR")
             .env_remove("ADAGE_DISABLE")
-            .env_remove("ADAGE_HOLDOUT")
+            .env_remove("ADAGE_CONTROL")
             .env_remove("ADAGE_ARM")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
             .stdin(Stdio::null());
@@ -121,8 +121,8 @@ fn init_detects_harnesses_prints_snippets_and_writes_nothing() {
         ".opencode/plugins/adage.js",
         "3. Embedding model",
         "`adage models fetch`",
-        "4. Survey",
-        "No sessions to survey",
+        "4. Sense",
+        "No traces to sense",
     ] {
         assert!(t.contains(s), "init output lacks {s:?}:\n{t}");
     }
@@ -155,15 +155,15 @@ fn init_yes_fetches_the_model_and_survives_a_failed_download() {
     let o = w.run(&["init", "--yes"]);
     let t = text(&o);
     assert!(o.status.success(), "{t}");
-    assert!(t.contains("fetching") && t.contains("could not fetch it") && t.contains("4. Survey"), "{t}");
+    assert!(t.contains("fetching") && t.contains("could not fetch it") && t.contains("4. Sense"), "{t}");
     assert!(!w.p("data/models/potion-base-8m").exists());
 }
 
 #[test]
-fn init_scopes_the_survey_to_a_repository() {
+fn init_scopes_the_sense_to_a_repository() {
     let w = World::new();
     let o = w.run(&["init", "--repo", w.p("work").to_str().unwrap()]);
-    assert!(o.status.success() && text(&o).contains("survey your existing agent history for work"), "{}", text(&o));
+    assert!(o.status.success() && text(&o).contains("sense your agents' existing traces for work"), "{}", text(&o));
     let o = w.run(&["init", "--repo", w.p("home").to_str().unwrap()]);
     assert!(!o.status.success() && text(&o).contains("not inside a git repository"), "{}", text(&o));
 }
@@ -291,7 +291,7 @@ fn learn_fixture(w: &World) -> bool {
         std::fs::write(&p, lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n")).unwrap();
         files.push(p.display().to_string());
     }
-    let mut args = vec!["learn", "--demo", "--repo", "acme-billing", "--transcripts"];
+    let mut args = vec!["condition", "--demo", "--repo", "acme-billing", "--transcripts"];
     args.extend(files.iter().map(String::as_str));
     let o = w.run(&args);
     o.status.success() && Path::new(&w.p("data/index.json")).exists()

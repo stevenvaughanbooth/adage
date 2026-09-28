@@ -6,7 +6,7 @@
 //! Held out, per bundle: both traces of the last scoped, deps and control task, and the second
 //! trace of the last registry task (the registry has only two tasks, and the sequence needs
 //! both). The environment step is approved in review first (`adage review approve`), as a person
-//! would: it is a draft until then. A context route (`make check` after a registry edit then
+//! would: it is nascent until then. A context route (`make check` after a registry edit then
 //! `make gen`) is added to the learned tracks, since the rehearsal's reflexes compile to one-event
 //! triggers.
 //!
@@ -91,8 +91,8 @@ fn context_track(repo: &str) -> Track {
             step: Step::Run { command: "make check".into() },
             slots: vec![],
             effect: Effect::Verify,
-            aspect: Aspect::Yellow,
-            state: RouteState::Active,
+            strength: Strength::Prime,
+            state: RouteState::Firm,
             exit: vec![Exit::IntentChanges],
             evidence: Evidence { support: 4, ..Default::default() },
             authored: true,
@@ -223,7 +223,7 @@ fn new_kind_reflexes_and_a_context_route_fire_through_the_hook_on_held_out_trace
         // Learn on the rest.
         let home = tmp.join(format!("home-{name}"));
         let o = adage(&home)
-            .args(["learn", "--demo", "--json", "--no-instincts", "--repo", &repo])
+            .args(["condition", "--demo", "--json", "--no-instincts", "--repo", &repo])
             .arg("--outcomes")
             .arg(b.join("rehearsal/outcomes.json"))
             .arg("--transcripts")
@@ -244,7 +244,7 @@ fn new_kind_reflexes_and_a_context_route_fire_through_the_hook_on_held_out_trace
                 && matches!(r.step, Step::Sequence { .. })
         })
         .expect("sequence");
-        assert_eq!(env.state, RouteState::Draft, "an environment step waits for review");
+        assert_eq!(env.state, RouteState::Nascent, "an environment step waits for review");
         // A person approves the environment step.
         // (As the review tests do: the command refuses to run from an agent's shell.)
         let o = adage(&home)

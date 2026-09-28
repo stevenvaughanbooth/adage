@@ -87,7 +87,7 @@ fn data_dir(paths: &Paths) -> Check {
             Some(a) if probe(a) => warn(
                 name,
                 format!("{} does not exist yet", detect::tilde(root)),
-                "`adage learn` creates it; nothing to do",
+                "`adage condition` creates it; nothing to do",
             ),
             _ => fail(
                 name,
@@ -165,17 +165,20 @@ fn tracks_check(scan: &TrackScan) -> Check {
         return fail(
             "tracks",
             format!("{} invalid track(s), which hooks ignore: {}", scan.invalid.len(), shown.join("; ")),
-            "fix or remove the named track directories, then run `adage learn` to recompile",
+            "fix or remove the named track directories, then run `adage condition` to recompile",
         );
     }
     if scan.valid.is_empty() {
         return warn(
             "tracks",
             "no tracks installed",
-            "`adage survey` shows what would be learned; `adage learn` builds tracks",
+            "`adage sense` shows which reflexes would form; `adage condition` forms them",
         );
     }
-    pass("tracks", format!("{} track(s) ({} imported), {routes} route(s), all valid", scan.valid.len(), scan.imported))
+    pass(
+        "tracks",
+        format!("{} track(s) ({} imported), {routes} reflex(es), all valid", scan.valid.len(), scan.imported),
+    )
 }
 
 fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
@@ -183,7 +186,10 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
     let bytes = match std::fs::read(&p) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return (warn("index", "no index yet: hooks have nothing to direct", "run `adage learn`"), Index::default())
+            return (
+                warn("index", "no index yet: hooks have nothing to direct", "run `adage condition`"),
+                Index::default(),
+            )
         }
         Err(e) => {
             return (
@@ -199,7 +205,7 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
                 fail(
                     "index",
                     format!("{} is not a valid index ({e}); hooks fail open and say nothing", detect::tilde(&p)),
-                    "run `adage learn` to recompile it",
+                    "run `adage condition` to recompile it",
                 ),
                 Index::default(),
             )
@@ -212,10 +218,10 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
             fail(
                 "index",
                 format!(
-                    "generation {} does not match its routes ({gen}): it was built by a different Adage version, or edited",
+                    "generation {} does not match its reflexes ({gen}): it was built by a different Adage version, or edited",
                     idx.generation
                 ),
-                "run `adage learn` to recompile it",
+                "run `adage condition` to recompile it",
             ),
             idx,
         );
@@ -223,7 +229,7 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
     let repos: std::collections::BTreeSet<&str> = idx.routes.iter().map(|r| r.repo.as_str()).collect();
     let (current, conflicts) = Index::compile_root(&paths.tracks(), &scan.valid);
     let mut detail = format!(
-        "generation {}, {} route(s) in {} repositor{}",
+        "generation {}, {} reflex(es) in {} repositor{}",
         idx.generation,
         idx.routes.len(),
         repos.len(),
@@ -238,7 +244,7 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
             warn(
                 "index",
                 format!("{detail}; stale: the installed tracks compile to {}", current.generation),
-                "run `adage learn` (or any `adage review` decision) to recompile",
+                "run `adage condition` (or any `adage review` decision) to recompile",
             ),
             idx,
         );
@@ -257,7 +263,7 @@ fn instincts_check(paths: &Paths, scan: &TrackScan, idx: &Index) -> Check {
         for r in &t.routes {
             let served = idx.routes.iter().find(|x| x.repo == repo && x.route.id == r.id);
             match (r.state, served) {
-                (adage_tracks::RouteState::Draft, _) => e.2 += 1,
+                (adage_tracks::RouteState::Nascent, _) => e.2 += 1,
                 (s, Some(x)) if s.is_live() && x.track == t.manifest.track.name => {
                     if matches!(r.step, adage_tracks::Step::Advise { .. }) {
                         e.1 += 1
@@ -274,13 +280,15 @@ fn instincts_check(paths: &Paths, scan: &TrackScan, idx: &Index) -> Check {
     if per.is_empty() {
         return pass(
             "instincts",
-            format!("{state}; none bound yet (`adage learn --instincts-only` binds them for a repository on day 0)"),
+            format!(
+                "{state}; none bound yet (`adage condition --instincts-only` binds them for a repository on day 0)"
+            ),
         );
     }
     let parts: Vec<String> = per
         .iter()
-        .map(|(repo, (bound, advice, drafts, over))| {
-            format!("{repo}: {bound} bound, {advice} advice, {drafts} awaiting approval, {over} overridden")
+        .map(|(repo, (bound, advice, nascent, over))| {
+            format!("{repo}: {bound} bound, {advice} advice, {nascent} awaiting approval, {over} overridden")
         })
         .collect();
     pass("instincts", format!("{state}; {}", parts.join("; ")))
@@ -297,7 +305,7 @@ fn packs_check(paths: &Paths) -> Check {
     let live: usize = bindings.iter().map(|(_, b)| b.routes.iter().filter(|r| r.status.is_live()).count()).sum();
     let inert = crate::packs::inert_routes(paths);
     let detail = format!(
-        "{} pack(s) bound to {} repositor{}: {live} route(s) live, {} inert",
+        "{} pack(s) bound to {} repositor{}: {live} reflex(es) live, {} inert",
         packs.len(),
         bindings.len(),
         if bindings.len() == 1 { "y" } else { "ies" },
@@ -325,7 +333,7 @@ fn packs_check(paths: &Paths) -> Check {
     warn(
         "packs",
         format!("{detail}; {}{more}", shown.join("; ")),
-        "inert routes are never delivered; `adage review` lists them. Restore what they need (a script, a tool), then run `adage add` again",
+        "inert reflexes are never delivered; `adage review` lists them. Restore what they need (a script, a tool), then run `adage add` again",
     )
 }
 
@@ -334,11 +342,9 @@ fn model_check(paths: &Paths, idx: &Index) -> Check {
     let wants = idx.routes.iter().any(|r| matches!(r.route.trigger, Trigger::Intent { .. }));
     match adage_intent::model::status(&paths.models()) {
         Ok(m) => pass("embedding model", format!("{} installed; checksums verified", m.id)),
-        Err(_) if !dir.join("manifest.json").exists() && wants => warn(
-            "embedding model",
-            "not installed, so the index's intent routes cannot fire",
-            "run `adage models fetch`",
-        ),
+        Err(_) if !dir.join("manifest.json").exists() && wants => {
+            warn("embedding model", "not installed, so intent reflexes cannot fire", "run `adage models fetch`")
+        }
         Err(_) if !dir.join("manifest.json").exists() => {
             pass("embedding model", "not installed (optional: `adage models fetch` enables intent families)")
         }
@@ -430,15 +436,15 @@ fn kill_switches(repo_root: Option<&Path>) -> Check {
     if let Some(r) = repo_root.filter(|r| r.join(".adage/disabled").exists()) {
         on.push(format!("{}: Adage is off in this repository", detect::tilde(&r.join(".adage/disabled"))));
     }
-    if let Ok(v) = std::env::var("ADAGE_HOLDOUT") {
+    if let Ok(v) = std::env::var("ADAGE_CONTROL") {
         match v.parse::<f64>() {
-            Ok(x) if x >= 1.0 => on.push(format!("ADAGE_HOLDOUT={v}: shadow mode, nothing is delivered")),
+            Ok(x) if x >= 1.0 => on.push(format!("ADAGE_CONTROL={v}: shadow mode, nothing is delivered")),
             Ok(x) if (0.0..1.0).contains(&x) => {}
-            _ => on.push(format!("ADAGE_HOLDOUT={v} is not a share between 0 and 1; the default 0.1 applies")),
+            _ => on.push(format!("ADAGE_CONTROL={v} is not a share between 0 and 1; the default 0.1 applies")),
         }
     }
-    if std::env::var("ADAGE_ARM").as_deref() == Ok("holdout") {
-        on.push("ADAGE_ARM=holdout: this shell's sessions receive nothing".into());
+    if std::env::var("ADAGE_ARM").as_deref() == Ok("control") {
+        on.push("ADAGE_ARM=control: this shell's sessions receive nothing".into());
     }
     if on.is_empty() {
         pass("kill switches", "none set")
@@ -528,13 +534,13 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
         pass(
             "auto-learn",
             format!(
-                "on ({source}): each repository is learned in the background when a session stops, at most every {}s, {} thresholds",
+                "on ({source}): each repository is conditioned in the background when a session stops, at most every {}s, {} thresholds",
                 cfg.learn_min_interval_secs,
                 cfg.learn_thresholds.as_str()
             ),
         )
     } else {
-        pass("auto-learn", format!("off ({source}): run `adage learn` yourself, or `adage config set learn.auto true`"))
+        pass("auto-learn", format!("off ({source}): run `adage condition` yourself, or `adage config set learn.auto true`"))
     });
 
     let now = crate::learnlog::now_ms();
@@ -569,7 +575,7 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
         let held = adage_store::lock::is_held(&file(".lock")).unwrap_or(false);
         let repo = &req.repo;
         match last.get(repo) {
-            Some(l) if l["kind"] == "learn_error" => {
+            Some(l) if l["kind"] == "condition_error" => {
                 let ts = l["ts"].as_u64().unwrap_or(0);
                 let what = l["error"].as_str().unwrap_or("unknown error").to_string();
                 failed.push(format!("{repo} ({}, {}: {what})", ago(now, ts), l["class"].as_str().unwrap_or("?")));
@@ -584,7 +590,7 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
                 Some(s) if s.finished_at.is_some() => {
                     runs.push(format!("{repo} ({}, {})", ago(now, s.finished_at.unwrap_or(0)), s.outcome))
                 }
-                _ => runs.push(format!("{repo} (not learned automatically yet)")),
+                _ => runs.push(format!("{repo} (not conditioned automatically yet)")),
             },
         }
         let started = state.as_ref().map(|s| s.started_at).unwrap_or(0);
@@ -616,8 +622,8 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
     } else {
         warn(
             "auto-learn runs",
-            format!("last automatic learn failed for {}", shown(&failed)),
-            "run `adage learn` in a terminal to see the error; `adage doctor` passes once a learn succeeds",
+            format!("last automatic conditioning failed for {}", shown(&failed)),
+            "run `adage condition` in a terminal to see the error; `adage doctor` passes once conditioning succeeds",
         )
     });
     if !stuck.is_empty() {
@@ -637,8 +643,8 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
     } else {
         warn(
             "auto-learn queue",
-            format!("{} request(s) not learned yet: {}", backlog.len(), shown(&backlog)),
-            "`adage learn` learns everything now; if requests keep waiting, check `fail-open.log` (class learn)",
+            format!("{} request(s) not conditioned yet: {}", backlog.len(), shown(&backlog)),
+            "`adage condition` conditions everything now; if requests keep waiting, check `fail-open.log` (class condition)",
         )
     });
     out

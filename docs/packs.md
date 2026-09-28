@@ -8,7 +8,7 @@
 A **pack** is the unit of distribution and approval for compiled skills: one track namespace
 (`owner/name`) in route format v2, closed over everything it references, content-addressed and
 signed. A pack is **inert**: it can *request* an execution level, but only a local approval store
-can grant one. A **track** stays the unit of learning and lifecycle (probation, active, demoted,
+can grant one. A **track** stays the unit of learning and lifecycle (forming, active, weakened,
 review, evidence); a pack is a track in format v2 plus its closure, requirements, optional vendored
 scripts and attestations.
 
@@ -43,7 +43,7 @@ SHA-256 of their bytes.
 **Never in a pack:** approvals, `review.yaml`, `trust.json`, spools, session state, prompts, bound
 slot values, execution outputs or their digests, absolute paths, usernames, `$ADAGE_HOME` paths,
 machine keys, and per-machine route state. A route has no `state` field (it is refused as an
-unknown field), and evidence has no `stale_since`.
+unknown field), and evidence has no `dormant_since`.
 
 ## `pack.toml`
 
@@ -118,7 +118,7 @@ steps:                        # 1..=4; E0 renders steps[0] only
     read: { from: lookup.files, max: 5 }
     effect: observe
 links: []                     # ["#other-route-id"]
-aspect: green
+strength: fire
 exit:
   - { when: result_equals, step: lookup, field: state, value: Closed }
   - { when: intent_changes }
@@ -183,24 +183,24 @@ Exactly one of `run`, `read`, `avoid`, `advise`, plus `effect`. Only a run step 
 
 ### Shapes
 
-| Shape | Trigger | Steps | Aspect |
+| Shape | Trigger | Steps | Strength |
 | --- | --- | --- | --- |
-| `run` | `prompt`, `intent`, `session_start` | run, then run or read | not red |
-| `after` | `after_command`, `after_failure` | run, then run or read | not red |
-| `obligation` | `after_edit` | run only | not red |
-| `read` | anything but `intent` | read only | not red |
-| `sequence` | any | two or more runs | not red |
-| `avoid` | `session_start`, `after_failure`, `prompt` | one avoid step | red |
-| `advise` | `after_edit`, `after_command`, `after_failure` | one advise step, observe, no inputs | yellow |
+| `run` | `prompt`, `intent`, `session_start` | run, then run or read | not inhibit |
+| `after` | `after_command`, `after_failure` | run, then run or read | not inhibit |
+| `obligation` | `after_edit` | run only | not inhibit |
+| `read` | anything but `intent` | read only | not inhibit |
+| `sequence` | any | two or more runs | not inhibit |
+| `avoid` | `session_start`, `after_failure`, `prompt` | one avoid step | inhibit |
+| `advise` | `after_edit`, `after_command`, `after_failure` | one advise step, observe, no inputs | prime |
 
 Each route renders with the template `<shape>@1` (and an advise step with
 `advise:<template>@1`), which `requires.templates` must list.
 
-### Effects, aspect and execution
+### Effects, strength and execution
 
 - The route's strongest declared effect has a ceiling (`adage_tracks::ceiling`): author and
-  publish are never directed; green only where the ceiling allows it.
-- An instinct route (and every route of an `instinct` pack) is yellow.
+  publish are never directed; fire only where the ceiling allows it.
+- An instinct route (and every route of an `instinct` pack) is prime.
 - `exec`: `level` at most the pack's `[exec] requested`; `timeout_ms` in 1..=600000 (default
   1500); `output` `typed` (default) or `raw`. Avoid and advise routes stay at E0. A request that
   could never be granted is refused: E1 (prefetch) needs observe; E2 (an action a hook runs) is at
@@ -233,8 +233,8 @@ version 2 `arms` record carries `arms` (per arm, named numbers), `deltas` (metri
 `adage share --attest <results.jsonl>` embeds a results file's `arms`, `scorecard` and
 `aggregate` records (in that order, at most 16). They are covered by the pack's signature, which
 proves who wrote the numbers, not that they are true: `adage review` and `adage review
-allow-exec` show each one as a single line, **self-reported by signer** `<fingerprint>`.
-Attestations are informational only: nothing reads them to set a reflex's strength (aspect), an
+delegate` show each one as a single line, **self-reported by signer** `<fingerprint>`.
+Attestations are informational only: nothing reads them to set a reflex's strength (strength), an
 execution level or an approval.
 
 ## Types
@@ -316,9 +316,9 @@ reformatting a route does not change it, since route lines carry exec digests.
 ## Digests and signatures
 
 - **Route exec digest**: SHA-256 of the canonical JSON (keys sorted, no whitespace, as
-  `EngineParams::canonical_json`) of `{"route": <route minus evidence and aspect>, "types":
+  `EngineParams::canonical_json`) of `{"route": <route minus evidence and strength>, "types":
   {<every referenced type: user definitions inline, built-ins as {"builtin": id}>}, "scripts":
-  {<path>: <sha256>}}`. Approvals are keyed by it: evidence updates and aspect moves keep it; any
+  {<path>: <sha256>}}`. Approvals are keyed by it: evidence updates and strength moves keep it; any
   change to a trigger, argv, input, output, type definition, script hash, exit or exec request
   changes it.
 - **Pack digest**: `adage_tracks::io::digest`'s algorithm over the pack's files: per-file SHA-256
@@ -343,7 +343,7 @@ the bytes from the repository `share` runs in, checks them against the pin, rewr
 `scripts/sha256-<hex>`, and drops the `requires.repo_files` entry. Only a script run by an
 interpreter named in argv (`python3`, `node`, `sh`) and without `deps` can be vendored. `adage
 add` copies the bytes read-only to `$ADAGE_HOME/cas/<hex>`. A route that runs a vendored script is
-**exec-only**: bound live (at probation, never a draft) with its execution ceiling, but never
+**exec-only**: bound live (forming, never a nascent reflex) with its execution ceiling, but never
 directed at E0 (its argv names no file an agent could run); `adage-exec hook` brings it into play
 only once it is approved at E1 or E2 on this machine (policy `allow_vendor_scripts`, full text
 shown, never automatic). A vendored route whose pack requests no execution level is inert.
@@ -370,7 +370,7 @@ Without a root, or when the file is missing, that route is skipped and reported 
 `Upgraded::skipped`: a pack never holds an unpinned script. The manifest gets applicability
 `repo` (the track's scope), tools, templates and models from the routes, the track's harness
 gauge, `[exec] requested = "E0"`, and `evidence.json` from each route's support and `by_origin`.
-`state`, `stale_since` and `authored` are dropped.
+`state`, `dormant_since` and `authored` are dropped.
 
 ## Using packs
 
@@ -382,8 +382,8 @@ adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format
 
 The source is resolved in this order:
 
-1. A learned track by name. It is upgraded to a pack. Only its live routes and drafts travel;
-   retired and demoted routes stay behind. A repository script is pinned L-ref against the
+1. A learned track by name. It is upgraded to a pack. Only its live routes and nascent reflexes travel;
+   extinguished and weakened routes stay behind. A repository script is pinned L-ref against the
    repository `share` runs in, if that repository is the track's; otherwise that route is listed
    under "Not carried".
 2. An installed pack by name.
@@ -474,7 +474,7 @@ Only signature, schema or closure failures refuse a whole pack.
 checkout bound before. For each, it writes a bound track under
 `tracks/@imported/@bound/<owner>/<name>/<repo>/`:
 
-- `track.toml` and `routes/`: the live routes, at probation and yellow at most, with the
+- `track.toml` and `routes/`: the live routes, forming and prime at most, with the
   recipient's review decisions carried across re-binds;
 - `exec.json`: route id → `ExecBinding` (`route_exec_digest`, resolved `scripts` with SHA-256,
   `max_level`);

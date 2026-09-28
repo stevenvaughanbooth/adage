@@ -4,7 +4,7 @@
 use adage_core::Effect;
 use adage_instincts::{bind, bind_with, BindOptions, BindResult};
 use adage_tracks::{
-    Aspect, Evidence, Exit, Gauge, Index, Manifest, Route, RouteState, Scope, Step, Track, TrackInfo, Trigger,
+    Evidence, Exit, Gauge, Index, Manifest, Route, RouteState, Scope, Step, Strength, Track, TrackInfo, Trigger,
 };
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -110,11 +110,11 @@ fn pnpm_repository_gets_package_manager_discipline() {
     assert_eq!(install.len(), 2, "npm install and npm ci");
     for x in install {
         // An environment step waits for a person (Design O11).
-        assert_eq!((x.effect, x.state), (Effect::Environment, RouteState::Draft));
+        assert_eq!((x.effect, x.state), (Effect::Environment, RouteState::Nascent));
     }
     assert!(has(&r, "fail exec npm install []", "pnpm install"));
     assert!(has(&r, "fail exec npm test []", "pnpm test"));
-    assert_eq!(route(&r, "dead-end-68b3e9").state, RouteState::Probation);
+    assert_eq!(route(&r, "dead-end-68b3e9").state, RouteState::Forming);
     let kinds: BTreeSet<&str> = r.advisories().iter().map(|a| a.template_id).collect();
     assert_eq!(kinds, ["lockfile", "package-manager"].into_iter().collect());
     let pm = r.advisories().into_iter().find(|a| a.template_id == "package-manager").unwrap();
@@ -138,13 +138,13 @@ fn rust_workspace_and_go_generate_bind_advisories_only() {
     let r = bound("go");
     assert!(r.runs().is_empty(), "G1 (go generate finish line) ships disabled: {:#?}", shape(&r));
     let gen = r.advisories().into_iter().find(|a| a.instinct == "U4").expect("U4 advisory");
-    assert_eq!(gen.slots["path"], "aspect/aspect_string.go");
+    assert_eq!(gen.slots["path"], "strength/strength_string.go");
     assert_eq!(gen.slots["command"], "go generate ./...");
     assert!(r.advisories().iter().any(|a| a.instinct == "U6" && a.slots["path"] == "go.sum"));
     let facts = adage_instincts::extract(&fixture("go"));
     let go = facts.go.unwrap();
     assert_eq!(go.module, "example.com/signals");
-    assert_eq!(go.generate, vec![("aspect/aspect.go".to_string(), "stringer -type=Aspect".to_string())]);
+    assert_eq!(go.generate, vec![("strength/strength.go".to_string(), "stringer -type=Strength".to_string())]);
 }
 
 #[test]
@@ -196,7 +196,7 @@ fn hostile_repositories_never_bind_their_commands() {
         assert_eq!(x.step, Step::Run { command: "make test".into() });
     }
     let json = serde_json::to_string(&r.routes).unwrap().to_ascii_lowercase();
-    for bad in ["evil", "adage-signal", "ignore", "push", "curl", "token", "green"] {
+    for bad in ["evil", "adage-reflex", "ignore", "push", "curl", "token", "fire"] {
         assert!(!json.contains(bad), "{bad:?} leaked: {json}");
     }
 }
@@ -321,11 +321,11 @@ fn every_bound_route_is_a_valid_capped_instinct() {
         for x in &r.routes {
             assert_eq!(x.evidence.provenance, "instinct:core@0.1.0", "{name} {}", x.id);
             assert_eq!(x.evidence.support, 0);
-            assert_eq!(x.aspect, Aspect::Yellow, "{name} {}", x.id);
+            assert_eq!(x.strength, Strength::Prime, "{name} {}", x.id);
             assert!(!x.authored && x.slots.is_empty());
             assert!(
                 matches!(x.step, Step::Run { .. } | Step::Advise { .. }),
-                "never a red avoid step: {name} {}",
+                "never an inhibit avoid step: {name} {}",
                 x.id
             );
             assert!(
@@ -339,8 +339,8 @@ fn every_bound_route_is_a_valid_capped_instinct() {
             assert!(x.is_instinct() && matches!(x.origin(), adage_tracks::Origin::Instinct { .. }));
             assert_eq!(x.evidence.by_origin.get("declared"), Some(&1));
             match x.effect {
-                Effect::Observe | Effect::Verify | Effect::Regenerate => assert_eq!(x.state, RouteState::Probation),
-                Effect::Environment => assert_eq!(x.state, RouteState::Draft),
+                Effect::Observe | Effect::Verify | Effect::Regenerate => assert_eq!(x.state, RouteState::Forming),
+                Effect::Environment => assert_eq!(x.state, RouteState::Nascent),
                 e => panic!("{name} {}: {e:?}", x.id),
             }
             assert!(r.origins.contains_key(&x.id));
@@ -381,8 +381,8 @@ fn learned(id: &str, trigger: Trigger, step: Step) -> Route {
         step,
         slots: vec![],
         effect: Effect::Verify,
-        aspect: Aspect::Red,
-        state: RouteState::Active,
+        strength: Strength::Inhibit,
+        state: RouteState::Firm,
         exit: vec![Exit::IntentChanges],
         evidence: Evidence { provenance: "desire-path".into(), support: 7, ..Default::default() },
         authored: false,
@@ -411,7 +411,7 @@ fn learned_routes_and_review_rejections_override_instincts() {
         Step::Run { command: "make gen".into() },
     );
     fl.effect = Effect::Regenerate;
-    fl.aspect = Aspect::Green;
+    fl.strength = Strength::Fire;
     // 4. A learned dead end that avoids the command an instinct would direct.
     let avoid_it = learned(
         "dead-end-000002",

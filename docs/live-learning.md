@@ -1,7 +1,7 @@
 # Live learning
 
 Adage learns while agents work. When a session stops or ends, the hook asks for the repository to
-be learned, and a background learner does it, usually within seconds. There is no `adage learn`
+be learned, and a background learner does it, usually within seconds. There is no `adage condition`
 to remember, and no daemon. This page is the contract for everything that watches it happen
 (`adage ui`, `adage watch`, scripts): the settings, the files, and the two streams to follow.
 The design is in [Architecture §4.7.2](Adage%20—%20Architecture.md#472-live-learning).
@@ -15,14 +15,14 @@ has a default, so the file is optional.
 [learn]
 auto = true               # learn automatically when agent sessions stop or end
 min_interval_secs = 120   # at most one automatic learn per repository per interval (0–86400)
-thresholds = "default"    # evidence bars: "default", or "demo" (lower); `adage learn --demo` still overrides
+thresholds = "default"    # evidence bars: "default", or "demo" (lower); `adage condition --demo` still overrides
 claude_projects = ""      # Claude Code history ("" = ~/.claude/projects)
 codex_sessions = ""       # Codex rollouts automatic learning reads, e.g. "~/.codex/sessions" ("" = none)
 opencode_exports = ""     # a directory of `opencode export` files ("" = none)
 parse_cache = true        # keep parsed transcripts in cache/sessions (owner-only; faster re-learning)
 
 [runtime]
-holdout = 0.1             # share of sessions held out as the control arm (0–1)
+control = 0.1             # share of sessions held out as the control arm (0–1)
 ```
 
 | Key | Default | Environment override |
@@ -33,8 +33,8 @@ holdout = 0.1             # share of sessions held out as the control arm (0–1
 | `learn.claude_projects` | `""` | — |
 | `learn.codex_sessions` | `""` | — |
 | `learn.opencode_exports` | `""` | — |
-| `learn.parse_cache` | `true` | — (`adage learn --no-cache` skips it for one run) |
-| `runtime.holdout` | `0.1` | `ADAGE_HOLDOUT` (any number; 1 or more is shadow mode, as before) |
+| `learn.parse_cache` | `true` | — (`adage condition --no-cache` skips it for one run) |
+| `runtime.control` | `0.1` | `ADAGE_CONTROL` (any number; 1 or more is shadow mode, as before) |
 
 Environment variables win over the file, and the file over the defaults. An unparseable file, an
 unknown key, or an invalid value is reported by `adage config` and `adage doctor`, and that key
@@ -54,21 +54,21 @@ adage config set <key> <value>   validated, written atomically; refused inside a
    `session.deleted`, after its normal decision, the hook (if `learn.auto` is on and the
    repository has no `.adage/disabled`) writes the repository's request marker. Then, unless a
    learner holds the repository's lock or one is already scheduled, it starts
-   `adage learn --auto --repo-root <root>` detached (its own process group on Unix; a detached
+   `adage condition --auto --repo-root <root>` detached (its own process group on Unix; a detached
    process group on Windows; no standard streams). If the last learn for the repository started
    less than `min_interval_secs` ago, it adds `--after <ms>` and the learner waits until then, so
    the last session is always learned and at most one learn starts per interval. The hook never
    waits for it, and what the hook prints never changes. A failure is written to
-   `fail-open.log` (class `learn`).
+   `fail-open.log` (class `condition`).
 2. **Learner.** Takes the repository's lock or exits (single flight). Learns that repository
    only, from Claude Code history, the configured Codex and OpenCode sources, and any transcript a
    hook named, through the parse cache; holds `tracks.lock` while it writes tracks and the index.
    Appends a line to `learn.log`. Then re-reads the request marker once: a request that arrived
    while it ran is learned before it exits.
-3. **Manual learning** (`adage learn`) uses the same thresholds (unless `--demo`), the same cache
+3. **Manual learning** (`adage condition`) uses the same thresholds (unless `--demo`), the same cache
    and the same lock, and writes the same `learn.log` lines with `"trigger":"manual"`.
 
-Automatic learning of a repository produces exactly the tracks a full `adage learn` over the same
+Automatic learning of a repository produces exactly the tracks a full `adage condition` over the same
 sources produces for it (tested), so the two never fight. Set `learn.codex_sessions` if you also
 learn Codex history by hand, or evidence from it will come and go between manual and automatic
 runs.
@@ -93,7 +93,7 @@ while `after` is in the future. `adage doctor` reports a learner holding its loc
 minutes, and a request pending over 5 minutes past its interval.
 
 Other files: `$ADAGE_HOME/tracks.lock` (one writer of tracks and index at a time: learners,
-`adage learn`, review decisions, `adage add`), and `$ADAGE_HOME/cache/sessions/` (the parse cache:
+`adage condition`, review decisions, `adage add`), and `$ADAGE_HOME/cache/sessions/` (the parse cache:
 `manifest.json` maps each transcript to its size, modification time and repository root, and
 `<hash>.json` holds its parsed session; owner-only, rebuilt on a new build, safe to delete).
 
@@ -108,35 +108,35 @@ offset, then read `learn.log` from 0. Ignore kinds and fields you do not know.
 A learn, one line per repository learned:
 
 ```json
-{"ts":1758620000000,"kind":"learn","trigger":"auto","repo":"github.com/acme/billing",
+{"ts":1758620000000,"kind":"condition","trigger":"auto","repo":"github.com/acme/billing",
  "sessions_read":212,"sessions_used":198,"duration_ms":431,"index_generation":"3f1c9a0d4b2e7f61",
  "changes":[
-   {"route":"finish-line-6a01b2","track":"github-com-acme-billing/learned","change":"aspect",
-    "from":"yellow","to":"green","summary":"finish line route yellow → green (9 of 9 sessions, lower bound 0.70)"},
+   {"route":"finish-line-6a01b2","track":"github-com-acme-billing/learned","change":"strength",
+    "from":"prime","to":"fire","summary":"finish line route prime → fire (9 of 9 sessions, lower bound 0.70)"},
    {"route":"lookup-work-item","track":"github-com-acme-billing/learned","change":"evidence",
-    "from":null,"to":null,"summary":"green work item route evidence 8/9 → 9/10 sessions"}],
- "version":"0.1.0","sessions_steered":3,"thresholds":"min_support=5 green_lower_bound=0.8 yellow_rate=0.5",
+    "from":null,"to":null,"summary":"fire work item route evidence 8/9 → 9/10 sessions"}],
+ "version":"0.1.0","sessions_steered":3,"thresholds":"min_support=5 fire_lower_bound=0.8 prime_rate=0.5",
  "intent_model":null,"repos":{"github.com/acme/billing":{"sessions":198,"tracks":[…]}}}
 ```
 
 | Field | Meaning |
 | --- | --- |
-| `trigger` | `auto` (a learner a hook started) or `manual` (`adage learn`) |
+| `trigger` | `auto` (a learner a hook started) or `manual` (`adage condition`) |
 | `repo` | Repository key; `null` only for a manual run that found no usable session |
 | `sessions_read` | Transcripts read (an automatic run counts only its repository's) |
 | `sessions_used` | This repository's sessions with steps |
-| `changes[].change` | `new` (in service, was not), `draft` (waits for approval in `adage review`), `retired`, `stale` (kept on its last evidence because it steered its own evidence away; yellow at most), `aspect`, `evidence` (sessions of support or opportunity changed), `proposal` (a pinned route has a proposed change) |
-| `changes[].from`, `to` | Aspects (`green`, `yellow`, `red`) or `null`: `new`/`draft` have only `to`, `retired` only `from`, `aspect` both |
+| `changes[].change` | `new` (in service, was not), `nascent` (waits for approval in `adage review`), `extinguished`, `dormant` (kept on its last evidence because it steered its own evidence away; prime at most), `strength`, `evidence` (sessions of support or opportunity changed), `proposal` (a pinned route has a proposed change) |
+| `changes[].from`, `to` | Strengths (`fire`, `prime`, `inhibit`) or `null`: `new`/`nascent` have only `to`, `extinguished` only `from`, `strength` both |
 | `changes[].summary` | Fixed template text |
 | `version` … `repos` | The fields every line had before live learning, unchanged |
 
 A failure:
 
 ```json
-{"ts":1758620000000,"kind":"learn_error","trigger":"auto","repo":"github.com/acme/billing","class":"lock","error":"taking the tracks lock: PermissionDenied"}
+{"ts":1758620000000,"kind":"condition_error","trigger":"auto","repo":"github.com/acme/billing","class":"lock","error":"taking the tracks lock: PermissionDenied"}
 ```
 
-`class` is `repo` (its directory is gone), `lock`, `learn` or `panic`; `error` is a fixed message
+`class` is `repo` (its directory is gone), `lock`, `condition` or `panic`; `error` is a fixed message
 or an I/O error kind. No line of `learn.log` ever holds prompt text, a command, tool output, or a
 path.
 
@@ -154,8 +154,8 @@ new files in the directory. Each record:
     directives, would_have, continue_reason?, would_continue?, judgements, observed } }
 ```
 
-`propensity` is the probability of `arm` at assignment: the holdout share for `holdout`, one minus
+`propensity` is the probability of `arm` at assignment: the control share for `control`, one minus
 it for `treated`, and 1 when `ADAGE_ARM` forced the arm (absent in records written before it). Each
 directive carries its route's delivery shape as `kind` (`run`, `avoid`, `read-batch`, `obligation`,
-`sequence` or `advise`; records written before Track G G5 hold the retired track kinds). `observed` holds canonical template keys, not raw commands, and no prompt text is recorded. Events
+`sequence` or `advise`; records written before Track G G5 hold the removed track kinds). `observed` holds canonical template keys, not raw commands, and no prompt text is recorded. Events
 the no-match fast path skips leave no record.

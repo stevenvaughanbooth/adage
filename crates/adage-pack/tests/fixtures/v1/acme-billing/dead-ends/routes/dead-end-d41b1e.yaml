@@ -9,8 +9,8 @@ step:
   signature: 'RuntimeError: ACME_ENV is not set — run tests with ''make test'''
 slots: []
 effect: verify
-aspect: red
-state: active
+strength: inhibit
+state: firm
 exit:
 - when: intent_changes
 evidence:

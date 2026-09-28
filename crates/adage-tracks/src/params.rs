@@ -3,7 +3,7 @@
 //! [`EngineParams`] is plain data with serde defaults equal to the values Adage has always used,
 //! so an empty file (`{}` or an empty TOML document) is exactly today's engine, and so is
 //! [`EngineParams::default`]. [`EngineParams::demo`] is the `--demo` preset (lower evidence bars
-//! for small histories); it differs only in `learn.min_support` and `learn.green_lower_bound`.
+//! for small histories); it differs only in `learn.min_support` and `learn.fire_lower_bound`.
 //!
 //! It lives here, in the track crate, because both the runtime and the learner depend on this
 //! crate and on nothing of each other's in that direction.
@@ -49,16 +49,16 @@ pub struct EngineParams {
 #[serde(default, deny_unknown_fields)]
 pub struct RuntimeParams {
     /// Tool batches after a directive within which running its command counts as following it;
-    /// after that the directive is judged derailed.
+    /// after that the directive is judged ignored.
     pub follow_window: u32,
     pub max_directives_per_session: usize,
     pub max_directives_per_decision: usize,
     pub max_stop_requests: u32,
     /// Recent call keys kept in the session state.
     pub history: usize,
-    /// The holdout share when neither `ADAGE_HOLDOUT` nor `runtime.holdout` sets one. Recorded
-    /// for completeness: offline replay is always the holdout arm, so L0 does not read it.
-    pub holdout_share: f64,
+    /// The control share when neither `ADAGE_CONTROL` nor `runtime.control` sets one. Recorded
+    /// for completeness: offline replay is always the control arm, so L0 does not read it.
+    pub control_share: f64,
 }
 
 impl Default for RuntimeParams {
@@ -69,7 +69,7 @@ impl Default for RuntimeParams {
             max_directives_per_decision: MAX_DIRECTIVES_PER_DECISION,
             max_stop_requests: MAX_STOP_REQUESTS,
             history: HISTORY,
-            holdout_share: 0.1,
+            control_share: 0.1,
         }
     }
 }
@@ -80,10 +80,10 @@ impl Default for RuntimeParams {
 pub struct LearnParams {
     /// Minimum distinct supporting sessions for any route.
     pub min_support: u32,
-    /// Wilson lower bound required for green.
-    pub green_lower_bound: f64,
-    /// Minimum support rate for yellow (a new route).
-    pub yellow_rate: f64,
+    /// Wilson lower bound required for fire.
+    pub fire_lower_bound: f64,
+    /// Minimum support rate for prime (a new route).
+    pub prime_rate: f64,
     /// The lower rate bar that keeps an existing route (hysteresis).
     pub retain_rate: f64,
     /// An avoid names a runner only if it failed in at least `num/den` of the sessions
@@ -100,11 +100,11 @@ pub struct LearnParams {
     pub intent_contrast: f64,
     /// Review: absolute movement of the Wilson lower bound that counts as a material change.
     pub material_lower_bound: f64,
-    /// Stale routes: the share of occurrences that must be exposed for a route's absence to be
+    /// Dormant routes: the share of occurrences that must be exposed for a route's absence to be
     /// put down to exposure alone.
-    pub stale_exposure: f64,
+    pub dormant_exposure: f64,
     /// The outcome-lift path (`crate::lift`): a step that too few traces took for the rate bar
-    /// still forms a reflex, capped at yellow (prime), when the traces that took it succeeded
+    /// still forms a reflex, capped at prime (prime), when the traces that took it succeeded
     /// more often than those that did not, with the 95% lower bound on the difference at least
     /// this. Outcomes are the recorded ones (`--outcomes`), else transcript proxies. Omitted from
     /// the canonical JSON at its default (0.2), so the presets' hashes are unchanged.
@@ -127,8 +127,8 @@ impl Default for LearnParams {
     fn default() -> Self {
         LearnParams {
             min_support: 5,
-            green_lower_bound: 0.8,
-            yellow_rate: 0.5,
+            fire_lower_bound: 0.8,
+            prime_rate: 0.5,
             retain_rate: 0.3,
             dead_end_consistency: [9, 10],
             dead_end_signatures: 3,
@@ -136,7 +136,7 @@ impl Default for LearnParams {
             intent_ubiquitous: 0.8,
             intent_contrast: 0.3,
             material_lower_bound: crate::review::MATERIAL_LOWER_BOUND,
-            stale_exposure: 0.5,
+            dormant_exposure: 0.5,
             outcome_lift_lower_bound: OUTCOME_LIFT_LOWER_BOUND,
             outcome_min_support: None,
         }
@@ -146,7 +146,7 @@ impl Default for LearnParams {
 impl LearnParams {
     /// The `--demo` thresholds: lower evidence bars for demonstrations and small histories.
     pub fn demo() -> Self {
-        LearnParams { min_support: 3, green_lower_bound: 0.5, ..Default::default() }
+        LearnParams { min_support: 3, fire_lower_bound: 0.5, ..Default::default() }
     }
 }
 
@@ -189,15 +189,15 @@ impl EngineParams {
             bail!("learn: dead_end_signatures must be at least 1");
         }
         for (name, x) in [
-            ("runtime.holdout_share", r.holdout_share),
-            ("learn.green_lower_bound", l.green_lower_bound),
-            ("learn.yellow_rate", l.yellow_rate),
+            ("runtime.control_share", r.control_share),
+            ("learn.fire_lower_bound", l.fire_lower_bound),
+            ("learn.prime_rate", l.prime_rate),
             ("learn.retain_rate", l.retain_rate),
             ("learn.finish_line_contrast", l.finish_line_contrast),
             ("learn.intent_ubiquitous", l.intent_ubiquitous),
             ("learn.intent_contrast", l.intent_contrast),
             ("learn.material_lower_bound", l.material_lower_bound),
-            ("learn.stale_exposure", l.stale_exposure),
+            ("learn.dormant_exposure", l.dormant_exposure),
             ("learn.outcome_lift_lower_bound", l.outcome_lift_lower_bound),
         ] {
             if !(0.0..=1.0).contains(&x) {
@@ -311,7 +311,7 @@ mod tests {
         let from_toml: EngineParams = toml::from_str("").unwrap();
         assert_eq!(from_toml, d);
         let demo = EngineParams::demo();
-        assert_eq!((demo.learn.min_support, demo.learn.green_lower_bound), (3, 0.5));
+        assert_eq!((demo.learn.min_support, demo.learn.fire_lower_bound), (3, 0.5));
         assert_eq!((d.learn.outcome_min_support, demo.learn.outcome_min_support), (None, None));
         assert_eq!(d.learn.outcome_lift_lower_bound, 0.2);
         // At their defaults the outcome-lift settings leave the canonical JSON (and hash) as it was.
@@ -326,9 +326,9 @@ mod tests {
         let p = EngineParams::demo()
             .with_overrides(&serde_json::json!({"learn": {"min_support": 4}, "runtime": {"follow_window": 5}}))
             .unwrap();
-        assert_eq!((p.learn.min_support, p.learn.green_lower_bound, p.runtime.follow_window), (4, 0.5, 5));
+        assert_eq!((p.learn.min_support, p.learn.fire_lower_bound, p.runtime.follow_window), (4, 0.5, 5));
         assert!(EngineParams::default().with_overrides(&serde_json::json!({"learn": {"min_suport": 4}})).is_err());
-        assert!(EngineParams::default().with_overrides(&serde_json::json!({"learn": {"yellow_rate": 2.0}})).is_err());
+        assert!(EngineParams::default().with_overrides(&serde_json::json!({"learn": {"prime_rate": 2.0}})).is_err());
     }
 
     #[test]

@@ -1,8 +1,8 @@
-# Live proving ground
+# Live evals
 
 `runner.py` runs real headless Claude Code agents on a sandbox repository, with and without
 Adage. It generalises `demo/run.py`: the sandbox, tasks, prompts, arms, model and budget all come
-from a config file. It covers the with/without comparison of Design §12 (the proving ground) and
+from a config file. It covers the with/without comparison of Design §12 (the eval loop) and
 §14 (measurement). For what the numbers mean next to the offline replay eval, see
 [docs/evals.md](../../docs/evals.md).
 
@@ -22,7 +22,7 @@ python3 evals/live/runner.py evals/live/configs/acme-billing.json --execute --ro
 ```
 
 The dry run prints the number of agent runs as the product that makes it, e.g. `train 6 tasks x
-2 repeats = 12; eval 6 tasks x 3 repeats x 2 arms (holdout, adage) x 2 rounds = 72; total 84
+2 repeats = 12; eval 6 tasks x 3 repeats x 2 arms (control, adage) x 2 rounds = 72; total 84
 agent runs`.
 
 ## Phases and rounds
@@ -30,9 +30,9 @@ agent runs`.
 | Phase | What happens |
 | --- | --- |
 | `train` | Round 1 only. Baseline agents work the training tasks with no Adage hooks installed |
-| `learn` | `adage learn` reads the training transcripts. In later rounds it also reads earlier rounds' eval sessions (see below), with each route kind excluded from the sessions it steered |
-| `eval` | Agents work the held-out tasks: every (task, repeat) runs one session per arm, in a seeded random order: `adage` (hooks installed, directives delivered), `holdout` (hooks installed, directives logged but not delivered: the control) and optionally `off` (no hooks: measures hook overhead), `instincts` (hooks installed, directives delivered, from a day-0 index of instincts only: `adage learn --instincts-only` over a fresh sandbox, in `private/instincts-home`) and `e1` (the learned index plus E1 prefetch through `adage-exec`, from `private/e1-home`, which a person prepares: a copy of `adage-home` with `adage review allow-exec ... --level e1` approvals; the runner refuses the arm without it) |
-| `report` | `summary.json` and a results page (below): per-arm aggregates, task-level statistics between `adage` and `holdout` (see [Statistics](#statistics)) |
+| `learn` | `adage condition` reads the training transcripts. In later rounds it also reads earlier rounds' eval sessions (see below), with each route kind excluded from the sessions it steered |
+| `eval` | Agents work the held-out tasks: every (task, repeat) runs one session per arm, in a seeded random order: `adage` (hooks installed, directives delivered), `control` (hooks installed, directives logged but not delivered: the control) and optionally `off` (no hooks: measures hook overhead), `instincts` (hooks installed, directives delivered, from a day-0 index of instincts only: `adage condition --instincts-only` over a fresh sandbox, in `private/instincts-home`) and `e1` (the learned index plus E1 prefetch through `adage-exec`, from `private/e1-home`, which a person prepares: a copy of `adage-home` with `adage review delegate ... --level e1` approvals; the runner refuses the arm without it) |
+| `report` | `summary.json` and a results page (below): per-arm aggregates, task-level statistics between `adage` and `control` (see [Statistics](#statistics)) |
 
 The phases default to all four. Name some to run only those: for example `eval report --round 2`.
 A config's `rounds` (default 1) run in order in one invocation: round 1 is train, learn, eval,
@@ -107,9 +107,9 @@ the same):
 
 | Field | Meaning |
 | --- | --- |
-| `adage`, `holdout` | The arm's aggregate over its runs (median or mean, as in the table above) |
-| `diff`, `ci95` | `adage - holdout`, with a 95% percentile bootstrap CI that resamples whole tasks (2000 resamples) |
-| `task_mean_diff` | The test statistic: the mean over tasks of (task mean of adage - task mean of holdout) |
+| `adage`, `control` | The arm's aggregate over its runs (median or mean, as in the table above) |
+| `diff`, `ci95` | `adage - control`, with a 95% percentile bootstrap CI that resamples whole tasks (2000 resamples) |
+| `task_mean_diff` | The test statistic: the mean over tasks of (task mean of adage - task mean of control) |
 | `p_value` | Two-sided permutation test that shuffles arm labels **within each task** (the randomisation unit) and recomputes `task_mean_diff` (10000 permutations) |
 | `p_holm` | `p_value` after Holm's step-down adjustment across the round's metrics (the family) |
 | `p_tasks` | Two-sided sign-flip test on the per-task differences alone: whether the effect would hold for *new tasks*. Exact; with k tasks its smallest possible value is 2/2^k (0.031 for 6) |
@@ -129,7 +129,7 @@ and its environment is built from scratch: only `PATH`, locale, terminal, time z
 variables, the auth variables below, and the config's `forward_env` pass through. So no session,
 of either arm, can read your Claude Code auto-memory (`MEMORY.md`), your earlier transcripts
 (`~/.claude/projects`), your settings or MCP servers, or another session's transcript. (Before
-this, holdout agents read the operator's auto-memory in 23 of 36 runs.) Transcripts are archived
+this, control agents read the operator's auto-memory in 23 of 36 runs.) Transcripts are archived
 from the session's own `CLAUDE_CONFIG_DIR/projects`. The learned index, the transcripts and
 `outcomes.json` live in `<root>/private/`, outside every session's run directory; the hooks reach
 the index through `ADAGE_HOME`. The home also gets a `.gitconfig` with a neutral identity, and
@@ -201,12 +201,12 @@ The config is JSON. `configs/acme-billing.json` is the demo.
 
 | Key | Meaning |
 | --- | --- |
-| `name`, `repo_key` | The run's name, and the repository key tracks are learned under (`adage learn --repo`) |
+| `name`, `repo_key` | The run's name, and the repository key tracks are learned under (`adage condition --repo`) |
 | `workdir` | The sandbox directory name inside each run directory |
 | `sandbox` | argv that creates a fresh sandbox at `{dir}` for task `{task}` (`{repo}` = this repository) |
 | `score` | argv that scores a finished sandbox and prints JSON with `passed` (and optionally `stale_generated`, `ci_passed`, `hidden_passed`) |
 | `prompts` | Prompt templates, with `{id}` replaced by the task. Tasks rotate through them |
-| `train`, `eval` | `{"tasks": [...], "repeats": n}`. `eval.arms` defaults to `["holdout", "adage"]` |
+| `train`, `eval` | `{"tasks": [...], "repeats": n}`. `eval.arms` defaults to `["control", "adage"]` |
 | `eval.tasks_by_round` | One disjoint held-out pool per round (list of lists, or `{"1": [...], "2": [...]}`); replaces `eval.tasks`. Without it later rounds are `leaky` |
 | `rounds` | Learning rounds run by one invocation (default 1) |
 | `seed` | Arm-order seed (`--seed` overrides) |
@@ -216,7 +216,7 @@ The config is JSON. `configs/acme-billing.json` is the demo.
 | `tools` | The built-in tools a session has (`claude --tools`); default `allowed_tools` |
 | `adage_exec` | The `adage-exec` binary the `e1` arm's hooks run (default: next to `--adage`) |
 | `model`, `max_turns`, `concurrency` | Passed to `claude -p`, and the number of sessions run in parallel |
-| `learn_args` | Extra `adage learn` arguments (`["--demo"]` for small runs) |
+| `learn_args` | Extra `adage condition` arguments (`["--demo"]` for small runs) |
 | `allowed_tools`, `disallowed_tools` | `claude --allowedTools/--disallowedTools` |
 | `budget_usd` | Spend cap. No new session starts once the reported cost reaches it |
 | `classify` | Substrings of a Bash command that make it a `lookup`, `regen`, `verify` or `bash_edit` call; `check_flags` turn a regen command into a verify (`--verify`). Defaults describe acme-billing |
@@ -264,7 +264,7 @@ comment names a fix.
 
 **The scorer.** `score.py <dir> <INC-id>` copies the hidden test into `test/`, runs the repository's
 CI (`npm run check`), then runs the hidden test again explicitly with its own resolver hook and the
-TAP reporter, and removes it. `passed` needs all of: CI green, the hidden suite visible in the CI
+TAP reporter, and removes it. `passed` needs all of: CI fire, the hidden suite visible in the CI
 output (`ci_ran_hidden`: a CI that skipped it does not count), the explicit run executing at least
 as many tests as the file declares with none failing (`hidden_passed`), and generated code fresh
 by the template's own generator, not the sandbox's (`stale_generated`).
@@ -277,15 +277,15 @@ python3 evals/live/sandboxes/harbor-dispatch/rehearse.py /tmp/harbor-rehearsal  
 ```
 
 `selfcheck.py` proves determinism, the dead end, the lookup for every ID (and that its plain-text
-output contains no path-like text besides the listed files, which `adage learn` would take for
+output contains no path-like text besides the listed files, which `adage condition` would take for
 linked files), that every incident fails untouched and passes solved, the obligation, the scorer's
 skip guard, and that all fixes together pass. `rehearse.py` runs scripted, model-free sessions with
 the real commands in real sandboxes, writes them as Claude Code transcripts in the runner's layout,
-and checks that `adage learn` learns all four conventions from them, that the runner's metrics and
+and checks that `adage condition` learns all four conventions from them, that the runner's metrics and
 results page work, and that `build_demo.py` plus `adage eval` ingest the root.
 
 **The run.** 84 agent runs: 6 training incidents x 2 repeats (no hooks), then in each of 2 rounds 6
-held-out incidents x 3 repeats x 2 arms (holdout, adage). Round 2 learns from all 48 earlier
+held-out incidents x 3 repeats x 2 arms (control, adage). Round 2 learns from all 48 earlier
 sessions, including round 1's sessions of the same six held-out incidents, so it is `leaky` (see
 [Phases and rounds](#phases-and-rounds)). The spend cap is $45.
 
@@ -322,7 +322,7 @@ agent may try `npx` for a TypeScript tool, which the sandbox cannot stop from us
 <root>/runs/<run>/<workdir>/              the sandbox after the agent finished
 <root>/runs/<run>/home/                   the session's own HOME (and CLAUDE_CONFIG_DIR, XDG dirs, TMPDIR)
 <root>/runs/<run>/stream.jsonl            the `claude -p` stream, time-stamped
-<root>/private/transcripts/<project>/<session>.jsonl   the Claude Code transcript (what `adage learn` reads)
+<root>/private/transcripts/<project>/<session>.jsonl   the Claude Code transcript (what `adage condition` reads)
 <root>/private/adage-home/                tracks, index, and per-session spools and state
 <root>/private/outcomes.json, settings-*.json
 <root>/state.json, summary.json
@@ -344,7 +344,7 @@ adage eval evals/datasets/my-run --split round1
 ```
 
 The dataset gets one split per round (`round1`, `round2`, …): train on the training sessions and
-every earlier round's eval sessions, test on that round's holdout arm.
+every earlier round's eval sessions, test on that round's control arm.
 
 ## Tests
 

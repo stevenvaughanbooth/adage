@@ -1,7 +1,7 @@
 {
   "name": "adage-exec",
   "version": "0.1.0",
-  "description": "Adage with execution (opt-in): approved, observe-only lookups run in an OS sandbox at the stimulus and their typed output arrives beside the directive (E1), and approved actions such as `make gen` after an edit run staged in the sandbox, verified, and applied from the hook (E2). Serves only after `adage exec enable`; the Adage plugin then goes quiet.",
+  "description": "Adage with execution (opt-in): approved, observe-only lookups run in an OS sandbox at the stimulus and their typed output arrives beside the directive (E1), and approved actions such as `make gen` after an edit run staged in the sandbox, verified, and applied from the hook (E2). Serves only after `adage delegate on`; the Adage plugin then goes quiet.",
   "author": { "name": "Adage" },
   "repository": "https://github.com/stevenvaughanbooth/adage"
 }

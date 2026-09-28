@@ -84,7 +84,7 @@ fn text(o: &Output) -> String {
     format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))
 }
 
-fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, aspect: Aspect, support: u32, opp: u32) -> Route {
+fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, strength: Strength, support: u32, opp: u32) -> Route {
     let slots = match &step {
         Step::Run { command } if command.contains("{item}") => vec![Slot {
             name: "item".into(),
@@ -100,8 +100,8 @@ fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, aspect: Aspect,
         step,
         slots,
         effect,
-        aspect,
-        state: RouteState::Active,
+        strength,
+        state: RouteState::Firm,
         exit: vec![Exit::IntentChanges],
         evidence: Evidence {
             support,
@@ -116,20 +116,20 @@ fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, aspect: Aspect,
     }
 }
 
-fn lookup(aspect: Aspect) -> Route {
+fn lookup(strength: Strength) -> Route {
     route(
         "lookup",
         Trigger::Prompt { span: SpanKind::Ticket },
         Step::Run { command: "./scripts/wi-lookup {item} --json".into() },
         Effect::Observe,
-        aspect,
+        strength,
         20,
         20,
     )
 }
 
-fn verify(id: &str, aspect: Aspect, support: u32) -> Route {
-    route(id, Trigger::SessionStart, Step::Run { command: "make test".into() }, Effect::Verify, aspect, support, 12)
+fn verify(id: &str, strength: Strength, support: u32) -> Route {
+    route(id, Trigger::SessionStart, Step::Run { command: "make test".into() }, Effect::Verify, strength, support, 12)
 }
 
 fn make_track(name: &str, provenance: &str, routes: Vec<Route>) -> Track {
@@ -181,24 +181,24 @@ fn key(t: &str, r: &str) -> (String, String) {
 }
 
 /// A learned track with one route per queue reason (and some that must not be queued), plus an
-/// import at probation and runtime judgements.
+/// import at forming and runtime judgements.
 fn populated() -> World {
     let w = World::new();
-    let same = verify("approved-same", Aspect::Yellow, 10);
-    let changed_now = verify("approved-changed", Aspect::Yellow, 10);
-    let changed_then = verify("approved-changed", Aspect::Yellow, 4);
-    let mut kept = verify("rejected-kept", Aspect::Yellow, 10);
-    kept.state = RouteState::Retired;
-    let mut back = verify("rejected-back", Aspect::Yellow, 12);
-    back.state = RouteState::Probation;
-    let back_then = verify("rejected-back", Aspect::Yellow, 5);
-    let derails = verify("derails", Aspect::Green, 12);
-    let mut pinned = verify("pinned", Aspect::Yellow, 10);
+    let same = verify("approved-same", Strength::Prime, 10);
+    let changed_now = verify("approved-changed", Strength::Prime, 10);
+    let changed_then = verify("approved-changed", Strength::Prime, 4);
+    let mut kept = verify("rejected-kept", Strength::Prime, 10);
+    kept.state = RouteState::Extinguished;
+    let mut back = verify("rejected-back", Strength::Prime, 12);
+    back.state = RouteState::Forming;
+    let back_then = verify("rejected-back", Strength::Prime, 5);
+    let ignores = verify("ignores", Strength::Fire, 12);
+    let mut pinned = verify("pinned", Strength::Prime, 10);
     pinned.authored = true;
     let t = make_track(
         NAME,
         "desire-path",
-        vec![lookup(Aspect::Green), same.clone(), changed_now, kept.clone(), back, derails.clone(), pinned.clone()],
+        vec![lookup(Strength::Fire), same.clone(), changed_now, kept.clone(), back, ignores.clone(), pinned.clone()],
     );
     install(
         &w,
@@ -207,28 +207,28 @@ fn populated() -> World {
         &[
             (&same, Decision::Approved),
             (&changed_then, Decision::Approved),
-            (&kept, Decision::Rejected),
-            (&back_then, Decision::Rejected),
-            (&derails, Decision::Approved),
+            (&kept, Decision::Extinguished),
+            (&back_then, Decision::Extinguished),
+            (&ignores, Decision::Approved),
             (&pinned, Decision::Pinned),
         ],
     );
-    let mut imp = lookup(Aspect::Yellow);
-    imp.state = RouteState::Probation;
+    let mut imp = lookup(Strength::Prime);
+    imp.state = RouteState::Forming;
     let mut it = make_track(NAME, "imported:desire-path", vec![imp]);
     it.manifest.track.version = IMPORT_VERSION.into();
     install(&w, "@imported/acme/work-items", &it, &[]);
-    // Six treated sessions leave `derails`; holdout sessions and another repository do not count.
+    // Six treated sessions leave `ignores`; control sessions and another repository do not count.
     for i in 0..6 {
-        w.session(&format!("t{i}"), REPO, "treated", &[("derailed", "derails"), ("followed", "lookup")]);
+        w.session(&format!("t{i}"), REPO, "treated", &[("ignored", "ignores"), ("followed", "lookup")]);
     }
     for i in 0..4 {
-        w.session(&format!("h{i}"), REPO, "holdout", &[("derailed", "approved-same")]);
+        w.session(&format!("h{i}"), REPO, "control", &[("ignored", "approved-same")]);
         w.session(
             &format!("o{i}"),
             "elsewhere",
             "treated",
-            &[("derailed", "approved-same"), ("derailed", "approved-same")],
+            &[("ignored", "approved-same"), ("ignored", "approved-same")],
         );
     }
     w
@@ -242,7 +242,7 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
     let expect: BTreeMap<_, Vec<String>> = [
         (key("@imported/acme/work-items", "lookup"), vec!["imported".to_string()]),
         (key(NAME, "approved-changed"), vec!["changed".into()]),
-        (key(NAME, "derails"), vec!["derailing".into()]),
+        (key(NAME, "ignores"), vec!["ignoring".into()]),
         (key(NAME, "lookup"), vec!["new".into()]),
         (key(NAME, "rejected-back"), vec!["resurfaced".into()]),
     ]
@@ -255,23 +255,23 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
         q["queue"].as_array().unwrap().iter().find(|i| i["track"] == t && i["route"] == r).unwrap().clone()
     };
     let lk = item(NAME, "lookup");
-    assert_eq!(lk["aspect"], "green");
-    assert_eq!(lk["ceiling"], "green");
+    assert_eq!(lk["strength"], "fire");
+    assert_eq!(lk["ceiling"], "fire");
     assert_eq!(lk["effect"], "observe");
-    assert_eq!(lk["decisions"], json!(["approve", "reject", "demote", "pin"]));
+    assert_eq!(lk["decisions"], json!(["approve", "extinguish", "weaken", "pin"]));
     assert_eq!(lk["evidence"]["support"], 20);
     assert_eq!(lk["evidence"]["opportunities"], 20);
     assert!(lk["evidence"]["lower_bound"].as_f64().unwrap() > 0.8);
     assert_eq!(lk["runtime"]["followed"], 6);
     assert_eq!(lk["example_values"]["item"], "W-1234");
     let d = lk["directive"].as_str().unwrap();
-    assert!(d.starts_with("<adage-signal track=\"acme/work-items@0.1.0\" route=\"lookup\" aspect=\"green\">"), "{d}");
+    assert!(d.starts_with("<adage-reflex track=\"acme/work-items@0.1.0\" route=\"lookup\" strength=\"fire\">"), "{d}");
     assert!(d.contains("./scripts/wi-lookup W-1234 --json"), "{d}");
     assert!(d.contains("not requested by the user"), "{d}");
 
-    let dr = item(NAME, "derails");
-    assert_eq!(dr["runtime"]["derailed"], 6, "holdout and other repositories are not counted");
-    assert!(dr["reasons"][0]["detail"].as_str().unwrap().contains("demoting"));
+    let dr = item(NAME, "ignores");
+    assert_eq!(dr["runtime"]["ignored"], 6, "control and other repositories are not counted");
+    assert!(dr["reasons"][0]["detail"].as_str().unwrap().contains("weakening"));
     assert!(item(NAME, "approved-changed")["reasons"][0]["detail"]
         .as_str()
         .unwrap()
@@ -280,11 +280,11 @@ fn queue_lists_each_reason_with_evidence_and_directive() {
 
     let t = w.ok(&["review"]);
     for s in [
-        "5 route(s) await a decision",
+        "5 reflex(es) await a decision",
         "why        new:",
         "Wilson lower bound",
         "example values: item = W-1234",
-        "adage review <approve|reject|demote|pin> acme/work-items lookup",
+        "adage review <approve|extinguish|weaken|pin> acme/work-items lookup",
         "(imported)",
     ] {
         assert!(t.contains(s), "listing lacks {s:?}:\n{t}");
@@ -317,35 +317,35 @@ fn decisions_change_track_files_and_index() {
     assert_eq!(w.track(NAME).manifest.track.version, "0.1.0", "approval alone changes no behaviour");
     assert!(!reasons(&w.queue()).contains_key(&key(NAME, "lookup")));
 
-    // Demote: green → yellow in the file and the index; a major bump.
-    w.ok(&["review", "demote", NAME, "lookup"]);
+    // Weaken: fire → prime in the file and the index; a major bump.
+    w.ok(&["review", "weaken", NAME, "lookup"]);
     let t = w.track(NAME);
-    assert_eq!(t.routes.iter().find(|r| r.id == "lookup").unwrap().aspect, Aspect::Yellow);
+    assert_eq!(t.routes.iter().find(|r| r.id == "lookup").unwrap().strength, Strength::Prime);
     assert_eq!(t.manifest.track.version, "1.0.0");
-    assert_eq!(lookup_in_index(&w).unwrap().aspect, Aspect::Yellow);
+    assert_eq!(lookup_in_index(&w).unwrap().strength, Strength::Prime);
     let rs = review::load(&dir).unwrap();
-    assert_eq!(rs.routes["lookup"].decision, Decision::Demoted);
+    assert_eq!(rs.routes["lookup"].decision, Decision::Weakened);
     assert_eq!(rs.routes["lookup"].by, None, "no name unless the person gives one");
     assert_eq!(rs.routes["lookup"].basis.followed, 6, "judgements so far are the new baseline");
-    let o = w.run(&["review", "demote", NAME, "lookup"]);
-    assert!(!o.status.success() && text(&o).contains("only a green route"), "{}", text(&o));
+    let o = w.run(&["review", "weaken", NAME, "lookup"]);
+    assert!(!o.status.success() && text(&o).contains("only a fire reflex"), "{}", text(&o));
 
-    // Promote: back to green; a minor bump.
-    w.ok(&["review", "promote", NAME, "lookup"]);
-    assert_eq!(lookup_in_index(&w).unwrap().aspect, Aspect::Green);
+    // Strengthen: back to fire; a minor bump.
+    w.ok(&["review", "strengthen", NAME, "lookup"]);
+    assert_eq!(lookup_in_index(&w).unwrap().strength, Strength::Fire);
     assert_eq!(w.track(NAME).manifest.track.version, "1.1.0");
 
-    // Reject: retired, kept in the file, gone from the index.
-    w.ok(&["review", "reject", NAME, "lookup"]);
-    assert_eq!(w.track(NAME).routes.iter().find(|r| r.id == "lookup").unwrap().state, RouteState::Retired);
+    // Reject: extinguished, kept in the file, gone from the index.
+    w.ok(&["review", "extinguish", NAME, "lookup"]);
+    assert_eq!(w.track(NAME).routes.iter().find(|r| r.id == "lookup").unwrap().state, RouteState::Extinguished);
     assert!(lookup_in_index(&w).is_none());
     // A teammate's import of the same route does not slip back in behind the rejection.
     assert!(!w.index().routes.iter().any(|r| r.route.id == "lookup"));
 
-    // Approve a retired route: back in service at probation, never green.
+    // Approve an extinguished route: back in service at forming, never fire.
     w.ok(&["review", "approve", NAME, "lookup"]);
     let r = lookup_in_index(&w).unwrap();
-    assert_eq!((r.state, r.aspect), (RouteState::Probation, Aspect::Yellow));
+    assert_eq!((r.state, r.strength), (RouteState::Forming, Strength::Prime));
 
     // Pin: edit-locked.
     w.ok(&["review", "pin", NAME, "lookup"]);
@@ -364,14 +364,14 @@ fn decisions_change_track_files_and_index() {
 }
 
 #[test]
-fn promotion_never_exceeds_the_effect_ceiling() {
+fn strengthening_never_exceeds_the_effect_ceiling() {
     let w = World::new();
     let gen = route(
         "gen-at-start",
         Trigger::SessionStart,
         Step::Run { command: "make gen".into() },
         Effect::Regenerate,
-        Aspect::Yellow,
+        Strength::Prime,
         10,
         10,
     );
@@ -380,7 +380,7 @@ fn promotion_never_exceeds_the_effect_ceiling() {
         Trigger::AfterEdit { paths: "schema/*.json".into() },
         Step::Run { command: "make gen".into() },
         Effect::Regenerate,
-        Aspect::Yellow,
+        Strength::Prime,
         10,
         10,
     );
@@ -389,20 +389,20 @@ fn promotion_never_exceeds_the_effect_ceiling() {
         Trigger::SessionStart,
         Step::Run { command: "make install".into() },
         Effect::Environment,
-        Aspect::Yellow,
+        Strength::Prime,
         10,
         10,
     );
-    let red = route(
+    let inhibit = route(
         "dead",
         Trigger::SessionStart,
         Step::Avoid { avoid: "pytest".into(), instead: "make test".into(), signature: "ACME_ENV is not set".into() },
         Effect::Verify,
-        Aspect::Red,
+        Strength::Inhibit,
         10,
         10,
     );
-    install(&w, NAME, &make_track(NAME, "desire-path", vec![gen, gen_edit, env, red]), &[]);
+    install(&w, NAME, &make_track(NAME, "desire-path", vec![gen, gen_edit, env, inhibit]), &[]);
     let files = |w: &World| {
         let d = w.track_dir(NAME);
         (
@@ -413,37 +413,37 @@ fn promotion_never_exceeds_the_effect_ceiling() {
     };
     let untouched = files(&w);
     for (id, why) in
-        [("gen-at-start", "ceiling is yellow"), ("env", "ceiling is yellow"), ("dead", "only a yellow route")]
+        [("gen-at-start", "ceiling is prime"), ("env", "ceiling is prime"), ("dead", "only a prime reflex")]
     {
-        let o = w.run(&["review", "promote", NAME, id]);
-        assert!(!o.status.success(), "{id} must not be promoted");
+        let o = w.run(&["review", "strengthen", NAME, id]);
+        assert!(!o.status.success(), "{id} must not be strengthened");
         assert!(text(&o).contains(why), "{id}: {}", text(&o));
     }
     assert_eq!(files(&w), untouched, "a refused decision writes nothing");
     assert!(!w.track_dir(NAME).join(review::FILE).exists());
-    // A regenerate step triggered by an edit may be green.
-    w.ok(&["review", "promote", NAME, "gen-after-edit"]);
-    assert_eq!(w.track(NAME).routes.iter().find(|r| r.id == "gen-after-edit").unwrap().aspect, Aspect::Green);
+    // A regenerate step triggered by an edit may be fire.
+    w.ok(&["review", "strengthen", NAME, "gen-after-edit"]);
+    assert_eq!(w.track(NAME).routes.iter().find(|r| r.id == "gen-after-edit").unwrap().strength, Strength::Fire);
 
-    // Design O2: an import cannot be green without local first-hand evidence.
+    // Design O2: an import cannot be fire without local first-hand evidence.
     let imp_ref = "@imported/acme/imported";
-    let mut imp = lookup(Aspect::Yellow);
-    imp.state = RouteState::Probation;
+    let mut imp = lookup(Strength::Prime);
+    imp.state = RouteState::Forming;
     install(&w, imp_ref, &make_track("acme/imported", "imported:desire-path", vec![imp]), &[]);
-    let o = w.run(&["review", "promote", imp_ref, "lookup"]);
+    let o = w.run(&["review", "strengthen", imp_ref, "lookup"]);
     assert!(!o.status.success() && text(&o).contains("first-hand"), "{}", text(&o));
     // Weak local evidence is not enough.
-    let mut weak = lookup(Aspect::Yellow);
+    let mut weak = lookup(Strength::Prime);
     weak.evidence.support = 3;
     weak.evidence.opportunities = 6;
     weak.evidence.lower_bound = wilson_lower(3, 6);
     install(&w, "acme/local", &make_track("acme/local", "desire-path", vec![weak]), &[]);
-    assert!(!w.run(&["review", "promote", imp_ref, "lookup"]).status.success());
+    assert!(!w.run(&["review", "strengthen", imp_ref, "lookup"]).status.success());
     // Learned here with strong evidence: allowed, and the import keeps its author's version.
-    install(&w, "acme/local", &make_track("acme/local", "desire-path", vec![lookup(Aspect::Green)]), &[]);
-    w.ok(&["review", "promote", imp_ref, "lookup"]);
+    install(&w, "acme/local", &make_track("acme/local", "desire-path", vec![lookup(Strength::Fire)]), &[]);
+    w.ok(&["review", "strengthen", imp_ref, "lookup"]);
     let t = w.track(imp_ref);
-    assert_eq!(t.routes[0].aspect, Aspect::Green);
+    assert_eq!(t.routes[0].strength, Strength::Fire);
     assert_eq!(t.manifest.track.version, "0.1.0");
 }
 
@@ -461,7 +461,7 @@ fn agents_can_list_but_not_decide() {
     let before = snapshot(&w);
     let o = w.cmd(&["review", "--json"]).env("CLAUDECODE", "1").output().unwrap();
     assert!(o.status.success(), "listing is fine for agents: {}", text(&o));
-    for verb in ["approve", "reject", "retire", "demote", "promote", "pin"] {
+    for verb in ["approve", "extinguish", "weaken", "strengthen", "pin"] {
         let o = w.cmd(&["review", verb, NAME, "lookup"]).env("CLAUDECODE", "1").output().unwrap();
         assert!(!o.status.success(), "{verb} ran inside an agent session");
         assert!(text(&o).contains("agent session"), "{verb}: {}", text(&o));
@@ -539,7 +539,7 @@ fn corpus(dir: &Path, n: usize) -> Vec<PathBuf> {
 }
 
 fn learn(w: &World, files: &[PathBuf]) {
-    let mut args = vec!["learn", "--repo", "acme-billing", "--demo", "--transcripts"];
+    let mut args = vec!["condition", "--repo", "acme-billing", "--demo", "--transcripts"];
     args.extend(files.iter().map(|p| p.to_str().unwrap()));
     w.ok(&args);
 }
@@ -554,26 +554,26 @@ fn decisions_survive_relearning() {
     let dead_ends = "acme-billing/learned";
     let work = "acme-billing/learned";
     let dead = w.track(dead_ends).routes.iter().find(|r| r.id.starts_with("dead-end-")).unwrap().clone();
-    assert_eq!(dead.aspect, Aspect::Red);
-    let aspect =
-        |w: &World, t: &str, id: &str| w.track(t).routes.iter().find(|r| r.id == id).map(|r| (r.aspect, r.state));
-    assert_eq!(aspect(&w, work, "lookup-work-item").unwrap().0, Aspect::Green);
-    assert_eq!(aspect(&w, work, "read-linked-files").unwrap().0, Aspect::Yellow);
+    assert_eq!(dead.strength, Strength::Inhibit);
+    let strength =
+        |w: &World, t: &str, id: &str| w.track(t).routes.iter().find(|r| r.id == id).map(|r| (r.strength, r.state));
+    assert_eq!(strength(&w, work, "lookup-work-item").unwrap().0, Strength::Fire);
+    assert_eq!(strength(&w, work, "read-linked-files").unwrap().0, Strength::Prime);
     let q = reasons(&w.queue());
     assert_eq!(q.values().filter(|k| *k == &vec!["new".to_string()]).count(), 4, "every learned route is new: {q:?}");
 
-    w.ok(&["review", "reject", dead_ends, &dead.id]);
-    w.ok(&["review", "demote", work, "lookup-work-item"]);
-    w.ok(&["review", "promote", work, "read-linked-files"]);
+    w.ok(&["review", "extinguish", dead_ends, &dead.id]);
+    w.ok(&["review", "weaken", work, "lookup-work-item"]);
+    w.ok(&["review", "strengthen", work, "read-linked-files"]);
     let versions = |w: &World| w.track(work).manifest.track.version;
     let decided = versions(&w);
 
     // Re-learning the same sessions changes nothing a person decided, and bumps nothing.
     learn(&w, &six);
-    assert_eq!(aspect(&w, dead_ends, &dead.id).unwrap().1, RouteState::Retired);
+    assert_eq!(strength(&w, dead_ends, &dead.id).unwrap().1, RouteState::Extinguished);
     assert!(!w.index().routes.iter().any(|r| r.route.id == dead.id), "a rejected route is never delivered");
-    assert_eq!(aspect(&w, work, "lookup-work-item").unwrap().0, Aspect::Yellow, "a demotion is not reverted");
-    assert_eq!(aspect(&w, work, "read-linked-files").unwrap().0, Aspect::Green, "a promotion is not reverted");
+    assert_eq!(strength(&w, work, "lookup-work-item").unwrap().0, Strength::Prime, "a weakening is not reverted");
+    assert_eq!(strength(&w, work, "read-linked-files").unwrap().0, Strength::Fire, "a strengthening is not reverted");
     assert_eq!(versions(&w), decided);
     let q = reasons(&w.queue());
     assert_eq!(q.len(), 1, "only the untouched finish-line route waits: {q:?}");
@@ -585,26 +585,26 @@ fn decisions_survive_relearning() {
     assert_eq!(std::fs::read(w.track_dir(work).join(review::FILE)).unwrap(), review_file);
 
     // Twice the sessions: the rejected dead end has strengthened materially and comes back at
-    // probation; the promotion is released to what the evidence says; both wait in the queue.
+    // forming; the strengthening is released to what the evidence says; both wait in the queue.
     let twelve = corpus(&w.p("tx"), 12);
     learn(&w, &twelve);
-    assert_eq!(aspect(&w, dead_ends, &dead.id).unwrap(), (Aspect::Red, RouteState::Probation));
+    assert_eq!(strength(&w, dead_ends, &dead.id).unwrap(), (Strength::Inhibit, RouteState::Forming));
     assert!(w.index().routes.iter().any(|r| r.route.id == dead.id));
     assert_eq!(
-        aspect(&w, work, "lookup-work-item").unwrap().0,
-        Aspect::Yellow,
-        "a demotion holds even as evidence grows"
+        strength(&w, work, "lookup-work-item").unwrap().0,
+        Strength::Prime,
+        "a weakening holds even as evidence grows"
     );
-    assert_eq!(aspect(&w, work, "read-linked-files").unwrap().0, Aspect::Yellow);
+    assert_eq!(strength(&w, work, "read-linked-files").unwrap().0, Strength::Prime);
     let q = reasons(&w.queue());
     assert_eq!(q[&key(dead_ends, &dead.id)], vec!["resurfaced".to_string()]);
     assert_eq!(q[&key(work, "lookup-work-item")], vec!["changed".to_string()]);
     assert_eq!(q[&key(work, "read-linked-files")], vec!["changed".to_string()]);
 
     // Rejected again, it stays rejected while the evidence holds.
-    w.ok(&["review", "reject", dead_ends, &dead.id]);
+    w.ok(&["review", "extinguish", dead_ends, &dead.id]);
     learn(&w, &twelve);
-    assert_eq!(aspect(&w, dead_ends, &dead.id).unwrap().1, RouteState::Retired);
+    assert_eq!(strength(&w, dead_ends, &dead.id).unwrap().1, RouteState::Extinguished);
 }
 
 /// Design O11: an environment step is delivered only on a route a person approved. `acme-tracker`
@@ -626,19 +626,19 @@ fn an_environment_step_is_delivered_only_after_approval() {
     let lookup = || w.track(work).routes.into_iter().find(|r| r.id == "lookup-work-item").unwrap();
     let delivered = || w.index().routes.iter().any(|r| r.route.id == "lookup-work-item");
     let l = lookup();
-    assert_eq!((l.effect, l.aspect, l.state), (Effect::Environment, Aspect::Yellow, RouteState::Draft));
-    assert!(!delivered(), "a draft is never delivered");
+    assert_eq!((l.effect, l.strength, l.state), (Effect::Environment, Strength::Prime, RouteState::Nascent));
+    assert!(!delivered(), "a nascent is never delivered");
     let q = w.queue();
     assert_eq!(reasons(&q)[&key(work, "lookup-work-item")], vec!["approval".to_string()], "{q:#}");
 
     w.ok(&["review", "approve", work, "lookup-work-item"]);
-    assert_eq!((lookup().aspect, lookup().state), (Aspect::Yellow, RouteState::Active));
-    assert!(delivered(), "approved, it is delivered (yellow, its ceiling)");
+    assert_eq!((lookup().strength, lookup().state), (Strength::Prime, RouteState::Firm));
+    assert!(delivered(), "approved, it is delivered (prime, its ceiling)");
     assert!(!reasons(&w.queue()).contains_key(&key(work, "lookup-work-item")));
 
     // Re-learning keeps the approval while the step is the one approved.
     learn(&w, &files);
-    assert_eq!(lookup().state, RouteState::Active);
+    assert_eq!(lookup().state, RouteState::Firm);
     assert!(delivered());
 
     // A different command is a different step: it waits for approval again.
@@ -651,7 +651,7 @@ fn an_environment_step_is_delivered_only_after_approval() {
         })
         .collect();
     learn(&w, &other);
-    assert_eq!(lookup().state, RouteState::Draft);
+    assert_eq!(lookup().state, RouteState::Nascent);
     assert!(!delivered());
     assert_eq!(reasons(&w.queue())[&key(work, "lookup-work-item")], vec!["changed".to_string()]);
 }

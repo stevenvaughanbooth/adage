@@ -283,8 +283,8 @@ pub fn auto_eligible(req: &ExecRequest, ctx: &AutoContext) -> Result<(), Vec<Str
     }
     match &req.origin {
         Origin::Local => {}
-        Origin::Pack { trusted: true, probation_passed: true, .. } => {}
-        Origin::Pack { .. } => why.push("the pack's signer is not trusted or it has not passed probation".into()),
+        Origin::Pack { trusted: true, forming_passed: true, .. } => {}
+        Origin::Pack { .. } => why.push("the pack's signer is not trusted or it has not passed forming".into()),
     }
     if !ctx.policy_auto {
         why.push("automatic approval is off (policy exec.auto_approve; off by default until gate G3)".into());
@@ -359,7 +359,7 @@ mod tests {
             (
                 "signer",
                 Box::new(|r| {
-                    r.origin = Origin::Pack { signer: Some("SHA256:x".into()), trusted: true, probation_passed: true }
+                    r.origin = Origin::Pack { signer: Some("SHA256:x".into()), trusted: true, forming_passed: true }
                 }),
             ),
             ("digest", Box::new(|r| r.route_exec_digest = Some("ab".repeat(32)))),
@@ -430,7 +430,7 @@ mod tests {
                 r.contracts.insert("f".into(), ".*".into());
             }),
             Box::new(|r| r.output.mode = OutputMode::Raw),
-            Box::new(|r| r.origin = Origin::Pack { signer: None, trusted: true, probation_passed: false }),
+            Box::new(|r| r.origin = Origin::Pack { signer: None, trusted: true, forming_passed: false }),
             Box::new(|r| r.effect = Effect::Verify),
         ];
         for (i, m) in cases.iter().enumerate() {

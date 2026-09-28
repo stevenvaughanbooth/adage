@@ -14,13 +14,17 @@ const CRATES: &[&str] = &["adage-cli", "adage-hook", "adage-runtime", "adage-sto
 /// (file relative to `crates/`, occurrences, why it is allowed).
 const ALLOWED: &[(&str, usize, &str)] = &[
     // Live learning: at the end of a turn the hook (`adage-hook` → `autolearn::on_turn_end`) may
-    // start `adage learn --auto`, re-executing the adage binary itself, detached. It runs Adage's
+    // start `adage condition --auto`, re-executing the adage binary itself, detached. It runs Adage's
     // own learner over transcripts, never a repository or agent command.
-    ("adage-hook/src/autolearn.rs", 1, "spawns `adage learn` (itself), detached"),
-    // The terminal UI's background jobs: `adage learn` again (itself), from `adage ui`.
-    ("adage-cli/src/ui/jobs.rs", 1, "spawns `adage learn` (itself) from the terminal UI"),
+    ("adage-hook/src/autolearn.rs", 1, "spawns `adage condition` (itself), detached"),
+    // The terminal UI's background jobs: `adage condition` again (itself), from `adage ui`.
+    ("adage-cli/src/ui/jobs.rs", 1, "spawns `adage condition` (itself) from the terminal UI"),
     // `adage ui --demo`: the demo re-runs the adage binary against a throwaway home.
     ("adage-cli/src/ui/demo.rs", 1, "spawns the adage binary (itself) for the demo"),
+    // `adage train`: hands over to the separate adage-train binary (exec on Unix, so nothing is
+    // left running in `adage`). adage-train, not adage, drives the agent sessions, sandboxed, at a
+    // person's request; adage-train is not one of the crates scanned here.
+    ("adage-cli/src/train.rs", 1, "execs the separate adage-train binary for `adage train`"),
     // `adage models download`: fetches a model file with curl, at a person's request.
     ("adage-cli/src/models.rs", 1, "curl for `adage models download`"),
     // Terminal mode switching for the interactive UI (stty on the controlling terminal).

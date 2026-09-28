@@ -87,8 +87,8 @@ fn track() -> Track {
                 contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
             }],
             effect: Effect::Observe,
-            aspect: Aspect::Yellow,
-            state: RouteState::Active,
+            strength: Strength::Prime,
+            state: RouteState::Firm,
             exit: vec![Exit::IntentChanges],
             evidence: Evidence { support: 3, opportunities: 12, days: 1, ..Default::default() },
             authored: false,
@@ -151,7 +151,7 @@ impl World {
     fn repo(&self) -> PathBuf {
         self.p("private/acme-billing")
     }
-    /// An E1 approval with no declared fields: what `adage review allow-exec … --level e1` records
+    /// An E1 approval with no declared fields: what `adage review delegate … --level e1` records
     /// for a plain-text lookup, typed (no `--raw`).
     fn approve(&self) {
         let index = Index::load(&self.p("adage/index.json"));

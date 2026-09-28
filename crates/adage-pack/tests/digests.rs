@@ -1,10 +1,10 @@
 //! Digest stability, as properties: re-serialisation and line endings keep the pack's digests and
-//! closure; every semantic change to a route alters its exec digest; evidence and aspect do not.
+//! closure; every semantic change to a route alters its exec digest; evidence and strength do not.
 
 mod common;
 
 use adage_core::spans::SpanKind;
-use adage_pack::{route_exec_digest, Aspect, Level, Pack, RouteV2, TriggerV2};
+use adage_pack::{route_exec_digest, Level, Pack, RouteV2, Strength, TriggerV2};
 use proptest::prelude::*;
 use std::collections::BTreeMap;
 
@@ -20,12 +20,12 @@ proptest! {
     #![proptest_config(ProptestConfig { cases: 48, .. ProptestConfig::default() })]
 
     #[test]
-    fn evidence_and_aspect_never_change_the_exec_digest(
+    fn evidence_and_strength_never_change_the_exec_digest(
         support in 0u32..10_000,
         opportunities in 0u32..10_000,
         rate in 0.0f64..=1.0,
         synthetic in 0u32..100,
-        yellow in any::<bool>(),
+        prime in any::<bool>(),
         provenance in "[a-z]{1,12}",
     ) {
         let p = sample();
@@ -38,8 +38,8 @@ proptest! {
         e.lower_bound = rate / 2.0;
         e.provenance = provenance;
         e.by_origin = BTreeMap::from([("synthetic".to_string(), synthetic)]);
-        if yellow {
-            r.aspect = Aspect::Yellow;
+        if prime {
+            r.strength = Strength::Prime;
         }
         prop_assert_eq!(route_exec_digest(&r, &p.types), base.clone());
         // The pack stays valid and its closure is unchanged: approvals do not lapse.
@@ -111,5 +111,5 @@ fn the_exec_digest_inlines_types_and_scripts() {
     assert!(json.contains("\"work-item-id\":{\"base\":\"string\""), "{json}");
     assert!(json.contains("\"repo-path-list\":{\"builtin\":\"repo-path-list\"}"), "{json}");
     assert!(json.contains(&format!("\"scripts\":{{\"scripts/wi-lookup\":\"{}\"}}", common::lookup_sha())), "{json}");
-    assert!(!json.contains("evidence") && !json.contains("\"aspect\""), "{json}");
+    assert!(!json.contains("evidence") && !json.contains("\"strength\""), "{json}");
 }

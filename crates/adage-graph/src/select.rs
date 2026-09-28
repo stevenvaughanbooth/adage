@@ -33,7 +33,7 @@
 use crate::events::{EventSession, Level, NodeType, NONE};
 use crate::mine::{self, Db, Item, MineParams, Pattern, Pol};
 use crate::proto::{self, ProtoParams};
-use crate::score::{self, Calibration, Holdout, Rule, ScoreParams, Scored};
+use crate::score::{self, Calibration, HeldOut, Rule, ScoreParams, Scored};
 use adage_core::pattern::Shape;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -195,7 +195,7 @@ pub struct Learned {
     #[serde(skip)]
     pub unselected: Vec<Reflex>,
     /// Every scored candidate's counts by canonical pattern string, selected or not: what
-    /// `stale::verdict` reads for a reflex that was not selected again (Track G §6.3).
+    /// `dormant::verdict` reads for a reflex that was not selected again (Track G §6.3).
     #[serde(skip)]
     pub counts: BTreeMap<String, Counts>,
     #[serde(skip)]
@@ -580,7 +580,7 @@ pub fn select(db: &Db, scored: &[Scored], max: usize) -> Vec<(usize, f64)> {
 }
 
 /// Learn reflexes from `train`; evaluate on `test` (held out) when it is not empty.
-pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) -> (Learned, Option<Holdout>) {
+pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) -> (Learned, Option<HeldOut>) {
     let p = p.resolved();
     let t0 = Instant::now();
     let epoch = proto::build(train, &p.proto);
@@ -644,7 +644,7 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
             .collect(),
         timings: Timings { proto_ms: ms(t0, t1), mine_ms: ms(t1, t2), score_ms: ms(t2, t3), select_ms: ms(t3, t4) },
     };
-    let holdout = (!te.is_empty()).then(|| {
+    let held_out = (!te.is_empty()).then(|| {
         // Every candidate is a calibration pair source; the selected ones are also reported apart.
         let chosen: std::collections::BTreeSet<usize> = kept.iter().map(|k| k.0).collect();
         let rules: Vec<Rule> = scored
@@ -661,9 +661,9 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
             })
             .collect();
         let test_db: Vec<mine::DbSession> = te.iter().map(|s| db.prepare(s)).collect();
-        score::holdout(&db, &rules, &test_db)
+        score::held_out(&db, &rules, &test_db)
     });
-    (learned, holdout)
+    (learned, held_out)
 }
 
 /// Inner folds of the calibration fit.

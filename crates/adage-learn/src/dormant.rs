@@ -2,28 +2,28 @@
 //!
 //! Learning never counts what a directive named as evidence (Design §11, Track G §3.2), so a route
 //! that is delivered and followed starves itself of evidence: nearly every trace where it applies
-//! was exposed to it, and once the transcripts from before it expire only the holdout is left to
+//! was exposed to it, and once the transcripts from before it expire only the control is left to
 //! confirm it. Without this module such a route would fall below the support bar and be dropped,
-//! then be re-learned from the holdout, then dropped again.
+//! then be re-learned from the control, then dropped again.
 //!
 //! **Exposure.** For a route R, the traces where its trigger occurred ([`occurs`]) are split into
 //! the *exposed* ones (a directive they received named what R directs,
 //! [`crate::engine::exposed`]) and the *unsteered* ones. `Evidence::exposed` records the first
 //! count on every learned route.
 //!
-//! **Stale.** A route that was in service but is not found again this run is kept as
-//! `RouteState::Stale` ([`adage_tracks::review::keep_stale`]) when [`verdict`] finds:
+//! **Dormant.** A route that was in service but is not found again this run is kept as
+//! `RouteState::Dormant` ([`adage_tracks::review::keep_dormant`]) when [`verdict`] finds:
 //!
-//! - it is exposed (at least one exposed session), and either at least `cfg.stale_exposure`
+//! - it is exposed (at least one exposed session), and either at least `cfg.dormant_exposure`
 //!   ([`STALE_EXPOSURE`] by default) of the
 //!   sessions where it applies were exposed, or its unsteered support is below `min_support`; and
 //! - there is no contrary evidence: among unsteered sessions ([`probe`]), at least `min_support`
 //!   opportunities with a support rate below `retain_rate` (the bar that keeps an existing route)
 //!   drops it as before.
 //!
-//! Anything else is dropped as before. A person's rejection always wins (it is never kept stale).
-//! Derail flags live in the spools, which learning does not read: they surface in `adage review`,
-//! where retiring the route is the person's call.
+//! Anything else is dropped as before. A person's rejection always wins (it is never kept dormant).
+//! Ignore flags live in the spools, which learning does not read: they surface in `adage review`,
+//! where extinguishing the route is the person's call.
 
 use crate::engine::{exposed, glob_hit};
 use crate::evidence::{argv, runner, shell_join, LearnConfig};
@@ -36,7 +36,7 @@ use adage_tracks::{Route, Step, Trigger};
 use std::collections::BTreeMap;
 
 /// The share of a route's occurrences that must be exposed for its absence to be put down to
-/// exposure alone, whatever its unsteered support. The default of `LearnConfig::stale_exposure`.
+/// exposure alone, whatever its unsteered support. The default of `LearnConfig::dormant_exposure`.
 pub const STALE_EXPOSURE: f64 = 0.5;
 
 /// Where a route's trigger occurred, split by whether the trace was exposed to it.
@@ -278,7 +278,7 @@ fn head_of(command: &str) -> String {
 
 /// Thresholds under which a judgement reports whatever it finds, for [`probe`].
 fn relaxed(cfg: &LearnConfig) -> LearnConfig {
-    LearnConfig { min_support: 1, yellow_rate: 0.0, retain_rate: 0.0, green_lower_bound: f64::INFINITY, ..cfg.clone() }
+    LearnConfig { min_support: 1, prime_rate: 0.0, retain_rate: 0.0, fire_lower_bound: f64::INFINITY, ..cfg.clone() }
 }
 
 /// For a route that was in service and was not found again: `Some(exposed)` to keep it dormant,
@@ -298,7 +298,7 @@ pub fn verdict(r: &Route, sessions: &[&Session], cfg: &LearnConfig, emb: &mut Em
     }
     let share = e.exposed as f64 / (e.exposed + e.unsteered) as f64;
     let thin = p.map_or(e.unsteered, |p| p.support) < cfg.min_support;
-    (share >= cfg.stale_exposure || thin).then_some(e.exposed)
+    (share >= cfg.dormant_exposure || thin).then_some(e.exposed)
 }
 
 /// [`verdict`] from counts alone, with no dispatch on the route's shape: the scorer counts, for a reflex's own pattern, the traces where it occurs only through exposed
@@ -313,5 +313,5 @@ pub fn verdict_counts(exposed: u32, opportunities: u32, support: u32, cfg: &Lear
         return None;
     }
     let share = exposed as f64 / (exposed + opportunities) as f64;
-    (share >= cfg.stale_exposure || support < cfg.min_support).then_some(exposed)
+    (share >= cfg.dormant_exposure || support < cfg.min_support).then_some(exposed)
 }

@@ -1,4 +1,4 @@
-//! Value flow inside `adage learn` (Track G G0–G1).
+//! Value flow inside `adage condition` (Track G G0–G1).
 //!
 //! - [`compute_facts`]: every session's facts (stage S2, `adage_graph::facts`), through the facts
 //!   cache (`$ADAGE_HOME/cache/facts`), in parallel and in session-id order, for
@@ -15,7 +15,7 @@
 //!   contract the type's regex.
 
 use crate::bridge;
-use crate::evidence::{aspect_with_lift, days, median, models, outcome_lift, shell_join, LearnConfig, MaxRank};
+use crate::evidence::{days, median, models, outcome_lift, shell_join, strength_with_lift, LearnConfig, MaxRank};
 use crate::import::Session;
 use adage_core::spans::SpanKind;
 use adage_core::{tokens, vtype, Effect};
@@ -189,10 +189,10 @@ fn route_for(
     // The rate gate, else the outcome-lift path (prime at most).
     let lift = outcome_lift(sessions, &open, &support);
     // A thin slot (two values) forms on outcome lift alone, at prime.
-    let aspect = if thin {
-        crate::evidence::lift_aspect(effect, false, cfg, lift.as_ref())?
+    let strength = if thin {
+        crate::evidence::lift_strength(effect, false, cfg, lift.as_ref())?
     } else {
-        aspect_with_lift(effect, false, n, lb, rate, cfg, "lookup-work-item", lift.as_ref())?
+        strength_with_lift(effect, false, n, lb, rate, cfg, "lookup-work-item", lift.as_ref())?
     };
     Some(Route {
         id: "lookup-work-item".into(),
@@ -205,7 +205,7 @@ fn route_for(
             contract: Contract::Pattern { regex: t.regex.clone() },
         }],
         effect,
-        aspect,
+        strength,
         state: initial_state(effect),
         exit: vec![Exit::IntentChanges],
         evidence: Evidence {
@@ -387,7 +387,7 @@ mod tests {
         let refs: Vec<&Session> = ss.iter().collect();
         let r = lookup_routes(&refs, &cfg());
         assert!(r.iter().all(|r| !matches!(&r.step, Step::Run { command } if command.contains("close"))), "{r:?}");
-        // The view slot is judged on its own evidence: 5 of 10 sessions, yellow at the demo bar.
+        // The view slot is judged on its own evidence: 5 of 10 sessions, prime at the demo bar.
         assert_eq!(r.len(), 1, "{r:?}");
         assert_eq!(r[0].step, Step::Run { command: "gh issue view {item}".into() });
     }
@@ -413,7 +413,7 @@ mod tests {
         let refs: Vec<&Session> = ss.iter().collect();
         let r = lookup_routes(&refs, &LearnConfig::default());
         assert_eq!(r.len(), 1, "the lift path forms the lookup");
-        assert_eq!(r[0].aspect, Aspect::Yellow, "prime at most on lift alone");
+        assert_eq!(r[0].strength, Strength::Prime, "prime at most on lift alone");
         let l = r[0].evidence.outcome_lift.as_ref().expect("evidence records the lift");
         assert_eq!((l.with, l.with_passed, l.without, l.without_passed), (5, 5, 7, 1));
         assert!(r[0].evidence.rate < 0.5);
@@ -423,7 +423,7 @@ mod tests {
         // No lift: the step's takers did no better.
         let flat: Vec<Session> = (0..12).map(|i| ticket_session(i, i < 5, Some(i % 2 == 0))).collect();
         assert!(lookup_routes(&flat.iter().collect::<Vec<_>>(), &LearnConfig::default()).is_empty());
-        // Common enough for the rate bar: green stays possible.
+        // Common enough for the rate bar: fire stays possible.
         let common: Vec<Session> = (0..30).map(|i| ticket_session(i % 12, i < 29, Some(i < 29))).collect();
         let common: Vec<Session> = common
             .into_iter()
@@ -434,7 +434,7 @@ mod tests {
             })
             .collect();
         let r = lookup_routes(&common.iter().collect::<Vec<_>>(), &LearnConfig::default());
-        assert_eq!(r[0].aspect, Aspect::Green);
+        assert_eq!(r[0].strength, Strength::Fire);
     }
 
     #[test]
@@ -463,7 +463,7 @@ mod tests {
         let refs: Vec<&Session> = ss.iter().collect();
         let r = lookup_routes(&refs, &cfg());
         assert_eq!(r.len(), 1, "{r:?}");
-        assert_eq!(r[0].aspect, Aspect::Yellow);
+        assert_eq!(r[0].strength, Strength::Prime);
         let Contract::Pattern { regex } = &r[0].slots[0].contract else { panic!() };
         assert_eq!(regex, "^(?:BIL\\-[0-9]{3,4})$");
         // Without the lift (every trace passed), two values are not enough.

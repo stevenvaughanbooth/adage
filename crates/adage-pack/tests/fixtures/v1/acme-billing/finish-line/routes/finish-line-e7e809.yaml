@@ -8,8 +8,8 @@ step:
   command: make gen
 slots: []
 effect: regenerate
-aspect: green
-state: active
+strength: fire
+state: firm
 exit:
 - when: exploratory_change
 evidence:

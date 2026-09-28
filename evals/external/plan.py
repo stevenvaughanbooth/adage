@@ -33,7 +33,7 @@ import protocol  # noqa: E402
 import stats  # noqa: E402
 
 AGENT = "adage_harbor:AdageClaudeCode"
-ARMS = ("off", "holdout", "adage")
+ARMS = ("off", "control", "adage")
 # ESTIMATED agent cost per trial in USD (list prices, typical SWE-agent turn counts). Not measured.
 PER_TRIAL_USD = {
     "swebenchpro": {"haiku": 0.40, "sonnet": 1.50, "opus": 4.00},
@@ -61,7 +61,7 @@ def parse_dataset(s: str) -> tuple[str, str | None]:
 
 
 def repo_key(suite: str, repo: str) -> str:
-    """The canonical key an index is learned under (adage learn --repo)."""
+    """The canonical key an index is learned under (adage condition --repo)."""
     return f"adage-eval:{suite}/{protocol.repo_slug(repo)}"
 
 
@@ -132,7 +132,7 @@ def agent_config(model: str, arm: str, a, repo: str | None = None, home_repo: st
     kw = {"arm": arm, "disable_web_search": True}
     if a.max_turns:
         kw["max_turns"] = a.max_turns
-    if arm in ("holdout", "adage", "agents-md"):
+    if arm in ("control", "adage", "agents-md"):
         src = home_repo or repo
         kw["adage_home"] = str(Path(a.artifacts).resolve() / f"{protocol.repo_slug(src)}.tgz")
         kw["adage_repo_key"] = repo_key(a.suite, src)
@@ -172,7 +172,7 @@ def build_phases(a, entry: dict, split: dict) -> dict:
                       f"python3 {HERE / 'plan.py'} check-leakage --home {home} --split {a.split} "
                       f"--tasks-dir {a.tasks_dir} --harvest {a.harvest}/{s} --repo {r}")
     freeze.append(f"(cd {a.artifacts} && sha256sum *.tgz > MANIFEST.sha256)   # the frozen artifact; no learning after this")
-    cmds.append(("3. adage learn, one ADAGE_HOME per repository (default thresholds, frozen afterwards)", learn))
+    cmds.append(("3. adage condition, one ADAGE_HOME per repository (default thresholds, frozen afterwards)", learn))
     cmds.append(("4. freeze + leakage check (a finding blocks the eval)", freeze))
     rng = random.Random(a.seed)
     lro = protocol.leave_repo_out(repos, a.seed) if a.leave_repo_out and len(repos) > 1 else {}
@@ -408,7 +408,7 @@ def trial_record(trial: Path, suite: str, idx: dict) -> dict:
         "started_at": res.get("started_at"),
         "exception": (res.get("exception_info") or {}).get("exception_type"),
     }
-    if arm in ("holdout", "adage", "adage-lro") and status == "ok" and rec["adage"]["spool_records"] == 0:
+    if arm in ("control", "adage", "adage-lro") and status == "ok" and rec["adage"]["spool_records"] == 0:
         rec["adage"]["hooks_inert"] = True
     return rec
 

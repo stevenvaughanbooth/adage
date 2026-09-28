@@ -1,7 +1,7 @@
 {
  "adage_is_instincts_only": false,
  "arms": [
-  "holdout",
+  "control",
   "adage",
   "instincts"
  ],
@@ -31,7 +31,7 @@
    "turns_to_first_edit": null
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.0200539,
    "dead_end_hits": 0,
    "file": "sessions/eval-CARE-242-r1-holdout.jsonl",
@@ -82,7 +82,7 @@
    "turns_to_first_edit": 12
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1254295,
    "dead_end_hits": 0,
    "file": "sessions/eval-CARE-242-r2-holdout.jsonl",
@@ -133,7 +133,7 @@
    "turns_to_first_edit": 26
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.08552489999999999,
    "dead_end_hits": 0,
    "file": "sessions/eval-CARE-375-r1-holdout.jsonl",
@@ -184,7 +184,7 @@
    "turns_to_first_edit": 11
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.09502509999999999,
    "dead_end_hits": 0,
    "file": "sessions/eval-CARE-375-r2-holdout.jsonl",
@@ -235,7 +235,7 @@
    "turns_to_first_edit": 9
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.12318230000000001,
    "dead_end_hits": 0,
    "file": "sessions/eval-CARE-633-r1-holdout.jsonl",
@@ -286,7 +286,7 @@
    "turns_to_first_edit": null
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.09597140000000001,
    "dead_end_hits": 0,
    "file": "sessions/eval-CARE-633-r2-holdout.jsonl",

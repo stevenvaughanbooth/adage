@@ -194,8 +194,8 @@ pub fn validate(t: &Track) -> Result<()> {
         let by_edit = matches!(r.trigger, Trigger::AfterEdit { .. });
         match ceiling(r.effect, by_edit) {
             None => bail!("{}: effect {:?} may never be directed", ctx(), r.effect),
-            Some(max) if r.aspect == Aspect::Green && max != Aspect::Green => {
-                bail!("{}: aspect green exceeds the ceiling for {:?}", ctx(), r.effect)
+            Some(max) if r.strength == Strength::Fire && max != Strength::Fire => {
+                bail!("{}: strength fire exceeds the ceiling for {:?}", ctx(), r.effect)
             }
             _ => {}
         }
@@ -238,8 +238,8 @@ pub fn validate(t: &Track) -> Result<()> {
                 if rank(actual) > rank(r.effect) && !inferred_observe(r, command, actual, &table) {
                     bail!("{}: command {:?} is {:?}, but the track declares {:?}", ctx(), command, actual, r.effect);
                 }
-                if r.aspect == Aspect::Red {
-                    bail!("{}: a run step cannot be red", ctx());
+                if r.strength == Strength::Inhibit {
+                    bail!("{}: a run step cannot be inhibit", ctx());
                 }
             }
             Step::ReadBatch { slot, max } => {
@@ -253,8 +253,8 @@ pub fn validate(t: &Track) -> Result<()> {
                 }
             }
             Step::Avoid { avoid, instead, signature } => {
-                if r.aspect != Aspect::Red {
-                    bail!("{}: an avoid step must be red", ctx());
+                if r.strength != Strength::Inhibit {
+                    bail!("{}: an avoid step must be inhibit", ctx());
                 }
                 // `avoid` names one or more failing runners, joined with " / ".
                 if !avoid.split(" / ").all(safe_command) || !safe_command(instead) || !safe_text(signature) {
@@ -291,17 +291,17 @@ pub fn validate(t: &Track) -> Result<()> {
                             r.effect
                         );
                     }
-                    // The aspect is at most the lowest ceiling of its commands.
+                    // The strength is at most the lowest ceiling of its commands.
                     match ceiling(actual, by_edit) {
                         None => bail!("{}: command {:?} may never be directed", ctx(), command),
-                        Some(max) if r.aspect == Aspect::Green && max != Aspect::Green => {
-                            bail!("{}: aspect green exceeds the ceiling of {:?}", ctx(), command)
+                        Some(max) if r.strength == Strength::Fire && max != Strength::Fire => {
+                            bail!("{}: strength fire exceeds the ceiling of {:?}", ctx(), command)
                         }
                         _ => {}
                     }
                 }
-                if r.aspect == Aspect::Red {
-                    bail!("{}: a sequence cannot be red", ctx());
+                if r.strength == Strength::Inhibit {
+                    bail!("{}: a sequence cannot be inhibit", ctx());
                 }
                 if !matches!(
                     r.trigger,
@@ -315,9 +315,9 @@ pub fn validate(t: &Track) -> Result<()> {
             }
             Step::Advise { template, slots } => {
                 crate::advice::check(template, slots, &table).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
-                // Advice directs nothing: yellow, observe, no route slots, and a reactive trigger.
-                if r.aspect != Aspect::Yellow || r.effect != Effect::Observe || !r.slots.is_empty() {
-                    bail!("{}: an advisory step is yellow, observe, with no route slots", ctx());
+                // Advice directs nothing: prime, observe, no route slots, and a reactive trigger.
+                if r.strength != Strength::Prime || r.effect != Effect::Observe || !r.slots.is_empty() {
+                    bail!("{}: an advisory step is prime, observe, with no route slots", ctx());
                 }
                 if !matches!(
                     r.trigger,
@@ -330,9 +330,9 @@ pub fn validate(t: &Track) -> Result<()> {
         if let Some(o) = &r.evidence.origin {
             validate_origin(o).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
         }
-        // An instinct is yellow at most and never a Stop request (Design; docs/instincts.md).
-        if r.is_instinct() && r.aspect != Aspect::Yellow {
-            bail!("{}: an instinct route is yellow", ctx());
+        // An instinct is prime at most and never a Stop request (Design; docs/instincts.md).
+        if r.is_instinct() && r.strength != Strength::Prime {
+            bail!("{}: an instinct route is prime", ctx());
         }
         for k in r.evidence.by_origin.keys() {
             if !safe_id(k.replace('_', "-").as_str()) || k.len() > 32 {
@@ -362,14 +362,14 @@ pub fn validate(t: &Track) -> Result<()> {
             }
             _ => {}
         }
-        // `stale_since` is shown in `adage review` and `adage status`: a plain date or nothing.
-        // (Any state may carry `exposed`; a stale route is delivered at yellow at most whatever
-        // its stored aspect, so a promote decision on one is not refused here.)
-        if let Some(d) = &r.evidence.stale_since {
+        // `dormant_since` is shown in `adage review` and `adage status`: a plain date or nothing.
+        // (Any state may carry `exposed`; a dormant route is delivered at prime at most whatever
+        // its stored strength, so a strengthen decision on one is not refused here.)
+        if let Some(d) = &r.evidence.dormant_since {
             let date = d.len() == 10
                 && d.bytes().enumerate().all(|(i, c)| if i == 4 || i == 7 { c == b'-' } else { c.is_ascii_digit() });
             if !date {
-                bail!("{}: stale_since {:?} is not a YYYY-MM-DD date", ctx(), d);
+                bail!("{}: dormant_since {:?} is not a YYYY-MM-DD date", ctx(), d);
             }
         }
     }

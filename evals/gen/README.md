@@ -34,7 +34,7 @@ each, as ground truth:
 | `finish_line` | `command` (regenerate), `glob`, `signature` | Lookups read a generated module built from `registry/*.csv`. Editing a CSV requires `make gen` / `npm run codegen`; CI (`make check` / `npm run check`) and the hidden checks fail on stale output |
 | `decoy` | `command`, `mode` | A plausible command that is **not** a convention, to measure false routes: `unused_target` (`make bench`), `lookalike_regen` (`make proto`, `npm run gen:docs`: looks like a regenerate step, generates nothing), `lookalike_verify` (a lint that always passes), `legacy_script` (a leftover no-op script). Decoys exit 0 and change nothing |
 | `scope` | `command` (with `{part}`), `glob`, `samples` | python-make only (Track G G3). Three packages under `packages/<name>/`, each with its own suite: after changing one, `make -C packages/<name> check` (declared in `.ci/pipeline.yml`); `make check` covers `tests/` only. `samples` are the package names. Learnable only as a slot bound from the edited path |
-| `env_sync` | `command` (environment), `glob`, `signature` | python-make only (Track G G3). `requirements.txt` pins libraries; `make deps` (an environment step) refreshes `requirements.lock`, and `make check` fails on a stale lock. Adage learns it as a draft (nascent) awaiting review, as the environment ceiling requires |
+| `env_sync` | `command` (environment), `glob`, `signature` | python-make only (Track G G3). `requirements.txt` pins libraries; `make deps` (an environment step) refreshes `requirements.lock`, and `make check` fails on a stale lock. Adage conditions it as a nascent reflex awaiting review, as the environment ceiling requires |
 | `sequence` | `command` (the first step), `steps`, `glob`, `signature` | python-make only (Track G G3); replaces `finish_line`. After editing `registry/*.csv`: `make gen`, then `make check`, in that order (`.ci/pipeline.yml`) |
 
 Every entry also has `id` and `notes`. Dead-end modes, per stack:
@@ -102,7 +102,7 @@ they live, and which become tracker tasks or control tasks.
 | `conventions.scope`, `.env_sync`, `.sequence` | `false` | Track G G3 kinds, python-make only. `sequence` needs `finish_line` and replaces it in `conventions.json`. Left out of the normalised spec when off, so existing bundles keep their bytes |
 | `tasks.scoped`, `.deps` | 3 each when their kind is on, else 0 | At most 3 each; `scoped` needs `scope`, `deps` needs `env_sync` |
 | `id_digits` | the skin's | `[min, max]` digits of item numbers |
-| `id_shape` | `prefix_dash` | Tracker ids: `prefix_dash` (`BIL-1041`), `hash_num` (`#482` in prompts, `482` to the tool), `uuid`, `path_num` (`bil/412`), `branch` (`fix/<word>-<n>`), `mixed` (`BIL-1041` and `#482`, one tool). Left out of the normalised spec when default, so existing bundles keep their bytes. `specs/idshapes.json` covers every shape; `rehearse.py` also writes `holdout.json` (200 fresh ids, 200 near misses) for `adage eval types` |
+| `id_shape` | `prefix_dash` | Tracker ids: `prefix_dash` (`BIL-1041`), `hash_num` (`#482` in prompts, `482` to the tool), `uuid`, `path_num` (`bil/412`), `branch` (`fix/<word>-<n>`), `mixed` (`BIL-1041` and `#482`, one tool). Left out of the normalised spec when default, so existing bundles keep their bytes. `specs/idshapes.json` covers every shape; `rehearse.py` also writes `held_out.json` (200 fresh ids, 200 near misses) for `adage eval types` |
 | `name` | `<stack>-<skin>` | The bundle's name |
 
 A spec is validated before anything is written; a bad one exits 2 with the reason. A suite
@@ -133,7 +133,7 @@ bugs and where, the registry tasks, and the tracker's decoy items.
 **The scorer** copies the task's hidden test into the sandbox, runs the repository's CI command,
 runs the hidden test again explicitly with the scorer's own setup (which satisfies every guard, so
 the result depends on no file the agent could change), removes the test, and checks generated code
-with the pristine generator. `passed` needs CI green, the hidden test seen in the CI output, the
+with the pristine generator. `passed` needs CI fire, the hidden test seen in the CI output, the
 explicit run passing at least as many tests as the file declares, and fresh generated code. Output
 matches the existing scorers' JSON (`passed`, `ci_passed`, `hidden_passed`, `stale_generated`, ...).
 
@@ -170,8 +170,8 @@ pass every task. Node bundles are skipped (not failed) without Node.
 
 `rehearse.py DIR` runs scripted, model-free sessions with the real commands in real copies of each
 sandbox (every task twice, 16 sessions per smoke bundle), writes them as Claude Code transcripts,
-runs `adage learn --demo` on them with an isolated `ADAGE_HOME`, and compares the learned routes
-(read from the track files, so drafts count) with `conventions.json`. The scripted agent explores,
+runs `adage condition --demo` on them with an isolated `ADAGE_HOME`, and compares the learned routes
+(read from the track files, so nascent reflexes count) with `conventions.json`. The scripted agent explores,
 runs decoys (while exploring, and after some code edits), looks items up and reads the listed files,
 applies the reference fix, regenerates after registry edits (sometimes only after CI reports stale
 output), tries the obvious runner and the universal default before the working command in two
@@ -182,15 +182,15 @@ On the smoke suite it recovers 28 of 28 conventions and learns nothing from the 
 | Bundle | Recovered | Notes |
 | --- | --- | --- |
 | py-billing-s11 (env_guard) | 5/5 | |
-| py-clinic-s12 (wrong_runner) | 5/5 | lookup learned as a **draft** (below) |
+| py-clinic-s12 (wrong_runner) | 5/5 | lookup learned as a **nascent** (below) |
 | py-logistics-s13 (env_guard, no instinct violation) | 4/4 | |
 | node-logistics-s21 (path_alias) | 5/5 | dead end learned as `avoid node` (below) |
 | node-billing-s22 (env_guard) | 5/5 | same |
-| node-clinic-s23 (wrong_runner, no instinct violation) | 4/4 | lookup a draft; `avoid node` |
+| node-clinic-s23 (wrong_runner, no instinct violation) | 4/4 | lookup a nascent reflex; `avoid node` |
 
 What the rehearsal shows about Adage's learner, not about the generator:
 
-- **A lookup tool without a read verb in its name is learned as a draft.** `./tools/case CARE-203`
+- **A lookup tool without a read verb in its name is learned as nascent.** `./tools/case CARE-203`
   is classified as an environment-effect command (only names such as `wi-lookup` or `fetch-ticket`
   are classified observe by name), so `lookup-work-item` waits in `adage review` and is not in the
   index until approved. The clinic skin keeps this name on purpose, as a harder variant.
@@ -203,11 +203,11 @@ What the rehearsal shows about Adage's learner, not about the generator:
 
 ### The new kinds (Track G G3)
 
-`rehearse.py DIR` learns with `adage learn`, whose graph engine is the only learner (Track G G5).
+`rehearse.py DIR` learns with `adage condition`, whose graph engine is the only learner (Track G G5).
 It matches routes by shape as well as by stable ids: a dead end announced after its failure
 (`after_failure` → `run`), a finish line delivered as a sequence whose first step it is, and the
 scope, env_sync and sequence kinds (an after-edit route on the convention's glob directing its
-steps; its command with the edited part as a slot; its environment step, as a draft). Routes with a
+steps; its command with the edited part as a slot; its environment step, as nascent). Routes with a
 context trigger are compiled but inert until Track G G4, and are neither expected nor unexpected.
 
 ```bash
@@ -217,7 +217,7 @@ python3 evals/gen/rehearse.py /tmp/gen/newkinds   # recovers every convention
 
 Every smoke and idshapes bundle recovers every convention with no unexpected route, and on
 the newkinds suite (three python-make bundles, 28 sessions each) every convention is recovered,
-env_sync as a draft (`make deps then make check`, awaiting review) and scope as
+env_sync as nascent (`make deps then make check`, awaiting review) and scope as
 `make -C packages/{part} check` after an edit of `packages/**/*.py`. The hand-written miners the
 engine replaced recovered none of the three new kinds there. `adage eval routes <bundle-or-suite>`
 scores the same learned routes with Adage's own convention matcher.
@@ -246,6 +246,6 @@ scores the same learned routes with Adage's own convention matcher.
 | `stacks/` | `base.py` (shared), `python_make.py`, `node_npm.py` |
 | `score.py` | The scorer (copied into each bundle) |
 | `selfcheck.py` | Proves every bundle is sound |
-| `rehearse.py` | Scripted transcripts, `adage learn`, recovered vs expected |
+| `rehearse.py` | Scripted transcripts, `adage condition`, recovered vs expected |
 | `specs/` | `smoke.json` (the suite), `idshapes.json` (tracker id shapes), `newkinds.json` (scope, env_sync and sequence), `example.json` |
 | `test_gen.py` | The tests (`python3 -m unittest discover evals/gen`) |

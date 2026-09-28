@@ -1,4 +1,4 @@
-//! `adage survey`, through the binary, over synthetic Claude Code history in an isolated `HOME`
+//! `adage sense`, through the binary, over synthetic Claude Code history in an isolated `HOME`
 //! (`~/.claude/projects`) and an isolated `ADAGE_HOME`: the report, its redaction, its filters,
 //! and that it writes nothing.
 
@@ -123,10 +123,10 @@ fn history(w: &World) {
 }
 
 #[test]
-fn surveys_history_per_repository_and_writes_nothing() {
+fn senses_history_per_repository_and_writes_nothing() {
     let w = World::new();
     history(&w);
-    let out = w.ok(&["survey", "--demo"]);
+    let out = w.ok(&["sense", "--demo"]);
     for s in [
         "Read-only",
         "7 session(s) in 2 repository(ies)",
@@ -149,10 +149,10 @@ fn surveys_history_per_repository_and_writes_nothing() {
     assert!(!out.contains(&w.home().display().to_string()), "{out}");
     assert!(!out.contains("ghp_"), "{out}");
     assert!(out.contains("notes are in ~/notes.md and the token is [redacted]"), "{out}");
-    assert!(!w.root.join("data").exists(), "the survey writes nothing");
+    assert!(!w.root.join("data").exists(), "`adage sense` writes nothing");
 
     // JSON for tools, with the same content.
-    let v: Value = serde_json::from_str(&w.ok(&["survey", "--json", "--demo"])).unwrap();
+    let v: Value = serde_json::from_str(&w.ok(&["sense", "--json", "--demo"])).unwrap();
     let repos = v["repos"].as_array().unwrap();
     assert_eq!(repos.len(), 2);
     let acme = repos.iter().find(|r| r["repo"] == "acme-billing").unwrap();
@@ -171,28 +171,28 @@ fn surveys_history_per_repository_and_writes_nothing() {
     assert!(!v.to_string().contains("ghp_"));
 
     // Filters: one repository; a recent window drops the old session.
-    let v: Value = serde_json::from_str(&w.ok(&["survey", "--json", "--repo", "other"])).unwrap();
+    let v: Value = serde_json::from_str(&w.ok(&["sense", "--json", "--repo", "other"])).unwrap();
     assert_eq!(v["repos"].as_array().unwrap().len(), 1);
     assert_eq!(v["repos"][0]["repo"], "other");
-    let v: Value = serde_json::from_str(&w.ok(&["survey", "--json", "--since", "30"])).unwrap();
+    let v: Value = serde_json::from_str(&w.ok(&["sense", "--json", "--since", "30"])).unwrap();
     assert_eq!(v["sessions"], 6);
-    assert!(w.run(&["survey", "--since", "soon"]).status.code() == Some(1));
+    assert!(w.run(&["sense", "--since", "soon"]).status.code() == Some(1));
 }
 
 #[test]
 fn candidates_are_compared_with_installed_tracks() {
     let w = World::new();
     history(&w);
-    // After `adage learn`, the survey shows the same routes as installed, not new.
+    // After `adage condition`, `adage sense` shows the same routes as installed, not new.
     let files: Vec<String> = std::fs::read_dir(w.home().join(".claude/projects/-fixture-acme-billing"))
         .unwrap()
         .map(|e| e.unwrap().path().display().to_string())
         .collect();
-    let mut args = vec!["learn", "--demo", "--transcripts"];
+    let mut args = vec!["condition", "--demo", "--transcripts"];
     args.extend(files.iter().map(String::as_str));
     w.ok(&args);
     let before = std::fs::read(w.root.join("data/index.json")).unwrap();
-    let v: Value = serde_json::from_str(&w.ok(&["survey", "--json", "--demo", "--repo", "acme-billing"])).unwrap();
+    let v: Value = serde_json::from_str(&w.ok(&["sense", "--json", "--demo", "--repo", "acme-billing"])).unwrap();
     let statuses: Vec<&str> =
         v["repos"][0]["candidates"].as_array().unwrap().iter().map(|c| c["status"].as_str().unwrap()).collect();
     assert!(!statuses.is_empty() && statuses.iter().all(|s| *s == "installed"), "{statuses:?}");
@@ -202,6 +202,6 @@ fn candidates_are_compared_with_installed_tracks() {
 #[test]
 fn an_empty_history_says_how_to_point_it_elsewhere() {
     let w = World::new();
-    let out = w.ok(&["survey"]);
-    assert!(out.contains("No sessions to survey"), "{out}");
+    let out = w.ok(&["sense"]);
+    assert!(out.contains("No traces to sense"), "{out}");
 }

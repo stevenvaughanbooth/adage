@@ -3,7 +3,7 @@
 Adage's pitch is "agent traces become reflexes". This corpus is the first test of it with nothing
 scripted: 354 real headless Claude Code sessions (`claude -p`, Claude Code 2.1.283) on twelve
 sandbox runs (ten sandboxes, two of them also with a stronger model), 2026-09-28. Every trace came from
-an agent working a task; every reflex below was learned from those traces by `adage learn`; every
+an agent working a task; every reflex below was learned from those traces by `adage condition`; every
 effect was measured on held-out tasks the learner never saw.
 
 **The short version.**
@@ -36,12 +36,12 @@ effect was measured on held-out tasks the learner never saw.
   and the new `confine` mode: every session ran under bubblewrap, seeing only its own run directory, its
   arm's `ADAGE_HOME` and the hook binaries. Tool set pinned with `--tools` (see findings 1 and 2).
 - **Train.** Plain agents with no hooks: 6–12 sessions per sandbox (training tasks x 2–3 repeats).
-- **Learn.** `adage learn --demo` over each sandbox's training transcripts, in an ADAGE_HOME of its own,
-  instincts bound. A second, day-0 home per sandbox: `adage learn --instincts-only` over a fresh sandbox.
+- **Learn.** `adage condition --demo` over each sandbox's training transcripts, in an ADAGE_HOME of its own,
+  instincts bound. A second, day-0 home per sandbox: `adage condition --instincts-only` over a fresh sandbox.
 - **Held out.** Fresh tasks never trained on, 2 repeats, arms randomised per (task, repeat) with a fixed
-  seed: `holdout` (hooks on, directives logged, not delivered: the control), `adage` (reflexes and
+  seed: `control` (hooks on, directives logged, not delivered: the control), `adage` (reflexes and
   instincts delivered) and `instincts` (the day-0 index only). Where nothing was learned the adage index
-  *is* the instincts, so only `holdout` and `adage` ran and that adage arm counts as instincts-only below.
+  *is* the instincts, so only `control` and `adage` ran and that adage arm counts as instincts-only below.
 - **Scored.** Hidden tests (`passed`, `hidden_passed`), plus the runner's metrics. Statistics per
   `evals/live/README.md#statistics`: the task is the unit; CIs resample tasks; p permutes arms within
   tasks; Holm across the metrics of each comparison; the sign-flip test asks whether the effect holds for
@@ -55,10 +55,10 @@ effect was measured on held-out tasks the learner never saw.
 "Conventions found" is `adage eval routes` against each sandbox's `conventions.json`: by the learned
 reflexes alone, by the live index (reflexes + instincts), and by the instincts-only index. Gen
 sandboxes' ground truth was converted to `adage-conventions/1` (their instinct-violation convention
-counts as a dead end; decoys are checked separately). "Drafts" were learned but left awaiting review,
+counts as a dead end; decoys are checked separately). "Nascent reflexes" were learned but left awaiting review,
 so they were never delivered.
 
-| Sandbox | Model | Sessions (train + eval) | Spend | Train pass | Train used lookup | Reflexes learned | Drafts | Conventions found: reflexes / +instincts / instincts only | False routes (reflexes / instincts) | Decoy hits | Pass rate adage vs holdout (diff) | Turns adage vs holdout (diff) |
+| Sandbox | Model | Sessions (train + eval) | Spend | Train pass | Train used lookup | Reflexes learned | Nascent reflexes | Conventions found: reflexes / +instincts / instincts only | False routes (reflexes / instincts) | Decoy hits | Pass rate adage vs control (diff) | Turns adage vs control (diff) |
 | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- | --- | ---: | --- | --- |
 | acme-billing | Haiku 4.5 | 12 + 24 | $3.61 | 4/12 | 3/12 | none | – | 0/4 / 2/4 / 2/4 | 0 / 0 | 0 | 0.58 vs 0.42 (0.17) | 25.5 vs 22.0 (3.5) |
 | harbor-dispatch | Haiku 4.5 | 12 + 36 | $5.30 | 9/12 | 9/12 | work-items/lookup-work-item, work-items/read-linked-files, finish-line/finish-line-04e5d4 | – | 3/4 / 4/4 / 2/4 | 0 / 0 | 0 | 1.00 vs 0.92 (0.08) | 12.0 vs 27.5 (-15.5) |
@@ -82,9 +82,9 @@ Aggregates as the runner defines them (median for turns and times, mean for rate
 `follow_rate` compares arms on routes they were exposed to (would-have directives); its arms see
 different indexes, so read it as "did the agent do what the route says", not as an effect.
 
-**Haiku 4.5, every sandbox: adage vs holdout** (10 sandboxes; 36 tasks; runs adage 72, holdout 72; left out as infra errors adage 0, holdout 0; hit max_turns adage 11, holdout 20)
+**Haiku 4.5, every sandbox: adage vs control** (10 sandboxes; 36 tasks; runs adage 72, control 72; left out as infra errors adage 0, control 0; hit max_turns adage 11, control 20)
 
-| Metric | adage | holdout | diff | 95% CI (tasks) | p | p (Holm) | p (tasks, sign-flip) |
+| Metric | adage | control | diff | 95% CI (tasks) | p | p (Holm) | p (tasks, sign-flip) |
 | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: |
 | pass_rate (avg) | 0.62 | 0.51 | 0.11 | [0.01, 0.21] | 0.152 | 0.760 | 0.073 |
 | hidden_pass_rate (avg) | 0.62 | 0.51 | 0.11 | [0.01, 0.21] | 0.152 | 0.760 | 0.073 |
@@ -97,9 +97,9 @@ different indexes, so read it as "did the agent do what the route says", not as 
 | obligation_met_rate (avg) | 0.14 | 0.18 | -0.04 | [-0.38, 0.31] | 0.894 | 1.000 | 1.000 |
 | follow_rate (avg) | 0.59 | 0.20 | 0.39 | [0.21, 0.44] | 0.000 | 0.001 | 0.000 |
 
-**Haiku 4.5, sandboxes where a reflex was learned: adage vs holdout** (4 sandboxes; 15 tasks; runs adage 30, holdout 30; left out as infra errors adage 0, holdout 0; hit max_turns adage 0, holdout 7)
+**Haiku 4.5, sandboxes where a reflex was learned: adage vs control** (4 sandboxes; 15 tasks; runs adage 30, control 30; left out as infra errors adage 0, control 0; hit max_turns adage 0, control 7)
 
-| Metric | adage | holdout | diff | 95% CI (tasks) | p | p (Holm) | p (tasks, sign-flip) |
+| Metric | adage | control | diff | 95% CI (tasks) | p | p (Holm) | p (tasks, sign-flip) |
 | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: |
 | pass_rate (avg) | 0.87 | 0.83 | 0.03 | [-0.10, 0.17] | 1.000 | 1.000 | 1.000 |
 | hidden_pass_rate (avg) | 0.87 | 0.83 | 0.03 | [-0.10, 0.17] | 1.000 | 1.000 | 1.000 |
@@ -127,9 +127,9 @@ different indexes, so read it as "did the agent do what the route says", not as 
 | obligation_met_rate (avg) | 0.12 | 0.29 | -0.16 | [-0.38, 0.00] | 1.000 | 1.000 | 1.000 |
 | follow_rate (avg) | 0.48 | 0.93 | -0.45 | [-0.39, -0.20] | 0.000 | 0.005 | 0.008 |
 
-**Haiku 4.5, every sandbox: instincts-only (day 0) vs holdout** (10 sandboxes; 36 tasks; runs instincts 72, holdout 72; left out as infra errors instincts 0, holdout 0; hit max_turns instincts 18, holdout 20)
+**Haiku 4.5, every sandbox: instincts-only (day 0) vs control** (10 sandboxes; 36 tasks; runs instincts 72, control 72; left out as infra errors instincts 0, control 0; hit max_turns instincts 18, control 20)
 
-| Metric | instincts | holdout | diff | 95% CI (tasks) | p | p (Holm) | p (tasks, sign-flip) |
+| Metric | instincts | control | diff | 95% CI (tasks) | p | p (Holm) | p (tasks, sign-flip) |
 | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: |
 | pass_rate (avg) | 0.60 | 0.51 | 0.08 | [-0.03, 0.18] | 0.327 | 1.000 | 0.207 |
 | hidden_pass_rate (avg) | 0.60 | 0.51 | 0.08 | [-0.03, 0.18] | 0.327 | 1.000 | 0.207 |
@@ -142,9 +142,9 @@ different indexes, so read it as "did the agent do what the route says", not as 
 | obligation_met_rate (avg) | 0.23 | 0.18 | 0.05 | [-0.33, 0.42] | 1.000 | 1.000 | 1.000 |
 | follow_rate (avg) | 0.95 | 0.20 | 0.75 | [0.48, 0.78] | 0.000 | 0.001 | 0.002 |
 
-**Sonnet 5 slice: adage vs holdout** (2 sandboxes; 12 tasks; runs adage 24, holdout 24; left out as infra errors adage 0, holdout 0; hit max_turns adage 0, holdout 0)
+**Sonnet 5 slice: adage vs control** (2 sandboxes; 12 tasks; runs adage 24, control 24; left out as infra errors adage 0, control 0; hit max_turns adage 0, control 0)
 
-| Metric | adage | holdout | diff | 95% CI (tasks) | p | p (Holm) | p (tasks, sign-flip) |
+| Metric | adage | control | diff | 95% CI (tasks) | p | p (Holm) | p (tasks, sign-flip) |
 | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: |
 | pass_rate (avg) | 1.00 | 0.92 | 0.08 | [0.00, 0.21] | 0.503 | 1.000 | 0.500 |
 | hidden_pass_rate (avg) | 1.00 | 0.92 | 0.08 | [0.00, 0.21] | 0.503 | 1.000 | 0.500 |
@@ -172,9 +172,9 @@ different indexes, so read it as "did the agent do what the route says", not as 
 | obligation_met_rate (avg) | 0.75 | 0.71 | 0.04 | [0.00, 0.17] | 1.000 | 1.000 | 1.000 |
 | follow_rate (avg) | 0.56 | 0.88 | -0.32 | [-0.33, -0.25] | 0.169 | 1.000 | 0.500 |
 
-**Sonnet 5 slice: instincts-only vs holdout** (2 sandboxes; 12 tasks; runs instincts 24, holdout 24; left out as infra errors instincts 0, holdout 0; hit max_turns instincts 0, holdout 0)
+**Sonnet 5 slice: instincts-only vs control** (2 sandboxes; 12 tasks; runs instincts 24, control 24; left out as infra errors instincts 0, control 0; hit max_turns instincts 0, control 0)
 
-| Metric | instincts | holdout | diff | 95% CI (tasks) | p | p (Holm) | p (tasks, sign-flip) |
+| Metric | instincts | control | diff | 95% CI (tasks) | p | p (Holm) | p (tasks, sign-flip) |
 | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: |
 | pass_rate (avg) | 0.96 | 0.92 | 0.04 | [0.00, 0.12] | 1.000 | 1.000 | 1.000 |
 | hidden_pass_rate (avg) | 0.96 | 0.92 | 0.04 | [0.00, 0.12] | 1.000 | 1.000 | 1.000 |
@@ -222,7 +222,7 @@ claims compile). The numbers below are the corpus as run, before these fixes.
    read their own task's hidden test (`gen/.../hidden/test_hidden_bil_7793.py`) and read the runner's
    `state.json` (other sessions' prompts and commands), then "fixed" the ticket from it. The first 62
    sessions were discarded for this. Fixed here: `confine` (bubblewrap) in the runner.
-2. **The harness's own tools derail the task.** Claude Code 2.1.283 exposes `TaskGet`/`TaskList`
+2. **The harness's own tools ignore the task.** Claude Code 2.1.283 exposes `TaskGet`/`TaskList`
    (and Cron*, ToolSearch, ...) even with `--allowedTools`; asked to "pick up W-1042", Haiku called
    `TaskGet W-1042`, found nothing, and asked the user what to do. Fixed: the runner passes `--tools`.
    `adage-train`'s ClaudeCode harness has the same exposure (not changed here).
@@ -233,27 +233,27 @@ claims compile). The numbers below are the corpus as run, before these fixes.
 4. **The instincts arm's decisions were read from the wrong ADAGE_HOME** (the runner always read
    `adage-home`'s spools). Fixed; this corpus re-read them.
 5. **Rarely-used conventions cannot be learned.** `--demo` needs the behaviour in ≥50% of sessions
-   (`yellow_rate`); Haiku used the lookup in 1–3 of 9–12 sessions in six sandboxes, and outcomes do not
+   (`prime_rate`); Haiku used the lookup in 1–3 of 9–12 sessions in six sandboxes, and outcomes do not
    enter the threshold, although across all Haiku training sessions those that used the lookup passed
    40 of 44 and those that did not passed 5 of 52. Nothing was learned there.
 6. **Effect classification by script name decides whether a reflex is ever delivered.** `python3 tools/case {item}`
    (wardline-clinic's lookup, 7/9 sessions, rate 0.78) was classified `environment` and left as a
-   draft, as was node-clinic's `node tools/case {item}`; `python3 scripts/wi-lookup` and `node bin/fetch-incident` were `observe`
-   and active. `adage learn`'s summary lists the draft as `lookup-work-item [yellow]` with no sign it is
-   a draft (it is missing from the index).
+   nascent, as was node-clinic's `node tools/case {item}`; `python3 scripts/wi-lookup` and `node bin/fetch-incident` were `observe`
+   and active. `adage condition`'s summary lists the nascent as `lookup-work-item [prime]` with no sign it is
+   a nascent reflex (it is missing from the index).
 7. **Packs drop the lookup reflex.** `adage share` pins repository scripts only when the repository it
-   runs in has the track's key, but tracks learned with `adage learn --repo <name>` (as the live runner
+   runs in has the track's key, but tracks learned with `adage condition --repo <name>` (as the live runner
    does) have a bare-name key no repository matches, so every lookup reflex was "Not carried: ... pass
    the repository root to pin it (L-ref)". There is no flag to pass it: the message points at nothing.
    Every pack in this corpus carries `read-linked-files` (and finish lines) but not the lookup.
-8. **`adage learn --instincts-only` keys the repository `<name>@<root commit>`, `adage learn --repo <name>`
+8. **`adage condition --instincts-only` keys the repository `<name>@<root commit>`, `adage condition --repo <name>`
    keys it `<name>`**, so the two indexes of one sandbox disagree, and `adage eval routes` (which reads
    the dataset's repo key) scores an instincts-only index as empty unless it is re-keyed.
-9. **E1 prefetch could not be delivered.** (a) `allow-exec --level e1` refuses a plain-text lookup ("no
+9. **E1 prefetch could not be delivered.** (a) `delegate --level e1` refuses a plain-text lookup ("no
    typed output"; the learned route is `node bin/fetch-incident {item}`, not `--json`), so it needs
    `--raw`, which policy must allow. (b) Then every prefetch was withheld at `sandbox`: as root the
    sandbox runs the command as `nobody`, and the repository sat under a mode-700 directory; nothing but
-   the spool says so (`allow-exec` approved it; `exec status` shows a grant). (c) With a world-readable
+   the spool says so (`delegate` approved it; `exec status` shows a grant). (c) With a world-readable
    copy it was withheld at `render`, with no reason given.
 10. **`build_demo.py` redacts the account name as a bare substring.** With HOME=/root it would rewrite
     every "root" in every transcript ("root commit", "rootDir") to "user". It also misses Claude Code's
@@ -285,7 +285,7 @@ cargo build --release -p adage-cli -p adage-exec
 python3 evals/gen/gen.py --suite smoke --out <gen>/smoke; python3 evals/gen/gen.py --suite idshapes --out <gen>/idshapes
 python3 evals/gen/selfcheck.py <gen>/smoke        # and idshapes; harbor's selfcheck needs Node >= 23.6
 # per sandbox: its config (the bundle's config.json, or evals/live/configs/*.json) with
-#   "host_auth": true, "confine": true, "eval": {..., "repeats": 2, "arms": ["holdout", "adage", "instincts"]},
+#   "host_auth": true, "confine": true, "eval": {..., "repeats": 2, "arms": ["control", "adage", "instincts"]},
 #   train repeats 3 (gen) or 2 (acme, harbor), seed 20260928
 python3 evals/live/runner.py <config> train --execute --root <root>
 python3 evals/live/runner.py <config> learn --execute --root <root>

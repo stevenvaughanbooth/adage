@@ -1,7 +1,7 @@
 {
  "adage_is_instincts_only": true,
  "arms": [
-  "holdout",
+  "control",
   "adage"
  ],
  "conventions": "conventions.json",
@@ -30,7 +30,7 @@
    "turns_to_first_edit": null
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.0126792,
    "dead_end_hits": 0,
    "file": "sessions/eval-196-r1-holdout.jsonl",
@@ -64,7 +64,7 @@
    "turns_to_first_edit": 21
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1358783,
    "dead_end_hits": 0,
    "file": "sessions/eval-196-r2-holdout.jsonl",
@@ -98,7 +98,7 @@
    "turns_to_first_edit": null
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.036830499999999995,
    "dead_end_hits": 0,
    "file": "sessions/eval-2565-r1-holdout.jsonl",
@@ -132,7 +132,7 @@
    "turns_to_first_edit": null
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.036931399999999996,
    "dead_end_hits": 0,
    "file": "sessions/eval-2565-r2-holdout.jsonl",
@@ -166,7 +166,7 @@
    "turns_to_first_edit": 29
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1904584,
    "dead_end_hits": 0,
    "file": "sessions/eval-567-r1-holdout.jsonl",
@@ -200,7 +200,7 @@
    "turns_to_first_edit": null
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.0353733,
    "dead_end_hits": 0,
    "file": "sessions/eval-567-r2-holdout.jsonl",

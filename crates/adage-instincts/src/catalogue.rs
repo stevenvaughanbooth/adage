@@ -87,9 +87,9 @@ mod tests {
         sorted.sort();
         sorted.dedup();
         assert_eq!(sorted.len(), ids.len(), "duplicate instinct ids");
-        // Only the P0 set binds now; every instinct is capped at yellow.
+        // Only the P0 set binds now; every instinct is capped at prime.
         for i in &c.instincts {
-            assert_eq!(i.cap, "yellow", "{}", i.id);
+            assert_eq!(i.cap, "prime", "{}", i.id);
             if i.priority == "P1" {
                 assert!(!i.enabled, "{} is P1 and must ship disabled", i.id);
             }

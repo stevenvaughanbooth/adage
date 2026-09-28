@@ -14,7 +14,7 @@ use super::watch::{buffer_text, Sources};
 use super::wizard::{self, Wizard};
 use crate::doctor::{Check, Status};
 use adage_store::{spool, Paths};
-use adage_tracks::Aspect;
+use adage_tracks::Strength;
 use ratatui::backend::TestBackend;
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::style::Color;
@@ -30,8 +30,8 @@ fn rec(k: u64, arm: &str, event: &str, kind: &str, decision: Value) -> Value {
     json!({ "ts": T0 + k * 1000, "event": event, "kind": kind, "arm": arm, "repo": "harbor-dispatch", "generation": "8216e29f00", "decision": decision })
 }
 
-fn directive(route: &str, aspect: &str) -> Value {
-    json!({ "route": route, "track": "harbor-dispatch/incidents", "version": "0.3.0", "aspect": aspect, "text": "…" })
+fn directive(route: &str, strength: &str) -> Value {
+    json!({ "route": route, "track": "harbor-dispatch/incidents", "version": "0.3.0", "strength": strength, "text": "…" })
 }
 
 fn decision(directives: Vec<Value>, would: Vec<Value>, judgements: Vec<Value>, cont: Option<&str>) -> Value {
@@ -41,7 +41,7 @@ fn decision(directives: Vec<Value>, would: Vec<Value>, judgements: Vec<Value>, c
     })
 }
 
-/// A data directory with two treated sessions and a holdout, and a learn.log.
+/// A data directory with two treated sessions and a control, and a learn.log.
 fn fixture(dir: &Path) -> Paths {
     let paths = Paths::at(dir);
     let s = |id: &str| paths.spool(id);
@@ -56,8 +56,8 @@ fn fixture(dir: &Path) -> Paths {
             "UserPromptSubmit",
             "prompt",
             decision(
-                vec![directive("lookup-incident", "green")],
-                vec![directive("lookup-incident", "green")],
+                vec![directive("lookup-incident", "fire")],
+                vec![directive("lookup-incident", "fire")],
                 vec![],
                 None,
             ),
@@ -68,10 +68,10 @@ fn fixture(dir: &Path) -> Paths {
         &s(c),
         &rec(
             1,
-            "holdout",
+            "control",
             "UserPromptSubmit",
             "prompt",
-            decision(vec![], vec![directive("lookup-incident", "green")], vec![], None),
+            decision(vec![], vec![directive("lookup-incident", "fire")], vec![], None),
         ),
     )
     .unwrap();
@@ -83,7 +83,7 @@ fn fixture(dir: &Path) -> Paths {
             "PostToolBatch",
             "batch",
             decision(
-                vec![directive("read-linked-files", "yellow")],
+                vec![directive("read-linked-files", "prime")],
                 vec![],
                 vec![json!({ "kind": "followed", "route": "lookup-incident" })],
                 None,
@@ -99,7 +99,7 @@ fn fixture(dir: &Path) -> Paths {
             "treated",
             "PostToolUseFailure",
             "failure",
-            decision(vec![directive("dead-end-npm-test", "red")], vec![], vec![], None),
+            decision(vec![directive("dead-end-npm-test", "inhibit")], vec![], vec![], None),
         ),
     )
     .unwrap();
@@ -110,7 +110,7 @@ fn fixture(dir: &Path) -> Paths {
             "treated",
             "PostToolBatch",
             "batch",
-            decision(vec![], vec![], vec![json!({ "kind": "derailed", "route": "lookup-incident" })], None),
+            decision(vec![], vec![], vec![json!({ "kind": "ignored", "route": "lookup-incident" })], None),
         ),
     )
     .unwrap();
@@ -118,7 +118,7 @@ fn fixture(dir: &Path) -> Paths {
         &s(c),
         &rec(
             6,
-            "holdout",
+            "control",
             "PostToolBatch",
             "batch",
             decision(vec![], vec![], vec![json!({ "kind": "followed", "route": "lookup-incident" })], None),
@@ -152,7 +152,7 @@ fn fixture(dir: &Path) -> Paths {
         "treated",
         "UserPromptSubmit",
         "prompt",
-        decision(vec![directive("lookup", "green")], vec![], vec![], None),
+        decision(vec![directive("lookup", "fire")], vec![], vec![], None),
     );
     other["repo"] = json!("acme-billing");
     other["harness"] = json!("codex");
@@ -160,11 +160,11 @@ fn fixture(dir: &Path) -> Paths {
     let log = [
         json!({ "ts": T0 - 3_600_000, "sessions_read": 12, "sessions_used": 12, "index_generation": "1a2b3c4d5e", "repos": { "harbor-dispatch": { "sessions": 12, "tracks": [{ "name": "harbor-dispatch/incidents", "version": "0.2.0", "change": "new", "routes": 3 }] } } }).to_string(),
         "not json at all".to_string(),
-        json!({ "ts": T0 + 10_000, "kind": "learn", "trigger": "auto", "repo": "harbor-dispatch", "sessions_read": 25, "sessions_used": 24, "duration_ms": 730, "index_generation": "8216e29f00", "changes": [
-            { "route": "lookup-incident", "track": "harbor-dispatch/incidents", "change": "aspect", "from": "yellow", "to": "green", "summary": "24/25 sessions" },
-            { "route": "dead-end-npm-test", "track": "harbor-dispatch/incidents", "change": "new", "to": "red", "summary": "6/7 sessions" },
+        json!({ "ts": T0 + 10_000, "kind": "condition", "trigger": "auto", "repo": "harbor-dispatch", "sessions_read": 25, "sessions_used": 24, "duration_ms": 730, "index_generation": "8216e29f00", "changes": [
+            { "route": "lookup-incident", "track": "harbor-dispatch/incidents", "change": "strength", "from": "prime", "to": "fire", "summary": "24/25 sessions" },
+            { "route": "dead-end-npm-test", "track": "harbor-dispatch/incidents", "change": "new", "to": "inhibit", "summary": "6/7 sessions" },
         ] }).to_string(),
-        json!({ "ts": T0 + 20_000, "kind": "learn_error", "repo": "harbor-dispatch", "class": "io", "error": "tracks directory is not writable" }).to_string(),
+        json!({ "ts": T0 + 20_000, "kind": "condition_error", "repo": "harbor-dispatch", "class": "io", "error": "tracks directory is not writable" }).to_string(),
     ];
     std::fs::write(paths.learn_log(), log.join("\n") + "\n").unwrap();
     paths
@@ -184,7 +184,7 @@ fn health() -> Health {
             check(
                 "embedding model",
                 Status::Warn,
-                "not installed, so the index's intent routes cannot fire",
+                "not installed, so intent reflexes cannot fire",
                 Some("run `adage models fetch`"),
             ),
             check(
@@ -205,7 +205,7 @@ fn health() -> Health {
         lights: vec![
             Light { label: "adage 0.1.0".into(), lamp: Lamp::Ok },
             Light { label: "hooks cc".into(), lamp: Lamp::Ok },
-            Light { label: "4 routes".into(), lamp: Lamp::Ok },
+            Light { label: "4 reflexes".into(), lamp: Lamp::Ok },
             Light { label: "auto-learn on".into(), lamp: Lamp::Ok },
             Light { label: "no model".into(), lamp: Lamp::Warn },
             Light { label: "fail-open 0".into(), lamp: Lamp::Ok },
@@ -252,38 +252,34 @@ fn render(w: u16, h: u16, f: impl FnOnce(&mut ratatui::Frame)) -> (String, ratat
 
 #[test]
 fn feed_items_say_what_adage_did() {
-    let d = decision(
-        vec![directive("lookup-incident", "green")],
-        vec![directive("lookup-incident", "green")],
-        vec![],
-        None,
-    );
+    let d =
+        decision(vec![directive("lookup-incident", "fire")], vec![directive("lookup-incident", "fire")], vec![], None);
     let i = feed::from_record("s-1", &rec(0, "treated", "UserPromptSubmit", "prompt", d.clone()));
     assert_eq!(
         i.acts,
-        vec![Act::Directed { route: "lookup-incident".into(), aspect: Aspect::Green }],
+        vec![Act::Directed { route: "lookup-incident".into(), strength: Strength::Fire }],
         "would-have is not repeated"
     );
-    assert_eq!((i.event.as_str(), i.harness.as_str(), i.holdout), ("prompt", "claude", false));
+    assert_eq!((i.event.as_str(), i.harness.as_str(), i.control), ("prompt", "claude", false));
     let h = feed::from_record(
         "s-2",
         &rec(
             0,
-            "holdout",
+            "control",
             "UserPromptSubmit",
             "prompt",
-            decision(vec![], vec![directive("x", "yellow")], vec![], Some("r")),
+            decision(vec![], vec![directive("x", "prime")], vec![], Some("r")),
         ),
     );
-    assert_eq!(h.acts, vec![Act::Withheld { route: "x".into(), aspect: Aspect::Yellow }, Act::StopRequest]);
+    assert_eq!(h.acts, vec![Act::Withheld { route: "x".into(), strength: Strength::Prime }, Act::StopRequest]);
     // An older record: no kind, no repo, no harness.
     let old = feed::from_record(
         "s-3",
-        &json!({ "ts": 5, "event": "PostToolUseFailure", "arm": "treated", "decision": { "judgements": [{ "kind": "derailed", "route": "r" }] } }),
+        &json!({ "ts": 5, "event": "PostToolUseFailure", "arm": "treated", "decision": { "judgements": [{ "kind": "ignored", "route": "r" }] } }),
     );
     assert_eq!(
         (old.event.as_str(), old.repo.as_str(), old.acts.clone()),
-        ("failure", "", vec![Act::Derailed("r".into())])
+        ("failure", "", vec![Act::Ignored("r".into())])
     );
     assert!(feed::from_record("s", &json!({})).quiet());
     assert_eq!(feed::short_session("7c1e04d2-11aa-4a31-9f0e-00000000a11c", 6), "00a11c");
@@ -292,41 +288,44 @@ fn feed_items_say_what_adage_did() {
 #[test]
 fn learn_log_reads_both_shapes_and_skips_the_rest() {
     let t = learnlog::parse(
-        &json!({ "ts": T0, "kind": "learn", "trigger": "auto", "repo": "harbor-dispatch", "sessions_read": 25, "sessions_used": 24, "changes": [
-            { "route": "lookup-work-item", "track": "harbor-dispatch/work-items", "change": "aspect", "from": "yellow", "to": "green", "summary": "24/25 sessions" }
+        &json!({ "ts": T0, "kind": "condition", "trigger": "auto", "repo": "harbor-dispatch", "sessions_read": 25, "sessions_used": 24, "changes": [
+            { "route": "lookup-work-item", "track": "harbor-dispatch/work-items", "change": "strength", "from": "prime", "to": "fire", "summary": "24/25 sessions" }
         ] })
         .to_string(),
     );
     assert_eq!(t.len(), 2);
     assert_eq!(t[0].tone, Tone::Run);
     assert_eq!(t[0].text, "auto-learn harbor-dispatch: 24/25 sessions used, 1 change");
-    assert_eq!(t[1].text, "learned harbor-dispatch/work-items: lookup-work-item yellow→green (24/25 sessions)");
-    assert_eq!(t[1].short, "learned work-items: lookup-work-item yellow→green (24/25 sessions)");
-    assert_eq!(t[1].aspect, Some(Aspect::Green));
+    assert_eq!(t[1].text, "conditioned harbor-dispatch/work-items: lookup-work-item prime→fire (24/25 sessions)");
+    assert_eq!(t[1].short, "conditioned work-items: lookup-work-item prime→fire (24/25 sessions)");
+    assert_eq!(t[1].strength, Some(Strength::Fire));
     // `adage_learn::diff`'s summaries: the evidence after the arrow, or the counts alone.
     let t = learnlog::parse(
-        &json!({ "ts": T0, "kind": "learn", "trigger": "manual", "repo": "r", "changes": [
-            { "route": "finish-line-6a01b2", "track": "r/finish-line", "change": "aspect", "from": "yellow", "to": "green",
-              "summary": "finish line route yellow → green (9 of 9 sessions, lower bound 0.70)" },
+        &json!({ "ts": T0, "kind": "condition", "trigger": "manual", "repo": "r", "changes": [
+            { "route": "finish-line-6a01b2", "track": "r/finish-line", "change": "strength", "from": "prime", "to": "fire",
+              "summary": "finish line route prime → fire (9 of 9 sessions, lower bound 0.70)" },
             { "route": "finish-line-6a01b2", "track": "r/finish-line", "change": "evidence", "from": null, "to": null,
-              "summary": "green finish line route evidence 6/8 → 7/8 sessions" },
+              "summary": "fire finish line route evidence 6/8 → 7/8 sessions" },
           ], "repos": { "r": { "tracks": [{ "name": "r/finish-line" }] } } })
         .to_string(),
     );
     assert_eq!(t.len(), 3, "the legacy per-track fields beside `changes` add nothing: {t:?}");
-    assert_eq!(t[0].text, "learn (manual) r: 2 changes");
-    assert_eq!(t[1].text, "learned r/finish-line: finish-line-6a01b2 yellow→green (9 of 9 sessions, lower bound 0.70)");
+    assert_eq!(t[0].text, "condition (manual) r: 2 changes");
+    assert_eq!(
+        t[1].text,
+        "conditioned r/finish-line: finish-line-6a01b2 prime→fire (9 of 9 sessions, lower bound 0.70)"
+    );
     assert_eq!(t[2].text, "evidence r/finish-line: finish-line-6a01b2 6/8 → 7/8 sessions");
-    let e = learnlog::parse(r#"{"ts":1,"kind":"learn_error","trigger":"auto","class":"lock","error":"busy"}"#);
-    assert_eq!((e[0].tone, e[0].text.as_str()), (Tone::Error, "learning failed (lock): busy"));
+    let e = learnlog::parse(r#"{"ts":1,"kind":"condition_error","trigger":"auto","class":"lock","error":"busy"}"#);
+    assert_eq!((e[0].tone, e[0].text.as_str()), (Tone::Error, "conditioning failed (lock): busy"));
     // Missing fields are tolerated; unknown kinds and non-JSON are skipped.
-    assert_eq!(learnlog::parse(r#"{"kind":"learn"}"#)[0].text, "learn");
+    assert_eq!(learnlog::parse(r#"{"kind":"condition"}"#)[0].text, "condition");
     assert!(learnlog::parse(r#"{"kind":"something-else"}"#).is_empty());
     assert!(learnlog::parse("[1,2]").is_empty() && learnlog::parse("garbage").is_empty());
     let old = learnlog::parse(
         r#"{"ts":1,"sessions_read":3,"sessions_used":2,"repos":{"acme":{"tracks":[{"name":"acme/work","version":"0.1.0","change":"new","routes":2}]}}}"#,
     );
-    assert_eq!(old[0].text, "learn: 2/3 sessions used, 1 track(s)");
+    assert_eq!(old[0].text, "condition: 2/3 sessions used, 1 track(s)");
     assert_eq!(old[1].text, "wrote acme/work @ 0.1.0 (new, 2 routes)");
 }
 
@@ -468,12 +467,12 @@ fn watch_frames_at_split_pane_and_wide_sizes() {
     let c = ctx(paths.clone(), true);
     let (small, buf) = render(60, 20, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
     snap("watch-60x20", &small);
-    // Colour carries the aspect: the green directive's text is green.
+    // Colour carries the strength: the fire directive's text is fire.
     let (x, y) = find(&buf, "→ lookup-incident").expect("a directive is shown");
     assert_eq!(buf[(x + 2, y)].fg, Color::Green);
     let (wide, _) = render(110, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
     snap("watch-110x30", &wide);
-    assert!(wide.contains("learned harbor-dispatch/incidents: lookup-incident yellow→green (24/25 sessions)"));
+    assert!(wide.contains("conditioned harbor-dispatch/incidents: lookup-incident prime→fire (24/25 sessions)"));
 
     // All repositories, quiet events hidden, paused.
     let mut live = live;
@@ -490,14 +489,14 @@ fn watch_frames_at_split_pane_and_wide_sizes() {
 }
 
 #[test]
-fn no_color_spells_aspects_out() {
+fn no_color_spells_strengths_out() {
     let d = tempfile::tempdir().unwrap();
     let paths = fixture(d.path());
     let live = live_from(&paths);
     let h = health();
     let c = ctx(paths, false);
     let (text, buf) = render(80, 24, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
-    assert!(text.contains("→ lookup-incident [G]") && text.contains("→ dead-end-npm-test [R]"), "{text}");
+    assert!(text.contains("→ lookup-incident [F]") && text.contains("→ dead-end-npm-test [I]"), "{text}");
     assert!(text.contains("+ adage 0.1.0") && text.contains("! no model"), "{text}");
     for y in 0..buf.area.height {
         for x in 0..buf.area.width {
@@ -515,7 +514,7 @@ fn empty_home_says_what_to_do() {
     assert!(
         text.contains("checking health")
             && text.contains("No hook activity yet")
-            && text.contains("Nothing learned yet"),
+            && text.contains("Nothing conditioned yet"),
         "{text}"
     );
     let (tiny, _) = render(25, 6, |f| view::draw_live(f, f.area(), &live, None, &c, true));
@@ -532,7 +531,7 @@ fn find(buf: &ratatui::buffer::Buffer, needle: &str) -> Option<(u16, u16)> {
     None
 }
 
-fn route_row(id: &str, aspect: Aspect, verbs: Vec<&'static str>, reasons: Vec<(String, String)>) -> RouteRow {
+fn route_row(id: &str, strength: Strength, verbs: Vec<&'static str>, reasons: Vec<(String, String)>) -> RouteRow {
     RouteRow {
         reference: "harbor-dispatch/incidents".into(),
         track: "harbor-dispatch/incidents".into(),
@@ -541,10 +540,10 @@ fn route_row(id: &str, aspect: Aspect, verbs: Vec<&'static str>, reasons: Vec<(S
         imported: false,
         in_index: true,
         id: id.into(),
-        aspect,
-        ceiling: "green".into(),
+        strength,
+        ceiling: "fire".into(),
         effect: "observe".into(),
-        state: "active".into(),
+        state: "firm".into(),
         authored: false,
         trigger: "a prompt names a ticket".into(),
         step: "run `bin/fetch-incident {item}`".into(),
@@ -552,8 +551,8 @@ fn route_row(id: &str, aspect: Aspect, verbs: Vec<&'static str>, reasons: Vec<(S
         opportunities: 25,
         rate: 0.96,
         lower_bound: 0.8,
-        live: LiveCounts { emitted: 3, followed: 2, derailed: 1, met: 0, would_have: 1, unaided: 1, not_reached: 0 },
-        directive: "<adage-signal track=\"harbor-dispatch/incidents@0.3.0\" route=\"lookup-incident\" aspect=\"green\">\nIncidents are looked up with: `bin/fetch-incident INC-12`\n</adage-signal>".into(),
+        live: LiveCounts { emitted: 3, followed: 2, ignored: 1, met: 0, would_have: 1, unaided: 1, not_reached: 0 },
+        directive: "<adage-reflex track=\"harbor-dispatch/incidents@0.3.0\" route=\"lookup-incident\" strength=\"fire\">\nIncidents are looked up with: `bin/fetch-incident INC-12`\n</adage-reflex>".into(),
         verbs,
         reasons,
     }
@@ -577,11 +576,11 @@ fn app_state() -> AppState {
         rows: vec![
             route_row(
                 "lookup-incident",
-                Aspect::Green,
-                vec!["approve", "reject", "demote", "pin"],
-                vec![("new".into(), "learned by `adage learn` and never reviewed".into())],
+                Strength::Fire,
+                vec!["approve", "reject", "weaken", "pin"],
+                vec![("new".into(), "from `adage condition`, never reviewed".into())],
             ),
-            route_row("read-linked-files", Aspect::Yellow, vec!["approve", "reject", "promote", "pin"], vec![]),
+            route_row("read-linked-files", Strength::Prime, vec!["approve", "reject", "strengthen", "pin"], vec![]),
         ],
     }));
     s
@@ -611,8 +610,8 @@ fn review_keys_confirm_and_respect_the_verbs_that_apply() {
     let none = KeyModifiers::NONE;
     assert!(matches!(s.key(KeyCode::Char('2'), none), Some(Cmd::Want(app::WantKind::Routes))));
     assert_eq!(s.tab, Tab::Routes);
-    // Promote is not open to a green route: a message, no command.
-    assert!(s.key(KeyCode::Char('p'), none).is_none());
+    // Strengthen is not open to a fire reflex: a message, no command.
+    assert!(s.key(KeyCode::Char('s'), none).is_none());
     assert!(matches!(&s.modal, Some(Modal::Message { error: true, .. })));
     assert!(s.key(KeyCode::Esc, none).is_none() && s.modal.is_none());
     // Approve asks first; n cancels, y confirms with the same arguments `adage review` takes.
@@ -620,12 +619,12 @@ fn review_keys_confirm_and_respect_the_verbs_that_apply() {
     assert!(matches!(&s.modal, Some(Modal::Confirm { .. })));
     assert!(s.key(KeyCode::Char('n'), none).is_none() && s.modal.is_none());
     s.key(KeyCode::Down, none);
-    s.key(KeyCode::Char('p'), none);
+    s.key(KeyCode::Char('s'), none);
     match s.key(KeyCode::Char('y'), none) {
         Some(Cmd::Do(app::Action::Review { verb, reference, route })) => {
             assert_eq!(
                 (verb, reference.as_str(), route.as_str()),
-                ("promote", "harbor-dispatch/incidents", "read-linked-files")
+                ("strengthen", "harbor-dispatch/incidents", "read-linked-files")
             )
         }
         _ => panic!("expected a review command"),
@@ -697,7 +696,7 @@ fn wizard_walks_every_step() {
     assert!(matches!(w.key(KeyCode::Char('y'), none), Some(wizard::Cmd::Learn)));
     // The learn ran and showed its output; any answer moves on.
     w.steps[w.cur].status = wizard::StepStatus::Done("12 sessions read".into());
-    w.output = vec!["adage learn: 12 sessions read".into()];
+    w.output = vec!["adage condition: 12 sessions read".into()];
     w.key(KeyCode::Enter, none);
     assert!(matches!(w.key(KeyCode::Char('y'), none), Some(wizard::Cmd::AutoLearn)));
     assert!(matches!(w.advance(wizard::StepStatus::Done("learn.auto = true".into())), Some(wizard::Cmd::Finish)));
@@ -708,7 +707,7 @@ fn wizard_walks_every_step() {
     snap("wizard-summary", &text);
     let report = w.report().join("\n");
     assert!(
-        report.contains("– Hooks: claude-code: skipped") && report.contains("✓ First learn: 12 sessions read"),
+        report.contains("– Hooks: claude-code: skipped") && report.contains("✓ First conditioning: 12 sessions read"),
         "{report}"
     );
     assert!(report.contains("adage watch"));

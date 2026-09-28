@@ -293,7 +293,7 @@ class Stack:
             out.append({"id": "env-sync", "kind": "env_sync", "command": self.deps_cmd, "glob": "requirements.txt",
                         "signature": self.deps_signature(),
                         "notes": f"After changing requirements.txt, run {self.deps_cmd} to refresh requirements.lock; "
-                                 f"{self.verify_cmd} fails on a stale lock. An environment step: a draft until a "
+                                 f"{self.verify_cmd} fails on a stale lock. An environment step: nascent until a "
                                  f"person approves it."})
         if c.finish_line and not c.sequence:
             out.append({"id": "finish-line", "kind": "finish_line", "command": self.regen_cmd, "glob": "registry/*.csv",
@@ -372,7 +372,7 @@ class Stack:
                                f"tracker tasks",
                 **base, "prompts": list(self.skin.prompts),
                 "train": {"tasks": split(("bugfix", "registry"), "train"), "repeats": 2},
-                "eval": {"tasks": split(("bugfix", "registry"), "eval"), "repeats": 3, "arms": ["holdout", "adage"]},
+                "eval": {"tasks": split(("bugfix", "registry"), "eval"), "repeats": 3, "arms": ["control", "adage"]},
                 "budget_usd": 20.0,
             }
         if split(("control",), "train") and split(("control",), "eval"):
@@ -382,7 +382,7 @@ class Stack:
                                f"exercise no task convention (the brief is written to BRIEF.md)",
                 **base, "prompts": list(BRIEF_PROMPTS),
                 "train": {"tasks": split(("control",), "train"), "repeats": 2},
-                "eval": {"tasks": split(("control",), "eval"), "repeats": 3, "arms": ["holdout", "adage"]},
+                "eval": {"tasks": split(("control",), "eval"), "repeats": 3, "arms": ["control", "adage"]},
                 "budget_usd": 10.0,
             }
         return out

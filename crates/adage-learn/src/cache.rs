@@ -1,7 +1,7 @@
 //! Per-transcript parse cache: `$ADAGE_HOME/cache/sessions/`.
 //!
 //! Parsing a transcript (JSON lines, then every shell command through tree-sitter and the command
-//! table) is most of what `adage learn` costs. Transcripts only grow, and most never change again,
+//! table) is most of what `adage condition` costs. Transcripts only grow, and most never change again,
 //! so a parse is kept and reused while the file is the same:
 //!
 //! - `manifest.json` maps each transcript path to its size and modification time when parsed, the

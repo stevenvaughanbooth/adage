@@ -1,4 +1,4 @@
-//! `adage learn`: import sessions, learn reflexes (the graph engine, [`engine`]), assemble one
+//! `adage condition`: import sessions, learn reflexes (the graph engine, [`engine`]), assemble one
 //! versioned track per repository (`<repo>/learned`), bind instincts, compile the index.
 
 pub mod bridge;
@@ -6,6 +6,7 @@ pub mod cache;
 pub mod claims;
 pub mod codex;
 pub mod diff;
+pub mod dormant;
 pub mod effects;
 pub mod engine;
 pub mod evidence;
@@ -13,7 +14,6 @@ pub mod graph;
 pub mod import;
 pub mod instincts;
 pub mod opencode;
-pub mod stale;
 
 use adage_core::CommandTable;
 use adage_intent::model::StaticModel;
@@ -103,7 +103,7 @@ pub(crate) fn bump(prev: Option<&Track>, routes: &[Route]) -> (String, String) {
             }
             t => t.clone(),
         };
-        (r.id.clone(), serde_json::to_string(&(&trigger, &r.step, &r.slots, &r.aspect)).unwrap_or_default())
+        (r.id.clone(), serde_json::to_string(&(&trigger, &r.step, &r.slots, &r.strength)).unwrap_or_default())
     };
     let old: BTreeMap<_, _> = p.routes.iter().map(shape).collect();
     let new: BTreeMap<_, _> = routes.iter().map(shape).collect();
@@ -128,7 +128,7 @@ pub const TRACK: &str = "learned";
 
 /// Track directories earlier learners wrote, one per route kind. A learn run folds their routes,
 /// review decisions and proposals into [`TRACK`] (ids are unchanged) and removes them.
-pub const RETIRED_TRACKS: [&str; 5] = ["work-items", "finish-line", "dead-ends", "intents", "graph"];
+pub const LEGACY_TRACKS: [&str; 5] = ["work-items", "finish-line", "dead-ends", "intents", "graph"];
 
 /// One track as a learn run would write it, with the proposals it would record for pinned routes.
 #[derive(Debug, Clone)]
@@ -137,12 +137,12 @@ pub struct Planned {
     pub track: Track,
     pub proposals: Proposals,
     /// Decisions to save beside the track (`review.yaml`), when learning made one itself (an
-    /// instinct retired automatically).
+    /// instinct extinguished automatically).
     pub reviews: Option<adage_tracks::review::Reviews>,
     /// Why each learned route exists (`.why.json`, for people; never rendered to the agent).
     pub why: Option<BTreeMap<String, adage_tracks::why::Why>>,
-    /// Track directories this one replaces ([`RETIRED_TRACKS`]), removed once it is written.
-    pub retire: Vec<PathBuf>,
+    /// Track directories this one replaces ([`LEGACY_TRACKS`]), removed once it is written.
+    pub replaces: Vec<PathBuf>,
 }
 
 impl Planned {
@@ -156,7 +156,7 @@ impl Planned {
         if let Some(w) = &self.why {
             adage_tracks::why::save(&self.dir, w)?;
         }
-        for d in &self.retire {
+        for d in &self.replaces {
             std::fs::remove_dir_all(d)?;
         }
         Ok(())
@@ -175,7 +175,7 @@ pub fn read_session(path: &Path, table: &CommandTable, repo_override: Option<&st
     }
 }
 
-/// `adage learn`: import sessions, mine routes, write tracks, compile the index.
+/// `adage condition`: import sessions, mine routes, write tracks, compile the index.
 pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &LearnConfig) -> Result<Report> {
     let table = CommandTable::load();
     let mut sessions: Vec<Session> = Vec::new();
@@ -257,14 +257,11 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
 }
 
 fn thresholds(cfg: &LearnConfig) -> String {
-    format!(
-        "min_support={} green_lower_bound={} yellow_rate={}",
-        cfg.min_support, cfg.green_lower_bound, cfg.yellow_rate
-    )
+    format!("min_support={} fire_lower_bound={} prime_rate={}", cfg.min_support, cfg.fire_lower_bound, cfg.prime_rate)
 }
 
-/// The dry run of `adage learn`: everything it would mine, reconcile, and version from these
-/// sessions against the tracks installed under `tracks_root`, with nothing written. `adage survey`
+/// The dry run of `adage condition`: everything it would mine, reconcile, and version from these
+/// sessions against the tracks installed under `tracks_root`, with nothing written. `adage sense`
 /// shows these as candidates. `sessions_read`, `sessions_steered` and `index_generation` are left
 /// to the caller; sessions without steps are ignored.
 pub fn plan(
@@ -299,14 +296,14 @@ pub fn plan(
         let dir = repo_dir.join(TRACK);
         // What was learned before: this track, or the per-kind tracks of an earlier learner (their
         // routes, decisions and proposals are folded in; the ids are the same).
-        let retire: Vec<PathBuf> = if dir.exists() {
+        let replaces: Vec<PathBuf> = if dir.exists() {
             Vec::new()
         } else {
-            RETIRED_TRACKS.iter().map(|t| repo_dir.join(t)).filter(|d| d.is_dir()).collect()
+            LEGACY_TRACKS.iter().map(|t| repo_dir.join(t)).filter(|d| d.is_dir()).collect()
         };
-        let prev = match retire.is_empty() {
+        let prev = match replaces.is_empty() {
             true => io::read(&dir).ok(),
-            false => fold_tracks(&retire, &name),
+            false => fold_tracks(&replaces, &name),
         };
         // Hysteresis: routes that already exist keep a lower bar.
         let mut cfg = cfg.clone();
@@ -329,10 +326,10 @@ pub fn plan(
         let mut why: BTreeMap<String, adage_tracks::why::Why> =
             run.routes.iter().map(|j| (j.route.id.clone(), j.why.clone())).collect();
         if !(routes.is_empty() && prev.is_none()) {
-            let mut emb = stale::Embeddings::new(model.as_ref());
+            let mut emb = dormant::Embeddings::new(model.as_ref());
             // The traces each route could not learn from: a directive they received named it.
             for r in routes.iter_mut() {
-                r.evidence.exposed = stale::exposure(r, ss, &mut emb).exposed;
+                r.evidence.exposed = dormant::exposure(r, ss, &mut emb).exposed;
             }
             // Human-edited routes are preserved; learning never overwrites them. Where its own
             // version differs materially, it is proposed in `adage review` instead.
@@ -347,7 +344,7 @@ pub fn plan(
             }
             // A person's decisions in `adage review` hold across re-learning (review.yaml). If they
             // cannot be read, leave the track as it is rather than silently undo them.
-            let from: Vec<PathBuf> = if retire.is_empty() { vec![dir.clone()] } else { retire.clone() };
+            let from: Vec<PathBuf> = if replaces.is_empty() { vec![dir.clone()] } else { replaces.clone() };
             let reviews = match fold_reviews(&from) {
                 Ok(r) => r,
                 Err(e) => {
@@ -364,14 +361,14 @@ pub fn plan(
             let routes =
                 adage_tracks::review::reconcile_with(prev.as_ref(), &reviews, routes, cfg.material_lower_bound);
             // A route in service that was not found again only because it steered the traces that
-            // would confirm it is kept, dormant, on its last evidence (E1; `stale`): judged on the
+            // would confirm it is kept, dormant, on its last evidence (E1; `dormant`): judged on the
             // scorer's counts for its own pattern (its `why`), else on the traces.
             let prev_why: BTreeMap<String, adage_tracks::why::Why> =
                 from.iter().flat_map(|d| adage_tracks::why::load(d)).collect();
-            let mut emb = stale::Embeddings::new(model.as_ref());
-            let mut routes = adage_tracks::review::keep_stale(prev.as_ref(), &reviews, routes, &today, |p| {
+            let mut emb = dormant::Embeddings::new(model.as_ref());
+            let mut routes = adage_tracks::review::keep_dormant(prev.as_ref(), &reviews, routes, &today, |p| {
                 engine::verdict(prev_why.get(&p.id), &run.counts, cfg)
-                    .unwrap_or_else(|| stale::verdict(p, ss, cfg, &mut emb))
+                    .unwrap_or_else(|| dormant::verdict(p, ss, cfg, &mut emb))
             });
             routes.sort_by(|a, b| a.id.cmp(&b.id));
             // Learned routes are built from untrusted session content. One that fails validation
@@ -429,7 +426,7 @@ pub fn plan(
                     proposals.routes.keys().map(|id| format!("{id}: pinned; a change is proposed in `adage review`")),
                 );
                 rr.tracks.push(TrackReport { name: name.clone(), version, change, routes: lines });
-                planned.push(Planned { dir: dir.clone(), track, proposals, reviews: None, why: Some(why), retire });
+                planned.push(Planned { dir: dir.clone(), track, proposals, reviews: None, why: Some(why), replaces });
             }
         }
         // Instincts, after learning and review: bound from the repository's own files, with
@@ -454,14 +451,14 @@ pub fn plan(
     Ok((report, planned))
 }
 
-/// One route in `adage learn`'s summary: its id and strength, and, for a reflex that is not
-/// delivered yet, what it waits for and how to decide it (docs/lexicon.md: a draft is *nascent*).
+/// One route in `adage condition`'s summary: its id and strength, and, for a reflex that is not
+/// delivered yet, what it waits for and how to decide it (docs/lexicon.md: a nascent is *nascent*).
 /// A reflex that formed on outcome lift alone says so.
 pub fn route_line(track: &str, r: &Route) -> String {
-    let strength = match r.aspect {
-        adage_tracks::Aspect::Green => "fire",
-        adage_tracks::Aspect::Yellow => "prime",
-        adage_tracks::Aspect::Red => "inhibit",
+    let strength = match r.strength {
+        adage_tracks::Strength::Fire => "fire",
+        adage_tracks::Strength::Prime => "prime",
+        adage_tracks::Strength::Inhibit => "inhibit",
     };
     let mut s = format!("{} [{}]", r.id, strength);
     if let Some(l) = &r.evidence.outcome_lift {
@@ -473,7 +470,7 @@ pub fn route_line(track: &str, r: &Route) -> String {
     if r.evidence.effect_evidence.is_some() {
         s.push_str(" (observe, from the traces)");
     }
-    if r.state == adage_tracks::RouteState::Draft {
+    if r.state == adage_tracks::RouteState::Nascent {
         s.push_str(&format!(
             " NASCENT: not delivered until a person approves it; review with `adage review`, then `adage review approve {track} {}`",
             r.id
@@ -532,7 +529,7 @@ pub fn is_prompt_route(r: &Route) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use adage_tracks::{Aspect, Evidence, RouteState, Step};
+    use adage_tracks::{Evidence, RouteState, Step, Strength};
 
     #[test]
     fn the_summary_marks_nascent_reflexes_and_says_how_to_review_them() {
@@ -543,8 +540,8 @@ mod tests {
             step: Step::Run { command: "python3 tools/case {item}".into() },
             slots: vec![],
             effect: adage_core::Effect::Environment,
-            aspect: Aspect::Yellow,
-            state: RouteState::Draft,
+            strength: Strength::Prime,
+            state: RouteState::Nascent,
             exit: vec![],
             evidence: Evidence::default(),
             authored: false,
@@ -552,8 +549,8 @@ mod tests {
         let line = route_line("clinic/work-items", &r);
         assert!(line.starts_with("lookup-work-item [prime] NASCENT: not delivered"), "{line}");
         assert!(line.contains("`adage review approve clinic/work-items lookup-work-item`"), "{line}");
-        r.state = RouteState::Active;
-        r.aspect = Aspect::Green;
+        r.state = RouteState::Firm;
+        r.strength = Strength::Fire;
         assert_eq!(route_line("clinic/work-items", &r), "lookup-work-item [fire]");
     }
 }

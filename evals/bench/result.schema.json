@@ -70,24 +70,24 @@
       "properties": {
         "runtime": {
           "type": "object",
-          "required": ["follow_window", "max_directives_per_session", "max_directives_per_decision", "max_stop_requests", "history", "holdout_share"],
+          "required": ["follow_window", "max_directives_per_session", "max_directives_per_decision", "max_stop_requests", "history", "control_share"],
           "properties": {
             "follow_window": { "type": "integer", "minimum": 1 },
             "max_directives_per_session": { "type": "integer", "minimum": 1 },
             "max_directives_per_decision": { "type": "integer", "minimum": 1 },
             "max_stop_requests": { "type": "integer", "minimum": 0 },
             "history": { "type": "integer", "minimum": 1 },
-            "holdout_share": { "type": "number", "minimum": 0, "maximum": 1 }
+            "control_share": { "type": "number", "minimum": 0, "maximum": 1 }
           },
           "additionalProperties": false
         },
         "learn": {
           "type": "object",
-          "required": ["min_support", "green_lower_bound", "yellow_rate", "retain_rate", "dead_end_consistency", "dead_end_signatures", "finish_line_contrast", "intent_ubiquitous", "intent_contrast", "material_lower_bound", "stale_exposure"],
+          "required": ["min_support", "fire_lower_bound", "prime_rate", "retain_rate", "dead_end_consistency", "dead_end_signatures", "finish_line_contrast", "intent_ubiquitous", "intent_contrast", "material_lower_bound", "dormant_exposure"],
           "properties": {
             "min_support": { "type": "integer", "minimum": 1 },
-            "green_lower_bound": { "type": "number", "minimum": 0, "maximum": 1 },
-            "yellow_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "fire_lower_bound": { "type": "number", "minimum": 0, "maximum": 1 },
+            "prime_rate": { "type": "number", "minimum": 0, "maximum": 1 },
             "retain_rate": { "type": "number", "minimum": 0, "maximum": 1 },
             "dead_end_consistency": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 2, "maxItems": 2 },
             "dead_end_signatures": { "type": "integer", "minimum": 1 },
@@ -95,7 +95,7 @@
             "intent_ubiquitous": { "type": "number", "minimum": 0, "maximum": 1 },
             "intent_contrast": { "type": "number", "minimum": 0, "maximum": 1 },
             "material_lower_bound": { "type": "number", "minimum": 0, "maximum": 1 },
-            "stale_exposure": { "type": "number", "minimum": 0, "maximum": 1 }
+            "dormant_exposure": { "type": "number", "minimum": 0, "maximum": 1 }
           },
           "additionalProperties": false
         }

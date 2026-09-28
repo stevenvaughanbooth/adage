@@ -15,7 +15,7 @@ use adage_core::spans::{self, SpanKind};
 use adage_core::tools::normalize_tool;
 use adage_core::{repo, CommandTable};
 use adage_tracks::context::CtxNet;
-use adage_tracks::{interlock, Aspect, Contract, Index, IndexedRoute, Route, SlotSource, Step, Trigger};
+use adage_tracks::{interlock, Contract, Index, IndexedRoute, Route, SlotSource, Step, Strength, Trigger};
 pub use context::CtxState;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -34,15 +34,15 @@ const HISTORY: usize = adage_tracks::params::HISTORY;
 pub enum Arm {
     #[default]
     Treated,
-    Holdout,
+    Control,
 }
 
 /// Deterministic experiment assignment (Architecture A12): stable per session, reproducible.
-pub fn assign_arm(session: &str, holdout_share: f64) -> Arm {
+pub fn assign_arm(session: &str, control_share: f64) -> Arm {
     let h = Sha256::digest(format!("adage-arm:{session}").as_bytes());
     let x = u32::from_le_bytes([h[0], h[1], h[2], h[3]]) as f64 / u32::MAX as f64;
-    if x < holdout_share {
-        Arm::Holdout
+    if x < control_share {
+        Arm::Control
     } else {
         Arm::Treated
     }
@@ -50,18 +50,18 @@ pub fn assign_arm(session: &str, holdout_share: f64) -> Arm {
 
 /// The arm a session gets, and its **propensity**: the probability that assignment gave it that
 /// arm, recorded in every spool record for inverse-propensity weighting later (Design §11, §14.1).
-/// With the holdout share `h` (clamped to 0..=1): `h` for the holdout arm, `1 - h` for the
-/// treated arm. An arm forced with `ADAGE_ARM` (`forced` = `treated` or `holdout`) was not drawn:
+/// With the control share `h` (clamped to 0..=1): `h` for the control arm, `1 - h` for the
+/// treated arm. An arm forced with `ADAGE_ARM` (`forced` = `treated` or `control`) was not drawn:
 /// its propensity is 1. Any other `forced` value is ignored.
-pub fn assign(session: &str, holdout_share: f64, forced: Option<&str>) -> (Arm, f64) {
+pub fn assign(session: &str, control_share: f64, forced: Option<&str>) -> (Arm, f64) {
     match forced {
-        Some("holdout") => return (Arm::Holdout, 1.0),
+        Some("control") => return (Arm::Control, 1.0),
         Some("treated") => return (Arm::Treated, 1.0),
         _ => {}
     }
-    let h = if holdout_share.is_nan() { 0.0 } else { holdout_share.clamp(0.0, 1.0) };
-    match assign_arm(session, holdout_share) {
-        Arm::Holdout => (Arm::Holdout, h),
+    let h = if control_share.is_nan() { 0.0 } else { control_share.clamp(0.0, 1.0) };
+    match assign_arm(session, control_share) {
+        Arm::Control => (Arm::Control, h),
         Arm::Treated => (Arm::Treated, 1.0 - h),
     }
 }
@@ -172,7 +172,7 @@ pub struct Directive {
     pub route: String,
     pub track: String,
     pub version: String,
-    pub aspect: Aspect,
+    pub strength: Strength,
     pub text: String,
     /// The route's delivery shape ([`adage_tracks::shape`]), rendered into the directive's
     /// wrapper (`kind="…"`). Empty in records written before it existed.
@@ -190,23 +190,23 @@ pub enum Judgement {
     Followed {
         route: String,
     },
-    Derailed {
+    Ignored {
         route: String,
     },
     ObligationMet {
         route: String,
     },
     /// The agent ran the directed command within the follow window, and it failed. Three of
-    /// these (or a derail rate whose Wilson lower bound reaches 0.5) retire an instinct route at
+    /// these (or an ignore rate whose Wilson lower bound reaches 0.5) extinguish an instinct route at
     /// the next learn (`adage_learn::instincts`).
-    FollowedFailed {
+    Misfired {
         route: String,
     },
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Decision {
-    /// What the agent receives (empty in the holdout arm).
+    /// What the agent receives (empty in the control arm).
     pub directives: Vec<Directive>,
     /// A stop-hook request to continue, with its reason.
     pub continue_reason: Option<String>,
@@ -335,7 +335,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
         Event::Prompt { text } => {
             st.prompts += 1;
             let spans = spans::extract(text);
-            // 0. Red first (Design §10.6): the dead ends to announce at the first prompt are chosen
+            // 0. Inhibit first (Design §10.6): the dead ends to announce at the first prompt are chosen
             //    before anything else, so the caps never crowd a warning out, and nothing a
             //    warning contradicts is chosen beside it. They are still emitted last, as before.
             let announce: Vec<&IndexedRoute> = if st.prompts == 1 {
@@ -346,27 +346,27 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             let (per_session, per_decision) =
                 (ctx.params.max_directives_per_session, ctx.params.max_directives_per_decision);
             let room = per_decision.min(per_session.saturating_sub(st.emitted.len()));
-            let reds: Vec<&IndexedRoute> = announce
+            let inhibits: Vec<&IndexedRoute> = announce
                 .iter()
                 .copied()
-                .filter(|r| r.route.aspect == Aspect::Red && !st.emitted.iter().any(|e| e == &r.route.id))
+                .filter(|r| r.route.strength == Strength::Inhibit && !st.emitted.iter().any(|e| e == &r.route.id))
                 .filter(|r| render::route_text(&r.route, &[]).is_some())
                 .take(room)
                 .collect();
-            let mut reds_left = reds.len();
+            let mut inhibits_left = inhibits.len();
             let ok = |st: &SessionState, out: &Vec<Directive>, ir: &IndexedRoute, reserved: usize| {
                 emit_ok(st, out, &ir.route.id)
                     && st.emitted.len() + out.len() + reserved < per_session
                     && out.len() + reserved < per_decision
-                    && !reds.iter().any(|red| interlock::avoids(&red.route, &ir.route))
+                    && !inhibits.iter().any(|inhibit| interlock::avoids(&inhibit.route, &ir.route))
             };
-            // 1. Prompt-triggered routes, strongest aspect first.
+            // 1. Prompt-triggered routes, strongest strength first.
             let mut prompt_routes: Vec<&&IndexedRoute> =
                 routes.iter().filter(|r| matches!(r.route.trigger, Trigger::Prompt { .. })).collect();
             prompt_routes
-                .sort_by_key(|r| (adage_tracks::delivered_aspect(&r.route), -(r.route.evidence.support as i64)));
+                .sort_by_key(|r| (adage_tracks::delivered_strength(&r.route), -(r.route.evidence.support as i64)));
             for ir in prompt_routes {
-                if !ok(st, &out, ir, reds_left) {
+                if !ok(st, &out, ir, inhibits_left) {
                     continue;
                 }
                 if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, text, ctx) {
@@ -385,7 +385,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             let mut emb: Option<Option<(String, Vec<f32>)>> = None;
             if let Some((family, ir)) = match_intent(ctx, &routes, text, &mut emb) {
                 st.intent = Some(family);
-                if ok(st, &out, ir, reds_left) {
+                if ok(st, &out, ir, inhibits_left) {
                     if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, text, ctx) {
                         st.pending.push(Pending {
                             route: ir.route.id.clone(),
@@ -401,17 +401,17 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             if let Some(sy) = syms.as_ref().filter(|sy| sy.has_prompt_items()) {
                 let got = sy.prompt(text, || embedding(ctx, text, &mut emb));
                 if st.ctx.push(&net, &got) {
-                    fire_contexts(ctx, &routes, &net, st, &mut out, |st, out, ir| ok(st, out, ir, reds_left));
+                    fire_contexts(ctx, &routes, &net, st, &mut out, |st, out, ir| ok(st, out, ir, inhibits_left));
                 }
             }
-            // 3. Known dead ends, once, at the first prompt: the reds chosen above, and any other
+            // 3. Known dead ends, once, at the first prompt: the inhibits chosen above, and any other
             //    session-start route there is room for.
             for ir in announce {
-                let red = reds.iter().any(|r| r.route.id == ir.route.id);
-                if red {
-                    reds_left -= 1;
+                let inhibit = inhibits.iter().any(|r| r.route.id == ir.route.id);
+                if inhibit {
+                    inhibits_left -= 1;
                 }
-                if red || ok(st, &out, ir, reds_left) {
+                if inhibit || ok(st, &out, ir, inhibits_left) {
                     if let Some(t) = render::route_text(&ir.route, &[]) {
                         out.push(directive(ir, t));
                     }
@@ -430,12 +430,12 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     let key = cap(key);
                     d.observed.push(key.clone());
                     push_history_capped(st, key.clone(), ctx.params.history);
-                    // Follow / derail judgement: the directed command, or it with options added.
+                    // Follow / ignore judgement: the directed command, or it with options added.
                     st.pending.retain(|p| {
                         if meets(&p.expect_key, &key) {
                             let route = p.route.clone();
                             d.judgements.push(if call.failed {
-                                Judgement::FollowedFailed { route }
+                                Judgement::Misfired { route }
                             } else {
                                 Judgement::Followed { route }
                             });
@@ -496,7 +496,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                     let command = &render::bind(command, &bound);
                                     // An instinct's finish line is advice, never an obligation: no
                                     // Stop request can come of it. Its directive is judged like
-                                    // any other (followed, derailed, or followed and failed).
+                                    // any other (followed, ignored, or misfired).
                                     if ir.route.is_instinct() {
                                         if emit_ok(st, &out, &ir.route.id) {
                                             if let Some(t) = render::route_text(&ir.route, &bound) {
@@ -615,7 +615,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             for p in st.pending.iter_mut() {
                 p.batches_left = p.batches_left.saturating_sub(1);
                 if p.batches_left == 0 {
-                    d.judgements.push(Judgement::Derailed { route: p.route.clone() });
+                    d.judgements.push(Judgement::Ignored { route: p.route.clone() });
                 }
             }
             st.pending.retain(|p| p.batches_left > 0);
@@ -627,7 +627,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 // The directed command, run within the follow window, failed.
                 st.pending.retain(|p| {
                     if meets(&p.expect_key, &key) {
-                        d.judgements.push(Judgement::FollowedFailed { route: p.route.clone() });
+                        d.judgements.push(Judgement::Misfired { route: p.route.clone() });
                         false
                     } else {
                         true
@@ -676,7 +676,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     st.stop_requests += 1;
                     let reason = render::stop_reason(&o.paths, &o.command);
                     d.would_continue = Some(reason.clone());
-                    if st.arm != Some(Arm::Holdout) {
+                    if st.arm != Some(Arm::Control) {
                         d.continue_reason = Some(reason);
                     }
                 }
@@ -692,34 +692,34 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
         d.ctx = Some(st.ctx.clone());
     }
     d.would_have = out.clone();
-    if st.arm != Some(Arm::Holdout) {
+    if st.arm != Some(Arm::Control) {
         d.directives = out;
     }
     d
 }
 
-/// Approach locking (Design §10.6, "red beats green"; `adage_tracks::interlock`): once a red
+/// Approach locking (Design §10.6, "inhibit beats fire"; `adage_tracks::interlock`): once an inhibit
 /// directive (a dead end) has been emitted in a session, or is emitted in this decision, no
 /// directive whose command it avoids is emitted, in this decision or any later one. A directive
 /// dropped here leaves nothing behind: no pending follow judgement and no finish-line obligation,
-/// so there is never a stop request to run a command the session was warned fails. A green
+/// so there is never a stop request to run a command the session was warned fails. A fire
 /// emitted before the warning stays as it was (an obligation it made is not withdrawn: a dead end
 /// is announced at the first prompt, before any edit can make one).
 fn approach_lock(routes: &[&IndexedRoute], st: &mut SessionState, out: Vec<Directive>) -> Vec<Directive> {
     let route_of = |id: &str| routes.iter().find(|r| r.route.id == id).map(|r| &r.route);
-    let reds: Vec<&Route> = st
+    let inhibits: Vec<&Route> = st
         .emitted
         .iter()
         .chain(out.iter().map(|d| &d.route))
         .filter_map(|id| route_of(id))
         .filter(|r| matches!(r.step, Step::Avoid { .. }))
         .collect();
-    if reds.is_empty() {
+    if inhibits.is_empty() {
         return out;
     }
-    let (keep, dropped): (Vec<Directive>, Vec<Directive>) = out
-        .into_iter()
-        .partition(|d| route_of(&d.route).is_none_or(|r| !reds.iter().any(|red| interlock::avoids(red, r))));
+    let (keep, dropped): (Vec<Directive>, Vec<Directive>) = out.into_iter().partition(|d| {
+        route_of(&d.route).is_none_or(|r| !inhibits.iter().any(|inhibit| interlock::avoids(inhibit, r)))
+    });
     if !dropped.is_empty() {
         let gone = |id: &String| dropped.iter().any(|d| &d.route == id);
         st.pending.retain(|p| !gone(&p.route));
@@ -835,8 +835,8 @@ fn directive(ir: &IndexedRoute, text: String) -> Directive {
         route: ir.route.id.clone(),
         track: ir.track.clone(),
         version: ir.version.clone(),
-        // A route on probation or stale is never delivered green, whatever its track says.
-        aspect: adage_tracks::delivered_aspect(&ir.route),
+        // A route forming or dormant is never delivered fire, whatever its track says.
+        strength: adage_tracks::delivered_strength(&ir.route),
         text,
         kind: adage_tracks::shape(&ir.route).to_string(),
         origin: ir.route.is_instinct().then(|| ir.route.origin()),

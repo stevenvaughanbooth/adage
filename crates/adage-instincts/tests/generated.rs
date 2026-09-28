@@ -1,6 +1,6 @@
 //! Binding on the procedurally generated sandboxes (`evals/gen`, suite `smoke`), against their
 //! ground truth (`conventions.json`): nothing binds for a decoy, and nothing directs the command an
-//! instinct violation retires. Skipped (with a note) where python3 or git is unavailable.
+//! instinct violation extinguishes. Skipped (with a note) where python3 or git is unavailable.
 
 use adage_tracks::{Step, Trigger};
 use std::collections::BTreeSet;
@@ -61,7 +61,7 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
             eprintln!("{name}: {} {:?} -> {:?}", x.id, x.trigger, x.step);
         }
         for c in &conv {
-            // A dead end planted as the retired universal default says so in its mode.
+            // A dead end planted as the superseded universal default says so in its mode.
             let kind =
                 if c["mode"] == "instinct_violation" { "instinct_violation" } else { c["kind"].as_str().unwrap_or("") };
             let command = c["command"].as_str().unwrap_or("");
@@ -73,7 +73,7 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
                 "instinct_violation" => {
                     violations += 1;
                     let avoided = c["avoided"][0].as_str().unwrap();
-                    assert!(!directed.iter().any(|d| d == avoided), "{name}: retired {avoided} was bound");
+                    assert!(!directed.iter().any(|d| d == avoided), "{name}: extinguished {avoided} was bound");
                 }
                 "dead_end" => {
                     dead_ends += 1;
@@ -105,7 +105,7 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
         }
         // Whatever binds is valid and capped (the fixture tests check the details).
         for x in &r.routes {
-            assert_eq!(x.aspect, adage_tracks::Aspect::Yellow);
+            assert_eq!(x.strength, adage_tracks::Strength::Prime);
         }
     }
     eprintln!(

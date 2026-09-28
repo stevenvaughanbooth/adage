@@ -9,7 +9,7 @@
 
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
-pub use adage_tracks::Aspect;
+pub use adage_tracks::Strength;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -249,7 +249,7 @@ pub struct RouteV2 {
     /// Explicit intra-pack edges: `#other-route-id`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<String>,
-    pub aspect: Aspect,
+    pub strength: Strength,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exit: Vec<ExitV2>,
     /// The route's execution request (at most the pack's `[exec].requested`).
@@ -511,7 +511,7 @@ pub struct ExecSpec {
 pub const MAX_ACTION_GLOBS: usize = 16;
 
 /// A route's aggregate evidence (as `adage_tracks::Evidence`, without per-machine state such as
-/// `stale_since`).
+/// `dormant_since`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RouteEvidence {

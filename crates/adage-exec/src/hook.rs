@@ -54,7 +54,7 @@ pub fn main(harness: String, event: String) -> ! {
     adage_hook::main(harness, event, adage_hook::Options { learner: Some(adage_beside), extension: Some(&PREFETCH) })
 }
 
-/// The `adage` binary installed beside `adage-exec` (live learning is `adage learn --auto`).
+/// The `adage` binary installed beside `adage-exec` (live learning is `adage condition --auto`).
 pub fn adage_beside() -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let name = if cfg!(windows) { "adage.exe" } else { "adage" };
@@ -146,7 +146,7 @@ fn directive_for(ir: &adage_tracks::index::IndexedRoute, directives: &[Directive
         route: ir.route.id.clone(),
         track: ir.track.clone(),
         version: ir.version.clone(),
-        aspect: ir.route.aspect,
+        strength: ir.route.strength,
         text: render::route_text(&ir.route, &bound)?,
         kind: adage_tracks::shape(&ir.route).to_string(),
         origin: None,
@@ -156,7 +156,7 @@ fn directive_for(ir: &adage_tracks::index::IndexedRoute, directives: &[Directive
 /// E2: run at most one approved action for the obligations this event armed or enforces.
 fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
     let mut out = Acted::default();
-    if turn.arm == Some(adage_runtime::Arm::Holdout) {
+    if turn.arm == Some(adage_runtime::Arm::Control) {
         return out;
     }
     let home = &turn.paths.root;

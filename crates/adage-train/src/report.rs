@@ -1,4 +1,4 @@
-//! `adage-train report <run>`: what became of each claim, what the run cost, and (with
+//! `adage train report <run>`: what became of each claim, what the run cost, and (with
 //! validation) whether each compiled reflex does as well as the skill it came from.
 
 use crate::claims::{argv_of, Claim, ClaimKind};
@@ -388,7 +388,7 @@ fn num(x: Option<f64>, d: usize) -> String {
 
 pub fn render(r: &Report) -> String {
     let mut s = String::new();
-    let _ = writeln!(s, "adage-train report {}", r.run);
+    let _ = writeln!(s, "adage train report {}", r.run);
     let _ = writeln!(s, "source     {} (sha256 {})", r.source, &r.source_sha256[..12.min(r.source_sha256.len())]);
     let _ = writeln!(s, "harness    {} · model {} · repo {}", r.harness, r.model, r.repo_key);
     let _ = writeln!(
@@ -402,7 +402,7 @@ pub fn render(r: &Report) -> String {
     let _ = writeln!(s, "cost       ${:.2} of a ${:.2} cap (as reported by the harness)", r.cost_usd, r.budget_usd);
     let _ = writeln!(
         s,
-        "staged     {} ({} routes; provenance {}); nothing is active until reviewed",
+        "staged     {} ({} routes; provenance {}); nothing is delivered until reviewed",
         r.staged,
         r.staged_routes.len(),
         r.provenance

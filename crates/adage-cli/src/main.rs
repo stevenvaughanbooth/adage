@@ -1,41 +1,42 @@
-//! `adage` — put your agent on rails.
+//! `adage` — agent traces become reflexes.
 //!
 //! ```text
 //! adage hook <claude|opencode|codex> <Event>   hook client (reads the harness payload on stdin)
 //! adage init [--repo <path>] [--yes | --print]  first run: a guided wizard at a terminal; else detect
-//!                                    harnesses, show hook snippets, offer the model, survey
-//! adage survey [--repo <key>] [--since <days>] [--json]   what your agents actually do (read-only)
+//!                                    harnesses, show hook snippets, offer the model, sense
+//! adage sense [--repo <key>] [--since <days>] [--json]   read-only: which reflexes your traces would form
 //! adage doctor [--json]              check the binary, data directory, index, tracks, model, hooks
-//! adage watch [--repo <path>] [--demo]  a live pane: health lights, hook activity, what Adage learns
-//! adage ui                           the full-screen app: live feed, routes and review, health fixes, settings
-//! adage learn [options]              mine tracks from agent sessions and compile the index
-//! adage learn --auto --repo-root <path>   learn one repository quietly (what hooks start)
-//! adage learn --instincts-only [--repo-path <dir>] [--repo <key>]  bind Adage's built-in defaults (instincts) for
-//!                                    a repository from its files alone, with no sessions (day 0)
+//! adage watch [--repo <path>] [--demo]  a live pane: health lights, hook activity, what Adage conditions
+//! adage ui                           the full-screen app: live feed, reflexes and review, health fixes, settings
+//! adage condition [options]          mine traces into reflexes, bind instincts, compile the index
+//! adage condition --auto --repo-root <path>   condition one repository quietly (what hooks start)
+//! adage condition --instincts-only [--repo-path <dir>] [--repo <key>]  bind Adage's instincts for
+//!                                    a repository from its files alone, with no traces (day 0)
+//! adage train <plan|--plan|report> …  grow reflexes from a skill (runs the adage-train binary)
 //! adage config [get <key> | set <key> <value>] [--json]   settings in $ADAGE_HOME/config.toml
-//! adage status                       installed tracks, routes, aspects, and evidence
-//! adage report [--json]              directives emitted, followed, and derailed, from spools
-//! adage graph [--json] [--events <n>] situations → routes → steps → agent responses, with live counts
-//! adage graph --serve [--port <n>]   serve the signal box at http://127.0.0.1:<n>/ (default 8765)
-//! adage graph --learned --dump <repo> [--transcripts <file>...] [--json]   the graph engine's session facts
+//! adage status                       installed tracks, reflexes, strengths, and evidence
+//! adage report [--json]              directives emitted, followed, and ignored, from spools
+//! adage graph [--json] [--events <n>] situations → reflexes → steps → agent responses, with live counts
+//! adage map [--port <n>]             serve the map at http://127.0.0.1:<n>/ (default 8765)
+//! adage graph --learned --dump <repo> [--transcripts <file>...] [--json]   the graph engine's trace facts
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
 //!                                    print (default) or write a harness's hook registration
 //! adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>] [--ack-scripts] [--repo-root <dir>] [--format pack|v1]
 //!                                    redaction-check, build and sign a pack (namespace adage-pack)
 //! adage add <dir> [--trust]          verify a pack (or a v1 track, upgraded in place), install it,
-//!                                    and bind it to this repository at probation
-//! adage review [--json]              routes awaiting a person's decision, with evidence and directive text
-//! adage review allow-exec <track> <route> --level e1|e2 [--raw] [--fields ..] [--outputs <glob>]   approve an E1 prefetch or an E2 action (a person)
-//! adage review revoke-exec <track> <route>
-//! adage exec enable|disable|status   hooks call adage-exec (E1 prefetch, E2 actions) or adage; grants per repository
-//! adage review <approve|reject|demote|promote|pin|dismiss> <track> <route> [--by <name>]
+//!                                    and bind it to this repository at forming
+//! adage review [--json]              reflexes awaiting a person's decision, with evidence and directive text
+//! adage review delegate <track> <route> --level e1|e2 [--raw] [--fields ..] [--outputs <glob>]   approve an E1 prefetch or an E2 action (a person)
+//! adage review revoke <track> <route>   withdraw that grant
+//! adage delegate on|off|status       hooks call adage-exec (E1 prefetch, E2 actions) or adage; grants per repository
+//! adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <route> [--by <name>]
 //! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
 //! adage eval <dataset> [--split ..] [--json]  offline replay eval of what Adage would have said
 //! adage version
 //! ```
-//! Environment: `ADAGE_HOME` (data directory), `ADAGE_ARM` (`treated`|`holdout`, overrides
-//! assignment), `ADAGE_HOLDOUT` (holdout share; overrides `runtime.holdout`, default 0.1),
+//! Environment: `ADAGE_HOME` (data directory), `ADAGE_ARM` (`treated`|`control`, overrides
+//! assignment), `ADAGE_CONTROL` (control share; overrides `runtime.control`, default 0.1),
 //! `ADAGE_AUTO_LEARN` (`0`/`1`; overrides `learn.auto`), `ADAGE_DISABLE=1` (kill switch),
 //! `ADAGE_ALLOW_NONINTERACTIVE=1` (let `share` and `add` run without a terminal, for CI).
 
@@ -58,10 +59,11 @@ mod proposal;
 mod redact;
 mod reimport;
 mod review;
+mod sense;
 mod serve;
 mod share;
 mod share_pack;
-mod survey;
+mod train;
 mod tty;
 mod ui;
 
@@ -69,7 +71,7 @@ mod ui;
 use adage_hook::on_big_stack;
 use adage_learn::{Inputs, LearnConfig};
 use adage_store::Paths;
-use adage_tracks::{io, Aspect};
+use adage_tracks::{io, Strength};
 use anyhow::{bail, Result};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -96,27 +98,28 @@ fn flag(args: &[String], name: &str) -> Option<String> {
 
 fn run(args: &[String]) -> Result<()> {
     let paths = Paths::from_env();
-    // Root commits `learn` and `survey` find are left for hooks (repository keys).
+    // Root commits `condition` and `sense` find are left for hooks (repository keys).
     adage_core::repo::use_cache(paths.repo_keys());
     match args.first().map(String::as_str) {
-        Some("learn") if args.iter().any(|a| a == "--auto") => autolearn::run_auto(&args[1..], &paths),
-        Some("learn") if args.iter().any(|a| a == "--instincts-only") => instincts_only(&args[1..], &paths),
-        Some("learn") => learn(&args[1..], &paths),
+        Some("condition") if args.iter().any(|a| a == "--auto") => autolearn::run_auto(&args[1..], &paths),
+        Some("condition") if args.iter().any(|a| a == "--instincts-only") => instincts_only(&args[1..], &paths),
+        Some("condition") => condition(&args[1..], &paths),
+        Some("train") => train::train(&args[1..]),
         Some("config") => config::run(&args[1..], &paths),
         Some("status") => status(&paths),
         Some("report") => report(&paths, args.iter().any(|a| a == "--json")),
         Some("share") => share::share(&args[1..], &paths),
         Some("add") => add::add(&args[1..], &paths),
-        Some("review") if matches!(args.get(1).map(String::as_str), Some("allow-exec" | "revoke-exec")) => {
+        Some("review") if matches!(args.get(1).map(String::as_str), Some("delegate" | "revoke")) => {
             exec::review(&args[1], &args[2..], &paths)
         }
         Some("review") => review::review(&args[1..], &paths),
-        Some("exec") => exec::exec(&args[1..], &paths),
-        Some("graph") if args.iter().any(|a| a == "--serve") => serve::serve(&args[1..], &paths),
+        Some("delegate") => exec::delegate(&args[1..], &paths),
+        Some("map") => serve::serve(&args[1..], &paths),
         Some("graph") => graph::graph(&args[1..], &paths),
         Some("eval") => adage_eval::cli::run(&args[1..]),
         Some("models") => models::run(&args[1..], &paths),
-        Some("survey") => survey::survey(&args[1..], &paths),
+        Some("sense") => sense::sense(&args[1..], &paths),
         Some("init") => init::init(&args[1..], &paths),
         Some("doctor") => doctor::doctor(&args[1..], &paths),
         Some("watch") => ui::watch(&args[1..], &paths),
@@ -134,22 +137,29 @@ fn run(args: &[String]) -> Result<()> {
             println!("adage {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        _ => {
-            println!("usage: adage <init|survey|learn|status|report|graph|review|exec|share|add|install|models|doctor|watch|ui|config|hooks-config|version|hook>");
-            println!("       adage watch   live pane for a split terminal: health, hook activity, learning");
-            println!("       adage ui      full-screen app: live feed, routes and review, health fixes, settings");
-            Ok(())
+        other => {
+            println!("usage: adage <init|sense|condition|train|status|report|graph|map|review|delegate|share|add|install|models|doctor|watch|ui|config|hooks-config|version|hook>");
+            println!("       adage sense       read-only: which reflexes your traces would form");
+            println!("       adage condition   mine traces into reflexes and bind instincts");
+            println!("       adage watch       live pane for a split terminal: health, hook activity, conditioning");
+            println!(
+                "       adage ui          full-screen app: live feed, reflexes and review, health fixes, settings"
+            );
+            match other {
+                None | Some("help" | "--help" | "-h") => Ok(()),
+                Some(cmd) => bail!("unknown command `{cmd}` (see the usage above)"),
+            }
         }
     }
 }
 
-/// `adage learn [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
+/// `adage condition [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
 ///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--json]`
 ///
 /// Thresholds: `--demo`, else `learn.thresholds` (`adage config`). Parses are cached under
 /// `$ADAGE_HOME/cache/sessions` unless `--no-cache` or `learn.parse_cache = false` (the result is
 /// the same).
-fn learn(args: &[String], paths: &Paths) -> Result<()> {
+fn condition(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
     let mut transcripts: Vec<PathBuf> = Vec::new();
     let mut i = 0;
@@ -168,7 +178,7 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
     if let Some(dir) = flag(args, "--codex-sessions") {
         let (found, compressed) = adage_learn::codex::discover(std::path::Path::new(&dir));
         if compressed > 0 {
-            eprintln!("adage learn: skipped {compressed} compressed Codex rollouts (.jsonl.zst); decompress them with `zstd -d` to include them");
+            eprintln!("adage condition: skipped {compressed} compressed Codex rollouts (.jsonl.zst); decompress them with `zstd -d` to include them");
         }
         let prefix = flag(args, "--cwd-prefix");
         for p in found {
@@ -248,7 +258,7 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
     let rep = match result {
         Ok(r) => r,
         Err(e) => {
-            let line = learnlog::error_line(learnlog::now_ms(), "manual", None, "learn", &learnlog::describe(&e));
+            let line = learnlog::error_line(learnlog::now_ms(), "manual", None, "condition", &learnlog::describe(&e));
             let _ = learnlog::append(paths, &line);
             return Err(e);
         }
@@ -262,13 +272,13 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         })
         .collect();
     if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64) {
-        eprintln!("adage learn: could not write {}: {e}", paths.learn_log().display());
+        eprintln!("adage condition: could not write {}: {e}", paths.learn_log().display());
     }
     if args.iter().any(|a| a == "--json") {
         println!("{}", serde_json::to_string_pretty(&rep)?);
     } else {
         println!(
-            "adage learn: {} traces read, {} used, {} steered (what their directives named is not evidence)",
+            "adage condition: {} traces read, {} used, {} steered (what their directives named is not evidence)",
             rep.sessions_read, rep.sessions_used, rep.sessions_steered
         );
         println!("thresholds: {}", rep.thresholds);
@@ -289,7 +299,7 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
             }
             let e = &rr.engine;
             println!(
-                "  learned: {} traces, {} patterns selected, {} reflexes compiled, {} kept ({} with a context trigger)",
+                "  conditioned: {} traces, {} patterns selected, {} reflexes compiled, {} kept ({} with a context trigger)",
                 e.sessions, e.reflexes, e.compiled, e.routes, e.contexts
             );
             for c in changes.get(repo).into_iter().flatten() {
@@ -305,7 +315,7 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
             .count();
         if nascent > 0 {
             println!(
-                "\n{nascent} nascent reflex(es) learned but not delivered: each waits for a person. Review them with `adage review`."
+                "\n{nascent} nascent reflex(es) formed but not delivered: each waits for a person. Review them with `adage review`."
             );
         }
         if !rep.conflicts.is_empty() {
@@ -319,7 +329,7 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
     Ok(())
 }
 
-/// What binding instincts did for one repository, for the text output of `adage learn`.
+/// What binding instincts did for one repository, for the text output of `adage condition`.
 fn print_instincts(ir: &adage_learn::instincts::InstinctReport) {
     match &ir.not_bound {
         Some(why) => println!("  instincts: none bound ({why})"),
@@ -327,21 +337,25 @@ fn print_instincts(ir: &adage_learn::instincts::InstinctReport) {
             "  instincts: {} bound, {} advice, {} awaiting approval in `adage review`{}{}",
             ir.bound,
             ir.advice,
-            ir.drafts,
-            if ir.retired.is_empty() { String::new() } else { format!(", {} retired automatically", ir.retired.len()) },
+            ir.nascent,
+            if ir.extinguished.is_empty() {
+                String::new()
+            } else {
+                format!(", {} extinguished automatically", ir.extinguished.len())
+            },
             if ir.confirmed.is_empty() {
                 String::new()
             } else {
-                format!(", {} confirmed by sessions", ir.confirmed.len())
+                format!(", {} confirmed by traces", ir.confirmed.len())
             }
         ),
     }
 }
 
-/// `adage learn --instincts-only [--repo-path <dir>] [--repo <key>] [--json]`: bind a repository's instincts
+/// `adage condition --instincts-only [--repo-path <dir>] [--repo <key>] [--json]`: bind a repository's instincts
 /// from its declared files, with no sessions (day 0), and compile the index. The repository is
 /// `--repo-path` (default: the current directory), resolved to its root; its key is `--repo <key>` when
-/// given (as `adage learn --repo` keys reflexes), else derived from the root.
+/// given (as `adage condition --repo` keys reflexes), else derived from the root.
 pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
     let dir = match flag(args, "--repo-path").or_else(|| flag(args, "--repo-root")) {
@@ -350,7 +364,7 @@ pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
     };
     let dir = dir.canonicalize().map_err(|e| anyhow::anyhow!("{}: {e}", dir.display()))?;
     let root = adage_core::repo::find_root(&dir).unwrap_or(dir);
-    // The same key `adage learn --repo <key>` stores reflexes under, so both indexes of one
+    // The same key `adage condition --repo <key>` stores reflexes under, so both indexes of one
     // repository agree (`adage_core::repo::key_with`).
     let explicit = flag(args, "--repo");
     let repo = adage_core::repo::key_with(explicit.as_deref(), || {
@@ -368,14 +382,14 @@ pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
     let changes: BTreeMap<&String, Vec<adage_learn::diff::Change>> =
         rep.repos.keys().map(|r| (r, adage_learn::diff::diff(&before, &after))).collect();
     if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64) {
-        eprintln!("adage learn: could not write {}: {e}", paths.learn_log().display());
+        eprintln!("adage condition: could not write {}: {e}", paths.learn_log().display());
     }
     if args.iter().any(|a| a == "--json") {
         println!("{}", serde_json::to_string_pretty(&rep)?);
         return Ok(());
     }
     for (repo, rr) in &rep.repos {
-        println!("adage learn --instincts-only: {repo}");
+        println!("adage condition --instincts-only: {repo}");
         for t in &rr.tracks {
             println!("  {} @ {} ({})", t.name, t.version, t.change);
             for r in &t.routes {
@@ -396,7 +410,7 @@ pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
     Ok(())
 }
 
-/// Append one `learn.log` line per repository this `adage learn` learned (`crate::learnlog`), or
+/// Append one `learn.log` line per repository this `adage condition` learned (`crate::learnlog`), or
 /// one with no repository if it found no usable session. No prompt, command or path.
 fn log_learn(
     paths: &Paths,
@@ -434,7 +448,7 @@ fn status(paths: &Paths) -> Result<()> {
     match adage_intent::model::StaticModel::open(&adage_intent::model::dir_in(&paths.models())) {
         Ok(m) => println!("intent model: {}", m.id),
         Err(_) if has_intents => {
-            println!("intent model: not installed, so intent routes will not fire (`adage models fetch`)")
+            println!("intent model: not installed, so intent reflexes will not fire (`adage models fetch`)")
         }
         Err(_) => {}
     }
@@ -452,14 +466,14 @@ fn status(paths: &Paths) -> Result<()> {
         };
         println!("{} @ {}  [{}]{origin}", t.manifest.track.name, t.manifest.track.version, t.manifest.scope.repo);
         for r in &t.routes {
-            let dot = match r.aspect {
-                Aspect::Green => "🟢",
-                Aspect::Yellow => "🟡",
-                Aspect::Red => "🔴",
+            let (dot, word) = match r.strength {
+                Strength::Fire => ("🟢", "fire"),
+                Strength::Prime => ("🟡", "prime"),
+                Strength::Inhibit => ("🔴", "inhibit"),
             };
             let e = &r.evidence;
             println!(
-                "  {dot} {:<22} {:>3}/{:<3} sessions  rate {:.2}  lb {:.2}  {:?}",
+                "  {dot} {word:<7} {:<22} {:>3}/{:<3} traces  rate {:.2}  lb {:.2}  {:?}",
                 r.id, e.support, e.opportunities, e.rate, e.lower_bound, r.effect
             );
         }

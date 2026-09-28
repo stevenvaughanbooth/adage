@@ -80,8 +80,8 @@ fn track() -> Track {
                 contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
             }],
             effect: Effect::Observe,
-            aspect: Aspect::Green,
-            state: RouteState::Active,
+            strength: Strength::Fire,
+            state: RouteState::Firm,
             exit: vec![Exit::IntentChanges],
             evidence: Evidence { support: 9, opportunities: 10, days: 3, ..Default::default() },
             authored: false,
@@ -132,7 +132,7 @@ impl World {
         let _ =
             std::fs::set_permissions(self.repo().join(".tracker/cache.bin"), std::fs::Permissions::from_mode(0o644));
     }
-    /// What `adage review allow-exec acme-billing/work-items lookup-work-item --level e1 --fields …
+    /// What `adage review delegate acme-billing/work-items lookup-work-item --level e1 --fields …
     /// --exit-when state=Closed` records, through the same library calls.
     fn approve(&self) {
         let index = Index::load(&self.p("adage/index.json"));

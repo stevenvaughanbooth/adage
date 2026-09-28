@@ -1,7 +1,7 @@
-//! Colours and glyphs. With `NO_COLOR` set (no-color.org) nothing is coloured: aspects and lamps
+//! Colours and glyphs. With `NO_COLOR` set (no-color.org) nothing is coloured: strengths and lamps
 //! are spelled out in text instead, and only bold, dim, italic and reverse remain.
 
-use adage_tracks::Aspect;
+use adage_tracks::Strength;
 use ratatui::style::{Color, Modifier, Style};
 
 /// A health lamp.
@@ -44,7 +44,7 @@ impl Theme {
     pub fn accent(&self) -> Style {
         self.fg(Color::Cyan)
     }
-    pub fn holdout(&self) -> Style {
+    pub fn control(&self) -> Style {
         self.fg(Color::Magenta).add_modifier(Modifier::ITALIC)
     }
     pub fn dim(&self) -> Style {
@@ -64,21 +64,22 @@ impl Theme {
         self.accent().add_modifier(Modifier::BOLD)
     }
 
-    pub fn aspect(&self, a: Aspect) -> Style {
+    pub fn strength(&self, a: Strength) -> Style {
         match a {
-            Aspect::Green => self.green(),
-            Aspect::Yellow => self.yellow(),
-            Aspect::Red => self.red(),
+            Strength::Fire => self.green(),
+            Strength::Prime => self.yellow(),
+            Strength::Inhibit => self.red(),
         }
     }
 
-    /// The aspect's lamp: a coloured dot, or its name without colour.
-    pub fn aspect_mark(&self, a: Aspect) -> &'static str {
+    /// The strength's lamp: a coloured dot (fire green, prime yellow, inhibit red), or its initial
+    /// without colour.
+    pub fn strength_mark(&self, a: Strength) -> &'static str {
         match (self.color, a) {
             (true, _) => "●",
-            (false, Aspect::Green) => "[G]",
-            (false, Aspect::Yellow) => "[Y]",
-            (false, Aspect::Red) => "[R]",
+            (false, Strength::Fire) => "[F]",
+            (false, Strength::Prime) => "[P]",
+            (false, Strength::Inhibit) => "[I]",
         }
     }
 
@@ -103,11 +104,11 @@ impl Theme {
     }
 }
 
-pub fn parse_aspect(s: &str) -> Option<Aspect> {
+pub fn parse_strength(s: &str) -> Option<Strength> {
     match s {
-        "green" => Some(Aspect::Green),
-        "yellow" => Some(Aspect::Yellow),
-        "red" => Some(Aspect::Red),
+        "fire" => Some(Strength::Fire),
+        "prime" => Some(Strength::Prime),
+        "inhibit" => Some(Strength::Inhibit),
         _ => None,
     }
 }

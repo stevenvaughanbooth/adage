@@ -1,7 +1,7 @@
 #!/bin/sh
 # adage-exec plugin SessionStart (Track C §3.2, D2). This plugin's hooks run
 # ${CLAUDE_PLUGIN_DATA}/bin/adage-exec, which this script points at:
-#   - execution on ($ADAGE_HOME/exec/enabled, written only by `adage exec enable` at a terminal):
+#   - execution on ($ADAGE_HOME/exec/enabled, written only by `adage delegate on` at a terminal):
 #     the adage-exec binary (bundled dist/<target>/adage-exec verified against dist/SHA256SUMS,
 #     else adage-exec on PATH, else beside adage on PATH). The Adage plugin reads the same marker
 #     and goes quiet, so hooks never fire twice. With no adage-exec found, the adage binary

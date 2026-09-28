@@ -16,7 +16,7 @@ steps:
     from: files
     max: 5
   effect: observe
-aspect: yellow
+strength: prime
 exit:
 - when: intent_changes
 evidence:

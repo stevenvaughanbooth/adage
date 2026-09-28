@@ -795,19 +795,19 @@ fn validate_route(
     }
     validate_shape(r, &kinds)?;
 
-    // Effects and aspect.
+    // Effects and strength.
     let by_edit = matches!(r.trigger, TriggerV2::AfterEdit { .. });
     match adage_tracks::ceiling(max_effect, by_edit) {
         None => bail!("effect {max_effect:?} may never be directed"),
-        Some(max) if r.aspect == Aspect::Green && max != Aspect::Green => {
-            bail!("aspect green exceeds the ceiling for {max_effect:?}")
+        Some(max) if r.strength == Strength::Fire && max != Strength::Fire => {
+            bail!("strength fire exceeds the ceiling for {max_effect:?}")
         }
         _ => {}
     }
     let instinct = p.manifest.pack.origin == PackOrigin::Instinct
         || matches!(r.evidence.as_ref().and_then(|e| e.origin.as_ref()), Some(RouteOrigin::Instinct { .. }));
-    if instinct && r.aspect != Aspect::Yellow {
-        bail!("an instinct route is yellow");
+    if instinct && r.strength != Strength::Prime {
+        bail!("an instinct route is prime");
     }
 
     // Links.
@@ -996,14 +996,14 @@ fn validate_shape(r: &RouteV2, kinds: &[StepKind]) -> Result<()> {
         bail!("shape {} does not fit its trigger and steps", r.shape.as_str());
     }
     match r.shape {
-        Shape::Avoid if r.aspect != Aspect::Red => bail!("an avoid route is red"),
+        Shape::Avoid if r.strength != Strength::Inhibit => bail!("an avoid route is inhibit"),
         Shape::Advise => {
-            if r.aspect != Aspect::Yellow || r.steps[0].effect != Effect::Observe || !r.inputs.is_empty() {
-                bail!("an advise route is yellow, observe, with no inputs");
+            if r.strength != Strength::Prime || r.steps[0].effect != Effect::Observe || !r.inputs.is_empty() {
+                bail!("an advise route is prime, observe, with no inputs");
             }
         }
         Shape::Avoid => {}
-        _ if r.aspect == Aspect::Red => bail!("only an avoid route is red"),
+        _ if r.strength == Strength::Inhibit => bail!("only an avoid route is inhibit"),
         _ => {}
     }
     Ok(())

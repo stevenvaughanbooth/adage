@@ -125,7 +125,7 @@ fn contextual(t: &str) -> bool {
 
 fn own_text(t: &str) -> bool {
     let t = t.trim_start();
-    t.starts_with("<adage-signal ") || t.starts_with("Adage finish-line check:")
+    t.starts_with("<adage-reflex ") || t.starts_with("Adage finish-line check:")
 }
 
 /// The shell command an argv runs: `["bash", "-lc", cmd]` → `cmd`; anything else is joined.

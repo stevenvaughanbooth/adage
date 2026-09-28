@@ -1,4 +1,4 @@
-//! A compiled route as an execution request (Track C §3.2, §4.1): what `adage review allow-exec`
+//! A compiled route as an execution request (Track C §3.2, §4.1): what `adage review delegate`
 //! approves and what `adage-exec hook` runs are both derived here, from the same index entry, so
 //! the approval key computed at the trigger equals the approved one exactly when nothing that
 //! would run has changed.
@@ -301,7 +301,7 @@ pub fn plan(
                     scripts.push(ScriptRef { path: p.clone(), sha256: h.clone() });
                 }
             }
-            let origin = Origin::Pack { signer: None, trusted: false, probation_passed: false };
+            let origin = Origin::Pack { signer: None, trusted: false, forming_passed: false };
             (scripts, origin, Some(b.route_exec_digest.clone()), Some(t))
         }
         (Some(_), _) => return Err("the route's pack cannot be read".into()),

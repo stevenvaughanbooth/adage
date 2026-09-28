@@ -1,5 +1,5 @@
 //! How evidence is counted and judged (Design §11): learning thresholds ([`LearnConfig`]), the
-//! aspect rule (a Wilson lower bound for green, a rate for yellow, capped by the step's effect
+//! strength rule (a Wilson lower bound for fire, a rate for prime, capped by the step's effect
 //! class, with the outcome-lift path as a second gate), and the counting helpers every judgement
 //! shares. Evidence is always counted in **distinct traces**.
 
@@ -17,12 +17,12 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct LearnConfig {
     /// Minimum distinct supporting sessions for any route.
     pub min_support: u32,
-    /// Wilson lower bound required for green.
-    pub green_lower_bound: f64,
-    /// Minimum support rate for yellow.
-    pub yellow_rate: f64,
+    /// Wilson lower bound required for fire.
+    pub fire_lower_bound: f64,
+    /// Minimum support rate for prime.
+    pub prime_rate: f64,
     /// Lower bar that keeps an *existing* route (hysteresis): routes do not flap when their rate
-    /// dips just below the bar that created them. Demotion on harm is separate.
+    /// dips just below the bar that created them. Weakening on harm is separate.
     pub retain_rate: f64,
     /// Ids of routes that already exist; they are judged against `retain_rate`.
     pub existing: BTreeSet<String>,
@@ -39,8 +39,8 @@ pub struct LearnConfig {
     pub intent_contrast: f64,
     /// Review: the lower-bound movement that counts as a material change.
     pub material_lower_bound: f64,
-    /// Stale routes: the exposed share that explains a route's absence ([`crate::stale`]).
-    pub stale_exposure: f64,
+    /// Dormant routes: the exposed share that explains a route's absence ([`crate::dormant`]).
+    pub dormant_exposure: f64,
     /// The outcome-lift path (`adage_tracks::lift`): the lower bound on the success difference a
     /// step needs, and the traces that must have taken it.
     pub outcome_lift_lower_bound: f64,
@@ -57,12 +57,12 @@ impl Default for LearnConfig {
 }
 
 impl LearnConfig {
-    /// The rate bar for a route id: `retain_rate` if it already exists, else `yellow_rate`.
+    /// The rate bar for a route id: `retain_rate` if it already exists, else `prime_rate`.
     pub fn bar(&self, id: &str) -> f64 {
         if self.existing.contains(id) {
             self.retain_rate
         } else {
-            self.yellow_rate
+            self.prime_rate
         }
     }
 
@@ -75,8 +75,8 @@ impl LearnConfig {
     pub fn from_params(p: &LearnParams) -> Self {
         LearnConfig {
             min_support: p.min_support,
-            green_lower_bound: p.green_lower_bound,
-            yellow_rate: p.yellow_rate,
+            fire_lower_bound: p.fire_lower_bound,
+            prime_rate: p.prime_rate,
             retain_rate: p.retain_rate,
             existing: BTreeSet::new(),
             provenance: "desire-path".into(),
@@ -86,7 +86,7 @@ impl LearnConfig {
             intent_ubiquitous: p.intent_ubiquitous,
             intent_contrast: p.intent_contrast,
             material_lower_bound: p.material_lower_bound,
-            stale_exposure: p.stale_exposure,
+            dormant_exposure: p.dormant_exposure,
             outcome_lift_lower_bound: p.outcome_lift_lower_bound,
             outcome_min_support: p.outcome_min_support.unwrap_or(p.min_support),
             instincts: None,
@@ -102,30 +102,30 @@ pub(crate) fn median(v: &mut [f64]) -> f64 {
     v[v.len() / 2]
 }
 
-pub(crate) fn aspect_for(
+pub(crate) fn strength_for(
     effect: Effect,
     by_edit: bool,
     lb: f64,
     rate: f64,
     cfg: &LearnConfig,
     id: &str,
-) -> Option<Aspect> {
+) -> Option<Strength> {
     let max = ceiling(effect, by_edit)?;
-    if lb >= cfg.green_lower_bound && max == Aspect::Green {
-        Some(Aspect::Green)
+    if lb >= cfg.fire_lower_bound && max == Strength::Fire {
+        Some(Strength::Fire)
     } else if rate >= cfg.bar(id) {
-        Some(Aspect::Yellow)
+        Some(Strength::Prime)
     } else {
         None
     }
 }
 
-/// [`aspect_for`], with the outcome-lift path (`adage_tracks::lift`) as a second gate: a step
-/// that fails the rate bar (or has too little support for it) still gets yellow (prime) when the
-/// traces that took it succeeded significantly more often than those that did not. Never green:
-/// green reads the rate's lower bound alone.
+/// [`strength_for`], with the outcome-lift path (`adage_tracks::lift`) as a second gate: a step
+/// that fails the rate bar (or has too little support for it) still gets prime (prime) when the
+/// traces that took it succeeded significantly more often than those that did not. Never fire:
+/// fire reads the rate's lower bound alone.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn aspect_with_lift(
+pub(crate) fn strength_with_lift(
     effect: Effect,
     by_edit: bool,
     support: u32,
@@ -134,25 +134,25 @@ pub(crate) fn aspect_with_lift(
     cfg: &LearnConfig,
     id: &str,
     lift: Option<&OutcomeLift>,
-) -> Option<Aspect> {
+) -> Option<Strength> {
     if support >= cfg.min_support {
-        if let Some(a) = aspect_for(effect, by_edit, lb, rate, cfg, id) {
+        if let Some(a) = strength_for(effect, by_edit, lb, rate, cfg, id) {
             return Some(a);
         }
     }
-    lift_aspect(effect, by_edit, cfg, lift)
+    lift_strength(effect, by_edit, cfg, lift)
 }
 
-/// The outcome-lift path alone: yellow (prime) when the lift qualifies and the effect may be
+/// The outcome-lift path alone: prime (prime) when the lift qualifies and the effect may be
 /// directed.
-pub(crate) fn lift_aspect(
+pub(crate) fn lift_strength(
     effect: Effect,
     by_edit: bool,
     cfg: &LearnConfig,
     lift: Option<&OutcomeLift>,
-) -> Option<Aspect> {
+) -> Option<Strength> {
     lift.filter(|l| l.qualifies(cfg.outcome_min_support, cfg.outcome_lift_lower_bound))
-        .and_then(|_| adage_tracks::lift::aspect(effect, by_edit))
+        .and_then(|_| adage_tracks::lift::strength(effect, by_edit))
 }
 
 /// The outcomes lift is judged on: the recorded ones (`--outcomes`, a dataset's `passed`) when

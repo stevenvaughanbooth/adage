@@ -98,7 +98,7 @@ The response is `{"context": text}` or `{"continue": reason}`.
 - never evaluates, executes, or shells out with text it receives: directive text only ever goes
   into `output.output` or a message part.
 
-**Learning** — `adage learn --transcripts <export.json>…` accepts `opencode export` files
+**Learning** — `adage condition --transcripts <export.json>…` accepts `opencode export` files
 (recognised by content: `info` is the first key) alongside Claude Code transcripts
 (`crates/adage-learn/src/opencode.rs`). Steering is detected from synthetic user parts and
 directives appended to tool output, both of which the export records. Sub-agent sessions
@@ -109,7 +109,7 @@ mkdir -p exports
 opencode session list --format json | jq -r '.[].id' | while read -r id; do
   opencode export "$id" > "exports/$id.json"
 done
-adage learn --transcripts exports/*.json
+adage condition --transcripts exports/*.json
 ```
 
 **Install** — `adage install opencode [--write] [--scope project|user]` prints (default) or writes
@@ -126,8 +126,8 @@ the plugin with the binary's absolute path embedded, to `.opencode/plugins/adage
   a new synthetic user message after the session went idle; in `opencode run` it may race with
   process exit (per #16626) — inferred.
 - **Hidden context.** The context message and the appended tool-result text are visible in the
-  transcript and TUI (inferred). They are wrapped in `<adage-signal>` and say they are from Adage.
-- **Batches.** `tool.execute.after` fires per call, so follow/derail windows count calls, not
+  transcript and TUI (inferred). They are wrapped in `<adage-reflex>` and say they are from Adage.
+- **Batches.** `tool.execute.after` fires per call, so follow/ignore windows count calls, not
   turns, as with Claude Code's `PostToolUse`.
 - **Unverified at runtime** (inferred): that `synthetic` is accepted on `session.prompt` parts; that
   a `noReply` message created during `chat.message` lands before the user's message; that the
@@ -183,7 +183,7 @@ Codex's hook contract mirrors Claude Code's, so the adapter
   says plainly it is from Adage, not the user. When that reason comes back as a
   `UserPromptSubmit` prompt, the adapter ignores it rather than matching prompt routes on it.
 
-**Learning** — `adage learn --codex-sessions ~/.codex/sessions` reads every rollout under the
+**Learning** — `adage condition --codex-sessions ~/.codex/sessions` reads every rollout under the
 `YYYY/MM/DD` layout; `--transcripts` also accepts rollout files, recognised by their first line
 (`crates/adage-learn/src/codex.rs`). The importer takes the prompt from the `user_message` event
 (or, in paginated history, the first user message that is not Codex's own context such as
@@ -224,7 +224,7 @@ after schema edits — as each harness records it on disk (12 seeded sessions pe
 `sim/fixtures/`, including noise) and as each harness's hooks deliver it (native payloads for a
 held-out session). `crates/adage-cli/tests/harness_sim.rs` then drives the real binary, per
 harness: learn from that harness's history → replay the held-out session through
-`adage hook <harness> <event>` in the treated and the holdout arm → check every response and
+`adage hook <harness> <event>` in the treated and the control arm → check every response and
 `adage graph --json`. `cargo run -p adage-sim` rewrites the fixtures; a test fails if they drift.
 
 The mock data is written from the formats as recorded above, so the simulator proves Adage
@@ -234,7 +234,7 @@ against *our reading* of each harness, not the harness itself:
 | --- | --- | --- | --- |
 | The importer reads that harness's history and learns the scenario's reflexes (lookup, linked files, dead end, finish line) | simulated (and real, in the demo) | simulated (export shape from source) | simulated (rollout shapes from source, current and older) |
 | Each directive arrives at its moment, in the harness's output shape: lookup and dead end at the prompt, linked files after the lookup, finish line after the schema edit, continue at the first stop, nothing at the second | simulated (and real, in the demo) | simulated | simulated |
-| The holdout arm is silent throughout; `adage graph` counts both sessions, split by arm | simulated | simulated | simulated |
+| The control arm is silent throughout; `adage graph` counts both sessions, split by arm | simulated | simulated | simulated |
 | Adage's own continuation, coming back as a prompt, matches no prompt route | simulated | simulated | simulated |
 | The plugin places text as designed (context message, appended tool output, idle continuation) | — | simulated in node with a fake client, against the real binary | — |
 | Routes learned in one harness deliver in another | simulated (all three histories at once) | simulated (from Codex history) | simulated (all three) |
@@ -248,7 +248,7 @@ OpenCode session ids and Codex UUIDv7 thread ids begin with the creation time, s
 started together were counted as one; graph now keys by the whole id (the dashboard shortens it
 for display).
 
-**First checks on a live install.** OpenCode: export one real session and `adage learn` it; run a
+**First checks on a live install.** OpenCode: export one real session and `adage condition` it; run a
 work-item prompt with the plugin installed and confirm the context message, the appended tool
 text, and the idle continuation reach the model (in the TUI and in `opencode run`). Codex: learn
 from the installed version's `~/.codex/sessions`; add a logging hook next to Adage's and diff the

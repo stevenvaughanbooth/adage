@@ -4,7 +4,7 @@
 //! 2. Hooks, per harness found: the exact file and diff for this repository (Tab: user scope);
 //!    written only on `y`, through `adage install --write`'s own code.
 //! 3. The embedding model (optional): fetched with progress.
-//! 4. A first `adage learn`.
+//! 4. A first `adage condition`.
 //! 5. Auto-learn: `learn.auto = true` in `config.toml` (`adage config set`), if it is off.
 //! 6. The doctor's summary, and where to go next (`adage watch` in a split pane).
 //!
@@ -56,7 +56,7 @@ impl Step {
             Kind::Harnesses => "Harnesses".into(),
             Kind::Hooks(h) => format!("Hooks: {h}"),
             Kind::Model => "Embedding model".into(),
-            Kind::Learn => "First learn".into(),
+            Kind::Learn => "First conditioning".into(),
             Kind::AutoLearn => "Auto-learn".into(),
             Kind::Finish => "Summary".into(),
         }
@@ -288,15 +288,15 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
             Some(m) => out.push(Line::raw(format!("The embedding model is installed: {m}."))),
             None => {
                 out.push(Line::raw("Optional: the static embedding model (potion-base-8M, 31 MB, SHA-256 verified)."));
-                out.push(Line::raw("With it, `adage learn` groups prompts that mean the same thing into intent"));
+                out.push(Line::raw("With it, `adage condition` groups prompts that mean the same thing into intent"));
                 out.push(Line::raw(
                     "families and learns what each usually starts with. Everything else works without it.",
                 ));
             }
         },
         Kind::Learn => {
-            out.push(Line::raw("Run a first `adage learn`: it reads your agents' session history (Claude Code"));
-            out.push(Line::raw("under ~/.claude/projects), mines routes, writes tracks, and compiles the index"));
+            out.push(Line::raw("Run a first `adage condition`: it reads your agents' traces (Claude Code history"));
+            out.push(Line::raw("under ~/.claude/projects), mines reflexes, writes tracks, and compiles the index"));
             out.push(Line::raw("hooks read. It reads transcripts; it never runs anything they contain."));
         }
         Kind::AutoLearn => {
@@ -305,7 +305,7 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
                 Some((false, src)) => format!("off ({src})"),
                 None => "unknown".to_string(),
             };
-            out.push(Line::raw("Learn automatically after agent sessions end, so routes keep up with how your"));
+            out.push(Line::raw("Condition automatically after agent sessions end, so reflexes keep up with how your"));
             out.push(Line::raw("agents work. This sets `learn.auto = true` in:"));
             out.push(Line::from(Span::styled(format!("  {}", w.config_path), t.bold())));
             out.push(dim(&format!("Now: {now}.")));
@@ -339,7 +339,7 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
                     Span::styled("adage watch", t.accent().patch(t.bold())),
                     Span::raw(" in a split pane to see Adage work live, and "),
                     Span::styled("adage ui", t.accent().patch(t.bold())),
-                    Span::raw(" for routes, review, health and settings."),
+                    Span::raw(" for reflexes, review, health and settings."),
                 ]));
             }
         },
@@ -364,7 +364,7 @@ fn hint(w: &Wizard) -> &'static str {
         Kind::Harnesses => "y continue · q stop",
         Kind::Hooks(_) => "y install · Tab this repository / user scope · n skip · ↑ ↓ scroll · q stop",
         Kind::Model => "y fetch · n skip · q stop",
-        Kind::Learn => "y learn now · n skip · q stop",
+        Kind::Learn => "y condition now · n skip · q stop",
         Kind::AutoLearn => "y turn it on · n skip · q stop",
         Kind::Finish => "Enter or q exits",
     }

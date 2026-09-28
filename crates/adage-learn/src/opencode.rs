@@ -57,7 +57,7 @@ fn s<'a>(v: &'a Value, path: &[&str]) -> Option<&'a str> {
 
 fn own_text(t: &str) -> bool {
     let t = t.trim_start();
-    t.starts_with("<adage-signal ") || t.starts_with("Adage finish-line check:")
+    t.starts_with("<adage-reflex ") || t.starts_with("Adage finish-line check:")
 }
 
 /// Parse one export. `None` for sub-agent sessions and sessions without a usable prompt.

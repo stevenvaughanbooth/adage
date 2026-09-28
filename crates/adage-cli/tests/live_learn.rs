@@ -68,7 +68,7 @@ impl World {
         for v in [
             "ADAGE_DISABLE",
             "ADAGE_AUTO_LEARN",
-            "ADAGE_HOLDOUT",
+            "ADAGE_CONTROL",
             "CLAUDECODE",
             "OPENCODE",
             "CODEX_SANDBOX",
@@ -150,7 +150,7 @@ fn every_harness_enqueues_and_starts_a_learner_at_stop_and_session_end() {
         assert_eq!(w.hook(h, e, p), "", "{h} {e}: no routes, nothing to say");
         let spawns = w.spawns();
         assert_eq!(spawns.len(), i + 1, "{h} {e} starts a learner");
-        assert_eq!(spawns[i], vec!["learn", "--auto", "--repo-root", &repo], "{h} {e}");
+        assert_eq!(spawns[i], vec!["condition", "--auto", "--repo-root", &repo], "{h} {e}");
         let reqs = w.requests();
         assert_eq!(reqs.len(), 1, "one request per repository, refreshed");
         let r = &reqs[0];
@@ -217,7 +217,7 @@ fn debounce_and_single_flight() {
 
     // And a learner started now finds the lock held, and leaves without learning or logging.
     let t = Instant::now();
-    let o = w.cmd(&["learn", "--auto", "--repo-root", &w.repo()]).output().unwrap();
+    let o = w.cmd(&["condition", "--auto", "--repo-root", &w.repo()]).output().unwrap();
     assert!(o.status.success(), "{}", World::text(&o));
     assert!(t.elapsed() >= Duration::from_secs(1), "it waited a little for the lock first");
     assert!(w.log().is_empty(), "single flight: the second learner did nothing");
@@ -233,11 +233,11 @@ fn a_learner_that_cannot_start_fails_open() {
     assert_eq!(out, "", "output unchanged");
     let log = std::fs::read_to_string(w.home().join("fail-open.log")).unwrap();
     let v: Value = serde_json::from_str(log.trim()).unwrap();
-    assert_eq!((v["class"].as_str(), v["event"].as_str()), (Some("learn"), Some("Stop")), "{v}");
+    assert_eq!((v["class"].as_str(), v["event"].as_str()), (Some("condition"), Some("Stop")), "{v}");
     assert!(!log.contains(&w.repo()), "no paths in the fail-open log");
 }
 
-/// `adage learn --auto`, run the way a hook starts it: it learns only this repository, logs the
+/// `adage condition --auto`, run the way a hook starts it: it learns only this repository, logs the
 /// changes in the `learn.log` contract, and a second run with nothing new changes nothing.
 #[test]
 fn learn_auto_logs_what_changed() {
@@ -256,12 +256,12 @@ fn learn_auto_logs_what_changed() {
         )
         .unwrap();
     }
-    let o = w.cmd(&["learn", "--auto", "--repo-root", &w.repo()]).output().unwrap();
+    let o = w.cmd(&["condition", "--auto", "--repo-root", &w.repo()]).output().unwrap();
     assert!(o.status.success() && o.stdout.is_empty(), "quiet: {}", World::text(&o));
     let log = w.log();
     assert_eq!(log.len(), 1, "{log:?}");
     let l = &log[0];
-    assert_eq!((l["kind"].as_str(), l["trigger"].as_str()), (Some("learn"), Some("auto")));
+    assert_eq!((l["kind"].as_str(), l["trigger"].as_str()), (Some("condition"), Some("auto")));
     let repo = l["repo"].as_str().unwrap();
     assert!(repo.starts_with("acme-billing@"), "{l}");
     assert_eq!(
@@ -273,7 +273,7 @@ fn learn_auto_logs_what_changed() {
     let changes = l["changes"].as_array().unwrap();
     assert!(changes.len() >= 3, "{l}");
     for c in changes {
-        assert!(["new", "draft"].contains(&c["change"].as_str().unwrap()), "first learn: every route is new: {c}");
+        assert!(["new", "nascent"].contains(&c["change"].as_str().unwrap()), "first learn: every route is new: {c}");
         assert!(c["from"].is_null() && c["to"].is_string() && c["summary"].is_string(), "{c}");
         assert!(c["track"].as_str().unwrap().starts_with("acme-billing-path-"), "{c}");
     }
@@ -303,29 +303,29 @@ fn learn_auto_logs_what_changed() {
     assert_eq!(state["outcome"], "ok", "{state}");
 
     // Again, with nothing new: no changes, and every transcript came from the cache.
-    let o = w.cmd(&["learn", "--auto", "--repo-root", &w.repo()]).output().unwrap();
+    let o = w.cmd(&["condition", "--auto", "--repo-root", &w.repo()]).output().unwrap();
     assert!(o.status.success());
     let log = w.log();
     assert_eq!(log[1]["changes"], json!([]), "{}", log[1]);
     assert_eq!(log[1]["index_generation"], log[0]["index_generation"]);
 
     // A manual learn writes the same kind of line, with trigger manual, one per repository.
-    let o = w.cmd(&["learn", "--demo"]).output().unwrap();
+    let o = w.cmd(&["condition", "--demo"]).output().unwrap();
     assert!(o.status.success(), "{}", World::text(&o));
     let all = w.log();
     let manual: Vec<&Value> = all.iter().skip(2).collect();
     assert_eq!(manual.len(), 2, "two repositories: {manual:?}");
-    assert!(manual.iter().all(|l| l["trigger"] == "manual" && l["kind"] == "learn"));
+    assert!(manual.iter().all(|l| l["trigger"] == "manual" && l["kind"] == "condition"));
     let billing = manual.iter().find(|l| l["repo"] == repo).unwrap();
     assert_eq!(billing["changes"], json!([]), "billing was already learned: {billing}");
     let ledger = manual.iter().find(|l| l["repo"] != repo).unwrap();
     assert!(ledger["changes"].as_array().is_some_and(|c| !c.is_empty()), "{ledger}");
 
-    // A repository that is gone: a learn_error line with a fixed message, no path.
-    let o = w.cmd(&["learn", "--auto", "--repo-root", &w.root.join("gone").to_string_lossy()]).output().unwrap();
+    // A repository that is gone: a condition_error line with a fixed message, no path.
+    let o = w.cmd(&["condition", "--auto", "--repo-root", &w.root.join("gone").to_string_lossy()]).output().unwrap();
     assert!(o.status.success());
     let last = w.log().pop().unwrap();
-    assert_eq!((last["kind"].as_str(), last["class"].as_str()), (Some("learn_error"), Some("repo")), "{last}");
+    assert_eq!((last["kind"].as_str(), last["class"].as_str()), (Some("condition_error"), Some("repo")), "{last}");
     assert!(!last.to_string().contains(&*w.root.to_string_lossy()));
 }
 
@@ -335,25 +335,25 @@ fn config_command_validates_and_refuses_agents() {
     let o = w.cmd(&["config", "--json"]).output().unwrap();
     let v: Value = serde_json::from_slice(&o.stdout).unwrap();
     let keys: Vec<&str> = v["keys"].as_array().unwrap().iter().map(|k| k["key"].as_str().unwrap()).collect();
-    assert!(keys.contains(&"learn.auto") && keys.contains(&"runtime.holdout") && keys.contains(&"learn.thresholds"));
+    assert!(keys.contains(&"learn.auto") && keys.contains(&"runtime.control") && keys.contains(&"learn.thresholds"));
     assert!(v["keys"].as_array().unwrap().iter().all(|k| k["source"] == "default"));
 
     let o = w.cmd(&["config", "set", "learn.min_interval_secs", "30"]).output().unwrap();
     assert!(o.status.success(), "{}", World::text(&o));
     let o = w.cmd(&["config", "get", "learn.min_interval_secs"]).output().unwrap();
     assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "30");
-    let o = w.cmd(&["config", "set", "runtime.holdout", "2"]).output().unwrap();
+    let o = w.cmd(&["config", "set", "runtime.control", "2"]).output().unwrap();
     assert!(!o.status.success() && World::text(&o).contains("between 0 and 1"), "{}", World::text(&o));
     let o = w.cmd(&["config", "set", "learn.nope", "1"]).output().unwrap();
     assert!(!o.status.success() && World::text(&o).contains("unknown key"));
 
     // Environment beats the file, and `config` says so.
-    let o = w.cmd(&["config", "set", "runtime.holdout", "0.3"]).output().unwrap();
+    let o = w.cmd(&["config", "set", "runtime.control", "0.3"]).output().unwrap();
     assert!(o.status.success());
-    let o = w.cmd(&["config", "get", "runtime.holdout"]).env("ADAGE_HOLDOUT", "0.7").output().unwrap();
+    let o = w.cmd(&["config", "get", "runtime.control"]).env("ADAGE_CONTROL", "0.7").output().unwrap();
     assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "0.7");
-    let o = w.cmd(&["config"]).env("ADAGE_HOLDOUT", "0.7").output().unwrap();
-    assert!(World::text(&o).contains("env ADAGE_HOLDOUT"), "{}", World::text(&o));
+    let o = w.cmd(&["config"]).env("ADAGE_CONTROL", "0.7").output().unwrap();
+    assert!(World::text(&o).contains("env ADAGE_CONTROL"), "{}", World::text(&o));
 
     // Inside an agent session, reading is fine and changing is refused, whatever else is set.
     let before = std::fs::read(w.home().join("config.toml")).unwrap();
@@ -374,12 +374,12 @@ fn wait_for(what: &str, limit: Duration, mut f: impl FnMut() -> bool) {
 }
 
 /// The whole loop, for real: a Stop hook starts a detached learner, which learns the history,
-/// logs the new routes and compiles the index; the next prompt is directed. `runtime.holdout` in
-/// the file puts sessions in the holdout arm unless `ADAGE_HOLDOUT` says otherwise.
+/// logs the new routes and compiles the index; the next prompt is directed. `runtime.control` in
+/// the file puts sessions in the control arm unless `ADAGE_CONTROL` says otherwise.
 #[test]
 fn a_real_stop_hook_learns_in_the_background() {
     let w = World::new();
-    w.config("[learn]\nthresholds = \"demo\"\n[runtime]\nholdout = 1.0\n");
+    w.config("[learn]\nthresholds = \"demo\"\n[runtime]\ncontrol = 1.0\n");
     w.history();
     let mut c = w.cmd(&["hook", "claude", "Stop"]);
     c.env_remove("ADAGE_TEST_NO_SPAWN");
@@ -411,11 +411,11 @@ fn a_real_stop_hook_learns_in_the_background() {
         |sid: &str| claude::hook(sid, &w.repo(), "UserPromptSubmit", json!({ "prompt": "Please pick up W-2042" }));
     let mut c = w.cmd(&["hook", "claude", "UserPromptSubmit"]);
     c.env_remove("ADAGE_ARM");
-    assert_eq!(w.hook_with(c, &prompt("live-2")), "", "runtime.holdout = 1: held out");
+    assert_eq!(w.hook_with(c, &prompt("live-2")), "", "runtime.control = 1: held out");
     let mut c = w.cmd(&["hook", "claude", "UserPromptSubmit"]);
-    c.env_remove("ADAGE_ARM").env("ADAGE_HOLDOUT", "0");
+    c.env_remove("ADAGE_ARM").env("ADAGE_CONTROL", "0");
     let out = w.hook_with(c, &prompt("live-3"));
-    assert!(out.contains("W-2042"), "ADAGE_HOLDOUT=0 wins over the file: {out}");
+    assert!(out.contains("W-2042"), "ADAGE_CONTROL=0 wins over the file: {out}");
 
     // Doctor reports it.
     let o = w.cmd(&["doctor", "--json"]).output().unwrap();
@@ -451,7 +451,7 @@ fn doctor_reports_failed_stuck_and_waiting_learners() {
             .to_string(),
     )
     .unwrap();
-    let line = json!({ "ts": old, "kind": "learn_error", "trigger": "auto", "repo": req["repo"], "class": "lock", "error": "taking the tracks lock: WouldBlock" });
+    let line = json!({ "ts": old, "kind": "condition_error", "trigger": "auto", "repo": req["repo"], "class": "lock", "error": "taking the tracks lock: WouldBlock" });
     std::fs::write(w.home().join("learn.log"), format!("{line}\n")).unwrap();
     let doctor = || -> Value {
         let o = w.cmd(&["doctor", "--json"]).output().unwrap();

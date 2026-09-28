@@ -35,7 +35,7 @@ pub struct Transcript {
     pub id: String,
     pub cwd: String,
     pub items: Vec<Item>,
-    /// The session received Adage directives (hook attachments carrying `<adage-signal`).
+    /// The session received Adage directives (hook attachments carrying `<adage-reflex`).
     pub steered: bool,
     pub directed: BTreeSet<String>,
 }
@@ -146,7 +146,7 @@ pub fn parse(text: &str) -> Option<Transcript> {
         }
         let typ = rec.get("type").and_then(Value::as_str).unwrap_or("");
         if matches!(typ, "attachment" | "system") {
-            if line.contains("<adage-signal") {
+            if line.contains("<adage-reflex") {
                 steered = true;
                 route_ids(line, &mut directed);
             }

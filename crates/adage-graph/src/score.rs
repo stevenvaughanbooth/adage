@@ -34,7 +34,7 @@
 //! and Wilson rule of its judgement (`adage-learn`), as every reflex's is: a Beta lower bound here
 //! would demand five or six unanimous traces where three decide everything else (G5).
 //!
-//! [`holdout`] evaluates selected reflexes on held-out sessions: next-action top-1 accuracy
+//! [`held_out`] evaluates selected reflexes on held-out sessions: next-action top-1 accuracy
 //! against an order-1 baseline, conformance (mean −ln p of the next event) and calibration ECE.
 
 use crate::events::{Level, NodeType, NONE};
@@ -716,7 +716,7 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
     } else {
         String::new()
     };
-    // A directive with no value is never delivered (yellow needs V > 0, Track G §6.1). An
+    // A directive with no value is never delivered (prime needs V > 0, Track G §6.1). An
     // obligation (after the last edit) or an avoid (after a failure) is a guard: its worth is in
     // the sessions that would miss it, which p_soon does not see, so its gate is contrast or
     // consistency alone.
@@ -1270,7 +1270,7 @@ pub struct Oracle {
     pub positions: u64,
     /// Σ over contexts of n·H(next | context), bits (divide by `positions`).
     pub nbits: f64,
-    /// Fraction; set by [`Holdout::merge`].
+    /// Fraction; set by [`HeldOut::merge`].
     pub ceiling: f64,
     pub entropy_bits: f64,
 }
@@ -1440,7 +1440,7 @@ pub fn ece_ci(pairs: &[(f64, bool)]) -> (f64, f64) {
 /// Held-out evaluation (Track G §5 conformance, Design §8.5).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-pub struct Holdout {
+pub struct HeldOut {
     pub sessions: usize,
     /// Positions whose next alphabet event is an act.
     pub positions: u64,
@@ -1465,7 +1465,7 @@ pub struct Holdout {
     pub ece_selected: f64,
     pub ece_selected_pairs: u64,
     pub ece_selected_ci: (f64, f64),
-    /// Raw counts, so held-out folds pool exactly ([`Holdout::merge`]).
+    /// Raw counts, so held-out folds pool exactly ([`HeldOut::merge`]).
     pub hits_engine: u64,
     pub hits_baseline: u64,
     pub hits_order2: u64,
@@ -1479,7 +1479,7 @@ pub struct Holdout {
     pub selected_pairs: Vec<(f64, bool)>,
 }
 
-impl Holdout {
+impl HeldOut {
     fn finish(&mut self) {
         let r = |a: u64, b: u64| if b == 0 { 0.0 } else { a as f64 / b as f64 };
         self.top1_engine = r(self.hits_engine, self.positions);
@@ -1499,8 +1499,8 @@ impl Holdout {
     }
 
     /// Pool held-out folds.
-    pub fn merge(parts: &[Holdout]) -> Holdout {
-        let mut h = Holdout { bins: bins10(), bins_raw: bins10(), bins_selected: bins10(), ..Default::default() };
+    pub fn merge(parts: &[HeldOut]) -> HeldOut {
+        let mut h = HeldOut { bins: bins10(), bins_raw: bins10(), bins_selected: bins10(), ..Default::default() };
         let add = |a: &mut Bins, b: &Bins| {
             for (x, y) in a.iter_mut().zip(b) {
                 x.0 += y.0;
@@ -1674,11 +1674,11 @@ pub fn next_params() -> NextParams {
 /// backoff model against the order-1 and order-2 baselines (every predictor sees the same
 /// history, alphabet events only, and predicts the exact label of the next alphabet event when
 /// it is an act), conformance, oracle ceilings, and the calibration of every candidate.
-pub fn holdout(train: &Db, rules: &[Rule], test: &[DbSession]) -> Holdout {
+pub fn held_out(train: &Db, rules: &[Rule], test: &[DbSession]) -> HeldOut {
     let base = Order1::train(train);
     let order2 = Order2::train(train);
     let model = NextModel::fit(&train.sessions, &next_params());
-    let mut h = Holdout {
+    let mut h = HeldOut {
         sessions: test.len(),
         chosen: vec![model.chosen],
         bins: bins10(),

@@ -3,7 +3,7 @@
 //! its signature.
 //!
 //! They are **informational only**. Nothing reads them to decide anything: they never grant a
-//! strength (aspect), a level or an approval. `adage review` shows them marked "self-reported by
+//! strength (strength), a level or an approval. `adage review` shows them marked "self-reported by
 //! signer", because a signature proves who wrote the numbers, not that they are true.
 //!
 //! [`check`] reads one as untrusted input against the schema's envelope, strictly: every key
@@ -325,7 +325,7 @@ mod tests {
             ("run id", Box::new(|v| v["run_id"] = json!("xyz"))),
             ("tier", Box::new(|v| v["tier"] = json!("l9"))),
             ("v1 tier", Box::new(|v| v["schema_version"] = json!(1))),
-            ("unknown key", Box::new(|v| v["grants"] = json!("green"))),
+            ("unknown key", Box::new(|v| v["grants"] = json!("fire"))),
             ("invisible", Box::new(|v| v["suite"] = json!("a\u{202e}b"))),
             ("newline", Box::new(|v| v["suite"] = json!("a\nb"))),
             ("params hash", Box::new(|v| v["params_hash"] = json!("00"))),

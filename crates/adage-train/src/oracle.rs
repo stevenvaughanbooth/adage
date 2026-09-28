@@ -1,12 +1,12 @@
 //! The trajectory oracle: what a session did about a claim, read from its transcript (parsed and
-//! normalised by adage-learn, exactly as `adage learn` reads it).
+//! normalised by adage-learn, exactly as `adage condition` reads it).
 
 use crate::claims::{argv_of, Claim, ClaimKind};
 use adage_core::{keys, CanonicalAction, CommandTable, Effect};
 use adage_learn::import::Session;
 use std::path::Path;
 
-/// Parse a transcript as `adage learn` would, under `repo` (the forced repository key).
+/// Parse a transcript as `adage condition` would, under `repo` (the forced repository key).
 pub fn read(path: &Path, repo: &str, table: &CommandTable) -> Option<Session> {
     adage_learn::read_session(path, table, Some(repo))
 }

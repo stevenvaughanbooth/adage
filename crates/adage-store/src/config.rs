@@ -6,12 +6,12 @@
 //! min_interval_secs = 120    # at most one automatic learn per repository per interval
 //! thresholds = "default"     # or "demo" (lower evidence bars, for demos and small histories)
 //! claude_projects = ""       # Claude Code history ("" = ~/.claude/projects)
-//! codex_sessions = ""        # Codex rollouts to learn from automatically ("" = none)
+//! codex_sessions = ""        # Codex rollouts to condition on automatically ("" = none)
 //! opencode_exports = ""      # a directory of `opencode export` files ("" = none)
 //! parse_cache = true         # keep parsed transcripts under cache/sessions (faster re-learning)
 //!
 //! [runtime]
-//! holdout = 0.1              # share of sessions held out as the control arm
+//! control = 0.1              # share of sessions held out as the control arm
 //!
 //! [instincts]
 //! enabled = true             # bind Adage's built-in defaults from each repository's files
@@ -20,7 +20,7 @@
 //! ```
 //!
 //! Every key has a default, so a missing file is the default configuration. Environment
-//! variables win over the file: `ADAGE_HOLDOUT` for `runtime.holdout` and `ADAGE_AUTO_LEARN`
+//! variables win over the file: `ADAGE_CONTROL` for `runtime.control` and `ADAGE_AUTO_LEARN`
 //! (`0`/`1`) for `learn.auto`. A file that cannot be parsed, an unknown key, or a value that fails
 //! validation is reported (`adage config`, `adage doctor`) and that key keeps its default: hooks
 //! never fail because of the configuration.
@@ -62,8 +62,8 @@ pub struct Config {
     pub learn_opencode_exports: Option<PathBuf>,
     /// Keep parsed transcripts in `$ADAGE_HOME/cache/sessions` (`adage_learn::cache`).
     pub learn_parse_cache: bool,
-    /// The holdout share; as with `ADAGE_HOLDOUT`, 1 or more is shadow mode.
-    pub runtime_holdout: f64,
+    /// The control share; as with `ADAGE_CONTROL`, 1 or more is shadow mode.
+    pub runtime_control: f64,
     /// Bind instincts (prebuilt routes) from each repository's declared files when learning.
     pub instincts_enabled: bool,
     /// Instinct packs to bind.
@@ -122,28 +122,28 @@ pub const KEYS: &[Key] = &[
         kind: Kind::Bool,
         default: "true",
         env: Some("ADAGE_AUTO_LEARN"),
-        doc: "learn automatically, in the background, when an agent session stops or ends",
+        doc: "condition automatically, in the background, when an agent session stops or ends",
     },
     Key {
         name: "learn.min_interval_secs",
         kind: Kind::Secs,
         default: "120",
         env: None,
-        doc: "at most one automatic learn per repository in this many seconds (0 to 86400)",
+        doc: "at most one automatic conditioning run per repository in this many seconds (0 to 86400)",
     },
     Key {
         name: "learn.thresholds",
         kind: Kind::Thresholds,
         default: "default",
         env: None,
-        doc: "evidence bars for `adage learn` and automatic learning: default, or demo (lower)",
+        doc: "evidence bars for `adage condition` and automatic learning: default, or demo (lower)",
     },
     Key {
         name: "learn.claude_projects",
         kind: Kind::Dir,
         default: "",
         env: None,
-        doc: "Claude Code history to learn from (\"\" = ~/.claude/projects)",
+        doc: "Claude Code traces to condition on (\"\" = ~/.claude/projects)",
     },
     Key {
         name: "learn.codex_sessions",
@@ -188,10 +188,10 @@ pub const KEYS: &[Key] = &[
         doc: "instinct ids never to bind, comma-separated, e.g. U3,N1 (see docs/instincts.md)",
     },
     Key {
-        name: "runtime.holdout",
+        name: "runtime.control",
         kind: Kind::Share,
         default: "0.1",
-        env: Some("ADAGE_HOLDOUT"),
+        env: Some("ADAGE_CONTROL"),
         doc: "share of sessions held out as the control arm (Adage decides but says nothing)",
     },
 ];
@@ -343,7 +343,7 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
         }
         if let Some(var) = k.env {
             if let Some(raw) = env(var) {
-                // ADAGE_HOLDOUT keeps its meaning from before the file: any number, where 1 or
+                // ADAGE_CONTROL keeps its meaning from before the file: any number, where 1 or
                 // more is shadow mode.
                 let ok = match k.kind {
                     Kind::Share => raw.trim().parse::<f64>().ok().filter(|x| x.is_finite()).map(|x| x.to_string()),
@@ -367,7 +367,7 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
         learn_codex_sessions: home_relative(&text("learn.codex_sessions")),
         learn_opencode_exports: home_relative(&text("learn.opencode_exports")),
         learn_parse_cache: parse_bool(&text("learn.parse_cache")).unwrap_or(true),
-        runtime_holdout: text("runtime.holdout").parse().unwrap_or(0.1),
+        runtime_control: text("runtime.control").parse().unwrap_or(0.1),
         instincts_enabled: parse_bool(&text("instincts.enabled")).unwrap_or(true),
         instincts_packs: split_ids(&text("instincts.packs")),
         instincts_disabled: split_ids(&text("instincts.disabled")),
@@ -434,7 +434,7 @@ mod tests {
         assert_eq!(c.learn_thresholds, Thresholds::Default);
         assert_eq!((c.learn_claude_projects.clone(), c.learn_codex_sessions.clone()), (None, None));
         assert!(c.learn_parse_cache);
-        assert_eq!(c.runtime_holdout, 0.1);
+        assert_eq!(c.runtime_control, 0.1);
         assert!(c.instincts_enabled);
         assert_eq!(c.instincts_packs, vec!["core".to_string()]);
         assert!(c.instincts_disabled.is_empty());
@@ -446,27 +446,27 @@ mod tests {
     fn env_beats_file_beats_default() {
         let d = tempfile::tempdir().unwrap();
         let f = d.path().join(FILE);
-        std::fs::write(&f, "[learn]\nauto = false\nthresholds = \"demo\"\n[runtime]\nholdout = 0.25\n").unwrap();
+        std::fs::write(&f, "[learn]\nauto = false\nthresholds = \"demo\"\n[runtime]\ncontrol = 0.25\n").unwrap();
         let l = load_from(&f, &no_env);
         assert!(!l.config.learn_auto);
         assert_eq!(l.config.learn_thresholds, Thresholds::Demo);
-        assert_eq!(l.config.runtime_holdout, 0.25);
+        assert_eq!(l.config.runtime_control, 0.25);
         assert_eq!(l.get("learn.auto").unwrap().1, Source::File);
         assert_eq!(l.get("learn.min_interval_secs").unwrap(), &("120".to_string(), Source::Default));
         let env = |v: &str| match v {
-            "ADAGE_HOLDOUT" => Some("1".to_string()),
+            "ADAGE_CONTROL" => Some("1".to_string()),
             "ADAGE_AUTO_LEARN" => Some("1".to_string()),
             _ => None,
         };
         let l = load_from(&f, &env);
         assert!(l.config.learn_auto, "ADAGE_AUTO_LEARN wins over the file");
-        assert_eq!(l.config.runtime_holdout, 1.0, "ADAGE_HOLDOUT keeps shadow mode");
-        assert_eq!(l.get("runtime.holdout").unwrap().1, Source::Env("ADAGE_HOLDOUT"));
+        assert_eq!(l.config.runtime_control, 1.0, "ADAGE_CONTROL keeps shadow mode");
+        assert_eq!(l.get("runtime.control").unwrap().1, Source::Env("ADAGE_CONTROL"));
         // An invalid environment value is ignored, and reported.
-        let bad = |v: &str| (v == "ADAGE_HOLDOUT").then(|| "lots".to_string());
+        let bad = |v: &str| (v == "ADAGE_CONTROL").then(|| "lots".to_string());
         let l = load_from(&f, &bad);
-        assert_eq!(l.config.runtime_holdout, 0.25);
-        assert!(l.problems.iter().any(|p| p.contains("ADAGE_HOLDOUT")), "{:?}", l.problems);
+        assert_eq!(l.config.runtime_control, 0.25);
+        assert!(l.problems.iter().any(|p| p.contains("ADAGE_CONTROL")), "{:?}", l.problems);
     }
 
     #[test]
@@ -475,7 +475,7 @@ mod tests {
         let f = d.path().join(FILE);
         std::fs::write(
             &f,
-            "[learn]\nauto = \"yes please\"\nmin_interval_secs = -5\nthresholds = \"lax\"\ncodex_sessions = \"relative/dir\"\ntypo = 1\n[runtime]\nholdout = 3.0\n",
+            "[learn]\nauto = \"yes please\"\nmin_interval_secs = -5\nthresholds = \"lax\"\ncodex_sessions = \"relative/dir\"\ntypo = 1\n[runtime]\ncontrol = 3.0\n",
         )
         .unwrap();
         let l = load_from(&f, &no_env);
@@ -495,7 +495,7 @@ mod tests {
         std::fs::write(paths.config(), "[learn]\nauto = false\n[other]\nkept = 1\n").unwrap();
         assert_eq!(set(&paths, "learn.min_interval_secs", "30").unwrap(), "30");
         assert_eq!(set(&paths, "learn.thresholds", "demo").unwrap(), "demo");
-        assert_eq!(set(&paths, "runtime.holdout", "0.2").unwrap(), "0.2");
+        assert_eq!(set(&paths, "runtime.control", "0.2").unwrap(), "0.2");
         assert_eq!(set(&paths, "learn.codex_sessions", "~/.codex/sessions").unwrap(), "~/.codex/sessions");
         assert_eq!(set(&paths, "instincts.disabled", "U3, N1").unwrap(), "U3,N1");
         assert_eq!(set(&paths, "instincts.enabled", "false").unwrap(), "false");
@@ -503,7 +503,7 @@ mod tests {
             ("learn.min_interval_secs", "soon"),
             ("learn.min_interval_secs", "100000"),
             ("learn.thresholds", "lax"),
-            ("runtime.holdout", "1.5"),
+            ("runtime.control", "1.5"),
             ("learn.auto", "maybe"),
             ("learn.codex_sessions", "relative"),
             ("learn.nope", "1"),
@@ -516,7 +516,7 @@ mod tests {
         assert!(!l.config.learn_auto, "untouched keys are kept");
         assert_eq!(l.config.learn_min_interval_secs, 30);
         assert_eq!(l.config.learn_thresholds, Thresholds::Demo);
-        assert_eq!(l.config.runtime_holdout, 0.2);
+        assert_eq!(l.config.runtime_control, 0.2);
         assert!(l.config.learn_codex_sessions.unwrap().ends_with(".codex/sessions"));
         assert_eq!(l.config.instincts_disabled, vec!["U3".to_string(), "N1".to_string()]);
         assert!(!l.config.instincts_enabled);

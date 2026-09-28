@@ -1,12 +1,14 @@
-//! adage-train: compile a skill into staged reflexes (docs/training.md).
+//! adage-train: grow reflexes from a skill (docs/training.md). People reach it as `adage train`,
+//! which executes this binary with the same arguments (the `adage` binary never starts agent
+//! sessions itself).
 //!
-//! adage-train plan --from <SKILL.md|CONTRIBUTING.md|Makefile|package.json|workflow.yml|runbook.md>
+//! adage train plan --from <SKILL.md|CONTRIBUTING.md|Makefile|package.json|workflow.yml|runbook.md>
 //!                  [--repo <path>] [--seed N] [--sessions N] [--model ID] [--json] [--out plan.json]
-//! adage-train run --plan plan.json [--harness claude-code|fake] [--fake-world world.json]
+//! adage train --plan plan.json [--harness claude-code|fake] [--fake-world world.json]
 //!                 [--model ID] [--budget USD] [--max-turns N] [--concurrency N] [--validate N]
 //!                 [--oracle trajectory] [--container none] [--run-id ID] [--adage PATH]
 //!                 [--thresholds default|demo] [--timeout-secs N] [--keep] [--json] [--execute]
-//! adage-train report <run id|run dir> [--json]
+//! adage train report <run id|run dir> [--json]
 
 use adage_train::fake::{Fake, FakeWorld};
 use adage_train::harness::{ClaudeCode, Harness};
@@ -15,14 +17,14 @@ use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "usage:
-  adage-train plan --from <file> [--repo <path>] [--seed N] [--sessions N] [--model ID] [--json] [--out plan.json]
-  adage-train run --plan plan.json [--harness claude-code|fake] [--model ID] [--budget USD] [--max-turns N]
+  adage train plan --from <file> [--repo <path>] [--seed N] [--sessions N] [--model ID] [--json] [--out plan.json]
+  adage train --plan plan.json [--harness claude-code|fake] [--model ID] [--budget USD] [--max-turns N]
                   [--concurrency N] [--validate N] [--oracle trajectory] [--container none] [--run-id ID]
                   [--adage PATH] [--thresholds default|demo] [--timeout-secs N] [--keep] [--json] [--execute]
                   [--forward-env NAME,NAME..] [--host-auth]
-  adage-train report <run id | run dir> [--json]
+  adage train report <run id | run dir> [--json]
 
-`plan` is free: it reads files and executes nothing. `run` without --execute is a dry run: it prints
+`plan` is free: it reads files and executes nothing. `--plan` without --execute is a dry run: it prints
 every session, the exact commands and the isolation, and exits. With --execute it starts real agent
 sessions that spend money, and refuses unless a person is at a terminal outside any agent session.
 `--forward-env` passes the named variables of your environment to every isolated session (for a
@@ -87,10 +89,13 @@ fn real_main(argv: Vec<String>) -> Result<()> {
         println!("{USAGE}");
         return Ok(());
     };
+    // `adage train --plan plan.json …` runs a plan: the options come first, with no subcommand.
+    if cmd.starts_with("--") && cmd != "--help" {
+        return cmd_run(Args { rest: argv });
+    }
     let mut a = Args { rest: argv[1..].to_vec() };
     match cmd.as_str() {
         "plan" => cmd_plan(&mut a).and_then(|_| a.done().map(|_| ())),
-        "run" => cmd_run(a),
         "report" => cmd_report(a),
         "-h" | "--help" | "help" => {
             println!("{USAGE}");
@@ -124,9 +129,9 @@ fn cmd_plan(a: &mut Args) -> Result<()> {
     } else {
         print!("{}", plan::render(&p));
         if let Some(out) = out {
-            println!("\nplan written to {out}; next: adage-train run --plan {out}   (a dry run)");
+            println!("\nplan written to {out}; next: adage train --plan {out}   (a dry run)");
         } else {
-            println!("\n(pass --out plan.json to save it for `adage-train run --plan`)");
+            println!("\n(pass --out plan.json to save it for `adage train --plan`)");
         }
     }
     Ok(())
@@ -146,7 +151,9 @@ fn harness_for(name: &str, world: Option<&str>, forward: &[String], host_auth: b
 }
 
 fn cmd_run(mut a: Args) -> Result<()> {
-    let plan_path = a.value("--plan")?.context("run needs --plan plan.json")?;
+    let plan_path = a
+        .value("--plan")?
+        .context("adage train needs --plan plan.json (make one with `adage train plan --from <file>`)")?;
     let p = plan::load(Path::new(&plan_path))?;
     let mut o = run::RunOptions::defaults(adage_home());
     o.model = p.estimate.model.clone();

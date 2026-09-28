@@ -1,4 +1,4 @@
-// Adage for OpenCode — put your agent on rails.
+// Adage for OpenCode — agent traces become reflexes.
 //
 // A thin bridge: each documented plugin hook below spawns the adage binary (no shell) with a small
 // JSON payload on stdin and reads back {"context": text} or {"continue": reason}. The text is

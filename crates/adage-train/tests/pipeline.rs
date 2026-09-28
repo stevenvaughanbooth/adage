@@ -182,11 +182,11 @@ fn fake_end_to_end_compiles_the_right_claim_and_flags_the_stale_one() {
         assert_eq!(t.manifest.scope.repo, "example.com/acme/billing");
         assert_eq!(t.manifest.track.provenance, prov);
         assert!(t.routes.iter().all(|r| r.evidence.provenance == prov));
-        // The synthetic cap: never green, never beyond probation.
+        // The synthetic cap: never fire, never beyond forming.
         assert!(t
             .routes
             .iter()
-            .all(|r| r.aspect != adage_tracks::Aspect::Green && r.state != adage_tracks::RouteState::Active));
+            .all(|r| r.strength != adage_tracks::Strength::Fire && r.state != adage_tracks::RouteState::Firm));
     }
     let side: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(dir.join("staged/provenance.json")).unwrap()).unwrap();
@@ -274,7 +274,7 @@ fn a_plain_verify_claim_the_sessions_follow_compiles() {
         .expect("the claimed check is staged");
     assert_eq!(route.step, adage_tracks::Step::Run { command: "make test".into() });
     assert!(matches!(&route.trigger, adage_tracks::Trigger::AfterEdit { .. }));
-    assert_eq!(route.state, adage_tracks::RouteState::Probation, "the synthetic cap applies");
+    assert_eq!(route.state, adage_tracks::RouteState::Forming, "the synthetic cap applies");
     let rep = report::build(&dir, &p, &state).unwrap();
     let v = rep.claims.iter().find(|x| x.id == c.id).unwrap().verdict.clone();
     assert!(matches!(&v, Verdict::Compiled { route } if route.starts_with("finish-check-")), "{v:?}");
@@ -334,7 +334,7 @@ fn the_dry_run_writes_nothing_and_shows_exact_commands() {
     let reflex: Vec<&str> =
         d["examples"]["reflex"]["command"].as_array().unwrap().iter().map(|a| a.as_str().unwrap()).collect();
     assert!(!reflex.contains(&"--append-system-prompt"));
-    assert_eq!(d["examples"]["reflex"]["adage_env"]["ADAGE_HOLDOUT"], "0");
+    assert_eq!(d["examples"]["reflex"]["adage_env"]["ADAGE_CONTROL"], "0");
     assert_eq!(d["examples"]["explore"]["adage_env"]["ADAGE_DISABLE"], "1");
     assert!(!text.contains("sk-test") && !text.contains("nope"));
     assert_eq!(d["examples"]["explore"]["settings"]["sandbox"]["enabled"], true);
@@ -362,7 +362,7 @@ fn the_cli_refuses_to_execute_inside_an_agent_session() {
     assert!(String::from_utf8_lossy(&st.stdout).contains("nothing was executed"));
     for (k, v) in [("CLAUDECODE", "1"), ("ADAGE_TRAIN_SESSION", "x/y")] {
         let st = Command::new(bin())
-            .args(["run", "--plan"])
+            .args(["--plan"])
             .arg(&out)
             .args(["--budget", "1", "--execute"])
             .env("ADAGE_HOME", tmp.path().join("h"))
@@ -379,7 +379,7 @@ fn the_cli_refuses_to_execute_inside_an_agent_session() {
     assert!(!tmp.path().join("h").exists());
     // Without a terminal (and without the CI switch): refused too.
     let st = Command::new(bin())
-        .args(["run", "--plan"])
+        .args(["--plan"])
         .arg(&out)
         .args(["--budget", "1", "--execute"])
         .env_remove("CLAUDECODE")
@@ -393,7 +393,7 @@ fn the_cli_refuses_to_execute_inside_an_agent_session() {
     assert!(String::from_utf8_lossy(&st.stderr).contains("needs a person at a terminal"));
     // The fake harness runs end to end from the CLI, and `report` reads the run back.
     let st = Command::new(bin())
-        .args(["run", "--plan"])
+        .args(["--plan"])
         .arg(&out)
         .args(["--harness", "fake", "--fake-world"])
         .arg(fixtures().join("world.json"))

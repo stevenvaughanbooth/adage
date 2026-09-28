@@ -33,7 +33,7 @@
 //! - (Track G G3) a **scope** route runs the convention's command after an edit of its glob, with
 //!   the command's `{slot}` bound from a segment of the edited path (an `edit_segment` slot whose
 //!   contract accepts every sample and rejects every counter-sample); an **env_sync** route runs
-//!   the convention's environment step after an edit of its glob (it is a draft until a person
+//!   the convention's environment step after an edit of its glob (it is nascent until a person
 //!   approves it, as its ceiling requires); a **sequence** route runs the convention's `steps`, in
 //!   order, after an edit of its glob.
 //!
@@ -171,7 +171,7 @@ pub struct Convention {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub steps: Vec<String>,
     /// How a generator planted it (`evals/gen`: a dead end's `mode`, `instinct_violation` for the
-    /// retired universal default). Informational.
+    /// superseded universal default). Informational.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
     /// The failure (or staleness) signature the sandbox prints. Informational.
@@ -496,7 +496,7 @@ pub struct RouteMatch {
     pub id: String,
     pub kind: String,
     pub step: String,
-    /// The route's state (a learned environment step is a draft until reviewed).
+    /// The route's state (a learned environment step is nascent until reviewed).
     pub state: String,
     /// Conventions this route matches.
     pub matches: Vec<String>,
@@ -688,8 +688,8 @@ fn repo_files(root: &Path) -> Vec<String> {
 /// `adage eval routes <gen-bundle>`: learn from every rehearsal transcript of a generated bundle
 /// (`python3 evals/gen/rehearse.py <bundle> --no-learn` writes them) at the demo thresholds and no
 /// instincts, as the rehearsal does, then score
-/// every learned route **in any state but retired** against the bundle's conventions: an
-/// environment step is a draft until a person approves it, and it is still what was learned.
+/// every learned route **in any state but extinguished** against the bundle's conventions: an
+/// environment step is nascent until a person approves it, and it is still what was learned.
 pub fn run_bundle(dir: &Path) -> Result<RoutesReport> {
     let conv = Conventions::from_bundle(dir)?;
     let reh = dir.join("rehearsal");
@@ -724,7 +724,7 @@ pub fn run_bundle(dir: &Path) -> Result<RoutesReport> {
     let learned: Vec<Route> = adage_tracks::io::read_all(&tracks)?
         .into_iter()
         .flat_map(|t| t.routes)
-        .filter(|r| r.state != adage_tracks::RouteState::Retired)
+        .filter(|r| r.state != adage_tracks::RouteState::Extinguished)
         .collect();
     let refs: Vec<&Route> = learned.iter().collect();
     let (live, inert_routes) = live_and_inert(&refs);
@@ -751,7 +751,7 @@ pub fn run_bundle(dir: &Path) -> Result<RoutesReport> {
         task_overlap: 0,
         task_overlap_ids: vec![],
         leaky: false,
-        split_note: Some("every rehearsal transcript; routes in any state but retired".into()),
+        split_note: Some("every rehearsal transcript; routes in any state but extinguished".into()),
         index_file: None,
         conventions_file: "conventions.json".into(),
         sandbox: conv.sandbox.clone(),
@@ -852,18 +852,6 @@ pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
     })
 }
 
-/// A route state in the lexicon's words (docs/lexicon.md).
-fn lexicon_state(s: &str) -> &str {
-    match s {
-        "draft" => "nascent",
-        "probation" => "forming",
-        "active" => "firm",
-        "stale" => "dormant",
-        "retired" => "extinguished",
-        other => other,
-    }
-}
-
 /// Human-readable routes report. Deterministic, like the JSON.
 pub fn render_text(r: &RoutesReport) -> String {
     use std::fmt::Write;
@@ -893,7 +881,7 @@ pub fn render_text(r: &RoutesReport) -> String {
             (true, false) => format!("part of {}", x.partial.join(", ")),
             (true, true) => "FALSE".to_string(),
         };
-        let state = if x.state == "active" { String::new() } else { format!(" [{}]", lexicon_state(&x.state)) };
+        let state = if x.state == "firm" { String::new() } else { format!(" [{}]", x.state) };
         let _ = writeln!(s, "  {:<22} {:<12} {:<44} {}{state}", x.id, x.kind, x.step, verdict);
         for m in &x.misses {
             let _ = writeln!(s, "      not {m}");
@@ -964,7 +952,7 @@ mod tests {
     fn route(id: &str, trigger: serde_json::Value, step: serde_json::Value, slots: serde_json::Value) -> Route {
         serde_json::from_value(serde_json::json!({
             "id": id, "summary": "s", "trigger": trigger, "step": step, "slots": slots,
-            "effect": "observe", "aspect": "green", "state": "active",
+            "effect": "observe", "strength": "fire", "state": "firm",
             "evidence": {"days": 1, "deviations_failed": 0, "lower_bound": 0.5, "median_position": 0.0,
                          "models": [], "opportunities": 1, "provenance": "desire-path", "rate": 1.0,
                          "successes": 0, "support": 1, "turns_saved": 0.0}

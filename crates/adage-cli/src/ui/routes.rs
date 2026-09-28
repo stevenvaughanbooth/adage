@@ -2,9 +2,9 @@
 //! counts (from `adage graph`'s build) and the review decisions that apply to it (from `adage
 //! review`).
 
-use super::theme::parse_aspect;
+use super::theme::parse_strength;
 use adage_store::Paths;
-use adage_tracks::Aspect;
+use adage_tracks::Strength;
 use anyhow::Result;
 use serde_json::Value;
 
@@ -12,7 +12,7 @@ use serde_json::Value;
 pub struct LiveCounts {
     pub emitted: u64,
     pub followed: u64,
-    pub derailed: u64,
+    pub ignored: u64,
     pub met: u64,
     pub would_have: u64,
     pub unaided: u64,
@@ -29,7 +29,7 @@ pub struct RouteRow {
     pub imported: bool,
     pub in_index: bool,
     pub id: String,
-    pub aspect: Aspect,
+    pub strength: Strength,
     pub ceiling: String,
     pub effect: String,
     pub state: String,
@@ -82,7 +82,7 @@ pub fn from_graph(
                 repo: r["repo"].as_str().unwrap_or("").to_string(),
                 imported: r["imported"].as_bool().unwrap_or(false),
                 in_index: r["in_index"].as_bool().unwrap_or(false),
-                aspect: r["aspect"].as_str().and_then(parse_aspect).unwrap_or(Aspect::Yellow),
+                strength: r["strength"].as_str().and_then(parse_strength).unwrap_or(Strength::Prime),
                 ceiling: r["ceiling"].as_str().unwrap_or("").to_string(),
                 effect: r["effect"].as_str().unwrap_or("").to_string(),
                 state: r["state"].as_str().unwrap_or("").to_string(),
@@ -96,11 +96,11 @@ pub fn from_graph(
                 live: LiveCounts {
                     emitted: n(&l["emitted"]),
                     followed: n(&l["followed"]),
-                    derailed: n(&l["derailed"]),
+                    ignored: n(&l["ignored"]),
                     met: n(&l["obligation_met"]),
                     would_have: n(&l["would_have"]),
-                    unaided: n(&l["holdout"]["unaided"]),
-                    not_reached: n(&l["holdout"]["not_reached"]),
+                    unaided: n(&l["control"]["unaided"]),
+                    not_reached: n(&l["control"]["not_reached"]),
                 },
                 directive: r["directive"].as_str().unwrap_or("").to_string(),
                 verbs: st.map(|s| s.verbs.clone()).unwrap_or_default(),
@@ -121,6 +121,6 @@ pub fn load(paths: &Paths) -> Result<Routes> {
     Ok(from_graph(&g, &standings))
 }
 
-/// A review verb and its key in the Routes tab.
+/// A review verb and its key in the Reflexes tab.
 pub const ACTIONS: [(char, &str); 6] =
-    [('a', "approve"), ('r', "reject"), ('d', "demote"), ('p', "promote"), ('n', "pin"), ('x', "dismiss")];
+    [('a', "approve"), ('e', "extinguish"), ('w', "weaken"), ('s', "strengthen"), ('n', "pin"), ('x', "dismiss")];

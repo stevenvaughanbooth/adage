@@ -89,7 +89,7 @@ steps:
     run: {{ argv: ["./scripts/wi-lookup", "{{item}}", "--json"] }}
     effect: observe
     script: {{ path: scripts/wi-lookup, closure: ref, sha256: "{sha}" }}
-aspect: green
+strength: fire
 exec: {{ level: E1 }}
 "#
         ),
@@ -155,10 +155,10 @@ fn an_lref_script_binds_only_while_its_hash_matches() {
     assert_eq!(lookup.route_exec_digest, pack.route_exec_digest("lookup").unwrap());
     let exec = lookup.exec().unwrap();
     assert_eq!((exec.max_level, exec.scripts.len()), (Level::E1, 1));
-    // The runtime form: today's route model, at probation, the command table's effect.
+    // The runtime form: today's route model, at forming, the command table's effect.
     let rt = lookup.route.as_ref().unwrap();
     assert_eq!(rt.step, adage_tracks::Step::Run { command: "./scripts/wi-lookup {item} --json".into() });
-    assert_eq!(rt.state, adage_tracks::RouteState::Probation);
+    assert_eq!(rt.state, adage_tracks::RouteState::Forming);
     assert_eq!(rt.slots.len(), 1);
     // Deterministic.
     assert_eq!(bind(&pack, &Target::checkout(&root), &e), b);
@@ -305,9 +305,9 @@ fn detector_packs_apply_where_their_detector_fires() {
         let mut p = lref_pack("kind = \"any\"");
         p.manifest.pack.origin = adage_pack::PackOrigin::Instinct;
         for r in &mut p.routes {
-            r.aspect = adage_tracks::Aspect::Yellow;
+            r.strength = adage_tracks::Strength::Prime;
             if r.shape == adage_pack::Shape::Avoid {
-                r.aspect = adage_tracks::Aspect::Red;
+                r.strength = adage_tracks::Strength::Inhibit;
             }
         }
         p.routes.retain(|r| r.shape != adage_pack::Shape::Avoid);

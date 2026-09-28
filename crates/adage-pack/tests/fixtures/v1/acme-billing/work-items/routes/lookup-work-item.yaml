@@ -15,8 +15,8 @@ slots:
     kind: pattern
     regex: ^W-\d{4}$
 effect: observe
-aspect: green
-state: active
+strength: fire
+state: firm
 exit:
 - when: intent_changes
 evidence:

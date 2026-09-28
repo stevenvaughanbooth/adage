@@ -1,4 +1,4 @@
-//! `adage-train run`: the dry run (the default), and with `--execute` the exploration sessions,
+//! `adage train`: the dry run (the default), and with `--execute` the exploration sessions,
 //! mining into staged reflexes, and the optional validation arms.
 //!
 //! Layout under `$ADAGE_HOME/train/<run>/`:
@@ -10,7 +10,7 @@
 //! sessions/<job>/    each session's raw harness output (stream.jsonl)
 //! transcripts/<phase>/<job>.jsonl
 //!                    transcripts copied out of each session's own config directory; never
-//!                    anywhere `adage learn` or live learning reads history
+//!                    anywhere `adage condition` or live learning reads history
 //! staged/tracks/     reflexes mined from the exploration transcripts, under the repository's
 //!                    key; NOT installed, NOT in any index hooks read
 //! staged/index.json  their compiled index (what the reflex arm's hooks read, re-keyed)
@@ -239,7 +239,7 @@ fn arm_env(arm: Arm, run: &str, job: &str, reflex_home: &Path) -> BTreeMap<Strin
     if arm.hooks() {
         e.insert("ADAGE_HOME".to_string(), reflex_home.to_string_lossy().to_string());
         e.insert("ADAGE_ARM".to_string(), "treated".to_string());
-        e.insert("ADAGE_HOLDOUT".to_string(), "0".to_string());
+        e.insert("ADAGE_CONTROL".to_string(), "0".to_string());
     } else {
         e.insert("ADAGE_DISABLE".to_string(), "1".to_string());
     }
@@ -397,15 +397,15 @@ pub fn mine(dir: &Path, plan: &Plan, state: &RunState) -> Result<Staged> {
     // sessions ran the step after their last edit (`adage_learn::claims::claimed_verify_route`);
     // lookup claims where they looked the prompt's item up (`claimed_lookup_route`).
     add_claimed_steps(&mut all, &transcripts, plan, &cfg);
-    // The synthetic-origin cap (docs/training.md): never green, never more than probation. A
-    // dead end stays red (the model requires it of an avoid step); review decides.
+    // The synthetic-origin cap (docs/training.md): never fire, never more than forming. A
+    // dead end stays inhibit (the model requires it of an avoid step); review decides.
     for t in all.iter_mut() {
         for r in t.routes.iter_mut() {
-            if r.aspect == adage_tracks::Aspect::Green {
-                r.aspect = adage_tracks::Aspect::Yellow;
+            if r.strength == adage_tracks::Strength::Fire {
+                r.strength = adage_tracks::Strength::Prime;
             }
-            if r.state == adage_tracks::RouteState::Active {
-                r.state = adage_tracks::RouteState::Probation;
+            if r.state == adage_tracks::RouteState::Firm {
+                r.state = adage_tracks::RouteState::Forming;
             }
         }
         io::validate(t)?;
@@ -651,7 +651,7 @@ pub fn execute(
 pub fn load_state(dir: &Path) -> Result<RunState> {
     let p = dir.join("state.json");
     serde_json::from_str(&std::fs::read_to_string(&p).with_context(|| format!("reading {}", p.display()))?)
-        .with_context(|| format!("{} is not an adage-train run state", p.display()))
+        .with_context(|| format!("{} is not an adage train state", p.display()))
 }
 
 /// The dry run: everything `--execute` would do, with nothing written or started.
@@ -708,7 +708,7 @@ pub fn describe(plan: &Plan, o: &RunOptions, h: &dyn Harness, base: &BTreeMap<St
                 .chain(h.forward_env().iter().cloned())
                 .fold(Vec::<String>::new(), |mut v, k| { if !v.contains(&k) { v.push(k) } v }),
             "auth": if h.name() == "claude-code" { h.auth_source(base) } else { None },
-            "hooks": "exploration, baseline and skill arms: ADAGE_DISABLE=1; reflex arm: hooks on, ADAGE_HOME=<run>/reflex-home (staged reflexes only), ADAGE_HOLDOUT=0",
+            "hooks": "exploration, baseline and skill arms: ADAGE_DISABLE=1; reflex arm: hooks on, ADAGE_HOME=<run>/reflex-home (staged reflexes only), ADAGE_CONTROL=0",
             "transcripts": format!("{}/transcripts (never where learning reads history)", dir.display()),
         },
         "examples": examples,

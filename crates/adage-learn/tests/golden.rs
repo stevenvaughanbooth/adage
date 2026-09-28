@@ -1,7 +1,7 @@
 //! End-to-end learner test over synthetic Claude Code transcripts in the real on-disk format.
 
 use adage_learn::{learn, Inputs, LearnConfig};
-use adage_tracks::{io, Aspect, Exit, Index, Step, Trigger};
+use adage_tracks::{io, Exit, Index, Step, Strength, Trigger};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -98,7 +98,7 @@ fn learns_the_lookup_linked_files_an_avoid_and_an_obligation() {
 
     let lookup = routes.iter().find(|r| matches!(r.trigger, Trigger::Prompt { .. })).expect("prompt route");
     assert_eq!(lookup.step, Step::Run { command: "python3 scripts/wi-lookup {item}".into() });
-    assert_eq!(lookup.aspect, Aspect::Green, "6/6 sessions clears the demo green bar");
+    assert_eq!(lookup.strength, Strength::Fire, "6/6 sessions clears the demo fire bar");
     assert_eq!(format!("{:?}", lookup.effect), "Observe");
 
     let linked = routes.iter().find(|r| matches!(r.step, Step::ReadBatch { .. })).expect("linked-files route");
@@ -113,7 +113,7 @@ fn learns_the_lookup_linked_files_an_avoid_and_an_obligation() {
         assert_eq!(instead, "make test");
         assert!(signature.contains("ACME_ENV is not set"));
     }
-    assert_eq!(dead.aspect, Aspect::Red);
+    assert_eq!(dead.strength, Strength::Inhibit);
     assert_eq!(dead.exit, vec![Exit::IntentChanges]);
 
     let fin = routes.iter().find(|r| matches!(r.trigger, Trigger::AfterEdit { .. })).expect("finish-line route");
@@ -148,7 +148,7 @@ fn steered_traces_are_exposed_only_to_what_their_directives_named() {
     for i in 0..3 {
         let mut t = Tx::new(&format!("steered{i}"), cwd, "Pick up W-2099");
         t.lines.push(json!({"type":"attachment","sessionId":format!("steered{i}"),"cwd":cwd,
-            "content":"<adage-signal track=\"x\" route=\"lookup-work-item\" aspect=\"green\" kind=\"run\">\nIn this repository, work item details are looked up with:\n  python3 scripts/wi-lookup W-2099\n</adage-signal>"}));
+            "content":"<adage-reflex track=\"x\" route=\"lookup-work-item\" strength=\"fire\" kind=\"run\">\nIn this repository, work item details are looked up with:\n  python3 scripts/wi-lookup W-2099\n</adage-reflex>"}));
         t.bash("./scripts/other-lookup W-2099", "ok", false)
             .call("Edit", json!({"file_path": format!("{cwd}/acme/billing.py")}), "ok", false)
             .bash("python3 -m pytest", "RuntimeError: ACME_ENV is not set — run tests with 'make test'", true)

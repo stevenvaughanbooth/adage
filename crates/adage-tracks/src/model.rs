@@ -7,33 +7,39 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Aspect {
-    Green,
-    Yellow,
-    Red,
+pub enum Strength {
+    /// Do this: strong evidence (shown fire).
+    Fire,
+    /// Consider this: a suggestion (shown prime).
+    Prime,
+    /// Don't do this: a known dead end (shown inhibit).
+    Inhibit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RouteState {
-    Draft,
-    Probation,
-    Active,
-    Demoted,
-    Retired,
+    /// Learned, but waits for a person's review; never delivered.
+    Nascent,
+    /// Delivered while its evidence builds.
+    Forming,
+    /// Established.
+    Firm,
+    /// Extinguished: kept on disk, never delivered.
+    Extinguished,
     /// In service, but no longer re-found by learning *because of its own exposure*: most of the
     /// sessions where it could apply were steered by routes of its kind, so they are excluded from
     /// its learner (Design §11), and too few unsteered sessions remain to confirm it. Its last
-    /// evidence is kept, with [`Evidence::stale_since`] set, and it is delivered at yellow at most
-    /// (red dead ends stay red). Re-found, it returns to the state the learner gives it; contrary
+    /// evidence is kept, with [`Evidence::dormant_since`] set, and it is delivered at prime at most
+    /// (inhibit dead ends stay inhibit). Re-found, it returns to the state the learner gives it; contrary
     /// evidence among unsteered sessions drops it as before (`adage_learn`, E1).
-    Stale,
+    Dormant,
 }
 
 impl RouteState {
-    /// Compiled into the index and delivered (`Active`, `Probation`, `Stale`).
+    /// Compiled into the index and delivered (`Firm`, `Forming`, `Dormant`).
     pub fn is_live(self) -> bool {
-        matches!(self, RouteState::Active | RouteState::Probation | RouteState::Stale)
+        matches!(self, RouteState::Firm | RouteState::Forming | RouteState::Dormant)
     }
 }
 
@@ -188,7 +194,7 @@ pub enum Step {
         slots: BTreeMap<String, String>,
     },
     /// Two or three commands, run in this order (Track G §6.1). Rendered as a numbered list from a
-    /// fixed template; the route's aspect is at most the lowest ceiling of its commands, and
+    /// fixed template; the route's strength is at most the lowest ceiling of its commands, and
     /// whether it was followed is judged on the first.
     Sequence { commands: Vec<String> },
 }
@@ -199,7 +205,7 @@ pub enum Step {
 pub enum Exit {
     /// The user is asking for something the route doesn't cover.
     IntentChanges,
-    /// The change is exploratory or a draft.
+    /// The change is exploratory or a nascent.
     ExploratoryChange,
 }
 
@@ -232,10 +238,10 @@ pub struct Evidence {
     /// `opportunities`. High exposure explains a route that learning can no longer confirm.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub exposed: u32,
-    /// Set while the route is [`RouteState::Stale`]: the UTC date (`YYYY-MM-DD`) of the learn run
+    /// Set while the route is [`RouteState::Dormant`]: the UTC date (`YYYY-MM-DD`) of the learn run
     /// that first kept it on its last evidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stale_since: Option<String>,
+    pub dormant_since: Option<String>,
     /// Where the route came from ([`Origin`]); `None` in a route written before origins were
     /// recorded, whose origin is read from `provenance` ([`Route::origin`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -243,12 +249,12 @@ pub struct Evidence {
     /// Counts by the origin of the evidence (roadmap E1): `support` and `opportunities` are
     /// organic sessions only; anything else is counted here. An instinct route records
     /// `declared: 1` (the declared fact that bound it) and, once the runtime has judged it, its
-    /// `followed`, `followed_failed` and `derailed` judgements from treated sessions. An
-    /// instinct never earns green on these.
+    /// `followed`, `misfired` and `ignored` judgements from treated sessions. An
+    /// instinct never earns fire on these.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub by_origin: BTreeMap<String, u32>,
     /// The outcome lift the step showed (`crate::lift`): recorded whenever the traces' outcomes
-    /// were known, and the reason the route exists when it formed on lift alone (yellow at most).
+    /// were known, and the reason the route exists when it formed on lift alone (prime at most).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome_lift: Option<crate::lift::OutcomeLift>,
     /// Why a repository script's step was classified observe from the traces rather than by its
@@ -302,7 +308,7 @@ pub struct Route {
     #[serde(default)]
     pub slots: Vec<Slot>,
     pub effect: Effect,
-    pub aspect: Aspect,
+    pub strength: Strength,
     pub state: RouteState,
     #[serde(default)]
     pub exit: Vec<Exit>,
@@ -341,7 +347,7 @@ impl Route {
         }
     }
 
-    /// Whether an instinct bound this route (weaker than any reflex: yellow at most, never a
+    /// Whether an instinct bound this route (weaker than any reflex: prime at most, never a
     /// Stop request, lowest precedence in the index).
     pub fn is_instinct(&self) -> bool {
         matches!(self.evidence.origin, Some(Origin::Instinct { .. }))
@@ -414,37 +420,37 @@ pub fn shape(r: &Route) -> &'static str {
 /// Every delivery shape [`shape`] names.
 pub const SHAPES: [&str; 6] = ["run", "avoid", "read-batch", "obligation", "sequence", "advise"];
 
-/// The aspect a route is delivered at: its own, except that a route on probation or stale, or
-/// an instinct, is never delivered green (and an instinct never red).
-pub fn delivered_aspect(r: &Route) -> Aspect {
+/// The strength a route is delivered at: its own, except that a route forming or dormant, or
+/// an instinct, is never delivered fire (and an instinct never inhibit).
+pub fn delivered_strength(r: &Route) -> Strength {
     if r.is_instinct() {
-        return Aspect::Yellow;
+        return Strength::Prime;
     }
-    match (r.state, r.aspect) {
-        (RouteState::Probation | RouteState::Stale, Aspect::Green) => Aspect::Yellow,
+    match (r.state, r.strength) {
+        (RouteState::Forming | RouteState::Dormant, Strength::Fire) => Strength::Prime,
         (_, a) => a,
     }
 }
 
-/// The strongest aspect an effect class may ever be given (Design §8.6).
-pub fn ceiling(effect: Effect, triggered_by_edit: bool) -> Option<Aspect> {
+/// The strongest strength an effect class may ever be given (Design §8.6).
+pub fn ceiling(effect: Effect, triggered_by_edit: bool) -> Option<Strength> {
     match effect {
-        Effect::Observe | Effect::Verify => Some(Aspect::Green),
-        Effect::Regenerate => Some(if triggered_by_edit { Aspect::Green } else { Aspect::Yellow }),
-        Effect::Environment => Some(Aspect::Yellow),
+        Effect::Observe | Effect::Verify => Some(Strength::Fire),
+        Effect::Regenerate => Some(if triggered_by_edit { Strength::Fire } else { Strength::Prime }),
+        Effect::Environment => Some(Strength::Prime),
         Effect::Author | Effect::Publish => None,
     }
 }
 
 /// The state a learned or imported route starts in (Design §10.4, O11). An environment step may
-/// be delivered only on a route a person approved in `adage review`, so it starts as a draft, which
-/// is never delivered; `approve` puts it into service (yellow at most, its ceiling). Every other
+/// be delivered only on a route a person approved in `adage review`, so it starts as nascent, which
+/// is never delivered; `approve` puts it into service (prime at most, its ceiling). Every other
 /// directable step starts in service.
 pub fn initial_state(effect: Effect) -> RouteState {
     if effect == Effect::Environment {
-        RouteState::Draft
+        RouteState::Nascent
     } else {
-        RouteState::Active
+        RouteState::Firm
     }
 }
 
@@ -474,8 +480,8 @@ mod tests {
     fn ceilings() {
         assert_eq!(ceiling(Effect::Author, false), None);
         assert_eq!(ceiling(Effect::Publish, true), None);
-        assert_eq!(ceiling(Effect::Environment, true), Some(Aspect::Yellow));
-        assert_eq!(ceiling(Effect::Regenerate, false), Some(Aspect::Yellow));
-        assert_eq!(ceiling(Effect::Regenerate, true), Some(Aspect::Green));
+        assert_eq!(ceiling(Effect::Environment, true), Some(Strength::Prime));
+        assert_eq!(ceiling(Effect::Regenerate, false), Some(Strength::Prime));
+        assert_eq!(ceiling(Effect::Regenerate, true), Some(Strength::Fire));
     }
 }

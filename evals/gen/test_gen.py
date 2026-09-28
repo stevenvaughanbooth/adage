@@ -372,12 +372,12 @@ class NewKinds(unittest.TestCase):
         for kind in grammar.NEW_KINDS:
             self.assertTrue(rows[kind]["ok"], f"{kind} was not learned")
         env = next(r for r in graph["comparison"] if r["kind"] == "env_sync")
-        self.assertEqual(env["learned"]["state"], "draft", "an environment step is nascent until reviewed")
+        self.assertEqual(env["learned"]["state"], "nascent", "an environment step is nascent until reviewed")
         self.assertEqual(graph["decoys_learned"], 0)
 
 
 class IdShapes(unittest.TestCase):
-    """Tracker id shapes (Track G §4.4): `id_shape` in a spec, and the holdout `adage eval types` uses."""
+    """Tracker id shapes (Track G §4.4): `id_shape` in a spec, and the held-out set `adage eval types` uses."""
 
     BASE = {"stack": "python-make", "skin": "billing", "tasks": {"bugfix": 4, "registry": 2, "control": 2}}
 
@@ -414,8 +414,8 @@ class IdShapes(unittest.TestCase):
                     self.assertEqual({m.group(0) for p in prompts for m in found.finditer(p)}, {grammar.mention(t.id)})
                 if shape == "mixed":
                     self.assertEqual(sum(i.isdigit() for i in ids), len(ids) // 2)
-                ho = grammar.holdout(plan.spec, ids, seed)
-                self.assertEqual(ho, grammar.holdout(plan.spec, ids, seed))
+                ho = grammar.held_out(plan.spec, ids, seed)
+                self.assertEqual(ho, grammar.held_out(plan.spec, ids, seed))
                 self.assertEqual((len(ho["fresh"]), len(ho["near_miss"])), (200, 200), shape)
                 self.assertTrue(all(pattern.fullmatch(v) for v in ho["fresh"]))
                 self.assertFalse(set(ho["fresh"]) & set(ids))
@@ -435,7 +435,7 @@ class IdShapes(unittest.TestCase):
             self.assertEqual(status, "ok", f"{c.failed}\n" + "\n".join(c.lines))
             rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, None, learn=False)
             self.assertTrue(rep["all_passed"])
-            ho = json.loads((b / "rehearsal" / "holdout.json").read_text())
+            ho = json.loads((b / "rehearsal" / "held_out.json").read_text())
             self.assertEqual(ho["id_shape"], "path_num")
             exe = rehearse.find_adage(None)
             if not exe:

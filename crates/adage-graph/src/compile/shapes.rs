@@ -8,7 +8,7 @@
 //! - a context ending in a **failed** verify act, continued by a working verify act → `avoid`;
 //! - a context ending in an **edit**: one regenerate act → `obligation`; one act whose argument
 //!   is a segment of the edited path (a flow edge) → `run` with an `edit_segment` slot; one
-//!   environment act → `run`, a draft until reviewed; 2–3 acts starting with a regenerate or
+//!   environment act → `run`, a nascent until reviewed; 2–3 acts starting with a regenerate or
 //!   environment step, the rest regenerate or verify steps → `sequence`;
 //! - otherwise, a context of two or three compilable events (acts, failures, edits) → a context
 //!   trigger (`run` or `sequence`), inert until G4; a single successful act → `after_command` →
@@ -21,11 +21,11 @@
 //! and is not compiled in G3. Every run or sequence that directs a runner a compiled avoid names
 //! is dropped before emission (interlocking, Track G §6.3).
 //!
-//! **Aspect.** Green needs the posterior's lower bound (`conf_lb`) ≥ `green_lower_bound` and a
-//! green ceiling; yellow needs the posterior mean (`conf`, with an instinct's prior mixed in when
-//! one directs the same command at the same point) ≥ `yellow_rate` — the reflex passed its gate,
-//! so `V > 0` (a guard: a lower bound ≥ 0.5) already holds. An avoid is red. No reflex compiles
-//! above yellow from prior mass alone: green reads the organic lower bound only.
+//! **Strength.** Fire needs the posterior's lower bound (`conf_lb`) ≥ `fire_lower_bound` and a
+//! fire ceiling; prime needs the posterior mean (`conf`, with an instinct's prior mixed in when
+//! one directs the same command at the same point) ≥ `prime_rate` — the reflex passed its gate,
+//! so `V > 0` (a guard: a lower bound ≥ 0.5) already holds. An avoid is inhibit. No reflex compiles
+//! above prime from prior mass alone: fire reads the organic lower bound only.
 
 use super::stable::{self, LINKED_FILES_ID, LOOKUP_ID};
 use super::{glob, ids, max_effect, Compiled, Dropped, Input, Output, MAX_ROUTES};
@@ -103,9 +103,9 @@ fn evidence(r: &Reflex, provenance: &str) -> Evidence {
     }
 }
 
-/// The aspect of a reflex's route (see the module documentation); `None` when it is not
+/// The strength of a reflex's route (see the module documentation); `None` when it is not
 /// delivered at all.
-fn aspect(r: &Reflex, effect: Effect, by_edit: bool, prior: Option<(f64, f64)>, input: &Input) -> Option<Aspect> {
+fn strength(r: &Reflex, effect: Effect, by_edit: bool, prior: Option<(f64, f64)>, input: &Input) -> Option<Strength> {
     let max = ceiling(effect, by_edit)?;
     let p = input.params;
     let mean = match prior {
@@ -115,21 +115,21 @@ fn aspect(r: &Reflex, effect: Effect, by_edit: bool, prior: Option<(f64, f64)>, 
         }
         None => r.conf,
     };
-    if r.conf_lb >= p.green_lower_bound && max == Aspect::Green {
-        Some(Aspect::Green)
-    } else if mean.max(r.conf) >= p.yellow_rate {
-        Some(Aspect::Yellow)
+    if r.conf_lb >= p.fire_lower_bound && max == Strength::Fire {
+        Some(Strength::Fire)
+    } else if mean.max(r.conf) >= p.prime_rate {
+        Some(Strength::Prime)
     } else {
         None
     }
 }
 
-/// The aspect of a route whose evidence is counted again on its own trigger and step (the
-/// caller's judgement, `adage_learn::engine`): the ceiling, at most yellow, until then. A route
+/// The strength of a route whose evidence is counted again on its own trigger and step (the
+/// caller's judgement, `adage_learn::engine`): the ceiling, at most prime, until then. A route
 /// decomposed from a longer reflex (the lookup inside a linked-files reflex) must not inherit that
 /// reflex's confidence.
-fn provisional(effect: Effect, by_edit: bool) -> Option<Aspect> {
-    ceiling(effect, by_edit).map(|_| Aspect::Yellow)
+fn provisional(effect: Effect, by_edit: bool) -> Option<Strength> {
+    ceiling(effect, by_edit).map(|_| Strength::Prime)
 }
 
 /// The most common exact member of a context item (a trigger may be broad; only a directed
@@ -155,7 +155,7 @@ fn route(
     step: Step,
     slots: Vec<Slot>,
     effect: Effect,
-    aspect: Aspect,
+    strength: Strength,
     exit: Exit,
     ev: Evidence,
 ) -> Route {
@@ -166,7 +166,7 @@ fn route(
         step,
         slots,
         effect,
-        aspect,
+        strength,
         state: initial_state(effect),
         exit: vec![exit],
         evidence: ev,
@@ -403,7 +403,7 @@ impl<'a> Builder<'a> {
                 contract: Contract::RepoPath,
             }],
             Effect::Observe,
-            Aspect::Yellow,
+            Strength::Prime,
             Exit::IntentChanges,
             ev,
         );
@@ -527,10 +527,10 @@ impl<'a> Builder<'a> {
             let trigger = Trigger::AfterEdit { paths: g.clone() };
             let cmd = super::commands(&step).first().map(|c| c.to_string());
             let prior = prior_for(&trigger, cmd.as_deref(), self.input);
-            // The aspect is the lowest ceiling of the commands (a sequence), after an edit.
+            // The strength is the lowest ceiling of the commands (a sequence), after an edit.
             let low = match &step {
                 Step::Sequence { .. } => fixed.iter().map(|c| c.2).fold(Effect::Observe, |a, e| {
-                    if ceiling(e, true) == Some(Aspect::Green) {
+                    if ceiling(e, true) == Some(Strength::Fire) {
                         a
                     } else {
                         max_effect(a, e)
@@ -640,7 +640,7 @@ impl<'a> Builder<'a> {
         // A context route keeps the reflex's own posterior (nothing counts it again in G3); an
         // after-command route is counted again by the caller.
         let asp = if matches!(trigger, Trigger::Context { .. }) {
-            aspect(r, effect, false, None, self.input)
+            strength(r, effect, false, None, self.input)
         } else {
             provisional(effect, false)
         };
@@ -755,13 +755,13 @@ impl<'a> Builder<'a> {
                         Step::Avoid { avoid: runners.join(" / "), instead: instead.clone(), signature: sig.clone() },
                         vec![],
                         Effect::Verify,
-                        Aspect::Red,
+                        Strength::Inhibit,
                         Exit::IntentChanges,
                         ev,
                     )
                 } else {
                     let key = keys.iter().next().cloned().unwrap_or_default();
-                    let Some(asp) = aspect(best, Effect::Verify, false, None, self.input) else { continue };
+                    let Some(asp) = strength(best, Effect::Verify, false, None, self.input) else { continue };
                     route(
                         id,
                         "After this failure, what works instead in this repository",

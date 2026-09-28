@@ -38,15 +38,15 @@ class SettingsTest(unittest.TestCase):
         base = {"hooks": {"Stop": [{"hooks": [{"command": "a", "args": ["hook", "claude", "Stop"]}]}]}, "k": 1}
         self.assertEqual(h.settings_for_arm("off", base), {"k": 1})
         self.assertEqual(h.settings_for_arm("agents-md", None), {})
-        self.assertIn("SessionStart", h.settings_for_arm("holdout", None)["hooks"])
+        self.assertIn("SessionStart", h.settings_for_arm("control", None)["hooks"])
         with self.assertRaises(ValueError):
             h.settings_for_arm("treated", None)
 
     def test_arm_env(self):
         self.assertNotIn("ADAGE_HOME", h.arm_env("off", "/logs/agent/adage-home"))
-        e = h.arm_env("holdout", "/logs/agent/adage-home")
+        e = h.arm_env("control", "/logs/agent/adage-home")
         self.assertEqual((e["ADAGE_ARM"], e["ADAGE_AUTO_LEARN"], e["ADAGE_HOME"]),
-                         ("holdout", "0", "/logs/agent/adage-home"))
+                         ("control", "0", "/logs/agent/adage-home"))
         self.assertEqual(h.arm_env("adage", "/x")["ADAGE_ARM"], "treated")
         for arm in h.ARMS:
             self.assertEqual(h.arm_env(arm, "/x")["CLAUDE_CODE_DISABLE_AUTO_MEMORY"], "1")

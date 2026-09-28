@@ -1,7 +1,7 @@
-//! Replay a recorded session through the real runtime, in the holdout arm.
+//! Replay a recorded session through the real runtime, in the control arm.
 //!
 //! Every hook event the session would have raised goes through `adage_runtime::decide` with the
-//! session state held in memory. The arm is `holdout`, so each decision records what Adage *would
+//! session state held in memory. The arm is `control`, so each decision records what Adage *would
 //! have said* without saying it — this is history, and nothing in it can change.
 
 use crate::transcript::{self, Transcript};
@@ -120,7 +120,7 @@ pub fn replay(
     params: RuntimeParams,
 ) -> Replayed {
     let ctx = Ctx { index, repo: repo_key.to_string(), root, table, embed: None, params };
-    let mut st = SessionState { arm: Some(Arm::Holdout), repo: Some(repo_key.to_string()), ..Default::default() };
+    let mut st = SessionState { arm: Some(Arm::Control), repo: Some(repo_key.to_string()), ..Default::default() };
     let mut r = Replayed {
         id: t.id.clone(),
         prompt: t.prompt().unwrap_or_default().to_string(),
@@ -153,7 +153,7 @@ pub fn replay(
             differs("different state for later decisions");
             fast_st = st.clone();
         }
-        debug_assert!(d.directives.is_empty(), "the holdout arm never delivers");
+        debug_assert!(d.directives.is_empty(), "the control arm never delivers");
         for w in &d.would_have {
             r.fired.push(Fired { directive: w.clone(), event: name, turn: step.turn });
         }

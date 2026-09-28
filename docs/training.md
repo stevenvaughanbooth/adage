@@ -1,21 +1,22 @@
 # Training: skill → reflex
 
-`adage-train` turns what a skill *says* into reflexes Adage can *prove*. It reads a `SKILL.md` (or a
+`adage train` turns what a skill *says* into reflexes Adage can *prove*. It reads a `SKILL.md` (or a
 runbook, `CONTRIBUTING.md`, a Makefile, `package.json` or a GitHub Actions workflow), extracts its
 claims, drives **your own agent harness** headlessly on generated tasks in disposable clones of
-your repository, learns from what the agents did with `adage learn`'s graph engine, and reports, claim by
+your repository, learns from what the agents did with `adage condition`'s graph engine, and reports, claim by
 claim, whether the skill compiled into a reflex, is stale, was never exercised, or is unsafe.
 
 Terminology:
 
 | | Where it comes from | Evidence |
 | --- | --- | --- |
-| **Reflex** | Learned from sessions: your agents' (organic), or `adage-train`'s (synthetic) | Distinct sessions, Wilson lower bound |
+| **Reflex** | Conditioned on traces: your agents' (organic), or `adage train`'s (synthetic) | Distinct sessions, Wilson lower bound |
 | **Instinct** | Prebuilt route bound from the repository's declared files ([instincts.md](instincts.md)) | None: a capped default |
-| **Skill** | Text a person wrote | None until `adage-train` tests it |
+| **Skill** | Text a person wrote | None until `adage train` tests it |
 
 **Principle.** The `adage` binary, which hooks run, never executes anything (Design principle 1).
-`adage-train` is a separate, optional binary. It is the proving ground of Design §12 for one skill:
+`adage train` runs `adage-train`, a separate, optional binary (the `adage` binary never drives an
+agent session itself). It is the offline eval loop of Design §12 for one skill:
 it runs *agents*, sandboxed, only when a person at a terminal explicitly asks (`--execute`), with a
 spending cap. Nothing it produces reaches a hook until a person reviews it.
 
@@ -25,7 +26,7 @@ spending cap. Nothing it produces reaches a hook until a person reviews it.
   (Design §10.10, bridge 3). Training exercises it and keeps what the agents' behaviour supports.
 - **Declared facts → instincts** ([instincts.md](instincts.md)). The same facts (`Makefile` targets
   and prerequisites, `package.json` scripts, CI `run:` steps, generator links) bind instincts on
-  day 0 with no sessions at all. `adage-train plan --from Makefile` reads them through the same
+  day 0 with no sessions at all. `adage train plan --from Makefile` reads them through the same
   extractor (`adage_instincts::extract`), so a declared step can be *tested* rather than assumed.
 - **Ids line up.** A learned route takes the id the learner derives (`finish-line-<glob, command>`,
   `dead-end-<working command>`), which is also the id an instinct binds for the same behaviour.
@@ -83,17 +84,17 @@ With `--execute`:
 1. **Exploration.** One session per planned task, with the skill text appended to the system
    prompt (`--append-system-prompt`) and no hooks (`ADAGE_DISABLE=1`).
 2. **Mining.** The exploration transcripts go through `adage_learn::learn` with the repository key
-   forced to yours (`repo_override`, what `adage learn --repo` does) into a *separate* staging
+   forced to yours (`repo_override`, what `adage condition --repo` does) into a *separate* staging
    directory, `staged/tracks`, with provenance `synthetic:skill:<sha256 of the source>@<run>` on
    every track and route, and a sidecar `staged/provenance.json`. Then the synthetic cap is applied:
-   no route is green and none is beyond probation. **Staged reflexes are not activated**: nothing
+   no route is fire and none is beyond forming. **Staged reflexes are not activated**: nothing
    is written to `$ADAGE_HOME/tracks` or `$ADAGE_HOME/index.json`.
 3. **Validation** (`--validate N`). N held-out tasks from another seed (no prompt of the
    exploration set), each in three arms, in a seeded order:
    - `baseline`: no skill, no hooks;
    - `skill`: the skill appended, no hooks;
    - `reflex`: no skill; Adage's hooks on (`adage hooks-config`), `ADAGE_HOME` pointing at
-     `reflex-home/` which holds only the staged reflexes, `ADAGE_HOLDOUT=0`, `ADAGE_AUTO_LEARN=0`.
+     `reflex-home/` which holds only the staged reflexes, `ADAGE_CONTROL=0`, `ADAGE_AUTO_LEARN=0`.
      A clone has no `origin`, so hooks inside it compute the key `<name>@<root commit>`; the
      reflex home's copy of the staged tracks is re-keyed to it (from a probe clone).
 
@@ -117,7 +118,7 @@ within 10 points of the skill arm, and its mean turns and cost are no more than 
 skill arm's. For a contradicted claim, "followed" means the session's first verification was the
 working command and it passed.
 
-The trajectory oracle reads each transcript exactly as `adage learn` does (`adage_learn::read_session`):
+The trajectory oracle reads each transcript exactly as `adage condition` does (`adage_learn::read_session`):
 `regenerate_after` is followed when a successful run of the command comes after the last edit to a
 matching file; `verify` when the command ran and passed; `avoid` and contradicted claims when the
 first verification is the working command and passed; `lookup` when the tool ran with the prompt's id.
@@ -133,7 +134,7 @@ first verification is the working command and passed; `lookup` when the tool ran
 | Tools | `--allowedTools Bash Read Edit Write Glob Grep`, `--disallowedTools WebFetch WebSearch Task Agent`, `--permission-mode dontAsk` (anything not pre-allowed is denied, never prompted), `--strict-mcp-config` with no MCP config (no MCP servers). |
 | Sandbox | The settings file each session loads sets `sandbox.enabled: true`, `autoAllowBashIfSandboxed: true`, `allowUnsandboxedCommands: false` and denies `WebFetch`/`WebSearch`. `--container none` is the only container mode. |
 | Budget | Sessions stop *starting* once the harness-reported cost reaches `--budget`; each session also gets `--max-budget-usd` equal to what remains when it starts. With `--concurrency N`, the overshoot is at most the N sessions already running, each capped as above. Never more than N sessions at once. A per-session wall-clock `--timeout-secs` (default 1800) kills a hung session. |
-| Transcripts | Copied out of each session's own config directory into `$ADAGE_HOME/train/<run>/transcripts/`, never into `~/.claude/projects` or any directory `adage learn` or live learning reads. `run` refuses an `ADAGE_HOME` inside the Claude Code projects directory. |
+| Transcripts | Copied out of each session's own config directory into `$ADAGE_HOME/train/<run>/transcripts/`, never into `~/.claude/projects` or any directory `adage condition` or live learning reads. `run` refuses an `ADAGE_HOME` inside the Claude Code projects directory. |
 | No influence on live learning | Exploration, baseline and skill sessions run with `ADAGE_DISABLE=1`; the reflex arm with `ADAGE_AUTO_LEARN=0` and its own `ADAGE_HOME`. |
 | No activation | Staged reflexes live under `staged/`; the reflex arm reads a copy in `reflex-home/`. Nothing is installed. |
 | Untrusted input | The source file is read-only input (at most 1 MiB); repository reads go through `adage_instincts::files::RepoFiles` (bounded, no symlinks out). Mined routes pass `adage_tracks::io::validate` like any learned route. |
@@ -147,37 +148,37 @@ Where a route's evidence comes from caps how strongly Adage may direct it. The c
 is enforced in staging today; the others describe the policy the model changes below make
 enforceable in the index.
 
-| Origin | Source | Max aspect | Counts toward organic support | Activation |
+| Origin | Source | Max strength | Counts toward organic support | Activation |
 | --- | --- | --- | --- | --- |
-| organic | your agents' own sessions (`adage learn`, live learning) | green (within the effect ceiling) | yes | automatic, reviewable |
-| synthetic | `adage-train` sessions (`synthetic:skill:<sha>@<run>`) | yellow (a dead end stays red: the model requires it of an avoid step) | never | after review, and preferably an accepted validation |
-| declared | a repository's declared facts, as `adage-train plan --from Makefile` exercises them | yellow | never | after review |
-| instinct | prebuilt, bound from declared facts (`instinct:core@<v>`) | yellow, never a Stop block | never | automatic at probation (environment steps: draft) |
-| imported | a teammate's signed track (`adage add`) | yellow until first-hand evidence | no | probation; promotion needs local evidence |
-| demonstrated | a person doing the task themselves in a recorded session | green after review | yes, once reviewed | review |
-| corrected | a person's decision in `adage review` (authored, pinned, promoted) | as decided, within the effect ceiling | n/a | immediate |
+| organic | your agents' own sessions (`adage condition`, live learning) | fire (within the effect ceiling) | yes | automatic, reviewable |
+| synthetic | `adage train` sessions (`synthetic:skill:<sha>@<run>`) | prime (a dead end stays inhibit: the model requires it of an avoid step) | never | after review, and preferably an accepted validation |
+| declared | a repository's declared facts, as `adage train plan --from Makefile` exercises them | prime | never | after review |
+| instinct | prebuilt, bound from declared facts (`instinct:core@<v>`) | prime, never a Stop block | never | automatic forming (environment steps: nascent) |
+| imported | a teammate's signed track (`adage add`) | prime until first-hand evidence | no | forming; strengthening needs local evidence |
+| demonstrated | a person doing the task themselves in a recorded session | fire after review | yes, once reviewed | review |
+| corrected | a person's decision in `adage review` (authored, pinned, strengthened) | as decided, within the effect ceiling | n/a | immediate |
 
 ## CLI reference
 
 ```text
-adage-train plan --from <SKILL.md|CONTRIBUTING.md|Makefile|package.json|.github/workflows/x.yml|runbook.md>
+adage train plan --from <SKILL.md|CONTRIBUTING.md|Makefile|package.json|.github/workflows/x.yml|runbook.md>
                  [--repo <path>] [--seed N (1)] [--sessions N (24)] [--model ID (claude-haiku-4-5)]
                  [--json] [--out plan.json]
 
-adage-train run --plan plan.json [--harness claude-code|fake] [--fake-world world.json]
+adage train --plan plan.json [--harness claude-code|fake] [--fake-world world.json]
                 [--model ID (the plan's)] [--budget USD] [--max-turns N (30)] [--concurrency N (2)]
                 [--validate N (0)] [--oracle trajectory] [--container none] [--run-id ID]
                 [--adage PATH] [--thresholds default|demo] [--timeout-secs N (1800)] [--keep]
                 [--json] [--execute]
 
-adage-train report <run id | run directory> [--json]
+adage train report <run id | run directory> [--json]
 ```
 
 - `--repo` names any path inside the repository (its git root is used); by default, the source
   file's repository.
 - `--adage` is the `adage` binary whose hooks the reflex arm runs; required with `--validate` and a
   real harness.
-- `--thresholds demo` uses `adage learn --demo`'s lower evidence bars (min support 3), for small runs.
+- `--thresholds demo` uses `adage condition --demo`'s lower evidence bars (min support 3), for small runs.
 - `--harness fake --fake-world world.json` runs the whole pipeline with the scripted agent the
   tests use (below), spending nothing; it needs no terminal.
 
@@ -237,7 +238,7 @@ Not verified (no real agent was run; no money was spent):
   `evals/live/runner.py` does.
 - **The reflex arm with real hooks**: `adage hooks-config` output and `ADAGE_HOME` re-keying are the
   runner's proven path, but not exercised end to end here.
-- Outcomes are not scored (no hidden checks): `adage learn` receives no outcomes, so finish lines
+- Outcomes are not scored (no hidden checks): `adage condition` receives no outcomes, so finish lines
   have no `deviations_failed`.
 
 ## Follow-up model changes
@@ -249,9 +250,9 @@ Not verified (no real agent was run; no money was spent):
    sidecar `staged/provenance.json`.
 2. **`TrackInfo.origin`** (or treating a `synthetic:` provenance like `imported` in
    `Index::compile`): first-hand organic routes must rank before synthetic ones with the same id,
-   and the aspect cap above must be enforced at compile time, not only in staging.
-3. **Promotion from staging**: an `adage review`-style step that installs accepted staged reflexes
-   into `$ADAGE_HOME/tracks/<repo>/…` at probation, keeping the provenance, and records the
+   and the strength cap above must be enforced at compile time, not only in staging.
+3. **Strengthening from staging**: an `adage review`-style step that installs accepted staged reflexes
+   into `$ADAGE_HOME/tracks/<repo>/…` forming, keeping the provenance, and records the
    decision. Not built: today staged reflexes are only inspected (`staged/tracks`, `report`).
 4. **A verify step in general**: outside a claim (`adage_learn::claims`), a correct `verify` step
    followed without failures compiles to nothing, because the learner learns "the tests here run with `make test`" except through a dead

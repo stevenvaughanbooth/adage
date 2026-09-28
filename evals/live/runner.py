@@ -10,11 +10,11 @@ plan. Every session is a real headless Claude Code agent (`claude -p`), so this 
 and each session gets a fresh sandbox and its own empty home directory:
 
   train   baseline agents on the training tasks, with no Adage hooks installed (round 1 only)
-  learn   `adage learn` over the training transcripts (and, in later rounds, earlier eval sessions
+  learn   `adage condition` over the training transcripts (and, in later rounds, earlier eval sessions
           of tasks outside this round's held-out pool)
   eval    held-out tasks; each (task, repeat) runs every arm, in an order drawn from the seed:
             adage    hooks installed, directives delivered
-            holdout  hooks installed, directives computed and logged but not delivered (the control)
+            control  hooks installed, directives computed and logged but not delivered (the control)
             off      no hooks at all (to measure hook overhead, if wanted)
   report  summary.json (per-arm aggregates, task-level permutation p-values with Holm adjustment,
           task-bootstrap CIs, per round) and a results page like demo/results:
@@ -80,7 +80,7 @@ import report as demo_report  # noqa: E402 - demo/report.py: statuses, statistic
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 EXPLORE_TOOLS = {"Read", "Glob", "Grep", "LS"}
 EXPLORE_COMMANDS = ("ls", "find", "cat", "grep", "rg", "head", "tail", "tree", "sed -n", "wc")
-ARMS = ("adage", "holdout", "off", "instincts", "e1")
+ARMS = ("adage", "control", "off", "instincts", "e1")
 SPOOL_MAGIC = bytes([0xAD, 0xA6, 0xE5, 0x01])
 DEFAULTS = {
     "model": "claude-haiku-4-5-20251001",
@@ -160,7 +160,7 @@ def load_config(path, overrides):
     missing = [k for k in ("name", "repo_key", "sandbox", "score", "prompts", "train", "eval") if k not in cfg]
     if missing:
         raise SystemExit(f"config {path}: missing {', '.join(missing)}")
-    for arm in cfg["eval"].get("arms", ["holdout", "adage"]):
+    for arm in cfg["eval"].get("arms", ["control", "adage"]):
         if arm not in ARMS:
             raise SystemExit(f"config {path}: unknown arm {arm!r} (one of {', '.join(ARMS)})")
     if not isinstance(cfg["rounds"], int) or cfg["rounds"] < 1:
@@ -242,7 +242,7 @@ def plan(cfg, phases, round_):
         for r in range(e.get("repeats", 1)):
             for i, task in enumerate(tasks_for_round(cfg, round_)):
                 prompt = prompts[(i + r) % len(prompts)]
-                for arm in arm_order(e.get("arms", ["holdout", "adage"]), cfg.get("seed") or 0, round_, task, r + 1):
+                for arm in arm_order(e.get("arms", ["control", "adage"]), cfg.get("seed") or 0, round_, task, r + 1):
                     out.append((f"{tag}-{task}-r{r + 1}-{arm}", "eval", arm, task, prompt))
     return out
 
@@ -268,13 +268,13 @@ def claude_command(cfg, prompt, settings):
 
 def instincts_home(home):
     """The `instincts` arm's ADAGE_HOME, next to the learned one: Adage's built-in defaults bound
-    from the repository's files alone (`adage learn --instincts-only`), no learned reflex."""
+    from the repository's files alone (`adage condition --instincts-only`), no learned reflex."""
     return Path(home).parent / "instincts-home"
 
 
 def e1_home(home):
     """The `e1` arm's ADAGE_HOME: a copy of the learned home in which a person approved E1
-    prefetches (`adage review allow-exec ... --level e1`, which needs a terminal). Its hooks run
+    prefetches (`adage review delegate ... --level e1`, which needs a terminal). Its hooks run
     `adage-exec`, not `adage`. The runner never approves anything itself."""
     return Path(home).parent / "e1-home"
 
@@ -295,7 +295,7 @@ def env_for(arm, home):
         return {"ADAGE_HOME": str(instincts_home(home)), "ADAGE_ARM": "treated", "ADAGE_AUTO_LEARN": "0"}
     if arm == "e1":
         return {"ADAGE_HOME": str(e1_home(home)), "ADAGE_ARM": "treated", "ADAGE_AUTO_LEARN": "0"}
-    return {"ADAGE_HOME": str(home), "ADAGE_ARM": "holdout" if arm == "holdout" else "treated",
+    return {"ADAGE_HOME": str(home), "ADAGE_ARM": "control" if arm == "control" else "treated",
             "ADAGE_AUTO_LEARN": "0"}
 
 
@@ -408,7 +408,7 @@ def rounds_for(cfg, round_):
 def estimate(cfg, phases, rounds):
     """How many agent runs the plan makes, as the product that produces the number."""
     t, e = cfg["train"], cfg["eval"]
-    arms = e.get("arms", ["holdout", "adage"])
+    arms = e.get("arms", ["control", "adage"])
     train_runs = len(t["tasks"]) * t.get("repeats", 1) if ("train" in phases and 1 in rounds) else 0
     eval_rounds = rounds if "eval" in phases else []
     sizes = [len(tasks_for_round(cfg, r)) for r in (eval_rounds or rounds[:1])]
@@ -444,7 +444,7 @@ def describe(cfg, phases, rounds, root, adage, isolate=True):
             })
     learn = None
     if "learn" in phases:
-        learn = [str(adage), "learn", *cfg["learn_args"], "--json", "--repo", cfg["repo_key"],
+        learn = [str(adage), "condition", *cfg["learn_args"], "--json", "--repo", cfg["repo_key"],
                  "--outcomes", str(private / "outcomes.json"), "--transcripts", "<each learnable earlier session's transcript>"]
     est = estimate(cfg, phases, rounds)
     assert est["total_runs"] == len(rows), (est, len(rows))
@@ -595,7 +595,7 @@ def spool_directives(home, session_id):
         for k in ("directives", "would_have"):
             for x in d.get(k, []):
                 out.append({"ts": rec.get("ts"), "event": rec.get("event"), "kind": k, "route": x.get("route"),
-                            "aspect": x.get("aspect"), "text": x.get("text", "")[:600]})
+                            "strength": x.get("strength"), "text": x.get("text", "")[:600]})
         for jd in d.get("judgements", []):
             out.append({"ts": rec.get("ts"), "event": rec.get("event"), "kind": jd.get("kind"), "route": jd.get("route")})
         if d.get("continue_reason"):
@@ -607,8 +607,8 @@ def follow_counts(spool):
     """Routes the session was exposed to (would-have), and how many of them it followed."""
     exposed = {d["route"] for d in spool if d["kind"] == "would_have" and d.get("route")}
     followed = {d["route"] for d in spool if d["kind"] in ("followed", "obligation_met") and d.get("route")} & exposed
-    derailed = {d["route"] for d in spool if d["kind"] == "derailed" and d.get("route")}
-    return {"exposed": len(exposed), "followed": len(followed), "derailed": len(derailed)}
+    ignored = {d["route"] for d in spool if d["kind"] == "ignored" and d.get("route")}
+    return {"exposed": len(exposed), "followed": len(followed), "ignored": len(ignored)}
 
 
 def shell_segments(cmd):
@@ -907,7 +907,7 @@ class Live:
                         version = m.get("claude_code_version")
                     elif typ == "system" and "hook" in str(m.get("subtype", "")):
                         text = json.dumps(m)
-                        if "adage-signal" in text or "finish-line check" in text:
+                        if "adage-reflex" in text or "finish-line check" in text:
                             directives.append({"t": t, "raw": text[:4000]})
                             self.update(run_id, directives=directives)
                     elif typ == "assistant":
@@ -994,7 +994,7 @@ class Live:
         (self.private / "outcomes.json").write_text(json.dumps(outcomes))
         if self.round == 1:
             shutil.rmtree(self.home / "tracks", ignore_errors=True)
-        out = subprocess.run([str(self.adage), "learn", *self.cfg["learn_args"], "--json", "--repo", self.cfg["repo_key"],
+        out = subprocess.run([str(self.adage), "condition", *self.cfg["learn_args"], "--json", "--repo", self.cfg["repo_key"],
                               "--outcomes", str(self.private / "outcomes.json"), "--transcripts", *transcripts],
                              capture_output=True, text=True, env=dict(os.environ, ADAGE_HOME=str(self.home)))
         if out.returncode != 0:
@@ -1011,7 +1011,7 @@ class Live:
         print(json.dumps(rep, indent=2))
 
     def bind_instincts(self):
-        """The `instincts` arm's index: `adage learn --instincts-only` over a fresh sandbox (of the
+        """The `instincts` arm's index: `adage condition --instincts-only` over a fresh sandbox (of the
         round's first held-out task), in its own ADAGE_HOME. No session is read."""
         home = instincts_home(self.home)
         shutil.rmtree(home, ignore_errors=True)
@@ -1021,8 +1021,8 @@ class Live:
         shutil.rmtree(work.parent, ignore_errors=True)
         work.parent.mkdir(parents=True)
         subprocess.run(expand(self.cfg["sandbox"], dir=str(work), task=task), check=True, capture_output=True)
-        # Keyed as `learn --repo` keys the reflexes, so both indexes of one sandbox agree.
-        out = subprocess.run([str(self.adage), "learn", "--instincts-only", "--repo-path", str(work),
+        # Keyed as `adage condition --repo` keys the reflexes, so both indexes of one sandbox agree.
+        out = subprocess.run([str(self.adage), "condition", "--instincts-only", "--repo-path", str(work),
                               "--repo", self.cfg["repo_key"], "--json"],
                              capture_output=True, text=True, env=dict(os.environ, ADAGE_HOME=str(home)))
         if out.returncode != 0:
@@ -1046,7 +1046,7 @@ holm = demo_report.holm
 
 def summarise(state, round_, n_perm=10000, n_boot=2000):
     """The held-out runs of one round per arm: aggregates, n per metric (and how many runs had no
-    value or a restricted one), the difference between adage and holdout with a task-bootstrap
+    value or a restricted one), the difference between adage and control with a task-bootstrap
     95% CI, the task-stratified permutation p-value and its Holm adjustment across the metrics,
     and the task-level sign-flip p-value. Runs whose harness or scorer failed are left out of
     every arm and counted (`status_counts`, `excluded`); censored runs stay, and are counted."""
@@ -1200,7 +1200,7 @@ def main(argv):
         if "eval" in opts["phases"]:
             if "e1" in cfg["eval"].get("arms", []) and not (e1_home(live.home) / "index.json").exists():
                 raise SystemExit(f"the e1 arm needs {e1_home(live.home)}: copy private/adage-home there and approve "
-                                 "its prefetches as a person (adage review allow-exec ... --level e1); see README")
+                                 "its prefetches as a person (adage review delegate ... --level e1); see README")
             live.phase("eval", [s for s in sessions if s[1] == "eval"])
         if "report" in opts["phases"]:
             summaries[str(round_)] = summarise(live.state, round_)

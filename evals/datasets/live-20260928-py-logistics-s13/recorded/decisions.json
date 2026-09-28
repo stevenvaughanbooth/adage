@@ -42,7 +42,7 @@
 ],
 "eval-OPS-11-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "88efc5b0c76beede",
 "judgements": [],
@@ -50,7 +50,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "88efc5b0c76beede",
 "judgements": [],
@@ -60,7 +60,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "88efc5b0c76beede",
 "judgements": [],
@@ -68,7 +68,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolUseFailure",
 "generation": "88efc5b0c76beede",
 "judgements": [],
@@ -78,7 +78,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "88efc5b0c76beede",
 "judgements": [],
@@ -86,12 +86,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "88efc5b0c76beede",
 "judgements": [
 [
-"derailed",
+"ignored",
 "dead-end-fbe967"
 ]
 ],
@@ -99,12 +99,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "88efc5b0c76beede",
 "judgements": [
 [
-"derailed",
+"ignored",
 "dead-end-60822e"
 ]
 ],
@@ -124,7 +124,7 @@
 ],
 "eval-OPS-11-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "88efc5b0c76beede",
 "judgements": [],
@@ -152,7 +152,7 @@
 ],
 "eval-OPS-49-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "88efc5b0c76beede",
 "judgements": [],
@@ -160,7 +160,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "b751d2ca3e8f9bf2",
 "judgements": [],
@@ -168,7 +168,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "b751d2ca3e8f9bf2",
 "judgements": [],
@@ -176,7 +176,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "b751d2ca3e8f9bf2",
 "judgements": [],
@@ -186,7 +186,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "b751d2ca3e8f9bf2",
 "judgements": [
@@ -199,7 +199,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "b751d2ca3e8f9bf2",
 "judgements": [],
@@ -207,7 +207,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "b751d2ca3e8f9bf2",
 "judgements": [],
@@ -266,7 +266,7 @@
 ],
 "eval-OPS-49-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "b751d2ca3e8f9bf2",
 "judgements": [],
@@ -286,7 +286,7 @@
 ],
 "eval-OPS-74-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "88efc5b0c76beede",
 "judgements": [],
@@ -294,7 +294,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "88efc5b0c76beede",
 "judgements": [],
@@ -302,7 +302,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "88efc5b0c76beede",
 "judgements": [],
@@ -310,7 +310,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "88efc5b0c76beede",
 "judgements": [],
@@ -330,7 +330,7 @@
 ],
 "eval-OPS-74-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "b751d2ca3e8f9bf2",
 "judgements": [],

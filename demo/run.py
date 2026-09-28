@@ -2,13 +2,13 @@
 """Adage demo runner — real headless Claude Code agents, with and without Adage.
 
   python3 demo/run.py train   # baseline agents on training work items; Adage off
-  python3 demo/run.py learn   # adage learn over the training transcripts -> tracks
-  python3 demo/run.py eval    # held-out work items, two arms: holdout vs adage
+  python3 demo/run.py learn   # adage condition over the training transcripts -> tracks
+  python3 demo/run.py eval    # held-out work items, two arms: control vs adage
   python3 demo/run.py all
 
 Every run gets a fresh copy of the sandbox repository, a real `claude -p` session, and a hidden
 check afterwards. Live state is written to $DEMO_ROOT/state.json for the dashboard
-(demo/dashboard/serve.py). Both eval arms run Adage's hooks: the holdout arm computes what it
+(demo/dashboard/serve.py). Both eval arms run Adage's hooks: the control arm computes what it
 would have said and logs it, but says nothing — so hook overhead is identical between arms.
 
 Environment: DEMO_ROOT (default /tmp/adage-demo), DEMO_MODEL, DEMO_CONCURRENCY, DEMO_REPEATS,
@@ -134,7 +134,7 @@ def run_one(run_id, phase, arm, task, prompt_template):
 
     env = dict(os.environ)
     env["ADAGE_HOME"] = str(ADAGE_HOME)
-    env["ADAGE_ARM"] = "holdout" if arm == "holdout" else "treated"
+    env["ADAGE_ARM"] = "control" if arm == "control" else "treated"
     # Learning happens between rounds, never during one: no automatic learning.
     env["ADAGE_AUTO_LEARN"] = "0"
     cmd = [
@@ -167,7 +167,7 @@ def run_one(run_id, phase, arm, task, prompt_template):
             session_id = m.get("session_id")
         elif typ == "system" and "hook" in str(m.get("subtype", "")):
             text = json.dumps(m)
-            if "adage-signal" in text or "finish-line check" in text:
+            if "adage-reflex" in text or "finish-line check" in text:
                 directives.append({"t": t, "raw": text[:4000]})
                 update_run(run_id, directives=directives)
         elif typ == "assistant":
@@ -248,7 +248,7 @@ def spool_directives(session_id):
             for k in ("directives", "would_have"):
                 for x in d.get(k, []):
                     out.append({"ts": rec.get("ts"), "event": rec.get("event"), "kind": k, "route": x.get("route"),
-                                "aspect": x.get("aspect"), "text": x.get("text", "")[:600]})
+                                "strength": x.get("strength"), "text": x.get("text", "")[:600]})
             for jd in d.get("judgements", []):
                 out.append({"ts": rec.get("ts"), "event": rec.get("event"), "kind": jd.get("kind"), "route": jd.get("route")})
             if d.get("continue_reason"):
@@ -298,7 +298,7 @@ def learn():
     env = dict(os.environ, ADAGE_HOME=str(ADAGE_HOME))
     if ROUND == 1:
         shutil.rmtree(ADAGE_HOME / "tracks", ignore_errors=True)
-    out = subprocess.run([str(ADAGE_BIN), "learn", "--demo", "--json", "--repo", "acme-billing",
+    out = subprocess.run([str(ADAGE_BIN), "condition", "--demo", "--json", "--repo", "acme-billing",
                           "--outcomes", str(ROOT / "outcomes.json"), "--transcripts", *transcripts],
                          capture_output=True, text=True, env=env)
     if out.returncode != 0:
@@ -326,7 +326,7 @@ def evaluate():
             prompt = PROMPTS[(i + r) % len(PROMPTS)]
             # Interleave arms so both see the same conditions over time.
             tag = "eval" if ROUND == 1 else f"eval{ROUND}"
-            plan.append((f"{tag}-{task}-r{r + 1}-holdout", "eval", "holdout", task, prompt))
+            plan.append((f"{tag}-{task}-r{r + 1}-control", "eval", "control", task, prompt))
             plan.append((f"{tag}-{task}-r{r + 1}-adage", "eval", "adage", task, prompt))
     phase_runs("eval", plan)
     STATE["phase"] = "done"

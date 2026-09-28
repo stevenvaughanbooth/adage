@@ -19,7 +19,7 @@
 //! subset) laid over the thresholds preset.
 //!
 //! Instincts are off by default, so the numbers are those of learned routes. `--instincts` binds
-//! them after learning, as `adage learn` does; `--instincts-only` learns nothing from the train
+//! them after learning, as `adage condition` does; `--instincts-only` learns nothing from the train
 //! sessions and binds only instincts, from the repository's files (`--sandbox-dir`, default
 //! `evals/sandboxes/<repo>`), then replays the test sessions: what Adage says on day 0.
 //!

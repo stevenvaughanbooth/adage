@@ -15,7 +15,7 @@
 //! `repo-path` (or `repo-path-list` for the slot a `read_batch` reads). A run step whose argv names
 //! a repository script is pinned by the SHA-256 of that file under `repo_root` (L-ref). Without a
 //! root, or when the file is missing, the route is skipped and reported: a pack never holds an
-//! unpinned script reference. Per-machine state (`state`, `stale_since`, `authored`) is dropped.
+//! unpinned script reference. Per-machine state (`state`, `dormant_since`, `authored`) is dropped.
 
 use crate::digest::sha256_hex;
 use crate::model::*;
@@ -333,7 +333,7 @@ impl Cx {
             inputs,
             steps: vec![step],
             links: Vec::new(),
-            aspect: r.aspect,
+            strength: r.strength,
             exit,
             exec: None,
             evidence: Some(evidence),

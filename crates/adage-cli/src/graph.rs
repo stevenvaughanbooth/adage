@@ -1,14 +1,14 @@
 //! `adage graph [--json] [--events <n>]`: Adage's live state as a graph, for people and tools.
 //!
 //! Judgements are split by arm. In treated sessions they say whether the agent followed what it
-//! was told; in holdout sessions nothing was delivered, so they say whether the agent found the
+//! was told; in control sessions nothing was delivered, so they say whether the agent found the
 //! same path unaided — the baseline every effect is measured against.
 //!
 //! Nodes are the situations Adage watches for (route triggers), the routes, the steps they
 //! direct, and how agents responded. Every count comes from the installed tracks and the session
 //! spools under `$ADAGE_HOME`; nothing is estimated. Read-only, so agents may run it.
 //!
-//! The JSON is what the signal box (`crates/adage-cli/assets/brain.html`) draws; `adage graph
+//! The JSON is what the map (`crates/adage-cli/assets/brain.html`) draws; `adage graph
 //! --serve` serves both from the binary (see `serve.rs`).
 
 use crate::review::{ceiling_str, discover, preview};
@@ -28,10 +28,10 @@ struct Live {
     emitted: u64,
     would_have: u64,
     followed: u64,
-    derailed: u64,
+    ignored: u64,
     obligation_met: u64,
-    /// Holdout sessions: nothing was delivered, so a "followed" judgement means the agent took the
-    /// route's path unaided, and a "derailed" one means it did not.
+    /// Control sessions: nothing was delivered, so a "followed" judgement means the agent took the
+    /// route's path unaided, and a "ignored" one means it did not.
     unaided: u64,
     not_reached: u64,
     obligation_met_unaided: u64,
@@ -105,7 +105,7 @@ fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
 /// `adage graph --learned --dump <repo> [--transcripts <file>...] [--claude-projects <dir>] [--json]`:
 /// the graph engine's session facts for one repository (Track G G0), as counts: events, prompts,
 /// acts, artifacts, edges by kind, token occurrences, embeddings, truncations, and the value slots
-/// learned from them. Sessions are read as `adage learn` reads them (Claude Code history by
+/// learned from them. Sessions are read as `adage condition` reads them (Claude Code history by
 /// default); facts go through the facts cache (`$ADAGE_HOME/cache/facts`). Read-only apart from
 /// that cache.
 fn dump_learned(args: &[String], paths: &Paths) -> Result<()> {
@@ -226,24 +226,24 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
     } else {
         let s = &out["sessions"];
         println!(
-            "adage graph: {} routes, {} sessions ({} treated, {} holdout)",
+            "adage graph: {} reflexes, {} sessions ({} treated, {} control)",
             routes_len(&out),
             s["total"],
             s["treated"],
-            s["holdout"]
+            s["control"]
         );
         for r in out["routes"].as_array().into_iter().flatten() {
             let l = &r["live"];
             println!(
-                "  [{}] {} → {} → {}   directed {} · followed {} · derailed {} │ holdout: would-have {} · unaided {} · not reached {}",
-                r["aspect"].as_str().unwrap_or(""),
+                "  [{}] {} → {} → {}   directed {} · followed {} · ignored {} │ control: would-have {} · unaided {} · not reached {}",
+                r["strength"].as_str().unwrap_or(""),
                 r["trigger"]["label"].as_str().unwrap_or(""),
                 r["id"].as_str().unwrap_or(""),
                 r["step"]["label"].as_str().unwrap_or(""),
-                l["emitted"], l["followed"], l["derailed"], l["would_have"], l["holdout"]["unaided"], l["holdout"]["not_reached"]
+                l["emitted"], l["followed"], l["ignored"], l["would_have"], l["control"]["unaided"], l["control"]["not_reached"]
             );
         }
-        println!("Use --json for the full graph (routes, observed commands, recent events).");
+        println!("Use --json for the full graph (reflexes, observed commands, recent events).");
     }
     Ok(())
 }
@@ -258,7 +258,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
     let mut live: BTreeMap<(String, String), Live> = BTreeMap::new();
     let mut observed: BTreeMap<String, (u64, BTreeSet<String>)> = BTreeMap::new();
     let mut events: Vec<Value> = Vec::new();
-    let (mut treated, mut holdout, mut stops) = (0u64, 0u64, 0u64);
+    let (mut treated, mut control, mut stops) = (0u64, 0u64, 0u64);
 
     // The commands each dead-end route warns against, to count sessions that ran one anyway.
     let avoided: Vec<(String, String, Vec<String>)> = installed
@@ -289,7 +289,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
         let recs: Vec<Value> = spool::read_all(p).unwrap_or_default();
         match recs.iter().find_map(|r| r["arm"].as_str()) {
             Some("treated") => treated += 1,
-            Some("holdout") => holdout += 1,
+            Some("control") => control += 1,
             _ => {}
         }
         for r in &recs {
@@ -306,7 +306,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
             for id in &would {
                 live.entry((repo.clone(), id.clone())).or_default().would_have += 1;
             }
-            let holdout = r["arm"] == "holdout";
+            let control = r["arm"] == "control";
             let arm = r["arm"].as_str().unwrap_or("unknown").to_string();
             arm_sessions.entry((repo.clone(), arm.clone())).or_default().insert(sid.clone());
             for id in directed.iter().chain(&would) {
@@ -335,12 +335,12 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
             for j in d["judgements"].as_array().into_iter().flatten() {
                 let (Some(kind), Some(id)) = (j["kind"].as_str(), j["route"].as_str()) else { continue };
                 let l = live.entry((repo.clone(), id.to_string())).or_default();
-                match (kind, holdout) {
+                match (kind, control) {
                     ("followed", false) => l.followed += 1,
-                    ("derailed", false) => l.derailed += 1,
+                    ("ignored", false) => l.ignored += 1,
                     ("obligation_met", false) => l.obligation_met += 1,
                     ("followed", true) => l.unaided += 1,
-                    ("derailed", true) => l.not_reached += 1,
+                    ("ignored", true) => l.not_reached += 1,
                     ("obligation_met", true) => l.obligation_met_unaided += 1,
                     _ => {}
                 }
@@ -377,7 +377,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
             for (k, how) in route_keys(r, &table) {
                 railed.entry(k).or_insert((r.id.clone(), how));
             }
-            let arm_stats: serde_json::Map<String, Value> = ["treated", "holdout"]
+            let arm_stats: serde_json::Map<String, Value> = ["treated", "control"]
                 .iter()
                 .map(|a| {
                     let s = arms.get(&(repo.clone(), r.id.clone(), a.to_string()));
@@ -403,7 +403,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                 "repo": repo,
                 "imported": inst.imported,
                 "in_index": indexed,
-                "aspect": lower(r.aspect),
+                "strength": lower(r.strength),
                 "ceiling": ceiling_str(r),
                 "effect": lower(r.effect),
                 "state": lower(r.state),
@@ -416,9 +416,9 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                     "emitted": l.map_or(0, |l| l.emitted),
                     "would_have": l.map_or(0, |l| l.would_have),
                     "followed": l.map_or(0, |l| l.followed),
-                    "derailed": l.map_or(0, |l| l.derailed),
+                    "ignored": l.map_or(0, |l| l.ignored),
                     "obligation_met": l.map_or(0, |l| l.obligation_met),
-                    "holdout": {
+                    "control": {
                         "unaided": l.map_or(0, |l| l.unaided),
                         "not_reached": l.map_or(0, |l| l.not_reached),
                         "obligation_met": l.map_or(0, |l| l.obligation_met_unaided),
@@ -444,7 +444,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
     let out = json!({
         "generation": index.generation,
         "home": paths.root.display().to_string(),
-        "sessions": { "total": spools.len(), "treated": treated, "holdout": holdout },
+        "sessions": { "total": spools.len(), "treated": treated, "control": control },
         "stop_requests": stops,
         "routes": routes,
         "observed": observed,

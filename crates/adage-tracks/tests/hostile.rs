@@ -6,7 +6,7 @@ use adage_core::spans::SpanKind;
 use adage_core::Effect;
 use adage_tracks::*;
 
-fn track(trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, aspect: Aspect) -> Track {
+fn track(trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, strength: Strength) -> Track {
     Track {
         manifest: Manifest {
             track: TrackInfo {
@@ -25,8 +25,8 @@ fn track(trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, aspect:
             step,
             slots,
             effect,
-            aspect,
-            state: RouteState::Active,
+            strength,
+            state: RouteState::Firm,
             exit: vec![],
             evidence: Evidence::default(),
             authored: false,
@@ -35,13 +35,13 @@ fn track(trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, aspect:
 }
 
 fn run(command: &str) -> Track {
-    track(Trigger::SessionStart, Step::Run { command: command.into() }, vec![], Effect::Environment, Aspect::Yellow)
+    track(Trigger::SessionStart, Step::Run { command: command.into() }, vec![], Effect::Environment, Strength::Prime)
 }
 
 #[test]
 fn a_command_may_not_name_a_path_outside_the_repository() {
     // Validation checked only a command's characters, so `cat /etc/passwd` (observe, so even
-    // green) or `cat ../../secret` could be directed by a shared track.
+    // fire) or `cat ../../secret` could be directed by a shared track.
     for c in [
         "cat /etc/passwd",
         "cat ../../secret",
@@ -84,7 +84,7 @@ fn only_a_prompt_can_bind_a_run_steps_slots() {
         Step::Run { command: "make {item}".into() },
         vec![slot.clone()],
         Effect::Environment,
-        Aspect::Yellow,
+        Strength::Prime,
     );
     assert!(io::validate(&after_edit).is_err());
     let prompt = track(
@@ -92,7 +92,7 @@ fn only_a_prompt_can_bind_a_run_steps_slots() {
         Step::Run { command: "make {item}".into() },
         vec![slot],
         Effect::Environment,
-        Aspect::Yellow,
+        Strength::Prime,
     );
     assert!(io::validate(&prompt).is_ok());
     let avoid = track(
@@ -100,7 +100,7 @@ fn only_a_prompt_can_bind_a_run_steps_slots() {
         Step::Avoid { avoid: "pytest {item}".into(), instead: "make test".into(), signature: "fails".into() },
         vec![],
         Effect::Verify,
-        Aspect::Red,
+        Strength::Inhibit,
     );
     assert!(io::validate(&avoid).is_err(), "nothing binds an avoid step's slots");
 }
@@ -113,7 +113,7 @@ fn a_signature_may_not_carry_invisible_characters() {
             Step::Avoid { avoid: "python3 -m pytest".into(), instead: "make test".into(), signature: sig.into() },
             vec![],
             Effect::Verify,
-            Aspect::Red,
+            Strength::Inhibit,
         )
     };
     assert!(io::validate(&t("No module named pytest")).is_ok());

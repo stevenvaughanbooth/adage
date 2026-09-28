@@ -6,25 +6,25 @@
 //! several lines with the same `ts`; one that found no usable session writes one with `repo` null):
 //!
 //! ```json
-//! {"ts":1758620000000,"kind":"learn","trigger":"auto","repo":"github.com/acme/billing",
+//! {"ts":1758620000000,"kind":"condition","trigger":"auto","repo":"github.com/acme/billing",
 //!  "sessions_read":212,"sessions_used":198,"duration_ms":431,"index_generation":"3f1c…",
 //!  "changes":[{"route":"finish-line-6a01b2","track":"github-com-acme-billing/finish-line",
-//!              "change":"aspect","from":"yellow","to":"green",
-//!              "summary":"finish line route yellow → green (9 of 9 sessions, lower bound 0.70)"}],
+//!              "change":"strength","from":"prime","to":"fire",
+//!              "summary":"finish line route prime → fire (9 of 9 sessions, lower bound 0.70)"}],
 //!  "version":"0.1.0","sessions_steered":3,"thresholds":"min_support=5 …","intent_model":null,
 //!  "repos":{"github.com/acme/billing":{"sessions":198,"tracks":[{"name":"…","version":"1.2.0",
 //!           "change":"route added","routes":4}]}}}
 //! ```
 //!
-//! - `trigger`: `auto` (the background learner a hook started) or `manual` (`adage learn`).
+//! - `trigger`: `auto` (the background learner a hook started) or `manual` (`adage condition`).
 //! - `sessions_read`: transcripts the run read (an automatic run counts only its repository's);
 //!   `sessions_used`: this repository's sessions with steps.
-//! - `changes`: [`adage_learn::diff`] — `change` is `new`, `retired`, `aspect`, `evidence`, `draft`
-//!   or `proposal`; `from`/`to` are aspects (`green`, `yellow`, `red`) or null; `summary` is a
-//!   fixed template (route kind, aspect, session counts).
+//! - `changes`: [`adage_learn::diff`] — `change` is `new`, `extinguished`, `strength`, `evidence`, `nascent`
+//!   or `proposal`; `from`/`to` are strengths (`fire`, `prime`, `inhibit`) or null; `summary` is a
+//!   fixed template (route kind, strength, session counts).
 //! - `version` … `repos` are the fields every line had before live learning, kept as they were.
 //!
-//! **A failed learn**: `{"ts", "kind":"learn_error", "trigger", "repo", "class", "error"}`, where
+//! **A failed conditioning run**: `{"ts", "kind":"condition_error", "trigger", "repo", "class", "error"}`, where
 //! `class` is one of `repo` (the repository's directory is gone), `lock` (the tracks lock could not
 //! be taken), `learn` (learning failed) or `panic`, and `error` a fixed message or an I/O error
 //! kind.
@@ -80,13 +80,13 @@ pub fn learn_line(ts: u64, l: &Learned) -> Value {
                 .map(|t| json!({ "name": t.name, "version": t.version, "change": t.change, "routes": t.routes.len() }))
                 .collect();
             let mut entry = json!({ "sessions": rr.sessions, "tracks": tracks });
-            // Instinct counts only: ids and reasons stay in `adage learn --json`.
+            // Instinct counts only: ids and reasons stay in `adage condition --json`.
             if let Some(i) = &rr.instincts {
                 entry["instincts"] = json!({
                     "bound": i.bound,
                     "advice": i.advice,
-                    "drafts": i.drafts,
-                    "retired": i.retired.len(),
+                    "nascent": i.nascent,
+                    "extinguished": i.extinguished.len(),
                     "confirmed": i.confirmed.len(),
                 });
             }
@@ -96,7 +96,7 @@ pub fn learn_line(ts: u64, l: &Learned) -> Value {
     };
     json!({
         "ts": ts,
-        "kind": "learn",
+        "kind": "condition",
         "trigger": l.trigger,
         "repo": l.repo,
         "sessions_read": l.sessions_read,
@@ -112,10 +112,10 @@ pub fn learn_line(ts: u64, l: &Learned) -> Value {
     })
 }
 
-/// The `learn_error` line.
+/// The `condition_error` line.
 pub fn error_line(ts: u64, trigger: &str, repo: Option<&str>, class: &str, error: &str) -> Value {
     let error: String = error.chars().filter(|c| !c.is_control()).take(200).collect();
-    json!({ "ts": ts, "kind": "learn_error", "trigger": trigger, "repo": repo, "class": class, "error": error })
+    json!({ "ts": ts, "kind": "condition_error", "trigger": trigger, "repo": repo, "class": class, "error": error })
 }
 
 /// A fixed description of a learn failure: the I/O error kind if one caused it, never its text
@@ -123,7 +123,7 @@ pub fn error_line(ts: u64, trigger: &str, repo: Option<&str>, class: &str, error
 pub fn describe(e: &anyhow::Error) -> String {
     match e.chain().find_map(|c| c.downcast_ref::<std::io::Error>()) {
         Some(io) => format!("I/O error ({:?})", io.kind()),
-        None => "learning failed; run `adage learn --json` to see why".into(),
+        None => "conditioning failed; run `adage condition --json` to see why".into(),
     }
 }
 

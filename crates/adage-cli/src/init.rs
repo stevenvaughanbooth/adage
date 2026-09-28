@@ -6,13 +6,13 @@
 //!    configuration.
 //! 3. Offers the optional embedding model: prints `adage models fetch`, and runs it only with
 //!    `--yes`.
-//! 4. Runs `adage survey` over existing history (read-only), for the repository at `--repo` if
+//! 4. Runs `adage sense` over existing history (read-only), for the repository at `--repo` if
 //!    given, else for every repository.
 //!
 //! At a terminal (stdin and stdout both terminals, outside any agent session, and without
 //! `--print` or `--yes`) `init` is a guided wizard instead (`crate::ui::wizard`): it asks
 //! before each step, shows the exact file and diff before installing hooks, and can fetch the
-//! model, run a first `adage learn`, and turn auto-learning on.
+//! model, run a first `adage condition`, and turn auto-learning on.
 //!
 //! Printing is allowed anywhere, including inside an agent session. `--yes` downloads into the
 //! data directory, so it needs a person at a terminal and refuses inside an agent session.
@@ -67,14 +67,14 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
         if yes { "download" } else { "offer" }
     );
     println!(
-        "  4. survey your existing agent history{} — read-only.",
+        "  4. sense your agents' existing traces{}: which reflexes they would form (read-only);",
         match (&repo_arg, &repo_key) {
             (Some(_), Some(k)) => format!(" for {k}"),
             _ => String::new(),
         }
     );
     println!(
-        "  5. show what Adage's built-in defaults (instincts) would bind in this repository, from its files alone{}.",
+        "  5. show which instincts (Adage's built-in reflexes) would bind in this repository, from its files alone{}.",
         if yes { ", and bind them" } else { "" }
     );
     if let Some(v) = agent {
@@ -140,11 +140,11 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
         ),
     }
 
-    // 4. Survey.
-    println!("\n4. Survey\n");
-    let opts = crate::survey::Options { repo: repo_arg.as_ref().and(repo_key.clone()), ..Default::default() };
-    let s = crate::survey::run(&opts, paths)?;
-    crate::survey::print_text(&s);
+    // 4. Sense.
+    println!("\n4. Sense\n");
+    let opts = crate::sense::Options { repo: repo_arg.as_ref().and(repo_key.clone()), ..Default::default() };
+    let s = crate::sense::run(&opts, paths)?;
+    crate::sense::print_text(&s);
 
     // 5. Instincts: what Adage's built-in defaults would bind here, from this repository's files.
     println!("\n5. Instincts (day 0)");
@@ -154,7 +154,7 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
 }
 
 /// Show what would bind for the repository (a dry bind, nothing written), and offer
-/// `adage learn --instincts-only`; with `--yes`, run it.
+/// `adage condition --instincts-only`; with `--yes`, run it.
 fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result<()> {
     let Some(root) = root else {
         println!("  Not inside a repository: instincts bind per repository (run `adage init` inside one).");
@@ -171,24 +171,26 @@ fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result
         println!("  Nothing in this repository's files matches a built-in default.");
         return Ok(());
     }
-    println!("  From this repository's files alone, with no session history, Adage would bind:");
+    println!("  From this repository's files alone, with no traces, Adage would bind these instincts:");
     for r in &dry.routes {
         let instinct = dry.origins.get(&r.id).map(String::as_str).unwrap_or("?");
-        let draft =
-            if r.state == adage_tracks::RouteState::Draft { "  (needs your approval in `adage review`)" } else { "" };
-        println!("    {instinct:<3} {}{draft}", crate::share::describe_step(&r.step));
+        let nascent =
+            if r.state == adage_tracks::RouteState::Nascent { "  (needs your approval in `adage review`)" } else { "" };
+        println!("    {instinct:<3} {}{nascent}", crate::share::describe_step(&r.step));
     }
-    println!("  Each is yellow at most, never blocks the agent from stopping, and gives way to anything Adage learns.");
-    let drafts = dry.routes.iter().any(|r| r.state == adage_tracks::RouteState::Draft);
-    if drafts {
-        println!("  Environment steps (installs) stay drafts until you approve one in `adage review`; approving one approves the pack's environment steps for this repository.");
+    println!(
+        "  Each is prime at most, never blocks the agent from stopping, and gives way to any reflex Adage conditions."
+    );
+    let nascent = dry.routes.iter().any(|r| r.state == adage_tracks::RouteState::Nascent);
+    if nascent {
+        println!("  Environment steps (installs) stay nascent until you approve one in `adage review`; approving one approves the pack's environment steps for this repository.");
     }
-    let cmd = format!("adage learn --instincts-only --repo-path {}", detect::tilde(root));
+    let cmd = format!("adage condition --instincts-only --repo-path {}", detect::tilde(root));
     if yes {
         println!("  binding: {cmd}");
         crate::instincts_only(&["--repo-path".to_string(), root.to_string_lossy().into_owned()], paths)?;
     } else {
-        println!("  `{cmd}` binds them now (`adage init --yes` does it for you); otherwise the first learn does.");
+        println!("  `{cmd}` binds them now (`adage init --yes` does it for you); otherwise the first `adage condition` does.");
     }
     Ok(())
 }

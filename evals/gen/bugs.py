@@ -39,7 +39,7 @@ def camel(snake):
 class Template:
     id: str
     title: str          # tracker title
-    description: str    # tracker description (no path-like text: `adage learn` reads paths from it)
+    description: str    # tracker description (no path-like text: `adage condition` reads paths from it)
     acceptance: str
     control: str        # a self-contained prompt fragment for control tasks: the problem, precisely
     py_good: str

@@ -185,12 +185,15 @@ fn a_segment_of_the_edited_path_binds_the_scope_of_a_check() {
 }
 
 #[test]
-fn an_environment_step_after_an_edit_is_a_draft() {
+fn an_environment_step_after_an_edit_is_a_nascent() {
     let out = compile(&[reflex(vec![edit("requirements.txt")], vec![act("exec make deps")], Some("exec make deps"))]);
     assert_eq!(out.routes.len(), 1, "{:?}", out.dropped);
     let r = &out.routes[0].route;
     assert_eq!(r.trigger, Trigger::AfterEdit { paths: "requirements.txt".into() });
-    assert_eq!((r.effect, r.state, r.aspect), (adage_core::Effect::Environment, RouteState::Draft, Aspect::Yellow));
+    assert_eq!(
+        (r.effect, r.state, r.strength),
+        (adage_core::Effect::Environment, RouteState::Nascent, Strength::Prime)
+    );
 }
 
 #[test]
@@ -211,7 +214,7 @@ fn a_failed_check_then_a_working_one_is_an_avoid_announced_by_how_often_it_is_ru
     let out = compile(&[reflex(vec![x], vec![act("exec make check")], Some("exec make check"))]);
     assert_eq!(out.routes.len(), 1, "{:?}", out.dropped);
     let r = &out.routes[0].route;
-    // Every trace ran the runner: announced at session start, red, with the miner's id.
+    // Every trace ran the runner: announced at session start, inhibit, with the miner's id.
     assert_eq!(r.trigger, Trigger::SessionStart);
     assert_eq!(
         r.step,
@@ -221,7 +224,7 @@ fn a_failed_check_then_a_working_one_is_an_avoid_announced_by_how_often_it_is_ru
             signature: "ModuleNotFoundError: No module named pytest".into()
         }
     );
-    assert_eq!(r.aspect, Aspect::Red);
+    assert_eq!(r.strength, Strength::Inhibit);
     assert_eq!(r.id, compile::stable::dead_end_id("exec make check", "", 0));
     // A run the avoided runner would take is dropped before emission (interlocking).
     let mut y = act(&pytest);
@@ -268,8 +271,8 @@ fn an_instinct_directing_the_same_step_is_recorded_as_a_prior() {
         step: Step::Run { command: "make gen".into() },
         slots: vec![],
         effect: adage_core::Effect::Regenerate,
-        aspect: Aspect::Yellow,
-        state: RouteState::Active,
+        strength: Strength::Prime,
+        state: RouteState::Firm,
         exit: vec![],
         evidence: Evidence { provenance: "instinct:core@0.1.0".into(), ..Default::default() },
         authored: false,

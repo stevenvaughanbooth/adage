@@ -2,8 +2,8 @@
 //!
 //! - The **route exec digest** ([`route_exec_digest`]) is the SHA-256 of the canonical JSON (keys
 //!   sorted, no whitespace, as `EngineParams::canonical_json`) of the route minus `evidence` and
-//!   `aspect` (a pack never holds `state`), with every referenced type definition and every script
-//!   SHA-256 inlined. Approvals are keyed by it: evidence updates and aspect moves keep it; any
+//!   `strength` (a pack never holds `state`), with every referenced type definition and every script
+//!   SHA-256 inlined. Approvals are keyed by it: evidence updates and strength moves keep it; any
 //!   change to a trigger, argv, input or output type, or script changes it.
 //! - The **pack digest** ([`pack_digest`], [`digest_dir`]) is `adage_tracks::io::digest`'s
 //!   algorithm: per-file SHA-256 over line-ending-normalised bytes (`scripts/` verbatim), sorted by
@@ -94,7 +94,7 @@ pub fn exec_json(route: &RouteV2, user: &BTreeMap<String, TypeDef>) -> String {
     let mut v = serde_json::to_value(route).unwrap_or(Value::Null);
     if let Value::Object(m) = &mut v {
         m.remove("evidence");
-        m.remove("aspect");
+        m.remove("strength");
         m.remove("state");
     }
     let mut referenced: BTreeMap<String, Value> = BTreeMap::new();

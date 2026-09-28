@@ -95,9 +95,9 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
         Source::Pack(dir) => (Pack::load(&dir).with_context(|| format!("{} fails validation", dir.display()))?, dir),
         Source::Track(dir) => {
             let mut track = io::read(&dir).with_context(|| format!("{} fails validation", dir.display()))?;
-            // What a person retired or demoted stays here; a pack carries no per-machine state.
+            // What a person extinguished or weakened stays here; a pack carries no per-machine state.
             track.routes.retain(|r| {
-                let keep = r.state.is_live() || r.state == RouteState::Draft;
+                let keep = r.state.is_live() || r.state == RouteState::Nascent;
                 if !keep {
                     skipped.push((r.id.clone(), format!("{:?} here", r.state).to_lowercase()));
                 }
@@ -259,7 +259,7 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
             "  {:<24} {:<10} {:<6} exec {exec}{}",
             r.id,
             r.shape.as_str(),
-            format!("{:?}", r.aspect).to_lowercase(),
+            format!("{:?}", r.strength).to_lowercase(),
             support.unwrap_or_default()
         );
     }

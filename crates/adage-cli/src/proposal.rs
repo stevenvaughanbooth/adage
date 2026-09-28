@@ -1,6 +1,6 @@
 //! Proposed changes to pinned routes in `adage review` (Implementation plan §4.1).
 //!
-//! `adage learn` (and a re-run of `adage add`) never overwrite a pinned route; when their own
+//! `adage condition` (and a re-run of `adage add`) never overwrite a pinned route; when their own
 //! version of it differs materially, they record a proposal ([`adage_tracks::proposals`]). The
 //! review queue lists it with the reason "proposed" and a field-by-field diff;
 //! `adage review approve` applies it (the route stays pinned), and `adage review dismiss` keeps the
@@ -8,7 +8,7 @@
 
 use crate::share::describe_step;
 use adage_tracks::proposals::Proposal;
-use adage_tracks::review::{aspect_str, shape};
+use adage_tracks::review::{shape, strength_str};
 use adage_tracks::{Contract, Route, SlotSource};
 
 fn slots(r: &Route) -> String {
@@ -53,7 +53,7 @@ fn fields(r: &Route) -> Vec<(&'static str, String)> {
         ("step", describe_step(&r.step)),
         ("slots", slots(r)),
         ("effect", r.effect.as_str().to_string()),
-        ("aspect", aspect_str(r.aspect).to_string()),
+        ("strength", strength_str(r.strength).to_string()),
         ("exit", format!("{:?}", r.exit).to_lowercase()),
         ("evidence", evidence(r)),
     ]
@@ -72,7 +72,7 @@ pub(crate) fn diff(pinned: &Route, proposed: &Route) -> Vec<(&'static str, Strin
 /// The proposal for a route, if it still applies to the route as it stands: made against this
 /// very pinned route (a hand edit since then makes it stale until the next learn run).
 pub(crate) fn current<'a>(p: Option<&'a Proposal>, r: &Route) -> Option<&'a Proposal> {
-    p.filter(|p| r.authored && p.against.shape == shape(r) && p.against.aspect == r.aspect)
+    p.filter(|p| r.authored && p.against.shape == shape(r) && p.against.strength == r.strength)
 }
 
 /// The route that approving the proposal installs: the proposed version, still pinned.
@@ -86,7 +86,7 @@ pub(crate) fn applied(p: &Proposal) -> Route {
 mod tests {
     use super::*;
     use adage_core::Effect;
-    use adage_tracks::{Aspect, Evidence, RouteState, Step, Trigger};
+    use adage_tracks::{Evidence, RouteState, Step, Strength, Trigger};
 
     #[test]
     fn diffs_only_what_changed() {
@@ -97,8 +97,8 @@ mod tests {
             step: Step::Run { command: "make test".into() },
             slots: vec![],
             effect: Effect::Verify,
-            aspect: Aspect::Yellow,
-            state: RouteState::Active,
+            strength: Strength::Prime,
+            state: RouteState::Firm,
             exit: vec![],
             evidence: Evidence { support: 5, opportunities: 6, days: 2, ..Default::default() },
             authored: true,

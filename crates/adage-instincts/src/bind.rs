@@ -11,7 +11,7 @@
 //! 3. **Learned routes win.** An instinct is skipped if a learned route has its id, avoids its
 //!    command, directs something (the same or different) for the same trigger, or a person
 //!    rejected its id in review.
-//! 4. **Capped.** Yellow, probation (an environment step: draft, which waits for review, as
+//! 4. **Capped.** Prime, forming (an environment step: nascent, which waits for review, as
 //!    Design O11 requires), no slots, provenance `instinct:<pack>@<version>`, no evidence.
 //! 5. **Validated.** Every route passes [`adage_tracks::io::validate`] plus the checks here.
 //!
@@ -25,7 +25,7 @@ use crate::files::safe_rel;
 use crate::safety::{command_key, rank, stable};
 use adage_core::{CommandTable, Effect};
 use adage_tracks::{
-    Aspect, Evidence, Gauge, Manifest, Origin, Route, RouteState, Scope, Step, Track, TrackInfo, Trigger,
+    Evidence, Gauge, Manifest, Origin, Route, RouteState, Scope, Step, Strength, Track, TrackInfo, Trigger,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -217,8 +217,8 @@ pub fn bind_facts(
                 step: Step::Advise { template: a.template_id, slots: a.slots },
                 slots: vec![],
                 effect: Effect::Observe,
-                aspect: Aspect::Yellow,
-                state: RouteState::Probation,
+                strength: Strength::Prime,
+                state: RouteState::Forming,
                 exit: vec![],
                 evidence: evidence(cat, &a.instinct, a.ecosystem, a.declared),
                 authored: false,
@@ -320,9 +320,9 @@ fn build(c: &RouteCandidate, id: &str, cat: &Catalogue) -> Route {
         step: Step::Run { command: c.command.clone() },
         slots: vec![],
         effect: c.effect,
-        aspect: Aspect::Yellow,
+        strength: Strength::Prime,
         // Design O11: an environment step is delivered only on a route a person approved.
-        state: if c.effect == Effect::Environment { RouteState::Draft } else { RouteState::Probation },
+        state: if c.effect == Effect::Environment { RouteState::Nascent } else { RouteState::Forming },
         exit: vec![c.exit.clone()],
         evidence: evidence(cat, &c.instinct, c.ecosystem, c.declared.clone()),
         authored: false,
@@ -364,8 +364,8 @@ pub fn check_route(r: &Route, cat: &Catalogue, table: &CommandTable) -> Result<(
         routes: vec![r.clone()],
     };
     adage_tracks::io::validate(&t).map_err(|e| format!("fails track validation: {e:#}"))?;
-    if r.aspect != Aspect::Yellow {
-        return Err("an instinct is yellow".into());
+    if r.strength != Strength::Prime {
+        return Err("an instinct is prime".into());
     }
     let Step::Run { command } = &r.step else { return Err("an instinct directs a run step".into()) };
     if !plain_command(command) || !r.slots.is_empty() {
@@ -376,8 +376,8 @@ pub fn check_route(r: &Route, cat: &Catalogue, table: &CommandTable) -> Result<(
         return Err(format!("{command:?} classifies as {}", actual.as_str()));
     }
     match (r.effect, r.state) {
-        (Effect::Observe | Effect::Verify | Effect::Regenerate, RouteState::Probation) => {}
-        (Effect::Environment, RouteState::Draft) => {}
+        (Effect::Observe | Effect::Verify | Effect::Regenerate, RouteState::Forming) => {}
+        (Effect::Environment, RouteState::Nascent) => {}
         (e, s) => return Err(format!("effect {} in state {s:?} may not be bound", e.as_str())),
     }
     match &r.trigger {
@@ -399,7 +399,7 @@ pub fn check_route(r: &Route, cat: &Catalogue, table: &CommandTable) -> Result<(
 }
 
 /// An advisory route: track validation (which checks the template and each slot's contract),
-/// then the instinct rules: yellow, observe, probation, a repository-relative glob or a plain
+/// then the instinct rules: prime, observe, forming, a repository-relative glob or a plain
 /// command key for its trigger, the instinct provenance, and nothing invisible.
 pub fn check_advisory(r: &Route, cat: &Catalogue, table: &CommandTable) -> Result<(), String> {
     let Step::Advise { template, slots } = &r.step else { return Err("not an advisory step".into()) };
@@ -418,8 +418,8 @@ pub fn check_advisory(r: &Route, cat: &Catalogue, table: &CommandTable) -> Resul
         routes: vec![r.clone()],
     };
     adage_tracks::io::validate(&t).map_err(|e| format!("fails track validation: {e:#}"))?;
-    if (r.aspect, r.effect, r.state) != (Aspect::Yellow, Effect::Observe, RouteState::Probation) {
-        return Err("advice is yellow, observe, in probation".into());
+    if (r.strength, r.effect, r.state) != (Strength::Prime, Effect::Observe, RouteState::Forming) {
+        return Err("advice is prime, observe, in forming".into());
     }
     match &r.trigger {
         Trigger::AfterEdit { paths } if safe_glob(paths) => {}

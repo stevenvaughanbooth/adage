@@ -6,11 +6,11 @@
 //! ```
 //!
 //! - **Generated sandboxes** (`evals/gen`, a bundle or a suite): the sessions are the rehearsal's
-//!   scripted transcripts (`<bundle>/rehearsal/transcripts/*/*.jsonl`) and the holdout is
-//!   `<bundle>/rehearsal/holdout.json` (200 fresh ids from the generator's id distribution and 200
+//!   scripted transcripts (`<bundle>/rehearsal/transcripts/*/*.jsonl`) and the held-out set is
+//!   `<bundle>/rehearsal/held_out.json` (200 fresh ids from the generator's id distribution and 200
 //!   near misses: a wrong prefix, one character too few or too many, a leading `-`, shell
 //!   metacharacters). Both come from `python3 evals/gen/rehearse.py <dir> --no-learn`.
-//! - **A dataset** (`evals/datasets/*`): every session in the manifest; the holdout is the lookup
+//! - **A dataset** (`evals/datasets/*`): every session in the manifest; the held-out set is the lookup
 //!   convention's `samples` (to accept) and `counter_samples` (to reject).
 //!
 //! For each, value types are learned from every session (`adage_graph::learn`), and the lookup
@@ -26,7 +26,7 @@
 //! - **unsafe**: acceptances, by *any* learned type in the bundle, of the adversarial set (the
 //!   leading-`-` and shell near misses, and fixed hostile strings);
 //! - **agreement**: the learned regex (compiled here, never at runtime) and the O(len) matcher
-//!   agree on every holdout string.
+//!   agree on every held-out string.
 //!
 //! Sessions come through adage-learn's importer (`adage_learn::read_session`) and its bridge to
 //! the graph engine (`adage_learn::bridge`), with every prompt anchored where it was typed.
@@ -103,7 +103,7 @@ pub struct BundleReport {
     pub slots: Vec<SlotSummary>,
     /// (type regex, adversarial value) pairs a learned type accepted. Must be empty.
     pub unsafe_accepts: Vec<(String, String)>,
-    /// Holdout strings on which a learned regex and the matcher disagree. Must be empty.
+    /// Held-out strings on which a learned regex and the matcher disagree. Must be empty.
     pub disagreements: Vec<(String, String)>,
     /// Learning, then the hook, when asked (`--end-to-end`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -144,7 +144,7 @@ struct NearMiss {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct Holdout {
+struct HeldOut {
     id_shape: String,
     fresh: Vec<String>,
     near_miss: Vec<NearMiss>,
@@ -221,7 +221,7 @@ fn score_arm(arm: &mut Arm, accepts: &dyn Fn(&str) -> bool, fresh: &[String], ne
     }
 }
 
-/// Evaluate one set of sessions against one holdout.
+/// Evaluate one set of sessions against one held-out set.
 fn evaluate(
     name: &str,
     id_shape: &str,
@@ -335,7 +335,7 @@ fn gen_bundle(dir: &Path, e2e: bool) -> Result<BundleReport> {
     let tasks: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(dir.join("tasks.json"))?)?;
     let repo = tasks["repo"].as_str().unwrap_or_default().to_string();
     let reh = dir.join("rehearsal");
-    let hp = reh.join("holdout.json");
+    let hp = reh.join("held_out.json");
     if !hp.is_file() {
         bail!(
             "{name}: no rehearsal ({}): run `python3 evals/gen/rehearse.py {} --no-learn` first",
@@ -343,7 +343,7 @@ fn gen_bundle(dir: &Path, e2e: bool) -> Result<BundleReport> {
             dir.display()
         );
     }
-    let ho: Holdout = serde_json::from_str(&std::fs::read_to_string(&hp)?).with_context(|| hp.display().to_string())?;
+    let ho: HeldOut = serde_json::from_str(&std::fs::read_to_string(&hp)?).with_context(|| hp.display().to_string())?;
     let mut files = Vec::new();
     for p in std::fs::read_dir(reh.join("transcripts"))?.flatten() {
         if p.path().is_dir() {

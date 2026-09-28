@@ -1,6 +1,6 @@
 //! The compiled index: everything the hot path needs, in one deterministic file.
 //!
-//! The runtime never reads track directories. `adage learn` (and `adage add`) compile all
+//! The runtime never reads track directories. `adage condition` (and `adage add`) compile all
 //! installed tracks into `index.json`, written atomically (temp file + rename). The same inputs
 //! always produce the same bytes, and `generation` identifies exactly which inputs decided.
 
@@ -134,7 +134,7 @@ fn precedence(t: &Track, r: &Route) -> u8 {
 }
 
 /// Where `adage add` installs tracks, inside the tracks directory. `@` never appears in a learned
-/// track's directory, so `adage learn` can never write over an import.
+/// track's directory, so `adage condition` can never write over an import.
 pub const IMPORTED_DIR: &str = "@imported";
 
 impl Index {
@@ -145,8 +145,8 @@ impl Index {
 
     /// Compile tracks into an index, with the interlocking rules applied
     /// ([`crate::interlock`]): a route a dead end contradicts at the prompt is left out, and of two
-    /// greens at one decision point one is compiled yellow. Returns the conflicts found, for
-    /// `adage learn` and `adage doctor` to report.
+    /// fires at one decision point one is compiled prime. Returns the conflicts found, for
+    /// `adage condition` and `adage doctor` to report.
     pub fn compile_with_conflicts(tracks: &[Track]) -> (Index, Vec<interlock::Conflict>) {
         let imported_tracks: BTreeSet<(&str, &str)> = tracks
             .iter()
@@ -154,13 +154,13 @@ impl Index {
             .map(|t| (t.manifest.scope.repo.as_str(), t.manifest.track.name.as_str()))
             .collect();
         let live = |r: &Route| r.state.is_live();
-        // A first-hand route a person retired still takes part in de-duplication, so an import of
+        // A first-hand route a person extinguished still takes part in de-duplication, so an import of
         // the same route cannot slip back in behind the rejection; it is dropped afterwards.
         let mut routes: Vec<(u8, IndexedRoute)> = tracks
             .iter()
             .flat_map(|t| {
                 let imported = is_imported(t);
-                t.routes.iter().filter(move |r| live(r) || (!imported && r.state == RouteState::Retired)).map(
+                t.routes.iter().filter(move |r| live(r) || (!imported && r.state == RouteState::Extinguished)).map(
                     move |r| {
                         let ir = IndexedRoute {
                             repo: t.manifest.scope.repo.clone(),
@@ -176,8 +176,8 @@ impl Index {
             .collect();
         // A route learned here and the same route imported from a teammate, or bound by an
         // instinct, share a content-derived id: keep one, and prefer first-hand evidence over an
-        // import, and an import over an instinct (a live first-hand route over a retired one, and
-        // a retired first-hand route over any import or instinct). By provenance, never by track
+        // import, and an import over an instinct (a live first-hand route over an extinguished one, and
+        // an extinguished first-hand route over any import or instinct). By provenance, never by track
         // name.
         routes.sort_by(|(ia, a), (ib, b)| {
             (&a.repo, &a.route.id, ia, !live(&a.route), &a.track).cmp(&(
@@ -210,7 +210,7 @@ impl Index {
     }
 
     /// [`Index::compile_with_conflicts`], then the exec bindings of pack-sourced routes read from
-    /// the bound tracks under `tracks_root` ([`exec_bindings`]). What `adage learn`, `add`,
+    /// the bound tracks under `tracks_root` ([`exec_bindings`]). What `adage condition`, `add`,
     /// `review` and `doctor` compile.
     pub fn compile_root(tracks_root: &Path, tracks: &[Track]) -> (Index, Vec<interlock::Conflict>) {
         let (mut index, conflicts) = Index::compile_with_conflicts(tracks);

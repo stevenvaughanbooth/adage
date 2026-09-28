@@ -326,7 +326,7 @@ def mention_regex(shape, prefix):
     }[shape])
 
 
-def holdout(spec, task_ids, seed, n=200):
+def held_out(spec, task_ids, seed, n=200):
     """Fresh ids and near misses for `adage eval types` (Track G §4.4): `n` fresh ids from the
     generator's own id function, with the digit range the bundle's `id_pattern` declares, none of
     them a task's id; and `n` near misses of them: a wrong prefix, one character too few or too

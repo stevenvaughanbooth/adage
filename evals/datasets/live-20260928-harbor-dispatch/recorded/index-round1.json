@@ -4,7 +4,7 @@
   {
    "repo": "harbor-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "regenerate",
     "evidence": {
@@ -29,7 +29,7 @@
     ],
     "id": "finish-line-04e5d4",
     "slots": [],
-    "state": "active",
+    "state": "firm",
     "step": {
      "command": "npm run codegen",
      "do": "run"
@@ -46,7 +46,7 @@
   {
    "repo": "harbor-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -80,7 +80,7 @@
     ],
     "id": "dead-end-7f4b9d",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "npm run check",
      "do": "run"
@@ -98,7 +98,7 @@
   {
    "repo": "harbor-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -132,7 +132,7 @@
     ],
     "id": "dead-end-d0ca80",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "npm run check",
      "do": "run"
@@ -150,7 +150,7 @@
   {
    "repo": "harbor-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "observe",
     "evidence": {
@@ -179,7 +179,7 @@
     "exit": [],
     "id": "instinct-u4-e3eb8a",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "do": "advise",
      "slots": {
@@ -200,7 +200,7 @@
   {
    "repo": "harbor-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "observe",
     "evidence": {
@@ -237,7 +237,7 @@
       }
      }
     ],
-    "state": "active",
+    "state": "firm",
     "step": {
      "command": "node bin/fetch-incident {item}",
      "do": "run"
@@ -254,7 +254,7 @@
   {
    "repo": "harbor-dispatch",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "observe",
     "evidence": {
@@ -290,7 +290,7 @@
       }
      }
     ],
-    "state": "active",
+    "state": "firm",
     "step": {
      "do": "read_batch",
      "max": 5,

@@ -96,7 +96,7 @@ pub fn candidates(a: &Annotated, influence: &[Influence], table: &CommandTable) 
             continue;
         }
         if failed {
-            // A failing check is still the first step of a fix (a red test run is how it
+            // A failing check is still the first step of a fix (an inhibit test run is how it
             // starts), unless the trace then switched to another check that worked, which makes
             // it an avoid, not a continuation.
             let switched =
@@ -144,15 +144,15 @@ pub struct Intents {
 }
 
 /// Compile prompt-intent prototypes into routes (see the module documentation). `influence[i]`
-/// are the directives trace `i` received. `aspect(effect, lower bound, rate, id)` is the learner's
-/// aspect rule (with its hysteresis); `None` drops the family.
+/// are the directives trace `i` received. `strength(effect, lower bound, rate, id)` is the learner's
+/// strength rule (with its hysteresis); `None` drops the family.
 pub fn compile(
     sessions: &[Annotated],
     influence: &[Vec<Influence>],
     model: &StaticModel,
     p: &IntentParams,
     provenance: &str,
-    aspect: &dyn Fn(Effect, f64, f64, &str) -> Option<Aspect>,
+    strength: &dyn Fn(Effect, f64, f64, &str) -> Option<Strength>,
 ) -> Intents {
     struct Item<'a> {
         text: String,
@@ -261,7 +261,7 @@ pub fn compile(
         let base = format!("intent-{}", stable(&[&group]));
         let id = (1..).map(|k| if k == 1 { base.clone() } else { format!("{base}-{k}") }).find(|x| !ids.contains(x));
         let id = id.expect("an unused id");
-        let Some(asp) = aspect(effect, lb, rate, &id) else { continue };
+        let Some(asp) = strength(effect, lb, rate, &id) else { continue };
         let route = Route {
             id: id.clone(),
             summary: "Start requests like these with the command this repository's sessions ran first".into(),
@@ -269,7 +269,7 @@ pub fn compile(
             step: Step::Run { command: command.clone() },
             slots: vec![],
             effect,
-            aspect: asp,
+            strength: asp,
             state: initial_state(effect),
             exit: vec![Exit::IntentChanges],
             evidence: Evidence {

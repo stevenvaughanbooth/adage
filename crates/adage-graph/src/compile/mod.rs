@@ -18,7 +18,7 @@
 //! | one fixed act | two or three events | `run` | `context` → `run` |
 //! | one observe or verify act before the first edit | a prompt-intent prototype | `run` | `intent` → `run` ([`intent`]) |
 //!
-//! Ceilings are unchanged (`adage_tracks::ceiling`): environment steps are drafts until a person
+//! Ceilings are unchanged (`adage_tracks::ceiling`): environment steps are nascent until a person
 //! approves them, author and publish steps are never directed. Every compiled route gets a stable,
 //! content-derived id: `<shape>-<hash>` ([`ids`]), or the fixed form its shape has always had
 //! ([`stable`]: `lookup-work-item`, `read-linked-files`, `dead-end-…`, `finish-line-…`,
@@ -44,10 +44,10 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CompileParams {
-    /// Green needs the posterior's lower bound at least this (`learn.green_lower_bound`).
-    pub green_lower_bound: f64,
-    /// Yellow needs the posterior mean at least this (`learn.yellow_rate`).
-    pub yellow_rate: f64,
+    /// Fire needs the posterior's lower bound at least this (`learn.fire_lower_bound`).
+    pub fire_lower_bound: f64,
+    /// Prime needs the posterior mean at least this (`learn.prime_rate`).
+    pub prime_rate: f64,
     /// A context trigger's gap, in alphabet events (the miner's G).
     pub within: u8,
     /// The glob lattice's precision bar.
@@ -84,8 +84,8 @@ pub struct CompileParams {
 impl Default for CompileParams {
     fn default() -> Self {
         CompileParams {
-            green_lower_bound: 0.8,
-            yellow_rate: 0.5,
+            fire_lower_bound: 0.8,
+            prime_rate: 0.5,
             within: 8,
             glob_precision: 0.9,
             announce_at_start: 0.0,
@@ -296,22 +296,22 @@ pub fn compile(input: &Input) -> Output {
 }
 
 /// The compiler's second gate (Track G §6, outcome lift): a reflex that fails the rate gate,
-/// counted on its own trigger and step, still compiles at yellow (prime) when the traces that
+/// counted on its own trigger and step, still compiles at prime (prime) when the traces that
 /// took its step succeeded significantly more often than those where its trigger occurred and
 /// they did not (`adage_tracks::lift`): at least `outcome_min_support` traces took it and the 95%
-/// lower bound on the difference is at least `outcome_lift_lower_bound`. Never green, never above
+/// lower bound on the difference is at least `outcome_lift_lower_bound`. Never fire, never above
 /// the effect's ceiling, never for a step that may not be directed at all.
 pub fn outcome_gate(
     effect: Effect,
     by_edit: bool,
     lift: Option<&adage_tracks::lift::OutcomeLift>,
     p: &CompileParams,
-) -> Option<adage_tracks::Aspect> {
+) -> Option<adage_tracks::Strength> {
     let l = lift?;
     if !l.qualifies(p.outcome_min_support, p.outcome_lift_lower_bound) {
         return None;
     }
-    adage_tracks::lift::aspect(effect, by_edit)
+    adage_tracks::lift::strength(effect, by_edit)
 }
 
 /// The commands a step directs.
@@ -328,7 +328,7 @@ pub fn commands(s: &Step) -> Vec<&str> {
 mod outcome_gate_tests {
     use super::*;
     use adage_tracks::lift::OutcomeLift;
-    use adage_tracks::Aspect;
+    use adage_tracks::Strength;
 
     fn lift(with: (usize, usize), without: (usize, usize)) -> OutcomeLift {
         let v = |(p, f): (usize, usize)| {
@@ -341,8 +341,8 @@ mod outcome_gate_tests {
     fn a_significant_lift_compiles_at_prime_and_never_above_the_ceiling() {
         let p = CompileParams::default();
         let strong = lift((5, 0), (1, 9));
-        assert_eq!(outcome_gate(Effect::Observe, false, Some(&strong), &p), Some(Aspect::Yellow));
-        assert_eq!(outcome_gate(Effect::Regenerate, true, Some(&strong), &p), Some(Aspect::Yellow));
+        assert_eq!(outcome_gate(Effect::Observe, false, Some(&strong), &p), Some(Strength::Prime));
+        assert_eq!(outcome_gate(Effect::Regenerate, true, Some(&strong), &p), Some(Strength::Prime));
         // Never for a step that may not be directed.
         assert_eq!(outcome_gate(Effect::Author, false, Some(&strong), &p), None);
         // Too few takers, or no significant difference, or no outcomes at all.

@@ -40,8 +40,8 @@ fn route(id: &str, trigger: Trigger, command: &str, effect: Effect) -> Route {
         step: Step::Run { command: command.into() },
         slots: vec![],
         effect,
-        aspect: Aspect::Yellow,
-        state: RouteState::Active,
+        strength: Strength::Prime,
+        state: RouteState::Firm,
         exit: vec![Exit::IntentChanges],
         evidence: Evidence { support: 5, ..Default::default() },
         authored: false,
@@ -86,7 +86,7 @@ fn world() -> World {
     let mut track = track;
     track.routes[1].step =
         Step::Avoid { avoid: "pytest".into(), instead: "make test".into(), signature: "ACME_ENV is not set".into() };
-    track.routes[1].aspect = Aspect::Red;
+    track.routes[1].strength = Strength::Inhibit;
     io::validate(&track).unwrap();
     Index::compile(&[track]).write_atomic(&home.join("index.json")).unwrap();
     World { _d: d, home, repo }

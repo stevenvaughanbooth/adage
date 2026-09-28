@@ -166,8 +166,8 @@ pub enum Origin {
         signer: Option<String>,
         /// The signer is in the trust anchors.
         trusted: bool,
-        /// The pack has passed local probation.
-        probation_passed: bool,
+        /// The pack has passed local forming.
+        forming_passed: bool,
     },
 }
 

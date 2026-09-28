@@ -31,7 +31,7 @@ pub fn find_root(start: &Path) -> Option<PathBuf> {
 ///   alternates, a history longer than [`gitobj::MAX_WALK`]), or the directory is not a git
 ///   repository: `<directory name>@path-<12 hex digits of SHA-256 of the root's path>`. Such a
 ///   key is not shared with any copy.
-/// - A directory that no longer exists (history of a deleted checkout, read by `adage learn`):
+/// - A directory that no longer exists (history of a deleted checkout, read by `adage condition`):
 ///   the directory name alone, the key every repository without `origin` had before. Hooks accept
 ///   such a *legacy* key only while no repository of that name has a new key ([`lookup_key`]).
 pub fn repo_key(root: &Path) -> String {
@@ -39,7 +39,7 @@ pub fn repo_key(root: &Path) -> String {
 }
 
 /// The one derivation of the key a repository's tracks are stored under, used by every path that
-/// learns, binds or shares (`adage learn`, `adage learn --instincts-only`, `adage share`, the
+/// learns, binds or shares (`adage condition`, `adage condition --instincts-only`, `adage share`, the
 /// importers): the explicit key a person gave (`--repo <key>`) when there is one, used exactly as
 /// given, else [`repo_key`] of the root. `derive` computes the latter (so a caller can remember
 /// keys per root); [`key_for`] is the plain form.
@@ -56,7 +56,7 @@ pub fn key_for(root: &Path, explicit: Option<&str>) -> String {
 }
 
 /// Where [`repo_key`] remembers root commits for the rest of this process. The CLI sets
-/// `$ADAGE_HOME/repo-keys`, so the history `adage learn` walks is not walked again by a hook.
+/// `$ADAGE_HOME/repo-keys`, so the history `adage condition` walks is not walked again by a hook.
 static CACHE: OnceLock<PathBuf> = OnceLock::new();
 
 /// Remember root commits under `dir` for the rest of this process (first call wins).
@@ -76,7 +76,7 @@ pub fn repo_key_cached(root: &Path, cache: &Path) -> String {
 /// if the index holds routes for some repository of this directory name.
 ///
 /// A legacy key (the bare directory name, from before keys carried the root commit) is accepted
-/// only while the index holds no new-style key for that name. Once `adage learn` has re-keyed a
+/// only while the index holds no new-style key for that name. Once `adage condition` has re-keyed a
 /// repository of that name, a legacy key could belong to any repository of the name, so it is
 /// ignored: that is the collision the new keys exist to prevent.
 pub fn lookup_key(root: &Path, cache: Option<&Path>, keys: &BTreeSet<&str>) -> Option<String> {
@@ -129,11 +129,11 @@ fn no_origin_key(root: &Path, cache: Option<&Path>) -> String {
     }
 }
 
-/// Root commits found in this process, by repository path: `adage learn` asks once per session.
+/// Root commits found in this process, by repository path: `adage condition` asks once per session.
 static FOUND: Mutex<BTreeMap<String, String>> = Mutex::new(BTreeMap::new());
 
 /// The root commit (40 hex digits): through the cache directory when one is given (hooks, one
-/// repository per process), else remembered in this process (`adage learn`, many sessions per
+/// repository per process), else remembered in this process (`adage condition`, many sessions per
 /// repository).
 fn root_commit(root: &Path, cache: Option<&Path>) -> Option<String> {
     let path = root.to_string_lossy().to_string();

@@ -6,7 +6,7 @@
 //!   name too few distinct items for value flow to type the slot on its own: the claim's example
 //!   id is the evidence that the argument is data, and gives its type.
 
-use crate::evidence::{argv, aspect_with_lift, days, median, models, outcome_lift, shell_join, stable, LearnConfig};
+use crate::evidence::{argv, days, median, models, outcome_lift, shell_join, stable, strength_with_lift, LearnConfig};
 use crate::import::{Session, StepObs};
 use adage_core::spans::SpanKind;
 use adage_core::vtype::{self, Class, Run, Runs};
@@ -56,7 +56,7 @@ pub fn claimed_verify_route(sessions: &[&Session], command: &str, cfg: &LearnCon
     let id = format!("finish-check-{}", stable(&[ANY_EDIT, command]));
     let lb = wilson_lower(n, opp);
     let lift = outcome_lift(sessions, &open, &support);
-    let aspect = aspect_with_lift(Effect::Verify, true, n, lb, rate, cfg, &id, lift.as_ref())?;
+    let strength = strength_with_lift(Effect::Verify, true, n, lb, rate, cfg, &id, lift.as_ref())?;
     Some(Route {
         id,
         summary: "A check this repository asks for before finishing, after any edit".into(),
@@ -64,8 +64,8 @@ pub fn claimed_verify_route(sessions: &[&Session], command: &str, cfg: &LearnCon
         step: Step::Run { command: command.to_string() },
         slots: vec![],
         effect: Effect::Verify,
-        aspect,
-        state: RouteState::Active,
+        strength,
+        state: RouteState::Firm,
         exit: vec![Exit::ExploratoryChange],
         evidence: Evidence {
             opportunities: opp,
@@ -181,7 +181,7 @@ pub fn claimed_lookup_route(sessions: &[&Session], tool: &str, example: &str, cf
     let rate = n as f64 / opportunities.max(1) as f64;
     let lb = wilson_lower(n, opportunities);
     let lift = outcome_lift(sessions, &open, &support);
-    let aspect = aspect_with_lift(effect, false, n, lb, rate, cfg, "lookup-work-item", lift.as_ref())?;
+    let strength = strength_with_lift(effect, false, n, lb, rate, cfg, "lookup-work-item", lift.as_ref())?;
     let regex = vtype::to_regex(&runs);
     let mut samples: Vec<String> = seen.iter().filter(|v| vtype::matches(&runs, v)).cloned().collect();
     samples.push(example.to_string());
@@ -205,7 +205,7 @@ pub fn claimed_lookup_route(sessions: &[&Session], tool: &str, example: &str, cf
             contract: Contract::Pattern { regex },
         }],
         effect,
-        aspect,
+        strength,
         state: initial_state(effect),
         exit: vec![Exit::IntentChanges],
         evidence: Evidence {

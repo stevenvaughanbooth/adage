@@ -2,14 +2,14 @@
 //! learner, and it learns at least what the hand-written miners it replaced learned.
 //!
 //! - **The miners' floor.** On every committed dataset and every split the gates and the L0 bench
-//!   use, the conventions the miners recovered when they were retired (measured with their last
+//!   use, the conventions the miners recovered when they were removed (measured with their last
 //!   version, the real-use fixes included) must all be recovered, and no learned route may be
 //!   false beyond the one the miners learned too (`MINERS_FALSE`). The table is that measurement: a convention may be added to a row when learning
 //!   improves, never removed.
 //! - **Generated bundles.** On the `evals/gen` smoke, idshapes and newkinds suites, every
 //!   convention is recovered with no false route and no decoy: the miners recovered all of the
 //!   smoke suite's, and the graph engine alone the id shapes and the new kinds (scope, env_sync,
-//!   sequence), with the environment step a draft (nascent until a person approves it). No
+//!   sequence), with the environment step a nascent (nascent until a person approves it). No
 //!   learner code names these kinds.
 //! - **Fast path.** The hook's no-match fast path changes no decision with the learned index.
 //!
@@ -33,7 +33,7 @@ fn opts(split: Option<&str>) -> Options {
     Options { split: split.map(str::to_string), ..Default::default() }
 }
 
-/// (dataset, split, conventions the miners recovered there when they were retired).
+/// (dataset, split, conventions the miners recovered there when they were removed).
 const FLOOR: &[(&str, Option<&str>, &[&str])] = &[
     ("adversarial", None, &["work-item-lookup", "work-item-linked-files", "tests-through-make", "regenerate-models"]),
     ("adversarial", Some("group:task:3:0"), &["tests-through-make"]),
@@ -238,12 +238,12 @@ fn every_generated_convention_is_learned() {
                     r.missed_conventions, r.false_routes, r.decoy_hits
                 ));
             }
-            // The environment step is nascent (a draft) until a person approves it.
+            // The environment step is nascent (a nascent) until a person approves it.
             for c in r.conventions.iter().filter(|c| c.kind == "env_sync") {
                 for id in &c.matched_by {
                     let x = r.routes.iter().find(|x| &x.id == id).unwrap();
-                    if x.state != "draft" {
-                        bad.push(format!("{bundle}: env_sync route {id} is {}, not a draft", x.state));
+                    if x.state != "nascent" {
+                        bad.push(format!("{bundle}: env_sync route {id} is {}, not a nascent", x.state));
                     }
                 }
             }

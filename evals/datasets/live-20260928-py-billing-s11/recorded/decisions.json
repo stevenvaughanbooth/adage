@@ -11,7 +11,7 @@
 ],
 "eval-BIL-1279-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [],
@@ -31,7 +31,7 @@
 ],
 "eval-BIL-1279-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [],
@@ -51,7 +51,7 @@
 ],
 "eval-BIL-419-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [],
@@ -71,7 +71,7 @@
 ],
 "eval-BIL-419-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [],
@@ -91,7 +91,7 @@
 ],
 "eval-BIL-852-r1-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [],
@@ -99,7 +99,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [],
@@ -107,7 +107,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [],
@@ -115,7 +115,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [],
@@ -125,7 +125,7 @@
 ]
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [],
@@ -133,12 +133,12 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [
 [
-"derailed",
+"ignored",
 "finish-line-c83ca5"
 ]
 ],
@@ -146,7 +146,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [],
@@ -154,7 +154,7 @@
 "would_have": []
 },
 {
-"arm": "holdout",
+"arm": "control",
 "event": "PostToolBatch",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [],
@@ -174,7 +174,7 @@
 ],
 "eval-BIL-852-r2-holdout": [
 {
-"arm": "holdout",
+"arm": "control",
 "event": "UserPromptSubmit",
 "generation": "7f2d49f80ea4fc48",
 "judgements": [],

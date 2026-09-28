@@ -5,7 +5,7 @@
 //! ```text
 //! $ADAGE_HOME/tracks/@imported/<owner>/<name>/                  the pack, exactly as verified
 //! $ADAGE_HOME/tracks/@imported/@bound/<owner>/<name>/<repo>/    one bound track per repository:
-//!     track.toml, routes/*.yaml    the live routes, in the runtime model, at probation
+//!     track.toml, routes/*.yaml    the live routes, in the runtime model, at forming
 //!     exec.json                    route id → ExecBinding (IndexedRoute.exec)
 //!     binding.json                 every route live or inert (with the reason), the pack digest,
 //!                                  how the pack was verified, and the checkout it was bound against
@@ -15,15 +15,15 @@
 //!
 //! A bound track is derived state: `adage add` rewrites it from the pack each time (carrying the
 //! recipient's review decisions, as a re-import does), and the index compiles it like any
-//! imported track (probation, yellow at most). Nothing here creates an execution approval.
+//! imported track (forming, prime at most). Nothing here creates an execution approval.
 
-use crate::add::at_probation;
+use crate::add::at_forming;
 use crate::reimport;
 use adage_pack::bind::{Applies, BindEnv, Binding, BoundRoute, Status, Target};
 use adage_pack::Pack;
 use adage_store::Paths;
 use adage_tracks::index::{ExecBinding, BOUND_DIR, EXEC_FILE, IMPORTED_DIR};
-use adage_tracks::{io, Aspect, Gauge, Manifest, Scope, Track, TrackInfo};
+use adage_tracks::{io, Gauge, Manifest, Scope, Strength, Track, TrackInfo};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -159,10 +159,10 @@ pub struct Bound {
     pub binding: Binding,
     /// Where the bound track was written (`None`: the pack does not apply there).
     pub dir: Option<PathBuf>,
-    /// The bound track as installed (at probation, the recipient's decisions carried).
+    /// The bound track as installed (at forming, the recipient's decisions carried).
     pub track: Option<Track>,
-    /// Each live route's aspect before probation capped it.
-    pub was: BTreeMap<String, Aspect>,
+    /// Each live route's strength before forming capped it.
+    pub was: BTreeMap<String, Strength>,
     pub kept: Vec<(String, adage_tracks::review::Decision)>,
     /// Pinned routes whose new version differs: proposed in `adage review`.
     pub proposed: Vec<String>,
@@ -228,7 +228,7 @@ pub fn bind_installed(
 
 struct Written {
     track: Track,
-    was: BTreeMap<String, Aspect>,
+    was: BTreeMap<String, Strength>,
     kept: Vec<(String, adage_tracks::review::Decision)>,
     proposed: Vec<String>,
 }
@@ -258,15 +258,15 @@ fn write_bound(
         },
         routes: binding.live().filter_map(|r| r.route.clone()).collect(),
     };
-    let was: BTreeMap<String, Aspect> = track.routes.iter().map(|r| (r.id.clone(), r.aspect)).collect();
-    let (mut track, _) = at_probation(track);
+    let was: BTreeMap<String, Strength> = track.routes.iter().map(|r| (r.id.clone(), r.strength)).collect();
+    let (mut track, _) = at_forming(track);
     // A reflex that runs a vendored script is exec-only (never directed at E0), so it does not
-    // wait as a draft: running it always needs its own explicit approval (Track C §1.7).
+    // wait as nascent: running it always needs its own explicit approval (Track C §1.7).
     let exec_only: BTreeSet<&str> =
         pack.routes.iter().filter(|r| adage_pack::bind::vendored(r)).map(|r| r.id.as_str()).collect();
     for r in track.routes.iter_mut().filter(|r| exec_only.contains(r.id.as_str())) {
-        if r.state == adage_tracks::RouteState::Draft {
-            r.state = adage_tracks::RouteState::Probation;
+        if r.state == adage_tracks::RouteState::Nascent {
+            r.state = adage_tracks::RouteState::Forming;
         }
     }
     io::validate(&track).context("the bound track fails validation")?;

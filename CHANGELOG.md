@@ -9,6 +9,41 @@ version as the GitHub Release notes.
 
 ### Changed
 
+- **The approved lexicon, everywhere (docs/lexicon.md).** Adage is unreleased, so the rename
+  carries no compatibility baggage: old verbs are removed, not aliased; on-disk formats use the new
+  words and no reader for the old values is kept.
+  - Verbs: `adage survey` → `adage sense`; `adage learn` → `adage condition` (including
+    `--auto` and `--instincts-only`); `adage graph --serve` → `adage map`; `adage review
+    promote` / `demote` / `reject` (and its alias `retire`) → `strengthen` / `weaken` /
+    `extinguish`; `adage exec enable` / `disable` / `status` → `adage delegate on` / `off` /
+    `status` (bare `adage delegate` is `status`); `adage review allow-exec` / `revoke-exec` →
+    `adage review delegate` / `revoke`; `adage-train run` → `adage train` (`adage train plan`,
+    `adage train --plan …`, `adage train report`: the `adage` binary executes the separate
+    `adage-train` binary, which still owns every agent session).
+  - Strengths: `green` / `yellow` / `red` → `fire` / `prime` / `inhibit` (the `aspect` field is now
+    `strength`; the colours stay in the UI, and `NO_COLOR` marks are `[F]` / `[P]` / `[I]`).
+  - Lifecycle: `draft` / `probation` / `active` / `stale` / `retired` → `nascent` / `forming` /
+    `firm` / `dormant` / `extinguished` (`stale_since` → `dormant_since`). Review decisions
+    `rejected` / `demoted` / `promoted` → `extinguished` / `weakened` / `strengthened`.
+  - Judgements `derailed` / `followed_failed` → `ignored` / `misfired`; the holdout arm is the
+    control arm (`ADAGE_ARM=control`, `ADAGE_CONTROL`, `runtime.control`, `control_share`).
+  - `learn.log` change kinds `draft` / `retired` / `stale` → `nascent` / `extinguished` /
+    `dormant`, and its run records are `"kind": "condition"`. Interlocking: `two-greens` →
+    `two-fires`, resolution `demoted` → `weakened`. Engine parameters `green_lower_bound`,
+    `yellow_rate`, `stale_exposure`, `holdout_share` → `fire_lower_bound`, `prime_rate`,
+    `dormant_exposure`, `control_share`.
+  - The directive wrapper is `<adage-reflex … strength="fire|prime|inhibit">`; the safety oracle,
+    the importers' steering detection, the hook adapters and the goldens follow. The text inside a
+    directive is unchanged: plain and factual, with no themed words.
+  - The web view is **the map** (`adage map`); the TUI's Routes tab is **Reflexes**, with review
+    keys `a`pprove, `e`xtinguish, `w`eaken, `s`trengthen, pi`n`, dismiss `x`.
+  - Committed datasets, recorded decisions and indexes, goldens and fixtures were migrated once,
+    by a script that is not kept. The L0 bench baseline was re-blessed with identical numbers.
+  - README, docs, Design Spec §5 and §17, plugin and npm descriptions and the evals READMEs use the
+    lexicon; the railway vocabulary (routes on rails, signals and aspects, the signal box,
+    derailing, holdouts) is retired from user copy. Historical documents under `docs/archive`
+    are unchanged.
+
 - **One learner (Track G G5).** The graph engine is now the only learner: the hand-written miners
   (lookup, linked files, finish line, dead ends, intent families) are removed, and so are route
   kinds, `learn.engine` and `adage learn --engine`. It learns everything they learned on every

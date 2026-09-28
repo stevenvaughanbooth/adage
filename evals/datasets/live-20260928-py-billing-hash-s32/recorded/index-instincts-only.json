@@ -4,7 +4,7 @@
   {
    "repo": "tallyhouse-billing@0b74a00aeddf",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "verify",
     "evidence": {
@@ -38,7 +38,7 @@
     ],
     "id": "dead-end-60822e",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make check",
      "do": "run"
@@ -56,7 +56,7 @@
   {
    "repo": "tallyhouse-billing@0b74a00aeddf",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "regenerate",
     "evidence": {
@@ -89,7 +89,7 @@
     ],
     "id": "finish-line-c83ca5",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "command": "make gen",
      "do": "run"
@@ -106,7 +106,7 @@
   {
    "repo": "tallyhouse-billing@0b74a00aeddf",
    "route": {
-    "aspect": "yellow",
+    "strength": "prime",
     "authored": false,
     "effect": "observe",
     "evidence": {
@@ -135,7 +135,7 @@
     "exit": [],
     "id": "instinct-u4-727700",
     "slots": [],
-    "state": "probation",
+    "state": "forming",
     "step": {
      "do": "advise",
      "slots": {

@@ -1,6 +1,6 @@
 //! Outcome lift: whether traces that took a step succeeded more often than traces that did not.
 //!
-//! The rate gate (`learn.yellow_rate`) learns only what most agents did. A convention that few
+//! The rate gate (`learn.prime_rate`) learns only what most agents did. A convention that few
 //! agents find, but that the successful ones used, fails it: in the first live corpus, Haiku
 //! sessions that used the repository's lookup passed 40 of 44 against 5 of 52 for those that did
 //! not, and no reflex formed. The outcome-lift path is a second gate for such a step:
@@ -12,7 +12,7 @@
 //! - the step qualifies when at least `min_support` traces took it, and the lower bound is at
 //!   least `lower_bound`.
 //!
-//! A reflex that forms on lift alone is capped at yellow (prime): it says that successful agents
+//! A reflex that forms on lift alone is capped at prime (prime): it says that successful agents
 //! did this, not that most agents do.
 
 use serde::{Deserialize, Serialize};
@@ -96,10 +96,10 @@ impl OutcomeLift {
     }
 }
 
-/// The aspect a step gets on the outcome-lift path: yellow (prime) where its effect may be
-/// directed at all, never green.
-pub fn aspect(effect: adage_core::Effect, by_edit: bool) -> Option<crate::Aspect> {
-    crate::ceiling(effect, by_edit).map(|_| crate::Aspect::Yellow)
+/// The strength a step gets on the outcome-lift path: prime (prime) where its effect may be
+/// directed at all, never fire.
+pub fn strength(effect: adage_core::Effect, by_edit: bool) -> Option<crate::Strength> {
+    crate::ceiling(effect, by_edit).map(|_| crate::Strength::Prime)
 }
 
 #[cfg(test)]

@@ -10,7 +10,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, aspect: Aspect) -> Route {
+fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, strength: Strength) -> Route {
     Route {
         id: id.into(),
         summary: String::new(),
@@ -18,8 +18,8 @@ fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, aspect: Aspect)
         step,
         slots: vec![],
         effect,
-        aspect,
-        state: RouteState::Active,
+        strength,
+        state: RouteState::Firm,
         exit: vec![Exit::IntentChanges],
         evidence: Evidence { support: 5, ..Default::default() },
         authored: false,
@@ -59,14 +59,14 @@ fn world() -> World {
                     signature: "No module named pytest".into(),
                 },
                 Effect::Verify,
-                Aspect::Red,
+                Strength::Inhibit,
             ),
             route(
                 "finish-line-x",
                 Trigger::AfterEdit { paths: "schema/*.json".into() },
                 Step::Run { command: "make gen".into() },
                 Effect::Regenerate,
-                Aspect::Green,
+                Strength::Fire,
             ),
         ],
     };
