@@ -321,7 +321,12 @@ It reports **route precision** (learned routes matching some convention ÷ learn
 **route recall** (conventions some route matches ÷ conventions; intent conventions are listed
 but not counted, as offline learning has no embedding model), F1, both with Wilson intervals,
 the **false routes** (with why each missed every convention of its kind) and the **missed
-conventions**, plus the split's task overlap. Measured:
+conventions**, plus the split's task overlap. A reflex that is a convention but **too narrow**
+(its contract accepts some of the convention's samples and none of its counter-samples, or its
+glob covers some of the files the convention owes) is fail-safe: it never fires where it should
+not, so it is reported as "too narrow for <convention> (fail-safe)", counted true in precision
+and not recalled, never as FALSE. (py-billing-s11 `round1` learns `^BIL-\d{4}$` from 4-digit
+training ids, prime at most; the held-out 3-digit ids make it too narrow, not false.) Measured:
 
 | Dataset, split | Learned routes | Route precision | Route recall | F1 | Missed |
 | --- | ---: | ---: | ---: | ---: | --- |
@@ -484,12 +489,15 @@ adds trials and directives).
 with the defaults, and why it was blessed. `cargo test -p adage-eval --test bench` reproduces it
 byte for byte (ignoring `adage_version`), checks that runs and sweeps are deterministic (the same
 bytes with 1 or 4 jobs), that every configuration of a `random:4` sweep has no unsafe directive,
-and that parameters really reach the learner and the runtime. The baseline (J 0.6148, blessed when
-the graph engine became the only learner, Track G G5): turns saved at window 0.660 per session,
-0.500 false directives per session, route F1 1.0, recall 0.972, precision@window 0.360; final
-check J 0.5937. The removed miners gave J 0.6307 (0.660, 0.491, 1.0, 0.972, 0.348): the engine
-learns the same routes on the core suite and adds the sequence `make gen then make test` beside
-the regenerate obligation where the traces ran the two together, 8 of its 9 directives followed.
+and that parameters really reach the learner and the runtime. The baseline (J 0.6307, blessed when one
+edit became one directive): turns saved at window 0.660 per session, 0.491 false directives per
+session, route F1 1.0, recall 0.972, precision@window 0.348, ECE 0.271; final check J 0.5937.
+When the graph engine became the only learner (Track G G5) it was J 0.6148 (0.660, 0.500, 1.0,
+0.972, 0.360): the engine learns the same reflexes on the core suite and adds the sequence `make
+gen then make test` beside the regenerate obligation where the traces ran the two together, and
+both were delivered at the edit. A sequence that begins with the obligation's command now carries
+it (the runtime delivers the sequence alone, and the obligation rides on its first step), so the
+duplicate directive is gone and J is back to the removed miners' 0.6307.
 Before the command-pattern algebra it was J 0.6783 (0.651, 0.472, 1.0, 0.942, 0.335;
 final 0.6146) before the command-pattern algebra: the linked-files trigger now also fires when an
 agent runs the lookup script without its interpreter, which raises recall and adds directives,

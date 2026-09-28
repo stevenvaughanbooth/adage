@@ -780,4 +780,4 @@ floor (the deviations above); which change costs how much was not attributed.
 
 - The live datasets' misses are the miners' misses (most of their conventions have too few takers).
 - The sequence rule (deviation 3) is a threshold on adjacency, chosen on the demo and newkinds.
-- A directive delivered twice at one edit (obligation and sequence) is possible where both are kept.
+- ~~A directive delivered twice at one edit (obligation and sequence)~~ Closed in the launch polish: a sequence that begins with the obligation's command carries it (the runtime delivers the sequence alone; met by its first step, a Stop request if not), which recovered the L0 bench to J 0.6307.

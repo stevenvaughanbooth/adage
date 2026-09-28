@@ -14,7 +14,8 @@ Terminology:
 | **Instinct** | Prebuilt route bound from the repository's declared files ([instincts.md](instincts.md)) | None: a capped default |
 | **Skill** | Text a person wrote | None until `adage train` tests it |
 
-**Principle.** The `adage` binary, which hooks run, never executes anything (Design principle 1).
+**Principle.** The `adage` binary, which hooks run, starts no process on the agent's behalf (Design
+principle 1; `adage-exec/tests/no_spawn.rs` pins it).
 `adage train` runs `adage-train`, a separate, optional binary (the `adage` binary never drives an
 agent session itself). It is the offline eval loop of Design §12 for one skill:
 it runs *agents*, sandboxed, only when a person at a terminal explicitly asks (`--execute`), with a

@@ -19,10 +19,12 @@ Reflexes come from three places:
   which claims in the skill are stale.
 
 Reflexes live in **tracks** on disk, and travel as signed, closed **packs** you can review, commit
-and share. The `adage` binary never executes anything: the agent runs every command through its
-own tools, under its harness's own permissions. Execution is a separate, opt-in component
-(`adage-exec`, turned on with `adage delegate on`) that runs only reflexes you approved on that
-machine (`adage review delegate`), inside an OS sandbox.
+and share. Adage never runs the commands its reflexes direct: the agent runs every command through
+its own tools, under its harness's own permissions. The `adage` binary starts no process on the
+agent's behalf (it starts only itself, to condition in the background, and `adage-train` when you
+ask it to train; a test pins this). Execution is a separate, opt-in binary (`adage-exec`, turned
+on with `adage delegate on`) that runs only reflexes you approved on that machine (`adage review
+delegate`), inside an OS sandbox.
 
 ```text
   agent traces ──► adage condition ──► reflexes ──► index ──► hooks ──► directives
@@ -125,35 +127,59 @@ Windows (x64):
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.ps1 | iex"
 brew install stevenvaughanbooth/tap/adage
-npm install -g <package>    # name not decided yet (npm/config.mjs)
+npm install -g @adage/cli   # once the scope is claimed (npm/config.mjs)
 cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli
 ```
+
+Three binaries ship: `adage`; `adage-exec`, which runs the reflexes you let act (`adage delegate`;
+Linux and macOS); and `adage-train`, which grows reflexes from a skill (`adage train`). The npm
+package carries all three. The other channels install each on its own: `adage-exec-installer.sh`
+and `adage-train-installer.sh` beside `adage-cli-installer.sh`, `brew install
+stevenvaughanbooth/tap/adage-exec` (and `adage-train`), or `cargo install --locked --git … adage-exec`
+(and `adage-train`). Put them beside `adage` or on `PATH`.
 
 Every release archive has a SHA-256 checksum, a Sigstore build-provenance attestation
 (`gh attestation verify <file> --repo stevenvaughanbooth/adage`) and a CycloneDX SBOM. For Claude
 Code, add the plugin marketplace with `/plugin marketplace add stevenvaughanbooth/adage` and install
-`adage`; the plugin runs the `adage` it finds on `PATH` and never downloads anything.
+`adage` (and `adage-exec`, to let reflexes act); the plugins run the binaries they find on `PATH`
+and never download anything.
 
 ## Quick start
 
 ### First run
 
+Inside the repository you want reflexes for (`adage --help` lists every command; `adage <command>
+--help` its options):
+
 ```bash
-cargo build --release -p adage-cli
-target/release/adage init             # guided setup at a terminal: hooks, model, first conditioning, auto-conditioning
-target/release/adage watch            # run in a split pane: Adage's health, hook activity, and conditioning, live
-target/release/adage sense            # read-only: which reflexes your traces would form, per repository
-target/release/adage doctor           # check binary, data dir, index, tracks, model, hooks, kill switches
-target/release/adage map              # the map at http://127.0.0.1:8765 (read-only, loopback only)
+adage init             # guided setup at a terminal: hooks, model, first conditioning, auto-conditioning
+adage sense            # read-only: which reflexes your traces would form, per repository
+adage condition        # form them: read your agents' traces, bind instincts, compile the index
+adage watch            # in a split pane: Adage's health, hook activity and conditioning, live
+adage map              # the map of your reflexes at http://127.0.0.1:8765 (read-only, loopback only)
+adage doctor           # check binary, data dir, index, tracks, model, hooks, kill switches
+adage review           # reflexes waiting for your decision, with evidence and the exact directive text
+```
+
+Then, when you want to:
+
+```bash
+adage share <track> --out <dir> --key ~/.ssh/id_ed25519   # a signed pack for your team
+adage add <dir> --trust                                    # a teammate's pack, bound here at forming
+adage delegate on                                          # let reflexes you approve act (adage-exec)
+adage train plan --from CONTRIBUTING.md                    # what training on a skill would cost; runs nothing
 ```
 
 At a terminal, `init` is a wizard: it detects your harnesses and, one step at a time, asks before
 it registers hooks (showing the exact file and diff), fetches the embedding model, conditions
 the repository for the first time, and turns automatic conditioning on if it is off; it ends with the doctor's
-summary. Piped, inside an agent session, or with `--print`, it prints the same report as before and
-writes nothing unless you pass `--yes` (which only downloads the embedding model). `sense` reads the same traces `condition` does and
-lists the reflexes `condition` would form as candidates, with prompts shown only as short redacted
-snippets. `doctor` exits non-zero only when a check fails.
+summary. Piped, inside an agent session, or with `--print`, it prints the same report and writes
+nothing; `--yes` downloads the embedding model and binds this repository's instincts. `sense` reads
+the same traces `condition` does and lists the reflexes `condition` would form as candidates, with
+prompts shown only as short redacted snippets. With no history yet, `adage condition
+--instincts-only` binds Adage's instincts from the repository's files alone. `doctor` exits
+non-zero only when a check fails. From a source checkout, `cargo build --release --locked -p
+adage-cli -p adage-exec -p adage-train` builds all three into `target/release/`.
 
 ### Watch it live
 
@@ -206,12 +232,16 @@ Decisions, installs and settings refuse inside an agent session, as their comman
 
 ### Claude Code
 
+Installed from the marketplace (above), the plugin needs nothing else. To try the plugin from a
+source checkout instead:
+
 ```bash
-# 1. Build the binary and stage it into the plugin
+# 1. Build the binaries and stage them into the plugins
 plugin/build.sh
 
-# 2. Condition on your existing Claude Code traces (reads ~/.claude/projects). After this,
-#    Adage keeps conditioning by itself as sessions end (see "Live conditioning" below).
+# 2. Condition on your existing Claude Code traces (reads ~/.claude/projects, sub-agents'
+#    traces included). After this, Adage keeps conditioning by itself as sessions end
+#    (see "Live conditioning" below).
 target/release/adage condition
 target/release/adage status
 
@@ -222,11 +252,10 @@ claude --plugin-dir plugin/claude-code
 ### OpenCode and Codex
 
 ```bash
-cargo build --release -p adage-cli
-target/release/adage install opencode            # print the plugin; add --write to install it
-target/release/adage install codex               # print a hooks.json; add --write to merge it
-opencode export <session-id> > s.json && target/release/adage condition --transcripts s.json
-target/release/adage condition --codex-sessions ~/.codex/sessions   # Codex rollouts
+adage install opencode            # print the plugin; add --write to install it
+adage install codex               # print a hooks.json; add --write to merge it
+opencode export <session-id> > s.json && adage condition --transcripts s.json
+adage condition --codex-sessions ~/.codex/sessions   # Codex rollouts
 ```
 
 `--write` installs into the repository (`.opencode/plugins/adage.js`, `.codex/hooks.json`) or, with
@@ -298,14 +327,14 @@ extinguished reflexes that came back stronger, and reflexes agents keep ignoring
 entry shows its evidence, effect and ceiling, and the exact directive text with example slot values.
 A pinned reflex is never overwritten: when learning (or a re-import) finds a materially different
 version, it waits as *proposed*, with a diff; `approve` applies it (still pinned) and `dismiss` keeps
-yours. `adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <route> [--by <name>]` records the decision
+yours. `adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <reflex> [--by <name>]` records the decision
 in the track's `review.yaml`, re-validates the track, and recompiles the index. Strengthening never exceeds
 the effect ceiling, and an import cannot be strengthened to fire without first-hand evidence learned
 locally. `adage condition` keeps extinguished reflexes out of service until they strengthen materially, and holds
 weakenings and strengthenings. An extinguished reflex also keeps a teammate's import of the same
 reflex out of the index. Decisions refuse to run inside an agent session. Listing is allowed there.
 
-**Experiment:** `runtime.control = 0.1` (default; `ADAGE_CONTROL` overrides) holds out 10% of sessions — Adage computes what it would
+**Experiment:** `runtime.control = 0.1` (default; `ADAGE_CONTROL` overrides) makes 10% of sessions the control — Adage computes what it would
 have said and logs it, but says nothing — so every claimed effect is measured against a control.
 
 ## The demo
@@ -331,32 +360,39 @@ fails untouched and passes with its reference solution.
 | --- | --- |
 | `crates/adage-core` | Canonical actions, shell normaliser (tree-sitter-bash + command table as data), effect classes, spans, repo identity |
 | `crates/adage-store` | Per-session two-slot state files and CRC-framed spools — no daemon |
-| `crates/adage-tracks` | Track format, validation, canonical digest, compiled index |
+| `crates/adage-tracks` | Track format, validation, compiled index, interlocking, review decisions |
 | `crates/adage-runtime` | Hook-time decisions and directive rendering from fixed templates |
+| `crates/adage-hook` | The hook pipeline `adage` and `adage-exec` share: harness adapters, the no-match fast path, fail-open |
 | `crates/adage-graph` | The graph engine: the only learner |
-| `crates/adage-learn` | Transcript import, steering by influence, and the learner's driver |
-| `crates/adage-sign` | Native `sshsig` signing (ssh-agent or key file) and `allowed_signers` verification |
-| `crates/adage-sign` | Native `sshsig` signing and `allowed_signers` verification for shared tracks |
+| `crates/adage-learn` | Transcript import (Claude Code and its sub-agents, Codex, OpenCode), steering by influence, and the learner's driver |
+| `crates/adage-instincts` | Instincts: reflexes that ship with Adage, bound from a repository's own files |
 | `crates/adage-intent` | Prompt normalisation, the static embedding model in plain Rust (WordPiece + safetensors rows read on demand), deterministic kNN + Louvain clustering, behavioural split/merge |
-| `crates/adage-eval` | `adage eval`: offline replay of recorded sessions through the runtime, scored against what agents did; safety oracle; property tests |
-| `crates/adage-cli` | The `adage` binary; harness adapters in `src/harness/` |
+| `crates/adage-pack` | Packs (format `adage-pack/1`): validation, closure, digest, binding; the `adage-pack` inspect/verify/digest tool |
+| `crates/adage-sign` | Native `sshsig` signing (ssh-agent or key file) and `allowed_signers` verification |
+| `crates/adage-exec` | The `adage-exec` binary: approvals, policy, the OS sandbox, E1 prefetch and E2 actions |
+| `crates/adage-train` | The `adage-train` binary: a skill → sandboxed agent sessions → reflexes |
+| `crates/adage-eval` | `adage eval`: offline replay of recorded sessions through the runtime, scored against what agents did; the L0 bench; safety oracle; property tests |
+| `crates/adage-cli` | The `adage` binary |
 | `crates/adage-sim` | Harness simulator: seeded mock histories (`sim/fixtures/`) and native hook payloads for Claude Code, OpenCode, and Codex |
 | `plugin/claude-code` | The Claude Code plugin |
+| `plugin/claude-code-exec` | The `adage-exec` plugin, which serves hooks once `adage delegate on` |
 | `plugin/opencode` | The OpenCode plugin (installed by `adage install opencode`) |
+| `npm/` | The npm launcher and per-platform packages |
 | `demo/` | Sandbox, runner, live dashboard |
 | `evals/` | Eval datasets (90 real demo sessions, synthetic, adversarial) and the live eval runner — see [docs/evals.md](docs/evals.md) |
 | `docs/` | [Design spec](docs/Adage%20—%20Design%20Spec.md) · [Architecture](docs/Adage%20—%20Architecture.md) · [Implementation plan](docs/Adage%20—%20Implementation%20Plan.md) |
 | `spikes/` | The experiments that settled the architecture — see [the board](spikes/README.md) |
 
-`cargo test --workspace` runs the suite, including the normaliser's 315 golden fixtures.
+`cargo test --workspace --locked` runs the suite, including the normaliser's golden fixtures, the
+eval gates and the L0 bench against its baseline.
 
 ## Status
 
 v0.1: Claude Code, plus OpenCode and Codex adapters and importers, built against their
 documentation and source and verified end to end by the harness simulator (condition on each
 harness's mock history, replay a held-out session through its native hooks in both arms), but not
-yet run against a live installation — see [docs/harnesses.md](docs/harnesses.md#verification). Tracks are shared
-directly (`adage share` / `adage add`) and reviewed with `adage review`. Intent families use static
+yet run against a live installation — see [docs/harnesses.md](docs/harnesses.md#verification). Reflexes travel
+as signed packs (`adage share` / `adage add`) and are reviewed with `adage review`. Intent families use static
 embeddings (`adage models fetch`; everything else works without the model). Hardened against an
 adversarial review (tracks are untrusted input; effects re-derived; bounded hot path; symlink-safe
 paths). Team depots and lockfiles are designed but not yet built. See the implementation plan.
