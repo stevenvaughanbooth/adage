@@ -118,8 +118,13 @@ pub fn render_text(r: &FidelityReport) -> String {
     let mut s = format!("replay fidelity, {} (index {}, {} matching)\n", r.round, r.index_generation, r.matching);
     for (arm, a) in &r.by_arm {
         s.push_str(&format!(
-            "  {arm:<8} {} sessions: decisions match {}/{}, hook event sequence matches {}/{}\n",
-            a.sessions, a.decisions_match, a.sessions, a.events_match, a.sessions
+            "  {:<8} {} traces: decisions match {}/{}, hook event sequence matches {}/{}\n",
+            if arm == "holdout" { "control" } else { arm.as_str() },
+            a.sessions,
+            a.decisions_match,
+            a.sessions,
+            a.events_match,
+            a.sessions
         ));
     }
     for m in &r.mismatches {

@@ -483,7 +483,7 @@ pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
     })
 }
 
-/// Human-readable routes report. Deterministic, like the JSON.
+/// Human-readable report of the conditioned reflexes (`adage eval routes`). Deterministic, like the JSON.
 pub fn render_text(r: &RoutesReport) -> String {
     use std::fmt::Write;
     let mut s = String::new();
@@ -492,9 +492,9 @@ pub fn render_text(r: &RoutesReport) -> String {
         "adage eval routes: {} (split {}, thresholds {}; conventions {}, {})",
         r.dataset, r.split, r.thresholds, r.conventions_file, r.sandbox
     );
-    let _ = writeln!(s, "learned from {} train sessions ({} test sessions unused)", r.train_sessions, r.test_sessions);
+    let _ = writeln!(s, "conditioned on {} train traces ({} test traces unused)", r.train_sessions, r.test_sessions);
     s.push_str(&crate::leakage_text(r.split_note.as_deref(), &r.task_overlap_ids, r.leaky));
-    let _ = writeln!(s, "index {} with {} routes", r.index_generation, r.learned_routes);
+    let _ = writeln!(s, "index {} with {}", r.index_generation, crate::count(r.learned_routes, "reflex"));
     for x in &r.routes {
         let verdict = if x.matches.is_empty() { "FALSE".to_string() } else { format!("= {}", x.matches.join(", ")) };
         let _ = writeln!(s, "  {:<22} {:<12} {:<44} {}", x.id, x.kind, x.step, verdict);
@@ -505,7 +505,7 @@ pub fn render_text(r: &RoutesReport) -> String {
     let _ = writeln!(s, "\nconventions");
     for c in &r.conventions {
         let found = match (c.evaluable, c.matched_by.is_empty()) {
-            (false, _) => "not learnable offline (no model)".to_string(),
+            (false, _) => "cannot be conditioned offline (no intent model)".to_string(),
             (true, true) => "MISSED".to_string(),
             (true, false) => format!("found by {}", c.matched_by.join(", ")),
         };
@@ -513,7 +513,7 @@ pub fn render_text(r: &RoutesReport) -> String {
     }
     let _ = writeln!(
         s,
-        "\nroute precision {}/{} {:.1}% (95% CI {}); route recall {}/{} {:.1}% (95% CI {}); F1 {:.3}",
+        "\nreflex precision {}/{} {:.1}% (95% CI {}); reflex recall {}/{} {:.1}% (95% CI {}); F1 {:.3}",
         r.true_routes,
         r.learned_routes,
         r.precision * 100.0,
@@ -526,7 +526,7 @@ pub fn render_text(r: &RoutesReport) -> String {
     );
     let none = || "none".to_string();
     let list = |v: &[String]| if v.is_empty() { none() } else { v.join(", ") };
-    let _ = writeln!(s, "false routes: {}", list(&r.false_routes));
+    let _ = writeln!(s, "false reflexes: {}", list(&r.false_routes));
     let _ = writeln!(s, "missed conventions: {}", list(&r.missed_conventions));
     s
 }

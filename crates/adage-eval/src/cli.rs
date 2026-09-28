@@ -17,10 +17,13 @@
 //! `--params <file.toml|json>`: engine parameters (`adage_tracks::params::EngineParams`, any
 //! subset) laid over the thresholds preset.
 //!
-//! Instincts are off by default, so the numbers are those of learned routes. `--instincts` binds
-//! them after learning, as `adage learn` does; `--instincts-only` learns nothing from the train
-//! sessions and binds only instincts, from the repository's files (`--sandbox-dir`, default
-//! `evals/sandboxes/<repo>`), then replays the test sessions: what Adage says on day 0.
+//! Instincts are off by default, so the numbers are those of conditioned reflexes. `--instincts`
+//! binds them after conditioning, as `adage condition` does; `--instincts-only` conditions nothing
+//! on the train traces and binds only instincts, from the repository's files (`--sandbox-dir`,
+//! default `evals/sandboxes/<repo>`), then replays the test traces: what Adage says on day 0.
+//!
+//! Human-readable text uses the lexicon's words (reflexes, fire/prime/inhibit, control); the
+//! JSON, the datasets and the subcommand names (`routes`) keep their stored words.
 //!
 //! Read-only apart from `generate` (which writes only `<out-dir>`), and it runs nothing: safe
 //! to run anywhere, including inside an agent session.
@@ -51,7 +54,28 @@ fn params(args: &[String]) -> Result<Option<serde_json::Value>> {
         .transpose()
 }
 
-const USAGE: &str = "usage: adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--window <n>] [--include-steered] [--index <file>] [--instincts | --instincts-only] [--sandbox-dir <dir>] [--exec-e1] [--json]\n       adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--index <file>] [--json]\n       adage eval bench run|sweep|report|bless … (adage eval bench --help)\n       adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--json]\n       adage eval types <gen-dir|dataset-dir> [--end-to-end] [--json]\n       adage eval generate <synthetic|adversarial> <out-dir>\n<split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all";
+const USAGE: &str = "\
+usage: adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--window <n>] [--include-steered] [--index <file>] [--instincts | --instincts-only] [--sandbox-dir <dir>] [--exec-e1] [--json]
+         condition reflexes on the train traces, replay the test traces, and score what Adage would have said
+       adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--index <file>] [--json]
+         list the reflexes conditioned on the train traces, checked against the dataset's conventions
+       adage eval bench run|sweep|report|bless … (adage eval bench --help)
+         the parameter bench
+       adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--json]
+         replay recorded traces and compare with the hook's live decisions (treated and control arms)
+       adage eval types <gen-dir|dataset-dir> [--end-to-end] [--json]
+         the value types conditioned for lookup slots
+       adage eval generate <synthetic|adversarial> <out-dir>
+         write a generated dataset
+<split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all
+--instincts binds instincts after conditioning; --instincts-only conditions nothing and binds only instincts (day 0).";
+
+/// What a usage error points to: the full usage is `adage eval --help`.
+const SEE_HELP: &str = "see `adage eval --help`";
+
+fn missing_dir() -> String {
+    format!("missing <dataset-dir>: {SEE_HELP}")
+}
 
 pub fn run(args: &[String]) -> Result<()> {
     let json = args.iter().any(|a| a == "--json");
@@ -62,7 +86,7 @@ pub fn run(args: &[String]) -> Result<()> {
         }
         Some("bench") => crate::bench::cli::run(&args[1..]),
         Some("routes") => {
-            let dir = args.get(1).filter(|d| !d.starts_with("--")).context(USAGE)?;
+            let dir = args.get(1).filter(|d| !d.starts_with("--")).with_context(missing_dir)?;
             let opts = crate::Options {
                 split: flag(args, "--split"),
                 thresholds: flag(args, "--thresholds"),
@@ -81,7 +105,7 @@ pub fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         Some("types") => {
-            let dir = args.get(1).filter(|d| !d.starts_with("--")).context(USAGE)?;
+            let dir = args.get(1).filter(|d| !d.starts_with("--")).with_context(missing_dir)?;
             let e2e = args.iter().any(|a| a == "--end-to-end");
             let r = crate::value_types::run_with(&PathBuf::from(dir), e2e)?;
             if json {
@@ -92,7 +116,7 @@ pub fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         Some("fidelity") => {
-            let dir = args.get(1).context(USAGE)?;
+            let dir = args.get(1).filter(|d| !d.starts_with("--")).with_context(missing_dir)?;
             let round = flag(args, "--round").unwrap_or_else(|| "round2".into());
             let exact_keys = args.iter().any(|a| a == "--exact-keys");
             let r = crate::fidelity::run_with(&PathBuf::from(dir), &round, exact_keys)?;
@@ -104,7 +128,9 @@ pub fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         Some("generate") => {
-            let (Some(which), Some(out)) = (args.get(1), args.get(2)) else { bail!(USAGE) };
+            let (Some(which), Some(out)) = (args.get(1), args.get(2)) else {
+                bail!("adage eval generate needs <synthetic|adversarial> and an <out-dir>: {SEE_HELP}")
+            };
             let out = PathBuf::from(out);
             match which.as_str() {
                 "synthetic" => crate::generate::synthetic(&out)?,
@@ -114,6 +140,7 @@ pub fn run(args: &[String]) -> Result<()> {
             println!("wrote {}", out.display());
             Ok(())
         }
+        Some(opt) if opt.starts_with('-') => bail!("{opt} goes after the <dataset-dir>: {SEE_HELP}"),
         Some(dir) => {
             let window = match flag(args, "--window") {
                 Some(w) => w.parse().context("--window takes a number of turns")?,

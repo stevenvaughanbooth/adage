@@ -388,6 +388,25 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
     })
 }
 
+/// A stored aspect as the lexicon's strength (docs/lexicon.md), for the text reports only.
+pub(crate) fn strength(aspect: &str) -> &str {
+    match aspect {
+        "green" => "fire",
+        "yellow" => "prime",
+        "red" => "inhibit",
+        other => other,
+    }
+}
+
+/// `n` and a noun, pluralised (`1 reflex`, `3 reflexes`).
+pub(crate) fn count(n: usize, noun: &str) -> String {
+    match (n, noun.ends_with('x')) {
+        (1, _) => format!("1 {noun}"),
+        (_, true) => format!("{n} {noun}es"),
+        _ => format!("{n} {noun}s"),
+    }
+}
+
 fn pct(x: f64) -> String {
     format!("{:.1}%", x * 100.0)
 }
@@ -406,7 +425,7 @@ pub(crate) fn leakage_text(note: Option<&str>, overlap: &[String], leaky: bool) 
             ids.push_str(", …");
         }
         if ids.is_empty() {
-            s.push_str(" — LEAKY: sessions are in both train and test");
+            s.push_str(" — LEAKY: traces are in both train and test");
         } else {
             s.push_str(&format!(" — LEAKY: test tasks were trained on ({ids})"));
         }
@@ -426,7 +445,7 @@ pub fn render_text(r: &Report) -> String {
     );
     let _ = writeln!(
         s,
-        "sessions: {} train, {} test, {} scored, {} skipped (steered){}",
+        "traces: {} train, {} test, {} scored, {} skipped (steered){}",
         r.train_sessions,
         r.test_sessions,
         r.scored_sessions,
@@ -434,12 +453,17 @@ pub fn render_text(r: &Report) -> String {
         if r.in_sample > 0 { format!(", {} IN-SAMPLE", r.in_sample) } else { String::new() }
     );
     s.push_str(&leakage_text(r.split_note.as_deref(), &r.task_overlap_ids, r.leaky));
-    let _ = writeln!(s, "index {} with {} routes", r.index_generation, r.routes.len());
+    let _ = writeln!(s, "index {} with {}", r.index_generation, count(r.routes.len(), "reflex"));
     for x in &r.routes {
         let _ = writeln!(
             s,
-            "  {:<22} {:<12} {:<6} {:>3}/{:<3} {}",
-            x.id, x.kind, x.aspect, x.support, x.opportunities, x.step
+            "  {:<22} {:<12} {:<7} {:>3}/{:<3} {}",
+            x.id,
+            x.kind,
+            strength(&x.aspect),
+            x.support,
+            x.opportunities,
+            x.step
         );
     }
     let _ = writeln!(
@@ -489,7 +513,7 @@ pub fn render_text(r: &Report) -> String {
     let f = &r.finish_line;
     let _ = writeln!(
         s,
-        "finish line: {} obligations — {} met by the agent, {} needed but skipped, {} false alarms, {} unlabelled: accuracy {} (95% CI {}); {} stale sessions missed; stop requests {} ({} correct)",
+        "finish line: {} obligations — {} met by the agent, {} needed but skipped, {} false alarms, {} unlabelled: accuracy {} (95% CI {}); {} stale traces missed; stop requests {} ({} correct)",
         f.obligations, f.met, f.caught, f.false_alarms, f.unknown, pct(f.accuracy), score::ci_text(f.accuracy_ci), f.missed, f.stop_requests, f.stop_requests_correct
     );
     if let Some(i) = &r.instincts {
