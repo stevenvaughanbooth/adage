@@ -432,7 +432,9 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
         }
     }
 
-    let bar = adage_learn::LearnConfig::default();
+    // The bars this home conditions with (`learn.thresholds`), so the map measures evidence
+    // against the bar that actually set each strength.
+    let bar = crate::autolearn::thresholds(adage_store::config::load(paths).config.learn_thresholds);
     let mut obs: Vec<(&String, &(u64, BTreeSet<String>))> = observed.iter().collect();
     obs.sort_by(|a, b| b.1 .1.len().cmp(&a.1 .1.len()).then(b.1 .0.cmp(&a.1 .0)).then(a.0.cmp(b.0)));
     let observed: Vec<Value> = obs

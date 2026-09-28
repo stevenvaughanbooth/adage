@@ -169,7 +169,8 @@ pub fn setup() -> Result<DemoHome> {
         serde_json::to_string_pretty(&crate::harness::claude::settings(&exe))?,
     )?;
     std::fs::create_dir_all(&home.paths.root)?;
-    std::fs::write(home.paths.config(), "[learn]\nauto = true\n")?;
+    // The scripted evidence clears the demo bars (`learn.thresholds = "demo"`), so the home says so.
+    std::fs::write(home.paths.config(), "[learn]\nauto = true\nthresholds = \"demo\"\n")?;
     install_track(&home.paths, &track(0))?;
     Ok(home)
 }
