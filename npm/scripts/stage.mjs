@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 // Stage the npm packages for a release: stamp the name, version and license into the main package
-// and one package per platform, and copy each platform's binary in.
+// and one package per platform, and copy each platform's binaries in: `adage`, and beside it
+// `adage-exec` (what `adage delegate` runs) and `adage-train` (what `adage train` runs), each from
+// its own release archive.
 //
 //   node npm/scripts/stage.mjs --version 0.1.0 --out <dir> (--bins <dir> | --artifacts <dir>)
 //                              [--name <npm name>] [--allow-missing]
 //
-//   --bins <dir>       binaries laid out as <dir>/<target>/adage[.exe]
-//   --artifacts <dir>  dist's release archives (adage-cli-<target>.tar.xz / .zip), extracted here
+//   --bins <dir>       binaries laid out as <dir>/<target>/adage[.exe] (and adage-exec, adage-train)
+//   --artifacts <dir>  dist's release archives (adage-cli-<target>.tar.xz / .zip, and adage-exec-…,
+//                      adage-train-…), extracted here
 //   --name             override PACKAGE_NAME from npm/config.mjs (tests only)
 //   --allow-missing    stage only the platforms that have a binary (local tests); a release needs all
 //
@@ -19,7 +22,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { PACKAGE_NAME, PLATFORMS } from "../config.mjs"
+import { COMPANIONS, PACKAGE_NAME, PLATFORMS } from "../config.mjs"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const npmDir = path.resolve(here, "..")
@@ -69,12 +72,13 @@ function find(dir, name) {
   return null
 }
 
-// Extract dist's archive for one target into a scratch directory and return the binary's path.
-function fromArchive(artifacts, p, scratch) {
-  const base = `adage-cli-${p.target}`
+// Extract dist's archive of `app` for one target into a scratch directory and return the path of
+// the binary `exe` in it.
+function fromArchive(artifacts, app, p, exe, scratch) {
+  const base = `${app}-${p.target}`
   const archive = [".tar.xz", ".tar.gz", ".zip"].map((ext) => path.join(artifacts, base + ext)).find(existsSync)
   if (!archive) return null
-  const into = path.join(scratch, p.target)
+  const into = path.join(scratch, app, p.target)
   mkdirSync(into, { recursive: true })
   if (archive.endsWith(".zip")) {
     try {
@@ -85,7 +89,14 @@ function fromArchive(artifacts, p, scratch) {
   } else {
     execFileSync("tar", ["-xf", archive, "-C", into], { stdio: "inherit" })
   }
-  return find(into, p.exe)
+  return find(into, exe)
+}
+
+// The companion binary `c` for platform `p`, or null.
+function companion(o, c, p, scratch) {
+  const exe = p.os === "win32" ? `${c.name}.exe` : c.name
+  const bin = o.bins ? path.join(o.bins, p.target, exe) : fromArchive(o.artifacts, c.app, p, exe, scratch)
+  return bin && existsSync(bin) && statSync(bin).isFile() ? { bin, exe } : null
 }
 
 const o = args(process.argv.slice(2))
@@ -103,7 +114,7 @@ const scratch = o.artifacts ? mkdtempSync(path.join(tmpdir(), "adage-stage-")) :
 const staged = []
 try {
   for (const p of PLATFORMS) {
-    const bin = o.bins ? path.join(o.bins, p.target, p.exe) : fromArchive(o.artifacts, p, scratch)
+    const bin = o.bins ? path.join(o.bins, p.target, p.exe) : fromArchive(o.artifacts, "adage-cli", p, p.exe, scratch)
     if (!bin || !existsSync(bin) || !statSync(bin).isFile()) {
       if (o["allow-missing"]) continue
       fail(`no binary for ${p.target}`)
@@ -126,6 +137,17 @@ try {
     const dest = path.join(dir, "bin", p.exe)
     copyFileSync(bin, dest)
     chmodSync(dest, 0o755)
+    // Companions sit beside `adage`, where `adage delegate on` and `adage train` look first.
+    for (const c of COMPANIONS) {
+      const found = companion(o, c, p, scratch)
+      if (!found) {
+        if (o["allow-missing"] || !c.required(p)) continue
+        fail(`no ${c.name} binary for ${p.target}`)
+      }
+      const to = path.join(dir, "bin", found.exe)
+      copyFileSync(found.bin, to)
+      chmodSync(to, 0o755)
+    }
     staged.push({ dir, name: manifest.name })
   }
   if (staged.length === 0) fail("no platform binaries found")

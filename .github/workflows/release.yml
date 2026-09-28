@@ -236,7 +236,7 @@ jobs:
           name: artifacts-build-global
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
-            ${{ steps.cargo-cyclonedx.output.paths }}
+            ${{ steps.cargo-cyclonedx.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
   # Determines if we should publish/announce
   host:
