@@ -157,6 +157,29 @@ pub fn describe_step(step: &Step) -> String {
     }
 }
 
+/// The redaction check's findings as an error: one cause per finding; nothing was written.
+pub(crate) fn redaction_refusal(name: &str, findings: &[redact::Finding]) -> anyhow::Error {
+    let causes = findings
+        .iter()
+        .map(|f| {
+            let at = if f.line > 0 { format!("{}:{}", f.file, f.line) } else { f.file.clone() };
+            if f.excerpt.is_empty() {
+                format!("{at} · {}", f.kind)
+            } else {
+                format!("{at} · {} · {}", f.kind, f.excerpt)
+            }
+        })
+        .collect();
+    crate::refusal(
+        format!(
+            "refusing to share {name}: the redaction check found {}; nothing was written",
+            crate::words::count(findings.len(), "problem")
+        ),
+        causes,
+        "generalise or remove the flagged text, then share again",
+    )
+}
+
 const USAGE: &str = "usage: adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format pack|v1]";
 
 pub fn share(args: &[String], paths: &Paths) -> Result<()> {
@@ -201,11 +224,7 @@ fn share_v1(name: &str, out: &Path, key: Option<PathBuf>, paths: &Paths) -> Resu
         contents.push((rel.clone(), bytes));
     }
     if !findings.is_empty() {
-        eprintln!("adage share: the redaction check found {} problem(s); nothing was written:", findings.len());
-        for f in &findings {
-            eprintln!("  {}:{}  {}  {}", f.file, f.line, f.kind, f.excerpt);
-        }
-        bail!("refusing to share {name}: generalise or remove the flagged text, then share again");
+        return Err(redaction_refusal(name, &findings));
     }
 
     if out.exists() && (!out.is_dir() || std::fs::read_dir(&out)?.next().is_some()) {
@@ -226,7 +245,7 @@ fn share_v1(name: &str, out: &Path, key: Option<PathBuf>, paths: &Paths) -> Resu
         std::fs::remove_dir(&out)?;
     }
     std::fs::rename(&stage, &out)?;
-    print_summary(&track, &out, &contents, &listing, &digest, &signed);
+    print_summary(&track, &out, &contents, &listing, &digest, &signed)?;
     Ok(())
 }
 
@@ -263,50 +282,70 @@ fn print_summary(
     l: &Listing,
     digest: &str,
     s: &adage_sign::Signed,
-) {
+) -> Result<()> {
+    use adage_term::{Line, Out};
     let m = &t.manifest;
-    println!("adage share: {} @ {}  (repo {})\n", m.track.name, m.track.version, m.scope.repo);
-    println!("Included — exactly these files, plus {SIG}:");
+    let mut o = Out::stdout();
+    o.header("share", &[&format!("track {}@{}", m.track.name, m.track.version), &m.scope.repo, "format v1"])?;
+    o.blank()?;
+    o.section(&format!("Included: exactly these files, plus {SIG}"))?;
     for (rel, bytes) in contents {
-        println!("  {rel:<40} {:>7} bytes", bytes.len());
+        o.line(&Line::new().text(format!("  {rel:<48} ")).faint(format!("{:>7} bytes", bytes.len())))?;
     }
-    println!("\nRoutes (templates and aggregate statistics only):");
+    o.blank()?;
+    o.section("Reflexes: templates and aggregate statistics only")?;
     for r in &t.routes {
         let e = &r.evidence;
-        println!(
-            "  {:<22} {:<6} {:<11} {}  [{}/{} sessions]",
-            r.id,
-            format!("{:?}", r.aspect).to_lowercase(),
-            format!("{:?}", r.effect).to_lowercase(),
-            describe_step(&r.step),
-            e.support,
-            e.opportunities
-        );
+        o.line(
+            &Line::new()
+                .text(format!("  {:<24} ", r.id))
+                .strength(crate::words::strength(r.aspect))
+                .pad_to(38)
+                .quiet(format!("{:<11} {}", format!("{:?}", r.effect).to_lowercase(), describe_step(&r.step)))
+                .sep()
+                .faint(format!("{}/{} traces", e.support, e.opportunities)),
+        )?;
     }
-    if !l.other.is_empty() {
-        println!("\nNot included:");
-        for (rel, why) in l.other.iter().filter(|(r, _)| r != SIG) {
-            println!("  {rel:<40} {why}");
+    let other: Vec<_> = l.other.iter().filter(|(r, _)| r != SIG).collect();
+    if !other.is_empty() {
+        o.blank()?;
+        o.section("Not included")?;
+        for (rel, why) in other {
+            o.line(&Line::new().text(format!("  {rel:<40} ")).quiet(why.to_string()))?;
         }
     }
-    println!("\nChecked: no absolute paths, home-directory paths, or secret-looking strings in any file.");
-    println!("Digest:  sha256 {digest}");
+    o.blank()?;
+    o.kv(
+        "checked",
+        Line::new().text("no absolute paths, home-directory paths, or secret-looking strings in any file"),
+    )?;
+    o.kv("digest", Line::new().quiet(format!("sha256 {digest}")))?;
     let how = match s.method {
         adage_sign::Method::Agent => "via ssh-agent",
         adage_sign::Method::KeyFile => "with key file",
     };
-    println!(
-        "Signed:  {} ({}, {how}), namespace {}",
-        adage_sign::fingerprint(&s.key),
-        s.key.algorithm(),
-        adage_sign::NAMESPACE
-    );
-    println!("Wrote:   {}", out.display());
+    o.kv(
+        "signed",
+        Line::new().text(format!(
+            "{} ({}, {how}), namespace {}",
+            adage_sign::fingerprint(&s.key),
+            s.key.algorithm(),
+            adage_sign::NAMESPACE
+        )),
+    )?;
+    o.kv("wrote", Line::new().text(out.display().to_string()))?;
     let principal =
         Some(s.key.comment()).filter(|c| !c.is_empty() && !c.contains(char::is_whitespace)).unwrap_or("adage-signer");
-    println!(
-        "\nRecipients trust this signer with a line in <repo>/.adage/trusted-signers or $ADAGE_HOME/trusted-signers:\n  {principal} namespaces=\"{}\" {}",
+    o.blank()?;
+    o.note(
+        "Recipients trust this signer with a line in <repo>/.adage/trusted-signers or $ADAGE_HOME/trusted-signers:",
+    )?;
+    o.line(&Line::new().text(format!(
+        "  {principal} namespaces=\"{}\" {}",
         adage_sign::NAMESPACE,
         adage_sign::key_line(&s.key)
-    );
+    )))?;
+    o.blank()?;
+    o.next(&format!("adage add {}", out.display()), "on the recipient's machine, once they trust the signer")?;
+    Ok(())
 }

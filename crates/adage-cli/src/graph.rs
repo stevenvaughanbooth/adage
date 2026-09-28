@@ -110,7 +110,10 @@ fn dump_learned(args: &[String], paths: &Paths) -> Result<()> {
     let at = args.iter().position(|a| a == "--dump").unwrap_or(0);
     let repo = args.get(at + 1).filter(|r| !r.starts_with("--")).cloned();
     let Some(repo) = repo else {
-        anyhow::bail!("usage: adage graph --learned --dump <repo> [--transcripts <file>...] [--json]")
+        return Err(crate::hint(
+            "--dump needs a repository key",
+            "adage graph --learned --dump <repo> [--transcripts <file>…] [--json]",
+        ));
     };
     let mut files: Vec<PathBuf> = Vec::new();
     if let Some(i) = args.iter().position(|a| a == "--transcripts") {
@@ -170,46 +173,92 @@ fn dump_learned(args: &[String], paths: &Paths) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&out)?);
         return Ok(());
     }
-    println!(
-        "adage graph --learned: {repo}: {} sessions (facts cache: {hits} hits, {misses} computed)",
-        sessions.len()
-    );
-    println!(
-        "  events {} (prompts {}, acts {}, failed {}), max per session {}",
-        stats.events, stats.prompts, stats.acts, stats.failed_acts, stats.max_events
-    );
-    println!(
-        "  artifacts {} ({} distinct), distinct act keys {}, observations {}, failures {}",
-        stats.arts, stats.distinct_arts, stats.distinct_act_keys, stats.obs, stats.fails
-    );
+    use crate::words::count;
+    use adage_term::{Glyph, Line, Out, Role};
+    let mut o = Out::stdout();
+    o.header(
+        "graph --learned",
+        &[&repo, &count(sessions.len(), "trace"), &format!("facts cache {hits} hits, {misses} computed")],
+    )?;
+    o.blank()?;
+    o.kv(
+        "events",
+        Line::new()
+            .text(stats.events.to_string())
+            .sep()
+            .quiet(format!("{} prompts, {} acts, {} failed", stats.prompts, stats.acts, stats.failed_acts))
+            .sep()
+            .quiet(format!("at most {} per trace", stats.max_events)),
+    )?;
+    o.kv(
+        "artifacts",
+        Line::new()
+            .text(stats.arts.to_string())
+            .sep()
+            .quiet(format!("{} distinct", stats.distinct_arts))
+            .sep()
+            .quiet(format!("{} distinct act keys", stats.distinct_act_keys)),
+    )?;
+    o.kv(
+        "observed",
+        Line::new().text(format!("{} observations", stats.obs)).sep().quiet(format!("{} failures", stats.fails)),
+    )?;
     let edges: Vec<String> = stats.edges.iter().map(|(k, v)| format!("{k} {v}")).collect();
-    println!("  edges: {}", if edges.is_empty() { "none".into() } else { edges.join(", ") });
-    println!(
-        "  token occurrences {}, embeddings {} (model: {}), truncated sessions {}",
-        stats.tokens,
-        stats.embeddings,
-        model.as_ref().map(|m| m.id.as_str()).unwrap_or("none; prompts not embedded"),
-        stats.truncated_sessions
-    );
-    println!("  value flow: {} sinks, {} value slots", learned.sinks, learned.slots.len());
+    o.kv("edges", Line::new().quiet(if edges.is_empty() { "none".into() } else { edges.join(", ") }))?;
+    o.kv(
+        "tokens",
+        Line::new()
+            .text(format!("{} occurrences", stats.tokens))
+            .sep()
+            .quiet(format!("{} truncated traces", stats.truncated_sessions)),
+    )?;
+    o.kv(
+        "embeddings",
+        Line::new().text(stats.embeddings.to_string()).sep().quiet(match &model {
+            Some(m) => format!("model {}", m.id),
+            None => "no intent model; prompts not embedded".into(),
+        }),
+    )?;
+    o.kv(
+        "value flow",
+        Line::new().text(count(learned.sinks, "sink")).sep().text(count(learned.slots.len(), "value slot")),
+    )?;
+    let w = slots.iter().chain(&rejected).map(|s| s["sink"].as_str().unwrap_or("").chars().count()).max();
+    let col = 6 + w.unwrap_or(0).max(16);
     for s in &slots {
-        println!(
-            "    {}  {}  ({} sessions)",
-            s["sink"].as_str().unwrap_or(""),
-            s["contract"].as_str().unwrap_or(""),
-            s["sessions"]
-        );
+        o.line(
+            &Line::new()
+                .text("  ")
+                .glyph(Role::Fire, Glyph::Ok)
+                .text(" ")
+                .text(s["sink"].as_str().unwrap_or(""))
+                .pad_to(col)
+                .quiet(s["contract"].as_str().unwrap_or(""))
+                .sep()
+                .faint(count(s["sessions"].as_u64().unwrap_or(0) as usize, "trace")),
+        )?;
     }
     for s in &rejected {
-        println!(
-            "    not a slot: {}  ({} sessions, {} distinct, flow rate {:.2}, top share {:.2})",
-            s["sink"].as_str().unwrap_or(""),
-            s["sessions"],
-            s["distinct"],
-            s["flow_rate"].as_f64().unwrap_or(0.0),
-            s["top_share"].as_f64().unwrap_or(0.0)
-        );
+        o.line(
+            &Line::new()
+                .text("  ")
+                .glyph(Role::Ink3, Glyph::Off)
+                .text(" ")
+                .quiet(s["sink"].as_str().unwrap_or(""))
+                .pad_to(col)
+                .faint("not a slot")
+                .sep()
+                .faint(format!(
+                    "{}, {} distinct, flow rate {:.2}, top share {:.2}",
+                    count(s["sessions"].as_u64().unwrap_or(0) as usize, "trace"),
+                    s["distinct"],
+                    s["flow_rate"].as_f64().unwrap_or(0.0),
+                    s["top_share"].as_f64().unwrap_or(0.0)
+                )),
+        )?;
     }
+    o.blank()?;
+    o.next("adage condition --engine graph", "condition reflexes with the graph engine")?;
     Ok(())
 }
 

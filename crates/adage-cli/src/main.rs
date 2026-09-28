@@ -100,6 +100,16 @@ pub(crate) fn hint(what: impl Into<String>, help: impl Into<String>) -> anyhow::
     anyhow::Error::new(Hint { what: what.into(), help: help.into() })
 }
 
+/// `what` failed for each of `causes` (printed as `├─ cause` lines); `help` says what to do.
+pub(crate) fn refusal(what: impl Into<String>, mut causes: Vec<String>, help: impl Into<String>) -> anyhow::Error {
+    let Some(last) = causes.pop() else { return hint(what, help) };
+    let mut e = hint(last, help);
+    for c in causes.into_iter().rev() {
+        e = e.context(c);
+    }
+    e.context(what.into())
+}
+
 fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
 }

@@ -149,23 +149,17 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
         }
     }
     if !findings.is_empty() {
-        eprintln!("adage share: the redaction check found {} problem(s); nothing was written:", findings.len());
-        for f in &findings {
-            eprintln!("  {}:{}  {}  {}", f.file, f.line, f.kind, f.excerpt);
-        }
-        bail!("refusing to share {name}: generalise or remove the flagged text, then share again");
+        return Err(crate::share::redaction_refusal(name, &findings));
     }
     if !flags.is_empty() && !ack {
-        eprintln!(
-            "adage share: {} vendored script line(s) need your acknowledgement; nothing was written:",
-            flags.len()
-        );
-        for (rel, f) in &flags {
-            eprintln!("  {rel}:{}  {}  {}", f.line, f.kind, f.excerpt);
-        }
-        bail!(
-            "refusing to share {name}: these scripts reach beyond the repository. Review them, then re-run with --ack-scripts"
-        );
+        return Err(crate::refusal(
+            format!(
+                "refusing to share {name}: {} reach beyond the repository; nothing was written",
+                crate::words::count(flags.len(), "vendored script line")
+            ),
+            flags.iter().map(|(rel, f)| format!("{rel}:{} · {} · {}", f.line, f.kind, f.excerpt)).collect(),
+            "review them, then run the same `adage share` with --ack-scripts",
+        ));
     }
 
     if out.exists() && (!out.is_dir() || std::fs::read_dir(out)?.next().is_some()) {

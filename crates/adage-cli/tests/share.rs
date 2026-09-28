@@ -167,7 +167,7 @@ fn share_then_add_installs_routes_at_probation() {
         "routes/dead-unittest.yaml",
         ".DS_Store",
         "hidden",
-        "Signed:",
+        "signed",
         "namespace adage-track",
     ] {
         assert!(t.contains(s), "summary lacks {s:?}:\n{t}");
