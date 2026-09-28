@@ -9,6 +9,26 @@ version as the GitHub Release notes.
 
 ### Added
 
+- **E1 prefetch (Track C, milestone C3).** `adage-exec hook <harness> <event>` runs the same hook
+  pipeline as `adage hook`, now the shared `adage-hook` library. For a directive whose route has
+  an E1 approval, it runs the route in the sandbox (the L-ref script hash is re-read at execution),
+  re-checks the typed `<adage-data>` block with `check_data_block`, and delivers it beside the
+  directive ("That lookup has been run; its result is below."; `exec="e1"` on the wrapper). Exit
+  predicates are evaluated on the projected fields. Any failure delivers exactly the E0 output;
+  with nothing approved the output equals `adage hook`'s byte for byte (the goldens run against
+  both binaries). Spools record `exec` (level, exit, bytes, sha256, truncated, duration), never
+  the output. E1 sessions count as steered for the route's kinds and the intent miner.
+  - `adage review allow-exec <track> <route> --level e1 [--raw] [--fields] [--exit-when]
+    [--timeout-ms]` and `revoke-exec`, and `adage exec enable|disable|status`: a person's
+    decisions, refused inside agent sessions. `enable` swaps installed hook registrations to
+    `adage-exec hook` and writes the marker the Claude Code plugins coordinate on.
+  - A second Claude Code plugin, `adage-exec` (`plugin/claude-code-exec`); the Adage plugin's
+    session-start shim goes quiet while execution is on, so hooks never fire twice.
+  - `adage eval <dataset> --exec-e1`: an offline estimate of the lookup calls E1 would have
+    replaced and the turns saved beyond E0.
+  - `crates/adage-exec/examples/exec_latency.rs`: no-match latency of `adage-exec hook` against
+    `adage hook` (within 1 ms at p95), and what a delivered E1 adds.
+
 - **Packs are what `adage share` and `adage add` exchange (Track C, milestone C1).**
   - `adage share` emits a signed pack, not a v1 track. It upgrades a learned track (live routes
     only, with repository scripts pinned L-ref against the repository it runs in), re-signs an
@@ -288,6 +308,12 @@ version as the GitHub Release notes.
 
 ### Changed
 
+- Design Spec principle 1 is now "The agent is the only actor, unless you delegate" (Track C
+  §5.1), and Architecture Q4 splits into Q4a (`adage` spawns nothing) and Q4b (`adage-exec` runs
+  only approved, sandboxed routes).
+- Repository scripts run by `adage-exec` run from a private copy inside a shadow of the
+  repository in scratch, so scripts that find their data relative to themselves work.
+- Execution approvals are filed under `<track>/<route>` without the track's version.
 - **One command-pattern algebra** (`adage_core::pattern`) decides when an observed command is
   the directed one, everywhere: follow judgements, finish-line obligations, after-command and
   after-failure triggers, `adage graph`, interlocking and the eval scorer. A directed command is

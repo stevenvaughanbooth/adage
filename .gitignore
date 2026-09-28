@@ -15,5 +15,6 @@ spikes/**/cfg/
 spikes/S6-ssh-signing/keys/
 .claude/
 plugin/claude-code/dist/
+plugin/claude-code-exec/dist/
 *.egg-info/
 demo/results/*/raw/

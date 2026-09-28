@@ -192,7 +192,7 @@ fn require_person() -> Result<()> {
 }
 
 /// Is this hook entry one of Adage's own, for this harness?
-fn is_ours(entry: &Value, harness: &str) -> bool {
+pub(crate) fn is_ours(entry: &Value, harness: &str) -> bool {
     entry.get("hooks").and_then(|h| h.as_array()).is_some_and(|hs| {
         hs.iter().any(|h| {
             let args: Vec<&str> = h

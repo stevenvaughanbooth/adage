@@ -10,6 +10,17 @@
 ROOT="$1"; DATA="$2"
 skip() { [ -n "$1" ] && echo "adage: $1" >&2; cat >/dev/null; exit 0; }
 [ -n "$ROOT" ] && [ -n "$DATA" ] || skip ""
+# Execution on (`adage exec enable` writes $ADAGE_HOME/exec/enabled, at a terminal): the adage-exec
+# plugin serves this session's hooks, so this plugin goes quiet and hooks never fire twice
+# (Track C D2). Its hooks then run scripts/quiet.
+case "$(uname -s)" in
+  Darwin) AH="${ADAGE_HOME:-$HOME/Library/Application Support/Adage}" ;;
+  *) AH="${ADAGE_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/adage}" ;;
+esac
+if [ -f "$AH/exec/enabled" ]; then
+  mkdir -p "$DATA/bin" && ln -sfn "$ROOT/scripts/quiet" "$DATA/bin/adage"
+  skip ""
+fi
 EXE=adage
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) T=aarch64-apple-darwin ;; Darwin-x86_64) T=x86_64-apple-darwin ;;

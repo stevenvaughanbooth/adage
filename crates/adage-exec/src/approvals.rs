@@ -103,6 +103,10 @@ pub struct Approval {
     pub basis: serde_json::Value,
     #[serde(default)]
     pub auto: bool,
+    /// What the person declared beside the route (output fields, exit predicates, timeout), for
+    /// requests derived from a compiled route (`crate::route`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terms: Option<crate::route::Terms>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -122,9 +126,11 @@ pub fn path(adage_home: &Path) -> PathBuf {
     adage_home.join("approvals.json")
 }
 
-/// The route label an approval is filed under.
+/// The route label an approval is filed under: `<track>/<route>`, without the track's version
+/// (a version bump alone, as evidence changes, is not a new route).
 pub fn route_label(req: &ExecRequest) -> String {
-    format!("{}/{}", req.labels.track, req.labels.route)
+    let track = req.labels.track.split('@').next().unwrap_or_default();
+    format!("{track}/{}", req.labels.route)
 }
 
 impl Store {
@@ -289,6 +295,7 @@ mod tests {
             by: None,
             basis: serde_json::Value::Null,
             auto: false,
+            terms: None,
         });
         assert!(store.find(&k).is_some());
         let mutations: Vec<(&str, Mutation)> = vec![
@@ -348,6 +355,7 @@ mod tests {
             by: Some("me".into()),
             basis: serde_json::json!({"sessions": 3}),
             auto: false,
+            terms: None,
         });
         s.save(&p).unwrap();
         let back = Store::load(&p).unwrap();

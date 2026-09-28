@@ -5,7 +5,7 @@
 //! `PostToolBatch`, each call's failure for `PostToolUseFailure`, and the tool response text the
 //! hook payload carried (`toolUseResult`, which for `Read` has no text at all). This module keeps
 //! that structure, and converts it into the runtime's [`Event`]s exactly as the Claude Code
-//! adapter does (`crates/adage-cli/src/harness/claude.rs`).
+//! adapter does (`crates/adage-hook/src/harness/claude.rs`).
 
 use adage_runtime::{Call, Event};
 use serde_json::Value;

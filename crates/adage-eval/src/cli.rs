@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>]
-//!            [--window <turns>] [--include-steered] [--index <index.json>] [--json]
+//!            [--window <turns>] [--include-steered] [--index <index.json>] [--exec-e1] [--json]
 //!            [--instincts | --instincts-only] [--sandbox-dir <dir>]
 //! adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>]
 //!            [--index <index.json>] [--json]
@@ -51,7 +51,7 @@ fn params(args: &[String]) -> Result<Option<serde_json::Value>> {
         .transpose()
 }
 
-const USAGE: &str = "usage: adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--window <n>] [--include-steered] [--index <file>] [--instincts | --instincts-only] [--sandbox-dir <dir>] [--json]\n       adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--index <file>] [--json]\n       adage eval bench run|sweep|report|bless … (adage eval bench --help)\n       adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--json]\n       adage eval types <gen-dir|dataset-dir> [--json]\n       adage eval generate <synthetic|adversarial> <out-dir>\n<split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all";
+const USAGE: &str = "usage: adage eval <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--window <n>] [--include-steered] [--index <file>] [--instincts | --instincts-only] [--sandbox-dir <dir>] [--exec-e1] [--json]\n       adage eval routes <dataset-dir> [--split <split>] [--thresholds demo|default] [--params <file>] [--index <file>] [--json]\n       adage eval bench run|sweep|report|bless … (adage eval bench --help)\n       adage eval fidelity <dataset-dir> --round <round1|round2> [--exact-keys] [--json]\n       adage eval types <gen-dir|dataset-dir> [--json]\n       adage eval generate <synthetic|adversarial> <out-dir>\n<split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all";
 
 pub fn run(args: &[String]) -> Result<()> {
     let json = args.iter().any(|a| a == "--json");
@@ -127,6 +127,7 @@ pub fn run(args: &[String]) -> Result<()> {
                 params: params(args)?,
                 instincts: instinct_mode(args),
                 sandbox_dir: flag(args, "--sandbox-dir").map(PathBuf::from),
+                exec_e1: args.iter().any(|a| a == "--exec-e1"),
             };
             let r = crate::run(&PathBuf::from(dir), &opts)?;
             if json {

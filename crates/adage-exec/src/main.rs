@@ -1,6 +1,7 @@
 //! `adage-exec`: runs approved routes in an OS sandbox (Track C §3.2).
 //!
 //! ```text
+//! adage-exec hook    <claude|opencode|codex> <Event>   (a superset of `adage hook`: E1 prefetch)
 //! adage-exec run     --repo <dir> --argv '<json array>' [request flags] [--dry-run] [--record]
 //! adage-exec approve --repo <dir> --argv '<json array>' [request flags] [--by <name>]
 //! adage-exec revoke  --repo <dir> [--track <t> --route <r>]
@@ -25,6 +26,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 const USAGE: &str = "usage:
+  adage-exec hook    <claude|opencode|codex> <Event>
   adage-exec run     --repo <dir> --argv '<json array>' [--input k=v]... [--contract k=<regex>]...
                      [--effect observe] [--level e1|e2] [--output typed|raw] [--fields '<json>']
                      [--script <path>=<sha256>]... [--track t --route r --step s]
@@ -234,6 +236,7 @@ fn cmd_approve(a: &Args) -> Result<i32> {
         by: a.one("--by"),
         basis: serde_json::Value::Null,
         auto: false,
+        terms: None,
     });
     store.save(&path)?;
     println!("Recorded in {}.", path.display());
@@ -326,6 +329,10 @@ fn cmd_doctor(a: &Args) -> Result<i32> {
 
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("hook") {
+        // Before anything else: the no-match path must cost what `adage hook`'s does.
+        adage_exec::hook::main(args.get(1).cloned().unwrap_or_default(), args.get(2).cloned().unwrap_or_default());
+    }
     if args.is_empty() || args[0] == "--help" || args[0] == "-h" {
         println!("{USAGE}");
         std::process::exit(if args.is_empty() { 2 } else { 0 });
