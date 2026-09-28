@@ -40,8 +40,10 @@
 //! Two matches cross kinds: a sequence after an edit whose first step is a finish line's (or an
 //! env_sync's) command delivers that convention (it directs the owed step, and more); and a finish line whose
 //! command is a sequence convention's first step delivers part of it, so it is a true route (not
-//! false) without recovering the sequence. Routes whose trigger cannot fire yet (a context
-//! trigger, inert until G4) are listed apart and neither true nor false.
+//! false) without recovering the sequence. A context route (Track G §6.2) fires on the event of
+//! its last item, so it is scored as the one-event trigger on that item (an edit, a command, a
+//! failure); one ending at a prompt has no such trigger and is listed apart, neither true nor
+//! false.
 //!
 //! Route precision is the share of learned routes that match some convention; route recall is
 //! the share of conventions some learned route matches. Intent conventions are listed but not
@@ -481,8 +483,8 @@ pub struct RoutesReport {
     pub learned_routes: usize,
     /// The learning engine (`miners`, `shadow` or `graph`).
     pub engine: String,
-    /// Routes whose trigger cannot fire yet (a context trigger, inert until G4): neither true nor
-    /// false, and not in `learned_routes`.
+    /// Context routes ending at a prompt, which no convention's trigger describes: neither true
+    /// nor false, and not in `learned_routes`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inert_routes: Vec<String>,
     /// Learned routes that match at least one convention (or deliver part of one).
@@ -553,11 +555,32 @@ pub fn score_routes(
     (rms, cms)
 }
 
-/// Split routes into those that can fire and those that cannot yet (context triggers, G4).
-fn live_and_inert<'a>(routes: &[&'a Route]) -> (Vec<&'a Route>, Vec<String>) {
-    let (live, inert): (Vec<&Route>, Vec<&Route>) =
-        routes.iter().partition(|r| !matches!(r.trigger, Trigger::Context { .. }));
-    (live, inert.into_iter().map(|r| r.id.clone()).collect())
+/// The routes to score, and those listed apart: a context route is scored as the one-event
+/// trigger on its last item (it fires on that item's event); one ending at a prompt is listed
+/// apart.
+fn live_and_inert(routes: &[&Route]) -> (Vec<Route>, Vec<String>) {
+    let (mut live, mut inert) = (Vec::new(), Vec::new());
+    for r in routes {
+        let Trigger::Context { items, .. } = &r.trigger else {
+            live.push((*r).clone());
+            continue;
+        };
+        let last = match items.last() {
+            Some(adage_tracks::CtxItem::Edit { glob }) => Some(Trigger::AfterEdit { paths: glob.clone() }),
+            Some(adage_tracks::CtxItem::Act { keys }) => {
+                keys.first().map(|k| Trigger::AfterCommand { command: k.clone() })
+            }
+            Some(adage_tracks::CtxItem::Fail { keys, signature }) => {
+                keys.first().map(|k| Trigger::AfterFailure { command: k.clone(), signature: signature.clone() })
+            }
+            _ => None,
+        };
+        match last {
+            Some(t) => live.push(Route { trigger: t, ..(*r).clone() }),
+            None => inert.push(r.id.clone()),
+        }
+    }
+    (live, inert)
 }
 
 /// `adage eval routes <dataset>`: learn from the train split as `adage eval` does, then score
@@ -705,6 +728,7 @@ pub fn run_bundle(dir: &Path, engine: &str) -> Result<RoutesReport> {
         .collect();
     let refs: Vec<&Route> = learned.iter().collect();
     let (live, inert_routes) = live_and_inert(&refs);
+    let live: Vec<&Route> = live.iter().collect();
     let files = repo_files(&dir.join("repo"));
     let (rms, cms) = score_routes(&live, &conv, &files, &CommandTable::load());
     let true_routes = rms.iter().filter(|r| !r.matches.is_empty() || !r.partial.is_empty()).count();
@@ -771,6 +795,7 @@ pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
     let table = CommandTable::load();
     let routes: Vec<&Route> = index.for_repo(&ds.manifest.repo).map(|ir| &ir.route).collect();
     let (routes, inert_routes) = live_and_inert(&routes);
+    let routes: Vec<&Route> = routes.iter().collect();
     let (rms, cms) = score_routes(&routes, &conv, &files, &table);
     let true_routes = rms.iter().filter(|r| !r.matches.is_empty() || !r.partial.is_empty()).count();
     let false_routes: Vec<String> =
@@ -880,7 +905,7 @@ pub fn render_text(r: &RoutesReport) -> String {
     let list = |v: &[String]| if v.is_empty() { none() } else { v.join(", ") };
     let _ = writeln!(s, "false routes: {}", list(&r.false_routes));
     if !r.inert_routes.is_empty() {
-        let _ = writeln!(s, "inert until context triggers are live (G4): {}", r.inert_routes.join(", "));
+        let _ = writeln!(s, "not scored (a context ending at a prompt): {}", r.inert_routes.join(", "));
     }
     let _ = writeln!(s, "missed conventions: {}", list(&r.missed_conventions));
     s

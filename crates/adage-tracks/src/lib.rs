@@ -3,6 +3,7 @@
 //! compiled index the runtime reads.
 
 pub mod advice;
+pub mod context;
 pub mod index;
 pub mod interlock;
 pub mod io;

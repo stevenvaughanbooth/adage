@@ -91,6 +91,7 @@ impl<'a> Embeddings<'a> {
 /// | `after_edit` | edited a file of the glob |
 /// | `session_start` (a dead end) | ran a runner it avoids, or the command it suggests instead: the verify step a steered agent runs directly |
 /// | `intent` | has a first prompt that clears the family's threshold (with the same model) |
+/// | `context` | has the items' events in order, each within the gap of the one before, the gap counted over the events of any of its items (the runtime counts the repository's whole alphabet); prompt items are not read from traces |
 pub fn occurs(r: &Route, s: &Session, emb: &mut Embeddings) -> bool {
     match &r.trigger {
         Trigger::Prompt { span } => spans::extract(&s.prompt).iter().any(|x| x.kind == *span),
@@ -115,9 +116,41 @@ pub fn occurs(r: &Route, s: &Session, emb: &mut Embeddings) -> bool {
             _ => true,
         },
         Trigger::Intent { model, centroid, threshold, .. } => emb.matches(s, model, centroid, *threshold),
-        // Inert until G4: a context route never fires, so no session was steered by it.
-        Trigger::Context { .. } => false,
+        Trigger::Context { items, within } => context_occurs(items, *within, s),
     }
+}
+
+/// Whether a trace has a context's items as a gapped subsequence (see [`occurs`]).
+fn context_occurs(items: &[adage_tracks::CtxItem], within: u8, s: &Session) -> bool {
+    use adage_tracks::CtxItem;
+    let sat = |it: &CtxItem, x: &crate::import::StepObs| match it {
+        CtxItem::Act { keys } => !x.call.failed && keys.iter().any(|k| adage_core::pattern::meets(k, &x.key)),
+        CtxItem::Fail { keys, signature } => {
+            x.call.failed
+                && x.call.output.contains(signature.as_str())
+                && keys.iter().any(|k| adage_core::pattern::meets(k, &x.key))
+        }
+        CtxItem::Edit { glob } => {
+            adage_core::keys::is_author(&x.norm.action)
+                && x.rel_path.as_deref().is_some_and(|p| glob::Pattern::new(glob).is_ok_and(|g| g.matches(p)))
+        }
+        CtxItem::PromptValue { .. } | CtxItem::Intent { .. } => false,
+    };
+    // The events of any item, in order, and which items each satisfies.
+    let alpha: Vec<Vec<bool>> = s
+        .steps
+        .iter()
+        .map(|x| items.iter().map(|it| sat(it, x)).collect::<Vec<bool>>())
+        .filter(|v| v.iter().any(|b| *b))
+        .collect();
+    // Reachable end positions of each prefix of the items.
+    let mut ends: Vec<usize> = (0..alpha.len()).filter(|&q| alpha[q][0]).collect();
+    for i in 1..items.len() {
+        ends = (0..alpha.len())
+            .filter(|&q| alpha[q][i] && ends.iter().any(|&p| p < q && q - p <= within as usize))
+            .collect();
+    }
+    !ends.is_empty()
 }
 
 /// [`Exposure`] of `r` (of miner kind `kind`) over a repository's sessions.

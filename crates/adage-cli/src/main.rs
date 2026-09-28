@@ -296,8 +296,8 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
             }
             if let Some(e) = &rr.engine {
                 println!(
-                    "  graph engine: {} traces, {} reflexes selected, {} routes compiled, {} kept ({} inert until context triggers are live)",
-                    e.sessions, e.reflexes, e.compiled, e.routes, e.inert
+                    "  graph engine: {} traces, {} reflexes selected, {} routes compiled, {} kept ({} with a context trigger)",
+                    e.sessions, e.reflexes, e.compiled, e.routes, e.contexts
                 );
             }
             if let Some(sh) = &rr.shadow {

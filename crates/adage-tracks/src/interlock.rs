@@ -26,7 +26,7 @@
 //! Conflicts are reported ([`Conflict`]) for `adage learn` and `adage doctor` to show.
 
 use crate::index::IndexedRoute;
-use crate::model::{Aspect, Route, Step, Trigger};
+use crate::model::{Aspect, CtxItem, Route, Step, Trigger};
 use adage_core::pattern;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -136,9 +136,46 @@ pub fn same_point(a: &Trigger, b: &Trigger) -> bool {
         (AfterFailure { command: x, signature: s }, AfterFailure { command: y, signature: t }) => {
             keys_overlap(x, y) && (s.contains(t.as_str()) || t.contains(s.as_str()))
         }
-        // Two contexts are one decision point when their item lists are identical or one is a
-        // suffix of the other (the shorter context fires whenever the longer one does).
-        (Context { items: x, .. }, Context { items: y, .. }) => x.ends_with(y) || y.ends_with(x),
+        // A context fires on an event of its last item (Track G §7.2), so two contexts are one
+        // decision point when one event can be the last item of both (identical lists, or one a
+        // suffix of the other, are special cases), and a context and a single-event trigger are
+        // when that event can fire both.
+        (Context { items: x, .. }, Context { items: y, .. }) => match (x.last(), y.last()) {
+            (Some(a), Some(b)) => items_overlap(a, b),
+            _ => false,
+        },
+        (Context { items, .. }, other) | (other, Context { items, .. }) => {
+            items.last().is_some_and(|last| item_fires_with(last, other))
+        }
+        _ => false,
+    }
+}
+
+/// Whether one event can satisfy both context items.
+fn items_overlap(a: &CtxItem, b: &CtxItem) -> bool {
+    use CtxItem::*;
+    let any_keys = |x: &[String], y: &[String]| x.iter().any(|k| y.iter().any(|l| keys_overlap(k, l)));
+    match (a, b) {
+        (Act { keys: x }, Act { keys: y }) => any_keys(x, y),
+        (Fail { keys: x, signature: s }, Fail { keys: y, signature: t }) => {
+            any_keys(x, y) && (s.contains(t.as_str()) || t.contains(s.as_str()))
+        }
+        (Edit { glob: x }, Edit { glob: y }) => globs_overlap(x, y),
+        (PromptValue { .. }, PromptValue { .. }) => true,
+        (Intent { family: x, .. }, Intent { family: y, .. }) => x == y,
+        _ => false,
+    }
+}
+
+/// Whether the event of a context's last item can also fire a single-event trigger.
+fn item_fires_with(last: &CtxItem, t: &Trigger) -> bool {
+    match (last, t) {
+        (CtxItem::Act { keys }, Trigger::AfterCommand { command }) => keys.iter().any(|k| keys_overlap(k, command)),
+        (CtxItem::Fail { keys, signature: s }, Trigger::AfterFailure { command, signature: t }) => {
+            keys.iter().any(|k| keys_overlap(k, command)) && (s.contains(t.as_str()) || t.contains(s.as_str()))
+        }
+        (CtxItem::Edit { glob }, Trigger::AfterEdit { paths }) => globs_overlap(glob, paths),
+        (CtxItem::Intent { family: x, .. }, Trigger::Intent { family: y, .. }) => x == y,
         _ => false,
     }
 }
@@ -377,7 +414,8 @@ mod tests {
     }
 
     /// Track G G3: a sequence conflicts with an avoid if any of its commands runs an avoided
-    /// runner; two contexts are one decision point when one is a suffix of the other.
+    /// runner; two contexts are one decision point when one is a suffix of the other (G4: when
+    /// their last items can be one event).
     #[test]
     fn sequences_and_contexts_interlock() {
         let seq = |c: &[&str]| Step::Sequence { commands: c.iter().map(|x| x.to_string()).collect() };
@@ -401,6 +439,16 @@ mod tests {
         let three = Trigger::Context { items: vec![a.clone(), e.clone(), a.clone()], within: 8 };
         assert!(same_point(&three, &long), "a suffix is the same point");
         assert!(!same_point(&long, &edit()));
+        // Track G G4: a context fires on an event of its last item, so it shares a decision point
+        // with any trigger that event fires.
+        let other = CtxItem::Act { keys: vec!["exec make deps".into()] };
+        let ends_in_gen = Trigger::Context { items: vec![other.clone(), a.clone()], within: 8 };
+        assert!(same_point(&long, &ends_in_gen), "the same last item");
+        assert!(same_point(&long, &Trigger::AfterCommand { command: "exec make gen".into() }));
+        assert!(same_point(&Trigger::AfterCommand { command: "exec make gen".into() }, &long));
+        assert!(!same_point(&long, &Trigger::AfterCommand { command: "exec make check".into() }));
+        assert!(same_point(&short, &edit()), "a context ending in an edit of an overlapping glob");
+        assert!(!same_point(&short, &Trigger::AfterEdit { paths: "docs/*.md".into() }));
     }
 
     #[test]

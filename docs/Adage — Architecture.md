@@ -210,7 +210,8 @@ native payload. Three shortcuts keep the common path cheap:
   (T0) was not built.
 - **No-match fast path** (Design §13.2). `Index::compile` stores, per repository, what can make
   its routes act (`adage_tracks::triggers::Triggers`: prompt span kinds, intent routes, dead ends
-  still to announce, words a matching command must contain, finish-line globs).
+  still to announce, words a matching command must contain, finish-line globs, and the words,
+  globs and value types of *every* item of every context trigger, [§4.3.2](#432-context-triggers)).
   `adage_runtime::fast::skip` rejects an event before the command table, the state lock and the
   spool when it cannot change any decision: session start and end always; a prompt with no
   bindable span, no intent routes and no dead end to announce; a batch or failure with no call
@@ -270,6 +271,42 @@ directive is emitted that a red directive already emitted in the session, or emi
 decision, avoids; a dropped directive leaves no pending judgement and no obligation. The eval's
 safety oracle checks both invariants over every session (`safety::check_interlock`).
 
+#### 4.3.2 Context triggers
+
+A context trigger (Track G §6.2, `Trigger::Context`) is two or three earlier events, in order,
+each within `within` (≤ 8) **alphabet events** of the one before; it fires on the event of its
+last item. Since G4 the runtime matches them:
+
+- **Alphabet and net, in the index.** `Index::compile` interns, per repository, every distinct
+  context item (a successful command, a failed command with its signature, an edit of a glob, a
+  prompt holding a learned value type, an intent family): a symbol id is the item's rank in the
+  sorted canonical forms, and a digest names the alphabet. Beside it goes a **discrimination
+  net**, a trie over the reversed item sequences whose nodes list the routes whose context ends
+  there with their `within` (`adage_tracks::context::CtxNet`, in `index.json` under `contexts`).
+- **Symbolisation** (`adage_runtime::context`). `decide` turns each call of a batch, each failure
+  and each prompt into the symbols it satisfies: a command's canonical key is looked up by its
+  identity (program and subcommand) and kept where it meets an item's key (added options count,
+  as in §4.3.1); a failure also needs the signature in its output; an edit, the glob; a prompt, a
+  token of the value type or the intent family's test (the prompt is embedded once per decision).
+  An event with no symbol is not an alphabet event and changes nothing.
+- **State.** `SessionState.ctx` keeps at most 16 recent symbols, each with the number of alphabet
+  events since it (none older than 16), the alphabet's digest (a state from another alphabet
+  starts over: the index was relearned mid-session), and `last_fail`. Claude Code reports a
+  failed call to the failure hook and then again in the tool batch, unmarked; `last_fail` keeps
+  that second report from counting as a successful command.
+- **Matching.** After pushing an alphabet event's symbols, the net is walked from each of them
+  through strictly older symbols, at most 3 deep, each step at most 8 alphabet events back; a
+  route fires when some path kept every gap within its `within`. At most a few hundred map
+  lookups. A fired context route is a run step or a sequence of fixed commands (no slot binds
+  from a context), delivered once per session, judged on its first command; it never makes a
+  finish-line obligation or a Stop request. Approach locking applies as to any directive.
+- **Interlocking.** A context shares a decision point with another context whose last item one
+  event can satisfy, and with a one-event trigger that event fires (an after-edit trigger of an
+  overlapping glob, an after-command trigger of an overlapping key, the same failure).
+- **Fast path.** Matching reads alphabet events only, and the triggers hold every item's words,
+  globs and value types, so an event the fast path skips cannot move the context state: skipping
+  it is exactly equivalent (checked by the replay on every event, the context state included).
+
 **Failure attribution.** A transcript records one result per tool call. When a call with several
 sub-actions fails, the learners and the eval attribute the failure to its last sub-action only
 (`keys::sub_action_failed`), unless the command has an `||`, where every operand ran and failed.
@@ -301,6 +338,7 @@ The state (`SessionState` in `adage-runtime`) holds:
 | `history` | The last 32 canonical template keys |
 | `stop_requests` | Stop-hook requests made this session |
 | `intent` | The intent family the latest prompt matched |
+| `ctx` | Context symbols ([§4.3.2](#432-context-triggers)): ≤ 16 recent symbol ids with the alphabet events since each, the alphabet's digest, the last failed command item |
 
 **Spool: `<session>.spool`** (`crates/adage-store/src/spool.rs`). Append-only records, each
 `magic | len | crc | JSON`, written with one `O_APPEND` write (records up to 1 MiB). A reader
@@ -309,12 +347,13 @@ record. Each hook appends one record:
 
 ```text
 { ts, event, kind, arm, repo, generation, harness?, decision: {
-    directives, would_have, continue_reason?, would_continue?, judgements, observed } }
+    directives, would_have, continue_reason?, would_continue?, judgements, observed, ctx? } }
 ```
 
 `observed` holds canonical template keys, not raw commands, and no prompt text is recorded.
 `kind` (the runtime event) and `repo` were added for rebuilds; older records are read by their
-harness event name.
+harness event name. `ctx` is the context state after the event, recorded only when the event
+changed it.
 
 **Deviation from S3.** S3 recommended treating the state as a cache over the spool: fold spool
 records newer than a watermark, and rebuild on a CRC failure. Only the rebuild is built. The state
@@ -322,7 +361,8 @@ is authoritative for the session while it can be read, and the spool is an audit
 `report`, `graph`, `review` and `doctor`. When the state cannot be read, the hook replays the
 spool's recorded decisions under the state lock (`adage_runtime::rebuild`, at most 4 MiB and
 10,000 records): arm, repository, counters, emitted routes, history, finish-line obligations
-(from the index) and stop requests. An in-flight follow judgement is dropped, and an obligation
+(from the index), stop requests, and the last recorded context state (dropped when the index's
+alphabet for the repository has changed since). An in-flight follow judgement is dropped, and an obligation
 re-armed by an edit after it was met stays met, since the spool keeps call keys, not paths: a
 rebuilt session can miss a stop request, never make an extra one.
 
@@ -348,6 +388,10 @@ decision compile all installed tracks into **one file**, `$ADAGE_HOME/index.json
   the root's path>`. Clones and copies share routes; unrelated repositories with one name do
   not. A bare directory-name key (from before) is still honoured until a repository of that name
   is re-keyed (`repo::lookup_key`).
+- **Derived tables.** Per repository, the fast path's `triggers` and, when it has context
+  triggers, their alphabet and net (`contexts`). Both are derived from the routes, so neither is
+  part of `generation`. An index compiled before them derives them on load; one compiled with
+  triggers but before contexts matches no context trigger (its triggers lack the items' words).
 - **Live routes only.** `active`, `probation` and `stale` routes are compiled (the last two never delivered green). When a learned route and an
   imported one share an id, the learned one wins. A learned route a person retired still
   suppresses an import of the same id.
@@ -949,6 +993,12 @@ binary in exec form, 500 runs after 20 warm-ups, Apple M3 Pro):
 
 The intent path adds about 3.2 ms per process: 1.25 ms compiling the normaliser's regexes,
 1.25 ms building the vocabulary map, and 0.01 ms for the embedding itself.
+
+**Context triggers (Track G G4).** `hook_latency` now also runs tool batches in a repository with
+context routes, and compares two builds by turns (`<a>,<b>`). The G3 and G4 builds were compared
+on a loaded Linux machine, 2 × 1,000 runs. Medians agree within 0.25 ms in every scenario: a
+no-match batch 2.0 ms, and a batch where a context route fires 4.9–5.3 ms (+0.1–0.2 ms). The p95s
+there were dominated by contention (Track G doc, G4 status note).
 
 **Components:**
 

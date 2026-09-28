@@ -4,9 +4,10 @@
 //!
 //! [`skip`] says an event can be skipped only when running [`crate::decide`] on it would give no
 //! directive, no judgement and no stop request, and would change nothing in the session state that
-//! a later decision reads (`emitted`, `pending`, `obligations`, `stop_requests`, and `prompts`
-//! while it is 0). What a skipped event leaves out is measurement only: the `batches` and
-//! `history` counters, and its spool record, so `adage graph` lists commands only from recorded
+//! a later decision reads (`emitted`, `pending`, `obligations`, `stop_requests`, `prompts`
+//! while it is 0, and the context state `ctx`). What a skipped event leaves out is measurement
+//! only: the `batches` and `history` counters, and its spool record, so `adage graph` lists
+//! commands only from recorded
 //! events. Runs of a dead end's avoided commands are always recorded (they are words in the
 //! triggers), as are all events of a session with a pending judgement or an obligation.
 //!
@@ -19,6 +20,11 @@
 //! | batch | no pending judgement and no obligation in the state; no call might match ([`Triggers::call_might_match`]) |
 //! | failure | no call might match, and no pending judgement (a failure of a directed command judges it `followed_failed`) |
 //! | stop | no obligation both unmet and not yet requested |
+//!
+//! **Context triggers** (Track G §7.3) match a subsequence over *alphabet* events only: an event
+//! that satisfies no context item pushes nothing and changes no match. Every item's words, globs,
+//! value types and intents are in the triggers ([`Triggers::of`]), so an event that might be an
+//! alphabet event is never skipped, and skipping the rest is exactly equivalent.
 //!
 //! The eval replay checks this on every event of every dataset: a skipped event's full decision
 //! must be empty, and deciding with the fast path must give the same decisions as without it
