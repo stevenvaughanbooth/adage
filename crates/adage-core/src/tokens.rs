@@ -117,6 +117,37 @@ pub fn tokens(text: &str, max: usize) -> Vec<Token> {
     out
 }
 
+/// A token's **mention**: the literal text around it inside the token it was split from (`#` in
+/// `#482` for the sub-token `482`); empty for a whole token.
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+pub struct Mention {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub prefix: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub suffix: String,
+}
+
+/// [`tokens`], each with its [`Mention`].
+pub fn with_mentions(text: &str, max: usize) -> Vec<(Token, Mention)> {
+    let toks = tokens(text, max);
+    let mut parent: Option<&Token> = None;
+    let mut out = Vec::with_capacity(toks.len());
+    for t in &toks {
+        let m = match (t.sub, parent) {
+            (true, Some(p)) if t.start >= p.start && t.start + t.text.len() <= p.start + p.text.len() => {
+                let off = t.start - p.start;
+                Mention { prefix: p.text[..off].to_string(), suffix: p.text[off + t.text.len()..].to_string() }
+            }
+            _ => Mention::default(),
+        };
+        if !t.sub {
+            parent = Some(t);
+        }
+        out.push((t.clone(), m));
+    }
+    out
+}
+
 /// The distinct token texts (tokens and sub-tokens) of `text`, in order of first appearance.
 pub fn words(text: &str, max: usize) -> Vec<String> {
     let mut seen = std::collections::BTreeSet::new();
@@ -147,6 +178,25 @@ mod tests {
         assert_eq!(texts("fix/login-42"), ["fix/login-42", "fix", "login-42"]);
         assert_eq!(subs("#482"), vec![(1, "482")]);
         assert!(subs("BIL-1041").is_empty());
+    }
+
+    #[test]
+    fn mentions() {
+        let m: Vec<(String, String, String)> =
+            with_mentions("fix #123 and ops/4.", 100).into_iter().map(|(t, m)| (t.text, m.prefix, m.suffix)).collect();
+        let s = |a: &str, b: &str, c: &str| (a.to_string(), b.to_string(), c.to_string());
+        assert_eq!(
+            m,
+            [
+                s("fix", "", ""),
+                s("#123", "", ""),
+                s("123", "#", ""),
+                s("and", "", ""),
+                s("ops/4", "", ""),
+                s("ops", "", "/4"),
+                s("4", "ops/", "")
+            ]
+        );
     }
 
     #[test]

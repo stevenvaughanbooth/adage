@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "adage-core",
  "adage-eval",
+ "adage-graph",
  "adage-instincts",
  "adage-intent",
  "adage-learn",
@@ -73,11 +74,13 @@ name = "adage-graph"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-intent",
  "proptest",
  "regex",
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
 ]
 
 [[package]]
@@ -112,6 +115,7 @@ name = "adage-learn"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-graph",
  "adage-instincts",
  "adage-intent",
  "adage-runtime",

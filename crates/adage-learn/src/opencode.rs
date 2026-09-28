@@ -11,7 +11,7 @@
 //! appended to tool output (after a tool); both are recorded in the export. Sub-agent sessions
 //! (`info.parentID` set) are skipped, like Claude Code sidechains.
 
-use crate::import::{Session, Signals, OPENCODE};
+use crate::import::{Prompts, Session, Signals, OPENCODE};
 use adage_core::tools::{from_opencode, normalize_tool};
 use adage_core::{repo, CommandTable};
 use adage_runtime::Call;
@@ -72,16 +72,16 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
     let mut model: Option<String> = None;
     let mut prompt: Option<String> = None;
     let mut signals = Signals::default();
-    // (turn, tool, input, output, failed)
-    let mut uses: Vec<(u32, String, Value, String, bool)> = Vec::new();
+    // (turn, prompt index, tool, input, output, failed)
+    let mut uses: Vec<(u32, u16, String, Value, String, bool)> = Vec::new();
     let mut turns = 0u32;
-    let mut prompts = 0u32;
+    let mut prompts = Prompts::default();
     for m in v.get("messages")?.as_array()? {
         let mi = m.get("info").unwrap_or(&Value::Null);
         let parts = m.get("parts").and_then(|p| p.as_array()).map(Vec::as_slice).unwrap_or(&[]);
         match s(mi, &["role"]) {
             Some("user") => {
-                let mut typed = false;
+                let mut typed: Option<&str> = None;
                 for p in parts.iter().filter(|p| s(p, &["type"]) == Some("text")) {
                     let text = s(p, &["text"]).unwrap_or("");
                     let synthetic = p.get("synthetic").and_then(|x| x.as_bool()) == Some(true);
@@ -91,13 +91,15 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
                         && !text.trim().is_empty()
                         && !own_text(text)
                     {
-                        typed = true;
+                        typed.get_or_insert(text);
                         if prompt.is_none() {
                             prompt = Some(text.to_string());
                         }
                     }
                 }
-                prompts += u32::from(typed);
+                if let Some(t) = typed {
+                    prompts.push(t);
+                }
             }
             Some("assistant") => {
                 if model.is_none() {
@@ -122,6 +124,7 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
                     any = true;
                     uses.push((
                         turns,
+                        prompts.current(),
                         s(p, &["tool"]).unwrap_or("").to_string(),
                         st.get("input").cloned().unwrap_or(Value::Null),
                         output,
@@ -143,7 +146,7 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
     let repo_key = repo_override.map(str::to_string).unwrap_or_else(|| repo::repo_key(&root));
     let root_str = root.to_string_lossy().to_string();
     let mut steps = Vec::new();
-    for (turn, native, input, output, failed) in uses {
+    for (turn, at, native, input, output, failed) in uses {
         for (tool, mut input) in from_opencode(&native, &input) {
             if let Some(p) = input.get("file_path").and_then(|v| v.as_str()) {
                 if !p.is_empty() && !p.starts_with('/') {
@@ -153,12 +156,14 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
             let call = Call { tool: tool.clone(), input: input.clone(), output: output.clone(), failed };
             steps.extend(crate::import::call_steps(
                 turn,
+                at,
                 &call,
                 normalize_tool(&tool, &input, &root_str, table),
                 &root,
             ));
         }
     }
+    let prompts = prompts.anchor(&steps);
     Some(Session {
         id,
         root,

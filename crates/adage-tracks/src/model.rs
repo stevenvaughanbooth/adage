@@ -46,6 +46,54 @@ pub enum SlotSource {
     Prompt { span: SpanKind },
     /// A JSON field in the output of the command that triggered this route.
     ResultField { field: String },
+    /// The first token of the prompt (`adage_core::tokens`, sub-tokens included) that the learned
+    /// value type accepts (Track G §4.3). Bound by a prompt trigger. With `mentions`, only a token
+    /// written one of these ways counts (`#` before `482` in `#482`; an empty mention is the
+    /// whole token): learned from how people named the value, so a stray number in a prompt is
+    /// not taken for a `#482`-style id.
+    PromptValue {
+        vtype: ValueType,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        mentions: Vec<adage_core::tokens::Mention>,
+    },
+    /// A value from the triggering command's output: the JSON leaf at `field` (a dotted path),
+    /// or, without a field, the first token of the text output, that the learned type accepts.
+    /// Bound by an after-command trigger.
+    OutputValue {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        field: Option<String>,
+        vtype: ValueType,
+    },
+    /// Segment `depth` (0 = the first directory) of the path whose edit fired the route's
+    /// after-edit trigger, which must match `glob`. Bound by an after-edit trigger.
+    EditSegment { glob: String, depth: u8 },
+}
+
+impl SlotSource {
+    /// The learned value type this source binds with, if any.
+    pub fn vtype(&self) -> Option<&ValueType> {
+        match self {
+            SlotSource::PromptValue { vtype, .. } | SlotSource::OutputValue { vtype, .. } => Some(vtype),
+            _ => None,
+        }
+    }
+}
+
+/// A learned value type as a track stores it (Track G §4.3): the samples themselves never, only
+/// their hash. The slot's contract is still `Contract::Pattern { regex }` with this `regex`, so
+/// validation is unchanged; the runtime matches `runs` with `adage_core::vtype::matches`, which
+/// agrees with the regex on every string, and so compiles no regex in the hook. `io::validate`
+/// checks that `runs` and `regex` agree.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ValueType {
+    /// Stable: a hash of the sink identity and the skeleton without lengths (`vt-<16 hex>`).
+    pub id: String,
+    pub runs: adage_core::vtype::Runs,
+    /// The anchored regex of `runs` (`adage_core::vtype::to_regex`).
+    pub regex: String,
+    /// SHA-256 (hex) of the sorted distinct samples; empty when unknown.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub samples_hash: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

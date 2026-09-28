@@ -17,6 +17,7 @@
 //! adage report [--json]              directives emitted, followed, and derailed, from spools
 //! adage graph [--json] [--events <n>] situations → routes → steps → agent responses, with live counts
 //! adage graph --serve [--port <n>]   serve the signal box at http://127.0.0.1:<n>/ (default 8765)
+//! adage graph --learned --dump <repo> [--transcripts <file>...] [--json]   the graph engine's session facts
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
 //!                                    print (default) or write a harness's hook registration
@@ -165,7 +166,7 @@ fn run(args: &[String]) -> Result<()> {
 }
 
 /// `adage learn [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
-///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--json]`
+///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--engine <miners|shadow|graph>] [--json]`
 ///
 /// Thresholds: `--demo`, else `learn.thresholds` (`adage config`). Parses are cached under
 /// `$ADAGE_HOME/cache/sessions` unless `--no-cache` or `learn.parse_cache = false` (the result is
@@ -243,6 +244,13 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         autolearn::thresholds(settings.learn_thresholds)
     };
     let mut cfg = cfg;
+    // The learning engine (Track G): `miners` (the default), `shadow` or `graph`.
+    if let Some(e) = flag(args, "--engine") {
+        if !adage_tracks::params::ENGINES.contains(&e.as_str()) {
+            bail!("--engine must be one of {:?}", adage_tracks::params::ENGINES);
+        }
+        cfg.engine = e;
+    }
     // Instincts are bound after mining, per repository, unless turned off (config, or --no-instincts).
     if !args.iter().any(|a| a == "--no-instincts") {
         cfg.instincts = Some(autolearn::instinct_config(&settings, paths));

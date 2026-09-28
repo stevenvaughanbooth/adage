@@ -15,7 +15,7 @@
 //! | Event | Skipped when |
 //! | --- | --- |
 //! | session start, session end | always: nothing decides on them |
-//! | prompt | no intent routes; no prompt route's span kind in the text; not the session's first prompt (`prompts` > 0) |
+//! | prompt | no intent routes; no prompt route's span kind in the text; no prompt token a prompt route's learned value type accepts; not the session's first prompt (`prompts` > 0) |
 //! | batch | no pending judgement and no obligation in the state; no call might match ([`Triggers::call_might_match`]) |
 //! | failure | no call might match, and no pending judgement (a failure of a directed command judges it `followed_failed`) |
 //! | stop | no obligation both unmet and not yet requested |
@@ -39,6 +39,9 @@ pub fn skip(t: &Triggers, ev: &Event, cwd: &str, state: impl FnOnce() -> Option<
                 return false;
             }
             if !t.prompt_spans.is_empty() && spans::extract(text).iter().any(|s| t.prompt_spans.contains(&s.kind)) {
+                return false;
+            }
+            if t.prompt_might_bind(text) {
                 return false;
             }
             // The first prompt of a session is always decided in full, even with no dead end to

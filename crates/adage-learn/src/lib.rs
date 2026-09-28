@@ -1,8 +1,10 @@
 //! `adage learn`: import sessions, mine routes, assemble versioned tracks, compile the index.
 
+pub mod bridge;
 pub mod cache;
 pub mod codex;
 pub mod diff;
+pub mod graph;
 pub mod import;
 pub mod instincts;
 pub mod intent;
@@ -50,6 +52,9 @@ pub struct RepoReport {
     /// What binding instincts did (`None` when learning did not bind them).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub instincts: Option<instincts::InstinctReport>,
+    /// Session facts the graph engine computed (`None` with the miners alone).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graph: Option<graph::FactsReport>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -215,6 +220,12 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         };
         return Ok(report);
     }
+    // Session facts are cached beside the parse cache (`$ADAGE_HOME/cache/facts`).
+    let mut cfg = cfg.clone();
+    if cfg.facts_cache.is_none() {
+        cfg.facts_cache = inputs.cache.as_deref().and_then(Path::parent).map(|p| p.join("facts"));
+    }
+    let cfg = &cfg;
     let (mut report, planned) = plan(sessions, inputs.models.as_deref(), tracks_root, cfg)?;
     report.sessions_read = read;
     report.sessions_steered = steered;
@@ -279,10 +290,15 @@ pub fn plan(
         // steers every miner).
         let unsteered = |kind: &str| -> Vec<&Session> { ss.iter().copied().filter(|s| !s.steered_by(kind)).collect() };
         let ws = unsteered("work-items");
-        let mut work = mine::prompt_routes(&ws, cfg);
+        let mut work = if cfg.graph() { graph::lookup_routes(&ws, cfg) } else { mine::prompt_routes(&ws, cfg) };
+        if cfg.graph() {
+            let facts = graph::facts(ss, model.as_ref(), cfg);
+            rr.graph = Some(facts);
+        }
         if let Some(r) = work.first() {
             if let adage_tracks::Step::Run { .. } = &r.step {
-                let key = lookup_key(&ws, r);
+                let typed = r.slots.iter().any(|s| matches!(s.source, adage_tracks::SlotSource::PromptValue { .. }));
+                let key = if typed { graph::lookup_key(&ws, r) } else { lookup_key(&ws, r) };
                 if let Some(k) = key {
                     work.extend(mine::read_batch_routes(&ws, &k, cfg));
                 }

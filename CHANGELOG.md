@@ -63,6 +63,28 @@ version as the GitHub Release notes.
   types reach lookup recall 1.00, accept 1.00 and reject 1.00 with no unsafe acceptance on every
   shape; the hard-coded detector finds nothing outside `X-123` ids. See
   docs/tracks/track-g-graph-engine.md, "Status".
+- **Track G, G0 (event-graph substrate) and G1 integration (learned value types made live).**
+  Importers keep every prompt (`Session.prompts: Vec<PromptObs { text, at_step }>`,
+  `StepObs.prompt`; `Session.prompt` is still the first; the parse cache re-parses older entries,
+  `cache::SESSION_FORMAT`). `adage-graph` gains session facts (`facts.rs`: prompt and act events,
+  artifact, output and failure nodes, `follows`/`binds`/`reads`/`writes`/`yields`/`fails_with`/
+  `recovers_with` edges, token occurrences, bounded), node embeddings (`embed.rs`: SHA-256-seeded
+  feature hashing plus the static model when installed, quantised) and a content-keyed,
+  owner-only facts cache (`$ADAGE_HOME/cache/facts`). `adage-learn/src/bridge.rs` converts
+  sessions for the graph engine. New `adage graph --learned --dump <repo>`. New learn parameter
+  `learn.engine` (`miners`, the default and unchanged, `shadow`, `graph`) and `adage learn
+  --engine`: under `shadow`/`graph` the lookup route (`lookup-work-item`, same id) takes its slot
+  from a learned value type (`SlotSource::PromptValue`, with `OutputValue` and `EditSegment` also
+  added and bound by the runtime), effect ceilings are applied before any typed slot can direct,
+  and session facts are computed. The hook binds a typed slot with the shared tokeniser and the
+  O(len) matcher, compiling no regex for it; `plain_token` and the contract stay the final gate;
+  the fast path accounts for typed prompt slots exactly. `io::validate` checks that a type's
+  runs and regex agree and that each run step's slot is bound by its trigger. `adage eval types
+  --end-to-end` learns with the graph engine and replays prompts through the hook: on
+  `specs/idshapes.json` lookup recall 1.00 and 0 unsafe binds. `rehearse.py` takes `--engine`,
+  learns without instincts, matches lookups by ids and dead ends by canonical runner (this fixes
+  `test_learn_recovers_every_convention`, which failed on instinct routes and on `node --test` /
+  `npm test` runners). With default parameters the L0 baseline is reproduced exactly.
 
 - **Tunable engine parameters and the L0 optimisation bench.** Every number the runtime and the
   learner tune on (follow window, directive budget, stop requests, history; support, green and

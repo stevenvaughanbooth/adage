@@ -29,6 +29,62 @@ pub struct StepObs {
     pub call: Call,
     /// Repository-relative path read or written, if any.
     pub rel_path: Option<String>,
+    /// Index into [`Session::prompts`] of the prompt this step served: the latest prompt typed
+    /// before its tool call (0 for a call before any prompt). Saturates at `u16::MAX`.
+    #[serde(default)]
+    pub prompt: u16,
+}
+
+/// One prompt the person typed, and where it falls among the session's steps.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PromptObs {
+    /// The prompt's text, at most [`MAX_PROMPT_BYTES`] (cut on a character boundary).
+    pub text: String,
+    /// The index of the first step that served this prompt or a later one: the prompt was
+    /// delivered before `steps[at_step]` (`steps.len()` when no step followed it).
+    pub at_step: u32,
+}
+
+/// A stored prompt's text is cut to this many bytes (what the shared tokeniser reads).
+pub const MAX_PROMPT_BYTES: usize = 64 * 1024;
+/// At most this many prompts are kept per session.
+pub const MAX_PROMPTS: usize = u16::MAX as usize;
+
+/// Collects a session's prompts while a transcript is read, and anchors them to its steps
+/// afterwards ([`Prompts::anchor`]). Every importer uses it, so `StepObs::prompt` and
+/// `PromptObs::at_step` mean the same thing whatever the harness.
+#[derive(Debug, Default)]
+pub(crate) struct Prompts {
+    texts: Vec<String>,
+}
+
+impl Prompts {
+    pub(crate) fn push(&mut self, text: &str) {
+        if self.texts.len() < MAX_PROMPTS {
+            self.texts.push(adage_core::tokens::bounded(text, MAX_PROMPT_BYTES).to_string());
+        }
+    }
+
+    /// The index of the prompt a call recorded now serves.
+    pub(crate) fn current(&self) -> u16 {
+        self.texts.len().saturating_sub(1).min(u16::MAX as usize) as u16
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.texts.is_empty()
+    }
+
+    /// The prompts, each anchored at the first step that served it or a later prompt.
+    pub(crate) fn anchor(self, steps: &[StepObs]) -> Vec<PromptObs> {
+        self.texts
+            .into_iter()
+            .enumerate()
+            .map(|(i, text)| {
+                let at = steps.iter().position(|s| s.prompt as usize >= i).unwrap_or(steps.len());
+                PromptObs { text, at_step: at as u32 }
+            })
+            .collect()
+    }
 }
 
 /// Serializable so that a parse can be cached (`crate::cache`).
@@ -53,8 +109,10 @@ pub struct Session {
     /// The harness the session ran in, as recorded in a track's `gauge.harness`: `claude-code`
     /// for Claude Code transcripts, `opencode` for `opencode export` files.
     pub harness: String,
-    /// Prompts the person typed in the session (the first is [`Session::prompt`]).
-    pub prompts: u32,
+    /// Prompts the person typed in the session, in order, each anchored to the steps (Track G
+    /// §1.1). The first is also [`Session::prompt`].
+    #[serde(default)]
+    pub prompts: Vec<PromptObs>,
 }
 
 /// `gauge.harness` names, per session source.
@@ -172,6 +230,11 @@ impl Session {
 }
 
 impl Session {
+    /// How many prompts the person typed.
+    pub fn prompt_count(&self) -> u32 {
+        self.prompts.len() as u32
+    }
+
     /// Index of the first step that edits or writes a file.
     pub fn first_edit(&self) -> Option<usize> {
         self.steps.iter().position(|s| keys::is_author(&s.norm.action))
@@ -211,12 +274,12 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     let mut model: Option<String> = None;
     let mut day = String::new();
     let mut prompt: Option<String> = None;
-    // (turn, tool_use_id, name, input) in order
-    let mut uses: Vec<(u32, String, String, Value)> = Vec::new();
+    // (turn, tool_use_id, name, input, prompt index) in order
+    let mut uses: Vec<(u32, String, String, Value, u16)> = Vec::new();
     let mut results: HashMap<String, (String, bool)> = HashMap::new();
     let mut turn_of_msg: HashMap<String, u32> = HashMap::new();
     let mut signals = Signals::default();
-    let mut prompts = 0u32;
+    let mut prompts = Prompts::default();
 
     for line in reader.lines() {
         let Ok(line) = line else { break };
@@ -249,13 +312,13 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
                 let content = &rec["message"]["content"];
                 if let Some(s) = content.as_str() {
                     if rec.get("isMeta").and_then(|v| v.as_bool()) != Some(true) && !is_synthetic_prompt(s) {
-                        prompts += 1;
+                        prompts.push(s);
                         if prompt.is_none() {
                             prompt = Some(s.to_string());
                         }
                     }
                 } else if let Some(items) = content.as_array() {
-                    let mut typed = false;
+                    let mut typed: Option<&str> = None;
                     for it in items {
                         if it.get("type").and_then(|v| v.as_str()) == Some("tool_result") {
                             let tid = it.get("tool_use_id").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -263,14 +326,16 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
                             results.insert(tid, (text_of(it.get("content").unwrap_or(&Value::Null)), failed));
                         } else if let Some(t) = it.get("text").and_then(|v| v.as_str()) {
                             if !is_synthetic_prompt(t) {
-                                typed = true;
+                                typed.get_or_insert(t);
                                 if prompt.is_none() {
                                     prompt = Some(t.to_string());
                                 }
                             }
                         }
                     }
-                    prompts += u32::from(typed);
+                    if let Some(t) = typed {
+                        prompts.push(t);
+                    }
                 }
             }
             Some("assistant") => {
@@ -289,6 +354,7 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
                                 it.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                                 it.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                                 it.get("input").cloned().unwrap_or(Value::Null),
+                                prompts.current(),
                             ));
                         }
                     }
@@ -305,11 +371,12 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     let repo_key = repo_override.map(str::to_string).unwrap_or_else(|| repo::repo_key(&root));
     let root_str = root.to_string_lossy().to_string();
     let mut steps = Vec::new();
-    for (turn, tid, name, input) in uses {
+    for (turn, tid, name, input, at) in uses {
         let (output, failed) = results.get(&tid).cloned().unwrap_or_default();
         let call = Call { tool: name.clone(), input: input.clone(), output, failed };
-        steps.extend(call_steps(turn, &call, normalize_tool(&name, &input, &root_str, table), &root));
+        steps.extend(call_steps(turn, at, &call, normalize_tool(&name, &input, &root_str, table), &root));
     }
+    let prompts = prompts.anchor(&steps);
     Some(Session {
         id,
         root,
@@ -332,7 +399,7 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
 /// unless the command has an `||` ([`keys::sub_action_failed`]): `make gen && pytest` failing
 /// does not make `make gen` a failed run. Every importer (Claude Code, OpenCode, Codex) builds its
 /// steps here.
-pub(crate) fn call_steps(turn: u32, call: &Call, actions: Vec<Normalized>, root: &Path) -> Vec<StepObs> {
+pub(crate) fn call_steps(turn: u32, prompt: u16, call: &Call, actions: Vec<Normalized>, root: &Path) -> Vec<StepObs> {
     let flat = keys::flatten(&actions);
     let count = flat.len();
     let or_chain = keys::has_or_chain(&call.input);
@@ -343,7 +410,7 @@ pub(crate) fn call_steps(turn: u32, call: &Call, actions: Vec<Normalized>, root:
             let rel_path = keys::action_path(&n.action).map(|p| repo::relativize(root, p));
             let mut call = call.clone();
             call.failed = keys::sub_action_failed(i, count, call.failed, or_chain);
-            StepObs { turn, key: template_key(&n.action), norm: n, call, rel_path }
+            StepObs { turn, key: template_key(&n.action), norm: n, call, rel_path, prompt }
         })
         .collect()
 }
@@ -373,10 +440,48 @@ mod tests {
         let table = CommandTable::load();
         let input = serde_json::json!({ "command": command });
         let call = Call { tool: "Bash".into(), input: input.clone(), output: String::new(), failed };
-        call_steps(0, &call, normalize_tool("Bash", &input, "/r", &table), Path::new("/r"))
+        call_steps(0, 0, &call, normalize_tool("Bash", &input, "/r", &table), Path::new("/r"))
             .into_iter()
             .map(|s| (s.key, s.call.failed))
             .collect()
+    }
+
+    #[test]
+    fn every_prompt_is_kept_and_anchored_to_the_steps_it_served() {
+        let rec = |v: serde_json::Value| format!("{v}\n");
+        let user = |t: &str| {
+            rec(serde_json::json!({"type":"user","sessionId":"s","cwd":"/tmp/x","timestamp":"2026-09-01T00:00:00Z",
+                "message":{"role":"user","content":t}}))
+        };
+        let tool = |mid: &str, id: &str, cmd: &str| {
+            rec(serde_json::json!({"type":"assistant","sessionId":"s","message":{"id":mid,"role":"assistant",
+                "content":[{"type":"tool_use","id":id,"name":"Bash","input":{"command":cmd}}]}}))
+        };
+        let result = |id: &str| {
+            rec(serde_json::json!({"type":"user","sessionId":"s","message":{"role":"user",
+                "content":[{"type":"tool_result","tool_use_id":id,"content":"ok"}]}}))
+        };
+        let body = [
+            user("Fix BIL-1041"),
+            tool("m1", "t1", "./scripts/wi-lookup BIL-1041 && ls"),
+            result("t1"),
+            user("<system-reminder>not typed</system-reminder>"),
+            user("now run the checks"),
+            tool("m2", "t2", "make check"),
+            result("t2"),
+            user("thanks"),
+        ]
+        .concat();
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.jsonl");
+        std::fs::write(&p, body).unwrap();
+        let s = parse_transcript(&p, &CommandTable::load(), Some("r")).unwrap();
+        assert_eq!(s.prompt, "Fix BIL-1041");
+        let got: Vec<(&str, u32)> = s.prompts.iter().map(|p| (p.text.as_str(), p.at_step)).collect();
+        // `a && ls` is two steps, both serving the first prompt.
+        assert_eq!(got, [("Fix BIL-1041", 0), ("now run the checks", 2), ("thanks", 3)]);
+        assert_eq!(s.steps.iter().map(|x| x.prompt).collect::<Vec<_>>(), [0, 0, 1]);
+        assert_eq!(s.prompt_count(), 3);
     }
 
     #[test]
@@ -474,7 +579,7 @@ mod tests {
             steered_kinds: BTreeSet::new(),
             outcome: None,
             harness: CLAUDE_CODE.into(),
-            prompts: 1,
+            prompts: vec![PromptObs { text: "p".into(), at_step: 0 }],
         };
         // Built without kinds: judged by route ids.
         assert!(s.steered_by("dead-ends") && s.steered_by("intents"));

@@ -23,6 +23,7 @@ pub mod safety;
 pub mod score;
 pub mod transcript;
 pub mod value_types;
+pub mod value_types_e2e;
 
 use adage_core::CommandTable;
 use adage_learn::{Inputs, LearnConfig};

@@ -21,7 +21,7 @@
 //! output, message, or prompt between them. Compressed rollouts (`.jsonl.zst`, written only with
 //! the `local_thread_store_compression` feature) are not read.
 
-use crate::import::{Session, Signals};
+use crate::import::{Prompts, Session, Signals};
 use adage_core::tools::{from_codex, normalize_tool};
 use adage_core::{repo, CommandTable};
 use adage_runtime::Call;
@@ -150,6 +150,8 @@ fn argv_command(argv: &[Value]) -> String {
 /// A call as recorded: the canonical tool pairs it stands for, and the directory it ran in.
 struct Recorded {
     turn: u32,
+    /// The prompt it served, counted in `user_message` events and in user messages.
+    prompt: (u16, u16),
     pairs: Vec<(String, Value)>,
     cwd: Option<String>,
 }
@@ -230,7 +232,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
     let mut item_prompt: Option<String> = None;
     // Prompts the person typed: counted from `user_message` events when present, else from user
     // messages (the same precedence as the first prompt).
-    let (mut event_prompts, mut item_prompts) = (0u32, 0u32);
+    let (mut event_prompts, mut item_prompts) = (Prompts::default(), Prompts::default());
     let mut signals = Signals::default();
     let mut calls: Vec<(String, Recorded)> = Vec::new();
     let mut outputs: HashMap<String, String> = HashMap::new();
@@ -252,7 +254,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
                 in_calls = false;
                 note(t, &mut signals);
                 if !t.trim().is_empty() && !own_text(t) {
-                    event_prompts += 1;
+                    event_prompts.push(t);
                     if event_prompt.is_none() {
                         event_prompt = Some(t.to_string());
                     }
@@ -260,6 +262,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
             }
             (Some("response_item"), Some(kind)) => {
                 let call_id = s(p, &["call_id"]).or_else(|| s(p, &["id"])).unwrap_or("").to_string();
+                let prompt = (event_prompts.current(), item_prompts.current());
                 let mut call = |pairs_cwd: (Vec<(String, Value)>, Option<String>)| {
                     if !in_calls {
                         turns += 1;
@@ -268,7 +271,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
                     if calls.len() < MAX_CALLS {
                         calls.push((
                             call_id.clone(),
-                            Recorded { turn: turns - 1, pairs: pairs_cwd.0, cwd: pairs_cwd.1 },
+                            Recorded { turn: turns - 1, prompt, pairs: pairs_cwd.0, cwd: pairs_cwd.1 },
                         ));
                     }
                 };
@@ -280,7 +283,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
                                 in_calls = false;
                                 note(&t, &mut signals);
                                 if !t.trim().is_empty() && !own_text(&t) && !contextual(&t) {
-                                    item_prompts += 1;
+                                    item_prompts.push(&t);
                                     if item_prompt.is_none() {
                                         item_prompt = Some(t);
                                     }
@@ -324,6 +327,9 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
     let root = repo::find_root(&cwd_path).unwrap_or(cwd_path);
     let repo_key = repo_override.map(str::to_string).unwrap_or_else(|| repo::repo_key(&root));
     let root_str = root.to_string_lossy().to_string();
+    // Prompts from `user_message` events when there are any, else from user messages (the same
+    // precedence as the first prompt).
+    let by_event = !event_prompts.is_empty();
     let mut steps = Vec::new();
     for (call_id, rec) in calls {
         // A call with no recorded output never finished (interrupted, or the file was cut off).
@@ -338,10 +344,17 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
             }
             let call = Call { tool: tool.clone(), input: input.clone(), output: output.clone(), failed };
             let at = if tool == "Bash" { run_in.as_str() } else { root_str.as_str() };
-            steps.extend(crate::import::call_steps(rec.turn, &call, normalize_tool(&tool, &input, at, table), &root));
+            let prompt = if by_event { rec.prompt.0 } else { rec.prompt.1 };
+            steps.extend(crate::import::call_steps(
+                rec.turn,
+                prompt,
+                &call,
+                normalize_tool(&tool, &input, at, table),
+                &root,
+            ));
         }
     }
-    let prompts = if event_prompts > 0 { event_prompts } else { item_prompts };
+    let prompts = if by_event { event_prompts } else { item_prompts }.anchor(&steps);
     Some(Session {
         id,
         root,

@@ -28,8 +28,8 @@
 //! - **agreement**: the learned regex (compiled here, never at runtime) and the O(len) matcher
 //!   agree on every holdout string.
 //!
-//! Sessions come through adage-learn's importer (`adage_learn::read_session`); its `Session` keeps
-//! only the first prompt (Track G §1.1's import gap, G0), which is all a rehearsal session has.
+//! Sessions come through adage-learn's importer (`adage_learn::read_session`) and its bridge to
+//! the graph engine (`adage_learn::bridge`), with every prompt anchored where it was typed.
 
 use adage_core::spans::{self, SpanKind};
 use adage_core::types::CanonicalAction;
@@ -41,39 +41,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-/// Convert an imported session into the graph engine's input (the adapter G1 integration moves
-/// into `adage-learn/src/bridge.rs`).
+/// Convert an imported session into the graph engine's input: `adage_learn::bridge::to_input`, every
+/// prompt anchored where it was typed (G0).
 pub fn to_input(s: &adage_learn::import::Session) -> input::Session {
-    fn push(action: &CanonicalAction, step: &adage_learn::import::StepObs, out: &mut Vec<input::Step>) {
-        match action {
-            CanonicalAction::Exec { argv, .. } => out.push(input::Step::Exec {
-                argv: argv.clone(),
-                output: step.call.output.clone(),
-                failed: step.call.failed,
-            }),
-            CanonicalAction::Read { .. } | CanonicalAction::List { .. } | CanonicalAction::Search { .. } => {
-                if let Some(p) = &step.rel_path {
-                    out.push(input::Step::Read { path: p.clone() });
-                }
-            }
-            CanonicalAction::Edit { .. } | CanonicalAction::Write { .. } => {
-                if let Some(p) = &step.rel_path {
-                    out.push(input::Step::Edit { path: p.clone() });
-                }
-            }
-            CanonicalAction::Compound { actions, .. } => {
-                for a in actions {
-                    push(&a.action, step, out);
-                }
-            }
-            _ => {}
-        }
-    }
-    let mut steps = Vec::new();
-    for st in &s.steps {
-        push(&st.norm.action, st, &mut steps);
-    }
-    input::Session { id: s.id.clone(), prompts: vec![input::Prompt { text: s.prompt.clone(), at_step: 0 }], steps }
+    adage_learn::bridge::to_input(s)
 }
 
 /// One arm (learned or hard-coded) on one bundle.
@@ -134,6 +105,9 @@ pub struct BundleReport {
     pub unsafe_accepts: Vec<(String, String)>,
     /// Holdout strings on which a learned regex and the matcher disagree. Must be empty.
     pub disagreements: Vec<(String, String)>,
+    /// Learning with `engine = graph`, then the hook, when asked (`--end-to-end`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub end_to_end: Option<crate::value_types_e2e::EndToEnd>,
 }
 
 /// Totals for one id shape.
@@ -147,6 +121,11 @@ pub struct ShapeSummary {
     pub hardcoded_accept: f64,
     pub hardcoded_reject: f64,
     pub unsafe_accepts: u32,
+    /// End to end (`--end-to-end`): the mean recall over bundles, and unsafe binds in all.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub e2e_recall: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub e2e_unsafe: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -250,6 +229,7 @@ fn evaluate(
     lookup_command: &str,
     fresh: &[String],
     near: &[(String, String)],
+    e2e_repo: Option<&str>,
 ) -> Result<BundleReport> {
     let (identity, pos) =
         lookup_sink(lookup_command).with_context(|| format!("{name}: no placeholder in {lookup_command:?}"))?;
@@ -317,6 +297,10 @@ fn evaluate(
             }
         }
     }
+    let end_to_end = match e2e_repo {
+        Some(repo) => Some(crate::value_types_e2e::run(repo, sessions, &(identity.clone(), pos), fresh, &adversarial)?),
+        None => None,
+    };
     Ok(BundleReport {
         name: name.to_string(),
         id_shape: id_shape.to_string(),
@@ -327,6 +311,7 @@ fn evaluate(
         slots,
         unsafe_accepts,
         disagreements,
+        end_to_end,
     })
 }
 
@@ -337,7 +322,7 @@ fn read_sessions(files: &[PathBuf], repo: &str) -> Vec<adage_learn::import::Sess
     out
 }
 
-fn gen_bundle(dir: &Path) -> Result<BundleReport> {
+fn gen_bundle(dir: &Path, e2e: bool) -> Result<BundleReport> {
     let name = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let conv: Vec<serde_json::Value> = serde_json::from_str(
         &std::fs::read_to_string(dir.join("conventions.json")).with_context(|| format!("{name}: conventions.json"))?,
@@ -369,10 +354,10 @@ fn gen_bundle(dir: &Path) -> Result<BundleReport> {
     files.sort();
     let sessions = read_sessions(&files, &repo);
     let near: Vec<(String, String)> = ho.near_miss.into_iter().map(|n| (n.value, n.kind)).collect();
-    evaluate(&name, &ho.id_shape, &sessions, &command, &ho.fresh, &near)
+    evaluate(&name, &ho.id_shape, &sessions, &command, &ho.fresh, &near, e2e.then_some(repo.as_str()))
 }
 
-fn dataset(dir: &Path) -> Result<BundleReport> {
+fn dataset(dir: &Path, e2e: bool) -> Result<BundleReport> {
     let ds = crate::dataset::Dataset::load(dir)?;
     let cf = ds.conventions_file()?.with_context(|| format!("{}: no conventions.json", dir.display()))?;
     let conv = crate::conventions::Conventions::load(&cf)?;
@@ -385,7 +370,8 @@ fn dataset(dir: &Path) -> Result<BundleReport> {
     let sessions = read_sessions(&files, &ds.manifest.repo);
     let near: Vec<(String, String)> =
         look.counter_samples.iter().map(|v| (v.clone(), "counter_sample".into())).collect();
-    evaluate(&ds.manifest.name, "dataset", &sessions, &look.command, &look.samples, &near)
+    let repo = ds.manifest.repo.clone();
+    evaluate(&ds.manifest.name, "dataset", &sessions, &look.command, &look.samples, &near, e2e.then_some(repo.as_str()))
 }
 
 fn summarise<'a>(rs: impl Iterator<Item = &'a BundleReport>) -> ShapeSummary {
@@ -401,16 +387,30 @@ fn summarise<'a>(rs: impl Iterator<Item = &'a BundleReport>) -> ShapeSummary {
         hardcoded_accept: mean(&|r| r.hardcoded.accept()),
         hardcoded_reject: mean(&|r| r.hardcoded.reject()),
         unsafe_accepts: rs.iter().map(|r| r.unsafe_accepts.len() as u32).sum(),
+        e2e_recall: rs
+            .iter()
+            .any(|r| r.end_to_end.is_some())
+            .then(|| mean(&|r| r.end_to_end.as_ref().map(|e| e.recall()).unwrap_or(0.0))),
+        e2e_unsafe: rs
+            .iter()
+            .any(|r| r.end_to_end.is_some())
+            .then(|| rs.iter().filter_map(|r| r.end_to_end.as_ref()).map(|e| e.unsafe_binds.len() as u32).sum()),
     }
 }
 
 /// Run the eval on a gen bundle, a gen suite, or a dataset.
 pub fn run(dir: &Path) -> Result<Report> {
+    run_with(dir, false)
+}
+
+/// [`run`], and with `e2e` learning with `engine = graph` and replaying the prompts through the
+/// hook's decision (`crate::value_types_e2e`).
+pub fn run_with(dir: &Path, e2e: bool) -> Result<Report> {
     let mut bundles = Vec::new();
     if dir.join("manifest.json").is_file() {
-        bundles.push(dataset(dir)?);
+        bundles.push(dataset(dir, e2e)?);
     } else if dir.join("spec.json").is_file() {
-        bundles.push(gen_bundle(dir)?);
+        bundles.push(gen_bundle(dir, e2e)?);
     } else {
         let mut dirs: Vec<PathBuf> = std::fs::read_dir(dir)
             .with_context(|| dir.display().to_string())?
@@ -423,7 +423,7 @@ pub fn run(dir: &Path) -> Result<Report> {
             bail!("{}: not a dataset, a generated bundle or a suite", dir.display());
         }
         for d in dirs {
-            bundles.push(gen_bundle(&d)?);
+            bundles.push(gen_bundle(&d, e2e)?);
         }
     }
     let shapes: BTreeSet<String> = bundles.iter().map(|b| b.id_shape.clone()).collect();
@@ -463,6 +463,22 @@ pub fn render_text(r: &Report) -> String {
         for (k, n) in &b.learned.accepted_near_misses {
             s.push_str(&format!("    learned type accepts {n} near misses of kind {k}\n"));
         }
+        if let Some(e) = &b.end_to_end {
+            s.push_str(&format!(
+                "    end to end (engine graph): {} · sessions {}/{} · fresh {}/{} · controls fired {}/{} · unsafe {}\n",
+                e.route.as_deref().unwrap_or("no lookup route"),
+                e.sessions_bound,
+                e.sessions,
+                e.fresh_bound,
+                e.fresh,
+                e.controls_fired,
+                e.controls,
+                e.unsafe_binds.len()
+            ));
+            for (p, v) in &e.unsafe_binds {
+                s.push_str(&format!("    UNSAFE BIND: {p:?} -> {v:?}\n"));
+            }
+        }
     }
     s.push_str("\nper id shape (mean over bundles): recall = lookup slot found with a safe type\n");
     s.push_str(&format!(
@@ -490,6 +506,9 @@ pub fn render_text(r: &Report) -> String {
         s.push_str(&row("non-X-123", &r.new_shapes));
     }
     s.push_str(&row("all", &r.all));
+    if let (Some(rec), Some(bad)) = (r.all.e2e_recall, r.all.e2e_unsafe) {
+        s.push_str(&format!("end to end (learn with engine graph, then the hook): recall {rec:.3}, unsafe {bad}\n"));
+    }
     s.push_str(
         "targets (Track G §4.4): accept >= 0.99, reject = 1.00, recall on non-X-123 shapes >= 0.95, unsafe = 0\n",
     );

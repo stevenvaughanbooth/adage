@@ -23,6 +23,7 @@ adage-tracks = { path = "../adage-tracks" }
 adage-intent = { path = "../adage-intent" }
 adage-runtime = { path = "../adage-runtime" }
 adage-learn = { path = "../adage-learn" }
+adage-graph = { path = "../adage-graph" }
 adage-instincts = { path = "../adage-instincts" }
 adage-sign = { path = "../adage-sign" }
 adage-eval = { path = "../adage-eval" }

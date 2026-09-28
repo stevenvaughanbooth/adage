@@ -173,7 +173,7 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
         (Step::Run { command }, Trigger::AfterEdit { paths }) => Some(format!(
             "In this repository, changes to files matching {} must be followed by running:\n  {}\n{}{}",
             sanitise(paths),
-            sanitise(command),
+            sanitise(&bind(command, bound)),
             finish_basis(r),
             exit
         )),

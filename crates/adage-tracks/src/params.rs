@@ -103,6 +103,19 @@ pub struct LearnParams {
     /// Stale routes: the share of occurrences that must be exposed for a route's absence to be
     /// put down to exposure alone.
     pub stale_exposure: f64,
+    /// The learning engine (Track G §10): `miners` (today's miners, the default), `shadow` or
+    /// `graph`. Under `shadow` and `graph` the lookup miner takes its slot and contract from the
+    /// graph engine's learned value types, and session facts are computed (and cached).
+    /// Omitted from the canonical JSON when `miners`, so the default setting's hash is unchanged.
+    #[serde(skip_serializing_if = "is_miners")]
+    pub engine: String,
+}
+
+/// The engines `LearnParams::engine` may name.
+pub const ENGINES: [&str; 3] = ["miners", "shadow", "graph"];
+
+fn is_miners(e: &str) -> bool {
+    e == "miners"
 }
 
 impl Default for LearnParams {
@@ -119,6 +132,7 @@ impl Default for LearnParams {
             intent_contrast: 0.3,
             material_lower_bound: crate::review::MATERIAL_LOWER_BOUND,
             stale_exposure: 0.5,
+            engine: "miners".into(),
         }
     }
 }
@@ -164,6 +178,9 @@ impl EngineParams {
         }
         if l.dead_end_signatures == 0 {
             bail!("learn: dead_end_signatures must be at least 1");
+        }
+        if !ENGINES.contains(&l.engine.as_str()) {
+            bail!("learn.engine must be one of {ENGINES:?} (got {:?})", l.engine);
         }
         for (name, x) in [
             ("runtime.holdout_share", r.holdout_share),
@@ -313,5 +330,19 @@ mod tests {
         b.learn.retain_rate = 0.31;
         assert_ne!(a.params_hash(), b.params_hash());
         assert_eq!(a.params_hash().len(), 64);
+    }
+
+    #[test]
+    fn the_engine_defaults_to_the_miners_and_keeps_the_default_hash() {
+        let d = EngineParams::default();
+        assert_eq!(d.learn.engine, "miners");
+        assert!(!d.canonical_json().contains("engine"));
+        let g = d.with_overrides(&serde_json::json!({"learn": {"engine": "graph"}})).unwrap();
+        assert_eq!(g.learn.engine, "graph");
+        assert!(g.canonical_json().contains("\"engine\":\"graph\""));
+        assert_ne!(g.params_hash(), d.params_hash());
+        let back = d.with_overrides(&serde_json::json!({"learn": {"engine": "miners"}})).unwrap();
+        assert_eq!(back.params_hash(), d.params_hash());
+        assert!(d.with_overrides(&serde_json::json!({"learn": {"engine": "gnn"}})).is_err());
     }
 }

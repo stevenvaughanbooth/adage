@@ -47,6 +47,9 @@ fn export_fixture_golden() {
     }
     golden("opencode-session.txt", &got);
     assert_eq!(s.prompt, "Pick up W-1040 and get it done.", "synthetic parts are never the prompt");
+    assert_eq!(s.prompts[0].text, s.prompt);
+    assert!(s.steps.iter().all(|x| (x.prompt as usize) < s.prompts.len()));
+    assert!(s.prompts.windows(2).all(|w| w[0].at_step <= w[1].at_step));
     assert!(s.directed.contains("lookup-work-item") && s.directed.contains("read-linked-files"));
     assert!(!got.contains("sleep 100"), "unfinished calls are skipped");
 }

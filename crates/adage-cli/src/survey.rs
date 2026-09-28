@@ -242,6 +242,8 @@ fn trim_output(s: &mut String) {
 fn compact(s: &mut Session) {
     let keep: usize = s.prompt.char_indices().nth(4000).map(|(i, _)| i).unwrap_or(s.prompt.len());
     s.prompt.truncate(keep);
+    // Candidate mining reads the first prompt only.
+    s.prompts.clear();
     for st in &mut s.steps {
         st.call.input = serde_json::Value::Null;
         trim_output(&mut st.call.output);
@@ -255,7 +257,7 @@ fn is_exec(a: &CanonicalAction) -> bool {
 impl Acc {
     fn add(&mut self, mut s: Session) {
         self.sessions += 1;
-        self.prompts += s.prompts;
+        self.prompts += s.prompt_count();
         self.harnesses.insert(s.harness.clone());
         self.steered += u32::from(s.steered);
         if !s.day.is_empty() {
@@ -413,7 +415,7 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Survey> {
             continue;
         }
         let Some(s) = adage_learn::read_session(p, &table, None) else { continue };
-        if s.steps.is_empty() && s.prompts == 0 {
+        if s.steps.is_empty() && s.prompts.is_empty() {
             continue;
         }
         if o.repo.as_ref().is_some_and(|r| *r != s.repo) {
@@ -723,7 +725,7 @@ mod tests {
                 steered_kinds: BTreeSet::new(),
                 outcome: None,
                 harness: "claude-code".into(),
-                prompts: 1,
+                prompts: vec![],
             });
             assert!(a.mined.len() < MINED_PER_REPO * 2 && a.samples.len() <= SAMPLES * 4);
         }
