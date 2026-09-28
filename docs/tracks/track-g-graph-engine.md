@@ -461,3 +461,75 @@ Total is about 15–19 engineer-weeks. G1 can ship alone and is useful even if G
 10. **Embeddings:** without substrate embeddings, a 256-d signed feature hash of structural features stands in (the hashed half of §1.2).
 
 **Gaps.** The next-action (+5 points) and ECE (≤ 0.05) targets; scoring cost at 400k events; steering-by-influence is implemented on the input (`Influence`) but no importer fills it yet; Obs/Fail nodes are not emitted (polarity on acts and `same_art` edges carry the dead-end and linked-files evidence); causal lift (E4) is not computed.
+
+## Status note: G3 (2026-09-28)
+
+**Implemented and integrated behind `learn.engine`.** The default is still `miners`: with it the L0 bench reproduces the committed baseline (J 0.6307).
+
+- **Compiler** (`crates/adage-graph/src/compile/{mod,shapes,glob,ids,legacy}.rs`). Selected reflexes, and every candidate that passed its gates (see deviation 2), become routes by structure alone:
+  - the lookup (`prompt =flow=> act`);
+  - read-batch (`act =same_art=> read`);
+  - avoid: a failed check, then the check that works. It is announced at session start when at least half the traces run the runner, otherwise as `after_failure` → `run`;
+  - obligation: `last(edit)` → one regenerate act;
+  - scope: `edit` → an act whose argument is a segment of the edited path. This compiles to `run` with an `edit_segment` slot;
+  - an environment step after an edit: `run`, a draft;
+  - sequence: 2–3 regenerate or verify steps after an edit, the first being a regenerate or environment step. A step repeated at once counts once;
+  - contexts of 2–3 events (`Trigger::Context`).
+
+  Legacy shapes keep the miners' ids (`lookup-work-item`, `read-linked-files`, `dead-end-<stable(W)>` / `<stable(W,S)>`, `finish-line-<stable(g,c)>`). New shapes get `<shape>-<stable(canonical trigger ‖ step ‖ slot names)>`. A run or sequence that directs an avoided runner is dropped before emission. The glob lattice never produces `**/*.ext`.
+- **Model** (`adage-tracks`):
+  - `Step::Sequence { commands }` has 2–3 plain commands and no slots. Its aspect is at most the lowest ceiling of its commands, and it is never red. It is rendered as a numbered list from a fixed template (checked by the safety oracle), judged on its first command, and never produces a Stop request.
+  - `Trigger::Context { items: Vec<CtxItem> (2–3), within (1–8) }` takes items from `CtxItem::{Act, Fail, Edit, PromptValue, Intent}`. Both are validated in `io.rs`.
+  - **Context triggers are compiled but inert until G4.** The runtime never matches one, and `Triggers` adds nothing for it, so the fast path is unchanged. `adage eval routes` lists them separately, as neither true nor false, and `rehearse.py` ignores them.
+  - `interlock.rs`: `avoids` covers every command of a sequence, and `same_point` gains `Context` (identical items, or one list a suffix of the other).
+  - Hidden directories under the tracks root are never read as tracks.
+- **Engines** (`adage-learn/src/{engine,shadow}.rs`).
+  - `graph` compiles into the normal track directories: legacy shapes in their legacy tracks, new shapes in `<repo>/graph`.
+  - `shadow` writes the miners' tracks as usual and the graph engine's to `<repo>/.shadow/<track>`. It also writes `<repo>/.shadow/shadow-report.json`, listing routes only the miners learned, routes only the graph engine learned, and routes that differ by trigger, step, slots, aspect or state. `adage learn --engine shadow` prints the same report.
+  - Instinct routes are priors (κ = 3 at 0.7), used in the yellow test only.
+  - The stale verdict for a graph route reads the scorer's counts for its own pattern (`stale::verdict_counts`), with no kind dispatch.
+  - Each graph route's `why` block holds the pattern, backoff depth, gain, lift, confidence, prototype members, three example traces and the prior. It is stored in the track's hidden `.why.json`, which is outside the canonical digest and never rendered to the agent. `adage review` shows it in text and in `--json`.
+- **Evals.**
+  - `conventions.rs` gains `Scope`, `EnvSync` and `Sequence` (with a `steps` field). It reads a generated bundle's conventions and scores bundles and suites with `adage eval routes <bundle|suite> --engine miners|shadow|graph`. Every route counts in any state except retired, so drafts count.
+  - `evals/gen`: the python-make stack generates three new conventions:
+    - `scope`: `packages/<name>/`, checked with `make -C packages/{part} check`;
+    - `env_sync`: a `requirements.txt` edit calls for `make deps`, and CI fails on a stale lock;
+    - `sequence`: `make gen` then `make check` after a registry edit, replacing the finish line.
+
+    It also adds `scoped` and `deps` tasks with their selfchecks and scripted behaviour, and a new suite, `specs/newkinds.json` (3 bundles).
+  - Existing specs regenerate byte for byte: the new keys are left out when off, and the new tasks are drawn after everything else.
+  - `rehearse.py --engine graph` matches routes by shape as well as by id.
+
+**Results.**
+
+- **Parity** (`crates/adage-eval/tests/g3.rs`), recall and false routes, miners / graph:
+
+  | Unit | Miners | Graph |
+  | --- | --- | --- |
+  | demo-haiku45, default split | 4/4, 0 false | 4/4, 0 false |
+  | synthetic, default split | 4/4, 0 false | 4/4, 0 false |
+  | adversarial, default split | 4/4, 0 false | 4/4, 0 false |
+  | each of the 6 smoke bundles | — | same recall as the miners, 0 false |
+
+  On the smoke suite, `rehearse.py --engine graph` recovers 28/28 conventions with no unexpected route. On other splits (task-grouped folds, temporal) the graph engine loses the dead end on demo-haiku45 fold 2, and one or two conventions on three adversarial splits. The causes are support too thin for the guard's Beta lower bound, and failure outputs with no renderable signature. False routes are 0 on every split.
+- **New capability** (newkinds suite, 28 traces per bundle). On all 3 bundles the graph engine recovers:
+  - scope: `make -C packages/{part} check` after edits to `packages/**/*.py`;
+  - env_sync: `make deps then make check` after edits to `requirements.txt`, as a **draft**;
+  - sequence: `make gen then make check` after edits to `registry/*.csv`.
+
+  It also recovers every other convention, with no decoy and no unexpected route. The miners recover none of the three; their `make gen` finish line counts as part of the sequence. No learner code names these kinds.
+- **L0**, `engine = graph` (the core suite, task-grouped folds): J 0.9759 against 0.6307 for the miners. False directives per session fall from 0.49 to 0.32, and turns saved at the window are equal (0.66). Route F1 is 0.979 against 1.0: one fold misses a dead end. All guardrails pass: unsafe 0, fast-path mismatches 0, route precision 1.0.
+
+**Deviations decided while building it.**
+
+1. **Judgement by shape.** A compiled route's evidence and aspect are counted again on the traces, the way its trigger and step read them. Lookup and linked files use the miners' counters; after-edit, avoid and after-failure routes use counters in `engine.rs`. The aspect uses the miners' Wilson rule. This is the §5 parity switch, so changing engines does not move an aspect by itself. Context routes keep the reflex's posterior.
+2. **Gated but unselected candidates compile.** MDL may not select a deliverable seen in few traces: a dead end in 5 of 30 traces can cost more bits than it saves. `Learned::unselected` (at most 2,000, best value first) feeds the compiler after the selected reflexes. This applies to every shape except contexts, which compile from selected reflexes only.
+3. **The lookup** is G1's value-slot route (`graph::lookup_routes`), whether or not MDL selected a `prompt =flow=>` reflex: the value-slot test is the lookup's pattern.
+4. **Glob tree.** The lattice's tree is the set of paths the traces touched, a pure function of the traces, so in G3 a directory glob is always precise. A repository tree can be passed to `Corpus::of`.
+5. **Not compiled in G3:**
+   - a check or observation after an edit: this is the agent's own habit and was never a convention on any dataset;
+   - `after_command` → `run`: off by default, because on the datasets it directs the agent's next check, which is a false route;
+   - prompt-intent contexts: intent families still come from `adage-learn/src/intent.rs`, because a prompt prototype needs the pinned model. G5 moves them.
+6. **Scope binding.** An edit's path segments are recorded as flow sources. An earlier read of the same path is the token's first source, however, so the flow edge may start at the read. A first continuation command is bound as `edit_segment` either way when its variable argument is a segment of every edited member path.
+
+**Gaps.** Parity on some non-default splits (above). `Trigger::Context` is inert until G4. The glob lattice has no repository tree. The `why` block is not yet shown in `adage graph --learned`. The node-npm stack does not generate the new kinds.

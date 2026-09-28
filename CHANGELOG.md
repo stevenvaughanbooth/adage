@@ -65,6 +65,24 @@ version as the GitHub Release notes.
   record with deltas and harm counts). `adage review` and `allow-exec` show them marked
   "self-reported by signer <fingerprint>"; they never grant a strength or a level.
 
+- **Graph engine G3 (Track G): a compiler to delivery shapes, and `learn.engine = graph | shadow`.**
+  - `adage-graph/src/compile/` turns reflexes into routes by their structure: lookup, read-batch,
+    avoid, obligation, scope (with an `edit_segment` slot), an environment step (as a draft),
+    sequence, and context triggers. Routes whose shapes the miners already produce keep the
+    miners' ids.
+  - Two model additions, validated, rendered and interlocked: `Step::Sequence` (a numbered list,
+    judged on its first command) and `Trigger::Context` (compiled, but **inert until G4**).
+  - `adage learn --engine graph` writes the reflexes into the usual tracks, with new shapes in
+    `<repo>/graph`. `--engine shadow` writes them to `<repo>/.shadow/` instead, with a
+    `shadow-report.json` that diffs them against the miners' routes.
+  - Each reflex's `why` block (pattern, backoff, gain, lift, members, example traces) is stored in
+    the track's `.why.json` and shown by `adage review`.
+  - Instinct routes act as priors. Stale graph routes are judged on the scorer's counts.
+  - `adage eval routes` takes `--engine`, accepts generated bundles or suites, and scores `scope`,
+    `env_sync` and `sequence` conventions.
+  - `evals/gen` generates those three conventions (python-make, `specs/newkinds.json`).
+    `rehearse.py --engine graph` recovers every convention there and on the smoke suite; the
+    miners learn none of the three new kinds.
 - **Graph engine G2 (Track G): prototypes, closed-episode mining, scoring, MDL selection**, in
   `crates/adage-graph` (not wired into `adage learn` yet). `events.rs`: the miner's event-sequence
   input (typed events with batches, prompt segments, value-flow and same-artifact edges), with a
