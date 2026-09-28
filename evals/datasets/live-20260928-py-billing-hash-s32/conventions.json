@@ -1,0 +1,62 @@
+{
+ "schema": "adage-conventions/1",
+ "sandbox": "tallyhouse-billing",
+ "description": "Converted from the gen bundle's conventions.json (evals/gen); decoys are in decoys.json.",
+ "conventions": [
+  {
+   "id": "lookup",
+   "notes": "Task prompts name only an item ID. Items live in the internal tracker: an opaque store (.tracker/cache.bin) that only scripts/wi-lookup reads. The README mentions only the internal tracker.",
+   "kind": "lookup",
+   "command": "./scripts/wi-lookup {id}",
+   "id_pattern": "^\\d{3,4}$",
+   "samples": [
+    "7347",
+    "129",
+    "553",
+    "2565",
+    "567",
+    "196"
+   ],
+   "counter_samples": [
+    "X-1",
+    "ABCDEFG-123456789",
+    "12",
+    "not-an-id"
+   ]
+  },
+  {
+   "id": "linked-files",
+   "notes": "The lookup output lists the files to change under 'Files:' (the `files` field with --json). Registry items list the CSV and the module that reads it, never the generated file.",
+   "kind": "linked_files",
+   "command": "./scripts/wi-lookup {id}",
+   "samples": [
+    "7347"
+   ]
+  },
+  {
+   "id": "dead-end",
+   "notes": "tests/__init__.py aborts unless TALLY_ENV=test, which only `make check` sets. Plain unittest fails at once; `TALLY_ENV=test python3 -m unittest` would work (an environment fix). The working command is declared in .ci/pipeline.yml.",
+   "kind": "dead_end",
+   "command": "make check",
+   "avoided": [
+    "python3 -m unittest"
+   ]
+  },
+  {
+   "id": "instinct-violation",
+   "notes": "(gen kind instinct_violation) The universal default (make test) is retired here and fails; the suite runs with make check, declared only in .ci/pipeline.yml.",
+   "kind": "dead_end",
+   "command": "make check",
+   "avoided": [
+    "make test"
+   ]
+  },
+  {
+   "id": "finish-line",
+   "notes": "Lookups read tally/generated/registry.py, generated from registry/*.csv. Editing a CSV requires make gen; make check and the hidden checks fail on stale output.",
+   "kind": "finish_line",
+   "command": "make gen",
+   "glob": "registry/*.csv"
+  }
+ ]
+}

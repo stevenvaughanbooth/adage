@@ -1,0 +1,9 @@
+[
+ {
+  "command": "npm run gen:docs",
+  "id": "decoy-lookalike-regen",
+  "kind": "decoy",
+  "mode": "lookalike_regen",
+  "notes": "Looks like a regeneration step but generates nothing tracked; it is never required after any edit."
+ }
+]

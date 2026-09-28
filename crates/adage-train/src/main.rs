@@ -19,11 +19,16 @@ const USAGE: &str = "usage:
   adage-train run --plan plan.json [--harness claude-code|fake] [--model ID] [--budget USD] [--max-turns N]
                   [--concurrency N] [--validate N] [--oracle trajectory] [--container none] [--run-id ID]
                   [--adage PATH] [--thresholds default|demo] [--timeout-secs N] [--keep] [--json] [--execute]
+                  [--forward-env NAME,NAME..] [--host-auth]
   adage-train report <run id | run dir> [--json]
 
 `plan` is free: it reads files and executes nothing. `run` without --execute is a dry run: it prints
 every session, the exact commands and the isolation, and exits. With --execute it starts real agent
 sessions that spend money, and refuses unless a person is at a terminal outside any agent session.
+`--forward-env` passes the named variables of your environment to every isolated session (for a
+login the host provides: Bedrock, Vertex); `--host-auth` adds the variables of a host-managed
+Claude Code login (session-ingress token file, organisation, account, base URL, proxies, CA
+bundles). An agent session's own markers (CLAUDECODE, a session id) are never forwarded.
 See docs/training.md.";
 
 struct Args {
@@ -127,9 +132,9 @@ fn cmd_plan(a: &mut Args) -> Result<()> {
     Ok(())
 }
 
-fn harness_for(name: &str, world: Option<&str>) -> Result<Box<dyn Harness>> {
+fn harness_for(name: &str, world: Option<&str>, forward: &[String], host_auth: bool) -> Result<Box<dyn Harness>> {
     match name {
-        "claude-code" => Ok(Box::new(ClaudeCode::default())),
+        "claude-code" => Ok(Box::new(ClaudeCode::with_forward(forward, host_auth)?)),
         "fake" => {
             let path = world.context("--harness fake needs --fake-world <world.json> (see docs/training.md)")?;
             let w: FakeWorld =
@@ -147,6 +152,11 @@ fn cmd_run(mut a: Args) -> Result<()> {
     o.model = p.estimate.model.clone();
     let harness = a.value("--harness")?.unwrap_or_else(|| "claude-code".into());
     let world = a.value("--fake-world")?;
+    let forward: Vec<String> = a
+        .value("--forward-env")?
+        .map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+        .unwrap_or_default();
+    let host_auth = a.flag("--host-auth");
     if let Some(m) = a.value("--model")? {
         o.model = m;
     }
@@ -175,7 +185,7 @@ fn cmd_run(mut a: Args) -> Result<()> {
     if o.max_turns == 0 || o.concurrency == 0 {
         bail!("--max-turns and --concurrency must be at least 1");
     }
-    let h = harness_for(&harness, world.as_deref())?;
+    let h = harness_for(&harness, world.as_deref(), &forward, host_auth)?;
     let base = isolate::process_env();
     if !o.execute {
         let d = run::describe(&p, &o, h.as_ref(), &base);

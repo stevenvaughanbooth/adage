@@ -239,6 +239,8 @@ class Status(unittest.TestCase):
         self.assertEqual(c({"subtype": "error_during_execution"}, 3, 4, self.ok_score)[0], "infra_error")
         self.assertEqual(c({"subtype": "success"}, 0, 1, {"passed": False}),
                          ("infra_error", "no tool calls in 1 turn(s)"))
+        self.assertEqual(c({"subtype": "success", "result": "What does W-1043 entail?"}, 0, 1, {"passed": False}),
+                         ("ok", "answered without a tool call"), "asking instead of acting is the agent's failure")
         self.assertEqual(c({"subtype": "error_max_turns", "is_error": True}, 30, 31, {"passed": False}, True, 30)[0],
                          "censored")
         self.assertEqual(c({"subtype": "success"}, 5, 6, {}, False)[0], "scorer_error")
@@ -360,6 +362,77 @@ class Isolation(unittest.TestCase):
             self.assertEqual(runner.auth_source({"CLAUDE_CONFIG_DIR": tmp + "/none", "HOME": tmp}), None)
             self.assertEqual(runner.auth_source({"HOME": "/nonexistent", "CLAUDE_CODE_USE_BEDROCK": "1"},
                                                 ["CLAUDE_CODE_USE_BEDROCK"]), ("forward", ["CLAUDE_CODE_USE_BEDROCK"]))
+
+    def test_host_auth_forwards_exactly_the_allowlist(self):
+        host = {**self.BASE, "CLAUDE_SESSION_INGRESS_TOKEN_FILE": "/run/token", "CLAUDE_CODE_ORGANIZATION_UUID": "org",
+                "CLAUDE_CODE_ACCOUNT_UUID": "acct", "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST": "1",
+                "ANTHROPIC_BASE_URL": "https://api", "HTTPS_PROXY": "http://p", "no_proxy": "localhost",
+                "CLAUDE_CODE_SESSION_ID": "lead", "CLAUDE_CODE_REMOTE_SESSION_ID": "lead", "CLAUDE_CODE_ENTRYPOINT": "remote",
+                "CLAUDE_CODE_MESSAGING_TOKEN": "t", "GH_TOKEN": "gh"}
+        del host["ANTHROPIC_API_KEY"]
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = Path(tmp) / "c.json"
+            cfg_path.write_text(json.dumps({**json.loads(Path(CONFIG).read_text()), "name": "t"}))
+            cfg = runner.load_config(cfg_path, {"host_auth": True})
+            self.assertTrue(set(runner.HOST_AUTH_ENV) <= set(cfg["forward_env"]))
+            env = runner.session_env("adage", Path(tmp) / "h", Path(tmp) / "a", True, host, cfg["forward_env"])
+            for k in ("CLAUDE_SESSION_INGRESS_TOKEN_FILE", "CLAUDE_CODE_ORGANIZATION_UUID", "CLAUDE_CODE_ACCOUNT_UUID",
+                      "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST", "ANTHROPIC_BASE_URL", "HTTPS_PROXY", "no_proxy"):
+                self.assertEqual(env[k], host[k], k)
+            for k in ("CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REMOTE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT",
+                      "CLAUDE_CODE_MESSAGING_TOKEN", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY"):
+                self.assertNotIn(k, env, k)
+            self.assertEqual(env["HOME"], str(Path(tmp) / "h"))
+            # Only the host's variables beyond the isolation allowlist get through.
+            extra = set(env) - set(runner.PASS_ENV) - set(runner.home_dirs("")) - {"DISABLE_AUTOUPDATER", "ADAGE_HOME",
+                                                                                  "ADAGE_ARM", "ADAGE_AUTO_LEARN"}
+            self.assertTrue(extra <= set(runner.HOST_AUTH_ENV), extra)
+            # Auth: the host token, never a copied credentials file (even when one exists).
+            (Path(tmp) / ".claude").mkdir()
+            (Path(tmp) / ".claude" / ".credentials.json").write_text("{}")
+            self.assertEqual(runner.auth_source({**host, "HOME": tmp, "CLAUDE_CONFIG_DIR": tmp + "/.claude"}, cfg["forward_env"], True),
+                             ("host", ["CLAUDE_SESSION_INGRESS_TOKEN_FILE"]))
+            self.assertIsNone(runner.auth_source({"HOME": tmp, "HTTPS_PROXY": "p"}, cfg["forward_env"], True))
+            # A session marker in forward_env is refused.
+            for bad in ("CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "ADAGE_HOME"):
+                cfg_path.write_text(json.dumps({**json.loads(Path(CONFIG).read_text()), "forward_env": [bad]}))
+                with self.assertRaises(SystemExit):
+                    runner.load_config(cfg_path, {})
+        # The flag is parsed, and the dry run shows the forwarded variables.
+        _, opts = runner.parse([CONFIG, "--host-auth"])
+        self.assertTrue(opts["host_auth"])
+        out = dry("--host-auth", "--json", "--root", tempfile.mkdtemp())
+        self.assertIn("CLAUDE_SESSION_INGRESS_TOKEN_FILE", json.loads(out)["isolation"]["passed_through"])
+
+    def test_confinement_hides_everything_but_the_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Path(tmp)
+            run_dir, home, tok = t / "runs" / "r1", t / "private" / "adage-home", t / "host" / "token"
+            for d in (run_dir, home, tok.parent, t / "tools" / "bin"):
+                d.mkdir(parents=True)
+            tok.write_text("x")
+            env = {"PATH": f"{t}/tools/bin:/usr/bin", "CLAUDE_SESSION_INGRESS_TOKEN_FILE": str(tok),
+                   "ADAGE_HOME": str(home)}
+            argv = runner.confine_argv({"confine_hide": [tmp]}, run_dir, env, ro=[t / "private" / "none"], rw=[home])
+            self.assertEqual(argv[0], "bwrap")
+            self.assertEqual(argv[argv.index("--tmpfs") + 1], tmp)
+            pairs = {argv[i + 1]: argv[i] for i, a in enumerate(argv) if a in ("--bind", "--ro-bind") and argv[i + 1] != "/"}
+            self.assertEqual(pairs[str(run_dir)], "--bind")
+            self.assertEqual(pairs[str(home)], "--bind")
+            self.assertEqual(pairs[str(tok.parent)], "--ro-bind", "the token's directory, not the file (it is replaced)")
+            self.assertEqual(pairs[f"{t}/tools/bin"], "--ro-bind", "PATH entries under a hidden directory")
+            self.assertNotIn("/usr/bin", pairs, "what is not hidden needs no mount")
+            self.assertNotIn(str(t / "private"), pairs, "the private tree stays hidden")
+            self.assertNotIn(str(t / "private" / "none"), pairs, "a missing path is not mounted")
+        # Every session gets the same tool set, not the harness's default one.
+        cmd = runner.claude_command({**runner.DEFAULTS, "allowed_tools": ["Bash", "Read"]}, "p", "/s.json")
+        self.assertEqual(cmd[cmd.index("--tools") + 1], "Bash,Read")
+
+    def test_the_instincts_arm_reads_its_own_home(self):
+        env = runner.env_for("instincts", Path("/r/private/adage-home"))
+        self.assertEqual(env["ADAGE_HOME"], "/r/private/instincts-home")
+        self.assertEqual(env["ADAGE_ARM"], "treated")
+        self.assertEqual(runner.env_for("adage", Path("/r/private/adage-home"))["ADAGE_HOME"], "/r/private/adage-home")
 
     def test_the_plan_puts_homes_outside_the_private_tree(self):
         with tempfile.TemporaryDirectory() as tmp:

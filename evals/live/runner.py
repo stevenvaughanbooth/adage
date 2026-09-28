@@ -46,6 +46,9 @@ Options:
                        state.json, else a fresh one; always recorded in state.json)
   --no-isolate         run agents with your own HOME, ~/.claude and environment (not
                        recommended: auto-memory and earlier transcripts leak into the control arm)
+  --host-auth          forward the variables of a host-managed login to isolated sessions (HOST_AUTH_ENV:
+                       the ingress token file, organisation, account, base URL, proxies and CA
+                       bundles; never CLAUDECODE or a session id). Same as `"host_auth": true`
   --json               print the plan as JSON (dry run)
   --adage PATH         the adage binary (default: target/release/adage in this repository)
 
@@ -74,7 +77,7 @@ import report as demo_report  # noqa: E402 - demo/report.py: statuses, statistic
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 EXPLORE_TOOLS = {"Read", "Glob", "Grep", "LS"}
 EXPLORE_COMMANDS = ("ls", "find", "cat", "grep", "rg", "head", "tail", "tree", "sed -n", "wc")
-ARMS = ("adage", "holdout", "off")
+ARMS = ("adage", "holdout", "off", "instincts", "e1")
 SPOOL_MAGIC = bytes([0xAD, 0xA6, 0xE5, 0x01])
 DEFAULTS = {
     "model": "claude-haiku-4-5-20251001",
@@ -88,6 +91,11 @@ DEFAULTS = {
     "workdir": "repo",
     # Extra environment variables passed to isolated sessions (e.g. Bedrock or Vertex settings).
     "forward_env": [],
+    # Forward HOST_AUTH_ENV too (`--host-auth`): for hosts that provide Claude Code's login.
+    "host_auth": False,
+    # Run each session under bubblewrap (`confine_argv`): see only its run directory, its ADAGE_HOME
+    # and what it needs. `confine_hide`, `confine_expose` adjust what is hidden and mounted back.
+    "confine": False,
     # How tool calls are categorised for the timeline and the metrics (substrings of a Bash
     # command). The defaults describe the acme-billing demo; other sandboxes set their own.
     "classify": {
@@ -114,6 +122,26 @@ PASS_ENV = ("PATH", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TERM", "SHELL", "
 # ~/.claude/.credentials.json (Linux; macOS keeps it in the Keychain, so set a variable there).
 AUTH_ENV = ("ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN")
 AUTH_PASS = AUTH_ENV + ("ANTHROPIC_BASE_URL",)
+# `--host-auth` (or `"host_auth": true`): the allowlist a host-managed Claude Code login needs when
+# the host, not a credentials file, provides auth (Claude Code on the web and similar containers:
+# a session-ingress token file and the organisation and account it belongs to). Exactly these, and
+# only when set. Never the host session's own identity (CLAUDECODE, CLAUDE_CODE_SESSION_ID, ...):
+# those would attach every child session to the operator's session.
+HOST_AUTH_ENV = ("ANTHROPIC_BASE_URL", "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST", "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
+                 "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_ORGANIZATION_UUID", "CLAUDE_CODE_ACCOUNT_UUID",
+                 "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy",
+                 "SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE")
+# Of those, the ones that actually carry a credential.
+HOST_AUTH_TOKENS = ("CLAUDE_SESSION_INGRESS_TOKEN_FILE", "CLAUDE_CODE_OAUTH_TOKEN")
+
+
+def forbidden_forward(name):
+    """Variables `forward_env` must never pass: an agent session's own markers and identity (a
+    child session carrying them attaches to, or reports into, the operator's session) and Adage's
+    own settings (the runner sets those per arm)."""
+    return (name == "CLAUDECODE" or name.startswith("ADAGE_") or "SESSION_ID" in name
+            or name in ("CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_PID")
+            or name.startswith("CLAUDE_CODE_MESSAGING_") or name.startswith("CLAUDE_CODE_REMOTE"))
 
 
 # ------------------------------------------------------------------------------------- config
@@ -134,6 +162,12 @@ def load_config(path, overrides):
             raise SystemExit(f"config {path}: unknown arm {arm!r} (one of {', '.join(ARMS)})")
     if not isinstance(cfg["rounds"], int) or cfg["rounds"] < 1:
         raise SystemExit(f"config {path}: rounds must be a positive integer")
+    if cfg.get("host_auth"):
+        cfg["forward_env"] = list(dict.fromkeys([*(cfg.get("forward_env") or []), *HOST_AUTH_ENV]))
+    bad = [k for k in cfg.get("forward_env") or [] if forbidden_forward(k)]
+    if bad:
+        raise SystemExit(f"config {path}: forward_env may not pass {', '.join(bad)} (an agent session's own "
+                         "markers, or Adage's settings)")
     tbr = cfg["eval"].get("tasks_by_round")
     if tbr is None and "tasks" not in cfg["eval"]:
         raise SystemExit(f"config {path}: eval needs tasks or tasks_by_round")
@@ -219,17 +253,45 @@ def claude_command(cfg, prompt, settings):
         "--setting-sources", "project,local",
         "--strict-mcp-config",
         "--settings", str(settings),
+        # The tool set itself, not only what is pre-approved: newer harnesses offer more built-in
+        # tools (TaskGet/TaskList, Cron*, ToolSearch, ...), and an agent asked to "pick up W-1042"
+        # looked for it with TaskGet, found no such task and asked what to do. `tools` (default:
+        # the allowed tools) keeps every session, of every harness version, on the same tools.
+        "--tools", ",".join(cfg.get("tools") or cfg["allowed_tools"]),
         "--allowedTools", *cfg["allowed_tools"],
         "--disallowedTools", *cfg["disallowed_tools"],
     ]
 
 
+def instincts_home(home):
+    """The `instincts` arm's ADAGE_HOME, next to the learned one: Adage's built-in defaults bound
+    from the repository's files alone (`adage learn --instincts-only`), no learned reflex."""
+    return Path(home).parent / "instincts-home"
+
+
+def e1_home(home):
+    """The `e1` arm's ADAGE_HOME: a copy of the learned home in which a person approved E1
+    prefetches (`adage review allow-exec ... --level e1`, which needs a terminal). Its hooks run
+    `adage-exec`, not `adage`. The runner never approves anything itself."""
+    return Path(home).parent / "e1-home"
+
+
+def settings_kind(arm):
+    """Which settings file a session loads: no hooks, Adage's hooks, or adage-exec's (E1)."""
+    return "exec" if arm == "e1" else "hooks" if env_for(arm, "/x") else "none"
+
+
 def env_for(arm, home):
     """Adage's environment overrides for one session. Training and `off` sessions have no hooks at
-    all. Automatic learning is off: the rounds decide when learning happens, so the index stays
-    fixed within a round."""
+    all. The `instincts` arm is treated, reading the day-0 index (instincts only). Automatic
+    learning is off: the rounds decide when learning happens, so the index stays fixed within a
+    round."""
     if arm in ("train", "off"):
         return {}
+    if arm == "instincts":
+        return {"ADAGE_HOME": str(instincts_home(home)), "ADAGE_ARM": "treated", "ADAGE_AUTO_LEARN": "0"}
+    if arm == "e1":
+        return {"ADAGE_HOME": str(e1_home(home)), "ADAGE_ARM": "treated", "ADAGE_AUTO_LEARN": "0"}
     return {"ADAGE_HOME": str(home), "ADAGE_ARM": "holdout" if arm == "holdout" else "treated",
             "ADAGE_AUTO_LEARN": "0"}
 
@@ -256,6 +318,55 @@ def isolation_env(run_home, base, forward=()):
     return env
 
 
+# `confine`: run each session in a bubblewrap mount namespace in which the hidden directories are
+# empty and only what the session needs is mounted back. Without it an agent can walk out of its
+# sandbox: real Haiku sessions ran `find /tmp -name "*hidden*"`, read the hidden test of their own
+# task, and read the runner's state.json (every other session's commands and prompts).
+CONFINE_HIDE = ("/tmp", "/home", "/root", "/var/tmp", "/mnt", "/workspace")
+# Environment variables whose values are files a session needs (CA bundles, the host's token file).
+CONFINE_FILE_ENV = ("SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
+                    "SSL_CERT_DIR")
+
+
+def under(path, dirs):
+    p = str(path)
+    return any(p == d or p.startswith(d.rstrip("/") + "/") for d in dirs)
+
+
+def confine_argv(cfg, run_dir, env, ro=(), rw=()):
+    """The bubblewrap prefix for one session: the whole filesystem read-only, the directories in
+    `confine_hide` (default CONFINE_HIDE) empty, then mounted back: the run directory (read-write:
+    the sandbox and the session's own home), `rw` (the arm's ADAGE_HOME), and read-only `ro` (the
+    settings file and the hook binaries), the files named by CONFINE_FILE_ENV, the PATH entries
+    under a hidden directory, and the config's `confine_expose`. A fresh /proc (own PID namespace)
+    and /dev. The network is shared."""
+    hide = list(cfg.get("confine_hide") or CONFINE_HIDE)
+    argv = ["bwrap", "--die-with-parent", "--unshare-pid", "--ro-bind", "/", "/", "--proc", "/proc", "--dev", "/dev"]
+    for d in hide:
+        if Path(d).is_dir():
+            argv += ["--tmpfs", d]
+    seen = set()
+
+    def mount(kind, path):
+        path = str(path)
+        if path in seen or not Path(path).exists() or not under(path, hide):
+            return
+        seen.add(path)
+        argv.extend([kind, path, path])
+
+    for x in rw:
+        mount("--bind", x)
+    mount("--bind", run_dir)
+    # Their directories, not the files: a bind mount pins the file's inode, and the host replaces
+    # its token file by rename (a session confined with the file alone was "Not logged in").
+    ro = list(ro) + [str(Path(env[k]).parent) for k in CONFINE_FILE_ENV if env.get(k)]
+    ro += [x for x in (env.get("PATH") or "").split(":") if x]
+    ro += list(cfg.get("confine_expose") or [])
+    for x in ro:
+        mount("--ro-bind", x)
+    return argv
+
+
 def session_env(arm, run_home, adage_home, isolate, base, forward=()):
     """The environment one session runs with: isolated (the default) or the operator's own."""
     env = isolation_env(run_home, base, forward) if isolate else dict(base)
@@ -268,11 +379,15 @@ def operator_config_dir(base=None):
     return Path(base.get("CLAUDE_CONFIG_DIR") or Path(base.get("HOME") or Path.home()) / ".claude")
 
 
-def auth_source(base, forward=()):
-    """How isolated sessions will authenticate: ("env", [names]) when an auth variable is set,
+def auth_source(base, forward=(), host=False):
+    """How isolated sessions will authenticate: with `host_auth`, ("host", [names]) when a host token
+    variable is set (no credentials file is ever copied then); else ("env", [names]) when an auth variable is set,
     ("file", path) for the operator's credentials file (copied into each run's config directory
     for the session and removed after it), ("forward", [names]) when only `forward_env` variables
     are set (Bedrock, Vertex: trusted as given), or None."""
+    if host:
+        tok = [k for k in HOST_AUTH_TOKENS if base.get(k)]
+        return ("host", tok) if tok else None
     names = [k for k in AUTH_ENV if base.get(k)]
     if names:
         return "env", names
@@ -320,7 +435,7 @@ def describe(cfg, phases, rounds, root, adage, isolate=True):
                 "cwd": str(workdir),
                 "home": str(root / "runs" / run_id / "home") if isolate else None,
                 "sandbox": expand(cfg["sandbox"], dir=str(workdir), task=task),
-                "command": claude_command(cfg, text, private / f"settings-{'hooks' if env_for(arm, '') else 'none'}.json"),
+                "command": claude_command(cfg, text, private / f"settings-{settings_kind(arm)}.json"),
                 "env": env_for(arm, private / "adage-home"),
                 "score": expand(cfg["score"], dir=str(workdir), task=task),
             })
@@ -638,10 +753,12 @@ class Live:
         self.home = self.private / "adage-home"
         self.transcripts = self.private / "transcripts"
         self.lock = threading.Lock()
+        self.written = set()
+        self.adage_exec = Path(cfg.get("adage_exec") or Path(adage).parent / "adage-exec")
         self.spent = 0.0
         self.base_env = dict(os.environ)
         self.forward = list(cfg.get("forward_env") or [])
-        self.auth = auth_source(self.base_env, self.forward) if isolate else None
+        self.auth = auth_source(self.base_env, self.forward, bool(cfg.get("host_auth"))) if isolate else None
         p = root / "state.json"
         self.state = json.loads(p.read_text()) if p.exists() else {"config": cfg["name"], "runs": {}, "rounds": {}}
         self.state["model"] = cfg["model"]
@@ -673,13 +790,22 @@ class Live:
             self.state["runs"].setdefault(run_id, {}).update(kv)
             self.save()
 
-    def settings(self, hooks):
-        p = self.private / f"settings-{'hooks' if hooks else 'none'}.json"
-        if hooks:
-            out = subprocess.run([str(self.adage), "hooks-config", str(self.adage)], capture_output=True, text=True, check=True)
-            p.write_text(out.stdout)
-        else:
-            p.write_text("{}")
+    def settings(self, kind):
+        """The settings file of one kind (`settings_kind`). Written once per invocation and
+        atomically: concurrent sessions once rewrote the same file while others started reading it."""
+        p = self.private / f"settings-{kind}.json"
+        with self.lock:
+            if kind not in self.written:
+                if kind == "none":
+                    body = "{}"
+                else:
+                    bin_ = self.adage if kind == "hooks" else self.adage_exec
+                    body = subprocess.run([str(self.adage), "hooks-config", str(bin_)], capture_output=True, text=True,
+                                          check=True).stdout
+                tmp = p.with_suffix(".tmp")
+                tmp.write_text(body)
+                tmp.replace(p)
+                self.written.add(kind)
         return p
 
     def prepare_home(self, run_home):
@@ -728,14 +854,17 @@ class Live:
                     seed=self.cfg.get("seed"), status="running", t0=time.time(), events=[], directives=[])
         subprocess.run(expand(self.cfg["sandbox"], dir=str(workdir), task=task), check=True, capture_output=True)
         prompt = prompt_t.format(id=task)
-        hooks = bool(env_for(arm, self.home))
         env = session_env(arm, run_home, self.home, self.isolate, self.base_env, self.forward)
         if self.isolate:
             self.prepare_home(run_home)
             config_dir = Path(env["CLAUDE_CONFIG_DIR"])
         else:
             config_dir = operator_config_dir(self.base_env)
-        cmd = claude_command(self.cfg, prompt, self.settings(hooks))
+        settings = self.settings(settings_kind(arm))
+        cmd = claude_command(self.cfg, prompt, settings)
+        if self.cfg.get("confine"):
+            rw = [env["ADAGE_HOME"]] if env.get("ADAGE_HOME") else []
+            cmd = confine_argv(self.cfg, run_dir, env, ro=[settings, self.adage, self.adage_exec], rw=rw) + cmd
         t0 = time.time()
         events, directives, uses_by_id, sid, result, turns, version = [], [], {}, None, {}, 0, None
         try:
@@ -789,7 +918,8 @@ class Live:
             self.spent += cost
         if sid:
             self.archive_transcript(sid, config_dir)
-        spool = spool_directives(self.home, sid) if arm not in ("train", "off") else []
+        # The spool is in the arm's own ADAGE_HOME (instincts-home, e1-home), not always adage-home.
+        spool = spool_directives(Path(env.get("ADAGE_HOME") or self.home), sid) if arm not in ("train", "off") else []
         metrics = run_metrics(self.cfg, events, result, score, workdir, round(time.time() - t0, 2), sid, spool)
         status, reason = demo_report.classify_status(result, len(events), metrics["turns"], score, scorer_ok,
                                                      self.cfg["max_turns"])
@@ -845,8 +975,30 @@ class Live:
         self.state["rounds"][str(self.round)] = {"learn": rep, "tracks": tracks, "sessions": len(transcripts),
                                                  "leaky": leaky, "pool": sorted(pool) if pool is not None else None}
         self.state["learn"], self.state["tracks"] = rep, tracks
+        if "instincts" in self.cfg["eval"].get("arms", []):
+            self.state["rounds"][str(self.round)]["instincts_only"] = self.bind_instincts()
         self.save()
         print(json.dumps(rep, indent=2))
+
+    def bind_instincts(self):
+        """The `instincts` arm's index: `adage learn --instincts-only` over a fresh sandbox (of the
+        round's first held-out task), in its own ADAGE_HOME. No session is read."""
+        home = instincts_home(self.home)
+        shutil.rmtree(home, ignore_errors=True)
+        home.mkdir(parents=True)
+        task = tasks_for_round(self.cfg, self.round)[0]
+        work = self.private / "instincts-sandbox" / self.cfg["workdir"]
+        shutil.rmtree(work.parent, ignore_errors=True)
+        work.parent.mkdir(parents=True)
+        subprocess.run(expand(self.cfg["sandbox"], dir=str(work), task=task), check=True, capture_output=True)
+        out = subprocess.run([str(self.adage), "learn", "--instincts-only", "--repo-path", str(work), "--json"],
+                             capture_output=True, text=True, env=dict(os.environ, ADAGE_HOME=str(home)))
+        if out.returncode != 0:
+            raise SystemExit(out.stderr)
+        idx = home / "index.json"
+        routes = json.loads(idx.read_text()).get("routes", []) if idx.exists() else []
+        print(f"instincts-only index: {len(routes)} route(s)", flush=True)
+        return {"report": json.loads(out.stdout), "routes": routes}
 
 
 # ------------------------------------------------------------------------------------- report
@@ -904,7 +1056,8 @@ def redact_home(state):
 
 def parse(argv):
     opts = {"execute": False, "dry_run": False, "json": False, "root": None, "model": None, "round": None,
-            "adage": None, "phases": [], "config": None, "seed": None, "isolate": True}
+            "adage": None, "phases": [], "config": None, "seed": None, "isolate": True,
+            "host_auth": None}
     it = iter(argv)
     for a in it:
         if a == "--execute":
@@ -915,6 +1068,8 @@ def parse(argv):
             opts["json"] = True
         elif a == "--no-isolate":
             opts["isolate"] = False
+        elif a == "--host-auth":
+            opts["host_auth"] = True
         elif a in ("--root", "--model", "--round", "--adage", "--config", "--seed"):
             v = next(it, None)
             if v is None:
@@ -962,7 +1117,7 @@ def resolve_seed(cfg, root):
 
 def main(argv):
     config, opts = parse(argv)
-    cfg = load_config(config, {"model": opts["model"], "seed": opts["seed"]})
+    cfg = load_config(config, {"model": opts["model"], "seed": opts["seed"], "host_auth": opts["host_auth"]})
     root = Path(opts["root"] or f"/tmp/adage-live/{cfg['name']}").resolve()
     adage = Path(opts["adage"] or REPO / "target" / "release" / "adage")
     rounds = rounds_for(cfg, opts["round"])
@@ -983,10 +1138,13 @@ def main(argv):
         raise SystemExit("`claude` is not on PATH")
     if not adage.exists():
         raise SystemExit(f"build first: cargo build --release -p adage-cli  (missing {adage})")
-    if opts["isolate"] and not auth_source(os.environ, cfg.get("forward_env") or []):
+    if cfg.get("confine") and not shutil.which("bwrap"):
+        raise SystemExit("confine needs bubblewrap (`bwrap`) on PATH")
+    if opts["isolate"] and not auth_source(os.environ, cfg.get("forward_env") or [], bool(cfg.get("host_auth"))):
         raise SystemExit("isolated sessions cannot find your Claude Code login: set ANTHROPIC_API_KEY, or "
                          "CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`), or have ~/.claude/.credentials.json "
-                         "(see evals/live/README.md, Isolation). --no-isolate runs without isolation.")
+                         "(see evals/live/README.md, Isolation); where the host manages the login, --host-auth. "
+                         "--no-isolate runs without isolation.")
     if not opts["isolate"]:
         print("WARNING: --no-isolate: sessions use your HOME and ~/.claude (auto-memory, earlier transcripts); "
               "the control arm is not isolated.", flush=True)
@@ -1006,6 +1164,9 @@ def main(argv):
         if "learn" in opts["phases"]:
             live.learn()
         if "eval" in opts["phases"]:
+            if "e1" in cfg["eval"].get("arms", []) and not (e1_home(live.home) / "index.json").exists():
+                raise SystemExit(f"the e1 arm needs {e1_home(live.home)}: copy private/adage-home there and approve "
+                                 "its prefetches as a person (adage review allow-exec ... --level e1); see README")
             live.phase("eval", [s for s in sessions if s[1] == "eval"])
         if "report" in opts["phases"]:
             summaries[str(round_)] = summarise(live.state, round_)

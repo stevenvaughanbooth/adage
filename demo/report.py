@@ -52,7 +52,8 @@ def classify_status(result, tool_calls, turns, score, scorer_ok=True, max_turns=
     """(status, reason) of one finished run.
 
     infra_error   the harness failed: no result message, an error result other than the turn
-                  limit, or a session that did nothing (no tool calls in at most one turn)
+                  limit, or a session that did nothing (no tool calls in at most one turn, and no
+                  reply: one that only answered, e.g. asked what the ticket means, is `ok`, failed)
     scorer_error  the scorer crashed or printed no verdict (`passed`)
     censored      the session hit max_turns: its outcome is what it had done by then
     ok            everything else"""
@@ -64,6 +65,10 @@ def classify_status(result, tool_calls, turns, score, scorer_ok=True, max_turns=
         detail = str(result.get("result") or "")[:200]
         return "infra_error", f"harness error ({subtype or 'is_error'})" + (f": {detail}" if detail else "")
     if not tool_calls and (turns or 0) <= 1:
+        # A successful reply with text but no tool call is the agent's own choice (real Haiku
+        # sessions answered "What does W-1043 entail?" and stopped): a failed task, not the harness's.
+        if subtype == "success" and str(result.get("result") or "").strip():
+            return "ok", "answered without a tool call"
         return "infra_error", f"no tool calls in {turns or 0} turn(s)"
     if not scorer_ok or not isinstance(score, dict) or "passed" not in score:
         return "scorer_error", "the scorer crashed or printed no verdict"
