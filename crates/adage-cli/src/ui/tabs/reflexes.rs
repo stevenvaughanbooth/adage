@@ -308,7 +308,7 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
             } else {
                 lines
             };
-            s.modal = Some(Modal::Viewer { title: format!("traces · {}", r.id), lines, scroll: 0 });
+            s.modal = Some(Modal::Viewer { title: format!("traces · {}", r.id), source: None, lines, scroll: 0 });
         }
         KeyCode::Char('o') => {
             let r = s.selected_route()?;

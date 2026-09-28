@@ -81,6 +81,19 @@ pub fn fit_with(s: &str, n: usize, more: &str) -> String {
     out
 }
 
+/// [`fit_with`] from the left: the end of `s` (a path's file name) survives, `more` in front.
+pub fn fit_left(s: &str, n: usize, more: &str) -> String {
+    let count = s.chars().count();
+    if count <= n {
+        return s.to_string();
+    }
+    let m = more.chars().count();
+    if n < m {
+        return s.chars().skip(count - n).collect();
+    }
+    format!("{more}{}", s.chars().skip(count - (n - m)).collect::<String>())
+}
+
 /// `s` as a column `n` wide: padded, or cut (with `more`) so at least one space separates it
 /// from the next. Views call it through `Theme::pad`.
 pub fn pad_with(s: &str, n: usize, more: &str) -> String {
@@ -113,5 +126,8 @@ mod tests {
         assert_eq!(fit_with("abcdef", 0, "…"), "");
         assert_eq!(pad_with("ab", 4, "…"), "ab  ");
         assert_eq!(pad_with("abcdef", 5, "..."), "a... ");
+        assert_eq!(fit_left("~/a/b/fail-open.log", 16, "…"), "…b/fail-open.log");
+        assert_eq!(fit_left("~/a/b/fail-open.log", 16, "..."), "...fail-open.log");
+        assert_eq!(fit_left("short", 15, "…"), "short");
     }
 }

@@ -90,13 +90,41 @@ pub enum Action {
 }
 
 pub enum Modal {
-    Help { scroll: u16 },
-    Confirm { title: String, lines: Vec<Line<'static>>, action: Action, scroll: u16 },
-    Message { title: String, lines: Vec<String>, error: bool, scroll: u16 },
-    Progress { title: String, status: String, ratio: f64 },
-    Viewer { title: String, lines: Vec<String>, scroll: u16 },
-    Scope { harness: String },
-    Edit { key: &'static str, buffer: String, error: Option<String> },
+    Help {
+        scroll: u16,
+    },
+    Confirm {
+        title: String,
+        lines: Vec<Line<'static>>,
+        action: Action,
+        scroll: u16,
+    },
+    Message {
+        title: String,
+        lines: Vec<String>,
+        error: bool,
+        scroll: u16,
+    },
+    Progress {
+        title: String,
+        status: String,
+        ratio: f64,
+    },
+    /// Lines to read: `source` is the file they come from, when they come from one.
+    Viewer {
+        title: String,
+        source: Option<String>,
+        lines: Vec<String>,
+        scroll: u16,
+    },
+    Scope {
+        harness: String,
+    },
+    Edit {
+        key: &'static str,
+        buffer: String,
+        error: Option<String>,
+    },
 }
 
 /// What the runtime must do after a key.
@@ -388,12 +416,12 @@ impl AppState {
                 self.modal = Some(Modal::Message { title, lines, error, scroll: s });
                 None
             }
-            Modal::Viewer { title, lines, scroll: mut s } => {
+            Modal::Viewer { title, source, lines, scroll: mut s } => {
                 if matches!(code, KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q')) {
                     return None;
                 }
                 nudge(&mut s);
-                self.modal = Some(Modal::Viewer { title, lines, scroll: s });
+                self.modal = Some(Modal::Viewer { title, source, lines, scroll: s });
                 None
             }
             Modal::Progress { .. } => {
@@ -694,8 +722,15 @@ fn draw_modal(f: &mut Frame, area: Rect, m: &Modal, s: &AppState, t: &Theme) {
             ls.push(Line::from(Span::styled("enter or esc closes", t.dim())));
             view::popup(f, area, title, ls, t, *scroll)
         }
-        Modal::Viewer { title, lines, scroll } => {
-            let mut ls: Vec<Line> = lines.iter().map(|l| Line::raw(l.clone())).collect();
+        Modal::Viewer { title, source, lines, scroll } => {
+            let mut ls: Vec<Line> = Vec::new();
+            if let Some(p) = source {
+                // A long path keeps its end, the file's name: `…/adage/fail-open.log`.
+                let room = (area.width as usize).saturating_sub(8);
+                ls.push(Line::from(Span::styled(words::fit_left(p, room, t.more()), t.dim())));
+                ls.push(Line::raw(""));
+            }
+            ls.extend(lines.iter().map(|l| Line::raw(l.clone())));
             ls.push(Line::from(Span::styled(format!("{} scroll{}esc closes", t.arrows(), t.sep()), t.dim())));
             view::popup(f, area, title, ls, t, *scroll)
         }
@@ -808,18 +843,7 @@ fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Opt
         Cmd::Quit => return true,
         Cmd::Want(WantKind::Routes) => loader.want(Want::Routes),
         Cmd::Want(WantKind::Health) => loader.want(Want::Health),
-        Cmd::OpenFailOpen => {
-            let p = ctx.paths.root.join(crate::doctor::FAIL_OPEN_LOG);
-            let lines: Vec<String> = match std::fs::read_to_string(&p) {
-                Ok(text) => {
-                    let all: Vec<String> = text.lines().map(pretty_fail_open).collect();
-                    all[all.len().saturating_sub(200)..].to_vec()
-                }
-                Err(_) => vec!["No fail-open errors recorded.".into()],
-            };
-            let scroll = lines.len().saturating_sub(10) as u16;
-            s.modal = Some(Modal::Viewer { title: crate::detect::tilde(&p), lines, scroll });
-        }
+        Cmd::OpenFailOpen => s.modal = Some(fail_open_viewer(&ctx.paths)),
         Cmd::PlanInstall { harness, scope } => match crate::install::plan(&harness, scope, ctx.root.as_deref(), None) {
             Ok(p) => {
                 let lines = install_confirm(&p, t);
@@ -887,6 +911,20 @@ fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Opt
         },
     }
     false
+}
+
+/// The fail-open log, newest at the bottom: titled for what it is, the file named inside.
+pub fn fail_open_viewer(paths: &adage_store::Paths) -> Modal {
+    let p = paths.root.join(crate::doctor::FAIL_OPEN_LOG);
+    let lines: Vec<String> = match std::fs::read_to_string(&p) {
+        Ok(text) => {
+            let all: Vec<String> = text.lines().map(pretty_fail_open).collect();
+            all[all.len().saturating_sub(200)..].to_vec()
+        }
+        Err(_) => vec!["No fail-open errors recorded.".into()],
+    };
+    let scroll = lines.len().saturating_sub(10) as u16;
+    Modal::Viewer { title: "Fail-open errors".into(), source: Some(crate::detect::tilde(&p)), lines, scroll }
 }
 
 fn pretty_fail_open(line: &str) -> String {

@@ -1299,6 +1299,25 @@ fn keys_overlay_and_status_bar_come_from_one_table() {
 }
 
 #[test]
+fn fail_open_viewer_has_a_title_and_keeps_the_file_name() {
+    let d = tempfile::tempdir().unwrap();
+    let deep = d.path().join("a-rather-long-directory-name/and-another-one-below-it/adage");
+    let paths = Paths::at(&deep);
+    std::fs::create_dir_all(&deep).unwrap();
+    let line = json!({ "ts": T0, "harness": "claude", "event": "Stop", "class": "io", "error": "disk full" });
+    std::fs::write(deep.join(crate::doctor::FAIL_OPEN_LOG), format!("{line}\n")).unwrap();
+    let c = ctx(paths.clone(), false);
+    let mut s = app_state();
+    s.modal = Some(app::fail_open_viewer(&paths));
+    let text = app_frame(&s, &c, 60, 20);
+    assert!(text.contains(" Fail-open errors "), "{text}");
+    let path_line = text.lines().find(|l| l.contains("fail-open")).unwrap();
+    let file = crate::doctor::FAIL_OPEN_LOG.rsplit('/').next().unwrap();
+    assert!(path_line.contains('…') && path_line.contains(&format!("{file} ")), "{text}");
+    assert!(text.contains("disk full"), "{text}");
+}
+
+#[test]
 fn keys_overlay_wraps_under_the_description_column() {
     let d = tempfile::tempdir().unwrap();
     let c = ctx(Paths::at(d.path()), false);
