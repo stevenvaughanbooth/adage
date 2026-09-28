@@ -17,9 +17,15 @@ auto = true               # learn automatically when agent sessions stop or end
 min_interval_secs = 120   # at most one automatic learn per repository per interval (0–86400)
 thresholds = "default"    # evidence bars: "default", or "demo" (lower); `adage condition --demo` still overrides
 claude_projects = ""      # Claude Code history ("" = ~/.claude/projects)
-codex_sessions = ""       # Codex rollouts automatic learning reads, e.g. "~/.codex/sessions" ("" = none)
+codex_sessions = "auto"   # Codex rollouts: "auto" ($CODEX_HOME/sessions once Codex hooks are registered), a directory, or "" (none)
 opencode_exports = ""     # a directory of `opencode export` files ("" = none)
 parse_cache = true        # keep parsed transcripts in cache/sessions (owner-only; faster re-learning)
+
+[instincts]
+enabled = true            # bind Adage's instincts from each repository's files
+
+[ui]
+notices = "daily"         # one-line notices at session start (Claude Code), at most daily; or "off"
 
 [runtime]
 control = 0.1             # share of sessions held out as the control arm (0–1)
@@ -31,9 +37,10 @@ control = 0.1             # share of sessions held out as the control arm (0–1
 | `learn.min_interval_secs` | `120` | — |
 | `learn.thresholds` | `default` | — |
 | `learn.claude_projects` | `""` | — |
-| `learn.codex_sessions` | `""` | — |
+| `learn.codex_sessions` | `auto` | — |
 | `learn.opencode_exports` | `""` | — |
 | `learn.parse_cache` | `true` | — (`adage condition --no-cache` skips it for one run) |
+| `ui.notices` | `daily` | — |
 | `runtime.control` | `0.1` | `ADAGE_CONTROL` (any number; 1 or more is shadow mode, as before) |
 
 Environment variables win over the file, and the file over the defaults. An unparseable file, an
@@ -43,8 +50,13 @@ keeps its default: a hook never fails because of the configuration.
 ```text
 adage config [--json]            every key: value, source (default | file | env VAR), and what it does
 adage config get <key>           one effective value
-adage config set <key> <value>   validated, written atomically; refused inside an agent session
+adage config set <key> <value>   validated, written atomically
 ```
+
+Keys that change what Adage learns from or how much evidence it needs (`learn.thresholds`,
+`learn.claude_projects`, `learn.codex_sessions`, `learn.opencode_exports`, `instincts.packs`) need
+a person: a terminal (or `ADAGE_ALLOW_NONINTERACTIVE=1`), never inside an agent session. Every
+other key only tunes Adage or turns something down, and can be set from anywhere.
 
 `config set` keeps every other key but not comments. Paths are absolute or start with `~/`.
 
@@ -65,7 +77,25 @@ adage config set <key> <value>   validated, written atomically; refused inside a
    hook named, through the parse cache; holds `tracks.lock` while it writes tracks and the index.
    Appends a line to `learn.log`. Then re-reads the request marker once: a request that arrived
    while it ran is learned before it exits.
-3. **Manual learning** (`adage condition`) uses the same thresholds (unless `--demo`), the same cache
+3. **Session start (bootstrap).** At `SessionStart` (OpenCode `session.created`), in a repository
+   with no reflexes whose learner has not run since the index last changed, or when the index
+   cannot be read, the hook starts the learner at once with `--bootstrap`: it binds the
+   repository's instincts and recompiles the index first (tens of milliseconds), then learns.
+   In a repository with reflexes, the session start assigns the session's arm and spools one
+   `session_start` record. Either way it may print one notice (below).
+4. **Scope.** The learner reads only this repository's traces: Claude Code project directories
+   named for one of its checkouts (the root, its main checkout, its linked worktrees), and within
+   them only transcripts whose recorded working directory is inside a checkout; Codex rollouts and
+   OpenCode exports by their recorded directory. Nothing else is opened. `learn.codex_sessions =
+   auto` reads `$CODEX_HOME/sessions` once Codex hooks are registered. Sources are additive: a
+   transcript found once is remembered (`<slug>.sources.json`, up to 5,000) and forgotten only
+   when its directory lists without it, so a learner started from a sandboxed session keeps what
+   it cannot see (the parse cache serves it).
+5. **After learning** the learner updates the repository's ledger and savings estimate
+   (`$ADAGE_HOME/ledger/`, below) and composes the next notice. Every learner also re-binds
+   instincts from the repository's files. Three failed runs in a row back the next one off (twice
+   the interval per further failure, up to 64×).
+6. **Manual learning** (`adage condition`) uses the same thresholds (unless `--demo`), the same cache
    and the same lock, and writes the same `learn.log` lines with `"trigger":"manual"`.
 
 Automatic learning of a repository produces exactly the tracks a full `adage condition` over the same
@@ -85,7 +115,17 @@ Times are milliseconds since the Unix epoch. JSON files are replaced atomically 
 | `<slug>.spawn.json` | hook | Last learner started: `{"at", "after"}` (`after` = when it starts learning) |
 | `<slug>.lock` | learner | Held while a learner runs or waits (`flock` / `LockFileEx`); released when it exits, however it exits |
 | `<slug>.state.json` | learner | `{"pid", "started_at", "finished_at", "outcome": "running"\|"ok"\|"error", "processed"}` |
-| `<slug>.sources.json` | learner | Transcripts hooks named outside the configured sources |
+| `<slug>.sources.json` | learner | Every transcript found for the repository (sources or hooks), forgotten only when verifiably gone |
+| `<slug>.notice.json` | learner | The next notice: `{"id", "text", "kind": "health"\|"waiting"\|"value"\|"reflexes", "at", "basis", "baseline"}` |
+| `<slug>.notice-shown.json` | hook | The last notice shown: `{"id", "at"}`; a notice is shown only if its id is new and a day has passed |
+
+`<slug>.state.json` also carries `errors`: failed runs in a row.
+
+`$ADAGE_HOME/ledger/` holds, per repository, `<slug>.jsonl` (one line per trace: session id,
+harness and version, models, start and end, model turns, tool calls, first edit turn, tokens,
+cost `{usd?, source: harness|priced@<date>|none}`, `asked_for_help`; no prompt, command or path),
+`<slug>.seen.json` (which transcripts were summarised, by a hash of their path) and
+`<slug>.summary.json` (the savings estimate every surface reads; `adage savings --json`).
 
 A request is **pending** while `requested_at > processed`. A learner is **running** while its lock
 is held (test with a shared lock, released at once: `adage_store::lock::is_held`), and **waiting**

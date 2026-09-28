@@ -1,6 +1,8 @@
 {
   "name": "adage",
-  "owner": { "name": "stevenvaughanbooth" },
+  "owner": {
+    "name": "stevenvaughanbooth"
+  },
   "metadata": {
     "description": "Adage: agent traces become reflexes.",
     "version": "0.1.0"
@@ -8,16 +10,26 @@
   "plugins": [
     {
       "name": "adage",
-      "source": "./plugin/claude-code",
-      "description": "Agent traces become reflexes: Adage compiles the paths your agents take into reflexes and tells them, deterministically, what to do next. Needs the adage binary on PATH (npm, Homebrew, or the release installers).",
+      "source": {
+        "source": "git-subdir",
+        "url": "stevenvaughanbooth/adage",
+        "path": "plugin/claude-code",
+        "ref": "marketplace"
+      },
+      "description": "Agent traces become reflexes: Adage learns the paths your agents take in each repository and tells them, deterministically, what to do next. Works from the first session: binaries for macOS, Linux and Windows are bundled and verified; nothing is downloaded.",
       "version": "0.1.0",
       "repository": "https://github.com/stevenvaughanbooth/adage",
       "homepage": "https://github.com/stevenvaughanbooth/adage"
     },
     {
       "name": "adage-exec",
-      "source": "./plugin/claude-code-exec",
-      "description": "Adage with execution (opt-in): after `adage delegate on` and a person's `adage review delegate` per reflex, observe-only lookups run in an OS sandbox at the stimulus and their typed output arrives beside the directive (E1), and approved actions such as `make gen` after an edit run staged, verified and applied from the hook (E2). Replaces the Adage plugin's hooks while execution is on. Needs the adage and adage-exec binaries.",
+      "source": {
+        "source": "git-subdir",
+        "url": "stevenvaughanbooth/adage",
+        "path": "plugin/claude-code-exec",
+        "ref": "marketplace"
+      },
+      "description": "Adage with execution (opt-in): after `adage delegate on` and a person's `adage review delegate` per reflex, observe-only lookups run in an OS sandbox at the stimulus and their typed output arrives beside the directive (E1), and approved actions such as `make gen` after an edit run staged, verified and applied from the hook (E2). Replaces the Adage plugin's hooks while execution is on. Binaries bundled.",
       "version": "0.1.0",
       "repository": "https://github.com/stevenvaughanbooth/adage",
       "homepage": "https://github.com/stevenvaughanbooth/adage"

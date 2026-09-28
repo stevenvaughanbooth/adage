@@ -1,5 +1,17 @@
 # Adage zero-config design: "install it and it just works"
 
+> **Status (2026-09-28): P0 implemented.** Items 1–10 of §6 and acceptance tests 1–9
+> (`crates/adage-cli/tests/zero_config_plugin.rs`) are in. Differences from the text below: the
+> first-session notice reads `adage: learning from N past sessions in this repo; reflexes arrive
+> within a minute. Nothing runs without you.` (the instinct count is not known yet when the hook
+> answers); the interval is the *expanded* percentile bootstrap (plain percentiles under-cover at
+> 12 control sessions); `adage connect` (P1) is not built, and the card points to `adage install
+> <harness> --write --scope user`; the exec-plugin guard checks for the plugin's directory beside
+> this one, its data directory, or a marker its shim touches at every start. Instincts are
+> re-bound at every automatic learn, not only at bootstrap. `systemMessage` on `SessionStart` was
+> verified against Claude Code 2.1.283: it is recorded as a `hook_system_message` attachment,
+> shown to the person, and not sent to the model.
+
 ## 0. Principles
 
 1. **Adage should earn its first directive in the first session without the user running any Adage command.** Consent is needed only for: execution, environment-changing steps, network downloads, and team trust anchors.

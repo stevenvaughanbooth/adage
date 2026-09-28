@@ -19,7 +19,7 @@ mod app;
 mod demo;
 mod diff;
 mod feed;
-mod health;
+pub(crate) mod health;
 mod jobs;
 mod learnlog;
 mod routes;

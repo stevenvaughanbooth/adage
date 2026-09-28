@@ -144,25 +144,32 @@ fn events_that_cannot_match_stop_before_the_state_and_the_spool() {
     let sessions = w.home.join("sessions");
     let ls =
         json!({ "tool_calls": [{ "tool_name": "Bash", "tool_input": { "command": "ls -la" }, "tool_response": "x" }] });
-    // Nothing yet in this session, and nothing a route could match: no state, no spool.
+    let spool = || adage_store::spool::read_all::<serde_json::Value>(&sessions.join("s-1.spool")).unwrap();
+    // The session start is recorded once (its arm, for the savings estimate: docs/zero-config.md
+    // §3.2) and says nothing; an event nothing could match then touches nothing.
     assert_eq!(hook(&w, "SessionStart", json!({ "source": "startup" })), "");
+    let start = spool();
+    assert_eq!(start.len(), 1);
+    assert_eq!((start[0]["kind"].as_str(), start[0]["arm"].as_str()), (Some("session_start"), Some("treated")));
+    assert_eq!(start[0]["propensity"], 1.0, "ADAGE_ARM forced it");
+    let before = std::fs::read(sessions.join("s-1.state")).unwrap();
     assert_eq!(hook(&w, "PostToolBatch", ls.clone()), "");
-    assert!(!sessions.exists(), "skipped before any file was touched");
+    assert_eq!(spool().len(), 1, "skipped before the spool");
+    assert_eq!(std::fs::read(sessions.join("s-1.state")).unwrap(), before, "and before the state");
     // The first prompt announces the dead end, so it is decided.
     assert!(hook(&w, "UserPromptSubmit", json!({ "prompt": "Fix it." })).contains("dead-end-x"));
-    let spool = || adage_store::spool::read_all::<serde_json::Value>(&sessions.join("s-1.spool")).unwrap().len();
-    assert_eq!(spool(), 1);
+    assert_eq!(spool().len(), 2);
     // A run of the avoided command is recorded (for `adage graph`), though it matches no trigger.
     let pytest = json!({ "tool_name": "Bash", "tool_input": { "command": "pytest -q" }, "tool_response": "No module named pytest" });
     hook(&w, "PostToolUseFailure", pytest);
-    assert_eq!(spool(), 2);
+    assert_eq!(spool().len(), 3);
     hook(&w, "PostToolBatch", ls.clone());
-    assert_eq!(spool(), 2, "no match: skipped");
+    assert_eq!(spool().len(), 3, "no match: skipped");
     // An edit the finish line covers makes an obligation; from then on every batch is decided.
     let edit = json!({ "tool_calls": [{ "tool_name": "Edit", "tool_input": { "file_path": w.repo.join("schema/a.json") }, "tool_response": "ok" }] });
     assert!(hook(&w, "PostToolBatch", edit).contains("finish-line-x"));
     hook(&w, "PostToolBatch", ls);
-    assert_eq!(spool(), 4);
+    assert_eq!(spool().len(), 5);
 }
 
 #[test]

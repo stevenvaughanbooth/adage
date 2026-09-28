@@ -108,6 +108,11 @@ const GROUPS: &[(&str, &[Cmd])] = &[
                 usage: &["adage watch [--repo <path>] [--demo] [--once [--size WxH]]"],
             },
             Cmd {
+                name: "savings",
+                about: "what Adage saves here, measured against sessions where it stayed quiet",
+                usage: &["adage savings [--repo <path>] [--json]"],
+            },
+            Cmd {
                 name: "ui",
                 about: "the full-screen app: live feed, reflexes and review, health fixes, settings",
                 usage: &["adage ui [--repo <path>] [--demo]"],
@@ -203,7 +208,7 @@ pub fn all() -> String {
             s.push_str(&format!("  {:<14}{}\n", c.name, c.about));
         }
     }
-    s.push_str(&format!("\nBare `adage` at a terminal opens `adage ui`.\n{ENV}\n"));
+    s.push_str(&format!("\nBare `adage` prints the status card; `adage ui` opens the app.\n{ENV}\n"));
     s
 }
 

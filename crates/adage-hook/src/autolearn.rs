@@ -34,6 +34,10 @@ pub struct Request {
     pub transcript_path: Option<String>,
     pub harness: String,
     pub requested_at: u64,
+    /// Asked at a session's start (docs/zero-config.md §3.2): the learner binds instincts and
+    /// recompiles the index first, then learns.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub bootstrap: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
@@ -52,6 +56,59 @@ pub struct RunState {
     pub outcome: String,
     #[serde(default)]
     pub processed: u64,
+    /// Runs in a row that ended in an error: from the third, the next learner waits twice as
+    /// long each time (up to 64 intervals), and a notice says so.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub errors: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
+}
+
+/// A one-line notice for the person, written by the learner (`<slug>.notice.json`) and shown by
+/// the hook at a session start (docs/zero-config.md §3.3). `id` changes only when there is
+/// something new to say.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Notice {
+    pub id: String,
+    pub text: String,
+    /// `health`, `waiting`, `value` or `reflexes` (the wording priority, highest first).
+    pub kind: String,
+    pub at: u64,
+    /// What the notice was composed from (the learner's; the hook ignores it).
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub basis: serde_json::Value,
+    /// What had been shown when it was composed: "new" is measured from here.
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    pub baseline: serde_json::Value,
+}
+
+/// The last notice shown for a repository (`<slug>.notice-shown.json`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Shown {
+    pub id: String,
+    pub at: u64,
+}
+
+/// At most one notice per repository in this many milliseconds.
+pub const NOTICE_EVERY_MS: u64 = 86_400_000;
+
+/// The notice to show now for this repository, if any: a new one (an id not shown last), at
+/// least [`NOTICE_EVERY_MS`] after the last shown, with `ui.notices` on. Showing it records it.
+pub fn take_notice(paths: &Paths, repo: &str) -> Option<String> {
+    if !config::load(paths).config.ui_notices {
+        return None;
+    }
+    let q = Queue::new(paths, repo);
+    let n: Notice = read_json(&q.notice())?;
+    let shown: Shown = read_json(&q.shown()).unwrap_or_default();
+    let now = now_ms();
+    if n.id.is_empty() || n.id == shown.id || now.saturating_sub(shown.at) < NOTICE_EVERY_MS {
+        return None;
+    }
+    write_json(&q.shown(), &Shown { id: n.id, at: now }).ok()?;
+    Some(n.text)
 }
 
 /// One repository's queue files.
@@ -82,6 +139,12 @@ impl Queue {
     pub fn sources(&self) -> PathBuf {
         self.file(".sources.json")
     }
+    pub fn notice(&self) -> PathBuf {
+        self.file(".notice.json")
+    }
+    pub fn shown(&self) -> PathBuf {
+        self.file(".notice-shown.json")
+    }
 }
 
 pub fn read_json<T: DeserializeOwned>(p: &Path) -> Option<T> {
@@ -106,12 +169,15 @@ pub enum Triggered {
 }
 
 /// The hook's part: record the request and start a learner if none is running or scheduled.
+/// `bootstrap`: asked at a session's start, for a repository with no reflexes yet or a damaged
+/// index (docs/zero-config.md §3.2).
 pub fn on_turn_end(
     paths: &Paths,
     root: &Path,
     harness: &str,
     transcript_path: Option<&str>,
     learner: &Path,
+    bootstrap: bool,
 ) -> Result<Triggered, Failure> {
     let cfg = config::load(paths).config;
     if !cfg.learn_auto {
@@ -129,6 +195,7 @@ pub fn on_turn_end(
         transcript_path,
         harness: harness.to_string(),
         requested_at: now,
+        bootstrap,
     };
     write_json(&q.request(), &req).map_err(|e| Failure::io("condition", "recording a learn request", &e))?;
     if lock::is_held(&q.lock()).map_err(|e| Failure::io("condition", "checking the learner lock", &e))? {
@@ -138,19 +205,28 @@ pub fn on_turn_end(
     if last.after > now {
         return Ok(Triggered::Scheduled);
     }
-    let started = read_json::<RunState>(&q.state()).map(|s| s.started_at).unwrap_or(0);
-    let earliest = started.max(last.after).saturating_add(cfg.learn_min_interval_secs * 1000);
-    let after = (earliest > now).then_some(earliest);
-    spawn(paths, root, after, learner)?;
+    let run = read_json::<RunState>(&q.state()).unwrap_or_default();
+    // Back off after repeated errors: from the third in a row, twice the interval per error
+    // (at least a minute, at most 64 intervals).
+    let base = if run.errors >= 3 { cfg.learn_min_interval_secs.max(60) } else { cfg.learn_min_interval_secs };
+    let factor = 1u64 << run.errors.saturating_sub(2).min(6);
+    let earliest = run.started_at.max(last.after).saturating_add(base * 1000 * factor);
+    // A bootstrap (no reflexes yet, or a damaged index) starts at once, unless learning keeps
+    // failing here.
+    let after = (earliest > now && (!bootstrap || run.errors >= 3)).then_some(earliest);
+    spawn(paths, root, after, learner, bootstrap)?;
     let _ = write_json(&q.spawned(), &Spawned { at: now, after: after.unwrap_or(now) });
     Ok(Triggered::Started(after))
 }
 
 /// Start `<learner> condition --auto --repo-root <root> [--after <ms>]` (the adage binary), detached,
 /// and do not wait.
-fn spawn(paths: &Paths, root: &Path, after: Option<u64>, learner: &Path) -> Result<(), Failure> {
+fn spawn(paths: &Paths, root: &Path, after: Option<u64>, learner: &Path, bootstrap: bool) -> Result<(), Failure> {
     let mut args: Vec<String> =
         vec!["condition".into(), "--auto".into(), "--repo-root".into(), root.to_string_lossy().into()];
+    if bootstrap {
+        args.push("--bootstrap".into());
+    }
     if let Some(a) = after {
         args.extend(["--after".to_string(), a.to_string()]);
     }

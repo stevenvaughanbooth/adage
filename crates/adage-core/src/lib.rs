@@ -4,6 +4,7 @@
 pub mod gitobj;
 pub mod keys;
 pub mod pattern;
+pub mod pricing;
 pub mod repo;
 pub mod shell;
 pub mod spans;

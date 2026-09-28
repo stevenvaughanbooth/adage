@@ -91,13 +91,18 @@ fn watch_once_on_a_fresh_machine_and_doctor_watch_alias() {
 }
 
 #[test]
-fn bare_adage_without_a_terminal_prints_usage() {
+fn bare_adage_prints_the_status_card_and_help_prints_usage() {
     let (_d, root) = world();
-    for args in [&[][..], &["--help"][..]] {
-        let o = run(&root, &root, args);
-        let t = text(&o);
-        assert!(o.status.success() && t.contains("usage: adage") && t.contains("watch"), "{t}");
-    }
+    let o = run(&root, &root, &[]);
+    let t = text(&o);
+    assert!(o.status.success() && t.starts_with("adage ") && !t.contains("usage: adage"), "{t}");
+    assert!(t.contains("adage doctor"), "{t}");
+    let o = run(&root, &root, &["--help"]);
+    let t = text(&o);
+    assert!(
+        o.status.success() && t.contains("usage: adage") && t.contains("watch") && t.contains("status card"),
+        "{t}"
+    );
 }
 
 #[test]

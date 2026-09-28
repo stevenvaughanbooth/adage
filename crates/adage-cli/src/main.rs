@@ -1,12 +1,14 @@
 //! `adage` — agent traces become reflexes.
 //!
 //! ```text
+//! adage                              the status card: reflexes, learning, savings, what waits for you
 //! adage hook <claude|opencode|codex> <Event>   hook client (reads the harness payload on stdin)
 //! adage init [--repo <path>] [--yes | --print]  first run: a guided wizard at a terminal; else detect
 //!                                    harnesses, show hook snippets, offer the model, sense
 //! adage sense [--repo <key>] [--since <days>] [--json]   read-only: which reflexes your traces would form
 //! adage doctor [--json]              check the binary, data directory, index, tracks, model, hooks
 //! adage watch [--repo <path>] [--demo]  a live pane: health lights, hook activity, what Adage conditions
+//! adage savings [--repo <path>] [--json]   what Adage saves here, measured against quiet sessions
 //! adage ui                           the full-screen app: live feed, reflexes and review, health fixes, settings
 //! adage condition [options]          mine traces into reflexes, bind instincts, compile the index
 //! adage condition --auto --repo-root <path>   condition one repository quietly (what hooks start)
@@ -60,10 +62,12 @@ mod proposal;
 mod redact;
 mod reimport;
 mod review;
+mod savings;
 mod sense;
 mod serve;
 mod share;
 mod share_pack;
+mod status_card;
 mod train;
 mod tty;
 mod ui;
@@ -133,9 +137,10 @@ fn run(args: &[String]) -> Result<()> {
         Some("doctor") => doctor::doctor(&args[1..], &paths),
         Some("watch") => ui::watch(&args[1..], &paths),
         Some("ui") => ui::app(&args[1..], &paths),
-        // Bare `adage` at a terminal opens the app; anywhere else (a pipe, an agent's shell) it
-        // prints the usage, as `--help` always does.
-        None if ui::interactive() => ui::app(&[], &paths),
+        Some("savings") => savings::run(&args[1..], &paths),
+        // Bare `adage` prints the status card, wherever it runs (a terminal, a pipe, `!adage` in
+        // Claude Code); `adage ui` opens the app and `--help` shows the usage.
+        None => status_card::run(&paths),
         Some("hooks-config") => {
             let bin = args.get(1).cloned().unwrap_or_else(|| "adage".into());
             println!("{}", serde_json::to_string_pretty(&harness::claude::settings(&bin))?);
@@ -153,7 +158,7 @@ fn run(args: &[String]) -> Result<()> {
             }
             None => bail!("unknown command `{}`: `adage --help` lists them", args[1]),
         },
-        None | Some("help" | "--help" | "-h") => {
+        Some("help" | "--help" | "-h") => {
             print!("{}", help::all());
             Ok(())
         }

@@ -360,14 +360,39 @@ fn config_command_validates_and_refuses_agents() {
     let o = w.cmd(&["config"]).env("ADAGE_CONTROL", "0.7").output().unwrap();
     assert!(World::text(&o).contains("env ADAGE_CONTROL"), "{}", World::text(&o));
 
-    // Inside an agent session, reading is fine and changing is refused, whatever else is set.
+    // Inside an agent session, reading is fine and changing what Adage learns from is refused,
+    // whatever else is set.
     let before = std::fs::read(w.home().join("config.toml")).unwrap();
     for var in ["CLAUDECODE", "OPENCODE", "CODEX_SANDBOX"] {
-        let o = w.cmd(&["config", "set", "learn.auto", "false"]).env(var, "1").output().unwrap();
-        assert!(!o.status.success() && World::text(&o).contains("agent session"), "{var}: {}", World::text(&o));
+        for (k, v) in
+            [("learn.thresholds", "demo"), ("learn.claude_projects", "/elsewhere"), ("instincts.packs", "core")]
+        {
+            let o = w.cmd(&["config", "set", k, v]).env(var, "1").output().unwrap();
+            assert!(!o.status.success() && World::text(&o).contains("agent session"), "{var} {k}: {}", World::text(&o));
+        }
         assert!(w.cmd(&["config"]).env(var, "1").output().unwrap().status.success());
     }
     assert_eq!(std::fs::read(w.home().join("config.toml")).unwrap(), before, "nothing was written");
+    // A guarded key also needs a terminal ...
+    let o = w
+        .cmd(&["config", "set", "learn.thresholds", "demo"])
+        .env_remove("ADAGE_ALLOW_NONINTERACTIVE")
+        .output()
+        .unwrap();
+    assert!(!o.status.success() && World::text(&o).contains("terminal"), "{}", World::text(&o));
+    // ... but a setting that only tunes Adage or turns something down does not, anywhere.
+    for (k, v) in [("learn.auto", "false"), ("ui.notices", "off"), ("instincts.enabled", "false")] {
+        let o = w
+            .cmd(&["config", "set", k, v])
+            .env_remove("ADAGE_ALLOW_NONINTERACTIVE")
+            .env("CLAUDECODE", "1")
+            .stdin(std::process::Stdio::null())
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{k}: {}", World::text(&o));
+    }
+    let o = w.cmd(&["config", "get", "ui.notices"]).output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "off");
 }
 
 fn wait_for(what: &str, limit: Duration, mut f: impl FnMut() -> bool) {

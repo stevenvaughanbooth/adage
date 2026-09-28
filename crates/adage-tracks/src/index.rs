@@ -266,6 +266,25 @@ impl Index {
 
     /// Load the index; any failure yields an empty index (fail open).
     pub fn load(path: &Path) -> Index {
-        std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+        Index::try_load(path).unwrap_or_default()
     }
+
+    /// Load the index, saying why it could not be: [`Unloaded::Missing`] when there is no file (a
+    /// fresh machine), [`Unloaded::Damaged`] when there is one that cannot be read or parsed (a
+    /// truncated write, a disk error). The hook treats a damaged index as a request to rebuild it.
+    pub fn try_load(path: &Path) -> std::result::Result<Index, Unloaded> {
+        let bytes = match std::fs::read(path) {
+            Ok(b) => b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(Unloaded::Missing),
+            Err(_) => return Err(Unloaded::Damaged),
+        };
+        serde_json::from_slice(&bytes).map_err(|_| Unloaded::Damaged)
+    }
+}
+
+/// Why [`Index::try_load`] found no index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unloaded {
+    Missing,
+    Damaged,
 }
