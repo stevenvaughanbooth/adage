@@ -193,3 +193,9 @@ jobs:
       - name: embedded map matches web/map
         run: pnpm drift
         working-directory: web/map
+      - name: browser for the e2e suite
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: web/map
+      - name: map e2e and axe (builds and starts the adage binary itself)
+        run: pnpm test:e2e
+        working-directory: web/map
