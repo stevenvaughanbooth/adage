@@ -35,7 +35,27 @@ pub fn find_root(start: &Path) -> Option<PathBuf> {
 ///   the directory name alone, the key every repository without `origin` had before. Hooks accept
 ///   such a *legacy* key only while no repository of that name has a new key ([`lookup_key`]).
 pub fn repo_key(root: &Path) -> String {
+    if let Some(main) = removed_worktree(root) {
+        return repo_key(&main);
+    }
     origin_key(root).unwrap_or_else(|| no_origin_key(root, CACHE.get().map(PathBuf::as_path)))
+}
+
+/// The repository a removed Claude Code agent worktree belonged to: for a directory that no
+/// longer exists at `<repo>/.claude/worktrees/<name>` (from `claude --worktree` or a sub-agent's
+/// isolation), `<repo>`, when it is still a repository. Traces recorded there keep their
+/// repository's key; a worktree that still exists is keyed through its common git directory
+/// ([`origin_key`]).
+pub fn removed_worktree(path: &Path) -> Option<PathBuf> {
+    if path.exists() {
+        return None;
+    }
+    let s = path.to_string_lossy();
+    let marker = "/.claude/worktrees/";
+    let i = s.find(marker)?;
+    s[i + marker.len()..].split('/').next().filter(|n| !n.is_empty())?;
+    let main = PathBuf::from(&s[..i]);
+    main.join(".git").exists().then_some(main)
 }
 
 /// The one derivation of the key a repository's tracks are stored under, used by every path that
@@ -68,6 +88,9 @@ pub fn use_cache(dir: PathBuf) {
 /// history is walked once, not at every hook. A remembered root commit is used only while the
 /// repository's object store still holds it.
 pub fn repo_key_cached(root: &Path, cache: &Path) -> String {
+    if let Some(main) = removed_worktree(root) {
+        return repo_key_cached(&main, cache);
+    }
     origin_key(root).unwrap_or_else(|| no_origin_key(root, Some(cache)))
 }
 
@@ -98,7 +121,12 @@ pub fn lookup_key(root: &Path, cache: Option<&Path>, keys: &BTreeSet<&str>) -> O
 
 /// The `origin` remote's normalised URL, from the repository's config.
 pub fn origin_key(root: &Path) -> Option<String> {
-    let cfg = std::fs::read_to_string(root.join(".git/config")).ok()?;
+    // A linked worktree's `.git` is a file; the shared config is in the common directory, so a
+    // worktree has its repository's key.
+    let cfg = match std::fs::read_to_string(root.join(".git/config")) {
+        Ok(c) => c,
+        Err(_) => std::fs::read_to_string(crate::gitobj::dirs(root)?.1.join("config")).ok()?,
+    };
     let mut in_origin = false;
     for line in cfg.lines() {
         let l = line.trim();
@@ -289,6 +317,23 @@ mod tests {
         assert_eq!(relativize(Path::new("/r/repo"), "/r/other/x"), "/r/other/x");
         assert_eq!(relativize(Path::new("/r/repo"), "/r/repo/a/../b"), "b");
         assert_eq!(relativize(Path::new("/r/repo"), "/r/repository/x"), "/r/repository/x", "component boundary");
+    }
+
+    /// A linked worktree (`.git` a `gitdir:` file) has its repository's key: the shared config is
+    /// in the common directory.
+    #[test]
+    fn a_linked_worktree_has_its_repositorys_origin_key() {
+        let d = tempfile::tempdir().unwrap();
+        let main = d.path().join("repo");
+        std::fs::create_dir_all(main.join(".git/worktrees/wt")).unwrap();
+        std::fs::write(main.join(".git/config"), "[remote \"origin\"]\n\turl = https://github.com/Acme/Billing\n")
+            .unwrap();
+        std::fs::write(main.join(".git/worktrees/wt/commondir"), "../..\n").unwrap();
+        let wt = d.path().join("wt");
+        std::fs::create_dir_all(&wt).unwrap();
+        std::fs::write(wt.join(".git"), format!("gitdir: {}\n", main.join(".git/worktrees/wt").display())).unwrap();
+        assert_eq!(origin_key(&wt).as_deref(), Some("github.com/acme/billing"));
+        assert_eq!(origin_key(&wt), origin_key(&main));
     }
 
     #[test]

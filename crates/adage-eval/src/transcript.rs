@@ -146,6 +146,15 @@ pub fn parse(text: &str) -> Option<Transcript> {
         }
         let typ = rec.get("type").and_then(Value::as_str).unwrap_or("");
         if matches!(typ, "attachment" | "system") {
+            // Only hook output steers (`adage_learn::import`): an edited file's snippet that
+            // quotes the wrapper does not.
+            let hook_output = match typ {
+                "attachment" => rec["attachment"]["type"].as_str().is_some_and(|t| t.starts_with("hook")),
+                _ => rec.get("subtype").and_then(Value::as_str).is_some_and(|t| t.contains("hook")),
+            };
+            if !hook_output {
+                continue;
+            }
             if line.contains("<adage-reflex") {
                 steered = true;
                 route_ids(line, &mut directed);

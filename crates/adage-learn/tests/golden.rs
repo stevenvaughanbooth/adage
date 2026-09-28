@@ -148,7 +148,7 @@ fn steered_traces_are_exposed_only_to_what_their_directives_named() {
     for i in 0..3 {
         let mut t = Tx::new(&format!("steered{i}"), cwd, "Pick up W-2099");
         t.lines.push(json!({"type":"attachment","sessionId":format!("steered{i}"),"cwd":cwd,
-            "content":"<adage-reflex track=\"x\" route=\"lookup-work-item\" strength=\"fire\" kind=\"run\">\nIn this repository, work item details are looked up with:\n  python3 scripts/wi-lookup W-2099\n</adage-reflex>"}));
+            "attachment":{"type":"hook_additional_context","content":["<adage-reflex track=\"x\" route=\"lookup-work-item\" strength=\"fire\" kind=\"run\">\nIn this repository, work item details are looked up with:\n  python3 scripts/wi-lookup W-2099\n</adage-reflex>"]}}));
         t.bash("./scripts/other-lookup W-2099", "ok", false)
             .call("Edit", json!({"file_path": format!("{cwd}/acme/billing.py")}), "ok", false)
             .bash("python3 -m pytest", "RuntimeError: ACME_ENV is not set — run tests with 'make test'", true)

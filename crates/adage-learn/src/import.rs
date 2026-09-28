@@ -404,13 +404,17 @@ fn is_synthetic_prompt(s: &str) -> bool {
     t.starts_with("<local-command") || t.starts_with("<command-") || t.starts_with("<system-reminder") || t.is_empty()
 }
 
-/// Parse one transcript file. Returns `None` for sidechains or sessions without a usable prompt.
+/// Parse one transcript file. Returns `None` for sessions without a usable prompt. Sidechain
+/// records inside a top-level transcript (an older Claude Code's inline sub-agent turns) are
+/// skipped; a sub-agent's own transcript (`<session>/subagents/agent-*.jsonl`, every record a
+/// sidechain) is a trace of its own.
 ///
 /// The file is streamed line by line, so memory is bounded by the session's own tool calls, not
 /// by the file (a long transcript is mostly tool output, kept only once per call).
 pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option<&str>) -> Option<Session> {
     use std::io::BufRead;
     let reader = std::io::BufReader::new(std::fs::File::open(path).ok()?);
+    let subagent = path.parent().and_then(|p| p.file_name()).is_some_and(|n| n == "subagents");
     let mut id = String::new();
     let mut cwd: Option<String> = None;
     let mut model: Option<String> = None;
@@ -431,12 +435,17 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
         let Ok(line) = line else { break };
         let line = line.as_str();
         let Ok(rec) = serde_json::from_str::<Value>(line) else { continue };
-        if rec.get("isSidechain").and_then(|v| v.as_bool()) == Some(true) {
+        if !subagent && rec.get("isSidechain").and_then(|v| v.as_bool()) == Some(true) {
             continue;
         }
         if id.is_empty() {
+            // A sub-agent shares its parent's session id; its agent id tells the traces apart.
+            let agent = rec.get("agentId").and_then(|v| v.as_str()).filter(|_| subagent);
             if let Some(s) = rec.get("sessionId").and_then(|v| v.as_str()) {
-                id = s.to_string();
+                id = match agent {
+                    Some(a) => format!("{s}/{a}"),
+                    None => s.to_string(),
+                };
             }
         }
         if cwd.is_none() {
@@ -447,10 +456,15 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
                 day = ts.chars().take(10).collect();
             }
         }
-        // Directives are delivered as hook attachments; text elsewhere (a tool printing Adage's
-        // own docs, say) is not steering.
-        let is_attachment = matches!(rec.get("type").and_then(|v| v.as_str()), Some("attachment") | Some("system"));
-        if is_attachment {
+        // Directives are delivered as hook output (`hook_additional_context` attachments, hook
+        // system records); text elsewhere (a tool printing Adage's own docs, an edited file's
+        // snippet that quotes the wrapper) is not steering.
+        let hook_output = match rec.get("type").and_then(|v| v.as_str()) {
+            Some("attachment") => rec["attachment"]["type"].as_str().is_some_and(|t| t.starts_with("hook")),
+            Some("system") => rec.get("subtype").and_then(|v| v.as_str()).is_some_and(|t| t.contains("hook")),
+            _ => false,
+        };
+        if hook_output {
             signals.at(uses.len());
             signals.note(line);
         }
@@ -524,7 +538,12 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     let cwd = cwd?;
     let prompt = prompt?;
     let cwd_path = PathBuf::from(&cwd);
-    let root = repo::find_root(&cwd_path).unwrap_or(cwd_path);
+    let root = match worktree_root(&cwd_path) {
+        // Paths are relative to the worktree the agent worked in; its key is its repository's
+        // (`repo::repo_key`).
+        Some(worktree) => worktree,
+        None => repo::find_root(&cwd_path).unwrap_or(cwd_path),
+    };
     let repo_key = repo::key_for(&root, repo_override);
     let root_str = root.to_string_lossy().to_string();
     let mut steps = Vec::new();
@@ -580,16 +599,34 @@ pub(crate) fn call_steps(turn: u32, prompt: u16, call: &Call, actions: Vec<Norma
         .collect()
 }
 
-/// Every top-level (non-sidechain) transcript under a Claude Code projects directory.
+/// The root of a Claude Code agent worktree that no longer exists (`<repo>/.claude/worktrees/<name>`,
+/// [`repo::removed_worktree`]), which the transcript's paths are under; `None` otherwise (a
+/// worktree that still exists is found by [`repo::find_root`]).
+fn worktree_root(cwd: &Path) -> Option<PathBuf> {
+    let main = repo::removed_worktree(cwd)?;
+    let rest = cwd.strip_prefix(main.join(".claude/worktrees")).ok()?;
+    let name = rest.components().next()?;
+    Some(main.join(".claude/worktrees").join(name))
+}
+
+/// Every top-level (non-sidechain) transcript under a Claude Code projects directory, and every
+/// sub-agent's (`<project>/<session>/subagents/*.jsonl`).
 pub fn discover(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
+    let jsonl = |dir: &Path, out: &mut Vec<PathBuf>| {
+        for f in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            let path = f.path();
+            if path.extension().is_some_and(|e| e == "jsonl") && path.is_file() {
+                out.push(path);
+            }
+        }
+    };
     let Ok(projects) = std::fs::read_dir(root) else { return out };
     for p in projects.flatten() {
-        let Ok(files) = std::fs::read_dir(p.path()) else { continue };
-        for f in files.flatten() {
-            let path = f.path();
-            if path.extension().is_some_and(|e| e == "jsonl") {
-                out.push(path);
+        jsonl(&p.path(), &mut out);
+        for s in std::fs::read_dir(p.path()).into_iter().flatten().flatten() {
+            if s.file_type().is_ok_and(|t| t.is_dir()) {
+                jsonl(&s.path().join("subagents"), &mut out);
             }
         }
     }
@@ -647,6 +684,70 @@ mod tests {
         assert_eq!(got, [("Fix BIL-1041", 0), ("now run the checks", 2), ("thanks", 3)]);
         assert_eq!(s.steps.iter().map(|x| x.prompt).collect::<Vec<_>>(), [0, 0, 1]);
         assert_eq!(s.prompt_count(), 3);
+    }
+
+    /// Only hook output steers: an edited file's snippet that quotes the wrapper (an edit to
+    /// Adage's own docs, say) does not.
+    #[test]
+    fn only_hook_output_marks_a_session_steered() {
+        let wrapper =
+            "<adage-reflex track=\"t@1\" route=\"r\" strength=\"fire\" kind=\"run\">\n  make gen\n</adage-reflex>";
+        let rec = |v: serde_json::Value| format!("{v}\n");
+        let head =
+            rec(serde_json::json!({"type":"user","sessionId":"s","cwd":"/tmp/x","timestamp":"2026-09-01T00:00:00Z",
+            "message":{"role":"user","content":"Fix the docs"}}));
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("s.jsonl");
+        for (attachment, steered) in [
+            (serde_json::json!({"type":"edited_text_file","filename":"docs/lexicon.md","snippet":wrapper}), false),
+            (
+                serde_json::json!({"type":"hook_additional_context","hookEvent":"UserPromptSubmit","content":[wrapper]}),
+                true,
+            ),
+        ] {
+            let body =
+                head.clone() + &rec(serde_json::json!({"type":"attachment","sessionId":"s","attachment":attachment}));
+            std::fs::write(&p, body).unwrap();
+            let s = parse_transcript(&p, &CommandTable::load(), Some("r")).unwrap();
+            assert_eq!(s.steered, steered, "{attachment}");
+        }
+    }
+
+    /// Sub-agents' transcripts are traces of their own (every record a sidechain), found beside
+    /// their parent's; a removed Claude Code worktree keeps its repository's key, with paths
+    /// relative to the worktree.
+    #[test]
+    fn sub_agent_traces_are_found_and_removed_worktrees_keep_their_repository() {
+        let d = tempfile::tempdir().unwrap();
+        let main = d.path().join("repo");
+        std::fs::create_dir_all(main.join(".git")).unwrap();
+        std::fs::write(main.join(".git/config"), "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n")
+            .unwrap();
+        let gone = main.join(".claude/worktrees/agent-1");
+        let rec = |v: serde_json::Value| format!("{v}\n");
+        let body = [
+            rec(serde_json::json!({"type":"user","isSidechain":true,"agentId":"a1","sessionId":"s","cwd":gone,
+                "timestamp":"2026-09-01T00:00:00Z","message":{"role":"user","content":"Fix the schema"}})),
+            rec(serde_json::json!({"type":"assistant","isSidechain":true,"agentId":"a1","sessionId":"s",
+                "message":{"id":"m1","role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Edit",
+                "input":{"file_path":gone.join("schema/a.json"),"old_string":"a","new_string":"b"}}]}})),
+        ]
+        .concat();
+        let projects = d.path().join("projects");
+        let sub = projects.join("-repo/s/subagents");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(projects.join("-repo/s.jsonl"), "").unwrap();
+        std::fs::write(sub.join("agent-a1.jsonl"), &body).unwrap();
+        std::fs::write(sub.join("agent-a1.meta.json"), "{}").unwrap();
+        let found = discover(&projects);
+        assert_eq!(found, [sub.join("agent-a1.jsonl"), projects.join("-repo/s.jsonl")]);
+        let s = parse_transcript(&sub.join("agent-a1.jsonl"), &CommandTable::load(), None).unwrap();
+        assert_eq!((s.id.as_str(), s.repo.as_str()), ("s/a1", "github.com/acme/billing"));
+        assert_eq!(s.root, gone);
+        assert_eq!(s.steps[0].rel_path.as_deref(), Some("schema/a.json"), "relative to the worktree");
+        // In a top-level transcript, sidechain records are another agent's turns: skipped.
+        std::fs::write(projects.join("-repo/s.jsonl"), &body).unwrap();
+        assert!(parse_transcript(&projects.join("-repo/s.jsonl"), &CommandTable::load(), None).is_none());
     }
 
     #[test]
