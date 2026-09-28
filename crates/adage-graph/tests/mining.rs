@@ -95,6 +95,10 @@ fn scale_2000_sessions_of_200_events() {
             l.gated,
             l.reflexes.len()
         );
+        // `SCALE_DUMP=<file>`: the result, to compare two builds byte for byte.
+        if let Ok(f) = std::env::var("SCALE_DUMP") {
+            std::fs::write(f, serde_json::to_string_pretty(&l).unwrap()).unwrap();
+        }
         assert!(!l.reflexes.is_empty());
     }
 }

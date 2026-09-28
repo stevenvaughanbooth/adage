@@ -33,7 +33,7 @@
 use crate::events::{EventSession, Level, NodeType, NONE};
 use crate::mine::{self, Db, Item, MineParams, Pattern, Pol};
 use crate::proto::{self, ProtoParams};
-use crate::score::{self, Holdout, Rule, ScoreParams, Scored};
+use crate::score::{self, Calibration, Holdout, Rule, ScoreParams, Scored};
 use adage_core::pattern::Shape;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -132,6 +132,12 @@ pub struct Reflex {
     pub days: u32,
     pub conf: f64,
     pub conf_lb: f64,
+    /// `conf` and `conf_lb` after calibration against inner held-out outcomes
+    /// ([`Calibration`]).
+    #[serde(default)]
+    pub conf_cal: f64,
+    #[serde(default)]
+    pub conf_lb_cal: f64,
     pub lift: f64,
     pub contrast: f64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -176,6 +182,9 @@ pub struct Learned {
     /// Calibrated τ per family.
     pub tau: BTreeMap<String, f32>,
     pub reflexes: Vec<Reflex>,
+    /// The posterior calibration map fitted on this learn's sessions.
+    #[serde(default)]
+    pub calibration: Calibration,
     #[serde(skip)]
     pub timings: Timings,
 }
@@ -472,6 +481,8 @@ fn reflex(db: &Db, sc: &Scored, gain: f64) -> Reflex {
         days: sc.days,
         conf: sc.conf,
         conf_lb: sc.conf_lb,
+        conf_cal: sc.conf_cal,
+        conf_lb_cal: sc.conf_lb_cal,
         lift: sc.lift,
         contrast: sc.contrast,
         consistency: sc.consistency,
@@ -558,7 +569,11 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
     let mut closed: Vec<&mine::MinedPattern> = mined.closed().collect();
     closed.sort_by(|a, b| b.sessions.len().cmp(&a.sessions.len()).then(a.pattern.cmp(&b.pattern)));
     closed.truncate(p.max_closed);
-    let scored = score::score_all(&db, &closed, &mined.patterns, &p.score);
+    let mut scored = score::score_all(&db, &closed, &mined.patterns, &p.score);
+    let calibration = fit_calibration(&corpus.labels, &tr, &db, &scored, &p);
+    for sc in scored.iter_mut() {
+        calibration.calibrate(sc, p.score.quantile);
+    }
     let t3 = Instant::now();
     let kept = select(&db, &scored, p.max_reflexes);
     let reflexes: Vec<Reflex> = kept.iter().map(|&(i, g)| reflex(&db, &scored[i], g)).collect();
@@ -578,23 +593,79 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
         singleton_share: epoch.singleton_share(),
         tau: epoch.families.iter().map(|(k, f)| (k.clone(), f.tau)).collect(),
         reflexes,
+        calibration,
         timings: Timings { proto_ms: ms(t0, t1), mine_ms: ms(t1, t2), score_ms: ms(t2, t3), select_ms: ms(t3, t4) },
     };
     let holdout = (!te.is_empty()).then(|| {
-        let rules: Vec<Rule> = kept
+        // Every candidate is a calibration pair source; the selected ones are also reported apart.
+        let chosen: std::collections::BTreeSet<usize> = kept.iter().map(|k| k.0).collect();
+        let rules: Vec<Rule> = scored
             .iter()
-            .map(|&(i, _)| Rule {
-                pattern: scored[i].pattern.clone(),
-                conf: scored[i].conf,
-                conf_lb: scored[i].conf_lb,
-                p_next: scored[i].p_next,
-                variant: scored[i].variant,
+            .enumerate()
+            .map(|(i, sc)| Rule {
+                pattern: sc.pattern.clone(),
+                conf: sc.conf,
+                conf_cal: sc.conf_cal,
+                conf_lb: sc.conf_lb,
+                p_next: sc.p_next,
+                variant: sc.variant,
+                selected: chosen.contains(&i),
             })
             .collect();
         let test_db: Vec<mine::DbSession> = te.iter().map(|s| db.prepare(s)).collect();
         score::holdout(&db, &rules, &test_db)
     });
     (learned, holdout)
+}
+
+/// Inner folds of the calibration fit.
+const CAL_FOLDS: usize = 3;
+
+/// At most this many training sessions get the exact calibration fit (re-mining per inner
+/// fold); larger corpora use [`Calibration::fit`].
+pub const CAL_REMINE_MAX: usize = 400;
+
+/// Fit the posterior calibration on the training sessions (Track G §5): on task-grouped inner
+/// folds, mine and score candidates on the other folds and compare each candidate's posterior
+/// with whether its continuation follows its context in the fold's sessions.
+fn fit_calibration(
+    labels: &crate::events::LabelTable,
+    train: &[&crate::events::LSession],
+    db: &Db,
+    scored: &[Scored],
+    p: &Params,
+) -> Calibration {
+    if db.sessions.len() > CAL_REMINE_MAX {
+        return Calibration::fit(db, scored, p.score.kappa, CAL_FOLDS);
+    }
+    let fold = score::inner_folds(&db.sessions, CAL_FOLDS);
+    let fold_of: BTreeMap<&str, usize> = db.sessions.iter().zip(&fold).map(|(s, &f)| (s.id.as_str(), f)).collect();
+    let mut bins = Calibration::bins();
+    for f in 0..CAL_FOLDS {
+        let (itr, ite): (Vec<&crate::events::LSession>, Vec<&crate::events::LSession>) =
+            train.iter().partition(|s| fold_of.get(s.id.as_str()) != Some(&f));
+        if itr.is_empty() || ite.is_empty() {
+            continue;
+        }
+        let idb = Db::build(labels, &itr, &p.mine);
+        let mined = mine::mine(&idb, &p.mine);
+        let mut closed: Vec<&mine::MinedPattern> = mined.closed().collect();
+        closed.sort_by(|a, b| b.sessions.len().cmp(&a.sessions.len()).then(a.pattern.cmp(&b.pattern)));
+        closed.truncate(p.max_closed);
+        let iscored = score::score_all(&idb, &closed, &mined.patterns, &p.score);
+        let test: Vec<mine::DbSession> = ite.iter().map(|s| idb.prepare(s)).collect();
+        for sc in &iscored {
+            let cut = sc.pattern.cut;
+            let mut xs: Vec<Item> = sc.pattern.items[..cut].to_vec();
+            xs[0] = xs[0].first();
+            for s in &test {
+                if idb.occurs(s, &xs, cut) {
+                    Calibration::add(&mut bins, sc.conf, idb.occurs(s, &sc.pattern.items, cut));
+                }
+            }
+        }
+    }
+    Calibration::from_bins(&bins)
 }
 
 /// Every scored candidate of a learn, with its canonical string, for inspection (`why` a pattern

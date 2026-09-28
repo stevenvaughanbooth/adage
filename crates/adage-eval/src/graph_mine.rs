@@ -11,9 +11,12 @@
 //!
 //! - the top reflexes (pattern, support, days, conf and its lower bound, lift, contrast, value,
 //!   compression gain);
-//! - on the held-out side: next-action top-1 accuracy of the engine (reflexes, then the order-1
-//!   backoff) against the order-1 baseline, conformance (mean −ln p of the next act), and the
-//!   calibration ECE of `conf` against held-out outcomes (Track G §5, Design §8.5);
+//! - on the held-out side: next-action top-1 accuracy of the engine (the
+//!   variable-order backoff model, `adage_graph::score::NextModel`) against the order-1 and
+//!   order-2 baselines with the oracle ceilings, conformance (mean −ln p of the next act), and
+//!   the calibration ECE of every candidate's calibrated posterior against held-out outcomes
+//!   (all (session, candidate) pairs, and the selected reflexes' with a bootstrap interval;
+//!   Track G §5, Design §8.5);
 //! - parity with `conventions.json`: each convention found as a mined pattern (Track G §8,
 //!   [`adage_graph::select::matches_convention`]), decoys selected, and reflexes matching no
 //!   convention.
@@ -173,7 +176,9 @@ pub struct Report {
     /// Means over bundles with a holdout.
     pub top1_engine: f64,
     pub top1_baseline: f64,
+    pub top1_order2: f64,
     pub ece: f64,
+    pub ece_raw: f64,
     pub recall: f64,
     pub decoys_selected: usize,
 }
@@ -363,7 +368,9 @@ pub fn run(dir: &Path, split: Option<&str>) -> Result<Report> {
     Ok(Report {
         top1_engine: mean(&|h| h.top1_engine),
         top1_baseline: mean(&|h| h.top1_baseline),
+        top1_order2: mean(&|h| h.top1_order2),
         ece: mean(&|h| h.ece),
+        ece_raw: mean(&|h| h.ece_raw),
         recall: bundles.iter().map(|b| b.parity.recall).sum::<f64>() / n,
         decoys_selected: bundles.iter().map(|b| b.parity.decoys_selected.len()).sum(),
         bundles,
@@ -405,17 +412,22 @@ pub fn render_text(r: &Report, top: usize) -> String {
         }
         if let Some(h) = &b.holdout {
             s.push_str(&format!(
-                "   held out: next-action top-1 engine {:.3} vs order-1 {:.3} ({} positions; reflexes fired at {}: {:.3} vs {:.3}); conformance {:.3} vs {:.3} nats; ECE {:.3} over {} (session, reflex) pairs\n",
+                "   held out: next-action top-1 engine {:.3} vs order-1 {:.3} vs order-2 {:.3} ({} positions; chains chosen {:?}); oracle ceilings (order 1/2/3) {}; conformance {:.3} vs {:.3} nats\n   calibration: ECE {:.3} over {} (session, candidate) pairs (raw {:.3}); selected reflexes {:.3} over {} pairs (90% CI {:.3}–{:.3})\n",
                 h.top1_engine,
                 h.top1_baseline,
+                h.top1_order2,
                 h.positions,
-                h.fired,
-                h.top1_engine_fired,
-                h.top1_baseline_fired,
+                h.chosen,
+                h.oracle.iter().map(|o| format!("{:.3} ({:.2} bits)", o.ceiling, o.entropy_bits)).collect::<Vec<_>>().join(" / "),
                 h.conformance_engine,
                 h.conformance_baseline,
                 h.ece,
-                h.ece_pairs
+                h.ece_pairs,
+                h.ece_raw,
+                h.ece_selected,
+                h.ece_selected_pairs,
+                h.ece_selected_ci.0,
+                h.ece_selected_ci.1,
             ));
         }
         let p = &b.parity;
@@ -438,8 +450,8 @@ pub fn render_text(r: &Report, top: usize) -> String {
         ));
     }
     s.push_str(&format!(
-        "mean over bundles: next-action top-1 engine {:.3} vs order-1 {:.3} (target: baseline + 0.05); ECE {:.3} (target ≤ 0.05); convention recall {:.2}; decoys selected {}\n",
-        r.top1_engine, r.top1_baseline, r.ece, r.recall, r.decoys_selected
+        "mean over bundles: next-action top-1 engine {:.3} vs order-1 {:.3} vs order-2 {:.3} (target: order-1 + 0.05); ECE {:.3} (raw {:.3}; target ≤ 0.05); convention recall {:.2}; decoys selected {}\n",
+        r.top1_engine, r.top1_baseline, r.top1_order2, r.ece, r.ece_raw, r.recall, r.decoys_selected
     ));
     s
 }

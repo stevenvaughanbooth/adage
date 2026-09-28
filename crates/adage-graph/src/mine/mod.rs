@@ -191,6 +191,9 @@ impl Pattern {
 pub struct DbSession {
     pub id: String,
     pub day: u32,
+    /// The session's task, when known (held-out folds and inner folds group by it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task: Option<String>,
     pub ev: Vec<LEvent>,
     /// Original event index of each alphabet event.
     pub orig: Vec<u32>,
@@ -303,6 +306,7 @@ impl Db {
         DbSession {
             id: s.id.clone(),
             day: s.day,
+            task: s.task.clone(),
             orig: keep.iter().map(|&i| i as u32).collect(),
             flows: remap(&s.flows),
             same_art: remap(&s.same_art),
