@@ -114,10 +114,12 @@ pub fn lattice(
 /// precise over the tree (precision over the tree's files of that extension, as every candidate
 /// ends in `*.ext`), least general first:
 ///
-/// 1. the siblings' glob: directories of one depth, the segments they differ in replaced by `*`
-///    (`crates/*/src/*.rs`);
-/// 2. their common prefix, `p/**/*.ext` (never empty);
-/// 3. `**/*.ext`, the extension anywhere in the repository: allowed for a repo-wide command only.
+/// 1. the siblings' glob: directories of one depth under one top-level directory, the segments
+///    they differ in replaced by `*` (`crates/*/src/*.rs`);
+/// 2. their common prefix, `p/**/*.ext` (never empty).
+///
+/// As in the lattice, a glob is never rooted in a wildcard (`**/*.ext`, `*/*.ext`): directories
+/// with nothing in common are different parts of the repository, and keep their own globs.
 ///
 /// When none is precise the globs are kept as they are. A single directory, a file glob and a file
 /// without an extension never widen.
@@ -154,7 +156,9 @@ pub fn widen(globs: &[String], tree: &BTreeSet<String>, touched: &BTreeSet<Strin
             let sib: Vec<&str> = (0..segs[0].len())
                 .map(|i| if segs.iter().all(|s| s[i] == segs[0][i]) { segs[0][i] } else { "*" })
                 .collect();
-            candidates.push(format!("{}/*.{e}", sib.join("/")));
+            if sib[0] != "*" {
+                candidates.push(format!("{}/*.{e}", sib.join("/")));
+            }
         }
         let mut prefix: Vec<&str> = segs[0].clone();
         for s in &segs[1..] {
@@ -165,7 +169,6 @@ pub fn widen(globs: &[String], tree: &BTreeSet<String>, touched: &BTreeSet<Strin
         if !prefix.is_empty() {
             candidates.push(format!("{}/**/*.{e}", prefix.join("/")));
         }
-        candidates.push(format!("**/*.{e}"));
         match candidates.into_iter().find(|g| ok(g)) {
             Some(g) => {
                 out.insert(g);

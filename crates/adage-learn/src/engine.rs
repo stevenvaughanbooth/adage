@@ -185,6 +185,38 @@ fn ran_after(steps: &[crate::import::StepObs], from: usize, step: &Step, part: O
     !want.is_empty() && i == want.len()
 }
 
+/// Whether the first run of `want` after position `from` recovered from a failed check: a
+/// different check failed after the edit and before it (`python -m pytest` fails, then
+/// `make test`). That run answers the failure, a dead end's evidence, not the edit.
+fn recovered(steps: &[crate::import::StepObs], from: usize, want: &Want) -> bool {
+    let Some(hit) = steps.iter().enumerate().skip(from + 1).find(|(_, st)| want.hit(st)).map(|(i, _)| i) else {
+        return false;
+    };
+    let runner = |st: &crate::import::StepObs| argv(st).map(|a| crate::evidence::runner(a));
+    let own = runner(&steps[hit]);
+    steps[from + 1..hit]
+        .iter()
+        .any(|st| st.call.failed && st.norm.effect == Effect::Verify && runner(st).is_some() && runner(st) != own)
+}
+
+/// The traces in which `command` (or a variant it covers) ran successfully within five steps of a
+/// different check's failure: the recovery `count_avoid` counts for a dead end.
+fn recovery_traces(command: &str, ss: &[&Session]) -> u32 {
+    let want = Want::new(command.to_string());
+    let runner = |st: &crate::import::StepObs| argv(st).map(|a| crate::evidence::runner(a));
+    let own = compile::variants::shape(command).map(|s| s.identity.join(" "));
+    ss.iter()
+        .filter(|s| {
+            s.steps.iter().enumerate().any(|(i, st)| {
+                st.call.failed
+                    && st.norm.effect == Effect::Verify
+                    && runner(st).is_some_and(|r| Some(&r) != own.as_ref() && !command.starts_with(&r))
+                    && s.steps.iter().skip(i + 1).take(5).any(|b| want.hit(b))
+            })
+        })
+        .count() as u32
+}
+
 struct Count {
     opportunities: u32,
     /// The traces where the trigger occurred (for the outcome lift).
@@ -205,6 +237,9 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
     });
     let first = compile::commands(&r.step).first().map(|c| c.to_string())?;
     let want_first = Want::new(first.clone());
+    // A plain check after an edit: its run is evidence only when the edit, not a failed check,
+    // called for it.
+    let check = r.effect == Effect::Verify && r.slots.is_empty() && matches!(r.step, Step::Run { .. });
     let (mut opp, mut support, mut ran_without, mut not_editing, mut failed) = (0, BTreeSet::new(), 0u32, 0u32, 0u32);
     let mut open = BTreeSet::new();
     for s in sessions {
@@ -223,7 +258,7 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
                 if depth.is_some() && part.is_none() {
                     continue;
                 }
-                if ran_after(&s.steps, i, &r.step, part) {
+                if ran_after(&s.steps, i, &r.step, part) && !(check && recovered(&s.steps, i, &want_first)) {
                     support.insert(s.id.clone());
                 } else if s.outcome == Some(false) {
                     failed += 1;
@@ -442,6 +477,11 @@ pub fn judge_read_batch(r: &Route, sessions: &[&Session], cfg: &LearnConfig) -> 
 /// The z of the one-sided 90% bound a check after an edit is contrasted with.
 const CHECK_Z: f64 = 1.2816;
 
+/// A check after an edit is suggested only when at least this many traces, and this share of
+/// them, missed it after such an edit: otherwise agents already run it unaided.
+const CHECK_MISSED: u32 = 2;
+const CHECK_MISSED_SHARE: f64 = 0.1;
+
 /// The Wilson score interval's upper bound at `z` (1 with no trials).
 fn wilson_upper(k: u32, n: u32, z: f64) -> f64 {
     if n == 0 {
@@ -588,6 +628,15 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
         if lower - upper < cfg.finish_line_contrast {
             return Err(format!(
                 "a check agents may run anyway: {n} of {} traces after the edit (lower bound {lower:.2}), {k} of {m} without it (upper bound {upper:.2})",
+                c.opportunities
+            ));
+        }
+        // A suggestion's worth is in the traces that would miss it (Track G §5: V has the factor
+        // 1 − p_soon): a check agents already ran after (nearly) every such edit adds nothing.
+        let missed = c.opportunities - n;
+        if missed < CHECK_MISSED || (missed as f64) < CHECK_MISSED_SHARE * c.opportunities as f64 {
+            return Err(format!(
+                "a check agents already run after the edit: {n} of {} traces ran it, {missed} missed it",
                 c.opportunities
             ));
         }
@@ -802,6 +851,14 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
         keep
     });
     explain_away(&mut routes, ss, cfg, &mut report);
+    let instead: Vec<String> = routes
+        .iter()
+        .filter_map(|j| match &j.route.step {
+            Step::Avoid { instead, .. } => Some(instead.clone()),
+            Step::Run { command } if matches!(j.route.trigger, Trigger::AfterFailure { .. }) => Some(command.clone()),
+            _ => None,
+        })
+        .collect();
     // A check after an edit that an obligation on the same trigger already makes (the check
     // meets the obligation's command: `cargo fmt --all --check` after `cargo fmt --all`) adds
     // nothing: the obligation is delivered alone.
@@ -811,6 +868,28 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
         };
         if j.route.effect != Effect::Verify {
             return true;
+        }
+        // A check an avoid already names as what to run instead is delivered at session start; so
+        // is one the traces show as a dead end's working command (the check agents turned to after
+        // another check failed, in at least `min_support` traces): it belongs to that dead end,
+        // learned or not, not to the edit.
+        let recoveries = recovery_traces(command, ss);
+        if let Some(a) = instead.iter().find(|i| adage_core::pattern::same_command(i, command)) {
+            report.dropped.push(Dropped {
+                pattern: j.why.pattern.clone(),
+                reason: format!("{}: a dead end already names {a:?} as the check to run", j.route.id),
+            });
+            return false;
+        }
+        if recoveries >= cfg.min_support {
+            report.dropped.push(Dropped {
+                pattern: j.why.pattern.clone(),
+                reason: format!(
+                    "{}: {recoveries} traces ran {command:?} after another check failed: a dead end's working command",
+                    j.route.id
+                ),
+            });
+            return false;
         }
         let checked = owed.iter().find(|(t, c)| *t == j.route.trigger && adage_core::pattern::same_command(c, command));
         if let Some((_, c)) = checked {
