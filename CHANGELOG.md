@@ -80,6 +80,31 @@ version as the GitHub Release notes.
   record with deltas and harm counts). `adage review` and `allow-exec` show them marked
   "self-reported by signer <fingerprint>"; they never grant a strength or a level.
 
+- **Graph engine G4 (Track G): context triggers fire at hook time.**
+  - The index carries, per repository with context triggers, an **alphabet** (every distinct
+    context item, interned by content) and a **discrimination net** (a trie over the reversed item
+    sequences, with each route's gap at its node): `adage_tracks::context`, `index.json`'s
+    `contexts`.
+  - The session state keeps its recent context symbols (`SessionState.ctx`: at most 16, none older
+    than 16 alphabet events, the alphabet's digest, the last failed command). `decide` symbolises
+    each batch call, failure and prompt (command keys by identity, then the command-pattern
+    algebra; failure signatures; edit globs; learned value types; intents) and walks the net at
+    most 3 deep. A fired context route directs its fixed command, or its sequence, once per
+    session, judged on the first command; no obligation and no Stop request come of it.
+  - Matching is a subsequence over alphabet events only, and the fast path's triggers now hold the
+    words, globs and value types of every context item, so skipping an event stays exactly
+    equivalent; the replay's fast-path check compares the context state too.
+  - A spool record carries the context state when its event changed it, and a rebuilt state takes
+    the last one (dropped if the index's alphabet changed since); a live state from another
+    alphabet starts over.
+  - Interlocking: a context shares a decision point with any trigger its last item's event fires.
+  - `adage eval routes` scores a context route as the one-event trigger on its last item.
+  - Gates: `crates/adage-eval/tests/g4.rs` (a context route fires in replay on every newkinds
+    trace that earns it, and the fast path is exact there) and `crates/adage-cli/tests/g4_hook.rs`
+    (held-out traces through `adage hook`: scope, env_sync, sequence and a context route fire at
+    the right events, `{part}` binds the edited package, controls get only the dead ends).
+  - `hook_latency` gains tool-batch scenarios in a repository with context routes, and runs
+    without the model (`-`).
 - **Graph engine G3 (Track G): a compiler to delivery shapes, and `learn.engine = graph | shadow`.**
   - `adage-graph/src/compile/` turns reflexes into routes by their structure: lookup, read-batch,
     avoid, obligation, scope (with an `edit_segment` slot), an environment step (as a draft),

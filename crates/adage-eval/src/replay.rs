@@ -69,9 +69,10 @@ pub struct FastCheck {
     pub mismatches: Vec<String>,
 }
 
-/// The state later decisions read (not the `batches` and `history` counters).
+/// The state later decisions read (not the `batches` and `history` counters): with the context
+/// state, whose symbols context triggers match on (Track G §7.3).
 fn decision_state(st: &SessionState) -> serde_json::Value {
-    serde_json::json!([st.arm, st.emitted, st.pending, st.obligations, st.stop_requests, st.prompts > 0])
+    serde_json::json!([st.arm, st.emitted, st.pending, st.obligations, st.stop_requests, st.prompts > 0, st.ctx])
 }
 
 pub fn actions(t: &Transcript, root: &Path, table: &CommandTable) -> Vec<Action> {

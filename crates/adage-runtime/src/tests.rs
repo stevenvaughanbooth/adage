@@ -549,7 +549,7 @@ fn restored(st: &SessionState) -> serde_json::Value {
     json!({
         "arm": st.arm, "repo": st.repo, "prompts": st.prompts, "batches": st.batches,
         "emitted": st.emitted, "obligations": obligations, "history": st.history,
-        "first_edit_at_batch": st.first_edit_at_batch, "stop_requests": st.stop_requests,
+        "first_edit_at_batch": st.first_edit_at_batch, "stop_requests": st.stop_requests, "ctx": st.ctx,
     })
 }
 
@@ -1298,51 +1298,91 @@ mod typed_slots {
     }
 }
 
-/// Track G G3: a sequence after an edit is said once, numbered, judged on its first command and
-/// never a Stop request; a context trigger is compiled but inert until G4 (it never matches, and
-/// the fast path adds nothing for it).
+// ---------------------------------------------------------------- context triggers (Track G G4)
+
+fn ctx_route(id: &str, items: Vec<CtxItem>, within: u8, step: Step, effect: Effect) -> Route {
+    route(id, Trigger::Context { items, within }, step, vec![], effect, Aspect::Yellow)
+}
+
+fn act_item(k: &str) -> CtxItem {
+    CtxItem::Act { keys: vec![k.into()] }
+}
+
+/// A repository with a sequence after a registry edit, and three context routes: `make check`
+/// after a registry edit then `make gen` (within 2 alphabet events), the steps after `make lint`
+/// then `make fmt`, and `make gen` again after it failed with its signature and the registry was
+/// edited.
+fn context_index(within: u8) -> Index {
+    let routes = vec![
+        route(
+            "sequence-1",
+            Trigger::AfterEdit { paths: "registry/*.csv".into() },
+            Step::Sequence { commands: vec!["make gen".into(), "make check".into()] },
+            vec![],
+            Effect::Regenerate,
+            Aspect::Green,
+        ),
+        ctx_route(
+            "run-ctx",
+            vec![CtxItem::Edit { glob: "registry/*.csv".into() }, act_item("exec make gen")],
+            within,
+            Step::Run { command: "make check".into() },
+            Effect::Verify,
+        ),
+        ctx_route(
+            "sequence-ctx",
+            vec![act_item("exec make lint"), act_item("exec make fmt")],
+            8,
+            Step::Sequence { commands: vec!["make gen".into(), "make check".into()] },
+            Effect::Regenerate,
+        ),
+        ctx_route(
+            "retry-ctx",
+            vec![
+                CtxItem::Fail { keys: vec!["exec make gen".into()], signature: "out of date".into() },
+                CtxItem::Edit { glob: "registry/*.csv".into() },
+            ],
+            8,
+            Step::Run { command: "make gen".into() },
+            Effect::Regenerate,
+        ),
+    ];
+    let t = track("acme/graph", "desire-path", routes);
+    adage_tracks::io::validate(&t).unwrap();
+    Index::compile(&[t])
+}
+
+fn failed_bash(cmd: &str, out: &str) -> Call {
+    Call { failed: true, ..bash(cmd, out) }
+}
+
+/// Decide every event on the full path and, as the hook does, on the fast path (an event it
+/// skips is not decided). A skipped event's full decision must be empty, and the state later
+/// decisions read, context symbols included, must be the same on both paths.
+fn decide_both(ctx: &Ctx, full: &mut SessionState, fast_st: &mut SessionState, ev: &Event) -> Decision {
+    let root = ctx.root.to_string_lossy().to_string();
+    let t = ctx.index.triggers(&ctx.repo);
+    let skip = fast::skip(&t, ev, &root, || Some(fast_st.clone()));
+    let d = decide(ctx, full, ev);
+    if skip {
+        assert!(d.would_have.is_empty() && d.judgements.is_empty(), "skipped {ev:?}, decided {d:?}");
+    } else {
+        let f = decide(ctx, fast_st, ev);
+        assert_eq!(serde_json::to_value(&f).unwrap(), serde_json::to_value(&d).unwrap(), "{ev:?}");
+    }
+    let state = |s: &SessionState| json!([s.emitted, s.pending, s.obligations, s.stop_requests, s.ctx]);
+    assert_eq!(state(fast_st), state(full), "after {ev:?}");
+    d
+}
+
+/// Track G G3 and G4: a sequence after an edit is said once, numbered, judged on its first
+/// command and never a Stop request; a context route fires on the event of its last item, when
+/// its earlier items came before it within its gap, and is judged like any other directive.
 #[test]
-fn a_sequence_follows_an_edit_and_a_context_never_fires() {
+fn a_sequence_follows_an_edit_and_a_context_fires_after_its_items() {
     let dir = tempfile::tempdir().unwrap();
     let table = CommandTable::load();
-    let track = Track {
-        manifest: Manifest {
-            track: TrackInfo {
-                name: "acme/graph".into(),
-                version: "0.1.0".into(),
-                description: String::new(),
-                provenance: "desire-path".into(),
-            },
-            scope: Scope { repo: "acme".into() },
-            gauge: Gauge::default(),
-        },
-        routes: vec![
-            route(
-                "sequence-1",
-                Trigger::AfterEdit { paths: "registry/*.csv".into() },
-                Step::Sequence { commands: vec!["make gen".into(), "make check".into()] },
-                vec![],
-                Effect::Regenerate,
-                Aspect::Green,
-            ),
-            route(
-                "run-ctx",
-                Trigger::Context {
-                    items: vec![
-                        CtxItem::Edit { glob: "registry/*.csv".into() },
-                        CtxItem::Act { keys: vec!["exec make gen".into()] },
-                    ],
-                    within: 8,
-                },
-                Step::Run { command: "make check".into() },
-                vec![],
-                Effect::Verify,
-                Aspect::Green,
-            ),
-        ],
-    };
-    adage_tracks::io::validate(&track).unwrap();
-    let index = Index::compile(&[track]);
+    let index = context_index(2);
     let ctx = Ctx {
         index: &index,
         repo: "acme".into(),
@@ -1351,29 +1391,192 @@ fn a_sequence_follows_an_edit_and_a_context_never_fires() {
         embed: None,
         params: Default::default(),
     };
-    let mut st = SessionState::default();
-    let edit = Call {
-        tool: "Edit".into(),
-        input: json!({ "file_path": dir.path().join("registry/ports.csv").to_string_lossy() }),
-        output: String::new(),
-        failed: false,
-    };
-    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit.clone()] });
+    let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
+    let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
+    let edit = || Event::Batch { calls: vec![edit_call(&dir, "registry/ports.csv")] };
+    let d = go(edit());
     assert_eq!(d.directives.len(), 1, "{:?}", d.directives);
     assert_eq!(d.directives[0].route, "sequence-1");
     assert!(d.directives[0].text.contains("  1. make gen\n  2. make check"), "{}", d.directives[0].text);
-    // Said once: a second edit says nothing again.
-    assert!(decide(&ctx, &mut st, &Event::Batch { calls: vec![edit] }).directives.is_empty());
-    // Followed on its first command; the context route never speaks, whatever happens.
-    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make gen", "ok")] });
+    assert!(d.ctx.is_some(), "an alphabet event is recorded");
+    // Events outside the alphabet change nothing, however many (in one batch: the sequence's
+    // follow window is still open after it).
+    let noise: Vec<Call> = (0..30).map(|i| bash(&format!("git log -n {i}"), "x")).collect();
+    let d = go(Event::Batch { calls: noise });
+    assert!(d.directives.is_empty() && d.ctx.is_none());
+    // `make gen` completes the context: the sequence is followed and the context route fires.
+    let d = go(Event::Batch { calls: vec![bash("make gen -j4", "ok")] });
     assert!(d.judgements.iter().any(|j| matches!(j, Judgement::Followed { route } if route == "sequence-1")));
-    assert!(d.directives.is_empty(), "{:?}", d.directives);
-    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make check", "ok")] });
-    assert!(d.directives.is_empty());
-    // A sequence is not an obligation: no Stop request.
-    assert!(decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false }).continue_reason.is_none());
-    // The fast path's triggers carry nothing for the context route.
-    let t = adage_tracks::triggers::Triggers::of(index.routes.iter().map(|r| &r.route));
+    assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["run-ctx"]);
+    assert_eq!(
+        d.directives[0].text,
+        "A known next step here is:\n  make check Ignore this if the user is asking for something else."
+    );
+    // Judged like any directive, and never a Stop request.
+    let d = go(Event::Batch { calls: vec![bash("make check", "ok")] });
+    assert!(d.judgements.iter().any(|j| matches!(j, Judgement::Followed { route } if route == "run-ctx")));
+    assert!(go(Event::Stop { stop_hook_active: false }).continue_reason.is_none());
+    // Said once: another edit, and make gen after it, say nothing again.
+    assert!(go(edit()).directives.is_empty());
+    assert!(go(Event::Batch { calls: vec![bash("make gen", "ok")] }).directives.is_empty());
+    // The fast path's triggers carry every item's words and globs.
+    let t = index.triggers("acme");
     assert_eq!(t.edit_globs, ["registry/*.csv"]);
-    assert!(t.words.is_empty() && !t.any_call);
+    assert_eq!(t.words, ["make"]);
+}
+
+#[test]
+fn a_context_needs_its_items_in_order_within_its_gap_of_alphabet_events() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let index = context_index(2);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let fired = |events: Vec<Event>| -> Vec<String> {
+        let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
+        let mut out = Vec::new();
+        for ev in events {
+            out.extend(decide_both(&ctx, &mut st, &mut fast_st, &ev).would_have.into_iter().map(|d| d.route));
+        }
+        out.retain(|r| r.ends_with("-ctx"));
+        out
+    };
+    let b = |cmd: &str| Event::Batch { calls: vec![bash(cmd, "ok")] };
+    let edit = || Event::Batch { calls: vec![edit_call(&dir, "registry/ports.csv")] };
+    // Two alphabet events between the edit and make gen: a gap of 3 > 2.
+    assert!(fired(vec![edit(), b("make lint"), b("make lint"), b("make gen")]).is_empty());
+    assert_eq!(fired(vec![edit(), b("make lint"), b("make gen")]), ["run-ctx"]);
+    // Out of order, or another directory: nothing.
+    assert!(fired(vec![b("make gen"), edit()]).is_empty());
+    let other = Event::Batch { calls: vec![edit_call(&dir, "docs/ports.csv")] };
+    assert!(fired(vec![other, b("make gen")]).is_empty());
+    // Two items in one batch are two events, in the batch's order.
+    let both = Event::Batch { calls: vec![bash("make lint", "ok"), bash("make fmt", "ok")] };
+    assert_eq!(fired(vec![both]), ["sequence-ctx"]);
+    // A context route is said once per session.
+    assert_eq!(fired(vec![b("make lint"), b("make fmt"), b("make lint"), b("make fmt")]), ["sequence-ctx"]);
+}
+
+/// A failed command is a failure item, never a successful command item, even when the harness
+/// lists it again in the tool batch after its failure hook (Claude Code does).
+#[test]
+fn a_failed_command_is_a_failure_item_and_not_a_success() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let index = context_index(8);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
+    let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
+    go(Event::Batch { calls: vec![edit_call(&dir, "registry/ports.csv")] });
+    let fail = failed_bash("make gen", "error: registry.py is out of date");
+    let d = go(Event::Failure { call: fail });
+    assert!(d.directives.is_empty());
+    // The same call in the batch that follows is not `make gen` succeeding: no `run-ctx`.
+    let d = go(Event::Batch { calls: vec![bash("make gen", "error: registry.py is out of date")] });
+    assert!(d.would_have.iter().all(|x| x.route != "run-ctx"), "{:?}", d.would_have);
+    // The failure, then an edit of the registry: run it again.
+    let d = go(Event::Batch { calls: vec![edit_call(&dir, "registry/ports.csv")] });
+    assert_eq!(d.would_have.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["retry-ctx"]);
+    // A later successful `make gen` is one.
+    let d = go(Event::Batch { calls: vec![bash("make gen", "ok")] });
+    assert_eq!(d.would_have.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["run-ctx"]);
+}
+
+#[test]
+fn context_state_is_bounded_rebuilt_from_the_spool_and_reset_by_a_new_alphabet() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let index = context_index(8);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let mut st = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+    let mut records = Vec::new();
+    let mut events = vec![Event::Batch { calls: vec![edit_call(&dir, "registry/a.csv")] }];
+    for i in 0..30 {
+        events.push(Event::Batch { calls: vec![bash(if i % 2 == 0 { "make lint" } else { "ls" }, "ok")] });
+    }
+    events.push(Event::Failure { call: failed_bash("make gen", "out of date") });
+    events.push(Event::Batch { calls: vec![bash("make gen", "out of date")] });
+    for (i, ev) in events.iter().enumerate() {
+        let d = decide(&ctx, &mut st, ev);
+        records.push(json!({ "kind": ev.name(), "arm": st.arm, "decision": d }));
+        let rebuilt = rebuild::rebuild(&records, &index, "acme", &table).unwrap();
+        assert_eq!(rebuilt.ctx, st.ctx, "after event {i}");
+        assert!(st.ctx.ring.len() <= crate::context::RING && st.ctx.since.iter().all(|s| *s <= crate::context::SPAN));
+    }
+    assert!(serde_json::to_vec(&st).unwrap().len() < 2048, "the state stays small");
+    // A relearned index with another alphabet: the recorded symbols mean nothing there.
+    let other = context_index(8);
+    let mut t = track("acme/graph", "desire-path", other.routes.iter().map(|r| r.route.clone()).collect());
+    t.routes.retain(|r| r.id != "retry-ctx");
+    let relearned = Index::compile(&[t]);
+    assert_ne!(relearned.contexts("acme").digest, index.contexts("acme").digest);
+    assert!(rebuild::rebuild(&records, &relearned, "acme", &table).unwrap().ctx.is_empty());
+    // And a live state from the old alphabet starts over at its next alphabet event.
+    let ctx2 = Ctx { index: &relearned, ..ctx };
+    decide(&ctx2, &mut st, &Event::Batch { calls: vec![bash("make lint", "ok")] });
+    assert_eq!((st.ctx.alphabet, st.ctx.ring.len()), (relearned.contexts("acme").digest, 1));
+}
+
+/// A context ending in a prompt item: a learned value type in the prompt, after a command.
+#[test]
+fn a_context_can_end_at_a_prompt() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let runs = adage_core::vtype::Runs {
+        branches: vec![vec![
+            adage_core::vtype::Run::Lit { text: "OPS".into() },
+            adage_core::vtype::Run::Lit { text: "-".into() },
+            adage_core::vtype::Run::Class { class: adage_core::vtype::Class::D, lo: 2, hi: 3 },
+        ]],
+    };
+    let regex = adage_core::vtype::to_regex(&runs);
+    let vtype = ValueType { id: "vt-0123456789abcdef".into(), runs, regex, samples_hash: String::new() };
+    let t = track(
+        "acme/graph",
+        "desire-path",
+        vec![ctx_route(
+            "prompt-ctx",
+            vec![act_item("exec make deps"), CtxItem::PromptValue { vtype }],
+            8,
+            Step::Run { command: "make check".into() },
+            Effect::Verify,
+        )],
+    );
+    adage_tracks::io::validate(&t).unwrap();
+    let index = Index::compile(&[t]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
+    let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
+    assert!(go(Event::Prompt { text: "Look at OPS-12".into() }).directives.is_empty(), "no command before it");
+    go(Event::Batch { calls: vec![bash("make deps", "ok")] });
+    assert!(go(Event::Prompt { text: "Now the README".into() }).directives.is_empty());
+    let d = go(Event::Prompt { text: "Now OPS-77 please".into() });
+    assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["prompt-ctx"]);
 }

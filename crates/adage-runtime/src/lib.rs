@@ -4,6 +4,7 @@
 //! which directives to emit. No I/O except checking that bound repository paths exist. The CLI
 //! owns reading payloads, locking state, writing spools, and printing harness output.
 
+pub mod context;
 pub mod fast;
 pub mod rebuild;
 pub mod render;
@@ -13,7 +14,9 @@ use adage_core::pattern;
 use adage_core::spans::{self, SpanKind};
 use adage_core::tools::normalize_tool;
 use adage_core::{repo, CommandTable};
+use adage_tracks::context::CtxNet;
 use adage_tracks::{interlock, Aspect, Contract, Index, IndexedRoute, Route, SlotSource, Step, Trigger};
+pub use context::CtxState;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -143,6 +146,9 @@ pub struct SessionState {
     /// was recorded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub propensity: Option<f64>,
+    /// The session's recent context symbols (Track G §7.1), what context triggers match on.
+    #[serde(default, skip_serializing_if = "CtxState::is_empty")]
+    pub ctx: CtxState,
 }
 
 /// At most this many stop-hook requests per session, across all obligations (the default of
@@ -213,6 +219,10 @@ pub struct Decision {
     pub judgements: Vec<Judgement>,
     /// Canonical template keys of the calls observed in this event.
     pub observed: Vec<String>,
+    /// The session's context state after this event, when the event changed it: what a state
+    /// rebuilt from the spool takes it from ([`rebuild`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ctx: Option<CtxState>,
 }
 
 /// Embeds a raw prompt: `(model id, unit vector)`, or `None` when no model is available. Called
@@ -308,6 +318,11 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     // Exec-only routes (vendored scripts) are carried out by adage-exec, never directed on their
     // own ([`with_exec_only`]).
     let routes: Vec<&IndexedRoute> = ctx.index.for_repo(&ctx.repo).filter(|r| in_play(r)).collect();
+    // Context triggers (Track G §7): the repository's alphabet and net, and a symboliser for it,
+    // only when it has any.
+    let net = ctx.index.contexts(&ctx.repo);
+    let syms = (!net.is_empty()).then(|| context::Symbols::new(&net));
+    let ctx_before = syms.as_ref().map(|_| st.ctx.clone());
     let mut out: Vec<Directive> = Vec::new();
     let emit_ok = |st: &SessionState, out: &Vec<Directive>, id: &str| {
         !st.emitted.iter().any(|e| e == id)
@@ -366,8 +381,10 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 }
             }
             // 2. Intent routes: the prompt means what a family means. The model is consulted only
-            //    if this repository has such routes; no model, no match (fail open).
-            if let Some((family, ir)) = match_intent(ctx, &routes, text) {
+            //    if this repository has such routes (or intent context items); no model, no
+            //    match (fail open). It embeds the prompt once.
+            let mut emb: Option<Option<(String, Vec<f32>)>> = None;
+            if let Some((family, ir)) = match_intent(ctx, &routes, text, &mut emb) {
                 st.intent = Some(family);
                 if ok(st, &out, ir, reds_left) {
                     if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, text, ctx) {
@@ -379,6 +396,13 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         });
                         out.push(directive(ir, text));
                     }
+                }
+            }
+            // 2b. Context triggers ending in a prompt item (a learned value type, an intent).
+            if let Some(sy) = syms.as_ref().filter(|sy| sy.has_prompt_items()) {
+                let got = sy.prompt(text, || embedding(ctx, text, &mut emb));
+                if st.ctx.push(&net, &got) {
+                    fire_contexts(ctx, &routes, &net, st, &mut out, |st, out, ir| ok(st, out, ir, reds_left));
                 }
             }
             // 3. Known dead ends, once, at the first prompt: the reds chosen above, and any other
@@ -400,6 +424,8 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             for o in st.obligations.iter_mut() {
                 o.fresh = false;
             }
+            // A failed call the failure hook just reported, listed again in this batch.
+            let mut open_failure = syms.as_ref().and_then(|_| st.ctx.open_failure(&net));
             for call in calls {
                 for (key, n) in call_keys(call, ctx) {
                     let key = cap(key);
@@ -556,6 +582,35 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                             }
                         }
                     }
+                    // Context triggers: symbolise the call, push it if it is an alphabet event,
+                    // and walk the net from it.
+                    if let Some(sy) = &syms {
+                        let mut got = Vec::new();
+                        if keys::is_author(&n.action) {
+                            if let Some(p) = keys::action_path(&n.action) {
+                                got.extend(sy.edit(&repo::relativize(ctx.root, p)));
+                            }
+                        }
+                        if call.failed {
+                            got.extend(sy.fail(&key, call));
+                        } else {
+                            let acts = sy.act(&key);
+                            if !acts.is_empty() && open_failure == Some(context::key_hash(&key)) {
+                                // Reported by the failure hook already: not a successful command.
+                                open_failure = None;
+                                st.ctx.last_fail = None;
+                            } else {
+                                got.extend(acts);
+                            }
+                        }
+                        got.sort_unstable();
+                        got.dedup();
+                        if st.ctx.push(&net, &got) {
+                            fire_contexts(ctx, &routes, &net, st, &mut out, |st, out, ir| {
+                                emit_ok(st, out, &ir.route.id)
+                            });
+                        }
+                    }
                 }
             }
             for p in st.pending.iter_mut() {
@@ -602,6 +657,17 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         }
                     }
                 }
+                // Context triggers: a failure item, and the record that keeps the batch after it
+                // from counting this call as a successful command.
+                if let Some(sy) = &syms {
+                    let pushed = st.ctx.push(&net, &sy.fail(&key, call));
+                    if !sy.act(&key).is_empty() {
+                        st.ctx.failed(&net, &key);
+                    }
+                    if pushed {
+                        fire_contexts(ctx, &routes, &net, st, &mut out, |st, out, ir| emit_ok(st, out, &ir.route.id));
+                    }
+                }
             }
         }
         Event::Stop { stop_hook_active } => {
@@ -622,6 +688,9 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
     let out = approach_lock(&routes, st, out);
     for o in &out {
         st.emitted.push(o.route.clone());
+    }
+    if ctx_before.is_some_and(|b| b != st.ctx) {
+        d.ctx = Some(st.ctx.clone());
     }
     d.would_have = out.clone();
     if st.arm != Some(Arm::Holdout) {
@@ -662,13 +731,18 @@ fn approach_lock(routes: &[&IndexedRoute], st: &mut SessionState, out: Vec<Direc
 
 /// The most similar intent family whose threshold the prompt clears, if any. Ties keep the first
 /// route in index order.
-fn match_intent<'a>(ctx: &Ctx, routes: &[&'a IndexedRoute], text: &str) -> Option<(String, &'a IndexedRoute)> {
+fn match_intent<'a>(
+    ctx: &Ctx,
+    routes: &[&'a IndexedRoute],
+    text: &str,
+    emb: &mut Option<Option<(String, Vec<f32>)>>,
+) -> Option<(String, &'a IndexedRoute)> {
     let intents: Vec<&'a IndexedRoute> =
         routes.iter().copied().filter(|r| matches!(r.route.trigger, Trigger::Intent { .. })).collect();
     if intents.is_empty() {
         return None;
     }
-    let (model_id, v) = (ctx.embed?)(text)?;
+    let (model_id, v) = embedding(ctx, text, emb)?;
     let mut best: Option<(f32, &'a String, &'a IndexedRoute)> = None;
     for ir in intents {
         let Trigger::Intent { family, model, centroid, threshold } = &ir.route.trigger else { continue };
@@ -681,6 +755,46 @@ fn match_intent<'a>(ctx: &Ctx, routes: &[&'a IndexedRoute], text: &str) -> Optio
         }
     }
     best.map(|(_, f, ir)| (f.clone(), ir))
+}
+
+/// The prompt's embedding, computed at most once per decision (`cache`).
+fn embedding(ctx: &Ctx, text: &str, cache: &mut Option<Option<(String, Vec<f32>)>>) -> Option<(String, Vec<f32>)> {
+    cache.get_or_insert_with(|| ctx.embed.and_then(|e| e(text))).clone()
+}
+
+/// The context routes the newest alphabet event completes ([`CtxNet::walk`]), in index order,
+/// each emitted if `ok` allows: a run step, or a sequence, from its fixed template, with a follow
+/// judgement on its (first) command. No slot is bound and no obligation is made: a context
+/// directs fixed commands only (`io::validate`), and never leads to a Stop request.
+fn fire_contexts(
+    ctx: &Ctx,
+    routes: &[&IndexedRoute],
+    net: &CtxNet,
+    st: &mut SessionState,
+    out: &mut Vec<Directive>,
+    ok: impl Fn(&SessionState, &Vec<Directive>, &IndexedRoute) -> bool,
+) {
+    let recent = st.ctx.recent();
+    let fired = net.walk(&recent);
+    if fired.is_empty() {
+        return;
+    }
+    for ir in routes.iter().filter(|r| matches!(r.route.trigger, Trigger::Context { .. })) {
+        if !fired.contains(ir.route.id.as_str()) || !ok(st, out, ir) {
+            continue;
+        }
+        let first = match &ir.route.step {
+            Step::Run { command } => command,
+            Step::Sequence { commands } => match commands.first() {
+                Some(c) => c,
+                None => continue,
+            },
+            _ => continue,
+        };
+        let Some(t) = render::route_text(&ir.route, &[]) else { continue };
+        st.pending.push(pending_for(ir, first, ctx));
+        out.push(directive(ir, t));
+    }
 }
 
 pub(crate) fn push_history(st: &mut SessionState, key: String) {

@@ -645,7 +645,7 @@ impl<'a> Builder<'a> {
         let shape = if matches!(step, Step::Sequence { .. }) { "sequence" } else { "run" };
         let id = ids::route_id(shape, &trigger, &step, &[]);
         let summary = if matches!(trigger, Trigger::Context { .. }) {
-            "What follows this context in this repository (inert until context triggers are live)"
+            "What follows this context in this repository"
         } else {
             "A step that follows this command in this repository"
         };

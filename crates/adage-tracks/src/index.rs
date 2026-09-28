@@ -4,6 +4,7 @@
 //! installed tracks into `index.json`, written atomically (temp file + rename). The same inputs
 //! always produce the same bytes, and `generation` identifies exactly which inputs decided.
 
+use crate::context::CtxNet;
 use crate::interlock;
 use crate::io;
 use crate::model::*;
@@ -24,6 +25,11 @@ pub struct Index {
     /// existed has none, and [`Index::triggers`] derives them on the fly.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub triggers: BTreeMap<String, Triggers>,
+    /// Per repository with context triggers, their alphabet and discrimination net
+    /// ([`CtxNet`], Track G §7.2). Derived from `routes` like `triggers`; an index written before
+    /// it existed has none, and [`Index::contexts`] derives it on the fly.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub contexts: BTreeMap<String, CtxNet>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -191,10 +197,16 @@ impl Index {
         let generation = io::hex(&Sha256::digest(&body))[..16].to_string();
         let mut triggers: BTreeMap<String, Triggers> = BTreeMap::new();
         let repos: BTreeSet<&str> = routes.iter().map(|r| r.repo.as_str()).collect();
+        let mut contexts: BTreeMap<String, CtxNet> = BTreeMap::new();
         for repo in repos {
-            triggers.insert(repo.to_string(), Triggers::of(routes.iter().filter(|r| r.repo == repo).map(|r| &r.route)));
+            let of_repo = || routes.iter().filter(|r| r.repo == repo).map(|r| &r.route);
+            triggers.insert(repo.to_string(), Triggers::of(of_repo()));
+            let net = CtxNet::of(of_repo());
+            if !net.is_empty() {
+                contexts.insert(repo.to_string(), net);
+            }
         }
-        (Index { generation, routes, triggers }, conflicts)
+        (Index { generation, routes, triggers, contexts }, conflicts)
     }
 
     /// [`Index::compile_with_conflicts`], then the exec bindings of pack-sourced routes read from
@@ -225,6 +237,16 @@ impl Index {
         match self.triggers.get(repo) {
             Some(t) => Cow::Borrowed(t),
             None => Cow::Owned(Triggers::of(self.for_repo(repo).map(|r| &r.route))),
+        }
+    }
+
+    /// `repo`'s context alphabet and net: precomputed, or derived from the routes for an index
+    /// compiled before they were stored (empty when the repository has no context trigger).
+    pub fn contexts(&self, repo: &str) -> Cow<'_, CtxNet> {
+        match self.contexts.get(repo) {
+            Some(n) => Cow::Borrowed(n),
+            None if self.triggers.contains_key(repo) => Cow::Owned(CtxNet::default()),
+            None => Cow::Owned(CtxNet::of(self.for_repo(repo).map(|r| &r.route))),
         }
     }
 

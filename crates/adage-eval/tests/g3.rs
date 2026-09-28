@@ -10,7 +10,7 @@
 //!   them. No learner code names these kinds: they are delivery shapes the compiler reaches from
 //!   the mined patterns' structure.
 //! - **Fast path.** The hook's no-match fast path changes no decision with the graph engine's
-//!   index either (context triggers are inert until G4, so they add nothing to match).
+//!   index either (since G4 the triggers hold every context item's words; `g4.rs` adds a context route).
 //!
 //! The generated suites are built and rehearsed into a temporary directory with
 //! `python3 evals/gen/gen.py --suite <name>` and `python3 evals/gen/rehearse.py --no-learn`; that
@@ -38,7 +38,7 @@ fn opts(engine: &str, split: Option<&str>) -> Options {
 
 fn line(what: &str, m: &RoutesReport, g: &RoutesReport) -> String {
     format!(
-        "{what}: miners recall {}/{} false {:?} | graph recall {}/{} false {:?} (inert {})",
+        "{what}: miners recall {}/{} false {:?} | graph recall {}/{} false {:?} (unscored {})",
         m.conventions_found,
         m.conventions_evaluable,
         m.false_routes,

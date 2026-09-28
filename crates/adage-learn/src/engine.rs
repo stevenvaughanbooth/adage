@@ -45,8 +45,8 @@ pub struct EngineReport {
     pub compiled: usize,
     /// Routes that passed judgement.
     pub routes: usize,
-    /// Routes compiled with a context trigger (inert until G4).
-    pub inert: usize,
+    /// Routes compiled with a context trigger (matched at hook time since G4).
+    pub contexts: usize,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub dropped: Vec<Dropped>,
 }
@@ -289,7 +289,8 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
             return Ok(r);
         }
         (Trigger::Context { .. }, _) => {
-            // Inert until G4: it keeps the reflex's own evidence.
+            // Nothing counts a context again on the traces (G4 matches it at hook time only): it
+            // keeps the reflex's own evidence.
             r.evidence.models = models(&seen);
             return Ok(r);
         }
@@ -391,7 +392,7 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route]) -> EngineRun {
         let prior = c.why.prior.is_some();
         match judge(c.route.clone(), ss, cfg, &lookup, prior) {
             Ok(r) => {
-                report.inert += usize::from(!compile::fires_in_g3(&r));
+                report.contexts += usize::from(matches!(r.trigger, Trigger::Context { .. }));
                 routes.push(Judged { track: compile::legacy_track(&r), route: r, why: c.why });
             }
             Err(reason) => report

@@ -66,9 +66,7 @@ pub(crate) fn trigger(t: &Trigger) -> Value {
         Trigger::AfterEdit { paths } => ("after_edit", format!("an edit touches {paths}")),
         Trigger::SessionStart => ("session_start", "the first prompt of a session".to_string()),
         Trigger::Intent { family, .. } => ("intent", format!("a prompt means: {family}")),
-        Trigger::Context { items, .. } => {
-            ("context", format!("a context of {} events (inert until context triggers are live)", items.len()))
-        }
+        Trigger::Context { items, .. } => ("context", format!("a context of {} events", items.len())),
     };
     json!({ "kind": kind, "label": label })
 }

@@ -343,8 +343,8 @@ pub fn validate(t: &Track) -> Result<()> {
             }
             Trigger::Context { items, within } => {
                 validate_context(items, *within).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
-                // A context binds no slot in G3 (its items are matched symbolically), so its step
-                // directs fixed commands only.
+                // A context binds no slot (its items are matched symbolically, and no value of
+                // theirs is kept), so its step directs fixed commands only.
                 if !r.slots.is_empty() || !matches!(r.step, Step::Run { .. } | Step::Sequence { .. }) {
                     bail!("{}: a context route is a run or sequence step with no slots", ctx());
                 }

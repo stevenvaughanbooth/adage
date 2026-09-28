@@ -560,3 +560,114 @@ The three G2 targets the first note missed, revisited. Measured on the same corp
 **Kept.** Determinism (1/4 threads, input order) and incremental-equals-full (`tests/mining.rs`, `tests/border.rs`); parity (`tests/kinds.rs`), recall 1.00 on every dataset and smoke bundle. `DbSession.task` added (inner folds group by it). Public API: fields added only (`Scored`, `Reflex`, `Learned`, `DbSession`); `score::score` takes the prebuilt `&Cache`; `Holdout` drops the reflex-firing counts.
 
 **Gaps.** Smoke misses both accuracy (+1.9) and ECE (0.084 mean) on 8-session training sets; demo-haiku45 reaches +5 points to within one position, well inside sampling noise at 721 positions; the chain candidates were chosen while exploring these corpora (the per-fold choice among them is honest). Selected-reflex ECE is 0.07–0.12 on the datasets. Single-thread time is still dominated by mining. The compiler still reads `conf`/`conf_lb`; switching aspects to `conf_lb_cal` is a G3 decision.
+
+## Status note: G4 (2026-09-28)
+
+**Implemented: context triggers fire at hook time.** The default engine is still `miners`.
+
+- **Index** (`adage-tracks/src/context.rs`). Per repository with context triggers,
+  `Index::compile` stores a `CtxNet` under `contexts`:
+  - the **alphabet**: every distinct `CtxItem`, a symbol id being its rank among the sorted
+    canonical forms, with a digest of the whole;
+  - the **dnet**: a trie over reversed item sequences, each node listing `(route, within)`.
+
+  Like `triggers`, it is derived from the routes and is outside `generation`.
+- **State** (`adage-runtime/src/context.rs`). `SessionState.ctx` is a `CtxState`: at most 16
+  symbols, each with `since` (alphabet events after it; none older than 16), `seen`, the alphabet
+  digest, and `last_fail`. Serialised, it is a few hundred bytes at most.
+- **Symbolisation in `decide`.**
+  - A batch call gives `act` symbols: exact key first, then every item key of the same HeadSub
+    identity that the key meets.
+  - A failure gives `fail` symbols (the signature must be in the output).
+  - An edit or write gives `edit` symbols (the glob).
+  - A prompt gives `prompt_value` symbols (a token the type accepts) and `intent` symbols (one
+    embedding per decision, shared with intent routes).
+  - After each alphabet event the net is walked from its symbols through strictly older ones: at
+    most 3 deep, each step ≤ 8 events back, and fired when the path's largest gap ≤ `within`.
+- **Delivery.** A fired context route directs a run step, or a sequence, from the fixed template,
+  once per session, with a follow judgement on its (first) command. It makes no obligation and no
+  Stop request, and approach locking applies.
+- **Interlocking.** `same_point(Context, x)` holds when one event can be the last item of both (two
+  contexts), or the last item's event fires the other trigger (after-edit on an overlapping glob,
+  after-command on an overlapping key, the same failure).
+- **Fast path.** `Triggers` holds the words, globs, value types and intents of every item. The
+  replay compares `ctx` too, and the runtime tests run every event through both paths.
+- **Rebuild.** A decision records `ctx` when its event changed it, and `rebuild` takes the last
+  one. A state whose digest differs from the index's is reset, both on rebuild and live at the
+  next alphabet event.
+
+**Results.**
+
+- **Fast path.** 0 mismatches on the three datasets with `engine = graph` (the `g3.rs` gate, now
+  with context state compared). On all three newkinds bundles, with the learned routes plus a
+  context route (`g4.rs`), it skipped 167/396, 183/358 and 177/396 events with 0 mismatches.
+- **A context fires in replay** (`g4.rs`). `[edit registry/*.csv, make gen] → make check` fired in
+  exactly the 4 traces per bundle that ran `make gen` after a registry edit, at that turn, and
+  nowhere else.
+- **End to end through `adage hook`** (`crates/adage-cli/tests/g4_hook.rs`).
+  - Setup: learn with `--engine graph` on 21 traces per bundle, then approve the environment step
+    in review.
+  - Held out, per bundle: both traces of the last scoped, deps and control task, and the second
+    trace of the last registry task. That is 7 traces (21 over the suite), each event replayed as
+    a Claude Code payload through a fresh `adage hook` process.
+  - Scope fired once, at the batch of the first package edit, bound to the edited package
+    (`ledger`, `records`, `routing`), with no Stop request after it.
+  - env_sync fired at the first `requirements.txt` edit.
+  - The sequence fired at the first registry edit, and the context route at the next `make gen`
+    batch.
+  - Controls received only the dead ends announced at the first prompt.
+- **Latency.** Measured with `hook_latency` (release, no model: the model files cannot be
+  downloaded here). The G3 build (`base`) and the G4 build were run by turns, 1,000 runs each, two
+  rounds, on a shared, loaded 4-core machine:
+
+  | Scenario | p50 base → G4 (ms) | p95 base → G4 (ms) |
+  | --- | --- | --- |
+  | no routes for the repository | 2.00 → 1.98, 3.06 → 2.54 | 6.46 → 7.15, 8.20 → 8.19 |
+  | structured, no match (prompt) | 4.71 → 4.68, 5.87 → 5.70 | 9.28 → 9.36, 11.95 → 12.06 |
+  | structured, ticket prompt (fires) | 5.38 → 5.34, 5.40 → 5.40 | 11.68 → 11.38, 10.54 → 10.26 |
+  | intent routes, model missing | 4.59 → 4.60, 5.10 → 5.07 | 9.60 → 9.99, 8.37 → 8.10 |
+  | batch, no match (context routes) | 2.00 → 1.99, 2.03 → 2.03 | 8.03 → 8.05, 5.11 → 5.44 |
+  | batch, a context route fires | 5.06 → 5.30, 4.81 → 4.90 | 11.91 → 12.01, 8.91 → 8.42 |
+
+  - Medians agree within 0.25 ms. The largest is the batch where a context fires, +0.09 to +0.23
+    ms, which is the symbolisation and walk on top of a full decision.
+  - The p95s move by −0.5 to +0.7 ms between rounds, both ways. This is contention noise that the
+    +0.3 ms target cannot be resolved against on this machine, so the target is **not
+    demonstrated**. It is not contradicted either.
+  - The index parse is unchanged for repositories without contexts. A net is a few hundred bytes
+    per repository, so **sharding was not needed** and is not built.
+  - The intent-with-model scenario was not measured. The embedding path is unchanged, apart from
+    sharing one embedding between intent routes and intent items.
+- **Fidelity: unchanged.** demo-haiku45 round 2: 36/36 decisions with `--exact-keys` (32/36 under
+  the current matching), events 35/36. Round 1: 11/18 holdout and 0/18 adage, as before.
+- **L0 bench.** `engine = graph`: J 0.9759, the same as G3, with every guardrail passing
+  (fast-path mismatches 0). The miners: J 0.6307, unchanged. The objective holds but does not
+  improve, because the graph engine selects no context reflex on the core datasets (see gaps).
+
+**Deviations decided while building it.**
+
+1. **The ring is 16 symbols, not 8.** One event may carry several symbols, and a three-item
+   context can span 16 alphabet events. `since` counts alphabet events after each entry rather
+   than holding positions.
+2. **The gap is counted over the repository's context alphabet**, which is smaller than the
+   miner's alphabet (every frequent label), so a runtime gap is never larger than the mined one.
+   Contexts may span prompt segments: resetting at a prompt would make every prompt matter to
+   the fast path.
+3. **`last_fail` is `(key hash, seen)`.** It keeps a failed call that Claude Code lists again in
+   the next batch from counting as a successful command. It lapses at the next alphabet event.
+4. **No slot binds from a context** (as `io::validate` already required), and a context never
+   makes an obligation.
+5. **An index compiled with `triggers` but without `contexts`** (a G3 index) matches no context:
+   its triggers lack the items' words, so matching would break the fast path's exactness.
+6. `adage eval routes` scores a context route as the one-event trigger on its last item. The
+   python rehearsal still ignores context routes (`rehearse.py`, not changed here).
+
+**Gaps.**
+
+- No dataset or gen bundle yields a *selected* context reflex yet: the newkinds conventions
+  compile to one-event triggers. So the gates use an authored context route, and the L0 objective
+  cannot move.
+- The +0.3 ms p95 target is unresolved on a shared machine.
+- Intent-with-model latency was not measured (no model files).
+- `rehearse.py` does not score contexts.
+- `last_fail` remembers only one failure.

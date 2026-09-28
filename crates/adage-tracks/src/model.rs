@@ -132,9 +132,10 @@ pub enum Trigger {
     Intent { family: String, model: String, centroid: Vec<i16>, threshold: f32 },
     /// A learned context of two or three events (Track G §6.2): `items` in time order, each
     /// within `within` alphabet events of the one before, the last one the event that fires the
-    /// route. **Compiled but inert until G4:** the runtime keeps no context state and no
-    /// discrimination net yet, so a context trigger never matches (`adage_runtime::decide`), and
-    /// the hook's fast path adds nothing for it. G4 activates it.
+    /// route. Matched as a subsequence over **alphabet events only** (events satisfying some
+    /// context item of the repository, [`crate::context`]), so no other event can change a match;
+    /// the runtime keeps the session's recent symbols and walks the index's discrimination net
+    /// (Track G §7, `adage_runtime::context`).
     Context { items: Vec<CtxItem>, within: u8 },
 }
 
