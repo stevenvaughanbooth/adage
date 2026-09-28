@@ -1495,18 +1495,25 @@ fn wizard_next_commands_keep_their_columns() {
     let mut w = Wizard::new(vec![], vec![], true);
     w.health = Some(health()); // codex's hooks are not registered: a long `next` command
     let t = Theme::with_color(false);
-    for cols in [100, 64] {
+    for cols in [100, 64, 44] {
         let card: Vec<String> = wizard::finish_card(&w, &t, true, cols).iter().map(|l| l.to_string()).collect();
         let next: Vec<&String> = card.iter().skip_while(|l| !l.starts_with("   next")).collect();
-        assert!(next[0].contains("adage install codex --write  registers the hooks"), "{card:#?}");
-        let desc = next[0].find("registers").unwrap();
+        assert!(next[0].starts_with("   next  adage install codex --write"), "{card:#?}");
+        if cols == 100 {
+            assert!(next[0].contains("--write  registers the hooks"), "room for both columns: {card:#?}");
+        }
+        // Every description, and each continuation, starts in one column; a command too long for
+        // the command column has a line to itself.
+        let desc = next.iter().find_map(|l| l.find("live pane")).unwrap();
         for l in &next {
             assert!(l.chars().count() <= cols, "{l:?} is wider than {cols}");
-            // A command row's description, or a continuation, starts in the description column.
+            if l[9..].starts_with("adage") && !l[9..].trim_end().contains("  ") {
+                continue; // a command on its own line
+            }
             let lead = &l[..desc];
             assert!(
                 (lead.ends_with("  ") || lead.trim().is_empty()) && !l[desc..].starts_with(' '),
-                "every description, and each continuation, starts in one column: {card:#?}"
+                "{cols} columns: {l:?} is out of line: {card:#?}"
             );
         }
     }

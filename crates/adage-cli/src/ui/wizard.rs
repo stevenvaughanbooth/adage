@@ -448,17 +448,20 @@ fn body(w: &Wizard, t: &Theme, width: usize) -> Vec<Line<'static>> {
                     ),
                     Span::styled(format!("adage doctor · {p} passed · {wn} to look at · {f} failing"), t.bold()),
                 ]));
+                // Each finding and its fix, wrapped under their own text rather than cut off.
+                let mut found = Vec::new();
                 for c in h.checks.iter().filter(|c| c.status != Status::Pass) {
                     let style = if c.status == Status::Fail { t.red() } else { t.yellow() };
-                    out.push(Line::from(vec![
+                    found.push(Line::from(vec![
                         Span::styled("! ", style),
                         Span::styled(format!("{}  ", c.label), t.bold()),
                         Span::styled(c.detail.clone(), t.dim()),
                     ]));
                     if let Some(fx) = &c.fix {
-                        out.push(Line::from(Span::styled(format!("  fix {fx}"), t.dim())));
+                        found.push(Line::from(vec![Span::styled("  fix ", t.dim()), Span::styled(fx.clone(), t.dim())]));
                     }
                 }
+                out.extend(super::view::wrap_hanging(t.lines(found), width as u16, true));
             }
         },
     }
@@ -602,7 +605,7 @@ pub fn finish_card(w: &Wizard, t: &Theme, completed: bool, cols: usize) -> Vec<L
                 Span::styled(c.detail.clone(), t.dim()),
             ]));
             if let Some(fx) = &c.fix {
-                out.push(Line::from(Span::styled(format!("       fix {fx}"), t.dim())));
+                out.push(Line::from(vec![Span::styled("       fix ", t.dim()), Span::styled(fx.clone(), t.dim())]));
             }
         }
     }
@@ -621,21 +624,23 @@ pub fn finish_card(w: &Wizard, t: &Theme, completed: bool, cols: usize) -> Vec<L
     out
 }
 
-/// The `next` rows: commands in one column as wide as the longest, each description wrapped to
-/// `cols` under its own first line. Too narrow for both columns, a description goes under its
-/// command instead.
+/// The `next` rows: a command column, then each description wrapped to `cols` under its own
+/// first line. The column is as wide as the longest command when that leaves the descriptions
+/// room; otherwise a longer command takes a line of its own, its description on the next line
+/// in the same column as the others. Narrower still, descriptions go under their commands.
 fn next_lines(rows: &[(String, &str)], t: &Theme, cols: usize) -> Vec<Line<'static>> {
     const LEAD: usize = 9; // `   next  `
-    let cmd_w = rows.iter().map(|(c, _)| c.chars().count()).max().unwrap_or(0).max(14);
+    let longest = rows.iter().map(|(c, _)| c.chars().count()).max().unwrap_or(0).max(14);
+    let cmd_w = if cols.saturating_sub(LEAD + longest + 2) >= 36 { longest } else { 14 };
     let (indent, room) = match cols.saturating_sub(LEAD + cmd_w + 2) {
         room if room >= 20 => (LEAD + cmd_w + 2, room),
         _ => (LEAD + 2, cols.saturating_sub(LEAD + 2).max(20)),
     };
-    let beside = indent > LEAD + 2;
     let mut out = Vec::new();
     for (k, (cmd, why)) in rows.iter().enumerate() {
         let lead = Span::styled(if k == 0 { "   next  " } else { "         " }, t.accent().patch(t.bold()));
         let mut parts = wrap(why, room).into_iter();
+        let beside = indent > LEAD + 2 && cmd.chars().count() <= cmd_w;
         if beside {
             let first = parts.next().unwrap_or_default();
             out.push(Line::from(vec![
