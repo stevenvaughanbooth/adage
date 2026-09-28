@@ -15,7 +15,9 @@ async function axe(page: Page) {
 }
 
 async function ready(page: Page) {
-  await expect(page.getByText("Loading the map…")).toHaveCount(0);
+  // The app has mounted (the top bar is there) before "not loading" means the data arrived.
+  await expect(page.getByRole("navigation", { name: "Views" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("Loading the map…")).toHaveCount(0, { timeout: 15_000 });
   await page.waitForTimeout(400);
 }
 
