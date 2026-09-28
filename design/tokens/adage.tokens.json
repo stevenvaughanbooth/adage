@@ -1,0 +1,792 @@
+{
+  "$description": "Adage design tokens (W3C DTCG 2025.10): the single source for the web map (CSS variables) and the terminal (crates/adage-term/src/tokens.rs). Regenerate both with `cargo xtask tokens`. Modes: night (dark, the default) and day (light).",
+  "color": {
+    "bg": {
+      "base": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.0196,
+            0.0196,
+            0.0275
+          ],
+          "hex": "#050507"
+        },
+        "$description": "Page ground. Never painted in the terminal.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                0.0196,
+                0.0196,
+                0.0275
+              ],
+              "hex": "#050507"
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                0.9686,
+                0.9647,
+                0.9843
+              ],
+              "hex": "#f7f6fb"
+            }
+          }
+        }
+      },
+      "panel": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.0471,
+            0.0471,
+            0.0706
+          ],
+          "hex": "#0c0c12"
+        },
+        "$description": "Cards, panels, the inspector.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                0.0471,
+                0.0471,
+                0.0706
+              ],
+              "hex": "#0c0c12"
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "hex": "#ffffff"
+            }
+          }
+        }
+      },
+      "raised": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.0784,
+            0.0784,
+            0.1098
+          ],
+          "hex": "#14141c"
+        },
+        "$description": "Popovers, the palette, code blocks.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                0.0784,
+                0.0784,
+                0.1098
+              ],
+              "hex": "#14141c"
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                0.9333,
+                0.9294,
+                0.9608
+              ],
+              "hex": "#eeedf5"
+            }
+          }
+        }
+      }
+    },
+    "line": {
+      "strong": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "hex": "#ffffff",
+          "alpha": 0.122
+        },
+        "$description": "Borders.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "hex": "#ffffff",
+              "alpha": 0.122
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                0.0784,
+                0.0706,
+                0.1569
+              ],
+              "hex": "#141228",
+              "alpha": 0.141
+            }
+          }
+        }
+      },
+      "soft": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "hex": "#ffffff",
+          "alpha": 0.059
+        },
+        "$description": "Dividers.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                1.0,
+                1.0,
+                1.0
+              ],
+              "hex": "#ffffff",
+              "alpha": 0.059
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                0.0784,
+                0.0706,
+                0.1569
+              ],
+              "hex": "#141228",
+              "alpha": 0.071
+            }
+          }
+        }
+      }
+    },
+    "ink": {
+      "1": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9569,
+            0.9569,
+            0.9686
+          ],
+          "hex": "#f4f4f7"
+        },
+        "$description": "Body text and headlines. The terminal uses its own default foreground.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                0.9569,
+                0.9569,
+                0.9686
+              ],
+              "hex": "#f4f4f7"
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                0.0745,
+                0.0745,
+                0.1255
+              ],
+              "hex": "#131320"
+            }
+          },
+          "adage.terminal": {
+            "ansi16": "default"
+          }
+        }
+      },
+      "2": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.6392,
+            0.651,
+            0.702
+          ],
+          "hex": "#a3a6b3"
+        },
+        "$description": "Secondary text and captions.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                0.6392,
+                0.651,
+                0.702
+              ],
+              "hex": "#a3a6b3"
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                0.2902,
+                0.298,
+                0.3608
+              ],
+              "hex": "#4a4c5c"
+            }
+          },
+          "adage.terminal": {
+            "ansi16": "dim"
+          }
+        }
+      },
+      "3": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.5451,
+            0.5569,
+            0.6118
+          ],
+          "hex": "#8b8e9c"
+        },
+        "$description": "Tertiary text: labels, timestamps, the control arm.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                0.5451,
+                0.5569,
+                0.6118
+              ],
+              "hex": "#8b8e9c"
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                0.3961,
+                0.4039,
+                0.4784
+              ],
+              "hex": "#65677a"
+            }
+          },
+          "adage.terminal": {
+            "ansi16": "bright-black"
+          }
+        }
+      }
+    },
+    "accent": {
+      "base": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.5451,
+            0.4863,
+            1.0
+          ],
+          "hex": "#8b7cff"
+        },
+        "$description": "The one brand hue: focus, selection, the active step, links.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                0.5451,
+                0.4863,
+                1.0
+              ],
+              "hex": "#8b7cff"
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                0.3569,
+                0.2941,
+                0.8392
+              ],
+              "hex": "#5b4bd6"
+            }
+          },
+          "adage.terminal": {
+            "ansi16": "magenta"
+          }
+        }
+      },
+      "soft": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.7882,
+            0.749,
+            1.0
+          ],
+          "hex": "#c9bfff"
+        },
+        "$description": "Accent text: commands, key hints.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                0.7882,
+                0.749,
+                1.0
+              ],
+              "hex": "#c9bfff"
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                0.2902,
+                0.2275,
+                0.7608
+              ],
+              "hex": "#4a3ac2"
+            }
+          },
+          "adage.terminal": {
+            "ansi16": "bright-magenta"
+          }
+        }
+      }
+    },
+    "lamp": {
+      "fire": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.2902,
+            0.8706,
+            0.502
+          ],
+          "hex": "#4ade80"
+        },
+        "$description": "Strength fire (do this); also success.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                0.2902,
+                0.8706,
+                0.502
+              ],
+              "hex": "#4ade80"
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                0.0784,
+                0.4863,
+                0.2314
+              ],
+              "hex": "#147c3b"
+            }
+          },
+          "adage.terminal": {
+            "ansi16": "green"
+          }
+        }
+      },
+      "prime": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9843,
+            0.749,
+            0.1412
+          ],
+          "hex": "#fbbf24"
+        },
+        "$description": "Strength prime (consider this); also warnings.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                0.9843,
+                0.749,
+                0.1412
+              ],
+              "hex": "#fbbf24"
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                0.6706,
+                0.3098,
+                0.0314
+              ],
+              "hex": "#ab4f08"
+            }
+          },
+          "adage.terminal": {
+            "ansi16": "yellow"
+          }
+        }
+      },
+      "inhibit": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9843,
+            0.4431,
+            0.5216
+          ],
+          "hex": "#fb7185"
+        },
+        "$description": "Strength inhibit (a dead end); also errors.",
+        "$extensions": {
+          "mode": {
+            "night": {
+              "colorSpace": "srgb",
+              "components": [
+                0.9843,
+                0.4431,
+                0.5216
+              ],
+              "hex": "#fb7185"
+            },
+            "day": {
+              "colorSpace": "srgb",
+              "components": [
+                0.7451,
+                0.0706,
+                0.2353
+              ],
+              "hex": "#be123c"
+            }
+          },
+          "adage.terminal": {
+            "ansi16": "red"
+          }
+        }
+      }
+    },
+    "cost": {
+      "$type": "color",
+      "$value": {
+        "colorSpace": "srgb",
+        "components": [
+          1.0,
+          0.4784,
+          0.349
+        ],
+        "hex": "#ff7a59"
+      },
+      "$description": "GPU spend and cost, nothing else.",
+      "$extensions": {
+        "mode": {
+          "night": {
+            "colorSpace": "srgb",
+            "components": [
+              1.0,
+              0.4784,
+              0.349
+            ],
+            "hex": "#ff7a59"
+          },
+          "day": {
+            "colorSpace": "srgb",
+            "components": [
+              0.749,
+              0.251,
+              0.0431
+            ],
+            "hex": "#bf400b"
+          }
+        },
+        "adage.terminal": {
+          "ansi16": "bright-red"
+        }
+      }
+    }
+  },
+  "font": {
+    "display": {
+      "$type": "fontFamily",
+      "$value": [
+        "Bricolage Grotesque",
+        "ui-sans-serif",
+        "system-ui",
+        "sans-serif"
+      ],
+      "$description": "Headlines and big numbers (web). Weight 600-700, tracking -0.03em."
+    },
+    "body": {
+      "$type": "fontFamily",
+      "$value": [
+        "Hanken Grotesk",
+        "ui-sans-serif",
+        "system-ui",
+        "sans-serif"
+      ],
+      "$description": "Explanation and UI (web). Weight 300 for body, 400-500 for UI."
+    },
+    "mono": {
+      "$type": "fontFamily",
+      "$value": [
+        "Red Hat Mono",
+        "ui-monospace",
+        "SFMono-Regular",
+        "Menlo",
+        "monospace"
+      ],
+      "$description": "Anything real: commands, reflex ids, evidence, timestamps."
+    }
+  },
+  "radius": {
+    "sm": {
+      "$type": "dimension",
+      "$value": {
+        "value": 6,
+        "unit": "px"
+      }
+    },
+    "md": {
+      "$type": "dimension",
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    },
+    "lg": {
+      "$type": "dimension",
+      "$value": {
+        "value": 12,
+        "unit": "px"
+      }
+    },
+    "xl": {
+      "$type": "dimension",
+      "$value": {
+        "value": 16,
+        "unit": "px"
+      }
+    }
+  },
+  "space": {
+    "4": {
+      "$type": "dimension",
+      "$value": {
+        "value": 4,
+        "unit": "px"
+      }
+    },
+    "8": {
+      "$type": "dimension",
+      "$value": {
+        "value": 8,
+        "unit": "px"
+      }
+    },
+    "12": {
+      "$type": "dimension",
+      "$value": {
+        "value": 12,
+        "unit": "px"
+      }
+    },
+    "16": {
+      "$type": "dimension",
+      "$value": {
+        "value": 16,
+        "unit": "px"
+      }
+    },
+    "20": {
+      "$type": "dimension",
+      "$value": {
+        "value": 20,
+        "unit": "px"
+      }
+    },
+    "24": {
+      "$type": "dimension",
+      "$value": {
+        "value": 24,
+        "unit": "px"
+      }
+    },
+    "32": {
+      "$type": "dimension",
+      "$value": {
+        "value": 32,
+        "unit": "px"
+      }
+    },
+    "48": {
+      "$type": "dimension",
+      "$value": {
+        "value": 48,
+        "unit": "px"
+      }
+    }
+  },
+  "duration": {
+    "fast": {
+      "$type": "duration",
+      "$value": {
+        "value": 120,
+        "unit": "ms"
+      },
+      "$description": "Hover and press."
+    },
+    "base": {
+      "$type": "duration",
+      "$value": {
+        "value": 200,
+        "unit": "ms"
+      },
+      "$description": "Panels and toasts."
+    },
+    "pulse": {
+      "$type": "duration",
+      "$value": {
+        "value": 900,
+        "unit": "ms"
+      },
+      "$description": "A firing reflex's pulse, once."
+    },
+    "rise": {
+      "$type": "duration",
+      "$value": {
+        "value": 800,
+        "unit": "ms"
+      },
+      "$description": "A headline rising through a mask."
+    }
+  },
+  "easing": {
+    "out": {
+      "$type": "cubicBezier",
+      "$value": [
+        0.25,
+        1,
+        0.5,
+        1
+      ],
+      "$description": "Quartic ease-out."
+    }
+  },
+  "glyph": {
+    "$description": "Terminal glyphs, each with an ASCII fallback for terminals without UTF-8.",
+    "lamp": {
+      "$value": "●",
+      "$description": "A strength lamp.",
+      "$extensions": {
+        "adage.ascii": "*"
+      }
+    },
+    "off": {
+      "$value": "○",
+      "$description": "Nascent, not configured, or withheld.",
+      "$extensions": {
+        "adage.ascii": "o"
+      }
+    },
+    "instinct": {
+      "$value": "◉",
+      "$description": "An instinct: born with it.",
+      "$extensions": {
+        "adage.ascii": "(o)"
+      }
+    },
+    "reflex": {
+      "$value": "◠",
+      "$description": "A reflex: the learned arc.",
+      "$extensions": {
+        "adage.ascii": "~"
+      }
+    },
+    "ok": {
+      "$value": "✓",
+      "$description": "Done, followed, met.",
+      "$extensions": {
+        "adage.ascii": "+"
+      }
+    },
+    "fail": {
+      "$value": "✗",
+      "$description": "Failed.",
+      "$extensions": {
+        "adage.ascii": "x"
+      }
+    },
+    "arrow": {
+      "$value": "→",
+      "$description": "Directs to.",
+      "$extensions": {
+        "adage.ascii": "->"
+      }
+    },
+    "active": {
+      "$value": "◆",
+      "$description": "The active step.",
+      "$extensions": {
+        "adage.ascii": "*"
+      }
+    },
+    "done": {
+      "$value": "◇",
+      "$description": "A finished step.",
+      "$extensions": {
+        "adage.ascii": "+"
+      }
+    },
+    "rail": {
+      "$value": "│",
+      "$description": "The flow rail.",
+      "$extensions": {
+        "adage.ascii": "|"
+      }
+    },
+    "pointer": {
+      "$value": "›",
+      "$description": "The selected choice.",
+      "$extensions": {
+        "adage.ascii": ">"
+      }
+    },
+    "sep": {
+      "$value": "·",
+      "$description": "Separator between facts.",
+      "$extensions": {
+        "adage.ascii": "-"
+      }
+    }
+  }
+}

@@ -1,3 +1,7 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
  adage watch · harbor-dispatch · gen 8216e29f                                                            LIVE
 ● adage 0.1.0  ● hooks cc  ● 4 routes  ● auto-learn on  ● no model  ● fail-open 0
  activity · harbor-dispatch ──────────────────────────────────────────────────────────────────────────────────

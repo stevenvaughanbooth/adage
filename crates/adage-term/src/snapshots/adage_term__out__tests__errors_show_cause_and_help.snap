@@ -1,0 +1,9 @@
+---
+source: crates/adage-term/src/out.rs
+expression: s
+---
+error  cannot listen on 127.0.0.1:80
+  │
+  ├─ cause  permission denied (os error 13): ports below 1024 need root
+  │
+  ╰─ help   use another port, or let Adage pick one: adage map --port 0

@@ -12,8 +12,20 @@ version as the GitHub Release notes.
 - Branding: the pitch is now **"Agent traces become reflexes."** Reflexes (learned) and instincts
   (shipped) are the units; tracks and packs are the artefacts. "Put your agent on rails" is retired
   as the tagline (README, plugin and npm descriptions, Design Spec §17).
+- The terminal UI takes its colours from the new design system: violet is the one accent,
+  strength colours mean fire, prime and inhibit, and under `NO_COLOR` strengths are spelled out
+  (`FIRE`, `PRIME`, `INHIBIT`) instead of `[G]`, `[Y]` and `[R]`.
 
 ### Added
+
+- **One design system for every surface** (docs/design/style.md, docs/design/redesign-plan.md).
+  Colours, type (Bricolage Grotesque, Hanken Grotesk, Red Hat Mono), spacing, motion and
+  terminal glyphs are defined once in `design/tokens/adage.tokens.json` (W3C DTCG);
+  `cargo xtask tokens` generates the terminal palette (`adage-term`) and the web map's CSS
+  variables, and `cargo test` fails if either is stale or any text colour is below 4.5:1
+  contrast. The new `adage-term` crate detects what the terminal can do (colour depth, UTF-8,
+  light or dark ground; `ADAGE_COLOR`, `ADAGE_THEME` and `ADAGE_ASCII` override it) and provides
+  the output grammar every command will print through. Terminal UI snapshots moved to insta.
 
 - **E1 prefetch (Track C, milestone C3).** `adage-exec hook <harness> <event>` runs the same hook
   pipeline as `adage hook`, now the shared `adage-hook` library. For a directive whose route has

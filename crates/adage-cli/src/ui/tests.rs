@@ -1,6 +1,6 @@
 //! UI tests: the tailers under concurrent appends and truncation, the parsers, and frames
-//! rendered with `TestBackend` from fixture data, compared with snapshots in `ui/snapshots/`
-//! (`ADAGE_BLESS=1` rewrites them).
+//! rendered with `TestBackend` from fixture data, compared with insta snapshots in
+//! `ui/snapshots/` (`cargo insta review` to inspect a change; `INSTA_UPDATE=always` to accept).
 
 use super::app::{self, AppState, Cmd, Modal, Tab};
 use super::feed::{self, Act};
@@ -219,7 +219,7 @@ fn health() -> Health {
 }
 
 fn ctx(paths: Paths, color: bool) -> Ctx {
-    Ctx { paths, root: None, label: "harbor-dispatch".into(), theme: Theme { color }, tz: 0, demo: false }
+    Ctx { paths, root: None, label: "harbor-dispatch".into(), theme: Theme::with_color(color), tz: 0, demo: false }
 }
 
 fn live_from(paths: &Paths) -> Live {
@@ -229,15 +229,9 @@ fn live_from(paths: &Paths) -> Live {
     live
 }
 
+/// A frame snapshot (insta: `cargo insta review`, or `INSTA_UPDATE=always` to accept).
 fn snap(name: &str, text: &str) {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/ui/snapshots").join(format!("{name}.txt"));
-    if std::env::var("ADAGE_BLESS").is_ok_and(|v| v == "1") {
-        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, text).unwrap();
-    }
-    let want = std::fs::read_to_string(&path)
-        .unwrap_or_else(|_| panic!("missing snapshot {}; run with ADAGE_BLESS=1", path.display()));
-    assert_eq!(text, want, "snapshot {name} changed (ADAGE_BLESS=1 to accept):\n{text}");
+    insta::assert_snapshot!(name, text);
 }
 
 fn render(w: u16, h: u16, f: impl FnOnce(&mut ratatui::Frame)) -> (String, ratatui::buffer::Buffer) {
@@ -497,7 +491,7 @@ fn no_color_spells_aspects_out() {
     let h = health();
     let c = ctx(paths, false);
     let (text, buf) = render(80, 24, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
-    assert!(text.contains("→ lookup-incident [G]") && text.contains("→ dead-end-npm-test [R]"), "{text}");
+    assert!(text.contains("→ lookup-incident FIRE") && text.contains("→ dead-end-npm-test INHIBIT"), "{text}");
     assert!(text.contains("+ adage 0.1.0") && text.contains("! no model"), "{text}");
     for y in 0..buf.area.height {
         for x in 0..buf.area.width {
@@ -668,7 +662,7 @@ fn install_confirmation_shows_the_file_and_diff() {
         before: Some("{\n  \"model\": \"x\"\n}\n".into()),
         after: "{\n  \"hooks\": {},\n  \"model\": \"x\"\n}\n".into(),
     };
-    let lines = app::install_confirm(&p, &Theme { color: false });
+    let lines = app::install_confirm(&p, &Theme::with_color(false));
     let text: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
     assert!(text[0].contains("/work/r/.claude/settings.local.json"));
     assert!(text.iter().any(|l| l == "+   \"hooks\": {},"), "{text:#?}");

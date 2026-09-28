@@ -1,3 +1,7 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
  adage  1 Live  2 Routes (1 to review)  3 Health (2)  4 Settings
 config /home/me/.local/share/adage/config.toml
 the same settings as `adage config`; environment variables win over the file

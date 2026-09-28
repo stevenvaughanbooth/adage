@@ -1,3 +1,7 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
  adage  1 Live  2 Routes (1 to review)  3 Health (2)  4 Settings
 ● binary               adage 0.1.0 at ~/bin/adage
 ● index                generation 8216e29f00, 4 route(s) in 1 repository

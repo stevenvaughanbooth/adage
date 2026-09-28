@@ -1,3 +1,7 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
  adage  1 Live  2 Routes (1 to review)  3 Health (2)  4 Settings
 harbor-dispatch/incidents @ 0.3.0  [harbor-di│ ● lookup-incident  green (ceiling green)
 * ● lookup-incident 24/25 · ✓2 ✗1            │ track    harbor-dispatch/incidents @ 0.3.0

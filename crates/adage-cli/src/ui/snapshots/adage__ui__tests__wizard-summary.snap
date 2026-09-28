@@ -1,3 +1,7 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
  adage init · set Adage up for harbor-dispatch
  ✓ Harnesses           │ Summary
  – Hooks: claude-code  │ adage doctor: 4 passed, 2 warning(s), 0 failure(s)

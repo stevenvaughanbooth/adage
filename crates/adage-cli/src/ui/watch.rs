@@ -127,7 +127,7 @@ pub fn snapshot(ctx: &Ctx, size: Option<(u16, u16)>) -> String {
         Ok(t) => t,
         Err(e) => return format!("adage watch: {e}\n"),
     };
-    let plain = Ctx { theme: super::theme::Theme { color: false }, ..ctx.clone() };
+    let plain = Ctx { theme: super::theme::Theme::with_color(false), ..ctx.clone() };
     let _ = term.draw(|f| view::draw_live(f, f.area(), &live, Some(&health), &plain, true));
     buffer_text(term.backend().buffer())
 }
