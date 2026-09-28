@@ -17,6 +17,7 @@ import { plural } from "../lib/words";
 import { reducedMotion } from "../state/theme";
 import { useUrl } from "../state/url";
 import { Icons } from "./glyphs";
+import { activeFilters } from "./LeftRail";
 import { type EdgeData, type FlowEdge, type FlowNode, edgeTypes, nodeTypes } from "./nodes";
 import { Replay } from "./Replay";
 import { Segmented, cx } from "./ui";
@@ -58,7 +59,7 @@ function usePulses(graph: Graph) {
   return { pulses, fire };
 }
 
-function Canvas({ graph }: { graph: Graph }) {
+function Canvas({ graph, onFilter }: { graph: Graph; onFilter?: () => void }) {
   const [url, setUrl] = useUrl();
   const [at, setAt] = useState<number | null>(url.at);
   const { pulses, fire } = usePulses(graph);
@@ -180,6 +181,7 @@ function Canvas({ graph }: { graph: Graph }) {
 
   const heads = url.dir === "RIGHT" ? columnHeads(map, placed) : [];
   const c = counts(graph, url.repo);
+  const nFilters = activeFilters(url);
   const traces = new Set(graph.events.filter((e) => !url.repo || e.repo === url.repo).map((e) => e.session)).size;
   const sessions = url.repo ? traces : Math.max(graph.sessions.total, traces);
 
@@ -259,6 +261,22 @@ function Canvas({ graph }: { graph: Graph }) {
 
         <div className="pointer-events-none absolute inset-x-4 top-3.5 flex items-center gap-2">
           <div className="pointer-events-auto flex flex-wrap items-center gap-2">
+            {onFilter && (
+              <button
+                type="button"
+                onClick={onFilter}
+                aria-haspopup="dialog"
+                title="Filter, strengths and the reflex tree (/)"
+                className={cx(
+                  "flex h-[34px] items-center gap-1.5 rounded-md border bg-panel px-3 text-[12.5px] lg:hidden",
+                  nFilters ? "border-accent/45 text-ink-1" : "border-line-strong text-ink-2 hover:text-ink-1",
+                )}
+              >
+                <Icons.filter size={14} />
+                Filter
+                {nFilters > 0 && <span className="font-mono text-[11px] text-accent-soft">· {nFilters}</span>}
+              </button>
+            )}
             <Segmented
               label="Graph mode"
               value={url.mode}
@@ -327,10 +345,10 @@ function Canvas({ graph }: { graph: Graph }) {
   );
 }
 
-export function MapCanvas({ graph }: { graph: Graph }) {
+export function MapCanvas({ graph, onFilter }: { graph: Graph; onFilter?: () => void }) {
   return (
     <ReactFlowProvider>
-      <Canvas graph={graph} />
+      <Canvas graph={graph} onFilter={onFilter} />
     </ReactFlowProvider>
   );
 }

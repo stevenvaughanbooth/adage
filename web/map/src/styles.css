@@ -247,6 +247,17 @@
 .rise {
   animation: rise var(--duration-rise) var(--easing-out) both;
 }
+@keyframes sheet-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: none;
+  }
+}
+.sheet {
+  animation: sheet-in var(--duration-rise) var(--easing-out) both;
+}
 @keyframes node-flash {
   0% {
     box-shadow: 0 0 0 0 var(--sel-ring);

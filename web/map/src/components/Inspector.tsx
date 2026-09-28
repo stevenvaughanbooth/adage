@@ -5,7 +5,11 @@ import type { ReactNode } from "react";
 import type { ArmStats, Graph, Route } from "../api/types";
 import { findRoute, routeKey } from "../lib/graph";
 import {
+  CONTROL_NOTE,
+  LIVE_SOURCE,
   type Lifecycle,
+  evidenceNote,
+  evidenceSource,
   isInstinct,
   judgement,
   lifecycle,
@@ -19,10 +23,16 @@ import { useUrl } from "../state/url";
 import { KindGlyph, Lamp } from "./glyphs";
 import { CommandButton, LifecycleChip, Pill, Prose, StrengthChip, cx } from "./ui";
 
-function Section({ label, children }: { label: string; children: ReactNode }) {
+function Section({ label, source, note, children }: { label: string; source?: string; note?: ReactNode; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-2.5" aria-label={label}>
-      <h3 className="lbl m-0 font-normal">{label}</h3>
+    <section className="flex flex-col gap-2.5" aria-label={source ? `${source} · ${label}` : label}>
+      <div className="flex flex-col gap-1">
+        <h3 className="lbl m-0 font-normal">
+          {source && <span className="text-accent-soft">{source} · </span>}
+          {label}
+        </h3>
+        {note && <p className="m-0 text-[11.5px] leading-snug text-ink-3">{note}</p>}
+      </div>
       {children}
     </section>
   );
@@ -98,7 +108,7 @@ function Bar({ label, k, n, control, better }: { label: string; k: number; n: nu
         />
       </div>
       <span className={cx("text-right font-mono tabular-nums", control ? "text-ink-2" : "text-ink-1")}>
-        {n ? `${k}/${n}` : "—"}
+        {k}/{n}
       </span>
     </>
   );
@@ -109,7 +119,11 @@ export function WithVsControl({ r }: { r: Route }) {
   const t: ArmStats = r.arms.treated ?? { sessions: 0, applied: 0, followed: 0, met: 0, hit_avoided: 0 };
   const c: ArmStats = r.arms.holdout ?? { sessions: 0, applied: 0, followed: 0, met: 0, hit_avoided: 0 };
   if (!t.applied && !c.applied) {
-    return <p className="m-0 text-[13px] text-ink-3">Not applied in any trace yet, in either arm.</p>;
+    return (
+      <p className="m-0 text-[13px] text-ink-3">
+        Not applied in any trace yet: <span className="font-mono">0/0</span> with it, <span className="font-mono">0/0</span> control.
+      </p>
+    );
   }
   const avoid = r.step.kind === "avoid";
   const obligation = t.met + c.met > 0;
@@ -281,7 +295,7 @@ export function Inspector({ graph }: { graph: Graph }) {
         <Directive text={r.directive} />
       </Section>
 
-      <Section label="Evidence">
+      <Section label="Evidence" source={evidenceSource(r)} note={evidenceNote(r)}>
         <div className="grid grid-cols-3 gap-2">
           <Stat value={e.support} of={`/${e.opportunities}`} label="traces took it" />
           <Stat value={e.lower_bound.toFixed(2)} label="lower bound" />
@@ -290,7 +304,7 @@ export function Inspector({ graph }: { graph: Graph }) {
         <Gauge lb={e.lower_bound} bar={bar} />
       </Section>
 
-      <Section label="With the reflex vs control">
+      <Section label={`With the ${inst ? "instinct" : "reflex"} vs control`} source={LIVE_SOURCE} note={CONTROL_NOTE}>
         <WithVsControl r={r} />
         <p className="m-0 font-mono text-[11px] text-ink-3">
           live · directed {r.live.emitted} · {judgement("followed")} {r.live.followed} · {judgement("derailed")} {r.live.derailed}

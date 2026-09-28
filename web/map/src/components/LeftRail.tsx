@@ -3,8 +3,8 @@ import type { Graph, Route } from "../api/types";
 import { counts, routeKey, visible } from "../lib/graph";
 import { type Lifecycle, STRENGTHS, type Strength, isInstinct, lifecycle, strength } from "../lib/words";
 import { useUrl } from "../state/url";
-import { KindGlyph, Lamp } from "./glyphs";
-import { FilterChip, cx } from "./ui";
+import { Icons, KindGlyph, Lamp } from "./glyphs";
+import { FilterChip, Modal, cx } from "./ui";
 
 interface Group {
   section?: string;
@@ -41,7 +41,43 @@ export function tree(rs: Route[]): Group[] {
 
 const HIDEABLE: Lifecycle[] = ["nascent", "dormant", "extinguished"];
 
+/** The filters hidden on the map, as a count for the Filter button on narrow screens. */
+export function activeFilters(url: { q: string; strengths: Set<Strength>; show: Set<Lifecycle> }): number {
+  return (url.q ? 1 : 0) + STRENGTHS.filter((s) => !url.strengths.has(s)).length + url.show.size;
+}
+
+/** The rail on wide screens (1024 px and up). */
 export function LeftRail({ graph }: { graph: Graph }) {
+  return (
+    <aside aria-label="Reflexes and instincts" className="hidden min-h-0 flex-col gap-3.5 border-r border-line bg-panel p-4 lg:flex">
+      <RailBody graph={graph} inputId="filter" />
+    </aside>
+  );
+}
+
+/** The same filters and tree on tablets and phones: a drawer from the left. */
+export function FilterSheet({ graph, open, onClose }: { graph: Graph; open: boolean; onClose: () => void }) {
+  return (
+    <Modal label="Filter and reflex tree" open={open} onClose={onClose} sheet focusInput={false}>
+      <div className="flex shrink-0 items-center justify-between border-b border-line py-3 pr-3 pl-4">
+        <h2 className="display m-0 text-lg font-semibold">Filter</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex h-9 items-center gap-1.5 rounded-md border border-line-strong px-3 text-[13px] text-ink-1 hover:border-accent/45"
+        >
+          <Icons.cross size={13} />
+          Close
+        </button>
+      </div>
+      <div className="flex min-h-0 grow flex-col gap-3.5 p-4">
+        <RailBody graph={graph} inputId="filter-sheet" onPick={onClose} />
+      </div>
+    </Modal>
+  );
+}
+
+function RailBody({ graph, inputId, onPick }: { graph: Graph; inputId: string; onPick?: () => void }) {
   const [url, setUrl] = useUrl();
   const c = counts(graph, url.repo);
   const inRepo = useMemo(
@@ -82,13 +118,13 @@ export function LeftRail({ graph }: { graph: Graph }) {
   };
 
   return (
-    <aside aria-label="Reflexes and instincts" className="hidden min-h-0 flex-col gap-3.5 border-r border-line bg-panel p-4 lg:flex">
+    <>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="filter" className="lbl">
+        <label htmlFor={inputId} className="lbl">
           Filter
         </label>
         <input
-          id="filter"
+          id={inputId}
           type="search"
           value={url.q}
           onChange={(e) => setUrl({ q: e.target.value })}
@@ -139,8 +175,11 @@ export function LeftRail({ graph }: { graph: Graph }) {
                   type="button"
                   data-reflex={key}
                   aria-current={sel ? "true" : undefined}
-                  title={onMap ? r.summary || r.id : `${r.id} · hidden on the map by the filters`}
-                  onClick={() => setUrl({ reflex: sel ? null : key, view: "map" }, true)}
+                  title={`${onMap ? r.summary || r.id : `${r.id} · hidden on the map by the filters`} · from conditioning, ${r.evidence.support}/${r.evidence.opportunities} traces took it`}
+                  onClick={() => {
+                    setUrl({ reflex: sel ? null : key, view: "map" }, true);
+                    onPick?.();
+                  }}
                   className={cx(
                     "flex h-[30px] w-full items-center gap-2 rounded-sm pr-2 text-left transition-colors duration-100",
                     g.title ? "pl-[22px]" : "pl-2",
@@ -160,6 +199,6 @@ export function LeftRail({ graph }: { graph: Graph }) {
           </div>
         ))}
       </nav>
-    </aside>
+    </>
   );
 }

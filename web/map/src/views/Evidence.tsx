@@ -7,10 +7,13 @@ import { KindGlyph, Lamp } from "../components/glyphs";
 import { Segmented, cx, day } from "../components/ui";
 import { armTraces, kpis, pct, perDay, share } from "../lib/evidence";
 import { routeKey } from "../lib/graph";
-import { isInstinct, lifecycle, plural, strength } from "../lib/words";
+import { CONTROL_NOTE, LIVE_SOURCE, isInstinct, lifecycle, plural, strength } from "../lib/words";
 import { type Window, useUrl, windowStart } from "../state/url";
 
-type SortKey = "saved" | "support" | "lb" | "strength" | "id";
+const GROUP_TH =
+  "border-b border-line px-3 pt-1.5 pb-1 text-left font-mono text-[10.5px] font-medium tracking-[0.08em] whitespace-nowrap text-accent-soft uppercase";
+
+type SortKey ="saved" | "support" | "lb" | "strength" | "id";
 
 function Chart({ data, markers }: { data: { day: number; treated: number; control: number }[]; markers: { ts: number; label: string }[] }) {
   const W = 700;
@@ -183,7 +186,9 @@ export function Evidence({ graph }: { graph: Graph }) {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <span className="font-mono text-xs text-ink-3">distinct traces · control: reflexes withheld on purpose</span>
+          <span className="font-mono text-xs text-ink-3" title={CONTROL_NOTE}>
+            {LIVE_SOURCE.toLowerCase()} · distinct traces · control: reflexes withheld on purpose
+          </span>
           <Segmented<Window>
             label="Window"
             value={url.window === "24h" ? "7d" : url.window}
@@ -254,12 +259,25 @@ export function Evidence({ graph }: { graph: Graph }) {
         </section>
 
         <section aria-label="Reflexes by turns saved" className="flex flex-col overflow-hidden rounded-lg border border-line-strong bg-panel px-2 pt-2">
-          <div className="px-3 pt-2.5 pb-1">
+          <div className="flex flex-col gap-1 px-3 pt-2.5 pb-1">
             <span className="lbl">Reflexes by {sort.key === "saved" ? "turns saved" : sort.key === "lb" ? "lower bound" : sort.key}</span>
+            <p className="m-0 text-[11.5px] leading-snug text-ink-3">
+              <span className="text-ink-2">From conditioning</span>: counted in past traces when the reflex formed.{" "}
+              <span className="text-ink-2">{LIVE_SOURCE}</span>: took its path (or, for inhibit, hit the dead end), with it vs control. {CONTROL_NOTE}
+            </p>
           </div>
           <div className="scroll-thin overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
+                <tr>
+                  <td colSpan={2} className="border-b border-line" />
+                  <th scope="col" colSpan={3} className={GROUP_TH}>
+                    From conditioning
+                  </th>
+                  <th scope="col" className={GROUP_TH}>
+                    {LIVE_SOURCE}
+                  </th>
+                </tr>
                 <tr>
                   {th("id", "Reflex")}
                   {th("strength", "Strength")}
@@ -302,7 +320,7 @@ export function Evidence({ graph }: { graph: Graph }) {
                       <td className="border-b border-line px-3 py-[11px] font-mono text-[12.5px] text-ink-2">{r.evidence.lower_bound.toFixed(2)}</td>
                       <td className="border-b border-line px-3 py-[11px] font-mono text-[12.5px] text-ink-1">{r.evidence.turns_saved.toFixed(1)}</td>
                       <td className={cx("border-b border-line px-3 py-[11px] font-mono text-[12px] whitespace-nowrap", "text-ink-2")} title={avoid ? "hit the dead end" : "took its path"}>
-                        {t?.applied ? `${k(t)}/${t.applied}` : "—"} · {c?.applied ? `${k(c)}/${c.applied}` : "—"}
+                        {k(t)}/{t?.applied ?? 0} · {k(c)}/{c?.applied ?? 0}
                       </td>
                     </tr>
                   );

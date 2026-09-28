@@ -225,6 +225,8 @@ export function Modal({
   children,
   className,
   top = 64,
+  sheet = false,
+  focusInput = true,
 }: {
   label: string;
   open: boolean;
@@ -232,15 +234,21 @@ export function Modal({
   children: ReactNode;
   className?: string;
   top?: number;
+  /** A drawer from the left edge, full height, instead of a centred dialog. */
+  sheet?: boolean;
+  /** Focus the first field on open (the palette's search); otherwise the first control. */
+  focusInput?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const back = useRef<Element | null>(null);
+  const withInput = useRef(focusInput);
+  withInput.current = focusInput;
   useEffect(() => {
     if (!open) return;
     back.current = document.activeElement;
     const el = ref.current;
     // A field first (the palette's search), else the first control; never a tabindex="-1" wrapper.
-    const first = el?.querySelector<HTMLElement>("input") ?? el?.querySelector<HTMLElement>(FOCUSABLE);
+    const first = (withInput.current ? el?.querySelector<HTMLElement>("input") : null) ?? el?.querySelector<HTMLElement>(FOCUSABLE);
     (first ?? el)?.focus();
     return () => {
       (back.current as HTMLElement | null)?.focus?.();
@@ -276,9 +284,11 @@ export function Modal({
         aria-modal="true"
         aria-label={label}
         tabIndex={-1}
-        style={{ top }}
+        style={sheet ? undefined : { top }}
         className={cx(
-          "rise absolute left-1/2 flex w-[min(640px,calc(100vw-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-line-strong bg-panel shadow-[var(--shadow)] outline-none",
+          sheet
+            ? "sheet absolute inset-y-0 left-0 flex w-[min(360px,calc(100vw-40px))] flex-col overflow-hidden border-r border-line-strong bg-panel shadow-[var(--shadow)] outline-none"
+            : "rise absolute left-1/2 flex w-[min(640px,calc(100vw-32px))] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-line-strong bg-panel shadow-[var(--shadow)] outline-none",
           className,
         )}
       >

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { start, useStore } from "./api/client";
 import { Inspector } from "./components/Inspector";
-import { LeftRail } from "./components/LeftRail";
+import { FilterSheet, LeftRail } from "./components/LeftRail";
 import { MapCanvas } from "./components/MapCanvas";
 import { Palette } from "./components/Palette";
 import { Shortcuts } from "./components/Shortcuts";
@@ -24,6 +24,15 @@ export function App() {
   const [url, setUrl] = useUrl();
   const [palette, setPalette] = useState(false);
   const [sheet, setSheet] = useState(false);
+  // The filter drawer: the rail's filters and tree on screens too narrow for the rail.
+  const [drawer, setDrawer] = useState(false);
+  useEffect(() => {
+    // Widening past the rail's breakpoint puts the rail back; the drawer is not needed.
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const f = () => mq.matches && setDrawer(false);
+    mq.addEventListener("change", f);
+    return () => mq.removeEventListener("change", f);
+  }, []);
   useEffect(() => start(), []);
   useEffect(() => {
     document.title = `${TITLES[url.view]} · Adage map`;
@@ -39,7 +48,7 @@ export function App() {
         setPalette((p) => !p);
         return true;
       case "escape":
-        if (palette || sheet) return;
+        if (palette || sheet || drawer) return;
         if (url.reflex) setUrl({ reflex: null }, true);
         return;
       case "?":
@@ -64,7 +73,8 @@ export function App() {
     if (url.view !== "map" || !graph) return;
     switch (k) {
       case "/":
-        document.getElementById("filter")?.focus();
+        if (window.matchMedia("(min-width: 1024px)").matches) document.getElementById("filter")?.focus();
+        else if (!firstRun) setDrawer(true);
         return true;
       case "a":
         setUrl({ mode: url.mode === "aggregated" ? "expanded" : "aggregated" });
@@ -125,7 +135,7 @@ export function App() {
           ) : (
             <div className="grid min-h-0 grow grid-cols-1 grid-rows-[minmax(0,1fr)_minmax(0,42%)] lg:grid-cols-[248px_minmax(0,1fr)_336px] lg:grid-rows-1 xl:grid-cols-[280px_minmax(0,1fr)_380px]">
               <LeftRail graph={graph} />
-              <MapCanvas graph={graph} />
+              <MapCanvas graph={graph} onFilter={() => setDrawer(true)} />
               <Inspector graph={graph} />
             </div>
           )
@@ -139,6 +149,7 @@ export function App() {
       </div>
       <Palette graph={graph} open={palette} onClose={() => setPalette(false)} onShortcuts={() => setSheet(true)} />
       <Shortcuts open={sheet} onClose={() => setSheet(false)} />
+      {graph && <FilterSheet graph={graph} open={drawer && url.view === "map" && !firstRun} onClose={() => setDrawer(false)} />}
       <Toast />
     </div>
   );

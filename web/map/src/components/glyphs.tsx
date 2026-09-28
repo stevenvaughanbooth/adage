@@ -114,6 +114,11 @@ export const Icons = {
       <path d="M3 8.3L6.4 11.5L13 4.5" />
     </Icon>
   ),
+  filter: (p: { size?: number }) => (
+    <Icon {...p}>
+      <path d="M2.5 4h11M4.5 8h7M6.5 12h3" />
+    </Icon>
+  ),
   cross: (p: { size?: number }) => (
     <Icon {...p}>
       <path d="M4 4l8 8M12 4l-8 8" />

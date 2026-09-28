@@ -110,6 +110,30 @@ export function arm(a: string | null | undefined): string {
   return a ?? "unknown";
 }
 
+// Where each kind of number comes from. Support, lower bound and turns saved were counted once,
+// when the reflex was conditioned; with-vs-control is counted live, in traces since it was
+// installed. The two are never mixed, so each is labelled where it appears.
+
+/** The source of a reflex's `evidence` numbers. */
+export function evidenceSource(r: Route): string {
+  if (isInstinct(r)) return "Shipped with Adage";
+  if (r.imported) return "From the pack";
+  return "From conditioning";
+}
+
+/** One line on what that source means. */
+export function evidenceNote(r: Route): string {
+  if (isInstinct(r)) return "Instincts carry no traces of their own: bound from what this repository declares.";
+  if (r.imported) return "Counted in the traces the pack was conditioned on, not in yours.";
+  return "Counted in past traces when Adage conditioned this reflex.";
+}
+
+/** The source of the per-arm numbers. */
+export const LIVE_SOURCE = "Live since installed";
+
+/** The control arm, in one line. */
+export const CONTROL_NOTE = "Control: traces where Adage withheld the reflex on purpose, so the agent worked unaided: the baseline.";
+
 /** Review verbs as the CLI names them (lexicon: promote → strengthen, and so on). */
 const VERB: Record<string, string> = {
   promote: "strengthen",
