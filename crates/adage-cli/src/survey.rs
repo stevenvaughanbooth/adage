@@ -562,6 +562,16 @@ fn candidates(p: &adage_learn::Planned) -> Vec<Candidate> {
 
 pub fn survey(args: &[String], paths: &Paths) -> Result<()> {
     let o = Options::parse(args)?;
+    if let Some(missing) = o.transcripts.iter().find(|p| !p.is_file()) {
+        return Err(crate::hint(
+            format!("{} is not a transcript file", missing.display()),
+            "pass files that exist, or a directory with --claude-projects <dir> or --codex-sessions <dir>",
+        ));
+    }
+    crate::check_dirs(&[
+        ("--claude-projects", o.claude_projects.as_deref()),
+        ("--codex-sessions", o.codex_sessions.as_deref()),
+    ])?;
     let s = run(&o, paths)?;
     if args.iter().any(|a| a == "--json") {
         println!("{}", serde_json::to_string_pretty(&s)?);

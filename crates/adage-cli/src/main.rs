@@ -227,8 +227,25 @@ fn run(args: &[String]) -> Result<()> {
 /// Thresholds: `--demo`, else `learn.thresholds` (`adage config`). Parses are cached under
 /// `$ADAGE_HOME/cache/sessions` unless `--no-cache` or `learn.parse_cache = false` (the result is
 /// the same).
+/// Source directories a person named must exist: an empty result would say "no traces" when the
+/// path is simply wrong.
+pub(crate) fn check_dirs(dirs: &[(&str, Option<&std::path::Path>)]) -> Result<()> {
+    for (flag, dir) in dirs {
+        if let Some(d) = dir.filter(|d| !d.is_dir()) {
+            return Err(hint(
+                format!("{} is not a directory ({flag})", d.display()),
+                format!("check the path; {flag} takes a directory of traces"),
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn learn(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
+    let (cp, cs) =
+        (flag(args, "--claude-projects").map(PathBuf::from), flag(args, "--codex-sessions").map(PathBuf::from));
+    check_dirs(&[("--claude-projects", cp.as_deref()), ("--codex-sessions", cs.as_deref())])?;
     let mut transcripts: Vec<PathBuf> = Vec::new();
     let mut i = 0;
     while i < args.len() {
