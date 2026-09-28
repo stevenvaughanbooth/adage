@@ -10,6 +10,7 @@ publish.workspace = true
 # never on adage-runtime or adage-learn. The runtime never links it.
 [dependencies]
 adage-core = { path = "../adage-core" }
+adage-intent = { path = "../adage-intent" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

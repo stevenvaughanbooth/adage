@@ -73,6 +73,7 @@ name = "adage-graph"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-intent",
  "proptest",
  "regex",
  "serde",

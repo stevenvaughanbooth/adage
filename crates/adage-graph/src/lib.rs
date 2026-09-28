@@ -9,8 +9,14 @@
 //!
 //! Not wired into `adage learn`, the runtime or the track model yet (G1 integration).
 
+pub mod events;
 pub mod flow;
 pub mod input;
+pub mod mine;
+pub mod proto;
+pub mod score;
+pub mod select;
+pub mod stats;
 pub mod types;
 
 use flow::{FlowParams, Slot};
