@@ -17,13 +17,13 @@ expression: text
                                        │           q  quit                                                   │
  ▾ nascent · waits for review          │                                                                     │
    ○ ◠ regen-openapi-client    nascent │ REFLEXES                                                            │
-                                       │           /  fuzzy filter reflexes by id, trigger, command or track │0
- ▾ instincts · adage/finish-line@0.1.0 │         j/k  move through the tree                                  │6
-   P ◉ finish-line/regenerate  firm    │       enter  open or close a group                                  │finish line met 0
+                                       │           /  fuzzy filter reflexes by id, trigger, command or track │ound 0.80 · 8 turns saved per trace
+ ▾ instincts · adage/finish-line@0.1.0 │         j/k  move through the tree                                  │red 1 · finish line met 0
+   P ◉ finish-line/regenerate  firm    │       enter  open or close a group                                  │
                                        │         tab  next tab                                               │
- ▸ extinguished · 1                    │           s  strengthen: prime → fire (adage review strengthen)     │
-                                       │           w  weaken: fire → prime (adage review weaken)             │/12
-                                       │           x  extinguish the reflex (adage review extinguish)        │5
+ ▸ extinguished · 1                    │           s  strengthen: prime → fire (adage review strengthen)     │ the step
+                                       │           w  weaken: fire → prime (adage review weaken)             │
+                                       │           x  extinguish the reflex (adage review extinguish)        │
                                        │           a  approve it as it is (adage review approve)             │
                                        │           n  pin it: conditioning proposes instead of overwriting   │
                                        │           m  dismiss a pinned reflex's proposed change              │

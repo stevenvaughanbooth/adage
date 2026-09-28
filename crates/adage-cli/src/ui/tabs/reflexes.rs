@@ -472,13 +472,9 @@ fn tree_lines(s: &AppState, nodes: &[Node], sel: usize, t: &Theme, width: usize)
     (out, sel_line)
 }
 
-fn kv2(a: (&str, String), b: Option<(&str, String)>, t: &Theme) -> Line<'static> {
-    let mut spans = vec![Span::raw("  "), Span::styled(t.pad(a.0, 14), t.dim()), Span::raw(t.pad(&a.1, 18))];
-    if let Some((k, v)) = b {
-        spans.push(Span::styled(t.pad(k, 14), t.dim()));
-        spans.push(Span::styled(v, t.bold()));
-    }
-    Line::from(spans)
+/// A line of evidence that says where it comes from: `from conditioning: 24/25 traces took it`.
+fn sourced(source: &str, text: String, t: &Theme) -> Line<'static> {
+    Line::from(vec![Span::raw("  "), Span::styled(format!("{source}: "), t.dim()), Span::raw(text)])
 }
 
 fn bar(took: u64, applied: u64, style: Style, t: &Theme) -> Span<'static> {
@@ -527,52 +523,55 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
         v.extend(view::directive_lines(&r.directive, t, ""));
     }
     v.push(Line::raw(""));
+    // Two sources, each named: the traces conditioning read (history), and what the hooks have
+    // recorded since the reflex was installed (live).
     v.push(head("EVIDENCE", t));
     if r.opportunities == 0 {
-        v.push(Line::from(Span::styled(
+        v.push(sourced(
+            "from conditioning",
             if r.instinct {
-                "  an instinct: it ships with Adage and has no evidence of its own"
+                "none, an instinct ships with Adage and has no evidence of its own".into()
             } else {
-                "  no evidence recorded"
+                "no evidence recorded".into()
             },
-            t.ink2(),
-        )));
+            t,
+        ));
     } else {
-        v.push(kv2(
-            ("support", format!("{}/{} traces", r.support, r.opportunities)),
-            Some(("lower bound", format!("{:.2}", r.lower_bound))),
-            t,
-        ));
-        let saved = (r.turns_saved > 0.0).then(|| ("turns saved", format!("{:.0} per trace", r.turns_saved)));
-        v.push(kv2(
-            saved.unwrap_or(("rate", format!("{:.2}", r.rate))),
-            (r.turns_saved > 0.0).then(|| ("rate", format!("{:.2}", r.rate))),
-            t,
-        ));
+        let mut facts = vec![
+            format!("{}/{} traces took it", r.support, r.opportunities),
+            format!("lower bound {:.2}", r.lower_bound),
+        ];
+        if r.turns_saved > 0.0 {
+            facts.push(format!("{:.0} turns saved per trace", r.turns_saved));
+        }
+        v.push(sourced("from conditioning", facts.join(&t.sep()), t));
     }
     let l = &r.live;
-    v.push(Line::from(vec![
-        Span::raw("  "),
-        Span::styled(t.pad("live", 14), t.dim()),
-        Span::raw(format!(
-            "fired {} · followed {} · ignored {} · finish line met {}",
-            l.emitted, l.followed, l.derailed, l.met
-        )),
-    ]));
+    v.push(sourced(
+        "live since installed",
+        format!(
+            "fired {}{sep}followed {}{sep}ignored {}{sep}finish line met {}",
+            l.emitted,
+            l.followed,
+            l.derailed,
+            l.met,
+            sep = t.sep()
+        ),
+        t,
+    ));
     if r.control.applied > 0 && r.with.applied > 0 {
         v.push(Line::raw(""));
         v.push(head("WITH THE REFLEX vs CONTROL", t));
+        v.push(sourced("live since installed", "traces where the agent took the step".into(), t));
         v.push(Line::from(vec![
             Span::raw("  "),
-            Span::styled(t.pad("took the step", 16), t.dim()),
-            Span::styled(t.pad("with", 9), t.ink2()),
+            Span::styled(t.pad("with the reflex", 17), t.ink2()),
             bar(r.with.took, r.with.applied, t.accent(), t),
             Span::raw(format!("  {}/{}", r.with.took, r.with.applied)),
         ]));
         v.push(Line::from(vec![
             Span::raw("  "),
-            Span::raw(" ".repeat(16)),
-            Span::styled(t.pad("control", 9), t.ink2()),
+            Span::styled(t.pad("control", 17), t.ink2()),
             bar(r.control.took, r.control.applied, t.dim(), t),
             Span::styled(format!("  {}/{}", r.control.took, r.control.applied), t.ink2()),
         ]));

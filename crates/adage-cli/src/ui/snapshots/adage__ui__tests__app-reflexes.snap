@@ -17,13 +17,13 @@ expression: text
                                                         │  </adage-reflex>
  ▾ nascent · waits for review                           │
    ○ ◠ regen-openapi-client    nascent  3/4             │  EVIDENCE
-                                                        │    support       24/25 traces      lower bound   0.80
- ▾ instincts · adage/finish-line@0.1.0                  │    turns saved   8 per trace       rate          0.96
-   P ◉ finish-line/regenerate  firm     –               │    live          fired 3 · followed 2 · ignored 1 · finish line met 0
-                                                        │
- ▸ extinguished · 1                                     │  WITH THE REFLEX vs CONTROL
-                                                        │    took the step   with     █████████████████     10/12
-                                                        │                    control  ████                  1/5
+                                                        │    from conditioning: 24/25 traces took it · lower bound 0.80 · 8 turns saved per trace
+ ▾ instincts · adage/finish-line@0.1.0                  │    live since installed: fired 3 · followed 2 · ignored 1 · finish line met 0
+   P ◉ finish-line/regenerate  firm     –               │
+                                                        │  WITH THE REFLEX vs CONTROL
+ ▸ extinguished · 1                                     │    live since installed: traces where the agent took the step
+                                                        │    with the reflex  █████████████████     10/12
+                                                        │    control          ████                  1/5
                                                         │
                                                         │  LIFECYCLE
                                                         │    ○ nascent ──── ● forming ──── ● firm

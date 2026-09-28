@@ -17,13 +17,13 @@ expression: text
                                                         [darkgray]│[/]  [darkgray]</adage-reflex>[/]
  [darkgray]▾ [/]nascent[darkgray] · waits for review[/]                           [darkgray]│[/]
    [darkgray]○ [/][magenta]◠ [/]regen-openapi-client    [d]nascent  [/][darkgray]3/4[/]             [darkgray]│[/]  [darkgray b]EVIDENCE[/]
-                                                        [darkgray]│[/]    [darkgray]support       [/]24/25 traces      [darkgray]lower bound   [/][b]0.80[/]
- [darkgray]▾ [/]instincts[darkgray] · adage/finish-line@0.1.0[/]                  [darkgray]│[/]    [darkgray]turns saved   [/]8 per trace       [darkgray]rate          [/][b]0.96[/]
-   [yellow]● [/][magenta]◉ [/]finish-line/regenerate  [d]firm     [/][darkgray]–[/]               [darkgray]│[/]    [darkgray]live          [/]fired 3 · followed 2 · ignored 1 · finish line met 0
-                                                        [darkgray]│[/]
- [darkgray]▸ extinguished · 1[/]                                     [darkgray]│[/]  [darkgray b]WITH THE REFLEX vs CONTROL[/]
-                                                        [darkgray]│[/]    [darkgray]took the step   [/][d]with     [/][magenta]█████████████████   [/]  10/12
-                                                        [darkgray]│[/]                    [d]control  [/][darkgray]████                [/][d]  1/5[/]
+                                                        [darkgray]│[/]    [darkgray]from conditioning: [/]24/25 traces took it · lower bound 0.80 · 8 turns saved per trace
+ [darkgray]▾ [/]instincts[darkgray] · adage/finish-line@0.1.0[/]                  [darkgray]│[/]    [darkgray]live since installed: [/]fired 3 · followed 2 · ignored 1 · finish line met 0
+   [yellow]● [/][magenta]◉ [/]finish-line/regenerate  [d]firm     [/][darkgray]–[/]               [darkgray]│[/]
+                                                        [darkgray]│[/]  [darkgray b]WITH THE REFLEX vs CONTROL[/]
+ [darkgray]▸ extinguished · 1[/]                                     [darkgray]│[/]    [darkgray]live since installed: [/]traces where the agent took the step
+                                                        [darkgray]│[/]    [d]with the reflex  [/][magenta]█████████████████   [/]  10/12
+                                                        [darkgray]│[/]    [d]control          [/][darkgray]████                [/][d]  1/5[/]
                                                         [darkgray]│[/]
                                                         [darkgray]│[/]  [darkgray b]LIFECYCLE[/]
                                                         [darkgray]│[/]    [darkgray]○ [/][d]nascent[/][darkgray] ──── [/][magenta]● [/][d]forming[/][darkgray] ──── [/][green]● [/][b]firm[/]
