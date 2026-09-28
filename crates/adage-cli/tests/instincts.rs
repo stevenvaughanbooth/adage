@@ -147,7 +147,7 @@ fn assert_instinct_text(t: &str) {
 fn claude_code_instinct_golden() {
     let w = World::new();
     let out = w.bind();
-    assert!(out.contains(&format!("{TRACK} @ 0.1.0 (created)")), "{out}");
+    assert!(out.contains(&format!("{TRACK}@0.1.0 · created")), "{out}");
     let cwd = w.repo();
     let with = |ev: &str, extra: Value| {
         let mut b =
@@ -275,7 +275,7 @@ fn codex_instinct_golden() {
 fn doctor_review_and_pack_approval() {
     let w = World::new().with_pnpm();
     let out = w.bind();
-    assert!(out.contains("awaiting approval"), "{out}");
+    assert!(out.contains("wait for review"), "{out}");
     // doctor counts what is bound per repository.
     let (d, _, _) = w.run(&["doctor", "--json"], b"");
     let v: Value = serde_json::from_str(&d).unwrap();
@@ -360,8 +360,8 @@ fn followed_and_failed_instincts_retire_at_the_next_learn() {
         .collect();
     assert_eq!(spools.matches("followed_failed").count(), 3, "{spools}");
     let out = w.bind();
-    assert!(out.contains("1 retired automatically"), "{out}");
-    assert!(out.contains("retired automatically: agents followed it and it failed"), "{out}");
+    assert!(out.contains("1 extinguished after failing"), "{out}");
+    assert!(out.contains("extinguished automatically: agents followed it and it failed"), "{out}");
     let yaml = std::fs::read_to_string(w.p(&format!("adage/tracks/{TRACK}/review.yaml"))).unwrap();
     assert!(yaml.contains("rejected") && yaml.contains("adage: followed and failed 3 times"), "{yaml}");
     let log = std::fs::read_to_string(w.p("adage/learn.log")).unwrap();

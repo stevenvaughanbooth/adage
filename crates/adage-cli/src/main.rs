@@ -15,6 +15,7 @@
 mod add;
 mod autolearn;
 mod cli;
+mod condition_out;
 mod config;
 mod detect;
 mod doctor;
@@ -58,7 +59,12 @@ fn main() {
     match on_big_stack(move || run(&args)) {
         Some(Ok(())) => {}
         Some(Err(e)) => {
-            eprintln!("adage: {e:#}");
+            // `error  what failed`, then each cause (adage_term::Out::error).
+            let causes: Vec<String> = e.chain().skip(1).map(|c| c.to_string()).collect();
+            let mut err = adage_term::Out::stderr();
+            if err.error(&e.to_string(), &causes, None).is_err() {
+                eprintln!("adage: {e:#}");
+            }
             std::process::exit(1);
         }
         None => std::process::exit(1),
@@ -317,58 +323,16 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
     if args.iter().any(|a| a == "--json") {
         println!("{}", serde_json::to_string_pretty(&rep)?);
     } else {
-        println!(
-            "adage condition: {} sessions read, {} used, {} steered (excluded per route kind from evidence they influenced)",
-            rep.sessions_read, rep.sessions_used, rep.sessions_steered
-        );
-        println!("thresholds: {}", rep.thresholds);
-        match &rep.intent_model {
-            Some(m) => println!("intent families: {m}"),
-            None => println!("intent families: skipped (no embedding model; `adage models fetch` enables them)"),
-        }
-        for (repo, rr) in &rep.repos {
-            println!("\n{repo} — {} sessions, {} usable intent families", rr.sessions, rr.intent_families);
-            for t in &rr.tracks {
-                println!("  {} @ {} ({})", t.name, t.version, t.change);
-                for r in &t.routes {
-                    println!("    · {r}");
-                }
-            }
-            if let Some(ir) = &rr.instincts {
-                print_instincts(ir);
-            }
-            for c in changes.get(repo).into_iter().flatten() {
-                println!("  changed: {}: {}", c.route, c.summary);
-            }
-        }
-        if !rep.conflicts.is_empty() {
-            println!("\ninterlocking: {} conflict(s) resolved", rep.conflicts.len());
-            for c in &rep.conflicts {
-                println!("  {}", c.describe());
-            }
-        }
-        println!("\nindex generation {}", rep.index_generation);
+        let run = condition_out::Run {
+            command: "condition",
+            report: &rep,
+            after: &after,
+            changes: &changes,
+            elapsed_ms: started.elapsed().as_millis() as u64,
+        };
+        condition_out::render(&mut adage_term::Out::stdout(), &run)?;
     }
     Ok(())
-}
-
-/// What binding instincts did for one repository, for the text output of `adage condition`.
-fn print_instincts(ir: &adage_learn::instincts::InstinctReport) {
-    match &ir.not_bound {
-        Some(why) => println!("  instincts: none bound ({why})"),
-        None => println!(
-            "  instincts: {} bound, {} advice, {} awaiting approval in `adage review`{}{}",
-            ir.bound,
-            ir.advice,
-            ir.drafts,
-            if ir.retired.is_empty() { String::new() } else { format!(", {} retired automatically", ir.retired.len()) },
-            if ir.confirmed.is_empty() {
-                String::new()
-            } else {
-                format!(", {} confirmed by sessions", ir.confirmed.len())
-            }
-        ),
-    }
 }
 
 /// `adage condition --instincts-only [--repo-path <dir>] [--json]`: bind a repository's instincts
@@ -401,25 +365,15 @@ pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&rep)?);
         return Ok(());
     }
-    for (repo, rr) in &rep.repos {
-        println!("adage condition --instincts-only: {repo}");
-        for t in &rr.tracks {
-            println!("  {} @ {} ({})", t.name, t.version, t.change);
-            for r in &t.routes {
-                println!("    · {r}");
-            }
-        }
-        if let Some(ir) = &rr.instincts {
-            print_instincts(ir);
-            for s in ir.skipped.iter().take(12) {
-                println!("    not bound: {s}");
-            }
-        }
-        for c in changes.get(repo).into_iter().flatten() {
-            println!("  changed: {}: {}", c.route, c.summary);
-        }
-    }
-    println!("\nindex generation {}", rep.index_generation);
+    let after: BTreeMap<String, adage_learn::diff::Snapshot> = BTreeMap::from([(repo.clone(), after)]);
+    let run = condition_out::Run {
+        command: "condition --instincts-only",
+        report: &rep,
+        after: &after,
+        changes: &changes,
+        elapsed_ms: started.elapsed().as_millis() as u64,
+    };
+    condition_out::render(&mut adage_term::Out::stdout(), &run)?;
     Ok(())
 }
 
@@ -558,8 +512,7 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
                 .text(" ")
                 .text(r.id.clone())
                 .pad_to(16 + id_w)
-                .text(format!("{:>3}/{:<3}", e.support, e.opportunities))
-                .faint(format!("  lb {:.2}", e.lower_bound));
+                .extend(words::evidence(e));
             if r.state != adage_tracks::RouteState::Active {
                 l = l.sep().quiet(words::lifecycle(r.state));
             }
@@ -607,11 +560,42 @@ fn report(paths: &Paths, json: bool) -> Result<()> {
     }
     if json {
         println!("{}", serde_json::json!({ "sessions": sessions, "totals": totals }));
-    } else {
-        println!("{sessions} sessions");
-        for (k, v) in totals {
-            println!("  {k:<16} {v}");
-        }
+        return Ok(());
     }
+    use adage_term::{Line, Out, Role};
+    let mut o = Out::stdout();
+    o.header("report", &[&words::count(sessions, "trace")])?;
+    o.blank()?;
+    if totals.is_empty() {
+        o.note("Nothing to report yet: hooks record a trace each time an agent works in a repository.")?;
+        o.blank()?;
+        return Ok(o.next("adage doctor", "check that hooks are installed")?);
+    }
+    let n = |k: &str| totals.get(k).copied().unwrap_or(0);
+    o.kv(
+        "directives",
+        Line::new()
+            .text(format!("{} sent", n("directives")))
+            .sep()
+            .quiet(format!("{} withheld (control)", n("would_have"))),
+    )?;
+    // Judgements, in the lexicon's words: what agents did with what Adage said.
+    let known = ["directives", "would_have", "stop_requests"];
+    for (k, v) in totals.iter().filter(|(k, _)| !known.contains(&k.as_str())) {
+        let role = match k.as_str() {
+            "followed" | "met" | "hit_avoided" => Role::Fire,
+            "derailed" | "followed_failed" | "misfired" => Role::Inhibit,
+            _ => Role::Ink,
+        };
+        o.kv(&words::prose(&k.replace('_', " ")), Line::new().push(role, v.to_string()))?;
+    }
+    if n("stop_requests") > 0 {
+        o.kv(
+            "stop requests",
+            Line::new().text(n("stop_requests").to_string()).sep().quiet("finish lines held at Stop"),
+        )?;
+    }
+    o.blank()?;
+    o.next("adage status", "the reflexes behind these numbers")?;
     Ok(())
 }

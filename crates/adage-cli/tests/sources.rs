@@ -55,7 +55,7 @@ fn an_empty_explicit_source_never_falls_back_to_claude_history() {
     assert!(!home.path().join("adage/tracks").exists(), "nothing was learned from the fallback");
 
     let (out, _, _) = adage(home.path(), &["sense", "--codex-sessions", empty.path().to_str().unwrap()]);
-    assert!(out.contains("0 session(s)"), "survey read only the named source:\n{out}");
+    assert!(out.contains("0 traces"), "survey read only the named source:\n{out}");
     assert!(!out.contains("Claude Code history"), "{out}");
 }
 
@@ -66,7 +66,7 @@ fn codex_history_is_learned_and_surveyed_with_its_harness() {
     let s = sessions.to_str().unwrap();
     let (out, err, ok) = adage(home.path(), &["sense", "--demo", "--codex-sessions", s]);
     assert!(ok, "{err}");
-    assert!(out.contains("Codex rollout(s)") && out.contains("(codex)"), "{out}");
+    assert!(out.contains("Codex rollout(s)") && out.contains("· codex"), "{out}");
 
     let (_, err, ok) = adage(home.path(), &["condition", "--demo", "--codex-sessions", s]);
     assert!(ok, "{err}");

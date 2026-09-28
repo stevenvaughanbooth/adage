@@ -566,128 +566,170 @@ pub fn survey(args: &[String], paths: &Paths) -> Result<()> {
     if args.iter().any(|a| a == "--json") {
         println!("{}", serde_json::to_string_pretty(&s)?);
     } else {
-        print_text(&s);
+        print_text(&s)?;
     }
     Ok(())
 }
 
-fn plural(n: u32, one: &str) -> String {
-    if n == 1 {
-        format!("1 {one}")
-    } else {
-        format!("{n} {one}s")
-    }
+/// The report as text on standard output (also the last step of `adage init --print`).
+pub fn print_text(s: &Survey) -> std::io::Result<()> {
+    render(&mut adage_term::Out::stdout(), s)
 }
 
-pub fn print_text(s: &Survey) {
-    println!("adage sense: what your agents actually do. Read-only: nothing is installed or written.");
-    let window = s.since.as_ref().map(|d| format!(" since {d}")).unwrap_or_default();
-    println!(
-        "Read {} session file(s) from {}; {} session(s){window} in {} repository(ies).",
-        s.files,
-        if s.source.is_empty() { "nowhere" } else { &s.source },
-        s.sessions,
-        s.repos.len()
-    );
-    if s.repos.is_empty() {
-        println!(
-            "\nNo sessions to survey. Point it at history with --claude-projects <dir> or --transcripts <file>..."
-        );
-        return;
+/// `adage sense`'s report, in the output grammar (docs/design/style.md).
+pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, s: &Survey) -> std::io::Result<()> {
+    use crate::words::count;
+    use adage_term::{Glyph, Line, Role, Strength};
+    let traces = count(s.sessions, "trace");
+    let repos = count(s.repos.len(), "repository");
+    o.header("sense", &[&traces, &repos, "read-only"])?;
+    o.kv("source", Line::new().text(if s.source.is_empty() { "nowhere".to_string() } else { s.source.clone() }))?;
+    if let Some(d) = &s.since {
+        o.kv("window", Line::new().text(format!("since {d}")))?;
     }
+    if s.repos.is_empty() {
+        o.blank()?;
+        o.note("No traces to sense in that source.")?;
+        o.blank()?;
+        return o.next("adage sense --transcripts <file>…", "or --claude-projects <dir>, --codex-sessions <dir>");
+    }
+    // Rows under a label: counts right-aligned in one column, then the text.
+    let counted = |a: u32, b: u32, text: &str| {
+        Line::new().pad_to(14).text(format!("{a:>4}")).faint(format!(" · {b:<5}")).text(text.to_string())
+    };
+    let mut any_candidates = false;
     for r in &s.repos {
-        let days = if r.first_day.is_empty() { String::new() } else { format!(", {} … {}", r.first_day, r.last_day) };
-        println!(
-            "\n{} — {}, {}{days} ({})",
-            r.repo,
-            plural(r.sessions, "session"),
-            plural(r.prompts, "prompt"),
-            r.harnesses.join(", ")
-        );
+        o.blank()?;
+        let mut head = Line::new()
+            .bold(Role::Ink, r.repo.clone())
+            .sep()
+            .quiet(count(r.sessions as usize, "trace"))
+            .sep()
+            .quiet(count(r.prompts as usize, "prompt"));
+        if !r.first_day.is_empty() {
+            head = head.sep().quiet(format!("{} … {}", r.first_day, r.last_day));
+        }
+        if !r.harnesses.is_empty() {
+            head = head.sep().quiet(r.harnesses.join(", "));
+        }
+        o.line(&head)?;
+        let kv = |label: &str| Line::new().text("  ").faint(label.to_string()).pad_to(14);
         if r.steered > 0 {
-            println!("  already steered by Adage in {} of them", r.steered);
+            o.line(&kv("steered").text(format!("by Adage in {} of them", r.steered)))?;
         }
         let t = &r.turns_before_first_edit;
-        match (t.median, t.p75, t.max) {
-            (Some(m), Some(p), Some(x)) => println!(
-                "  turns before first edit   median {m} · p75 {p} · max {x}{}",
-                if t.sessions_without_edit > 0 {
-                    format!(" · {} made no edit", plural(t.sessions_without_edit, "session"))
-                } else {
-                    String::new()
-                }
-            ),
-            _ => println!("  turns before first edit   no session edited anything"),
+        let mut l = kv("first edit");
+        l = match (t.median, t.p75, t.max) {
+            (Some(m), Some(p), Some(x)) => {
+                l.text(format!("median {m} turns")).sep().quiet(format!("p75 {p}")).sep().quiet(format!("max {x}"))
+            }
+            _ => l.quiet("no trace edited anything"),
+        };
+        if t.sessions_without_edit > 0 {
+            l = l.sep().quiet(format!("{} made no edit", count(t.sessions_without_edit as usize, "trace")));
         }
+        o.line(&l)?;
         if !r.commands.is_empty() {
-            println!("  most common commands      (sessions · runs)");
+            o.line(&kv("commands").faint("traces · runs"))?;
             for c in &r.commands {
-                println!("    {:>4} · {:<5} {}", c.sessions, c.runs, c.template);
+                o.line(&counted(c.sessions, c.runs, &c.template))?;
             }
         }
         if !r.prompt_spans.is_empty() {
-            let named: Vec<String> = r
-                .prompt_spans
-                .iter()
-                .map(|p| {
-                    let shapes =
-                        if p.shapes.is_empty() { String::new() } else { format!(" ({})", p.shapes.join(", ")) };
-                    format!("a {} in {}{shapes}", p.kind, plural(p.sessions, "session"))
-                })
-                .collect();
-            println!("  prompts name              {}", named.join(" · "));
+            let mut l = kv("prompts name");
+            for (i, p) in r.prompt_spans.iter().enumerate() {
+                if i > 0 {
+                    l = l.sep();
+                }
+                l = l.text(format!("a {} in {}", p.kind, count(p.sessions as usize, "trace")));
+                if !p.shapes.is_empty() {
+                    l = l.faint(format!(" ({})", p.shapes.join(", ")));
+                }
+            }
+            o.line(&l)?;
         }
         if !r.repeated_failures.is_empty() {
-            println!("  repeated failures         dead-end candidates (sessions · runs)");
+            o.line(&kv("dead ends").faint("candidates · traces · runs"))?;
             for f in &r.repeated_failures {
-                let next = f.then_worked.as_ref().map(|n| format!("   then worked: {n}")).unwrap_or_default();
-                println!("    {:>4} · {:<5} {}{next}", f.sessions, f.runs, f.template);
+                let mut l = counted(f.sessions, f.runs, &f.template);
+                if let Some(n) = &f.then_worked {
+                    l = l.faint("   then worked: ").push(Role::Command, n.clone());
+                }
+                o.line(&l)?;
             }
         }
         if !r.regeneration_after_edits.is_empty() {
-            println!("  edits, then regeneration  finish-line candidates");
+            o.line(&kv("finish lines").faint("candidates"))?;
             for g in &r.regeneration_after_edits {
-                println!(
-                    "    {} of {} sessions editing {} then ran {}",
+                o.line(&Line::new().pad_to(14).text(format!(
+                    "{} of {} traces editing {} then ran {}",
                     g.sessions, g.editing_sessions, g.edits, g.then_ran
-                );
+                )))?;
             }
         }
         if !r.sample_prompts.is_empty() {
-            println!(
-                "  recent prompts            {}",
-                r.sample_prompts.iter().map(|p| format!("\"{p}\"")).collect::<Vec<_>>().join("  ")
-            );
+            let quoted: Vec<String> = r.sample_prompts.iter().map(|p| format!("\"{p}\"")).collect();
+            o.line(&kv("recent").quiet(quoted.join("  ")))?;
         }
         let sampled =
-            if r.sampled { format!(", from the {} most recent sessions", r.mined_sessions) } else { String::new() };
+            if r.sampled { format!(" · from the {} most recent traces", r.mined_sessions) } else { String::new() };
         if r.candidates.is_empty() {
-            println!("  candidate routes          none yet: no behaviour clears the bars ({}){sampled}", s.thresholds);
+            o.line(
+                &kv("would form")
+                    .quiet(format!("nothing yet: no behaviour clears the bars ({}){sampled}", s.thresholds)),
+            )?;
         } else {
-            println!("  candidate routes          what `adage condition` would build — candidates only, nothing is written{sampled}:");
+            any_candidates = true;
+            o.line(&kv("would form").quiet(format!("candidates only, nothing is written{sampled}")))?;
+            let id_w = r
+                .candidates
+                .iter()
+                .map(|c| c.track.chars().count() + c.route.chars().count() + 1)
+                .max()
+                .unwrap_or(20)
+                .clamp(20, 44);
             for c in &r.candidates {
-                println!(
-                    "    {:<8} {:<9} {}/{}: {} → {}   {}/{} sessions, lower bound {:.2}, {}",
-                    format!("[{}]", c.aspect),
-                    c.status,
-                    c.track,
-                    c.route,
-                    c.trigger,
-                    c.step,
-                    c.support,
-                    c.opportunities,
-                    c.lower_bound,
-                    c.effect
-                );
+                let strength = Strength::parse(&c.aspect).unwrap_or(Strength::Prime);
+                o.line(
+                    &Line::new()
+                        .text("    ")
+                        .strength(strength)
+                        .pad_to(15)
+                        .push(if c.status == "new" { Role::Accent } else { Role::Ink3 }, c.status.clone())
+                        .pad_to(25)
+                        .glyph(Role::Accent, Glyph::Reflex)
+                        .text(" ")
+                        .text(format!("{}/{}", c.track, c.route))
+                        .pad_to(28 + id_w)
+                        .text(format!("{}/{}", c.support, c.opportunities))
+                        .faint(format!(" · lb {:.2} · {}", c.lower_bound, c.effect)),
+                )?;
+                o.line(
+                    &Line::new()
+                        .pad_to(27)
+                        .faint(format!("{} ", crate::words::prose(&c.trigger)))
+                        .glyph(Role::Ink3, Glyph::Arrow)
+                        .quiet(format!(" {}", crate::words::prose(&c.step))),
+                )?;
             }
         }
         if s.intent_model.is_none() {
-            println!("  intent families           skipped: no embedding model (`adage models fetch` enables them)");
+            o.line(&kv("intent").push(Role::Prime, "skipped").sep().quiet("no embedding model"))?;
         } else if r.intent_families > 0 {
-            println!("  intent families           {} usable", r.intent_families);
+            o.line(&kv("intent").text(format!("{} usable", count(r.intent_families as usize, "family"))))?;
         }
     }
-    println!("\nNext: `adage condition` builds these tracks, and `adage review` lists each route for your decision.");
+    o.blank()?;
+    if any_candidates {
+        o.next("adage condition", "form these reflexes")?;
+        o.also("adage review", "then decide on each one")?;
+    } else {
+        o.next("adage condition", "conditioning runs by itself after sessions; this runs it now")?;
+    }
+    if s.intent_model.is_none() {
+        o.also("adage models fetch", "similar prompts can then share a reflex")?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

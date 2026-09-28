@@ -122,7 +122,7 @@ fn init_detects_harnesses_prints_snippets_and_writes_nothing() {
         "3. Embedding model",
         "`adage models fetch`",
         "4. Survey",
-        "No sessions to survey",
+        "No traces to sense in that source",
     ] {
         assert!(t.contains(s), "init output lacks {s:?}:\n{t}");
     }

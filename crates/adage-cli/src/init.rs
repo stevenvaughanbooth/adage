@@ -144,7 +144,7 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
     println!("\n4. Survey\n");
     let opts = crate::survey::Options { repo: repo_arg.as_ref().and(repo_key.clone()), ..Default::default() };
     let s = crate::survey::run(&opts, paths)?;
-    crate::survey::print_text(&s);
+    crate::survey::print_text(&s)?;
 
     // 5. Instincts: what Adage's built-in defaults would bind here, from this repository's files.
     println!("\n5. Instincts (day 0)");
