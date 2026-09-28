@@ -186,3 +186,86 @@ fn exec_enable_swaps_hook_registrations_and_disable_swaps_them_back() {
     assert!(!off.contains("adage-exec"), "{off}");
     assert!(!w.p("adage/exec/enabled").exists());
 }
+
+#[test]
+fn allow_exec_at_e2_approves_an_mcp_tool() {
+    let w = World::new();
+    let mut args = allow();
+    args[5] = "e2";
+    args.truncate(8); // no --exit-when: E2 results are returned whole
+    let (out, err, code) = w.run(&args, &[]);
+    assert_eq!(code, 0, "{err}");
+    for want in [
+        "level:    E2   output: typed",
+        "input:    {id} a tool argument, must match ^W-\\d{4}$ (and be a plain token)",
+        "tool:     adage_lookup_work_item (adage-exec mcp;",
+        "automatic: no (",
+        "Execution is off: `adage exec enable` turns on the adage-exec MCP server",
+    ] {
+        assert!(out.contains(want), "missing {want:?} in:\n{out}");
+    }
+    // Automatic approval stays off by default (§4.2, until gate G3).
+    assert!(out.contains("automatic approval is off"), "{out}");
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(w.p("adage/approvals.json")).unwrap()).unwrap();
+    assert_eq!(v["approvals"][0]["key"]["level"], "e2");
+    // E1 and E2 grants are separate: approving E1 keeps the E2 one.
+    let (_, err, code) = w.run(&allow(), &[]);
+    assert_eq!(code, 0, "{err}");
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(w.p("adage/approvals.json")).unwrap()).unwrap();
+    assert_eq!(v["approvals"].as_array().unwrap().len(), 2);
+    let mut e3 = allow();
+    e3[5] = "e3";
+    let (_, err, code) = w.run(&e3, &[]);
+    assert_eq!(code, 1);
+    assert!(err.contains("E3"), "{err}");
+}
+
+#[test]
+fn exec_enable_registers_the_mcp_server_for_codex_and_opencode_and_disable_removes_it() {
+    let w = World::new();
+    let env = [
+        ("CODEX_HOME", w.p("home/.codex").to_string_lossy().to_string()),
+        ("XDG_CONFIG_HOME", w.p("home/.config").to_string_lossy().to_string()),
+    ];
+    let env: Vec<(&str, &str)> = env.iter().map(|(k, v)| (*k, v.as_str())).collect();
+    let codex = w.p("home/.codex/config.toml");
+    let opencode = w.p("home/.config/opencode/opencode.json");
+    std::fs::create_dir_all(codex.parent().unwrap()).unwrap();
+    let original = "model = \"o3\"\n\n[mcp_servers.other]\ncommand = \"other\"\n";
+    std::fs::write(&codex, original).unwrap();
+    for h in ["codex", "opencode"] {
+        let (_, err, code) = w.run(&["install", h, "--write"], &env);
+        assert_eq!(code, 0, "{err}");
+    }
+    let bin = w.p("bin/adage-exec");
+    let bin = bin.to_str().unwrap();
+    let (out, err, code) = w.run(&["exec", "enable", "--bin", bin], &env);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("codex: registered the MCP server `adage`"), "{out}");
+    assert!(out.contains("+ [mcp_servers.adage]"), "the diff is shown: {out}");
+    assert!(out.contains("opencode: registered the MCP server `adage`"), "{out}");
+    let toml = std::fs::read_to_string(&codex).unwrap();
+    assert!(toml.starts_with(original.trim_end()), "the rest of the file is kept:\n{toml}");
+    assert!(toml.contains(&format!("[mcp_servers.adage]\ncommand = \"{bin}\"\nargs = [\"mcp\"]\n")), "{toml}");
+    assert!(toml.contains("env = { ADAGE_HOME = "), "Codex passes a minimal environment: {toml}");
+    assert_eq!(std::fs::read_to_string(w.p("home/.codex/config.toml.adage-backup")).unwrap(), original);
+    let oc: Value = serde_json::from_str(&std::fs::read_to_string(&opencode).unwrap()).unwrap();
+    assert_eq!(oc["mcp"]["adage"]["command"], serde_json::json!([bin, "mcp"]));
+    assert_eq!(oc["mcp"]["adage"]["type"], "local");
+
+    // Idempotent.
+    let (out, _, code) = w.run(&["exec", "enable", "--bin", bin], &env);
+    assert_eq!(code, 0);
+    assert!(!out.contains("registered the MCP server"), "{out}");
+    assert_eq!(std::fs::read_to_string(&codex).unwrap(), toml);
+    let (out, _, _) = w.run(&["exec", "status", "--json"], &env);
+    let s: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(s["mcp"].as_array().map(Vec::len), Some(2), "{s}");
+
+    let (out, err, code) = w.run(&["exec", "disable"], &env);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("codex: removed the MCP server `adage`"), "{out}");
+    assert_eq!(std::fs::read_to_string(&codex).unwrap(), original);
+    let oc: Value = serde_json::from_str(&std::fs::read_to_string(&opencode).unwrap()).unwrap();
+    assert!(oc.get("mcp").is_none(), "{oc}");
+}

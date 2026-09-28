@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "adage": {
+      "type": "stdio",
+      "command": "${CLAUDE_PLUGIN_ROOT}/scripts/mcp",
+      "args": ["${CLAUDE_PLUGIN_ROOT}", "${CLAUDE_PLUGIN_DATA}"]
+    }
+  }
+}

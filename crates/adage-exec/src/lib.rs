@@ -23,6 +23,7 @@ pub mod env;
 pub mod git;
 pub mod hook;
 pub mod limits;
+pub mod mcp;
 pub mod person;
 pub mod policy;
 pub mod project;
