@@ -56,11 +56,18 @@ from them. Instincts are innate responses that ship with Adage.
 
 ## Rules
 
-- Old verbs and state names remain hidden aliases for one release, with a one-line deprecation
-  note on stderr (never on the hook path).
-- On-disk formats keep their existing field values (`active`, `probation`, `green`, …) so
-  existing tracks, packs and review files still read. The new words are presentation. A later
-  format version may migrate them.
-- The directive wrapper `<adage-signal …>` stays readable in old traces.
+Adage has not been released, so there is no compatibility baggage (decision 2026-09-28):
+
+- **No aliases.** Old verbs (`survey`, `learn`, `promote`, `demote`, `reject`, `graph --serve`,
+  `exec enable`, `allow-exec`) are removed, not deprecated. `condition` is the only verb for
+  learning.
+- **On-disk formats migrate.** Track, pack, index, review and spool fields use the new words
+  (`firm`, `forming`, `nascent`, `dormant`, `extinguished`; `fire`, `prime`, `inhibit`). No
+  reader for the old values is kept. Committed fixtures and datasets are rewritten once by a
+  migration script, which is then deleted.
+- **Old formats go.** v1 tracks (`--format v1`, the v1 upgrader path in `add`) and the
+  `<adage-signal>` wrapper are replaced by packs and a new wrapper, `<adage-reflex>`. Recorded
+  traces in datasets are rewritten to the new wrapper, and fidelity baselines are re-recorded.
+- **Agent-facing text stays plain and factual.** The theme is for people, not the model.
 - Where a themed word is less clear than a plain one in a specific sentence, the plain one wins
   (Design Spec §17.3).
