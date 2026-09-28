@@ -283,23 +283,29 @@ fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(St
     }
     let max_depth = edits.iter().map(|p| p.split('/').count()).max().unwrap_or(0).min(8);
     for depth in 0..max_depth.saturating_sub(1) {
-        // The parts: the segment at `depth` of every path the traces edited under the item's
-        // parent directory (`packages/` for `packages/runtime-core/src/x.ts`), so one item's single
-        // part still shows the part varying across the repository's traces.
+        // The parts: the segment at `depth` of the item's edited paths, or, below a directory
+        // they share (`packages/` for `packages/runtime-core/src/x.ts`), of every path the traces
+        // edited under it, so one item's single part still shows the part varying across the
+        // repository's traces. Top-level directories are never parts of one another.
+        let own: BTreeSet<&str> = edits.iter().filter_map(|p| p.split('/').nth(depth)).collect();
         let parent: BTreeSet<Vec<&str>> = edits.iter().map(|p| p.split('/').take(depth).collect::<Vec<_>>()).collect();
-        if parent.len() != 1 || edits.iter().any(|p| p.split('/').count() <= depth + 1) {
-            continue;
-        }
-        let parent = parent.into_iter().next().expect("one parent");
-        let segs: BTreeSet<&str> = input
-            .corpus
-            .edited
-            .iter()
-            .chain(edits.iter())
-            .filter(|p| p.split('/').count() > depth + 1)
-            .filter(|p| p.split('/').take(depth).eq(parent.iter().copied()))
-            .filter_map(|p| p.split('/').nth(depth))
-            .collect();
+        let segs: BTreeSet<&str> = if own.len() >= 2 || depth == 0 {
+            own
+        } else {
+            if parent.len() != 1 || edits.iter().any(|p| p.split('/').count() <= depth + 1) {
+                continue;
+            }
+            let parent = parent.into_iter().next().expect("one parent");
+            input
+                .corpus
+                .edited
+                .iter()
+                .chain(edits.iter())
+                .filter(|p| p.split('/').count() > depth + 1)
+                .filter(|p| p.split('/').take(depth).eq(parent.iter().copied()))
+                .filter_map(|p| p.split('/').nth(depth))
+                .collect()
+        };
         if segs.len() < 2 {
             continue;
         }
