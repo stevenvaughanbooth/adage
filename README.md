@@ -158,33 +158,41 @@ glyphs, and `NO_COLOR` is honoured.
 60×20 and grows with the pane:
 
 ```text
- adage watch · harbor-dispatch · gen 44876069                         LIVE
-+ adage 0.1.0  + hooks cc  + 4 routes  + auto-learn on  - no model
-+ fail-open 0
- activity · harbor-dispatch ────────────────────────────────────────────
-12:04:00 ●d76f0f cc prompt  → lookup-incident [G]
-12:04:01 ◌19b2cf cc prompt  withheld lookup-incident [G]
-12:04:02 ●d76f0f cc tools   → read-linked-files [Y]  ✓ followed lookup-i
-12:04:05 ●bc0c7d cc tools   ✗ derailed lookup-incident
-12:04:06 ●bc0c7d cc failure → dead-end-npm-test [R]
-12:04:07 ●bc0c7d cc stop    ■ stop-request
-12:04:08 ●bc0c7d cc tools   ✓ met codegen-after-registry
- learning ──────────────────────────────────────────────────────────────
-12:04 auto-learn: 27/28 sessions used, 730ms, 2 changes, gen 44876069
-12:04   learned incidents: read-linked-files yellow→green (13 of 17 sess
- q quit · p pause · f all repos · v hide quiet · ? help
+ adage watch  harbor-dispatch · demo           LIVE  FIRE 4  PRIME 1  INHIBIT 1
+─ now ──────────────────────────────────────────────────────────────────────────
+ 04:22:53 bc0c7d cc  tools    ✗ ignored lookup-incident
+ 04:22:53 19b2cf cc  stop     ○ would ask the agent to continue (withheld)
+ 04:22:53 d76f0f cc  tools    → ◠ codegen-after-regist… FIRE       npm run code…
+ 04:22:53 bc0c7d cc  failure  → ◠ dead-end-npm-test     INHIBIT    npm run check
+ 04:22:53 d76f0f cc  tools    ✓ finish line met codegen-after-registry
+ 04:22:53 bc0c7d cc  stop     ■ finish line: asked the agent to continue
+─ conditioning ─────────────────────────────────────────────────────────────────
+ ◆ 04:22 auto-condition · 27/28 traces used · 0.73 s · 2 changes
+   ◠ read-linked-files   prime → fire       13/17 · lb 0.53
+   ◠ lookup-incident     evidence           24/25 → 25/26
+   ○ 4 reflexes wait for review · adage review
+─ health ───────────────────────────────────────────────────────────────────────
+ + hooks claude    + 4 reflexes    + auto-condition
+ - intent model not fetched · adage models fetch
+────────────────────────────────────────────────────────────────────────────────
+ p pause · f scope · / filter · enter inspect · m open map · ? keys      q quit
 ```
 
-- **Top:** health lamps, re-checked every few seconds: the binary, hooks that run for this
-  repository, its reflexes in the index, auto-condition, the embedding model, recent fail-open errors.
-- **Middle:** every hook call as it happens, from the trace spools: time, session, harness, event,
-  and what Adage did: a directive (→, lit by strength: fire, prime or inhibit), withheld in a
-  control session (◌), followed ✓ or derailed ✗, a finish line met, or a stop request.
-- **Bottom:** what conditioning changed, from `learn.log`, manual or automatic; its title says
-  *conditioning now…* while a background conditioner holds this repository's lock.
+(`NO_COLOR` output, as above; in colour the strengths are lamps.)
 
-Keys: `q` quits, `p` pauses, `f` switches between this repository and all of them, `v` hides events
-where Adage said nothing, `↑`/`↓` scroll, `?` shows help. `NO_COLOR` is honoured: strengths are then
+- **Now:** every hook call as it happens, from the trace spools: time, session, harness, event,
+  and what Adage did: a directive (→, with its strength: fire, prime or inhibit), withheld in a
+  control session (○), followed ✓ or ignored ✗, a finish line met, or a stop request. `Enter`
+  inspects the selected row: the exact directive text and its evidence.
+- **Conditioning:** what conditioning changed, from `learn.log`, manual or automatic, and how many
+  reflexes wait for your review.
+- **Health:** lamps re-checked every few seconds: hooks that run for this repository, its reflexes
+  in the index, auto-condition, the embedding model, recent fail-open errors; each problem names
+  the command that fixes it.
+
+Keys: `q` quits, `p` pauses, `f` switches between this repository and all of them, `/` filters by
+trace, reflex or command, `Enter` inspects, `m` shows how to open the map, `v` hides events where
+Adage said nothing, `↑`/`↓` scroll (`G` back to the newest), `?` lists every key. `NO_COLOR` is honoured: strengths are then
 spelled out (`FIRE`, `PRIME`, `INHIBIT`), and `--plain` drops glyphs too.
 
 `adage ui` (or plain `adage` at a terminal) is the full-screen app. `:` or `ctrl-k` opens a command
