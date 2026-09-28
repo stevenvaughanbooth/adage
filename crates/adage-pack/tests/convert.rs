@@ -1,14 +1,14 @@
-//! Upgrading v1 tracks: the tracks `adage condition --demo` learns from the committed simulator
-//! fixtures (`sim/fixtures/claude`, copied to `tests/fixtures/v1`), and the instinct catalogue
+//! Converting local tracks to packs: the tracks `adage condition --demo` learns from the committed simulator
+//! fixtures (`sim/fixtures/claude`, copied to `tests/fixtures/tracks`), and the instinct catalogue
 //! bound on the acme fixture repository.
 
-use adage_pack::{upgrade_track, upgrade_track_with, ClosureLevel, Pack, PackOrigin, Shape, TriggerV2};
+use adage_pack::{from_track_dir, from_track_dir_with, ClosureLevel, Pack, PackOrigin, Shape, TriggerV2};
 use adage_tracks::{io, Gauge, Manifest, Scope, Track, TrackInfo};
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-fn v1(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/v1/acme-billing").join(name)
+fn track(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tracks/acme-billing").join(name)
 }
 
 /// A repository holding the script the learned lookup runs.
@@ -30,7 +30,7 @@ fn round_trip(p: &Pack) -> Pack {
 #[test]
 fn learned_work_items_become_an_l_ref_pack_with_the_implicit_chain() {
     let root = repo();
-    let u = upgrade_track_with(&v1("work-items"), Some(root.path())).unwrap();
+    let u = from_track_dir_with(&track("work-items"), Some(root.path())).unwrap();
     assert!(u.skipped.is_empty(), "{:?}", u.skipped);
     let p = round_trip(&u.pack);
     assert_eq!(p.manifest.pack.name, "acme-billing/work-items");
@@ -52,7 +52,7 @@ fn learned_work_items_become_an_l_ref_pack_with_the_implicit_chain() {
 
 #[test]
 fn without_a_repository_the_script_route_is_skipped_not_left_unpinned() {
-    let u = upgrade_track(&v1("work-items")).unwrap();
+    let u = from_track_dir(&track("work-items")).unwrap();
     assert_eq!(u.skipped.len(), 1);
     assert_eq!(u.skipped[0].0, "lookup-work-item");
     assert!(u.skipped[0].1.contains("scripts/wi-lookup"), "{:?}", u.skipped);
@@ -62,23 +62,23 @@ fn without_a_repository_the_script_route_is_skipped_not_left_unpinned() {
 
 #[test]
 fn learned_dead_ends_and_finish_line_become_l_none_packs() {
-    let dead = upgrade_track(&v1("dead-ends")).unwrap();
+    let dead = from_track_dir(&track("dead-ends")).unwrap();
     assert!(dead.skipped.is_empty());
     let p = round_trip(&dead.pack);
     assert!(p.routes.iter().all(|r| r.shape == Shape::Avoid));
     assert!(p.manifest.requires.repo_files.is_empty() && p.scripts.is_empty());
 
-    let finish = upgrade_track(&v1("finish-line")).unwrap();
+    let finish = from_track_dir(&track("finish-line")).unwrap();
     let p = round_trip(&finish.pack);
     assert_eq!(p.routes[0].shape, Shape::Obligation);
     assert_eq!(p.manifest.requires.tools.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(), ["make"]);
 }
 
 #[test]
-fn upgrading_is_deterministic() {
+fn converting_is_deterministic() {
     let root = repo();
-    let a = upgrade_track_with(&v1("work-items"), Some(root.path())).unwrap().pack;
-    let b = upgrade_track_with(&v1("work-items"), Some(root.path())).unwrap().pack;
+    let a = from_track_dir_with(&track("work-items"), Some(root.path())).unwrap().pack;
+    let b = from_track_dir_with(&track("work-items"), Some(root.path())).unwrap().pack;
     assert_eq!(a.digest().unwrap(), b.digest().unwrap());
     for r in &a.routes {
         assert_eq!(a.route_exec_digest(&r.id), b.route_exec_digest(&r.id));
@@ -105,7 +105,7 @@ fn the_instinct_catalogue_bound_on_acme_becomes_an_instinct_pack() {
     };
     let d = tempfile::tempdir().unwrap();
     io::write(d.path(), &track).unwrap();
-    let u = upgrade_track(d.path()).unwrap();
+    let u = from_track_dir(d.path()).unwrap();
     assert!(u.skipped.is_empty(), "{:?}", u.skipped);
     let p = round_trip(&u.pack);
     assert_eq!(p.manifest.pack.origin, PackOrigin::Instinct);

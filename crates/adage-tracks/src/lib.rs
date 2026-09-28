@@ -57,17 +57,14 @@ mod tests {
     }
 
     #[test]
-    fn round_trip_and_digest_is_stable() {
+    fn round_trip() {
         let d = tempfile::tempdir().unwrap();
         let t = sample();
         io::write(d.path(), &t).unwrap();
         let back = io::read(d.path()).unwrap();
         assert_eq!(back, t);
-        let a = io::digest(d.path()).unwrap();
         io::write(d.path(), &t).unwrap();
-        assert_eq!(a, io::digest(d.path()).unwrap());
-        std::fs::write(d.path().join("routes/lookup.yaml"), "tampered").unwrap();
-        assert_ne!(a, io::digest(d.path()).unwrap());
+        assert_eq!(io::read(d.path()).unwrap(), t);
     }
 
     #[test]

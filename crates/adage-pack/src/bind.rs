@@ -24,9 +24,9 @@
 //! The result is a pure function of the pack, the repository's files and the environment
 //! ([`BindEnv`]), so the same repository gives a byte-identical binding.
 
+use crate::convert::hash_repo_file;
 use crate::model::*;
 use crate::types;
-use crate::upgrade::hash_repo_file;
 use crate::validate::{program, Program};
 use crate::Pack;
 use adage_core::{CommandTable, Effect};

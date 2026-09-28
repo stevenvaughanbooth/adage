@@ -17,25 +17,25 @@
 //!
 //! A pack is inert: nothing in it grants execution. [`Pack::load`] reads one as untrusted input
 //! (strict files, strict schema, semantic validation, then the closure, which must equal
-//! `CLOSURE` byte for byte); [`Pack::write`] writes the canonical form; [`upgrade_track`] turns a
-//! v1 track directory into a pack.
+//! `CLOSURE` byte for byte); [`Pack::write`] writes the canonical form; [`from_track_dir`] turns a
+//! local track directory into a pack.
 
 pub mod attest;
 pub mod bind;
 pub mod closure;
+pub mod convert;
 pub mod digest;
 pub mod instincts;
 pub mod model;
 pub mod types;
-pub mod upgrade;
 pub mod validate;
 pub mod vendor;
 
 pub use bind::{bind, BindEnv, Binding, BoundRoute, Status, Target};
 pub use closure::Closure;
+pub use convert::{from_track_dir, from_track_dir_with, Converted};
 pub use digest::{digest_dir, pack_digest, route_exec_digest, sign_dir, verify_dir, NAMESPACE};
 pub use model::*;
-pub use upgrade::{upgrade_track, upgrade_track_with, Upgraded};
 
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;

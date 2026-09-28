@@ -98,7 +98,7 @@ pub fn vendor(pack: &Pack, root: &Path) -> Result<Vendored> {
 /// A script's bytes under `root`: a regular file with no symlink on the way, inside the root,
 /// within the script limit, UTF-8 without NUL.
 fn read_script(root: &Path, rel: &str) -> Result<Vec<u8>> {
-    crate::upgrade::hash_repo_file(root, rel)?; // the same path checks as an L-ref pin
+    crate::convert::hash_repo_file(root, rel)?; // the same path checks as an L-ref pin
     let bytes = std::fs::read(root.join(rel))?;
     if bytes.len() > MAX_SCRIPT_BYTES {
         bail!("{rel} is larger than {MAX_SCRIPT_BYTES} bytes (the script limit)");

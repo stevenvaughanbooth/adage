@@ -22,9 +22,9 @@
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
 //!                                    print (default) or write a harness's hook registration
-//! adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>] [--ack-scripts] [--repo-root <dir>] [--format pack|v1]
+//! adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>] [--ack-scripts] [--repo-root <dir>]
 //!                                    redaction-check, build and sign a pack (namespace adage-pack)
-//! adage add <dir> [--trust]          verify a pack (or a v1 track, upgraded in place), install it,
+//! adage add <dir> [--trust]          verify a signed pack, install it,
 //!                                    and bind it to this repository at forming
 //! adage review [--json]              reflexes awaiting a person's decision, with evidence and directive text
 //! adage review delegate <track> <route> --level e1|e2 [--raw] [--fields ..] [--outputs <glob>]   approve an E1 prefetch or an E2 action (a person)

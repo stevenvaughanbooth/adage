@@ -22,7 +22,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 /// The sshsig namespace for packs ([`adage_sign::PACK_NAMESPACE`]). An `allowed_signers` entry
-/// restricted to `adage-track` does not authorise a pack, which can request execution.
+/// restricted to another namespace does not authorise a pack, which can request execution.
 pub const NAMESPACE: &str = adage_sign::PACK_NAMESPACE;
 
 pub fn hex(b: &[u8]) -> String {
@@ -170,11 +170,5 @@ mod tests {
         // Scripts are hashed verbatim.
         b.insert("scripts/sha256-x".to_string(), b"x\n".to_vec());
         assert_ne!(pack_digest(&a), pack_digest(&b));
-        // The same files digest the same way as a v1 track directory.
-        let d = tempfile::tempdir().unwrap();
-        std::fs::write(d.path().join("pack.toml"), "a\nb\n").unwrap();
-        let mut one = BTreeMap::new();
-        one.insert("pack.toml".to_string(), b"a\nb\n".to_vec());
-        assert_eq!(pack_digest(&one), adage_tracks::io::digest(d.path()).unwrap());
     }
 }

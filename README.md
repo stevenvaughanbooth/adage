@@ -279,10 +279,11 @@ the data directory. `adage condition` then clusters each repository's prompts in
 forms an intent reflex per usable family. Without the model everything else works unchanged: learning
 skips intent families and hooks never load a model.
 
-**Sharing:** `adage share <track> --out <dir> [--key <path>]` checks every file for absolute paths,
-home-directory paths and secret-looking strings, re-validates the track, and signs its digest
-(`sshsig`, namespace `adage-track`; ssh-agent first, else the key file, whose passphrase is asked for at
-the terminal). `adage add <dir>` verifies the
+**Sharing:** `adage share <track> --out <dir> [--key <path>]` converts a track to a **pack** (the
+only format that travels; [docs/packs.md](docs/packs.md)), checks every byte for absolute paths,
+home-directory paths and secret-looking strings, re-validates it as a recipient would, and signs its
+digest (`sshsig`, namespace `adage-pack`; ssh-agent first, else the key file, whose passphrase is asked
+for at the terminal). `adage add <dir>` verifies the
 signature against `$ADAGE_HOME/trusted-signers` or the repository's `.adage/trusted-signers` (approved
 once with `--trust` and pinned by hash in `$ADAGE_HOME/trust.json`) and installs the reflexes
 forming, never fire, under `tracks/@imported/` where `adage condition` never writes; if you later condition
