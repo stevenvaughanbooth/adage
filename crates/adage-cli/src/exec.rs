@@ -479,6 +479,11 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     } else {
         println!("  effect:   observe, approved (the classifier says {})", classified.as_str());
     }
+    // A script the command table does not know, learned observe from what the traces show it
+    // doing: the person approving sees why (it is never approved automatically: it runs a script).
+    if let Some(note) = ir.route.evidence.effect_evidence.as_deref().filter(|n| !n.trim().is_empty()) {
+        println!("  inferred: {note}");
+    }
     println!("  sandbox:  {}", req.profile.summary());
     if let (Level::E2, Some(a)) = (level, &req.action) {
         println!(
@@ -532,7 +537,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         println!("  exit:     when {f} is {v}, nothing further is directed");
     }
     println!(
-        "  evidence: {} of {} sessions over {} days{}",
+        "  evidence: {} of {} traces over {} days{}",
         e.support,
         e.opportunities,
         e.days,
@@ -552,7 +557,13 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         route: label.clone(),
         approved_on: adage_exec::time::now(),
         by: flag(args, "--by"),
-        basis: json!({ "support": e.support, "opportunities": e.opportunities, "days": e.days, "by_origin": e.by_origin }),
+        basis: json!({
+            "support": e.support,
+            "opportunities": e.opportunities,
+            "days": e.days,
+            "by_origin": e.by_origin,
+            "effect_evidence": e.effect_evidence,
+        }),
         auto: false,
         terms: Some(terms),
     });

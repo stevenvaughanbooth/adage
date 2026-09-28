@@ -61,6 +61,15 @@ output (the `lookup → read-linked` edge: the linked files); `--fields` declare
 A pack route's fields, exits and timeout come from its pack. `--raw` asks for raw mode (policy
 must allow it); `--timeout-ms` raises the wall timeout up to 3,000 ms.
 
+**Scripts the traces show only reading.** The executor's classifier calls any script or
+interpreter `environment`, whatever it is named. A reflex whose script the learner classified
+observe from the traces (`python3 tools/case {item}`: run in at least three traces, never followed
+by changes it caused, its output read next; `evidence.effect_evidence`) can still be delegated at
+E1, like a script named for reading: the person approves the observe effect, and `delegate` prints
+the evidence on an `inferred:` line beside the classifier's view. The sandbox enforces the E1
+profile (read-only, no network) whatever the script does, and such a reflex is never approved
+automatically (it runs a script).
+
 `adage delegate on` rewrites the registrations `adage install` wrote (Claude Code settings, Codex
 `hooks.json`, the OpenCode plugin, project and user scope), swapping only the binary:
 `adage-exec hook <harness> <event>` takes `adage hook`'s arguments. For the Claude Code plugin it
