@@ -1,0 +1,53 @@
+{
+ "schema": "adage-conventions/1",
+ "sandbox": "wardline-clinic",
+ "description": "Converted from the gen bundle's conventions.json (evals/gen); decoys are in decoys.json.",
+ "conventions": [
+  {
+   "id": "lookup",
+   "notes": "Task prompts name only an item ID. Items live in the case system: an opaque store (.cases/store.dat) that only tools/case reads. The README mentions only the case system.",
+   "kind": "lookup",
+   "command": "./tools/case {id}",
+   "id_pattern": "^CARE-\\d{3}$",
+   "samples": [
+    "CARE-945",
+    "CARE-781",
+    "CARE-279",
+    "CARE-375",
+    "CARE-633",
+    "CARE-242"
+   ],
+   "counter_samples": [
+    "X-1",
+    "ABCDEFG-123456789",
+    "12",
+    "not-an-id"
+   ]
+  },
+  {
+   "id": "linked-files",
+   "notes": "The lookup output lists the files to change under 'Files:' (the `files` field with --json). Registry items list the CSV and the module that reads it, never the generated file.",
+   "kind": "linked_files",
+   "command": "./tools/case {id}",
+   "samples": [
+    "CARE-945"
+   ]
+  },
+  {
+   "id": "dead-end",
+   "notes": "Test files import tools/testing/fixtures.mjs, which throws unless the fixtures were preloaded by `npm run check` (--import ./tools/testing/setup.mjs), so any generic runner fails. The working command is declared in .ci/pipeline.yml.",
+   "kind": "dead_end",
+   "command": "npm run check",
+   "avoided": [
+    "node --test"
+   ]
+  },
+  {
+   "id": "finish-line",
+   "notes": "Lookups read src/generated/registry.mjs, generated from registry/*.csv. Editing a CSV requires npm run codegen; npm run check and the hidden checks fail on stale output.",
+   "kind": "finish_line",
+   "command": "npm run codegen",
+   "glob": "registry/*.csv"
+  }
+ ]
+}

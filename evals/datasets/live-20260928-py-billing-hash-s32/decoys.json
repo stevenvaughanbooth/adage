@@ -1,0 +1,9 @@
+[
+ {
+  "command": "make bench",
+  "id": "decoy-unused-target",
+  "kind": "decoy",
+  "mode": "unused_target",
+  "notes": "A plausible target nothing depends on. Running it changes nothing."
+ }
+]

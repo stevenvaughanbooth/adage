@@ -1,0 +1,23 @@
+[
+ {
+  "command": "make bench",
+  "id": "decoy-unused-target",
+  "kind": "decoy",
+  "mode": "unused_target",
+  "notes": "A plausible target nothing depends on. Running it changes nothing."
+ },
+ {
+  "command": "make proto",
+  "id": "decoy-lookalike-regen",
+  "kind": "decoy",
+  "mode": "lookalike_regen",
+  "notes": "Looks like a regeneration step but generates nothing tracked; it is never required after any edit."
+ },
+ {
+  "command": "make lint",
+  "id": "decoy-lookalike-verify",
+  "kind": "decoy",
+  "mode": "lookalike_verify",
+  "notes": "A lint step that always passes; it is not the test suite and not a dead end."
+ }
+]

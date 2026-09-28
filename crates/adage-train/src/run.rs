@@ -259,7 +259,8 @@ struct Ctx<'a> {
 
 fn spec_for(c: &Ctx, j: &Job, max_budget: f64) -> SessionSpec {
     let home = c.dir.join("homes").join(&j.job);
-    let mut env = isolate::isolation_env(&home, c.base, c.h.auth_env());
+    let pass: Vec<&str> = c.h.auth_env().iter().copied().chain(c.h.forward_env().iter().map(String::as_str)).collect();
+    let mut env = isolate::isolation_env(&home, c.base, &pass);
     env.extend(arm_env(j.arm, &c.run, &j.job, &c.dir.join("reflex-home")));
     SessionSpec {
         job: j.job.clone(),
@@ -485,10 +486,11 @@ pub fn preflight(plan: &Plan, o: &RunOptions, h: &dyn Harness, base: &BTreeMap<S
         if o.validate > 0 && o.adage_bin.is_none() {
             bail!("--validate runs a reflex arm with Adage's hooks: pass --adage <path to the adage binary>");
         }
-        if h.name() == "claude-code" && crate::harness::ClaudeCode::auth_source(base).is_none() {
+        if h.name() == "claude-code" && h.auth_source(base).is_none() {
             bail!(
                 "isolated sessions cannot find your Claude Code login: set ANTHROPIC_API_KEY or \
-                 CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`), or have ~/.claude/.credentials.json"
+                 CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`), or have ~/.claude/.credentials.json \
+                 (where the host manages the login: --host-auth)"
             );
         }
     }
@@ -646,8 +648,10 @@ pub fn describe(plan: &Plan, o: &RunOptions, h: &dyn Harness, base: &BTreeMap<St
         "isolation": {
             "clone": "git clone --local --no-hardlinks <repo> <run>/wt/<job>/<name>; git remote remove origin",
             "per_session": isolate::home_dirs(Path::new("<run>/homes/<job>")).keys().collect::<Vec<_>>(),
-            "passed_through": isolate::PASS_ENV.iter().chain(h.auth_env()).collect::<Vec<_>>(),
-            "auth": if h.name() == "claude-code" { crate::harness::ClaudeCode::auth_source(base) } else { None },
+            "passed_through": isolate::PASS_ENV.iter().chain(h.auth_env()).map(|s| s.to_string())
+                .chain(h.forward_env().iter().cloned())
+                .fold(Vec::<String>::new(), |mut v, k| { if !v.contains(&k) { v.push(k) } v }),
+            "auth": if h.name() == "claude-code" { h.auth_source(base) } else { None },
             "hooks": "exploration, baseline and skill arms: ADAGE_DISABLE=1; reflex arm: hooks on, ADAGE_HOME=<run>/reflex-home (staged reflexes only), ADAGE_HOLDOUT=0",
             "transcripts": format!("{}/transcripts (never where learning reads history)", dir.display()),
         },

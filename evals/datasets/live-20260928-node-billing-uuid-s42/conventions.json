@@ -1,0 +1,62 @@
+{
+ "schema": "adage-conventions/1",
+ "sandbox": "tallyhouse-billing",
+ "description": "Converted from the gen bundle's conventions.json (evals/gen); decoys are in decoys.json.",
+ "conventions": [
+  {
+   "id": "lookup",
+   "notes": "Task prompts name only an item ID. Items live in the internal tracker: an opaque store (.tracker/cache.bin) that only scripts/wi-lookup reads. The README mentions only the internal tracker.",
+   "kind": "lookup",
+   "command": "./scripts/wi-lookup {id}",
+   "id_pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+   "samples": [
+    "abd1b369-95c4-4c53-8102-f927d44eca73",
+    "dbc20688-74bf-40b7-b83e-875654a30842",
+    "fb6a5401-ebe4-420d-aaf2-21b25c9ee7d4",
+    "0446a156-3dba-459a-810d-b88db2716f02",
+    "d900c63f-9ac3-4b4b-999f-58660ad17d2e",
+    "e7de87ac-3f47-4c93-8dad-8607aa7c23d5"
+   ],
+   "counter_samples": [
+    "X-1",
+    "ABCDEFG-123456789",
+    "12",
+    "not-an-id"
+   ]
+  },
+  {
+   "id": "linked-files",
+   "notes": "The lookup output lists the files to change under 'Files:' (the `files` field with --json). Registry items list the CSV and the module that reads it, never the generated file.",
+   "kind": "linked_files",
+   "command": "./scripts/wi-lookup {id}",
+   "samples": [
+    "abd1b369-95c4-4c53-8102-f927d44eca73"
+   ]
+  },
+  {
+   "id": "dead-end",
+   "notes": "Sources and tests import @tallyhouse/billing/*, an alias in jsconfig.json that Node resolves only through the hook `npm run check` preloads (--import ./tools/testing/setup.mjs). Plain `node --test` fails with ERR_MODULE_NOT_FOUND. The working command is declared in .ci/pipeline.yml.",
+   "kind": "dead_end",
+   "command": "npm run check",
+   "avoided": [
+    "node --test"
+   ]
+  },
+  {
+   "id": "instinct-violation",
+   "notes": "(gen kind instinct_violation) The universal default (npm test) is retired here and fails; the suite runs with npm run check, declared only in .ci/pipeline.yml.",
+   "kind": "dead_end",
+   "command": "npm run check",
+   "avoided": [
+    "npm test"
+   ]
+  },
+  {
+   "id": "finish-line",
+   "notes": "Lookups read src/generated/registry.mjs, generated from registry/*.csv. Editing a CSV requires npm run codegen; npm run check and the hidden checks fail on stale output.",
+   "kind": "finish_line",
+   "command": "npm run codegen",
+   "glob": "registry/*.csv"
+  }
+ ]
+}
