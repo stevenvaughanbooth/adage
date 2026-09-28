@@ -96,6 +96,8 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
                         paths: paths.clone(),
                         met: false,
                         stop_requested: false,
+                        edited: String::new(),
+                        fresh: false,
                     });
                 }
                 (Trigger::Intent { family, .. }, _) => st.intent = Some(family.clone()),

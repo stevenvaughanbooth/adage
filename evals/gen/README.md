@@ -33,7 +33,9 @@ each, as ground truth:
 | `instinct_violation` | `command`, `avoided`, `signature` | The universal default is wrong here: `make test` / `npm test` is retired and prints a failure, while `make check` / `npm run check` works |
 | `finish_line` | `command` (regenerate), `glob`, `signature` | Lookups read a generated module built from `registry/*.csv`. Editing a CSV requires `make gen` / `npm run codegen`; CI (`make check` / `npm run check`) and the hidden checks fail on stale output |
 | `decoy` | `command`, `mode` | A plausible command that is **not** a convention, to measure false routes: `unused_target` (`make bench`), `lookalike_regen` (`make proto`, `npm run gen:docs`: looks like a regenerate step, generates nothing), `lookalike_verify` (a lint that always passes), `legacy_script` (a leftover no-op script). Decoys exit 0 and change nothing |
-| `scope`, `env_sync` | | Reserved in the schema; Adage does not mine them yet, and the generator does not produce them |
+| `scope` | `command` (with `{part}`), `glob`, `samples` | python-make only (Track G G3). Three packages under `packages/<name>/`, each with its own suite: after changing one, `make -C packages/<name> check` (declared in `.ci/pipeline.yml`); `make check` covers `tests/` only. `samples` are the package names. Learnable only as a slot bound from the edited path |
+| `env_sync` | `command` (environment), `glob`, `signature` | python-make only (Track G G3). `requirements.txt` pins libraries; `make deps` (an environment step) refreshes `requirements.lock`, and `make check` fails on a stale lock. Adage learns it as a draft (nascent) awaiting review, as the environment ceiling requires |
+| `sequence` | `command` (the first step), `steps`, `glob`, `signature` | python-make only (Track G G3); replaces `finish_line`. After editing `registry/*.csv`: `make gen`, then `make check`, in that order (`.ci/pipeline.yml`) |
 
 Every entry also has `id` and `notes`. Dead-end modes, per stack:
 
@@ -55,6 +57,8 @@ the tests meets (the dead end and the instinct violation).
 | `bugfix` | A tracker item; its bug is a mutated function (bugs.py) in the file the lookup lists | `lookup`, `linked-files` |
 | `registry` | A tracker item: add or change a row of `registry/*.csv`. The lookup lists the CSV and the module that reads it, never the generated file | `lookup`, `linked-files`, `finish-line` |
 | `control` | A self-contained prompt that names the file, the function and the expected behaviour. No ID, no lookup, no generated code | nothing |
+| `scoped` | Like a control task, in `packages/<name>/core.py`; the solution runs that package's suite | `scope` |
+| `deps` | "Pin `<library>` to `<version>` in requirements.txt"; the solution runs `make deps` | `env-sync` |
 
 At least 25% of the tasks must be control tasks. Every task has a hidden test outside the
 repository (`hidden/`), fails untouched and passes with its reference solution (`solutions.json`:
@@ -95,6 +99,8 @@ they live, and which become tracker tasks or control tasks.
 | `conventions.dead_end` | `"auto"` | A mode, `"auto"` (the seed picks one the stack supports), or `null` for none |
 | `conventions.decoys` | `["unused_target", "lookalike_regen"]` | A list of modes, or a count |
 | `tasks.bugfix`, `.registry`, `.control` | 4, 2, 2 | `bugfix + control` <= 12; `registry` <= 6 and needs `finish_line`; tracker tasks need `lookup`; `control` >= 25% of all |
+| `conventions.scope`, `.env_sync`, `.sequence` | `false` | Track G G3 kinds, python-make only. `sequence` needs `finish_line` and replaces it in `conventions.json`. Left out of the normalised spec when off, so existing bundles keep their bytes |
+| `tasks.scoped`, `.deps` | 3 each when their kind is on, else 0 | At most 3 each; `scoped` needs `scope`, `deps` needs `env_sync` |
 | `id_digits` | the skin's | `[min, max]` digits of item numbers |
 | `id_shape` | `prefix_dash` | Tracker ids: `prefix_dash` (`BIL-1041`), `hash_num` (`#482` in prompts, `482` to the tool), `uuid`, `path_num` (`bil/412`), `branch` (`fix/<word>-<n>`), `mixed` (`BIL-1041` and `#482`, one tool). Left out of the normalised spec when default, so existing bundles keep their bytes. `specs/idshapes.json` covers every shape; `rehearse.py` also writes `holdout.json` (200 fresh ids, 200 near misses) for `adage eval types` |
 | `name` | `<stack>-<skin>` | The bundle's name |
@@ -195,6 +201,29 @@ What the rehearsal shows about Adage's learner, not about the generator:
   target it is make's own `make: *** [Makefile:11: test] Error 1`. The declared signature (the
   guard's own message) always appears in the output; `rehearse.py` reports both.
 
+### The graph engine and the new kinds (Track G G3)
+
+`rehearse.py DIR --engine graph` learns with the graph engine (`adage learn --engine graph`). It
+matches routes by shape as well as by the miners' ids: a dead end announced after its failure
+(`after_failure` → `run`), a finish line delivered as a sequence whose first step it is, and the
+scope, env_sync and sequence kinds (an after-edit route on the convention's glob directing its
+steps; its command with the edited part as a slot; its environment step, as a draft). Routes with a
+context trigger are compiled but inert until Track G G4, and are neither expected nor unexpected.
+
+```bash
+python3 evals/gen/gen.py --suite newkinds --out /tmp/gen/newkinds
+python3 evals/gen/rehearse.py /tmp/gen/newkinds --engine graph   # recovers every convention
+python3 evals/gen/rehearse.py /tmp/gen/newkinds                  # the miners: none of scope, env_sync, sequence
+```
+
+With `--engine graph` every smoke bundle recovers every convention with no unexpected route, and on
+the newkinds suite (three python-make bundles, 28 sessions each) every convention is recovered,
+env_sync as a draft (`make deps then make check`, awaiting review) and scope as
+`make -C packages/{part} check` after an edit of `packages/**/*.py`. The miners recover none of the
+three new kinds there (their finish line on `make gen` delivers the sequence's first step, and is
+counted as part of it). `adage eval routes <bundle-or-suite> --engine graph|miners` scores the
+same learned routes with Adage's own convention matcher.
+
 ## Extending
 
 - **A stack** (rust-cargo, go): a module in `stacks/` with a `Stack` subclass (the contract is at
@@ -220,5 +249,5 @@ What the rehearsal shows about Adage's learner, not about the generator:
 | `score.py` | The scorer (copied into each bundle) |
 | `selfcheck.py` | Proves every bundle is sound |
 | `rehearse.py` | Scripted transcripts, `adage learn`, recovered vs expected |
-| `specs/` | `smoke.json` (the suite), `example.json` |
+| `specs/` | `smoke.json` (the suite), `idshapes.json` (tracker id shapes), `newkinds.json` (scope, env_sync and sequence), `example.json` |
 | `test_gen.py` | The tests (`python3 -m unittest discover evals/gen`) |

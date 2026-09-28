@@ -77,6 +77,13 @@ static T_AVOID: Lazy<Regex> = Lazy::new(|| {
     ))
     .unwrap()
 });
+/// A sequence (Track G §6.1): a fixed lead, numbered commands, the exit on its own line.
+static T_SEQUENCE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(&format!(
+        r"^(?:In this repository, changes to files matching (?P<glob>[^\n]*) are followed by these steps, in order:|That failed\. In this repository, run these steps instead, in order:|Known next steps here, in order:)(?P<steps>(?:\n  [1-3]\. [^\n]*){{2,3}})(?:{EXIT_LINE})?$"
+    ))
+    .unwrap()
+});
 static T_STOP: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^Adage finish-line check: this session changed files matching (?P<glob>[^\n`]*), and this repository requires running `(?P<cmd>[^\n`]*)` after such changes; it has not been run yet\. Run it \(and re-run the tests\) before finishing\. This reminder is from Adage, not from the user\.$").unwrap()
 });
@@ -254,6 +261,25 @@ pub fn check_directive(r: &Route, text: &str, root: Option<&Path>, canaries: &[S
             if a.as_str() != b.as_str() {
                 bad("advice names two package managers".into());
             }
+        }
+        return out;
+    }
+    if let Step::Sequence { commands } = &r.step {
+        let Some(c) = T_SEQUENCE.captures(text) else {
+            bad("text is not the fixed sequence template".into());
+            return out;
+        };
+        let steps: Vec<&str> = c["steps"].lines().filter(|l| !l.is_empty()).map(|l| &l[5..]).collect();
+        if steps.len() != commands.len() || steps.iter().zip(commands).any(|(a, b)| a != b) {
+            bad("the listed steps are not the route's".into());
+        }
+        for cmd in steps {
+            if let Some(e) = command_ok(cmd) {
+                bad(e);
+            }
+        }
+        if let Some(e) = c.name("glob").and_then(|g| glob_ok(g.as_str())) {
+            bad(e);
         }
         return out;
     }

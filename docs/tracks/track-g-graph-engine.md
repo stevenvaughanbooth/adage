@@ -461,3 +461,102 @@ Total is about 15–19 engineer-weeks. G1 can ship alone and is useful even if G
 10. **Embeddings:** without substrate embeddings, a 256-d signed feature hash of structural features stands in (the hashed half of §1.2).
 
 **Gaps.** The next-action (+5 points) and ECE (≤ 0.05) targets; scoring cost at 400k events; steering-by-influence is implemented on the input (`Influence`) but no importer fills it yet; Obs/Fail nodes are not emitted (polarity on acts and `same_art` edges carry the dead-end and linked-files evidence); causal lift (E4) is not computed.
+
+## Status note: G3 (2026-09-28)
+
+**Implemented and integrated behind `learn.engine`.** The default is still `miners`: with it the L0 bench reproduces the committed baseline (J 0.6307).
+
+- **Compiler** (`crates/adage-graph/src/compile/{mod,shapes,glob,ids,legacy}.rs`). Selected reflexes, and every candidate that passed its gates (see deviation 2), become routes by structure alone:
+  - the lookup (`prompt =flow=> act`);
+  - read-batch (`act =same_art=> read`);
+  - avoid: a failed check, then the check that works. It is announced at session start when at least half the traces run the runner, otherwise as `after_failure` → `run`;
+  - obligation: `last(edit)` → one regenerate act;
+  - scope: `edit` → an act whose argument is a segment of the edited path. This compiles to `run` with an `edit_segment` slot;
+  - an environment step after an edit: `run`, a draft;
+  - sequence: 2–3 regenerate or verify steps after an edit, the first being a regenerate or environment step. A step repeated at once counts once;
+  - contexts of 2–3 events (`Trigger::Context`).
+
+  Legacy shapes keep the miners' ids (`lookup-work-item`, `read-linked-files`, `dead-end-<stable(W)>` / `<stable(W,S)>`, `finish-line-<stable(g,c)>`). New shapes get `<shape>-<stable(canonical trigger ‖ step ‖ slot names)>`. A run or sequence that directs an avoided runner is dropped before emission. The glob lattice never produces `**/*.ext`.
+- **Model** (`adage-tracks`):
+  - `Step::Sequence { commands }` has 2–3 plain commands and no slots. Its aspect is at most the lowest ceiling of its commands, and it is never red. It is rendered as a numbered list from a fixed template (checked by the safety oracle), judged on its first command, and never produces a Stop request.
+  - `Trigger::Context { items: Vec<CtxItem> (2–3), within (1–8) }` takes items from `CtxItem::{Act, Fail, Edit, PromptValue, Intent}`. Both are validated in `io.rs`.
+  - **Context triggers are compiled but inert until G4.** The runtime never matches one, and `Triggers` adds nothing for it, so the fast path is unchanged. `adage eval routes` lists them separately, as neither true nor false, and `rehearse.py` ignores them.
+  - `interlock.rs`: `avoids` covers every command of a sequence, and `same_point` gains `Context` (identical items, or one list a suffix of the other).
+  - Hidden directories under the tracks root are never read as tracks.
+- **Engines** (`adage-learn/src/{engine,shadow}.rs`).
+  - `graph` compiles into the normal track directories: legacy shapes in their legacy tracks, new shapes in `<repo>/graph`.
+  - `shadow` writes the miners' tracks as usual and the graph engine's to `<repo>/.shadow/<track>`. It also writes `<repo>/.shadow/shadow-report.json`, listing routes only the miners learned, routes only the graph engine learned, and routes that differ by trigger, step, slots, aspect or state. `adage learn --engine shadow` prints the same report.
+  - Instinct routes are priors (κ = 3 at 0.7), used in the yellow test only.
+  - The stale verdict for a graph route reads the scorer's counts for its own pattern (`stale::verdict_counts`), with no kind dispatch.
+  - Each graph route's `why` block holds the pattern, backoff depth, gain, lift, confidence, prototype members, three example traces and the prior. It is stored in the track's hidden `.why.json`, which is outside the canonical digest and never rendered to the agent. `adage review` shows it in text and in `--json`.
+- **Evals.**
+  - `conventions.rs` gains `Scope`, `EnvSync` and `Sequence` (with a `steps` field). It reads a generated bundle's conventions and scores bundles and suites with `adage eval routes <bundle|suite> --engine miners|shadow|graph`. Every route counts in any state except retired, so drafts count.
+  - `evals/gen`: the python-make stack generates three new conventions:
+    - `scope`: `packages/<name>/`, checked with `make -C packages/{part} check`;
+    - `env_sync`: a `requirements.txt` edit calls for `make deps`, and CI fails on a stale lock;
+    - `sequence`: `make gen` then `make check` after a registry edit, replacing the finish line.
+
+    It also adds `scoped` and `deps` tasks with their selfchecks and scripted behaviour, and a new suite, `specs/newkinds.json` (3 bundles).
+  - Existing specs regenerate byte for byte: the new keys are left out when off, and the new tasks are drawn after everything else.
+  - `rehearse.py --engine graph` matches routes by shape as well as by id.
+
+**Results.**
+
+- **Parity** (`crates/adage-eval/tests/g3.rs`), recall and false routes, miners / graph:
+
+  | Unit | Miners | Graph |
+  | --- | --- | --- |
+  | demo-haiku45, default split | 4/4, 0 false | 4/4, 0 false |
+  | synthetic, default split | 4/4, 0 false | 4/4, 0 false |
+  | adversarial, default split | 4/4, 0 false | 4/4, 0 false |
+  | each of the 6 smoke bundles | — | same recall as the miners, 0 false |
+
+  On the smoke suite, `rehearse.py --engine graph` recovers 28/28 conventions with no unexpected route. On other splits (task-grouped folds, temporal) the graph engine loses the dead end on demo-haiku45 fold 2, and one or two conventions on three adversarial splits. The causes are support too thin for the guard's Beta lower bound, and failure outputs with no renderable signature. False routes are 0 on every split.
+- **New capability** (newkinds suite, 28 traces per bundle). On all 3 bundles the graph engine recovers:
+  - scope: `make -C packages/{part} check` after edits to `packages/**/*.py`;
+  - env_sync: `make deps then make check` after edits to `requirements.txt`, as a **draft**;
+  - sequence: `make gen then make check` after edits to `registry/*.csv`.
+
+  It also recovers every other convention, with no decoy and no unexpected route. The miners recover none of the three; their `make gen` finish line counts as part of the sequence. No learner code names these kinds.
+- **L0**, `engine = graph` (the core suite, task-grouped folds): J 0.9759 against 0.6307 for the miners. False directives per session fall from 0.49 to 0.32, and turns saved at the window are equal (0.66). Route F1 is 0.979 against 1.0: one fold misses a dead end. All guardrails pass: unsafe 0, fast-path mismatches 0, route precision 1.0.
+
+**Deviations decided while building it.**
+
+1. **Judgement by shape.** A compiled route's evidence and aspect are counted again on the traces, the way its trigger and step read them. Lookup and linked files use the miners' counters; after-edit, avoid and after-failure routes use counters in `engine.rs`. The aspect uses the miners' Wilson rule. This is the §5 parity switch, so changing engines does not move an aspect by itself. Context routes keep the reflex's posterior.
+2. **Gated but unselected candidates compile.** MDL may not select a deliverable seen in few traces: a dead end in 5 of 30 traces can cost more bits than it saves. `Learned::unselected` (at most 2,000, best value first) feeds the compiler after the selected reflexes. This applies to every shape except contexts, which compile from selected reflexes only.
+3. **The lookup** is G1's value-slot route (`graph::lookup_routes`), whether or not MDL selected a `prompt =flow=>` reflex: the value-slot test is the lookup's pattern.
+4. **Glob tree.** The lattice's tree is the set of paths the traces touched, a pure function of the traces, so in G3 a directory glob is always precise. A repository tree can be passed to `Corpus::of`.
+5. **Not compiled in G3:**
+   - a check or observation after an edit: this is the agent's own habit and was never a convention on any dataset;
+   - `after_command` → `run`: off by default, because on the datasets it directs the agent's next check, which is a false route;
+   - prompt-intent contexts: intent families still come from `adage-learn/src/intent.rs`, because a prompt prototype needs the pinned model. G5 moves them.
+6. **Scope binding.** An edit's path segments are recorded as flow sources. An earlier read of the same path is the token's first source, however, so the flow edge may start at the read. A first continuation command is bound as `edit_segment` either way when its variable argument is a segment of every edited member path.
+
+**Gaps.** Parity on some non-default splits (above). `Trigger::Context` is inert until G4. The glob lattice has no repository tree. The `why` block is not yet shown in `adage graph --learned`. The node-npm stack does not generate the new kinds.
+
+## Status note: G2 tuning (2026-09-28)
+
+The three G2 targets the first note missed, revisited. Measured on the same corpora (`adage eval mine`: demo-haiku45 and synthetic on `group:task:3`, the six `evals/gen` smoke bundles on their `tasks.json` split both ways) and the same 2,000 × 200 synthetic scale test (`tests/mining.rs`, release). This machine has 4 cores, shared with other builds, so timings are at 4 threads (`min(8, cores)`).
+
+| | before | after |
+|---|---|---|
+| next-action top-1, demo-haiku45 (721 positions) | 0.402 (order-1 0.399) | **0.449** (order-1 0.399, order-2 0.395): +5.0 points (36 positions; 4.99 strictly) |
+| synthetic (136) | 0.801 (0.801) | **0.824** (0.801; order-2 0.824): +2.2; ceiling 0.815 (below) |
+| smoke mean (6 bundles, 371 positions) | 0.506 (0.506) | **0.525** (0.506; order-2 0.555): +1.9 |
+| ECE, demo-haiku45 | 0.120 (268 selected pairs) | **0.017** over 106,953 (session, candidate) pairs (0.077 before calibration); selected reflexes 0.116 over 268 (90% CI 0.084–0.163) |
+| ECE, synthetic | 0.063 (197) | **0.022** over 6,253 (0.041 raw); selected 0.068 over 197 (CI 0.040–0.102) |
+| ECE, smoke (per bundle) | 0.001–0.484 (33–39) | 0.013–0.119 over 1,038–1,772 pairs each, mean 0.084 (0.144 raw); selected 0.07–0.31 over 33–39 (CIs 0.04–0.46) |
+| 2k × 200, 4 threads | 18.0 s (scoring 13.0 s) | **9.0 s** with other builds running (load 3–4): prototypes 1.7, mining 2.3, scoring 4.5 (with calibration), selection 0.4; 6.9 s unloaded (scoring 2.8) |
+| 2k × 200, 1 thread | 37.9 s (scoring 29.6 s) | **17.8 s** (scoring 9.4 s, mining 6.0 s) |
+
+**Speed (`score.rs`).** The scorer no longer rescans sessions. `Stats` keeps, per label, the positions in each session of its posting list, and a join is a posting-list intersection followed by the same dynamic program as `Db::reach` over the items' position lists (merging, or probing around the previous row when it is much shorter; an existence join stops at its first match). `Cache::build` collects every join the patterns need before scoring (Y alone; each context suffix X_k; X_k ++ Y), computes each context's end positions once and extends them for every continuation, reads mined patterns' sessions from the miner, and runs these units and the background counts on all threads through `par_map` (an atomic cursor; results in input order, so the thread count changes nothing). The background count first finds the Y matches whose continuation completes and then every anchor they can follow, instead of trying Y from every anchor near a Y. The learned output is byte-identical to the old scorer's (checked on a 400 × 120 corpus with `SCALE_DUMP`; 20,000 closed patterns). On an unloaded machine the 4-thread run was 6.9 s (prototypes 1.8, mining 1.9, scoring 2.8, selection 0.4) and the 1-thread run 18.1 s (scoring 9.4 s); the rest of the single-thread time is mining (6.4 s).
+
+**Next action (`score::NextModel`).** The engine's prediction is now the variable-order backoff model of §5, not selected reflexes over an order-1 fallback: a chain of contexts, coarse to fine, each shrinking its counts towards the previous distribution with a Beta/Dirichlet prior of κ = 2 (a context with no evidence stops the walk: the longest context with evidence speaks). The base rate escapes to a novel act PPM-C style, a tenth of the mass stays on the base rate (conformance), and the session's own earlier transitions count twice (a cache: agents repeat themselves). The chain is chosen per training set, by task-grouped inner cross-validation (most top-1 hits, then fewest nats), among three: taxonomy over mixed labels `h0,m0,h1,m1,m2` (head, then the exact act or the head-level path, orders 1–3), taxonomy over exact labels `h0,x0,h1,x1,x2`, and exact `x0,x1,x2`. The eval is fair: all three predictors (engine, order-1, order-2) see the same alphabet-only history of the held-out session and predict the exact label of the next alphabet event when it is an act, on the same folds. Explored and dropped (no held-out gain, or a loss on another corpus): the prompt's intent prototype (−3 to −5 points: held-out tasks have new prompts), prototype and coarse levels instead of heads, PPM-C escapes at every level, κ 1 or 4, the last act, edit phase and position features, averaging chains, predicting the head first, and letting selected reflexes override the model (they fired at 10 of 721 positions).
+
+**Ceilings.** `Holdout.oracle` is, per context order k = 1–3, the held-out data's own best top-1 for that exact context (what a predictor knowing the test answers per context would get) and H(next | context). Synthetic: 0.809 / 0.838 / 0.846 (0.53 / 0.43 / 0.42 bits). Its generator (`adage eval generate synthetic`) is known exactly: after `edit acme/billing.py` the next act is `make test` with probability 1/2 and one of two failing runners with 1/4 each, and every other act position is determined (the lookup, `make gen` after a schema edit, `make test` after a failure). With about 2.62 act positions per work-item session and 1 per chore session, the Bayes-optimal accuracy is (48 × 2.12 + 4) / (48 × 2.62 + 4) = **0.815**: order-1 + 5 points (0.851) is not attainable in expectation on synthetic; order-1 already gets 0.801 and the engine 0.824 on this sample. Smoke: 0.66–0.73 / 0.70–0.77 / 0.74–0.80 in-sample; each bundle has 8 training sessions and 53–64 held-out positions (one position is 1.6 points), and its scripted sessions vary by session index (`rehearse.py` `work`), which no history shows. Order-2 is ahead there (0.555) because the exact successor of an exact pair recurs verbatim in scripted sessions; on demo-haiku45 it is behind order-1.
+
+**Calibration (`score::Calibration`).** Each learn fits a monotone map from a candidate's posterior mean to held-out outcomes on its own training sessions: task-grouped inner folds (3), candidates re-mined and re-scored on each inner training side exactly as the outer evaluation does (below 400 sessions; above, the cheap form recomputes each candidate's posterior from its own opportunity and support lists), pairs binned by 1/200, isotonic regression by pool adjacent violators, linear between blocks. `Scored`/`Reflex` gain `conf_cal` (the mapped mean) and `conf_lb_cal` (the same quantile of a Beta with the calibrated mean and the posterior's concentration); `Learned.calibration` holds the map. The held-out ECE counts every (held-out session, candidate) pair where the candidate's context occurs (n above), not only selected reflexes. Re-mining matters: with the cheap form on demo-haiku45 the map made ECE worse (0.090), because a pattern mined from all training sessions is flattered by the inner fold's outcomes. Selected reflexes stay over-confident (winner's curse: they are chosen for high training confidence); their intervals are wide at 33–268 pairs.
+
+**Kept.** Determinism (1/4 threads, input order) and incremental-equals-full (`tests/mining.rs`, `tests/border.rs`); parity (`tests/kinds.rs`), recall 1.00 on every dataset and smoke bundle. `DbSession.task` added (inner folds group by it). Public API: fields added only (`Scored`, `Reflex`, `Learned`, `DbSession`); `score::score` takes the prebuilt `&Cache`; `Holdout` drops the reflex-firing counts.
+
+**Gaps.** Smoke misses both accuracy (+1.9) and ECE (0.084 mean) on 8-session training sets; demo-haiku45 reaches +5 points to within one position, well inside sampling noise at 721 positions; the chain candidates were chosen while exploring these corpora (the per-fold choice among them is honest). Selected-reflex ECE is 0.07–0.12 on the datasets. Single-thread time is still dominated by mining. The compiler still reads `conf`/`conf_lb`; switching aspects to `conf_lb_cal` is a G3 decision.

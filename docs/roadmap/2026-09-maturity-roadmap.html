@@ -474,14 +474,14 @@ adage bench bless   results/&lt;id&gt;.jsonl --reason "..."</pre>
     <div class="box">
       <h4>Execution levels and approval</h4>
       <ul>
-        <li><b>E0</b> directive, as today. <b>E1</b> prefetch: run an approved read-only route and inject typed, fenced output. <b>E2</b> routes as MCP tools, so the harness asks permission per call. <b>E3</b> actions: staged, checked against declared outputs, then applied.</li>
+        <li><b>E0</b> directive, as today. <b>E1</b> prefetch: run an approved read-only route and inject typed, fenced output. <b>E2</b> actions from hooks: when an approved reflex's stimulus fires, Adage runs it staged, checks it against its declared outputs, then applies it (revised 2026-09-28: no MCP; Adage acts only from the hooks it owns).</li>
         <li><b>A separate <code>adage-exec</code> binary.</b> The hook binary keeps "spawns nothing", checkable by grep in CI.</li>
         <li><b>The sandbox is the boundary, not classification:</b> Landlock + seccomp or bubblewrap on Linux; <code>sandbox-exec</code> on macOS; Windows stays at E0.</li>
         <li><b>Approvals are local.</b> Each is keyed by hashes of the argv, inputs, scripts, effect, level and sandbox profile, and lapses on any change. Auto-approval only for inert, read-only, known commands, after gate G3.</li>
       </ul>
     </div>
   </div>
-  <p class="small">Milestones: C0 format · C1 distribute and bind · C2 execution core and sandbox · C3 E1 prefetch · C4 E2 MCP (needs Track G's learned input types) · C5 actions, vendoring, attestations. About 13–15 weeks. <b>Gates before any default changes:</b> 0 sandbox escapes; E1 saves ≥ 0.5 turns per triggered session with the lower CI bound above 0; injection harm no worse than the agent reading the same output itself.</p>
+  <p class="small">Milestones: C0 format · C1 distribute and bind · C2 execution core and sandbox · C3 E1 prefetch · C4 (removed: no MCP) · C5 E2 actions from hooks, vendoring, attestations. About 13–15 weeks. <b>Gates before any default changes:</b> 0 sandbox escapes; E1 saves ≥ 0.5 turns per triggered session with the lower CI bound above 0; injection harm no worse than the agent reading the same output itself.</p>
 </section>
 
 <!-- ============ SHIPPED ============ -->

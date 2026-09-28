@@ -241,7 +241,7 @@ pub struct RouteV2 {
     /// A route with `entry: false` is reachable only through another route's `links`.
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub entry: bool,
-    /// Typed parameters (the E2 tool schema is generated from these).
+    /// Typed parameters (bound from the stimulus; an execution binds them against their types).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub inputs: BTreeMap<String, Input>,
     /// At least one; E0 renders `steps[0]` only.
@@ -341,7 +341,7 @@ pub struct StepV2 {
     /// The script a run step's argv names (L-ref or L-vendor).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub script: Option<ScriptRef>,
-    /// Typed output contract (the E1/E2 projection).
+    /// Typed output contract (the E1 projection).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub outputs: BTreeMap<String, Output>,
 }
@@ -489,7 +489,18 @@ pub struct ExecSpec {
     pub timeout_ms: u32,
     #[serde(default)]
     pub output: OutputMode,
+    /// E2 only: the repository-relative globs an action may change. A regenerate action must
+    /// declare them; any other change refuses the application (Track C §3.6).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outputs: Vec<String>,
+    /// E2 only: cache globs. Changes there are kept by a verify action and discarded, never
+    /// refused, by a regenerate action.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cache: Vec<String>,
 }
+
+/// Most globs an action may declare in `outputs` or `cache`.
+pub const MAX_ACTION_GLOBS: usize = 16;
 
 /// A route's aggregate evidence (as `adage_tracks::Evidence`, without per-machine state such as
 /// `stale_since`).

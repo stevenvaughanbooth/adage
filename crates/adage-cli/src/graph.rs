@@ -66,6 +66,9 @@ pub(crate) fn trigger(t: &Trigger) -> Value {
         Trigger::AfterEdit { paths } => ("after_edit", format!("an edit touches {paths}")),
         Trigger::SessionStart => ("session_start", "the first prompt of a session".to_string()),
         Trigger::Intent { family, .. } => ("intent", format!("a prompt means: {family}")),
+        Trigger::Context { items, .. } => {
+            ("context", format!("a context of {} events (inert until context triggers are live)", items.len()))
+        }
     };
     json!({ "kind": kind, "label": label })
 }
@@ -82,6 +85,7 @@ fn step(s: &Step) -> Value {
         Step::Advise { template, slots } => {
             json!({ "kind": "advise", "label": adage_tracks::advice::text(template, slots).unwrap_or_default(), "template": template })
         }
+        Step::Sequence { commands } => json!({ "kind": "sequence", "label": commands.join(" → ") }),
     }
 }
 
@@ -95,6 +99,7 @@ fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
             v.push((command_key(instead, table), "directs"));
             v
         }
+        Step::Sequence { commands } => commands.iter().map(|c| (command_key(c, table), "directs")).collect(),
         Step::ReadBatch { .. } | Step::Advise { .. } => vec![],
     }
 }

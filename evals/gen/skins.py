@@ -59,6 +59,12 @@ class Skin:
     reporters: tuple
     decoy_items: tuple              # (title, status, description) for closed tracker items
     decoys: dict = field(default_factory=dict)  # decoy mode -> name used for the target/script
+    # Track G G3 kinds (python-make only). `packages`: three package directories under packages/,
+    # each with its own suite (`make -C packages/<name> check`, the scope convention). `deps`:
+    # (library, version) pins; the first two are in requirements.txt from the start, each env_sync
+    # task pins one of the others (then `make deps`, the env_sync convention).
+    packages: tuple = ()
+    deps: tuple = ()
 
 
 BILLING = Skin(
@@ -138,6 +144,9 @@ BILLING = Skin(
     ),
     decoys={"unused_target": "bench", "lookalike_regen": "proto", "lookalike_verify": "lint",
             "legacy_script": "legacy-export"},
+    packages=("ledger", "rates", "export"),
+    deps=(("attrs", "23.2.0"), ("tabulate", "0.9.0"), ("python-dateutil", "2.9.0"), ("pyyaml", "6.0.1"),
+          ("rich", "13.7.1")),
 )
 
 LOGISTICS = Skin(
@@ -214,6 +223,9 @@ LOGISTICS = Skin(
     ),
     decoys={"unused_target": "bench", "lookalike_regen": "proto", "lookalike_verify": "lint",
             "legacy_script": "legacy-sync"},
+    packages=("routing", "manifest", "customs"),
+    deps=(("attrs", "23.2.0"), ("tabulate", "0.9.0"), ("python-dateutil", "2.9.0"), ("pyyaml", "6.0.1"),
+          ("rich", "13.7.1")),
 )
 
 CLINIC = Skin(
@@ -287,6 +299,9 @@ CLINIC = Skin(
     ),
     decoys={"unused_target": "bench", "lookalike_regen": "proto", "lookalike_verify": "lint",
             "legacy_script": "legacy-import"},
+    packages=("triage", "pharmacy", "records"),
+    deps=(("attrs", "23.2.0"), ("tabulate", "0.9.0"), ("python-dateutil", "2.9.0"), ("pyyaml", "6.0.1"),
+          ("rich", "13.7.1")),
 )
 
 SKINS = {s.name: s for s in (BILLING, LOGISTICS, CLINIC)}

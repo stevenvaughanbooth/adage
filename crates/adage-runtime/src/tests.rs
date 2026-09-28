@@ -532,9 +532,23 @@ fn dead_ends_and_linked_files_state_their_exit_condition() {
 
 /// The fields a rebuild restores, as JSON (Obligation has no PartialEq).
 fn restored(st: &SessionState) -> serde_json::Value {
+    // `edited` and `fresh` describe the latest edit for an E2 action at that event; no later
+    // decision reads them, so a rebuild need not restore them.
+    let obligations: Vec<serde_json::Value> = st
+        .obligations
+        .iter()
+        .map(|o| {
+            let mut v = json!(o);
+            if let Some(m) = v.as_object_mut() {
+                m.remove("edited");
+                m.remove("fresh");
+            }
+            v
+        })
+        .collect();
     json!({
         "arm": st.arm, "repo": st.repo, "prompts": st.prompts, "batches": st.batches,
-        "emitted": st.emitted, "obligations": st.obligations, "history": st.history,
+        "emitted": st.emitted, "obligations": obligations, "history": st.history,
         "first_edit_at_batch": st.first_edit_at_batch, "stop_requests": st.stop_requests,
     })
 }
@@ -1282,4 +1296,84 @@ mod typed_slots {
             assert_eq!(d.directives.is_empty(), skip, "{text}");
         }
     }
+}
+
+/// Track G G3: a sequence after an edit is said once, numbered, judged on its first command and
+/// never a Stop request; a context trigger is compiled but inert until G4 (it never matches, and
+/// the fast path adds nothing for it).
+#[test]
+fn a_sequence_follows_an_edit_and_a_context_never_fires() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let track = Track {
+        manifest: Manifest {
+            track: TrackInfo {
+                name: "acme/graph".into(),
+                version: "0.1.0".into(),
+                description: String::new(),
+                provenance: "desire-path".into(),
+            },
+            scope: Scope { repo: "acme".into() },
+            gauge: Gauge::default(),
+        },
+        routes: vec![
+            route(
+                "sequence-1",
+                Trigger::AfterEdit { paths: "registry/*.csv".into() },
+                Step::Sequence { commands: vec!["make gen".into(), "make check".into()] },
+                vec![],
+                Effect::Regenerate,
+                Aspect::Green,
+            ),
+            route(
+                "run-ctx",
+                Trigger::Context {
+                    items: vec![
+                        CtxItem::Edit { glob: "registry/*.csv".into() },
+                        CtxItem::Act { keys: vec!["exec make gen".into()] },
+                    ],
+                    within: 8,
+                },
+                Step::Run { command: "make check".into() },
+                vec![],
+                Effect::Verify,
+                Aspect::Green,
+            ),
+        ],
+    };
+    adage_tracks::io::validate(&track).unwrap();
+    let index = Index::compile(&[track]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let mut st = SessionState::default();
+    let edit = Call {
+        tool: "Edit".into(),
+        input: json!({ "file_path": dir.path().join("registry/ports.csv").to_string_lossy() }),
+        output: String::new(),
+        failed: false,
+    };
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit.clone()] });
+    assert_eq!(d.directives.len(), 1, "{:?}", d.directives);
+    assert_eq!(d.directives[0].route, "sequence-1");
+    assert!(d.directives[0].text.contains("  1. make gen\n  2. make check"), "{}", d.directives[0].text);
+    // Said once: a second edit says nothing again.
+    assert!(decide(&ctx, &mut st, &Event::Batch { calls: vec![edit] }).directives.is_empty());
+    // Followed on its first command; the context route never speaks, whatever happens.
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make gen", "ok")] });
+    assert!(d.judgements.iter().any(|j| matches!(j, Judgement::Followed { route } if route == "sequence-1")));
+    assert!(d.directives.is_empty(), "{:?}", d.directives);
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![bash("make check", "ok")] });
+    assert!(d.directives.is_empty());
+    // A sequence is not an obligation: no Stop request.
+    assert!(decide(&ctx, &mut st, &Event::Stop { stop_hook_active: false }).continue_reason.is_none());
+    // The fast path's triggers carry nothing for the context route.
+    let t = adage_tracks::triggers::Triggers::of(index.routes.iter().map(|r| &r.route));
+    assert_eq!(t.edit_globs, ["registry/*.csv"]);
+    assert!(t.words.is_empty() && !t.any_call);
 }

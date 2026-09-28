@@ -85,6 +85,32 @@ pub fn to_input(s: &Session) -> input::Session {
     annotate(s).session
 }
 
+/// The session as the graph engine's miner reads it (Track G §1.1): [`annotate`], then
+/// `adage_graph::events::from_input` with each step's model turn as its batch and its effect
+/// class, the day and the outcome.
+pub fn events(a: &input::Annotated, s: &Session) -> adage_graph::events::EventSession {
+    let effect = |e: &str| -> Option<adage_core::Effect> {
+        Some(match e {
+            "observe" => adage_core::Effect::Observe,
+            "verify" => adage_core::Effect::Verify,
+            "regenerate" => adage_core::Effect::Regenerate,
+            "environment" => adage_core::Effect::Environment,
+            "author" => adage_core::Effect::Author,
+            "publish" => adage_core::Effect::Publish,
+            _ => return None,
+        })
+    };
+    let meta = adage_graph::events::Meta {
+        day: Some(a.day.clone()),
+        task: None,
+        outcome: s.outcome,
+        turns: Some(a.meta.iter().map(|m| m.turn).collect()),
+        effects: Some(a.meta.iter().map(|m| effect(&m.effect)).collect()),
+        influence: vec![],
+    };
+    adage_graph::events::from_input(&a.session, &meta, &adage_core::CommandTable::load())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

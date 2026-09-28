@@ -85,11 +85,26 @@ impl Conflict {
 }
 
 /// Whether `red` says not to run what `other` directs: `red` avoids a runner that `other`'s
-/// command runs. Only an avoid step says "not this"; its aspect does not matter.
+/// command runs. Only an avoid step says "not this"; its aspect does not matter. A sequence
+/// conflicts if *any* of its commands runs an avoided runner (Track G §6.3); an obligation is a
+/// run step after an edit, so it is covered by the run arm.
 pub fn avoids(red: &Route, other: &Route) -> bool {
     match (&red.step, &other.step) {
         (Step::Avoid { avoid, .. }, Step::Run { command }) => pattern::directs_avoided(avoid, command),
+        (Step::Avoid { avoid, .. }, Step::Sequence { commands }) => {
+            commands.iter().any(|c| pattern::directs_avoided(avoid, c))
+        }
         _ => false,
+    }
+}
+
+/// The command a route directs first: a run step's, or a sequence's first (whose follow is
+/// judged on it).
+fn first_command(step: &Step) -> Option<&str> {
+    match step {
+        Step::Run { command } => Some(command),
+        Step::Sequence { commands } => commands.first().map(String::as_str),
+        _ => None,
     }
 }
 
@@ -121,14 +136,17 @@ pub fn same_point(a: &Trigger, b: &Trigger) -> bool {
         (AfterFailure { command: x, signature: s }, AfterFailure { command: y, signature: t }) => {
             keys_overlap(x, y) && (s.contains(t.as_str()) || t.contains(s.as_str()))
         }
+        // Two contexts are one decision point when their item lists are identical or one is a
+        // suffix of the other (the shorter context fires whenever the longer one does).
+        (Context { items: x, .. }, Context { items: y, .. }) => x.ends_with(y) || y.ends_with(x),
         _ => false,
     }
 }
 
 /// Whether two green routes would direct different commands at one decision point.
 pub fn two_greens(a: &Route, b: &Route) -> bool {
-    match (&a.step, &b.step) {
-        (Step::Run { command: x }, Step::Run { command: y }) => {
+    match (first_command(&a.step), first_command(&b.step)) {
+        (Some(x), Some(y)) => {
             a.aspect == Aspect::Green
                 && b.aspect == Aspect::Green
                 && same_point(&a.trigger, &b.trigger)
@@ -144,6 +162,7 @@ fn command_of(r: &Route) -> String {
         Step::Avoid { avoid, .. } => avoid.clone(),
         Step::ReadBatch { slot, .. } => format!("read {{{slot}}}"),
         Step::Advise { template, .. } => format!("advise {template}"),
+        Step::Sequence { commands } => commands.join(" then "),
     }
 }
 
@@ -152,8 +171,8 @@ fn overrides(other: &Route, instinct: &Route) -> bool {
     if other.is_instinct() || !instinct.is_instinct() || !same_point(&other.trigger, &instinct.trigger) {
         return false;
     }
-    match (&other.step, &instinct.step) {
-        (Step::Run { command: x }, Step::Run { command: y }) => !pattern::same_command(x, y),
+    match (first_command(&other.step), first_command(&instinct.step)) {
+        (Some(x), Some(y)) => !pattern::same_command(x, y),
         _ => false,
     }
 }
@@ -355,6 +374,33 @@ mod tests {
         assert_eq!(out[0].route.aspect, Aspect::Yellow);
         assert_eq!(out[1].route.aspect, Aspect::Green);
         assert_eq!(conflicts[0].winner, "learned");
+    }
+
+    /// Track G G3: a sequence conflicts with an avoid if any of its commands runs an avoided
+    /// runner; two contexts are one decision point when one is a suffix of the other.
+    #[test]
+    fn sequences_and_contexts_interlock() {
+        let seq = |c: &[&str]| Step::Sequence { commands: c.iter().map(|x| x.to_string()).collect() };
+        let edit = || Trigger::AfterEdit { paths: "registry/*.csv".into() };
+        let bad = route("seq-bad", edit(), seq(&["make gen", "npm test"]), Aspect::Green, 5);
+        let good = route("seq-good", edit(), seq(&["make gen", "make check"]), Aspect::Green, 5);
+        assert!(avoids(&dead_end("npm test").route, &bad.route));
+        assert!(!avoids(&dead_end("npm test").route, &good.route));
+        let (out, conflicts) = resolve(vec![dead_end("npm test"), bad, good], |_| false);
+        assert_eq!(out.len(), 3, "an after-edit sequence is filtered at runtime, not left out");
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!((conflicts[0].loser.as_str(), conflicts[0].resolution), ("seq-bad", Resolution::RuntimeFilter));
+        assert_eq!(conflicts[0].command, "make gen then npm test");
+        use crate::model::CtxItem;
+        let a = CtxItem::Act { keys: vec!["exec make gen".into()] };
+        let e = CtxItem::Edit { glob: "registry/*.csv".into() };
+        let long = Trigger::Context { items: vec![e.clone(), a.clone()], within: 8 };
+        let short = Trigger::Context { items: vec![a.clone(), e.clone()], within: 8 };
+        assert!(same_point(&long, &Trigger::Context { items: vec![e.clone(), a.clone()], within: 4 }));
+        assert!(!same_point(&long, &short));
+        let three = Trigger::Context { items: vec![a.clone(), e.clone(), a.clone()], within: 8 };
+        assert!(same_point(&three, &long), "a suffix is the same point");
+        assert!(!same_point(&long, &edit()));
     }
 
     #[test]

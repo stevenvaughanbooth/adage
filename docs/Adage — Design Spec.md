@@ -90,9 +90,9 @@ and noticed when it stopped working.
    a route **only** when all of these hold: this machine holds an approval for that route's exact
    argv, inputs, scripts (by hash), effect and level; an OS sandbox enforces the approved profile;
    and the route's effect is at most regenerate. Output returns to the agent as typed, fenced data,
-   never as instructions. Actions with effects (E3) run only when the agent calls them as tools,
-   under the harness's own permission prompts, and are staged and verified before anything in the
-   worktree changes. Approvals never travel with a track. (Track C §5.1;
+   never as instructions. Actions with effects (E2) run only from the hooks Adage owns, for a
+   reflex a person approved explicitly on this machine, and are staged and verified before
+   anything in the worktree changes. Approvals never travel with a track. (Track C §5.1;
    [execution](execution.md).)
 2. **Deterministic by construction.** The same situation with the same installed tracks produces
    the same directive. (The one exception, experiment assignment, is itself a deterministic hash of

@@ -1576,18 +1576,31 @@ impl Calibration {
         let k = folds.max(2);
         let fold = inner_folds(&db.sessions, k);
         let mut bins = Calibration::bins();
+        let (mut opp, mut hit) = (vec![0u32; k], vec![0u32; k]);
         for sc in scored {
+            // One merge walk: per fold, opportunities and those followed by the continuation.
+            opp.iter_mut().chain(hit.iter_mut()).for_each(|x| *x = 0);
+            let mut j = 0usize;
+            for &si in &sc.opp_list {
+                while j < sc.sessions.len() && sc.sessions[j] < si {
+                    j += 1;
+                }
+                let f = fold[si as usize];
+                opp[f] += 1;
+                hit[f] += u32::from(j < sc.sessions.len() && sc.sessions[j] == si);
+            }
+            let (n_all, s_all): (u32, u32) = (opp.iter().sum(), hit.iter().sum());
             for f in 0..k {
-                let n = sc.opp_list.iter().filter(|&&i| fold[i as usize] != f).count() as f64;
-                if n == 0.0 {
+                let n = f64::from(n_all - opp[f]);
+                if n == 0.0 || opp[f] == 0 {
                     continue;
                 }
-                let s = sc.sessions.iter().filter(|&&i| fold[i as usize] != f).count() as f64;
-                let (a, b) = stats::posterior(s, n, sc.prior, kappa);
+                let (a, b) = stats::posterior(f64::from(s_all - hit[f]), n, sc.prior, kappa);
                 let pred = a / (a + b);
-                for &si in sc.opp_list.iter().filter(|&&i| fold[i as usize] == f) {
-                    Calibration::add(&mut bins, pred, sc.sessions.binary_search(&si).is_ok());
-                }
+                let i = ((pred * CAL_BINS as f64) as usize).min(CAL_BINS - 1);
+                bins[i].0 += pred * f64::from(opp[f]);
+                bins[i].1 += f64::from(hit[f]);
+                bins[i].2 += f64::from(opp[f]);
             }
         }
         Calibration::from_bins(&bins)

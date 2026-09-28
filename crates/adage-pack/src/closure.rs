@@ -30,7 +30,7 @@ use adage_core::{keys::template_command, pattern, CommandTable};
 use anyhow::{bail, Result};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-/// At most this many routes in a chain of `after` edges (bounds E2 multi-step tools).
+/// At most this many routes in a chain of `after` edges (bounds multi-step executions).
 pub const MAX_AFTER_CHAIN: usize = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

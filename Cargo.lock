@@ -84,6 +84,7 @@ dependencies = [
  "adage-store",
  "adage-tracks",
  "anyhow",
+ "glob",
  "landlock",
  "libc",
  "once_cell",
@@ -102,6 +103,7 @@ version = "0.1.0"
 dependencies = [
  "adage-core",
  "adage-intent",
+ "adage-tracks",
  "proptest",
  "regex",
  "serde",

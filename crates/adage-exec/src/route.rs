@@ -15,6 +15,9 @@
 //!   approval ([`Terms`]); else the result fields later routes read from this command's output
 //!   (the implicit edge `lookup → read-linked`, §2.1 item 5), as repository-path lists.
 //! - **exits**: a pack route's `result_equals` predicates, or those declared at approval.
+//! - **E2 actions** (Track C §3.6): a finish-line reflex (after editing X, run Y) or any other
+//!   verify or regenerate step, planned with its own effect, a writable-overlay profile, and the
+//!   action's declared outputs and cache globs (the pack's `exec`, or declared at approval).
 
 use adage_core::{CommandTable, Effect};
 use adage_tracks::index::IndexedRoute;
@@ -23,7 +26,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use crate::request::{ExecRequest, FieldSpec, FieldType, Labels, Level, Origin, OutputMode, OutputSpec, ScriptRef};
+use crate::request::{
+    ActionKind, ActionSpec, ExecRequest, FieldSpec, FieldType, Labels, Level, Origin, OutputMode, OutputSpec, ScriptRef,
+};
 use crate::sandbox::Profile;
 
 /// What a person may declare at approval, beside the route: the typed output fields, exit
@@ -40,6 +45,15 @@ pub struct Terms {
     pub timeout_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub raw: bool,
+    /// E2: the globs the action may change (regenerate), and cache globs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outputs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cache: Vec<String>,
+    /// E2: the effect a person approved for a step that runs a script (classified environment),
+    /// when lower; the sandbox and the change-set check enforce it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect: Option<Effect>,
 }
 
 /// An E1-ready request (inputs unbound) and the exit predicates to evaluate on its output.
@@ -48,7 +62,7 @@ pub struct Plan {
     pub request: ExecRequest,
     pub exit_when: BTreeMap<String, String>,
     /// Slots whose contract is a repository path (E2 only): the value must also name something
-    /// that exists inside the repository, checked at call time.
+    /// that exists inside the repository, checked at run time.
     pub repo_paths: std::collections::BTreeSet<String>,
 }
 
@@ -139,11 +153,13 @@ pub fn pack_terms(tracks: &Path, ir: &IndexedRoute) -> Option<Terms> {
             _ => None,
         })
         .collect();
-    let (timeout_ms, raw) = match &r.exec {
-        Some(x) => (Some(x.timeout_ms as u64), x.output == adage_pack::OutputMode::Raw),
-        None => (None, false),
+    let (timeout_ms, raw, outputs, cache) = match &r.exec {
+        Some(x) => {
+            (Some(x.timeout_ms as u64), x.output == adage_pack::OutputMode::Raw, x.outputs.clone(), x.cache.clone())
+        }
+        None => (None, false, vec![], vec![]),
     };
-    Some(Terms { fields, exit_when, timeout_ms, raw })
+    Some(Terms { fields, exit_when, timeout_ms, raw, outputs, cache, effect: None })
 }
 
 fn field_of_type(
@@ -204,8 +220,8 @@ pub fn plan(
     let Step::Run { command } = &ir.route.step else {
         return Err("only a route that runs a command can be prefetched".into());
     };
-    if matches!(ir.route.trigger, Trigger::AfterEdit { .. }) {
-        return Err("a finish-line step changes the repository; it never runs at E1 or E2".into());
+    if matches!(ir.route.trigger, Trigger::AfterEdit { .. }) && level != Level::E2 {
+        return Err("a finish-line step changes the repository; it runs only as an E2 action".into());
     }
     let argv: Vec<String> = command.split_whitespace().map(String::from).collect();
     let used = crate::request::slots(&argv);
@@ -217,12 +233,12 @@ pub fn plan(
             (SlotSource::Prompt { .. }, Contract::Pattern { regex }, _) => {
                 contracts.insert(name.clone(), regex.clone());
             }
-            // At E2 the agent supplies every input as a tool argument, so where the route binds
-            // it from at E0 does not matter; its contract does.
-            (_, Contract::Pattern { regex }, Level::E2 | Level::E3) => {
+            // At E2 an action's inputs are bound from the stimulus (the edited path's segments),
+            // so where the route binds them from at E0 does not matter; the contract does.
+            (_, Contract::Pattern { regex }, Level::E2) => {
                 contracts.insert(name.clone(), regex.clone());
             }
-            (_, Contract::RepoPath, Level::E2 | Level::E3) => {
+            (_, Contract::RepoPath, Level::E2) => {
                 contracts.insert(name.clone(), REPO_PATH_CONTRACT.to_string());
                 repo_paths.insert(name.clone());
             }
@@ -237,12 +253,18 @@ pub fn plan(
             if b.max_level < adage_tracks::index::Level::E1 {
                 return Err("the pack binds this route at E0 only".into());
             }
-            let scripts: Vec<ScriptRef> = b
-                .scripts
-                .iter()
-                .filter(|(p, _)| argv.iter().any(|a| a.trim_start_matches("./") == p.trim_start_matches("./")))
-                .map(|(p, h)| ScriptRef { path: p.clone(), sha256: h.clone() })
-                .collect();
+            let mut scripts: Vec<ScriptRef> = Vec::new();
+            for (p, h) in &b.scripts {
+                if let Some(hex) = p.strip_prefix("cas/") {
+                    // L-vendor: argv names `scripts/sha256-<hex>`; the bytes run from the CAS.
+                    let token = adage_pack::vendor::script_path(hex);
+                    if argv.iter().skip(1).any(|a| a == &token) {
+                        scripts.push(ScriptRef { path: format!("cas:{hex}"), sha256: h.clone() });
+                    }
+                } else if argv.iter().any(|a| a.trim_start_matches("./") == p.trim_start_matches("./")) {
+                    scripts.push(ScriptRef { path: p.clone(), sha256: h.clone() });
+                }
+            }
             let origin = Origin::Pack { signer: None, trusted: false, probation_passed: false };
             (scripts, origin, Some(b.route_exec_digest.clone()), Some(t))
         }
@@ -259,15 +281,39 @@ pub fn plan(
             (scripts, Origin::Local, None, None)
         }
     };
+    // The effect a person approved a scripted step at is theirs to give, for a pack route too.
+    let approved_effect = terms.and_then(|t| t.effect);
     let terms = pack.as_ref().or(terms);
     let fields = match terms {
         Some(t) if !t.fields.is_empty() => t.fields.clone(),
         _ => implicit_outputs(ir, index, table),
     };
     let mode = if terms.is_some_and(|t| t.raw) { OutputMode::Raw } else { OutputMode::Typed };
-    if mode == OutputMode::Typed && fields.is_empty() {
+    if level == Level::E2 && mode == OutputMode::Raw {
+        return Err("an E2 action returns its outcome and changed paths, never raw output".into());
+    }
+    if mode == OutputMode::Typed && fields.is_empty() && level != Level::E2 {
         return Err("no typed output: declare fields at approval (--fields) or a later route that reads them".into());
     }
+    let (effect, action) = if level == Level::E2 {
+        let effect = match approved_effect {
+            Some(e) if !scripts.is_empty() && e < ir.route.effect => e,
+            _ => ir.route.effect,
+        };
+        let kind = match effect {
+            Effect::Verify => ActionKind::Verify,
+            Effect::Regenerate | Effect::Environment => ActionKind::Regenerate,
+            e => {
+                return Err(format!("a step with the {} effect is not an E2 action (verify or regenerate)", e.as_str()))
+            }
+        };
+        let (outputs, cache) = terms.map(|t| (t.outputs.clone(), t.cache.clone())).unwrap_or_default();
+        let action = ActionSpec { kind, outputs, cache };
+        action.validate().map_err(|e| format!("{e} (declare them at approval: --outputs <glob>)"))?;
+        (effect, Some(action))
+    } else {
+        (Effect::Observe, None)
+    };
     let mut profile = Profile::for_level(level);
     if let Some(ms) = terms.and_then(|t| t.timeout_ms) {
         profile.limits = profile.limits.with_timeout(level, ms);
@@ -279,7 +325,7 @@ pub fn plan(
             argv,
             inputs: BTreeMap::new(),
             contracts,
-            effect: Effect::Observe,
+            effect,
             level,
             output: OutputSpec { mode, fields },
             scripts,
@@ -291,6 +337,7 @@ pub fn plan(
             },
             origin,
             route_exec_digest: digest,
+            action,
         },
         exit_when,
         repo_paths,
@@ -324,6 +371,12 @@ pub fn bound_inputs(template: &[String], text: &str) -> Option<BTreeMap<String, 
         }
     }
     Some(out)
+}
+
+/// The values a bound command line holds for a template's slots (an obligation's command, bound
+/// from the edited path), aligned word by word as [`bound_inputs`] aligns a directive's.
+pub fn bound_from_command(template: &[String], command: &str) -> Option<BTreeMap<String, String>> {
+    bound_inputs(template, &format!("\n  {command}"))
 }
 
 /// The index entry for a directive, if the index holds it for this repository.

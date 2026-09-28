@@ -129,6 +129,9 @@ pub struct Reflex {
     /// `flow(i→j)`, `same_art(i→j)`, `last(i)` over item indices (context first).
     pub constraints: Vec<String>,
     pub support: u32,
+    /// Sessions where the context occurs (the opportunities, undiscounted).
+    #[serde(default)]
+    pub opportunities: u32,
     pub days: u32,
     pub conf: f64,
     pub conf_lb: f64,
@@ -185,8 +188,31 @@ pub struct Learned {
     /// The posterior calibration map fitted on this learn's sessions.
     #[serde(default)]
     pub calibration: Calibration,
+    /// Candidates that passed every gate but that the MDL cover did not select, best first
+    /// (value, support, canonical string), at most [`MAX_UNSELECTED`], with no compression gain.
+    /// The compiler reads them after the selected reflexes (Track G G3): a deliverable seen in
+    /// few traces can cost more bits than it saves and still be worth delivering.
+    #[serde(skip)]
+    pub unselected: Vec<Reflex>,
+    /// Every scored candidate's counts by canonical pattern string, selected or not: what
+    /// `stale::verdict` reads for a reflex that was not selected again (Track G §6.3).
+    #[serde(skip)]
+    pub counts: BTreeMap<String, Counts>,
     #[serde(skip)]
     pub timings: Timings,
+}
+
+/// At most this many unselected candidates are kept for the compiler.
+pub const MAX_UNSELECTED: usize = 2_000;
+
+/// A scored candidate's session counts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Counts {
+    /// Sessions where it occurs only through exposed (steered) continuation events.
+    pub exposed: u32,
+    /// Unsteered sessions where its context occurs, and where it occurs.
+    pub opportunities: u32,
+    pub support: u32,
 }
 
 fn lg(x: f64) -> f64 {
@@ -478,6 +504,7 @@ fn reflex(db: &Db, sc: &Scored, gain: f64) -> Reflex {
         continuation,
         constraints,
         support: sc.support,
+        opportunities: sc.opp_sessions,
         days: sc.days,
         conf: sc.conf,
         conf_lb: sc.conf_lb,
@@ -577,6 +604,19 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
     let t3 = Instant::now();
     let kept = select(&db, &scored, p.max_reflexes);
     let reflexes: Vec<Reflex> = kept.iter().map(|&(i, g)| reflex(&db, &scored[i], g)).collect();
+    let chosen: std::collections::BTreeSet<usize> = kept.iter().map(|&(i, _)| i).collect();
+    let mut rest: Vec<(usize, String)> = scored
+        .iter()
+        .enumerate()
+        .filter(|(i, s)| s.passes && !chosen.contains(i))
+        .map(|(i, s)| (i, s.pattern.render(&db.labels)))
+        .collect();
+    rest.sort_by(|a, b| {
+        let (x, y) = (&scored[a.0], &scored[b.0]);
+        y.value.total_cmp(&x.value).then(y.support.cmp(&x.support)).then(a.1.cmp(&b.1))
+    });
+    rest.truncate(MAX_UNSELECTED);
+    let unselected: Vec<Reflex> = rest.iter().map(|&(i, _)| reflex(&db, &scored[i], 0.0)).collect();
     let t4 = Instant::now();
     let ms = |a: Instant, b: Instant| (b - a).as_millis() as u64;
     let learned = Learned {
@@ -594,6 +634,14 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
         tau: epoch.families.iter().map(|(k, f)| (k.clone(), f.tau)).collect(),
         reflexes,
         calibration,
+        unselected,
+        counts: scored
+            .iter()
+            .map(|sc| {
+                let c = Counts { exposed: sc.exposed, opportunities: sc.opp_sessions, support: sc.support };
+                (sc.pattern.render(&db.labels), c)
+            })
+            .collect(),
         timings: Timings { proto_ms: ms(t0, t1), mine_ms: ms(t1, t2), score_ms: ms(t2, t3), select_ms: ms(t3, t4) },
     };
     let holdout = (!te.is_empty()).then(|| {

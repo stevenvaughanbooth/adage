@@ -124,6 +124,10 @@ impl Triggers {
                     None => t.any_call = true,
                 },
                 Trigger::AfterEdit { paths } => t.edit_globs.push(paths.clone()),
+                // Inert until G4 (Track G §7.3): the runtime never matches a context trigger, so
+                // no event can make it act and the fast path needs nothing for it. G4 adds the
+                // words of every symbol in any context here.
+                Trigger::Context { .. } => {}
             }
             // A dead end's avoided runners: their runs are recorded (`adage graph` counts them).
             if let Step::Avoid { avoid, .. } = &r.step {

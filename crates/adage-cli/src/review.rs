@@ -97,7 +97,8 @@ pub(crate) fn discover(root: &Path) -> Result<Vec<Installed>> {
         }
         let Ok(rd) = std::fs::read_dir(&d) else { continue };
         for e in rd.flatten() {
-            if e.file_type().is_ok_and(|t| t.is_dir()) {
+            // Hidden directories hold no track in service (`<repo>/.shadow/`, Track G G3).
+            if e.file_type().is_ok_and(|t| t.is_dir()) && !e.file_name().to_string_lossy().starts_with('.') {
                 stack.push(e.path());
             }
         }
@@ -346,6 +347,10 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     let index = Index::compile_root(&paths.tracks(), &all.iter().map(|i| i.track.clone()).collect::<Vec<_>>()).0;
     let items = queue(&all, &judged, &index);
     let inert = crate::packs::inert_routes(paths);
+    let attested = attestations(paths);
+    let revoked = adage_exec::approvals::Store::load(&adage_exec::approvals::path(&paths.root))
+        .map(|s| s.revoked)
+        .unwrap_or_default();
     if as_json {
         let rows: Vec<Value> = items
             .iter()
@@ -370,6 +375,7 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
                     "step": describe_step(&r.step),
                     "evidence": { "support": e.support, "opportunities": e.opportunities, "days": e.days, "rate": e.rate, "lower_bound": e.lower_bound },
                     "runtime": { "followed": it.followed, "derailed": it.derailed },
+                    "why": adage_tracks::why::load(&it.inst.dir).remove(&r.id),
                     "directive": directive,
                     "example_values": examples,
                     "last_review": it.inst.reviews.routes.get(&r.id).map(|v| json!({ "decision": v.decision.as_str(), "on": v.on, "by": v.by })),
@@ -383,10 +389,25 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
                 })
             })
             .collect();
-        println!("{}", serde_json::to_string_pretty(&json!({ "count": rows.len(), "queue": rows, "inert": inert }))?);
+        let attestations: Vec<Value> = attested
+            .iter()
+            .map(|(pack, lines)| json!({ "pack": pack, "attestations": lines, "note": "self-reported by signer; informational only" }))
+            .collect();
+        let revoked: Vec<Value> = revoked
+            .iter()
+            .map(|r| json!({ "kind": "exec-revoked", "route": r.route, "repo": r.repo, "level": r.level.as_str(), "on": r.on, "cause": r.cause }))
+            .collect();
+        println!(
+            "{}",
+            serde_json::to_string_pretty(
+                &json!({ "count": rows.len(), "queue": rows, "inert": inert, "attestations": attestations, "exec_revoked": revoked })
+            )?
+        );
         return Ok(());
     }
     print_inert(&inert);
+    print_revoked(&revoked);
+    print_attested(&attested);
     if items.is_empty() {
         println!("adage review: nothing awaits a decision.");
         return Ok(());
@@ -419,6 +440,12 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
             e.support, e.opportunities, e.days, e.rate, e.lower_bound
         );
         println!("  runtime    followed {} · derailed {} (treated sessions)", it.followed, it.derailed);
+        // The graph engine's reasons for a reflex (Track G §6.3): for people, never the agent.
+        if let Some(w) = adage_tracks::why::load(&it.inst.dir).get(&r.id) {
+            for (i, line) in w.lines().iter().enumerate() {
+                println!("  {} {line}", if i == 0 { "reflex    " } else { "          " });
+            }
+        }
         println!("  step       {}", describe_step(&r.step));
         let (directive, examples) = preview(t, r);
         let ex = if examples.is_empty() {
@@ -448,6 +475,50 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Each installed pack's attestations (Track C §1.8), one line each, marked self-reported by its
+/// signer.
+fn attestations(paths: &Paths) -> Vec<(String, Vec<String>)> {
+    let mut packs: Vec<String> = crate::packs::bindings(paths).into_iter().map(|(_, b)| b.pack).collect();
+    packs.sort();
+    packs.dedup();
+    packs
+        .into_iter()
+        .map(|p| {
+            let lines = crate::packs::attestation_lines(paths, &p);
+            (p, lines)
+        })
+        .filter(|(_, l)| !l.is_empty())
+        .collect()
+}
+
+fn print_attested(attested: &[(String, Vec<String>)]) {
+    for (pack, lines) in attested {
+        println!("adage review: {pack} carries {} attestation(s), self-reported by its signer:\n", lines.len());
+        for l in lines {
+            println!("  attested   {l}");
+        }
+        println!("  note       attestations are informational only: they never set a reflex's strength or an execution level\n");
+    }
+}
+
+/// Execution grants Adage withdrew by itself (Track C §3.6): losing authority is automatic,
+/// regaining it never is.
+fn print_revoked(revoked: &[adage_exec::approvals::Revocation]) {
+    if revoked.is_empty() {
+        return;
+    }
+    println!("adage review: {} execution grant(s) were revoked automatically:\n", revoked.len());
+    for r in revoked {
+        let (track, route) = r.route.rsplit_once('/').unwrap_or((&r.route, ""));
+        println!("{}  {}   [{}]", r.route, r.level.as_str().to_uppercase(), r.repo);
+        println!("  why        exec-revoked: {} (on {})", r.cause, r.on);
+        println!(
+            "  decide     adage review allow-exec {track} {route} --level {} (after fixing what it changes)\n",
+            r.level.as_str()
+        );
+    }
 }
 
 /// Routes of installed packs that are inert here (Track C §2.3): never delivered, and no decision

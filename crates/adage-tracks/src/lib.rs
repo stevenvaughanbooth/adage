@@ -11,6 +11,7 @@ pub mod params;
 pub mod proposals;
 pub mod review;
 pub mod triggers;
+pub mod why;
 
 pub use index::{Index, IndexedRoute};
 pub use model::*;
@@ -211,6 +212,68 @@ mod tests {
         let y = std::fs::read_to_string(&p).unwrap().replace("threshold: 0.7", "threshold: .nan");
         std::fs::write(&p, y).unwrap();
         assert!(io::read(d.path()).is_err());
+    }
+
+    /// Track G G3: sequences and context triggers are validated like every other step and trigger.
+    #[test]
+    fn sequences_and_contexts_are_validated() {
+        let with = |f: &dyn Fn(&mut Route)| {
+            let mut t = sample();
+            let r = &mut t.routes[0];
+            r.trigger = Trigger::AfterEdit { paths: "registry/*.csv".into() };
+            r.step = Step::Sequence { commands: vec!["make gen".into(), "make check".into()] };
+            r.slots.clear();
+            r.effect = Effect::Regenerate;
+            r.aspect = Aspect::Green;
+            f(r);
+            io::validate(&t)
+        };
+        with(&|_| {}).unwrap();
+        // 2 to 3 plain commands, no slots, no red, not above any command's ceiling.
+        assert!(with(&|r| r.step = Step::Sequence { commands: vec!["make gen".into()] }).is_err());
+        let four = vec!["make gen".into(), "make check".into(), "make lint".into(), "make docs".into()];
+        assert!(with(&|r| r.step = Step::Sequence { commands: four.clone() }).is_err());
+        assert!(
+            with(&|r| r.step = Step::Sequence { commands: vec!["make gen".into(), "make x;rm -rf /".into()] }).is_err()
+        );
+        assert!(with(&|r| r.step = Step::Sequence { commands: vec!["make gen".into(), "gh issue close 1".into()] })
+            .is_err());
+        assert!(with(&|r| r.step = Step::Sequence { commands: vec!["make gen".into(), "make {x}".into()] }).is_err());
+        assert!(with(&|r| r.aspect = Aspect::Red).is_err());
+        assert!(
+            with(&|r| {
+                r.step = Step::Sequence { commands: vec!["npm install".into(), "make check".into()] };
+                r.effect = Effect::Environment;
+            })
+            .is_err(),
+            "an environment step caps a sequence at yellow"
+        );
+        // A sequence follows an edit, a command, a failure or a context.
+        assert!(with(&|r| r.trigger = Trigger::SessionStart).is_err());
+        // Contexts: 2 or 3 safe items, a gap of 1 to 8, a fixed run or sequence.
+        let ctx = |items: Vec<CtxItem>, within: u8| Trigger::Context { items, within };
+        // (A regeneration is green only after an edit: a context caps it at yellow.)
+        assert!(with(&|r| r.trigger = ctx(
+            vec![CtxItem::Edit { glob: "registry/*.csv".into() }, CtxItem::Act { keys: vec!["exec make gen".into()] }],
+            8
+        ))
+        .is_err());
+        let with = |f: &dyn Fn(&mut Route)| {
+            with(&|r| {
+                r.aspect = Aspect::Yellow;
+                f(r)
+            })
+        };
+        let act = || CtxItem::Act { keys: vec!["exec make gen".into()] };
+        let edit = || CtxItem::Edit { glob: "registry/*.csv".into() };
+        with(&|r| r.trigger = ctx(vec![edit(), act()], 8)).unwrap();
+        assert!(with(&|r| r.trigger = ctx(vec![act()], 8)).is_err());
+        assert!(with(&|r| r.trigger = ctx(vec![edit(), act(), act(), act()], 8)).is_err());
+        assert!(with(&|r| r.trigger = ctx(vec![edit(), act()], 9)).is_err());
+        assert!(with(&|r| r.trigger = ctx(vec![CtxItem::Edit { glob: "**/*.csv".into() }, act()], 8)).is_err());
+        assert!(with(&|r| r.trigger = ctx(vec![CtxItem::Act { keys: vec!["exec x;y".into()] }, act()], 8)).is_err());
+        let fail = CtxItem::Fail { keys: vec!["exec pytest".into()], signature: "`boom`".into() };
+        assert!(with(&|r| r.trigger = ctx(vec![fail.clone(), act()], 8)).is_err());
     }
 
     #[test]

@@ -115,6 +115,8 @@ pub fn occurs(r: &Route, s: &Session, emb: &mut Embeddings) -> bool {
             _ => true,
         },
         Trigger::Intent { model, centroid, threshold, .. } => emb.matches(s, model, centroid, *threshold),
+        // Inert until G4: a context route never fires, so no session was steered by it.
+        Trigger::Context { .. } => false,
     }
 }
 
@@ -256,4 +258,20 @@ pub fn verdict(
     let share = e.exposed as f64 / (e.exposed + e.unsteered) as f64;
     let thin = p.map_or(e.unsteered, |p| p.support) < cfg.min_support;
     (share >= cfg.stale_exposure || thin).then_some(e.exposed)
+}
+
+/// [`verdict`] from counts alone, with no dispatch on the route's shape: the graph engine's
+/// scorer counts, for a reflex's own pattern, the traces where it occurs only through exposed
+/// continuation events (`exposed`), the unsteered traces where its context occurs
+/// (`opportunities`) and those where it occurs (`support`) (Track G §6.3).
+pub fn verdict_counts(exposed: u32, opportunities: u32, support: u32, cfg: &LearnConfig) -> Option<u32> {
+    if exposed == 0 {
+        return None;
+    }
+    let contrary = opportunities >= cfg.min_support && (support as f64) < cfg.retain_rate * opportunities as f64;
+    if contrary {
+        return None;
+    }
+    let share = exposed as f64 / (exposed + opportunities) as f64;
+    (share >= cfg.stale_exposure || support < cfg.min_support).then_some(exposed)
 }

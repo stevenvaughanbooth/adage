@@ -315,8 +315,13 @@ pub fn plan_repo(
         .collect();
     lines.extend(retired_now.iter().map(|(id, why)| format!("{id}: retired automatically ({why})")));
     let tr = TrackReport { name, version, change, routes: lines };
-    let planned =
-        Planned { dir, track: t, proposals: Default::default(), reviews: (!retired_now.is_empty()).then_some(reviews) };
+    let planned = Planned {
+        dir,
+        track: t,
+        proposals: Default::default(),
+        reviews: (!retired_now.is_empty()).then_some(reviews),
+        why: None,
+    };
     Ok((rep, Some((tr, planned))))
 }
 
