@@ -120,7 +120,7 @@ fn init_detects_harnesses_prints_snippets_and_writes_nothing() {
         "\"UserPromptSubmit\"",
         ".opencode/plugins/adage.js",
         "3  Embedding model",
-        "`adage models fetch`",
+        "adage models fetch",
         "4  Sense your traces",
         "No traces to sense in that source",
     ] {
