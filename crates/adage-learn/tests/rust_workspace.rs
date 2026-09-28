@@ -7,7 +7,7 @@
 //!
 //! - after editing the crates' Rust files, `cargo fmt --all` is owed (an obligation);
 //! - `cargo clippy --workspace --all-targets --locked -- -D warnings` and/or
-//!   `cargo test --workspace --locked` follow as checks (prime runs, never fire);
+//!   `cargo test --workspace --locked` follow as checks (prime: runs, or a sequence after the format step);
 //! - nothing is learned for docs edits (the checks after a docs edit are explained by the Rust
 //!   edits in the same traces), and `cargo fmt --all --check` is not directed beside the
 //!   obligation it checks.
@@ -83,14 +83,21 @@ fn the_rust_workspace_reflexes_form() {
     let fmt = fmt.unwrap_or_else(|| panic!("no cargo fmt obligation; learned:\n{}", listing.join("\n")));
     assert_eq!(shape(fmt), "obligation", "{}", listing.join("\n"));
 
-    // A check follows as a prime run: a repo-wide form agents ran, though most runs were narrowed
-    // or carried extra flags.
+    // The checks follow, at prime: a repo-wide form agents ran, though most runs were narrowed or
+    // carried extra flags, as a run of its own or as the later steps of a sequence that starts
+    // with the format step (agents here always ran them, in that order).
     let checks = ["cargo clippy --workspace --all-targets --locked -- -D warnings", "cargo test --workspace --locked"];
-    let found: Vec<&adage_tracks::Route> =
-        routes.iter().filter(|r| rust_edit(r) && checks.iter().any(|c| directs(r, c))).collect();
+    let names = |r: &adage_tracks::Route| match &r.step {
+        Step::Run { command } => checks.contains(&command.as_str()),
+        Step::Sequence { commands } => {
+            commands[0] == "cargo fmt --all" && commands[1..].iter().any(|c| checks.contains(&c.as_str()))
+        }
+        _ => false,
+    };
+    let found: Vec<&adage_tracks::Route> = routes.iter().filter(|r| rust_edit(r) && names(r)).collect();
     assert!(!found.is_empty(), "no check after Rust edits; learned:\n{}", listing.join("\n"));
     for r in found {
-        assert_eq!(shape(r), "run");
+        assert!(["run", "sequence"].contains(&shape(r)));
         assert_eq!(r.strength, Strength::Prime, "a check after an edit is suggested, never fired");
     }
 
