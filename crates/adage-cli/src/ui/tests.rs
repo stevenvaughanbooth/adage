@@ -413,6 +413,15 @@ fn settings_show_every_config_key_with_its_source() {
     );
     assert_eq!(row("learn.thresholds").source, "default");
     assert!(s.settings_problems.iter().any(|p| p.contains("learn.bogus")), "{:?}", s.settings_problems);
+    // The selected setting stays on screen however its neighbours wrap.
+    let c = ctx(paths, false);
+    s.tab = Tab::Settings;
+    for sel in 0..s.settings.len() {
+        s.setting_sel = sel;
+        let text = app_frame(&s, &c, 60, 20);
+        let key = s.settings[sel].key;
+        assert!(text.lines().any(|l| l.starts_with(&format!("▌{key} "))), "{key} is not shown:\n{text}");
+    }
 }
 
 // ---------------------------------------------------------------------------------------------

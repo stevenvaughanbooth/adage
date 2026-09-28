@@ -81,12 +81,13 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     )));
     // Wrapped here, each continuation under its own text, so the scroll counts screen rows.
     let mut rows = Vec::new();
+    let mut sel_row = 0;
     for (i, l) in lines.into_iter().enumerate() {
         if i == sel_line {
-            sel_line = rows.len();
+            sel_row = rows.len();
         }
         rows.extend(view::wrap_lines(t.lines(vec![l]), area.width));
     }
-    let offset = sel_line.saturating_sub((area.height as usize).saturating_sub(3));
+    let offset = sel_row.saturating_sub((area.height as usize).saturating_sub(3));
     f.render_widget(Paragraph::new(rows).scroll((offset as u16, 0)), area);
 }
