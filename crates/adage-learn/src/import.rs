@@ -613,6 +613,17 @@ fn worktree_root(cwd: &Path) -> Option<PathBuf> {
 /// sub-agent's (`<project>/<session>/subagents/*.jsonl`).
 pub fn discover(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
+    let Ok(projects) = std::fs::read_dir(root) else { return out };
+    for p in projects.flatten() {
+        out.extend(discover_project(&p.path()));
+    }
+    out.sort();
+    out
+}
+
+/// The transcripts of one Claude Code project directory: its sessions, and their sub-agents'.
+pub fn discover_project(project: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
     let jsonl = |dir: &Path, out: &mut Vec<PathBuf>| {
         for f in std::fs::read_dir(dir).into_iter().flatten().flatten() {
             let path = f.path();
@@ -621,13 +632,10 @@ pub fn discover(root: &Path) -> Vec<PathBuf> {
             }
         }
     };
-    let Ok(projects) = std::fs::read_dir(root) else { return out };
-    for p in projects.flatten() {
-        jsonl(&p.path(), &mut out);
-        for s in std::fs::read_dir(p.path()).into_iter().flatten().flatten() {
-            if s.file_type().is_ok_and(|t| t.is_dir()) {
-                jsonl(&s.path().join("subagents"), &mut out);
-            }
+    jsonl(project, &mut out);
+    for s in std::fs::read_dir(project).into_iter().flatten().flatten() {
+        if s.file_type().is_ok_and(|t| t.is_dir()) {
+            jsonl(&s.path().join("subagents"), &mut out);
         }
     }
     out.sort();
