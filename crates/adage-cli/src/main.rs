@@ -292,7 +292,9 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
     if let Some(dir) = flag(args, "--codex-sessions") {
         let (found, compressed) = adage_learn::codex::discover(std::path::Path::new(&dir));
         if compressed > 0 {
-            eprintln!("adage condition: skipped {compressed} compressed Codex rollouts (.jsonl.zst); decompress them with `zstd -d` to include them");
+            let n = words::count(compressed, "compressed Codex rollout");
+            let _ = adage_term::Out::stderr()
+                .warn(&format!("skipped {n} (.jsonl.zst); decompress them with `zstd -d` to include them"));
         }
         let prefix = flag(args, "--cwd-prefix");
         for p in found {
@@ -403,7 +405,7 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         })
         .collect();
     if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64) {
-        eprintln!("adage condition: could not write {}: {e}", paths.learn_log().display());
+        let _ = adage_term::Out::stderr().warn(&format!("could not write {}: {e}", paths.learn_log().display()));
     }
     if args.iter().any(|a| a == "--json") {
         println!("{}", serde_json::to_string_pretty(&rep)?);
@@ -445,7 +447,7 @@ pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
     let changes: BTreeMap<&String, Vec<adage_learn::diff::Change>> =
         rep.repos.keys().map(|r| (r, adage_learn::diff::diff(&before, &after))).collect();
     if let Err(e) = log_learn(paths, &rep, &changes, started.elapsed().as_millis() as u64) {
-        eprintln!("adage condition: could not write {}: {e}", paths.learn_log().display());
+        let _ = adage_term::Out::stderr().warn(&format!("could not write {}: {e}", paths.learn_log().display()));
     }
     if args.iter().any(|a| a == "--json") {
         println!("{}", serde_json::to_string_pretty(&rep)?);
