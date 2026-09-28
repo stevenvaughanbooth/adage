@@ -338,7 +338,7 @@ impl Cx {
             Program::Script { path, interpreter } => {
                 let Some(root) = root else {
                     return Err(format!(
-                        "runs the repository script {path}; pass the repository root to pin it (L-ref)"
+                        "runs the repository script {path}; run this inside the repository to pin it (L-ref)"
                     ));
                 };
                 let sha = hash_repo_file(root, &path).map_err(|e| format!("cannot pin {path}: {e:#}"))?;

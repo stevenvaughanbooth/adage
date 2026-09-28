@@ -145,7 +145,10 @@ pub(crate) fn find_track(root: &Path, name: &str) -> Result<PathBuf> {
     if p.join("track.toml").is_file() {
         return Ok(p.to_path_buf());
     }
-    bail!("no installed track named {name:?} in {} (see `adage status`)", root.display())
+    Err(crate::hint(
+        format!("no installed track named {name:?} in {}", root.display()),
+        "use a track's name as `adage status` shows it (without @version), or pass a track directory",
+    ))
 }
 
 pub fn describe_step(step: &Step) -> String {
