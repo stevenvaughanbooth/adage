@@ -213,8 +213,8 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
     // The author ships 2.0.0: the lookup changed, and there is a new route.
     w.publish(&track("2.0.0", "./scripts/wi-lookup {item}", true), "out2");
     let out = w.add("out2");
-    assert!(out.contains("kept       your review decisions"), "{out}");
-    assert!(out.contains("proposed   lookup"), "{out}");
+    assert!(out.contains("kept        your review decisions"), "{out}");
+    assert!(out.contains("proposed    lookup"), "{out}");
     let reviews: Reviews = adage_tracks::review::load(&w.installed()).unwrap();
     let decisions: Vec<(&str, Decision)> = reviews.routes.iter().map(|(k, v)| (k.as_str(), v.decision)).collect();
     assert_eq!(

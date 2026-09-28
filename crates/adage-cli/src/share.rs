@@ -164,6 +164,12 @@ pub fn share(args: &[String], paths: &Paths) -> Result<()> {
     let name = args.first().filter(|a| !a.starts_with("--")).context(USAGE)?;
     let out = PathBuf::from(crate::flag(args, "--out").context(USAGE)?);
     let key = crate::flag(args, "--key").map(PathBuf::from);
+    if let Some(k) = key.as_deref().filter(|k| !k.is_file()) {
+        return Err(crate::hint(
+            format!("no signing key at {}", k.display()),
+            "pass --key <private key file> (e.g. ~/.ssh/id_ed25519), or leave it out to sign with ssh-agent",
+        ));
+    }
     match crate::flag(args, "--format").as_deref() {
         None | Some("pack") => crate::share_pack::share(name, &out, key.as_deref(), args, paths),
         Some("v1") => share_v1(name, &out, key, paths),

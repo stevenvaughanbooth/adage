@@ -6,6 +6,7 @@ use crate::redact;
 use crate::share::list_files;
 use adage_pack::Pack;
 use adage_store::Paths;
+use adage_term::{Line, Out};
 use adage_tracks::{index, io, RouteState};
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeSet;
@@ -187,63 +188,81 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
     std::fs::rename(&stage, out)?;
 
     let m = &pack.manifest;
-    println!("adage share: pack {} @ {}  (from {})\n", m.pack.name, m.pack.version, from.display());
-    println!("Included — exactly these files, plus {}:", adage_pack::validate::SIG);
+    let mut o = Out::stdout();
+    o.header("share", &[&format!("pack {}@{}", m.pack.name, m.pack.version), &format!("from {}", from.display())])?;
+    o.blank()?;
+    o.section(&format!("Included: exactly these files, plus {}", adage_pack::validate::SIG))?;
     for (rel, bytes) in &files {
-        println!("  {rel:<48} {:>7} bytes", bytes.len());
+        o.line(&Line::new().text(format!("  {rel:<48} ")).faint(format!("{:>7} bytes", bytes.len())))?;
     }
-    println!("\nRoutes (templates, types and aggregate statistics only):");
+    o.blank()?;
+    o.section("Reflexes: templates, types and aggregate statistics only")?;
     for r in &pack.routes {
         let exec = r.exec.as_ref().map(|x| format!("{:?}", x.level)).unwrap_or_else(|| "E0".into());
-        let support = r.evidence.as_ref().map(|e| format!("  [{}/{} sessions]", e.support, e.opportunities));
-        println!(
-            "  {:<24} {:<10} {:<6} exec {exec}{}",
-            r.id,
-            r.shape.as_str(),
-            format!("{:?}", r.aspect).to_lowercase(),
-            support.unwrap_or_default()
-        );
+        let mut l = Line::new()
+            .text(format!("  {:<24} {:<10} ", r.id, r.shape.as_str()))
+            .strength(crate::words::strength(r.aspect))
+            .pad_to(48)
+            .quiet(format!("exec {exec}"));
+        if let Some(e) = r.evidence.as_ref() {
+            l = l.sep().quiet(format!("{}/{} traces", e.support, e.opportunities));
+        }
+        o.line(&l)?;
     }
     if !skipped.is_empty() {
-        println!("\nNot carried:");
+        o.blank()?;
+        o.section("Not carried")?;
         for (id, why) in &skipped {
-            println!("  {id:<24} {why}");
+            o.line(&Line::new().text(format!("  {id:<24} ")).quiet(crate::words::prose(why)))?;
         }
     }
     if !not_included.is_empty() {
-        println!("\nNot included:");
+        o.blank()?;
+        o.section("Not included")?;
         for (rel, why) in &not_included {
-            println!("  {rel:<40} {why}");
+            o.line(&Line::new().text(format!("  {rel:<40} ")).quiet(why.to_string()))?;
         }
     }
     if !flags.is_empty() {
-        println!("\nAcknowledged (--ack-scripts):");
+        o.blank()?;
+        o.section("Acknowledged (--ack-scripts)")?;
         for (rel, f) in &flags {
-            println!("  {rel}:{}  {}  {}", f.line, f.kind, f.excerpt);
+            o.line(&Line::new().text(format!("  {rel}:{}  {}  ", f.line, f.kind)).quiet(f.excerpt.clone()))?;
         }
     }
-    println!("\nChecked: no absolute paths, home-directory paths, or secret-looking strings in any file.");
-    println!("Never included: approvals, review.yaml, proposals, trust.json, session state.");
-    println!("Digest:  sha256 {digest}");
+    o.blank()?;
+    o.kv(
+        "checked",
+        Line::new().text("no absolute paths, home-directory paths, or secret-looking strings in any file"),
+    )?;
+    o.kv("never sent", Line::new().quiet("approvals, review.yaml, proposals, trust.json, session state"))?;
+    o.kv("digest", Line::new().quiet(format!("sha256 {digest}")))?;
     let how = match signed.method {
         adage_sign::Method::Agent => "via ssh-agent",
         adage_sign::Method::KeyFile => "with key file",
     };
-    println!(
-        "Signed:  {} ({}, {how}), namespace {}",
-        adage_sign::fingerprint(&signed.key),
-        signed.key.algorithm(),
-        adage_sign::PACK_NAMESPACE
-    );
-    println!("Wrote:   {}", out.display());
+    o.kv(
+        "signed",
+        Line::new().text(format!(
+            "{} ({}, {how}), namespace {}",
+            adage_sign::fingerprint(&signed.key),
+            signed.key.algorithm(),
+            adage_sign::PACK_NAMESPACE
+        )),
+    )?;
+    o.kv("wrote", Line::new().text(out.display().to_string()))?;
     let principal = Some(signed.key.comment())
         .filter(|c| !c.is_empty() && !c.contains(char::is_whitespace))
         .unwrap_or("adage-signer");
-    println!(
-        "\nRecipients trust this signer for packs with a line in <repo>/.adage/trusted-signers or $ADAGE_HOME/trusted-signers:\n  {principal} namespaces=\"{}\" {}",
+    o.blank()?;
+    o.note("Recipients trust this signer for packs with a line in <repo>/.adage/trusted-signers or $ADAGE_HOME/trusted-signers:")?;
+    o.line(&Line::new().text(format!(
+        "  {principal} namespaces=\"{}\" {}",
         adage_sign::PACK_NAMESPACE,
         adage_sign::key_line(&signed.key)
-    );
+    )))?;
+    o.blank()?;
+    o.next(&format!("adage add {}", out.display()), "on the recipient's machine, once they trust the signer")?;
     Ok(())
 }
 

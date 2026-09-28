@@ -250,7 +250,7 @@ fn share_then_add_binds_lref_scripts_and_marks_changes_inert() {
     let pk = keygen(&w);
     write_dir(&w.p("authored"), &pack_files(REPO_APPLICABILITY));
     let t = ok(w.share(&w.p("authored"), "out", &[]));
-    for s in ["pack acme/billing @ 1.0.0", "pack.sig", "namespace adage-pack", "namespaces=\"adage-pack\""] {
+    for s in ["pack acme/billing@1.0.0", "pack.sig", "namespace adage-pack", "namespaces=\"adage-pack\""] {
         assert!(t.contains(s), "share output lacks {s:?}:\n{t}");
     }
     assert!(w.p("out/pack.sig").is_file() && w.p("out/CLOSURE").is_file() && !w.p("out/track.toml").exists());
@@ -264,12 +264,12 @@ fn share_then_add_binds_lref_scripts_and_marks_changes_inert() {
     w.trust(&pk, "adage-pack");
     let t = ok(w.add("out", &w.p("checkout")));
     for s in [
-        "signature  good, namespace adage-pack",
-        "repo       github.com/acme/billing: 3 live, 1 inert",
+        "signature   good, namespace adage-pack",
+        "repo        github.com/acme/billing: 3 live, 1 inert",
         "count-items",
         "inert: shape not yet supported at runtime",
-        "(was green)",
-        "approvals  none",
+        "(was fire)",
+        "approvals   none",
     ] {
         assert!(t.contains(s), "add output lacks {s:?}:\n{t}");
     }

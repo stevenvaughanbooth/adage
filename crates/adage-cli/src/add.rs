@@ -32,6 +32,7 @@ use adage_pack::Pack;
 use adage_sign::PublicKey;
 use adage_sign::{allowed_signers, fingerprint, key_line, NAMESPACE, PACK_NAMESPACE};
 use adage_store::Paths;
+use adage_term::{Line, Out};
 use adage_tracks::{io, Aspect, Index, RouteState, Track};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -200,6 +201,12 @@ pub fn add(args: &[String], paths: &Paths) -> Result<()> {
     if src.join(adage_pack::validate::MANIFEST).is_file() {
         return add_pack(&src, paths, trust, cwd_root.as_deref());
     }
+    if !src.is_dir() {
+        return Err(crate::hint(
+            format!("{} does not exist, or is not a directory", src.display()),
+            "pass the directory `adage share --out <dir>` wrote",
+        ));
+    }
     if !src.join("track.toml").is_file() {
         bail!("{} is not a pack (no pack.toml) or a track directory (no track.toml)", src.display());
     }
@@ -304,22 +311,26 @@ fn add_pack(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> 
     let index = recompile(paths)?;
 
     let m = &pack.manifest;
-    println!("adage add: pack {} @ {}  from {}", m.pack.name, m.pack.version, src.display());
-    println!("  signature  good, namespace {PACK_NAMESPACE}, key {}", fingerprint(&signer));
-    println!("  trusted    {}", decision.how);
-    println!("  digest     sha256 {digest}");
-    println!("  installed  {}", dest.display());
+    let mut o = Out::stdout();
+    o.header("add", &[&format!("pack {}@{}", m.pack.name, m.pack.version), &format!("from {}", src.display())])?;
+    o.blank()?;
+    o.kv("signature", Line::new().text(format!("good, namespace {PACK_NAMESPACE}, key {}", fingerprint(&signer))))?;
+    o.kv("trusted", Line::new().text(decision.how.clone()))?;
+    o.kv("digest", Line::new().quiet(format!("sha256 {digest}")))?;
+    o.kv("installed", Line::new().text(dest.display().to_string()))?;
     if !pack.scripts.is_empty() {
-        println!(
-            "  scripts    {} vendored script(s) in {} (read-only; {} new); nothing runs them without an approval on this machine",
-            pack.scripts.len(),
-            packs::cas_dir(paths).display(),
-            cas.len()
-        );
+        o.kv(
+            "scripts",
+            Line::new().text(format!(
+                "{} in {} (read-only; {} new); nothing runs them without an approval on this machine",
+                crate::words::count(pack.scripts.len(), "vendored script"),
+                packs::cas_dir(paths).display(),
+                cas.len()
+            )),
+        )?;
     }
-    print_bound(&pack, &bound, &local_effects(&pack));
-    println!("index generation {}, {} routes", index.generation, index.routes.len());
-    Ok(())
+    print_bound(&mut o, &pack, &bound, &local_effects(&pack))?;
+    finish(&mut o, &index)
 }
 
 fn add_v1(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> Result<()> {
@@ -382,17 +393,38 @@ fn install_v1(stage: &Path, src: &Path, paths: &Paths, trust: bool, cwd_root: Op
     let index = recompile(paths)?;
 
     let m = &track.manifest;
-    println!("adage add: {} @ {}  (repo {})  from {}", m.track.name, m.track.version, repo, src.display());
-    println!("  signature  good, namespace {NAMESPACE}, key {}", fingerprint(&signer));
-    println!("  trusted    {}", decision.how);
-    println!("  digest     sha256 {digest}");
-    println!("  upgraded   to pack {} (digest sha256 {pack_digest})", pack.manifest.pack.name);
-    println!("  installed  {}", dest.display());
+    let mut o = Out::stdout();
+    o.header("add", &[&format!("{}@{}", m.track.name, m.track.version), &repo, &format!("from {}", src.display())])?;
+    o.blank()?;
+    o.kv("signature", Line::new().text(format!("good, namespace {NAMESPACE}, key {}", fingerprint(&signer))))?;
+    o.kv("trusted", Line::new().text(decision.how.clone()))?;
+    o.kv("digest", Line::new().quiet(format!("sha256 {digest}")))?;
+    o.kv(
+        "upgraded",
+        Line::new()
+            .text(format!("to pack {}", pack.manifest.pack.name))
+            .quiet(format!(" (digest sha256 {pack_digest})")),
+    )?;
+    o.kv("installed", Line::new().text(dest.display().to_string()))?;
     for (id, why) in &up.skipped {
-        println!("  not carried {id}: {why}");
+        o.kv("not carried", Line::new().text(format!("{id}: {}", crate::words::prose(why))))?;
     }
-    print_bound(&pack, &bound, &local_effects(&pack));
-    println!("index generation {}, {} routes", index.generation, index.routes.len());
+    print_bound(&mut o, &pack, &bound, &local_effects(&pack))?;
+    finish(&mut o, &index)
+}
+
+/// The index row and what to run next, after an install.
+fn finish<W: std::io::Write>(o: &mut Out<W>, index: &Index) -> Result<()> {
+    o.kv(
+        "index",
+        Line::new()
+            .text(format!("gen {}", &index.generation[..index.generation.len().min(8)]))
+            .sep()
+            .quiet(crate::words::count(index.routes.len(), "reflex")),
+    )?;
+    o.blank()?;
+    o.next("adage review", "imported reflexes wait for your decision")?;
+    o.also("adage status", "every reflex in effect")?;
     Ok(())
 }
 
@@ -414,61 +446,82 @@ fn recompile(paths: &Paths) -> Result<Index> {
     Ok(index)
 }
 
-fn print_bound(pack: &Pack, bound: &[Bound], effects: &BTreeMap<String, adage_core::Effect>) {
+fn print_bound<W: std::io::Write>(
+    o: &mut Out<W>,
+    pack: &Pack,
+    bound: &[Bound],
+    effects: &BTreeMap<String, adage_core::Effect>,
+) -> Result<()> {
     if bound.is_empty() {
-        println!(
-            "  bound      nowhere yet: run `adage add` again inside a repository this pack applies to ({})",
-            describe_applicability(&pack.manifest.applicability)
-        );
-        return;
+        o.kv(
+            "bound",
+            Line::new().text(format!(
+                "nowhere yet: run `adage add` again inside a repository this pack applies to ({})",
+                describe_applicability(&pack.manifest.applicability)
+            )),
+        )?;
+        return Ok(());
     }
     for b in bound {
         let binding = &b.binding;
         if let Applies::No(why) = &binding.applies {
-            println!("  repo       {}: not applicable ({why})", binding.repo);
+            o.kv("repo", Line::new().text(format!("{}: not applicable ({why})", binding.repo)))?;
             continue;
         }
         if let Some(d) = &b.dir {
-            println!("  bound      {}", d.display());
+            o.kv("bound", Line::new().text(d.display().to_string()))?;
         }
-        println!(
-            "  repo       {}: {} live, {} inert; imported at probation, never green on import (O2):",
-            binding.repo,
-            binding.live().count(),
-            binding.inert().count()
-        );
+        o.kv(
+            "repo",
+            Line::new().text(format!(
+                "{}: {} live, {} inert; imported as forming, never fire on import (O2):",
+                binding.repo,
+                binding.live().count(),
+                binding.inert().count()
+            )),
+        )?;
         let routes = b.track.as_ref().map(|t| t.routes.as_slice()).unwrap_or_default();
         for r in &binding.routes {
             match &r.status {
                 Status::Live { max_level } => {
                     let Some(rt) = routes.iter().find(|x| x.id == r.id) else { continue };
-                    let aspect = format!("{:?}", rt.aspect).to_lowercase();
                     let before = b.was.get(&r.id).copied().unwrap_or(rt.aspect);
                     let note = if before != rt.aspect {
-                        format!(" (was {})", format!("{before:?}").to_lowercase())
+                        format!(" (was {})", crate::words::strength(before).word())
                     } else {
                         String::new()
                     };
                     let effect = effects.get(&r.id).map(|e| e.as_str()).unwrap_or("?");
-                    let draft = if rt.state == RouteState::Draft { " · draft until approved" } else { "" };
-                    println!(
-                        "    {:<22} {aspect}{note:<12} {}  [effect {effect} · exec up to {max_level:?}{draft}]",
-                        r.id,
-                        crate::share::describe_step(&rt.step)
-                    );
+                    let draft = if rt.state == RouteState::Draft { " · nascent until approved" } else { "" };
+                    o.line(
+                        &Line::new()
+                            .text(format!("    {:<22} ", r.id))
+                            .strength(crate::words::strength(rt.aspect))
+                            .quiet(note)
+                            .pad_to(48)
+                            .text(crate::share::describe_step(&rt.step))
+                            .faint(format!("  [effect {effect} · exec up to {max_level:?}{draft}]")),
+                    )?;
                 }
-                Status::Inert { reason } => println!("    {:<22} inert: {reason}", r.id),
+                Status::Inert { reason } => {
+                    o.line(&Line::new().text(format!("    {:<22} ", r.id)).faint(format!("inert: {reason}")))?
+                }
             }
         }
         if !b.kept.is_empty() {
-            let kept: Vec<String> = b.kept.iter().map(|(id, d)| format!("{id} ({})", d.as_str())).collect();
-            println!("  kept       your review decisions: {}", kept.join(", "));
+            let kept: Vec<String> =
+                b.kept.iter().map(|(id, d)| format!("{id} ({})", crate::words::prose(d.as_str()))).collect();
+            o.kv("kept", Line::new().text(format!("your review decisions: {}", kept.join(", "))))?;
         }
         for id in &b.proposed {
-            println!("  proposed   {id} is pinned here and the new version differs; see `adage review`");
+            o.kv(
+                "proposed",
+                Line::new().text(format!("{id} is pinned here and the new version differs; see `adage review`")),
+            )?;
         }
     }
-    println!("  approvals  none: a pack can only request execution; nothing here grants it");
+    o.kv("approvals", Line::new().text("none: a pack can only request execution; nothing here grants it"))?;
+    Ok(())
 }
 
 fn describe_applicability(a: &adage_pack::Applicability) -> String {

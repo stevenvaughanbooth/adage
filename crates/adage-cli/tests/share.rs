@@ -180,7 +180,7 @@ fn share_then_add_installs_routes_at_probation() {
     w.trust_personally(&pk);
     let o = w.add(&[]);
     assert!(o.status.success(), "{}", text(&o));
-    assert!(text(&o).contains("was green"), "{}", text(&o));
+    assert!(text(&o).contains("was fire"), "{}", text(&o));
     // Upgraded in place: the pack is installed as verified, and bound to this repository.
     assert!(adage_pack::Pack::load(&w.p("recipient/tracks/@imported").join(NAME)).is_ok());
     let installed =
