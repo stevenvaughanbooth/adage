@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { start, useStore } from "./api/client";
 import { Inspector } from "./components/Inspector";
 import { FilterSheet, LeftRail } from "./components/LeftRail";
@@ -17,7 +17,10 @@ import { FirstRun } from "./views/FirstRun";
 import { Health } from "./views/Health";
 import { Traces } from "./views/Traces";
 
-const TITLES = { map: "Map", traces: "Traces", evidence: "Evidence", health: "Health" } as const;
+// The 3D walkthrough (three.js) loads only when its tab opens.
+const HowItWorks = lazy(() => import("./views/HowItWorks"));
+
+const TITLES = { map: "Map", traces: "Traces", evidence: "Evidence", health: "Health", how: "How it works" } as const;
 
 export function App() {
   const { graph, error, connection } = useStore();
@@ -66,9 +69,17 @@ export function App() {
       case "g h":
         setUrl({ view: "health" }, true);
         return true;
+      case "g w":
+        setUrl({ view: "how" }, true);
+        return true;
       case "t":
         cycleTheme();
         return true;
+    }
+    if (url.view === "how") {
+      const how = { ArrowRight: "next", ArrowLeft: "prev", space: "toggle" }[k];
+      if (how) dispatch("adage-how", how);
+      return Boolean(how);
     }
     if (url.view !== "map" || !graph) return;
     switch (k) {
@@ -127,7 +138,11 @@ export function App() {
       </a>
       <TopBar graph={graph} connection={connection} firstRun={firstRun} onPalette={() => setPalette(true)} />
       <div id="content" className="flex min-h-0 grow flex-col">
-        {!graph ? (
+        {url.view === "how" ? (
+          <Suspense fallback={<Loading error={null} />}>
+            <HowItWorks graph={graph} />
+          </Suspense>
+        ) : !graph ? (
           <Loading error={error} />
         ) : url.view === "map" ? (
           firstRun ? (

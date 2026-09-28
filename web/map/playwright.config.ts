@@ -33,6 +33,12 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: process.env.CI ? "line" : "list",
-  use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 }, contextOptions: { reducedMotion: "reduce" } },
+  use: {
+    ...devices["Desktop Chrome"],
+    viewport: { width: 1440, height: 900 },
+    contextOptions: { reducedMotion: "reduce" },
+    // How it works draws with WebGL: software rendering, so it runs without a GPU.
+    launchOptions: { args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] },
+  },
   webServer: [server(DEMO_PORT, "--demo"), server(EMPTY_PORT, "")],
 });

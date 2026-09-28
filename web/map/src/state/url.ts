@@ -5,8 +5,8 @@ import type { Direction, Mode } from "../lib/graph";
 import { HIDDEN_BY_DEFAULT } from "../lib/graph";
 import { LIFECYCLE, type Lifecycle, STRENGTHS, type Strength } from "../lib/words";
 
-export type View = "map" | "traces" | "evidence" | "health";
-export const VIEWS: View[] = ["map", "traces", "evidence", "health"];
+export type View = "map" | "traces" | "evidence" | "health" | "how";
+export const VIEWS: View[] = ["map", "traces", "evidence", "health", "how"];
 export type Window = "24h" | "7d" | "30d" | "all";
 export const WINDOWS: Window[] = ["24h", "7d", "30d", "all"];
 
@@ -23,6 +23,9 @@ export interface UrlState {
   window: Window;
   /** Replay: the scrubbed time, or live. */
   at: number | null;
+  /** How it works: the chapter and the step within it. */
+  ch: string | null;
+  step: number;
 }
 
 function list<T extends string>(v: string | null, all: readonly T[], dflt: readonly T[]): Set<T> {
@@ -48,6 +51,8 @@ export function parse(search: string): UrlState {
     show: list(p.get("show"), LIFECYCLE, []),
     window: WINDOWS.includes(win as Window) ? (win as Window) : "all",
     at: p.has("at") && Number.isFinite(at) && at > 0 ? at : null,
+    ch: p.get("ch") || null,
+    step: Math.max(0, Math.floor(Number(p.get("step")) || 0)),
   };
 }
 
@@ -65,6 +70,8 @@ export function serialize(s: UrlState): string {
   if (shown.length) p.set("show", shown.join(","));
   if (s.window !== "all") p.set("window", s.window);
   if (s.at) p.set("at", String(s.at));
+  if (s.view === "how" && s.ch) p.set("ch", s.ch);
+  if (s.view === "how" && s.step) p.set("step", String(s.step));
   const q = p.toString();
   return q ? `?${q}` : "";
 }

@@ -13,6 +13,7 @@ const NAV: { view: View; label: string; key: string }[] = [
   { view: "traces", label: "Traces", key: "g t" },
   { view: "evidence", label: "Evidence", key: "g e" },
   { view: "health", label: "Health", key: "g h" },
+  { view: "how", label: "How it works", key: "g w" },
 ];
 
 const THEME_ICON: Record<ThemeMode, () => ReactNode> = {

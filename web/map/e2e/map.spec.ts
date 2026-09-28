@@ -7,7 +7,7 @@ import { DEMO_PORT, EMPTY_PORT } from "./ports";
 
 const DEMO = `http://127.0.0.1:${DEMO_PORT}`;
 const EMPTY = `http://127.0.0.1:${EMPTY_PORT}`;
-const VIEWS = ["map", "traces", "evidence", "health"] as const;
+const VIEWS = ["map", "traces", "evidence", "health", "how"] as const;
 
 async function axe(page: Page) {
   const r = await new AxeBuilder({ page }).analyze();
@@ -167,4 +167,42 @@ test.describe("phone", () => {
       await expect(page.getByRole("navigation", { name: "Views" })).toBeVisible();
     });
   }
+});
+
+test("how it works steps through every chapter, from the keyboard", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await page.goto(`${DEMO}/?view=how`);
+  await ready(page);
+  const caption = page.locator("[aria-live='polite']").filter({ has: page.getByRole("heading", { level: 2 }) });
+  await expect(caption.getByRole("heading", { level: 2 })).toHaveText("Transcript lines stream in");
+  // The stage draws (WebGL), or says why it cannot.
+  await expect(page.locator("main canvas").first().or(page.getByText("This view draws in 3D with WebGL"))).toBeVisible();
+  const chapters = page.getByRole("navigation", { name: "Chapters" }).getByRole("listitem");
+  const n = await chapters.count();
+  expect(n).toBe(9);
+  // → walks every step of every chapter; the URL follows, so each step is shareable.
+  const seen = new Set<string>();
+  const heading = caption.getByRole("heading", { level: 2 });
+  for (let i = 0; i < 150; i++) {
+    const before = (await heading.textContent()) ?? "";
+    seen.add(before);
+    await page.keyboard.press("ArrowRight");
+    await page.waitForTimeout(60);
+    // At the last step of the last chapter, → does nothing.
+    if (new URL(page.url()).searchParams.get("ch") === "measure" && (await heading.textContent()) === before) break;
+  }
+  expect(new URL(page.url()).searchParams.get("ch")).toBe("measure");
+  expect(seen.size).toBeGreaterThan(30);
+  // ← goes back across a chapter boundary to the previous chapter's last step.
+  await page.goto(`${DEMO}/?view=how&ch=subgraphs&step=0`);
+  await ready(page);
+  await page.keyboard.press("ArrowLeft");
+  await expect(page).toHaveURL(/ch=intent/);
+  // The scoring step computes its numbers and draws its figure.
+  await page.goto(`${DEMO}/?view=how&ch=subgraphs&step=9`);
+  await ready(page);
+  await expect(caption.getByText("lower bound 0.59 ≥ 0.50")).toBeVisible();
+  await expect(caption.getByRole("img", { name: /Figure/ })).toBeVisible();
+  expect(errors).toEqual([]);
 });

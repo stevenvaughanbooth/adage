@@ -17,6 +17,8 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: ["g", "t"], label: "Traces", group: "Go to" },
   { keys: ["g", "e"], label: "Evidence", group: "Go to" },
   { keys: ["g", "h"], label: "Health", group: "Go to" },
+  { keys: ["g", "w"], label: "How it works", group: "Go to" },
+  { keys: ["←", "→"], label: "How it works: previous, next step", group: "Everywhere" },
   { keys: ["/"], label: "Filter reflexes", group: "Map" },
   { keys: ["j"], label: "Next reflex", group: "Map" },
   { keys: ["k"], label: "Previous reflex", group: "Map" },

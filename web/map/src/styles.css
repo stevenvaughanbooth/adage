@@ -286,3 +286,47 @@
   animation-iteration-count: 1 !important;
   transition-duration: 1ms !important;
 }
+
+/* How it works: labels the 3D stage projects onto the scene. */
+.how-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  font: 11px var(--font-mono);
+  color: var(--color-ink-2);
+  transition: opacity 400ms var(--easing-out);
+  will-change: transform;
+}
+.how-label.chip {
+  color: var(--color-ink-1);
+  background: color-mix(in oklab, var(--color-bg-panel) 82%, transparent);
+  border: 1px solid var(--color-line-strong);
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+.how-label.note {
+  color: var(--color-accent-soft);
+}
+.how-label.big {
+  font-size: 12px;
+  padding: 5px 9px;
+}
+.how-label small {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--color-ink-3);
+}
+.how-label .how-dim {
+  color: var(--color-ink-3);
+}
+.how-lamp.fire {
+  color: var(--color-lamp-fire);
+}
+.how-lamp.prime {
+  color: var(--color-lamp-prime);
+}
+.how-lamp.inhibit {
+  color: var(--color-lamp-inhibit);
+}

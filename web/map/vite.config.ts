@@ -16,6 +16,15 @@ export default defineConfig({
     assetsInlineLimit: 0,
     cssCodeSplit: false,
     chunkSizeWarningLimit: 2048,
+    // How it works (three.js) is one lazy chunk, loaded when its tab opens; the budget script
+    // counts it apart from the page.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("/node_modules/three/") || id.includes("/src/how/") || id.includes("/src/views/HowItWorks")) return "how";
+        },
+      },
+    },
   },
   worker: { format: "es" },
   // `pnpm dev` (or `vite preview`) against a running `adage map` (ADAGE_MAP_API, default port 8765).

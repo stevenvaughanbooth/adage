@@ -6,7 +6,7 @@
 // The file as is is embedded only when it is small or does not compress (fonts); the server
 // answers every browser with br or gzip. Output is deterministic (sorted, no timestamps), so
 // `pnpm drift` can check the committed copy. Budget: 400 KB brotli for the page, excluding the
-// layout worker (elkjs), which loads lazily.
+// layout worker (elkjs) and the How it works chunk (three.js), which load lazily.
 
 import { brotliCompressSync, constants, gzipSync } from "node:zlib";
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -63,6 +63,7 @@ rmSync(out, { recursive: true, force: true });
 const entries = [];
 let pageBr = 0;
 let workerBr = 0;
+let howBr = 0;
 const rows = [];
 for (const file of walk(dist)) {
   const path = relative(dist, file).split(sep).join("/");
@@ -83,6 +84,7 @@ for (const file of walk(dist)) {
   if (keepGz) writeFileSync(`${dest}.gz`, gz);
   const wire = keepBr ? br.length : raw.length;
   if (path.includes("layout.worker")) workerBr += wire;
+  else if (/\/how-[^/]*\.js$/.test(path)) howBr += wire;
   else pageBr += wire;
   rows.push([path, raw.length, keepBr ? br.length : null, keepGz ? gz.length : null, keepRaw]);
   const inc = (suffix) => `Some(include_bytes!("../../assets/map/${path}${suffix}"))`;
@@ -102,7 +104,7 @@ const kb = (n) => (n === null ? "—" : `${(n / 1024).toFixed(1)} KB`);
 for (const [p, raw, br, gz, keep] of rows) {
   console.log(`${p.padEnd(58)} raw ${kb(raw).padStart(10)}${keep ? "" : " (not embedded)"}  br ${kb(br).padStart(9)}  gz ${kb(gz).padStart(9)}`);
 }
-console.log(`page, brotli: ${kb(pageBr)} of the ${kb(BUDGET)} budget; layout worker (elkjs, lazy): ${kb(workerBr)}`);
+console.log(`page, brotli: ${kb(pageBr)} of the ${kb(BUDGET)} budget; layout worker (elkjs, lazy): ${kb(workerBr)}; how it works (three.js, lazy): ${kb(howBr)}`);
 if (pageBr > BUDGET) {
   console.error(`over budget by ${kb(pageBr - BUDGET)}`);
   process.exit(1);
