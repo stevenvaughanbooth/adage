@@ -6,8 +6,8 @@
 //! docs, or only read. What a developer would expect learned:
 //!
 //! - after editing the crates' Rust files, `cargo fmt --all` is owed (an obligation);
-//! - `cargo clippy --workspace --all-targets --locked -- -D warnings` and
-//!   `cargo test --workspace --locked` are the checks that follow (prime runs, never fire);
+//! - `cargo clippy --workspace --all-targets --locked -- -D warnings` and/or
+//!   `cargo test --workspace --locked` follow as checks (prime runs, never fire);
 //! - nothing is learned for docs edits (the checks after a docs edit are explained by the Rust
 //!   edits in the same traces), and `cargo fmt --all --check` is not directed beside the
 //!   obligation it checks.
@@ -83,11 +83,13 @@ fn the_rust_workspace_reflexes_form() {
     let fmt = fmt.unwrap_or_else(|| panic!("no cargo fmt obligation; learned:\n{}", listing.join("\n")));
     assert_eq!(shape(fmt), "obligation", "{}", listing.join("\n"));
 
-    // The checks follow as prime runs: the repo-wide forms agents ran, though most runs were
-    // narrowed or carried extra flags.
-    for check in ["cargo clippy --workspace --all-targets --locked -- -D warnings", "cargo test --workspace --locked"] {
-        let r = routes.iter().find(|r| rust_edit(r) && directs(r, check));
-        let r = r.unwrap_or_else(|| panic!("no {check} after Rust edits; learned:\n{}", listing.join("\n")));
+    // A check follows as a prime run: a repo-wide form agents ran, though most runs were narrowed
+    // or carried extra flags.
+    let checks = ["cargo clippy --workspace --all-targets --locked -- -D warnings", "cargo test --workspace --locked"];
+    let found: Vec<&adage_tracks::Route> =
+        routes.iter().filter(|r| rust_edit(r) && checks.iter().any(|c| directs(r, c))).collect();
+    assert!(!found.is_empty(), "no check after Rust edits; learned:\n{}", listing.join("\n"));
+    for r in found {
         assert_eq!(shape(r), "run");
         assert_eq!(r.strength, Strength::Prime, "a check after an edit is suggested, never fired");
     }

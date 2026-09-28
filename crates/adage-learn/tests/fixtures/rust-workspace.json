@@ -43,6 +43,10 @@
      false
     ],
     [
+     "edit",
+     "CHANGELOG.md"
+    ],
+    [
      "bash",
      "cargo fmt --all",
      "",
@@ -58,16 +62,6 @@
      "bash",
      "cargo test --workspace --locked",
      "test result: ok. 240 passed",
-     false
-    ],
-    [
-     "edit",
-     "CHANGELOG.md"
-    ],
-    [
-     "bash",
-     "cargo fmt --all --check",
-     "",
      false
     ],
     [
@@ -203,6 +197,10 @@
      false
     ],
     [
+     "edit",
+     "CHANGELOG.md"
+    ],
+    [
      "bash",
      "cargo fmt --all",
      "",
@@ -234,16 +232,6 @@
      "bash",
      "cargo test --workspace --locked --no-fail-fast",
      "test result: ok. 240 passed",
-     false
-    ],
-    [
-     "edit",
-     "CHANGELOG.md"
-    ],
-    [
-     "bash",
-     "cargo fmt --all --check",
-     "",
      false
     ],
     [
@@ -455,6 +443,10 @@
      false
     ],
     [
+     "edit",
+     "CHANGELOG.md"
+    ],
+    [
      "bash",
      "cargo fmt --all && cargo clippy --workspace --all-targets --locked -- -D warnings",
      "Finished",
@@ -464,16 +456,6 @@
      "bash",
      "cargo test --workspace --locked",
      "test result: ok. 240 passed",
-     false
-    ],
-    [
-     "edit",
-     "CHANGELOG.md"
-    ],
-    [
-     "bash",
-     "cargo fmt --all --check",
-     "",
      false
     ],
     [
@@ -689,6 +671,10 @@
      false
     ],
     [
+     "edit",
+     "CHANGELOG.md"
+    ],
+    [
      "bash",
      "cargo fmt --all",
      "",
@@ -704,16 +690,6 @@
      "bash",
      "cargo test --workspace --locked",
      "test result: ok. 240 passed",
-     false
-    ],
-    [
-     "edit",
-     "CHANGELOG.md"
-    ],
-    [
-     "bash",
-     "cargo fmt --all --check",
-     "",
      false
     ],
     [
@@ -777,6 +753,10 @@
      false
     ],
     [
+     "edit",
+     "CHANGELOG.md"
+    ],
+    [
      "bash",
      "cargo fmt --all && cargo clippy --workspace --all-targets --locked -- -D warnings",
      "Finished",
@@ -786,16 +766,6 @@
      "bash",
      "cargo test --workspace --locked",
      "test result: ok. 240 passed",
-     false
-    ],
-    [
-     "edit",
-     "CHANGELOG.md"
-    ],
-    [
-     "bash",
-     "cargo fmt --all --check",
-     "",
      false
     ],
     [
@@ -1011,6 +981,10 @@
      false
     ],
     [
+     "edit",
+     "CHANGELOG.md"
+    ],
+    [
      "bash",
      "cargo fmt --all",
      "",
@@ -1026,16 +1000,6 @@
      "bash",
      "cargo test --workspace --locked",
      "test result: ok. 240 passed",
-     false
-    ],
-    [
-     "edit",
-     "CHANGELOG.md"
-    ],
-    [
-     "bash",
-     "cargo fmt --all --check",
-     "",
      false
     ],
     [
@@ -1099,6 +1063,10 @@
      false
     ],
     [
+     "edit",
+     "CHANGELOG.md"
+    ],
+    [
      "bash",
      "cargo fmt --all && cargo clippy --workspace --all-targets --locked -- -D warnings",
      "Finished",
@@ -1108,16 +1076,6 @@
      "bash",
      "cargo test --workspace --locked",
      "test result: ok. 240 passed",
-     false
-    ],
-    [
-     "edit",
-     "CHANGELOG.md"
-    ],
-    [
-     "bash",
-     "cargo fmt --all --check",
-     "",
      false
     ],
     [
