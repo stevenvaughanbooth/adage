@@ -80,7 +80,7 @@ test("the inspector says where each number comes from", async ({ page }) => {
   await page.getByRole("navigation", { name: "Reflex tree" }).getByRole("button").first().click();
   const inspector = page.getByRole("complementary", { name: "Inspector" });
   await expect(inspector.getByRole("region", { name: /^(From conditioning|From the pack|Shipped with Adage) · Evidence$/ })).toBeVisible();
-  const live = inspector.getByRole("region", { name: /^Live since installed · With the (reflex|instinct) vs control$/ });
+  const live = inspector.getByRole("region", { name: /^Live since installed · vs control$/ });
   await expect(live).toBeVisible();
   await expect(live.getByText(/^Control: traces where Adage withheld the reflex on purpose/)).toBeVisible();
 });

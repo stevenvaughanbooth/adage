@@ -17,12 +17,12 @@ pub(crate) static ASSETS: &[Asset] = &[
         gz: None,
     },
     Asset {
-        path: "assets/index-CVMCxc3O.js",
+        path: "assets/index-CuEWPXAE.js",
         content_type: "text/javascript; charset=utf-8",
         immutable: true,
         raw: None,
-        br: Some(include_bytes!("../../assets/map/assets/index-CVMCxc3O.js.br")),
-        gz: Some(include_bytes!("../../assets/map/assets/index-CVMCxc3O.js.gz")),
+        br: Some(include_bytes!("../../assets/map/assets/index-CuEWPXAE.js.br")),
+        gz: Some(include_bytes!("../../assets/map/assets/index-CuEWPXAE.js.gz")),
     },
     Asset {
         path: "assets/layout.worker-C5z_fNT1.js",

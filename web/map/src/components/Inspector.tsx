@@ -304,7 +304,7 @@ export function Inspector({ graph }: { graph: Graph }) {
         <Gauge lb={e.lower_bound} bar={bar} />
       </Section>
 
-      <Section label={`With the ${inst ? "instinct" : "reflex"} vs control`} source={LIVE_SOURCE} note={CONTROL_NOTE}>
+      <Section label="vs control" source={LIVE_SOURCE} note={CONTROL_NOTE}>
         <WithVsControl r={r} />
         <p className="m-0 font-mono text-[11px] text-ink-3">
           live · directed {r.live.emitted} · {judgement("followed")} {r.live.followed} · {judgement("derailed")} {r.live.derailed}
