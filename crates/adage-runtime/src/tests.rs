@@ -783,6 +783,7 @@ fn unlocked(tracks: &[&Track]) -> Index {
                     track: t.manifest.track.name.clone(),
                     version: "1.0.0".into(),
                     route: r.clone(),
+                    exec: None,
                 })
             })
             .collect(),

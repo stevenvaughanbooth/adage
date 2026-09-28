@@ -9,6 +9,99 @@ version as the GitHub Release notes.
 
 ### Added
 
+- **Packs are what `adage share` and `adage add` exchange (Track C, milestone C1).**
+  - `adage share` emits a signed pack, not a v1 track. It upgrades a learned track (live routes
+    only, with repository scripts pinned L-ref against the repository it runs in), re-signs an
+    installed pack, or signs a pack directory. The redaction check runs over every byte, vendored
+    scripts included. A vendored script that names URLs or hosts, runs network tools, uses
+    absolute paths or reads `*_TOKEN`/`*_KEY`-style variables is listed and needs `--ack-scripts`.
+    Approvals, `review.yaml`, proposals and `trust.json` never travel. The signature uses the
+    namespace `adage-pack` (`adage_sign::PACK_NAMESPACE`). `--format v1` still writes a v1 track.
+  - `adage add` accepts packs. It reads the directory strictly: no symlinks and no smuggled files.
+    It verifies the digest and signature against the trust anchors: personal `trusted-signers`,
+    then the TOFU-pinned repository file, then `--trust`. An `allowed_signers` entry restricted to
+    `adage-track` does not authorise a pack. The pack is validated in full, including its closure.
+    Scripts are re-classified locally as environment, and a minimal policy file is honoured
+    (`[publishers] deny`, `[exec] allow_vendor_scripts`). The pack is installed exactly as verified
+    under `tracks/@imported/<owner>/<name>/`, and its vendored scripts are copied read-only to
+    `$ADAGE_HOME/cas/<sha256>`. It creates no execution approvals. v1 tracks are still accepted
+    (namespace `adage-track`) and are upgraded in place to a pack.
+  - Resolution against a repository (`adage_pack::bind`) gives each route either live, with the
+    highest level it may be approved at, or inert, with a reason. It checks, in turn:
+    - applicability by repository key (including the `<name>@<root commit>` form), by fingerprint
+      over the declared facts, or by a compiled detector;
+    - `requires.os`, and tools by PATH lookup only (nothing is run);
+    - that templates and models are known to this build;
+    - the SHA-256 of each L-ref script, which must be a regular file inside the root with no
+      symlink on the way and at most 1 MiB, plus its deps;
+    - that the route has a runtime form. A shape with none becomes inert with the reason "shape
+      not yet supported at runtime".
+
+    Only a signature, schema or closure failure refuses a whole pack. Live routes compile into the
+    index as bound tracks under `tracks/@imported/@bound/<owner>/<name>/<repo>/`, at probation and
+    yellow at most, and the recipient's review decisions carry across re-binds. Each carries
+    `IndexedRoute.exec` (route exec digest, resolved scripts and hashes, `max_level`), which the E0
+    hot path ignores. `adage doctor` (a new `packs` check) and `adage review` (text and `--json`)
+    show inert routes with their reasons and the pack's version and digest.
+  - The core instincts ship as the pack `adage/core-instincts` (`adage_pack::instincts`), with
+    detector applicability (`detector = "*"` over this build's catalogue). Binding it gives exactly
+    the instinct binder's routes; a test pins this.
+  - `adage_tracks::index::Index::compile_root` attaches the exec bindings. `adage learn`, `add`,
+    `review` and `doctor` all compile through it.
+- **Track packs, format `adage-pack/1` (Track C, milestone C0).** A new crate, `adage-pack`,
+  defines the pack: one track namespace in route format v2 (shapes run, avoid, after, read,
+  advise, obligation and sequence; typed inputs and outputs; argv steps; exit predicates; an
+  execution request that grants nothing), closed over everything it references and
+  content-addressed. It reads packs as untrusted input (a file allowlist with no symlinks and at
+  most 256 files, 1 MiB per file and 64 KiB per script; UTF-8 without NUL, control or invisible
+  characters; unknown fields refused; strict, anchored and bounded contract types; plain argv
+  tokens; repository-relative paths and globs; effects re-classified locally), computes the
+  closure (types, L-ref and L-vendor scripts, tools, templates, models, links, the implicit
+  after-command and avoid-instead edges; no dangling references, no unreferenced bytes, no after
+  cycles or chains over four) and checks it against the pack's `CLOSURE` byte for byte. It
+  computes the route exec digest (canonical JSON without evidence and aspect, with type
+  definitions and script hashes inlined: the future approval key) and the pack digest (the track
+  digest algorithm, with `CLOSURE` included and `pack.sig` excluded), signs and verifies in the new
+  sshsig namespace `adage-pack`, and upgrades v1 track directories to packs (L-none, or L-ref
+  pinned against a repository). Nothing uses packs yet: `adage share` and `adage add` move to them
+  in C1, and nothing executes. A debugging binary, `adage-pack inspect|verify|digest|upgrade`, ships
+  with the crate. See docs/packs.md.
+- **`adage-exec`: the execution core (Track C, milestone C2)** (new crate and binary, optional;
+  the `adage` binary still never runs a repository or agent command, now checked by a test that
+  scans the adage crates for `Command::new`). `adage-exec run --repo <dir> --argv '<json>'
+  --effect observe --level e1 --output typed --fields '<json>' [--dry-run]` runs a step only when
+  every gate passes, in order: slots bound to values their strict contracts accept (no shell,
+  ever); the declared effect not below the local classification (scripts and interpreters are
+  environment); policy; an approval equal on every field of the key (repository, route exec
+  digest, argv templates, scripts and hashes, effect, level, output mode, sandbox profile id,
+  signer), or automatic approval of the inert-observe class, off by default until gate G3; and an
+  enforced sandbox, else nothing runs. Linux: Landlock (ABI ≥ 1, best effort to 9) plus a seccomp
+  filter applied before `execve`, user and network namespaces where available, and root dropped
+  to nobody; bubblewrap as the fallback; macOS: `sandbox-exec` with a generated SBPL profile;
+  Windows: unavailable. The environment is built from nothing (sanitised `PATH`, scratch `HOME`
+  and `TMPDIR`, fixed locale and git variables; never agent sockets, tokens or cloud
+  credentials); git runs with `-c` hardening, and a repository whose config sets `core.fsmonitor`,
+  `sshCommand`, `filter.*`, textconv, aliases or includes loses git's inert status. Limits per
+  level (E1: 1.5 s, 64 KiB captured, 4 KiB returned; E2: 10 s, 256 KiB, 16 KiB), `RLIMIT_AS`
+  2 GiB, `RLIMIT_NPROC` 256, `RLIMIT_FSIZE` 64 MiB, and the process group killed and reaped.
+  Typed output keeps only declared fields that pass their types (`repo-path` inside the root,
+  `repo-path-list`, `git-rev`, `int`, `bool`, `enum`, `pattern`), re-serialised by Adage; raw
+  output (separately approved, policy-gated) is stripped, defanged and scanned for secrets,
+  canaries and instruction-shaped text; any failure withholds the whole block. Output reaches the
+  agent only in the fixed `<adage-data>` template. `adage-exec approve`/`revoke` refuse inside an
+  agent session and need a terminal; approvals live in `$ADAGE_HOME/approvals.json` (0600, atomic)
+  and lapse with a field diff when the route changes. Policy: `$ADAGE_HOME/policy.toml` plus a
+  managed file whose denies win and whose `require_sandbox` the personal file cannot lower.
+  `adage-exec doctor` reports the sandbox (Landlock ABI, namespaces, bwrap, sandbox-exec). The
+  L0-sec escape suite (`crates/adage-exec/tests/escape/`) runs every payload under each available
+  backend: 0 escapes. See docs/execution.md.
+- **`commands.toml`: an `inert` field** (default false), true only for `cat`, `head`, `tail`,
+  `wc`, `ls`, `rg`, `grep`, `jq` and the `git` subcommands `status`, `log`, `diff`, `show` and
+  `rev-parse`: programs whose behaviour repository files cannot turn into running code. It gates
+  automatic approval in `adage-exec` and is pinned by a test.
+- **`adage_eval::safety::check_data_block`**: the safety oracle for execution data blocks (the
+  fixed template, route, byte count, no tags or control characters in the payload, declared and
+  valid typed fields or no free text, no instruction-shaped raw text, no canaries).
 - **`adage-train`: skill → reflex training** (new crate and binary, optional; the `adage` binary
   still never executes anything). `adage-train plan --from <SKILL.md|CONTRIBUTING.md|Makefile|
   package.json|workflow.yml|runbook.md>` extracts typed claims deterministically (verify,

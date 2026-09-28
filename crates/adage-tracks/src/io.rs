@@ -81,7 +81,7 @@ pub fn slot_refs(command: &str) -> Vec<String> {
     re.captures_iter(command).map(|c| c[1].to_string()).collect()
 }
 
-fn safe_id(id: &str) -> bool {
+pub fn safe_id(id: &str) -> bool {
     let b = id.as_bytes();
     !b.is_empty()
         && b.len() <= 64
@@ -89,7 +89,7 @@ fn safe_id(id: &str) -> bool {
         && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
 }
 
-fn safe_name(n: &str) -> bool {
+pub fn safe_name(n: &str) -> bool {
     n.len() <= 128
         && n.split('/').count() <= 2
         && n.split('/').all(|p| {
@@ -102,7 +102,7 @@ fn safe_name(n: &str) -> bool {
 /// Directed commands are plain argv: no shell operators, substitutions, redirections, or quoting,
 /// and no path outside the repository (absolute, or with a `..` segment), in an argument or in a
 /// flag's value.
-fn safe_command(c: &str) -> bool {
+pub fn safe_command(c: &str) -> bool {
     let inside = |part: &str| !part.starts_with('/') && !part.split('/').any(|seg| seg == "..");
     // Words separated by single spaces: a blank or padded command renders as nothing.
     !c.is_empty()
@@ -157,7 +157,7 @@ pub fn classify(command: &str, table: &CommandTable) -> Effect {
 }
 
 /// A contract must reject values that could carry shell syntax, whitespace, traversal, or flags.
-fn contract_is_strict(regex: &str) -> bool {
+pub fn contract_is_strict(regex: &str) -> bool {
     let Ok(re) = Regex::new(regex) else { return false };
     let probes = ["a b", "a;b", "a|b", "$(x)", "`x`", "a&b", "a\nb", "../x", "-x", "a>b", "a<b", "a'b", "a\"b", ""];
     regex.starts_with('^') && regex.ends_with('$') && !probes.iter().any(|p| re.is_match(p))

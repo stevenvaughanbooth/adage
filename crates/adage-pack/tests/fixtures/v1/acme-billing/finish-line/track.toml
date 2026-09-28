@@ -1,0 +1,12 @@
+[track]
+name = "acme-billing/finish-line"
+version = "0.1.0"
+description = "Steps this repository requires after certain edits"
+provenance = "desire-path"
+
+[scope]
+repo = "acme-billing"
+
+[gauge]
+harness = ["claude-code"]
+models = ["claude-sonnet-4-6"]

@@ -1,0 +1,35 @@
+id: lookup-work-item
+summary: Look up the work item named in the prompt
+trigger:
+  on: prompt
+  span: ticket
+step:
+  do: run
+  command: python3 scripts/wi-lookup {item}
+slots:
+- name: item
+  source:
+    from: prompt
+    span: ticket
+  contract:
+    kind: pattern
+    regex: ^W-\d{4}$
+effect: observe
+aspect: green
+state: active
+exit:
+- when: intent_changes
+evidence:
+  opportunities: 10
+  support: 9
+  days: 9
+  successes: 0
+  deviations_failed: 0
+  rate: 0.9
+  lower_bound: 0.5958499704752279
+  median_position: 2.0
+  turns_saved: 1.0
+  provenance: desire-path
+  models:
+  - claude-sonnet-4-6
+authored: false

@@ -19,9 +19,17 @@ impl World {
     fn new() -> World {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
-        for d in ["sender", "recipient", "home", "keys", "elsewhere"] {
+        for d in ["sender", "recipient", "home", "keys", "elsewhere", "checkout/.git", "checkout/scripts", "bin"] {
             std::fs::create_dir_all(root.join(d)).unwrap();
         }
+        // The recipient's checkout of the repository the track is for: the lookup's script is
+        // pinned against it when the v1 track is upgraded to a pack.
+        std::fs::write(
+            root.join("checkout/.git/config"),
+            "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("checkout/scripts/wi-lookup"), "#!/bin/sh\necho '{}'\n").unwrap();
         World { _dir: dir, root }
     }
     fn p(&self, rel: &str) -> PathBuf {
@@ -40,6 +48,7 @@ impl World {
             .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
             .env_remove("SSH_AUTH_SOCK")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
+            .env("PATH", self.p("bin"))
             .stdin(Stdio::null());
         c
     }
@@ -48,13 +57,15 @@ impl World {
     }
     fn share(&self) -> Output {
         let (out, key) = (self.p("out"), self.p("keys/id_ed25519"));
-        self.run("sender", &["share", NAME, "--out", out.to_str().unwrap(), "--key", key.to_str().unwrap()])
+        let args = ["share", NAME, "--out", out.to_str().unwrap(), "--key", key.to_str().unwrap(), "--format", "v1"];
+        self.run("sender", &args)
     }
+    /// `adage add` in the recipient's checkout.
     fn add(&self, extra: &[&str]) -> Output {
         let out = self.p("out");
         let mut args = vec!["add", out.to_str().unwrap()];
         args.extend(extra);
-        self.run("recipient", &args)
+        self.cmd("recipient", &self.p("checkout"), &args).output().unwrap()
     }
     fn trust_personally(&self, pk: &ssh_key::PublicKey) {
         std::fs::write(
@@ -170,7 +181,10 @@ fn share_then_add_installs_routes_at_probation() {
     let o = w.add(&[]);
     assert!(o.status.success(), "{}", text(&o));
     assert!(text(&o).contains("was green"), "{}", text(&o));
-    let installed = io::read(&w.p("recipient/tracks/@imported").join(NAME)).unwrap();
+    // Upgraded in place: the pack is installed as verified, and bound to this repository.
+    assert!(adage_pack::Pack::load(&w.p("recipient/tracks/@imported").join(NAME)).is_ok());
+    let installed =
+        io::read(&w.p("recipient/tracks/@imported/@bound").join(NAME).join("github-com-acme-billing")).unwrap();
     assert!(installed.manifest.track.provenance.starts_with("imported"));
     assert!(!w.p("recipient/tracks").join(NAME).exists(), "imports never occupy a learned track's directory");
     let index = Index::load(&w.p("recipient/index.json"));

@@ -10,7 +10,7 @@
 //! (and that they run an adage binary that exists); the Claude Code plugin's staged binary; kill
 //! switches and experiment settings; the size of the session spools; fail-open errors, if any
 //! are recorded in `$ADAGE_HOME/fail-open.log` (one JSON object per line, newest last); the
-//! configuration file; and live learning (`crate::autolearn`): whether it is on, each repository's
+//! configuration file; installed packs and their inert routes; and live learning (`crate::autolearn`): whether it is on, each repository's
 //! last automatic learn and its outcome, a learner that has held its lock too long, and requests
 //! still waiting.
 
@@ -221,7 +221,7 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
         );
     }
     let repos: std::collections::BTreeSet<&str> = idx.routes.iter().map(|r| r.repo.as_str()).collect();
-    let (current, conflicts) = Index::compile_with_conflicts(&scan.valid);
+    let (current, conflicts) = Index::compile_root(&paths.tracks(), &scan.valid);
     let mut detail = format!(
         "generation {}, {} route(s) in {} repositor{}",
         idx.generation,
@@ -284,6 +284,49 @@ fn instincts_check(paths: &Paths, scan: &TrackScan, idx: &Index) -> Check {
         })
         .collect();
     pass("instincts", format!("{state}; {}", parts.join("; ")))
+}
+
+/// Installed packs (Track C §2.3): how many, bound to how many repositories, and every route
+/// whose closure is not satisfied here, with the reason and the pack's origin and digest.
+fn packs_check(paths: &Paths) -> Check {
+    let bindings = crate::packs::bindings(paths);
+    if bindings.is_empty() {
+        return pass("packs", "none installed");
+    }
+    let packs: std::collections::BTreeSet<&str> = bindings.iter().map(|(_, b)| b.pack.as_str()).collect();
+    let live: usize = bindings.iter().map(|(_, b)| b.routes.iter().filter(|r| r.status.is_live()).count()).sum();
+    let inert = crate::packs::inert_routes(paths);
+    let detail = format!(
+        "{} pack(s) bound to {} repositor{}: {live} route(s) live, {} inert",
+        packs.len(),
+        bindings.len(),
+        if bindings.len() == 1 { "y" } else { "ies" },
+        inert.len()
+    );
+    if inert.is_empty() {
+        return pass("packs", detail);
+    }
+    let shown: Vec<String> = inert
+        .iter()
+        .take(5)
+        .map(|i| {
+            format!(
+                "{}@{} (sha256 {}) {} in {}: {}",
+                i.pack,
+                i.version,
+                &i.digest[..i.digest.len().min(12)],
+                i.route,
+                i.repo,
+                i.reason
+            )
+        })
+        .collect();
+    let more = if inert.len() > 5 { format!("; and {} more", inert.len() - 5) } else { String::new() };
+    warn(
+        "packs",
+        format!("{detail}; {}{more}", shown.join("; ")),
+        "inert routes are never delivered; `adage review` lists them. Restore what they need (a script, a tool), then run `adage add` again",
+    )
 }
 
 fn model_check(paths: &Paths, idx: &Index) -> Check {
@@ -613,6 +656,7 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
         index,
         tracks_check(&scan),
         instincts_check(paths, &scan, &idx),
+        packs_check(paths),
         model_check(paths, &idx),
     ];
     checks.extend(hooks_checks(repo_root, exe.as_deref()));
