@@ -8,27 +8,33 @@
 //! with ratatui's `TestBackend` against fixture data. State comes from files only:
 //!
 //! * hook activity: `$ADAGE_HOME/sessions/*.spool`, followed incrementally ([`tail`]);
-//! * learning: `$ADAGE_HOME/learn.log`, one JSON object per line ([`learnlog`]);
+//! * conditioning: `$ADAGE_HOME/learn.log`, one JSON object per line ([`learnlog`]);
 //! * health: `adage doctor`'s checks, re-run every few seconds on a worker thread ([`health`]);
 //! * settings: `$ADAGE_HOME/config.toml`, through `adage_store::config` (as `adage config`).
 //!
 //! The terminal is restored on every exit path, including a panic ([`term`]). `NO_COLOR` is
-//! honoured: colour is dropped and aspects and lamps are spelled out.
+//! honoured: colour is dropped and strengths and lamps are spelled out. Words follow the lexicon
+//! (docs/lexicon.md) at display time; stored values keep their names ([`words`]).
 
 mod app;
 mod demo;
 mod diff;
 mod feed;
+mod fuzzy;
 mod health;
 mod jobs;
+mod keys;
 mod learnlog;
+mod palette;
 mod routes;
+mod tabs;
 mod tail;
 mod term;
 mod theme;
 mod view;
 mod watch;
 mod wizard;
+mod words;
 
 #[cfg(test)]
 mod tests;

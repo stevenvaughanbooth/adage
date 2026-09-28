@@ -1,0 +1,39 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings                                                            harbor-dispatch · LIVE
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 4 passed · 2 warnings · 0 failures   same checks as adage doctor
+
+▌ + binary               adage 0.╭─ palette ────────────────────────────────────────────────────────────────────────╮
+  + index                generati│ : str▌                                                                11 matches │
+  ! embedding model    ⏎ not inst├──────────────────────────────────────────────────────────────────────────────────┤
+  + hooks: claude-co…    ~/work/h│ ACTIONS                                                                          │
+  ! hooks: codex       ⏎ codex is│ › Strengthen reflex…                   adage review strengthen                 s │
+  + fail-open errors     none in │   Condition this repository now        adage condition                         c │
+                                 │                                                                                  │
+                                 │ REFLEXES                                                                         │
+                                 │   PRIME ◠ start-with-npm-check         prime · forming · 6/9                     │
+                                 │                                                                                  │
+                                 │ GO TO                                                                            │
+                                 │   Settings · runtime.holdout           adage config set runtime.holdout          │
+                                 │   Settings · learn.auto                adage config set learn.auto               │
+                                 │   Settings · learn.min_interval_secs   adage config set learn.min_interval_secs  │
+                                 │   Settings · learn.thresholds          adage config set learn.thresholds         │
+                                 │   Settings · learn.claude_projects     adage config set learn.claude_projects    │
+                                 │   Settings · learn.codex_sessions      adage config set learn.codex_sessions     │
+                                 │   Settings · learn.opencode_exports    adage config set learn.opencode_exports   │
+                                 ├──────────────────────────────────────────────────────────────────────────────────┤
+                                 │ ↑↓ move · enter run · tab complete · esc close                                   │
+                                 │ every action also shows the adage command that does the same thing               │
+                                 ╰──────────────────────────────────────────────────────────────────────────────────╯
+
+
+─ check ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ binary  adage 0.1.0 at ~/bin/adage
+
+
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ? keys · : palette · enter fix · R recheck                                                                                                    q quit

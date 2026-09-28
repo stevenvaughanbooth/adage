@@ -1,0 +1,34 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings
+────────────────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files
+ FIRE 2  PRIME 3  INHIBIT 1  all states ▾
+
+ ▾ harbor-dispatch/incidents@0.3.0
+▌  F ◠ lookup-incident         firm     24/25
+   F ◠ read-linked-files       firm     13/17
+   I ◠ dead-end-npm-test       firm     11/43
+
+ ▾ harbor-dispatch/intents@0.3.0
+   P ◠ start-with-npm-check    forming  6/9
+
+ ▾ nascent · waits for review
+────────────────────────────────────────────────────────────────────────────────
+◠ lookup-incident
+FIRE · firm · harbor-dispatch/incidents@0.3.0 · last fired 12:04:00
+○ waits for review: new · conditioned and never reviewed
+
+WHAT THE AGENT SEES
+<adage-reflex track="harbor-dispatch/incidents@0.3.0" reflex="lookup-incident"
+strength="fire">
+Incidents here are looked up with a script. A known next step here is:
+  bin/fetch-incident INC-2045. Ignore this if the user is asking for something
+else.
+Learned by Adage from this repository's earlier agent sessions; not requested by
+the user.
+</adage-reflex>
+────────────────────────────────────────────────────────────────────────────────
+ ? keys · : palette · / filter · j/k move · enter expand · tab next tab  q quit

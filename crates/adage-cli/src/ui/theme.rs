@@ -3,9 +3,10 @@
 //! strength fire, `dim()` is tertiary text), never a colour.
 //!
 //! With `NO_COLOR` set (no-color.org) nothing is coloured: strengths and lamps are spelled out
-//! in text instead, and only bold, dim, italic and reverse remain.
+//! in text instead, and only bold, dim, italic and reverse remain. `ADAGE_ASCII=1` swaps every
+//! glyph for its ASCII fallback, and `ADAGE_REDUCED_MOTION=1` turns the one-shot pulses off.
 
-use adage_term::{Caps, Level, Role};
+use adage_term::{Caps, Glyph, Level, Role};
 use adage_tracks::Aspect;
 use ratatui::style::{Modifier, Style};
 
@@ -23,6 +24,8 @@ pub enum Lamp {
 pub struct Theme {
     /// Whether anything is coloured (false under `NO_COLOR`).
     pub color: bool,
+    /// One-shot pulses (a firing reflex); off with `ADAGE_REDUCED_MOTION=1`.
+    pub motion: bool,
     term: adage_term::Theme,
 }
 
@@ -31,13 +34,21 @@ impl Theme {
     pub fn from_env() -> Theme {
         // A full-screen view only runs at a terminal, and bold and dim are always available.
         let caps = Caps { effects: true, ..Caps::from_env(|k| std::env::var(k).ok(), true) };
-        Theme { color: caps.level > Level::None, term: adage_term::Theme::new(caps) }
+        let motion = std::env::var("ADAGE_REDUCED_MOTION").map_or(true, |v| v.is_empty() || v == "0");
+        Theme { color: caps.level > Level::None, motion, term: adage_term::Theme::new(caps) }
     }
 
     /// The 16-colour theme (`true`) or no colour (`false`): what tests and `--once` use.
     pub fn with_color(color: bool) -> Theme {
         let level = if color { Level::Ansi16 } else { Level::None };
-        Theme { color, term: adage_term::Theme::new(Caps { level, effects: true, ..Caps::plain() }) }
+        Theme { color, motion: true, term: adage_term::Theme::new(Caps { level, effects: true, ..Caps::plain() }) }
+    }
+
+    /// The same, with ASCII glyphs (`ADAGE_ASCII=1`).
+    #[cfg(test)]
+    pub fn ascii(mut self) -> Theme {
+        self.term.caps.unicode = false;
+        self
     }
 
     fn role(&self, r: Role) -> Style {
@@ -72,6 +83,34 @@ impl Theme {
             Style::default().add_modifier(Modifier::DIM)
         }
     }
+    /// Secondary text: descriptions, evidence after the number.
+    pub fn ink2(&self) -> Style {
+        self.role(Role::Ink2)
+    }
+    /// Commands the reader can run, and key hints.
+    pub fn command(&self) -> Style {
+        self.role(Role::Command)
+    }
+    /// A key in a hint: the command colour, bold.
+    pub fn key(&self) -> Style {
+        self.command().add_modifier(Modifier::BOLD)
+    }
+    /// Rules and box lines.
+    pub fn rule(&self) -> Style {
+        self.dim()
+    }
+    /// A glyph, or its ASCII fallback.
+    pub fn glyph(&self, g: Glyph) -> &'static str {
+        self.term.glyph(g)
+    }
+    /// A drawing character (rules, boxes, bars) or its ASCII stand-in.
+    pub fn ch(&self, unicode: &'static str, ascii: &'static str) -> &'static str {
+        if self.term.caps.unicode {
+            unicode
+        } else {
+            ascii
+        }
+    }
     pub fn bold(&self) -> Style {
         Style::default().add_modifier(Modifier::BOLD)
     }
@@ -90,10 +129,19 @@ impl Theme {
         }
     }
 
+    /// The strength's word: fire, prime, inhibit.
+    pub fn strength_word(a: Aspect) -> &'static str {
+        match a {
+            Aspect::Green => "fire",
+            Aspect::Yellow => "prime",
+            Aspect::Red => "inhibit",
+        }
+    }
+
     /// The strength's lamp: a coloured dot, or its word without colour.
     pub fn aspect_mark(&self, a: Aspect) -> &'static str {
         match (self.color, a) {
-            (true, _) => "●",
+            (true, _) => self.glyph(Glyph::Lamp),
             (false, Aspect::Green) => "FIRE",
             (false, Aspect::Yellow) => "PRIME",
             (false, Aspect::Red) => "INHIBIT",
@@ -111,8 +159,8 @@ impl Theme {
 
     pub fn lamp_mark(&self, l: Lamp) -> &'static str {
         match (self.color, l) {
-            (true, Lamp::Off) => "○",
-            (true, _) => "●",
+            (true, Lamp::Off) => self.glyph(Glyph::Off),
+            (true, _) => self.glyph(Glyph::Lamp),
             (false, Lamp::Ok) => "+",
             (false, Lamp::Warn) => "!",
             (false, Lamp::Fail) => "x",
@@ -123,9 +171,9 @@ impl Theme {
 
 pub fn parse_aspect(s: &str) -> Option<Aspect> {
     match s {
-        "green" => Some(Aspect::Green),
-        "yellow" => Some(Aspect::Yellow),
-        "red" => Some(Aspect::Red),
+        "green" | "fire" => Some(Aspect::Green),
+        "yellow" | "prime" => Some(Aspect::Yellow),
+        "red" | "inhibit" => Some(Aspect::Red),
         _ => None,
     }
 }

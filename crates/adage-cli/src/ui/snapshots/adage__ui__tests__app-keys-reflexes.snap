@@ -1,0 +1,44 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings                                                            harbor-dispatch · LIVE
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ / filter reflexes, commands, files                     │  ◠ lookup-incident
+ FIRE 2  PRIME 3  INHIBIT 1  all states ▾               │  FIRE · firm · harbor-dispatch/incidents@0.3.0
+                                                        │  ○ waits for review: new · conditioned and never reviewed
+ ▾ harbor-dispatch/incidents@0.3.0                      │
+▌  F ◠ lookup-incident         firm    ╭ keys ───────────────────────────────────────────────────────────────╮
+   F ◠ read-linked-files       firm    │ EVERYWHERE                                                          │0" reflex="lookup-incident"
+   I ◠ dead-end-npm-test       firm    │           ?  this list                                              │
+                                       │           :  command palette (also ctrl-k): every action and reflex │ next step here is:
+ ▾ harbor-dispatch/intents@0.3.0       │         tab  next tab (shift-tab: previous)                         │ser is asking for something else.
+   P ◠ start-with-npm-check    forming │         1-5  Live, Reflexes, Map, Health, Settings                  │nt sessions; not requested by the user.
+                                       │           q  quit                                                   │
+ ▾ nascent · waits for review          │                                                                     │
+   ○ ◠ regen-openapi-client    nascent │ REFLEXES                                                            │
+                                       │           /  fuzzy filter reflexes by id, trigger, command or track │0
+ ▾ instincts · adage/finish-line@0.1.0 │         j/k  move through the tree                                  │6
+   P ◉ finish-line/regenerate  firm    │       enter  open or close a group                                  │finish line met 0
+                                       │         tab  next tab                                               │
+ ▸ extinguished · 1                    │           s  strengthen: prime → fire (adage review strengthen)     │
+                                       │           w  weaken: fire → prime (adage review weaken)             │    10/12
+                                       │           x  extinguish the reflex (adage review extinguish)        │    1/5
+                                       │           a  approve it as it is (adage review approve)             │
+                                       │           n  pin it: conditioning proposes instead of overwriting   │
+                                       │           m  dismiss a pinned reflex's proposed change              │
+                                       │           d  let the reflex act (shows adage review delegate)       │
+                                       │           t  the traces it fired in                                 │
+                                       │           o  the same reflex in the web map (adage map --focus)     │
+                                       │       F P I  show or hide fire, prime, inhibit                      │e   n pin   m dismiss
+                                       │           S  cycle the lifecycle filter                             │
+                                       │   PgUp PgDn  scroll the detail                                      │ents lookup-incident from any shell
+                                       │           R  reload the reflexes                                    │
+                                       ╰─────────────────────────────────────────────────────────────────────╯
+                                                        │
+                                                        │
+                                                        │
+                                                        │
+                                                        │
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ? keys · : palette · / filter · j/k move · enter expand · tab next tab                                                                        q quit

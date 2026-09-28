@@ -1,5 +1,5 @@
 //! Work that must not freeze the screen: the health checks (re-run every few seconds), loading
-//! the routes, and one-off jobs (fetch the model, run `adage learn`). Each runs on its own thread
+//! the reflexes, and one-off jobs (fetch the intent model, run `adage condition`). Each runs on its own thread
 //! and reports over a channel the event loop drains between frames. Threads end when the screen
 //! drops its receiver.
 
@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 
 /// How often health is re-checked.
 pub const HEALTH_EVERY: Duration = Duration::from_secs(3);
-/// How often the routes are reloaded while their tab wants them.
+/// How often the reflexes are reloaded while a tab wants them.
 pub const ROUTES_EVERY: Duration = Duration::from_secs(10);
 
 pub enum Loaded {
@@ -134,7 +134,7 @@ impl Job {
 
 /// Fetch the embedding model, with progress.
 pub fn fetch_model(paths: Paths) -> Job {
-    Job::spawn("Fetching the embedding model", move |tx| {
+    Job::spawn("Fetching the intent model", move |tx| {
         let id = crate::models::fetch_with(&paths, &mut |p| {
             let mb = |b: u64| b as f64 / (1 << 20) as f64;
             let _ = tx.send(JobMsg::Progress(
@@ -142,20 +142,24 @@ pub fn fetch_model(paths: Paths) -> Job {
                 format!("{} — {:.1} of {:.1} MB", p.url.rsplit('/').next().unwrap_or(p.url), mb(p.done), mb(p.total)),
             ));
         })?;
-        Ok(vec![format!("installed {id}"), "intent families are learned from the next `adage learn` on.".into()])
+        Ok(vec![
+            format!("installed {id}"),
+            "intent families are conditioned from the next `adage condition` on.".into(),
+        ])
     })
 }
 
-/// Learn now, as a child process (its output is captured, never written to the screen). In a
-/// repository this is exactly what a hook's background learner runs, `adage learn --auto
+/// Condition now, as a child process (its output is captured, never written to the screen). In a
+/// repository this is exactly what a hook's background conditioner runs, `adage condition --auto
 /// --repo-root <root>`, so it takes the same per-repository lock and logs to `learn.log` the same
-/// way; the result is read back from there. Outside one it is `adage learn` (every repository).
+/// way; the result is read back from there. Outside one it is `adage condition` (every
+/// repository).
 pub fn learn_now(paths: Paths, root: Option<PathBuf>) -> Job {
-    Job::spawn("Learning from your agents' sessions", move |tx| {
+    Job::spawn("Conditioning on your agents' traces", move |tx| {
         let exe = std::env::current_exe()?;
-        let _ = tx.send(JobMsg::Progress(0.1, "reading transcripts…".into()));
+        let _ = tx.send(JobMsg::Progress(0.1, "reading traces…".into()));
         let mut cmd = std::process::Command::new(exe);
-        cmd.arg("learn").env("ADAGE_HOME", &paths.root).stdin(std::process::Stdio::null());
+        cmd.arg("condition").env("ADAGE_HOME", &paths.root).stdin(std::process::Stdio::null());
         if let Some(r) = &root {
             cmd.args(["--auto", "--repo-root"]).arg(r);
         }
@@ -163,7 +167,7 @@ pub fn learn_now(paths: Paths, root: Option<PathBuf>) -> Job {
         let out = cmd.output()?;
         let err: Vec<String> = String::from_utf8_lossy(&out.stderr).lines().map(String::from).collect();
         if !out.status.success() {
-            let msg = err.last().cloned().unwrap_or_else(|| format!("adage learn exited with {}", out.status));
+            let msg = err.last().cloned().unwrap_or_else(|| format!("adage condition exited with {}", out.status));
             anyhow::bail!("{}", msg.trim_start_matches("adage: "));
         }
         let Some(root) = root else {
@@ -179,7 +183,7 @@ pub fn learn_now(paths: Paths, root: Option<PathBuf>) -> Job {
             .collect();
         if mine.is_empty() {
             return Ok(vec![format!(
-                "A learner is already working on {repo}; what it changes appears in the learning ticker."
+                "A conditioner is already working on {repo}; what it changes appears under conditioning."
             )]);
         }
         let mut lines = Vec::new();

@@ -68,7 +68,12 @@ impl Drop for Term {
 /// The next key press within [`TICK`], if any. Resizes are handled by the next draw; key releases
 /// (reported on Windows) are ignored.
 pub fn next_key() -> Result<Option<KeyEvent>> {
-    if !event::poll(TICK)? {
+    next_key_within(TICK)
+}
+
+/// The next key press within `wait`, if any.
+pub fn next_key_within(wait: Duration) -> Result<Option<KeyEvent>> {
+    if !event::poll(wait)? {
         return Ok(None);
     }
     match event::read()? {

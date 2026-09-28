@@ -48,19 +48,18 @@ fn watch_demo_replays_real_hook_decisions() {
     let t = text(&o);
     assert!(o.status.success(), "{t}");
     for s in [
-        "adage watch · harbor-dispatch",
+        "adage watch  harbor-dispatch",
         "demo",
-        "→ lookup-incident FIRE",
-        "withheld lookup-incident FIRE",
+        "→ ◠ lookup-incident          FIRE",
+        "○ would fire lookup-incident (withheld)",
         "✓ followed lookup-incident",
-        "✗ derailed lookup-incident",
-        "→ dead-end-npm-test INHIBIT",
-        "■ stop-request",
-        "✓ met codegen-after-registry",
-        "(holdout)",
-        "learned harbor-dispatch/incidents: read-linked-files yellow→green",
-        "+ hooks cc",
-        "+ auto-learn on",
+        "✗ ignored lookup-incident",
+        "→ ◠ dead-end-npm-test        INHIBIT",
+        "■ finish line: asked the agent to continue",
+        "✓ finish line met codegen-after-registry",
+        "read-linked-files         prime → fire",
+        "hooks claude",
+        "auto-condition",
     ] {
         assert!(t.contains(s), "the demo frame lacks {s:?}:\n{t}");
     }
@@ -75,7 +74,9 @@ fn watch_once_on_a_fresh_machine_and_doctor_watch_alias() {
     let t = text(&o);
     assert!(o.status.success(), "{t}");
     assert!(
-        t.contains("adage watch · work") && t.contains("No hook activity yet") && t.contains("Nothing learned yet"),
+        t.contains("adage watch  work")
+            && t.contains("No traces yet for work")
+            && t.contains("Nothing conditioned yet"),
         "{t}"
     );
     assert_eq!(t.lines().count(), 20);

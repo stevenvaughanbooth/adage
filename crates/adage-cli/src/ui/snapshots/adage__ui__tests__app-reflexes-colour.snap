@@ -1,0 +1,39 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+[magenta b] adage[/]   [darkgray] 1 [/][d]Live [/] [magenta b r] 2 Reflexes [/][yellow](2)[/] [darkgray] 3 [/][d]Map [/] [darkgray] 4 [/][d]Health [/][yellow](2)[/] [darkgray] 5 [/][d]Settings [/]                                                         [d]harbor-dispatch · [/][green]● [/]live
+[darkgray]──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[/]
+[lightmagenta b] / [/][darkgray]filter reflexes, commands, files[/]                     [darkgray]│[/]  [magenta]◠ [/][b]lookup-incident[/]
+ [green]● [/][d]fire 2  [/][yellow]● [/][d]prime 3  [/][red]● [/][d]inhibit 1  [/][darkgray]all states ▾[/]         [darkgray]│[/]  [green]● [/][green b]fire[/][d] · firm · harbor-dispatch/incidents@0.3.0 · last fired 12:04:00[/]
+                                                        [darkgray]│[/]  [yellow]○ waits for review: [/][yellow b]new · [/][d]conditioned and never reviewed[/]
+ [darkgray]▾ [/]harbor-dispatch/incidents[darkgray]@0.3.0[/]                      [darkgray]│[/]
+[magenta]▌[/]  [green]● [/][magenta]◠ [/][b]lookup-incident         [/][d]firm     [/][darkgray]24/25[/]           [darkgray]│[/]  [darkgray b]WHAT THE AGENT SEES[/]
+   [green]● [/][magenta]◠ [/]read-linked-files       [d]firm     [/][darkgray]13/17[/]           [darkgray]│[/]  [darkgray]<adage-reflex track="harbor-dispatch/incidents@0.3.0" reflex="lookup-incident"[/]
+   [red]● [/][magenta]◠ [/]dead-end-npm-test       [d]firm     [/][darkgray]11/43[/]           [darkgray]│[/]  [darkgray]strength="fire">[/]
+                                                        [darkgray]│[/]  Incidents here are looked up with a script. A known next step here is:
+ [darkgray]▾ [/]harbor-dispatch/intents[darkgray]@0.3.0[/]                        [darkgray]│[/]  [lightmagenta]  bin/fetch-incident INC-2045. Ignore this if the user is asking for something else.[/]
+   [yellow]● [/][magenta]◠ [/]start-with-npm-check    [d]forming  [/][darkgray]6/9[/]             [darkgray]│[/]  [d]Learned by Adage from this repository's earlier agent sessions; not requested by the user.[/]
+                                                        [darkgray]│[/]  [darkgray]</adage-reflex>[/]
+ [darkgray]▾ [/]nascent[darkgray] · waits for review[/]                           [darkgray]│[/]
+   [darkgray]○ [/][magenta]◠ [/]regen-openapi-client    [d]nascent  [/][darkgray]3/4[/]             [darkgray]│[/]  [darkgray b]EVIDENCE[/]
+                                                        [darkgray]│[/]    [darkgray]support       [/]24/25 traces      [darkgray]lower bound   [/][b]0.80[/]
+ [darkgray]▾ [/]instincts[darkgray] · adage/finish-line@0.1.0[/]                  [darkgray]│[/]    [darkgray]turns saved   [/]8 per trace       [darkgray]rate          [/][b]0.96[/]
+   [yellow]● [/][magenta]◉ [/]finish-line/regenerate  [d]firm     [/][darkgray]–[/]               [darkgray]│[/]    [darkgray]live          [/]fired 3 · followed 2 · ignored 1 · finish line met 0
+                                                        [darkgray]│[/]
+ [darkgray]▸ extinguished · 1[/]                                     [darkgray]│[/]  [darkgray b]WITH THE REFLEX vs CONTROL[/]
+                                                        [darkgray]│[/]    [darkgray]took the step         [/][d]with     [/][magenta]█████████████████   [/]  10/12
+                                                        [darkgray]│[/]                          [d]control  [/][darkgray]████                [/][d]  1/5[/]
+                                                        [darkgray]│[/]
+                                                        [darkgray]│[/]  [darkgray b]LIFECYCLE[/]
+                                                        [darkgray]│[/]    [darkgray]○ [/][d]nascent[/][darkgray] ──── [/][magenta]● [/][d]forming[/][darkgray] ──── [/][green]● [/][b]firm[/]
+                                                        [darkgray]│[/]  [darkgray]  ceiling fire · effect observe[/]
+                                                        [darkgray]│[/]
+                                                        [darkgray]│[/]  [darkgray b]ACTIONS[/]
+                                                        [darkgray]│[/]    [darkgray]s strengthen   [/][lightmagenta b]w[/][d] weaken   [/][lightmagenta b]x[/][d] extinguish   [/][lightmagenta b]a[/][d] approve   [/][lightmagenta b]n[/][d] pin   [/][darkgray]m dismiss   [/]
+                                                        [darkgray]│[/]    [lightmagenta b]d[/][d] delegate   [/][lightmagenta b]t[/][d] traces (5)   [/][lightmagenta b]o[/][d] open in map[/]
+                                                        [darkgray]│[/]  [darkgray]  same as [/][lightmagenta]adage review weaken harbor-dispatch/incidents lookup-incident[/][darkgray] from any shell[/]
+                                                        [darkgray]│[/]
+                                                        [darkgray]│[/]
+[darkgray]──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[/]
+ [lightmagenta b]?[/][darkgray] keys · [/][lightmagenta b]:[/][darkgray] palette · [/][lightmagenta b]/[/][darkgray] filter · [/][lightmagenta b]j/k[/][darkgray] move · [/][lightmagenta b]enter[/][darkgray] expand · [/][lightmagenta b]tab[/][darkgray] next tab[/]                                                                        [lightmagenta b]q[/][darkgray] quit [/]

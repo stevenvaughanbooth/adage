@@ -1,7 +1,7 @@
 //! `adage watch`: the compact live pane.
 
 use super::health::{self, Health};
-use super::jobs::{Loaded, Loader};
+use super::jobs::{Loaded, Loader, Want};
 use super::tail::{LineTail, SpoolTail};
 use super::term::{self, Term};
 use super::view::{self, Ctx, Live};
@@ -10,8 +10,9 @@ use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::Terminal;
+use std::time::{Duration, Instant};
 
-/// The files the live view follows, and the learners' locks.
+/// The files the live view follows, and the conditioners' locks.
 pub struct Sources {
     pub spool: SpoolTail,
     pub log: LineTail,
@@ -19,7 +20,7 @@ pub struct Sources {
     polls: u64,
 }
 
-/// Learners' locks are probed every this many polls (about twice a second).
+/// Conditioners' locks are probed every this many polls (about twice a second).
 const LOCK_EVERY: u64 = 3;
 
 impl Sources {
@@ -32,7 +33,7 @@ impl Sources {
         }
     }
 
-    /// New records and log lines; which repositories are learning (`repo`, or all).
+    /// New records and log lines; which repositories are conditioning (`repo`, or all).
     pub fn poll(&mut self, live: &mut Live, repo: Option<&str>) {
         live.push_records(self.spool.poll());
         live.push_log(self.log.poll());
@@ -45,14 +46,39 @@ impl Sources {
 
 /// Map a key to the live view's keys; `true` to quit.
 pub fn live_key(live: &mut Live, code: KeyCode, mods: KeyModifiers) -> bool {
-    if live.help {
+    if code == KeyCode::Char('c') && mods.contains(KeyModifiers::CONTROL) {
+        return true;
+    }
+    if live.filtering {
+        match code {
+            KeyCode::Esc => {
+                live.filter.clear();
+                live.filtering = false;
+            }
+            KeyCode::Enter => live.filtering = false,
+            KeyCode::Backspace => {
+                live.filter.pop();
+            }
+            KeyCode::Char(c) if live.filter.chars().count() < 60 => {
+                live.filter.push(c);
+                live.scroll = 0;
+            }
+            _ => {}
+        }
+        return false;
+    }
+    if live.help || live.inspect || live.map_hint {
         live.help = false;
+        live.inspect = false;
+        live.map_hint = false;
         return matches!(code, KeyCode::Char('q'));
     }
     match code {
-        KeyCode::Char('q') | KeyCode::Esc => return true,
-        KeyCode::Char('c') if mods.contains(KeyModifiers::CONTROL) => return true,
+        KeyCode::Char('q') => return true,
+        KeyCode::Esc if !live.filter.is_empty() => live.filter.clear(),
+        KeyCode::Esc => return true,
         KeyCode::Char('?') | KeyCode::Char('h') => live.help = true,
+        KeyCode::Enter => live.inspect = true,
         KeyCode::Up => {
             live.key('k');
         }
@@ -70,9 +96,19 @@ pub fn live_key(live: &mut Live, code: KeyCode, mods: KeyModifiers) -> bool {
     false
 }
 
+/// How long to wait for a key: shorter while a pulse runs, so it fades smoothly.
+pub fn wait(live: &Live) -> Duration {
+    if live.pulsing() {
+        Duration::from_millis(60)
+    } else {
+        term::TICK
+    }
+}
+
 /// Run the pane until `q`. `before_tick` runs each frame (the demo uses it to keep playing).
 pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
     let loader = Loader::spawn(ctx.paths.clone(), ctx.root.clone());
+    loader.want(Want::Routes);
     let mut sources = Sources::new(&ctx);
     let mut live = Live::default();
     let mut health: Option<Health> = None;
@@ -83,14 +119,19 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
             f();
         }
         while let Ok(m) = loader.rx.try_recv() {
-            if let Loaded::Health(h) = m {
-                health = Some(*h);
-                ctx.tz = view::local_offset();
+            match m {
+                Loaded::Health(h) => {
+                    health = Some(*h);
+                    ctx.tz = view::local_offset();
+                }
+                Loaded::Routes(Ok(r)) => live.waiting = Some(r.waiting()),
+                Loaded::Routes(Err(_)) => {}
             }
         }
         sources.poll(&mut live, health.as_ref().and_then(|h| h.repo_key.as_deref()));
+        live.tick_pulse(Instant::now(), ctx.theme.motion);
         t.terminal.draw(|f| view::draw_live(f, f.area(), &live, health.as_ref(), &ctx, true))?;
-        if let Some(k) = term::next_key()? {
+        if let Some(k) = term::next_key_within(wait(&live))? {
             if live_key(&mut live, k.code, k.modifiers) {
                 break;
             }
@@ -123,6 +164,7 @@ pub fn snapshot(ctx: &Ctx, size: Option<(u16, u16)>) -> String {
     let mut live = Live::default();
     let health = health::gather(&ctx.paths, ctx.root.as_deref());
     Sources::new(ctx).poll(&mut live, health.repo_key.as_deref());
+    live.waiting = super::routes::load(&ctx.paths).ok().map(|r| r.waiting());
     let mut term = match Terminal::new(TestBackend::new(w, h)) {
         Ok(t) => t,
         Err(e) => return format!("adage watch: {e}\n"),

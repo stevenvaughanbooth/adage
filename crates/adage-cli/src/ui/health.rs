@@ -31,10 +31,10 @@ impl Fix {
     pub fn label(&self) -> String {
         match self {
             Fix::InstallHooks(h) => format!("install {h} hooks"),
-            Fix::FetchModel => "fetch the embedding model".into(),
-            Fix::LearnNow => "learn this repository now".into(),
+            Fix::FetchModel => "fetch the intent model".into(),
+            Fix::LearnNow => "condition this repository now".into(),
             Fix::OpenFailOpen => "open the fail-open log".into(),
-            Fix::EnableAutoLearn => "turn auto-learn on".into(),
+            Fix::EnableAutoLearn => "turn auto-condition on".into(),
             Fix::OpenSettings => "open the settings".into(),
         }
     }
@@ -44,6 +44,19 @@ impl Fix {
 pub struct Light {
     pub label: String,
     pub lamp: Lamp,
+    /// The command that fixes it, when it needs one.
+    pub hint: Option<String>,
+}
+
+impl Light {
+    pub fn new(label: impl Into<String>, lamp: Lamp) -> Light {
+        Light { label: label.into(), lamp, hint: None }
+    }
+
+    fn hint(mut self, cmd: &str) -> Light {
+        self.hint = Some(cmd.to_string());
+        self
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -52,13 +65,10 @@ pub struct Health {
     /// One per check: its fix, if it needs and has one.
     pub fixes: Vec<Option<Fix>>,
     pub lights: Vec<Light>,
+    /// Harnesses whose hooks run for this repository (`claude`, `codex`, …).
+    pub harnesses: Vec<String>,
     pub generation: Option<String>,
-    pub routes_total: usize,
-    /// Routes for this repository, when it has a key.
-    pub routes_repo: Option<usize>,
     pub repo_key: Option<String>,
-    /// The effective `learn.auto`, and where it came from (`default`, `file`, `env …`).
-    pub auto_learn: Option<(bool, String)>,
 }
 
 impl Health {
@@ -156,75 +166,58 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
     let by = |name: &str| checks.iter().find(|c| c.check == name);
 
     let mut lights = Vec::new();
-    lights.push(Light {
-        label: format!("adage {}", env!("CARGO_PKG_VERSION")),
-        lamp: by("binary").map_or(Lamp::Off, |c| lamp(c.status)),
-    });
+    if let Some(c) = by("binary").filter(|c| c.status != Status::Pass) {
+        lights.push(Light::new(format!("adage {}", env!("CARGO_PKG_VERSION")), lamp(c.status)).hint("adage doctor"));
+    }
     // Hooks that would run for this repository: user scope, or registered in it.
     let regs = detect::registrations(root);
     let working: Vec<&str> =
         regs.iter().filter(|r| r.binary.as_deref().is_some_and(detect::executable)).map(|r| r.harness).collect();
     let broken = regs.iter().any(|r| !r.binary.as_deref().is_some_and(detect::executable));
     let installed = detect::harnesses().iter().any(|d| d.found());
-    let mut names: Vec<&str> = working.iter().map(|h| super::feed::harness_short(h)).collect();
+    let mut names: Vec<String> = working.iter().map(|h| super::feed::harness_name(h).to_string()).collect();
     names.sort();
     names.dedup();
-    lights.push(if broken {
-        Light { label: "hooks broken".into(), lamp: Lamp::Fail }
-    } else if !names.is_empty() {
-        Light { label: format!("hooks {}", names.join("+")), lamp: Lamp::Ok }
-    } else if installed {
-        Light { label: "no hooks".into(), lamp: Lamp::Warn }
-    } else {
-        Light { label: "no harness".into(), lamp: Lamp::Off }
-    });
+    if broken {
+        lights.push(Light::new("hooks broken", Lamp::Fail).hint("adage doctor"));
+    }
+    for n in &names {
+        lights.push(Light::new(format!("hooks {n}"), Lamp::Ok));
+    }
+    if names.is_empty() && !broken {
+        lights.push(if installed {
+            Light::new("no hooks", Lamp::Warn).hint("adage init")
+        } else {
+            Light::new("no harness found", Lamp::Off)
+        });
+    }
     let n = routes_repo.unwrap_or(index.routes.len());
-    lights.push(Light {
-        label: format!("{n} route{}", if n == 1 { "" } else { "s" }),
-        lamp: by("index").map_or(Lamp::Off, |c| {
-            if n == 0 && c.status == Status::Pass {
-                Lamp::Warn
-            } else {
-                lamp(c.status)
-            }
-        }),
+    let index_check = by("index");
+    lights.push(match index_check.map(|c| c.status) {
+        Some(Status::Pass) if n == 0 => Light::new("no reflexes yet", Lamp::Warn).hint("adage condition"),
+        Some(Status::Pass) => Light::new(format!("{n} reflex{}", if n == 1 { "" } else { "es" }), Lamp::Ok),
+        Some(s) => Light::new("index", lamp(s)).hint("adage condition"),
+        None => Light::new("no index", Lamp::Off).hint("adage condition"),
     });
-    // Any live-learning check short of pass (a failed run, a stuck learner, a backlog) dims it.
+    // Any live-conditioning check short of pass (a failed run, a stuck learner, a backlog) dims it.
     let learning_trouble = checks.iter().any(|c| c.check.starts_with("auto-learn") && c.status != Status::Pass);
-    lights.push(Light {
-        label: match &auto_learn {
-            Some((true, _)) => "auto-learn on".into(),
-            Some((false, _)) => "auto-learn off".into(),
-            None => "auto-learn ?".into(),
-        },
-        lamp: match (&auto_learn, learning_trouble) {
-            (_, true) => Lamp::Warn,
-            (Some((true, _)), false) => Lamp::Ok,
-            _ => Lamp::Off,
-        },
+    lights.push(match (&auto_learn, learning_trouble) {
+        (_, true) => Light::new("auto-condition", Lamp::Warn).hint("adage doctor"),
+        (Some((true, _)), false) => Light::new("auto-condition", Lamp::Ok),
+        _ => Light::new("auto-condition off", Lamp::Off),
     });
     let model = by("embedding model");
     let model_installed = model.is_some_and(|c| c.status == Status::Pass && c.detail.contains("installed;"));
-    lights.push(Light {
-        label: if model_installed { "model".into() } else { "no model".into() },
-        lamp: match model.map(|c| c.status) {
-            Some(Status::Pass) if model_installed => Lamp::Ok,
-            Some(Status::Pass) | None => Lamp::Off,
-            Some(s) => lamp(s),
-        },
+    lights.push(match model.map(|c| c.status) {
+        Some(Status::Pass) if model_installed => Light::new("intent model", Lamp::Ok),
+        Some(Status::Pass) | None => Light::new("intent model not fetched", Lamp::Off).hint("adage models fetch"),
+        Some(s) => Light::new("intent model", lamp(s)).hint("adage models fetch"),
     });
-    lights.push(Light {
-        label: format!("fail-open {fail_open}"),
-        lamp: if fail_open == 0 { Lamp::Ok } else { Lamp::Warn },
-    });
-    Health {
-        checks,
-        fixes,
-        lights,
-        generation,
-        routes_total: index.routes.len(),
-        routes_repo,
-        repo_key: key,
-        auto_learn,
+    if fail_open > 0 {
+        lights.push(
+            Light::new(format!("{fail_open} fail-open error{}", if fail_open == 1 { "" } else { "s" }), Lamp::Warn)
+                .hint("adage doctor"),
+        );
     }
+    Health { checks, fixes, lights, harnesses: names, generation, repo_key: key }
 }
