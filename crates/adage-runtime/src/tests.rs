@@ -1423,6 +1423,70 @@ fn a_sequence_follows_an_edit_and_a_context_fires_after_its_items() {
     assert_eq!(t.words, ["make"]);
 }
 
+/// One edit, one directive: a sequence whose first step is a finish line's command subsumes the
+/// finish line. The agent is told once (the sequence), and the obligation rides on the sequence's
+/// first step: met when it runs, a Stop request when it does not, re-armed by a later edit.
+#[test]
+fn a_sequence_subsumes_the_finish_line_it_begins_with() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let routes = vec![
+        route(
+            "finish-line",
+            Trigger::AfterEdit { paths: "schema/*.json".into() },
+            Step::Run { command: "make gen".into() },
+            vec![],
+            Effect::Regenerate,
+            Strength::Fire,
+        ),
+        route(
+            "gen-then-test",
+            Trigger::AfterEdit { paths: "schema/*.json".into() },
+            Step::Sequence { commands: vec!["make gen".into(), "make test".into()] },
+            vec![],
+            Effect::Regenerate,
+            Strength::Fire,
+        ),
+        route(
+            "docs-line",
+            Trigger::AfterEdit { paths: "docs/*.md".into() },
+            Step::Run { command: "make docs".into() },
+            vec![],
+            Effect::Regenerate,
+            Strength::Fire,
+        ),
+    ];
+    let index = Index::compile(&[track("acme/t", "desire-path", routes)]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
+    let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
+    let edit = |f: &str| Event::Batch { calls: vec![edit_call(&dir, f)] };
+    let stop = || Event::Stop { stop_hook_active: false };
+
+    let d = go(edit("schema/users.json"));
+    let said: Vec<&str> = d.directives.iter().map(|x| x.route.as_str()).collect();
+    assert_eq!(said, ["gen-then-test"], "one directive for one edit");
+    // Not run: the carried obligation asks at Stop, once.
+    let s = go(stop());
+    assert!(s.continue_reason.as_deref().is_some_and(|r| r.contains("make gen")), "{s:?}");
+    assert!(go(stop()).continue_reason.is_none());
+    // Its first step meets the obligation and follows the sequence.
+    go(edit("schema/users.json"));
+    let d = go(Event::Batch { calls: vec![bash("make gen", "ok")] });
+    assert!(d.judgements.iter().any(|j| matches!(j, Judgement::ObligationMet { route } if route == "finish-line")));
+    assert!(go(stop()).continue_reason.is_none(), "met");
+    // A finish line no sequence begins with is unchanged.
+    let d = go(edit("docs/index.md"));
+    assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["docs-line"]);
+}
+
 #[test]
 fn a_context_needs_its_items_in_order_within_its_gap_of_alphabet_events() {
     let dir = tempfile::tempdir().unwrap();

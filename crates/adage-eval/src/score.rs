@@ -425,19 +425,7 @@ pub fn score_session(
                             && (a.turn > f.turn || (a.turn == f.turn && edit_call.is_some_and(|c| a.call > c)))
                     })
                     .map(|a| a.turn);
-                let fl = &mut tally.finish_line;
-                fl.obligations += 1;
-                let needed = meta.is_some_and(|m| m.stale_generated == Some(true) || m.passed == Some(false));
-                let clean = meta.is_some_and(|m| m.passed == Some(true) && m.stale_generated != Some(true));
-                if m.is_some() {
-                    fl.met += 1;
-                } else if needed {
-                    fl.caught += 1;
-                } else if clean {
-                    fl.false_alarms += 1;
-                } else {
-                    fl.unknown += 1;
-                }
+                tally_obligation(&mut tally.finish_line, m.is_some(), meta);
                 (m.is_some(), m, 0)
             }
             Step::Run { .. } => {
@@ -446,11 +434,23 @@ pub fn score_session(
                 let m = acts.iter().find(|a| after(a, f) && e.matches(a)).map(|a| a.turn);
                 (m.is_some(), m, m.map(|t| t - f.turn - 1).unwrap_or(0))
             }
-            // A sequence is judged on its first command (Track G §6.1).
+            // A sequence is judged on its first command (Track G §6.1). One that begins with a
+            // finish line's command after the same edits carries that obligation (the runtime
+            // delivers the sequence alone): it counts as the obligation given, too.
             Step::Sequence { commands } => {
                 let Some(cmd) = commands.first() else { continue };
                 let e = Expect::of(cmd, table);
                 let m = acts.iter().find(|a| after(a, f) && e.matches(a)).map(|a| a.turn);
+                let carries = matches!(route.trigger, Trigger::AfterEdit { .. })
+                    && routes.values().any(|o| {
+                        !o.is_instinct()
+                            && matches!(o.trigger, Trigger::AfterEdit { .. })
+                            && adage_tracks::interlock::same_point(&route.trigger, &o.trigger)
+                            && matches!(&o.step, Step::Run { command } if pattern::same_command(cmd, command))
+                    });
+                if carries {
+                    tally_obligation(&mut tally.finish_line, m.is_some(), meta);
+                }
                 (m.is_some(), m, m.map(|t| t - f.turn - 1).unwrap_or(0))
             }
         };
@@ -651,6 +651,22 @@ fn recall(
         }
     }
     (steps.len() as u32, covered)
+}
+
+/// One obligation given: met, or caught (the session needed it), a false alarm, or unknown.
+fn tally_obligation(fl: &mut FinishLine, met: bool, meta: Option<&SessionMeta>) {
+    fl.obligations += 1;
+    let needed = meta.is_some_and(|m| m.stale_generated == Some(true) || m.passed == Some(false));
+    let clean = meta.is_some_and(|m| m.passed == Some(true) && m.stale_generated != Some(true));
+    if met {
+        fl.met += 1;
+    } else if needed {
+        fl.caught += 1;
+    } else if clean {
+        fl.false_alarms += 1;
+    } else {
+        fl.unknown += 1;
+    }
 }
 
 #[cfg(test)]
