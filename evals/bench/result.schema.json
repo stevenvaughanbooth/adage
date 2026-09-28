@@ -13,7 +13,7 @@
       "pattern": "^[0-9a-f]{16}$",
       "description": "Deterministic: SHA-256 (first 16 hex digits) of the canonical JSON of the schema version, tier, suite definition, dataset content hashes and params hash."
     },
-    "tier": { "enum": ["l0", "l0-sec", "l1", "l2"], "description": "l0: offline replay of recorded sessions (the only tier of version 1). l0-sec: the sandbox escape and staging suites. l1: the simulator. l2: live sandboxes." },
+    "tier": { "enum": ["l0", "l0-sec", "l1", "l2", "l3"], "description": "l0: offline replay of recorded sessions (the only tier of version 1). l0-sec: the sandbox escape and staging suites. l1: the simulator. l2: live sandboxes. l3 (version 2): live agents on real open-source repositories at pinned commits (RepoBench-Local, evals/repobench)." },
     "exec_level": { "enum": ["e0", "e1", "e2"], "description": "Version 2: the execution level the attested arm used." },
     "suite": { "type": "string" },
     "git_sha": { "type": "string", "description": "Only when given (--git-sha or ADAGE_GIT_SHA), and never with --deterministic." },

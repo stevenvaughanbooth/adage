@@ -434,6 +434,23 @@ class Isolation(unittest.TestCase):
         self.assertEqual(env["ADAGE_ARM"], "treated")
         self.assertEqual(runner.env_for("adage", Path("/r/private/adage-home"))["ADAGE_HOME"], "/r/private/adage-home")
 
+    def test_the_agents_md_arm_is_the_control_plus_a_context_file(self):
+        env = runner.env_for("agents-md", Path("/r/private/adage-home"))
+        self.assertEqual(env["ADAGE_ARM"], "control")
+        self.assertEqual(env["ADAGE_HOME"], "/r/private/adage-home")
+        self.assertEqual(runner.settings_kind("agents-md"), "hooks")
+        # The sandbox command learns the arm, so it can commit the context file for this arm only.
+        self.assertEqual(runner.expand(["mk", "{dir}", "--arm", "{arm}"], dir="/d", task="t", arm="agents-md"),
+                         ["mk", "/d", "--arm", "agents-md"])
+        self.assertEqual(runner.expand(["{arm}"], dir="/d", task="t"), [""])
+
+    def test_task_prompts_replace_the_rotating_templates(self):
+        cfg = {**runner.DEFAULTS, "prompts": ["Fix {id}."], "task_prompts": {"T-1": "Calling f({}) crashes; fix it."},
+               "train": {"tasks": ["T-1", "T-2"], "repeats": 1}, "eval": {"tasks": ["T-3"], "repeats": 1}}
+        rows = {r[3]: r[4].format(id=r[3]) for r in runner.plan(cfg, ["train", "eval"], 1)}
+        self.assertEqual(rows["T-1"], "Calling f({}) crashes; fix it.")
+        self.assertEqual(rows["T-2"], "Fix T-2.")
+
     def test_the_plan_puts_homes_outside_the_private_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = json.loads(dry_with(CONFIG, "--json", "--root", tmp))

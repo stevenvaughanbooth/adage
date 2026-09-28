@@ -1,0 +1,64 @@
+{
+ "protocol": "adage-external/1",
+ "train_frac": 0.5,
+ "buffer": 2,
+ "min_test": 5,
+ "repos": {
+  "vue-core": {
+   "train": [
+    "vue-core-e0d27234",
+    "vue-core-378f9783",
+    "vue-core-97f35255",
+    "vue-core-a7513a1a",
+    "vue-core-c04a45d1",
+    "vue-core-77061fe8",
+    "vue-core-2506700b",
+    "vue-core-24684647",
+    "vue-core-a2b40db9",
+    "vue-core-6e1814aa"
+   ],
+   "buffer": [
+    "vue-core-a72036f6",
+    "vue-core-b535917d"
+   ],
+   "test": [
+    "vue-core-ef82a267",
+    "vue-core-f8d42e1c",
+    "vue-core-38577161",
+    "vue-core-2cde6f75",
+    "vue-core-bfcfe9e4",
+    "vue-core-76d42dc1",
+    "vue-core-5dda1920",
+    "vue-core-54097087"
+   ],
+   "cutoff": "2026-08-27T00:19:37+00:00",
+   "first_test": "2026-08-27T00:21:42+00:00",
+   "dates": {
+    "vue-core-e0d27234": "2026-07-16T00:19:40+00:00",
+    "vue-core-378f9783": "2026-07-16T00:20:06+00:00",
+    "vue-core-97f35255": "2026-07-16T00:58:30+00:00",
+    "vue-core-a7513a1a": "2026-08-04T07:40:21+00:00",
+    "vue-core-c04a45d1": "2026-08-04T07:41:05+00:00",
+    "vue-core-77061fe8": "2026-08-04T07:42:23+00:00",
+    "vue-core-2506700b": "2026-08-04T07:44:17+00:00",
+    "vue-core-24684647": "2026-08-04T23:57:47+00:00",
+    "vue-core-a2b40db9": "2026-08-11T07:28:17+00:00",
+    "vue-core-6e1814aa": "2026-08-27T00:19:37+00:00",
+    "vue-core-a72036f6": "2026-08-27T00:20:07+00:00",
+    "vue-core-b535917d": "2026-08-27T00:20:41+00:00",
+    "vue-core-ef82a267": "2026-08-27T00:21:42+00:00",
+    "vue-core-f8d42e1c": "2026-08-27T00:22:52+00:00",
+    "vue-core-38577161": "2026-08-27T00:24:53+00:00",
+    "vue-core-2cde6f75": "2026-09-07T01:24:30+00:00",
+    "vue-core-bfcfe9e4": "2026-09-07T01:25:15+00:00",
+    "vue-core-76d42dc1": "2026-09-07T01:58:54+00:00",
+    "vue-core-5dda1920": "2026-09-07T03:05:54+00:00",
+    "vue-core-54097087": "2026-09-09T07:28:30+00:00"
+   }
+  }
+ },
+ "excluded": {},
+ "unassigned": [],
+ "digest": "540417ac83eb76b6edad03b83339e57846d088e00681ecde04b8f51036d01a91",
+ "repo_key": "github.com/vuejs/core"
+}

@@ -1,0 +1,376 @@
+{
+ "repo": "marshmallow",
+ "url": "https://github.com/marshmallow-code/marshmallow",
+ "repo_key": "github.com/marshmallow-code/marshmallow",
+ "tasks": [
+  {
+   "id": "marshmallow-5c2f7f99",
+   "sha": "5c2f7f99f35bc3b0fd9ececa8fcde75d1a895dc2",
+   "base": "a782c52d84f9ac0556e2771f7af8c5e5e8e86cab",
+   "date": "2023-07-02T18:33:03+02:00",
+   "subject": "Merge pull request #2102 from TheBigRoomXXL/fix-utils-from-timestamp-overflow",
+   "src_files": [
+    "src/marshmallow/utils.py"
+   ],
+   "test_files": [
+    "tests/test_deserialization.py",
+    "tests/test_utils.py"
+   ],
+   "gold_files": [
+    "AUTHORS.rst",
+    "src/marshmallow/utils.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_deserialization.py tests/test_utils.py",
+   "base_exit": 1,
+   "base_tail": "rialization.py:30: in fromtimestamp\n    raise OverflowError()\nE   OverflowError\n=============================== warnings summary ===============================\ntests/test_deserialization.py::TestFieldDeserialization::test_datetime_list_field_deserialization\n  /tmp/adage-repobench/validate/marshmallow-5c2f7f99/repo/tests/test_deserialization.py:1293: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).\n    dtimes = dt.datetime.now(), dt.datetime.now(), dt.datetime.utcnow()\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nFAILED tests/test_deserialization.py::TestFieldDeserialization::test_oversized_timestamp_field_deserialization[MockDateTimeOSError-timestamp] - OSError\nFAILED tests/test_deserialization.py::TestFieldDeserialization::test_oversized_timestamp_field_deserialization[MockDateTimeOSError-timestamp_ms] - OSError\nFAILED tests/test_deserialization.py::TestFieldDeserialization::test_oversized_timestamp_field_deserialization[MockDateTimeOverflowError-timestamp] - OverflowError\nFAILED tests/test_deserialization.py::TestFieldDeserialization::test_oversized_timestamp_field_deserialization[MockDateTimeOverflowError-timestamp_ms] - OverflowError\n=================== 4 failed, 400 passed, 1 warning in 1.73s ===================",
+   "fixed_seconds": 1.22,
+   "n_tests": 404,
+   "prompt": "When deserializing a `DateTime` field with `format=\"timestamp\"` or `\"timestamp_ms\"`, values that are too large for the platform's C library to convert (or negative in some cases) crash with an unhandled `OSError`/`OverflowError`/`ValueError` instead of the expected `ValidationError`. For example:\n\n```python\nfrom marshmallow import fields\nfield = fields.DateTime(format=\"timestamp\")\nfield.deserialize(99999999999999999)\n```\n\nThis raises `OverflowError` instead of a `ValidationError` with message \"Not a valid datetime.\". Please fix this so out-of-range timestamp values consistently raise a `ValidationError`.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-91147b2b",
+   "sha": "91147b2bfd2824383ec6dca8925dc038aad229ef",
+   "base": "819749204b9a7271c189401e5f5aa00cab624514",
+   "date": "2023-07-20T22:54:28+02:00",
+   "subject": "Merge pull request #2150 from deckar01/2149-default-nested-partial",
+   "src_files": [
+    "src/marshmallow/schema.py"
+   ],
+   "test_files": [
+    "tests/test_deserialization.py"
+   ],
+   "gold_files": [
+    "src/marshmallow/schema.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_deserialization.py",
+   "base_exit": 1,
+   "base_tail": "                 [100%]\n\n=================================== FAILURES ===================================\n__________________ TestValidation.test_nested_partial_default __________________\ntests/test_deserialization.py:2249: in test_nested_partial_default\n    result = SchemaB().load(b_dict)\n             ^^^^^^^^^^^^^^^^^^^^^^\nsrc/marshmallow/schema.py:731: in load\n    return self._do_load(\nsrc/marshmallow/schema.py:918: in _do_load\n    raise exc\nE   marshmallow.exceptions.ValidationError: {'z': {'x': ['Missing data for required field.']}}\n=============================== warnings summary ===============================\ntests/test_deserialization.py::TestFieldDeserialization::test_datetime_list_field_deserialization\n  /tmp/adage-repobench/validate/marshmallow-91147b2b/repo/tests/test_deserialization.py:1293: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).\n    dtimes = dt.datetime.now(), dt.datetime.now(), dt.datetime.utcnow()\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nFAILED tests/test_deserialization.py::TestValidation::test_nested_partial_default - marshmallow.exceptions.ValidationError: {'z': {'x': ['Missing data for required field.']}}\n=================== 1 failed, 368 passed, 1 warning in 0.73s ===================",
+   "fixed_seconds": 0.67,
+   "n_tests": 369,
+   "prompt": "When a `Nested` field wraps a `Schema` *instance* that was already constructed with its own `partial` argument, that partial configuration seems to get ignored during load. For example:\n\n```python\nclass SchemaA(Schema):\n    x = fields.Integer(required=True)\n    y = fields.Integer(required=True)\n\nclass SchemaB(Schema):\n    z = fields.Nested(SchemaA(partial=(\"x\",)))\n\nSchemaB().load({\"z\": {\"y\": 42}})\n```\n\nThis raises a `ValidationError` complaining that `x` is missing, even though the nested schema instance was explicitly created with `partial=(\"x\",)`. Please fix this so the nested schema instance's own partial settings are respected.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-8f493e66",
+   "sha": "8f493e66b38d71269a8388b120b537a7fbd60ca8",
+   "base": "cd976d5d2220a5e2f553fec2082a5d254a7019da",
+   "date": "2024-03-04T20:18:38+00:00",
+   "subject": "Fix error message (#2246)",
+   "src_files": [
+    "src/marshmallow/schema.py"
+   ],
+   "test_files": [
+    "tests/test_schema.py"
+   ],
+   "gold_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/schema.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_schema.py",
+   "base_exit": 1,
+   "base_tail": "est_fields_must_be_declared_as_instances ___________________\ntests/test_schema.py:556: in test_fields_must_be_declared_as_instances\n    with pytest.raises(\nE   AssertionError: Regex pattern did not match.\nE     Expected regex: 'Field for \"name\" must be declared as a Field instance'\nE     Actual message: 'Field for \"{field_name}\" must be declared as a Field instance, not a class. Did you mean \"fields.{field_obj.__name__}()\"?'\n=============================== warnings summary ===============================\ntests/test_schema.py::test_load_validation_error_stores_input_data_and_valid_data\n  /tmp/adage-repobench/validate/marshmallow-8f493e66/repo/tests/test_schema.py:88: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).\n    \"always_valid\": dt.datetime.utcnow().isoformat(),\n\n-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html\n=========================== short test summary info ============================\nFAILED tests/test_schema.py::test_fields_must_be_declared_as_instances - AssertionError: Regex pattern did not match.\n  Expected regex: 'Field for \"name\" must be declared as a Field instance'\n  Actual message: 'Field for \"{field_name}\" must be declared as a Field instance, not a class. Did you mean \"fields.{field_obj.__name__}()\"?'\n=================== 1 failed, 245 passed, 1 warning in 1.19s ===================",
+   "fixed_seconds": 0.89,
+   "n_tests": 246,
+   "prompt": "When a schema field is mistakenly declared as a Field class instead of a Field instance (e.g. `name = fields.String` instead of `fields.String()`), marshmallow raises a `TypeError`, but the error message doesn't say which field caused the problem, making it hard to debug in schemas with many fields. For example:\n\n```python\nclass BadUserSchema(Schema):\n    name = fields.String\n\nBadUserSchema().dump(user)\n```\n\nExpected the error message to identify the offending field, e.g. something like `Field for \"name\" must be declared as a Field instance`. Please update the error message to include the field's name.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-de5e842a",
+   "sha": "de5e842aeaf7eacfa42e9231f8b18e0792851c45",
+   "base": "c7152171fbe7c12f5ac77800a43dc7ad8ae2e2cf",
+   "date": "2025-01-13T21:17:25+00:00",
+   "subject": "Check for fields declared as instances at class declaration rather than at instantiation (#2772)",
+   "src_files": [
+    "src/marshmallow/schema.py",
+    "src/marshmallow/utils.py"
+   ],
+   "test_files": [
+    "tests/test_schema.py"
+   ],
+   "gold_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/schema.py",
+    "src/marshmallow/utils.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_schema.py",
+   "base_exit": 1,
+   "base_tail": "........................................................................ [ 35%]\n..F..................................................................... [ 70%]\n............................................................             [100%]\n=================================== FAILURES ===================================\n__________________ test_fields_must_be_declared_as_instances ___________________\n\nuser = <User Monty>\n\n    def test_fields_must_be_declared_as_instances(user):\n>       with pytest.raises(\n            TypeError, match='Field for \"name\" must be declared as a Field instance'\n        ):\nE       Failed: DID NOT RAISE TypeError\n\ntests/test_schema.py:540: Failed\n=========================== short test summary info ============================\nFAILED tests/test_schema.py::test_fields_must_be_declared_as_instances - Failed: DID NOT RAISE TypeError\n1 failed, 203 passed in 0.97s",
+   "fixed_seconds": 0.93,
+   "n_tests": 204,
+   "prompt": "Schemas only validate that fields are declared as instances (not classes) when you actually call `dump`/`load`, so a mistake like the one below isn't caught until the schema is used at runtime, which can happen far from where the schema was defined:\n\n```python\nclass BadUserSchema(Schema):\n    name = fields.String\n```\n\nThis should raise a `TypeError` (with a message identifying the field name) immediately when the class is declared, rather than waiting until an instance of the schema is used for serialization. Please fix this so the check happens at class declaration time.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-2b84b56e",
+   "sha": "2b84b56e9a80d07b65d74811673e8e5cf46cd0f1",
+   "base": "fc8726244820b9f08fb7d02e007ed8d378a46c7b",
+   "date": "2025-10-31T13:00:27-04:00",
+   "subject": "(fix) missing constant with len validation (#2861)",
+   "src_files": [
+    "src/marshmallow/constants.py"
+   ],
+   "test_files": [
+    "tests/test_deserialization.py"
+   ],
+   "gold_files": [
+    "AUTHORS.rst",
+    "CHANGELOG.rst",
+    "src/marshmallow/constants.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_deserialization.py",
+   "base_exit": 1,
+   "base_tail": ">       assert field.deserialize({}) is missing\n               ^^^^^^^^^^^^^^^^^^^^^\n\ntests/test_deserialization.py:1014: \n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \nsrc/marshmallow/fields.py:375: in deserialize\n    self._validate(output)\nsrc/marshmallow/fields.py:270: in _validate\n    self._validate_all(value)\nsrc/marshmallow/validate.py:76: in __call__\n    validator(value)\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nself = <Length(min=0, max=None, equal=None, error=None)>\nvalue = <marshmallow.missing>\n\n    def __call__(self, value: _SizedT) -> _SizedT:\n>       length = len(value)\n                 ^^^^^^^^^^\nE       TypeError: object of type '_Missing' has no len()\n\nsrc/marshmallow/validate.py:416: TypeError\n=========================== short test summary info ============================\nFAILED tests/test_deserialization.py::TestFieldDeserialization::test_function_field_deserialization_missing_with_length_validator - TypeError: object of type '_Missing' has no len()\n1 failed, 378 passed in 0.97s",
+   "fixed_seconds": 1.3,
+   "n_tests": 379,
+   "prompt": "A `Function` field whose `deserialize` callable can legitimately return the `missing` sentinel breaks when combined with a validator like `validate.Length`. For example:\n\n```python\nfrom marshmallow import fields, validate, missing\n\nfield = fields.Function(\n    deserialize=lambda value: value.get(\"some-key\", missing),\n    validate=validate.Length(min=0),\n)\nfield.deserialize({})\n```\n\nInstead of returning `missing` as expected, this fails because the validator is run against the `missing` sentinel. Please fix this so validators are skipped when the deserialized value is `missing`.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-39e7c833",
+   "sha": "39e7c833e9c8711a49d6d710f7e3ee5cf2effbbe",
+   "base": "78a94ea0e7ee9f35f8322318064232fe6147f190",
+   "date": "2026-01-23T13:57:26+01:00",
+   "subject": "Merge pull request #2892 from thanhlecongg/fix-2891",
+   "src_files": [
+    "src/marshmallow/validate.py"
+   ],
+   "test_files": [
+    "tests/test_validate.py"
+   ],
+   "gold_files": [
+    "src/marshmallow/validate.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_validate.py",
+   "base_exit": 1,
+   "base_tail": "ex = self._regex(\n            relative=self.relative, absolute=self.absolute, require_tld=self.require_tld\n        )\n    \n        # Hostname is optional for file URLS. If absent it means `localhost`.\n        # Fill it in for the validation if needed\n        if scheme == \"file\" and value.startswith(\"file:///\"):\n            matched = regex.search(value.replace(\"file:///\", \"file://localhost/\", 1))\n        else:\n            matched = regex.search(value)\n    \n        if not matched:\n>           raise ValidationError(message)\nE           marshmallow.exceptions.ValidationError: Not a valid URL.\n\nsrc/marshmallow/validate.py:223: ValidationError\n=========================== short test summary info ============================\nFAILED tests/test_validate.py::test_url_accepts_valid_file_urls[FILE:///tmp/tmp1234] - marshmallow.exceptions.ValidationError: Not a valid URL.\nFAILED tests/test_validate.py::test_url_accepts_valid_file_urls[FILE:///C:/Users/test/file.txt] - marshmallow.exceptions.ValidationError: Not a valid URL.\nFAILED tests/test_validate.py::test_url_accepts_valid_file_urls[FILE:///home/user/documents/test.pdf] - marshmallow.exceptions.ValidationError: Not a valid URL.\nFAILED tests/test_validate.py::test_url_accepts_valid_file_urls[FILE:///tmp/test%20file.txt] - marshmallow.exceptions.ValidationError: Not a valid URL.\nFAILED tests/test_validate.py::test_url_accepts_valid_file_urls[FILE:///] - marshmallow.exceptions.ValidationError: Not a valid URL.\n5 failed, 194 passed in 0.65s",
+   "fixed_seconds": 0.48,
+   "n_tests": 199,
+   "prompt": "The URL validator accepts lowercase `file://` URLs but rejects uppercase `FILE://` URLs, even though URL schemes should be treated case-insensitively per the URL spec. For example:\n\n```python\nfrom marshmallow import validate\n\nvalidate.URL(schemes={\"file\"})(\"FILE:///tmp/test.txt\")\n```\n\nThis raises a `ValidationError` even though `\"file:///tmp/test.txt\"` (lowercase) is accepted. Please fix the URL validator so scheme matching for `file` URLs (and generally) is case-insensitive.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-19ca8dce",
+   "sha": "19ca8dce2d5bde94509a4a89e495f35c695442d5",
+   "base": "213ee3a020e24fb26ead3a2285ba0402c90080ce",
+   "date": "2026-02-04T15:45:08+00:00",
+   "subject": "Fix Constant field rejecting None values during load (#2894)",
+   "src_files": [
+    "src/marshmallow/fields.py"
+   ],
+   "test_files": [
+    "tests/test_deserialization.py"
+   ],
+   "gold_files": [
+    "AUTHORS.rst",
+    "CHANGELOG.rst",
+    "src/marshmallow/fields.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_deserialization.py",
+   "base_exit": 1,
+   "base_tail": "                )\n            errors = error_store.errors\n            # Run post processors\n            if not errors and postprocess and self._hooks[POST_LOAD]:\n                try:\n                    result = self._invoke_load_processors(\n                        POST_LOAD,\n                        result,\n                        many=many,\n                        original_data=data,\n                        partial=partial,\n                        unknown=unknown,\n                    )\n                except ValidationError as err:\n                    errors = err.normalized_messages()\n        if errors:\n            exc = ValidationError(errors, data=data, valid_data=result)\n            self.handle_error(exc, data, many=many, partial=partial)\n>           raise exc\nE           marshmallow.exceptions.ValidationError: {'foo': ['Field may not be null.']}\n\nsrc/marshmallow/schema.py:938: ValidationError\n=========================== short test summary info ============================\nFAILED tests/test_deserialization.py::TestFieldDeserialization::test_constant_none_allows_none_value - marshmallow.exceptions.ValidationError: {'foo': ['Field may not be null.']}\n1 failed, 379 passed in 1.09s",
+   "fixed_seconds": 0.75,
+   "n_tests": 380,
+   "prompt": "A `Constant` field configured with a constant value of `None` incorrectly rejects `None` as a load value. For example:\n\n```python\nclass MySchema(Schema):\n    foo = fields.Constant(None)\n\nMySchema().load({\"foo\": None})\n```\n\nThis should succeed and return `{\"foo\": None}`, matching the behavior when other values are passed for a `Constant` field (they get replaced by the constant), but instead it currently fails/misbehaves for the `None` constant specifically. Please fix `Constant` so a `None` constant value is handled correctly during load.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-fea54285",
+   "sha": "fea5428567960f15be0c9a3a4b99c0d9bb63848c",
+   "base": "546be2f728faca68a88130a6406c20994355c853",
+   "date": "2026-03-25T17:58:45-04:00",
+   "subject": "Make Number and Mapping abstract base classes (#2925)",
+   "src_files": [
+    "src/marshmallow/fields.py"
+   ],
+   "test_files": [
+    "tests/test_fields.py",
+    "tests/test_serialization.py"
+   ],
+   "gold_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/fields.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_fields.py tests/test_serialization.py",
+   "base_exit": 1,
+   "base_tail": "........................................................................ [ 96%]\n........                                                                 [100%]\n=================================== FAILURES ===================================\n__________ TestAbstractBaseFields.test_number_cannot_be_instantiated ___________\n\nself = <tests.test_fields.TestAbstractBaseFields object at 0x7f395268e870>\n\n    def test_number_cannot_be_instantiated(self):\n>       with pytest.raises(TypeError, match=\"num_type\"):\nE       Failed: DID NOT RAISE TypeError\n\ntests/test_fields.py:32: Failed\n__________ TestAbstractBaseFields.test_mapping_cannot_be_instantiated __________\n\nself = <tests.test_fields.TestAbstractBaseFields object at 0x7f395268e5a0>\n\n    def test_mapping_cannot_be_instantiated(self):\n>       with pytest.raises(TypeError, match=\"mapping_type\"):\nE       Failed: DID NOT RAISE TypeError\n\ntests/test_fields.py:36: Failed\n=========================== short test summary info ============================\nFAILED tests/test_fields.py::TestAbstractBaseFields::test_number_cannot_be_instantiated - Failed: DID NOT RAISE TypeError\nFAILED tests/test_fields.py::TestAbstractBaseFields::test_mapping_cannot_be_instantiated - Failed: DID NOT RAISE TypeError\n2 failed, 222 passed in 0.76s",
+   "fixed_seconds": 0.71,
+   "n_tests": 224,
+   "prompt": "`fields.Number` and `fields.Mapping` are meant to be abstract base classes for fields like `Integer`/`Float` and `Dict`, but they can currently be instantiated directly even though they lack a usable `num_type`/`mapping_type`. This leads to confusing failures later when the field is actually used, instead of a clear error up front. For example:\n\n```python\nfrom marshmallow import fields\nfields.Number()\nfields.Mapping()\n```\n\nBoth of these succeed today but should instead raise a clear `TypeError` at instantiation time (mentioning the missing `num_type`/`mapping_type`), since these classes are not meant to be used directly \u2014 only subclassed with a concrete type set. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-070dde08",
+   "sha": "070dde08bad456e743a0d2e1842c142a799a9568",
+   "base": "fea5428567960f15be0c9a3a4b99c0d9bb63848c",
+   "date": "2026-03-25T22:09:46+00:00",
+   "subject": "Fix Constant field with required=True raising ValueError (#2901)",
+   "src_files": [
+    "src/marshmallow/fields.py"
+   ],
+   "test_files": [
+    "tests/test_deserialization.py"
+   ],
+   "gold_files": [
+    "AUTHORS.rst",
+    "CHANGELOG.rst",
+    "src/marshmallow/fields.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_deserialization.py",
+   "base_exit": 1,
+   "base_tail": "        if validate is None:\n            self.validators = []\n        elif callable(validate):\n            self.validators = [validate]\n        elif utils.is_iterable_but_not_string(validate):\n            self.validators = list(validate)\n        else:\n            raise ValueError(\n                \"The 'validate' parameter must be a callable \"\n                \"or a collection of callables.\"\n            )\n    \n        # If allow_none is None and load_default is None\n        # None should be considered valid by default\n        self.allow_none = load_default is None if allow_none is None else allow_none\n        self.load_only = load_only\n        self.dump_only = dump_only\n        if required is True and load_default is not missing_:\n>           raise ValueError(\"'load_default' must not be set for required fields.\")\nE           ValueError: 'load_default' must not be set for required fields.\n\nsrc/marshmallow/fields.py:217: ValueError\n=========================== short test summary info ============================\nFAILED tests/test_deserialization.py::TestFieldDeserialization::test_constant_with_required - ValueError: 'load_default' must not be set for required fields.\n1 failed, 380 passed in 1.35s",
+   "fixed_seconds": 0.67,
+   "n_tests": 381,
+   "prompt": "Defining a `fields.Constant` with `required=True` raises a `ValueError` at schema definition time instead of working as expected. For example:\n\n```python\nfrom marshmallow import Schema, fields\n\nclass MySchema(Schema):\n    foo = fields.Constant(42, required=True)\n```\n\nThis should be allowed, since a Constant field always supplies a value regardless of what's in the input \u2014 `MySchema().load({})` should return `{\"foo\": 42}` and `MySchema().load({\"foo\": 99})` should also return `{\"foo\": 42}` (the constant should not be affected by a `required` check). Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-65374df0",
+   "sha": "65374df0c31cdc45acc4435741779298201306a2",
+   "base": "070dde08bad456e743a0d2e1842c142a799a9568",
+   "date": "2026-03-25T22:18:11+00:00",
+   "subject": "Fix OneOf.options() emitting phantom entries when labels outnumber choices (#2909)",
+   "src_files": [
+    "src/marshmallow/validate.py"
+   ],
+   "test_files": [
+    "tests/test_validate.py"
+   ],
+   "gold_files": [
+    "AUTHORS.rst",
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_validate.py",
+   "base_exit": 1,
+   "base_tail": "E         +     ),\nE           ]\n\ntests/test_validate.py:730: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_validate.py::test_oneof_options - AssertionError: assert [('1', 'one')...('', 'three')] == [('1', 'one'), ('2', 'two')]\n  \n  Left contains one more item: ('', 'three')\n  \n  Full diff:\n    [\n        (\n            '1',\n            'one',\n        ),\n        (\n            '2',\n            'two',\n        ),\n  +     (\n  +         '',\n  +         'three',\n  +     ),\n    ]\n1 failed, 198 passed in 0.48s",
+   "fixed_seconds": 0.43,
+   "n_tests": 199,
+   "prompt": "`validate.OneOf.options()` produces phantom entries when the `labels` list passed in is longer than `choices`. For example:\n\n```python\nfrom marshmallow import validate\n\noneof = validate.OneOf([1, 2], [\"one\", \"two\", \"three\"])\nlist(oneof.options())\n# includes an extra (\"\", \"three\") entry that doesn't correspond to any real choice\n```\n\nThe number of options returned should never exceed the number of choices \u2014 extra labels beyond the choices should simply be ignored, and if `choices` is empty, `options()` should yield nothing at all even if `labels` is non-empty. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-252090c7",
+   "sha": "252090c7c707166cf4fcfcdc73eb4376b7bbc4b7",
+   "base": "65374df0c31cdc45acc4435741779298201306a2",
+   "date": "2026-03-25T22:27:12+00:00",
+   "subject": "Fix nested partial to use attr_name instead of data_key for prefix (#2903)",
+   "src_files": [
+    "src/marshmallow/schema.py"
+   ],
+   "test_files": [
+    "tests/test_deserialization.py"
+   ],
+   "gold_files": [
+    "AUTHORS.rst",
+    "CHANGELOG.rst",
+    "src/marshmallow/schema.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_deserialization.py",
+   "base_exit": 1,
+   "base_tail": "                )\n            errors = error_store.errors\n            # Run post processors\n            if not errors and postprocess and self._hooks[POST_LOAD]:\n                try:\n                    result = self._invoke_load_processors(\n                        POST_LOAD,\n                        result,\n                        many=many,\n                        original_data=data,\n                        partial=partial,\n                        unknown=unknown,\n                    )\n                except ValidationError as err:\n                    errors = err.normalized_messages()\n        if errors:\n            exc = ValidationError(errors, data=data, valid_data=result)\n            self.handle_error(exc, data, many=many, partial=partial)\n>           raise exc\nE           marshmallow.exceptions.ValidationError: {'homeAddress': {'zip_code': ['Missing data for required field.']}}\n\nsrc/marshmallow/schema.py:938: ValidationError\n=========================== short test summary info ============================\nFAILED tests/test_deserialization.py::TestValidation::test_nested_partial_tuple_with_data_key - marshmallow.exceptions.ValidationError: {'homeAddress': {'zip_code': ['Missing data for required field.']}}\n1 failed, 381 passed in 0.82s",
+   "fixed_seconds": 0.86,
+   "n_tests": 382,
+   "prompt": "Using `partial` with a dotted path into a `Nested` field doesn't work when the nested field has a `data_key` set that differs from its attribute name. For example:\n\n```python\nfrom marshmallow import Schema, fields\n\nclass AddressSchema(Schema):\n    zip_code = fields.String(required=True)\n    city = fields.String(required=True)\n\nclass PersonSchema(Schema):\n    address = fields.Nested(AddressSchema, data_key=\"homeAddress\", required=True)\n\ndata = {\"homeAddress\": {\"city\": \"Springfield\"}}\nPersonSchema().load(data, partial=(\"address.zip_code\",))\n```\n\nThis raises a `ValidationError` about the missing `zip_code`, even though `partial=(\"address.zip_code\",)` should exempt it. The partial path should be matched using the field's attribute name (`address`), not its `data_key` (`homeAddress`), so the nested schema correctly receives the partial option. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-024b5d09",
+   "sha": "024b5d09e9f026f0f96d220e243be69346687ce0",
+   "base": "252090c7c707166cf4fcfcdc73eb4376b7bbc4b7",
+   "date": "2026-03-25T22:30:15+00:00",
+   "subject": "Fix Enum field by-name lookup to only return actual members (#2902)",
+   "src_files": [
+    "src/marshmallow/fields.py"
+   ],
+   "test_files": [
+    "tests/test_deserialization.py"
+   ],
+   "gold_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/fields.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_deserialization.py",
+   "base_exit": 1,
+   "base_tail": ">       with pytest.raises(\n            ValidationError, match=\"Must be one of: male, female, non_binary.\"\n        ):\nE       Failed: DID NOT RAISE ValidationError\n\ntests/test_deserialization.py:1203: Failed\n_ TestFieldDeserialization.test_enum_field_by_symbol_rejects_non_member_attributes[__members__] _\n\nself = <tests.test_deserialization.TestFieldDeserialization object at 0x7f264c80f650>\nnon_member = '__members__'\n\n    @pytest.mark.parametrize(\"non_member\", [\"mro\", \"__class__\", \"__members__\"])\n    def test_enum_field_by_symbol_rejects_non_member_attributes(self, non_member):\n        field = fields.Enum(GenderEnum)\n>       with pytest.raises(\n            ValidationError, match=\"Must be one of: male, female, non_binary.\"\n        ):\nE       Failed: DID NOT RAISE ValidationError\n\ntests/test_deserialization.py:1203: Failed\n=========================== short test summary info ============================\nFAILED tests/test_deserialization.py::TestFieldDeserialization::test_enum_field_by_symbol_rejects_non_member_attributes[mro] - Failed: DID NOT RAISE ValidationError\nFAILED tests/test_deserialization.py::TestFieldDeserialization::test_enum_field_by_symbol_rejects_non_member_attributes[__class__] - Failed: DID NOT RAISE ValidationError\nFAILED tests/test_deserialization.py::TestFieldDeserialization::test_enum_field_by_symbol_rejects_non_member_attributes[__members__] - Failed: DID NOT RAISE ValidationError\n3 failed, 382 passed in 1.75s",
+   "fixed_seconds": 0.92,
+   "n_tests": 385,
+   "prompt": "`fields.Enum`'s by-name deserialization incorrectly accepts non-member attribute names of the enum class. For example:\n\n```python\nfrom enum import Enum\nfrom marshmallow import fields\n\nclass GenderEnum(Enum):\n    male = 1\n    female = 2\n    non_binary = 3\n\nfield = fields.Enum(GenderEnum)\nfield.deserialize(\"mro\")  # or \"__class__\", \"__members__\"\n```\n\nInstead of raising a `ValidationError` (\"Must be one of: male, female, non_binary.\"), this returns whatever built-in attribute/method matches that name on the Enum class, since the lookup isn't restricted to actual enum members. Please fix this so only real enum members are matched by name.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-72ac4a04",
+   "sha": "72ac4a04208ff24df0a9694d9b03b78b1c5a2e6a",
+   "base": "024b5d09e9f026f0f96d220e243be69346687ce0",
+   "date": "2026-03-25T22:33:35+00:00",
+   "subject": "Reject booleans in from_timestamp_ms, consistent with from_timestamp (#2904)",
+   "src_files": [
+    "src/marshmallow/utils.py"
+   ],
+   "test_files": [
+    "tests/test_deserialization.py",
+    "tests/test_utils.py"
+   ],
+   "gold_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/utils.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_deserialization.py tests/test_utils.py",
+   "base_exit": 1,
+   "base_tail": "\nvalue = True\n\n    @pytest.mark.parametrize(\"value\", [True, False])\n    def test_from_timestamp_ms_rejects_booleans(value):\n>       with pytest.raises(ValueError, match=r\"Not a valid POSIX timestamp\"):\nE       Failed: DID NOT RAISE ValueError\n\ntests/test_utils.py:146: Failed\n________________ test_from_timestamp_ms_rejects_booleans[False] ________________\n\nvalue = False\n\n    @pytest.mark.parametrize(\"value\", [True, False])\n    def test_from_timestamp_ms_rejects_booleans(value):\n>       with pytest.raises(ValueError, match=r\"Not a valid POSIX timestamp\"):\nE       Failed: DID NOT RAISE ValueError\n\ntests/test_utils.py:146: Failed\n=========================== short test summary info ============================\nFAILED tests/test_deserialization.py::TestFieldDeserialization::test_boolean_timestamp_field_deserialization[True-timestamp_ms] - Failed: DID NOT RAISE ValidationError\nFAILED tests/test_deserialization.py::TestFieldDeserialization::test_boolean_timestamp_field_deserialization[False-timestamp_ms] - Failed: DID NOT RAISE ValidationError\nFAILED tests/test_utils.py::test_from_timestamp_ms_rejects_booleans[True] - Failed: DID NOT RAISE ValueError\nFAILED tests/test_utils.py::test_from_timestamp_ms_rejects_booleans[False] - Failed: DID NOT RAISE ValueError\n4 failed, 405 passed in 1.20s",
+   "fixed_seconds": 1.37,
+   "n_tests": 409,
+   "prompt": "`fields.DateTime(format=\"timestamp\")` correctly rejects boolean input, but `fields.DateTime(format=\"timestamp_ms\")` does not \u2014 it happily converts `True`/`False` into datetimes instead of raising a validation error. For example:\n\n```python\nfrom marshmallow import fields\n\nfields.DateTime(format=\"timestamp_ms\").deserialize(True)  # should raise ValidationError(\"Not a valid datetime.\")\n```\n\nThe two formats should behave consistently, and booleans should always be rejected as invalid timestamps regardless of which format is used. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-f07eadc8",
+   "sha": "f07eadc87dfac25ed505d5cd9d186920f2682733",
+   "base": "4acb783c73130f762aa5b0df6b65ff7685d5ff2c",
+   "date": "2026-04-02T12:53:27+00:00",
+   "subject": "Fix validate.Email to accept IDNs (#2937)",
+   "src_files": [
+    "src/marshmallow/validate.py"
+   ],
+   "test_files": [
+    "tests/test_validate.py"
+   ],
+   "gold_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_validate.py",
+   "base_exit": 1,
+   "base_tail": "E       Failed: DID NOT RAISE ValidationError\n\ntests/test_validate.py:398: Failed\n_________________ test_email_idn_invalid[user@m\\xfcnchen-.de] __________________\n\ninvalid_email = 'user@m\u00fcnchen-.de'\n\n    @pytest.mark.parametrize(\n        \"invalid_email\",\n        [\n            \"user@-m\u00fcnchen.de\",\n            \"user@m\u00fcnchen-.de\",\n            \"user@m\u00fcnchen\",\n        ],\n    )\n    def test_email_idn_invalid(invalid_email):\n        validator = validate.Email()\n>       with pytest.raises(ValidationError):\nE       Failed: DID NOT RAISE ValidationError\n\ntests/test_validate.py:398: Failed\n=========================== short test summary info ============================\nFAILED tests/test_validate.py::test_email_idn_invalid[user@-m\\xfcnchen.de] - Failed: DID NOT RAISE ValidationError\nFAILED tests/test_validate.py::test_email_idn_invalid[user@m\\xfcnchen-.de] - Failed: DID NOT RAISE ValidationError\n2 failed, 215 passed in 0.80s",
+   "fixed_seconds": 0.97,
+   "n_tests": 217,
+   "prompt": "`validate.Email` rejects valid email addresses that use internationalized domain names (IDNs). For example:\n\n```python\nfrom marshmallow import validate\n\nvalidate.Email()(\"user@m\u00fcnchen.de\")\n```\n\nThis raises a `ValidationError` even though this is a legitimate email address with a non-ASCII domain (similarly for domains like `\u4f8b\u3048.jp`, `\u0645\u062b\u0627\u0644.\u0625\u062e\u062a\u0628\u0627\u0631`, `\u043f\u0440\u0438\u043c\u0435\u0440.\u0438\u0441\u043f\u044b\u0442\u0430\u043d\u0438\u0435`, etc.). At the same time, domains with invalid label formatting (like leading/trailing hyphens, e.g. `user@-m\u00fcnchen.de`) should still correctly be rejected. Please fix the validator to properly support IDN domains while still rejecting malformed ones.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "marshmallow-902f99c4",
+   "sha": "902f99c4151d1f0c4c3b8e8dfbafc7b6a76aeaa6",
+   "base": "3207be31474530f7c0685dfbd7b4faca5b35fbf5",
+   "date": "2026-08-08T14:24:08+00:00",
+   "subject": "Fix URL validator rejecting a fragment after an empty path (#3016)",
+   "src_files": [
+    "src/marshmallow/validate.py"
+   ],
+   "test_files": [
+    "tests/test_validate.py"
+   ],
+   "gold_files": [
+    "AUTHORS.rst",
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly tests/test_validate.py",
+   "base_exit": 1,
+   "base_tail": "            if scheme not in self.schemes:\n                raise ValidationError(message)\n    \n        regex = self._regex(\n            relative=self.relative, absolute=self.absolute, require_tld=self.require_tld\n        )\n    \n        # Hostname is optional for file URLS. If absent it means `localhost`.\n        # Fill it in for the validation if needed\n        if scheme == \"file\" and value.lower().startswith(\"file:///\"):\n            matched = regex.search(\"file://localhost/\" + value[8:])\n        else:\n            matched = regex.search(value)\n    \n        if not matched:\n>           raise ValidationError(message)\nE           marshmallow.exceptions.ValidationError: Not a valid URL.\n\nsrc/marshmallow/validate.py:242: ValidationError\n=========================== short test summary info ============================\nFAILED tests/test_validate.py::test_url_absolute_valid[http://example.org#fragment] - marshmallow.exceptions.ValidationError: Not a valid URL.\nFAILED tests/test_validate.py::test_url_absolute_valid[http://user@example.com#fragment] - marshmallow.exceptions.ValidationError: Not a valid URL.\nFAILED tests/test_validate.py::test_url_relative_valid[#frag] - marshmallow.exceptions.ValidationError: Not a valid URL.\nFAILED tests/test_validate.py::test_url_relative_only_valid[#frag] - marshmallow.exceptions.ValidationError: Not a valid URL.\n4 failed, 217 passed in 0.56s",
+   "fixed_seconds": 0.87,
+   "n_tests": 221,
+   "prompt": "`validate.URL` incorrectly rejects absolute URLs where a fragment follows an empty path, such as `https://example.com#fragment`. For example:\n\n```python\nfrom marshmallow import validate\n\nvalidate.URL()(\"https://example.org#fragment\")\n```\n\nThis raises a `ValidationError`, even though this is a valid URL per RFC 3986 and anchor links to a domain root are common in practice. In relative mode, a bare fragment like `\"#frag\"` should also be accepted, similar to how a bare `\"?query\"` is already accepted. Please fix the validator so fragments following an empty path are allowed.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  }
+ ]
+}
