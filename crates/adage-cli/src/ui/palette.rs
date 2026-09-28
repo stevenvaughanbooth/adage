@@ -227,6 +227,10 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, p: &Palette, t: &Theme) {
     let list_h = (h as usize).saturating_sub(7);
     let mut body: Vec<(Option<usize>, Line<'static>)> = Vec::new();
     let mut last = None;
+    // Titles are what you choose by, so they get the room first (up to 60% of the width, as wide
+    // as the longest one needs); the notes take what is left.
+    let longest = found.iter().map(|(e, _)| e.title.chars().count() + 2 + if e.lamp.is_some() { 4 } else { 0 }).max();
+    let title_w = longest.unwrap_or(16).clamp(16, (inner_w * 3 / 5).max(16));
     for (i, (e, pos)) in found.iter().enumerate() {
         if last != Some(e.section) {
             if last.is_some() {
@@ -242,7 +246,6 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, p: &Palette, t: &Theme) {
             Span::raw("  ")
         }];
         let base = if chosen { t.bold() } else { Style::default() };
-        let title_w = inner_w.saturating_sub(2 + 36).clamp(16, 36);
         if let Some((a, instinct)) = e.lamp {
             spans.push(Span::styled(format!("{} ", t.aspect_mark(a)), t.aspect(a)));
             spans.push(Span::styled(

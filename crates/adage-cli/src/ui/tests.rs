@@ -1256,6 +1256,9 @@ fn palette_finds_actions_and_reflexes_and_runs_them() {
     let text = app_frame(&s, &c, 150, 35);
     snap("app-palette", &text);
     assert!(text.contains("› Strengthen reflex…") && text.contains("adage review strengthen"), "{text}");
+    // At 60 columns titles keep their room; the notes give way.
+    let narrow = app_frame(&s, &c, 60, 24);
+    assert!(narrow.contains("› Strengthen reflex…") && narrow.contains("start-with-npm-check"), "{narrow}");
     // Every action shows the command that does the same.
     for (e, _) in palette::matches(&s, "") {
         if e.section == palette::Section::Actions && e.title.ends_with('…') {
