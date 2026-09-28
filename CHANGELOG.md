@@ -16,6 +16,52 @@ paths that get work done, and compiles them into reflexes: small, typed, determi
 with their evidence attached. At each decision point the matching reflex tells the agent what to
 do next. Adage never runs the commands it directs; execution is a separate, opt-in binary.
 
+### Zero configuration: install the plugin, start a session
+
+- **The marketplace plugin carries its binaries.** The release workflow stages both Claude Code
+  plugins with verified binaries for all five targets (`scripts/stage-plugin.mjs`, archives
+  checked against dist's `.sha256`, binaries against `dist/SHA256SUMS`) and publishes them to the
+  `marketplace` branch (`.github/workflows/publish-marketplace.yml`); `marketplace.json` installs
+  from it (`git-subdir`, `ref: marketplace`). No `adage` on `PATH` is needed and nothing is
+  downloaded. When no binary can serve, the session-start shim says so in one line the person sees
+  (a JSON `systemMessage`, verified against Claude Code 2.1.283: shown in the UI, never sent to
+  the model), records it in `$DATA/status`, and points the other hooks at `scripts/quiet`.
+- **Bootstrap at the first session start.** In a repository with no reflexes (or a damaged index)
+  the SessionStart hook starts the learner at once (`condition --auto --bootstrap`): instincts and
+  the index first, then this repository's earlier traces, so the first prompt is already directed.
+  The hook says `adage: learning from N past sessions in this repo…` once.
+- **Every session start is counted.** In a repository with reflexes, SessionStart assigns the arm
+  and spools one `session_start` record, so the savings estimate's denominator includes sessions
+  where nothing matched.
+- **Notices.** One line at session start (Claude Code), at most once a day per repository and only
+  when something is new: a health problem, an install step waiting for review, a savings verdict,
+  new reflexes. `ui.notices = off` silences them.
+- **Repository-scoped reading.** Automatic learning picks a repository's traces by Claude Code
+  project directory and recorded working directory before parsing; other repositories'
+  transcripts are never opened. Worktrees count as the repository (including repositories
+  without `origin`: a linked worktree now shares its main checkout's key).
+- **Sources are additive.** A learner started from a sandboxed session that cannot see some
+  transcripts keeps them (and their cached parses); only files verifiably gone are forgotten.
+- **`learn.codex_sessions = auto`** (the new default) reads `$CODEX_HOME/sessions`, this
+  repository's rollouts only, once Codex hooks are registered.
+- **Bare `adage` is a status card** everywhere (terminal, pipe, `!adage` in Claude Code):
+  reflexes, learning, counts, savings, health and what waits for you. `adage ui` opens the app.
+- **Savings, honestly.** A ledger per repository (`ledger/<slug>.jsonl`: turns, tool calls,
+  tokens, cost, whether the agent ended asking for help; no prompt, command or path) and an
+  estimate against the control arm (`adage savings [--json]`): Hajek IPW, winsorised at the 95th
+  percentile, a stratified bootstrap with an expanded percentile interval, seeded from the session
+  ids. Dollars appear only past 10 control and 30 treated sessions, always with an interval,
+  labelled API-list equivalent from a dated price table (`crates/adage-core/src/pricing.toml`);
+  unknown models are tokens and turns only. An interval below zero says "Adage appears to add
+  ~$x per session".
+- **Self-heal.** A damaged index is rebuilt at the next session start, silently. Three failed
+  learns in a row back off and say so. With `delegate on` but no adage-exec plugin, the Adage
+  plugin keeps serving and says why. A blocked model download is classified (`offline`,
+  `blocked`, `tls`, `timeout`, `http`), recorded in `models/.fetch-failed.json`, never retried by
+  itself, and explained by `adage doctor`; `ADAGE_MODEL_BASE_URL` downloads from a mirror.
+- **`adage config set`** needs a person only for keys that change what Adage learns from or how
+  much evidence it needs; other keys can be set from scripts and sandboxes.
+
 ### Conditioning (learning from traces)
 
 - `adage condition` imports Claude Code transcripts (sub-agents' traces included), Codex rollouts

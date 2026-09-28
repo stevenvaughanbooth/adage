@@ -37,6 +37,10 @@ pub enum Output {
     Context(String),
     /// A stop-hook request to continue, with its reason (fixed template).
     Continue(String),
+    /// One line for the person, not the model (docs/zero-config.md §3.3): Claude Code shows a
+    /// `systemMessage` in its UI and never sends it to the model. Harnesses without such a channel
+    /// render nothing; their notices reach the status card and `adage watch` only.
+    Notice(String),
 }
 
 /// Who is calling: the session and working directory every native payload must carry.

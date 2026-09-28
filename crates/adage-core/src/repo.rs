@@ -106,7 +106,7 @@ pub fn lookup_key(root: &Path, cache: Option<&Path>, keys: &BTreeSet<&str>) -> O
     if let Some(o) = origin_key(root) {
         return keys.contains(o.as_str()).then_some(o);
     }
-    let name = dir_name(root);
+    let name = checkout_name(root);
     let prefix = format!("{name}@");
     let scoped = keys
         .range::<str, _>((Bound::Included(prefix.as_str()), Bound::Unbounded))
@@ -146,8 +146,25 @@ pub fn dir_name(root: &Path) -> String {
     root.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
 }
 
+/// The name a repository without `origin` is keyed by: its directory's name, or, for a linked
+/// worktree (`.git` a `gitdir:` file), the name of the main checkout whose `.git` is its common
+/// directory. So `app` and its worktree `.claude/worktrees/agent-1` share `app@<root commit>`.
+pub fn checkout_name(root: &Path) -> String {
+    if root.join(".git").is_file() {
+        if let Some((_, common)) = gitobj::dirs(root) {
+            let common = lexical_normalise(&common);
+            if common.file_name().is_some_and(|n| n == ".git") {
+                if let Some(main) = common.parent().filter(|m| m.file_name().is_some()) {
+                    return dir_name(main);
+                }
+            }
+        }
+    }
+    dir_name(root)
+}
+
 fn no_origin_key(root: &Path, cache: Option<&Path>) -> String {
-    let name = dir_name(root);
+    let name = checkout_name(root);
     if !root.is_dir() {
         return name;
     }

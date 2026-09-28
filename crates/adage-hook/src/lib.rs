@@ -206,20 +206,141 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
         return Ok(None);
     }
     let paths = Paths::from_env();
-    let out = respond(adapter, harness, event, &p, &session, &cwd, &root, &paths, opts);
+    // A damaged index (a truncated write, a disk error) is served as empty and rebuilt: the
+    // session start asks the learner to recompile it (docs/zero-config.md §5).
+    let loaded = Index::try_load(&paths.index());
+    let damaged = matches!(loaded, Err(adage_tracks::index::Unloaded::Damaged));
+    let index = loaded.unwrap_or_default();
+    let learner = || match opts.learner {
+        Some(find) => find().ok_or_else(|| Failure::new("condition", "finding the adage binary: not found")),
+        None => std::env::current_exe().map_err(|e| Failure::io("condition", "finding the adage binary", &e)),
+    };
+    if matches!(adapter.translate(event, &p, &cwd.to_string_lossy()), Some(Event::SessionStart)) {
+        let start = Start { adapter, harness, event, session: &session, root: &root, paths: &paths, index: &index };
+        return session_start(&start, damaged, &learner);
+    }
+    let out = respond(adapter, harness, event, &p, &session, &cwd, &root, &paths, opts, &index);
     if adapter.is_learn_point(event) {
         let transcript = p.get("transcript_path").and_then(|v| v.as_str());
-        let learner = match opts.learner {
-            Some(find) => find().ok_or_else(|| Failure::new("condition", "finding the adage binary: not found")),
-            None => std::env::current_exe().map_err(|e| Failure::io("condition", "finding the adage binary", &e)),
-        };
-        let learned =
-            learner.and_then(|l| autolearn::on_turn_end(&paths, &root, adapter.name(), transcript, &l).map(drop));
+        let learned = learner()
+            .and_then(|l| autolearn::on_turn_end(&paths, &root, adapter.name(), transcript, &l, false).map(drop));
         if let Err(f) = learned {
             failopen::record(&paths.root, harness, event, &f);
         }
     }
     out
+}
+
+/// What a session start is about.
+struct Start<'a> {
+    adapter: &'a dyn harness::Adapter,
+    harness: &'a str,
+    event: &'a str,
+    session: &'a str,
+    root: &'a Path,
+    paths: &'a Paths,
+    index: &'a Index,
+}
+
+/// A session start (docs/zero-config.md §3.2, §3.3):
+///
+/// 1. In a repository with reflexes, the session is assigned its arm now and one `session_start`
+///    record is spooled (`arm`, `propensity`, `repo`, `generation`): every exposed session is
+///    then counted by the savings estimate, including those where nothing ever matched.
+/// 2. **Bootstrap.** With `learn.auto` on, a repository with no reflexes whose learner has not
+///    run since the index last changed, or a damaged index, starts a learner at once
+///    (`condition --auto --bootstrap`): instincts and the index within about 100 ms, then the
+///    repository's own traces.
+/// 3. **Notice.** One line for the person (Claude Code's `systemMessage`; the model never sees
+///    it): at the first bootstrap, what Adage is doing; afterwards, the learner's latest notice,
+///    at most once a day and only when new. Rebuilding a damaged index says nothing.
+fn session_start(
+    s: &Start<'_>,
+    damaged: bool,
+    learner: &dyn Fn() -> Result<PathBuf, Failure>,
+) -> Result<Option<String>, Failure> {
+    let keys: std::collections::BTreeSet<&str> = s.index.routes.iter().map(|r| r.repo.as_str()).collect();
+    let routed = repo::lookup_key(s.root, Some(&s.paths.repo_keys()), &keys);
+    if let Some(repo_key) = &routed {
+        if let Err(f) = record_start(s, repo_key) {
+            failopen::record(&s.paths.root, s.harness, s.event, &f);
+        }
+    }
+    let cfg = adage_store::config::load(s.paths).config;
+    let key = routed.clone().unwrap_or_else(|| repo::repo_key_cached(s.root, &s.paths.repo_keys()));
+    let q = autolearn::Queue::new(s.paths, &key);
+    let run: Option<autolearn::RunState> = autolearn::read_json(&q.state());
+    let first = run.is_none() && !q.shown().exists();
+    let stale = || {
+        let index_at = std::fs::metadata(s.paths.index())
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64);
+        match (&run, index_at) {
+            (None, _) => true,
+            (Some(r), Some(at)) => r.finished_at.is_some_and(|f| f < at),
+            (Some(_), None) => true,
+        }
+    };
+    let bootstrap = cfg.learn_auto && (damaged || (routed.is_none() && stale()));
+    if bootstrap {
+        let asked = learner().and_then(|l| autolearn::on_turn_end(s.paths, s.root, s.adapter.name(), None, &l, true));
+        if let Err(f) = asked {
+            failopen::record(&s.paths.root, s.harness, s.event, &f);
+        }
+    }
+    if damaged || !cfg.ui_notices {
+        return Ok(None);
+    }
+    let text = if bootstrap && first {
+        let now = autolearn::now_ms();
+        let _ = autolearn::write_json(&q.shown(), &autolearn::Shown { id: "bootstrap".into(), at: now });
+        Some(first_notice(s.root, &cfg))
+    } else {
+        autolearn::take_notice(s.paths, &key)
+    };
+    Ok(text.and_then(|t| s.adapter.render(s.event, Output::Notice(t))))
+}
+
+/// What the first session in a repository says: how many of its earlier traces Adage is learning
+/// from (Claude Code project directories, counted by name: nothing is opened here).
+fn first_notice(root: &Path, cfg: &adage_store::config::Config) -> String {
+    let projects = cfg
+        .learn_claude_projects
+        .clone()
+        .or_else(|| adage_store::home_dir().map(|h| h.join(".claude").join("projects")));
+    let n = projects
+        .map(|p| adage_learn::scope::count_claude_sessions(&p, &adage_learn::scope::checkouts(root)))
+        .unwrap_or(0);
+    match n {
+        0 => "adage: learning from this repo as you work; its first reflexes form in a few sessions. Nothing runs without you.".into(),
+        1 => "adage: learning from 1 past session in this repo; reflexes arrive within a minute. Nothing runs without you.".into(),
+        n => format!("adage: learning from {n} past sessions in this repo; reflexes arrive within a minute. Nothing runs without you."),
+    }
+}
+
+/// Assign the session's arm (if it has none yet) and spool one `session_start` record.
+fn record_start(s: &Start<'_>, repo_key: &str) -> Result<(), Failure> {
+    let arm_env = std::env::var("ADAGE_ARM").ok();
+    let share: f64 = adage_store::config::load(s.paths).config.runtime_control;
+    let (arm, propensity) = state::update::<SessionState, _>(&s.paths.state(s.session), |st| {
+        if st.arm.is_none() {
+            let (arm, p) = assign(s.session, share, arm_env.as_deref());
+            st.arm = Some(arm);
+            st.propensity = Some(p);
+            st.repo = Some(repo_key.to_string());
+        }
+        (st.arm, st.propensity)
+    })
+    .map_err(|e| Failure::io("state", "assigning the session's arm", &e))?;
+    let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let mut rec = json!({ "ts": ts, "event": s.event, "kind": "session_start", "arm": arm, "propensity": propensity, "repo": repo_key, "generation": s.index.generation });
+    if s.adapter.name() != "claude" {
+        rec["harness"] = json!(s.adapter.name());
+    }
+    spool::append(&s.paths.spool(s.session), &rec)
+        .map_err(|e| Failure::io("spool", "appending to the session spool", &e))
 }
 
 /// Decide and render: everything after the kill switches.
@@ -234,8 +355,8 @@ fn respond(
     root: &Path,
     paths: &Paths,
     opts: Options,
+    index: &Index,
 ) -> Result<Option<String>, Failure> {
-    let index = Index::load(&paths.index());
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
     let Some(repo_key) = repo::lookup_key(root, Some(&paths.repo_keys()), &keys) else {
         return Ok(None); // nothing installed for this repository: the common, cheapest path
@@ -258,14 +379,8 @@ fn respond(
         let v = m.embed(&normalize(text))?;
         Some((m.id, v))
     };
-    let ctx = Ctx {
-        index: &index,
-        repo: repo_key.clone(),
-        root,
-        table: &table,
-        embed: Some(&embed),
-        params: Default::default(),
-    };
+    let ctx =
+        Ctx { index, repo: repo_key.clone(), root, table: &table, embed: Some(&embed), params: Default::default() };
     let arm_env = std::env::var("ADAGE_ARM").ok();
     // ADAGE_CONTROL, else `runtime.control` in config.toml, else 0.1.
     let share: f64 = adage_store::config::load(paths).config.runtime_control;
@@ -273,7 +388,7 @@ fn respond(
     // Exec-only reflexes come into play only under an extension that carries them out.
     let exec_only: Vec<(String, String)> = match opts.extension {
         Some(x) if index.for_repo(&repo_key).any(|r| r.exec_only()) => {
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.exec_only(&repo_key, &index, paths)))
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.exec_only(&repo_key, index, paths)))
                 .unwrap_or_default()
         }
         _ => Vec::new(),
@@ -283,7 +398,7 @@ fn respond(
     let rebuild = || {
         let small = std::fs::metadata(&spool_path).is_ok_and(|m| m.len() <= rebuild::MAX_SPOOL_BYTES);
         let records: Vec<Value> = if small { spool::read_all(&spool_path).ok()? } else { return None };
-        rebuild::rebuild(&records, &index, &repo_key, &table)
+        rebuild::rebuild(&records, index, &repo_key, &table)
     };
     let (mut decision, arm, propensity, stims) =
         state::update_or_rebuild::<SessionState, _>(&state_path, rebuild, |st| {
@@ -319,7 +434,7 @@ fn respond(
                 event,
                 ev: &ev,
                 session,
-                index: &index,
+                index,
                 repo_key: &repo_key,
                 root,
                 cwd,

@@ -68,6 +68,8 @@ impl Adapter for Codex {
             Output::Context(text) => {
                 json!({ "hookSpecificOutput": { "hookEventName": event, "additionalContext": text } }).to_string()
             }
+            // Codex documents no person-only channel: notices go to the card and `adage watch`.
+            Output::Notice(_) => return None,
         })
     }
 }
