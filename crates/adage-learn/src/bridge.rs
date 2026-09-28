@@ -14,14 +14,35 @@
 
 use crate::import::{Session, StepObs};
 use adage_core::keys::template_key;
-use adage_core::types::CanonicalAction;
+use adage_core::types::{CanonicalAction, Effect, Normalized};
+use adage_core::CommandTable;
 use adage_graph::input;
 
-fn push(action: &CanonicalAction, step: &StepObs, out: &mut Vec<(input::Step, input::StepMeta)>) {
+/// The effect class of a command as the graph engine labels it: the command's own. Each part of a
+/// compound keeps its own class (in `cargo fmt --all && git commit -m …` the format step
+/// regenerates; it is no author step), and a command whose output was redirected to a file is
+/// still the command it ran (`cargo test --workspace > log` verifies; the log is the agent's).
+pub(crate) fn effect_of(n: &Normalized) -> Effect {
+    match &n.action {
+        CanonicalAction::Exec { argv, .. } if n.note.starts_with("redirected to ") => {
+            adage_graph::events::classify(argv, &table())
+        }
+        _ => n.effect,
+    }
+}
+
+fn table() -> &'static CommandTable {
+    static T: std::sync::OnceLock<CommandTable> = std::sync::OnceLock::new();
+    T.get_or_init(CommandTable::load)
+}
+
+fn push(n: &Normalized, step: &StepObs, out: &mut Vec<(input::Step, input::StepMeta)>) {
+    let action = &n.action;
+    let effect = effect_of(n);
     let meta = |key: String| input::StepMeta {
         turn: step.turn,
         prompt: step.prompt,
-        effect: step.norm.effect.as_str().to_string(),
+        effect: effect.as_str().to_string(),
         key,
     };
     match action {
@@ -41,7 +62,7 @@ fn push(action: &CanonicalAction, step: &StepObs, out: &mut Vec<(input::Step, in
         }
         CanonicalAction::Compound { actions, .. } => {
             for a in actions {
-                push(&a.action, step, out);
+                push(a, step, out);
             }
         }
         _ => {}
@@ -61,7 +82,7 @@ pub fn annotate_prefix(s: &Session, n: usize) -> input::Annotated {
     let mut start: Vec<u32> = Vec::with_capacity(steps.len() + 1);
     for st in steps {
         start.push(out.len() as u32);
-        push(&st.norm.action, st, &mut out);
+        push(&st.norm, st, &mut out);
     }
     start.push(out.len() as u32);
     let prompts: Vec<input::Prompt> = if s.prompts.is_empty() {
@@ -86,7 +107,7 @@ fn starts(s: &Session) -> Vec<u32> {
     let mut start = Vec::with_capacity(s.steps.len() + 1);
     for st in &s.steps {
         start.push(out.len() as u32);
-        push(&st.norm.action, st, &mut out);
+        push(&st.norm, st, &mut out);
     }
     start.push(out.len() as u32);
     start

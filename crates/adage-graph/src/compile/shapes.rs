@@ -28,7 +28,7 @@
 //! above prime from prior mass alone: fire reads the organic lower bound only.
 
 use super::stable::{self, LINKED_FILES_ID, LOOKUP_ID};
-use super::{glob, ids, max_effect, Compiled, Dropped, Input, Output, MAX_ROUTES};
+use super::{glob, ids, max_effect, variants, Compiled, Dropped, Input, Output, MAX_ROUTES};
 use crate::events::NodeType;
 use crate::select::{ItemView, Reflex};
 use adage_core::pattern;
@@ -187,12 +187,40 @@ pub fn housekeeping(command: &str) -> bool {
     HOUSEKEEPING.contains(&head.rsplit('/').next().unwrap_or(head))
 }
 
+/// Whether a literal may be directed as it is: no placeholder, nothing quoted, safe, and not
+/// housekeeping.
+fn directable(lit: &str) -> bool {
+    !lit.contains('{') && !lit.contains('\'') && io::safe_command(lit) && !housekeeping(lit)
+}
+
+/// The covering variant of an item's family ([`variants`]), when its members disagree.
+fn covering(v: &ItemView, input: &Input) -> Option<String> {
+    let family: Vec<variants::Variant> = v
+        .members
+        .iter()
+        .filter_map(|(k, n)| {
+            let a = input.corpus.acts.get(k)?;
+            let (lit, _) = input.corpus.literal(k)?;
+            Some(variants::Variant {
+                key: k.clone(),
+                runs: *n,
+                ok_sessions: a.ok_sessions,
+                effect: input.corpus.effect(k)?,
+                directable: !k.contains('{') && directable(lit),
+            })
+        })
+        .collect();
+    variants::covering(&family, input.params.min_sessions, input.params.dominant).map(|(k, _)| k)
+}
+
 /// A command a continuation item directs: its dominant variant's literal, when that has no
 /// placeholder (a variable argument with no bound source is not directable).
 fn fixed_command(v: &ItemView, target: Option<&str>, input: &Input) -> Result<(String, String, Effect), String> {
     let key = match target {
         Some(t) => t.to_string(),
-        None => dominant(v, input.params.dominant).ok_or_else(|| format!("{} is ambiguous", v.label))?,
+        None => dominant(v, input.params.dominant)
+            .or_else(|| covering(v, input))
+            .ok_or_else(|| format!("{} is ambiguous", v.label))?,
     };
     let (lit, _) = input.corpus.literal(&key).ok_or_else(|| format!("no trace ran {key}"))?;
     if lit.contains('{') || lit.contains('\'') || !io::safe_command(lit) {
@@ -526,6 +554,9 @@ impl<'a> Builder<'a> {
                 Effect::Environment if cont.len() == 1 => {
                     ("run", Step::Run { command: fixed[0].1.clone() }, first, false)
                 }
+                // The repository's check after editing these files: a run, prime at most (the
+                // judge caps it), never an obligation with a Stop request.
+                Effect::Verify if cont.len() == 1 => ("run", Step::Run { command: fixed[0].1.clone() }, first, false),
                 _ => {
                     self.drop(
                         r,
@@ -566,6 +597,7 @@ impl<'a> Builder<'a> {
             let summary = match shape {
                 "obligation" => "A regeneration step this repository requires after editing these files",
                 "sequence" => "Steps this repository runs, in order, after editing these files",
+                _ if effect == Effect::Verify => "A check this repository runs after editing these files",
                 _ => "An environment step this repository needs after editing these files",
             };
             let ev = evidence(r, &self.input.params.provenance);
@@ -800,6 +832,66 @@ impl<'a> Builder<'a> {
     }
 }
 
+/// Whether every command a step directs runs over the whole repository
+/// ([`variants::repo_wide`]).
+fn repo_wide_step(step: &Step) -> bool {
+    let cmds = super::commands(step);
+    !cmds.is_empty() && cmds.iter().all(|c| pattern::Shape::of_command(c).is_some_and(|s| variants::repo_wide(&s)))
+}
+
+/// After-edit routes that direct the same repo-wide step on sibling directories' globs are one
+/// reflex: their globs are generalised together ([`glob::widen`]), one route per resulting glob,
+/// built from the route with the most support (its evidence is counted again on the new glob by
+/// the judge). Routes whose glob does not widen are kept as they are.
+fn widen_repo_wide(out: Vec<Compiled>, input: &Input) -> Vec<Compiled> {
+    let mut groups: BTreeMap<(&'static str, String), Vec<usize>> = BTreeMap::new();
+    for (i, c) in out.iter().enumerate() {
+        if matches!(c.route.trigger, Trigger::AfterEdit { .. }) && c.route.slots.is_empty() && repo_wide_step(&c.route.step)
+        {
+            let step = serde_json::to_string(&c.route.step).unwrap_or_default();
+            groups.entry((c.shape, step)).or_default().push(i);
+        }
+    }
+    let glob_of = |c: &Compiled| match &c.route.trigger {
+        Trigger::AfterEdit { paths } => paths.clone(),
+        _ => String::new(),
+    };
+    let mut replaced: BTreeSet<usize> = BTreeSet::new();
+    let mut added: Vec<Compiled> = Vec::new();
+    for ((shape, _), idx) in groups {
+        let globs: Vec<String> = idx.iter().map(|&i| glob_of(&out[i])).collect::<BTreeSet<_>>().into_iter().collect();
+        let p = input.params;
+        let wide = glob::widen(&globs, &input.corpus.tree, &input.corpus.touched, p.glob_precision);
+        if wide == globs {
+            continue;
+        }
+        let best = *idx
+            .iter()
+            .max_by(|&&a, &&b| {
+                let (x, y) = (&out[a], &out[b]);
+                x.route.evidence.support.cmp(&y.route.evidence.support).then_with(|| y.why.pattern.cmp(&x.why.pattern))
+            })
+            .expect("a group has a route");
+        for &i in &idx {
+            if !wide.contains(&glob_of(&out[i])) {
+                replaced.insert(i);
+            }
+        }
+        for g in wide.iter().filter(|g| !globs.contains(g)) {
+            let mut c = out[best].clone();
+            c.route.trigger = Trigger::AfterEdit { paths: g.clone() };
+            let cmd = super::commands(&c.route.step).first().map(|x| x.to_string()).unwrap_or_default();
+            c.route.id = if c.fixed_id && shape == "obligation" {
+                stable::finish_line_id(g, &cmd)
+            } else {
+                ids::route_id(shape, &c.route.trigger, &c.route.step, &[])
+            };
+            added.push(c);
+        }
+    }
+    out.into_iter().enumerate().filter(|(i, _)| !replaced.contains(i)).map(|(_, c)| c).chain(added).collect()
+}
+
 /// Compile (see [`super::compile`]).
 pub fn compile(input: &Input) -> Output {
     let mut b = Builder { input, out: Vec::new(), dropped: Vec::new(), avoids: Vec::new() };
@@ -859,6 +951,8 @@ pub fn compile(input: &Input) -> Output {
         }
     }
     b.finish_avoids();
+    let out = std::mem::take(&mut b.out);
+    b.out = widen_repo_wide(out, input);
     // Interlocking before emission: a run or sequence directing an avoided runner is dropped.
     let avoided: Vec<String> = b
         .out

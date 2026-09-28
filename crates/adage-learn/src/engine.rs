@@ -112,14 +112,74 @@ pub fn exposed(s: &Session, r: &Route) -> bool {
     s.exposed_to(&refs, matches!(r.step, Step::ReadBatch { .. }))
 }
 
+/// The commands a step ran successfully, each with its own effect class: the step's command, or
+/// every part of a compound one (`cargo fmt --all && cargo test --workspace`). A failed compound
+/// is failed in every part (which part failed is not recorded).
+fn ok_parts(st: &crate::import::StepObs) -> Vec<(String, Effect)> {
+    fn walk(n: &adage_core::Normalized, out: &mut Vec<(String, Effect)>) {
+        match &n.action {
+            CanonicalAction::Exec { argv, .. } if !argv.is_empty() => {
+                out.push((shell_join(argv), bridge::effect_of(n)));
+            }
+            CanonicalAction::Compound { actions, .. } => actions.iter().for_each(|a| walk(a, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    if !st.call.failed {
+        walk(&st.norm, &mut out);
+    }
+    out
+}
+
+/// Whether a step runs a command at all (a compound one included).
+fn runs_command(st: &crate::import::StepObs) -> bool {
+    match &st.norm.action {
+        CanonicalAction::Exec { .. } => true,
+        CanonicalAction::Compound { actions, .. } => {
+            actions.iter().any(|a| matches!(a.action, CanonicalAction::Exec { .. }))
+        }
+        _ => false,
+    }
+}
+
+/// A directed command, read once for matching observed runs of its family.
+struct Want {
+    command: String,
+    shape: Option<adage_core::pattern::Shape>,
+    effect: Effect,
+}
+
+impl Want {
+    fn new(command: String) -> Want {
+        let shape = adage_core::pattern::Shape::of_command(&command);
+        let effect = io::classify(&command, &adage_core::CommandTable::load());
+        Want { command, shape, effect }
+    }
+
+    /// Whether step `st` ran this command or a variant it covers (`compile::variants`: an
+    /// extension with options, or, for a repo-wide command, a narrowing of the same effect):
+    /// traces that ran `cargo test -p adage-cli` after an edit are evidence for
+    /// `cargo test --workspace --locked`, the family's covering form.
+    fn hit(&self, st: &crate::import::StepObs) -> bool {
+        ok_parts(st).iter().any(|(lit, e)| {
+            *lit == self.command
+                || self.shape.as_ref().is_some_and(|w| {
+                    adage_core::pattern::Shape::of_command(lit)
+                        .is_some_and(|v| compile::variants::covers(w, &v, *e == self.effect))
+                })
+        })
+    }
+}
+
 /// Whether `steps` ran what `step` directs after position `from` (a sequence in order), with
 /// `{part}` bound to `part`.
 fn ran_after(steps: &[crate::import::StepObs], from: usize, step: &Step, part: Option<&str>) -> bool {
     let bind = |c: &str| part.map_or(c.to_string(), |p| c.replace("{part}", p));
-    let want: Vec<String> = compile::commands(step).into_iter().map(bind).collect();
+    let want: Vec<Want> = compile::commands(step).into_iter().map(|c| Want::new(bind(c))).collect();
     let mut i = 0;
     for st in steps.iter().skip(from + 1) {
-        if i < want.len() && ok_literal(st).as_deref() == Some(want[i].as_str()) {
+        if i < want.len() && want[i].hit(st) {
             i += 1;
         }
     }
@@ -143,6 +203,7 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
         _ => None,
     });
     let first = compile::commands(&r.step).first().map(|c| c.to_string())?;
+    let want_first = Want::new(first.clone());
     let (mut opp, mut support, mut ran_without, mut not_editing, mut failed) = (0, BTreeSet::new(), 0u32, 0u32, 0u32);
     let mut open = BTreeSet::new();
     for s in sessions {
@@ -170,13 +231,11 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
             None => {
                 not_editing += 1;
                 let head = first.split('{').next().unwrap_or_default().to_string();
-                let ran = s.steps.iter().filter_map(ok_literal).any(|l| {
-                    if depth.is_some() {
-                        l.starts_with(&head)
-                    } else {
-                        l == first
-                    }
-                });
+                let ran = if depth.is_some() {
+                    s.steps.iter().flat_map(ok_parts).any(|(l, _)| l.starts_with(&head))
+                } else {
+                    s.steps.iter().any(|st| want_first.hit(st))
+                };
                 ran_without += u32::from(ran);
             }
         }
@@ -202,7 +261,8 @@ fn together(r: &Route, sessions: &[&Session]) -> (u32, u32) {
         let mut at = Vec::new();
         let mut from = last + 1;
         for c in commands {
-            match s.steps.iter().enumerate().skip(from).find(|(_, st)| ok_literal(st).as_deref() == Some(c.as_str())) {
+            let want = Want::new(c.clone());
+            match s.steps.iter().enumerate().skip(from).find(|(_, st)| want.hit(st)) {
                 Some((i, _)) => {
                     at.push(i);
                     from = i + 1;
@@ -215,7 +275,7 @@ fn together(r: &Route, sessions: &[&Session]) -> (u32, u32) {
         }
         of += 1;
         let next_command =
-            |i: usize| s.steps.iter().enumerate().skip(i + 1).find(|(_, st)| argv(st).is_some()).map(|(j, _)| j);
+            |i: usize| s.steps.iter().enumerate().skip(i + 1).find(|(_, st)| runs_command(st)).map(|(j, _)| j);
         together += u32::from(at.windows(2).all(|w| next_command(w[0]) == Some(w[1])));
     }
     (together, of)
@@ -470,6 +530,12 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
         (if n >= cfg.min_support { strength_for(effect, by_edit, lb, prime_rate.max(rate), cfg, &r.id) } else { None })
             .or_else(|| outcome_gate(effect, by_edit, lift.as_ref(), cfg))
             .ok_or_else(|| format!("rate {rate:.2} below the bar and no outcome lift, or may never be directed"))?;
+    // A check after an edit is suggested, never fired at every edit (`compile::shapes`).
+    let strength = if by_edit && effect == Effect::Verify && matches!(r.step, Step::Run { .. }) {
+        Strength::Prime
+    } else {
+        strength
+    };
     r.strength = strength;
     r.evidence = Evidence {
         opportunities: c.opportunities,
@@ -500,6 +566,64 @@ fn outcome_gate(
         ..Default::default()
     };
     compile::outcome_gate(effect, by_edit, lift, &p)
+}
+
+/// After-edit routes that direct the same step on different globs compete for one explanation:
+/// agents who edit `crates/**/*.rs` and `docs/*.md` in one trace, then run
+/// `cargo clippy --workspace …`, show the check after both kinds of edit, but only one kind calls
+/// for it. Strongest first (support, then id), a route is kept only when the traces that edited
+/// its files and **none** of a kept route's still ran its step after their last matching edit at
+/// the prime bar: its files predict the step on their own. Without such traces nothing tells the
+/// two apart, and the stronger explanation stands alone.
+fn explain_away(routes: &mut Vec<Judged>, ss: &[&Session], cfg: &LearnConfig, report: &mut EngineReport) {
+    let glob_of = |r: &Route| match &r.trigger {
+        Trigger::AfterEdit { paths } if r.slots.is_empty() => Some(paths.clone()),
+        _ => None,
+    };
+    let mut order: Vec<usize> = (0..routes.len()).filter(|&i| glob_of(&routes[i].route).is_some()).collect();
+    order.sort_by(|&a, &b| {
+        let (x, y) = (&routes[a].route, &routes[b].route);
+        y.evidence.support.cmp(&x.evidence.support).then_with(|| x.id.cmp(&y.id))
+    });
+    let mut kept: Vec<usize> = Vec::new();
+    let mut gone: BTreeSet<usize> = BTreeSet::new();
+    for i in order {
+        let r = &routes[i].route;
+        let g = glob_of(r).expect("after-edit");
+        let rival = kept.iter().map(|&k| &routes[k].route).find(|k| {
+            k.step == r.step && glob_of(k).is_some_and(|kg| kg != g) && {
+                let kg = glob_of(k).expect("after-edit");
+                let alone: Vec<&Session> = ss
+                    .iter()
+                    .copied()
+                    .filter(|s| !exposed(s, r) && !s.steps.iter().any(|st| edited(st).is_some_and(|p| glob_hit(&kg, p))))
+                    .collect();
+                let c = count_after_edit(r, &alone);
+                let (n, opp) = c.map_or((0, 0), |c| (c.support.len() as u32, c.opportunities));
+                opp == 0 || (n as f64) < cfg.bar(&r.id) * opp as f64
+            }
+        });
+        match rival {
+            Some(k) => {
+                report.dropped.push(Dropped {
+                    pattern: routes[i].why.pattern.clone(),
+                    reason: format!(
+                        "{}: explained by {} (the traces that edited {g} but no file of {} did not run it)",
+                        r.id,
+                        k.id,
+                        glob_of(k).unwrap_or_default()
+                    ),
+                });
+                gone.insert(i);
+            }
+            None => kept.push(i),
+        }
+    }
+    let mut i = 0;
+    routes.retain(|_| {
+        i += 1;
+        !gone.contains(&(i - 1))
+    });
 }
 
 /// Learn, compile and judge the routes for one repository's traces. `model` is the pinned
@@ -597,6 +721,26 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
             });
         }
         keep
+    });
+    explain_away(&mut routes, ss, cfg, &mut report);
+    // A check after an edit that an obligation on the same trigger already makes (the check
+    // meets the obligation's command: `cargo fmt --all --check` after `cargo fmt --all`) adds
+    // nothing: the obligation is delivered alone.
+    routes.retain(|j| {
+        let (Trigger::AfterEdit { .. }, Step::Run { command }) = (&j.route.trigger, &j.route.step) else {
+            return true;
+        };
+        if j.route.effect != Effect::Verify {
+            return true;
+        }
+        let checked = owed.iter().find(|(t, c)| *t == j.route.trigger && adage_core::pattern::same_command(c, command));
+        if let Some((_, c)) = checked {
+            report.dropped.push(Dropped {
+                pattern: j.why.pattern.clone(),
+                reason: format!("{}: it checks what the obligation to run {c:?} already owes", j.route.id),
+            });
+        }
+        checked.is_none()
     });
     // A value-flow reflex MDL did not select on its own (a longer pattern holding it was chosen,
     // or none): its route is the value slot's, with the slot's own evidence.
