@@ -1,7 +1,7 @@
 # Live learning
 
 Adage learns while agents work. When a session stops or ends, the hook asks for the repository to
-be learned, and a background learner does it, usually within seconds. There is no `adage learn`
+be learned, and a background learner does it, usually within seconds. There is no `adage condition`
 to remember, and no daemon. This page is the contract for everything that watches it happen
 (`adage ui`, `adage watch`, scripts): the settings, the files, and the two streams to follow.
 The design is in [Architecture §4.7.2](Adage%20—%20Architecture.md#472-live-learning).
@@ -15,7 +15,7 @@ has a default, so the file is optional.
 [learn]
 auto = true               # learn automatically when agent sessions stop or end
 min_interval_secs = 120   # at most one automatic learn per repository per interval (0–86400)
-thresholds = "default"    # evidence bars: "default", or "demo" (lower); `adage learn --demo` still overrides
+thresholds = "default"    # evidence bars: "default", or "demo" (lower); `adage condition --demo` still overrides
 claude_projects = ""      # Claude Code history ("" = ~/.claude/projects)
 codex_sessions = ""       # Codex rollouts automatic learning reads, e.g. "~/.codex/sessions" ("" = none)
 opencode_exports = ""     # a directory of `opencode export` files ("" = none)
@@ -33,7 +33,7 @@ holdout = 0.1             # share of sessions held out as the control arm (0–1
 | `learn.claude_projects` | `""` | — |
 | `learn.codex_sessions` | `""` | — |
 | `learn.opencode_exports` | `""` | — |
-| `learn.parse_cache` | `true` | — (`adage learn --no-cache` skips it for one run) |
+| `learn.parse_cache` | `true` | — (`adage condition --no-cache` skips it for one run) |
 | `runtime.holdout` | `0.1` | `ADAGE_HOLDOUT` (any number; 1 or more is shadow mode, as before) |
 
 Environment variables win over the file, and the file over the defaults. An unparseable file, an
@@ -54,7 +54,7 @@ adage config set <key> <value>   validated, written atomically; refused inside a
    `session.deleted`, after its normal decision, the hook (if `learn.auto` is on and the
    repository has no `.adage/disabled`) writes the repository's request marker. Then, unless a
    learner holds the repository's lock or one is already scheduled, it starts
-   `adage learn --auto --repo-root <root>` detached (its own process group on Unix; a detached
+   `adage condition --auto --repo-root <root>` detached (its own process group on Unix; a detached
    process group on Windows; no standard streams). If the last learn for the repository started
    less than `min_interval_secs` ago, it adds `--after <ms>` and the learner waits until then, so
    the last session is always learned and at most one learn starts per interval. The hook never
@@ -65,10 +65,10 @@ adage config set <key> <value>   validated, written atomically; refused inside a
    hook named, through the parse cache; holds `tracks.lock` while it writes tracks and the index.
    Appends a line to `learn.log`. Then re-reads the request marker once: a request that arrived
    while it ran is learned before it exits.
-3. **Manual learning** (`adage learn`) uses the same thresholds (unless `--demo`), the same cache
+3. **Manual learning** (`adage condition`) uses the same thresholds (unless `--demo`), the same cache
    and the same lock, and writes the same `learn.log` lines with `"trigger":"manual"`.
 
-Automatic learning of a repository produces exactly the tracks a full `adage learn` over the same
+Automatic learning of a repository produces exactly the tracks a full `adage condition` over the same
 sources produces for it (tested), so the two never fight. Set `learn.codex_sessions` if you also
 learn Codex history by hand, or evidence from it will come and go between manual and automatic
 runs.
@@ -93,7 +93,7 @@ while `after` is in the future. `adage doctor` reports a learner holding its loc
 minutes, and a request pending over 5 minutes past its interval.
 
 Other files: `$ADAGE_HOME/tracks.lock` (one writer of tracks and index at a time: learners,
-`adage learn`, review decisions, `adage add`), and `$ADAGE_HOME/cache/sessions/` (the parse cache:
+`adage condition`, review decisions, `adage add`), and `$ADAGE_HOME/cache/sessions/` (the parse cache:
 `manifest.json` maps each transcript to its size, modification time and repository root, and
 `<hash>.json` holds its parsed session; owner-only, rebuilt on a new build, safe to delete).
 
@@ -121,7 +121,7 @@ A learn, one line per repository learned:
 
 | Field | Meaning |
 | --- | --- |
-| `trigger` | `auto` (a learner a hook started) or `manual` (`adage learn`) |
+| `trigger` | `auto` (a learner a hook started) or `manual` (`adage condition`) |
 | `repo` | Repository key; `null` only for a manual run that found no usable session |
 | `sessions_read` | Transcripts read (an automatic run counts only its repository's) |
 | `sessions_used` | This repository's sessions with steps |

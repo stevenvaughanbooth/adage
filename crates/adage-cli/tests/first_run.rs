@@ -291,7 +291,7 @@ fn learn_fixture(w: &World) -> bool {
         std::fs::write(&p, lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n")).unwrap();
         files.push(p.display().to_string());
     }
-    let mut args = vec!["learn", "--demo", "--repo", "acme-billing", "--transcripts"];
+    let mut args = vec!["condition", "--demo", "--repo", "acme-billing", "--transcripts"];
     args.extend(files.iter().map(String::as_str));
     let o = w.run(&args);
     o.status.success() && Path::new(&w.p("data/index.json")).exists()

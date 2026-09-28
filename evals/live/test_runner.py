@@ -57,7 +57,7 @@ class DryRun(unittest.TestCase):
         self.assertEqual(by_arm["train"], {}, "training sessions run without hooks")
         self.assertEqual(by_arm["holdout"]["ADAGE_ARM"], "holdout")
         self.assertEqual(by_arm["adage"]["ADAGE_ARM"], "treated")
-        self.assertIn("learn", p["learn"])
+        self.assertIn("condition", p["learn"])
 
     def test_a_dry_run_writes_nothing(self):
         text = dry("--root", str(self.root))

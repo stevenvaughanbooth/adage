@@ -226,7 +226,7 @@ The index gains `IndexedRoute.exec: Option<ExecBinding>`, holding the route exec
   - `adage-exec mcp`: a stdio MCP server for E2 and E3.
   - `adage-exec run <track> <route> --input k=v [--dry-run]`: for a person (and for evals). Running it through the agent's Bash is harmless: the harness's permissions apply and approvals are still checked.
 
-Why not put execution in the hook binary behind a flag? Because the promise is checkable today: grep for `Command::new` in the `adage` crates. Keeping it checkable is worth one extra binary. `adage exec enable` (a person at a terminal) swaps the hook registration from `adage hook` to `adage-exec hook` and registers the MCP server. `adage exec disable` reverses it. On Claude Code this is a second plugin in the same marketplace, `adage-exec`, with its own `hooks.json` (it replaces the Adage plugin's hooks when both are enabled, and the Adage plugin's session-start shim detects this and goes quiet) and a `.mcp.json` that runs `${CLAUDE_PLUGIN_DATA}/bin/adage-exec mcp`. Recommended alternative for simplicity: a single plugin whose hooks call `adage` unless `${CLAUDE_PLUGIN_DATA}/exec-enabled` exists, a marker that only `adage exec enable` writes. It is less clean, but it avoids hook doubling. Owner decision D2.
+Why not put execution in the hook binary behind a flag? Because the promise is checkable today: grep for `Command::new` in the `adage` crates. Keeping it checkable is worth one extra binary. `adage delegate` (a person at a terminal) swaps the hook registration from `adage hook` to `adage-exec hook` and registers the MCP server. `adage delegate --off` reverses it. On Claude Code this is a second plugin in the same marketplace, `adage-exec`, with its own `hooks.json` (it replaces the Adage plugin's hooks when both are enabled, and the Adage plugin's session-start shim detects this and goes quiet) and a `.mcp.json` that runs `${CLAUDE_PLUGIN_DATA}/bin/adage-exec mcp`. Recommended alternative for simplicity: a single plugin whose hooks call `adage` unless `${CLAUDE_PLUGIN_DATA}/exec-enabled` exists, a marker that only `adage delegate` writes. It is less clean, but it avoids hook doubling. Owner decision D2.
 
 No-match latency is unchanged: `adage-exec hook` takes the same fast path (`adage-runtime/src/fast.rs`) and only loads the sandbox when an E1 route fires.
 
@@ -337,7 +337,7 @@ Everything else needs a person. Automatic approval is **off by default** until g
 
 `$ADAGE_HOME/approvals.json` is plain JSON with mode 0600, written atomically and only by commands that pass `require_person`. Each entry is `{ key, approved_on, by?, basis: { evidence snapshot }, auto: bool }`.
 
-It is not signed. Anything that can write `$ADAGE_HOME` can already rewrite `trusted-signers` and `trust.json`, so signing would add ceremony without adding a boundary. Instead, `adage init` and `adage exec enable` print a recommended harness deny rule for edits to `$ADAGE_HOME/**`, and `doctor` warns if one is missing.
+It is not signed. Anything that can write `$ADAGE_HOME` can already rewrite `trusted-signers` and `trust.json`, so signing would add ceremony without adding a boundary. Instead, `adage init` and `adage delegate` print a recommended harness deny rule for edits to `$ADAGE_HOME/**`, and `doctor` warns if one is missing.
 
 Optional hardening is available with `exec.require_signed_approvals = true`: each entry is signed with a key file whose passphrase is typed at the terminal, never through the agent.
 
@@ -346,12 +346,12 @@ Approvals never travel. `share` refuses to include them, and `add` ignores any s
 ### 4.4 User experience
 
 - **`adage review`** gains the reasons `exec-request` (a route asks for a level above its current grant), `exec-changed` and `exec-revoked` (automatic revocation, with its cause). The verbs are:
-  - `adage review allow-exec <track> <route> --level e1|e2|e3 [--raw] [--effect observe]`
-  - `adage review revoke-exec <track> <route>`
+  - `adage review delegate <track> <route> --level e1|e2|e3 [--raw] [--effect observe]`
+  - `adage review undelegate <track> <route>`
 
   Both refuse inside an agent session. The screen shows the argv template with each input and its contract, the effect (classifier result against what is being approved), the sandbox profile in one line ("reads: repository, toolchain · writes: nothing · network: off"), the script closure (full text for vendored scripts, path, hash and deps for L-ref), the evidence by origin, and any attestations.
-- **`adage init`** reports sandbox capability ("Linux, Landlock ABI 4: E1–E3 available") and "Execution: off". It lists routes that would be approved automatically at inert-observe and offers `adage exec enable`, with a one-time pack-level approval for the instinct environment steps, as already planned.
-- **`adage exec status`** lists grants per repository, and `doctor` shows sandbox probes.
+- **`adage init`** reports sandbox capability ("Linux, Landlock ABI 4: E1–E3 available") and "Execution: off". It lists routes that would be approved automatically at inert-observe and offers `adage delegate`, with a one-time pack-level approval for the instinct environment steps, as already planned.
+- **`adage delegate --status`** lists grants per repository, and `doctor` shows sandbox probes.
 
 ### 4.5 Policy
 
@@ -439,7 +439,7 @@ On the bench ladder, all results use one JSONL schema. Add `tier` values and an 
 | **C0 Format** | Pack v2 schema, types registry, route exec digest, closure, `CLOSURE`, and an upgrader from v1 tracks; the principle text amended as a draft | New `crates/adage-pack/{model.rs,closure.rs,digest.rs,validate.rs}` (reusing `adage-tracks::io` checks, which move to shared functions); `docs/packs.md` | 1.5 weeks | none |
 | **C1 Distribute and bind** | `adage share` writes packs (the `adage-pack` namespace); `adage add` verifies packs; resolution with inert reasons; L-none and L-ref; fingerprint and detector applicability; the core instincts shipped as a pack; `IndexedRoute.exec` | `adage-pack/bind.rs`; `adage-cli/src/{share.rs,add.rs,doctor.rs}`; `adage-sign` (namespace constant); `adage-tracks/src/index.rs`; `adage-instincts/src/catalogue.rs` | 2 weeks | instincts integration items 1, 2 and 5 (provenance, `Step::Advise`, `by_origin`) |
 | **C2 Execution core** | Sandbox (Landlock with seccomp, bwrap, sandbox-exec), environment scrubbing, limits, git hardening, typed projection, the `inert` field in `commands.toml`, approvals store, policy, `adage-exec run`, review verbs, the L0-sec suite | New `crates/adage-exec/{sandbox/linux.rs,sandbox/macos.rs,env.rs,project.rs,approvals.rs,policy.rs}`; `adage-core/data/commands.toml` and `table.rs`; `adage-cli/src/review.rs`; `adage-eval/src/safety.rs` (`check_data_block`) | 3 weeks | C0 |
-| **C3 E1 prefetch** | `adage-exec hook`, the E1 data block, spool fields, steered-session exclusion, `adage exec enable/disable`, the `adage-exec` plugin variant, L1 and L2 arms | `adage-exec/src/hook.rs` (wrapping `adage-cli` hook logic, which moves into a library crate `adage-hook` so both binaries share it); `adage-runtime/src/render.rs` (data template); `plugin/claude-code-exec/`; `evals/live` | 2 weeks | C1, C2; gate G1 |
+| **C3 E1 prefetch** | `adage-exec hook`, the E1 data block, spool fields, steered-session exclusion, `adage delegate/disable`, the `adage-exec` plugin variant, L1 and L2 arms | `adage-exec/src/hook.rs` (wrapping `adage-cli` hook logic, which moves into a library crate `adage-hook` so both binaries share it); `adage-runtime/src/render.rs` (data template); `plugin/claude-code-exec/`; `evals/live` | 2 weeks | C1, C2; gate G1 |
 | **C4 E2 MCP** | `adage-exec mcp`: tools from contracts, output schemas, rate limits, `list_changed`, `.mcp.json` in the plugin, Codex and OpenCode registration in `adage install` | `adage-exec/src/mcp/{server.rs,schema.rs}` (hand-written JSON-RPC over stdio, no heavy SDK); `adage-cli/src/install.rs` | 2 to 3 weeks | C3; **Track G typed slot contracts learned from value flow** (before G, only prompt-span inputs and hand-authored output types, so coverage is thin); gate G2 |
 | **C5 Actions, vendoring, attestations** | E3 stage, verify and apply; L-vendor scripts with cas; attestations in packs; automatic revocation; the G3 and G4 runs | `adage-exec/src/stage.rs`; `adage-pack/vendor.rs`; `evals/bench` schema v2 | 3 to 4 weeks | C4; Track G delivery shapes (`after-X-do-Y` for regenerate outputs); gates G3 and G4 |
 

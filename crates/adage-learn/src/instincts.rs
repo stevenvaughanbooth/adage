@@ -359,7 +359,7 @@ pub fn other_routes_except(tracks_root: &Path, repo: &str, skip: &BTreeSet<&str>
     out
 }
 
-/// `adage learn --instincts-only`: bind one repository's instincts with no sessions (day 0), write
+/// `adage condition --instincts-only`: bind one repository's instincts with no sessions (day 0), write
 /// the track, and compile the index. Returns the report for that repository.
 pub fn learn_only(
     repo: &str,

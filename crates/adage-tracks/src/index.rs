@@ -1,6 +1,6 @@
 //! The compiled index: everything the hot path needs, in one deterministic file.
 //!
-//! The runtime never reads track directories. `adage learn` (and `adage add`) compile all
+//! The runtime never reads track directories. `adage condition` (and `adage add`) compile all
 //! installed tracks into `index.json`, written atomically (temp file + rename). The same inputs
 //! always produce the same bytes, and `generation` identifies exactly which inputs decided.
 
@@ -121,7 +121,7 @@ fn precedence(t: &Track, r: &Route) -> u8 {
 }
 
 /// Where `adage add` installs tracks, inside the tracks directory. `@` never appears in a learned
-/// track's directory, so `adage learn` can never write over an import.
+/// track's directory, so `adage condition` can never write over an import.
 pub const IMPORTED_DIR: &str = "@imported";
 
 impl Index {
@@ -133,7 +133,7 @@ impl Index {
     /// Compile tracks into an index, with the interlocking rules applied
     /// ([`crate::interlock`]): a route a dead end contradicts at the prompt is left out, and of two
     /// greens at one decision point one is compiled yellow. Returns the conflicts found, for
-    /// `adage learn` and `adage doctor` to report.
+    /// `adage condition` and `adage doctor` to report.
     pub fn compile_with_conflicts(tracks: &[Track]) -> (Index, Vec<interlock::Conflict>) {
         let imported_tracks: BTreeSet<(&str, &str)> = tracks
             .iter()
@@ -191,7 +191,7 @@ impl Index {
     }
 
     /// [`Index::compile_with_conflicts`], then the exec bindings of pack-sourced routes read from
-    /// the bound tracks under `tracks_root` ([`exec_bindings`]). What `adage learn`, `add`,
+    /// the bound tracks under `tracks_root` ([`exec_bindings`]). What `adage condition`, `add`,
     /// `review` and `doctor` compile.
     pub fn compile_root(tracks_root: &Path, tracks: &[Track]) -> (Index, Vec<interlock::Conflict>) {
         let (mut index, conflicts) = Index::compile_with_conflicts(tracks);

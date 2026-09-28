@@ -6,13 +6,13 @@
 //!    configuration.
 //! 3. Offers the optional embedding model: prints `adage models fetch`, and runs it only with
 //!    `--yes`.
-//! 4. Runs `adage survey` over existing history (read-only), for the repository at `--repo` if
+//! 4. Runs `adage sense` over existing history (read-only), for the repository at `--repo` if
 //!    given, else for every repository.
 //!
 //! At a terminal (stdin and stdout both terminals, outside any agent session, and without
 //! `--print` or `--yes`) `init` is a guided wizard instead (`crate::ui::wizard`): it asks
 //! before each step, shows the exact file and diff before installing hooks, and can fetch the
-//! model, run a first `adage learn`, and turn auto-learning on.
+//! model, run a first `adage condition`, and turn auto-learning on.
 //!
 //! Printing is allowed anywhere, including inside an agent session. `--yes` downloads into the
 //! data directory, so it needs a person at a terminal and refuses inside an agent session.
@@ -154,7 +154,7 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
 }
 
 /// Show what would bind for the repository (a dry bind, nothing written), and offer
-/// `adage learn --instincts-only`; with `--yes`, run it.
+/// `adage condition --instincts-only`; with `--yes`, run it.
 fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result<()> {
     let Some(root) = root else {
         println!("  Not inside a repository: instincts bind per repository (run `adage init` inside one).");
@@ -183,7 +183,7 @@ fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result
     if drafts {
         println!("  Environment steps (installs) stay drafts until you approve one in `adage review`; approving one approves the pack's environment steps for this repository.");
     }
-    let cmd = format!("adage learn --instincts-only --repo-path {}", detect::tilde(root));
+    let cmd = format!("adage condition --instincts-only --repo-path {}", detect::tilde(root));
     if yes {
         println!("  binding: {cmd}");
         crate::instincts_only(&["--repo-path".to_string(), root.to_string_lossy().into_owned()], paths)?;

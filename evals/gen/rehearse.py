@@ -14,7 +14,7 @@ and finishes with the working verify command. Every command really runs in the s
 session is written as a Claude Code transcript (JSONL) with the real output, in the layout the live
 runner uses (ROOT/<bundle>/transcripts/<project>/<session>.jsonl, outcomes.json).
 
-Then, unless --no-learn, it runs `adage learn --demo --no-instincts` (with `--engine`, when given) on
+Then, unless --no-learn, it runs `adage condition --demo --no-instincts` (with `--engine`, when given) on
 those transcripts with an isolated ADAGE_HOME (ROOT/<bundle>/adage-home) and compares the learned
 routes with conventions.json: each non-decoy convention must be recovered, and no route may mention
 a decoy. A lookup is recovered when its command is the convention's and its contract accepts every
@@ -394,7 +394,7 @@ def rehearse_bundle(bundle, root, repeats, adage, learn, engine=None):
         home = root / "adage-home"
         # Learned routes only: instincts are bound from the repository's files, not learned from
         # the sessions, so they are not what a rehearsal measures (and would be unexpected routes).
-        argv = [str(adage), "learn", "--demo", "--json", "--no-instincts", "--repo", b.tasks["repo"]]
+        argv = [str(adage), "condition", "--demo", "--json", "--no-instincts", "--repo", b.tasks["repo"]]
         if engine:
             argv += ["--engine", engine]
         argv += ["--outcomes", str(root / "outcomes.json"), "--transcripts", *tx]

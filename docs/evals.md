@@ -45,7 +45,7 @@ What it does:
    session) is on both sides: those numbers measure a learner that has seen the test tasks. See
    "Splits and leakage" below.
 2. It **learns** tracks from the train sessions into a temporary Adage home. This is the real
-   `adage learn` with the dataset's thresholds (`--thresholds demo|default` overrides them). It
+   `adage condition` with the dataset's thresholds (`--thresholds demo|default` overrides them). It
    uses no embedding model, so intent routes are not evaluated offline.
 3. It **replays** each test session event by event through the real runtime,
    `adage_runtime::decide`, in the **holdout arm**. The session is history: nothing can change
@@ -522,7 +522,7 @@ These use `proptest` with default case counts and bounded inputs, and finish in 
 
 ### Bugs found, fixed, and pinned by regression tests
 
-1. **One hostile error line stopped `adage learn` for the whole repository.** A dead-end signature
+1. **One hostile error line stopped `adage condition` for the whole repository.** A dead-end signature
    containing quotes or shell syntax failed track validation, and `learn` returned the error:
    nothing was learned and no index was compiled. Any mined command with a quoted argument did the
    same.
@@ -536,7 +536,7 @@ These use `proptest` with default case counts and bounded inputs, and finish in 
 3. **Stack overflow in the normaliser.** A 15 KB `a && a && … && ls` is under `MAX_COMMAND` and
    contains no brackets, so `too_deep` let it through. The walk recursed once per `&&`, which
    overflowed even an 8 MiB stack. The overflow aborted the hook process, which `catch_unwind`
-   cannot catch, and aborted `adage learn` over any history that contained such a command.
+   cannot catch, and aborted `adage condition` over any history that contained such a command.
    - Fix: `&&`/`||` chains are flattened iteratively, and a depth bound (`MAX_DEPTH = 96`) covers
      everything else.
    - Regression tests: `adage-core/tests/deep.rs`.
@@ -600,7 +600,7 @@ session. A run writes the layout of a demo archive and a results page like `demo
 `build_demo.py <root> <dataset> --name … --repo … --sandbox …` turns any live run into an offline
 dataset for `adage eval`. `python3 -m unittest evals/live/test_runner.py` smoke-tests the dry run.
 For harbor-dispatch, `selfcheck.py` proves every incident solvable and `rehearse.py` proves, with
-scripted sessions and no model, that `adage learn` learns all four of its conventions and that
+scripted sessions and no model, that `adage condition` learns all four of its conventions and that
 `adage eval` ingests the result.
 See [evals/live/README.md](../evals/live/README.md).
 

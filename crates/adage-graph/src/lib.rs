@@ -11,7 +11,7 @@
 //! value-flow and file edges, token occurrences) with node embeddings from [`embed`], cached by
 //! content in [`cache`].
 //!
-//! `adage learn` uses both when `LearnParams::engine` is `shadow` or `graph`
+//! `adage condition` uses both when `LearnParams::engine` is `shadow` or `graph`
 //! (`adage-learn/src/graph.rs`): the lookup route's slot is a learned value type, and session
 //! facts are computed and cached.
 

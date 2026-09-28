@@ -1,0 +1,49 @@
+---
+source: crates/adage-cli/src/cli.rs
+expression: help
+---
+Agent traces become reflexes.
+
+Usage: adage [OPTIONS] [COMMAND]
+
+Start:
+  init         set Adage up: harnesses, hooks, past traces
+  doctor       check that everything is healthy
+
+Every day:
+  status       reflexes and instincts in effect, with evidence
+  watch        live pane for a split terminal
+  ui           the full-screen app
+  map          open the map in your browser
+  review       reflexes waiting for you
+
+Learning:
+  sense        what your agents actually do (read-only)
+  condition    condition reflexes from traces
+  report       what Adage said, and what agents did
+  graph        Adage's state as a graph
+
+Sharing:
+  share        build and sign a pack
+  add          verify and install a pack
+
+Execution:
+  delegate     let hooks run delegated reflexes
+
+Setup:
+  install      one harness's hook registration
+  models       the optional embedding model
+  config       settings
+  completions  shell completions
+
+Evaluation:
+  eval         offline replay evaluation
+
+
+Options:
+      --plain    Plain output for screen readers and logs: no colour, no glyphs beyond ASCII
+  -h, --help     Print help
+  -V, --version  Print version
+
+
+Start with adage init. `adage <command> --help` explains each command.

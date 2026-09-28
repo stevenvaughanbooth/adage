@@ -9,8 +9,8 @@
 //! from the facts cache.
 //! Writes a Claude Code history of the simulator's scenario (`adage-sim`, default 300 sessions in
 //! each of 2 repositories) under a scratch `HOME`, then times, through the binary:
-//! `adage learn --no-cache` (every transcript parsed), `adage learn` with a cold and a warm parse
-//! cache, and `adage learn --auto` for one repository with a warm cache after one of its
+//! `adage condition --no-cache` (every transcript parsed), `adage condition` with a cold and a warm parse
+//! cache, and `adage condition --auto` for one repository with a warm cache after one of its
 //! transcripts grew (what a hook starts at the end of a turn). Prints JSON, in milliseconds.
 
 use adage_sim::{claude, scenario};
@@ -74,10 +74,10 @@ fn main() {
     std::fs::create_dir_all(root.join("adage")).unwrap();
     std::fs::write(root.join("adage/config.toml"), "[learn]\nthresholds = \"demo\"\n").unwrap();
 
-    let full = run(bin, &root, &["learn", "--no-cache", "--engine", &engine]);
-    let cold = run(bin, &root, &["learn", "--engine", &engine]);
-    let warm = run(bin, &root, &["learn", "--engine", &engine]);
-    let auto_warm = run(bin, &root, &["learn", "--auto", "--repo-root", &first_repo]);
+    let full = run(bin, &root, &["condition", "--no-cache", "--engine", &engine]);
+    let cold = run(bin, &root, &["condition", "--engine", &engine]);
+    let warm = run(bin, &root, &["condition", "--engine", &engine]);
+    let auto_warm = run(bin, &root, &["condition", "--auto", "--repo-root", &first_repo]);
     // One transcript of the first repository grows by a turn, as at the end of a session.
     let grown = a_transcript.unwrap();
     let mut text = std::fs::read_to_string(&grown).unwrap();
@@ -85,7 +85,7 @@ fn main() {
     text.push_str(&line);
     text.push('\n');
     std::fs::write(&grown, text).unwrap();
-    let auto_one_changed = run(bin, &root, &["learn", "--auto", "--repo-root", &first_repo]);
+    let auto_one_changed = run(bin, &root, &["condition", "--auto", "--repo-root", &first_repo]);
     let log = std::fs::read_to_string(root.join("adage/learn.log")).unwrap();
     let last: serde_json::Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
     println!(

@@ -42,7 +42,7 @@ pub fn main(harness: String, event: String) -> ! {
     adage_hook::main(harness, event, adage_hook::Options { learner: Some(adage_beside), extension: Some(&PREFETCH) })
 }
 
-/// The `adage` binary installed beside `adage-exec` (live learning is `adage learn --auto`).
+/// The `adage` binary installed beside `adage-exec` (live learning is `adage condition --auto`).
 pub fn adage_beside() -> Option<std::path::PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let name = if cfg!(windows) { "adage.exe" } else { "adage" };

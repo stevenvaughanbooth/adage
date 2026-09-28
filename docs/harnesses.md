@@ -98,7 +98,7 @@ The response is `{"context": text}` or `{"continue": reason}`.
 - never evaluates, executes, or shells out with text it receives: directive text only ever goes
   into `output.output` or a message part.
 
-**Learning** — `adage learn --transcripts <export.json>…` accepts `opencode export` files
+**Learning** — `adage condition --transcripts <export.json>…` accepts `opencode export` files
 (recognised by content: `info` is the first key) alongside Claude Code transcripts
 (`crates/adage-learn/src/opencode.rs`). Steering is detected from synthetic user parts and
 directives appended to tool output, both of which the export records. Sub-agent sessions
@@ -109,7 +109,7 @@ mkdir -p exports
 opencode session list --format json | jq -r '.[].id' | while read -r id; do
   opencode export "$id" > "exports/$id.json"
 done
-adage learn --transcripts exports/*.json
+adage condition --transcripts exports/*.json
 ```
 
 **Install** — `adage install opencode [--write] [--scope project|user]` prints (default) or writes
@@ -183,7 +183,7 @@ Codex's hook contract mirrors Claude Code's, so the adapter
   says plainly it is from Adage, not the user. When that reason comes back as a
   `UserPromptSubmit` prompt, the adapter ignores it rather than matching prompt routes on it.
 
-**Learning** — `adage learn --codex-sessions ~/.codex/sessions` reads every rollout under the
+**Learning** — `adage condition --codex-sessions ~/.codex/sessions` reads every rollout under the
 `YYYY/MM/DD` layout; `--transcripts` also accepts rollout files, recognised by their first line
 (`crates/adage-learn/src/codex.rs`). The importer takes the prompt from the `user_message` event
 (or, in paginated history, the first user message that is not Codex's own context such as
@@ -248,7 +248,7 @@ OpenCode session ids and Codex UUIDv7 thread ids begin with the creation time, s
 started together were counted as one; graph now keys by the whole id (the dashboard shortens it
 for display).
 
-**First checks on a live install.** OpenCode: export one real session and `adage learn` it; run a
+**First checks on a live install.** OpenCode: export one real session and `adage condition` it; run a
 work-item prompt with the plugin installed and confirm the context message, the appended tool
 text, and the idle continuation reach the model (in the TUI and in `opencode run`). Codex: learn
 from the installed version's `~/.codex/sessions`; add a logging hook next to Adage's and diff the

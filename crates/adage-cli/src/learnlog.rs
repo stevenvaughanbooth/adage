@@ -16,7 +16,7 @@
 //!           "change":"route added","routes":4}]}}}
 //! ```
 //!
-//! - `trigger`: `auto` (the background learner a hook started) or `manual` (`adage learn`).
+//! - `trigger`: `auto` (the background learner a hook started) or `manual` (`adage condition`).
 //! - `sessions_read`: transcripts the run read (an automatic run counts only its repository's);
 //!   `sessions_used`: this repository's sessions with steps.
 //! - `changes`: [`adage_learn::diff`] — `change` is `new`, `retired`, `aspect`, `evidence`, `draft`
@@ -80,7 +80,7 @@ pub fn learn_line(ts: u64, l: &Learned) -> Value {
                 .map(|t| json!({ "name": t.name, "version": t.version, "change": t.change, "routes": t.routes.len() }))
                 .collect();
             let mut entry = json!({ "sessions": rr.sessions, "tracks": tracks });
-            // Instinct counts only: ids and reasons stay in `adage learn --json`.
+            // Instinct counts only: ids and reasons stay in `adage condition --json`.
             if let Some(i) = &rr.instincts {
                 entry["instincts"] = json!({
                     "bound": i.bound,
@@ -123,7 +123,7 @@ pub fn error_line(ts: u64, trigger: &str, repo: Option<&str>, class: &str, error
 pub fn describe(e: &anyhow::Error) -> String {
     match e.chain().find_map(|c| c.downcast_ref::<std::io::Error>()) {
         Some(io) => format!("I/O error ({:?})", io.kind()),
-        None => "learning failed; run `adage learn --json` to see why".into(),
+        None => "learning failed; run `adage condition --json` to see why".into(),
     }
 }
 

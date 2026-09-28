@@ -6,7 +6,7 @@ template (bugs.py) a function name and a noun phrase. Stacks never hard-code dom
 read them from here, so any skin works with any stack.
 
 Adding a skin: add an entry to SKINS with every key below. Keep every text free of path-like tokens
-(no decimals, no "e.g.", no file names): `adage learn` reads paths from plain-text lookup output.
+(no decimals, no "e.g.", no file names): `adage condition` reads paths from plain-text lookup output.
 """
 
 from dataclasses import dataclass, field

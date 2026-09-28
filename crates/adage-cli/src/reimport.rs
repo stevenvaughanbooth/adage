@@ -2,7 +2,7 @@
 //! own review decisions carry across for every route whose id survives in the new version.
 //!
 //! - **Rejected / demoted / promoted / approved:** recorded again and re-applied exactly as
-//!   `adage learn` re-applies them ([`review::reconcile`]): a rejected route stays retired unless
+//!   `adage condition` re-applies them ([`review::reconcile`]): a rejected route stays retired unless
 //!   the new version strengthened materially, a demotion holds, and a promotion holds only while the
 //!   route is materially unchanged *and* local first-hand evidence still allows an import to be
 //!   green (Design O2).

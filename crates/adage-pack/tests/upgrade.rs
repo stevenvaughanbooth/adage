@@ -1,4 +1,4 @@
-//! Upgrading v1 tracks: the tracks `adage learn --demo` learns from the committed simulator
+//! Upgrading v1 tracks: the tracks `adage condition --demo` learns from the committed simulator
 //! fixtures (`sim/fixtures/claude`, copied to `tests/fixtures/v1`), and the instinct catalogue
 //! bound on the acme fixture repository.
 

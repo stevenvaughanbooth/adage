@@ -257,7 +257,7 @@ fn demo_instincts_only_gates() {
 
 #[test]
 fn instincts_after_learning_give_way_and_stay_safe() {
-    // With learning (what `adage learn` does): a learned route with an instinct's id wins, the
+    // With learning (what `adage condition` does): a learned route with an instinct's id wins, the
     // rest bind, and every directive and wrapper is still one the oracle accepts.
     for (name, split) in [("demo-haiku45", Some("round2")), ("synthetic", None), ("adversarial", None)] {
         let r = eval_instincts(name, split, InstinctMode::With);

@@ -318,7 +318,7 @@ fn decisions_change_track_files_and_index() {
     assert!(!reasons(&w.queue()).contains_key(&key(NAME, "lookup")));
 
     // Demote: green → yellow in the file and the index; a major bump.
-    w.ok(&["review", "demote", NAME, "lookup"]);
+    w.ok(&["review", "weaken", NAME, "lookup"]);
     let t = w.track(NAME);
     assert_eq!(t.routes.iter().find(|r| r.id == "lookup").unwrap().aspect, Aspect::Yellow);
     assert_eq!(t.manifest.track.version, "1.0.0");
@@ -327,16 +327,16 @@ fn decisions_change_track_files_and_index() {
     assert_eq!(rs.routes["lookup"].decision, Decision::Demoted);
     assert_eq!(rs.routes["lookup"].by, None, "no name unless the person gives one");
     assert_eq!(rs.routes["lookup"].basis.followed, 6, "judgements so far are the new baseline");
-    let o = w.run(&["review", "demote", NAME, "lookup"]);
+    let o = w.run(&["review", "weaken", NAME, "lookup"]);
     assert!(!o.status.success() && text(&o).contains("only a green route"), "{}", text(&o));
 
     // Promote: back to green; a minor bump.
-    w.ok(&["review", "promote", NAME, "lookup"]);
+    w.ok(&["review", "strengthen", NAME, "lookup"]);
     assert_eq!(lookup_in_index(&w).unwrap().aspect, Aspect::Green);
     assert_eq!(w.track(NAME).manifest.track.version, "1.1.0");
 
     // Reject: retired, kept in the file, gone from the index.
-    w.ok(&["review", "reject", NAME, "lookup"]);
+    w.ok(&["review", "extinguish", NAME, "lookup"]);
     assert_eq!(w.track(NAME).routes.iter().find(|r| r.id == "lookup").unwrap().state, RouteState::Retired);
     assert!(lookup_in_index(&w).is_none());
     // A teammate's import of the same route does not slip back in behind the rejection.
@@ -415,14 +415,14 @@ fn promotion_never_exceeds_the_effect_ceiling() {
     for (id, why) in
         [("gen-at-start", "ceiling is yellow"), ("env", "ceiling is yellow"), ("dead", "only a yellow route")]
     {
-        let o = w.run(&["review", "promote", NAME, id]);
+        let o = w.run(&["review", "strengthen", NAME, id]);
         assert!(!o.status.success(), "{id} must not be promoted");
         assert!(text(&o).contains(why), "{id}: {}", text(&o));
     }
     assert_eq!(files(&w), untouched, "a refused decision writes nothing");
     assert!(!w.track_dir(NAME).join(review::FILE).exists());
     // A regenerate step triggered by an edit may be green.
-    w.ok(&["review", "promote", NAME, "gen-after-edit"]);
+    w.ok(&["review", "strengthen", NAME, "gen-after-edit"]);
     assert_eq!(w.track(NAME).routes.iter().find(|r| r.id == "gen-after-edit").unwrap().aspect, Aspect::Green);
 
     // Design O2: an import cannot be green without local first-hand evidence.
@@ -430,7 +430,7 @@ fn promotion_never_exceeds_the_effect_ceiling() {
     let mut imp = lookup(Aspect::Yellow);
     imp.state = RouteState::Probation;
     install(&w, imp_ref, &make_track("acme/imported", "imported:desire-path", vec![imp]), &[]);
-    let o = w.run(&["review", "promote", imp_ref, "lookup"]);
+    let o = w.run(&["review", "strengthen", imp_ref, "lookup"]);
     assert!(!o.status.success() && text(&o).contains("first-hand"), "{}", text(&o));
     // Weak local evidence is not enough.
     let mut weak = lookup(Aspect::Yellow);
@@ -438,10 +438,10 @@ fn promotion_never_exceeds_the_effect_ceiling() {
     weak.evidence.opportunities = 6;
     weak.evidence.lower_bound = wilson_lower(3, 6);
     install(&w, "acme/local", &make_track("acme/local", "desire-path", vec![weak]), &[]);
-    assert!(!w.run(&["review", "promote", imp_ref, "lookup"]).status.success());
+    assert!(!w.run(&["review", "strengthen", imp_ref, "lookup"]).status.success());
     // Learned here with strong evidence: allowed, and the import keeps its author's version.
     install(&w, "acme/local", &make_track("acme/local", "desire-path", vec![lookup(Aspect::Green)]), &[]);
-    w.ok(&["review", "promote", imp_ref, "lookup"]);
+    w.ok(&["review", "strengthen", imp_ref, "lookup"]);
     let t = w.track(imp_ref);
     assert_eq!(t.routes[0].aspect, Aspect::Green);
     assert_eq!(t.manifest.track.version, "0.1.0");
@@ -461,7 +461,7 @@ fn agents_can_list_but_not_decide() {
     let before = snapshot(&w);
     let o = w.cmd(&["review", "--json"]).env("CLAUDECODE", "1").output().unwrap();
     assert!(o.status.success(), "listing is fine for agents: {}", text(&o));
-    for verb in ["approve", "reject", "retire", "demote", "promote", "pin"] {
+    for verb in ["approve", "extinguish", "weaken", "strengthen", "pin"] {
         let o = w.cmd(&["review", verb, NAME, "lookup"]).env("CLAUDECODE", "1").output().unwrap();
         assert!(!o.status.success(), "{verb} ran inside an agent session");
         assert!(text(&o).contains("agent session"), "{verb}: {}", text(&o));
@@ -539,7 +539,7 @@ fn corpus(dir: &Path, n: usize) -> Vec<PathBuf> {
 }
 
 fn learn(w: &World, files: &[PathBuf]) {
-    let mut args = vec!["learn", "--repo", "acme-billing", "--demo", "--transcripts"];
+    let mut args = vec!["condition", "--repo", "acme-billing", "--demo", "--transcripts"];
     args.extend(files.iter().map(|p| p.to_str().unwrap()));
     w.ok(&args);
 }
@@ -561,9 +561,9 @@ fn decisions_survive_relearning() {
     let q = reasons(&w.queue());
     assert_eq!(q.values().filter(|k| *k == &vec!["new".to_string()]).count(), 4, "every learned route is new: {q:?}");
 
-    w.ok(&["review", "reject", dead_ends, &dead.id]);
-    w.ok(&["review", "demote", work, "lookup-work-item"]);
-    w.ok(&["review", "promote", work, "read-linked-files"]);
+    w.ok(&["review", "extinguish", dead_ends, &dead.id]);
+    w.ok(&["review", "weaken", work, "lookup-work-item"]);
+    w.ok(&["review", "strengthen", work, "read-linked-files"]);
     let versions = |w: &World| (w.track(work).manifest.track.version, w.track(dead_ends).manifest.track.version);
     let decided = versions(&w);
 
@@ -601,7 +601,7 @@ fn decisions_survive_relearning() {
     assert_eq!(q[&key(work, "read-linked-files")], vec!["changed".to_string()]);
 
     // Rejected again, it stays rejected while the evidence holds.
-    w.ok(&["review", "reject", dead_ends, &dead.id]);
+    w.ok(&["review", "extinguish", dead_ends, &dead.id]);
     learn(&w, &twelve);
     assert_eq!(aspect(&w, dead_ends, &dead.id).unwrap().1, RouteState::Retired);
 }

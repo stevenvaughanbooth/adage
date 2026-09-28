@@ -2,7 +2,7 @@
 """Adage demo runner — real headless Claude Code agents, with and without Adage.
 
   python3 demo/run.py train   # baseline agents on training work items; Adage off
-  python3 demo/run.py learn   # adage learn over the training transcripts -> tracks
+  python3 demo/run.py learn   # adage condition over the training transcripts -> tracks
   python3 demo/run.py eval    # held-out work items, two arms: holdout vs adage
   python3 demo/run.py all
 
@@ -298,7 +298,7 @@ def learn():
     env = dict(os.environ, ADAGE_HOME=str(ADAGE_HOME))
     if ROUND == 1:
         shutil.rmtree(ADAGE_HOME / "tracks", ignore_errors=True)
-    out = subprocess.run([str(ADAGE_BIN), "learn", "--demo", "--json", "--repo", "acme-billing",
+    out = subprocess.run([str(ADAGE_BIN), "condition", "--demo", "--json", "--repo", "acme-billing",
                           "--outcomes", str(ROOT / "outcomes.json"), "--transcripts", *transcripts],
                          capture_output=True, text=True, env=env)
     if out.returncode != 0:

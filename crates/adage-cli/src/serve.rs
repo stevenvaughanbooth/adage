@@ -1,4 +1,4 @@
-//! `adage graph --serve [--port N]`: the signal box, served by the binary itself (plan §6.3).
+//! `adage map [--port N]`: the signal box, served by the binary itself (plan §6.3).
 //!
 //! `/` is the page (`assets/brain.html`, embedded at build time) and `/graph.json` is the live
 //! graph, recomputed per request exactly as `adage graph --json --events 400` prints it. Standard
@@ -27,7 +27,7 @@ const CSP: &str = "default-src 'none'; script-src 'unsafe-inline'; style-src 'un
 pub fn serve(args: &[String], paths: &Paths) -> Result<()> {
     let port: u16 = match crate::flag(args, "--port") {
         Some(p) => p.parse().with_context(|| format!("--port {p:?} is not a port number"))?,
-        None if args.iter().any(|a| a == "--port") => bail!("usage: adage graph --serve [--port N]"),
+        None if args.iter().any(|a| a == "--port") => bail!("usage: adage map [--port N]"),
         None => DEFAULT_PORT,
     };
     let listener = TcpListener::bind(("127.0.0.1", port))
@@ -85,10 +85,7 @@ fn route(head: &str, paths: &Paths, port: u16) -> (Response, bool) {
         .map(|(_, v)| v.trim().to_ascii_lowercase());
     let allowed = [format!("127.0.0.1:{port}"), format!("localhost:{port}")];
     if !host.as_ref().is_some_and(|h| allowed.contains(h)) {
-        return (
-            text("403 Forbidden", "adage graph --serve answers only requests for 127.0.0.1 or localhost"),
-            head_only,
-        );
+        return (text("403 Forbidden", "adage map answers only requests for 127.0.0.1 or localhost"), head_only);
     }
     if method != "GET" && !head_only {
         return (

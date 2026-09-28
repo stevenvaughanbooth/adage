@@ -85,7 +85,7 @@ impl Sandbox {
         )
     }
     fn learn(&self, args: &[&str]) -> Value {
-        let mut a = vec!["learn", "--demo", "--json"];
+        let mut a = vec!["condition", "--demo", "--json"];
         a.extend_from_slice(args);
         let (out, err, code) = self.run(&a, b"", "treated");
         assert_eq!(code, 0, "learn failed: {err}");
@@ -456,7 +456,7 @@ fn learn_from_codex_history_deliver_in_opencode() {
     check_graph(&sb, "codex → opencode");
 }
 
-/// Each `adage learn` appends one summary line to `$ADAGE_HOME/learn.log`.
+/// Each `adage condition` appends one summary line to `$ADAGE_HOME/learn.log`.
 #[test]
 fn learn_writes_one_summary_line_per_run() {
     let sb = Sandbox::new();

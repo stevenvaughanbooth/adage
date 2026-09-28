@@ -114,7 +114,7 @@ pub fn scan(file: &str, text: &str, home: Option<&str>) -> Vec<Finding> {
     out
 }
 
-/// Text safe to print in a report (`adage survey`): the same rules as [`scan`], applied as
+/// Text safe to print in a report (`adage sense`): the same rules as [`scan`], applied as
 /// replacements. Home-directory paths become `~` (another user's home, `~user`), and tokens,
 /// high-entropy strings and long hex strings become `[redacted]`.
 pub fn scrub(text: &str, home: Option<&str>) -> String {

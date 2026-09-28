@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! <dataset>/manifest.json   name, repo, learn thresholds, sessions (+ labels), named splits
-//! <dataset>/sessions/*.jsonl Claude Code transcripts (the format `adage learn` reads)
+//! <dataset>/sessions/*.jsonl Claude Code transcripts (the format `adage condition` reads)
 //! <dataset>/sandbox.txt      the repository's files, one per line; `a -> b` is a symlink, and a
 //!                            path starting `../` is created *outside* the repository root
 //! <dataset>/conventions.json the sandbox's hidden conventions (ground truth for `eval routes`)
@@ -22,9 +22,9 @@ pub struct Manifest {
     pub name: String,
     #[serde(default)]
     pub description: String,
-    /// Repository key the sessions belong to (passed to `adage learn --repo`).
+    /// Repository key the sessions belong to (passed to `adage condition --repo`).
     pub repo: String,
-    /// Learn thresholds: `demo` or `default` (`adage learn` vs `adage learn --demo`).
+    /// Learn thresholds: `demo` or `default` (`adage condition` vs `adage condition --demo`).
     #[serde(default = "default_learn")]
     pub learn: String,
     #[serde(default)]

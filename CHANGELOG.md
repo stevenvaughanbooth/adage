@@ -12,6 +12,18 @@ version as the GitHub Release notes.
 - Branding: the pitch is now **"Agent traces become reflexes."** Reflexes (learned) and instincts
   (shipped) are the units; tracks and packs are the artefacts. "Put your agent on rails" is retired
   as the tagline (README, plugin and npm descriptions, Design Spec §17).
+- **Commands follow the lexicon** (docs/lexicon.md), with no aliases: `adage learn` is
+  `adage condition`, `adage survey` is `adage sense`, `adage graph --serve` is `adage map`,
+  `adage review promote | demote | reject` are `strengthen | weaken | extinguish`,
+  `adage exec enable | disable | status` is `adage delegate [--off | --status]`, and
+  `adage review allow-exec | revoke-exec` are `review delegate | undelegate`. A retired verb is an
+  error that names its replacement. Stored values (config keys, learn.log kinds, review
+  decisions in JSON) are unchanged.
+- **The command line is parsed by clap**: grouped, styled `adage --help`, `--help` on every
+  command, a suggestion for a mistyped command, `adage completions <shell>`, and `--plain`
+  (no colour, ASCII glyphs) everywhere. Usage errors exit with status 2.
+- `adage status` uses the new output grammar (strength, glyph, evidence, lifecycle; `next` when
+  something waits for review) and gains `--json`.
 - The terminal UI takes its colours from the new design system: violet is the one accent,
   strength colours mean fire, prime and inhibit, and under `NO_COLOR` strengths are spelled out
   (`FIRE`, `PRIME`, `INHIBIT`) instead of `[G]`, `[Y]` and `[R]`.

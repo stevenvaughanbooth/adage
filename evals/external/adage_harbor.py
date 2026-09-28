@@ -28,7 +28,7 @@ What it guarantees, and how:
   ADAGE_HOME is unpacked to <agent logs>/adage-home (= /logs/agent/adage-home), so spools
   (`sessions/*.spool`) come back with the trial's agent logs. `ADAGE_AUTO_LEARN=0` keeps the index
   frozen for the whole trial.
-- Repository keys: the index is learned under a canonical key (`adage learn --repo <key>`). The key a
+- Repository keys: the index is learned under a canonical key (`adage condition --repo <key>`). The key a
   hook computes inside the container depends on the checkout (origin URL, else `<dir>@<root commit>`,
   else `<dir>@path-<hash>`; adage-core/src/repo.rs). At setup the agent probes the checkout and
   re-keys the chosen repo's routes under every key the hook could compute there, so the lookup
@@ -458,4 +458,4 @@ if HARBOR:  # pragma: no cover
         installed at $XDG_CONFIG_HOME/opencode/plugins/adage.js (never <repo>/.opencode), and
         directives arrive as a context-only synthetic message (`noReply: true`), not
         additionalContext, so delivery differs from Claude Code's. Transcripts are OpenCode's own
-        storage, which `adage learn` does not import yet."""
+        storage, which `adage condition` does not import yet."""

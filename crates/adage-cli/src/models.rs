@@ -4,7 +4,7 @@
 //! shell) into a scratch directory, and `install` verifies every file's SHA-256 against the pinned
 //! digest before anything is written under `$ADAGE_HOME/models`. Offline machines download the
 //! three files any other way and run `adage models install <dir>`. Without a model, everything
-//! else works: `adage learn` skips intent families and hooks never fire intent routes.
+//! else works: `adage condition` skips intent families and hooks never fire intent routes.
 
 use adage_intent::model;
 use adage_store::Paths;

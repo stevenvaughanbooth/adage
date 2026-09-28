@@ -21,7 +21,7 @@ Decisions that need you are collected in §9.
 | A1 Daemon | S3, S1 | **No daemon.** Hooks are short-lived processes over per-session state files and spools |
 | A2 Language | S1 | **Rust.** Exec-form spawn + work ≈ 2 ms p95; a Node client is 35 ms p50 and ruled out |
 | A3 Transport | S1, S3 | **Command hooks in exec form**; no socket needed without a daemon |
-| A5 Storage | S3 | Hooks write per-session **spools + two-slot state files**; `adage learn` is the only index writer |
+| A5 Storage | S3 | Hooks write per-session **spools + two-slot state files**; `adage condition` is the only index writer |
 | A6 Embeddings | S2, S7 | **Static embeddings** (potion-base-8M, in-process, plain Rust). Hook p95 6.4 ms with the model loaded |
 | A7 Signing | S6 | **Native Rust sshsig**, through ssh-agent; `ssh-key = 0.6.7` pinned |
 | A8 Packaging | S5 | Binary in `${CLAUDE_PLUGIN_DATA}`, hooks call it by absolute path, pre-run at `SessionStart` |
@@ -75,11 +75,11 @@ arm64, and Windows x64, with clippy `-D warnings`, rustfmt, and `cargo deny`.
 | 10b | OpenCode + Codex adapters | ✅ built, ⚠️ not run live | Built from docs and source; neither harness installed here |
 | 10c | Sharing + signing | ✅ | `adage share` (redaction check, sshsig) / `adage add` (trust on first use, probation) |
 | — | `adage graph` + signal box | ✅ (added) | Live state as a rail network; judgements split by arm |
-| — | Survey report (Design J1) | ✅ | `adage survey`: read-only report of what agents do, with the routes learn would build as candidates |
+| — | Survey report (Design J1) | ✅ | `adage sense`: read-only report of what agents do, with the routes learn would build as candidates |
 | — | Proving ground as a product | ⚠️ partial | Offline: `adage eval` (§3a). Live: `evals/live/runner.py` runs the with/without A/B on any sandbox and task set; not yet a product |
 | — | First run: `init`, `doctor`, `graph --serve` | ✅ | Plan §6.3 |
 | — | Release engineering (M1) | ✅ built | CI, `dist` releases, npm packages, marketplace, Windows port; first tagged release waits on secrets and D1–D4 |
-| — | Harness simulator + Codex importer | ✅ | `crates/adage-sim`: mock sessions in each harness's native format, end-to-end replays; `adage learn --codex-sessions` |
+| — | Harness simulator + Codex importer | ✅ | `crates/adage-sim`: mock sessions in each harness's native format, end-to-end replays; `adage condition --codex-sessions` |
 | — | Team depots, lockfiles (Design §10.7, O12) | ❌ | Direct sharing works; depots do not |
 | — | Live learning (Design §10.9, automatic tracks) | ✅ (added) | Hooks start a debounced, single-flight background learner per repository at each stop; `config.toml` / `adage config`; `learn.log` records each route change; parse cache. Architecture §4.7.2, docs/live-learning.md |
 
@@ -122,7 +122,7 @@ The property tests found 8 bugs, all fixed with regression tests:
 
 ### Where the build deviated from the design, deliberately
 
-- **Imports live apart.** `adage add` installs under `tracks/@imported/`, which `adage learn` never
+- **Imports live apart.** `adage add` installs under `tracks/@imported/`, which `adage condition` never
   writes. Where a learned route and an imported one share an id, the index keeps the learned one.
 - **Review decisions** live in a per-track `review.yaml`, not on `Route`, so they travel with a
   shared track without changing the route schema. A recipient's `adage add` does not install the
@@ -185,11 +185,11 @@ Closed since draft 2:
   with the longest fields validation accepts, the largest decision (three directives) is 8,287
   bytes, under every harness's 9,500. A test (`the_largest_decision_fits_every_harness_cap`) pins
   the bound and each limit it rests on; raising one fails it. Truncation stays as a backstop.
-- `adage learn` appends a one-line JSON summary per run to `learn.log` (rotated at 256 KiB).
+- `adage condition` appends a one-line JSON summary per run to `learn.log` (rotated at 256 KiB).
 - **Live learning** (branch `live-learn`): learning no longer waits for a person to run
-  `adage learn`. At Claude Code and Codex `Stop`/`SessionEnd` and OpenCode
+  `adage condition`. At Claude Code and Codex `Stop`/`SessionEnd` and OpenCode
   `session.idle`/`session.deleted`, after its decision, the hook writes a request marker
-  (`learn-queue/<repo>.json`) and starts a detached `adage learn --auto` for the repository,
+  (`learn-queue/<repo>.json`) and starts a detached `adage condition --auto` for the repository,
   debounced per `learn.min_interval_secs` (a request inside the interval starts a learner that
   waits, so none is lost) and single-flight per repository (`<repo>.lock`); `tracks.lock`
   serialises every writer of tracks and the index. The learner learns only that repository, and
@@ -214,8 +214,8 @@ Open:
 | A failing runner whose error output has no renderable line (quotes, shell syntax, invisible characters) has no signature, so no dead end names it | Adversarial dead-end recall 3/30; overall recall 0.57 | Cut an unrenderable line at its first unrenderable character, with a minimum length, if that keeps the safety oracle at 0 |
 | A linked worktree does not see its repository's `origin` (the config lives in the common git directory; `repo_key` reads `<root>/.git/config`) | A worktree is keyed `<worktree dir>@<root commit>`, so it does not share the main checkout's routes | Read `origin` from the common directory (`gitobj::Repo` already finds it); re-keys existing worktree routes |
 | Per-session nonce (review finding F12) and arm assignment by root session lineage (F7) were accepted but not built | `/clear` starts a new arm | Build both |
-| Automatic learning reads only configured sources; `adage learn` can be given others (`--transcripts`, `--codex-sessions`) | A route learned by hand from an unconfigured source can lose that evidence at the next automatic learn | Set `learn.codex_sessions` / `learn.opencode_exports` for sources you learn from; or remember manual sources |
-| The first automatic learn with an empty parse cache parses the whole Claude Code history (every repository), as `adage learn` does | One slow background learn (about 1 s per 4,000 sessions of the simulator's size), after which each learn reads only what changed | Pre-filter by project directory before parsing, if histories get large |
+| Automatic learning reads only configured sources; `adage condition` can be given others (`--transcripts`, `--codex-sessions`) | A route learned by hand from an unconfigured source can lose that evidence at the next automatic learn | Set `learn.codex_sessions` / `learn.opencode_exports` for sources you learn from; or remember manual sources |
+| The first automatic learn with an empty parse cache parses the whole Claude Code history (every repository), as `adage condition` does | One slow background learn (about 1 s per 4,000 sessions of the simulator's size), after which each learn reads only what changed | Pre-filter by project directory before parsing, if histories get large |
 | A learner is detached with a new process group, not a new session (`setsid` needs `libc`) | A terminal hang-up that signals the whole session could stop a learner mid-run. Hooks keep the previous index (it is replaced atomically, last); a track directory left half-written is rewritten by the next learn | Add `setsid` if it shows up |
 
 Fixed from the architecture audit (draft 3):
@@ -241,7 +241,7 @@ Fixed on branch `gaps-2` (merged):
 | Harness | What cannot work today | Why |
 | --- | --- | --- |
 | Codex | After-failure routes (authored or imported) | Hooks receive no failure signal (openai/codex#34289, still so at rust-v0.156.1); the adapter already accepts one if added. Learned dead ends are unaffected: they are announced at the first prompt, and are learned from Codex rollouts, which record exit codes |
-| Codex | ~~Learning from history~~ | Built: `adage learn --codex-sessions` reads rollouts, format read from source (rust-v0.156.1, older shapes at rust-v0.40.0); undocumented, so a release may change it |
+| Codex | ~~Learning from history~~ | Built: `adage condition --codex-sessions` reads rollouts, format read from source (rust-v0.156.1, older shapes at rust-v0.40.0); undocumented, so a release may change it |
 | OpenCode | A true finish-line Stop block | No stop hook (#16626); Adage sends a synthetic prompt on `session.idle` |
 | OpenCode | Learning from on-disk history | The SQLite schema is known from source but undocumented and migrating; `opencode export` files work, and `opencode session list --format json` plus `export` exports a whole history with documented commands |
 | Codex | Hooks on Windows (unverified) | `adage install codex` quotes the binary path for a POSIX shell (`'…'`); which shell Codex uses for hook commands on Windows is not yet checked |
@@ -277,7 +277,7 @@ starts without it.
 
 The pilot follows Design §18 (pilot definition):
 
-1. **Survey.** Run `adage learn` over existing Claude Code history, read-only, with no hooks
+1. **Survey.** Run `adage condition` over existing Claude Code history, read-only, with no hooks
    installed. Gates:
    - ≥ 95% of calls normalise;
    - the mined routes look right to you in `adage review`;
@@ -332,7 +332,7 @@ The binary stays `adage` whatever the package names are.
 - **Diagnostics.** `adage doctor` checks the binary, the hooks, the index, the model, and fail-open
   status.
 - **Survey report (J1).** A readable "what your agents actually do" report, generated from `graph`.
-- **Signal box without the demo.** `adage graph --serve` serves the live page from the binary, so
+- **Signal box without the demo.** `adage map` serves the live page from the binary, so
   no Python demo server is needed.
 - **Architecture draft 3, and user docs:**
   - a quick start per harness;

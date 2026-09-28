@@ -1,11 +1,11 @@
-//! Live learning: Adage learns while agents work, with no `adage learn` to remember
+//! Live learning: Adage learns while agents work, with no `adage condition` to remember
 //! (Architecture §4.7.2).
 //!
 //! **Trigger (in the hook).** When a session stops or ends (Claude Code and Codex `Stop` and
 //! `SessionEnd`, OpenCode `session.idle` and `session.deleted`), after its normal decision, the
 //! hook calls [`on_turn_end`]. If `learn.auto` is on (`adage config`), it records a request for the
 //! repository and, unless a learner for it is already running or scheduled, starts one: a detached
-//! `adage learn --auto --repo-root <root>` in its own process group (Unix) or a detached process
+//! `adage condition --auto --repo-root <root>` in its own process group (Unix) or a detached process
 //! group (Windows), with no standard streams, so the harness never waits for it. At most one learn
 //! per repository starts per `learn.min_interval_secs`: a request inside the interval starts a
 //! learner that waits for the interval to end (`--after <ms>`), so the last session is never left
@@ -30,7 +30,7 @@
 //! waits until `--after`, then learns that repository only, from Claude Code history
 //! (`learn.claude_projects`), `learn.codex_sessions` and `learn.opencode_exports` if set, and any
 //! transcript a hook named, through the parse cache. It holds `tracks.lock` while it writes, so it
-//! never interleaves with `adage learn`, a review decision or `adage add`. It appends the routes
+//! never interleaves with `adage condition`, a review decision or `adage add`. It appends the routes
 //! that changed to `learn.log` ([`crate::learnlog`]), then re-checks the queue once: a request
 //! that arrived while it ran is learned before it exits.
 
@@ -164,7 +164,7 @@ fn learn_once(
     Ok(Done { report, changes: diff::diff(&before, &after) })
 }
 
-/// `adage learn --auto --repo-root <root> [--after <ms>]`: learn one repository, quietly.
+/// `adage condition --auto --repo-root <root> [--after <ms>]`: learn one repository, quietly.
 pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
     let flag = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned());
     let Some(root) = flag("--repo-root").map(PathBuf::from) else { bail!("--auto needs --repo-root <path>") };

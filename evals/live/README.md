@@ -30,7 +30,7 @@ agent runs`.
 | Phase | What happens |
 | --- | --- |
 | `train` | Round 1 only. Baseline agents work the training tasks with no Adage hooks installed |
-| `learn` | `adage learn` reads the training transcripts. In later rounds it also reads earlier rounds' eval sessions (see below), with each route kind excluded from the sessions it steered |
+| `learn` | `adage condition` reads the training transcripts. In later rounds it also reads earlier rounds' eval sessions (see below), with each route kind excluded from the sessions it steered |
 | `eval` | Agents work the held-out tasks: every (task, repeat) runs one session per arm, in a seeded random order: `adage` (hooks installed, directives delivered), `holdout` (hooks installed, directives logged but not delivered: the control) and optionally `off` (no hooks: measures hook overhead) |
 | `report` | `summary.json` and a results page (below): per-arm aggregates, task-level statistics between `adage` and `holdout` (see [Statistics](#statistics)) |
 
@@ -171,7 +171,7 @@ The config is JSON. `configs/acme-billing.json` is the demo.
 
 | Key | Meaning |
 | --- | --- |
-| `name`, `repo_key` | The run's name, and the repository key tracks are learned under (`adage learn --repo`) |
+| `name`, `repo_key` | The run's name, and the repository key tracks are learned under (`adage condition --repo`) |
 | `workdir` | The sandbox directory name inside each run directory |
 | `sandbox` | argv that creates a fresh sandbox at `{dir}` for task `{task}` (`{repo}` = this repository) |
 | `score` | argv that scores a finished sandbox and prints JSON with `passed` (and optionally `stale_generated`, `ci_passed`, `hidden_passed`) |
@@ -182,7 +182,7 @@ The config is JSON. `configs/acme-billing.json` is the demo.
 | `seed` | Arm-order seed (`--seed` overrides) |
 | `forward_env` | Extra environment variables passed to isolated sessions (default none) |
 | `model`, `max_turns`, `concurrency` | Passed to `claude -p`, and the number of sessions run in parallel |
-| `learn_args` | Extra `adage learn` arguments (`["--demo"]` for small runs) |
+| `learn_args` | Extra `adage condition` arguments (`["--demo"]` for small runs) |
 | `allowed_tools`, `disallowed_tools` | `claude --allowedTools/--disallowedTools` |
 | `budget_usd` | Spend cap. No new session starts once the reported cost reaches it |
 | `classify` | Substrings of a Bash command that make it a `lookup`, `regen`, `verify` or `bash_edit` call; `check_flags` turn a regen command into a verify (`--verify`). Defaults describe acme-billing |
@@ -243,11 +243,11 @@ python3 evals/live/sandboxes/harbor-dispatch/rehearse.py /tmp/harbor-rehearsal  
 ```
 
 `selfcheck.py` proves determinism, the dead end, the lookup for every ID (and that its plain-text
-output contains no path-like text besides the listed files, which `adage learn` would take for
+output contains no path-like text besides the listed files, which `adage condition` would take for
 linked files), that every incident fails untouched and passes solved, the obligation, the scorer's
 skip guard, and that all fixes together pass. `rehearse.py` runs scripted, model-free sessions with
 the real commands in real sandboxes, writes them as Claude Code transcripts in the runner's layout,
-and checks that `adage learn` learns all four conventions from them, that the runner's metrics and
+and checks that `adage condition` learns all four conventions from them, that the runner's metrics and
 results page work, and that `build_demo.py` plus `adage eval` ingest the root.
 
 **The run.** 84 agent runs: 6 training incidents x 2 repeats (no hooks), then in each of 2 rounds 6
@@ -288,7 +288,7 @@ agent may try `npx` for a TypeScript tool, which the sandbox cannot stop from us
 <root>/runs/<run>/<workdir>/              the sandbox after the agent finished
 <root>/runs/<run>/home/                   the session's own HOME (and CLAUDE_CONFIG_DIR, XDG dirs, TMPDIR)
 <root>/runs/<run>/stream.jsonl            the `claude -p` stream, time-stamped
-<root>/private/transcripts/<project>/<session>.jsonl   the Claude Code transcript (what `adage learn` reads)
+<root>/private/transcripts/<project>/<session>.jsonl   the Claude Code transcript (what `adage condition` reads)
 <root>/private/adage-home/                tracks, index, and per-session spools and state
 <root>/private/outcomes.json, settings-*.json
 <root>/state.json, summary.json

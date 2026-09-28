@@ -136,7 +136,7 @@ pub const KEYS: &[Key] = &[
         kind: Kind::Thresholds,
         default: "default",
         env: None,
-        doc: "evidence bars for `adage learn` and automatic learning: default, or demo (lower)",
+        doc: "evidence bars for `adage condition` and automatic learning: default, or demo (lower)",
     },
     Key {
         name: "learn.claude_projects",

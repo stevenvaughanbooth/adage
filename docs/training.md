@@ -3,7 +3,7 @@
 `adage-train` turns what a skill *says* into reflexes Adage can *prove*. It reads a `SKILL.md` (or a
 runbook, `CONTRIBUTING.md`, a Makefile, `package.json` or a GitHub Actions workflow), extracts its
 claims, drives **your own agent harness** headlessly on generated tasks in disposable clones of
-your repository, mines what the agents did with `adage learn`'s miners, and reports, claim by
+your repository, mines what the agents did with `adage condition`'s miners, and reports, claim by
 claim, whether the skill compiled into a reflex, is stale, was never exercised, or is unsafe.
 
 Terminology:
@@ -83,7 +83,7 @@ With `--execute`:
 1. **Exploration.** One session per planned task, with the skill text appended to the system
    prompt (`--append-system-prompt`) and no hooks (`ADAGE_DISABLE=1`).
 2. **Mining.** The exploration transcripts go through `adage_learn::learn` with the repository key
-   forced to yours (`repo_override`, what `adage learn --repo` does) into a *separate* staging
+   forced to yours (`repo_override`, what `adage condition --repo` does) into a *separate* staging
    directory, `staged/tracks`, with provenance `synthetic:skill:<sha256 of the source>@<run>` on
    every track and route, and a sidecar `staged/provenance.json`. Then the synthetic cap is applied:
    no route is green and none is beyond probation. **Staged reflexes are not activated**: nothing
@@ -117,7 +117,7 @@ within 10 points of the skill arm, and its mean turns and cost are no more than 
 skill arm's. For a contradicted claim, "followed" means the session's first verification was the
 working command and it passed.
 
-The trajectory oracle reads each transcript exactly as `adage learn` does (`adage_learn::read_session`):
+The trajectory oracle reads each transcript exactly as `adage condition` does (`adage_learn::read_session`):
 `regenerate_after` is followed when a successful run of the command comes after the last edit to a
 matching file; `verify` when the command ran and passed; `avoid` and contradicted claims when the
 first verification is the working command and passed; `lookup` when the tool ran with the prompt's id.
@@ -133,7 +133,7 @@ first verification is the working command and passed; `lookup` when the tool ran
 | Tools | `--allowedTools Bash Read Edit Write Glob Grep`, `--disallowedTools WebFetch WebSearch Task Agent`, `--permission-mode dontAsk` (anything not pre-allowed is denied, never prompted), `--strict-mcp-config` with no MCP config (no MCP servers). |
 | Sandbox | The settings file each session loads sets `sandbox.enabled: true`, `autoAllowBashIfSandboxed: true`, `allowUnsandboxedCommands: false` and denies `WebFetch`/`WebSearch`. `--container none` is the only container mode. |
 | Budget | Sessions stop *starting* once the harness-reported cost reaches `--budget`; each session also gets `--max-budget-usd` equal to what remains when it starts. With `--concurrency N`, the overshoot is at most the N sessions already running, each capped as above. Never more than N sessions at once. A per-session wall-clock `--timeout-secs` (default 1800) kills a hung session. |
-| Transcripts | Copied out of each session's own config directory into `$ADAGE_HOME/train/<run>/transcripts/`, never into `~/.claude/projects` or any directory `adage learn` or live learning reads. `run` refuses an `ADAGE_HOME` inside the Claude Code projects directory. |
+| Transcripts | Copied out of each session's own config directory into `$ADAGE_HOME/train/<run>/transcripts/`, never into `~/.claude/projects` or any directory `adage condition` or live learning reads. `run` refuses an `ADAGE_HOME` inside the Claude Code projects directory. |
 | No influence on live learning | Exploration, baseline and skill sessions run with `ADAGE_DISABLE=1`; the reflex arm with `ADAGE_AUTO_LEARN=0` and its own `ADAGE_HOME`. |
 | No activation | Staged reflexes live under `staged/`; the reflex arm reads a copy in `reflex-home/`. Nothing is installed. |
 | Untrusted input | The source file is read-only input (at most 1 MiB); repository reads go through `adage_instincts::files::RepoFiles` (bounded, no symlinks out). Mined routes pass `adage_tracks::io::validate` like any learned route. |
@@ -149,7 +149,7 @@ enforceable in the index.
 
 | Origin | Source | Max aspect | Counts toward organic support | Activation |
 | --- | --- | --- | --- | --- |
-| organic | your agents' own sessions (`adage learn`, live learning) | green (within the effect ceiling) | yes | automatic, reviewable |
+| organic | your agents' own sessions (`adage condition`, live learning) | green (within the effect ceiling) | yes | automatic, reviewable |
 | synthetic | `adage-train` sessions (`synthetic:skill:<sha>@<run>`) | yellow (a dead end stays red: the model requires it of an avoid step) | never | after review, and preferably an accepted validation |
 | declared | a repository's declared facts, as `adage-train plan --from Makefile` exercises them | yellow | never | after review |
 | instinct | prebuilt, bound from declared facts (`instinct:core@<v>`) | yellow, never a Stop block | never | automatic at probation (environment steps: draft) |
@@ -177,7 +177,7 @@ adage-train report <run id | run directory> [--json]
   file's repository.
 - `--adage` is the `adage` binary whose hooks the reflex arm runs; required with `--validate` and a
   real harness.
-- `--thresholds demo` uses `adage learn --demo`'s lower evidence bars (min support 3), for small runs.
+- `--thresholds demo` uses `adage condition --demo`'s lower evidence bars (min support 3), for small runs.
 - `--harness fake --fake-world world.json` runs the whole pipeline with the scripted agent the
   tests use (below), spending nothing; it needs no terminal.
 
@@ -237,7 +237,7 @@ Not verified (no real agent was run; no money was spent):
   `evals/live/runner.py` does.
 - **The reflex arm with real hooks**: `adage hooks-config` output and `ADAGE_HOME` re-keying are the
   runner's proven path, but not exercised end to end here.
-- Outcomes are not scored (no hidden checks): `adage learn` receives no outcomes, so finish lines
+- Outcomes are not scored (no hidden checks): `adage condition` receives no outcomes, so finish lines
   have no `deviations_failed`.
 
 ## Follow-up model changes

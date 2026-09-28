@@ -164,7 +164,7 @@ pass every task. Node bundles are skipped (not failed) without Node.
 
 `rehearse.py DIR` runs scripted, model-free sessions with the real commands in real copies of each
 sandbox (every task twice, 16 sessions per smoke bundle), writes them as Claude Code transcripts,
-runs `adage learn --demo` on them with an isolated `ADAGE_HOME`, and compares the learned routes
+runs `adage condition --demo` on them with an isolated `ADAGE_HOME`, and compares the learned routes
 (read from the track files, so drafts count) with `conventions.json`. The scripted agent explores,
 runs decoys (while exploring, and after some code edits), looks items up and reads the listed files,
 applies the reference fix, regenerates after registry edits (sometimes only after CI reports stale
@@ -219,6 +219,6 @@ What the rehearsal shows about Adage's learner, not about the generator:
 | `stacks/` | `base.py` (shared), `python_make.py`, `node_npm.py` |
 | `score.py` | The scorer (copied into each bundle) |
 | `selfcheck.py` | Proves every bundle is sound |
-| `rehearse.py` | Scripted transcripts, `adage learn`, recovered vs expected |
+| `rehearse.py` | Scripted transcripts, `adage condition`, recovered vs expected |
 | `specs/` | `smoke.json` (the suite), `example.json` |
 | `test_gen.py` | The tests (`python3 -m unittest discover evals/gen`) |

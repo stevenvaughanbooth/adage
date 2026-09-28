@@ -270,7 +270,7 @@ fn add_pack(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> 
     let pack = Pack::from_files(&files).map_err(|e| anyhow!("refusing: the pack fails validation: {e:#}"))?;
     packs::policy_check(paths, &pack, Some(&fingerprint(&signer)))?;
     let scope = trust_scope(&pack, cwd_root);
-    // One writer of the tracks and index at a time (`adage learn`, automatic learners).
+    // One writer of the tracks and index at a time (`adage condition`, automatic learners).
     let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let decision = decide(paths, &scope, &msg, &pem, &signer, trust, PACK_NAMESPACE)?;
 
@@ -346,7 +346,7 @@ fn add_v1(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> Re
 }
 
 fn install_v1(stage: &Path, src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> Result<()> {
-    // One writer of the tracks and index at a time (`adage learn`, automatic learners).
+    // One writer of the tracks and index at a time (`adage condition`, automatic learners).
     let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let dir = stage.join("in");
     let digest = io::digest(&dir)?;
@@ -406,7 +406,7 @@ fn replace_dir(from: &Path, dest: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Recompile the index exactly as `adage learn` does.
+/// Recompile the index exactly as `adage condition` does.
 fn recompile(paths: &Paths) -> Result<Index> {
     let all = io::read_all(&paths.tracks())?;
     let (index, _) = Index::compile_root(&paths.tracks(), &all);

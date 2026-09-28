@@ -1,4 +1,4 @@
-//! A compiled route as an execution request (Track C §3.2, §4.1): what `adage review allow-exec`
+//! A compiled route as an execution request (Track C §3.2, §4.1): what `adage review delegate`
 //! approves and what `adage-exec hook` runs are both derived here, from the same index entry, so
 //! the approval key computed at the trigger equals the approved one exactly when nothing that
 //! would run has changed.

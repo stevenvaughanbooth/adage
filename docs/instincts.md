@@ -11,8 +11,8 @@ into concrete routes for that repository. Nothing comes from session history, so
 first time Adage sees a repository. They are weaker than reflexes by design: yellow at most, never a
 Stop block, and a reflex that says otherwise always wins.
 
-**Status: integrated.** `adage learn` binds instincts per repository after mining (and
-`adage learn --instincts-only` binds them with no sessions at all); the index, the runtime, the CLI
+**Status: integrated.** `adage condition` binds instincts per repository after mining (and
+`adage condition --instincts-only` binds them with no sessions at all); the index, the runtime, the CLI
 and the offline eval know them by their provenance. This document is the catalogue, the binding
 and override model, the safety rules, and how the crate is wired in ([Integration](#integration)).
 
@@ -247,7 +247,7 @@ each part does, and where:
   a retired first-hand route shadows an instinct with its id, as it shadows imports.
 - **Interlocking** (`interlock::resolve`): instincts have the lowest precedence. An instinct that a
   route from any other source contradicts at the same decision point (a different command) is left
-  out of the index (`ConflictKind::Instinct`, reported by `adage learn` and `adage doctor`).
+  out of the index (`ConflictKind::Instinct`, reported by `adage condition` and `adage doctor`).
 - **No repeat-failure trigger**: U2 stays disabled, so `Trigger::RepeatFailure` was not added.
 
 ### adage-learn
@@ -262,7 +262,7 @@ each part does, and where:
 - **The repository's root** is the working directory most of its sessions recorded that still
   exists (`instincts::root_of`), or the root the caller names (`Config::roots`: automatic learning
   names the hook's root). Unknown: nothing is bound, with the reason in the report.
-- **Day 0.** `adage learn --instincts-only [--repo-path <dir>]` binds a repository with no sessions
+- **Day 0.** `adage condition --instincts-only [--repo-path <dir>]` binds a repository with no sessions
   (`instincts::learn_only`), and an automatic learn for a repository with no usable session yet
   binds its instincts once from the root the hook named.
 - **Never learn from instincts.** A session that received an instinct's directive is steered on its
@@ -301,9 +301,9 @@ each part does, and where:
 
 - **Config**: `instincts.enabled` (default `true`), `instincts.packs` (default `core`),
   `instincts.disabled` (ids, comma-separated); in `adage config` and the settings tab of `adage ui`.
-  `adage learn --no-instincts` skips them for one run.
+  `adage condition --no-instincts` skips them for one run.
 - **`adage init`** shows what would bind for the current repository (a dry bind), explains pack
-  approval, and prints `adage learn --instincts-only`; `adage init --yes` runs it.
+  approval, and prints `adage condition --instincts-only`; `adage init --yes` runs it.
 - **`adage doctor`**: an `instincts` check with, per repository, the routes bound and delivered,
   advice, drafts awaiting approval, and those overridden.
 - **`adage review`** lists instinct routes with their origin (`instinct U1 (from Makefile)`) until a
@@ -318,7 +318,7 @@ each part does, and where:
   sessions are replayed. The report's `instincts` block gives precision of instinct directives
   (dead ends and finish lines separately), advice given, and the share of failed verify runs an
   instinct answered with a command the agent then ran (day-0 recall). `--instincts` binds them
-  after learning, as `adage learn` does. Instincts are off by default, so the committed numbers and
+  after learning, as `adage condition` does. Instincts are off by default, so the committed numbers and
   the L0 baseline are learned routes alone; `adage eval bench run --instincts` measures with them.
 - **The oracle** (`safety::check_wrapper`) accepts the instinct wrapper, the declared-source
   finish-line sentence and the advisory sentences exactly, with each advisory value equal to its
@@ -343,7 +343,7 @@ directives and fast-path mismatches 0 either way.
 
 - **U2 (no blind retry)** needs `Trigger::RepeatFailure`; it stays disabled.
 - **SessionStart bind in the hook**: binding happens in the background learner at the end of a
-  repository's first session, or through `adage learn --instincts-only` / `adage init`; not yet
+  repository's first session, or through `adage condition --instincts-only` / `adage init`; not yet
   when a session *starts* in an unseen repository.
 - **The interactive `adage init` wizard** does not have an instincts step (the plain `adage init`
   does).

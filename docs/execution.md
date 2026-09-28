@@ -9,7 +9,7 @@ The `adage` binary and its hooks still never run a repository or agent command. 
 (Q4a) is checked by `crates/adage-exec/tests/no_spawn.rs`, which scans the `adage-cli`,
 `adage-hook`, `adage-runtime`, `adage-store`, `adage-tracks` and `adage-learn` sources for
 `Command::new` / `process::Command` and fails on any use outside a short, justified list (the
-terminal UI's `stty`, `adage models download`'s `curl`, and `adage learn` re-executing itself for
+terminal UI's `stty`, `adage models download`'s `curl`, and `adage condition` re-executing itself for
 live learning and the UI). `adage` links the adage-exec library only to write approvals.
 
 ## E1 prefetch (`adage-exec hook`)
@@ -34,13 +34,13 @@ Output of python3 scripts/wi-lookup W-2042 --json, run by Adage in a read-only s
 **Turning it on** (a person, at a terminal; every step refuses inside an agent session):
 
 ```sh
-adage review allow-exec acme-billing/work-items lookup-work-item --level e1 \
+adage review delegate acme-billing/work-items lookup-work-item --level e1 \
   --fields '{"files":{"type":"repo-path-list","json":"linked_files","max":5},"state":{"type":"enum","values":["Active","Closed"]}}' \
   --exit-when state=Closed
-adage exec enable        # hooks call adage-exec hook instead of adage hook
-adage exec status        # registrations, and grants per repository
-adage exec disable       # back to adage hook (grants are kept)
-adage review revoke-exec acme-billing/work-items lookup-work-item
+adage delegate        # hooks call adage-exec hook instead of adage hook
+adage delegate --status        # registrations, and grants per repository
+adage delegate --off       # back to adage hook (grants are kept)
+adage review undelegate acme-billing/work-items lookup-work-item
 ```
 
 `allow-exec` shows the argv template, each input with its contract, the effect (observe, against
@@ -52,7 +52,7 @@ output (the `lookup → read-linked` edge: the linked files); `--fields` declare
 A pack route's fields, exits and timeout come from its pack. `--raw` asks for raw mode (policy
 must allow it); `--timeout-ms` raises the wall timeout up to 3,000 ms.
 
-`adage exec enable` rewrites the registrations `adage install` wrote (Claude Code settings, Codex
+`adage delegate` rewrites the registrations `adage install` wrote (Claude Code settings, Codex
 `hooks.json`, the OpenCode plugin, project and user scope), swapping only the binary:
 `adage-exec hook <harness> <event>` takes `adage hook`'s arguments. For the Claude Code plugin it
 writes `$ADAGE_HOME/exec/enabled`: with it, the Adage plugin's session-start shim points its hooks

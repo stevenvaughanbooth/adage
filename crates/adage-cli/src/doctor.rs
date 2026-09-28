@@ -87,7 +87,7 @@ fn data_dir(paths: &Paths) -> Check {
             Some(a) if probe(a) => warn(
                 name,
                 format!("{} does not exist yet", detect::tilde(root)),
-                "`adage learn` creates it; nothing to do",
+                "`adage condition` creates it; nothing to do",
             ),
             _ => fail(
                 name,
@@ -165,14 +165,14 @@ fn tracks_check(scan: &TrackScan) -> Check {
         return fail(
             "tracks",
             format!("{} invalid track(s), which hooks ignore: {}", scan.invalid.len(), shown.join("; ")),
-            "fix or remove the named track directories, then run `adage learn` to recompile",
+            "fix or remove the named track directories, then run `adage condition` to recompile",
         );
     }
     if scan.valid.is_empty() {
         return warn(
             "tracks",
             "no tracks installed",
-            "`adage survey` shows what would be learned; `adage learn` builds tracks",
+            "`adage sense` shows what would be learned; `adage condition` builds tracks",
         );
     }
     pass("tracks", format!("{} track(s) ({} imported), {routes} route(s), all valid", scan.valid.len(), scan.imported))
@@ -183,7 +183,10 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
     let bytes = match std::fs::read(&p) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            return (warn("index", "no index yet: hooks have nothing to direct", "run `adage learn`"), Index::default())
+            return (
+                warn("index", "no index yet: hooks have nothing to direct", "run `adage condition`"),
+                Index::default(),
+            )
         }
         Err(e) => {
             return (
@@ -199,7 +202,7 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
                 fail(
                     "index",
                     format!("{} is not a valid index ({e}); hooks fail open and say nothing", detect::tilde(&p)),
-                    "run `adage learn` to recompile it",
+                    "run `adage condition` to recompile it",
                 ),
                 Index::default(),
             )
@@ -215,7 +218,7 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
                     "generation {} does not match its routes ({gen}): it was built by a different Adage version, or edited",
                     idx.generation
                 ),
-                "run `adage learn` to recompile it",
+                "run `adage condition` to recompile it",
             ),
             idx,
         );
@@ -238,7 +241,7 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
             warn(
                 "index",
                 format!("{detail}; stale: the installed tracks compile to {}", current.generation),
-                "run `adage learn` (or any `adage review` decision) to recompile",
+                "run `adage condition` (or any `adage review` decision) to recompile",
             ),
             idx,
         );
@@ -274,7 +277,9 @@ fn instincts_check(paths: &Paths, scan: &TrackScan, idx: &Index) -> Check {
     if per.is_empty() {
         return pass(
             "instincts",
-            format!("{state}; none bound yet (`adage learn --instincts-only` binds them for a repository on day 0)"),
+            format!(
+                "{state}; none bound yet (`adage condition --instincts-only` binds them for a repository on day 0)"
+            ),
         );
     }
     let parts: Vec<String> = per
@@ -534,7 +539,7 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
             ),
         )
     } else {
-        pass("auto-learn", format!("off ({source}): run `adage learn` yourself, or `adage config set learn.auto true`"))
+        pass("auto-learn", format!("off ({source}): run `adage condition` yourself, or `adage config set learn.auto true`"))
     });
 
     let now = crate::learnlog::now_ms();
@@ -617,7 +622,7 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
         warn(
             "auto-learn runs",
             format!("last automatic learn failed for {}", shown(&failed)),
-            "run `adage learn` in a terminal to see the error; `adage doctor` passes once a learn succeeds",
+            "run `adage condition` in a terminal to see the error; `adage doctor` passes once a learn succeeds",
         )
     });
     if !stuck.is_empty() {
@@ -638,7 +643,7 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
         warn(
             "auto-learn queue",
             format!("{} request(s) not learned yet: {}", backlog.len(), shown(&backlog)),
-            "`adage learn` learns everything now; if requests keep waiting, check `fail-open.log` (class learn)",
+            "`adage condition` learns everything now; if requests keep waiting, check `fail-open.log` (class learn)",
         )
     });
     out

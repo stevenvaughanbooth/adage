@@ -147,7 +147,7 @@ class PhasesTest(unittest.TestCase):
             out = outs[0][0]
             self.assertIn("COST ESTIMATE", out)
             self.assertIn("NOT measured", out)
-            for step in ("1. train", "2. harvest", "3. adage learn", "4. freeze", "5. eval", "6. patch"):
+            for step in ("1. train", "2. harvest", "3. adage condition", "4. freeze", "5. eval", "6. patch"):
                 self.assertIn(step, out)
             cfgs = [json.loads(t) for t in outs[0][1]]
             train = [c for c in cfgs if c["job_name"].endswith("-train")][0]

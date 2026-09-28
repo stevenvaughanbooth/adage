@@ -11,7 +11,7 @@ really runs in the sandbox, and each session is written as a Claude Code transcr
 output. The root gets the live runner's layout (runs/, transcripts/, state.json, adage-home/), so
 the rest of the pipeline runs unchanged:
 
-  1. `adage learn --demo` over the 12 training sessions; checks that all four conventions are learned
+  1. `adage condition --demo` over the 12 training sessions; checks that all four conventions are learned
      (lookup with an INC contract, linked files, the npm-test dead end, the registry finish line);
   2. the runner's classification and metrics over every session, and the results page;
   3. `build_demo.py` turns the root into an `adage eval` dataset, and `adage eval --split round1`
@@ -160,7 +160,7 @@ def main(argv):
     train = [r for r in state["runs"].values() if r["phase"] == "train"]
     tx = [str(next((root / "transcripts").glob(f"*/{r['metrics']['session_id']}.jsonl"))) for r in train]
     (root / "outcomes.json").write_text(json.dumps({r["metrics"]["session_id"]: r["metrics"]["passed"] for r in train}))
-    out = subprocess.run([str(adage), "learn", *CFG["learn_args"], "--json", "--repo", CFG["repo_key"],
+    out = subprocess.run([str(adage), "condition", *CFG["learn_args"], "--json", "--repo", CFG["repo_key"],
                           "--outcomes", str(root / "outcomes.json"), "--transcripts", *tx],
                          capture_output=True, text=True, env=dict(scorer.env(), ADAGE_HOME=str(home)))
     if out.returncode != 0:

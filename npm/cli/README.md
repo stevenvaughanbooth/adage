@@ -11,7 +11,7 @@ selects by `os` and `cpu`; nothing is downloaded at install time, so `--ignore-s
 mirrors and proxies all work.
 
 ```bash
-adage learn          # learn from your Claude Code history
+adage condition          # learn from your Claude Code history
 adage status
 adage install claude-code    # or opencode, codex: print the hook registration
 ```

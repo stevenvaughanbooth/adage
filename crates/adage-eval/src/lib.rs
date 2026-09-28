@@ -93,7 +93,7 @@ pub enum InstinctMode {
     /// Learned routes only (the default; the committed numbers).
     #[default]
     Off,
-    /// Learned routes, then instincts bound from the sandbox (`--instincts`): what `adage learn`
+    /// Learned routes, then instincts bound from the sandbox (`--instincts`): what `adage condition`
     /// does by default.
     With,
     /// Instincts only (`--instincts-only`): nothing is learned from the train sessions; the index

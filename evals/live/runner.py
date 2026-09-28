@@ -10,7 +10,7 @@ plan. Every session is a real headless Claude Code agent (`claude -p`), so this 
 and each session gets a fresh sandbox and its own empty home directory:
 
   train   baseline agents on the training tasks, with no Adage hooks installed (round 1 only)
-  learn   `adage learn` over the training transcripts (and, in later rounds, earlier eval sessions
+  learn   `adage condition` over the training transcripts (and, in later rounds, earlier eval sessions
           of tasks outside this round's held-out pool)
   eval    held-out tasks; each (task, repeat) runs every arm, in an order drawn from the seed:
             adage    hooks installed, directives delivered
@@ -326,7 +326,7 @@ def describe(cfg, phases, rounds, root, adage, isolate=True):
             })
     learn = None
     if "learn" in phases:
-        learn = [str(adage), "learn", *cfg["learn_args"], "--json", "--repo", cfg["repo_key"],
+        learn = [str(adage), "condition", *cfg["learn_args"], "--json", "--repo", cfg["repo_key"],
                  "--outcomes", str(private / "outcomes.json"), "--transcripts", "<each learnable earlier session's transcript>"]
     est = estimate(cfg, phases, rounds)
     assert est["total_runs"] == len(rows), (est, len(rows))
@@ -834,7 +834,7 @@ class Live:
         (self.private / "outcomes.json").write_text(json.dumps(outcomes))
         if self.round == 1:
             shutil.rmtree(self.home / "tracks", ignore_errors=True)
-        out = subprocess.run([str(self.adage), "learn", *self.cfg["learn_args"], "--json", "--repo", self.cfg["repo_key"],
+        out = subprocess.run([str(self.adage), "condition", *self.cfg["learn_args"], "--json", "--repo", self.cfg["repo_key"],
                               "--outcomes", str(self.private / "outcomes.json"), "--transcripts", *transcripts],
                              capture_output=True, text=True, env=dict(os.environ, ADAGE_HOME=str(self.home)))
         if out.returncode != 0:

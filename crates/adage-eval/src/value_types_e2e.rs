@@ -1,5 +1,5 @@
 //! `adage eval types --end-to-end`: learned value types from learning to the hook (Track G G1
-//! gate). For each bundle or dataset, `adage learn`'s plan runs with `engine = graph` (demo
+//! gate). For each bundle or dataset, `adage condition`'s plan runs with `engine = graph` (demo
 //! thresholds, no instincts) on the sessions; the tracks it would write are compiled into an
 //! index (a draft is replayed as if a person approved it, which an environment-effect lookup
 //! needs before it is ever delivered); then the runtime decides every session's prompts, and a

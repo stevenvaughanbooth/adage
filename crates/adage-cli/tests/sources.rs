@@ -1,4 +1,4 @@
-//! Where `adage learn` and `adage survey` read history from. An explicit source that finds nothing
+//! Where `adage condition` and `adage sense` read history from. An explicit source that finds nothing
 //! is an error, never a silent fallback to the person's Claude Code history.
 
 use std::path::{Path, PathBuf};
@@ -49,12 +49,12 @@ fn adage(home: &Path, args: &[&str]) -> (String, String, bool) {
 fn an_empty_explicit_source_never_falls_back_to_claude_history() {
     let home = home_with_history();
     let empty = tempfile::tempdir().unwrap();
-    let (_, err, ok) = adage(home.path(), &["learn", "--demo", "--codex-sessions", empty.path().to_str().unwrap()]);
+    let (_, err, ok) = adage(home.path(), &["condition", "--demo", "--codex-sessions", empty.path().to_str().unwrap()]);
     assert!(!ok, "an explicit source that finds nothing fails");
     assert!(err.contains("no transcripts found"), "{err}");
     assert!(!home.path().join("adage/tracks").exists(), "nothing was learned from the fallback");
 
-    let (out, _, _) = adage(home.path(), &["survey", "--codex-sessions", empty.path().to_str().unwrap()]);
+    let (out, _, _) = adage(home.path(), &["sense", "--codex-sessions", empty.path().to_str().unwrap()]);
     assert!(out.contains("0 session(s)"), "survey read only the named source:\n{out}");
     assert!(!out.contains("Claude Code history"), "{out}");
 }
@@ -64,11 +64,11 @@ fn codex_history_is_learned_and_surveyed_with_its_harness() {
     let home = tempfile::tempdir().unwrap();
     let sessions = fixtures().join("codex/sessions");
     let s = sessions.to_str().unwrap();
-    let (out, err, ok) = adage(home.path(), &["survey", "--demo", "--codex-sessions", s]);
+    let (out, err, ok) = adage(home.path(), &["sense", "--demo", "--codex-sessions", s]);
     assert!(ok, "{err}");
     assert!(out.contains("Codex rollout(s)") && out.contains("(codex)"), "{out}");
 
-    let (_, err, ok) = adage(home.path(), &["learn", "--demo", "--codex-sessions", s]);
+    let (_, err, ok) = adage(home.path(), &["condition", "--demo", "--codex-sessions", s]);
     assert!(ok, "{err}");
     let tracks = walk(&home.path().join("adage/tracks"));
     let manifest = tracks.iter().find(|p| p.ends_with("track.toml")).expect("a track was learned");

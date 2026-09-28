@@ -1,4 +1,4 @@
-//! `adage learn`: import sessions, mine routes, assemble versioned tracks, compile the index.
+//! `adage condition`: import sessions, mine routes, assemble versioned tracks, compile the index.
 
 pub mod bridge;
 pub mod cache;
@@ -154,7 +154,7 @@ pub fn read_session(path: &Path, table: &CommandTable, repo_override: Option<&st
     }
 }
 
-/// `adage learn`: import sessions, mine routes, write tracks, compile the index.
+/// `adage condition`: import sessions, mine routes, write tracks, compile the index.
 pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &LearnConfig) -> Result<Report> {
     let table = CommandTable::load();
     let mut sessions: Vec<Session> = Vec::new();
@@ -248,8 +248,8 @@ fn thresholds(cfg: &LearnConfig) -> String {
     )
 }
 
-/// The dry run of `adage learn`: everything it would mine, reconcile, and version from these
-/// sessions against the tracks installed under `tracks_root`, with nothing written. `adage survey`
+/// The dry run of `adage condition`: everything it would mine, reconcile, and version from these
+/// sessions against the tracks installed under `tracks_root`, with nothing written. `adage sense`
 /// shows these as candidates. `sessions_read`, `sessions_steered` and `index_generation` are left
 /// to the caller; sessions without steps are ignored.
 pub fn plan(

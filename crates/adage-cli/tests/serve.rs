@@ -1,4 +1,4 @@
-//! `adage graph --serve`, through the binary: the signal box page and its live JSON, from an
+//! `adage map`, through the binary: the signal box page and its live JSON, from an
 //! isolated `ADAGE_HOME`, on a free port on 127.0.0.1.
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -32,7 +32,7 @@ fn get(addr: &str, path: &str, host: &str) -> (String, String) {
 fn serves_the_signal_box_and_live_json_from_the_binary() {
     let d = tempfile::tempdir().unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_adage"))
-        .args(["graph", "--serve", "--port", "0"])
+        .args(["map", "--port", "0"])
         .env("ADAGE_HOME", d.path().join("data"))
         .env("HOME", d.path())
         .env_remove("CLAUDECODE")
@@ -77,7 +77,7 @@ fn serves_the_signal_box_and_live_json_from_the_binary() {
 fn keeps_serving_after_its_stdout_is_closed() {
     let d = tempfile::tempdir().unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_adage"))
-        .args(["graph", "--serve", "--port", "0"])
+        .args(["map", "--port", "0"])
         .env("ADAGE_HOME", d.path().join("data"))
         .env("HOME", d.path())
         .stdin(Stdio::null())

@@ -1,7 +1,7 @@
 //! Regression: deeply nested shell must not exhaust the stack (found by the adage-eval property
 //! tests). A 15 KB `a && a && … && ls` — within `MAX_COMMAND`, and not bracket nesting, so
 //! `too_deep` let it through — overflowed even an 8 MiB stack: the hook process aborted, and so
-//! did `adage learn` over any history containing such a command.
+//! did `adage condition` over any history containing such a command.
 
 use adage_core::shell::normalize_shell;
 use adage_core::CommandTable;

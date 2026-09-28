@@ -1,9 +1,9 @@
-//! The graph engine inside `adage learn` (Track G G0–G1), when `LearnParams::engine` is `shadow`
+//! The graph engine inside `adage condition` (Track G G0–G1), when `LearnParams::engine` is `shadow`
 //! or `graph`.
 //!
 //! - [`facts`]: every session's facts (stage S2, `adage_graph::facts`), through the facts cache
 //!   (`$ADAGE_HOME/cache/facts`), in parallel and in session-id order. Nothing decides on them
-//!   yet (G2 mines them); `adage learn --json` reports their counts, and
+//!   yet (G2 mines them); `adage condition --json` reports their counts, and
 //!   `adage graph --learned --dump` prints them.
 //! - [`lookup_routes`]: the lookup miner on learned value types. Instead of TICKET spans and
 //!   `spans::ticket_contract`, it takes its slot and contract from `adage_graph::learn`: the value

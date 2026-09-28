@@ -10,7 +10,7 @@ rediscovering the repository.
 
 Reflexes come from three places:
 
-- **Traces.** `adage learn` mines real sessions in a repository.
+- **Traces.** `adage condition` mines real sessions in a repository.
 - **Instincts.** Reflexes that ship with Adage and work on day 0, read from the repository's own
   Makefile, `package.json`, CI and lockfiles, with no history needed. A learned reflex always
   overrides the matching instinct.
@@ -24,7 +24,7 @@ own tools, under its harness's own permissions. Execution is a separate, opt-in 
 (`adage-exec`) that runs only routes you approved on that machine, inside an OS sandbox.
 
 ```text
-  agent traces ──► adage learn ──► reflexes ──► index ──► hooks ──► directives
+  agent traces ──► adage condition ──► reflexes ──► index ──► hooks ──► directives
   (transcripts)     (mine)        (tracks,    (compiled) (Claude Code,  (text; typed data
   + instincts                      packs)                 OpenCode,     where you approved
   + adage-train                                           Codex)        execution)
@@ -136,9 +136,9 @@ Code, add the plugin marketplace with `/plugin marketplace add stevenvaughanboot
 cargo build --release -p adage-cli
 target/release/adage init             # guided setup at a terminal: hooks, model, first learn, auto-learn
 target/release/adage watch            # run in a split pane: Adage's health, hook activity, and learning, live
-target/release/adage survey           # what your agents actually do, per repository (read-only)
+target/release/adage sense           # what your agents actually do, per repository (read-only)
 target/release/adage doctor           # check binary, data dir, index, tracks, model, hooks, kill switches
-target/release/adage graph --serve    # the signal box at http://127.0.0.1:8765 (read-only, loopback only)
+target/release/adage map    # the signal box at http://127.0.0.1:8765 (read-only, loopback only)
 ```
 
 At a terminal, `init` is a wizard: it detects your harnesses and, one step at a time, asks before
@@ -190,7 +190,7 @@ spelled out (`[G]`, `[Y]`, `[R]`), as above.
 | --- | --- |
 | **Live** | the watch view, larger |
 | **Routes** | every installed route by track: aspect, trigger and step, evidence (sessions, Wilson lower bound), live counts, and the exact directive text. Review decisions (`a`pprove, `r`eject, `d`emote, `p`romote, pi`n`, dismiss `x`) ask first, then run exactly what `adage review` runs, with the same ceilings |
-| **Health** | every doctor check, live, including live learning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), learn this repository now (what a background learner runs: `adage learn --auto --repo-root`), turn auto-learn on, open the settings, or open the fail-open log |
+| **Health** | every doctor check, live, including live learning's. `Enter` fixes the selected one where a key can: register hooks (confirming the exact file and diff), fetch the model (with progress), learn this repository now (what a background learner runs: `adage condition --auto --repo-root`), turn auto-learn on, open the settings, or open the fail-open log |
 | **Settings** | every `adage config` key with its value and where it came from (default, file, or environment); `Enter` edits, `Space` toggles, and `adage config set`'s validation and agent-session refusal apply |
 
 `adage watch --demo` and `adage ui --demo` replay a small scripted scenario (three sessions of the
@@ -206,7 +206,7 @@ plugin/build.sh
 
 # 2. Learn from your existing Claude Code history (reads ~/.claude/projects). After this,
 #    Adage keeps learning by itself as sessions end (see "Live learning" below).
-target/release/adage learn
+target/release/adage condition
 target/release/adage status
 
 # 3. Run Claude Code with the Adage plugin
@@ -219,8 +219,8 @@ claude --plugin-dir plugin/claude-code
 cargo build --release -p adage-cli
 target/release/adage install opencode            # print the plugin; add --write to install it
 target/release/adage install codex               # print a hooks.json; add --write to merge it
-opencode export <session-id> > s.json && target/release/adage learn --transcripts s.json
-target/release/adage learn --codex-sessions ~/.codex/sessions   # Codex rollouts
+opencode export <session-id> > s.json && target/release/adage condition --transcripts s.json
+target/release/adage condition --codex-sessions ~/.codex/sessions   # Codex rollouts
 ```
 
 `--write` installs into the repository (`.opencode/plugins/adage.js`, `.codex/hooks.json`) or, with
@@ -236,7 +236,7 @@ directives emitted, followed, and derailed. Data lives in `~/Library/Application
 
 **Kill switches:** `ADAGE_DISABLE=1`, or a `.adage/disabled` file in a repository.
 
-**Live learning:** you do not have to run `adage learn` again. When an agent's session stops or
+**Live learning:** you do not have to run `adage condition` again. When an agent's session stops or
 ends, the hook starts a background learner for that repository (detached; the hook never waits,
 and never says anything different). It learns at most once per `learn.min_interval_secs` per
 repository, one learner at a time, and appends each route that changed (new, retired, yellow →
@@ -257,7 +257,7 @@ adage config set learn.min_interval_secs 300  # learn each repository at most ev
 | --- | --- | --- |
 | `learn.auto` | `true` | Learn automatically when sessions stop or end (`ADAGE_AUTO_LEARN` wins) |
 | `learn.min_interval_secs` | `120` | At most one automatic learn per repository per interval |
-| `learn.thresholds` | `default` | `default` or `demo`, for `adage learn` too (`--demo` wins) |
+| `learn.thresholds` | `default` | `default` or `demo`, for `adage condition` too (`--demo` wins) |
 | `learn.claude_projects` | `""` | Claude Code history (`""` = `~/.claude/projects`) |
 | `learn.codex_sessions` | `""` | Codex rollouts automatic learning reads (e.g. `~/.codex/sessions`) |
 | `learn.opencode_exports` | `""` | A directory of `opencode export` files automatic learning reads |
@@ -268,7 +268,7 @@ adage config set learn.min_interval_secs 300  # learn each repository at most ev
 
 **Intent families (optional):** `adage models fetch` downloads the pinned static embedding model
 (potion-base-8M, 31 MB, SHA-256 verified; `adage models install <dir>` for offline machines) into
-the data directory. `adage learn` then clusters each repository's prompts into intent families
+the data directory. `adage condition` then clusters each repository's prompts into intent families
 (exact kNN + deterministic Louvain, split and merged by what the sessions did next — spike S7) and
 learns an intent route per usable family. Without the model everything else works unchanged: learning
 skips intent families and hooks never load a model.
@@ -279,13 +279,13 @@ home-directory paths and secret-looking strings, re-validates the track, and sig
 the terminal). `adage add <dir>` verifies the
 signature against `$ADAGE_HOME/trusted-signers` or the repository's `.adage/trusted-signers` (approved
 once with `--trust` and pinned by hash in `$ADAGE_HOME/trust.json`) and installs the routes at
-probation, never green, under `tracks/@imported/` where `adage learn` never writes; if you later learn
+probation, never green, under `tracks/@imported/` where `adage condition` never writes; if you later learn
 the same route yourself, your first-hand route wins. Adding a newer version keeps your own review
 decisions for every route that survives. An unknown signer needs `--trust`. Both commands refuse to run inside an agent
 session (`CLAUDECODE`) or without a terminal; `ADAGE_ALLOW_NONINTERACTIVE=1` lifts only the terminal check.
 
 **Review:** `adage review [--json]` lists the routes that need a person's decision: new routes from
-`adage learn`, routes whose aspect or evidence changed materially since the last decision (shape,
+`adage condition`, routes whose aspect or evidence changed materially since the last decision (shape,
 aspect, a Wilson lower bound moving by 0.10, or support doubling or halving), imports at probation,
 rejected routes that came back stronger, and routes agents keep leaving in treated sessions. Each
 entry shows its evidence, effect and ceiling, and the exact directive text with example slot values.
@@ -294,7 +294,7 @@ version, it waits as *proposed*, with a diff; `approve` applies it (still pinned
 yours. `adage review <approve|reject|demote|promote|pin|dismiss> <track> <route> [--by <name>]` records the decision
 in the track's `review.yaml`, re-validates the track, and recompiles the index. Promotion never exceeds
 the effect ceiling, and an import cannot be promoted to green without first-hand evidence learned
-locally. `adage learn` keeps rejected routes retired until they strengthen materially, and holds
+locally. `adage condition` keeps rejected routes retired until they strengthen materially, and holds
 demotions and promotions. A rejected route also keeps a teammate's import of the same route out of
 the index. Decisions refuse to run inside an agent session. Listing is allowed there.
 

@@ -57,7 +57,7 @@ impl Rng {
     }
 }
 
-/// A Claude Code transcript under construction (the on-disk format `adage learn` reads).
+/// A Claude Code transcript under construction (the on-disk format `adage condition` reads).
 struct Tx {
     sid: String,
     cwd: String,

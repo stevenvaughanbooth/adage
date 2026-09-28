@@ -3,7 +3,7 @@
 signal box at /brain, which draws `adage graph --json` for $ADAGE_HOME (default
 $DEMO_ROOT/adage-home) and refreshes it live. $ADAGE_BIN overrides the binary. The signal box page
 lives with the binary (crates/adage-cli/assets/brain.html), which also serves it on its own:
-`adage graph --serve`."""
+`adage map`."""
 import functools
 import http.server
 import os

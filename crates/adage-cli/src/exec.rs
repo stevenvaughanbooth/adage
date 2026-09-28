@@ -2,12 +2,12 @@
 //! route; these commands only change which binary the hooks call and what this machine approves.
 //!
 //! ```text
-//! adage exec enable [--bin <adage-exec>] [--repo <dir>]   hooks call `adage-exec hook` (E1 prefetch)
-//! adage exec disable [--repo <dir>]                        hooks call `adage hook` again
-//! adage exec status [--repo <dir>] [--json]                registrations, and grants per repository
-//! adage review allow-exec <track> <route> --level e1 [--raw] [--fields '<json>']
+//! adage delegate [--bin <adage-exec>] [--repo <dir>]   hooks call `adage-exec hook` (E1 prefetch)
+//! adage delegate --off [--repo <dir>]                        hooks call `adage hook` again
+//! adage delegate --status [--repo <dir>] [--json]                registrations, and grants per repository
+//! adage review delegate <track> <route> --level e1 [--raw] [--fields '<json>']
 //!                         [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
-//! adage review revoke-exec <track> <route> [--repo <dir>]
+//! adage review undelegate <track> <route> [--repo <dir>]
 //! ```
 //!
 //! `enable` and `disable` rewrite the hook registrations `adage install` wrote (Claude Code
@@ -33,8 +33,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "usage: adage exec <enable [--bin <adage-exec>] | disable | status [--json]> [--repo <dir>]";
-const REVIEW_USAGE: &str = "usage: adage review allow-exec <track> <route> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
-       adage review revoke-exec <track> <route> [--repo <dir>]";
+const REVIEW_USAGE: &str = "usage: adage review delegate <track> <route> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
+       adage review undelegate <track> <route> [--repo <dir>]";
 
 /// Harnesses whose registrations `enable` swaps.
 const HARNESSES: [&str; 3] = ["claude-code", "codex", "opencode"];
@@ -141,7 +141,7 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
             "plugin (/plugin install adage-exec@adage); with {} present the Adage plugin goes quiet.",
             m.display()
         );
-        println!("Nothing runs until you approve a route: adage review allow-exec <track> <route> --level e1");
+        println!("Nothing runs until you approve a route: adage review delegate <track> <route> --level e1");
         println!("Recommended: deny your agent edits to {} in the harness's permissions.", paths.root.display());
     } else {
         let _ = std::fs::remove_file(&m);
@@ -227,7 +227,7 @@ fn indexed<'a>(
     route::find(index, &key, track, route_id).with_context(|| format!("no route {route_id} in track {track} for {key}"))
 }
 
-/// `adage review allow-exec` and `revoke-exec`.
+/// `adage review delegate` and `revoke-exec`.
 pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     require_person(&format!("review {verb}"))?;
     let (Some(track), Some(route_id)) = (args.first(), args.get(1)) else { bail!("{REVIEW_USAGE}") };
@@ -324,7 +324,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         store_path.display()
     );
     if !marker(paths).is_file() {
-        println!("Execution is off: `adage exec enable` makes hooks run it.");
+        println!("Execution is off: `adage delegate` makes hooks run it.");
     }
     Ok(())
 }

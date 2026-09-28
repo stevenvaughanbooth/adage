@@ -5,9 +5,9 @@
 //! adage review [--json]                                  list the queue (agents may read it)
 //! adage review approve <track> <route> [--by <name>]     accept as is (restores a retired route at probation;
 //!                                                        puts an environment step, a draft until then, into service)
-//! adage review reject  <track> <route> [--by <name>]     retire it; `retire` is the same
-//! adage review demote  <track> <route> [--by <name>]     green → yellow, held across re-learning
-//! adage review promote <track> <route> [--by <name>]     yellow → green, within the effect ceiling only
+//! adage review extinguish  <track> <route> [--by <name>]     retire it; `retire` is the same
+//! adage review weaken  <track> <route> [--by <name>]     green → yellow, held across re-learning
+//! adage review strengthen <track> <route> [--by <name>]     yellow → green, within the effect ceiling only
 //! adage review pin     <track> <route> [--by <name>]     edit-lock: mark `authored`
 //! adage review dismiss <track> <route>                   keep a pinned route; silence its proposed change
 //! ```
@@ -26,7 +26,7 @@
 //!
 //! Decisions change trust, so they refuse to run inside an agent session (review finding F11).
 //! They are recorded in the track's `review.yaml` (see [`adage_tracks::review`]); every decision
-//! re-validates the track and recompiles the index atomically, as `adage learn` and `adage add` do.
+//! re-validates the track and recompiles the index atomically, as `adage condition` and `adage add` do.
 
 use crate::share::{describe_step, require_person};
 use adage_learn::LearnConfig;
@@ -56,7 +56,7 @@ pub(crate) struct Installed {
     pub(crate) track: Track,
     pub(crate) imported: bool,
     pub(crate) reviews: Reviews,
-    /// Proposed changes to pinned routes, from `adage learn` or a re-run `adage add`.
+    /// Proposed changes to pinned routes, from `adage condition` or a re-run `adage add`.
     pub(crate) proposals: Proposals,
 }
 
@@ -296,7 +296,7 @@ fn queue<'a>(all: &'a [Installed], judged: &BTreeMap<(String, String), (u32, u32
                     "imported",
                     "imported from a shared track and at probation: yellow at most until local first-hand evidence confirms it".into(),
                 )),
-                None => reasons.push(("new", "learned by `adage learn` and never reviewed".into())),
+                None => reasons.push(("new", "learned by `adage condition` and never reviewed".into())),
                 Some(v) if v.decision == Decision::Rejected => {
                     if r.state != RouteState::Retired {
                         let why = review::material_change(&v.basis, r).unwrap_or_else(|| "its evidence strengthened".into());
@@ -660,7 +660,7 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         "demote" => {
             if r.aspect != Aspect::Green || !live(r.state) {
                 bail!(
-                    "{route_id} is {} ({}); only a green route in service can be demoted. To take it out of service: adage review reject {} {route_id}",
+                    "{route_id} is {} ({}); only a green route in service can be demoted. To take it out of service: adage review extinguish {} {route_id}",
                     aspect_str(r.aspect),
                     lower(r.state),
                     inst.reference
@@ -737,7 +737,7 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         proposals::save(&inst.dir, &props)?;
     }
 
-    // Recompile the index exactly as `adage learn` and `adage add` do.
+    // Recompile the index exactly as `adage condition` and `adage add` do.
     let tracks = io::read_all(&paths.tracks())?;
     let index = Index::compile_root(&paths.tracks(), &tracks).0;
     index.write_atomic(&paths.index())?;
@@ -757,7 +757,7 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
     out.push(format!("  aspect     {}", change(aspect_str(before.aspect).into(), aspect_str(after.aspect).into())));
     out.push(format!("  state      {}", change(lower(before.state), lower(after.state))));
     if after.authored != before.authored {
-        out.push("  authored   yes: `adage learn` will not overwrite it".into());
+        out.push("  authored   yes: `adage condition` will not overwrite it".into());
     }
     if let Some((pack, others)) = pack_approved.split_first() {
         let also =

@@ -87,7 +87,7 @@ fn watch_once_on_a_fresh_machine_and_doctor_watch_alias() {
         assert!(!o.status.success() && text(&o).contains("needs a terminal"), "{}", text(&o));
     }
     let o = run(&root, &root.join("work"), &["watch", "--bogus"]);
-    assert!(!o.status.success() && text(&o).contains("usage: adage watch"));
+    assert!(!o.status.success() && text(&o).contains("unexpected argument '--bogus'"), "{}", text(&o));
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn bare_adage_without_a_terminal_prints_usage() {
     for args in [&[][..], &["--help"][..]] {
         let o = run(&root, &root, args);
         let t = text(&o);
-        assert!(o.status.success() && t.contains("usage: adage") && t.contains("watch"), "{t}");
+        assert!(o.status.success() && t.contains("Usage: adage") && t.contains("watch"), "{t}");
     }
 }
 
@@ -111,5 +111,5 @@ fn init_without_a_terminal_keeps_the_printed_report() {
     let t = text(&o);
     assert!(o.status.success() && t.contains("1. Harnesses") && t.contains("4. Survey"), "{t}");
     let o = run(&root, &root.join("work"), &["init", "--nope"]);
-    assert!(!o.status.success() && text(&o).contains("[--yes | --print]"));
+    assert!(!o.status.success() && text(&o).contains("unexpected argument '--nope'"), "{}", text(&o));
 }

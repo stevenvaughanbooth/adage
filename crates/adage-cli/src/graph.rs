@@ -102,7 +102,7 @@ fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
 /// `adage graph --learned --dump <repo> [--transcripts <file>...] [--claude-projects <dir>] [--json]`:
 /// the graph engine's session facts for one repository (Track G G0), as counts: events, prompts,
 /// acts, artifacts, edges by kind, token occurrences, embeddings, truncations, and the value slots
-/// learned from them. Sessions are read as `adage learn` reads them (Claude Code history by
+/// learned from them. Sessions are read as `adage condition` reads them (Claude Code history by
 /// default); facts go through the facts cache (`$ADAGE_HOME/cache/facts`). Read-only apart from
 /// that cache.
 fn dump_learned(args: &[String], paths: &Paths) -> Result<()> {

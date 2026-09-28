@@ -1,6 +1,6 @@
 //! A scripted stand-in for a real agent, so the pipeline (plan → run → mine → report) runs end to
 //! end, deterministically, with nothing spent. It writes Claude Code transcripts (the format
-//! `adage learn` reads) into the session's `CLAUDE_CONFIG_DIR/projects`, exactly where a real
+//! `adage condition` reads) into the session's `CLAUDE_CONFIG_DIR/projects`, exactly where a real
 //! session would, and reports a cost per turn.
 //!
 //! Its "agent" is a small policy over a [`FakeWorld`] (what each command prints and whether it

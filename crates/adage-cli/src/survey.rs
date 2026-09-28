@@ -1,18 +1,18 @@
-//! `adage survey` (Design J1): "what does my agent actually do?" — a read-only report over
+//! `adage sense` (Design J1): "what does my agent actually do?" — a read-only report over
 //! existing session history, per repository.
 //!
 //! ```text
-//! adage survey [--repo <key>] [--since <days>] [--json] [--demo]
+//! adage sense [--repo <key>] [--since <days>] [--json] [--demo]
 //!              [--claude-projects <dir>] [--codex-sessions <dir>] [--transcripts <file>...]
 //! ```
 //!
-//! Sessions are found as `adage learn` finds them (Claude Code history under
+//! Sessions are found as `adage condition` finds them (Claude Code history under
 //! `~/.claude/projects`, or `--transcripts` files, including `opencode export` output). `--repo`
 //! keeps one repository key; `--since` keeps sessions from the last N days. For each repository
 //! the report shows sessions and prompts, the most common command templates, turns before the
 //! first edit, repeated failing commands (dead-end candidates), edits followed by regeneration
 //! (finish-line candidates), what prompts name (work items, files, commits, links), and the routes
-//! `adage learn` would build from the same sessions — computed by learn's own dry run
+//! `adage condition` would build from the same sessions — computed by learn's own dry run
 //! ([`adage_learn::plan`]) and marked as candidates. Nothing is written.
 //!
 //! Large histories: files are streamed one at a time and folded into bounded per-repository
@@ -363,10 +363,10 @@ fn percentile(sorted: &[u32], p: f64) -> Option<u32> {
     (!sorted.is_empty()).then(|| sorted[((sorted.len() - 1) as f64 * p).round() as usize])
 }
 
-/// Session files, as `adage learn` finds them, and a description of where they came from.
+/// Session files, as `adage condition` finds them, and a description of where they came from.
 fn discover(o: &Options) -> (Vec<PathBuf>, String) {
     let mut files = o.transcripts.clone();
-    // Default to Claude Code history only when no source was named, as `adage learn` does.
+    // Default to Claude Code history only when no source was named, as `adage condition` does.
     let explicit = !o.transcripts.is_empty() || o.codex_sessions.is_some();
     let dir = o
         .claude_projects
@@ -580,7 +580,7 @@ fn plural(n: u32, one: &str) -> String {
 }
 
 pub fn print_text(s: &Survey) {
-    println!("adage survey: what your agents actually do. Read-only: nothing is installed or written.");
+    println!("adage sense: what your agents actually do. Read-only: nothing is installed or written.");
     let window = s.since.as_ref().map(|d| format!(" since {d}")).unwrap_or_default();
     println!(
         "Read {} session file(s) from {}; {} session(s){window} in {} repository(ies).",
@@ -664,7 +664,7 @@ pub fn print_text(s: &Survey) {
         if r.candidates.is_empty() {
             println!("  candidate routes          none yet: no behaviour clears the bars ({}){sampled}", s.thresholds);
         } else {
-            println!("  candidate routes          what `adage learn` would build — candidates only, nothing is written{sampled}:");
+            println!("  candidate routes          what `adage condition` would build — candidates only, nothing is written{sampled}:");
             for c in &r.candidates {
                 println!(
                     "    {:<8} {:<9} {}/{}: {} → {}   {}/{} sessions, lower bound {:.2}, {}",
@@ -687,7 +687,7 @@ pub fn print_text(s: &Survey) {
             println!("  intent families           {} usable", r.intent_families);
         }
     }
-    println!("\nNext: `adage learn` builds these tracks, and `adage review` lists each route for your decision.");
+    println!("\nNext: `adage condition` builds these tracks, and `adage review` lists each route for your decision.");
 }
 
 #[cfg(test)]

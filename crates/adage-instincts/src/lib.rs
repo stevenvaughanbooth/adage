@@ -14,7 +14,7 @@
 //!   the index's de-duplication, and any learned route that contradicts an instinct suppresses it.
 //!
 //! Advice (don't hand-edit generated files or lockfiles; use the declared package manager) binds
-//! as routes with an advisory step (`Step::Advise`) from a fixed template. `adage learn` writes
+//! as routes with an advisory step (`Step::Advise`) from a fixed template. `adage condition` writes
 //! the routes as the track `<repo>/instincts` (`adage_learn::instincts`), the index gives every
 //! other source precedence over them, and the runtime words them as Adage's defaults, never as
 //! learned (docs/instincts.md).

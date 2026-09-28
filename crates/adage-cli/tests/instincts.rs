@@ -1,4 +1,4 @@
-//! Instincts end to end through the binary: `adage learn --instincts-only` binds a repository's
+//! Instincts end to end through the binary: `adage condition --instincts-only` binds a repository's
 //! built-in defaults from its files with no session history, the hooks deliver them with their
 //! own wrapper (golden per harness), they never ask the agent to keep going, `adage doctor` and
 //! `adage review` show them, a person's rejection holds, pack-level approval works, and agents
@@ -101,7 +101,7 @@ impl World {
         out
     }
     fn bind(&self) -> String {
-        self.ok(&["learn", "--instincts-only", "--repo-path", &self.repo()])
+        self.ok(&["condition", "--instincts-only", "--repo-path", &self.repo()])
     }
     fn hook(&self, harness: &str, event: &str, payload: &Value) -> String {
         let (out, err, code) = self.run(&["hook", harness, event], payload.to_string().as_bytes());
@@ -312,7 +312,7 @@ fn doctor_review_and_pack_approval() {
         idx["routes"].as_array().unwrap().iter().filter(|r| r["route"]["step"]["command"] == "pnpm install").count();
     assert_eq!(install, 2, "both environment steps are delivered after pack approval");
     // A rejected instinct stays retired across re-binds.
-    let out = w.ok(&["review", "reject", TRACK, "finish-line-e7e809"]);
+    let out = w.ok(&["review", "extinguish", TRACK, "finish-line-e7e809"]);
     assert!(out.contains("rejected"), "{out}");
     w.bind();
     let idx = std::fs::read_to_string(w.p("adage/index.json")).unwrap();

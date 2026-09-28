@@ -1,5 +1,5 @@
 //! Intent families end to end: synthetic Claude Code transcripts in the real on-disk format, a
-//! small fixture embedding model in the installed layout, `adage learn`, then the runtime.
+//! small fixture embedding model in the installed layout, `adage condition`, then the runtime.
 
 use adage_core::CommandTable;
 use adage_intent::model::{self, StaticModel};

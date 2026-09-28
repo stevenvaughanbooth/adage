@@ -1,4 +1,4 @@
-//! `adage review allow-exec | revoke-exec` and `adage exec enable | disable | status` (Track C
+//! `adage review delegate | revoke-exec` and `adage delegate | disable | status` (Track C
 //! §3.2, §4.4): a person's decisions, refused inside agent sessions; approvals written through
 //! adage-exec's API; hook registrations swapped between `adage hook` and `adage-exec hook`.
 
@@ -86,7 +86,7 @@ const FIELDS: &str = r#"{"files":{"type":"repo-path-list","json":"linked_files",
 fn allow<'a>() -> Vec<&'a str> {
     vec![
         "review",
-        "allow-exec",
+        "delegate",
         "acme-billing/work-items",
         "lookup-work-item",
         "--level",
@@ -106,8 +106,8 @@ fn approving_execution_is_a_persons_decision_and_shows_what_would_run() {
     assert_eq!(code, 1);
     assert!(err.contains("will not run inside an agent session"), "{err}");
     assert!(!store.exists());
-    let (_, err, code) = w.run(&["review", "allow-exec", "acme-billing/work-items", "lookup-work-item"], &[]);
-    assert_eq!(code, 1, "--level is required: {err}");
+    let (_, err, code) = w.run(&["review", "delegate", "acme-billing/work-items", "lookup-work-item"], &[]);
+    assert_eq!(code, 2, "--level is required (a usage error): {err}");
 
     let (out, err, code) = w.run(&allow(), &[]);
     assert_eq!(code, 0, "{err}");
@@ -135,16 +135,16 @@ fn approving_execution_is_a_persons_decision_and_shows_what_would_run() {
         assert_eq!(std::fs::metadata(&store).unwrap().permissions().mode() & 0o777, 0o600);
     }
 
-    let (out, _, code) = w.run(&["exec", "status", "--json"], &[]);
+    let (out, _, code) = w.run(&["delegate", "--status", "--json"], &[]);
     assert_eq!(code, 0);
     let s: Value = serde_json::from_str(&out).unwrap();
     assert_eq!(s["grants"]["acme-billing"][0]["route"], "acme-billing/work-items/lookup-work-item");
     assert_eq!(s["enabled"], false);
 
     let (_, _, code) =
-        w.run(&["review", "revoke-exec", "acme-billing/work-items", "lookup-work-item"], &[("OPENCODE", "1")]);
+        w.run(&["review", "undelegate", "acme-billing/work-items", "lookup-work-item"], &[("OPENCODE", "1")]);
     assert_eq!(code, 1, "revoking is a person's decision too");
-    let (out, _, code) = w.run(&["review", "revoke-exec", "acme-billing/work-items", "lookup-work-item"], &[]);
+    let (out, _, code) = w.run(&["review", "undelegate", "acme-billing/work-items", "lookup-work-item"], &[]);
     assert_eq!((code, out.contains("Revoked 1")), (0, true), "{out}");
 }
 
@@ -159,12 +159,12 @@ fn exec_enable_swaps_hook_registrations_and_disable_swaps_them_back() {
 
     let bin = w.p("bin/adage-exec");
     let bin = bin.to_str().unwrap();
-    let (_, err, code) = w.run(&["exec", "enable", "--bin", bin], &[("CODEX_SANDBOX", "1")]);
+    let (_, err, code) = w.run(&["delegate", "--bin", bin], &[("CODEX_SANDBOX", "1")]);
     assert_eq!(code, 1, "refused inside an agent session: {err}");
-    let (_, err, code) = w.run(&["exec", "enable", "--bin", "/nonexistent/adage-exec"], &[]);
+    let (_, err, code) = w.run(&["delegate", "--bin", "/nonexistent/adage-exec"], &[]);
     assert_eq!(code, 1, "{err}");
 
-    let (out, err, code) = w.run(&["exec", "enable", "--bin", bin], &[]);
+    let (out, err, code) = w.run(&["delegate", "--bin", bin], &[]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("now runs"), "{out}");
     let on: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
@@ -176,11 +176,11 @@ fn exec_enable_swaps_hook_registrations_and_disable_swaps_them_back() {
         "the same arguments as adage hook"
     );
     assert!(Path::new(&w.p("adage/exec/enabled")).is_file(), "the plugins' marker");
-    let (out, _, _) = w.run(&["exec", "status", "--json"], &[]);
+    let (out, _, _) = w.run(&["delegate", "--status", "--json"], &[]);
     let s: Value = serde_json::from_str(&out).unwrap();
     assert_eq!((s["enabled"].as_bool(), s["registrations"][0]["runs"].as_str()), (Some(true), Some("adage-exec")));
 
-    let (_, err, code) = w.run(&["exec", "disable"], &[]);
+    let (_, err, code) = w.run(&["delegate", "--off"], &[]);
     assert_eq!(code, 0, "{err}");
     let off = std::fs::read_to_string(&settings).unwrap();
     assert!(!off.contains("adage-exec"), "{off}");

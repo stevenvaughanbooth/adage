@@ -1,5 +1,5 @@
 //! Regression tests from the adversarial eval (`adage eval`, evals/datasets/adversarial): tool
-//! output an agent merely *saw* must never stop `adage learn`, nor reach a track unsanitised.
+//! output an agent merely *saw* must never stop `adage condition`, nor reach a track unsanitised.
 
 use adage_learn::{learn, Inputs, LearnConfig};
 use adage_tracks::{Index, Step};
@@ -39,7 +39,7 @@ fn learn_all(dir: &Path, files: Vec<PathBuf>) -> anyhow::Result<Index> {
 #[test]
 fn a_hostile_error_line_does_not_abort_learning() {
     // Before the fix, the dead-end miner took the error line as the route's signature, track
-    // validation rejected it, and `adage learn` failed for the whole repository: nothing learned,
+    // validation rejected it, and `adage condition` failed for the whole repository: nothing learned,
     // no index compiled. One line of tool output was enough.
     let d = tempfile::tempdir().unwrap();
     let files: Vec<PathBuf> = (0..4)

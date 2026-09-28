@@ -1,4 +1,4 @@
-//! The hook's part of live learning (Architecture §4.7.2; the learner itself is `adage learn
+//! The hook's part of live learning (Architecture §4.7.2; the learner itself is `adage condition
 //! --auto`, in `adage-cli/src/autolearn.rs`, which documents the queue files).
 //!
 //! When a session stops or ends, after its normal decision, the hook calls [`on_turn_end`]. If
@@ -150,7 +150,7 @@ pub fn on_turn_end(
 /// and do not wait.
 fn spawn(paths: &Paths, root: &Path, after: Option<u64>, learner: &Path) -> Result<(), Failure> {
     let mut args: Vec<String> =
-        vec!["learn".into(), "--auto".into(), "--repo-root".into(), root.to_string_lossy().into()];
+        vec!["condition".into(), "--auto".into(), "--repo-root".into(), root.to_string_lossy().into()];
     if let Some(a) = after {
         args.extend(["--after".to_string(), a.to_string()]);
     }

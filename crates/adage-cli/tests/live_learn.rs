@@ -150,7 +150,7 @@ fn every_harness_enqueues_and_starts_a_learner_at_stop_and_session_end() {
         assert_eq!(w.hook(h, e, p), "", "{h} {e}: no routes, nothing to say");
         let spawns = w.spawns();
         assert_eq!(spawns.len(), i + 1, "{h} {e} starts a learner");
-        assert_eq!(spawns[i], vec!["learn", "--auto", "--repo-root", &repo], "{h} {e}");
+        assert_eq!(spawns[i], vec!["condition", "--auto", "--repo-root", &repo], "{h} {e}");
         let reqs = w.requests();
         assert_eq!(reqs.len(), 1, "one request per repository, refreshed");
         let r = &reqs[0];
@@ -217,7 +217,7 @@ fn debounce_and_single_flight() {
 
     // And a learner started now finds the lock held, and leaves without learning or logging.
     let t = Instant::now();
-    let o = w.cmd(&["learn", "--auto", "--repo-root", &w.repo()]).output().unwrap();
+    let o = w.cmd(&["condition", "--auto", "--repo-root", &w.repo()]).output().unwrap();
     assert!(o.status.success(), "{}", World::text(&o));
     assert!(t.elapsed() >= Duration::from_secs(1), "it waited a little for the lock first");
     assert!(w.log().is_empty(), "single flight: the second learner did nothing");
@@ -237,7 +237,7 @@ fn a_learner_that_cannot_start_fails_open() {
     assert!(!log.contains(&w.repo()), "no paths in the fail-open log");
 }
 
-/// `adage learn --auto`, run the way a hook starts it: it learns only this repository, logs the
+/// `adage condition --auto`, run the way a hook starts it: it learns only this repository, logs the
 /// changes in the `learn.log` contract, and a second run with nothing new changes nothing.
 #[test]
 fn learn_auto_logs_what_changed() {
@@ -256,7 +256,7 @@ fn learn_auto_logs_what_changed() {
         )
         .unwrap();
     }
-    let o = w.cmd(&["learn", "--auto", "--repo-root", &w.repo()]).output().unwrap();
+    let o = w.cmd(&["condition", "--auto", "--repo-root", &w.repo()]).output().unwrap();
     assert!(o.status.success() && o.stdout.is_empty(), "quiet: {}", World::text(&o));
     let log = w.log();
     assert_eq!(log.len(), 1, "{log:?}");
@@ -303,14 +303,14 @@ fn learn_auto_logs_what_changed() {
     assert_eq!(state["outcome"], "ok", "{state}");
 
     // Again, with nothing new: no changes, and every transcript came from the cache.
-    let o = w.cmd(&["learn", "--auto", "--repo-root", &w.repo()]).output().unwrap();
+    let o = w.cmd(&["condition", "--auto", "--repo-root", &w.repo()]).output().unwrap();
     assert!(o.status.success());
     let log = w.log();
     assert_eq!(log[1]["changes"], json!([]), "{}", log[1]);
     assert_eq!(log[1]["index_generation"], log[0]["index_generation"]);
 
     // A manual learn writes the same kind of line, with trigger manual, one per repository.
-    let o = w.cmd(&["learn", "--demo"]).output().unwrap();
+    let o = w.cmd(&["condition", "--demo"]).output().unwrap();
     assert!(o.status.success(), "{}", World::text(&o));
     let all = w.log();
     let manual: Vec<&Value> = all.iter().skip(2).collect();
@@ -322,7 +322,7 @@ fn learn_auto_logs_what_changed() {
     assert!(ledger["changes"].as_array().is_some_and(|c| !c.is_empty()), "{ledger}");
 
     // A repository that is gone: a learn_error line with a fixed message, no path.
-    let o = w.cmd(&["learn", "--auto", "--repo-root", &w.root.join("gone").to_string_lossy()]).output().unwrap();
+    let o = w.cmd(&["condition", "--auto", "--repo-root", &w.root.join("gone").to_string_lossy()]).output().unwrap();
     assert!(o.status.success());
     let last = w.log().pop().unwrap();
     assert_eq!((last["kind"].as_str(), last["class"].as_str()), (Some("learn_error"), Some("repo")), "{last}");

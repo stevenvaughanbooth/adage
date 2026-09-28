@@ -1,6 +1,6 @@
 //! Proposed changes to pinned routes in `adage review` (Implementation plan §4.1).
 //!
-//! `adage learn` (and a re-run of `adage add`) never overwrite a pinned route; when their own
+//! `adage condition` (and a re-run of `adage add`) never overwrite a pinned route; when their own
 //! version of it differs materially, they record a proposal ([`adage_tracks::proposals`]). The
 //! review queue lists it with the reason "proposed" and a field-by-field diff;
 //! `adage review approve` applies it (the route stays pinned), and `adage review dismiss` keeps the

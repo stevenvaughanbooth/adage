@@ -49,7 +49,7 @@ the secondary arms, pass `--arms off,holdout,adage,agents-md` and `--leave-repo-
   first eval job.
 
 **What training means.** Training is `off`-arm agents solving the training tasks. Their transcripts
-are harvested per repository, and `adage learn --repo adage-eval:<suite>/<owner>__<name>` is run
+are harvested per repository, and `adage condition --repo adage-eval:<suite>/<owner>__<name>` is run
 once per repository with the default thresholds and its own `ADAGE_HOME`. The result is frozen as a
 tarball, recorded in `MANIFEST.sha256`, and nothing is learned after that point. Every eval trial sets
 `ADAGE_AUTO_LEARN=0`. No gold patches, hints, test names or upstream history are given to Adage.
@@ -145,7 +145,7 @@ What SWE-bench Pro can support:
 
 ```sh
 cargo build --release --target x86_64-unknown-linux-musl -p adage-cli   # the static binary for the containers
-cargo build --release -p adage-cli                                     # the host binary for `adage learn`
+cargo build --release -p adage-cli                                     # the host binary for `adage condition`
 uv tool install harbor   # or: pip install -e <harbor checkout>; Harbor needs Python >= 3.12
 export PYTHONPATH=$PWD/evals/external   # so Harbor can import adage_harbor:AdageClaudeCode
 ```
@@ -164,7 +164,7 @@ python3 evals/external/plan.py phases --registry $R --dataset swebenchpro@1.0 --
 
 1. train job
 2. harvest
-3. one `adage learn` per repository
+3. one `adage condition` per repository
 4. freeze and leakage check
 5. seeded eval jobs
 6. `check-patches`, `emit`, `analyse`

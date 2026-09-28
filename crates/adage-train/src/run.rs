@@ -10,7 +10,7 @@
 //! sessions/<job>/    each session's raw harness output (stream.jsonl)
 //! transcripts/<phase>/<job>.jsonl
 //!                    transcripts copied out of each session's own config directory; never
-//!                    anywhere `adage learn` or live learning reads history
+//!                    anywhere `adage condition` or live learning reads history
 //! staged/tracks/     reflexes mined from the exploration transcripts, under the repository's
 //!                    key; NOT installed, NOT in any index hooks read
 //! staged/index.json  their compiled index (what the reflex arm's hooks read, re-keyed)

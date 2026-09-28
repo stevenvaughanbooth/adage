@@ -1,6 +1,6 @@
 //! Proposed changes to pinned routes (Implementation plan §4.1): `proposals.yaml` beside a track.
 //!
-//! A pinned (`authored`) route is edit-locked: `adage learn` never overwrites it. When the miner's
+//! A pinned (`authored`) route is edit-locked: `adage condition` never overwrites it. When the miner's
 //! own version of that route differs from it *materially* — by [`crate::review::material_change`],
 //! the same definition the review queue uses — learn records the mined version here as a
 //! proposal, and `adage review` shows it with a diff. Approving applies it (the route stays

@@ -23,7 +23,7 @@
 //!    decision point, the instinct is **suppressed**. (It never wins two greens either: an
 //!    instinct is yellow.)
 //!
-//! Conflicts are reported ([`Conflict`]) for `adage learn` and `adage doctor` to show.
+//! Conflicts are reported ([`Conflict`]) for `adage condition` and `adage doctor` to show.
 
 use crate::index::IndexedRoute;
 use crate::model::{Aspect, Route, Step, Trigger};

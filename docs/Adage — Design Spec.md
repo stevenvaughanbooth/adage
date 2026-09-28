@@ -182,7 +182,7 @@ whichever is clearer.
 
 ### J1 · First install — "what does my agent actually do?"
 
-1. `adage survey` imports existing session history and prints a report: the intent families that
+1. `adage sense` imports existing session history and prints a report: the intent families that
    recur, turns before the first edit for each, the exploration that repeats, the dead ends, the
    missed obligations, and the tracks Adage would build. Nothing is installed; nothing changes.
 2. `adage init` turns it on. From then on Adage **builds and maintains tracks automatically** from
@@ -1234,7 +1234,7 @@ railway word is less clear than a plain one, the plain one wins.
 
 | Surface | Name |
 | --- | --- |
-| CLI | `adage` — `adage survey`, `adage init`, `adage review`, `adage share`, `adage add`, `adage prove`, `adage status` |
+| CLI | `adage` — `adage sense`, `adage init`, `adage review`, `adage share`, `adage add`, `adage prove`, `adage status` |
 | Repository directory | `.adage/` — `.adage/tracks/`, `.adage/tracks.lock`, `.adage/config.toml` |
 | Session command | `/adage off` |
 | Directive tag | `<signal source="adage" track="…" aspect="green">` |

@@ -16,16 +16,16 @@ runs/<run>/stream.jsonl, state.json, outcomes.json, adage-home/). The archive is
 modified. The output (default evals/datasets/demo-haiku45) holds:
 
   manifest.json          sessions, labels, named train/test splits, learn thresholds
-  sessions/<run>.jsonl   one Claude Code transcript per run, the format `adage learn` reads
+  sessions/<run>.jsonl   one Claude Code transcript per run, the format `adage condition` reads
   sandbox.txt            the sandbox repository's files (for repository-path contracts)
   recorded/              what the live hooks actually decided (for replay fidelity)
 
-Sessions come from the real Claude Code transcripts (`transcripts/`, what `adage learn` read
+Sessions come from the real Claude Code transcripts (`transcripts/`, what `adage condition` read
 live). Each is curated: only prompts, tool calls, tool results (with the hook-visible
 `toolUseResult`) and Adage's own hook attachments are kept; harness context (environment,
 skill listings, dates, file history, costs), thinking blocks and signatures are dropped; long
 tool output is trimmed; machine-specific text is redacted. Subagent transcripts are left out
-(`adage learn` never reads them).
+(`adage condition` never reads them).
 
 Archives without transcripts fall back to converting `runs/<run>/stream.jsonl` (the `claude -p
 --output-format stream-json` console stream, which has no prompt record and no `cwd` per record:

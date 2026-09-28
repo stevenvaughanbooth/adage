@@ -17,7 +17,7 @@
     {
       "name": "adage-exec",
       "source": "./plugin/claude-code-exec",
-      "description": "Adage with execution (E1 prefetch, opt-in): after `adage exec enable` and an approval per route, observe-only lookups run in an OS sandbox at the trigger and their typed output arrives beside the directive. Replaces the Adage plugin's hooks while execution is on. Needs the adage and adage-exec binaries.",
+      "description": "Adage with execution (E1 prefetch, opt-in): after `adage delegate` and an approval per route, observe-only lookups run in an OS sandbox at the trigger and their typed output arrives beside the directive. Replaces the Adage plugin's hooks while execution is on. Needs the adage and adage-exec binaries.",
       "version": "0.1.0",
       "repository": "https://github.com/stevenvaughanbooth/adage",
       "homepage": "https://github.com/stevenvaughanbooth/adage"

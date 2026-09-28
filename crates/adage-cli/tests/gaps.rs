@@ -206,7 +206,7 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
     keygen(&w);
     w.publish(&track("1.0.0", "./scripts/wi-lookup {item} --json", false), "out1");
     w.add("out1");
-    w.ok("recipient", &["review", "reject", NAME, "dead-unittest"]);
+    w.ok("recipient", &["review", "extinguish", NAME, "dead-unittest"]);
     w.ok("recipient", &["review", "pin", NAME, "lookup"]);
     w.ok("recipient", &["review", "approve", NAME, "check", "--by", "bob"]);
 

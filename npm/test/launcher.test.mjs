@@ -69,8 +69,8 @@ try {
 
     // Arguments pass through untouched, and so does a failing exit status.
     const bad = run(process.execPath, [launcher, "install", "no-such-harness", "--print"], { env })
-    assert.equal(bad.status, 1)
-    assert.match(bad.stderr, /usage: adage install/)
+    assert.equal(bad.status, 2)
+    assert.match(bad.stderr, /invalid value 'no-such-harness'/)
 
     // stdin reaches the binary: a hook call reads its payload and always exits 0 (fail open).
     const hook = run(process.execPath, [launcher, "hook", "claude", "SessionStart"], {
