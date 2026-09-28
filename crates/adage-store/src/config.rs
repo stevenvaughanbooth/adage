@@ -6,9 +6,12 @@
 //! min_interval_secs = 120    # at most one automatic learn per repository per interval
 //! thresholds = "default"     # or "demo" (lower evidence bars, for demos and small histories)
 //! claude_projects = ""       # Claude Code history ("" = ~/.claude/projects)
-//! codex_sessions = ""        # Codex rollouts to condition on automatically ("" = none)
+//! codex_sessions = "auto"    # Codex rollouts: "auto" ($CODEX_HOME/sessions once Codex hooks are registered), a directory, or "" (none)
 //! opencode_exports = ""      # a directory of `opencode export` files ("" = none)
 //! parse_cache = true         # keep parsed transcripts under cache/sessions (faster re-learning)
+//!
+//! [ui]
+//! notices = "daily"          # one-line notices at session start (Claude Code), at most daily; or "off"
 //!
 //! [runtime]
 //! control = 0.1              # share of sessions held out as the control arm
@@ -59,9 +62,14 @@ pub struct Config {
     /// `None` = the default location, `~/.claude/projects`.
     pub learn_claude_projects: Option<PathBuf>,
     pub learn_codex_sessions: Option<PathBuf>,
+    /// `learn.codex_sessions = "auto"` (the default): automatic learning reads
+    /// `$CODEX_HOME/sessions` (else `~/.codex/sessions`) once Codex hooks are registered.
+    pub learn_codex_auto: bool,
     pub learn_opencode_exports: Option<PathBuf>,
     /// Keep parsed transcripts in `$ADAGE_HOME/cache/sessions` (`adage_learn::cache`).
     pub learn_parse_cache: bool,
+    /// `ui.notices`: one-line notices at session start (`daily`, the default) or none (`off`).
+    pub ui_notices: bool,
     /// The control share; as with `ADAGE_CONTROL`, 1 or more is shadow mode.
     pub runtime_control: f64,
     /// Bind instincts (prebuilt routes) from each repository's declared files when learning.
@@ -100,6 +108,10 @@ enum Kind {
     Dir,
     /// A share between 0 and 1.
     Share,
+    /// A directory, `""` for none, or `auto`.
+    DirOrAuto,
+    /// `daily` or `off`.
+    Notices,
     /// A list of short ids (`[A-Za-z0-9_-]`, at most 32 characters each, at most 64 of them),
     /// given on the command line comma-separated; `""` for none.
     Ids,
@@ -113,6 +125,10 @@ pub struct Key {
     pub default: &'static str,
     pub env: Option<&'static str>,
     pub doc: &'static str,
+    /// A setting that changes what Adage learns from or how much evidence it needs (its sources,
+    /// thresholds, instinct packs): `adage config set` asks for a person at a terminal. Every
+    /// other key only tunes or turns something down, and can be set from a script or a sandbox.
+    pub guarded: bool,
 }
 
 /// Every key, in the order `adage config` prints them.
@@ -123,6 +139,7 @@ pub const KEYS: &[Key] = &[
         default: "true",
         env: Some("ADAGE_AUTO_LEARN"),
         doc: "condition automatically, in the background, when an agent session stops or ends",
+        guarded: false,
     },
     Key {
         name: "learn.min_interval_secs",
@@ -130,6 +147,7 @@ pub const KEYS: &[Key] = &[
         default: "120",
         env: None,
         doc: "at most one automatic conditioning run per repository in this many seconds (0 to 86400)",
+        guarded: false,
     },
     Key {
         name: "learn.thresholds",
@@ -137,6 +155,7 @@ pub const KEYS: &[Key] = &[
         default: "default",
         env: None,
         doc: "evidence bars for `adage condition` and automatic learning: default, or demo (lower)",
+        guarded: true,
     },
     Key {
         name: "learn.claude_projects",
@@ -144,13 +163,15 @@ pub const KEYS: &[Key] = &[
         default: "",
         env: None,
         doc: "Claude Code traces to condition on (\"\" = ~/.claude/projects)",
+        guarded: true,
     },
     Key {
         name: "learn.codex_sessions",
-        kind: Kind::Dir,
-        default: "",
+        kind: Kind::DirOrAuto,
+        default: "auto",
         env: None,
-        doc: "Codex rollouts automatic learning reads, e.g. ~/.codex/sessions (\"\" = none)",
+        doc: "Codex rollouts to condition on: auto (once Codex hooks are registered), a directory, or \"\" (none)",
+        guarded: true,
     },
     Key {
         name: "learn.opencode_exports",
@@ -158,6 +179,7 @@ pub const KEYS: &[Key] = &[
         default: "",
         env: None,
         doc: "a directory of `opencode export` files automatic learning reads (\"\" = none)",
+        guarded: true,
     },
     Key {
         name: "learn.parse_cache",
@@ -165,6 +187,7 @@ pub const KEYS: &[Key] = &[
         default: "true",
         env: None,
         doc: "keep parsed transcripts in cache/sessions so re-learning parses only what changed",
+        guarded: false,
     },
     Key {
         name: "instincts.enabled",
@@ -172,6 +195,7 @@ pub const KEYS: &[Key] = &[
         default: "true",
         env: None,
         doc: "bind Adage's built-in defaults (instincts) from each repository's declared files",
+        guarded: false,
     },
     Key {
         name: "instincts.packs",
@@ -179,6 +203,7 @@ pub const KEYS: &[Key] = &[
         default: "core",
         env: None,
         doc: "instinct packs to bind, comma-separated (only core exists)",
+        guarded: true,
     },
     Key {
         name: "instincts.disabled",
@@ -186,6 +211,15 @@ pub const KEYS: &[Key] = &[
         default: "",
         env: None,
         doc: "instinct ids never to bind, comma-separated, e.g. U3,N1 (see docs/instincts.md)",
+        guarded: false,
+    },
+    Key {
+        name: "ui.notices",
+        kind: Kind::Notices,
+        default: "daily",
+        env: None,
+        doc: "one-line notices at session start (Claude Code): daily, only when something is new; or off",
+        guarded: false,
     },
     Key {
         name: "runtime.control",
@@ -193,6 +227,7 @@ pub const KEYS: &[Key] = &[
         default: "0.1",
         env: Some("ADAGE_CONTROL"),
         doc: "share of sessions held out as the control arm (Adage decides but says nothing)",
+        guarded: false,
     },
 ];
 
@@ -237,7 +272,12 @@ fn from_text(kind: Kind, s: &str) -> Result<toml::Value, String> {
             "default" | "demo" => Ok(toml::Value::String(s.into())),
             _ => Err(format!("{s:?} is not default or demo")),
         },
-        Kind::Dir => {
+        Kind::DirOrAuto if s == "auto" => Ok(toml::Value::String(s.into())),
+        Kind::Notices => match s {
+            "daily" | "off" => Ok(toml::Value::String(s.into())),
+            _ => Err(format!("{s:?} is not daily or off")),
+        },
+        Kind::Dir | Kind::DirOrAuto => {
             if s.chars().any(char::is_control) || s.len() > 4096 {
                 return Err("not a usable path".into());
             }
@@ -275,7 +315,7 @@ fn from_toml(kind: Kind, v: &toml::Value) -> Result<String, String> {
         (Kind::Secs, toml::Value::Integer(n)) => n.to_string(),
         (Kind::Share, toml::Value::Float(x)) => x.to_string(),
         (Kind::Share, toml::Value::Integer(n)) => n.to_string(),
-        (Kind::Thresholds | Kind::Dir, toml::Value::String(s)) => s.clone(),
+        (Kind::Thresholds | Kind::Dir | Kind::DirOrAuto | Kind::Notices, toml::Value::String(s)) => s.clone(),
         (Kind::Ids, toml::Value::String(s)) => s.clone(),
         (Kind::Ids, toml::Value::Array(a)) => {
             let ids: Option<Vec<&str>> = a.iter().map(|v| v.as_str()).collect();
@@ -364,7 +404,11 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
         learn_min_interval_secs: text("learn.min_interval_secs").parse().unwrap_or(120),
         learn_thresholds: if text("learn.thresholds") == "demo" { Thresholds::Demo } else { Thresholds::Default },
         learn_claude_projects: home_relative(&text("learn.claude_projects")),
-        learn_codex_sessions: home_relative(&text("learn.codex_sessions")),
+        learn_codex_sessions: Some(text("learn.codex_sessions"))
+            .filter(|s| s != "auto")
+            .and_then(|s| home_relative(&s)),
+        learn_codex_auto: text("learn.codex_sessions") == "auto",
+        ui_notices: text("ui.notices") != "off",
         learn_opencode_exports: home_relative(&text("learn.opencode_exports")),
         learn_parse_cache: parse_bool(&text("learn.parse_cache")).unwrap_or(true),
         runtime_control: text("runtime.control").parse().unwrap_or(0.1),
@@ -433,6 +477,7 @@ mod tests {
         assert_eq!(c.learn_min_interval_secs, 120);
         assert_eq!(c.learn_thresholds, Thresholds::Default);
         assert_eq!((c.learn_claude_projects.clone(), c.learn_codex_sessions.clone()), (None, None));
+        assert!(c.learn_codex_auto && c.ui_notices);
         assert!(c.learn_parse_cache);
         assert_eq!(c.runtime_control, 0.1);
         assert!(c.instincts_enabled);

@@ -13,7 +13,9 @@ pub mod evidence;
 pub mod graph;
 pub mod import;
 pub mod instincts;
+pub mod ledger;
 pub mod opencode;
+pub mod scope;
 
 use adage_core::CommandTable;
 use adage_intent::model::StaticModel;

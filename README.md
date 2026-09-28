@@ -33,6 +33,60 @@ delegate`), inside an OS sandbox.
   + adage train                                               Codex)        execution)
 ```
 
+## Install
+
+In Claude Code:
+
+```text
+/plugin marketplace add stevenvaughanbooth/adage
+/plugin install adage@adage
+```
+
+Then start a session. That is all. The plugin carries verified binaries for macOS (arm64, x64),
+Linux (x64, arm64) and Windows (x64), so nothing else is installed and nothing is downloaded. At
+the first session in a repository you see one line, which the agent never sees:
+
+```text
+adage: learning from 23 past sessions in this repo; reflexes arrive within a minute. Nothing runs without you.
+```
+
+In the background, Adage binds its instincts from the repository's own files (Makefile,
+`package.json`, CI) and learns from this repository's earlier Claude Code traces, and only this
+repository's: other repositories' transcripts are never opened. From the next prompt on, the agent
+gets its reflexes. Adage keeps learning after every session, and at most once a day, only when
+something is new, tells you in one line (`adage: 3 new reflexes active.`, or `1 install step waits
+for you: run adage review in a terminal.`).
+
+From a terminal, `brew install stevenvaughanbooth/tap/adage` or `npm install -g @adage/cli`, then
+connect your agent once (`adage` tells you how: `adage install claude-code --write --scope user`,
+or `codex`, `opencode`) and start a session. Plain `adage`, anywhere (a terminal, a pipe, or
+`!adage` inside Claude Code), prints where things stand:
+
+```text
+adage 0.1.0 · github.com/acme/billing                          ● healthy
+  14 reflexes active: 4 instincts, 9 learned, 1 from your team
+  learning after each session · last: 2 min ago, 1 change
+  last 30 days: 61 sessions · 188 directives · 152 followed · 7 dead ends headed off
+  savings: ~$0.034 and 3.1 turns per session, API-list equivalent (95% CI $0.011–$0.058)
+           ≈ $1.87 over 55 sessions, vs 6 where Adage stayed quiet (priced as of 2026-06-24)
+  ended asking you for help: 3% with Adage, 5% without
+  1 install step waits for you → adage review
+  adage ui · adage map · adage doctor
+```
+
+**What is measured, honestly.** Adage stays quiet in 1 session in 10 (the control), so its effect
+can be measured. Until a repository has 10 quiet sessions and 30 with Adage, the card shows counts
+of what happened, never dollars (`measuring savings: 4 of 10 quiet sessions so far`). After that
+it shows the saving per session with a 95% interval, or "no measurable difference yet", or, if
+that is what the sessions say, "Adage appears to add ~$x per session". Dollars are API-list
+equivalents from a dated price table (subscription users do not pay per token); a model not in
+the table is shown as tokens and turns only. `adage savings --json` has the whole estimate.
+
+**What never happens without you:** nothing is ever run on the agent's behalf unless you turn on
+delegation at a terminal; install steps (environment changes) wait for `adage review`; no hook or
+learner touches the network; settings files change only when you install the plugin or run
+`adage install … --write` (which shows the diff).
+
 ## What it does, concretely
 
 From real traces in a repository, one learner, a graph engine
@@ -118,10 +172,11 @@ finding conventions, the more Adage adds.
 Results are in [demo/results/20260923-1249-harbor-dispatch-claude-sonnet-5](demo/results/20260923-1249-harbor-dispatch-claude-sonnet-5/).
 
 
-## Install
+## Going further
 
-From a tagged release (none published yet), for macOS (arm64, x64), Linux (x64, arm64; static) and
-Windows (x64):
+### Other ways to install
+
+From a tagged release, for macOS (arm64, x64), Linux (x64, arm64; static) and Windows (x64):
 
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
@@ -139,17 +194,15 @@ stevenvaughanbooth/tap/adage-exec` (and `adage-train`), or `cargo install --lock
 (and `adage-train`). Put them beside `adage` or on `PATH`.
 
 Every release archive has a SHA-256 checksum, a Sigstore build-provenance attestation
-(`gh attestation verify <file> --repo stevenvaughanbooth/adage`) and a CycloneDX SBOM. For Claude
-Code, add the plugin marketplace with `/plugin marketplace add stevenvaughanbooth/adage` and install
-`adage` (and `adage-exec`, to let reflexes act); the plugins run the binaries they find on `PATH`
-and never download anything.
+(`gh attestation verify <file> --repo stevenvaughanbooth/adage`) and a CycloneDX SBOM. The release
+workflow publishes the Claude Code plugins, with those binaries bundled and checksummed, to the
+`marketplace` branch that `/plugin install` reads; the plugin verifies its binary against
+`dist/SHA256SUMS` at every session start, falls back to `adage` on `PATH`, and otherwise says in one
+line what to install.
 
-## Quick start
+### Commands
 
-### First run
-
-Inside the repository you want reflexes for (`adage --help` lists every command; `adage <command>
---help` its options):
+`adage --help` lists every command; `adage <command> --help` its options.
 
 ```bash
 adage init             # guided setup at a terminal: hooks, model, first conditioning, auto-conditioning
@@ -216,7 +269,7 @@ Keys: `q` quits, `p` pauses, `f` switches between this repository and all of the
 where Adage said nothing, `↑`/`↓` scroll, `?` shows help. `NO_COLOR` is honoured: strengths are then
 spelled out by initial (`[F]` fire, `[P]` prime, `[I]` inhibit), as above.
 
-`adage ui` (or plain `adage` at a terminal) is the full-screen app, with four tabs:
+`adage ui` is the full-screen app, with four tabs:
 
 | Tab | What it does |
 | --- | --- |
@@ -233,7 +286,7 @@ Decisions, installs and settings refuse inside an agent session, as their comman
 ### Claude Code
 
 Installed from the marketplace (above), the plugin needs nothing else. To try the plugin from a
-source checkout instead:
+source checkout instead (it then uses the binary `plugin/build.sh` stages, or `adage` on `PATH`):
 
 ```bash
 # 1. Build the binaries and stage them into the plugins
@@ -294,19 +347,27 @@ adage config set learn.min_interval_secs 300  # learn each repository at most ev
 | `learn.min_interval_secs` | `120` | At most one automatic learn per repository per interval |
 | `learn.thresholds` | `default` | `default` or `demo`, for `adage condition` too (`--demo` wins) |
 | `learn.claude_projects` | `""` | Claude Code history (`""` = `~/.claude/projects`) |
-| `learn.codex_sessions` | `""` | Codex rollouts automatic learning reads (e.g. `~/.codex/sessions`) |
+| `learn.codex_sessions` | `auto` | Codex rollouts: `auto` reads `$CODEX_HOME/sessions` (this repository's only) once Codex hooks are registered; a directory; or `""` for none |
 | `learn.opencode_exports` | `""` | A directory of `opencode export` files automatic learning reads |
 | `learn.parse_cache` | `true` | Keep parsed transcripts in `cache/sessions` (owner-only), so re-learning parses only what changed |
+| `instincts.enabled` | `true` | Bind Adage's instincts from each repository's files |
+| `ui.notices` | `daily` | One-line notices at session start (Claude Code), at most daily and only when new; `off` silences them |
 | `runtime.control` | `0.1` | Control share (`ADAGE_CONTROL` wins) |
 
-`config set` refuses inside an agent session.
+Keys that change what Adage learns from or how much evidence it needs (`learn.thresholds`, the
+three source directories, `instincts.packs`) are a person's decision: `config set` asks for a
+terminal and refuses inside an agent session. Every other key only tunes Adage or turns something
+down, and can be set from a script, CI or a sandboxed session.
 
 **Intent families (optional):** `adage models fetch` downloads the pinned static embedding model
 (potion-base-8M, 31 MB, SHA-256 verified; `adage models install <dir>` for offline machines) into
 the data directory. `adage condition` then clusters each repository's prompts into intent families
 (exact kNN + deterministic Louvain, split and merged by what the sessions did next — spike S7) and
 forms an intent reflex per usable family. Without the model everything else works unchanged: learning
-skips intent families and hooks never load a model.
+skips intent families and hooks never load a model. Behind a proxy that blocks huggingface.co, the
+download is not retried by itself: `adage doctor` says why (`intent grouping off: huggingface.co
+blocked by proxy (403)`) and how to fix it. `ADAGE_MODEL_BASE_URL=<mirror>` downloads the same
+files from a mirror (still checked against the pinned SHA-256s).
 
 **Sharing:** `adage share <track> --out <dir> [--key <path>]` converts a track to a **pack** (the
 only format that travels; [docs/packs.md](docs/packs.md)), checks every byte for absolute paths,

@@ -342,6 +342,17 @@ fn model_check(paths: &Paths, idx: &Index) -> Check {
     let wants = idx.routes.iter().any(|r| matches!(r.route.trigger, Trigger::Intent { .. }));
     match adage_intent::model::status(&paths.models()) {
         Ok(m) => pass("embedding model", format!("{} installed; checksums verified", m.id)),
+        // A download that failed (never retried by itself): a pass, with the note that says why
+        // prompt grouping is off and how to fix it (docs/zero-config.md §5).
+        Err(_) if !dir.join("manifest.json").exists() && crate::models::fetch_failed(paths).is_some() => {
+            let f = crate::models::fetch_failed(paths).unwrap_or_default();
+            let (class, host, detail) = (
+                f["class"].as_str().unwrap_or("error"),
+                f["host"].as_str().unwrap_or("the model host"),
+                f["detail"].as_str().unwrap_or(""),
+            );
+            pass("embedding model", format!("intent grouping off: {}", crate::models::explain(class, host, detail)))
+        }
         Err(_) if !dir.join("manifest.json").exists() && wants => {
             warn("embedding model", "not installed, so intent reflexes cannot fire", "run `adage models fetch`")
         }

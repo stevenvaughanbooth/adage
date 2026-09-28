@@ -9,18 +9,28 @@
 #     serves instead (`adage-exec hook` takes `adage hook`'s arguments), so the session still
 #     gets E0 directives;
 #   - execution off: scripts/quiet, which answers nothing; the Adage plugin serves.
-# Nothing is ever downloaded. Every path exits 0 (fail open); hints go to stderr.
+# Nothing is ever downloaded. Every path exits 0 (fail open). When nothing can serve, bin/adage-exec
+# points at scripts/quiet and one line goes to the person as a JSON `systemMessage` on stdout.
+# At every start it touches $ADAGE_HOME/exec/plugin-seen, so the Adage plugin knows this one is
+# installed and goes quiet only then (never leaving a session with no hooks at all).
 ROOT="$1"; DATA="$2"
-skip() { [ -n "$1" ] && echo "adage-exec: $1" >&2; cat >/dev/null; exit 0; }
-[ -n "$ROOT" ] && [ -n "$DATA" ] || skip ""
+skip() { cat >/dev/null; exit 0; }
+fail() {
+  ln -sfn "$ROOT/scripts/quiet" "$DATA/bin/adage-exec" 2>/dev/null
+  t=$(printf '%s' "adage-exec: $1" | sed 's/\\/\\\\/g; s/"/\\"/g')
+  printf '{"systemMessage":"%s"}\n' "$t"
+  cat >/dev/null; exit 0
+}
+[ -n "$ROOT" ] && [ -n "$DATA" ] || skip
 case "$(uname -s)" in
   Darwin) AH="${ADAGE_HOME:-$HOME/Library/Application Support/Adage}" ;;
   *) AH="${ADAGE_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/adage}" ;;
 esac
-mkdir -p "$DATA/bin" || skip "cannot create $DATA/bin"
+[ -d "$AH" ] && mkdir -p "$AH/exec" 2>/dev/null && : >"$AH/exec/plugin-seen" 2>/dev/null
+mkdir -p "$DATA/bin" || fail "cannot create $DATA/bin"
 if [ ! -f "$AH/exec/enabled" ]; then
   ln -sfn "$ROOT/scripts/quiet" "$DATA/bin/adage-exec"
-  skip ""
+  skip
 fi
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) T=aarch64-apple-darwin ;; Darwin-x86_64) T=x86_64-apple-darwin ;;
@@ -33,15 +43,13 @@ LINKED=""
 SRC="$ROOT/dist/$T/adage-exec"
 if [ -n "$T" ] && [ -f "$SRC" ]; then
   WANT=$(grep " $T/adage-exec\$" "$ROOT/dist/SHA256SUMS" 2>/dev/null | cut -d' ' -f1)
-  GOT=$(sha256 "$SRC")
+  if [ -n "$WANT" ] && [ -x "$DATA/bin/adage-exec-$WANT" ]; then GOT="$WANT"; else GOT=$(sha256 "$SRC"); fi
   if [ -n "$WANT" ] && [ "$WANT" = "$GOT" ]; then
     if [ ! -x "$DATA/bin/adage-exec-$GOT" ]; then
       cp "$SRC" "$DATA/bin/.adage-exec-$GOT.tmp" && chmod 755 "$DATA/bin/.adage-exec-$GOT.tmp" \
         && mv "$DATA/bin/.adage-exec-$GOT.tmp" "$DATA/bin/adage-exec-$GOT" || skip "cannot install the bundled binary"
     fi
     ln -sfn "adage-exec-$GOT" "$DATA/bin/adage-exec" && LINKED=1
-  else
-    echo "adage-exec: the bundled binary does not match dist/SHA256SUMS; ignoring it" >&2
   fi
 fi
 if [ -z "$LINKED" ] && P=$(command -v adage-exec 2>/dev/null) && [ -n "$P" ] && [ -f "$P" ]; then
@@ -58,9 +66,8 @@ if [ -z "$LINKED" ] && P=$(command -v adage 2>/dev/null) && [ -n "$P" ]; then
   if [ -x "$D/adage-exec" ]; then
     ln -sfn "$D/adage-exec" "$DATA/bin/adage-exec" && LINKED=1
   else
-    echo "adage-exec: no adage-exec binary found; serving with adage (directives only)" >&2
     ln -sfn "$P" "$DATA/bin/adage-exec" && LINKED=1
   fi
 fi
-[ -n "$LINKED" ] || skip "no adage-exec or adage binary found; install Adage and start a new session"
+[ -n "$LINKED" ] || fail "no binary for $(uname -s)-$(uname -m); install with brew install stevenvaughanbooth/tap/adage or npm i -g @adage/cli"
 exec "$DATA/bin/adage-exec" hook claude SessionStart
