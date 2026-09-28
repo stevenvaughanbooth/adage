@@ -1,5 +1,7 @@
 # Track G: Graph and prediction engine v2
 
+> **Status (2026-09-28, later): the learner forms real repositories' reflexes** (command variants, sibling-directory globs, checks after an edit, distinct tasks; [status note](#status-note-real-traces-2026-09-28)).
+>
 > **Status (2026-09-28): G5 implemented: the graph engine is the only learner.** The miners, route kinds and `learn.engine` are gone; every reflex is written to `<repo>/learned` ([status note](#status-note-g5-2026-09-28)). The notes below describe earlier milestones as they were.
 >
 > **Status (2026-09-27, later): G0 implemented; G1 integrated behind `LearnParams.engine`.** The default engine is still `miners`, and with it behaviour is unchanged: the L0 bench reproduces the committed baseline exactly (same `params_hash`, J 0.6307).
@@ -781,3 +783,98 @@ floor (the deviations above); which change costs how much was not attributed.
 - The live datasets' misses are the miners' misses (most of their conventions have too few takers).
 - The sequence rule (deviation 3) is a threshold on adjacency, chosen on the demo and newkinds.
 - ~~A directive delivered twice at one edit (obligation and sequence)~~ Closed in the launch polish: a sequence that begins with the obligation's command carries it (the runtime delivers the sequence alone; met by its first step, a Stop request if not), which recovered the L0 bench to J 0.6307.
+
+## Status note: real traces (2026-09-28)
+
+**The learner forms the reflexes a developer would expect from real traces.** Dogfood: 38 real
+Claude Code traces of engineers building Adage (a Rust workspace; sub-agent transcripts included),
+conditioned with default thresholds in a scratch `ADAGE_HOME`. Before this change, no learned reflex
+formed. After it (`adage review`):
+
+| Route | Trigger | Step | Strength | Evidence |
+| --- | --- | --- | --- | --- |
+| `finish-line-0ba99a` (obligation) | after an edit to `crates/**/*.rs` | `cargo fmt --all` | fire | 25/26 traces, Wilson lower bound 0.81 |
+| `run-b53bf7` (a check) | after an edit to `crates/**/*.rs` | `cargo clippy --workspace --all-targets --locked -- -D warnings` | prime | 20/26, 0.58 |
+| `run-6e3b86` (a check) | after an edit to `crates/**/*.rs` | `cargo test --workspace --locked` | prime | 19/26, 0.54 |
+
+Nothing else is delivered: the checks after `docs/*.md` edits are explained by the Rust edits in
+the same traces, and `cargo fmt --all --check` after a Rust edit checks what the obligation
+already owes. The causes, and what changed (`adage-graph/src/compile/{variants,glob,shapes}.rs`,
+`adage-graph/src/mine/seq.rs`, `adage-learn/src/{engine,bridge}.rs`):
+
+1. **Command variants** (`compile::variants`). Agents ran `cargo test -p adage-cli`,
+   `cargo test --workspace --locked --no-fail-fast`, `cargo test -j4 --workspace --locked`, …: no
+   spelling held 80% of the runs, so nothing was directed. A continuation item now directs its
+   family's **covering variant** when no spelling dominates: a command line agents actually ran,
+   successfully, in at least `learn.min_support` traces, that covers at least 80% of the family's
+   runs. W covers V when V meets W (W plus options), or when V narrows W: the same identity and
+   effect class, every option of W that selects a part of the repository (`-p`, `--lib`, `-C`,
+   `--test`, …) present in V, and each operand of W selecting at least what V's does (a
+   directory selects the files under it, `tests` covers `tests/test_x.py::t`); options that select
+   nothing (`-j4`, `--locked`, `--no-fail-fast`) may differ. So the directed command is always one
+   agents ran, and the most common repo-wide form wins only when it covers the narrowings. The
+   judge counts a trace's run of any covered variant as evidence for W (`engine::Want`).
+2. **Glob fragmentation** (`glob::widen`, `shapes::widen_repo_wide`). Evidence was split per
+   sibling directory (`crates/adage-cli/src/*.rs`, `crates/adage-eval/src/*.rs`, …). After-edit
+   routes that direct the same repo-wide step (no operand or option selects a part), or the same
+   scoped step with its `{part}` slot, are generalised together to the least general glob that
+   covers them and is precise over the tree (precision over the tree's files of that extension):
+   the siblings' glob (`crates/*/src/*.rs`), their common prefix (`crates/**/*.rs`), then, for a
+   repo-wide command only, `**/*.rs`. Evidence is counted again on the new glob.
+3. **Effects of compound and redirected commands** (`bridge::effect_of`). `cargo fmt --all &&
+   cargo clippy …` was classified as a whole (author, when a later part commits or the output is
+   redirected), so every part was dropped as a target. Each part now keeps its own class, and a
+   command whose output is redirected to a log is still the command it ran. The judge reads
+   compound steps part by part.
+4. **Checks after an edit compile** (shape table: `one Regenerate/Verify Act` after
+   `last(edit)`). A verify after an edit compiles to `after_edit → run`, delivered at prime at
+   most (never fire, no Stop request). To keep it from being the agent's habit rather than the
+   repository's (the G3 reason for leaving it out), it must beat even the one-sided 90% Wilson
+   upper bound of its rate in traces that made no such edit by `learn.finish_line_contrast`
+   (a handful of such traces proves little), it must span two distinct tasks (below), a check of
+   what an obligation already owes is dropped, and among routes directing the same step on
+   different globs, a route is kept only when the traces that edited its files and none of a
+   stronger route's still ran the step (**explaining away**: clippy after docs edits).
+5. **The miner's beam** (`mine::seq`) keeps one slot, at the root, for the best head-level edit
+   before the target: in busy traces housekeeping between the last edit and the finishing steps
+   outranked it and no `edit → check` pattern was grown.
+6. **Distinct tasks** (`engine::one_task`). A directing route's supporting traces must span at
+   least two tasks (a trace's task is its normalised first prompt): RepoBench's nascent reflexes
+   were one task's scratch script, repeated by arms and reruns.
+7. **Parameterised test runs** (`shapes::segment_template`). A test run whose path argument goes
+   on past the edited part (`npm test -- packages/runtime-core/__tests__/x.spec.ts`) also stands
+   for its part's directory (`npm test -- packages/{part}`); the template covering most runs wins,
+   bound at runtime from the edited path (`edit_segment`). The parts are the segments the traces
+   edited under the item's parent directory, so one item's single part still shows the part
+   varying. A glob that fixes the segment (`tests/**/*.py`) writes it into the command.
+
+**RepoBench-Local traces** (offline, `--demo`, no instincts, every archived trace; `adage eval
+routes` against `evals/repobench/conventions`):
+
+| Repository | Traces | Before | After | Conventions |
+| --- | --- | --- | --- | --- |
+| attrs | 58 | 0 routes (4 nascent scratch-script routes in the report's run) | 0 routes | 0/1 |
+| click | 98 | 0 | 0 | 0/1 |
+| marshmallow | 43 | 0 | 0 | 0/1 |
+| urfave-cli | 43 | 0 | 0 | 0/1 |
+| vue-core | 35 | 0 | `npm test -- packages/{part}` after an edit to `packages/**/*.ts` (prime, 20/30) | 0/2 (scored false: the convention spells it `pnpm test {part} --run`; its notes call `npx vitest run packages/<pkg>` the same) |
+
+The Python repositories' convention is a dead end (`pytest` is only in `.venv`), but their traces
+recover by installing (`pip install pytest`, `pip install -e .`), an environment step, not by the
+`.venv` interpreter, so no avoid is learnable from them; click's `.venv/bin/python -m pytest tests
+-xvs` after test edits misses the contrast bar (0.29). urfave-cli's `make generate` sequence was
+never run by the agents. No scratch-script reflex forms any more.
+
+**Gates.** L0 bench J 0.6307, unchanged (route precision 1.0; not re-blessed). Parity, gates,
+fidelity, G4 and the gen suites pass with no new false route. `crates/adage-learn/tests/rust_workspace.rs`
+holds an anonymised fixture distilled from the dogfood traces (invented crates, prompts and paths)
+and asserts the three reflexes above form, with no docs reflex, no `--check` beside the
+obligation and no narrow run directed. `live_learn.rs`: a first learn may now log an instinct the
+traces confirm as extinguished (the learned dead end replaces it).
+
+**Gaps.** Dead ends whose working command varies (a per-trace test file) direct the covering form
+only when agents ran it; none did on RepoBench. A parameterised command is bound only from an
+edited path segment: a test file matching the edited source (`tests/test_x.py` for
+`src/x.py`), or a placeholder left to the agent, is not built. Task identity is the first prompt,
+not an intent cluster. The explaining-away rule needs traces that edited one glob and not the
+other.

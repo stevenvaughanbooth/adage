@@ -193,35 +193,58 @@ fn directable(lit: &str) -> bool {
     !lit.contains('{') && !lit.contains('\'') && io::safe_command(lit) && !housekeeping(lit)
 }
 
-/// The covering variant of an item's family ([`variants`]), when its members disagree.
-fn covering(v: &ItemView, input: &Input) -> Option<String> {
-    let family: Vec<variants::Variant> = v
-        .members
-        .iter()
-        .filter_map(|(k, n)| {
-            let a = input.corpus.acts.get(k)?;
-            let (lit, _) = input.corpus.literal(k)?;
-            Some(variants::Variant {
+/// The covering variant of an item's family ([`variants`]), when its members disagree: every
+/// command line agents ran under the item's member keys, weighted by the member's matches at this
+/// item and split over its literals by how often each ran. Returns (key, command line).
+fn covering(v: &ItemView, input: &Input) -> Option<(String, String)> {
+    let table = adage_core::CommandTable::load();
+    let mut family: Vec<variants::Variant> = Vec::new();
+    for (k, n) in &v.members {
+        let (Some(a), Some(effect)) = (input.corpus.acts.get(k), input.corpus.effect(k)) else { continue };
+        let total: u32 = a.literals.values().map(|(_, c)| c).sum();
+        for (lit, (_, c)) in &a.literals {
+            // The member's matches here, shared by its literals (at least one run each).
+            let runs = ((*n as u64 * *c as u64) / total.max(1) as u64).max(1) as u32;
+            family.push(variants::Variant {
                 key: k.clone(),
-                runs: *n,
-                ok_sessions: a.ok_sessions,
-                effect: input.corpus.effect(k)?,
-                directable: !k.contains('{') && directable(lit),
-            })
-        })
-        .collect();
-    variants::covering(&family, input.params.min_sessions, input.params.dominant).map(|(k, _)| k)
+                command: lit.clone(),
+                runs,
+                ok_sessions: a.literal_ok.get(lit).copied().unwrap_or(0),
+                effect: max_effect(effect, io::classify(lit, &table)),
+                directable: directable(lit),
+            });
+        }
+    }
+    variants::covering(&family, input.params.min_sessions, input.params.dominant).map(|(k, c, _)| (k, c))
 }
 
 /// A command a continuation item directs: its dominant variant's literal, when that has no
 /// placeholder (a variable argument with no bound source is not directable).
 fn fixed_command(v: &ItemView, target: Option<&str>, input: &Input) -> Result<(String, String, Effect), String> {
     let key = match target {
-        Some(t) => t.to_string(),
-        None => dominant(v, input.params.dominant)
-            .or_else(|| covering(v, input))
-            .ok_or_else(|| format!("{} is ambiguous", v.label))?,
+        Some(t) => Some(t.to_string()),
+        None => dominant(v, input.params.dominant),
     };
+    let first = key.map(|k| dominant_literal(k, input));
+    if let Some(Ok(x)) = first {
+        return Ok(x);
+    }
+    // No one spelling dominates: the family's covering variant, a command line agents ran that
+    // covers the others ([`variants`]).
+    if let Some((key, lit)) = covering(v, input) {
+        let table = adage_core::CommandTable::load();
+        let effect = max_effect(input.corpus.effect(&key).unwrap_or(Effect::Environment), io::classify(&lit, &table));
+        return Ok((key, lit, effect));
+    }
+    match first {
+        Some(Err(e)) => Err(e),
+        _ => Err(format!("{} is ambiguous", v.label)),
+    }
+}
+
+/// The literal a dominant key directs: its most common one, which must be a fixed, plain command
+/// and, for a key with a placeholder, itself dominant among the key's literals.
+fn dominant_literal(key: String, input: &Input) -> Result<(String, String, Effect), String> {
     let (lit, _) = input.corpus.literal(&key).ok_or_else(|| format!("no trace ran {key}"))?;
     if lit.contains('{') || lit.contains('\'') || !io::safe_command(lit) {
         return Err(format!("{lit:?} is not a fixed, plain command"));
@@ -243,8 +266,13 @@ fn fixed_command(v: &ItemView, target: Option<&str>, input: &Input) -> Result<(S
     Ok((key, lit.to_string(), effect))
 }
 
-/// The one template of a flow-bound command: every literal variant of the item's members with the
-/// component that is segment `depth` of an edited member path replaced by `{part}`.
+/// The one template of a flow-bound command: the literal variants of the item's members with the
+/// component that is segment `depth` of an edited member path replaced by `{part}`
+/// (`make -C packages/{part} check`, `cargo test -p {part}`). A path argument that goes on past the
+/// segment (one test file of the part: `npm test -- packages/runtime-core/__tests__/x.spec.ts`)
+/// also stands for its part's directory (`npm test -- packages/{part}`): the part's tests, the
+/// family's stable prefix with the variable part bound to what was edited. The template covering
+/// at least `dominant` of the runs ([`variants::covers`]; the most runs of its own first) wins.
 fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(String, u8, Effect)> {
     let keys = member_keys(v);
     let mut lits: Vec<(&Vec<String>, u32)> = Vec::new();
@@ -255,15 +283,35 @@ fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(St
     }
     let max_depth = edits.iter().map(|p| p.split('/').count()).max().unwrap_or(0).min(8);
     for depth in 0..max_depth.saturating_sub(1) {
-        let segs: BTreeSet<&str> = edits.iter().filter_map(|p| p.split('/').nth(depth)).collect();
+        // The parts: the segment at `depth` of every path the traces edited under the item's
+        // parent directory (`packages/` for `packages/runtime-core/src/x.ts`), so one item's single
+        // part still shows the part varying across the repository's traces.
+        let parent: BTreeSet<Vec<&str>> = edits.iter().map(|p| p.split('/').take(depth).collect::<Vec<_>>()).collect();
+        if parent.len() != 1 || edits.iter().any(|p| p.split('/').count() <= depth + 1) {
+            continue;
+        }
+        let parent = parent.into_iter().next().expect("one parent");
+        let segs: BTreeSet<&str> = input
+            .corpus
+            .edited
+            .iter()
+            .chain(edits.iter())
+            .filter(|p| p.split('/').count() > depth + 1)
+            .filter(|p| p.split('/').take(depth).eq(parent.iter().copied()))
+            .filter_map(|p| p.split('/').nth(depth))
+            .collect();
         if segs.len() < 2 {
             continue;
         }
-        let mut templates: BTreeMap<String, u32> = BTreeMap::new();
+        // Each run's full template, and the templates standing for it (itself, and its part's
+        // directory), with the runs each stands for itself.
+        let mut full: Vec<(String, u32)> = Vec::new();
+        let mut own: BTreeMap<String, u32> = BTreeMap::new();
         let mut total = 0;
         for (argv, n) in &lits {
             total += n;
             let mut done = false;
+            let mut cut: Option<Vec<String>> = None;
             let t: Vec<String> = argv
                 .iter()
                 .map(|tok| {
@@ -276,23 +324,56 @@ fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(St
                             done = true;
                             let mut q: Vec<String> = parts.iter().map(|p| p.to_string()).collect();
                             q[i] = "{part}".into();
+                            if i + 1 < q.len() && !tok.starts_with('-') {
+                                cut = Some(q[..=i].to_vec());
+                            }
                             q.join("/")
                         }
                         None => tok.clone(),
                     }
                 })
                 .collect();
-            if done {
-                *templates.entry(stable::shell_join(&t)).or_default() += n;
+            if !done {
+                continue;
+            }
+            let f = stable::shell_join(&t);
+            *own.entry(f.clone()).or_default() += n;
+            if let Some(c) = cut {
+                let dir = c.join("/");
+                let short: Vec<String> = t
+                    .iter()
+                    .map(|x| if x.contains("{part}") && x.starts_with(&dir) { dir.clone() } else { x.clone() })
+                    .collect();
+                let s = stable::shell_join(&short);
+                if s != f {
+                    *own.entry(s).or_default() += n;
+                }
+            }
+            full.push((f, *n));
+        }
+        let mut best: Option<(u32, u32, &String)> = None;
+        for (t, n) in &own {
+            if !io::safe_command(t) {
+                continue;
+            }
+            let Some(ts) = variants::shape(t) else { continue };
+            let covered: u32 = full
+                .iter()
+                .filter(|(f, _)| variants::shape(f).is_some_and(|fs| variants::covers(&ts, &fs, true)))
+                .map(|(_, c)| c)
+                .sum();
+            if total == 0 || (covered as f64) < input.params.dominant * total as f64 - 1e-9 {
+                continue;
+            }
+            if best.is_none_or(|(o, c, b)| (*n, covered, std::cmp::Reverse(t)) > (o, c, std::cmp::Reverse(b))) {
+                best = Some((*n, covered, t));
             }
         }
-        if let Some((t, n)) = templates.iter().max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0))) {
-            if total > 0 && *n as f64 / total as f64 >= input.params.dominant && io::safe_command(t) {
-                let effect = keys.iter().filter_map(|k| input.corpus.effect(k)).fold(Effect::Observe, max_effect);
-                let filled = t.replace("{part}", "x");
-                let effect = max_effect(effect, io::classify(&filled, &adage_core::CommandTable::load()));
-                return Some((t.clone(), depth as u8, effect));
-            }
+        if let Some((_, _, t)) = best {
+            let effect = keys.iter().filter_map(|k| input.corpus.effect(k)).fold(Effect::Observe, max_effect);
+            let filled = t.replace("{part}", "x");
+            let effect = max_effect(effect, io::classify(&filled, &adage_core::CommandTable::load()));
+            return Some((t.clone(), depth as u8, effect));
         }
     }
     None
@@ -556,7 +637,7 @@ impl<'a> Builder<'a> {
                 }
                 // The repository's check after editing these files: a run, prime at most (the
                 // judge caps it), never an obligation with a Stop request.
-                Effect::Verify if cont.len() == 1 => ("run", Step::Run { command: fixed[0].1.clone() }, first, false),
+                Effect::Verify => ("run", Step::Run { command: fixed[0].1.clone() }, first, false),
                 _ => {
                     self.drop(
                         r,
@@ -844,12 +925,32 @@ fn repo_wide_step(step: &Step) -> bool {
 /// built from the route with the most support (its evidence is counted again on the new glob by
 /// the judge). Routes whose glob does not widen are kept as they are.
 fn widen_repo_wide(out: Vec<Compiled>, input: &Input) -> Vec<Compiled> {
-    let mut groups: BTreeMap<(&'static str, String), Vec<usize>> = BTreeMap::new();
+    // A step scoped by the edited part (`npm test -- packages/{part}`) answers an edit in any
+    // sibling part the same way: it widens too, its slot's glob with it.
+    let segment_depth = |c: &Compiled| -> Option<Option<u8>> {
+        let depths: BTreeSet<u8> = c
+            .route
+            .slots
+            .iter()
+            .map(|s| match &s.source {
+                SlotSource::EditSegment { depth, .. } => Some(*depth),
+                _ => None,
+            })
+            .collect::<Option<_>>()?;
+        match depths.len() {
+            0 => repo_wide_step(&c.route.step).then_some(None),
+            1 => Some(depths.into_iter().next()),
+            _ => None,
+        }
+    };
+    let mut groups: BTreeMap<(&'static str, String, Option<u8>), Vec<usize>> = BTreeMap::new();
     for (i, c) in out.iter().enumerate() {
-        if matches!(c.route.trigger, Trigger::AfterEdit { .. }) && c.route.slots.is_empty() && repo_wide_step(&c.route.step)
-        {
+        if !matches!(c.route.trigger, Trigger::AfterEdit { .. }) {
+            continue;
+        }
+        if let Some(depth) = segment_depth(c) {
             let step = serde_json::to_string(&c.route.step).unwrap_or_default();
-            groups.entry((c.shape, step)).or_default().push(i);
+            groups.entry((c.shape, step, depth)).or_default().push(i);
         }
     }
     let glob_of = |c: &Compiled| match &c.route.trigger {
@@ -858,11 +959,18 @@ fn widen_repo_wide(out: Vec<Compiled>, input: &Input) -> Vec<Compiled> {
     };
     let mut replaced: BTreeSet<usize> = BTreeSet::new();
     let mut added: Vec<Compiled> = Vec::new();
-    for ((shape, _), idx) in groups {
+    for ((shape, _, depth), idx) in groups {
         let globs: Vec<String> = idx.iter().map(|&i| glob_of(&out[i])).collect::<BTreeSet<_>>().into_iter().collect();
         let p = input.params;
         let wide = glob::widen(&globs, &input.corpus.tree, &input.corpus.touched, p.glob_precision);
-        if wide == globs {
+        // A part is a segment under a fixed parent: a glob that widens past it binds nothing.
+        let fixed_parent = |g: &String| {
+            depth.is_none_or(|d| {
+                g.split('/').take(d as usize + 1).count() == d as usize + 1
+                    && !g.split('/').take(d as usize).any(|x| x.contains('*'))
+            })
+        };
+        if wide == globs || !wide.iter().all(fixed_parent) {
             continue;
         }
         let best = *idx
@@ -880,16 +988,42 @@ fn widen_repo_wide(out: Vec<Compiled>, input: &Input) -> Vec<Compiled> {
         for g in wide.iter().filter(|g| !globs.contains(g)) {
             let mut c = out[best].clone();
             c.route.trigger = Trigger::AfterEdit { paths: g.clone() };
+            for s in c.route.slots.iter_mut() {
+                if let SlotSource::EditSegment { glob, .. } = &mut s.source {
+                    *glob = g.clone();
+                }
+            }
             let cmd = super::commands(&c.route.step).first().map(|x| x.to_string()).unwrap_or_default();
             c.route.id = if c.fixed_id && shape == "obligation" {
                 stable::finish_line_id(g, &cmd)
             } else {
-                ids::route_id(shape, &c.route.trigger, &c.route.step, &[])
+                ids::route_id(shape, &c.route.trigger, &c.route.step, &c.route.slots)
             };
             added.push(c);
         }
     }
     out.into_iter().enumerate().filter(|(i, _)| !replaced.contains(i)).map(|(_, c)| c).chain(added).collect()
+}
+
+/// A scoped run whose glob fixes the bound segment (`tests/**/*.py` at depth 0) binds one value
+/// only: the segment is written into the command (`pytest tests -xvs`) and the slot dropped.
+fn fix_parts(mut c: Compiled) -> Compiled {
+    let (Trigger::AfterEdit { paths }, Step::Run { command }) = (&c.route.trigger, &c.route.step) else { return c };
+    let [Slot { source: SlotSource::EditSegment { depth, .. }, name, .. }] = c.route.slots.as_slice() else { return c };
+    let segs: Vec<&str> = paths.split('/').collect();
+    let d = *depth as usize;
+    let fixed = segs.len() > d + 1 && segs[..=d].iter().all(|s| !s.contains('*'));
+    if !fixed {
+        return c;
+    }
+    let command = command.replace(&format!("{{{name}}}"), segs[d]);
+    if command.contains('{') {
+        return c;
+    }
+    c.route.step = Step::Run { command };
+    c.route.slots.clear();
+    c.route.id = ids::route_id(c.shape, &c.route.trigger, &c.route.step, &[]);
+    c
 }
 
 /// Compile (see [`super::compile`]).
@@ -919,7 +1053,13 @@ pub fn compile(input: &Input) -> Output {
                     (Some(_), Some(wkey)) => {
                         let ok_verify = |k: &str| input.corpus.effect(k) == Some(Effect::Verify);
                         let runner_keys: Vec<String> = member_keys(x).into_iter().filter(|k| ok_verify(k)).collect();
-                        let instead = input.corpus.literal(&wkey).map(|(l, _)| l.to_string());
+                        // A working command with a variable argument (one test file per trace) is
+                        // named by its family's covering form, never by one trace's file.
+                        let instead = if wkey.contains('{') {
+                            y.and_then(|y| covering(y, input)).map(|(_, l)| l)
+                        } else {
+                            input.corpus.literal(&wkey).map(|(l, _)| l.to_string())
+                        };
                         match instead {
                             Some(instead)
                                 if ok_verify(&wkey) && !runner_keys.is_empty() && io::safe_command(&instead) =>
@@ -952,7 +1092,7 @@ pub fn compile(input: &Input) -> Output {
     }
     b.finish_avoids();
     let out = std::mem::take(&mut b.out);
-    b.out = widen_repo_wide(out, input);
+    b.out = widen_repo_wide(out, input).into_iter().map(fix_parts).collect();
     // Interlocking before emission: a run or sequence directing an avoided runner is dropped.
     let avoided: Vec<String> = b
         .out

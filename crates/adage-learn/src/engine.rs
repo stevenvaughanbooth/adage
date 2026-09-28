@@ -152,7 +152,7 @@ struct Want {
 
 impl Want {
     fn new(command: String) -> Want {
-        let shape = adage_core::pattern::Shape::of_command(&command);
+        let shape = compile::variants::shape(&command);
         let effect = io::classify(&command, &adage_core::CommandTable::load());
         Want { command, shape, effect }
     }
@@ -165,8 +165,7 @@ impl Want {
         ok_parts(st).iter().any(|(lit, e)| {
             *lit == self.command
                 || self.shape.as_ref().is_some_and(|w| {
-                    adage_core::pattern::Shape::of_command(lit)
-                        .is_some_and(|v| compile::variants::covers(w, &v, *e == self.effect))
+                    compile::variants::shape(lit).is_some_and(|v| compile::variants::covers(w, &v, *e == self.effect))
                 })
         })
     }
@@ -192,6 +191,8 @@ struct Count {
     open: BTreeSet<String>,
     support: BTreeSet<String>,
     rate_without: f64,
+    /// (ran the step, traces) among the traces the trigger did not occur in.
+    without: (u32, u32),
     deviations_failed: u32,
 }
 
@@ -241,7 +242,14 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
         }
     }
     let rate_without = if not_editing == 0 { 0.0 } else { ran_without as f64 / not_editing as f64 };
-    Some(Count { opportunities: opp, open, support, rate_without, deviations_failed: failed })
+    Some(Count {
+        opportunities: opp,
+        open,
+        support,
+        rate_without,
+        without: (ran_without, not_editing),
+        deviations_failed: failed,
+    })
 }
 
 /// The share of an after-edit sequence's traces that must run its steps one right after another
@@ -294,7 +302,7 @@ fn count_after_command(r: &Route, sessions: &[&Session]) -> Option<Count> {
             support.insert(s.id.clone());
         }
     }
-    Some(Count { opportunities: opp, open, support, rate_without: 0.0, deviations_failed: 0 })
+    Some(Count { opportunities: opp, open, support, rate_without: 0.0, without: (0, 0), deviations_failed: 0 })
 }
 
 /// An avoid over the traces: those that ran an avoided runner (the opportunities), and those
@@ -333,7 +341,14 @@ fn count_avoid(runners: &[&str], instead: &str, sessions: &[&Session]) -> Count 
             support.insert(s.id.clone());
         }
     }
-    Count { opportunities: opp, open: BTreeSet::new(), support, rate_without: 0.0, deviations_failed: 0 }
+    Count {
+        opportunities: opp,
+        open: BTreeSet::new(),
+        support,
+        rate_without: 0.0,
+        without: (0, 0),
+        deviations_failed: 0,
+    }
 }
 
 /// A read batch over the traces: those whose run of `key` listed files (in JSON, or repository
@@ -424,6 +439,51 @@ pub fn judge_read_batch(r: &Route, sessions: &[&Session], cfg: &LearnConfig) -> 
     })
 }
 
+/// The z of the one-sided 90% bound a check after an edit is contrasted with.
+const CHECK_Z: f64 = 1.2816;
+
+/// The Wilson score interval's upper bound at `z` (1 with no trials).
+fn wilson_upper(k: u32, n: u32, z: f64) -> f64 {
+    if n == 0 {
+        return 1.0;
+    }
+    let (n, p) = (n as f64, k as f64 / n as f64);
+    let z2 = z * z;
+    ((p + z2 / (2.0 * n) + z * (p * (1.0 - p) / n + z2 / (4.0 * n * n)).sqrt()) / (1.0 + z2 / n)).min(1.0)
+}
+
+/// At least this many distinct tasks must support a directing route.
+const MIN_TASKS: usize = 2;
+
+/// The task a trace worked on, as far as the trace shows it: its first prompt, normalised (case
+/// and spacing). Repeats of one task (arms, retries, reruns) share it; a trace with no prompt is a
+/// task of its own.
+fn task_of(s: &Session) -> String {
+    let p: String =
+        s.prompt.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase().chars().take(240).collect();
+    if p.is_empty() {
+        format!("\u{0}{}", s.id)
+    } else {
+        p
+    }
+}
+
+/// Support must span distinct tasks (`MIN_TASKS`): steps repeated by reruns of one task (its
+/// scratch script, run after each edit in every attempt at it) are that task's, not the
+/// repository's. It applies to the steps a trigger directs (after an edit or a command); an
+/// avoid is a failure of the environment (`No module named pytest`), the same whatever the task.
+fn one_task(ss: &[&Session], support: &BTreeSet<String>) -> Result<(), String> {
+    let tasks: BTreeSet<String> = ss.iter().filter(|s| support.contains(&s.id)).map(|s| task_of(s)).collect();
+    if tasks.len() < MIN_TASKS {
+        return Err(format!(
+            "its {} supporting traces worked on {} task(s), fewer than {MIN_TASKS}",
+            support.len(),
+            tasks.len()
+        ));
+    }
+    Ok(())
+}
+
 /// Judge one compiled route (see the module documentation); `Err` drops it.
 fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], prior: bool) -> Result<Route, String> {
     let seen: Vec<&Session> = ss.iter().copied().filter(|s| !exposed(s, &r)).collect();
@@ -512,8 +572,25 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
     if n < cfg.min_support && outcome_gate(r.effect, by_edit, lift.as_ref(), cfg).is_none() {
         return Err(format!("{n} supporting traces, fewer than {}", cfg.min_support));
     }
+    one_task(&seen, &c.support)?;
     if by_edit && rate - c.rate_without < cfg.finish_line_contrast {
         return Err(format!("contrast {:.2} below {}", rate - c.rate_without, cfg.finish_line_contrast));
+    }
+    // A check after an edit must not be what agents run anyway: the contrast must hold between
+    // the bounds, the one-sided 90% lower bound of its rate after the edit against the upper bound
+    // of its rate in the traces that made no such edit (a handful of traces on either side proves
+    // little). A regeneration owed by an edit is not run without one, and a check scoped to the
+    // edited part names what was edited: both keep the plain contrast.
+    if by_edit && r.effect == Effect::Verify && r.slots.is_empty() {
+        let (k, m) = c.without;
+        let upper = wilson_upper(k, m, CHECK_Z);
+        let lower = 1.0 - wilson_upper(c.opportunities - n, c.opportunities, CHECK_Z);
+        if lower - upper < cfg.finish_line_contrast {
+            return Err(format!(
+                "a check agents may run anyway: {n} of {} traces after the edit (lower bound {lower:.2}), {k} of {m} without it (upper bound {upper:.2})",
+                c.opportunities
+            ));
+        }
     }
     let lb = wilson_lower(n, c.opportunities);
     // An instinct's prior enters the prime test only (3 traces at 0.7).
@@ -596,7 +673,9 @@ fn explain_away(routes: &mut Vec<Judged>, ss: &[&Session], cfg: &LearnConfig, re
                 let alone: Vec<&Session> = ss
                     .iter()
                     .copied()
-                    .filter(|s| !exposed(s, r) && !s.steps.iter().any(|st| edited(st).is_some_and(|p| glob_hit(&kg, p))))
+                    .filter(|s| {
+                        !exposed(s, r) && !s.steps.iter().any(|st| edited(st).is_some_and(|p| glob_hit(&kg, p)))
+                    })
                     .collect();
                 let c = count_after_edit(r, &alone);
                 let (n, opp) = c.map_or((0, 0), |c| (c.support.len() as u32, c.opportunities));

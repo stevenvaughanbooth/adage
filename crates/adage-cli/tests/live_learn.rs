@@ -273,6 +273,11 @@ fn learn_auto_logs_what_changed() {
     let changes = l["changes"].as_array().unwrap();
     assert!(changes.len() >= 3, "{l}");
     for c in changes {
+        // An instinct the traces confirm gives way to the learned reflex in the same learn.
+        if c["change"] == "extinguished" && c["track"].as_str().is_some_and(|t| t.ends_with("/instincts")) {
+            assert!(c["summary"].as_str().unwrap().contains("confirmed by traces"), "{c}");
+            continue;
+        }
         assert!(["new", "nascent"].contains(&c["change"].as_str().unwrap()), "first learn: every route is new: {c}");
         assert!(c["from"].is_null() && c["to"].is_string() && c["summary"].is_string(), "{c}");
         assert!(c["track"].as_str().unwrap().starts_with("acme-billing-path-"), "{c}");

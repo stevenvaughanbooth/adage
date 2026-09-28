@@ -151,8 +151,9 @@ pub fn widen(globs: &[String], tree: &BTreeSet<String>, touched: &BTreeSet<Strin
         let mut candidates: Vec<String> = Vec::new();
         let segs: Vec<Vec<&str>> = dirs.iter().map(|(d, _)| d.split('/').collect()).collect();
         if dirs.iter().all(|(d, deep)| !deep && !d.is_empty()) && segs.iter().all(|s| s.len() == segs[0].len()) {
-            let sib: Vec<&str> =
-                (0..segs[0].len()).map(|i| if segs.iter().all(|s| s[i] == segs[0][i]) { segs[0][i] } else { "*" }).collect();
+            let sib: Vec<&str> = (0..segs[0].len())
+                .map(|i| if segs.iter().all(|s| s[i] == segs[0][i]) { segs[0][i] } else { "*" })
+                .collect();
             candidates.push(format!("{}/*.{e}", sib.join("/")));
         }
         let mut prefix: Vec<&str> = segs[0].clone();

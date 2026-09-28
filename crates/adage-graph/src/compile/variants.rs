@@ -57,47 +57,88 @@ fn is_path_like(t: &str) -> bool {
     t.contains('/') || (t.contains('.') && !t.starts_with('-'))
 }
 
+/// Whether an option selects part of the repository (`-p adage-cli`, `--lib`, `-C packages/a`).
+fn narrowing(o: &str) -> bool {
+    let mut parts = o.splitn(2, [' ', '=']);
+    let flag = parts.next().unwrap_or_default();
+    match parts.next() {
+        // `--workspace` alone widens; `-w <name>` (npm) selects.
+        Some(v) => NARROWING_VALUE_FLAGS.contains(&flag) && !v.chars().all(|c| c.is_ascii_digit()) && v != "{n}",
+        None => NARROWING_FLAGS.contains(&flag),
+    }
+}
+
 /// Whether a command, as a [`Shape`], runs its identity over the whole repository: no option
 /// selects a part of it (a package, a directory, a test target), and no operand names a path.
 pub fn repo_wide(s: &Shape) -> bool {
-    let narrowing_option = s.options.iter().any(|o| {
-        let mut parts = o.splitn(2, [' ', '=']);
-        let flag = parts.next().unwrap_or_default();
-        match parts.next() {
-            // `--workspace` alone widens; `-w <name>` (npm) selects.
-            Some(v) => NARROWING_VALUE_FLAGS.contains(&flag) && !v.chars().all(|c| c.is_ascii_digit()) && v != "{n}",
-            None => NARROWING_FLAGS.contains(&flag),
-        }
-    });
-    !narrowing_option && !s.positionals.iter().any(|p| is_path_like(p) || p.starts_with('{'))
+    !s.options.iter().any(|o| narrowing(o)) && !s.positionals.iter().any(|p| is_path_like(p) || p.starts_with('{'))
+}
+
+/// Whether operand `w` selects at least what `v` does: the same operand (a slot matches any), or
+/// a directory `v` lies under (`tests` or `tests/` for `tests/test_core.py::test_x`).
+fn contains(w: &str, v: &str) -> bool {
+    w == v || slot(w) || {
+        let dir = w.trim_end_matches('/');
+        !dir.is_empty()
+            && !dir.starts_with('-')
+            && v.strip_prefix(dir).is_some_and(|rest| rest.starts_with('/') || rest.starts_with("::"))
+    }
+}
+
+fn slot(t: &str) -> bool {
+    t.len() >= 2 && t.starts_with('{') && t.ends_with('}')
+}
+
+/// Whether two options are the same, a slot matching any value (`-p {part}` and `-p adage-cli`).
+fn same_option(a: &str, b: &str) -> bool {
+    let (fa, va) = a.split_once([' ', '=']).unwrap_or((a, ""));
+    let (fb, vb) = b.split_once([' ', '=']).unwrap_or((b, ""));
+    fa == fb && (va == vb || slot(va) || slot(vb))
 }
 
 /// Whether directed command `w` covers observed command `v` (see the module documentation).
 /// `same_effect` says whether the two have the same effect class (a narrowing must).
+///
+/// A narrowing keeps `w`'s identity and every option of `w` that selects a part (so
+/// `cargo test -p {part}` covers `cargo test -p {part} --test cli`, and never another package's
+/// run), and each of `w`'s operands selects at least what `v`'s does (`pytest tests` covers
+/// `pytest tests/test_core.py::test_x -xvs`); options that select nothing (`-j4`, `-q`,
+/// `--locked`) may differ.
 pub fn covers(w: &Shape, v: &Shape, same_effect: bool) -> bool {
     if w.met_by(v) {
         return true;
     }
     same_effect
         && w.same_identity(v)
-        && repo_wide(w)
+        && w.options.iter().filter(|o| narrowing(o)).all(|o| v.options.iter().any(|x| same_option(o, x)))
         && v.positionals.len() >= w.positionals.len()
-        && w.positionals.iter().zip(&v.positionals).all(|(a, b)| a == b)
+        && w.positionals.iter().zip(&v.positionals).all(|(a, b)| contains(a, b))
+}
+
+/// A command line read as it was typed, operands untemplated (`tests/test_x.py` stays itself, so
+/// one test file's run is not another's).
+pub fn shape(command: &str) -> Option<Shape> {
+    let toks: Vec<String> = command.split_whitespace().map(str::to_string).collect();
+    Shape::of_tokens(&toks)
 }
 
 /// Whether the directed command line `directed` covers the observed command line `observed`
 /// (both plain command lines; effect classes compared by the caller).
 pub fn covers_command(directed: &str, observed: &str, same_effect: bool) -> bool {
-    match (Shape::of_command(directed), Shape::of_command(observed)) {
+    match (shape(directed), shape(observed)) {
         (Some(w), Some(v)) => covers(&w, &v, same_effect),
         _ => directed == observed,
     }
 }
 
-/// One member of a family: its key, runs, traces it succeeded in, effect rank and shape.
+/// One member of a family: a command line agents ran (a literal of one of the item's keys), how
+/// often, in how many traces it succeeded, and its effect class.
 #[derive(Debug, Clone)]
 pub struct Variant {
+    /// The command key it was run under (`exec python -m pytest {path} -x`).
     pub key: String,
+    /// The command line itself (`python -m pytest tests/test_core.py -x`).
+    pub command: String,
     pub runs: u32,
     pub ok_sessions: u32,
     pub effect: adage_core::Effect,
@@ -105,15 +146,15 @@ pub struct Variant {
     pub directable: bool,
 }
 
-/// The covering variant of a family (see the module documentation): its key, and the share of
-/// the family's runs it covers.
-pub fn covering(family: &[Variant], min_sessions: u32, dominant: f64) -> Option<(String, f64)> {
+/// The covering variant of a family (see the module documentation): its key and command line,
+/// and the share of the family's runs it covers.
+pub fn covering(family: &[Variant], min_sessions: u32, dominant: f64) -> Option<(String, String, f64)> {
     let total: u32 = family.iter().map(|v| v.runs).sum();
     if total == 0 {
         return None;
     }
-    let shapes: Vec<Option<Shape>> = family.iter().map(|v| Shape::of_key(&v.key)).collect();
-    let mut best: Option<(u32, u32, &str)> = None;
+    let shapes: Vec<Option<Shape>> = family.iter().map(|v| shape(&v.command)).collect();
+    let mut best: Option<(u32, u32, &Variant)> = None;
     for (i, w) in family.iter().enumerate() {
         let Some(ws) = &shapes[i] else { continue };
         if !w.directable || w.ok_sessions < min_sessions {
@@ -130,13 +171,15 @@ pub fn covering(family: &[Variant], min_sessions: u32, dominant: f64) -> Option<
         }
         let better = match best {
             None => true,
-            Some((c, r, k)) => (covered, w.runs, std::cmp::Reverse(w.key.as_str())) > (c, r, std::cmp::Reverse(k)),
+            Some((c, r, b)) => {
+                (covered, w.runs, std::cmp::Reverse(w.command.as_str())) > (c, r, std::cmp::Reverse(b.command.as_str()))
+            }
         };
         if better {
-            best = Some((covered, w.runs, w.key.as_str()));
+            best = Some((covered, w.runs, w));
         }
     }
-    best.map(|(c, _, k)| (k.to_string(), c as f64 / total as f64))
+    best.map(|(c, _, w)| (w.key.clone(), w.command.clone(), c as f64 / total as f64))
 }
 
 #[cfg(test)]
@@ -144,12 +187,12 @@ mod tests {
     use super::*;
     use adage_core::Effect;
 
-    fn v(key: &str, runs: u32, ok: u32, effect: Effect) -> Variant {
-        Variant { key: format!("exec {key}"), runs, ok_sessions: ok, effect, directable: true }
+    fn v(cmd: &str, runs: u32, ok: u32, effect: Effect) -> Variant {
+        Variant { key: format!("exec {cmd}"), command: cmd.into(), runs, ok_sessions: ok, effect, directable: true }
     }
 
     fn shape(c: &str) -> Shape {
-        Shape::of_command(c).unwrap()
+        super::shape(c).unwrap()
     }
 
     #[test]
@@ -194,7 +237,7 @@ mod tests {
             v("cargo test -p adage-graph --test mining", 6, 3, Effect::Verify),
             v("cargo test --workspace --locked --no-fail-fast", 4, 3, Effect::Verify),
         ];
-        assert_eq!(covering(&fam, 5, 0.8).map(|x| x.0).as_deref(), Some("exec cargo test --workspace --locked"));
+        assert_eq!(covering(&fam, 5, 0.8).map(|x| x.1).as_deref(), Some("cargo test --workspace --locked"));
         // Too few traces ran the repo-wide form successfully: nothing is directed.
         assert_eq!(covering(&fam, 13, 0.8), None);
         // Only narrow forms, none covering the rest.
@@ -202,6 +245,6 @@ mod tests {
         assert_eq!(covering(&narrow, 5, 0.8), None);
         // A dominant variant covers itself.
         let one = vec![v("make gen", 9, 9, Effect::Regenerate), v("make gen -j4", 1, 1, Effect::Regenerate)];
-        assert_eq!(covering(&one, 5, 0.8).map(|x| x.0).as_deref(), Some("exec make gen"));
+        assert_eq!(covering(&one, 5, 0.8).map(|x| x.1).as_deref(), Some("make gen"));
     }
 }

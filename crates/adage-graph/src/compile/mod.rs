@@ -117,6 +117,9 @@ pub struct ActStats {
     /// Traces in which a run of it succeeded.
     #[serde(default)]
     pub ok_sessions: u32,
+    /// Per literal, the traces in which a run of it succeeded.
+    #[serde(default)]
+    pub literal_ok: BTreeMap<String, u32>,
     /// The highest effect class of its runs.
     pub effect: Option<Effect>,
     /// Failure signatures of its failed runs.
@@ -140,6 +143,9 @@ pub struct Corpus {
     pub tree: BTreeSet<String>,
     /// Paths some trace read or edited.
     pub touched: BTreeSet<String>,
+    /// Paths some trace edited.
+    #[serde(default)]
+    pub edited: BTreeSet<String>,
 }
 
 fn effect_of(s: &str) -> Option<Effect> {
@@ -184,6 +190,7 @@ impl Corpus {
         for a in order {
             let mut keys: BTreeSet<String> = BTreeSet::new();
             let mut ok_keys: BTreeSet<String> = BTreeSet::new();
+            let mut ok_lits: BTreeSet<(String, String)> = BTreeSet::new();
             let mut runners: BTreeSet<String> = BTreeSet::new();
             let mut passed: BTreeSet<String> = BTreeSet::new();
             for (i, st) in a.session.steps.iter().enumerate().take(input::MAX_STEPS) {
@@ -195,6 +202,9 @@ impl Corpus {
                         let key = events::act_key(argv);
                         let e = c.acts.entry(key.clone()).or_default();
                         let lit = stable::shell_join(argv);
+                        if !*failed {
+                            ok_lits.insert((key.clone(), lit.clone()));
+                        }
                         e.literals.entry(lit).or_insert_with(|| (argv.clone(), 0)).1 += 1;
                         let eff = a
                             .meta
@@ -223,6 +233,9 @@ impl Corpus {
                         if !path.is_empty() && !path.starts_with('/') {
                             c.tree.insert(path.clone());
                             c.touched.insert(path.clone());
+                            if matches!(st, input::Step::Edit { .. }) {
+                                c.edited.insert(path.clone());
+                            }
                         }
                     }
                 }
@@ -232,6 +245,9 @@ impl Corpus {
             }
             for k in ok_keys {
                 c.acts.get_mut(&k).expect("seen").ok_sessions += 1;
+            }
+            for (k, l) in ok_lits {
+                *c.acts.get_mut(&k).expect("seen").literal_ok.entry(l).or_default() += 1;
             }
             for r in runners {
                 *c.runners.entry(r).or_default() += 1;

@@ -25,7 +25,7 @@ use adage_graph::input;
 pub(crate) fn effect_of(n: &Normalized) -> Effect {
     match &n.action {
         CanonicalAction::Exec { argv, .. } if n.note.starts_with("redirected to ") => {
-            adage_graph::events::classify(argv, &table())
+            adage_graph::events::classify(argv, table())
         }
         _ => n.effect,
     }
