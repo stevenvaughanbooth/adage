@@ -866,7 +866,8 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
         let (Trigger::AfterEdit { .. }, Step::Run { command }) = (&j.route.trigger, &j.route.step) else {
             return true;
         };
-        if j.route.effect != Effect::Verify {
+        // (A check scoped to the edited part names that part: not the dead end's repo-wide command.)
+        if j.route.effect != Effect::Verify || !j.route.slots.is_empty() {
             return true;
         }
         // A check an avoid already names as what to run instead is delivered at session start; so
