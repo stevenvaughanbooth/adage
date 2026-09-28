@@ -13,6 +13,7 @@ pub mod evidence;
 pub mod graph;
 pub mod import;
 pub mod instincts;
+pub mod ledger;
 pub mod opencode;
 pub mod scope;
 
