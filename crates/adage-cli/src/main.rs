@@ -144,7 +144,7 @@ fn run(args: &[String]) -> Result<()> {
 }
 
 /// `adage learn [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
-///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--engine <miners|shadow|graph>] [--json]`
+///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--json]`
 ///
 /// Thresholds: `--demo`, else `learn.thresholds` (`adage config`). Parses are cached under
 /// `$ADAGE_HOME/cache/sessions` unless `--no-cache` or `learn.parse_cache = false` (the result is
@@ -222,14 +222,7 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         autolearn::thresholds(settings.learn_thresholds)
     };
     let mut cfg = cfg;
-    // The learning engine (Track G): `miners` (the default), `shadow` or `graph`.
-    if let Some(e) = flag(args, "--engine") {
-        if !adage_tracks::params::ENGINES.contains(&e.as_str()) {
-            bail!("--engine must be one of {:?}", adage_tracks::params::ENGINES);
-        }
-        cfg.engine = e;
-    }
-    // Instincts are bound after mining, per repository, unless turned off (config, or --no-instincts).
+    // Instincts are bound after learning, per repository, unless turned off (config, or --no-instincts).
     if !args.iter().any(|a| a == "--no-instincts") {
         cfg.instincts = Some(autolearn::instinct_config(&settings, paths));
     }
@@ -275,16 +268,16 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         println!("{}", serde_json::to_string_pretty(&rep)?);
     } else {
         println!(
-            "adage learn: {} sessions read, {} used, {} steered (excluded per route kind from evidence they influenced)",
+            "adage learn: {} traces read, {} used, {} steered (what their directives named is not evidence)",
             rep.sessions_read, rep.sessions_used, rep.sessions_steered
         );
         println!("thresholds: {}", rep.thresholds);
         match &rep.intent_model {
-            Some(m) => println!("intent families: {m}"),
-            None => println!("intent families: skipped (no embedding model; `adage models fetch` enables them)"),
+            Some(m) => println!("prompt intents: {m}"),
+            None => println!("prompt intents: skipped (no embedding model; `adage models fetch` enables them)"),
         }
         for (repo, rr) in &rep.repos {
-            println!("\n{repo} — {} sessions, {} usable intent families", rr.sessions, rr.intent_families);
+            println!("\n{repo} — {} traces, {} usable prompt intents", rr.sessions, rr.intent_families);
             for t in &rr.tracks {
                 println!("  {} @ {} ({})", t.name, t.version, t.change);
                 for r in &t.routes {
@@ -294,21 +287,11 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
             if let Some(ir) = &rr.instincts {
                 print_instincts(ir);
             }
-            if let Some(e) = &rr.engine {
-                println!(
-                    "  graph engine: {} traces, {} reflexes selected, {} routes compiled, {} kept ({} with a context trigger)",
-                    e.sessions, e.reflexes, e.compiled, e.routes, e.contexts
-                );
-            }
-            if let Some(sh) = &rr.shadow {
-                print!("{}", adage_learn::shadow::render(repo, sh));
-                let file = paths
-                    .tracks()
-                    .join(adage_learn::slug(repo))
-                    .join(adage_learn::SHADOW_DIR)
-                    .join(adage_learn::shadow::REPORT_FILE);
-                println!("  shadow report: {}", file.display());
-            }
+            let e = &rr.engine;
+            println!(
+                "  learned: {} traces, {} patterns selected, {} reflexes compiled, {} kept ({} with a context trigger)",
+                e.sessions, e.reflexes, e.compiled, e.routes, e.contexts
+            );
             for c in changes.get(repo).into_iter().flatten() {
                 println!("  changed: {}: {}", c.route, c.summary);
             }

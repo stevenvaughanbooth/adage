@@ -182,7 +182,7 @@ fn mines_intent_routes_and_the_runtime_matches_new_phrasings() {
         assert_eq!(r.aspect, Aspect::Green, "8/8 sessions clears the demo green bar");
     }
     // The track on disk validates as untrusted input.
-    io::read(&home.join("tracks/acme-docs/intents")).unwrap();
+    io::read(&home.join("tracks/acme-docs/learned")).unwrap();
 
     // Runtime: a phrasing never seen in training finds its family; chit-chat finds nothing.
     let m = StaticModel::open(&model::dir_in(&models)).unwrap();
@@ -229,7 +229,7 @@ fn intent_learning_is_deterministic_and_order_independent() {
 }
 
 #[test]
-fn without_a_model_learning_falls_back_and_keeps_existing_intent_tracks() {
+fn without_a_model_learning_falls_back_and_keeps_existing_intent_reflexes() {
     let d = tempfile::tempdir().unwrap();
     let files = corpus(d.path());
     // No model directory, and a damaged one: both mean no intent families, and nothing else changes.
@@ -241,9 +241,8 @@ fn without_a_model_learning_falls_back_and_keeps_existing_intent_tracks() {
         let (rep, index) = run(&files, &home, models);
         assert!(rep.intent_model.is_none());
         assert!(intents(&index).is_empty());
-        assert!(!home.join("tracks/acme-docs/intents").exists());
     }
-    // Learned with a model, then relearned without one: the intent track is left as it was.
+    // Learned with a model, then relearned without one: the intent reflexes are left as they were.
     let models = d.path().join("models");
     install_fixture_model(&models);
     let home = d.path().join("home");

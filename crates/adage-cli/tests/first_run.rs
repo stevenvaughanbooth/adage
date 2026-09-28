@@ -256,7 +256,7 @@ fn doctor_verifies_the_index_against_the_tracks() {
     assert_eq!(check(&v, "index")["status"], "pass", "{v:#}");
     assert_eq!(check(&v, "tracks")["status"], "pass", "{v:#}");
     // Editing a track without recompiling leaves the index stale.
-    let dir = w.p("data/tracks/acme-billing/finish-line");
+    let dir = w.p("data/tracks/acme-billing/learned");
     let mut t = adage_tracks::io::read(&dir).unwrap();
     t.routes[0].summary = "edited by hand".into();
     adage_tracks::io::write(&dir, &t).unwrap();

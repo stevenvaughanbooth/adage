@@ -187,7 +187,7 @@ pub fn command_key_ok(k: &str) -> bool {
 }
 
 /// A JSON field of a command's output: `name` or `a.b` (at most four segments), or `*paths`
-/// (the repository paths plain-text output mentions, as the miner reads them).
+/// (the repository paths plain-text output mentions, as the learner reads them).
 pub fn json_field_ok(f: &str) -> bool {
     f == "*paths"
         || (f.len() <= 128

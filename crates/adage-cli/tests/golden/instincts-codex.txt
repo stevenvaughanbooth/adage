@@ -5,7 +5,7 @@
 (nothing)
 
 ### PostToolUse
-{"hookSpecificOutput":{"additionalContext":"<adage-signal track=\"github-com-acme-billing/instincts@0.1.0\" route=\"finish-line-e7e809\" aspect=\"yellow\" kind=\"finish-line\" origin=\"instinct\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nMakefile declares this. Ignore this if this is an exploratory or draft change.\nAdage default for repositories like this one (from this repository's Makefile); not requested by the user.\n</adage-signal>","hookEventName":"PostToolUse"}}
+{"hookSpecificOutput":{"additionalContext":"<adage-signal track=\"github-com-acme-billing/instincts@0.1.0\" route=\"finish-line-e7e809\" aspect=\"yellow\" kind=\"obligation\" origin=\"instinct\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nMakefile declares this. Ignore this if this is an exploratory or draft change.\nAdage default for repositories like this one (from this repository's Makefile); not requested by the user.\n</adage-signal>","hookEventName":"PostToolUse"}}
 
 ### Stop
 (nothing)

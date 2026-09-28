@@ -232,7 +232,7 @@ against *our reading* of each harness, not the harness itself:
 
 | Claim | Claude Code | OpenCode | Codex |
 | --- | --- | --- | --- |
-| The importer reads that harness's history and learns all four route kinds | simulated (and real, in the demo) | simulated (export shape from source) | simulated (rollout shapes from source, current and older) |
+| The importer reads that harness's history and learns the scenario's reflexes (lookup, linked files, dead end, finish line) | simulated (and real, in the demo) | simulated (export shape from source) | simulated (rollout shapes from source, current and older) |
 | Each directive arrives at its moment, in the harness's output shape: lookup and dead end at the prompt, linked files after the lookup, finish line after the schema edit, continue at the first stop, nothing at the second | simulated (and real, in the demo) | simulated | simulated |
 | The holdout arm is silent throughout; `adage graph` counts both sessions, split by arm | simulated | simulated | simulated |
 | Adage's own continuation, coming back as a prompt, matches no prompt route | simulated | simulated | simulated |

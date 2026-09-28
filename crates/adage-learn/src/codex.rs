@@ -213,7 +213,8 @@ fn exec_result(text: &str) -> (String, bool) {
 }
 
 /// Directives Adage delivered (hook context, or its finish-line continuation prompt).
-fn note(text: &str, signals: &mut Signals) {
+fn note(text: &str, signals: &mut Signals, calls: usize) {
+    signals.at(calls);
     signals.note(text);
 }
 
@@ -252,7 +253,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
             (Some("event_msg"), Some("user_message")) => {
                 let t = s(p, &["message"]).unwrap_or("");
                 in_calls = false;
-                note(t, &mut signals);
+                note(t, &mut signals, calls.len());
                 if !t.trim().is_empty() && !own_text(t) {
                     event_prompts.push(t);
                     if event_prompt.is_none() {
@@ -281,7 +282,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
                         match s(p, &["role"]) {
                             Some("user") => {
                                 in_calls = false;
-                                note(&t, &mut signals);
+                                note(&t, &mut signals, calls.len());
                                 if !t.trim().is_empty() && !own_text(&t) && !contextual(&t) {
                                     item_prompts.push(&t);
                                     if item_prompt.is_none() {
@@ -290,7 +291,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
                                 }
                             }
                             // Hook `additionalContext` is recorded as a developer message.
-                            Some("developer") => note(&t, &mut signals),
+                            Some("developer") => note(&t, &mut signals, calls.len()),
                             _ => in_calls = false,
                         }
                     }
@@ -331,7 +332,9 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
     // precedence as the first prompt).
     let by_event = !event_prompts.is_empty();
     let mut steps = Vec::new();
+    let mut first_step: Vec<u32> = Vec::with_capacity(calls.len());
     for (call_id, rec) in calls {
+        first_step.push(steps.len() as u32);
         // A call with no recorded output never finished (interrupted, or the file was cut off).
         let Some(raw) = outputs.get(&call_id) else { continue };
         let (output, failed) = exec_result(raw);
@@ -355,6 +358,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
         }
     }
     let prompts = if by_event { event_prompts } else { item_prompts }.anchor(&steps);
+    let influence = signals.anchor(&first_step, steps.len());
     Some(Session {
         id,
         root,
@@ -365,7 +369,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
         steps,
         steered: signals.steered,
         directed: signals.directed,
-        steered_kinds: signals.kinds,
+        influence,
         outcome: None,
         harness: "codex".into(),
         prompts,

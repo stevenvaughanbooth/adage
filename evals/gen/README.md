@@ -194,17 +194,17 @@ What the rehearsal shows about Adage's learner, not about the generator:
   is classified as an environment-effect command (only names such as `wi-lookup` or `fetch-ticket`
   are classified observe by name), so `lookup-work-item` waits in `adage review` and is not in the
   index until approved. The clinic skin keeps this name on purpose, as a harder variant.
-- **`node --test` is generalised to `node`.** The dead-end miner names a runner without its flags,
-  so the directive says running `node` fails, which is too broad (`node tools/codegen.mjs` works).
+- **`node --test` is generalised to `node`.** A dead end names a runner without its flags, so the
+  directive says running `node` fails, which is too broad (`node tools/codegen.mjs` works).
 - **Signatures are the last error-like line, which may not be the distinctive one.** For
   `node --test` on Node 20/22 (TAP output) it is `error: 'test failed'`; for a failing Makefile
   target it is make's own `make: *** [Makefile:11: test] Error 1`. The declared signature (the
   guard's own message) always appears in the output; `rehearse.py` reports both.
 
-### The graph engine and the new kinds (Track G G3)
+### The new kinds (Track G G3)
 
-`rehearse.py DIR --engine graph` learns with the graph engine (`adage learn --engine graph`). It
-matches routes by shape as well as by the miners' ids: a dead end announced after its failure
+`rehearse.py DIR` learns with `adage learn`, whose graph engine is the only learner (Track G G5).
+It matches routes by shape as well as by stable ids: a dead end announced after its failure
 (`after_failure` → `run`), a finish line delivered as a sequence whose first step it is, and the
 scope, env_sync and sequence kinds (an after-edit route on the convention's glob directing its
 steps; its command with the edited part as a slot; its environment step, as a draft). Routes with a
@@ -212,17 +212,15 @@ context trigger are compiled but inert until Track G G4, and are neither expecte
 
 ```bash
 python3 evals/gen/gen.py --suite newkinds --out /tmp/gen/newkinds
-python3 evals/gen/rehearse.py /tmp/gen/newkinds --engine graph   # recovers every convention
-python3 evals/gen/rehearse.py /tmp/gen/newkinds                  # the miners: none of scope, env_sync, sequence
+python3 evals/gen/rehearse.py /tmp/gen/newkinds   # recovers every convention
 ```
 
-With `--engine graph` every smoke bundle recovers every convention with no unexpected route, and on
+Every smoke and idshapes bundle recovers every convention with no unexpected route, and on
 the newkinds suite (three python-make bundles, 28 sessions each) every convention is recovered,
 env_sync as a draft (`make deps then make check`, awaiting review) and scope as
-`make -C packages/{part} check` after an edit of `packages/**/*.py`. The miners recover none of the
-three new kinds there (their finish line on `make gen` delivers the sequence's first step, and is
-counted as part of it). `adage eval routes <bundle-or-suite> --engine graph|miners` scores the
-same learned routes with Adage's own convention matcher.
+`make -C packages/{part} check` after an edit of `packages/**/*.py`. The hand-written miners the
+engine replaced recovered none of the three new kinds there. `adage eval routes <bundle-or-suite>`
+scores the same learned routes with Adage's own convention matcher.
 
 ## Extending
 

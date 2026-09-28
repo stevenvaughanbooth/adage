@@ -90,10 +90,9 @@ fn declared_ok(d: &str) -> bool {
 }
 
 /// The wrapper around a directive's body: `<adage-signal track="name@version" route="id"
-/// aspect="green" kind="work-items">`. `kind` (the route kind, [`adage_tracks::route_kind`]) comes
-/// last and is left out when empty, so transcripts written before it existed parse as before.
-/// Learning reads it to know which miners a directive could steer, and falls back to the route id
-/// when it is missing (`adage_learn::import::steered_kinds`).
+/// aspect="green" kind="obligation">`. `kind` is the route's delivery shape
+/// ([`adage_tracks::shape`]) and is left out when empty. Learning reads what the directive names
+/// from its body ([`named`]) to know which traces it steered (Track G §3.2).
 pub fn wrap_kind(track: &str, version: &str, route: &str, kind: &str, aspect: Aspect, body: &str) -> String {
     wrap_origin(track, version, route, kind, aspect, body, None)
 }
@@ -113,8 +112,8 @@ pub fn wrap_origin(
 }
 
 /// [`wrap_origin`], with `exec="<level>"` after the other attributes when `exec` is not empty: a
-/// directive whose route Adage ran (Track C §3.4). Learning reads the attribute to count the
-/// session as steered (`adage_learn::import::steered_kinds`).
+/// directive whose route Adage ran (Track C §3.4). Learning reads the attribute: after it, the
+/// agent's actions are not its own (`adage_learn::import::Signals`).
 #[allow(clippy::too_many_arguments)]
 fn wrap_exec(
     track: &str,
@@ -362,6 +361,63 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
     }
 }
 
+/// What a rendered directive body names (Track G §3.2, steering by influence): the commands it
+/// directs or recommends, the runners it says to avoid, and the files it lists. The inverse of
+/// [`route_text`] and [`stop_reason`] for every template: a command is an indented line (`  cmd`,
+/// `  1. cmd`) or a backquoted span, avoided runners follow `running ` up to ` fails (`, and files
+/// follow `lists these files: `. Nothing named (a body cut short, a template this does not know)
+/// is an empty result, which a learner treats as naming everything.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Named {
+    pub commands: Vec<String>,
+    pub avoided: Vec<String>,
+    pub files: Vec<String>,
+}
+
+impl Named {
+    pub fn is_empty(&self) -> bool {
+        self.commands.is_empty() && self.avoided.is_empty() && self.files.is_empty()
+    }
+}
+
+/// See [`Named`].
+pub fn named(body: &str) -> Named {
+    let mut n = Named::default();
+    for line in body.lines() {
+        if let Some(rest) = line.strip_prefix("  ") {
+            // The generic template ends its command line with the exit clause.
+            let rest = rest.split(" Ignore this if ").next().unwrap_or(rest).trim();
+            let rest = match rest.split_once(". ") {
+                Some((k, cmd)) if !k.is_empty() && k.chars().all(|c| c.is_ascii_digit()) => cmd,
+                _ => rest,
+            };
+            if !rest.is_empty() {
+                n.commands.push(rest.to_string());
+            }
+        }
+        if let Some((_, after)) = line.split_once("running ") {
+            if let Some((avoid, _)) = after.split_once(" fails (") {
+                n.avoided.extend(avoid.split(" / ").map(|x| x.trim().to_string()).filter(|x| !x.is_empty()));
+            }
+        }
+        if let Some((_, after)) = line.split_once("lists these files: ") {
+            let list = after.trim_end();
+            let list = list.strip_suffix('.').unwrap_or(list);
+            n.files.extend(list.split(", ").map(|x| x.trim().to_string()).filter(|x| !x.is_empty()));
+        }
+        let mut rest = line;
+        while let Some((_, after)) = rest.split_once('`') {
+            let Some((span, tail)) = after.split_once('`') else { break };
+            if !span.trim().is_empty() {
+                n.commands.push(span.trim().to_string());
+            }
+            rest = tail;
+        }
+    }
+    n.commands.dedup();
+    n
+}
+
 pub fn stop_reason(paths: &str, command: &str) -> String {
     format!(
         "Adage finish-line check: this session changed files matching {}, and this repository requires running `{}` after such changes; it has not been run yet. Run it (and re-run the tests) before finishing. This reminder is from Adage, not from the user.",
@@ -416,5 +472,76 @@ mod e1_tests {
         }
         assert!(e1_exit_note("state", "Closed now").is_none());
         assert!(e1_exit_note("st\"ate", "Closed").is_none());
+    }
+}
+
+#[cfg(test)]
+mod named_tests {
+    use super::*;
+    use adage_core::Effect;
+    use adage_tracks::{Evidence, RouteState};
+
+    fn r(trigger: Trigger, step: Step, effect: Effect) -> Route {
+        Route {
+            id: "x".into(),
+            summary: String::new(),
+            trigger,
+            step,
+            slots: vec![],
+            effect,
+            aspect: Aspect::Yellow,
+            state: RouteState::Active,
+            exit: vec![Exit::IntentChanges],
+            evidence: Evidence::default(),
+            authored: false,
+        }
+    }
+
+    #[test]
+    fn every_template_names_what_it_directs() {
+        let run = |c: &str| Step::Run { command: c.into() };
+        let edit = || Trigger::AfterEdit { paths: "schema/*.json".into() };
+        let failure = Trigger::AfterFailure { command: "exec pytest".into(), signature: "x".into() };
+        let seq = Step::Sequence { commands: vec!["make gen".into(), "make check".into()] };
+        let ticket = Trigger::Prompt { span: adage_core::spans::SpanKind::Ticket };
+        for (route, bound, want) in [
+            (r(edit(), run("make gen"), Effect::Regenerate), vec![], vec!["make gen"]),
+            (r(Trigger::SessionStart, run("make ci"), Effect::Verify), vec![], vec!["make ci"]),
+            (r(failure, run("make test"), Effect::Verify), vec![], vec!["make test"]),
+            (r(edit(), seq, Effect::Regenerate), vec![], vec!["make gen", "make check"]),
+            (
+                r(ticket, run("./scripts/wi-lookup {item}"), Effect::Observe),
+                vec![("item".to_string(), "W-1".to_string())],
+                vec!["./scripts/wi-lookup W-1"],
+            ),
+        ] {
+            let mut route = route;
+            if matches!(route.trigger, Trigger::Prompt { .. }) {
+                route.slots = vec![adage_tracks::Slot {
+                    name: "item".into(),
+                    source: SlotSource::Prompt { span: adage_core::spans::SpanKind::Ticket },
+                    contract: adage_tracks::Contract::Pattern { regex: "^W-[0-9]$".into() },
+                }];
+            }
+            let body = route_text(&route, &bound).unwrap();
+            assert_eq!(named(&body).commands, want, "{body}");
+        }
+        let step = Step::Avoid {
+            avoid: "pytest / python3 -m unittest".into(),
+            instead: "make test".into(),
+            signature: "No module".into(),
+        };
+        let n = named(&route_text(&r(Trigger::SessionStart, step, Effect::Verify), &[]).unwrap());
+        assert_eq!(n.avoided, ["pytest", "python3 -m unittest"]);
+        assert_eq!(n.commands, ["make test"]);
+        let read = r(
+            Trigger::AfterCommand { command: "exec x".into() },
+            Step::ReadBatch { slot: "files".into(), max: 5 },
+            Effect::Observe,
+        );
+        let n = named(&route_text(&read, &[("files".into(), "a/b.py, c.py".into())]).unwrap());
+        assert_eq!(n.files, ["a/b.py", "c.py"]);
+        assert_eq!(named(&stop_reason("schema/*.json", "make gen")).commands, ["make gen"]);
+        assert!(named("cut sh").is_empty());
     }
 }

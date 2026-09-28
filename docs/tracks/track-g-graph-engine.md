@@ -1,5 +1,7 @@
 # Track G: Graph and prediction engine v2
 
+> **Status (2026-09-28): G5 implemented: the graph engine is the only learner.** The miners, route kinds and `learn.engine` are gone; every reflex is written to `<repo>/learned` ([status note](#status-note-g5-2026-09-28)). The notes below describe earlier milestones as they were.
+>
 > **Status (2026-09-27, later): G0 implemented; G1 integrated behind `LearnParams.engine`.** The default engine is still `miners`, and with it behaviour is unchanged: the L0 bench reproduces the committed baseline exactly (same `params_hash`, J 0.6307).
 >
 > *G0, substrate.* All three importers keep every prompt: `Session.prompts: Vec<PromptObs { text, at_step }>` (`Session.prompt` is still the first) and `StepObs.prompt: u16`; the parse-cache stamp carries a session format (`cache::SESSION_FORMAT = 2`), so older entries are re-parsed. `adage-graph` gains `facts.rs` (`SessionFacts`: time-ordered `Prompt` and `Act` events; `Art`, `Obs` and `Fail` nodes; `follows`, `binds`, `reads`, `writes`, `yields`, `fails_with` and `recovers_with` edges; token occurrences; ≤ 2,000 events, ≤ 512 token occurrences, ≤ 64 KiB of output per event, truncations recorded), `embed.rs` (prompt: the static model on `normalize()`, skipped without one; Act 384-d: 256 dimensions of SHA-256-seeded signed feature hashing plus 128 of the model's identity-word embedding folded in two, weighted 0.75/0.25; Art 256-d; all quantised to `i16`) and `cache.rs` (`$ADAGE_HOME/cache/facts/<sha256>.json`, keyed by facts format, embedding version, model id and the session's bytes; directory 0700, files 0600). `input.rs` gains `StepMeta` and `Annotated` beside `Session` (nothing existing changed). `adage-learn/src/bridge.rs` replaces `adage eval types`' adapter. `adage graph --learned --dump <repo> [--transcripts …] [--json]` prints the facts' counts, the value slots and the sinks that failed the slot test. Facts are the same bytes for 1, 2, 4 or 7 threads and any input order (`facts.rs` test). Learn time (`learn_bench`, 600 simulator sessions in 2 repositories, release build, two runs each; base = the commit before G0): `--engine miners` is unchanged (no cache 142–146 ms vs 140–147 base; warm cache 124–147 vs 121–126). `--engine graph`, which also computes facts: no cache 175–192 ms (1.2–1.35× base), warm facts and parse caches 145–150 ms (1.15–1.2×), but a cold cache 355–385 ms (about 1.5×: writing 600 facts files; embeddings are stored as hex to keep that down). So the ≤ 1.3× target holds warm and roughly holds without caches, and does not yet hold for the first, cold learn.
@@ -671,3 +673,111 @@ The three G2 targets the first note missed, revisited. Measured on the same corp
 - Intent-with-model latency was not measured (no model files).
 - `rehearse.py` does not score contexts.
 - `last_fail` remembers only one failure.
+
+## Status note: G5 (2026-09-28)
+
+**Implemented: the graph engine is the only learner.** The hand-written miners (`adage-learn`'s
+`mine.rs`, `intent.rs` and the shadow engine) are deleted, and with them `route_kind`, `KIND_*`,
+`MINER_KINDS`, `steers`, the `unsteered(kind)` plumbing, `score::kind`, `learn.engine` and
+`--engine`. The retirements were not done one per bench bless: every dataset was measured against
+the miners' last build first (the parity table below), and the engine was fixed until it kept their
+floor everywhere, then the miners went in one change.
+
+- **One track.** Every reflex of a repository is written to `<repo>/learned`
+  (`adage_learn::TRACK`). The retired tracks (`work-items`, `finish-line`, `dead-ends`, `intents`,
+  `graph`) are folded into it on the next learn, with their `review.yaml` decisions and proposals,
+  and removed. Ids are unchanged (`compile::stable`, renamed from `legacy`).
+- **Shapes, not kinds.** `adage_tracks::shape(route)` is the delivery shape (`run`, `avoid`,
+  `read-batch`, `obligation`, `sequence`, `advise`); the directive wrapper's `kind` carries it. The
+  eval scores directives per `shape@trigger` (`adage_eval::score::point`).
+- **Steering by influence (§3.2).** Importers parse each directive's body for what it names
+  (`adage_runtime::render::named`: directed and avoided commands, listed files), anchor it to the
+  step it arrived before (`import::Directed`), and the bridge marks every later event it names
+  exposed (`events::Influence`). Exposed events are no evidence, and exposed sessions are
+  subtracted from a pattern's opportunities before the posterior. A directive whose body cannot be
+  read (old or unknown) influences everything after it. The judge and the stale verdict count
+  only traces not exposed to the route.
+- **Prompt intents** are compiled in the graph pipeline (`compile::intent`, a port of the old
+  families: prototype prompts, pinned model, `Trigger::Intent`). Without the model, prior intent
+  reflexes are kept as they are.
+- **Claims** (`adage_learn::claims`): the verify-claim route moved here, and `adage-train` also
+  compiles a lookup claim where the exploration sessions looked the prompt's item up.
+
+**Deviations, decided while closing the gaps.**
+
+1. *Two-value types (gap a).* A slot with only two distinct values, every one flowed from the
+   prompt at a rate ≥ 0.6, is a *thin* slot: it becomes a type only when its runs are one literal
+   prefix (with a letter, ending in punctuation) followed by class runs, and only through the
+   outcome lift, so it is prime at most. W-204's rejection is kept. Literal uses (a value typed
+   into commands of ≥ 2 sessions without flowing from a prompt) are left out of a slot's test and
+   negatives. `top_share` is now `≤`.
+2. *Dead ends (gap b).* The beam roots recoveries first (a failing root 2, a last-edit root 1),
+   a failed act's kind label is its failure family (`fails: <signature>`), and the guard lower
+   bound gate is removed (the exposure subtraction replaces what it protected against). Dead ends
+   are announced at session start (`announce_at_start = 0`). A dead end with several runners keeps
+   those whose failures share the signature consistently, at most `learn.dead_end_signatures`,
+   ordered by traces.
+3. *Obligation beside a sequence.* An after-edit sequence whose first step regenerates also
+   compiles that step's obligation (the finish line's id and Stop request). The sequence itself is
+   then kept only when ≥ 75% of its traces ran its steps one right after another
+   (`engine::together`); otherwise its later steps are separate habits and only the obligation is
+   delivered. On the demo, round 2 keeps `make gen then make test then make ci` beside the
+   obligation (a deliberate addition, yellow); the simulator's histories and the review tests keep
+   only the obligation.
+4. *Read batches* are judged by the old linked-files counter, moved into `engine::judge_read_batch`.
+
+**Parity** (`crates/adage-eval/tests/parity.rs`, conventions recovered; miners = their last build):
+
+| Dataset / split | Miners | Graph |
+| --- | --- | --- |
+| adversarial default, 3:1, temporal | 4/4 | 4/4 |
+| adversarial group:task:3:0 | 1/4 | 2/4 |
+| adversarial group:task:3:2 | 2/4 | 2/4 |
+| demo-haiku45, every split but round1 | 4/4 | 4/4 |
+| demo-haiku45 round1 | 3/4 | 3/4 |
+| live acme-billing-sonnet5 / acme-billing | 3/4 / 2/4 | 3/4 / 2/4 |
+| live harbor-dispatch-sonnet5 / harbor-dispatch | 2/4 / 3/4 | 2/4 / 3/4 |
+| live node-billing-s22 / node-billing-uuid-s42 | 1/5 / 0/5 | 1/5 / 0/5 |
+| live node-clinic-s23 / node-logistics-s21 | 2/4 / 2/5 | 2/4 / 2/5 |
+| live py-billing-hash-s32 / py-billing-s11 | 0/5 / 1/5 | 0/5 / 1/5 |
+| live py-clinic-s12 | 2/5, 1 false | 2/5, 1 false (`dead-end-60822e`, the same: every generic runner fails there, the convention names one) |
+| live py-logistics-s13 | 2/4 | 2/4 |
+| synthetic, every split | 4/4 | 4/4 |
+| gen smoke (6 bundles) | all | all |
+| gen idshapes (11 bundles) | 3–5/5, 2 false | 5/5, none false |
+| gen newkinds (3 bundles) | 4/7, 3/6, 4/7 | 7/7, 6/6, 7/7 |
+
+Unsafe directives 0 and fast-path mismatches 0 everywhere. `parity.rs` holds, per dataset and
+split, the conventions the miners recovered, and fails if the engine recovers fewer or any false
+route beyond theirs; `every_generated_convention_is_learned` runs the three gen suites when
+`ADAGE_GEN_SMOKE`, `ADAGE_GEN_IDSHAPES` and `ADAGE_GEN_NEWKINDS` point at them.
+
+**Replay fidelity.** The recorded decisions came from the miners' index, so the recorded-index
+tests (`replay_reproduces_the_live_round2_decisions`) are unchanged. Against today's learned index
+(`adage eval fidelity --learned`, `fidelity::run_learned`), a recorded directive counts when it
+arrives at its event or earlier, and a recorded id from before content-derived ids is matched by
+its trigger and step (`finish-line-1` is `finish-line-e7e809`). Both demo rounds: 36/36 sessions
+get every recorded directive in time. Round 1: 34/36 identical (two holdout sessions get one more
+linked-files directive, the command-pattern algebra). Round 2: none identical, and the
+differences are exactly: every session also gets the second dead end (`dead-end-21cb2c`), ten
+schema-editing sessions get the sequence beside the obligation, four holdout sessions get one more
+linked-files directive, and one session (`eval2-W-2045-r2-holdout`) gets its lookup and dead end
+at session start, one event earlier than live (`gates.rs`,
+`replay_with_the_learned_index_gives_every_recorded_directive`). The recorded transcripts were
+not re-recorded.
+
+**Bench.** Re-blessed (`evals/baselines/l0-core.jsonl`, "G5: graph engine is the only
+learner"): J 0.6307 (miners) → 0.6148. Turns saved at the window 0.6604 → 0.6604, recall 0.9722 →
+0.9722, route F1 1.0 → 1.0, precision@window 0.3484 → 0.3603, false directives per session 0.4906
+→ 0.5000, ECE 0.2754 → 0.2730; final check (temporal) J 0.5937 → 0.5937. The one difference is
+the sequence `make gen then make test` in two demo folds, 8 of its 9 directives followed; the one
+not followed costs 0.0159. Guardrails: unsafe 0, fast-path mismatches 0, route precision 1.0. The
+G3 measurement of the engine (J 0.9759, 0.32 false directives per session) came with a missed
+dead end in one fold (route F1 0.979). The G5 engine gives up that difference for the miners'
+floor (the deviations above); which change costs how much was not attributed.
+
+**Gaps.**
+
+- The live datasets' misses are the miners' misses (most of their conventions have too few takers).
+- The sequence rule (deviation 3) is a threshold on adjacency, chosen on the demo and newkinds.
+- A directive delivered twice at one edit (obligation and sequence) is possible where both are kept.

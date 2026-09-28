@@ -1,10 +1,10 @@
-//! Instincts in learning (docs/instincts.md): after the miners and review reconciliation, bind
+//! Instincts in learning (docs/instincts.md): after the learners and review reconciliation, bind
 //! the repository's instincts from its declared files and write them as one track,
 //! `<repo>/instincts`, provenance `instinct:<pack>@<version>`.
 //!
 //! - **Learned wins.** The binder sees every other route of the repository (learned, imported,
 //!   authored) and skips an instinct any of them covers; the index prefers any other source by
-//!   provenance ([`adage_tracks::index`]). When the miner learns a route with an instinct's id,
+//!   provenance ([`adage_tracks::index`]). When the learner learns a route with an instinct's id,
 //!   the instinct route leaves the track (reported as confirmed by sessions).
 //! - **Review.** Ids a person rejected in any of the repository's `review.yaml` files are never
 //!   bound again; a rejected instinct route stays in the track, retired, so the decision shows.
@@ -321,6 +321,7 @@ pub fn plan_repo(
         proposals: Default::default(),
         reviews: (!retired_now.is_empty()).then_some(reviews),
         why: None,
+        retire: Vec::new(),
     };
     Ok((rep, Some((tr, planned))))
 }
@@ -416,7 +417,7 @@ mod tests {
         // Unchanged files: unchanged track.
         let (_, again) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &none, "2026-09-27").unwrap();
         assert_eq!(again.unwrap().0.change, "unchanged");
-        // The miner learns the same dead end: the instinct route leaves, confirmed by sessions.
+        // The learner learns the same dead end: the instinct route leaves, confirmed by sessions.
         let learned = Route {
             evidence: adage_tracks::Evidence { provenance: "desire-path".into(), support: 5, ..Default::default() },
             ..p.track.routes.iter().find(|r| r.id == "dead-end-d41b1e").unwrap().clone()

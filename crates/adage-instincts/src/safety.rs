@@ -341,7 +341,7 @@ pub fn command_key(command: &str, table: &CommandTable) -> Option<String> {
 }
 
 /// A short, stable id suffix from content: the same function as `adage_learn::mine::stable`, so a
-/// bound id equals the id the miner derives for the same behaviour.
+/// bound id equals the id the learner derives for the same behaviour.
 pub fn stable(parts: &[&str]) -> String {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for p in parts {
@@ -419,7 +419,7 @@ mod tests {
     }
 
     #[test]
-    fn ids_match_the_miner() {
+    fn ids_match_the_learner() {
         // The demo's learned dead end for `make test` (docs/evals.md, adage-eval gates).
         let t = CommandTable::load();
         let k = command_key("make test", &t).unwrap();

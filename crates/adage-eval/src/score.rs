@@ -32,20 +32,20 @@ use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-/// The kind of route, from its trigger and step.
-pub fn kind(r: &Route) -> &'static str {
-    match (&r.trigger, &r.step) {
-        (_, Step::Avoid { .. }) => "dead-end",
-        // An instinct's dead end: after the failing runner, the working command.
-        (Trigger::AfterFailure { .. }, Step::Run { .. }) => "dead-end",
-        (_, Step::Advise { .. }) => "advice",
-        (_, Step::ReadBatch { .. }) => "linked-files",
-        (_, Step::Sequence { .. }) => "sequence",
-        (Trigger::AfterEdit { .. }, _) => "finish-line",
-        (Trigger::Prompt { .. }, _) => "lookup",
-        (Trigger::Intent { .. }, _) => "intent",
-        _ => "other",
-    }
+/// Where a route acts and how, for per-group metrics: its delivery shape
+/// ([`adage_tracks::shape`]) at its trigger, `run@prompt`, `read-batch@after-command`,
+/// `avoid@session-start`, `obligation@after-edit`, `run@intent`, ….
+pub fn point(r: &Route) -> String {
+    let at = match &r.trigger {
+        Trigger::Prompt { .. } => "prompt",
+        Trigger::Intent { .. } => "intent",
+        Trigger::AfterCommand { .. } => "after-command",
+        Trigger::AfterEdit { .. } => "after-edit",
+        Trigger::AfterFailure { .. } => "after-failure",
+        Trigger::SessionStart => "session-start",
+        Trigger::Context { .. } => "context",
+    };
+    format!("{}@{at}", adage_tracks::shape(r))
 }
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
@@ -218,7 +218,7 @@ pub struct Safety {
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Scored {
     pub route: String,
-    pub kind: String,
+    pub shape: String,
     pub event: String,
     pub turn: u32,
     pub correct: bool,
@@ -243,7 +243,7 @@ pub struct SessionScore {
 #[derive(Debug, Default)]
 pub struct Tally {
     pub overall: Metrics,
-    pub by_kind: BTreeMap<String, Metrics>,
+    pub by_shape: BTreeMap<String, Metrics>,
     pub by_route: BTreeMap<String, Metrics>,
     pub recall: BTreeMap<String, Recall>,
     pub dead_ends: DeadEnds,
@@ -256,7 +256,7 @@ pub struct Tally {
 impl Tally {
     pub fn finish(&mut self) {
         self.overall.finish();
-        self.by_kind.values_mut().for_each(Metrics::finish);
+        self.by_shape.values_mut().for_each(Metrics::finish);
         self.by_route.values_mut().for_each(Metrics::finish);
         let mut total = Recall::default();
         for r in self.recall.values_mut() {
@@ -368,7 +368,7 @@ pub fn score_session(
             tally.safety.unsafe_directives += 1;
             tally.safety.violations.extend(v);
         }
-        let k = kind(route);
+        let k = point(route);
         let (correct, matched, saved) = match &route.step {
             // Advice directs no command: it is checked for safety, and not scored.
             Step::Advise { .. } => {
@@ -473,7 +473,7 @@ pub fn score_session(
         }
         for m in [
             &mut tally.overall,
-            tally.by_kind.entry(k.into()).or_default(),
+            tally.by_shape.entry(k.clone()).or_default(),
             tally.by_route.entry(route.id.clone()).or_default(),
         ] {
             m.add(&rep.id, correct, in_window, saved);
@@ -483,7 +483,7 @@ pub fn score_session(
         }
         detail.push(Scored {
             route: route.id.clone(),
-            kind: k.into(),
+            shape: k,
             event: f.event.into(),
             turn: f.turn,
             correct,
@@ -506,8 +506,9 @@ pub fn score_session(
             fl.stop_requests_correct += 1;
         }
     }
-    let any_obligation =
-        rep.fired.iter().any(|f| routes.get(f.directive.route.as_str()).is_some_and(|r| kind(r) == "finish-line"));
+    let any_obligation = rep.fired.iter().any(|f| {
+        routes.get(f.directive.route.as_str()).is_some_and(|r| matches!(r.trigger, Trigger::AfterEdit { .. }))
+    });
     if meta.is_some_and(|m| m.stale_generated == Some(true)) && !any_obligation {
         tally.finish_line.missed += 1;
     }
@@ -550,18 +551,20 @@ fn recall(
     let fired: Vec<(&Fired, &Route)> =
         rep.fired.iter().filter_map(|f| routes.get(f.directive.route.as_str()).map(|r| (f, *r))).collect();
     // Commands the directives named, with the turn they were given.
-    let mut named: Vec<(u32, Expect, &'static str)> = Vec::new();
+    // (turn, command, given after an edit)
+    let mut named: Vec<(u32, Expect, bool)> = Vec::new();
     for (f, r) in &fired {
+        let by_edit = matches!(r.trigger, Trigger::AfterEdit { .. }) && !matches!(r.step, Step::Avoid { .. });
         match &r.step {
-            Step::Avoid { instead, .. } => named.push((f.turn, Expect::of(instead, table), kind(r))),
+            Step::Avoid { instead, .. } => named.push((f.turn, Expect::of(instead, table), false)),
             Step::Run { .. } => {
                 if let Some(c) = command_in(&f.directive.text) {
-                    named.push((f.turn, Expect::of(&c, table), kind(r)));
+                    named.push((f.turn, Expect::of(&c, table), by_edit));
                 }
             }
             Step::Sequence { commands } => {
                 for c in commands {
-                    named.push((f.turn, Expect::of(c, table), kind(r)));
+                    named.push((f.turn, Expect::of(c, table), by_edit));
                 }
             }
             Step::ReadBatch { .. } | Step::Advise { .. } => {}
@@ -634,7 +637,7 @@ fn recall(
         if let Some(g) =
             acts.iter().skip(first_edit + 1).find(|a| a.effect == Effect::Regenerate && a.argv.is_some() && !a.failed)
         {
-            let hit = named.iter().any(|(t, e, k)| *k == "finish-line" && *t <= g.turn && e.matches(g));
+            let hit = named.iter().any(|(t, e, by_edit)| *by_edit && *t <= g.turn && e.matches(g));
             steps.push(("regenerate", hit));
         }
     }

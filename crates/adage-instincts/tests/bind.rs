@@ -60,7 +60,7 @@ fn has(r: &BindResult, trigger: &str, command: &str) -> bool {
 fn acme_recovers_its_dead_end_and_finish_line_on_day_zero() {
     let r = bound("acme");
     // U1: `python3 -m unittest` fails without ACME_ENV; `make test` sets it. The id is the one the
-    // dead-end miner derived for this working command in the demo (adage-eval gates), so the
+    // learner derived for this working command in the demo (adage-eval gates), so the
     // learned route replaces the instinct as soon as it exists.
     let d = route(&r, "dead-end-d41b1e");
     assert_eq!(
@@ -392,7 +392,7 @@ fn learned(id: &str, trigger: Trigger, step: Step) -> Route {
 #[test]
 fn learned_routes_and_review_rejections_override_instincts() {
     let base = bound("acme");
-    // 1. The miner learned the same dead end: same id, learned wins.
+    // 1. The learner learned the same dead end: same id, learned wins.
     let same = learned(
         "dead-end-d41b1e",
         Trigger::SessionStart,
@@ -484,25 +484,19 @@ fn the_index_keeps_the_learned_route_over_an_instinct_with_the_same_id() {
 }
 
 #[test]
-fn route_ids_line_up_with_route_kinds() {
+fn route_ids_line_up_with_delivery_shapes() {
+    // An instinct shares its id with the reflex it stands in for, and has that reflex's shape.
     for name in FIXTURES {
         for x in bound(name).routes {
-            let intended = adage_instincts::intended_kind(&x);
-            let today = adage_tracks::route_kind(&x);
-            assert_eq!(intended, today, "{}", x.id);
+            let shape = adage_tracks::shape(&x);
             if x.id.starts_with("finish-line-") {
-                assert_eq!(today, adage_tracks::KIND_FINISH_LINE);
+                assert_eq!(shape, "obligation", "{}", x.id);
             } else if x.id.starts_with("dead-end-") {
-                assert_eq!(today, adage_tracks::KIND_DEAD_ENDS, "{}", x.id);
+                assert_eq!(shape, "avoid", "{}", x.id);
             } else {
                 assert!(x.id.starts_with("instinct-"), "{}", x.id);
                 let advice = matches!(x.step, Step::Advise { .. });
-                assert_eq!(
-                    today,
-                    if advice { adage_tracks::KIND_ADVICE } else { adage_tracks::KIND_DEAD_ENDS },
-                    "{}",
-                    x.id
-                );
+                assert_eq!(shape, if advice { "advise" } else { "avoid" }, "{}", x.id);
             }
         }
     }

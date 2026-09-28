@@ -80,7 +80,7 @@ flowchart TB
     AD["Adapters<br/>harness/claude.rs · opencode.rs · codex.rs"]
     RT["adage-runtime<br/>decide · render"]
     ST["adage-store<br/>two-slot state · spools"]
-    LRN["adage-learn<br/>importers · miners · intent routes"]
+    LRN["adage-learn<br/>importers · graph engine driver · judges"]
     INT["adage-intent<br/>static embedder · kNN + Louvain · purity"]
     CORE["adage-core<br/>normaliser · effects · spans · repo key"]
     TRK["adage-tracks<br/>model · validate · digest · index · review"]
@@ -122,7 +122,8 @@ flowchart TB
 | `adage-sign` | Native sshsig signing (ssh-agent first, key file second) and `allowed_signers` verification | `src/lib.rs`, `src/allowed_signers.rs` |
 | `adage-intent` | Prompt normalisation, the static embedding model, exact kNN + deterministic Louvain, the behavioural split/merge | `src/model.rs`, `src/cluster.rs`, `src/purity.rs` |
 | `adage-instincts` | Instincts: prebuilt routes bound per repository from its declared files (Makefile, package.json, lockfiles, …), with no session history | `data/catalogue.toml`, `src/declared.rs`, `src/detect.rs`, `src/bind.rs` |
-| `adage-learn` | Importers (Claude Code, OpenCode export, Codex rollouts), miners, intent routes, instinct binding, versioning | `src/lib.rs`, `src/mine.rs`, `src/intent.rs`, `src/import.rs`, `src/instincts.rs`, `src/opencode.rs`, `src/codex.rs` |
+| `adage-graph` | The graph engine, the only learner: events, value slots and types, mining, scoring, selection, compilation to reflexes (Track G) | `src/events.rs`, `src/flow.rs`, `src/mine/`, `src/score.rs`, `src/select.rs`, `src/compile/` |
+| `adage-learn` | Importers (Claude Code, OpenCode export, Codex rollouts), steering by influence, the graph engine's driver and judges, instinct binding, versioning | `src/lib.rs`, `src/engine.rs`, `src/import.rs`, `src/bridge.rs`, `src/stale.rs`, `src/instincts.rs`, `src/opencode.rs`, `src/codex.rs` |
 | `adage-runtime` | Hook-time decisions, fixed-template rendering, holdout assignment, follow/derail judgement | `src/lib.rs`, `src/render.rs` |
 | `adage-cli` | The `adage` binary: the hook client, harness adapters, every command | `src/main.rs`, `src/hook.rs`, `src/harness/` |
 | `adage-eval` | Offline replay eval, datasets, the safety oracle, regression gates, property tests | `src/`, `tests/gates.rs`, `tests/prop_*.rs` |
@@ -436,11 +437,13 @@ the same history reports "unchanged" (`crates/adage-learn/src/lib.rs`).
 flowchart LR
   I[Import<br/>Claude Code JSONL · OpenCode export · Codex rollout] --> N[Normalise<br/>canonical actions, template keys]
   N --> G[Group by repository key]
-  G --> W[Work items<br/>prompt lookup, linked files]
-  G --> F[Finish line<br/>edit → regenerate]
-  G --> DE[Dead ends<br/>fail → what worked]
-  G --> IN[Intent families<br/>if a model is installed]
-  W & F & DE & IN --> R[Reconcile<br/>pinned routes, review.yaml, proposals]
+  G --> E[Events<br/>typed, valued, with influence]
+  E --> M[Mine<br/>value types, target-rooted beam]
+  M --> SC[Score and select<br/>posterior, lift, consistency]
+  SC --> C[Compile<br/>delivery shapes, stable ids]
+  G --> IN[Prompt intents<br/>if a model is installed]
+  C & IN --> J[Judge<br/>exposure, read batches, stale]
+  J --> R[Reconcile<br/>pinned routes, review.yaml, proposals]
   R --> V[Validate each route<br/>drop the invalid ones]
   V --> S[Version<br/>semver bump, change]
   S --> X[Write tracks<br/>compile index.json]
@@ -450,19 +453,31 @@ flowchart LR
 | --- | --- |
 | **Import** | Through the parse cache (below). Found by content (`read_session`). Claude Code transcripts from `~/.claude/projects` by default (sidechain records skipped). `opencode export` files via `--transcripts` (sub-agent sessions skipped). Codex rollouts via `--codex-sessions` (sub-agent threads and compressed `.zst` rollouts skipped). `--cwd-prefix` filters by recorded working directory |
 | **Normalise** | tree-sitter-bash plus the command table ([§4.7.1](#471-the-normaliser)); native tools mapped per harness (`crates/adage-core/src/tools.rs`) |
-| **Training hygiene** | A session steered by Adage is recognised from the directives in its transcript, and each miner excludes the sessions whose directives could influence it (`Session::steered_by`, `import::steers`): its own kind, the intent miner also for dead ends, and every miner for a directive of kind `other` or unknown. The kind is read from the wrapper (`kind="…"`), or from the route id in old transcripts. A route learning no longer finds because it steered its own evidence away is kept `stale` ([§4.6](#46-observations-and-evidence-a5); `adage_learn::stale`). Draft 2's truncation with inverse-propensity weights was not built; propensities are now logged for it |
-| **Miners** | Four kinds per repository (`crates/adage-learn/src/mine.rs`, `intent.rs`), each a track named `<repo>/<kind>` |
-| **Reconcile** | Routes a person pinned (`authored`) are kept, and a materially different mined version becomes a proposal. Decisions in `review.yaml` are re-applied |
-| **Validate** | Every mined route is validated alone. One that fails is dropped with a message, rather than failing the repository (eval bug 1) |
+| **Training hygiene** | A session steered by Adage is recognised from the directives in its transcript, and steering is by *influence* (Track G §3.2), not by kind: each directive is parsed for what it names (the commands it directs or avoids, the files it lists; `adage_runtime::render::named`, `import::Directed`), anchored to the step it arrived before, and every later event it names is marked exposed. An exposed event never counts as evidence for a pattern it matches, and an exposed session is subtracted from that pattern's opportunities. A directive whose body cannot be read influences everything after it. A reflex learning no longer finds because it steered its own evidence away is kept `stale` ([§4.6](#46-observations-and-evidence-a5); `adage_learn::stale`). Draft 2's truncation with inverse-propensity weights was not built; propensities are logged for it |
+| **Learn** | The graph engine (`crates/adage-graph`, driven by `crates/adage-learn/src/engine.rs`) is the only learner. Sessions become event sequences; value slots are found where a prompt's or a result's value flows into a later action, and value types are induced by minimum description length (a two-value type only with a literal prefix and a significant outcome lift); patterns are mined target-rooted with a bounded beam (recoveries after a failure first), scored against their opportunities (Beta posterior, Newcombe outcome lift, consistency), selected, and compiled to reflexes with stable, content-derived ids. Prompt intents (if the embedding model is installed) compile to `Trigger::Intent` reflexes from prototype prompts |
+| **Judge** | Each compiled reflex is checked against the traces it would have fired in: exposure, read batches (a file list read together), and the stale verdict. Rejected ones are reported with the reason |
+| **Reconcile** | Routes a person pinned (`authored`) are kept, and a materially different learned version becomes a proposal. Decisions in `review.yaml` are re-applied |
+| **Validate** | Every learned route is validated alone. One that fails is dropped with a message, rather than failing the repository (eval bug 1) |
 | **Version** | Shape changed or removed → major; added → minor; evidence only → patch; nothing → unchanged |
 | **Compile** | All tracks re-read, validated, interlocked ([§4.3.1](#431-matching-commands-and-interlocking)), compiled, and written atomically |
 
-| Track | Trigger → step | Aspect ceiling |
+Every reflex of a repository is written to one track, `<repo>/learned`. There are no route kinds:
+what a reflex is follows from its trigger and step, and its *delivery shape* (`adage_tracks::shape`)
+names how it reaches the agent. The engine discovers, for example:
+
+| Reflex the engine discovers | Trigger → step (shape) | Aspect ceiling |
 | --- | --- | --- |
-| `work-items` | A prompt naming a work item → run the lookup, with the ID bound (`lookup-work-item`); that lookup succeeding → read the files it lists, together (`read-linked-files`) | Lookup: green if its effect allows; files: yellow |
-| `finish-line` | An edit matching a glob → run the regenerate step; a bounded stop request if it is skipped | Green (regenerate after an edit) |
-| `dead-ends` | Announced at the first prompt → avoid these runners, which fail with this signature, and use this instead | Red |
-| `intents` | A prompt in an intent family → run the command those sessions ran first | Green only for observe or verify |
+| Look the work item up | A prompt naming a value of a learned type → run the lookup with it bound (`run`) | Green if its effect allows |
+| Read the files it lists | That lookup succeeding → read the files it listed, together (`read-batch`) | Yellow |
+| Regenerate after an edit | An edit matching a glob → run the regenerate step; a bounded Stop request if skipped (`obligation`) | Green |
+| A dead end | Announced at session start → avoid these runners, which fail with this signature, and use this instead (`avoid`) | Red |
+| Several steps after an edit | An edit matching a glob → run these steps in order (`sequence`) | By effect |
+| Check the part you edited | An edit under `packages/<name>/` → run the check with `<name>` bound (`run`) | By effect |
+| A prompt intent | A prompt in an intent family → run the command those sessions ran first (`run`) | Green only for observe or verify |
+
+Tracks written by earlier versions (`<repo>/work-items`, `finish-line`, `dead-ends`, `intents`,
+`graph`) are folded into `<repo>/learned` on the next learn, reviews and proposals included, and
+removed (`adage_learn::RETIRED_TRACKS`).
 
 #### 4.7.1 The normaliser
 
@@ -776,7 +791,7 @@ routes that wait for a person:
 | `imported` | Installed by `adage add`, never reviewed here |
 | `resurfaced` | Rejected, but since strengthened materially |
 | `changed` | Decided, but since changed materially |
-| `proposed` | Pinned, and the miner's version differs materially (with a diff) |
+| `proposed` | Pinned, and the learned version differs materially (with a diff) |
 | Derail flag | ≥ 5 runtime judgements in the spools, and the Wilson lower bound of the derail share ≥ 0.5 |
 
 A change is **material** when a route's shape (trigger, step, slots, effect or exit) or aspect

@@ -19,12 +19,12 @@ pub const BIND_ORDER: [&str; 19] = [
 /// How a candidate route's id is formed.
 #[derive(Debug, Clone, PartialEq)]
 pub enum IdHint {
-    /// The dead-end miner's id for the working command `wkey`: `dead-end-<stable(wkey)>` for the
+    /// The learner's dead-end id for the working command `wkey`: `dead-end-<stable(wkey)>` for the
     /// first route directing it, `dead-end-<stable(wkey, trigger key)>` for further ones.
     DeadEnd { wkey: String },
-    /// The finish-line miner's id: `finish-line-<stable(glob, command)>`.
+    /// The learner's finish-line id: `finish-line-<stable(glob, command)>`.
     FinishLine { glob: String },
-    /// No miner learns this shape: `instinct-<tag>-<stable(parts)>`.
+    /// The learner learns no this shape: `instinct-<tag>-<stable(parts)>`.
     Own { tag: String, parts: Vec<String> },
 }
 
@@ -336,7 +336,7 @@ fn u1(ctx: &Ctx) -> Detected {
         let (Some(cmd), Some(effect)) = (&w.entry.command, w.entry.effect()) else { continue };
         let summary = "Instinct U1: a declared script runs this repository's test runner with the setup it needs";
         // Declared entries that run the same runner bare (`npm test` → `node --test`) first: they
-        // are what an agent reaches for, so the first takes the miner's id. Then the bare runner.
+        // are what an agent reaches for, so the first takes the learner's id. Then the bare runner.
         let mut runners: Vec<String> = Vec::new();
         for e in &ctx.facts.entries {
             if let Some(c) = &e.command {

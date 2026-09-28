@@ -23,8 +23,14 @@ fn eval(name: &str, split: Option<&str>) -> Report {
     run(&datasets().join(name), &opts).unwrap_or_else(|e| panic!("eval {name}: {e:#}"))
 }
 
-fn precision(r: &Report, kind: &str) -> f64 {
-    r.by_kind.get(kind).unwrap_or_else(|| panic!("no {kind} directives in {} {}", r.dataset, r.split)).precision
+/// Directives by delivery shape and trigger (`adage_eval::score::point`).
+const LOOKUP: &str = "run@prompt";
+const LINKED: &str = "read-batch@after-command";
+const AVOID: &str = "avoid@session-start";
+const OBLIGATION: &str = "obligation@after-edit";
+
+fn precision(r: &Report, shape: &str) -> f64 {
+    r.by_shape.get(shape).unwrap_or_else(|| panic!("no {shape} directives in {} {}", r.dataset, r.split)).precision
 }
 
 fn at_least(what: &str, got: f64, min: f64) {
@@ -48,16 +54,18 @@ fn demo_round2_gates() {
     // Measured: precision 0.7571 overall (0.7424 before the command-pattern algebra, 0.729
     // before the second dead end); lookup 0.6667, linked files 0.8333 (0.75: the trigger now
     // fires when an agent runs the lookup script without its interpreter, 12 directives, not 8),
-    // dead end 0.7778; recall 0.913 (0.7826); finish-line accuracy 1.0 (4 obligations). Round 2
-    // is leaky by task (it trains on round-1 sessions of the tasks it tests), and the report
+    // dead end 0.7778; recall 0.913 (0.7826); finish-line accuracy 1.0 (4 obligations). With the
+    // graph engine as the only learner (Track G G5): precision 0.7568 overall (the sequence
+    // `make gen then make test then make ci`, 3 of 4 directives followed), every shape's
+    // precision unchanged, recall 0.9348. Round 2 is leaky by task (it trains on round-1 sessions of the tasks it tests), and the report
     // must say so.
     let r = eval("demo-haiku45", Some("round2"));
     assert_eq!(r.scored_sessions, 18);
-    at_least("overall precision", r.overall.precision, 0.7571 - EPS);
-    at_least("lookup precision", precision(&r, "lookup"), 0.6667 - EPS);
-    at_least("linked-files precision", precision(&r, "linked-files"), 0.8333 - EPS);
-    at_least("dead-end precision", precision(&r, "dead-end"), 0.7778 - EPS);
-    at_least("recall", r.recall["all"].recall, 0.913 - EPS);
+    at_least("overall precision", r.overall.precision, 0.7568 - EPS);
+    at_least("lookup precision", precision(&r, LOOKUP), 0.6667 - EPS);
+    at_least("linked-files precision", precision(&r, LINKED), 0.8333 - EPS);
+    at_least("dead-end precision", precision(&r, AVOID), 0.7778 - EPS);
+    at_least("recall", r.recall["all"].recall, 0.9348 - EPS);
     at_least("finish-line accuracy", r.finish_line.accuracy, 1.0 - EPS);
     assert_safe(&r);
     assert!(r.leaky && r.task_overlap == 6, "round2 must be flagged leaky: {} tasks", r.task_overlap);
@@ -68,14 +76,19 @@ fn demo_round2_gates() {
 fn demo_round2_learns_what_the_live_learner_learned() {
     // The offline learner, fed the curated transcripts of the same 54 sessions, must learn the
     // routes the live round-2 index held (ids, aspects). Measured: identical routes except two
-    // deliberate changes since: the dead end's avoided runners and evidence (the signature-keyed
-    // miner), and the exit condition dead ends and linked files now carry (Design W2). Before
+    // deliberate changes since: the dead end's avoided runners and evidence (keyed by
+    // signature), and the exit condition dead ends and linked files now carry (Design W2). Before
     // them, identical index bytes (generation 8dd5ec01ed76c4bd).
     //
     // One route is added, deliberately: dead ends are now one per (working command, signature),
     // so the second signature before `make test` (`python -m pytest`, "command not found", 4 of
     // 5 sessions) is a route of its own, `dead-end-21cb2c`. The live route keeps its id and aspect
-    // (`dead-end-d41b1e`, the most common signature). Nothing else may differ.
+    // (`dead-end-d41b1e`, the most common signature).
+    //
+    // And one since the graph engine became the only learner (Track G G5): the sessions that ran
+    // `make gen` after a schema edit and then `make test` and `make ci` did so one right after
+    // another (`adage_learn::engine`'s together rule), so beside the obligation to regenerate the
+    // sequence `make gen then make test then make ci` is learned, yellow. Nothing else may differ.
     let r = eval("demo-haiku45", Some("round2"));
     let live: adage_tracks::Index =
         serde_json::from_slice(&std::fs::read(datasets().join("demo-haiku45/recorded/index-round2.json")).unwrap())
@@ -83,6 +96,7 @@ fn demo_round2_learns_what_the_live_learner_learned() {
     let mut want: Vec<(String, String)> =
         live.routes.iter().map(|ir| (ir.route.id.clone(), format!("{:?}", ir.route.aspect).to_lowercase())).collect();
     want.push(("dead-end-21cb2c".into(), "red".into()));
+    want.push(("sequence-a36be6".into(), "yellow".into()));
     let mut got: Vec<(String, String)> = r.routes.iter().map(|x| (x.id.clone(), x.aspect.clone())).collect();
     want.sort();
     got.sort();
@@ -98,7 +112,7 @@ fn demo_round1_gates() {
     // No task on both sides.
     let r = eval("demo-haiku45", Some("round1"));
     at_least("overall precision", r.overall.precision, 0.6667 - EPS);
-    at_least("lookup precision", precision(&r, "lookup"), 0.5 - EPS);
+    at_least("lookup precision", precision(&r, LOOKUP), 0.5 - EPS);
     at_least("recall", r.recall["all"].recall, 0.5833 - EPS);
     assert_safe(&r);
     assert!(!r.leaky && r.task_overlap == 0);
@@ -142,15 +156,45 @@ fn replay_reproduces_the_live_round2_decisions() {
 }
 
 #[test]
+fn replay_with_the_learned_index_gives_every_recorded_directive() {
+    // Track G G5: the recorded decisions came from the retired miners' index. Replayed against
+    // the index the graph engine learns from the same round's train sessions, every directive the
+    // live hook gave must still arrive, at its event or earlier. Measured, both rounds: 36/36.
+    // What differs, precisely:
+    // - round 1: 34/36 identical; two holdout sessions get one more linked-files directive (the
+    //   command-pattern algebra, as in the test above); the live `finish-line-1` is today's
+    //   `finish-line-e7e809` (same trigger and step, an id from before content-derived ids).
+    // - round 2: none identical, because every session also gets the second dead end
+    //   (`dead-end-21cb2c`) at its first prompt; sessions that edit a schema get the sequence
+    //   `make gen then make test then make ci` beside the obligation (10); four holdout sessions
+    //   get one more linked-files directive; and one (`eval2-W-2045-r2-holdout`) gets its lookup
+    //   and dead end at session start, one event earlier than live.
+    let dir = datasets().join("demo-haiku45");
+    for (round, identical) in [("round1", 34), ("round2", 0)] {
+        let f = fidelity::run_learned(&dir, round, false).unwrap();
+        assert_eq!(f.sessions, 36, "{round}");
+        assert_eq!(f.superset, 36, "{round}: {:#?}", f.missing);
+        assert!(f.identical >= identical, "{round}: {} identical", f.identical);
+        for a in &f.added {
+            assert!(
+                ["read-linked-files", "dead-end-21cb2c", "sequence-a36be6"].iter().any(|id| a.contains(id)),
+                "{round}: unexpected {a}"
+            );
+        }
+        assert!(f.earlier.len() <= 1, "{round}: {:#?}", f.earlier);
+    }
+}
+
+#[test]
 fn synthetic_gates() {
     // Measured: precision 0.934 overall; lookup 0.778, linked files 1.0, dead end 1.0; recall 1.0
     // (0.974 while there was one dead end per working command: `unittest` fails with another
     // signature, now a route of its own); dead-end accuracy 1.0; finish-line accuracy 1.0.
     let r = eval("synthetic", None);
     at_least("overall precision", r.overall.precision, 0.9342 - EPS);
-    at_least("lookup precision", precision(&r, "lookup"), 0.7778 - EPS);
-    at_least("linked-files precision", precision(&r, "linked-files"), 1.0 - EPS);
-    at_least("dead-end precision", precision(&r, "dead-end"), 1.0 - EPS);
+    at_least("lookup precision", precision(&r, LOOKUP), 0.7778 - EPS);
+    at_least("linked-files precision", precision(&r, LINKED), 1.0 - EPS);
+    at_least("dead-end precision", precision(&r, AVOID), 1.0 - EPS);
     at_least("recall", r.recall["all"].recall, 1.0 - EPS);
     at_least("dead-end accuracy", r.dead_ends.accuracy, 1.0 - EPS);
     at_least("finish-line accuracy", r.finish_line.accuracy, 1.0 - EPS);
@@ -223,8 +267,8 @@ fn adversarial_set_yields_no_unsafe_directive() {
     let r = eval("adversarial", None);
     assert_safe(&r);
     // The set must keep exercising every route kind, or "zero unsafe" means nothing.
-    for k in ["lookup", "linked-files", "dead-end", "finish-line"] {
-        assert!(r.by_kind.get(k).is_some_and(|m| m.directives > 0), "adversarial set gave no {k} directive");
+    for k in [LOOKUP, LINKED, AVOID, OBLIGATION] {
+        assert!(r.by_shape.get(k).is_some_and(|m| m.directives > 0), "adversarial set gave no {k} directive");
     }
     assert!(r.safety.checked >= 80, "only {} directives checked", r.safety.checked);
 }

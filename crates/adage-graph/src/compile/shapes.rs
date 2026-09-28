@@ -27,7 +27,7 @@
 //! so `V > 0` (a guard: a lower bound ≥ 0.5) already holds. An avoid is red. No reflex compiles
 //! above yellow from prior mass alone: green reads the organic lower bound only.
 
-use super::legacy::{self, LINKED_FILES_ID, LOOKUP_ID};
+use super::stable::{self, LINKED_FILES_ID, LOOKUP_ID};
 use super::{glob, ids, max_effect, Compiled, Dropped, Input, Output, MAX_ROUTES};
 use crate::events::NodeType;
 use crate::select::{ItemView, Reflex};
@@ -239,7 +239,7 @@ fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(St
                 })
                 .collect();
             if done {
-                *templates.entry(legacy::shell_join(&t)).or_default() += n;
+                *templates.entry(stable::shell_join(&t)).or_default() += n;
             }
         }
         if let Some((t, n)) = templates.iter().max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0))) {
@@ -284,9 +284,9 @@ impl<'a> Builder<'a> {
         self.dropped.push(Dropped { pattern: r.pattern.clone(), reason: reason.into() });
     }
 
-    fn push(&mut self, shape: &'static str, legacy: bool, r: &Reflex, route: Route, prior: Option<&Route>) {
+    fn push(&mut self, shape: &'static str, fixed_id: bool, r: &Reflex, route: Route, prior: Option<&Route>) {
         let why = why(r, shape, prior.map(|p| p.id.clone()));
-        self.out.push(Compiled { shape, route, why, legacy });
+        self.out.push(Compiled { shape, route, why, fixed_id });
     }
 
     /// A prompt value flowing into an act: the lookup, with G1's learned type for the sink.
@@ -337,7 +337,7 @@ impl<'a> Builder<'a> {
                             }
                         })
                         .collect();
-                    *variants.entry(legacy::shell_join(&tpl)).or_default() += n;
+                    *variants.entry(stable::shell_join(&tpl)).or_default() += n;
                 }
             }
         }
@@ -412,7 +412,7 @@ impl<'a> Builder<'a> {
     }
 
     /// A context ending in an edit (see the module documentation).
-    fn after_edit(&mut self, r: &'a Reflex, edit: &ItemView) -> bool {
+    fn after_edit(&mut self, r: &Reflex, edit: &ItemView) -> bool {
         let cont = &r.continuation;
         if cont.is_empty() || !cont.iter().all(|v| is_act(v) && v.ok != Some(false)) {
             self.drop(r, "the continuation is not a run of successful commands");
@@ -495,6 +495,12 @@ impl<'a> Builder<'a> {
             && matches!(first, Effect::Regenerate | Effect::Environment)
             && fixed[1..].iter().all(|c| matches!(c.2, Effect::Regenerate | Effect::Verify))
             && fixed.iter().map(|c| &c.1).collect::<BTreeSet<_>>().len() == fixed.len();
+        // A sequence that starts with a regeneration owes that step as well: its obligation (with
+        // the Stop request a sequence never makes) is compiled beside it.
+        if seq_ok && first == Effect::Regenerate {
+            let single = Reflex { continuation: vec![cont[0].clone()], ..r.clone() };
+            self.after_edit(&single, edit);
+        }
         let (shape, step, effect, legacy_ok) = if seq_ok {
             let effect = fixed.iter().map(|c| c.2).fold(Effect::Observe, max_effect);
             ("sequence", Step::Sequence { commands: fixed.iter().map(|c| c.1.clone()).collect() }, effect, false)
@@ -537,7 +543,7 @@ impl<'a> Builder<'a> {
                 continue;
             };
             let id = if legacy_ok {
-                legacy::finish_line_id(&g, cmd.as_deref().unwrap_or_default())
+                stable::finish_line_id(&g, cmd.as_deref().unwrap_or_default())
             } else {
                 ids::route_id(shape, &trigger, &step, &[])
             };
@@ -655,7 +661,7 @@ impl<'a> Builder<'a> {
         true
     }
 
-    /// Group avoid cores by working command, then signature (the dead-end miner's structure), and
+    /// Group avoid cores by working command, then signature, and
     /// announce each at session start or after its failure.
     fn finish_avoids(&mut self) {
         let p = self.input.params;
@@ -683,12 +689,27 @@ impl<'a> Builder<'a> {
                 });
                 continue;
             };
+            // Runners that fail where they run (a failure family names several).
+            let corpus = self.input.corpus;
+            let consistent = |r: &String| {
+                let ran = corpus.runners.get(r).copied().unwrap_or(0);
+                let ok = corpus.runners_passed.get(r).copied().unwrap_or(0);
+                ran > 0 && (ran - ok) as f64 >= p.consistency * ran as f64 - 1e-9
+            };
             let runners: BTreeSet<String> = c
                 .runner_keys
                 .iter()
-                .filter_map(|k| self.input.corpus.literal(k))
-                .map(|(_, argv)| legacy::runner(argv))
+                .filter_map(|k| corpus.literal(k))
+                .map(|(_, argv)| stable::runner(argv))
+                .filter(consistent)
                 .collect();
+            if runners.is_empty() {
+                self.dropped.push(Dropped {
+                    pattern: c.r.pattern.clone(),
+                    reason: "every runner it fails with also passes where it runs".into(),
+                });
+                continue;
+            }
             let e = by_w.entry(c.wkey.clone()).or_insert_with(|| (c.instead.clone(), BTreeMap::new()));
             let s = e.1.entry(sig).or_default();
             s.0.extend(runners);
@@ -699,10 +720,15 @@ impl<'a> Builder<'a> {
         for (wkey, (instead, sigs)) in by_w {
             let mut ranked: Vec<(String, Sig)> = sigs.into_iter().collect();
             ranked.sort_by(|a, b| b.1 .2.cmp(&a.1 .2).then_with(|| b.0.cmp(&a.0)));
-            ranked.truncate(3);
+            ranked.truncate(p.max_signatures.max(1));
             let mut named: BTreeSet<String> = BTreeSet::new();
             for (rank, (sig, (runners, keys, _, rs))) in ranked.into_iter().enumerate() {
-                let runners: Vec<String> = runners.into_iter().filter(|x| !named.contains(x)).take(3).collect();
+                // Most traces first, then by name; each runner named once, under its most common
+                // signature.
+                let mut runners: Vec<String> = runners.into_iter().filter(|x| !named.contains(x)).collect();
+                let ran = |x: &String| self.input.corpus.runners.get(x).copied().unwrap_or(0);
+                runners.sort_by(|a, b| ran(b).cmp(&ran(a)).then_with(|| a.cmp(b)));
+                runners.truncate(3);
                 if runners.is_empty() {
                     continue;
                 }
@@ -715,7 +741,7 @@ impl<'a> Builder<'a> {
                     runners.iter().map(|x| self.input.corpus.runners.get(x).copied().unwrap_or(0)).max().unwrap_or(0);
                 let at_start = self.input.corpus.sessions > 0
                     && ran as f64 / self.input.corpus.sessions as f64 >= p.announce_at_start;
-                let id = legacy::dead_end_id(&wkey, &sig, rank);
+                let id = stable::dead_end_id(&wkey, &sig, rank);
                 let mut ev = evidence(best, &p.provenance);
                 ev.opportunities = ran.max(best.support);
                 ev.rate = best.support as f64 / ev.opportunities.max(1) as f64;

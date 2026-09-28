@@ -394,8 +394,9 @@ pub fn mine(dir: &Path, plan: &Plan, state: &RunState) -> Result<Staged> {
     let report = adage_learn::learn(&inputs, &tracks, &index, &cfg).context("mining the exploration transcripts")?;
     let mut all = io::read_all(&tracks)?;
     // Plain verify claims ("run `make check` before finishing"): compiled where the exploration
-    // sessions ran the step after their last edit (`adage_learn::mine::claimed_verify_route`).
-    add_claimed_verify_steps(&mut all, &transcripts, plan, &cfg);
+    // sessions ran the step after their last edit (`adage_learn::claims::claimed_verify_route`);
+    // lookup claims where they looked the prompt's item up (`claimed_lookup_route`).
+    add_claimed_steps(&mut all, &transcripts, plan, &cfg);
     // The synthetic-origin cap (docs/training.md): never green, never more than probation. A
     // dead end stays red (the model requires it of an avoid step); review decides.
     for t in all.iter_mut() {
@@ -444,29 +445,39 @@ pub fn mine(dir: &Path, plan: &Plan, state: &RunState) -> Result<Staged> {
     })
 }
 
-/// Each plain verify claim the exploration sessions followed after their edits, as a finish-line
-/// route in the repository's `finish-line` track (created if learning wrote none). A route
-/// already directing the step is left as it is.
-fn add_claimed_verify_steps(
-    all: &mut Vec<adage_tracks::Track>,
-    transcripts: &[PathBuf],
-    plan: &Plan,
-    cfg: &LearnConfig,
-) {
+/// Each plain verify claim the exploration sessions followed after their edits, and each lookup
+/// claim they followed when a prompt named an item, as a reflex in the repository's learned track
+/// (created if learning wrote none). A reflex already directing the step (a lookup already
+/// learned) is left as it is.
+fn add_claimed_steps(all: &mut Vec<adage_tracks::Track>, transcripts: &[PathBuf], plan: &Plan, cfg: &LearnConfig) {
     use crate::claims::ClaimKind;
     let table = adage_core::CommandTable::load();
     let sessions: Vec<adage_learn::import::Session> =
         transcripts.iter().filter_map(|p| adage_learn::read_session(p, &table, Some(&plan.repo.key))).collect();
     let refs: Vec<&adage_learn::import::Session> = sessions.iter().filter(|s| !s.steps.is_empty()).collect();
-    let name = format!("{}/finish-line", adage_learn::slug(&plan.repo.key));
+    let name = format!("{}/{}", adage_learn::slug(&plan.repo.key), adage_learn::TRACK);
     for c in plan.claims.iter().filter(|c| !c.is_unsafe()) {
-        let ClaimKind::Verify { command } = &c.kind else { continue };
-        let Some(route) = adage_learn::mine::claimed_verify_route(&refs, command, cfg) else { continue };
-        let directs =
-            |r: &adage_tracks::Route| matches!(&r.step, adage_tracks::Step::Run { command: x } if x == command);
-        if all.iter().any(|t| t.routes.iter().any(directs)) {
-            continue;
-        }
+        let route = match &c.kind {
+            ClaimKind::Verify { command } => {
+                let Some(route) = adage_learn::claims::claimed_verify_route(&refs, command, cfg) else { continue };
+                let directs =
+                    |r: &adage_tracks::Route| matches!(&r.step, adage_tracks::Step::Run { command: x } if x == command);
+                if all.iter().any(|t| t.routes.iter().any(directs)) {
+                    continue;
+                }
+                route
+            }
+            ClaimKind::Lookup { tool, id_example: Some(example), .. } => {
+                if all.iter().any(|t| t.routes.iter().any(|r| r.id == "lookup-work-item")) {
+                    continue;
+                }
+                let Some(route) = adage_learn::claims::claimed_lookup_route(&refs, tool, example, cfg) else {
+                    continue;
+                };
+                route
+            }
+            _ => continue,
+        };
         match all.iter_mut().find(|t| t.manifest.track.name == name) {
             Some(t) => t.routes.push(route),
             None => all.push(adage_tracks::Track {
@@ -474,7 +485,7 @@ fn add_claimed_verify_steps(
                     track: adage_tracks::TrackInfo {
                         name: name.clone(),
                         version: "0.1.0".into(),
-                        description: "Steps this repository requires after certain edits".into(),
+                        description: "Reflexes learned from this repository's agent sessions".into(),
                         provenance: cfg.provenance.clone(),
                     },
                     scope: adage_tracks::Scope { repo: plan.repo.key.clone() },

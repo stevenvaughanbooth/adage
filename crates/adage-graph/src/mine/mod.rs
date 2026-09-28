@@ -299,10 +299,7 @@ impl Db {
                 }
             }
         }
-        let exposed: Vec<bool> = keep
-            .iter()
-            .map(|&i| s.influence.iter().any(|&(from, lab)| from as usize <= i && s.events[i].lab[0] == lab))
-            .collect();
+        let exposed: Vec<bool> = keep.iter().map(|&i| s.exposed.binary_search(&(i as u32)).is_ok()).collect();
         DbSession {
             id: s.id.clone(),
             day: s.day,

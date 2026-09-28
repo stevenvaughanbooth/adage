@@ -127,7 +127,7 @@ mod tests {
                     _ => vec![("item".into(), "i".repeat(200))],
                 };
                 let body = render::route_text(r, &bound).expect("renders");
-                let kind = adage_tracks::route_kind(r);
+                let kind = adage_tracks::shape(r);
                 render::wrap_kind(&t.manifest.track.name, &t.manifest.track.version, &r.id, kind, r.aspect, &body).len()
             })
             .max()

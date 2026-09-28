@@ -1,4 +1,4 @@
-//! Track G G4, end to end through the real hook: learn with `--engine graph` on an `evals/gen`
+//! Track G G4, end to end through the real hook: learn on an `evals/gen`
 //! newkinds bundle's rehearsal traces, then replay held-out traces event by event through
 //! `adage hook claude <event>` (a fresh process per event, payload on stdin, the treated arm) and
 //! read what it delivers.
@@ -220,10 +220,10 @@ fn new_kind_reflexes_and_a_context_route_fire_through_the_hook_on_held_out_trace
         let test: Vec<&Value> = sessions.iter().filter(|x| held(x)).collect();
         assert_eq!(test.len(), 7, "{name}");
 
-        // Learn with the graph engine on the rest.
+        // Learn on the rest.
         let home = tmp.join(format!("home-{name}"));
         let o = adage(&home)
-            .args(["learn", "--demo", "--json", "--no-instincts", "--engine", "graph", "--repo", &repo])
+            .args(["learn", "--demo", "--json", "--no-instincts", "--repo", &repo])
             .arg("--outcomes")
             .arg(b.join("rehearsal/outcomes.json"))
             .arg("--transcripts")

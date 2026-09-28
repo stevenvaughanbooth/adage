@@ -111,9 +111,9 @@ A learn, one line per repository learned:
 {"ts":1758620000000,"kind":"learn","trigger":"auto","repo":"github.com/acme/billing",
  "sessions_read":212,"sessions_used":198,"duration_ms":431,"index_generation":"3f1c9a0d4b2e7f61",
  "changes":[
-   {"route":"finish-line-6a01b2","track":"github-com-acme-billing/finish-line","change":"aspect",
+   {"route":"finish-line-6a01b2","track":"github-com-acme-billing/learned","change":"aspect",
     "from":"yellow","to":"green","summary":"finish line route yellow → green (9 of 9 sessions, lower bound 0.70)"},
-   {"route":"lookup-work-item","track":"github-com-acme-billing/work-items","change":"evidence",
+   {"route":"lookup-work-item","track":"github-com-acme-billing/learned","change":"evidence",
     "from":null,"to":null,"summary":"green work item route evidence 8/9 → 9/10 sessions"}],
  "version":"0.1.0","sessions_steered":3,"thresholds":"min_support=5 green_lower_bound=0.8 yellow_rate=0.5",
  "intent_model":null,"repos":{"github.com/acme/billing":{"sessions":198,"tracks":[…]}}}
@@ -156,6 +156,6 @@ new files in the directory. Each record:
 
 `propensity` is the probability of `arm` at assignment: the holdout share for `holdout`, one minus
 it for `treated`, and 1 when `ADAGE_ARM` forced the arm (absent in records written before it). Each
-directive carries its route's `kind` (`work-items`, `finish-line`, `dead-ends`, `intents` or
-`other`). `observed` holds canonical template keys, not raw commands, and no prompt text is recorded. Events
+directive carries its route's delivery shape as `kind` (`run`, `avoid`, `read-batch`, `obligation`,
+`sequence` or `advise`; records written before Track G G5 hold the retired track kinds). `observed` holds canonical template keys, not raw commands, and no prompt text is recorded. Events
 the no-match fast path skips leave no record.

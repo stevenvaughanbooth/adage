@@ -1,5 +1,5 @@
 //! Evidence integrity (E1): a route that steers the sessions which would confirm it goes stale
-//! instead of retiring itself, and directives of unknown kind are excluded from every miner.
+//! instead of retiring itself, and directives of unknown kind are excluded from the learner.
 //!
 //! Synthetic Claude Code transcripts in the real on-disk format, as in `golden.rs`.
 
@@ -24,10 +24,16 @@ impl Tx {
             "message":{"role":"user","content":prompt}});
         Tx { lines: vec![first], sid: sid.into(), n: 0 }
     }
-    /// A directive delivered by the hook, as Claude Code records it.
-    fn directive(&mut self, wrapper: &str) -> &mut Self {
+    /// A directive delivered by the hook, as Claude Code records it: the lookup's text, naming
+    /// the lookup of `item` (a wrapper of another route names nothing readable).
+    fn directive(&mut self, wrapper: &str, item: &str) -> &mut Self {
+        let body = if wrapper.contains("lookup-work-item") {
+            format!("In this repository, work item details are looked up with:\n  python3 scripts/wi-lookup {item}")
+        } else {
+            "…".to_string()
+        };
         self.lines.push(json!({"type":"attachment","sessionId":self.sid,"cwd":CWD,
-            "content": format!("{wrapper}\nIn this repository, work item details are looked up with: …\n</adage-signal>")}));
+            "content": format!("{wrapper}\n{body}\n</adage-signal>")}));
         self
     }
     fn call(&mut self, name: &str, input: Value, output: &str) -> &mut Self {
@@ -51,7 +57,7 @@ impl Tx {
 }
 
 const LOOKUP: &str =
-    r#"<adage-signal track="acme-billing/work-items@0.1.0" route="lookup-work-item" aspect="green" kind="work-items">"#;
+    r#"<adage-signal track="acme-billing/learned@0.1.0" route="lookup-work-item" aspect="green" kind="run">"#;
 
 /// A session whose prompt names a work item. `steered`: the lookup directive was delivered.
 /// `looks_up`: the agent ran the lookup (as nearly every agent does once told to).
@@ -59,7 +65,7 @@ fn session(dir: &Path, sid: &str, item: usize, steered: Option<&str>, looks_up: 
     let id = format!("W-{:04}", 1000 + item);
     let mut t = Tx::new(sid, &format!("Pick up {id} and get it done."));
     if let Some(w) = steered {
-        t.directive(w);
+        t.directive(w, &id);
     }
     t.bash("ls", "README.md\nMakefile\nacme");
     if looks_up {
@@ -99,7 +105,7 @@ impl World {
         Index::load(&self.home().join("index.json"))
     }
     fn track(&self) -> Track {
-        io::read(&self.home().join("tracks").join(REPO).join("work-items")).unwrap()
+        io::read(&self.home().join("tracks").join(REPO).join("learned")).unwrap()
     }
     fn lookup(&self) -> Option<Route> {
         self.track().routes.into_iter().find(|r| r.id == "lookup-work-item")
@@ -121,7 +127,7 @@ fn a_route_that_steers_its_own_evidence_away_goes_stale_not_retired() {
     let learned = r.evidence.clone();
 
     // 2. The old transcripts expire. What is left: nine sessions the route steered (they looked
-    //    the item up, as told) and one held-out session (~10%) that found it unaided. The miner
+    //    the item up, as told) and one held-out session (~10%) that found it unaided. The learner
     //    sees one unsteered session: too little support. Before E1 the route retired itself.
     let h = w.history("after");
     let mut after: Vec<PathBuf> = (0..9).map(|i| session(&h, &format!("t{i}"), 20 + i, Some(LOOKUP), true)).collect();
@@ -184,13 +190,12 @@ fn a_route_nothing_exposed_is_dropped_as_before() {
 }
 
 #[test]
-fn directives_of_unknown_kind_are_excluded_from_every_miner() {
+fn directives_that_name_nothing_readable_steer_everything() {
     let w = World::new();
     let h = w.history("h");
     let mut files: Vec<PathBuf> = (0..6).map(|i| session(&h, &format!("u{i}"), i, None, true)).collect();
-    // Steered by an imported route whose id no miner produces (a red dead end, say), in the old
-    // wrapper without a kind, and by one whose kind says `other`: either could have steered the
-    // first command, so none of these sessions is lookup evidence.
+    // Steered by directives whose wrapper was cut short (no body to read what they named): either
+    // could have steered the first command, so none of these traces is lookup evidence.
     let old = r#"<adage-signal track="team/tricks@1.0.0" route="avoid-legacy-runner" aspect="red">"#;
     let other = r#"<adage-signal track="team/tricks@1.0.0" route="dead-end-9" aspect="red" kind="other">"#;
     for i in 0..3 {
@@ -199,7 +204,7 @@ fn directives_of_unknown_kind_are_excluded_from_every_miner() {
     }
     let p = files.last().unwrap();
     let s = adage_learn::import::parse_transcript(p, &adage_core::CommandTable::load(), None).unwrap();
-    assert_eq!(s.steered_kinds.len(), 4, "{:?}", s.steered_kinds);
+    assert!(!s.influence.is_empty() && s.influence.iter().all(|d| d.all), "{:?}", s.influence);
     w.learn(&files);
     let r = w.lookup().unwrap();
     assert_eq!(r.evidence.opportunities, 6, "sessions steered by an unknown route are not lookup opportunities");

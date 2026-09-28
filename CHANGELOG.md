@@ -9,6 +9,23 @@ version as the GitHub Release notes.
 
 ### Changed
 
+- **One learner (Track G G5).** The graph engine is now the only learner: the hand-written miners
+  (lookup, linked files, finish line, dead ends, intent families) are removed, and so are route
+  kinds, `learn.engine` and `adage learn --engine`. It learns everything they learned on every
+  committed dataset and split, and more on the generated suites (every id shape; scope, env_sync
+  and sequence reflexes), with no unsafe directive (docs/tracks/track-g-graph-engine.md, G5 status
+  note).
+  - Every reflex of a repository is written to one track, `<repo>/learned`. The old tracks
+    (`work-items`, `finish-line`, `dead-ends`, `intents`, `graph`) are folded into it on the next
+    learn, review decisions and proposals included; reflex ids are unchanged.
+  - A directive's wrapper `kind` is now its delivery shape (`run`, `avoid`, `read-batch`,
+    `obligation`, `sequence`, `advise`), and `adage eval` scores directives per shape and trigger.
+  - Steering is by influence: what a directive names (commands, avoided runners, listed files) is
+    no evidence from the point it arrived, for any reflex, instead of a whole session being
+    excluded from one kind.
+  - Dead ends are announced at session start.
+  - `adage eval fidelity --learned` replays the recorded demo rounds against today's learned index.
+
 - Branding: the pitch is now **"Agent traces become reflexes."** Reflexes (learned) and instincts
   (shipped) are the units; tracks and packs are the artefacts. "Put your agent on rails" is retired
   as the tagline (README, plugin and npm descriptions, Design Spec §17).

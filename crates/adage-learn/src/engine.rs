@@ -1,24 +1,23 @@
-//! The graph engine's routes inside `adage learn` (Track G G3): reflexes mined from the traces,
-//! compiled to delivery shapes, judged on the traces, and grouped into track directories.
+//! Learning inside `adage learn` (Track G): reflexes mined from the traces, compiled to delivery
+//! shapes, judged on the traces. This is the only learner; it knows no route kinds.
 //!
-//! 1. **Mine** (G2): every trace no directive steered becomes an event sequence
-//!    ([`crate::bridge::events`]); `adage_graph::select::learn` mines, scores and selects reflexes.
+//! 1. **Mine** (G2): every trace becomes an event sequence ([`crate::bridge::events`]), with the
+//!    events its directives named marked exposed (steering by influence, Track G §3.2);
+//!    `adage_graph::select::learn` mines, scores and selects reflexes.
 //! 2. **Compile** (G3, `adage_graph::compile`): each reflex becomes zero or more routes by its
-//!    structure, with a content-derived id, or a miner's id for a shape a miner emits today
-//!    (so `review.yaml` decisions survive), and a `why` block for people.
-//! 3. **Judge.** A compiled route's evidence is counted on the traces exactly as its own trigger
-//!    and step read them, the way the miners count a route of that shape: the lookup through G1's
-//!    value types ([`crate::graph::lookup_routes`]), linked files through the read-batch counter,
-//!    an after-edit route over the traces that edited a file of its glob (run after the last such
+//!    structure, with a stable, content-derived id (so `review.yaml` decisions survive) and a
+//!    `why` block for people. Value slots (G1) give the lookup's typed slot, and prompt-intent
+//!    prototypes (`adage_graph::compile::intent`) the intent routes.
+//! 3. **Judge.** A compiled route's evidence is counted again on the traces exactly as its own
+//!    trigger and step read them: the lookup through G1's value types
+//!    ([`crate::graph::lookup_routes`]), a read batch over the traces that ran its command, an
+//!    after-edit route over the traces that edited a file of its glob (run after the last such
 //!    edit, contrast against the traces that did not), an after-command route over the traces
-//!    that ran the command. Its aspect is then the miners' rule over those counts (Wilson lower
-//!    bound for green, rate for yellow, capped by the ceiling): the parity switch of Track G §5,
-//!    so an engine change does not move an aspect by itself. Avoids (red) and context routes keep
-//!    the reflex's own evidence. Traces steered by a route of the same shape
-//!    (`adage_tracks::route_kind`) are left out of its count.
-//! 4. **Group** by `adage_graph::compile::legacy_track`: the legacy track of the route's shape
-//!    (`work-items`, `finish-line`, `dead-ends`), else `graph`. Intent families still come from
-//!    `crate::intent` (a prompt prototype needs the pinned embedding model; G5 moves it).
+//!    that ran the command, an avoid over the traces that ran an avoided runner. Its aspect is
+//!    the Wilson rule over those counts (a lower bound for green, a rate for yellow, capped by the
+//!    ceiling), with the outcome-lift path as a second gate. Context routes keep the reflex's own
+//!    evidence. A trace that received a directive naming what a route directs is left out of its
+//!    count ([`exposed`]).
 //!
 //! **Instincts as priors.** The repository's installed instinct routes are pseudo-evidence on the
 //! reflex at the same decision point directing the same command: 3 traces at 0.7 in the yellow
@@ -26,17 +25,20 @@
 //! prior mass, and a reflex that says otherwise always wins (interlocking puts instincts last).
 
 use crate::bridge;
+use crate::evidence::{argv, aspect_for, days, median, models, outcome_lift, shell_join, LearnConfig, PATHS_FIELD};
 use crate::import::Session;
-use crate::mine::{aspect_for, days, models, shell_join, LearnConfig};
-use adage_core::Effect;
+use adage_core::spans::{self, SpanKind};
+use adage_core::{CanonicalAction, Effect};
 use adage_graph::compile::{self, CompileParams, Corpus, Dropped, Prior};
 use adage_graph::select::{self, Counts};
+use adage_intent::model::StaticModel;
+use adage_runtime::extract_json;
 use adage_tracks::why::Why;
 use adage_tracks::*;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 
-/// What the graph engine did for one repository.
+/// What learning did for one repository.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct EngineReport {
     /// Traces mined.
@@ -45,26 +47,27 @@ pub struct EngineReport {
     pub compiled: usize,
     /// Routes that passed judgement.
     pub routes: usize,
-    /// Routes compiled with a context trigger (matched at hook time since G4).
+    /// Routes compiled with a context trigger (matched at hook time).
     pub contexts: usize,
+    /// Prompt-intent prototypes that cleared the purity bar (none without an embedding model).
+    pub intent_families: usize,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub dropped: Vec<Dropped>,
 }
 
-/// One judged route, where it goes, and why it exists.
+/// One judged route, and why it exists.
 #[derive(Debug, Clone)]
 pub struct Judged {
-    pub track: &'static str,
     pub route: Route,
     pub why: Why,
 }
 
-/// The result of a graph learn for one repository.
+/// The result of learning for one repository.
 #[derive(Debug, Clone, Default)]
 pub struct EngineRun {
     pub routes: Vec<Judged>,
     pub report: EngineReport,
-    /// Every scored candidate's counts by pattern (for stale routes).
+    /// Every scored candidate's counts by pattern (for dormant routes).
     pub counts: BTreeMap<String, Counts>,
 }
 
@@ -72,7 +75,7 @@ fn threads() -> usize {
     std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).min(8)
 }
 
-fn glob_hit(glob: &str, rel: &str) -> bool {
+pub(crate) fn glob_hit(glob: &str, rel: &str) -> bool {
     adage_graph::select::glob_match(glob, rel) || glob::Pattern::new(glob).is_ok_and(|g| g.matches(rel))
 }
 
@@ -85,7 +88,28 @@ fn ok_literal(st: &crate::import::StepObs) -> Option<String> {
     if st.call.failed {
         return None;
     }
-    crate::mine::argv(st).map(|av| shell_join(av))
+    argv(st).map(|av| shell_join(av))
+}
+
+/// The commands a route directs or names: its step's commands, an avoid's runners, and the
+/// runner whose failure an after-failure route follows.
+pub fn named_commands(r: &Route) -> Vec<String> {
+    let mut v: Vec<String> = compile::commands(&r.step).into_iter().map(str::to_string).collect();
+    if let Step::Avoid { avoid, .. } = &r.step {
+        v.extend(avoid.split(" / ").map(str::to_string));
+    }
+    if let Trigger::AfterFailure { command, .. } = &r.trigger {
+        v.push(command.trim_start_matches("exec ").to_string());
+    }
+    v
+}
+
+/// Whether trace `s` received a directive naming what `r` directs (Track G §3.2): it is then no
+/// evidence for `r`.
+pub fn exposed(s: &Session, r: &Route) -> bool {
+    let cmds = named_commands(r);
+    let refs: Vec<&str> = cmds.iter().map(String::as_str).collect();
+    s.exposed_to(&refs, matches!(r.step, Step::ReadBatch { .. }))
 }
 
 /// Whether `steps` ran what `step` directs after position `from` (a sequence in order), with
@@ -161,6 +185,42 @@ fn count_after_edit(r: &Route, sessions: &[&Session]) -> Option<Count> {
     Some(Count { opportunities: opp, open, support, rate_without, deviations_failed: failed })
 }
 
+/// The share of an after-edit sequence's traces that must run its steps one right after another
+/// for it to be delivered beside an obligation owing its first step.
+const SEQUENCE_TOGETHER: f64 = 0.75;
+
+/// Of the traces that ran an after-edit sequence's steps in order after their last matching edit,
+/// how many ran each later step as the very next command after the one before it: (together, of).
+fn together(r: &Route, sessions: &[&Session]) -> (u32, u32) {
+    let (Trigger::AfterEdit { paths }, Step::Sequence { commands }) = (&r.trigger, &r.step) else { return (0, 0) };
+    let (mut together, mut of) = (0, 0);
+    for s in sessions {
+        let Some(last) = s.steps.iter().rposition(|st| edited(st).is_some_and(|p| glob_hit(paths, p))) else {
+            continue;
+        };
+        // Each step's position, found in order.
+        let mut at = Vec::new();
+        let mut from = last + 1;
+        for c in commands {
+            match s.steps.iter().enumerate().skip(from).find(|(_, st)| ok_literal(st).as_deref() == Some(c.as_str())) {
+                Some((i, _)) => {
+                    at.push(i);
+                    from = i + 1;
+                }
+                None => break,
+            }
+        }
+        if at.len() != commands.len() {
+            continue;
+        }
+        of += 1;
+        let next_command =
+            |i: usize| s.steps.iter().enumerate().skip(i + 1).find(|(_, st)| argv(st).is_some()).map(|(j, _)| j);
+        together += u32::from(at.windows(2).all(|w| next_command(w[0]) == Some(w[1])));
+    }
+    (together, of)
+}
+
 /// An after-command run over the traces: those that ran the command, and those that then ran the
 /// directed one within the next eight steps.
 fn count_after_command(r: &Route, sessions: &[&Session]) -> Option<Count> {
@@ -186,17 +246,15 @@ fn count_avoid(runners: &[&str], instead: &str, sessions: &[&Session]) -> Count 
             .steps
             .iter()
             .enumerate()
-            .filter(|(_, st)| {
-                crate::mine::argv(st).is_some_and(|av| runners.contains(&crate::mine::runner(av).as_str()))
-            })
+            .filter(|(_, st)| argv(st).is_some_and(|av| runners.contains(&crate::evidence::runner(av).as_str())))
             .map(|(i, _)| i)
             .collect();
         if runs.is_empty() {
             continue;
         }
         opp += 1;
-        // The recovery is the first check that then passed (within five steps), as the dead-end
-        // miner pairs them: a later check that also passed is not what replaced the runner.
+        // The recovery is the first check that then passed (within five steps): a later check
+        // that also passed is not what replaced the runner.
         let recovered = runs.iter().any(|&i| {
             let failed = &s.steps[i];
             failed.call.failed
@@ -205,10 +263,7 @@ fn count_avoid(runners: &[&str], instead: &str, sessions: &[&Session]) -> Count 
                     .skip(i + 1)
                     .take(5)
                     .find(|b| {
-                        crate::mine::argv(b).is_some()
-                            && !b.call.failed
-                            && b.norm.effect == Effect::Verify
-                            && b.key != failed.key
+                        argv(b).is_some() && !b.call.failed && b.norm.effect == Effect::Verify && b.key != failed.key
                     })
                     .and_then(ok_literal)
                     .as_deref()
@@ -221,10 +276,97 @@ fn count_avoid(runners: &[&str], instead: &str, sessions: &[&Session]) -> Count 
     Count { opportunities: opp, open: BTreeSet::new(), support, rate_without: 0.0, deviations_failed: 0 }
 }
 
-/// Judge one compiled route (see the module documentation); `None` drops it.
+/// A read batch over the traces: those whose run of `key` listed files (in JSON, or repository
+/// paths in its text) are the opportunities, those that then read at least half of them within
+/// sixteen steps the support. The field most supporting runs listed them in is the slot's.
+pub fn judge_read_batch(r: &Route, sessions: &[&Session], cfg: &LearnConfig) -> Option<Route> {
+    let Trigger::AfterCommand { command: key } = &r.trigger else { return None };
+    let mut opportunities = 0u32;
+    let mut open: BTreeSet<String> = BTreeSet::new();
+    let mut support: BTreeSet<String> = BTreeSet::new();
+    let mut fields: BTreeMap<String, u32> = BTreeMap::new();
+    let mut saved: Vec<f64> = Vec::new();
+    for s in sessions {
+        let Some(pos) = s.steps.iter().position(|x| &x.key == key && !x.call.failed) else { continue };
+        let output = &s.steps[pos].call.output;
+        let mut listed: Vec<(String, Vec<String>)> = extract_json(output)
+            .and_then(|j| j.as_object().cloned())
+            .map(|obj| {
+                obj.iter()
+                    .filter_map(|(k, v)| {
+                        let arr: Vec<String> =
+                            v.as_array()?.iter().filter_map(|x| x.as_str().map(str::to_string)).collect();
+                        (!arr.is_empty() && arr.iter().all(|p| p.contains('/') || p.contains('.')))
+                            .then_some((k.clone(), arr))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if listed.is_empty() {
+            // Plain-text output: the repository paths it mentions.
+            let paths: Vec<String> =
+                spans::extract(output).into_iter().filter(|x| x.kind == SpanKind::Path).map(|x| x.value).collect();
+            if !paths.is_empty() {
+                listed.push((PATHS_FIELD.to_string(), paths));
+            }
+        }
+        let Some((field, files)) = listed.into_iter().next() else { continue };
+        opportunities += 1;
+        open.insert(s.id.clone());
+        let mut read_turns: BTreeSet<u32> = BTreeSet::new();
+        let mut covered: BTreeSet<String> = BTreeSet::new();
+        for st in s.steps.iter().skip(pos + 1).take(16) {
+            if let (CanonicalAction::Read { .. }, Some(rel)) = (&st.norm.action, &st.rel_path) {
+                if files.contains(rel) {
+                    covered.insert(rel.clone());
+                    read_turns.insert(st.turn);
+                }
+            }
+        }
+        if covered.len() * 2 >= files.len() {
+            support.insert(s.id.clone());
+            *fields.entry(field).or_default() += 1;
+            saved.push(read_turns.len().saturating_sub(1) as f64);
+        }
+    }
+    let n = support.len() as u32;
+    let rate = n as f64 / opportunities.max(1) as f64;
+    let lift = outcome_lift(sessions, &open, &support);
+    // The rate gate, else the outcome-lift path (yellow either way: a read is only suggested).
+    if (n < cfg.min_support || rate < cfg.bar(&r.id))
+        && crate::evidence::lift_aspect(Effect::Observe, false, cfg, lift.as_ref()).is_none()
+    {
+        return None;
+    }
+    let field = fields.into_iter().max_by_key(|(_, c)| *c).map(|(f, _)| f).unwrap_or_default();
+    Some(Route {
+        slots: vec![Slot {
+            name: "files".into(),
+            source: SlotSource::ResultField { field },
+            contract: Contract::RepoPath,
+        }],
+        aspect: Aspect::Yellow,
+        state: RouteState::Active,
+        evidence: Evidence {
+            opportunities,
+            support: n,
+            days: days(sessions, &support),
+            rate,
+            lower_bound: wilson_lower(n, opportunities),
+            turns_saved: median(&mut saved),
+            provenance: cfg.provenance.clone(),
+            models: models(sessions),
+            outcome_lift: lift,
+            origin: r.evidence.origin.clone(),
+            ..Default::default()
+        },
+        ..r.clone()
+    })
+}
+
+/// Judge one compiled route (see the module documentation); `Err` drops it.
 fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], prior: bool) -> Result<Route, String> {
-    let kind = route_kind(&r);
-    let seen: Vec<&Session> = ss.iter().copied().filter(|s| !s.steered_by(kind)).collect();
+    let seen: Vec<&Session> = ss.iter().copied().filter(|s| !exposed(s, &r)).collect();
     match (&r.trigger, &r.step) {
         (Trigger::Prompt { .. }, Step::Run { command }) => {
             let id = |c: &str| adage_graph::select::command_identity(c);
@@ -234,22 +376,16 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
                 .cloned()
                 .ok_or_else(|| "the value-type lookup does not judge it".to_string());
         }
-        (Trigger::AfterCommand { command }, Step::ReadBatch { .. }) => {
-            return crate::mine::read_batch_routes(&seen, command, cfg)
-                .into_iter()
-                .next()
-                .map(|mut x| {
-                    x.evidence.origin = r.evidence.origin.clone();
-                    x
-                })
-                .ok_or_else(|| "too few traces read the files it listed together".to_string());
+        (Trigger::AfterCommand { .. }, Step::ReadBatch { .. }) => {
+            return judge_read_batch(&r, &seen, cfg)
+                .ok_or_else(|| "too few traces read the files it listed together".into());
         }
         (Trigger::SessionStart, Step::Avoid { avoid, instead, .. }) => {
             let runners: Vec<&str> = avoid.split(" / ").collect();
             let c = count_avoid(&runners, instead, &seen);
             let n = c.support.len() as u32;
             if n < cfg.min_support {
-                return Err(format!("{n} unsteered traces recovered, fewer than {}", cfg.min_support));
+                return Err(format!("{n} unexposed traces recovered, fewer than {}", cfg.min_support));
             }
             let opp = c.opportunities.max(n);
             r.evidence = Evidence {
@@ -267,13 +403,13 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
             return Ok(r);
         }
         (Trigger::AfterFailure { command: key, .. }, Step::Run { command }) => {
-            let runner = crate::mine::runner(
+            let runner = crate::evidence::runner(
                 &key.trim_start_matches("exec ").split(' ').map(str::to_string).collect::<Vec<_>>(),
             );
             let c = count_avoid(&[runner.as_str()], command, &seen);
             let n = c.support.len() as u32;
             if n < cfg.min_support {
-                return Err(format!("{n} unsteered traces recovered, fewer than {}", cfg.min_support));
+                return Err(format!("{n} unexposed traces recovered, fewer than {}", cfg.min_support));
             }
             let opp = c.opportunities.max(n);
             let (rate, lb) = (n as f64 / opp as f64, wilson_lower(n, opp));
@@ -294,7 +430,7 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
             return Ok(r);
         }
         (Trigger::Context { .. }, _) => {
-            // Nothing counts a context again on the traces (G4 matches it at hook time only): it
+            // Nothing counts a context again on the traces (it is matched at hook time only): it
             // keeps the reflex's own evidence.
             r.evidence.models = models(&seen);
             return Ok(r);
@@ -312,7 +448,7 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
     let rate = n as f64 / c.opportunities.max(1) as f64;
     // The outcome lift over the traces where the trigger occurred: the compiler's second gate
     // (`adage_graph::compile::outcome_gate`), for a reflex too few traces show for the rate bar.
-    let lift = crate::mine::outcome_lift(&seen, &c.open, &c.support);
+    let lift = outcome_lift(&seen, &c.open, &c.support);
     if n < cfg.min_support && outcome_gate(r.effect, by_edit, lift.as_ref(), cfg).is_none() {
         return Err(format!("{n} supporting traces, fewer than {}", cfg.min_support));
     }
@@ -366,21 +502,23 @@ fn outcome_gate(
     compile::outcome_gate(effect, by_edit, lift, &p)
 }
 
-/// Learn, compile and judge the graph engine's routes for one repository's traces.
-pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route]) -> EngineRun {
-    // Every trace is mined: patterns are candidates only. Evidence for what is delivered is
-    // counted again below on the traces no directive of the route's shape steered.
-    let mined: Vec<&Session> = ss.to_vec();
-    let annotated: Vec<adage_graph::input::Annotated> = mined.iter().map(|s| bridge::annotate(s)).collect();
+/// Learn, compile and judge the routes for one repository's traces. `model` is the pinned
+/// embedding model (prompt-intent prototypes need it; without one there are none).
+pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&StaticModel>) -> EngineRun {
+    // Every trace is mined; what its directives named is exposed, not evidence. Evidence for
+    // what is delivered is counted again below on the traces not exposed to the route.
+    let annotated: Vec<adage_graph::input::Annotated> = ss.iter().map(|s| bridge::annotate(s)).collect();
     let events: Vec<adage_graph::events::EventSession> =
-        mined.iter().zip(&annotated).map(|(s, a)| bridge::events(a, s)).collect();
+        ss.iter().zip(&annotated).map(|(s, a)| bridge::events(a, s)).collect();
     let mut p = select::Params::default().with_threads(threads());
     p.mine.min_support = cfg.min_support;
     p.score.min_support = cfg.min_support;
+    let (num, den) = cfg.dead_end_consistency;
+    p.score.consistency = num as f64 / den.max(1) as f64;
     let learned = select::learn(&events, &p);
     // G1's value slots, learned in the discovery window as the lookup is judged there.
     let prefix: Vec<adage_graph::input::Session> =
-        mined.iter().map(|s| bridge::annotate_prefix(s, s.discovery().len()).session).collect();
+        ss.iter().map(|s| bridge::annotate_prefix(s, s.discovery().len()).session).collect();
     let values = adage_graph::learn(&prefix, &adage_graph::Params { threads: threads(), ..Default::default() });
     // The glob lattice's tree is what the traces touched: a pure function of the traces, whatever
     // is on this machine (see `adage_graph::compile::glob`).
@@ -390,6 +528,8 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route]) -> EngineRun {
         yellow_rate: cfg.yellow_rate,
         outcome_lift_lower_bound: cfg.outcome_lift_lower_bound,
         outcome_min_support: cfg.outcome_min_support,
+        max_signatures: cfg.dead_end_signatures,
+        consistency: num as f64 / den.max(1) as f64,
         provenance: cfg.provenance.clone(),
         ..Default::default()
     };
@@ -404,12 +544,11 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route]) -> EngineRun {
         priors: &priors,
         params: &params,
     });
-    let ws: Vec<&Session> = ss.iter().copied().filter(|s| !s.steered_by(KIND_WORK_ITEMS)).collect();
     // The lookup is a value-flow reflex (Track G §8, `[prompt] =flow=> [act …]`): G1's value slot
     // test over every trace finds it, and judges it.
-    let lookup = crate::graph::lookup_routes(&ws, cfg);
+    let lookup = crate::graph::lookup_routes(ss, cfg);
     let mut report = EngineReport {
-        sessions: mined.len(),
+        sessions: ss.len(),
         reflexes: learned.reflexes.len(),
         compiled: out.routes.len(),
         dropped: out.dropped.clone(),
@@ -421,16 +560,47 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route]) -> EngineRun {
         match judge(c.route.clone(), ss, cfg, &lookup, prior) {
             Ok(r) => {
                 report.contexts += usize::from(matches!(r.trigger, Trigger::Context { .. }));
-                routes.push(Judged { track: compile::legacy_track(&r), route: r, why: c.why });
+                routes.push(Judged { route: r, why: c.why });
             }
             Err(reason) => report
                 .dropped
                 .push(Dropped { pattern: c.why.pattern.clone(), reason: format!("{}: {reason}", c.route.id) }),
         }
     }
+    // A sequence whose first step an obligation on the same trigger already owes adds only its
+    // later steps: kept when the traces did them together, one right after another, and dropped
+    // when other commands came between (they are then separate habits, such as the repository's
+    // usual check before finishing, and the obligation alone is delivered).
+    let owed: Vec<(Trigger, String)> = routes
+        .iter()
+        .filter(|j| shape(&j.route) == "obligation")
+        .filter_map(|j| match &j.route.step {
+            Step::Run { command } => Some((j.route.trigger.clone(), command.clone())),
+            _ => None,
+        })
+        .collect();
+    routes.retain(|j| {
+        let Step::Sequence { commands } = &j.route.step else { return true };
+        if !owed.iter().any(|(t, c)| *t == j.route.trigger && commands.first() == Some(c)) {
+            return true;
+        }
+        let seen: Vec<&Session> = ss.iter().copied().filter(|s| !exposed(s, &j.route)).collect();
+        let (together, of) = together(&j.route, &seen);
+        let keep = of > 0 && together as f64 >= SEQUENCE_TOGETHER * of as f64;
+        if !keep {
+            report.dropped.push(Dropped {
+                pattern: j.why.pattern.clone(),
+                reason: format!(
+                    "{}: its first step is owed by an obligation, and {together} of {of} traces ran the rest right after it",
+                    j.route.id
+                ),
+            });
+        }
+        keep
+    });
     // A value-flow reflex MDL did not select on its own (a longer pattern holding it was chosen,
     // or none): its route is the value slot's, with the slot's own evidence.
-    if !routes.iter().any(|j| j.route.id == compile::legacy::LOOKUP_ID) {
+    if !routes.iter().any(|j| j.route.id == compile::stable::LOOKUP_ID) {
         if let Some(l) = lookup.first() {
             let Step::Run { command } = &l.step else { unreachable!("a lookup runs a command") };
             let why = Why {
@@ -447,26 +617,35 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route]) -> EngineRun {
                 examples: vec![],
                 prior: None,
             };
-            routes.push(Judged { track: KIND_WORK_ITEMS, route: l.clone(), why });
+            routes.push(Judged { route: l.clone(), why });
+        }
+    }
+    // Prompt-intent prototypes (Track G §2, §6.2), with the pinned model.
+    if let Some(m) = model {
+        let influence: Vec<Vec<adage_graph::events::Influence>> = ss.iter().map(|s| bridge::influence(s)).collect();
+        let ip = compile::intent::IntentParams {
+            min_support: cfg.min_support,
+            ubiquitous: cfg.intent_ubiquitous,
+            contrast: cfg.intent_contrast,
+        };
+        let aspect = |effect: Effect, lb: f64, rate: f64, id: &str| aspect_for(effect, false, lb, rate, cfg, id);
+        let found = compile::intent::compile(&annotated, &influence, m, &ip, &cfg.provenance, &aspect);
+        report.intent_families = found.families;
+        let all_models = models(ss);
+        for mut x in found.routes {
+            x.route.evidence.models = all_models.clone();
+            routes.push(Judged { route: x.route, why: x.why });
         }
     }
     report.routes = routes.len();
     EngineRun { routes, report, counts: learned.counts }
 }
 
-/// The description of a graph-engine track directory.
-pub fn description(suffix: &str) -> &'static str {
-    match suffix {
-        KIND_WORK_ITEMS => "Context gathering for prompts that name a work item",
-        KIND_FINISH_LINE => "Steps this repository requires after certain edits",
-        KIND_DEAD_ENDS => "Commands that fail in this repository, and what works instead",
-        _ => "Reflexes the graph engine learned whose shapes no miner produces",
-    }
-}
-
-/// For a graph route that was in service and was not selected again: `Some(exposed)` to keep it
-/// stale, from the scorer's counts for its own pattern (its `why`), `None` to drop it.
-pub fn verdict(why: Option<&Why>, counts: &BTreeMap<String, Counts>, cfg: &LearnConfig) -> Option<u32> {
+/// For a route that was in service and was not learned again: `Some(verdict)` from the scorer's
+/// counts for its own pattern (its `why`; the verdict is `Some(exposed)` to keep it dormant),
+/// `None` when the scorer has none for it (the caller then judges it on the traces,
+/// [`crate::stale::verdict`]).
+pub fn verdict(why: Option<&Why>, counts: &BTreeMap<String, Counts>, cfg: &LearnConfig) -> Option<Option<u32>> {
     let c = counts.get(&why?.pattern)?;
-    crate::stale::verdict_counts(c.exposed, c.opportunities, c.support, cfg)
+    Some(crate::stale::verdict_counts(c.exposed, c.opportunities, c.support, cfg))
 }

@@ -15,24 +15,28 @@
 //! | one act with a value from the edited path | an edit | `run` | `after_edit` → `run`, slot `edit_segment` |
 //! | one environment act | an edit | `run` (nascent until reviewed) | `after_edit` → `run` |
 //! | 2–3 regenerate/verify acts | an edit, or a longer context | `sequence` | `after_edit` / `context` → `sequence` |
-//! | one fixed act | two or three events | `run` | `context` → `run` (inert until G4) |
+//! | one fixed act | two or three events | `run` | `context` → `run` |
+//! | one observe or verify act before the first edit | a prompt-intent prototype | `run` | `intent` → `run` ([`intent`]) |
 //!
 //! Ceilings are unchanged (`adage_tracks::ceiling`): environment steps are drafts until a person
-//! approves them, author and publish steps are never directed. Every compiled route gets a
-//! content-derived id ([`ids`]) or, for a shape a miner emits today, that miner's id
-//! ([`legacy`]), and a [`adage_tracks::why::Why`] for people.
+//! approves them, author and publish steps are never directed. Every compiled route gets a stable,
+//! content-derived id: `<shape>-<hash>` ([`ids`]), or the fixed form its shape has always had
+//! ([`stable`]: `lookup-work-item`, `read-linked-files`, `dead-end-…`, `finish-line-…`,
+//! `intent-…`), so review decisions survive re-learning; and a [`adage_tracks::why::Why`] for
+//! people.
 
 pub mod glob;
 pub mod ids;
-pub mod legacy;
+pub mod intent;
 pub mod shapes;
+pub mod stable;
 
 use crate::events;
 use crate::input;
 use crate::select::Reflex;
 use adage_core::Effect;
 use adage_tracks::why::Why;
-use adage_tracks::{Route, Step, Trigger};
+use adage_tracks::{Route, Step};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -49,7 +53,9 @@ pub struct CompileParams {
     /// The glob lattice's precision bar.
     pub glob_precision: f64,
     /// An avoid is announced at session start when at least this share of traces run the
-    /// failing runner; otherwise after its failure.
+    /// failing runner; otherwise after its failure. 0 (the default) announces every avoid at
+    /// session start, before the first wasted run, as dead ends always were: an after-failure
+    /// avoid names one runner, and fires only once the run was wasted.
     pub announce_at_start: f64,
     /// A directed command must be the dominant variant of its item (this share of its matches).
     pub dominant: f64,
@@ -65,6 +71,13 @@ pub struct CompileParams {
     /// `learn.outcome_min_support`).
     pub outcome_lift_lower_bound: f64,
     pub outcome_min_support: u32,
+    /// At most this many avoids (failure signatures) per working command
+    /// (`learn.dead_end_signatures`).
+    pub max_signatures: usize,
+    /// An avoid names a runner only if it failed in at least this share of the traces that ran
+    /// it (`learn.dead_end_consistency`): a runner that passes once the environment is fixed is
+    /// not a dead end.
+    pub consistency: f64,
     pub provenance: String,
 }
 
@@ -75,13 +88,15 @@ impl Default for CompileParams {
             yellow_rate: 0.5,
             within: 8,
             glob_precision: 0.9,
-            announce_at_start: 0.5,
+            announce_at_start: 0.0,
             dominant: 0.8,
             prior_kappa: 3.0,
             prior_mean: 0.7,
             after_command_runs: false,
             outcome_lift_lower_bound: 0.2,
             outcome_min_support: 5,
+            max_signatures: 3,
+            consistency: 0.9,
             provenance: "desire-path".into(),
         }
     }
@@ -107,8 +122,11 @@ pub struct ActStats {
 pub struct Corpus {
     pub sessions: u32,
     pub acts: BTreeMap<String, ActStats>,
-    /// Traces that ran each runner (`legacy::runner`), whatever the outcome.
+    /// Traces that ran each runner (`stable::runner`), whatever the outcome.
     pub runners: BTreeMap<String, u32>,
+    /// Traces in which a run of each runner passed.
+    #[serde(default)]
+    pub runners_passed: BTreeMap<String, u32>,
     /// The repository tree the glob lattice measures precision on: every path read or edited,
     /// and any repository file given.
     pub tree: BTreeSet<String>,
@@ -158,6 +176,7 @@ impl Corpus {
         for a in order {
             let mut keys: BTreeSet<String> = BTreeSet::new();
             let mut runners: BTreeSet<String> = BTreeSet::new();
+            let mut passed: BTreeSet<String> = BTreeSet::new();
             for (i, st) in a.session.steps.iter().enumerate().take(input::MAX_STEPS) {
                 match st {
                     input::Step::Exec { argv, output, failed } => {
@@ -166,7 +185,7 @@ impl Corpus {
                         }
                         let key = events::act_key(argv);
                         let e = c.acts.entry(key.clone()).or_default();
-                        let lit = legacy::shell_join(argv);
+                        let lit = stable::shell_join(argv);
                         e.literals.entry(lit).or_insert_with(|| (argv.clone(), 0)).1 += 1;
                         let eff = a
                             .meta
@@ -176,14 +195,17 @@ impl Corpus {
                         e.effect = Some(e.effect.map_or(eff, |x| max_effect(x, eff)));
                         let out = adage_core::tokens::bounded(output, input::MAX_OUTPUT);
                         if *failed {
-                            if let Some(sig) = legacy::failure_signature(out) {
+                            if let Some(sig) = stable::failure_signature(out) {
                                 *e.signatures.entry(sig).or_default() += 1;
                             }
-                        } else if let Some(f) = legacy::listed_field(out) {
+                        } else if let Some(f) = stable::listed_field(out) {
                             *e.fields.entry(f).or_default() += 1;
                         }
                         keys.insert(key);
-                        runners.insert(legacy::runner(argv));
+                        runners.insert(stable::runner(argv));
+                        if !*failed {
+                            passed.insert(stable::runner(argv));
+                        }
                     }
                     input::Step::Read { path } | input::Step::Edit { path } => {
                         if !path.is_empty() && !path.starts_with('/') {
@@ -198,6 +220,9 @@ impl Corpus {
             }
             for r in runners {
                 *c.runners.entry(r).or_default() += 1;
+            }
+            for r in passed {
+                *c.runners_passed.entry(r).or_default() += 1;
             }
         }
         c.tree.extend(tree.iter().filter(|p| !p.is_empty() && !p.starts_with('/')).cloned());
@@ -245,8 +270,8 @@ pub struct Compiled {
     pub shape: &'static str,
     pub route: Route,
     pub why: Why,
-    /// It has a shape a miner emits today, and that miner's id.
-    pub legacy: bool,
+    /// Its id has its shape's fixed form ([`stable`]).
+    pub fixed_id: bool,
 }
 
 /// A reflex that compiled to nothing, and why.
@@ -287,23 +312,6 @@ pub fn outcome_gate(
         return None;
     }
     adage_tracks::lift::aspect(effect, by_edit)
-}
-
-/// Where a compiled route lives through G3–G4 (Track G §6.3): the legacy track of its shape,
-/// else `graph`.
-pub fn legacy_track(r: &Route) -> &'static str {
-    match adage_tracks::route_kind(r) {
-        adage_tracks::KIND_WORK_ITEMS => adage_tracks::KIND_WORK_ITEMS,
-        adage_tracks::KIND_FINISH_LINE => adage_tracks::KIND_FINISH_LINE,
-        adage_tracks::KIND_DEAD_ENDS => adage_tracks::KIND_DEAD_ENDS,
-        adage_tracks::KIND_INTENTS => adage_tracks::KIND_INTENTS,
-        _ => "graph",
-    }
-}
-
-/// Whether a route's trigger can fire in G3 (a context trigger is compiled but inert until G4).
-pub fn fires_in_g3(r: &Route) -> bool {
-    !matches!(r.trigger, Trigger::Context { .. })
 }
 
 /// The commands a step directs.

@@ -29,8 +29,10 @@
 //! The gate is support and days, then consistency ≥ 0.9 for a pattern with a failed act
 //! (a dead end is a property of the runner, not of a contrast) or contrast ≥ `contrast`
 //! otherwise, and V > 0 for a directive (not for a guard: an obligation after `last(edit)` or an
-//! avoid after a failure, whose worth is in the sessions that would miss them; a guard needs a
-//! Beta lower bound ≥ 0.5 instead).
+//! avoid after a failure, whose worth is in the sessions that would miss them: its gate is
+//! contrast or consistency alone). A guard's delivery is then decided on the traces, by the rate
+//! and Wilson rule of its judgement (`adage-learn`), as every reflex's is: a Beta lower bound here
+//! would demand five or six unanimous traces where three decide everything else (G5).
 //!
 //! [`holdout`] evaluates selected reflexes on held-out sessions: next-action top-1 accuracy
 //! against an order-1 baseline, conformance (mean −ln p of the next event) and calibration ECE.
@@ -57,9 +59,6 @@ pub struct ScoreParams {
     pub consistency: f64,
     /// A target variant must hold this share of the target's matches.
     pub dominant: f64,
-    /// A guard (obligation, avoid) needs this Beta lower bound: it may stop the agent or name a
-    /// runner as broken, so a coin flip is not enough.
-    pub guard_lower_bound: f64,
     /// Anchor-level measures (lift, contrast, p_soon, p_next, Δturns, the target variant) are
     /// computed on at most this many sessions: every k-th session by id, k = ⌈N / this⌉.
     /// Support, days and the Beta posterior always use every session.
@@ -79,7 +78,6 @@ impl Default for ScoreParams {
             contrast: 0.3,
             consistency: 0.9,
             dominant: 0.8,
-            guard_lower_bound: 0.5,
             anchor_sessions: 300,
             threads: 1,
         }
@@ -615,6 +613,20 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
         }
     }
     let (opp, succ, opp_sessions) = last;
+    // Exposed: sessions where the pattern occurs only through exposed continuation events (a
+    // directive named them, Track G §3.2). They are neither support nor opportunity.
+    let (mut a, mut b) = (Vec::new(), Vec::new());
+    let (mut exposed, mut exposed_weight) = (0u32, 0.0f64);
+    for &si in &st.exposed {
+        if mp.sessions.binary_search(&si).is_err()
+            && !st.ends(db, si, &pat.items, pat.items.len(), &mut a, &mut b).is_empty()
+        {
+            exposed += 1;
+            exposed_weight += st.weight[si as usize];
+        }
+    }
+    let opp = (opp - exposed_weight).max(succ);
+    let opp_sessions = opp_sessions.saturating_sub(exposed);
     let (alpha, beta) = stats::posterior(succ, opp, prior, p.kappa);
     let conf = alpha / (alpha + beta);
     let conf_lb = stats::beta_quantile(p.quantile, alpha, beta);
@@ -627,7 +639,6 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
     let first_x = &pl.chain[cut - 1].0;
     let x_sessions = cache.occ(db, st, first_x);
     let opp_list: Vec<u32> = x_sessions.sessions.clone();
-    let (mut a, mut b) = (Vec::new(), Vec::new());
     for &si in x_sessions.sessions.iter().filter(|&&si| st.sample[si as usize]) {
         let sess = &db.sessions[si as usize];
         for &q in st.ends(db, si, &first_x.0, cut, &mut a, &mut b) {
@@ -687,15 +698,6 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
         }
         _ => (None, 0.0),
     };
-    // Exposed: occurrences only through exposed continuation events.
-    let mut exposed = 0u32;
-    for &si in &st.exposed {
-        if mp.sessions.binary_search(&si).is_err()
-            && !st.ends(db, si, &pat.items, pat.items.len(), &mut a, &mut b).is_empty()
-        {
-            exposed += 1;
-        }
-    }
     let days: BTreeSet<u32> = mp.sessions.iter().map(|&i| db.sessions[i as usize].day).collect();
     let support = mp.sessions.len() as u32;
     let min_days = p.min_days.min(st.days.max(1));
@@ -723,8 +725,6 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
         gate
     } else if !guard && value <= 0.0 {
         format!("value {value:.2} <= 0")
-    } else if guard && conf_lb < p.guard_lower_bound {
-        format!("guard lower bound {conf_lb:.2} < {}", p.guard_lower_bound)
     } else {
         gate
     };

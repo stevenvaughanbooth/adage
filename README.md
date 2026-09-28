@@ -32,19 +32,24 @@ own tools, under its harness's own permissions. Execution is a separate, opt-in 
 
 ## What it does, concretely
 
-From real sessions in a repository, Adage learns five kinds of reflex today (a general
-subgraph-mining engine that learns them without hand-written kinds is in progress:
-[Track G](docs/tracks/track-g-graph-engine.md)):
+From real sessions in a repository, one learner, a graph engine
+([Track G](docs/tracks/track-g-graph-engine.md)), finds the steps agents take together and
+compiles them into reflexes. It has no list of kinds to look for: a reflex is whatever stimulus
+reliably precedes a step, and how it is delivered follows from its shape. Reflexes it discovers
+on real and generated repositories include:
 
-| Route | Learned from | At runtime |
+| Reflex | Learned from | At runtime |
 | --- | --- | --- |
-| **Prompt → lookup** | Agents passing an ID from the prompt to the same command | 🟢/🟡 "Work item details are looked up with: `python3 scripts/wi-lookup W-2042`" |
-| **Linked files** | Agents reading, one turn at a time, the files a lookup listed | 🟡 "That result lists these files … read them together in one turn" |
-| **Dead ends** | A verify command that fails, followed by one that works | 🔴 "Running `python3 -m unittest` fails (…). Use this instead: `make test`" |
-| **Finish line** | A regenerate step that follows edits to a path pattern | 🟢 after the edit, and once at Stop if still unmet: "changes to `schema/*.json` must be followed by `make gen`" |
-| **Intent** | Prompts that mean the same thing (an *intent family*) whose sessions ran the same command first | 🟢/🟡 "Requests like this one usually start by running: `make test`" (optional; needs `adage models fetch`) |
+| **Look the item up** | Agents passing a value from the prompt to the same command; the value's type (`W-2042`, `#482`, a UUID) is learned from the values themselves | 🟢/🟡 "Work item details are looked up with: `python3 scripts/wi-lookup W-2042`" |
+| **Read what it lists** | Agents reading, one turn at a time, the files a lookup listed | 🟡 "That result lists these files … read them together in one turn" |
+| **Avoid a dead end** | A command that fails with the same signature, followed by one that works | 🔴 "Running `python3 -m unittest` fails (…). Use this instead: `make test`" |
+| **Regenerate after an edit** | A regenerate step that follows edits to a path pattern | 🟢 after the edit, and once at Stop if still unmet: "changes to `schema/*.json` must be followed by `make gen`" |
+| **Steps in order** | Commands run one after another after edits to a path pattern | 🟢/🟡 "changes to `registry/*.csv` are followed by these steps, in order: `make gen`, `make check`" |
+| **Check the part you edited** | A command naming the directory an edit touched | 🟢/🟡 after an edit under `packages/ledger/`: `make -C packages/ledger check` |
+| **Sync the environment** | A dependency step after a dependency file changes | 🟡 after review, once `requirements.txt` changes: `make deps then make check` |
+| **Start like others did** | Prompts that mean the same thing whose sessions ran the same command first | 🟢/🟡 "Requests like this one usually start by running: `make test`" (optional; needs `adage models fetch`) |
 
-Every route carries its evidence (distinct sessions, Wilson lower bound), an effect class that caps
+Every reflex carries its evidence (distinct sessions, Wilson lower bound), an effect class that caps
 how strongly it may be directed, and typed slot contracts: a value from the prompt reaches a directive
 only if it matches the contract learned from real values (`^W-\d{4}$`), and file paths only if they
 are safe, repository-relative, and exist.
@@ -326,7 +331,8 @@ fails untouched and passes with its reference solution.
 | `crates/adage-store` | Per-session two-slot state files and CRC-framed spools — no daemon |
 | `crates/adage-tracks` | Track format, validation, canonical digest, compiled index |
 | `crates/adage-runtime` | Hook-time decisions and directive rendering from fixed templates |
-| `crates/adage-learn` | Transcript import and the route miners |
+| `crates/adage-graph` | The graph engine: the only learner |
+| `crates/adage-learn` | Transcript import, steering by influence, and the learner's driver |
 | `crates/adage-sign` | Native `sshsig` signing (ssh-agent or key file) and `allowed_signers` verification |
 | `crates/adage-sign` | Native `sshsig` signing and `allowed_signers` verification for shared tracks |
 | `crates/adage-intent` | Prompt normalisation, the static embedding model in plain Rust (WordPiece + safetensors rows read on demand), deterministic kNN + Louvain clustering, behavioural split/merge |

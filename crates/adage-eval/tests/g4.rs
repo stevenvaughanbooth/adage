@@ -119,7 +119,7 @@ fn contexts_fire_in_replay_and_the_fast_path_stays_exact_on_newkinds() {
         transcripts.sort();
         // Learn with the graph engine, then add the context route.
         let home = tempfile::tempdir().unwrap();
-        let cfg = adage_learn::LearnConfig { engine: "graph".into(), ..adage_learn::LearnConfig::demo() };
+        let cfg = adage_learn::LearnConfig::demo();
         let inputs = adage_learn::Inputs {
             transcripts: transcripts.clone(),
             outcomes: Default::default(),

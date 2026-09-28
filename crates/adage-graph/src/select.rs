@@ -772,7 +772,7 @@ fn runs(identity: &str, runner: &str) -> bool {
     identity == r || identity.starts_with(&format!("{r} "))
 }
 
-/// A legacy route kind as a mined pattern (Track G §8), for the parity check:
+/// A convention kind of the evals (`conventions.json`) as a mined pattern (Track G §8), for scoring:
 ///
 /// - `lookup`: `[prompt] =flow=> [act command]`;
 /// - `linked_files`: `[act command] =same_art=> [read]`;

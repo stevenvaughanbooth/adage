@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Rehearse learning on generated sandboxes with scripted sessions. Spends no tokens.
 
-  python3 evals/gen/rehearse.py DIR [--out ROOT] [--repeats N] [--adage PATH] [--engine miners|shadow|graph]
-                                    [--no-learn] [--json]
+  python3 evals/gen/rehearse.py DIR [--out ROOT] [--repeats N] [--adage PATH] [--no-learn] [--json]
 
 DIR is a bundle or a suite. For each bundle, a scripted "agent" (plain Python, no model) works every
 task `--repeats` times (default 2), each in a fresh copy of the repository, the way unaided agents
@@ -14,18 +13,16 @@ and finishes with the working verify command. Every command really runs in the s
 session is written as a Claude Code transcript (JSONL) with the real output, in the layout the live
 runner uses (ROOT/<bundle>/transcripts/<project>/<session>.jsonl, outcomes.json).
 
-Then, unless --no-learn, it runs `adage learn --demo --no-instincts` (with `--engine`, when given) on
-those transcripts with an isolated ADAGE_HOME (ROOT/<bundle>/adage-home) and compares the learned
+Then, unless --no-learn, it runs `adage learn --demo --no-instincts` on those transcripts with an isolated ADAGE_HOME (ROOT/<bundle>/adage-home) and compares the learned
 routes with conventions.json: each non-decoy convention must be recovered, and no route may mention
 a decoy. A lookup is recovered when its command is the convention's and its contract accepts every
 tracker id and fresh holdout id and rejects every near miss (by ids, not by spelling, so any id
 shape can be judged); a dead end when its runner begins the avoided command, as adage canonicalises
-both (`npm test` is `npm run test`), or (`--engine graph`) when it runs the working command after the
-avoided one fails; a finish line by its glob and command, or by a sequence whose first step it is; a
+both (`npm test` is `npm run test`), or when it runs the working command after the avoided one fails; a finish line by its glob and command, or by a sequence whose first step it is; a
 sequence, scope or env_sync convention (Track G G3) by an after-edit route on its glob directing its
 steps, its command with the edited part as a slot, or its environment step (a draft awaiting review,
 as its ceiling requires). A finish line on a sequence's first step is part of it: expected, not a
-recovery. Context-triggered routes are inert until Track G G4 and are neither. The adage binary is
+recovery. Context-triggered routes are neither (this rehearsal does not score them). The adage binary is
 --adage, else target/release/adage, else target/debug/adage in this repository. It writes
 ROOT/<bundle>/report.json and prints recovered vs expected. The default ROOT is DIR/rehearsal (for
 a bundle) or DIR/<bundle>/rehearsal (for a suite).
@@ -331,8 +328,9 @@ def commands_of(route):
 
 
 def compare(b, routes, holdout=None):
-    """Match learned routes against conventions.json. A route may match by its miner id or by its
-    shape (the graph engine names new shapes by content: `run-…`, `sequence-…`)."""
+    """Match learned routes against conventions.json. A route matches by its fixed id form
+    (`lookup-work-item`, `dead-end-…`, `finish-line-…`) or by its shape (other shapes are named by
+    content: `run-…`, `sequence-…`)."""
     rows, used = [], set()
     routes = [r for r in routes if not inert(r["route"])]
 
@@ -360,7 +358,7 @@ def compare(b, routes, holdout=None):
                        and any(runs(x.strip(), a) for x in str(r["step"].get("avoid", "")).split(" / ")
                                for a in c["avoided"])
                        and r["step"].get("instead") == c["command"])
-            # The graph engine announces a dead end most traces do not meet after its failure.
+            # A dead end most traces do not meet is announced after its failure.
             got = got or take(lambda r: r["id"].startswith("dead-end") and r["trigger"].get("on") == "after_failure"
                               and any(runs(adage_runner(r["trigger"].get("command", "").removeprefix("exec ")), a)
                                       for a in c["avoided"])
@@ -414,7 +412,7 @@ def compare(b, routes, holdout=None):
     return rows, unexpected
 
 
-def rehearse_bundle(bundle, root, repeats, adage, learn, engine=None):
+def rehearse_bundle(bundle, root, repeats, adage, learn):
     b = Bundle(bundle)
     root = Path(root).resolve()
     shutil.rmtree(root, ignore_errors=True)
@@ -452,13 +450,10 @@ def rehearse_bundle(bundle, root, repeats, adage, learn, engine=None):
         # Learned routes only: instincts are bound from the repository's files, not learned from
         # the sessions, so they are not what a rehearsal measures (and would be unexpected routes).
         argv = [str(adage), "learn", "--demo", "--json", "--no-instincts", "--repo", b.tasks["repo"]]
-        if engine:
-            argv += ["--engine", engine]
         argv += ["--outcomes", str(root / "outcomes.json"), "--transcripts", *tx]
         env = dict(scorer.env(), ADAGE_HOME=str(home), ADAGE_AUTO_LEARN="0")
         out = subprocess.run(argv, capture_output=True, text=True, env=env)
         report["learn_argv"] = ["adage", *argv[1:-len(tx) - 1], f"<{len(tx)} transcripts>"]
-        report["engine"] = engine or "miners"
         if out.returncode != 0:
             report["learn_error"] = out.stderr[-2000:]
             report["ok"] = False
@@ -526,7 +521,6 @@ def main(argv):
         return v
 
     out, repeats, adage = take("--out"), int(take("--repeats", "2")), take("--adage")
-    engine = take("--engine")
     learn = "--no-learn" not in args
     as_json = "--json" in args
     args = [a for a in args if not a.startswith("--")]
@@ -552,7 +546,7 @@ def main(argv):
                 reports.append({"bundle": b.name, "skipped": why, "ok": True})
                 continue
         root = Path(out) / b.name if out and len(found) > 1 else Path(out) if out else b / "rehearsal"
-        rep = rehearse_bundle(b, root, repeats, exe, learn, engine)
+        rep = rehearse_bundle(b, root, repeats, exe, learn)
         reports.append(rep)
         if not as_json:
             print_report(rep)

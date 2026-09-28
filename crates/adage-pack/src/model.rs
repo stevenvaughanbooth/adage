@@ -316,6 +316,14 @@ pub struct InputFrom {
 #[serde(deny_unknown_fields)]
 pub struct PromptSource {
     pub span: SpanKind,
+    /// A learned value type (Track G §4.3): the first prompt token it accepts binds the input,
+    /// instead of a span of `span`'s kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vtype: Option<adage_tracks::ValueType>,
+    /// How people wrote the value (`#` in `#482`), when every learning trace wrote it the same
+    /// one or two ways: only such a token binds.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mentions: Vec<adage_core::tokens::Mention>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

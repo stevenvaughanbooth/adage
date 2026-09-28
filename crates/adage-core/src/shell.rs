@@ -469,7 +469,7 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
     let Some(spec) = table.get(cmd) else {
         // Unlisted commands default to environment (Design §8.6). One narrow exception: a
         // project script whose name leads with a read verb (`wi-lookup`, `show-config`,
-        // `list_services`) is classified observe by name, at reduced confidence. The miner still
+        // `list_services`) is classified observe by name, at reduced confidence. The learner still
         // needs session evidence before such a step can be directed.
         const READ_VERBS: [&str; 13] = [
             "lookup", "show", "get", "list", "view", "status", "info", "describe", "search", "find", "query", "print",

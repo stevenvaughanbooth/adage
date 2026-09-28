@@ -2,11 +2,8 @@
 //!
 //! ```text
 //! cargo build --release -p adage-cli --examples
-//! target/release/examples/learn_bench <adage binary> [sessions per repository] [repositories] [engine]
+//! target/release/examples/learn_bench <adage binary> [sessions per repository] [repositories]
 //! ```
-//! `engine` (`miners`, the default, `shadow` or `graph`) is passed to the manual learns as
-//! `--engine`: with the graph engine they also compute session facts (Track G G0), cold and then
-//! from the facts cache.
 //! Writes a Claude Code history of the simulator's scenario (`adage-sim`, default 300 sessions in
 //! each of 2 repositories) under a scratch `HOME`, then times, through the binary:
 //! `adage learn --no-cache` (every transcript parsed), `adage learn` with a cold and a warm parse
@@ -37,7 +34,6 @@ fn main() {
     let bin = &args[1];
     let per_repo: usize = args.get(2).and_then(|x| x.parse().ok()).unwrap_or(300);
     let repos: usize = args.get(3).and_then(|x| x.parse().ok()).unwrap_or(2);
-    let engine = args.get(4).cloned().unwrap_or_else(|| "miners".into());
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
     let mut first_repo = String::new();
@@ -74,9 +70,9 @@ fn main() {
     std::fs::create_dir_all(root.join("adage")).unwrap();
     std::fs::write(root.join("adage/config.toml"), "[learn]\nthresholds = \"demo\"\n").unwrap();
 
-    let full = run(bin, &root, &["learn", "--no-cache", "--engine", &engine]);
-    let cold = run(bin, &root, &["learn", "--engine", &engine]);
-    let warm = run(bin, &root, &["learn", "--engine", &engine]);
+    let full = run(bin, &root, &["learn", "--no-cache"]);
+    let cold = run(bin, &root, &["learn"]);
+    let warm = run(bin, &root, &["learn"]);
     let auto_warm = run(bin, &root, &["learn", "--auto", "--repo-root", &first_repo]);
     // One transcript of the first repository grows by a turn, as at the end of a session.
     let grown = a_transcript.unwrap();
@@ -91,7 +87,6 @@ fn main() {
     println!(
         "{}",
         serde_json::to_string_pretty(&json!({
-            "engine": engine,
             "sessions": per_repo * repos,
             "repositories": repos,
             "history_mb": bytes as f64 / 1e6,

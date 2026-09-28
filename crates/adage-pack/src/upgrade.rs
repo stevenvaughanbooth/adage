@@ -214,7 +214,19 @@ impl Cx {
             };
             #[allow(unreachable_patterns)]
             let from = match &s.source {
-                SlotSource::Prompt { span } => InputFrom { prompt: Some(PromptSource { span: *span }), result: None },
+                SlotSource::Prompt { span } => InputFrom {
+                    prompt: Some(PromptSource { span: *span, vtype: None, mentions: vec![] }),
+                    result: None,
+                },
+                // The samples' hash stays home: over a small id space it would give them away.
+                SlotSource::PromptValue { vtype, mentions } => InputFrom {
+                    prompt: Some(PromptSource {
+                        span: adage_core::spans::SpanKind::Ticket,
+                        vtype: Some(adage_tracks::ValueType { samples_hash: String::new(), ..vtype.clone() }),
+                        mentions: mentions.clone(),
+                    }),
+                    result: None,
+                },
                 SlotSource::ResultField { field } => {
                     InputFrom { prompt: None, result: Some(ResultSource { field: field.clone() }) }
                 }

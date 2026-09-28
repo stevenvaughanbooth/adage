@@ -1,8 +1,7 @@
-//! Legacy ids and texts (Track G §6.3): when a compiled reflex has the shape one of today's
-//! miners emits, it gets exactly the id that miner gives it, so `review.yaml` decisions,
-//! proposals, and the instinct ids that already line up with learned ids all survive a change of
-//! engine. The helpers here are the miners' own rules (`adage-learn/src/mine.rs`), restated
-//! because the graph crate never depends on `adage-learn`:
+//! Fixed id forms and shared rules (Track G §6.3). Some shapes have always had an id of a fixed,
+//! content-derived form, and keep it, so `review.yaml` decisions, proposals, and the instinct ids
+//! that line up with learned ids all survive re-learning. The rules here (the runner of a command,
+//! a failure's signature, the field an output lists files in) are shared with `adage-learn`:
 //!
 //! | Shape | Id |
 //! | --- | --- |
@@ -10,12 +9,13 @@
 //! | linked files (`after_command` → `read_batch`) | `read-linked-files` |
 //! | dead end (`session_start` → `avoid`, or `after_failure` → `run`) | `dead-end-<stable(W)>` for the working command W's most common signature, `dead-end-<stable(W, S)>` for each further signature S |
 //! | finish line (`after_edit` → a regenerate `run`) | `finish-line-<stable(glob, command)>` |
+//! | intent (`intent` → `run`) | `intent-<stable(group)>`, `group` the command's head and effect |
 //!
-//! `stable` is the miners' 24-bit FNV-1a suffix; W is the working command's canonical key.
+//! `stable` is a 24-bit FNV-1a suffix; W is the working command's canonical key.
 
 use adage_core::spans::{self, SpanKind};
 
-/// The miners' stable id suffix (FNV-1a over the parts, each followed by a NUL; 6 hex digits).
+/// The stable id suffix (FNV-1a over the parts, each followed by a NUL; 6 hex digits).
 pub fn stable(parts: &[&str]) -> String {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for p in parts {
@@ -72,11 +72,11 @@ pub fn runner(argv: &[String]) -> String {
                 format!("{} {}", s.program, s.identity.join(" "))
             }
         }
-        _ => legacy_runner(argv),
+        _ => fallback_runner(argv),
     }
 }
 
-fn legacy_runner(argv: &[String]) -> String {
+fn fallback_runner(argv: &[String]) -> String {
     let mut out: Vec<&str> = Vec::new();
     let mut i = 0;
     while i < argv.len() {
@@ -147,7 +147,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ids_are_the_miners() {
+    fn ids_are_stable() {
         // The demo's dead end (adage-instincts' safety tests pin the same value).
         assert_eq!(dead_end_id("exec make test", "x", 0), "dead-end-d41b1e");
         assert_ne!(dead_end_id("exec make test", "x", 1), "dead-end-d41b1e");

@@ -1032,7 +1032,7 @@ fn finish_line_claims_ci_only_on_evidence() {
 }
 
 #[test]
-fn directives_carry_their_kind_and_stale_routes_are_never_green() {
+fn directives_carry_their_shape_and_stale_routes_are_never_green() {
     let (dir, index, table) = fixture();
     let ctx = Ctx {
         index: &index,
@@ -1045,12 +1045,10 @@ fn directives_carry_their_kind_and_stale_routes_are_never_green() {
     let mut st = SessionState::default();
     let d = decide(&ctx, &mut st, &Event::Prompt { text: "Pick up W-2042".into() });
     let kinds: Vec<(&str, &str)> = d.directives.iter().map(|x| (x.route.as_str(), x.kind.as_str())).collect();
-    assert_eq!(kinds, vec![("lookup", "work-items"), ("dead-unittest", "dead-ends")]);
+    assert_eq!(kinds, vec![("lookup", "run"), ("dead-unittest", "avoid")]);
     let wrapped = render::wrap_directive(&d.directives[0]);
     assert!(
-        wrapped.starts_with(
-            "<adage-signal track=\"acme/t@0.1.0\" route=\"lookup\" aspect=\"green\" kind=\"work-items\">\n"
-        ),
+        wrapped.starts_with("<adage-signal track=\"acme/t@0.1.0\" route=\"lookup\" aspect=\"green\" kind=\"run\">\n"),
         "{wrapped}"
     );
     // Without a kind (a preview, an old record), the wrapper is as it always was.

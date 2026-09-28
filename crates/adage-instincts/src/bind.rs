@@ -4,7 +4,7 @@
 //!
 //! 1. **One directive per trigger.** Detectors run in [`BIND_ORDER`]; a trigger (a failing
 //!    command, an edited glob) already claimed by an earlier instinct is not bound again.
-//! 2. **Ids the miner would derive.** A dead-end-shaped route directing `S` takes
+//! 2. **Ids the learner would derive.** A dead-end-shaped route directing `S` takes
 //!    `dead-end-<stable(key(S))>` (further triggers for the same `S` add the trigger's key); a
 //!    finish line takes `finish-line-<stable(glob, command)>`. So a learned route for the same
 //!    behaviour has the same id, and the index's "learned wins" de-duplication applies.
@@ -60,7 +60,7 @@ pub struct BindResult {
     /// `(instinct id, reason)` for each candidate not bound, and each file the binder skipped
     /// (instinct id `declared`).
     pub skipped: Vec<(String, String)>,
-    /// Route id → the instinct that bound it (route ids equal the miner's, so the id alone does
+    /// Route id → the instinct that bound it (route ids equal the learner's, so the id alone does
     /// not say).
     pub origins: BTreeMap<String, String>,
 }
@@ -174,7 +174,7 @@ pub fn bind_facts(
                     continue;
                 }
             };
-            // Reserved even if this candidate is not bound: a learned route holding the miner's id
+            // Reserved even if this candidate is not bound: a learned route holding the learner's id
             // covers this trigger, not the others that direct the same command.
             ids.insert(rid.clone());
             if rejections.contains(&rid) {

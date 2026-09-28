@@ -67,8 +67,7 @@ pub fn read_all(root: &Path) -> Result<Vec<Track>> {
         for e in std::fs::read_dir(&d)? {
             let e = e?;
             // Never follow symlinked directories (loops, and escapes from the tracks directory).
-            // Hidden directories are never tracks in service: `<repo>/.shadow/` holds what the
-            // graph engine would learn under `learn.engine = shadow` (Track G G3).
+            // Hidden directories are never tracks in service.
             if e.file_type()?.is_dir() && !e.file_name().to_string_lossy().starts_with('.') {
                 stack.push(e.path());
             }

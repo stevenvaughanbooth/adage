@@ -138,10 +138,10 @@ fn surveys_history_per_repository_and_writes_nothing() {
         "exec python3 -m pytest tests   then worked: exec make test",
         "6 of 6 sessions editing schema/*.json then ran exec make gen",
         "candidates only, nothing is written",
-        "new       work-items/lookup-work-item",
-        "finish-line/finish-line-",
-        "dead-ends/dead-end-",
-        "intent families           skipped",
+        "new       learned/lookup-work-item",
+        "learned/finish-line-",
+        "learned/dead-end-",
+        "prompt intents            skipped",
     ] {
         assert!(out.contains(s), "report lacks {s:?}:\n{out}");
     }
@@ -159,10 +159,14 @@ fn surveys_history_per_repository_and_writes_nothing() {
     assert_eq!(acme["sessions"], 6);
     assert_eq!(acme["harnesses"], json!(["claude-code"]));
     assert_eq!(acme["turns_before_first_edit"]["median"], 3);
-    let kinds: Vec<&str> =
-        acme["candidates"].as_array().unwrap().iter().map(|c| c["track"].as_str().unwrap()).collect();
-    for k in ["work-items", "finish-line", "dead-ends"] {
-        assert!(kinds.contains(&k), "{kinds:?}");
+    let cands: Vec<(&str, &str)> = acme["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| (c["track"].as_str().unwrap(), c["route"].as_str().unwrap_or_default()))
+        .collect();
+    for id in ["lookup-work-item", "finish-line-", "dead-end-"] {
+        assert!(cands.iter().any(|(t, r)| *t == "learned" && r.starts_with(id)), "{cands:?}");
     }
     assert!(!v.to_string().contains("ghp_"));
 

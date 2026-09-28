@@ -95,10 +95,10 @@ impl Level {
             Level::Kind => 'k',
         }
     }
-    /// Whether items of type `ty` may use this level.
+    /// Whether items of type `ty` may use this level. A failed act's kind level is its
+    /// **failure family** (its signature, Track G §1.1): runners that fail the same way.
     pub fn allowed(self, ty: NodeType) -> bool {
         match ty {
-            NodeType::Act => self != Level::Kind,
             NodeType::Prompt => self != Level::Head,
             _ => true,
         }
@@ -151,12 +151,31 @@ pub struct Event {
     pub signature: Option<String>,
 }
 
-/// A directive the session received (Track G §3.2, steering without kinds): from event `from`
-/// on, a continuation item whose exact key is `key` is exposed, not evidence.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// A directive the session received (Track G §3.2, steering without kinds), as the importer read
+/// it: delivered before input step `at_step`, naming commands (by HeadSub identity) and files.
+/// From there on, an act of a named identity or a read of a named file is **exposed**: it is
+/// no evidence for a pattern that continues with it. A directive whose body names nothing
+/// readable (`all`) exposes every later act and read.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Influence {
-    pub from: u32,
-    pub key: String,
+    pub at_step: u32,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub identities: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub paths: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub all: bool,
+}
+
+impl Influence {
+    /// Whether this directive names an act of HeadSub identity `identity`.
+    pub fn names_act(&self, identity: &str) -> bool {
+        self.all || self.identities.iter().any(|i| i == identity)
+    }
+    /// Whether this directive names a read of `path`.
+    pub fn names_read(&self, path: &str) -> bool {
+        self.all || self.paths.iter().any(|p| p == path)
+    }
 }
 
 /// One session as events and edges.
@@ -174,8 +193,10 @@ pub struct EventSession {
     pub flows: Vec<(u32, u32)>,
     /// Same-artifact edges (Act whose output listed the path → Read/Edit of it), sorted.
     pub same_art: Vec<(u32, u32)>,
+    /// Events a directive the session received named, from its delivery on ([`Influence`]):
+    /// exposed, never continuation evidence. Sorted.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub influence: Vec<Influence>,
+    pub exposed: Vec<u32>,
 }
 
 /// What [`from_input`] cannot read from an [`input::Session`].
@@ -311,6 +332,8 @@ pub fn from_input(s: &input::Session, meta: &Meta, table: &CommandTable) -> Even
     let mut last_turn: Option<u32> = None;
     let mut segment: u16 = 0;
     let steps = &s.steps[..s.steps.len().min(input::MAX_STEPS)];
+    // The first event of each input step (prompts delivered before it included).
+    let mut first_event: Vec<u32> = Vec::with_capacity(steps.len());
     let new_batch = |have: &mut bool, b: &mut u32| {
         if *have {
             *b += 1;
@@ -344,6 +367,7 @@ pub fn from_input(s: &input::Session, meta: &Meta, table: &CommandTable) -> Even
             }
             next_prompt += 1;
         }
+        first_event.push(events.len() as u32);
         let turn = meta.turns.as_ref().and_then(|t| t.get(i)).copied();
         match (turn, last_turn) {
             (Some(t), Some(l)) if t == l => {}
@@ -416,6 +440,20 @@ pub fn from_input(s: &input::Session, meta: &Meta, table: &CommandTable) -> Even
             }
         }
     }
+    let mut exposed: BTreeSet<u32> = BTreeSet::new();
+    for inf in &meta.influence {
+        let from = first_event.get(inf.at_step as usize).copied().unwrap_or(events.len() as u32);
+        for (j, e) in events.iter().enumerate().skip(from as usize) {
+            let hit = match e.ty {
+                NodeType::Act => inf.names_act(&e.head),
+                NodeType::Read => inf.names_read(&e.key),
+                _ => false,
+            };
+            if hit {
+                exposed.insert(j as u32);
+            }
+        }
+    }
     EventSession {
         id: s.id.clone(),
         day: meta.day.as_deref().map(day_number).unwrap_or(0),
@@ -424,7 +462,7 @@ pub fn from_input(s: &input::Session, meta: &Meta, table: &CommandTable) -> Even
         events,
         flows: flows.into_iter().collect(),
         same_art: same_art.into_iter().collect(),
-        influence: meta.influence.clone(),
+        exposed: exposed.into_iter().collect(),
     }
 }
 
@@ -499,8 +537,8 @@ pub struct LSession {
     pub events: Vec<LEvent>,
     pub flows: Vec<(u32, u32)>,
     pub same_art: Vec<(u32, u32)>,
-    /// (from event, exact label id) pairs: continuation matches there are exposed.
-    pub influence: Vec<(u32, u32)>,
+    /// Exposed events ([`EventSession::exposed`]): continuation matches there are not evidence.
+    pub exposed: Vec<u32>,
 }
 
 /// Labelled sessions (sorted by id) and their label table.
@@ -560,11 +598,6 @@ pub fn build_corpus(sessions: &[EventSession], names: &dyn Fn(&Event) -> [Option
             }
             events.push(LEvent { ty: e.ty, lab, batch: e.batch, ok: e.ok, seg: e.segment });
         }
-        let influence = s
-            .influence
-            .iter()
-            .filter_map(|inf| table.id(&label_name(NodeType::Act, Level::Exact, &inf.key)).map(|id| (inf.from, id)))
-            .collect();
         out.push(LSession {
             id: s.id.clone(),
             day: s.day,
@@ -572,7 +605,7 @@ pub fn build_corpus(sessions: &[EventSession], names: &dyn Fn(&Event) -> [Option
             events,
             flows: s.flows.clone(),
             same_art: s.same_art.clone(),
-            influence,
+            exposed: s.exposed.clone(),
         });
     }
     Corpus { labels: table, sessions: out }

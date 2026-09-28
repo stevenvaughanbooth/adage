@@ -86,17 +86,17 @@ pub struct LearnParams {
     pub yellow_rate: f64,
     /// The lower rate bar that keeps an existing route (hysteresis).
     pub retain_rate: f64,
-    /// A runner is named in a dead end only if it failed in at least `num/den` of the sessions
+    /// An avoid names a runner only if it failed in at least `num/den` of the sessions
     /// that ran it: `[num, den]`, integers so the rule is exact.
     pub dead_end_consistency: [u32; 2],
-    /// At most this many dead ends (failure signatures) per working command.
+    /// At most this many avoids (failure signatures) per working command.
     pub dead_end_signatures: usize,
-    /// A finish-line command must be this much more common after the edit than without it.
+    /// A step after an edit must be this much more common after the edit than without it.
     pub finish_line_contrast: f64,
-    /// Commands run before the first edit by more than this share of sessions are not specific
-    /// to any intent.
+    /// Prompt-intent prototypes: commands run before the first edit by more than this share of
+    /// sessions are not specific to any intent.
     pub intent_ubiquitous: f64,
-    /// An intent family's command must be this much more common inside the family than outside.
+    /// A prompt-intent prototype's command must be this much more common inside it than outside.
     pub intent_contrast: f64,
     /// Review: absolute movement of the Wilson lower bound that counts as a material change.
     pub material_lower_bound: f64,
@@ -114,26 +114,13 @@ pub struct LearnParams {
     /// default, omitted from the canonical JSON) is `min_support`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outcome_min_support: Option<u32>,
-    /// The learning engine (Track G §10): `miners` (today's miners, the default), `shadow` or
-    /// `graph`. Under `shadow` and `graph` the lookup miner takes its slot and contract from the
-    /// graph engine's learned value types, and session facts are computed (and cached).
-    /// Omitted from the canonical JSON when `miners`, so the default setting's hash is unchanged.
-    #[serde(skip_serializing_if = "is_miners")]
-    pub engine: String,
 }
-
-/// The engines `LearnParams::engine` may name.
-pub const ENGINES: [&str; 3] = ["miners", "shadow", "graph"];
 
 /// The default `outcome_lift_lower_bound`.
 pub const OUTCOME_LIFT_LOWER_BOUND: f64 = 0.2;
 
 fn is_default_lift(x: &f64) -> bool {
     *x == OUTCOME_LIFT_LOWER_BOUND
-}
-
-fn is_miners(e: &str) -> bool {
-    e == "miners"
 }
 
 impl Default for LearnParams {
@@ -152,7 +139,6 @@ impl Default for LearnParams {
             stale_exposure: 0.5,
             outcome_lift_lower_bound: OUTCOME_LIFT_LOWER_BOUND,
             outcome_min_support: None,
-            engine: "miners".into(),
         }
     }
 }
@@ -201,9 +187,6 @@ impl EngineParams {
         }
         if l.dead_end_signatures == 0 {
             bail!("learn: dead_end_signatures must be at least 1");
-        }
-        if !ENGINES.contains(&l.engine.as_str()) {
-            bail!("learn.engine must be one of {ENGINES:?} (got {:?})", l.engine);
         }
         for (name, x) in [
             ("runtime.holdout_share", r.holdout_share),
@@ -360,19 +343,5 @@ mod tests {
         b.learn.retain_rate = 0.31;
         assert_ne!(a.params_hash(), b.params_hash());
         assert_eq!(a.params_hash().len(), 64);
-    }
-
-    #[test]
-    fn the_engine_defaults_to_the_miners_and_keeps_the_default_hash() {
-        let d = EngineParams::default();
-        assert_eq!(d.learn.engine, "miners");
-        assert!(!d.canonical_json().contains("engine"));
-        let g = d.with_overrides(&serde_json::json!({"learn": {"engine": "graph"}})).unwrap();
-        assert_eq!(g.learn.engine, "graph");
-        assert!(g.canonical_json().contains("\"engine\":\"graph\""));
-        assert_ne!(g.params_hash(), d.params_hash());
-        let back = d.with_overrides(&serde_json::json!({"learn": {"engine": "miners"}})).unwrap();
-        assert_eq!(back.params_hash(), d.params_hash());
-        assert!(d.with_overrides(&serde_json::json!({"learn": {"engine": "gnn"}})).is_err());
     }
 }

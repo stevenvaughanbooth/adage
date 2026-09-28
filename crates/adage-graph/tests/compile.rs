@@ -117,35 +117,38 @@ fn compile(reflexes: &[Reflex]) -> compile::Output {
 }
 
 #[test]
-fn a_regeneration_after_the_last_edit_is_an_obligation_with_the_miners_id() {
+fn a_regeneration_after_the_last_edit_is_an_obligation_with_its_fixed_id() {
     let out =
         compile(&[reflex(vec![edit("registry/currencies.csv")], vec![act("exec make gen")], Some("exec make gen"))]);
     assert_eq!(out.routes.len(), 1, "{:?}", out.dropped);
     let c = &out.routes[0];
     assert_eq!(c.shape, "obligation");
-    assert!(c.legacy);
-    assert_eq!(c.route.id, compile::legacy::finish_line_id("registry/*.csv", "make gen"));
+    assert!(c.fixed_id);
+    assert_eq!(c.route.id, compile::stable::finish_line_id("registry/*.csv", "make gen"));
     assert_eq!(c.route.trigger, Trigger::AfterEdit { paths: "registry/*.csv".into() });
     assert_eq!(c.route.step, Step::Run { command: "make gen".into() });
-    assert_eq!(compile::legacy_track(&c.route), KIND_FINISH_LINE);
+    assert_eq!(shape(&c.route), "obligation");
     assert_eq!(c.why.backoff, 1);
     assert_eq!(c.why.examples, ["s0", "s1"]);
 }
 
 #[test]
 fn two_steps_after_an_edit_are_a_sequence_and_a_repeated_step_counts_once() {
+    // A sequence that starts with a regeneration also owes that step: its obligation (with the
+    // Stop request a sequence never makes) is compiled beside it.
     let r = reflex(
         vec![edit("registry/currencies.csv")],
         vec![act("exec make gen"), act("exec make check"), act("exec make check")],
         Some("exec make gen"),
     );
     let out = compile(&[r]);
-    assert_eq!(out.routes.len(), 1, "{:?}", out.dropped);
-    let c = &out.routes[0];
-    assert_eq!(c.shape, "sequence");
+    assert_eq!(out.routes.len(), 2, "{:?}", out.dropped);
+    let o = out.routes.iter().find(|c| c.shape == "obligation").expect("the first step's obligation");
+    assert_eq!(o.route.id, compile::stable::finish_line_id("registry/*.csv", "make gen"));
+    let c = out.routes.iter().find(|c| c.shape == "sequence").expect("the sequence");
     assert_eq!(c.route.step, Step::Sequence { commands: vec!["make gen".into(), "make check".into()] });
     assert!(c.route.id.starts_with("sequence-"), "{}", c.route.id);
-    assert_eq!(compile::legacy_track(&c.route), "graph");
+    assert_eq!(shape(&c.route), "sequence");
     let t = Track {
         manifest: Manifest {
             track: TrackInfo {
@@ -219,7 +222,7 @@ fn a_failed_check_then_a_working_one_is_an_avoid_announced_by_how_often_it_is_ru
         }
     );
     assert_eq!(r.aspect, Aspect::Red);
-    assert_eq!(r.id, compile::legacy::dead_end_id("exec make check", "", 0));
+    assert_eq!(r.id, compile::stable::dead_end_id("exec make check", "", 0));
     // A run the avoided runner would take is dropped before emission (interlocking).
     let mut y = act(&pytest);
     y.ok = Some(false);
@@ -229,7 +232,7 @@ fn a_failed_check_then_a_working_one_is_an_avoid_announced_by_how_often_it_is_ru
 }
 
 #[test]
-fn a_longer_context_compiles_to_an_inert_context_trigger() {
+fn a_longer_context_compiles_to_a_context_trigger() {
     let r = reflex(
         vec![edit("registry/currencies.csv"), act("exec make gen")],
         vec![act("exec make check")],
@@ -239,7 +242,6 @@ fn a_longer_context_compiles_to_an_inert_context_trigger() {
     assert_eq!(out.routes.len(), 1, "{:?}", out.dropped);
     let c = &out.routes[0];
     assert!(matches!(c.route.trigger, Trigger::Context { within: 8, .. }), "{:?}", c.route.trigger);
-    assert!(!compile::fires_in_g3(&c.route));
     let Trigger::Context { items, .. } = &c.route.trigger else { unreachable!() };
     assert_eq!(
         items,

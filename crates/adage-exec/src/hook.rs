@@ -148,7 +148,7 @@ fn directive_for(ir: &adage_tracks::index::IndexedRoute, directives: &[Directive
         version: ir.version.clone(),
         aspect: ir.route.aspect,
         text: render::route_text(&ir.route, &bound)?,
-        kind: adage_tracks::route_kind(&ir.route).to_string(),
+        kind: adage_tracks::shape(&ir.route).to_string(),
         origin: None,
     })
 }

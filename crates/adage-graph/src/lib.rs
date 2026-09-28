@@ -85,6 +85,27 @@ pub struct Learned {
     pub slots: Vec<SlotType>,
 }
 
+/// A thin slot's type (two values only) must be one branch that starts with a literal prefix
+/// holding a letter and ending in punctuation (`BIL-`, `INC-`), followed by class runs only: as
+/// narrow as two samples allow, so a bare number or word never becomes a type from two values.
+pub fn literal_prefix(runs: &adage_core::vtype::Runs) -> bool {
+    use adage_core::vtype::Run;
+    let [b] = runs.branches.as_slice() else { return false };
+    let lits: Vec<&str> = b
+        .iter()
+        .map_while(|r| match r {
+            Run::Lit { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    let prefix = lits.concat();
+    let rest = &b[lits.len()..];
+    !rest.is_empty()
+        && prefix.chars().any(|c| c.is_ascii_alphabetic())
+        && prefix.chars().last().is_some_and(|c| !c.is_ascii_alphanumeric())
+        && rest.iter().all(|r| matches!(r, Run::Class { .. }))
+}
+
 /// Find value slots in `sessions` and induce a type for each.
 pub fn learn(sessions: &[input::Session], p: &Params) -> Learned {
     let obs = flow::observe_all(sessions, p.threads);
@@ -98,6 +119,9 @@ pub fn learn(sessions: &[input::Session], p: &Params) -> Learned {
                 Contract::RepoPath
             } else {
                 match types::induce(&slot.sink.name(), slot.positives.keys(), slot.negatives.iter()) {
+                    Ok(t) if slot.thin && !literal_prefix(&t.vtype.runs) => {
+                        Contract::None(Reject::WordLike("a thin slot needs a literal prefix".into()))
+                    }
                     Ok(t) => Contract::Pattern(t),
                     Err(r) => Contract::None(r),
                 }

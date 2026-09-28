@@ -4,8 +4,8 @@
 //! Canonical content is what the route says, never the evidence behind it: command keys and
 //! globs of the trigger (an intent item by its family, never its centroid), value-type ids, the
 //! directed commands, and slot *names*. Epoch label ids, prototype names, counts and dates never
-//! enter, so re-clustering or more traces never rename a route. Legacy shapes take the miners'
-//! ids instead ([`super::legacy`]).
+//! enter, so re-clustering or more traces never rename a route. Some shapes have a fixed id form
+//! instead ([`super::stable`]).
 
 use adage_tracks::{CtxItem, Slot, SlotSource, Step, Trigger};
 
@@ -65,7 +65,7 @@ pub fn route_id(shape: &str, trigger: &Trigger, step: &Step, slots: &[Slot]) -> 
     parts.push(String::from("\u{1f}"));
     parts.extend(step_parts(step, slots));
     let refs: Vec<&str> = parts.iter().map(String::as_str).collect();
-    format!("{shape}-{}", super::legacy::stable(&refs))
+    format!("{shape}-{}", super::stable::stable(&refs))
 }
 
 #[cfg(test)]

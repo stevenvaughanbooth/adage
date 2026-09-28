@@ -385,7 +385,7 @@ fn plausible_route() -> impl Strategy<Value = Route> {
         prop_oneof![3 => "[A-Za-z: ]{1,40}", 1 => hostile_text()],
     )
         .prop_map(|(avoid, instead, signature)| {
-            // `a / b` is how the miner names several runners; validation sees one string.
+            // `a / b` is how the learner names several runners; validation sees one string.
             let avoid = avoid.replace(" / ", " ");
             build(
                 "dead-end-1",

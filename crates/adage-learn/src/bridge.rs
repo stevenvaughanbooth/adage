@@ -80,6 +80,34 @@ pub fn annotate_prefix(s: &Session, n: usize) -> input::Annotated {
     input::Annotated { session: input::Session { id: s.id.clone(), prompts, steps }, meta, day: s.day.clone() }
 }
 
+/// The first bridged step of each import step of `s` (and one past the end).
+fn starts(s: &Session) -> Vec<u32> {
+    let mut out: Vec<(input::Step, input::StepMeta)> = Vec::new();
+    let mut start = Vec::with_capacity(s.steps.len() + 1);
+    for st in &s.steps {
+        start.push(out.len() as u32);
+        push(&st.norm.action, st, &mut out);
+    }
+    start.push(out.len() as u32);
+    start
+}
+
+/// The directives `s` received, as the graph engine reads them: anchored at bridged steps.
+pub fn influence(s: &Session) -> Vec<adage_graph::events::Influence> {
+    if s.influence.is_empty() {
+        return Vec::new();
+    }
+    let start = starts(s);
+    let last = start.last().copied().unwrap_or(0);
+    s.graph_influence()
+        .into_iter()
+        .map(|mut d| {
+            d.at_step = start.get(d.at_step as usize).copied().unwrap_or(last);
+            d
+        })
+        .collect()
+}
+
 /// The session as the graph engine reads it (what value-flow induction needs).
 pub fn to_input(s: &Session) -> input::Session {
     annotate(s).session
@@ -87,7 +115,7 @@ pub fn to_input(s: &Session) -> input::Session {
 
 /// The session as the graph engine's miner reads it (Track G §1.1): [`annotate`], then
 /// `adage_graph::events::from_input` with each step's model turn as its batch and its effect
-/// class, the day and the outcome.
+/// class, the day, the outcome and the directives it received ([`influence`]).
 pub fn events(a: &input::Annotated, s: &Session) -> adage_graph::events::EventSession {
     let effect = |e: &str| -> Option<adage_core::Effect> {
         Some(match e {
@@ -106,7 +134,7 @@ pub fn events(a: &input::Annotated, s: &Session) -> adage_graph::events::EventSe
         outcome: s.outcome,
         turns: Some(a.meta.iter().map(|m| m.turn).collect()),
         effects: Some(a.meta.iter().map(|m| effect(&m.effect)).collect()),
-        influence: vec![],
+        influence: influence(s),
     };
     adage_graph::events::from_input(&a.session, &meta, &adage_core::CommandTable::load())
 }
@@ -154,7 +182,7 @@ mod tests {
             ],
             steered: false,
             directed: BTreeSet::new(),
-            steered_kinds: BTreeSet::new(),
+            influence: vec![],
             outcome: None,
             harness: "claude-code".into(),
             prompts: vec![

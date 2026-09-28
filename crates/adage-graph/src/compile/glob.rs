@@ -11,13 +11,13 @@
 //! with no extension (`requirements.txt`, `Makefile`), which never widen.
 //!
 //! The lattice starts at `dir/*.ext`, not at the single file: one edited file stands for its
-//! directory's files of its kind, as the finish-line miner's `glob_for` always did (a deviation
-//! kept for parity: the miners' routes and ids are reproduced exactly).
+//! directory's files of its kind, as the retired finish-line miner's `glob_for` always did (a
+//! deviation kept for parity: the miners' routes and ids are reproduced exactly).
 //!
 //! The tree is every path the traces read or edited, plus any repository files the caller passes
 //! (`Corpus::of`), so the result is a pure function of the traces (and that list). `adage learn`
 //! passes none in G3: over the touched paths alone a directory glob is always precise, so the
-//! lattice gives the finish-line miner's `dir/*.ext` (and `p/**/*.ext` across sibling
+//! lattice gives the retired finish-line miner's `dir/*.ext` (and `p/**/*.ext` across sibling
 //! directories, whose evidence the caller then counts on that glob). A repository tree makes the
 //! precision bar bite (a directory most of whose files no trace touched keeps its files); G4 can
 //! pass one once the index records it.

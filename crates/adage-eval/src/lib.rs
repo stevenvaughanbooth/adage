@@ -153,7 +153,7 @@ pub fn instincts_index(repo: &str, root: &Path) -> Result<Index> {
 #[derive(Debug, Clone, Serialize)]
 pub struct LearnedRoute {
     pub id: String,
-    pub kind: String,
+    pub shape: String,
     pub aspect: String,
     pub step: String,
     pub support: u32,
@@ -185,7 +185,7 @@ pub struct Report {
     pub params_hash: String,
     pub routes: Vec<LearnedRoute>,
     pub overall: score::Metrics,
-    pub by_kind: BTreeMap<String, score::Metrics>,
+    pub by_shape: BTreeMap<String, score::Metrics>,
     pub by_route: BTreeMap<String, score::Metrics>,
     pub recall: BTreeMap<String, score::Recall>,
     pub dead_ends: score::DeadEnds,
@@ -354,7 +354,7 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
         .for_repo(&repo_key)
         .map(|ir| LearnedRoute {
             id: ir.route.id.clone(),
-            kind: score::kind(&ir.route).into(),
+            shape: score::point(&ir.route),
             aspect: format!("{:?}", ir.route.aspect).to_lowercase(),
             step: step_text(&ir.route.step),
             support: ir.route.evidence.support,
@@ -379,7 +379,7 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
         params_hash: params.params_hash(),
         routes,
         overall: tally.overall,
-        by_kind: tally.by_kind,
+        by_shape: tally.by_shape,
         by_route: tally.by_route,
         recall: tally.recall,
         dead_ends: tally.dead_ends,
@@ -444,7 +444,7 @@ pub fn render_text(r: &Report) -> String {
         let _ = writeln!(
             s,
             "  {:<22} {:<12} {:<6} {:>3}/{:<3} {}",
-            x.id, x.kind, x.aspect, x.support, x.opportunities, x.step
+            x.id, x.shape, x.aspect, x.support, x.opportunities, x.step
         );
     }
     let _ = writeln!(
@@ -467,8 +467,8 @@ pub fn render_text(r: &Report) -> String {
         );
     };
     row("all", &r.overall);
-    for (k, m) in &r.by_kind {
-        row(&format!("kind:{k}"), m);
+    for (k, m) in &r.by_shape {
+        row(&format!("shape:{k}"), m);
     }
     for (k, m) in &r.by_route {
         row(k, m);

@@ -981,7 +981,7 @@ pub fn generated_marker(head: &str) -> Option<&'static str> {
 
 static LITERAL: Lazy<Regex> = Lazy::new(|| Regex::new(r#""([^"\\\n]{1,200})"|'([^'\\\n]{1,200})'"#).unwrap());
 
-/// The path pattern a file stands for: `schema/invoice.json` → `schema/*.json` (as the miner's
+/// The path pattern a file stands for: `schema/invoice.json` → `schema/*.json` (as the learner's
 /// `glob_for`).
 pub fn glob_for(rel: &str) -> Option<String> {
     let (dir, file) = rel.rsplit_once('/').unwrap_or(("", rel));

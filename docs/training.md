@@ -3,7 +3,7 @@
 `adage-train` turns what a skill *says* into reflexes Adage can *prove*. It reads a `SKILL.md` (or a
 runbook, `CONTRIBUTING.md`, a Makefile, `package.json` or a GitHub Actions workflow), extracts its
 claims, drives **your own agent harness** headlessly on generated tasks in disposable clones of
-your repository, mines what the agents did with `adage learn`'s miners, and reports, claim by
+your repository, learns from what the agents did with `adage learn`'s graph engine, and reports, claim by
 claim, whether the skill compiled into a reflex, is stale, was never exercised, or is unsafe.
 
 Terminology:
@@ -27,7 +27,7 @@ spending cap. Nothing it produces reaches a hook until a person reviews it.
   and prerequisites, `package.json` scripts, CI `run:` steps, generator links) bind instincts on
   day 0 with no sessions at all. `adage-train plan --from Makefile` reads them through the same
   extractor (`adage_instincts::extract`), so a declared step can be *tested* rather than assumed.
-- **Ids line up.** A mined route takes the id the miner derives (`finish-line-<glob, command>`,
+- **Ids line up.** A learned route takes the id the learner derives (`finish-line-<glob, command>`,
   `dead-end-<working command>`), which is also the id an instinct binds for the same behaviour.
   On the acme fixture training stages `finish-line-e7e809` and `dead-end-d41b1e`, the ids the demo
   learned and instinct U5/U1 bind. Once installed, a trained reflex therefore overrides the
@@ -253,8 +253,8 @@ Not verified (no real agent was run; no money was spent):
 3. **Promotion from staging**: an `adage review`-style step that installs accepted staged reflexes
    into `$ADAGE_HOME/tracks/<repo>/…` at probation, keeping the provenance, and records the
    decision. Not built: today staged reflexes are only inspected (`staged/tracks`, `report`).
-4. **A verify-step route kind**: a correct `verify` claim followed without failures compiles to
-   nothing, because no miner learns "the tests here run with `make test`" except through a dead
+4. **A verify step in general**: outside a claim (`adage_learn::claims`), a correct `verify` step
+   followed without failures compiles to nothing, because the learner learns "the tests here run with `make test`" except through a dead
    end or an intent family.
 5. **Sandbox-aware dead ends**: record whether a failing session ran sandboxed, so a dead end that
    exists only inside the sandbox can be told apart.

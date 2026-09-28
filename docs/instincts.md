@@ -113,11 +113,11 @@ The binder ([`bind.rs`](../crates/adage-instincts/src/bind.rs)) runs the detecto
 
 1. **One directive per trigger.** A failing command or an edited glob already claimed by an earlier
    instinct is not bound again (specific before generic: U1's wrapper before U3's test command).
-2. **Ids the miner would derive.** A dead-end-shaped route directing `S` takes
-   `dead-end-<stable(key(S))>`, the id `mine::dead_end_routes` gives the dead end whose working
-   command is `S`; further triggers for the same `S` take `dead-end-<stable(key(S), key(R))>`. A
-   finish line takes `finish-line-<stable(glob, command)>`, as `mine::obligation_routes` does. Shapes
-   no miner learns take `instinct-<id>-<stable(…)>`. `BindResult::origins` maps every id to the
+2. **Ids the learner would derive.** A dead-end-shaped route directing `S` takes
+   `dead-end-<stable(key(S))>`, the id the learner gives the dead end whose working command is `S`
+   (`adage_graph::compile::stable`); further triggers for the same `S` take
+   `dead-end-<stable(key(S), key(R))>`. A finish line takes `finish-line-<stable(glob, command)>`,
+   as the learner's obligation does. Shapes the learner does not produce take `instinct-<id>-<stable(…)>`. `BindResult::origins` maps every id to the
    instinct that bound it.
 3. **Override rules** (learned wins). A candidate is skipped, with the reason, if a route from any
    other source (learned, imported, authored; routes with an `instinct:` provenance are ignored):
@@ -239,9 +239,8 @@ each part does, and where:
   repository-relative glob, `command` plain argv at most regenerate, `manager` and `lockfile` from
   the lockfile table). Validation refuses an unknown template, an unknown or missing slot, a value
   that fails its contract, and anything but yellow + observe after an edit, a command or a failure.
-- **`route_kind`**: `after_failure` + `run` is `dead-ends` (the kind of the learned route sharing
-  the `dead-end-*` id), and any advisory step is the new kind `advice`, which steers no miner but
-  its own (`adage_learn::import::steers`).
+- **Delivery shape** (`adage_tracks::shape`): `after_failure` + `run` is `avoid` (the shape of the
+  learned route sharing the `dead-end-*` id), and an advisory step is `advise`.
 - **Index precedence by provenance** (`Index::compile`): on an id collision, a first-hand route
   (learned or authored) beats an import, which beats an instinct, whatever the track names sort to;
   a retired first-hand route shadows an instinct with its id, as it shadows imports.
@@ -265,10 +264,10 @@ each part does, and where:
 - **Day 0.** `adage learn --instincts-only [--repo-path <dir>]` binds a repository with no sessions
   (`instincts::learn_only`), and an automatic learn for a repository with no usable session yet
   binds its instincts once from the root the hook named.
-- **Never learn from instincts.** A session that received an instinct's directive is steered on its
-  kind (`dead-ends` or `finish-line`, from the wrapper's `kind`), so it is excluded from that miner,
-  exactly as for a reflex; `advice` steers no miner.
-- **Hand-over.** When the miner learns a route with an instinct's id, the instinct leaves its track;
+- **Never learn from instincts.** A session that received an instinct's directive is steered by
+  influence, exactly as for a reflex: what the directive names is exposed from then on and is no
+  evidence for a reflex directing it.
+- **Hand-over.** When the learner learns a route with an instinct's id, the instinct leaves its track;
   `learn.log` says "instinct route confirmed by sessions: the learned route takes over".
 - **Review.** Rejected ids are never bound again, and a rejected instinct stays in the track,
   retired. Environment steps stay drafts until approved; approving one approves every environment

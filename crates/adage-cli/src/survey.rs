@@ -282,7 +282,7 @@ impl Acc {
             }
         }
         // Failing commands, and what the session ran successfully next instead (the dead-end
-        // miner's pairing: a different command of the same effect within five steps).
+        // learner's pairing: a different command of the same effect within five steps).
         let mut failed_here = BTreeSet::new();
         for (i, a) in s.steps.iter().enumerate() {
             if !a.call.failed || !is_exec(&a.norm.action) {
@@ -303,7 +303,7 @@ impl Acc {
         let mut last_edit: BTreeMap<String, usize> = BTreeMap::new();
         for (i, st) in s.steps.iter().enumerate() {
             if keys::is_author(&st.norm.action) {
-                if let Some(g) = st.rel_path.as_deref().and_then(adage_learn::mine::glob_for) {
+                if let Some(g) = st.rel_path.as_deref().and_then(adage_learn::evidence::glob_for) {
                     last_edit.insert(g, i);
                 }
             }
@@ -682,9 +682,9 @@ pub fn print_text(s: &Survey) {
             }
         }
         if s.intent_model.is_none() {
-            println!("  intent families           skipped: no embedding model (`adage models fetch` enables them)");
+            println!("  prompt intents            skipped: no embedding model (`adage models fetch` enables them)");
         } else if r.intent_families > 0 {
-            println!("  intent families           {} usable", r.intent_families);
+            println!("  prompt intents            {} usable", r.intent_families);
         }
     }
     println!("\nNext: `adage learn` builds these tracks, and `adage review` lists each route for your decision.");
@@ -722,7 +722,7 @@ mod tests {
                 steps: vec![],
                 steered: false,
                 directed: BTreeSet::new(),
-                steered_kinds: BTreeSet::new(),
+                influence: vec![],
                 outcome: None,
                 harness: "claude-code".into(),
                 prompts: vec![],

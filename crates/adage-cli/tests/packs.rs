@@ -599,10 +599,10 @@ fn learn_then_share_carries_the_lookup_with_its_script_pinned_against_repo_root(
 
     // Without a root, the lookup cannot be carried (the only route here), and the message names
     // the flag that fixes it.
-    refused(w.share(Path::new("acme-billing/work-items"), "no-root", &[]), "adage share --repo-root <dir>");
+    refused(w.share(Path::new("acme-billing/learned"), "no-root", &[]), "adage share --repo-root <dir>");
     // With it, the pack holds the lookup, its script pinned by hash.
     let root = w.p("checkout");
-    let t = ok(w.share(Path::new("acme-billing/work-items"), "out", &["--repo-root", root.to_str().unwrap()]));
+    let t = ok(w.share(Path::new("acme-billing/learned"), "out", &["--repo-root", root.to_str().unwrap()]));
     assert!(!t.contains("Not carried:\n  lookup-work-item"), "{t}");
     let pack = adage_pack::Pack::load(&w.p("out")).unwrap();
     let lookup = pack.routes.iter().find(|r| r.id == "lookup-work-item").expect("the lookup is carried");

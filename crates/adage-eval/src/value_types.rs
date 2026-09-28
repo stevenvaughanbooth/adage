@@ -17,7 +17,7 @@
 //! convention's command names the sink (`./scripts/wi-lookup {item}` → `scripts/wi-lookup #0`).
 //! Reported per bundle and per id shape, for the learned type and for the hard-coded detector
 //! (`adage_core::spans` TICKET spans in the prompt that reappear in the lookup's argv, then
-//! `spans::ticket_contract`, as the lookup miner does today):
+//! `spans::ticket_contract`, as the learner does today):
 //!
 //! - **slot found**: a slot at the lookup's sink with a safe type (learned), or a contract
 //!   (hard-coded). Recall over bundles is the share with one;
@@ -105,7 +105,7 @@ pub struct BundleReport {
     pub unsafe_accepts: Vec<(String, String)>,
     /// Holdout strings on which a learned regex and the matcher disagree. Must be empty.
     pub disagreements: Vec<(String, String)>,
-    /// Learning with `engine = graph`, then the hook, when asked (`--end-to-end`).
+    /// Learning, then the hook, when asked (`--end-to-end`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub end_to_end: Option<crate::value_types_e2e::EndToEnd>,
 }
@@ -406,7 +406,7 @@ pub fn run(dir: &Path) -> Result<Report> {
     run_with(dir, false)
 }
 
-/// [`run`], and with `e2e` learning with `engine = graph` and replaying the prompts through the
+/// [`run`], and with `e2e` learning and replaying the prompts through the
 /// hook's decision (`crate::value_types_e2e`).
 pub fn run_with(dir: &Path, e2e: bool) -> Result<Report> {
     let mut bundles = Vec::new();

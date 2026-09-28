@@ -78,25 +78,24 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// The kind of a learned route, as [`score::kind`] names it.
+    /// The kind of convention a learned route's structure (its trigger and step) can deliver.
+    /// Conventions are ground truth, written by kind; the learner knows none.
     pub fn of_route(r: &Route) -> Option<Kind> {
         let segment = r.slots.iter().any(|s| matches!(s.source, SlotSource::EditSegment { .. }));
-        match (&r.trigger, &r.step) {
-            (_, Step::Sequence { .. }) => return Some(Kind::Sequence),
-            (Trigger::AfterEdit { .. }, Step::Run { .. }) if segment => return Some(Kind::Scope),
+        Some(match (&r.trigger, &r.step) {
+            (_, Step::Sequence { .. }) => Kind::Sequence,
+            (Trigger::AfterEdit { .. }, Step::Run { .. }) if segment => Kind::Scope,
             (Trigger::AfterEdit { .. }, Step::Run { .. }) if r.effect == adage_core::Effect::Environment => {
-                return Some(Kind::EnvSync)
+                Kind::EnvSync
             }
-            _ => {}
-        }
-        match score::kind(r) {
-            "lookup" => Some(Kind::Lookup),
-            "linked-files" => Some(Kind::LinkedFiles),
-            "dead-end" => Some(Kind::DeadEnd),
-            "finish-line" => Some(Kind::FinishLine),
-            "intent" => Some(Kind::Intent),
-            _ => None,
-        }
+            (_, Step::Avoid { .. }) | (Trigger::AfterFailure { .. }, Step::Run { .. }) => Kind::DeadEnd,
+            (_, Step::ReadBatch { .. }) => Kind::LinkedFiles,
+            (_, Step::Advise { .. }) => return None,
+            (Trigger::AfterEdit { .. }, _) => Kind::FinishLine,
+            (Trigger::Prompt { .. }, _) => Kind::Lookup,
+            (Trigger::Intent { .. }, _) => Kind::Intent,
+            _ => return None,
+        })
     }
     pub fn name(self) -> &'static str {
         match self {
@@ -541,8 +540,6 @@ pub struct RoutesReport {
     pub sandbox: String,
     pub index_generation: String,
     pub learned_routes: usize,
-    /// The learning engine (`miners`, `shadow` or `graph`).
-    pub engine: String,
     /// Context routes ending at a prompt, which no convention's trigger describes: neither true
     /// nor false, and not in `learned_routes`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -589,10 +586,10 @@ pub fn score_routes(
         .collect();
     let mut rms = Vec::new();
     for r in routes {
-        let kind = Kind::of_route(r).map(Kind::name).unwrap_or_else(|| score::kind(r));
+        let kind = Kind::of_route(r).map(|k| k.name().to_string()).unwrap_or_else(|| score::point(r));
         let mut rm = RouteMatch {
             id: r.id.clone(),
-            kind: kind.into(),
+            kind,
             step: crate::step_text(&r.step),
             state: format!("{:?}", r.state).to_lowercase(),
             matches: vec![],
@@ -689,11 +686,11 @@ fn repo_files(root: &Path) -> Vec<String> {
 }
 
 /// `adage eval routes <gen-bundle>`: learn from every rehearsal transcript of a generated bundle
-/// (`python3 evals/gen/rehearse.py <bundle> --no-learn` writes them) with `engine` (`miners`,
-/// `shadow` or `graph`) at the demo thresholds and no instincts, as the rehearsal does, then score
+/// (`python3 evals/gen/rehearse.py <bundle> --no-learn` writes them) at the demo thresholds and no
+/// instincts, as the rehearsal does, then score
 /// every learned route **in any state but retired** against the bundle's conventions: an
 /// environment step is a draft until a person approves it, and it is still what was learned.
-pub fn run_bundle(dir: &Path, engine: &str) -> Result<RoutesReport> {
+pub fn run_bundle(dir: &Path) -> Result<RoutesReport> {
     let conv = Conventions::from_bundle(dir)?;
     let reh = dir.join("rehearsal");
     let mut transcripts: Vec<std::path::PathBuf> = Vec::new();
@@ -712,8 +709,7 @@ pub fn run_bundle(dir: &Path, engine: &str) -> Result<RoutesReport> {
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok())
         .unwrap_or_default();
-    let mut cfg = adage_learn::LearnConfig::demo();
-    cfg.engine = engine.to_string();
+    let cfg = adage_learn::LearnConfig::demo();
     let home = tempfile::tempdir()?;
     let inputs = adage_learn::Inputs {
         transcripts,
@@ -761,7 +757,6 @@ pub fn run_bundle(dir: &Path, engine: &str) -> Result<RoutesReport> {
         sandbox: conv.sandbox.clone(),
         index_generation: report.index_generation,
         learned_routes: rms.len(),
-        engine: engine.to_string(),
         inert_routes,
         true_routes,
         false_routes,
@@ -839,7 +834,6 @@ pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
         sandbox: conv.sandbox.clone(),
         index_generation: index.generation.clone(),
         learned_routes: rms.len(),
-        engine: p.params.learn.engine.clone(),
         inert_routes,
         true_routes,
         false_routes,
@@ -893,9 +887,6 @@ pub fn render_text(r: &RoutesReport) -> String {
         }
     }
     let _ = writeln!(s, "index {} with {} routes", r.index_generation, r.learned_routes);
-    if r.index_file.is_none() {
-        let _ = writeln!(s, "engine {}", r.engine);
-    }
     for x in &r.routes {
         let verdict = match (x.matches.is_empty(), x.partial.is_empty()) {
             (false, _) => format!("= {}", x.matches.join(", ")),

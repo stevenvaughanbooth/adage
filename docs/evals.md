@@ -484,9 +484,13 @@ adds trials and directives).
 with the defaults, and why it was blessed. `cargo test -p adage-eval --test bench` reproduces it
 byte for byte (ignoring `adage_version`), checks that runs and sweeps are deterministic (the same
 bytes with 1 or 4 jobs), that every configuration of a `random:4` sweep has no unsafe directive,
-and that parameters really reach the learner and the runtime. The baseline (J 0.6307): turns saved
-at window 0.660 per session, 0.491 false directives per session, route F1 1.0, recall 0.972,
-precision@window 0.348; final check J 0.5937. It was J 0.6783 (0.651, 0.472, 1.0, 0.942, 0.335;
+and that parameters really reach the learner and the runtime. The baseline (J 0.6148, blessed when
+the graph engine became the only learner, Track G G5): turns saved at window 0.660 per session,
+0.500 false directives per session, route F1 1.0, recall 0.972, precision@window 0.360; final
+check J 0.5937. The retired miners gave J 0.6307 (0.660, 0.491, 1.0, 0.972, 0.348): the engine
+learns the same routes on the core suite and adds the sequence `make gen then make test` beside
+the regenerate obligation where the traces ran the two together, 8 of its 9 directives followed.
+Before the command-pattern algebra it was J 0.6783 (0.651, 0.472, 1.0, 0.942, 0.335;
 final 0.6146) before the command-pattern algebra: the linked-files trigger now also fires when an
 agent runs the lookup script without its interpreter, which raises recall and adds directives,
 some not followed, which the objective charges twice. The sweep table below predates it. After a

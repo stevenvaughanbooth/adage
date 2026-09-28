@@ -7,12 +7,17 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+/// A trace whose prompt names its own work item (`W-1041` in `calls` stands for it: a value slot
+/// needs values that vary).
 fn session(dir: &Path, sid: &str, calls: &[(&str, &str, bool)]) -> PathBuf {
     let cwd = "/fixture/acme-billing";
+    let n: u32 = sid.trim_start_matches(|c: char| !c.is_ascii_digit()).parse().unwrap_or(0);
+    let item = format!("W-10{}", 41 + n);
     let mut lines = vec![
-        json!({"type":"user","sessionId":sid,"cwd":cwd,"timestamp":"2026-09-20T10:00:00Z","message":{"role":"user","content":"Pick up W-1041 and get it done."}}),
+        json!({"type":"user","sessionId":sid,"cwd":cwd,"timestamp":"2026-09-20T10:00:00Z","message":{"role":"user","content":format!("Pick up {item} and get it done.")}}),
     ];
     for (n, (cmd, out, err)) in calls.iter().enumerate() {
+        let (cmd, out) = (cmd.replace("W-1041", &item), out.replace("W-1041", &item));
         let id = format!("toolu_{n}");
         lines.push(json!({"type":"assistant","sessionId":sid,"cwd":cwd,"message":{"id":format!("msg_{n}"),"model":"m","content":[{"type":"tool_use","id":id,"name":"Bash","input":{"command":cmd}}]}}));
         lines.push(json!({"type":"user","sessionId":sid,"cwd":cwd,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":id,"content":out,"is_error":err}]}}));
@@ -38,7 +43,7 @@ fn learn_all(dir: &Path, files: Vec<PathBuf>) -> anyhow::Result<Index> {
 
 #[test]
 fn a_hostile_error_line_does_not_abort_learning() {
-    // Before the fix, the dead-end miner took the error line as the route's signature, track
+    // Before the fix, the learner took the error line as the route's signature, track
     // validation rejected it, and `adage learn` failed for the whole repository: nothing learned,
     // no index compiled. One line of tool output was enough.
     let d = tempfile::tempdir().unwrap();
@@ -69,7 +74,7 @@ fn a_safe_error_line_is_preferred_over_a_hostile_one() {
     let d = tempfile::tempdir().unwrap();
     let files: Vec<PathBuf> = (0..4)
         .map(|i| {
-            // Most sessions end on a hostile line; the miner must look past it to a renderable one.
+            // Most sessions end on a hostile line; the learner must look past it to a renderable one.
             let out = if i == 0 {
                 "RuntimeError: ACME_ENV is not set"
             } else {

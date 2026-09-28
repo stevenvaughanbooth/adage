@@ -1,14 +1,15 @@
-//! Exposure and stale routes (E1: evidence integrity).
+//! Exposure and dormant routes (E1: evidence integrity).
 //!
-//! Each miner ignores the sessions steered by its own kind of route (Design §11), so a route that
-//! is delivered and followed starves itself of evidence: nearly every session where it applies is
-//! steered, and once the transcripts from before it expire only the holdout is left to confirm
-//! it. Without this module such a route would fall below the support bar and be dropped, then be
-//! re-learned from the holdout, then dropped again.
+//! Learning never counts what a directive named as evidence (Design §11, Track G §3.2), so a route
+//! that is delivered and followed starves itself of evidence: nearly every trace where it applies
+//! was exposed to it, and once the transcripts from before it expire only the holdout is left to
+//! confirm it. Without this module such a route would fall below the support bar and be dropped,
+//! then be re-learned from the holdout, then dropped again.
 //!
-//! **Exposure.** For a route of kind K, the sessions where its trigger occurred ([`occurs`]) are
-//! split into the *exposed* ones (steered on K, so excluded from its miner) and the *unsteered*
-//! ones. `Evidence::exposed` records the first count on every learned route.
+//! **Exposure.** For a route R, the traces where its trigger occurred ([`occurs`]) are split into
+//! the *exposed* ones (a directive they received named what R directs,
+//! [`crate::engine::exposed`]) and the *unsteered* ones. `Evidence::exposed` records the first
+//! count on every learned route.
 //!
 //! **Stale.** A route that was in service but is not found again this run is kept as
 //! `RouteState::Stale` ([`adage_tracks::review::keep_stale`]) when [`verdict`] finds:
@@ -24,9 +25,9 @@
 //! Derail flags live in the spools, which learning does not read: they surface in `adage review`,
 //! where retiring the route is the person's call.
 
+use crate::engine::{exposed, glob_hit};
+use crate::evidence::{argv, runner, shell_join, LearnConfig};
 use crate::import::Session;
-use crate::intent;
-use crate::mine::{argv, glob_for, runner, shell_join, LearnConfig};
 use adage_core::spans;
 use adage_core::Effect;
 use adage_intent::model::StaticModel;
@@ -38,17 +39,17 @@ use std::collections::BTreeMap;
 /// exposure alone, whatever its unsteered support. The default of `LearnConfig::stale_exposure`.
 pub const STALE_EXPOSURE: f64 = 0.5;
 
-/// Where a route's trigger occurred, split by whether the session was steered on its kind.
+/// Where a route's trigger occurred, split by whether the trace was exposed to it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Exposure {
-    /// Sessions steered on the route's kind (excluded from its miner).
+    /// Traces a directive steered to what the route directs.
     pub exposed: u32,
-    /// Sessions not steered on the route's kind.
+    /// Traces not exposed to it.
     pub unsteered: u32,
 }
 
-/// Unsteered evidence for a route the miner did not find: sessions where it applied, and those
-/// that did what it directs, counted as its miner counts them.
+/// Unsteered evidence for a route learning did not find again: traces where it applied, and
+/// those that did what it directs.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Probe {
     pub opportunities: u32,
@@ -80,12 +81,12 @@ impl<'a> Embeddings<'a> {
     }
 }
 
-/// Whether `r`'s trigger occurred in `s`: the situations its miner counts as opportunities, judged
-/// the same way whether or not the session was steered.
+/// Whether `r`'s trigger occurred in `s`: the situations counted as its opportunities, judged the
+/// same way whether or not the trace was steered.
 ///
-/// | Trigger | Occurs when the session |
+/// | Trigger | Occurs when the trace |
 /// | --- | --- |
-/// | `prompt` | has a span of that kind in its first prompt |
+/// | `prompt` | has a value of the slot's learned type (or a span of that kind) in a prompt before its first edit |
 /// | `after_command` | ran the command successfully |
 /// | `after_failure` | ran the command and it failed with the signature |
 /// | `after_edit` | edited a file of the glob |
@@ -94,14 +95,16 @@ impl<'a> Embeddings<'a> {
 /// | `context` | has the items' events in order, each within the gap of the one before, the gap counted over the events of any of its items (the runtime counts the repository's whole alphabet); prompt items are not read from traces |
 pub fn occurs(r: &Route, s: &Session, emb: &mut Embeddings) -> bool {
     match &r.trigger {
-        Trigger::Prompt { span } => spans::extract(&s.prompt).iter().any(|x| x.kind == *span),
+        Trigger::Prompt { span } => match r.slots.iter().find_map(|x| x.source.vtype()) {
+            Some(t) => !crate::graph::prompt_values(s, &t.runs).is_empty(),
+            None => spans::extract(&s.prompt).iter().any(|x| x.kind == *span),
+        },
         Trigger::AfterCommand { command } => s.steps.iter().any(|x| x.key == *command && !x.call.failed),
         Trigger::AfterFailure { command, signature } => {
             s.steps.iter().any(|x| x.key == *command && x.call.failed && x.call.output.contains(signature.as_str()))
         }
         Trigger::AfterEdit { paths } => s.steps.iter().any(|x| {
-            adage_core::keys::is_author(&x.norm.action)
-                && x.rel_path.as_deref().and_then(glob_for).is_some_and(|g| g == *paths)
+            adage_core::keys::is_author(&x.norm.action) && x.rel_path.as_deref().is_some_and(|p| glob_hit(paths, p))
         }),
         Trigger::SessionStart => match &r.step {
             Step::Avoid { avoid, instead, .. } => {
@@ -153,12 +156,12 @@ fn context_occurs(items: &[adage_tracks::CtxItem], within: u8, s: &Session) -> b
     !ends.is_empty()
 }
 
-/// [`Exposure`] of `r` (of miner kind `kind`) over a repository's sessions.
-pub fn exposure(r: &Route, kind: &str, sessions: &[&Session], emb: &mut Embeddings) -> Exposure {
+/// [`Exposure`] of `r` over a repository's traces.
+pub fn exposure(r: &Route, sessions: &[&Session], emb: &mut Embeddings) -> Exposure {
     let mut e = Exposure::default();
     for s in sessions {
         if occurs(r, s, emb) {
-            if s.steered_by(kind) {
+            if exposed(s, r) {
                 e.exposed += 1;
             } else {
                 e.unsteered += 1;
@@ -168,24 +171,29 @@ pub fn exposure(r: &Route, kind: &str, sessions: &[&Session], emb: &mut Embeddin
     e
 }
 
-/// Unsteered evidence for `r` among `unsteered` (the sessions its miner saw), counted as its miner
-/// counts it; `None` where it cannot be judged.
+/// Unsteered evidence for `r` among `unsteered` (the traces not exposed to it), counted as its
+/// judgement counts it; `None` where it cannot be judged.
 ///
 /// | Route | Opportunities | Support |
 /// | --- | --- | --- |
-/// | Lookup (`prompt` → `run`) | a span of the slot's kind in the prompt | ran a command with the same head, with the prompt's value, successfully, before the first edit |
-/// | Linked files | as the miner (`read_batch_routes`) | as the miner |
-/// | Finish line | edited a file of the glob | ran the command successfully after the last such edit |
-/// | Dead end | ran a runner it avoids | every such run failed |
-/// | Intent | the prompt clears the threshold | ran a directable command with the same head before the first edit |
+/// | `prompt` → `run` | a value of the slot's type in the prompt | ran a command with the same head, with the prompt's value, successfully, before the first edit |
+/// | `read_batch` | as [`crate::engine::judge_read_batch`] | as it |
+/// | `after_edit` → `run` or `sequence` | edited a file of the glob | ran its first command successfully after the last such edit |
+/// | `avoid` | ran a runner it avoids | every such run failed |
+/// | `intent` → `run` | the prompt clears the threshold | ran a directable command with the same head before the first edit |
 pub fn probe(r: &Route, unsteered: &[&Session], cfg: &LearnConfig, emb: &mut Embeddings) -> Option<Probe> {
     let mut p = Probe::default();
     match (&r.trigger, &r.step) {
         (Trigger::Prompt { span }, Step::Run { command }) => {
             let head = head_of(command);
+            let vtype = r.slots.iter().find_map(|x| x.source.vtype());
             for s in unsteered {
-                let values: Vec<String> =
-                    spans::extract(&s.prompt).into_iter().filter(|x| x.kind == *span).map(|x| x.value).collect();
+                let values: Vec<String> = match vtype {
+                    Some(t) => crate::graph::prompt_values(s, &t.runs),
+                    None => {
+                        spans::extract(&s.prompt).into_iter().filter(|x| x.kind == *span).map(|x| x.value).collect()
+                    }
+                };
                 if values.is_empty() {
                     continue;
                 }
@@ -201,25 +209,27 @@ pub fn probe(r: &Route, unsteered: &[&Session], cfg: &LearnConfig, emb: &mut Emb
         }
         (Trigger::AfterCommand { command }, Step::ReadBatch { .. }) => {
             let relaxed = relaxed(cfg);
-            let found = crate::mine::read_batch_routes(unsteered, command, &relaxed).into_iter().find(|x| x.id == r.id);
+            let _ = command;
+            let found = crate::engine::judge_read_batch(r, unsteered, &relaxed);
             return Some(match found {
                 Some(x) => Probe { opportunities: x.evidence.opportunities, support: x.evidence.support },
                 None => Probe::default(),
             });
         }
-        (Trigger::AfterEdit { paths }, Step::Run { command }) => {
+        (Trigger::AfterEdit { paths }, Step::Run { .. } | Step::Sequence { .. }) if r.slots.is_empty() => {
+            let command = adage_graph::compile::commands(&r.step).first().map(|c| c.to_string()).unwrap_or_default();
             for s in unsteered {
                 let last = s.steps.iter().rposition(|x| {
                     adage_core::keys::is_author(&x.norm.action)
-                        && x.rel_path.as_deref().and_then(glob_for).is_some_and(|g| g == *paths)
+                        && x.rel_path.as_deref().is_some_and(|p| glob_hit(paths, p))
                 });
                 let Some(last) = last else { continue };
                 p.opportunities += 1;
-                let ran = s.steps.iter().skip(last + 1).any(|x| {
-                    x.norm.effect == Effect::Regenerate
-                        && !x.call.failed
-                        && argv(x).is_some_and(|av| shell_join(av) == *command)
-                });
+                let ran = s
+                    .steps
+                    .iter()
+                    .skip(last + 1)
+                    .any(|x| !x.call.failed && argv(x).is_some_and(|av| shell_join(av) == command));
                 p.support += u32::from(ran);
             }
         }
@@ -242,12 +252,16 @@ pub fn probe(r: &Route, unsteered: &[&Session], cfg: &LearnConfig, emb: &mut Emb
         }
         (Trigger::Intent { model, centroid, threshold, .. }, Step::Run { command }) => {
             let head = head_of(command);
+            let table = adage_core::CommandTable::load();
             for s in unsteered {
                 if !emb.matches(s, model, centroid, *threshold) {
                     continue;
                 }
                 p.opportunities += 1;
-                let took = intent::candidates(s).iter().any(|c| c.group.split('|').next() == Some(head.as_str()));
+                let a = crate::bridge::annotate(s);
+                let took = adage_graph::compile::intent::candidates(&a, &crate::bridge::influence(s), &table)
+                    .iter()
+                    .any(|c| c.group.split('|').next() == Some(head.as_str()));
                 p.support += u32::from(took);
             }
         }
@@ -256,32 +270,26 @@ pub fn probe(r: &Route, unsteered: &[&Session], cfg: &LearnConfig, emb: &mut Emb
     Some(p)
 }
 
-/// The head of a command template, as the miners group commands (`keys::command_head`).
+/// The head of a command template, as the learners group commands (`keys::command_head`).
 fn head_of(command: &str) -> String {
     let av: Vec<String> = command.split_whitespace().map(str::to_string).collect();
     adage_core::keys::command_head(&av)
 }
 
-/// Thresholds under which a miner reports whatever it finds, for [`probe`].
+/// Thresholds under which a judgement reports whatever it finds, for [`probe`].
 fn relaxed(cfg: &LearnConfig) -> LearnConfig {
     LearnConfig { min_support: 1, yellow_rate: 0.0, retain_rate: 0.0, green_lower_bound: f64::INFINITY, ..cfg.clone() }
 }
 
-/// For a route that was in service and was not found again: `Some(exposed)` to keep it stale,
+/// For a route that was in service and was not found again: `Some(exposed)` to keep it dormant,
 /// `None` to drop it (see the module documentation).
-pub fn verdict(
-    r: &Route,
-    kind: &str,
-    sessions: &[&Session],
-    unsteered: &[&Session],
-    cfg: &LearnConfig,
-    emb: &mut Embeddings,
-) -> Option<u32> {
-    let e = exposure(r, kind, sessions, emb);
+pub fn verdict(r: &Route, sessions: &[&Session], cfg: &LearnConfig, emb: &mut Embeddings) -> Option<u32> {
+    let e = exposure(r, sessions, emb);
     if e.exposed == 0 {
         return None;
     }
-    let p = probe(r, unsteered, cfg, emb);
+    let unsteered: Vec<&Session> = sessions.iter().copied().filter(|s| !exposed(s, r)).collect();
+    let p = probe(r, &unsteered, cfg, emb);
     let contrary = p.is_some_and(|p| {
         p.opportunities >= cfg.min_support && (p.support as f64) < cfg.retain_rate * p.opportunities as f64
     });
@@ -293,8 +301,7 @@ pub fn verdict(
     (share >= cfg.stale_exposure || thin).then_some(e.exposed)
 }
 
-/// [`verdict`] from counts alone, with no dispatch on the route's shape: the graph engine's
-/// scorer counts, for a reflex's own pattern, the traces where it occurs only through exposed
+/// [`verdict`] from counts alone, with no dispatch on the route's shape: the scorer counts, for a reflex's own pattern, the traces where it occurs only through exposed
 /// continuation events (`exposed`), the unsteered traces where its context occurs
 /// (`opportunities`) and those where it occurs (`support`) (Track G §6.3).
 pub fn verdict_counts(exposed: u32, opportunities: u32, support: u32, cfg: &LearnConfig) -> Option<u32> {

@@ -292,8 +292,8 @@ class Rehearsal(unittest.TestCase):
             self.assertEqual(rep["recovered"], rep["expected"])
             self.assertEqual(rep["decoys_learned"], 0)
 
-    def test_graph_engine_recovers_every_id_shape(self):
-        """Track G G1 gate: with `--engine graph`, every convention of every idshapes bundle is
+    def test_every_id_shape_is_recovered(self):
+        """Track G G1 gate: every convention of every idshapes bundle is
         recovered (the lookup included, whatever the id's shape), and end to end (learn, then the
         hook's decision on every prompt and on fresh and adversarial ids) lookup recall is at least
         0.95 with no unsafe bind."""
@@ -308,7 +308,7 @@ class Rehearsal(unittest.TestCase):
             for b in selfcheck.bundles(suite):
                 if not usable(b):
                     continue
-                rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, exe, learn=True, engine="graph")
+                rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, exe, learn=True)
                 self.assertTrue(rep["ok"], json.dumps({k: rep.get(k) for k in
                                                        ("bundle", "comparison", "unexpected_routes", "learn_error")},
                                                       indent=1)[:4000])
@@ -350,7 +350,7 @@ class NewKinds(unittest.TestCase):
             if t.kind in ("scoped", "deps"):
                 self.assertFalse(re.search(r"\b[A-Z][A-Z0-9]{0,9}-\d{1,7}\b", " ".join(stack.prompts(t))))
 
-    def test_graph_engine_learns_the_new_kinds_and_the_miners_do_not(self):
+    def test_the_new_kinds_are_learned(self):
         entry = gen.load_suite("newkinds")["sandboxes"][0]
         with tempfile.TemporaryDirectory() as t, contextlib.redirect_stdout(io.StringIO()):
             b = gen.build(entry["spec"], entry["seed"], Path(t) / "b")
@@ -365,16 +365,15 @@ class NewKinds(unittest.TestCase):
                 rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, None, learn=False)
                 self.assertTrue(rep["all_passed"])
                 self.skipTest("no adage binary (cargo build -p adage-cli)")
-            graph = rehearse.rehearse_bundle(b, Path(t) / "graph", 2, exe, learn=True, engine="graph")
-            miners = rehearse.rehearse_bundle(b, Path(t) / "miners", 2, exe, learn=True)
+            graph = rehearse.rehearse_bundle(b, Path(t) / "graph", 2, exe, learn=True)
         self.assertTrue(graph["ok"], json.dumps({k: graph.get(k) for k in
                                                  ("comparison", "unexpected_routes", "learn_error")}, indent=1)[:4000])
-        rows = {r["kind"]: r for r in miners["comparison"]}
+        rows = {r["kind"]: r for r in graph["comparison"]}
         for kind in grammar.NEW_KINDS:
-            self.assertFalse(rows[kind]["ok"], f"the miners learned {kind}")
+            self.assertTrue(rows[kind]["ok"], f"{kind} was not learned")
         env = next(r for r in graph["comparison"] if r["kind"] == "env_sync")
         self.assertEqual(env["learned"]["state"], "draft", "an environment step is nascent until reviewed")
-        self.assertEqual(miners["decoys_learned"], 0)
+        self.assertEqual(graph["decoys_learned"], 0)
 
 
 class IdShapes(unittest.TestCase):

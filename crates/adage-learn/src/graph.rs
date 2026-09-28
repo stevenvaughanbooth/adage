@@ -1,42 +1,31 @@
-//! The graph engine inside `adage learn` (Track G G0–G1), when `LearnParams::engine` is `shadow`
-//! or `graph`.
+//! Value flow inside `adage learn` (Track G G0–G1).
 //!
-//! - [`facts`]: every session's facts (stage S2, `adage_graph::facts`), through the facts cache
-//!   (`$ADAGE_HOME/cache/facts`), in parallel and in session-id order. Nothing decides on them
-//!   yet (G2 mines them); `adage learn --json` reports their counts, and
-//!   `adage graph --learned --dump` prints them.
-//! - [`lookup_routes`]: the lookup miner on learned value types. Instead of TICKET spans and
-//!   `spans::ticket_contract`, it takes its slot and contract from `adage_graph::learn`: the value
-//!   slots whose flow comes mostly from the prompt and that have a safe type, most sessions
-//!   first. Each is judged exactly as the miner judges its candidate (sessions whose prompt holds
-//!   a value of the type are the opportunities; running the command with that value before the
-//!   first edit is support), and **the effect ceiling comes before anything else**: a slot whose
-//!   command may never be directed (`gh issue close {item}`, Publish) is dropped, however
-//!   common. The route keeps the id `lookup-work-item`, so review decisions survive a change
-//!   of engine; its slot is `SlotSource::PromptValue` with the learned type, and its contract the
-//!   type's regex.
+//! - [`compute_facts`]: every session's facts (stage S2, `adage_graph::facts`), through the facts
+//!   cache (`$ADAGE_HOME/cache/facts`), in parallel and in session-id order, for
+//!   `adage graph --learned --dump`.
+//! - [`lookup_routes`]: the lookup, a value-flow reflex (`[prompt] =flow=> [act …]`), with its
+//!   slot and contract from `adage_graph::learn`: the value slots whose flow comes mostly from the
+//!   prompt and that have a safe type, most traces first. Each is judged on the traces (those
+//!   whose prompt holds a value of the type are the opportunities; running the command with that
+//!   value before the first edit is support; a trace a directive steered to the command is left
+//!   out), and **the effect ceiling comes before anything else**: a slot whose command may never
+//!   be directed (`gh issue close {item}`, Publish) is dropped, however common. A thin slot (two
+//!   values, `adage_graph::flow`) forms only on outcome lift, at prime. The route's id is
+//!   `lookup-work-item`; its slot is `SlotSource::PromptValue` with the learned type, and its
+//!   contract the type's regex.
 
 use crate::bridge;
+use crate::evidence::{aspect_with_lift, days, median, models, outcome_lift, shell_join, LearnConfig, MaxRank};
 use crate::import::Session;
-use crate::mine::{aspect_with_lift, days, median, models, outcome_lift, shell_join, LearnConfig, MaxRank};
 use adage_core::spans::SpanKind;
 use adage_core::{tokens, vtype, Effect};
 use adage_graph::embed::Embedder;
-use adage_graph::facts::{SessionFacts, Stats};
+use adage_graph::facts::SessionFacts;
 use adage_graph::flow;
 use adage_intent::model::StaticModel;
 use adage_tracks::*;
-use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::Ordering;
-
-/// What computing session facts did.
-#[derive(Debug, Clone, Default, Serialize)]
-pub struct FactsReport {
-    pub stats: Stats,
-    pub cache_hits: usize,
-    pub cache_misses: usize,
-}
 
 fn threads() -> usize {
     std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1).min(8)
@@ -60,12 +49,6 @@ pub fn compute_facts(
         }
         None => (adage_graph::facts::facts_all(&annotated, &e, threads), 0, 0),
     }
-}
-
-/// [`compute_facts`] for one repository's sessions in a learn run, summarised.
-pub fn facts(ss: &[&Session], model: Option<&StaticModel>, cfg: &LearnConfig) -> FactsReport {
-    let (all, hits, misses) = compute_facts(ss, model, cfg.facts_cache.as_deref(), threads());
-    FactsReport { stats: Stats::of(&all), cache_hits: hits, cache_misses: misses }
 }
 
 /// A learned type as a track stores it.
@@ -144,6 +127,7 @@ fn route_for(
     sessions: &[&Session],
     sink: &flow::SinkKey,
     t: &adage_graph::types::ValueType,
+    thin: bool,
     cfg: &LearnConfig,
 ) -> Option<Route> {
     let slot = format!("{}{{item}}{}", sink.prefix, sink.suffix);
@@ -156,6 +140,10 @@ fn route_for(
     // How each supporting session's prompt wrote the value (`#` in `#482`).
     let mut mentions: BTreeMap<tokens::Mention, u32> = BTreeMap::new();
     for s in sessions {
+        // A trace a directive steered to this command is no evidence for it (Track G §3.2).
+        if s.exposed_identity(&sink.identity) {
+            continue;
+        }
         let values = prompt_values(s, &t.runs);
         if values.is_empty() {
             continue;
@@ -163,7 +151,7 @@ fn route_for(
         opportunities += 1;
         open.insert(s.id.clone());
         'steps: for (i, step) in s.discovery().iter().enumerate() {
-            let Some(av) = crate::mine::argv(step) else { continue };
+            let Some(av) = crate::evidence::argv(step) else { continue };
             if step.call.failed {
                 continue;
             }
@@ -200,7 +188,12 @@ fn route_for(
     let lb = wilson_lower(n, opportunities);
     // The rate gate, else the outcome-lift path (prime at most).
     let lift = outcome_lift(sessions, &open, &support);
-    let aspect = aspect_with_lift(effect, false, n, lb, rate, cfg, "lookup-work-item", lift.as_ref())?;
+    // A thin slot (two values) forms on outcome lift alone, at prime.
+    let aspect = if thin {
+        crate::evidence::lift_aspect(effect, false, cfg, lift.as_ref())?
+    } else {
+        aspect_with_lift(effect, false, n, lb, rate, cfg, "lookup-work-item", lift.as_ref())?
+    };
     Some(Route {
         id: "lookup-work-item".into(),
         summary: "Look up the work item named in the prompt".into(),
@@ -256,7 +249,7 @@ pub fn lookup_key(sessions: &[&Session], r: &Route) -> Option<String> {
     let mut keys: BTreeMap<&str, u32> = BTreeMap::new();
     for s in sessions {
         for st in s.discovery() {
-            if let Some(av) = crate::mine::argv(st) {
+            if let Some(av) = crate::evidence::argv(st) {
                 if !st.call.failed && fits(av) {
                     *keys.entry(st.key.as_str()).or_default() += 1;
                 }
@@ -284,7 +277,7 @@ pub fn lookup_routes(sessions: &[&Session], cfg: &LearnConfig) -> Vec<Route> {
         })
         .collect();
     cands.sort_by(|a, b| b.0.sessions.cmp(&a.0.sessions).then_with(|| a.0.sink.cmp(&b.0.sink)));
-    cands.into_iter().find_map(|(slot, t)| route_for(sessions, &slot.sink, t, cfg)).into_iter().collect()
+    cands.into_iter().find_map(|(slot, t)| route_for(sessions, &slot.sink, t, slot.thin, cfg)).into_iter().collect()
 }
 
 #[cfg(test)]
@@ -321,7 +314,7 @@ mod tests {
             steps: cmds.iter().enumerate().map(|(k, (c, e))| exec(k as u32, c, *e)).collect(),
             steered: false,
             directed: BTreeSet::new(),
-            steered_kinds: BTreeSet::new(),
+            influence: vec![],
             outcome: None,
             harness: "claude-code".into(),
             prompts: vec![PromptObs { text: prompt.into(), at_step: 0 }],
@@ -330,7 +323,7 @@ mod tests {
     }
 
     fn cfg() -> LearnConfig {
-        LearnConfig { engine: "graph".into(), ..LearnConfig::demo() }
+        LearnConfig::demo()
     }
 
     #[test]
@@ -350,7 +343,7 @@ mod tests {
             })
             .collect();
         let refs: Vec<&Session> = ss.iter().collect();
-        assert!(crate::mine::prompt_routes(&refs, &cfg()).is_empty(), "no TICKET span in `#482`");
+        assert!(adage_core::spans::extract("Please fix #482 today").iter().all(|x| x.kind != SpanKind::Ticket));
         let r = lookup_routes(&refs, &cfg());
         assert_eq!(r.len(), 1);
         let r = &r[0];
@@ -397,5 +390,117 @@ mod tests {
         // The view slot is judged on its own evidence: 5 of 10 sessions, yellow at the demo bar.
         assert_eq!(r.len(), 1, "{r:?}");
         assert_eq!(r[0].step, Step::Run { command: "gh issue view {item}".into() });
+    }
+
+    /// A trace whose prompt names `W-10{i}`, which (if `lookup`) looks it up, with `passed`.
+    fn ticket_session(i: usize, lookup: bool, passed: Option<bool>) -> Session {
+        let ticket = format!("W-10{i:02}");
+        let mut cmds: Vec<(String, Effect)> = vec![("ls".into(), Effect::Observe)];
+        if lookup {
+            cmds.push((format!("python3 scripts/wi-lookup {ticket}"), Effect::Observe));
+        }
+        let cmds: Vec<(&str, Effect)> = cmds.iter().map(|(c, e)| (c.as_str(), *e)).collect();
+        let mut s = session(i, &format!("Pick up {ticket}"), &cmds);
+        s.outcome = passed;
+        s
+    }
+
+    #[test]
+    fn a_rare_step_that_successful_traces_took_forms_a_prime_reflex() {
+        // 5 of 12 traces used the lookup (below the 0.5 rate bar); all 5 passed, 1 of 7 others did.
+        let ss: Vec<Session> =
+            (0..12).map(|i| ticket_session(i, i < 5, Some(if i < 5 { true } else { i == 11 }))).collect();
+        let refs: Vec<&Session> = ss.iter().collect();
+        let r = lookup_routes(&refs, &LearnConfig::default());
+        assert_eq!(r.len(), 1, "the lift path forms the lookup");
+        assert_eq!(r[0].aspect, Aspect::Yellow, "prime at most on lift alone");
+        let l = r[0].evidence.outcome_lift.as_ref().expect("evidence records the lift");
+        assert_eq!((l.with, l.with_passed, l.without, l.without_passed), (5, 5, 7, 1));
+        assert!(r[0].evidence.rate < 0.5);
+        // Without outcomes (and no transcript proxy: no check ran), the rate bar alone decides.
+        let blind: Vec<Session> = (0..12).map(|i| ticket_session(i, i < 5, None)).collect();
+        assert!(lookup_routes(&blind.iter().collect::<Vec<_>>(), &LearnConfig::default()).is_empty());
+        // No lift: the step's takers did no better.
+        let flat: Vec<Session> = (0..12).map(|i| ticket_session(i, i < 5, Some(i % 2 == 0))).collect();
+        assert!(lookup_routes(&flat.iter().collect::<Vec<_>>(), &LearnConfig::default()).is_empty());
+        // Common enough for the rate bar: green stays possible.
+        let common: Vec<Session> = (0..30).map(|i| ticket_session(i % 12, i < 29, Some(i < 29))).collect();
+        let common: Vec<Session> = common
+            .into_iter()
+            .enumerate()
+            .map(|(k, mut s)| {
+                s.id = format!("c{k:02}");
+                s
+            })
+            .collect();
+        let r = lookup_routes(&common.iter().collect::<Vec<_>>(), &LearnConfig::default());
+        assert_eq!(r[0].aspect, Aspect::Green);
+    }
+
+    #[test]
+    fn two_values_form_a_lookup_only_on_outcome_lift_and_with_a_literal_prefix() {
+        // Two distinct ids in the four traces that took the lookup: a thin slot. Its type keeps the
+        // literal prefix and the observed lengths only (`BIL-` and 3 to 4 digits).
+        let mk = |i: usize, id: &str, lookup: bool, passed: bool| {
+            let mut cmds: Vec<(String, Effect)> = vec![("ls".into(), Effect::Observe)];
+            if lookup {
+                cmds.push((format!("./scripts/wi-lookup {id}"), Effect::Observe));
+            }
+            let cmds: Vec<(&str, Effect)> = cmds.iter().map(|(c, e)| (c.as_str(), *e)).collect();
+            let mut s = session(i, &format!("Work on {id}"), &cmds);
+            s.outcome = Some(passed);
+            s
+        };
+        let mut ss = vec![
+            mk(0, "BIL-495", true, true),
+            mk(1, "BIL-495", true, true),
+            mk(2, "BIL-4812", true, true),
+            mk(3, "BIL-4812", true, true),
+        ];
+        for i in 4..12 {
+            ss.push(mk(i, &format!("BIL-{}", 100 + i), false, i == 11));
+        }
+        let refs: Vec<&Session> = ss.iter().collect();
+        let r = lookup_routes(&refs, &cfg());
+        assert_eq!(r.len(), 1, "{r:?}");
+        assert_eq!(r[0].aspect, Aspect::Yellow);
+        let Contract::Pattern { regex } = &r[0].slots[0].contract else { panic!() };
+        assert_eq!(regex, "^(?:BIL\\-[0-9]{3,4})$");
+        // Without the lift (every trace passed), two values are not enough.
+        for s in ss.iter_mut() {
+            s.outcome = Some(true);
+        }
+        assert!(lookup_routes(&ss.iter().collect::<Vec<_>>(), &cfg()).is_empty());
+        // Two bare numbers never make a type, lift or not.
+        let mut bare = vec![
+            mk(0, "495", true, true),
+            mk(1, "495", true, true),
+            mk(2, "4812", true, true),
+            mk(3, "4812", true, true),
+        ];
+        for i in 4..12 {
+            bare.push(mk(i, &format!("{}", 100 + i), false, i == 11));
+        }
+        assert!(lookup_routes(&bare.iter().collect::<Vec<_>>(), &cfg()).is_empty());
+    }
+
+    #[test]
+    fn a_trace_steered_to_the_lookup_is_no_evidence_for_it() {
+        let mut ss: Vec<Session> = (0..8)
+            .map(|i| {
+                let n = 400 + 17 * i;
+                session(i, &format!("Please fix #{n}"), &[(&format!("./scripts/wi-lookup {n}"), Effect::Observe)])
+            })
+            .collect();
+        for s in ss.iter_mut().take(6) {
+            s.influence = vec![crate::import::Directed {
+                at_step: 0,
+                route: "lookup-work-item".into(),
+                commands: vec![format!("./scripts/wi-lookup {}", 1)],
+                ..Default::default()
+            }];
+        }
+        let r = lookup_routes(&ss.iter().collect::<Vec<_>>(), &cfg());
+        assert!(r.iter().all(|r| r.evidence.support <= 2), "{r:?}");
     }
 }

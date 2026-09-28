@@ -550,9 +550,10 @@ fn decisions_survive_relearning() {
     std::fs::create_dir_all(w.p("tx")).unwrap();
     let six = corpus(&w.p("tx"), 6);
     learn(&w, &six);
-    let dead_ends = "acme-billing/dead-ends";
-    let work = "acme-billing/work-items";
-    let dead = w.track(dead_ends).routes[0].clone();
+    // One learned track: every reflex of the repository.
+    let dead_ends = "acme-billing/learned";
+    let work = "acme-billing/learned";
+    let dead = w.track(dead_ends).routes.iter().find(|r| r.id.starts_with("dead-end-")).unwrap().clone();
     assert_eq!(dead.aspect, Aspect::Red);
     let aspect =
         |w: &World, t: &str, id: &str| w.track(t).routes.iter().find(|r| r.id == id).map(|r| (r.aspect, r.state));
@@ -564,7 +565,7 @@ fn decisions_survive_relearning() {
     w.ok(&["review", "reject", dead_ends, &dead.id]);
     w.ok(&["review", "demote", work, "lookup-work-item"]);
     w.ok(&["review", "promote", work, "read-linked-files"]);
-    let versions = |w: &World| (w.track(work).manifest.track.version, w.track(dead_ends).manifest.track.version);
+    let versions = |w: &World| w.track(work).manifest.track.version;
     let decided = versions(&w);
 
     // Re-learning the same sessions changes nothing a person decided, and bumps nothing.
@@ -621,7 +622,7 @@ fn an_environment_step_is_delivered_only_after_approval() {
         })
         .collect();
     learn(&w, &files);
-    let work = "acme-billing/work-items";
+    let work = "acme-billing/learned";
     let lookup = || w.track(work).routes.into_iter().find(|r| r.id == "lookup-work-item").unwrap();
     let delivered = || w.index().routes.iter().any(|r| r.route.id == "lookup-work-item");
     let l = lookup();

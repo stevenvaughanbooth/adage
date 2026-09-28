@@ -249,20 +249,20 @@ pub fn save(dir: &Path, r: &Reviews) -> Result<()> {
 
 /// Apply recorded decisions to freshly mined routes, so re-learning respects them.
 ///
-/// `prev` is the track as it was before this learn run; `mined` holds the miner's routes plus any
+/// `prev` is the track as it was before this learn run; `mined` holds the learner's routes plus any
 /// authored routes already carried over (those are never touched here).
 ///
 /// - **Rejected:** a re-mined route stays retired unless it [`strengthened`]; then it returns at
-///   probation, yellow at most, and waits in the queue again. A rejected route the miner no longer
+///   probation, yellow at most, and waits in the queue again. A rejected route the learner no longer
 ///   finds is kept, retired, so the decision stays visible and travels.
 /// - **Demoted:** held at yellow, whatever the evidence says.
 /// - **Promoted:** held at the promoted aspect while its shape and evidence are materially
 ///   unchanged and its effect ceiling allows; otherwise learning decides and the queue shows why.
-/// - **Approved:** an environment route, which the miner learns as a draft (O11), is put into
+/// - **Approved:** an environment route, which the learner learns as a draft (O11), is put into
 ///   service while its shape is the one approved. Otherwise nothing to hold.
 /// - **Pinned:** nothing to hold (pinned routes are `authored` and carried over as is).
 ///
-/// Losing authority stays automatic: a reviewed route the miner no longer finds is dropped like
+/// Losing authority stays automatic: a reviewed route the learner no longer finds is dropped like
 /// any other, and its decision re-applies if it comes back.
 pub fn reconcile(prev: Option<&Track>, reviews: &Reviews, mined: Vec<Route>) -> Vec<Route> {
     reconcile_with(prev, reviews, mined, MATERIAL_LOWER_BOUND)
@@ -316,7 +316,7 @@ pub fn reconcile_with(prev: Option<&Track>, reviews: &Reviews, mut mined: Vec<Ro
 /// Keep, as [`RouteState::Stale`], the routes of `prev` that learning no longer finds only because
 /// of their own exposure (E1: evidence integrity).
 ///
-/// Each miner ignores sessions steered by its own kind of route (Design §11), so a route that is
+/// The learner ignores sessions steered by the route (Design §11), so a route that is
 /// delivered, and followed, starves itself of evidence: once the transcripts from before it expire,
 /// only the holdout is left to confirm it. `routes` is the track as reconciled from this run;
 /// `verdict` is asked about each route of `prev` that was in service (active, probation or already
@@ -326,7 +326,7 @@ pub fn reconcile_with(prev: Option<&Track>, reviews: &Reviews, mut mined: Vec<Ro
 ///
 /// A kept route keeps its last evidence (with `exposed` refreshed), is marked `stale_since`
 /// (today, or the date it first went stale), and is held at yellow at most; a red dead end stays
-/// red. A stale route the miner finds again is simply replaced by the mined one, which returns it
+/// red. A stale route the learner finds again is simply replaced by the mined one, which returns it
 /// to its normal state.
 pub fn keep_stale(
     prev: Option<&Track>,

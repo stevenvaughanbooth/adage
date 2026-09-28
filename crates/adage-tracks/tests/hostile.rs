@@ -117,7 +117,7 @@ fn a_signature_may_not_carry_invisible_characters() {
         )
     };
     assert!(io::validate(&t("No module named pytest")).is_ok());
-    // The miner names several failing runners as `a / b`; each must be safe on its own.
+    // The learner names several failing runners as `a / b`; each must be safe on its own.
     let mut several = t("No module named pytest");
     several.routes[0].step = Step::Avoid {
         avoid: "python3 -m pytest / python -m pytest".into(),

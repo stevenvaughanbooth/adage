@@ -260,9 +260,13 @@ fn keys_at(
                     continue;
                 }
                 // A read or an edit at the kind level says nothing on its own: it is an item
-                // only with a constraint (a read of a listed path, the last edit).
+                // only with a constraint (a read of a listed path, the last edit). A failed act's
+                // kind level is its failure family, an item as a failure.
                 let k = Ext { fwd, label, pol, same, flow: f, same_art: sa, last: la };
-                let skip = (l == Level::Kind as usize && e.ty != NodeType::Prompt && m == 0) || k.flags() > room;
+                let family = e.ty == NodeType::Act && pol == Pol::Fail;
+                let skip = (l == Level::Kind as usize && e.ty != NodeType::Prompt && m == 0 && !family)
+                    || (l == Level::Kind as usize && e.ty == NodeType::Act && pol != Pol::Fail)
+                    || k.flags() > room;
                 if !skip {
                     out.push((k, q as u32));
                 }
@@ -341,7 +345,15 @@ impl Ctx<'_> {
             .filter(|(_, &(c, _))| c >= floor)
             .map(|(k, &(c, _))| (*k, c, c > maxref.get(k).copied().unwrap_or(0)))
             .collect();
-        interest.sort_by(|a, b| beam_cmp(db, (a.1, &a.0), (b.1, &b.0)));
+        // At the root, a failed run just before the target is the `recovers_with` relation (Track
+        // G §1.1: the next successful act after a failure), and the last edit before it is the
+        // obligation's relation: the evidence of the guards, expanded before any other context,
+        // so a busy trace cannot push them out of the beam.
+        let recovers = |k: &Ext| {
+            let root = n_back == 0 && n_fwd == 0 && !k.fwd;
+            u8::from(root && k.last) + 2 * u8::from(root && k.pol == Pol::Fail)
+        };
+        interest.sort_by(|a, b| recovers(&b.0).cmp(&recovers(&a.0)).then(beam_cmp(db, (a.1, &a.0), (b.1, &b.0))));
         // The beam: only the best `max_children` frequent, kept children are expanded.
         let mut rank = 0usize;
         for x in interest.iter_mut() {

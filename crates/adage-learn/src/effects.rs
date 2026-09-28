@@ -82,7 +82,7 @@ pub fn effect_of(effect: Effect, command: &str, sessions: &[&Session]) -> (Effec
 
 /// Whether a step runs the script at `rel` (under an interpreter or directly).
 fn runs(st: &crate::import::StepObs, rel: &str) -> bool {
-    let Some(av) = crate::mine::argv(st) else { return false };
+    let Some(av) = crate::evidence::argv(st) else { return false };
     let first = |i: usize| av.get(i).map(|a| a.trim_start_matches("./"));
     first(0) == Some(rel) || (adage_core::shell::SCRIPT_INTERPRETERS.contains(&av[0].as_str()) && first(1) == Some(rel))
 }
@@ -98,7 +98,7 @@ fn reports_change(output: &str) -> bool {
 }
 
 fn status_shows_change(st: &crate::import::StepObs) -> bool {
-    let Some(av) = crate::mine::argv(st) else { return false };
+    let Some(av) = crate::evidence::argv(st) else { return false };
     if av.first().map(String::as_str) != Some("git")
         || !matches!(av.get(1).map(String::as_str), Some("status" | "diff"))
     {
@@ -225,7 +225,7 @@ mod tests {
             steps,
             steered: false,
             directed: BTreeSet::new(),
-            steered_kinds: BTreeSet::new(),
+            influence: vec![],
             outcome: None,
             harness: "claude-code".into(),
             prompts: vec![PromptObs { text: "Fix CARE-1".into(), at_step: 0 }],

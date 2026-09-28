@@ -527,7 +527,10 @@ fn to_v1(r: &RouteV2, pack: &Pack, table: &CommandTable) -> Result<Route, String
             format!("{SHAPE_NOT_SUPPORTED}: input {name} has type {}, which has no runtime contract", i.ty)
         })?;
         let source = match (&i.from.prompt, &i.from.result) {
-            (Some(p), None) => SlotSource::Prompt { span: p.span },
+            (Some(p), None) => match &p.vtype {
+                Some(vtype) => SlotSource::PromptValue { vtype: vtype.clone(), mentions: p.mentions.clone() },
+                None => SlotSource::Prompt { span: p.span },
+            },
             (None, Some(f)) => SlotSource::ResultField { field: f.field.clone() },
             _ => return Err(format!("input {name} has no single source")),
         };

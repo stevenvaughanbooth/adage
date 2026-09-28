@@ -237,7 +237,7 @@ pub(crate) fn preview(t: &Track, r: &Route) -> (String, BTreeMap<String, String>
     let m = &t.manifest.track;
     let origin = r.is_instinct().then(|| r.origin());
     let aspect = if origin.is_some() { adage_tracks::delivered_aspect(r) } else { r.aspect };
-    let kind = if origin.is_some() { adage_tracks::route_kind(r) } else { "" };
+    let kind = if origin.is_some() { adage_tracks::shape(r) } else { "" };
     (render::wrap_origin(&m.name, &m.version, &r.id, kind, aspect, &body, origin.as_ref()), bound)
 }
 

@@ -4,6 +4,14 @@
 //! spools (`recorded/decisions.json`) and the index each round used (`recorded/index-<round>.json`).
 //! Replaying those sessions with that index must give the same would-have directives at the same
 //! events; otherwise the offline numbers describe a different system from the one that ran.
+//!
+//! [`run_learned`] asks the second question: replayed with the index *today's learner* learns from
+//! the round's train sessions (the recorded index came from the retired miners), does every
+//! directive the live hook gave still arrive, at that event or earlier? The learner may add
+//! directives (a superset), and may deliver one earlier: a dead end is now announced at session
+//! start, not at the first prompt. Each recorded directive that arrives late or never is listed.
+//! A recorded route whose id predates content-derived ids (round 1's `finish-line-1`) is matched
+//! by its trigger and step to the learned route with the same ones.
 
 use crate::dataset::Dataset;
 use crate::{replay, transcript};
@@ -114,6 +122,114 @@ pub fn run_with(dir: &Path, round: &str, exact_keys: bool) -> Result<FidelityRep
     Ok(rep)
 }
 
+/// Replay against the index today's learner learns from `round`'s train sessions (see the module
+/// documentation), with the recorded hooks' matching when `exact_keys`.
+#[derive(Debug, Default, Clone, Serialize)]
+pub struct LearnedFidelity {
+    pub round: String,
+    pub index_generation: String,
+    pub sessions: u32,
+    /// Sessions where every recorded directive arrived at its event or earlier.
+    pub superset: u32,
+    /// Sessions whose decisions are identical to the recorded ones.
+    pub identical: u32,
+    /// `<run>: event <i> (<name>) missing <route ids>`, for every recorded directive not given at
+    /// that event or before it.
+    pub missing: Vec<String>,
+    /// `<run>: event <i> (<name>) gives <route ids> earlier`: directives the live hook gave at a
+    /// later event.
+    pub earlier: Vec<String>,
+    /// `<run>: event <i> (<name>) adds <route ids>`: directives the learned index adds.
+    pub added: Vec<String>,
+}
+
+/// See [`LearnedFidelity`].
+pub fn run_learned(dir: &Path, round: &str, exact_keys: bool) -> Result<LearnedFidelity> {
+    let ds = Dataset::load(dir)?;
+    let n: u32 = round.strip_prefix("round").and_then(|x| x.parse().ok()).context("round must be round1 or round2")?;
+    let prepared = crate::prepare(dir, &crate::Options { split: Some(round.to_string()), ..Default::default() })?;
+    let index = &prepared.index;
+    let rec_path = dir.join("recorded/decisions.json");
+    let recorded: BTreeMap<String, Vec<Recorded>> = serde_json::from_slice(&std::fs::read(&rec_path)?)?;
+    // Recorded id → the learned id of the route with the same trigger and step.
+    let live_index: Index = serde_json::from_slice(&std::fs::read(dir.join(format!("recorded/index-{round}.json")))?)?;
+    let alias: BTreeMap<String, String> = live_index
+        .routes
+        .iter()
+        .filter_map(|l| {
+            index
+                .routes
+                .iter()
+                .find(|x| x.route.trigger == l.route.trigger && x.route.step == l.route.step)
+                .filter(|x| x.route.id != l.route.id)
+                .map(|x| (l.route.id.clone(), x.route.id.clone()))
+        })
+        .collect();
+    let recorded: BTreeMap<String, Vec<Recorded>> = recorded
+        .into_iter()
+        .map(|(run, events)| {
+            let events = events
+                .into_iter()
+                .map(|mut e| {
+                    for id in &mut e.would_have {
+                        if let Some(a) = alias.get(id) {
+                            *id = a.clone();
+                        }
+                    }
+                    e
+                })
+                .collect();
+            (run, events)
+        })
+        .collect();
+    let table = CommandTable::load();
+    let sandbox = crate::dataset::Sandbox::create(&ds.sandbox()?)?;
+    let mut rep =
+        LearnedFidelity { round: round.into(), index_generation: index.generation.clone(), ..Default::default() };
+    for s in ds.manifest.sessions.iter().filter(|s| s.phase == "eval" && s.round == Some(n)) {
+        let Some(live) = recorded.get(&s.run) else { continue };
+        let t = transcript::read(&ds.path(s))?;
+        let go =
+            || replay::replay(&t, index, &ds.manifest.repo, &sandbox.root, &table, s.stopped(), Default::default());
+        let r = if exact_keys { adage_runtime::with_exact_key_matching(go) } else { go() };
+        rep.sessions += 1;
+        // Events the live hooks recorded, in order; the replay's events the fast path would record.
+        let replayed: Vec<(String, Vec<String>)> = r
+            .trace
+            .iter()
+            .zip(&r.skipped)
+            .filter(|(_, skipped)| !**skipped)
+            .map(|((e, w, _), _)| (e.to_string(), w.clone()))
+            .collect();
+        let all: Vec<(String, Vec<String>)> = r.trace.iter().map(|(e, w, _)| (e.to_string(), w.clone())).collect();
+        let events = if all.len() == live.len() { &all } else { &replayed };
+        let (mut ok, mut same) = (true, true);
+        for (i, l) in live.iter().enumerate() {
+            let got: Vec<String> = events.get(i).map(|x| x.1.clone()).unwrap_or_default();
+            let given_by = |id: &String| events.iter().take(i + 1).any(|e| e.1.contains(id));
+            let missing: Vec<&String> = l.would_have.iter().filter(|x| !given_by(x)).collect();
+            let later = |id: &String| live.iter().skip(i + 1).any(|e| e.would_have.contains(id));
+            let (early, added): (Vec<&String>, Vec<&String>) =
+                got.iter().filter(|x| !l.would_have.contains(x)).partition(|x| later(x));
+            if !missing.is_empty() {
+                ok = false;
+                rep.missing.push(format!("{}: event {i} ({}) missing {missing:?}", s.run, l.event));
+            }
+            if !early.is_empty() {
+                same = false;
+                rep.earlier.push(format!("{}: event {i} ({}) gives {early:?} earlier", s.run, l.event));
+            }
+            if !added.is_empty() {
+                same = false;
+                rep.added.push(format!("{}: event {i} ({}) adds {added:?}", s.run, l.event));
+            }
+        }
+        rep.superset += u32::from(ok);
+        rep.identical += u32::from(ok && same);
+    }
+    Ok(rep)
+}
+
 pub fn render_text(r: &FidelityReport) -> String {
     let mut s = format!("replay fidelity, {} (index {}, {} matching)\n", r.round, r.index_generation, r.matching);
     for (arm, a) in &r.by_arm {
@@ -127,6 +243,23 @@ pub fn render_text(r: &FidelityReport) -> String {
     }
     for m in &r.event_mismatches {
         s.push_str(&format!("  events differ: {m}\n"));
+    }
+    s
+}
+
+pub fn render_learned(r: &LearnedFidelity) -> String {
+    let mut s = format!(
+        "replay fidelity against the learned index, {} (index {}): {}/{} sessions get every recorded directive in time, {} identically\n",
+        r.round, r.index_generation, r.superset, r.sessions, r.identical
+    );
+    for m in &r.missing {
+        s.push_str(&format!("  missing: {m}\n"));
+    }
+    for m in &r.earlier {
+        s.push_str(&format!("  earlier: {m}\n"));
+    }
+    for m in &r.added {
+        s.push_str(&format!("  added: {m}\n"));
     }
     s
 }

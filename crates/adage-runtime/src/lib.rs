@@ -174,9 +174,8 @@ pub struct Directive {
     pub version: String,
     pub aspect: Aspect,
     pub text: String,
-    /// The route's kind ([`adage_tracks::route_kind`]), rendered into the directive's wrapper so
-    /// that learning can tell which miners a session's directives could influence. Empty in
-    /// records written before it existed.
+    /// The route's delivery shape ([`adage_tracks::shape`]), rendered into the directive's
+    /// wrapper (`kind="…"`). Empty in records written before it existed.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub kind: String,
     /// Where the route came from, when it is not learned (an instinct): its wrapper says so
@@ -839,7 +838,7 @@ fn directive(ir: &IndexedRoute, text: String) -> Directive {
         // A route on probation or stale is never delivered green, whatever its track says.
         aspect: adage_tracks::delivered_aspect(&ir.route),
         text,
-        kind: adage_tracks::route_kind(&ir.route).to_string(),
+        kind: adage_tracks::shape(&ir.route).to_string(),
         origin: ir.route.is_instinct().then(|| ir.route.origin()),
     }
 }
