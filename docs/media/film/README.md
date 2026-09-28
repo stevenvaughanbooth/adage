@@ -14,5 +14,5 @@ Render with headless Chromium (WebGL via SwiftShader) and encode with ffmpeg:
     ffmpeg -i film-silent.mp4 -i soundtrack.wav -c:v libx264 -crf 25 -c:a aac -b:a 192k -shortest adage-film-1080p.mp4
 
 `render.cjs` expects Playwright and a Chromium binary; adjust the two paths at the top of the file.
-The timeline constants (`const T`) in `index7.html` and `audio6.py` must match (83.571 s, 112 BPM).
+The timeline constants (`const T`) in `index7.html` and `audio6.py` must match (87.857 s, 112 BPM).
 `index6.html` / `audio5.py` are the previous cut, kept for reference.

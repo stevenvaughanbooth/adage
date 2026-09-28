@@ -26,9 +26,9 @@ from scipy import signal
 from scipy.ndimage import maximum_filter1d, uniform_filter1d
 
 t_start = time.time()
-sr = 48000; bpm = 112; beat = 60 / bpm; bar = beat * 4; DUR = 83.571; n = int(sr * DUR)
+sr = 48000; bpm = 112; beat = 60 / bpm; bar = beat * 4; DUR = 87.857; n = int(sr * DUR)
 T = dict(open=0, wander=6.429, maze=12.857, reflex=17.143, instinct=23.571, session=30.0, evidence=47.143,
-         cool=53.571, fleet=60.0, numbers=66.429, close=75.0, end=83.571)
+         cool=53.571, fleet=64.286, numbers=70.714, close=79.286, end=87.857)
 SS = dict(prompt=0, stepin=1.071, sigR=2.143, hop1=4.286, sigB=5.893, hop2=7.5, hop3=9.107, sigC=10.714,
           hop4=11.786, hop5=12.857, done=13.393)
 SEED = 2026
@@ -401,16 +401,16 @@ add('fx', T['cool'] - 8 * beat, riser(7 * beat, .7), hall=.25)
 # 7 · cool: HIT 2, the drop: kick every beat, hats + claps to b8, wide pads, motif arp 16ths, sidechain;
 #     then the low-pass closes as the city cools, reverse cymbal into the fleet
 play_hit(T['cool'], 2)
-chords([Am, C], T['cool'], 2, 1.0, .085, roots=[rA, rC], subg=.2, hi=3200, wide=1.3)
-add('music', T['cool'] + 8 * beat, widen(pad(Am, 4 * beat, 1.0, .08, close=True, attack=.4, release=.8, hi=3200), 1.3), hall=.4)
-add('sub', T['cool'] + 8 * beat, subnote(rA, 4 * beat - .1, .02, .3), .16)
-arp([45, 52, 57, 60, 64, 60, 57, 52], T['cool'], T['cool'] + 8 * beat, beat / 4, .17, swing=.04, octave=12, delay=.35)
+chords([Am, C, F, C], T['cool'], 4, 1.0, .085, roots=[rA, rC, rF, rC], subg=.2, hi=3200, wide=1.3)
+add('music', T['cool'] + 16 * beat, widen(pad(Am, 4 * beat, 1.0, .08, close=True, attack=.4, release=.8, hi=3200), 1.3), hall=.4)
+add('sub', T['cool'] + 16 * beat, subnote(rA, 4 * beat - .1, .02, .3), .16)
+arp([45, 52, 57, 60, 64, 60, 57, 52], T['cool'], T['cool'] + 16 * beat, beat / 4, .17, swing=.04, octave=12, delay=.35)
 kicks(T['cool'], T['fleet'], .6)
-hats(T['cool'] + beat / 2, T['cool'] + 8 * beat, .15, sec=T['cool'])
-claps(T['cool'], T['cool'] + 8 * beat, .25)
-motif(T['cool'] + bar, g=.2, bright=1.1); motif(T['cool'] + bar, g=.1, bright=.8, octave=12, hall=.5)
+hats(T['cool'] + beat / 2, T['cool'] + 16 * beat, .15, sec=T['cool'])
+claps(T['cool'], T['cool'] + 16 * beat, .25)
+motif(T['cool'] + bar, g=.2, bright=1.1); motif(T['cool'] + bar, g=.1, bright=.8, octave=12, hall=.5); motif(T['cool'] + 3 * bar, g=.16, bright=1.0); motif(T['cool'] + 3 * bar, g=.08, bright=.8, octave=12, hall=.5)
 add('fx', T['fleet'] - bar, rcymbal(bar, .25), hall=.35)
-sidechain(T['cool'], T['cool'] + 8 * beat, .5); sidechain(T['cool'] + 8 * beat, T['fleet'], .25)
+sidechain(T['cool'], T['cool'] + 16 * beat, .5); sidechain(T['cool'] + 16 * beat, T['fleet'], .25)
 
 # 8 · fleet: no kick; sub swell (1-bar attack), wide pads Am–F–C–G, eight bells as the repos arrive
 add('sub', T['fleet'], subnote(55, 6.0, bar, .4), .18)
