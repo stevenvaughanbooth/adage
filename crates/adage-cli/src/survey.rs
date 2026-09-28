@@ -716,7 +716,7 @@ pub fn render<W: std::io::Write>(o: &mut adage_term::Out<W>, s: &Survey) -> std:
         if s.intent_model.is_none() {
             o.line(&kv("intent").push(Role::Prime, "skipped").sep().quiet("no embedding model"))?;
         } else if r.intent_families > 0 {
-            o.line(&kv("intent").text(format!("{} usable", count(r.intent_families as usize, "family"))))?;
+            o.line(&kv("intent").text(format!("{} usable", count(r.intent_families, "family"))))?;
         }
     }
     o.blank()?;
