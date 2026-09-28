@@ -14,7 +14,7 @@ const FFMPEG = '/usr/local/lib/python3.11/dist-packages/imageio_ffmpeg/binaries/
   const errs = [];
   p.on('pageerror', (e) => errs.push(e.message));
   p.on('console', (m) => { if (m.type() === 'error') errs.push(m.text()); });
-  await p.goto('file://' + path.join(HERE, process.env.STAGE || 'index.html'));
+  await p.goto('file://' + path.join(HERE, process.env.STAGE || 'index.html') + (process.env.HASH ? '#' + process.env.HASH : ''));
   await p.waitForFunction(() => window.__ready === true, null, { timeout: 120000 });
   const info = await p.evaluate(() => window.__info || '');
   console.log('ready:', info);

@@ -1,0 +1,507 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Adage · on rails · v6</title>
+<style>
+@font-face { font-family: "Bricolage Grotesque"; font-weight: 200 800; src: url("../fonts/bricolage.woff2") format("woff2"); }
+@font-face { font-family: "Hanken Grotesk"; font-weight: 100 900; src: url("../fonts/hanken.woff2") format("woff2"); }
+@font-face { font-family: "Red Hat Mono"; font-weight: 300 700; src: url("../fonts/redhatmono.woff2") format("woff2"); }
+:root { --ink: #f4f4f7; --ink2: #d5d7e2; --ink3: #b4b7c4; --ink4: #7a7d8c; --accent: #8b7cff; --accent2: #c9bfff; --green: #4ade80; --amber: #fbbf24; --red: #fb7185; --heat: #ff7a59;
+  --serif: "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif; --sans: "Hanken Grotesk", ui-sans-serif, system-ui, sans-serif; --mono: "Red Hat Mono", ui-monospace, monospace; --bg: #050507; --scrim: 5,5,7; --surf: 12,12,18; --surfa: .72; --line: 255,255,255; }
+body.day { --ink: #131320; --ink2: #4a4c5c; --ink3: #65677a; --ink4: #8b8e9c; --accent: #5b4bd6; --accent2: #4a3ac2; --green: #147c3b; --amber: #ab4f08; --red: #be123c; --heat: #bf400b; --bg: #f7f6fb; --scrim: 247,246,251; --surf: 255,255,255; --surfa: .82; --line: 20,18,40; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: var(--sans); }
+#gl { position: absolute; inset: 0; }
+#vig { position: absolute; inset: 0; background: radial-gradient(1700px 1100px at 50% 50%, transparent 55%, rgba(0,0,0,.35) 100%); pointer-events: none; } body.day #vig { background: radial-gradient(1700px 1100px at 50% 50%, transparent 60%, rgba(20,18,40,.10) 100%); }
+#grain { position: absolute; inset: 0; opacity: .6; mix-blend-mode: screen; pointer-events: none; background-repeat: repeat; background-size: 384px 384px; } body.day #grain { mix-blend-mode: multiply; opacity: .5; }
+#scrim { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
+#lead { position: absolute; inset: 0; pointer-events: none; }
+#ov { position: absolute; inset: 0; pointer-events: none; }
+#flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+#bars { position: absolute; left: 0; right: 0; height: 0; background: #000; pointer-events: none; } #barT { top: 0; } #barB { bottom: 0; }
+.b { position: absolute; inset: 0; opacity: 0; }
+.kt { display: flex; flex-wrap: wrap; justify-content: center; column-gap: .26em; row-gap: 0; width: max-content; max-width: 1500px; } .kt.l { justify-content: flex-start; flex-wrap: nowrap; white-space: nowrap; }
+.kt span { display: inline-block; will-change: transform, filter, opacity; }
+.serif { font-family: var(--serif); font-weight: 650; letter-spacing: -.03em; line-height: 1.0; color: var(--ink); text-shadow: 0 0 40px rgba(139,124,255,.16); } .serif i { font-style: normal; color: var(--accent2); } body.day .serif { text-shadow: none; }
+.sans { font-family: var(--sans); font-weight: 400; color: var(--ink2); letter-spacing: 0; line-height: 1.3; }
+.acr { font-family: var(--mono); font-weight: 500; letter-spacing: .32em; text-transform: uppercase; color: var(--ink3); }
+.mono { font-family: var(--mono); font-weight: 400; color: var(--ink4); letter-spacing: .1em; text-transform: uppercase; }
+.center { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.center.r { right: 240px; }
+.left { position: absolute; left: 120px; width: 1040px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
+/* counters: odometer digits */
+.counter { position: absolute; right: 120px; top: 110px; text-align: right; padding: 24px 40px; margin: -24px -40px; background: radial-gradient(closest-side, rgba(var(--scrim),.78), transparent); }
+.counter .n { font-family: var(--serif); font-weight: 650; font-size: 120px; line-height: 1; letter-spacing: -.03em; color: var(--ink); font-variant-numeric: tabular-nums; display: inline-flex; height: 1em; overflow: hidden; }
+.counter .n .d { display: inline-block; width: .56em; height: 1em; position: relative; } .counter .n .d span { position: absolute; left: 0; top: 0; width: 100%; text-align: center; line-height: 1; will-change: transform; }
+.counter .k { font-family: var(--sans); font-weight: 400; font-size: 28px; color: var(--ink2); margin-top: 6px; } .counter .m { font-family: var(--mono); font-size: 18px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink4); margin-top: 6px; height: 22px; }
+.counter.ghost .n { color: var(--heat); text-shadow: 0 0 24px rgba(255,122,89,.25); } body.day .counter.ghost .n { text-shadow: none; }
+.counter.left { right: auto; left: 120px; text-align: left; width: auto; display: block; }
+.big { position: absolute; left: 0; right: 0; text-align: center; font-family: var(--serif); font-weight: 700; line-height: 1; letter-spacing: -.04em; color: var(--ink); height: 754px; }
+.numwrap { position: absolute; left: 0; right: 0; top: 138px; bottom: 138px; overflow: hidden; }
+.lamps { display: flex; gap: 28px; } .lamps i { width: 28px; height: 28px; border-radius: 50%; display: block; background: #1c1c26; } body.day .lamps i { background: #d8d6e6; }
+.wordmark { position: absolute; left: 0; right: 0; text-align: center; font-family: var(--serif); font-weight: 700; font-size: 250px; line-height: 1; letter-spacing: -.04em; white-space: nowrap; }
+.wordmark .g { display: inline-block; position: relative; } .wordmark .g b, .wordmark .g em { display: inline-block; font-weight: 400; font-style: normal; will-change: transform, filter, opacity; }
+.wordmark .g em { position: absolute; left: 0; top: 0; color: var(--heat); } .wordmark .g b { background: linear-gradient(180deg, #ffffff 15%, #c9bfff 100%); -webkit-background-clip: text; background-clip: text; color: transparent; } body.day .wordmark .g b { background: linear-gradient(180deg, #131320 20%, #5b4bd6 100%); -webkit-background-clip: text; background-clip: text; }
+.tag { position: absolute; font-family: var(--mono); font-size: 24px; color: var(--ink3); background: rgba(var(--surf),.8); border: 1px solid rgba(var(--line),.12); padding: 6px 12px; border-radius: 8px; white-space: nowrap; transform: translate(-50%, -50%); }
+.tag.err { color: var(--red); border-color: rgba(251,113,133,.45); }
+/* shared frosted surface */
+.surf { background: rgba(var(--surf),var(--surfa)); backdrop-filter: blur(24px) saturate(140%); border: 1px solid rgba(var(--line),.12); border-radius: 10px; box-shadow: 0 24px 60px -24px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.05); } body.day .surf { box-shadow: 0 24px 60px -30px rgba(20,18,40,.35); }
+.peek { position: absolute; width: 560px; font-family: var(--mono); font-size: 22px; line-height: 1.4; color: var(--ink3); padding: 12px 16px 13px 20px; --c: var(--ink3); }
+.peek::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 2px; background: var(--c); }
+.peek .h { color: var(--ink); font-weight: 500; display: flex; gap: 10px; align-items: baseline; white-space: nowrap; overflow: hidden; }
+.peek .h em { font-style: normal; color: var(--ink4); font-size: 18px; letter-spacing: .14em; text-transform: uppercase; flex: none; }
+.peek .r { color: var(--ink4); white-space: pre; margin-top: 4px; overflow: hidden; } .peek .w { color: var(--ink); white-space: pre; }
+.peek .ms { margin-left: auto; font-size: 18px; letter-spacing: .1em; color: var(--accent2); display: inline-block; will-change: transform, opacity; }
+.peek.g { --c: var(--green); } .peek.y { --c: var(--amber); } .peek.r { --c: var(--red); }
+.peek .lamp { width: 12px; height: 12px; border-radius: 50%; display: inline-block; box-shadow: 0 0 14px 2px currentColor; flex: none; align-self: center; background: var(--c); color: var(--c); }
+.peek .pat { font-size: 22px; color: var(--ink3); background: rgba(255,255,255,.06); border-radius: 6px; padding: 6px 10px; margin: 8px 0 8px; white-space: pre; } .peek .pat b { color: #fff; font-weight: 500; }
+.term { position: absolute; font-family: var(--mono); color: var(--ink3); padding: 12px 18px 14px; overflow: hidden; }
+.term .tb { display: flex; align-items: center; color: var(--ink4); font-size: 18px; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 6px; } .term .tb .live { margin-left: auto; color: var(--green); text-transform: none; letter-spacing: .04em; }
+.tx .vp { position: absolute; left: 18px; right: 18px; top: 50px; bottom: 24px; overflow: hidden; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 36px, #000 100%); } .tx .body { position: absolute; left: 0; right: 0; top: 0; }
+.tl { white-space: pre-wrap; margin: 0 0 14px; font-size: 22px; line-height: 1.5; color: var(--ink3); }
+.tl.pr { color: var(--ink); font-size: 24px; } .tl.as { color: var(--ink2); font-family: var(--sans); font-weight: 400; font-size: 22px; } .tl.tc { color: var(--ink); } .tl.tc b { font-weight: 500; } .tl.rs { color: var(--ink4); padding-left: 14px; }
+.tl.sg { border-left: 3px solid var(--green); background: rgba(74,222,128,.06); padding: 8px 12px; border-radius: 0 8px 8px 0; } .tl.sg b { color: var(--ink); font-weight: 500; }
+.tl.sg i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); margin-right: 8px; vertical-align: 1px; }
+.tl.sg.y { border-color: var(--amber); background: rgba(251,191,36,.06); } .tl.sg.y i { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+.tl.sg.r { border-color: var(--red); background: rgba(251,113,133,.06); } .tl.sg.r i { background: var(--red); box-shadow: 0 0 10px var(--red); }
+.route { position: absolute; width: 400px; font-family: var(--mono); font-size: 20px; color: var(--ink3); padding: 14px 16px; --c: var(--green); }
+.route .h { display: flex; gap: 10px; align-items: center; color: var(--ink); font-size: 22px; font-weight: 500; white-space: nowrap; } .route .h em { font-style: normal; margin-left: auto; font-size: 18px; letter-spacing: .12em; color: var(--accent2); text-transform: uppercase; }
+.route .lamp { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 14px 2px currentColor; background: var(--c); color: var(--c); flex: none; }
+.route .s { color: var(--ink2); margin-top: 6px; font-family: var(--sans); font-weight: 300; font-size: 24px; line-height: 1.25; }
+.route .bar { height: 4px; border-radius: 2px; background: rgba(255,255,255,.10); margin-top: 12px; overflow: hidden; } .route .bar i { display: block; height: 100%; width: 0; background: var(--c); }
+.route .ev { display: flex; justify-content: space-between; margin-top: 8px; font-size: 20px; color: var(--ink4); } .route .ev b { color: var(--ink3); font-weight: 400; }
+.stat { position: absolute; display: flex; flex-direction: column; gap: 4px; } .stat .n { font-family: var(--serif); font-weight: 650; font-size: 120px; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--ink); } .stat .k { font-family: var(--sans); font-weight: 400; font-size: 28px; color: var(--ink2); } .stat .s { font-family: var(--mono); font-size: 20px; color: var(--ink4); letter-spacing: .04em; }
+.sigbox { position: absolute; left: 140px; top: 400px; width: 900px; font-family: var(--mono); font-size: 24px; line-height: 1.6; color: var(--ink3); padding: 20px 28px; --c: var(--green); }
+.sigbox::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: 2px; background: var(--c); }
+.sigbox .t { color: var(--accent2); } .sigbox .k { color: var(--ink4); } .sigbox .w { color: var(--ink); } .sigbox div { will-change: opacity, transform; }
+.install { position: absolute; left: 0; right: 0; text-align: center; font-family: var(--mono); font-size: 32px; color: var(--ink); white-space: nowrap; } .install .p { color: var(--ink4); }
+.stat.c { left: 0; right: 0; align-items: center; text-align: center; }
+.facts { position: absolute; left: 0; right: 0; text-align: center; font-family: var(--mono); font-size: 22px; color: var(--ink4); letter-spacing: .04em; }
+</style></head>
+<body>
+<div id="gl"></div><div id="vig"></div><div id="grain"></div><div id="scrim"></div><svg id="lead" width="1920" height="1080"></svg><div id="ov"></div><div id="flash"></div><div id="bars"><div id="barT"></div><div id="barB"></div></div>
+<script src="three.min.js"></script><script src="EffectComposer.js"></script><script src="RenderPass.js"></script><script src="ShaderPass.js"></script><script src="CopyShader.js"></script><script src="LuminosityHighPassShader.js"></script><script src="UnrealBloomPass.js"></script>
+<script>
+(() => {
+  // ------------------------------------------------------------ helpers
+  const W = 1920, H = 1080; const DAY = location.hash.includes("day"); if (DAY) document.body.classList.add("day");
+  const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+  const P = (t, a, d) => clamp((t - a) / d);
+  const eo = (u) => 1 - Math.pow(1 - u, 4), eio = (u) => (u < .5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2), eo3 = (u) => 1 - Math.pow(1 - u, 3), ei3 = (u) => u * u * u, ei2 = (u) => u * u, eo2 = (u) => 1 - (1 - u) * (1 - u);
+  const eos = (u) => Math.sin(u * Math.PI / 2), eios = (u) => -(Math.cos(Math.PI * u) - 1) / 2, back = (u) => { const c = 1.4; return 1 + (c + 1) * Math.pow(u - 1, 3) + c * Math.pow(u - 1, 2); };
+  const lerp = (a, b, u) => a + (b - a) * u;
+  const OV = document.getElementById("ov"), LEAD = document.getElementById("lead");
+  const el = (tag, cls, html, parent) => { const n = document.createElement(tag); if (cls) n.className = cls; if (html != null) n.innerHTML = html; (parent || OV).appendChild(n); return n; };
+  const st = (n, o) => { for (const k in o) n.style[k] = o[k]; };
+  let seed = 20260927; const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  // ------------------------------------------------------------ timeline: 112 BPM, 42 bars (must match audio4.py)
+  const BEAT = 60 / 112, BAR = BEAT * 4;
+  const T = { open: 0, wander: 6.429, maze: 12.857, reflex: 17.143, instinct: 23.571, session: 30.0, evidence: 47.143, cool: 53.571, fleet: 60.0, numbers: 66.429, close: 75.0, end: 83.571 };
+  window.DURATION = T.end;
+  const SS = { prompt: 0, stepin: 1.071, sigR: 2.143, hop1: 4.286, sigB: 5.893, hop2: 7.5, hop3: 9.107, sigC: 10.714, hop4: 11.786, hop5: 12.857, done: 13.393, hold: 13.929, out: 16.607 };
+  const HSTEP = BEAT / 2, CSTEP = .402, CSTART = .67, CDIE = CSTART + 29 * CSTEP;
+
+  // ------------------------------------------------------------ three, lit and graded
+  const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, powerPreference: "high-performance" });
+  renderer.setSize(W, H); renderer.setPixelRatio(1); renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .95;
+  const NIGHT = DAY ? new THREE.Color(.955, .952, .965) : new THREE.Color(.014, .014, .022); renderer.setClearColor(NIGHT, 1);
+  document.getElementById("gl").appendChild(renderer.domElement);
+  const scene = new THREE.Scene(); scene.fog = new THREE.FogExp2(NIGHT.getHex(), .028); scene.fog.color.copy(NIGHT);
+  const cam = new THREE.PerspectiveCamera(44, W / H, .5, 1200); scene.add(cam);
+  const composer = new THREE.EffectComposer(renderer); composer.addPass(new THREE.RenderPass(scene, cam));
+  const bloom = new THREE.UnrealBloomPass(new THREE.Vector2(W, H), .55, .85, .72); composer.addPass(bloom);
+  const GRADE = { uniforms: { tDiffuse: { value: null }, uCool: { value: 0 }, uDay: { value: DAY ? 1 : 0 } }, vertexShader: "varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float uCool; uniform float uDay; varying vec2 vUv;
+    const vec3 LIFT=vec3(.002,.002,.006), GAMMA=vec3(.97,.97,.95), GAIN=vec3(1.03,1.02,1.04); const vec3 SHADOW=vec3(.03,.02,.09), HIGH=vec3(1.0,.99,.98);
+    void main(){ vec2 d=vUv-.5; float r2=dot(d,d); vec3 c; c.r=texture2D(tDiffuse,vUv+d*r2*.004).r; c.g=texture2D(tDiffuse,vUv).g; c.b=texture2D(tDiffuse,vUv-d*r2*.004).b;
+      float l=dot(c,vec3(.2126,.7152,.0722)); float mid=smoothstep(0.,.25,l)*(1.-smoothstep(.55,.95,l)); c=mix(vec3(l),c,1.+.10*mid);
+      if(uDay<.5){ c=pow(max(GAIN*(c+LIFT*(1.-c)),0.),1./GAMMA); c+=SHADOW*(1.-smoothstep(0.,.18,l))*.35; c*=mix(vec3(1.),HIGH,smoothstep(.6,1.,l)); }
+      vec3 cold=vec3(.55,.49,1.0); float w=smoothstep(.1,.5,c.r-c.b); c=mix(c,mix(c,l*cold/.6,w),uCool);
+      // anamorphic thread: a short horizontal smear of the brightest pixels, tinted violet
+      vec3 s=vec3(0.); for(int i=-4;i<=4;i++){ vec2 o=vec2(float(i)*3.5/1920.,0.); vec3 p=texture2D(tDiffuse,vUv+o).rgb; float pl=dot(p,vec3(.2126,.7152,.0722)); s+=max(pl-.72,0.)*mix(vec3(1.),vec3(.55,.49,1.),abs(float(i))/4.); }
+      c+=s/9.*.35*(1.-uDay); gl_FragColor=vec4(c,1.); }` };
+  const grade = new THREE.ShaderPass(GRADE); composer.addPass(grade);
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z); const RGB = (r, g, b) => new THREE.Color(r, g, b);
+  const hemi = new THREE.HemisphereLight(DAY ? 0xffffff : 0x2a2450, DAY ? 0xd8d4ea : 0x0a0a12, 0); scene.add(hemi);
+  const key = new THREE.SpotLight(0xd8d2ff, 1.4, 90, .55, .8, 1.6); key.position.set(-10, 34, 8); key.target.position.set(2, 0, 0); scene.add(key, key.target);
+  const backL = new THREE.SpotLight(0x6a5cff, .5, 120, .7, 1, 1.4); backL.position.set(10, 12, -40); backL.target.position.set(0, 0, 0); scene.add(backL, backL.target);
+  const lamp = new THREE.PointLight(0xffffff, 0, 12, 2); scene.add(lamp);
+  const radialTex = (inner, outer) => { const c = document.createElement("canvas"); c.width = c.height = 1024; const x = c.getContext("2d"); const g = x.createRadialGradient(512, 512, 0, 512, 512, 512); g.addColorStop(0, inner); g.addColorStop(1, outer); x.fillStyle = g; x.fillRect(0, 0, 1024, 1024); const t = new THREE.CanvasTexture(c); return t; };
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(800, 800), new THREE.MeshStandardMaterial({ color: DAY ? RGB(3.0, 2.98, 3.06) : RGB(.09, .088, .10), map: radialTex("rgb(255,255,255)", DAY ? "rgb(252,251,254)" : "rgb(60,60,70)"), roughness: DAY ? .85 : .7, metalness: 0 })); ground.rotation.x = -Math.PI / 2; ground.position.y = -.25; scene.add(ground);
+  const fleetFloor = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshBasicMaterial({ color: DAY ? RGB(3.0, 2.98, 3.06) : 0xffffff, map: radialTex(DAY ? "rgb(240,238,250)" : "rgb(24,20,50)", DAY ? "rgb(255,255,255)" : "rgb(8,8,12)"), transparent: true, opacity: 0 })); fleetFloor.rotation.x = -Math.PI / 2; fleetFloor.position.y = -.4; scene.add(fleetFloor);
+
+  // ------------------------------------------------------------ the city
+  const COLS = 20, ROWS = 12, SP = 2.4; const nodes = []; const id = (c, r) => r * COLS + c;
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) nodes.push(V3((c - COLS / 2 + .5) * SP + (rnd() - .5) * .9, (rnd() - .5) * .2, (r - ROWS / 2 + .5) * SP + (rnd() - .5) * .9));
+  const adj = nodes.map(() => []); const edgePts = [];
+  const link = (a, b) => { adj[a].push(b); adj[b].push(a); edgePts.push(nodes[a], nodes[b]); };
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) { if (c + 1 < COLS && rnd() < .84) link(id(c, r), id(c + 1, r)); if (r + 1 < ROWS && rnd() < .78) link(id(c, r), id(c, r + 1)); if (c + 1 < COLS && r + 1 < ROWS && rnd() < .12) link(id(c, r), id(c + 1, r + 1)); }
+  const K = { start: id(1, 6), lookup: id(5, 5), files: id(8, 5), edit: id(11, 6), gen: id(14, 6), goal: id(17, 6), dead: id(7, 8), readme: id(2, 4), makefile: id(3, 7), tests: id(9, 3), docs: id(10, 9), pkg: id(2, 8), contrib: id(5, 2), ci: id(13, 9) };
+  const LABEL = { [K.start]: "Please work on W-2045.", [K.lookup]: "Glob **/*.{md,txt,json}", [K.files]: "Read acme/billing.py", [K.edit]: "Read tests/test_billing.py", [K.gen]: "Read stream.jsonl", [K.dead]: "python3 -m pytest ✗", [K.readme]: "Read README.md", [K.makefile]: "Read Makefile", [K.tests]: "Glob CLAUDE.md", [K.docs]: "grep -r W-2045 …", [K.pkg]: "ls -la …", [K.contrib]: "find . -name *.py", [K.ci]: "Read stream.jsonl" };
+  const spine = [K.start, id(2, 6), id(3, 6), id(3, 5), K.lookup, id(6, 5), id(7, 5), K.files, id(9, 5), id(9, 6), id(10, 6), K.edit, id(12, 6), id(13, 6), K.gen, id(15, 6), id(16, 6), K.goal];
+  const SI = { start: 0, lookup: 4, files: 7, edit: 11, gen: 14, goal: 17 };
+  for (let i = 0; i + 1 < spine.length; i++) if (!adj[spine[i]].includes(spine[i + 1])) link(spine[i], spine[i + 1]);
+  if (!adj[id(7, 5)].includes(id(7, 6))) link(id(7, 5), id(7, 6)); if (!adj[id(7, 6)].includes(id(7, 7))) link(id(7, 6), id(7, 7)); if (!adj[id(7, 7)].includes(K.dead)) link(id(7, 7), K.dead);
+  const INSTINCTS = [[id(2, 1), id(4, 1), id(6, 1), id(8, 1), id(10, 2), id(12, 2), id(14, 2), id(16, 2)], [id(3, 10), id(5, 10), id(7, 10), id(9, 10), id(11, 9), id(13, 10), id(15, 10)], [id(18, 1), id(18, 3), id(18, 5), id(18, 7), id(18, 9)], [id(1, 2), id(1, 4), id(1, 6), id(1, 8), id(1, 10)]];
+  INSTINCTS.forEach((p) => { for (let i = 0; i + 1 < p.length; i++) if (!adj[p[i]].includes(p[i + 1])) link(p[i], p[i + 1]); });
+  function wander(len, detour, from = K.start, to = K.goal) {
+    const walk = [from]; let cur = from; const seen = new Set([cur]);
+    const must = [K.readme, K.makefile, K.dead, K.tests].filter(() => rnd() < detour); let target = must.length ? must.shift() : to;
+    while (walk.length < len) { const tp = nodes[target]; const sc = adj[cur].map((n) => ({ n, s: nodes[n].distanceTo(tp) + (seen.has(n) ? 3 : 0) + rnd() * 4 })); sc.sort((a, b) => a.s - b.s); cur = sc[0].n; walk.push(cur); seen.add(cur); if (cur === target) { if (must.length) target = must.shift(); else if (target !== to) target = to; else break; } }
+    if (walk[walk.length - 1] !== to) { const j = spine.indexOf(cur); if (j >= 0) walk.push(...spine.slice(j + 1)); else walk.push(K.edit, id(12, 6), id(13, 6), K.gen, id(15, 6), id(16, 6), K.goal); }
+    return walk;
+  }
+  const hero = wander(24, 1.0); const ghosts = []; for (let i = 0; i < 16; i++) ghosts.push(wander(16 + Math.floor(rnd() * 10), .7));
+  const control = (() => { const w = [K.start]; let cur = K.start; const seen = new Set([cur]); const targets = [K.readme, K.pkg, K.makefile, K.contrib, K.tests, K.docs, K.dead, K.ci, K.files]; let ti = 0; let target = targets[0]; while (w.length < 30) { const tp = nodes[target]; const sc = adj[cur].map((n) => ({ n, s: nodes[n].distanceTo(tp) + (seen.has(n) ? 2 : 0) + rnd() * 3 })); sc.sort((a, b) => a.s - b.s); cur = sc[0].n; w.push(cur); seen.add(cur); if (cur === target) { ti = (ti + 1) % targets.length; target = targets[ti]; } } return w; })();
+  const lift = (ids, y) => ids.map((i) => nodes[i].clone().add(V3(0, y, 0)));
+  const curveOf = (ids, y = .1) => new THREE.CatmullRomCurve3(lift(ids, y), false, "catmullrom", .45);
+  const heroCurve = curveOf(hero, .12), ghostCurves = ghosts.map((g) => curveOf(g, .08 + rnd() * .12)), spineCurve = curveOf(spine, .14), controlCurve = curveOf(control, .12);
+  const deadCurve = curveOf([id(7, 5), id(7, 6), id(7, 7), K.dead], .14); const instinctCurves = INSTINCTS.map((p) => curveOf(p, .14));
+  const spineLens = spineCurve.getLengths(600); const arcOf = (i) => { const tt = i / (spine.length - 1); const j = Math.round(tt * 600); return spineLens[j] / spineLens[600]; };
+
+  // ------------------------------------------------------------ heat
+  const heatEv = nodes.map(() => []); const addHeat = (i, t, k = 1) => heatEv[i].push([t, k]);
+  hero.forEach((n, k) => addHeat(n, T.wander + k * HSTEP - .25, 1));
+  ghosts.forEach((g, j) => g.forEach((n, k) => addHeat(n, T.maze + j * .067 + (k / g.length) * 2.1, .8)));
+  control.forEach((n, k) => addHeat(n, T.session + CSTART + k * CSTEP - .25, 1));
+  const coolStart = T.cool; for (let s = 0; s < 54; s++) { const g = ghosts[s % 16]; g.forEach((n, k) => addHeat(n, coolStart + s * .055 + (k / g.length) * .6, .7)); }
+  const heatAt = (i, t) => { let h = 0; for (const [t0, k] of heatEv[i]) { if (t < t0) continue; const d = t - t0; const v = k * (d < .12 ? d / .12 : Math.exp(-(d - .12) / 2.6)); if (v > h) h = v; } return h; };
+
+  // ------------------------------------------------------------ meshes (HDR colours, no lin())
+  const nodeGeo = new THREE.SphereGeometry(.085, 10, 10), farGeo = new THREE.SphereGeometry(.34, 8, 8);
+  const nodeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const cNode = DAY ? RGB(.40, .40, .50) : RGB(.16, .16, .26), cHeat = DAY ? RGB(.62, .07, .01) : RGB(1.0, .16, .04), cCool = DAY ? RGB(.10, .07, .62) : RGB(.14, .10, .80), tmp = new THREE.Color();
+  const nodeMesh = new THREE.InstancedMesh(nodeGeo, nodeMat, nodes.length); { const m = new THREE.Matrix4(); nodes.forEach((p, i) => { m.makeTranslation(p.x, p.y, p.z); nodeMesh.setMatrixAt(i, m); nodeMesh.setColorAt(i, cNode); }); scene.add(nodeMesh); }
+  const edgeMat = new THREE.LineBasicMaterial({ color: DAY ? RGB(.62, .61, .72) : RGB(.035, .035, .07), transparent: true, opacity: 1 }); const edges = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(edgePts), edgeMat); scene.add(edges);
+  const glowMat = (color, opacity = 1) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity });
+  const progTube = (curve, color, opacity, r, segs = 240) => { const g = new THREE.TubeGeometry(curve, segs, r, 6, false); const m = new THREE.Mesh(g, glowMat(color, opacity)); m.geometry.setDrawRange(0, 0); m.userData.total = g.index.count; scene.add(m); return m; };
+  const setProg = (m, u) => m.geometry.setDrawRange(0, Math.floor(m.userData.total * clamp(u)));
+  const HEAT = DAY ? RGB(.62, .07, .01) : RGB(1.1, .18, .05), HEAT2 = DAY ? RGB(.62, .07, .01) : RGB(.85, .12, .03); const heroLine = progTube(heroCurve, HEAT, .9, .05); const ghostLines = ghostCurves.map((c) => progTube(c, HEAT2, DAY ? .6 : .5, .04)); const controlLine = progTube(controlCurve, HEAT, .85, .05, 300);
+  const RAIL = DAY ? RGB(.11, .07, .62) : RGB(.30, .22, 1.0), CORE = DAY ? RGB(1.0, 1.0, 1.0) : RGB(1.6, 1.58, 1.7), INST = DAY ? RGB(.08, .05, .45) : RGB(.16, .11, .66), AMB = DAY ? RGB(.42, .10, .01) : RGB(1.3, .38, .03), GRN = DAY ? RGB(.01, .20, .04) : RGB(.05, .95, .14), RED = DAY ? RGB(.50, .01, .04) : RGB(1.5, .12, .16);
+  const railGeo = new THREE.TubeGeometry(spineCurve, 320, .11, 10, false), coreGeo = new THREE.TubeGeometry(spineCurve, 320, .035, 8, false); const railFarGeo = new THREE.TubeGeometry(spineCurve, 160, .34, 8, false), coreFarGeo = new THREE.TubeGeometry(spineCurve, 160, .12, 6, false);
+  const railMat = glowMat(RAIL, 0), coreMat = glowMat(CORE, 0); const rail = new THREE.Mesh(railGeo, railMat), core = new THREE.Mesh(coreGeo, coreMat); scene.add(rail, core);
+  const railTotal = railGeo.index.count, coreTotal = coreGeo.index.count; const setRail = (u) => { rail.geometry.setDrawRange(0, Math.floor(railTotal * u)); core.geometry.setDrawRange(0, Math.floor(coreTotal * u)); }; setRail(0);
+  const paveHead = new THREE.Mesh(new THREE.SphereGeometry(.26, 16, 16), glowMat(CORE, 0)); scene.add(paveHead);
+  const instRails = instinctCurves.map((c) => { const m = progTube(c, INST, .8, .08, 160); const k = progTube(c, AMB, .9, .03, 160); return { m, k }; });
+  const hotGeo = new THREE.TubeGeometry(spineCurve, 320, .15, 10, false); const hot = new THREE.Mesh(hotGeo, glowMat(CORE, 0)); scene.add(hot); const hotTotal = hotGeo.index.count;
+  const setHot = (a, b, alpha, color) => { const s = Math.floor(hotTotal * arcOf(a)), e = Math.floor(hotTotal * arcOf(b)); hot.geometry.setDrawRange(s, Math.max(0, e - s)); hot.material.opacity = alpha; hot.material.color.copy(color); };
+  const spineGlow = new THREE.Mesh(new THREE.TubeGeometry(spineCurve, 200, .2, 8, false), glowMat(HEAT2, 0)); scene.add(spineGlow);
+  const sig = (i, color) => { const s = new THREE.Mesh(new THREE.SphereGeometry(.2, 16, 16), glowMat(color, 0)); s.position.copy(nodes[i]).add(V3(0, .16, 0)); scene.add(s); const c = new THREE.Mesh(new THREE.SphereGeometry(.08, 10, 10), glowMat(RGB(1.6, 1.8, 1.6), 0)); c.position.copy(s.position); scene.add(c); const halo = new THREE.Mesh(new THREE.SphereGeometry(.4, 16, 16), glowMat(color, 0)); halo.position.copy(s.position); scene.add(halo); return { s, c, halo, set(a, pulse = 1) { s.material.opacity = a; c.material.opacity = a; halo.material.opacity = .18 * a * pulse; } }; };
+  const S1 = sig(K.start, GRN), S2 = sig(K.lookup, AMB), S3 = sig(K.edit, GRN), SG = sig(K.goal, GRN); const SIGS = [S1, S2, S3, SG];
+  const barrier = new THREE.Mesh(new THREE.TubeGeometry(deadCurve, 40, .07, 8, false), glowMat(RED, 0)); scene.add(barrier);
+  const barBox = new THREE.Mesh(new THREE.BoxGeometry(.9, .22, .22), glowMat(RED, 0)); barBox.position.copy(nodes[K.dead]).add(V3(0, .2, 0)); barBox.rotation.y = .6; scene.add(barBox);
+  const deadDot = new THREE.Mesh(new THREE.SphereGeometry(.16, 12, 12), glowMat(RED, 0)); deadDot.position.copy(barBox.position); scene.add(deadDot);
+  const mkAgent = (color, halo, r = .14) => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 16), glowMat(color, 0)); scene.add(m); const h = new THREE.Mesh(new THREE.SphereGeometry(r * 2.4, 16, 16), glowMat(halo, 0)); scene.add(h); return { m, h, set(p, a) { this.m.position.copy(p); this.h.position.copy(p); this.m.material.opacity = a; this.h.material.opacity = .12 * a; } }; };
+  const agent = mkAgent(DAY ? RGB(.11, .07, .62) : RGB(1.5, 1.45, 1.6), RGB(.55, .45, 1.2)), ghostAgent = mkAgent(DAY ? RGB(.62, .07, .01) : RGB(1.3, .45, .18), HEAT, .13); const ghostAgents = ghostCurves.map(() => mkAgent(DAY ? RGB(.62, .07, .01) : RGB(1.3, .45, .18), HEAT, .09));
+  const ringMat = (c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0, side: THREE.DoubleSide });
+  const goalRing = new THREE.Mesh(new THREE.RingGeometry(.3, .42, 48), ringMat(GRN)); goalRing.rotation.x = -Math.PI / 2; goalRing.position.copy(nodes[K.goal]).add(V3(0, .05, 0)); scene.add(goalRing);
+  const capRing = new THREE.Mesh(new THREE.RingGeometry(.3, .5, 48), ringMat(RED)); capRing.rotation.x = -Math.PI / 2; scene.add(capRing);
+  const openRing = new THREE.Mesh(new THREE.RingGeometry(.34, .44, 48), ringMat(CORE)); openRing.rotation.x = -Math.PI / 2; scene.add(openRing);
+  const initRing = new THREE.Mesh(new THREE.RingGeometry(.994, 1.0, 128), ringMat(CORE)); initRing.rotation.x = -Math.PI / 2; initRing.position.set(0, .08, 0); scene.add(initRing);
+
+  // ------------------------------------------------------------ the die and the chip (the cooling beat)
+  const GPUC = DAY ? RGB(.62, .07, .01) : RGB(1.2, .24, .06), CPUC = RAIL;
+  const gpuGroup = new THREE.Group(); gpuGroup.position.set(-28.5, .5, -1); gpuGroup.rotation.x = -Math.PI / 2; scene.add(gpuGroup);
+  const GC = 12, GR = 8; const gpuCells = new THREE.InstancedMesh(new THREE.BoxGeometry(.62, .62, .5), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0 }), GC * GR);
+  { const m = new THREE.Matrix4(); for (let r = 0; r < GR; r++) for (let c = 0; c < GC; c++) { const i = r * GC + c; m.makeTranslation((c - GC / 2 + .5) * .78, (r - GR / 2 + .5) * .78, 0); gpuCells.setMatrixAt(i, m); gpuCells.setColorAt(i, cNode); } gpuGroup.add(gpuCells); }
+  const gpuFrame = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(GC * .78 + .6, GR * .78 + .6, .6)), new THREE.LineBasicMaterial({ color: GPUC, transparent: true, opacity: 0 })); gpuGroup.add(gpuFrame);
+  const cpuGroup = new THREE.Group(); cpuGroup.position.set(28.5, .4, -1); scene.add(cpuGroup);
+  const cpuBody = new THREE.Mesh(new THREE.BoxGeometry(5.2, .6, 5.2), new THREE.MeshBasicMaterial({ color: DAY ? RGB(.70, .69, .80) : RGB(.03, .03, .05), transparent: true, opacity: 0 })); cpuGroup.add(cpuBody);
+  const cpuEdge = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(5.2, .6, 5.2)), new THREE.LineBasicMaterial({ color: CPUC, transparent: true, opacity: 0 })); cpuGroup.add(cpuEdge);
+  const cpuPins = new THREE.InstancedMesh(new THREE.BoxGeometry(.16, .18, .5), new THREE.MeshBasicMaterial({ color: CPUC, transparent: true, opacity: 0 }), 48);
+  { const m = new THREE.Matrix4(); let i = 0; for (let k = 0; k < 12; k++) { const o = (k - 5.5) * .4; m.makeTranslation(o, -.3, 2.9); cpuPins.setMatrixAt(i++, m); m.makeTranslation(o, -.3, -2.9); cpuPins.setMatrixAt(i++, m); m.makeRotationY(Math.PI / 2).setPosition(2.9, -.3, o); cpuPins.setMatrixAt(i++, m); m.makeRotationY(Math.PI / 2).setPosition(-2.9, -.3, o); cpuPins.setMatrixAt(i++, m); } cpuGroup.add(cpuPins); }
+  const miniRail = new THREE.Mesh(new THREE.TubeGeometry(spineCurve, 120, .05, 6, false), glowMat(CORE, 0)); scene.add(miniRail);
+  const cpuGlow = new THREE.Mesh(new THREE.RingGeometry(3.2, 5.4, 48), ringMat(CPUC)); cpuGlow.rotation.x = -Math.PI / 2; cpuGlow.position.copy(cpuGroup.position).setY(.1); scene.add(cpuGlow);
+  const drops = []; for (let i = 0; i < 36; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.32, .32, .32), glowMat(GPUC, 0)); scene.add(m); drops.push(m); }
+  // ------------------------------------------------------------ the fleet
+  const fleet = new THREE.Group(); scene.add(fleet); const FL = []; const FSP = 64; const fleetPos = [];
+  for (let r = -1; r <= 1; r++) for (let c = -1; c <= 1; c++) if (!(r === 0 && c === 0)) fleetPos.push(V3(c * FSP + (rnd() - .5) * 8, 0, r * FSP + (rnd() - .5) * 8));
+  fleetPos.forEach((p, j) => { const g = new THREE.Group(); g.position.copy(p); g.rotation.y = (rnd() - .5) * .6; const nm = new THREE.InstancedMesh(farGeo, nodeMat, nodes.length); { const m = new THREE.Matrix4(); nodes.forEach((q, i) => { m.makeTranslation(q.x, q.y, q.z); nm.setMatrixAt(i, m); nm.setColorAt(i, cNode); }); } g.add(nm); const eg = new THREE.LineSegments(edges.geometry, new THREE.LineBasicMaterial({ color: RGB(.03, .03, .07), transparent: true, opacity: 1 })); g.add(eg); const rl = new THREE.Mesh(new THREE.TubeGeometry(spineCurve, 160, .34, 8, false), glowMat(RAIL, 0)); rl.geometry.setDrawRange(0, 0); g.add(rl); const cr = new THREE.Mesh(new THREE.TubeGeometry(spineCurve, 160, .12, 6, false), glowMat(CORE, 0)); cr.geometry.setDrawRange(0, 0); g.add(cr); const ir = instinctCurves.map((c) => { const m = new THREE.Mesh(new THREE.TubeGeometry(c, 100, .26, 6, false), glowMat(INST, 0)); g.add(m); return m; }); const beacon = new THREE.Mesh(new THREE.CylinderGeometry(.5, .5, 16, 12, 1, true), new THREE.MeshBasicMaterial({ color: RAIL, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false })); beacon.position.copy(nodes[K.start]).add(V3(0, 8, 0)); g.add(beacon); fleet.add(g); FL.push({ g, nm, eg, rl, cr, ir, beacon, delay: j * .35 + rnd() * .25, dist: p.length() }); });
+  const links = fleetPos.map((p, j) => { const a = nodes[K.goal].clone().add(V3(0, .14, 0)); const b = p.clone().add(nodes[K.start]).add(V3(0, .14, 0)); const mid = a.clone().lerp(b, .5).add(V3(0, 18 + rnd() * 8, 0)); const curve = new THREE.CatmullRomCurve3([a, a.clone().lerp(mid, .3), mid, b.clone().lerp(mid, .3), b]); const geo = new THREE.TubeGeometry(curve, 120, .45, 8, false); const m = new THREE.Mesh(geo, glowMat(RAIL, 0)); m.geometry.setDrawRange(0, 0); scene.add(m); const pulse = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 12), glowMat(CORE, 0)); scene.add(pulse); return { curve, m, total: geo.index.count, pulse, j }; });
+  fleet.visible = false;
+
+  // ------------------------------------------------------------ the ident rail (camera-attached, drawn under the letters)
+  const identGrp = new THREE.Group(); cam.add(identGrp); identGrp.position.set(0, 0, -10);
+  const identCurve = new THREE.LineCurve3(V3(-5.6, 0, 0), V3(5.6, 0, 0));
+  const identRail = new THREE.Mesh(new THREE.TubeGeometry(identCurve, 40, .062, 8, false), glowMat(RAIL, 0)); identRail.geometry.setDrawRange(0, 0); identGrp.add(identRail); const identRailTotal = identRail.geometry.index.count;
+  const identCore = new THREE.Mesh(new THREE.TubeGeometry(identCurve, 40, .022, 8, false), glowMat(CORE, 0)); identCore.geometry.setDrawRange(0, 0); identGrp.add(identCore); const identCoreTotal = identCore.geometry.index.count;
+  const identHead = new THREE.Mesh(new THREE.SphereGeometry(.09, 16, 16), glowMat(CORE, 0)); identGrp.add(identHead);
+  const identLamp = new THREE.PointLight(0xc9bfff, 0, 8, 2); identGrp.add(identLamp);
+
+  // ------------------------------------------------------------ camera
+  const start = nodes[K.start], goal = nodes[K.goal];
+  const KEYS = [ // [t, position, lookAt, fov, hold]
+    [0.0, V3(start.x - 2, 3.2, start.z + 8), V3(start.x + 6, -.2, start.z - 3), 38, 1],
+    [T.wander - .6, V3(start.x - 2, 3.2, start.z + 8), V3(start.x + 6, -.2, start.z - 3), 38, 1],
+    [T.wander + .8, V3(start.x + 1, 2.0, start.z + 6), V3(start.x + 7, .2, start.z - 2), 56, 0],
+    [T.maze - 1.0, V3(start.x + 10, 4, start.z + 8), V3(start.x + 14, 0, start.z - 3), 40, 0],
+    [T.maze, V3(0, 30, 6), V3(0, 0, -1), 34, 1],
+    [T.reflex - .001, V3(0, 28, 5), V3(0, 0, -1), 34, 0],
+    [T.reflex, V3(goal.x - 3, 1.0, goal.z + 1.6), V3(start.x + 4, .3, start.z + .6), 50, 1],
+    [T.reflex + 3.2, V3(goal.x - 3, 1.6, goal.z + 2.2), V3(start.x + 4, .3, start.z + .6), 50, 0],
+    [T.instinct + 1.07, V3(0, 42, 4), V3(0, 0, -1), 30, 0],
+    [T.instinct + 4.4, V3(-1, 38, 6), V3(0, 0, -1), 30, 1],
+    [T.session, V3(start.x + 1.2, 6.4, start.z + 10.2), V3(start.x + 4.2, 0, start.z - 1), 40, 0],
+    [T.evidence - .001, V3(goal.x + 1.2, 6.4, goal.z + 10.2), V3(goal.x + 4.2, 0, goal.z - 1), 40, 0],
+    [T.evidence, V3(-1, 24, 15), V3(-1, 0, -2), 34, 1],
+    [T.cool - .001, V3(-1, 22, 17), V3(-1, 0, -3), 34, 0],
+    [T.cool, V3(0, 60, 9), V3(0, 0, -1), 36, 1],
+    [T.fleet - .5, V3(0, 64, 8), V3(0, 0, -1), 36, 0],
+    [T.fleet + 2.143, V3(0, 150, 240), V3(0, 0, -8), 28, 0],
+    [T.numbers, V3(0, 212, 339), V3(0, 0, -8), 20, 1],
+    [T.close - .001, V3(0, 212, 339), V3(0, 0, -8), 20, 0],
+    [T.close, V3(goal.x + 8, 1.6, goal.z + .6), V3(start.x + 6, 2.6, start.z), 32, 1],
+    [T.end, V3(goal.x + 6.4, 1.6, goal.z + .5), V3(start.x + 6, 2.6, start.z), 32, 1],
+  ];
+  const posCurve = new THREE.CatmullRomCurve3(KEYS.map((k) => k[1]), false, "centripetal", .35), lookCurve = new THREE.CatmullRomCurve3(KEYS.map((k) => k[2]), false, "centripetal", .35);
+  function keyCam(t) {
+    let i = 0; while (i + 1 < KEYS.length && t >= KEYS[i + 1][0]) i++; const A = KEYS[i], B = KEYS[Math.min(i + 1, KEYS.length - 1)]; const dur = B[0] - A[0];
+    if (dur < .01) return [B[1].clone(), B[2].clone(), B[3]];
+    let u = P(t, A[0], dur); const f = A[4] && B[4] ? eios(u) : A[4] ? ei2(u) : B[4] ? eo2(u) : u; const s = (i + f) / (KEYS.length - 1);
+    return [posCurve.getPoint(clamp(s)), lookCurve.getPoint(clamp(s)), lerp(A[3], B[3], f)];
+  }
+  const HOPS = [[SS.hop1, SI.start, SI.lookup, .8], [SS.hop2, SI.lookup, SI.files, .7], [SS.hop3, SI.files, SI.edit, .8], [SS.hop4, SI.edit, SI.gen, .7], [SS.hop5, SI.gen, SI.goal, .7]];
+  const idxAt = (tl, soft) => { let x = SI.start; for (const [at, a, b, d] of HOPS) x += (b - a) * eio(P(tl, soft ? at - .35 : at, soft ? d + 1.2 : d)); return x; };
+  const railPt = (i) => spineCurve.getPoint(clamp(i / (spine.length - 1)));
+  const followCam = (tl) => { const lin = lerp(SI.start, SI.goal, P(tl, SS.prompt, SS.done - SS.prompt)); const p = railPt(.25 * lin + .75 * idxAt(tl, true)); return [p.clone().add(V3(1.2, 6.4, 10.2)), p.clone().add(V3(4.2, 0, -1))]; };
+  const chaseCam = (t) => { const hu = clamp((t - T.wander) / (T.maze - T.wander - .4)); const p = heroCurve.getPointAt(clamp(hu - .035)), now = heroCurve.getPointAt(hu), ahead = heroCurve.getPointAt(clamp(hu + .04)); const dir = ahead.clone().sub(now).setY(0).normalize(); const right = V3(dir.z, 0, -dir.x); const pos = p.clone().sub(dir.clone().multiplyScalar(4.2)).add(V3(0, 1.6, 0)).add(right.multiplyScalar(1.4)); return [pos, now.clone().add(dir.clone().multiplyScalar(1.2)).add(V3(0, .1, 0))]; };
+  function camAt(t) {
+    let [pos, look, fov] = keyCam(t);
+    const wf = P(t, T.session - .3, .6) * (1 - P(t, T.evidence - .02, .02)); if (wf > 0) { const [fp, fl] = followCam(t - T.session); pos = pos.clone().lerp(fp, wf); look = look.clone().lerp(fl, wf); }
+    const wc = P(t, T.wander - .2, 1.07) * (1 - P(t, T.maze - 1.07, 1.07)); if (wc > 0) { const [cp, cl] = chaseCam(t); pos = pos.clone().lerp(cp, wc); look = look.clone().lerp(cl, wc); fov = lerp(fov, 56, wc); }
+    cam.position.copy(pos); cam.lookAt(look);
+    const tl = t - T.session; if (wf > 0) { const push = P(tl, SS.stepin, .6) * (1 - P(tl, SS.hop1, 1.0)); let kick = 0; for (const [at] of HOPS) kick = Math.max(kick, Math.sin(Math.PI * P(tl, at, .35))); fov = lerp(fov, 35, push) + 2 * kick; }
+    cam.fov = fov; cam.updateProjectionMatrix();
+  }
+
+  // ------------------------------------------------------------ overlays: type system
+  const beats = []; function beat(t0, t1, build) { const n = el("div", "b"); const upd = build(n) || (() => {}); beats.push({ n, t0, t1, upd }); return n; }
+  function kinetic(parent, html, cls, size, extra) {
+    const isCaption = cls.includes("sans"); const box = el("div", "kt " + (cls.includes("left") ? "l " : "") + cls.replace("left", ""), null, parent); st(box, { fontSize: size + "px", ...(extra || {}) });
+    const parts = isCaption ? [html] : html.split(/\s+/); const words = parts.map((w) => { const s = document.createElement("span"); s.innerHTML = w; box.appendChild(s); return s; });
+    const n = words.length; const order = words.map((s, i) => (s.querySelector("i") || s.tagName === "I" ? n - 1 : i)); // the italic word lands last
+    return { box, n, show(u, out = 0) { words.forEach((s, i) => { const k = isCaption ? 0 : order[i]; const w = P(u, k * .08, isCaption ? .5 : .65); const o = isCaption ? out : clamp(out * (1.3 + (n - 1) * .1) - (n - 1 - k) * .1); const oo = s.querySelector("i") ? clamp(out * 1.3 - .25) : o; st(s, { opacity: eo(w) * (1 - oo), transform: `translateY(${lerp(.35, 0, eo(w)) - oo * .25}em)`, filter: `blur(${lerp(.1, 0, eo3(w)) + oo * .06}em)` }); }); } };
+  }
+  function block(parent, items, opts) { const box = el("div", opts.pos || "center", null, parent); st(box, { top: opts.top + "px", gap: (opts.gap ?? 10) + "px", ...(opts.style || {}) }); const L = items.map(([html, cls, size, extra]) => kinetic(box, html, cls, size, extra)); return { box, play: (t, at, stagger = .18, dur = null, outAt = 99) => { const out = ei3(P(t, outAt, .3)); L.forEach((l, i) => l.show(P(t, at + i * stagger, dur || (.65 + .08 * l.n)), out)); } }; }
+  const toScreen = (v) => { const p = v.clone().project(cam); return [(p.x + 1) / 2 * W, (1 - p.y) / 2 * H, p.z < 1]; };
+  const svgEl = (tag, attrs) => { const e = document.createElementNS("http://www.w3.org/2000/svg", tag); for (const k in attrs) e.setAttribute(k, attrs[k]); LEAD.appendChild(e); return e; };
+  const leaders = []; const LEADC = DAY ? "rgba(20,18,40,.55)" : "rgba(255,255,255,.45)", DOTC = DAY ? "#131320" : "#fff"; const leader = () => { const l = svgEl("line", { stroke: LEADC, "stroke-width": "1.5" }); leaders.push(l); return l; };
+  const dots = []; const dot = () => { const g = svgEl("g", {}); const o = document.createElementNS("http://www.w3.org/2000/svg", "circle"); o.setAttribute("r", "6"); o.setAttribute("fill", "none"); o.setAttribute("stroke", DOTC); o.setAttribute("stroke-width", "1.5"); const c = document.createElementNS("http://www.w3.org/2000/svg", "circle"); c.setAttribute("r", "2"); c.setAttribute("fill", DOTC); g.appendChild(o); g.appendChild(c); dots.push(g); return g; };
+  const hideLeaders = () => { leaders.forEach((l) => (l.style.opacity = 0)); dots.forEach((d) => (d.style.opacity = 0)); };
+  // callout choreography: dot pops, leader draws, card unfolds along it, stamp lands last
+  function born(card, l, d, x, y, u, outU) {
+    const a = 1 - outU; if (u <= 0 || a <= 0) { card.style.opacity = 0; l.style.opacity = 0; d.style.opacity = 0; return; }
+    const pd = back(P(u, 0, .18)), pl = P(u, .1, .26), pc = P(u, .28, .32), ps = P(u, .5, .14);
+    const cx = parseFloat(card.style.left), cy = parseFloat(card.style.top) + card.offsetHeight; d.setAttribute("transform", `translate(${x},${y}) scale(${pd})`); d.style.opacity = a;
+    const dx = cx - x, dy = cy - y; l.setAttribute("x1", x); l.setAttribute("y1", y); l.setAttribute("x2", x + dx * eo(pl)); l.setAttribute("y2", y + dy * eo(pl)); l.style.opacity = a;
+    st(card, { opacity: eo(pc) * a, clipPath: `inset(${lerp(100, 0, eo(pc))}% 0 0 0)`, transform: `translateY(${lerp(8, 0, eo(pc)) - outU * 6}px) scale(${lerp(.98, 1, eo(pc))})`, filter: `blur(${lerp(6, 0, eo(pc)) + outU * 4}px)` });
+    const ms = card.querySelector(".ms"); if (ms) st(ms, { opacity: eo(ps), transform: `scale(${lerp(1.15, 1, eo(ps))})` });
+  }
+  // odometer digits (deterministic)
+  function odometer(n, cols) { n.innerHTML = ""; const D = []; for (let i = 0; i < cols; i++) { const d = el("span", "d", null, n); const a = el("span", null, "0", d), b = el("span", null, "0", d); D.push({ d, a, b }); } return { set(value, prev, frac) { const s = String(value).padStart(cols, " "), p = String(prev).padStart(cols, " "); D.forEach(({ d, a, b }, i) => { const cur = s[i], old = p[i]; if (cur === old || frac >= 1) { a.textContent = cur; b.textContent = ""; a.style.transform = "translateY(0)"; b.style.transform = "translateY(1em)"; a.style.filter = "none"; } else { const u = eo(frac); a.textContent = old; b.textContent = cur; a.style.transform = `translateY(${-u}em)`; b.style.transform = `translateY(${1 - u}em)`; const bl = 3 * Math.sin(Math.PI * u); a.style.filter = `blur(${bl}px)`; b.style.filter = `blur(${bl}px)`; } d.style.width = cur === " " ? "0" : ".56em"; }); } }; }
+  const counterEl = (parent, cols, label, cls = "") => { const c = el("div", "counter " + cls, `<div class="n"></div><div class="k">${label}</div><div class="m"></div>`, parent); return { c, o: odometer(c.querySelector(".n"), cols), m: c.querySelector(".m") }; };
+  const stepCount = (tl, t0, step, max) => { const k = clamp(Math.floor((tl - t0) / step) + 1, 0, max); const frac = tl < t0 ? 1 : clamp(((tl - t0) % step) / .18); return [k, Math.max(0, k - 1), k >= max && tl - t0 > (max - 1) * step + .18 ? 1 : frac]; };
+  const SCRIM = document.getElementById("scrim");
+
+  // 1 · cold open: the lamps die, then the line
+  beat(0, T.wander + .6, (n) => {
+    const lamps = el("div", "lamps", `<i></i><i></i><i></i>`, n); st(lamps, { position: "absolute", left: 0, right: 0, top: "526px", justifyContent: "center" });
+    const b = block(n, [["Your agent has", "serif", 124], ["no <i>reflexes.</i>", "serif", 124]], { top: 380 });
+    const LC = DAY ? ["#147c3b", "#ab4f08", "#be123c"] : ["#4ade80", "#fbbf24", "#fb7185"];
+    return (t, tl) => { [...lamps.children].forEach((l, i) => { const die = P(tl, .50 + (2 - i) * .09, .09); st(l, { background: die < 1 ? LC[i] : (DAY ? "#d8d6e6" : "#1c1c26"), boxShadow: `0 0 ${lerp(30, 0, die)}px ${lerp(4, 0, die)}px ${LC[i]}`, opacity: 1 - P(tl, 1.0, .3) }); }); b.play(tl, 1.07, .54, .9, 5.9); };
+  });
+  // 2 · wander
+  beat(T.wander, T.maze + .3, (n) => {
+    const C = counterEl(n, 2, "thoughts · nothing written", "ghost");
+    const tags = Object.keys(LABEL).map((i) => { const e = el("div", "tag " + (+i === K.dead ? "err" : ""), LABEL[i], n); st(e, { opacity: 0 }); return { e, i: +i }; });
+    const cap = block(n, [["Every step is a <i>thought.</i>", "serif", 124]], { top: 96, pos: "center r" });
+    return (t, tl) => { const [k, pk, fr] = stepCount(tl, 0, HSTEP, 24); C.o.set(k, pk, fr); const vis = new Set(hero.slice(0, k)); tags.forEach((tg) => { let [x, y, ok] = toScreen(nodes[tg.i].clone().add(V3(0, .45, 0))); const inside = x > 120 && x < 1800 && y > 80 && y < 1000; const a = ok && inside && vis.has(tg.i) ? .7 : 0; st(tg.e, { left: x + "px", top: y + "px", opacity: a * (1 - P(t, T.maze - .8, .6)) }); }); cap.play(tl, .54, 0, null, T.maze - T.wander - .6); st(C.c, { opacity: P(tl, .3, .4) * (1 - P(t, T.maze - .6, .4)) }); };
+  });
+  // 3 · maze
+  beat(T.maze, T.reflex + .3, (n) => { const C = counterEl(n, 2, "sessions · the same maze", "ghost"); const cap = block(n, [["Same maze. <i>Every trace.</i>", "serif", 124]], { top: 96, pos: "center r" }); return (t, tl) => { const [k, pk, fr] = stepCount(tl, .1, 2.1 / 16, 16); C.o.set(k, pk, fr); st(C.c, { opacity: P(tl, .2, .3) * (1 - P(t, T.reflex - .5, .4)) }); cap.play(tl, .27, 0, null, T.reflex - T.maze - .5); }; });
+  // 4 · reflex
+  beat(T.reflex, T.instinct + .3, (n) => { const a = block(n, [["Agent traces", "serif", 124], ["become <i>reflexes.</i>", "serif", 124]], { top: 96 }); const b = block(n, [["Compiled once. Deterministic. Evidence attached.", "sans", 40]], { top: 380 }); return (t, tl) => { a.play(tl, .1, 0, null, T.instinct - T.reflex - .5); b.play(tl, 3 * BEAT, 0, null, T.instinct - T.reflex - .5); }; });
+  // 5 · instincts
+  beat(T.instinct, T.session + .3, (n) => { const a = block(n, [["Ships with <i>instincts.</i>", "serif", 124]], { top: 96 }); const b = block(n, [["Innate responses, read from the repository itself. Day zero.", "sans", 40]], { top: 270 }); const p = el("div", "install", `<span class="p">$ </span>adage init`, n); st(p, { top: "930px", opacity: 0 }); return (t, tl) => { const pu = P(tl, 0, .4) * (1 - P(tl, 11 * BEAT, .4)); st(p, { opacity: eo(pu) }); a.play(tl, 4 * BEAT, 0, null, 11 * BEAT); b.play(tl, 6 * BEAT, 0, null, 11 * BEAT); }; });
+  // 6 · the session
+  const PEEKS = [ // [at, until, cls, nodeKey, html, lane top]
+    [SS.stepin, SS.hop1 + .3, "g", "start", `<div class="h"><i class="lamp"></i><em>reflex · fire</em>lookup-work-item<span class="ms">5 ms · CPU</span></div><div class="pat">stimulus  prompt ∋ <b>W-2045</b>  matches  <b>^W-\\d{4}$</b></div><div class="w">→ python3 scripts/wi-lookup W-2045</div>`, 300],
+    [SS.sigR, SS.hop1 + .3, "r", "start", `<div class="h"><i class="lamp"></i><em>reflex · inhibit</em>dead-end-d41b1e</div><div class="w">pytest fails here → make test</div>`, 560],
+    [SS.hop1 + .54, SS.hop2 + .3, "t", "lookup", `<div class="h"><em>bash</em>scripts/wi-lookup W-2045</div><div class="r">W-2045 · Add payment terms · 2 linked files</div>`, 470],
+    [SS.sigB, SS.hop2 + .5, "y", "lookup", `<div class="h"><i class="lamp"></i><em>reflex · prime</em>read-linked-files<span class="ms">5 ms · CPU</span></div><div class="pat">stimulus  after wi-lookup → <b>2 files</b></div><div class="w">→ read them together, one turn</div>`, 300],
+    [SS.hop2 + .54, SS.hop3 + .4, "t", "files", `<div class="h"><em>read ×2</em>invoice.json · billing.py</div><div class="r">one turn</div>`, 470],
+    [SS.hop3 + .54, SS.hop4 + .3, "t", "edit", `<div class="h"><em>edit</em>schema/invoice.json</div><div class="r">+ payment_terms · NET30</div>`, 470],
+    [SS.sigC, SS.hop4 + .5, "g", "edit", `<div class="h"><i class="lamp"></i><em>instinct · fire</em>finish-line · regenerate<span class="ms">5 ms · CPU</span></div><div class="pat">stimulus  after edit <b>schema/*.json</b></div><div class="w">→ make gen · CI fails without it</div>`, 300],
+    [SS.hop4 + .54, SS.hop5 + .3, "t", "gen", `<div class="h"><em>bash</em>make gen</div><div class="r">python3 tools/gen.py</div>`, 470],
+    [SS.hop5 + .54, SS.out - .3, "t", "goal", `<div class="h"><em>bash</em>make test · git commit</div><div class="r">3 tests OK · f247fa1</div>`, 470],
+  ];
+  const TX = [
+    [SS.prompt, "pr", `❯ Can you take care of W-2045?`],
+    [SS.stepin, "sg g", `<i></i><b>reflex</b> lookup-work-item · fire<br>In this repository, work item details are looked up with:<br>&nbsp;&nbsp;python3 scripts/wi-lookup W-2045`],
+    [SS.sigR, "sg r", `<i></i><b>reflex</b> dead-end-d41b1e · inhibit<br>python3 -m pytest fails here. Use instead:<br>&nbsp;&nbsp;make test`],
+    [SS.hop1 + .2, "as", `I'll look up the work item W-2045 to see what needs to be done.`],
+    [SS.hop1 + .6, "tc", `⏺ <b>Bash</b>(python3 scripts/wi-lookup W-2045)`],
+    [SS.hop1 + 1.0, "rs", `⎿ ID: W-2045 · Title: Add payment terms<br>&nbsp;&nbsp;&nbsp;Linked: schema/invoice.json, acme/billing.py`],
+    [SS.sigB, "sg y", `<i></i><b>reflex</b> read-linked-files · prime<br>That result lists two files.<br>Read them together in one turn.`],
+    [SS.hop2 + .5, "tc", `⏺ <b>Read</b>(schema/invoice.json)<br>⏺ <b>Read</b>(acme/billing.py)`],
+    [SS.hop2 + .9, "rs", `⎿ 22 lines · 41 lines`],
+    [SS.hop3 + .3, "as", `Now I'll add the payment_terms field with the default 'NET30':`],
+    [SS.hop3 + .7, "tc", `⏺ <b>Edit</b>(schema/invoice.json)`],
+    [SS.hop3 + 1.0, "rs", `⎿ + "payment_terms": {"type": "str", "default": "NET30"}`],
+    [SS.sigC, "sg g", `<i></i><b>instinct</b> finish-line · regenerate · fire<br>Changes to schema/*.json must be followed by:<br>&nbsp;&nbsp;make gen<br>CI fails if this is skipped.`],
+    [SS.hop4 + .3, "as", `Now I'll generate the models from the updated schema:`],
+    [SS.hop4 + .6, "tc", `⏺ <b>Bash</b>(make gen)`],
+    [SS.hop4 + .9, "rs", `⎿ python3 tools/gen.py`],
+    [SS.hop5 + .3, "tc", `⏺ <b>Bash</b>(make test)`],
+    [SS.hop5 + .6, "rs", `⎿ Ran 3 tests in 0.000s · OK`],
+    [SS.hop5 + .9, "tc", `⏺ <b>Bash</b>(git commit -m "Add payment_terms field")`],
+    [SS.done + .1, "rs", `⎿ [main f247fa1] 2 files changed, 5 insertions(+)`],
+    [SS.done + .5, "as", `Done · payment_terms · models generated · tests pass`],
+  ];
+  beat(T.session, T.evidence + .02, (n) => {
+    const h1 = block(n, [["Known stimulus. <i>A reflex fires.</i>", "serif left", 84]], { top: 88, pos: "left" });
+    const h2 = block(n, [["It knows what comes <i>next.</i>", "serif left", 84]], { top: 88, pos: "left" });
+    const h3 = block(n, [["First edit at turn 3.", "serif left", 84], ["The control never finished.", "sans left", 40]], { top: 88, pos: "left", gap: 12 });
+    const peeks = PEEKS.map((p) => { const d = el("div", "peek surf " + (p[2] === "t" ? "" : p[2]), p[4], n); st(d, { opacity: 0, left: "300px", top: p[5] + "px" }); return { d, l: leader(), c: dot(), p }; });
+    const col = el("div", "term tx surf", `<div class="tb">claude code · acme-billing<span class="live">● adage</span></div><div class="vp"><div class="body">${TX.map((w) => `<div class="tl ${w[1]}">${w[2]}</div>`).join("")}</div></div>`, n); st(col, { left: "1140px", top: "150px", width: "720px", height: "700px", opacity: 0 });
+    const live = col.querySelector(".live"); const tls = [...col.querySelectorAll(".tl")], body = col.querySelector(".body"), vp = col.querySelector(".vp");
+    const turn = counterEl(n, 2, "turns · with Adage", "left"); st(turn.c, { top: "auto", bottom: "150px" }); turn.c.querySelector(".n").style.fontSize = "96px";
+    const ghost = counterEl(n, 2, "turns · without", "left ghost"); st(ghost.c, { top: "auto", bottom: "150px", left: "520px" }); ghost.c.querySelector(".n").style.fontSize = "96px";
+    const rule = el("div", null, "", ghost.c); st(rule, { position: "absolute", left: "40px", width: "0", height: "2px", background: "var(--red)", top: "112px" });
+    return (t, tl) => {
+      const o = 1 - P(t, T.evidence - .12, .12);
+      h1.play(tl, 3 * BEAT, 0, null, 10 * BEAT); h2.play(tl, SS.sigC + .05, 0, null, 25 * BEAT); h3.play(tl, SS.hold, .18, .7, SS.out);
+      live.style.opacity = .55 + .45 * Math.sin(t * 5.2);
+      peeks.forEach(({ d, l, c, p }) => { const [at, until, cls, key] = p; const u = P(tl, at, 1.0), outU = P(tl, until, .22); if (u <= 0 || (outU >= 1)) { d.style.opacity = 0; l.style.opacity = 0; c.style.opacity = 0; return; } const [x, y] = toScreen(nodes[K[key]].clone().add(V3(0, .2, 0))); born(d, l, c, x, y, u, outU * (1) + (1 - o)); });
+      const cv = P(tl, 0, .48) * o; st(col, { opacity: eo(cv), transform: `translateX(${lerp(28, 0, eo(cv))}px)`, filter: `blur(${lerp(4, 0, eo(cv))}px)` });
+      let scroll = 0; const vh = vp.clientHeight; tls.forEach((ln, i) => { const a = P(tl, TX[i][0], .3); st(ln, { opacity: a, transform: `translateY(${lerp(6, 0, a)}px)` }); if (a > 0) scroll = Math.max(scroll, (ln.offsetTop + ln.offsetHeight + 24 - vh) * eo(P(tl, TX[i][0], .6))); }); body.style.transform = `translateY(${-Math.max(0, scroll)}px)`;
+      const hopT = [SS.hop1, SS.hop2, SS.hop3, SS.hop4, SS.hop5, SS.done]; const vals = [1, 2, 3, 5, 7, 10]; let tn = 1, pn = 1, fr = 1; hopT.forEach((h, i) => { if (tl >= h) { pn = i === 0 ? 1 : vals[i - 1]; tn = vals[i]; fr = clamp((tl - h) / .18); } }); turn.o.set(tn, pn, fr); turn.m.textContent = tn === 3 ? "the first edit" : tn === 10 ? "done" : "";
+      const [gk, gpk, gfr] = stepCount(tl, CSTART, CSTEP, 30); ghost.o.set(gk, gpk, gfr); const dead = P(tl, CDIE, .6); ghost.m.textContent = gk >= 30 ? "hit the cap · failed" : ""; ghost.c.querySelector(".n").style.color = dead > 0 ? `color-mix(in srgb, #ff7a59 ${100 - 100 * dead}%, #7a7d8c)` : "#ff7a59"; rule.style.width = (110 * eo(dead)) + "px";
+      st(turn.c, { opacity: P(tl, CSTART, .5) * o }); st(ghost.c, { opacity: P(tl, CSTART, .5) * o });
+      const dimS = P(t, T.cool - BEAT, .2) * (1 - P(t, T.cool, .01)); SCRIM.style.background = "rgba(5,5,7,.6)"; SCRIM.style.opacity = dimS;
+    };
+  });
+  // 7 · evidence: a screen row of cards, leaders to the nodes
+  const ROUTES = [["start", "green", "◠ lookup-work-item", "Look up the work item named in the prompt", "fire", 23, 33, "8 turns saved"], ["lookup", "amber", "◠ read-linked-files", "Read the linked files together", "prime", 15, 16, "lower bound 0.72"], ["edit", "green", "◉ finish-line", "make gen after editing schema/*.json", "fire", 7, 7, "instinct, confirmed here"], ["dead", "red", "◠ dead-end-d41b1e", "pytest fails here; make test works", "inhibit", 11, 43, "a flinch, learned once"]];
+  beat(T.evidence, T.cool + .02, (n) => {
+    const h = block(n, [["Every reflex carries its <i>evidence.</i>", "serif", 124]], { top: 96 });
+    const cap = block(n, [["Conditioned from 54 traces in 0.24 s. Extinguished when the evidence fades.", "sans", 40]], { top: 270 });
+    const cards = ROUTES.map((r, i) => { const d = el("div", "route surf", `<div class="h"><i class="lamp"></i>${r[2]}<em>${r[4]}</em></div><div class="s">${r[3]}</div><div class="bar"><i></i></div><div class="ev"><span><b>${r[5]} of ${r[6]}</b> sessions</span><span>${r[7]}</span></div>`, n); d.style.setProperty("--c", `var(--${r[1]})`); st(d, { opacity: 0, left: (112 + i * 424) + "px", top: "800px" }); return { d, l: leader(), c: dot(), r }; });
+    return (t, tl) => { const o = 1 - P(t, T.cool - BEAT, .2) * .6; h.play(tl, .27, 0, null, T.cool - T.evidence - BEAT); cap.play(tl, 6 * BEAT, 0, null, T.cool - T.evidence - BEAT); cards.forEach(({ d, l, c, r }, i) => { const u = P(tl, (1 + i) * BEAT, 1.0); if (u <= 0) { d.style.opacity = 0; l.style.opacity = 0; c.style.opacity = 0; return; } const [x, y] = toScreen(nodes[K[r[0]]].clone().add(V3(0, .2, 0))); const cx = parseFloat(d.style.left) + 200, cy = 800; const pd = back(P(u, 0, .18)), pl = P(u, .1, .26), pc = P(u, .28, .32); c.setAttribute("transform", `translate(${x},${y}) scale(${pd})`); c.style.opacity = o; l.setAttribute("x1", x); l.setAttribute("y1", y); l.setAttribute("x2", x + (cx - x) * eo(pl)); l.setAttribute("y2", y + (cy - y) * eo(pl)); l.style.opacity = o; st(d, { opacity: eo(pc) * o, clipPath: `inset(0 0 ${lerp(100, 0, eo(pc))}% 0)`, transform: `translateY(${lerp(-8, 0, eo(pc))}px)`, filter: `blur(${lerp(6, 0, eo(pc))}px)` }); d.querySelector(".bar i").style.width = (100 * r[5] / r[6] * eo(P(tl, (1 + i) * BEAT + .5, 1.1))) + "%"; }); };
+  });
+  // 8 · the cooling city
+  beat(T.cool, T.fleet + 1.2, (n) => {
+    const h = block(n, [["Reflexes skip the <i>GPU.</i>", "serif", 124]], { top: 96 });
+    const c = block(n, [["Skills cost inference every time. Reflexes are compiled once.", "sans", 40]], { top: 270 });
+    const s1 = el("div", "stat c", `<div class="n">27.5</div><div class="k">model turns per task</div>`, n); st(s1, { bottom: "70px", opacity: 0 });
+    const lg = el("div", "acr", "GPU", n); st(lg, { position: "absolute", left: "0", width: "560px", textAlign: "center", top: "620px", fontSize: "22px", opacity: 0 });
+    const lc = el("div", "acr", "CPU", n); st(lc, { position: "absolute", left: "0", width: "560px", textAlign: "center", top: "620px", fontSize: "22px", opacity: 0 });
+    const cw = new THREE.Color(getComputedStyle(document.body).getPropertyValue("--heat").trim() || "#ff7a59"), cc = new THREE.Color(DAY ? "#5b4bd6" : "#c9bfff");
+    return (t, tl) => { const o = 1 - P(t, T.fleet - .6, .5); h.play(tl, BEAT, 0, null, T.fleet - T.cool - .6); c.play(tl, 2 * BEAT, 0, null, T.fleet - T.cool - .6); const u = Math.round(eio(P(tl, 6 * BEAT, 5 * BEAT)) * 12) / 12; s1.querySelector(".n").textContent = lerp(27.5, 9, u).toFixed(1); s1.querySelector(".n").style.color = cw.clone().lerp(cc, u).getStyle(); st(s1, { opacity: P(tl, 4 * BEAT, .5) * o }); const pg = toScreen(gpuGroup.position.clone().add(V3(0, 0, 5.2))), pc = toScreen(cpuGroup.position.clone().add(V3(0, 0, 4.2))); st(lg, { left: (pg[0] - 280) + "px", top: pg[1] + "px", opacity: P(tl, 2 * BEAT, .5) * o * (1 - .6 * u) }); st(lc, { left: (pc[0] - 280) + "px", top: pc[1] + "px", opacity: P(tl, 5 * BEAT, .5) * o }); SCRIM.style.background = `linear-gradient(0deg, rgba(var(--scrim),.7), transparent 300px)`; SCRIM.style.opacity = P(tl, 3 * BEAT, .5) * o; };
+  });
+  // 9 · the fleet
+  beat(T.fleet, T.numbers + .3, (n) => {
+    const h = block(n, [["A reflex compiled once", "serif", 124], ["travels <i>everywhere.</i>", "serif", 124]], { top: 96 });
+    const c = block(n, [["Signed packs. Reviewed, committed, shared. They travel with the code.", "sans", 40]], { top: 380 });
+    const C = counterEl(n, 1, "repos on rails"); st(C.c, { top: "auto", bottom: "120px" });
+    return (t, tl) => { const o = 1 - P(t, T.numbers - .5, .4); SCRIM.style.background = `radial-gradient(1200px 460px at 50% 22%, rgba(var(--scrim),.8), transparent)`; SCRIM.style.opacity = P(tl, 3.5 * BEAT, .5) * o; h.play(tl, 4 * BEAT, .3, null, T.numbers - T.fleet - .5); c.play(tl, 8 * BEAT, 0, null, T.numbers - T.fleet - .5); const [k, pk, fr] = stepCount(tl, 4 * BEAT - BEAT / 2, BEAT / 2, 9); C.o.set(k, pk, fr); st(C.c, { opacity: P(tl, 3.5 * BEAT, .5) * o }); };
+  });
+  // 10 · numbers: rise out of the letterbox
+  beat(T.numbers, T.close + .02, (n) => {
+    const wrap = el("div", "numwrap", null, n);
+    const N = [["−61%", "cost per task", "$0.053 instead of $0.135"], ["10×", "faster to the first edit", "turn 2 instead of turn 20"], ["0", "dead ends hit", "the flinch, learned once"]].map(([v, k, w]) => { const num = el("div", "big", v, wrap); st(num, { top: "50px", fontSize: "360px", opacity: 0 }); const b = block(n, [[k, "sans", 56, { color: "var(--ink)" }], [w, "sans", 32]], { top: 640, gap: 10 }); return { num, b }; });
+    const AT = [0, 4 * BEAT, 8 * BEAT], LEN = [4 * BEAT, 4 * BEAT, 8 * BEAT];
+    return (t, tl) => { N.forEach(({ num, b }, i) => { const at = AT[i], off = at + LEN[i] - .28; const u = P(tl, at, .7), o = P(tl, off, .28); st(num, { opacity: 1, transform: `translateY(${lerp(100, 0, eo(u)) - 100 * ei3(o)}%) scale(${lerp(.94, 1, eo(u))})`, filter: `blur(${lerp(.06, 0, eo(u))}em)` }); b.play(tl, at + .12, .1, .45, off); }); };
+  });
+  // 12 · close: the ident
+  const FLASH = document.getElementById("flash");
+  beat(T.close - .3, T.end, (n) => {
+    const glyphs = ["A", "d", "a", "g", "e"]; const wm = el("div", "wordmark", glyphs.map((g) => `<span class="g"><b>${g}</b><em>${g}</em></span>`).join(""), n); st(wm, { top: "250px" });
+    const acr = el("div", "acr", "Agentic DAG Engine", n); st(acr, { position: "absolute", left: 0, right: 0, textAlign: "center", top: "540px", fontSize: "24px", opacity: 0 });
+    const G = [...wm.querySelectorAll(".g")]; G.forEach((g) => { st(g.querySelector("b"), { opacity: 0 }); st(g.querySelector("em"), { opacity: 0 }); });
+    const lamps = el("div", "lamps", `<i></i><i></i><i></i>`, n); st(lamps, { position: "absolute", left: 0, right: 0, top: "626px", justifyContent: "center", opacity: 0 });
+    const LC = DAY ? ["#147c3b", "#ab4f08", "#be123c"] : ["#4ade80", "#fbbf24", "#fb7185"];
+    const tag = block(n, [["Agent traces become <i>reflexes.</i>", "serif", 64]], { top: 700 });
+    const inst = el("div", "install", `<span class="p">$ </span>brew install stevenvaughanbooth/tap/adage <span class="p">&amp;&amp;</span> adage init`, n); st(inst, { top: "850px", opacity: 0 });
+    const facts = el("div", "facts", `Apache-2.0 · one 10 MB Rust binary · Claude Code, OpenCode, Codex · deterministic, fail-open`, n); st(facts, { top: "950px", opacity: 0 });
+    const CX = [690, 830, 975, 1110, 1240];
+    return (t, tl0) => {
+      const tl = t - T.close; FLASH.style.opacity = tl >= 0 ? (1 - P(tl, 0, .08)) * (DAY ? .6 : 1) : 0;
+      const headX = lerp(-40, 1960, eios(P(tl, .12, .88)));
+      G.forEach((g, i) => { const startAt = .12 + .88 * ((CX[i] - 60 + 40) / 2000); const u = P(tl, startAt, .42); const cool = P(tl, startAt + .42 + .14, .5); const em = g.querySelector("em"), b = g.querySelector("b"); const tr = `translateY(${lerp(.35, 0, eo(u))}em)`, bl = `blur(${lerp(18, 0, eo(u))}px)`; st(em, { opacity: eo(u) * (1 - cool), transform: tr, filter: bl }); st(b, { opacity: eo(u) * cool, transform: tr, filter: bl }); });
+      [...lamps.children].forEach((l, i) => { const on = P(tl, 1.3 + i * .12, .09), gl = P(tl, 1.3 + i * .12, .36); const sock = P(tl, 1.1, .2); const br = .5 + .5 * Math.sin((tl - 2.1) * 2 * Math.PI / 3.2 - i * .8); const glow = on >= 1 ? lerp(44, 30, P(tl, 1.3 + i * .12 + .09, .27)) : 0; const spread = on >= 1 ? lerp(8, 4, P(tl, 1.3 + i * .12 + .09, .27)) : 0; const breathe = tl > 2.1 ? lerp(1, .3, br) : 1; st(l, { background: on >= 1 ? LC[i] : (DAY ? "#d8d6e6" : "#1c1c26"), boxShadow: on >= 1 ? `0 0 ${glow * breathe}px ${spread * breathe}px ${LC[i]}` : "none", transform: `scale(${on >= 1 ? lerp(.85, 1, back(P(tl, 1.3 + i * .12, .36))) : 1})`, opacity: sock * .6 + on * .4 }); }); lamps.style.opacity = P(tl, 1.1, .2);
+      st(acr, { opacity: eo(P(tl, 1.15, .5)), letterSpacing: lerp(.5, .32, eo(P(tl, 1.15, .8))) + "em" }); tag.play(tl, 1.7, 0, .4, 99); st(inst, { opacity: eo(P(tl, 2.9, .5)) }); st(facts, { opacity: eo(P(tl, 3.4, .5)) });
+    };
+  });
+  // grain: jittered noise
+  (() => { const g = document.createElement("canvas"); g.width = g.height = 384; const x = g.getContext("2d"); const im = x.createImageData(384, 384); for (let i = 0; i < im.data.length; i += 4) { const v = DAY ? 255 - Math.floor(rnd() * 18) : Math.floor(rnd() * 28); im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 255; } x.putImageData(im, 0, 0); document.getElementById("grain").style.backgroundImage = `url(${g.toDataURL()})`; })();
+
+  // ------------------------------------------------------------ per-frame world
+  const along = (curve, u) => curve.getPointAt(clamp(u));
+  const onSpine = new Set(spine); const onInst = new Set(INSTINCTS.flat());
+  const fogFor = (t) => { const F = [[0, .035], [T.wander, .040], [T.maze, .010], [T.reflex, .022], [T.instinct, .008], [T.session, .020], [T.session + 11, .045], [T.evidence, .010], [T.cool, .008], [T.fleet + 1, .0025], [T.numbers, .0018], [T.close, .018]]; let v = F[0][1]; for (let i = 0; i < F.length; i++) { const [at, d] = F[i]; v = lerp(v, d, P(t, at, .8)); } return v; };
+  const setBloom = (s, r, th) => { bloom.strength = s; bloom.radius = r; bloom.threshold = th; };
+  function world(t) {
+    const tl = t - T.session; const inSession = t >= T.session - .2 && t < T.evidence + .2;
+    const worldA = P(t, 4.29, 2.0); edgeMat.opacity = .9 * worldA;
+    const amb = DAY ? 1.0 : lerp(.22, .34, P(t, T.maze, 3)); hemi.intensity = amb * (t < T.close ? 1 : .6); key.intensity = (DAY ? .7 : 1.2) * lerp(.5, 1, P(t, T.maze, 3)); backL.intensity = (DAY ? .2 : .5) * P(t, T.maze, 3);
+    const coolU = eio(P(t, T.cool + 8 * BEAT, 4 * BEAT)); grade.uniforms.uCool.value = t < T.fleet + 3 ? coolU * (1 - P(t, T.fleet + 1.5, 1.5)) : 0; const paved = t >= T.reflex + .6;
+    const nearHide = cam.position;
+    { const m = new THREE.Matrix4(); let dirty = false; for (let i = 0; i < nodes.length; i++) { let h = heatAt(i, t); const inst = onInst.has(i) && t >= T.instinct + 1.07; const sp = onSpine.has(i) && paved; h *= (1 - coolU * .9); tmp.copy(cNode); if (sp || inst) tmp.lerp(cCool, .55 + .45 * coolU); tmp.lerp(cHeat, clamp(h)); const dimK = worldA * (t >= T.close ? .3 : 1); if (DAY) tmp.lerp(NIGHT, 1 - dimK); else tmp.multiplyScalar(dimK); nodeMesh.setColorAt(i, tmp); } nodeMesh.instanceColor.needsUpdate = true; }
+    // hero wander
+    const hu = clamp((t - T.wander) / (T.maze - T.wander - .4)); setProg(heroLine, hu); const heroFade = 1 - P(t, T.reflex, 1.2); heroLine.material.opacity = .9 * heroFade;
+    if (t >= T.wander && t < T.maze + .8) { const p = along(heroCurve, hu); agent.set(p, heroFade); lamp.position.copy(p).add(V3(0, 1.6, 0)); lamp.intensity = 1.8 * heroFade; lamp.color.setRGB(1.0, .32, .10); lamp.distance = 12; }
+    else if (inSession) { const p = railPt(idxAt(tl, false)); const a = P(t, T.session, .5) * (1 - P(t, T.evidence - .3, .3)); agent.set(p, a); lamp.position.copy(p).add(V3(0, 2.0, 0)); lamp.intensity = 2.6 * a; lamp.color.setRGB(.55, .45, 1.2); lamp.distance = 10; }
+    else { agent.set(V3(0, -50, 0), 0); lamp.intensity = 0; }
+    // ghosts
+    ghostCurves.forEach((c, i) => { let u = 0, op = 0; if (t >= T.maze) { u = clamp((t - (T.maze + i * .067)) / 2.1); op = .55 * (1 - P(t, T.reflex - .4, .5)); } if (t >= coolStart) { const uu = clamp((t - (coolStart + i * .055)) / .6); u = uu; op = .5 * (1 - coolU) * (uu > 0 ? 1 : 0); } setProg(ghostLines[i], u); ghostLines[i].material.opacity = op; if (u > 0 && u < 1 && op > 0) ghostAgents[i].set(along(c, u), op * 1.6); else ghostAgents[i].set(V3(0, -50, 0), 0); });
+    // desire path, then the pave head runs the rail toward the lens
+    const dens = P(t, T.maze + 4 * BEAT, 4 * BEAT); spineGlow.material.opacity = .45 * dens * (1 - P(t, T.reflex + .4, .6));
+    const paveU = t >= T.reflex ? eo3(P(t, T.reflex, 4 * BEAT)) : 0; setRail(paveU); const closeDim = 1 - .85 * P(t, T.close - .4, .4); const railDim = (t >= T.instinct && t < T.session ? .7 : t >= T.numbers && t < T.close ? .12 : 1) * closeDim;
+    railMat.opacity = .9 * (paveU > 0 ? 1 : 0) * railDim; coreMat.opacity = .95 * (paveU > 0 ? 1 : 0) * railDim;
+    if (paveU > 0 && paveU < 1) { paveHead.position.copy(along(spineCurve, paveU)); paveHead.material.opacity = 1; lamp.position.copy(paveHead.position).add(V3(0, 1.4, 0)); lamp.intensity = 3.5 * (1 - P(t, T.reflex + 1.9, .2)); lamp.color.setRGB(.55, .45, 1.2); lamp.distance = 12; }
+    else if (t >= T.close - 1.6 && t < T.close) { const u = eios(P(t, T.close - 1.6, 1.6)); paveHead.position.copy(along(spineCurve, u)); paveHead.material.opacity = 1; lamp.position.copy(paveHead.position).add(V3(0, 1.2, 0)); lamp.intensity = 3.5; lamp.color.setRGB(.55, .45, 1.2); }
+    else paveHead.material.opacity = 0;
+    const sigA = (t >= T.close - .4 ? 1 - P(t, T.close - .4, .4) : 1) * (t >= T.numbers && t < T.close ? .12 : 1);
+    [[S1, 2 * BEAT], [S2, 3 * BEAT], [S3, 4 * BEAT], [SG, 5 * BEAT]].forEach(([s, at]) => { const a = P(t, T.reflex + at, .35) * sigA; s.set(a, .8 + .2 * Math.sin(t * 4)); });
+    const ba = P(t, T.reflex + 6 * BEAT, .4) * sigA; barrier.material.opacity = .85 * ba; barBox.material.opacity = ba; deadDot.material.opacity = .6 * ba;
+    // instincts snap on
+    const ringU = P(t, T.instinct + 2 * BEAT, 4 * BEAT); initRing.material.opacity = ringU > 0 && ringU < 1 ? .7 * (1 - ringU) : 0; initRing.scale.setScalar(1 + ringU * 34);
+    const instDim = (t >= T.numbers && t < T.close ? .12 : t >= T.evidence + .5 && t < T.cool ? .3 : 1) * (t >= T.close - .4 ? 1 - P(t, T.close - .4, .4) : 1);
+    instRails.forEach(({ m, k }, i) => { const c0 = instinctCurves[i].getPoint(.5); const d = c0.length(); const u = clamp((ringU * 34 - d) / 6); setProg(m, u); setProg(k, u); m.material.opacity = .8 * instDim; k.material.opacity = .9 * instDim; if (i === 0) k.material.color.copy(AMB).lerp(CORE, P(t, T.session + SS.sigC, .6)); });
+    // session
+    if (inSession) {
+      const pulse = (at, off, a, b, col) => { const u = P(tl, at, .3) * (1 - P(tl, off, .4)); if (u > 0) setHot(a, b, .45 * u * (.75 + .25 * Math.sin(t * 9)), col); return u; };
+      hot.material.opacity = 0; pulse(SS.stepin, SS.hop1 + .5, SI.start, SI.lookup, RGB(.6, 1.8, .8)) || pulse(SS.sigB, SS.hop2 + .5, SI.lookup, SI.files, RGB(1.8, 1.4, .3)) || pulse(SS.sigC, SS.hop4 + .5, SI.edit, SI.gen, RGB(.6, 1.8, .8));
+      const ring = (t0) => P(tl, t0, .25) * (1 - P(tl, t0 + 1.6, .5)); let ra = 0; for (const [a0] of PEEKS) ra = Math.max(ra, ring(a0)); openRing.position.copy(agent.m.position).setY(.06); openRing.material.opacity = .7 * ra; openRing.scale.setScalar(1 + .3 * (1 - ra));
+      const cu = clamp((tl - CSTART) / (29 * CSTEP)); setProg(controlLine, cu); const dead = P(tl, CDIE, .6); controlLine.material.opacity = .8 * (1 - .5 * dead); if (cu > 0 && cu < 1) ghostAgent.set(along(controlCurve, cu), .95); else if (cu >= 1) { ghostAgent.set(along(controlCurve, 1), .95 * (1 - dead)); capRing.position.copy(ghostAgent.m.position).setY(.06); capRing.scale.setScalar(1 + dead * 6); capRing.material.opacity = (1 - dead) * .9; } else ghostAgent.set(V3(0, -50, 0), 0);
+      if (tl >= SS.done - .1) { const r = (tl - SS.done + .1) * 6; goalRing.scale.setScalar(1 + Math.max(0, r)); goalRing.material.opacity = clamp(1 - r / 6); } else goalRing.material.opacity = 0;
+    } else { hot.material.opacity = 0; openRing.material.opacity = 0; ghostAgent.set(V3(0, -50, 0), 0); capRing.material.opacity = 0; goalRing.material.opacity = 0; if (t < T.session) setProg(controlLine, 0); controlLine.material.opacity = 0; }
+    // the die burns, the map is lifted out of it, decisions drain into the chip, the die dims as the city cools
+    { const dieA = P(t, T.cool + BEAT, .6) * (1 - P(t, T.fleet - .4, .5)); const fire = eio(P(t, T.cool + BEAT, 2 * BEAT)); const drain = coolU;
+      gpuFrame.material.opacity = .9 * dieA; gpuCells.material.opacity = dieA; const cellDim = DAY ? .85 : 1;
+      for (let r = 0; r < GR; r++) for (let c = 0; c < GC; c++) { const i = r * GC + c; const kk = (c + r * .3) / (GC + GR * .3); const lit = clamp((fire * 20 - kk * 20) / 1.2); const rank = ((i * 37 + 11) % 128) / 128; const on = lit * (rank < 1 - .67 * drain ? 1 : .06); const flick = .85 + .15 * Math.sin(t * 21 + i * 1.3); tmp.copy(cNode).lerp(GPUC, on * flick * cellDim); gpuCells.setColorAt(i, tmp); } gpuCells.instanceColor.needsUpdate = true;
+      const cpuA = P(t, T.cool + 4 * BEAT, .8) * (1 - P(t, T.fleet - .4, .5)); cpuBody.material.opacity = .95 * cpuA; cpuEdge.material.opacity = cpuA; cpuPins.material.opacity = .85 * cpuA; cpuGlow.material.opacity = (.08 + .3 * drain) * cpuA;
+      const mv = eio(P(t, T.cool + 4 * BEAT, 2 * BEAT)); if (cpuA > 0 && mv > 0) { miniRail.material.opacity = cpuA; const sEnd = .10, s0 = .30; miniRail.scale.setScalar(lerp(s0, sEnd, mv)); const c0 = spineCurve.getPointAt(.5); const p0 = gpuGroup.position.clone().add(V3(0, .8, 0)).sub(c0.clone().multiplyScalar(s0)), p1 = cpuGroup.position.clone().add(V3(0, .7, 0)).sub(c0.clone().multiplyScalar(sEnd)); miniRail.position.lerpVectors(p0, p1, mv); miniRail.position.y += Math.sin(mv * Math.PI) * 5; } else miniRail.material.opacity = 0;
+      drops.forEach((m, i) => { const on = t > T.cool + 6 * BEAT && t < T.fleet - .6; const rank = ((i * 37 + 11) % 128) / 128; const u = on ? ((t - T.cool) * .32 + i * .137) % 1.0 : 0; if (!on || rank > .15 + .85 * drain) { m.material.opacity = 0; return; } const from = gpuGroup.localToWorld(V3((i % GC - GC / 2 + .5) * .78, (Math.floor(i / GC) % GR - GR / 2 + .5) * .78, .3)); const to = cpuGroup.position.clone().add(V3(0, .6, 0)); m.position.lerpVectors(from, to, u); m.position.y += Math.sin(u * Math.PI) * 7; m.material.opacity = 1; m.material.color.copy(u < .55 ? GPUC : CPUC); m.scale.setScalar(lerp(1, .4, u)); }); }
+    // fleet (far geometry switches on altitude, not time)
+    const far = cam.position.y > 60 && t >= T.cool; nodeMesh.geometry = far ? farGeo : nodeGeo; rail.geometry = far ? railFarGeo : railGeo; core.geometry = far ? coreFarGeo : coreGeo; if (far) { rail.geometry.setDrawRange(0, Infinity); core.geometry.setDrawRange(0, Infinity); }
+    const fu = P(t, T.fleet, 1.0); fleet.visible = fu > 0 && t < T.close; fleetFloor.material.opacity = fleet.visible ? .9 * fu : 0; const fleetDim = t >= T.numbers ? .15 : 1;
+    if (fleet.visible) { FL.forEach((f) => { const arrive = P(t, T.fleet + 2 * BEAT + f.delay, 1.2); const a = fu * fleetDim * (1 - .45 * clamp((f.dist - 40) / 120)); f.eg.material.opacity = .9 * a; const cool = eio(P(t, T.fleet + 3 * BEAT + f.delay, 1.6)); for (let i = 0; i < nodes.length; i++) { tmp.copy(cNode).multiplyScalar(1.6); if (onSpine.has(i) || onInst.has(i)) tmp.lerp(cCool, cool); tmp.lerp(cHeat, .25 * (1 - cool) * (((i * 37) % 11) / 11)); if (DAY) tmp.lerp(NIGHT, 1 - a); else tmp.multiplyScalar(a); f.nm.setColorAt(i, tmp); } f.nm.instanceColor.needsUpdate = true; f.rl.geometry.setDrawRange(0, Math.floor(f.rl.geometry.index.count * eo(arrive))); f.cr.geometry.setDrawRange(0, Math.floor(f.cr.geometry.index.count * eo(arrive))); f.rl.material.opacity = .9 * a; f.cr.material.opacity = .95 * a; f.ir.forEach((m) => (m.material.opacity = .6 * a * cool)); f.beacon.scale.y = eo(arrive); f.beacon.material.opacity = .22 * a * eo(arrive); }); }
+    links.forEach((L) => { const f = FL[L.j]; const u = eo(P(t, T.fleet + 2 * BEAT + f.delay - .4, 1.4)); L.m.geometry.setDrawRange(0, Math.floor(L.total * u)); L.m.material.opacity = (fleet.visible ? .8 : 0) * fleetDim; const pu = P(t, T.fleet + 2 * BEAT + f.delay - .4, 1.3); if (fleet.visible && pu > 0 && pu < 1) { L.pulse.position.copy(L.curve.getPointAt(pu)); L.pulse.material.opacity = 1; } else L.pulse.material.opacity = 0; });
+    // the ident rail
+    { const tc = t - T.close; const headU = P(tc, .12, .88); const hx = lerp(-5.6, 5.6, eios(headU)); identHead.position.set(hx, .106, 0); identHead.material.opacity = tc >= .12 && headU < 1 ? 1 : 0; identLamp.position.set(hx, .4, 0); identLamp.intensity = identHead.material.opacity * 4; const dr = clamp((hx + 5.6) / 11.2); identRail.geometry.setDrawRange(0, Math.floor(identRailTotal * dr)); identCore.geometry.setDrawRange(0, Math.floor(identCoreTotal * dr)); identRail.position.y = identCore.position.y = .106; identRail.material.opacity = tc >= .12 ? .85 : 0; identCore.material.opacity = tc >= .12 ? 1 - P(tc, 1.0, .4) : 0; const pulse = Math.max(P(tc, 4.4, .7) * (1 - P(tc, 4.4, .7)) * 4, P(tc, 8.4, .7) * (1 - P(tc, 8.4, .7)) * 4); identCore.material.opacity = Math.max(identCore.material.opacity, pulse * (tc > 1.4 ? 1 : 0)); if (tc > 1.4 && pulse > 0) { const px = lerp(-5.6, 5.6, tc < 6 ? P(tc, 4.4, .7) : P(tc, 8.4, .7)); identCore.geometry.setDrawRange(Math.max(0, Math.floor(identCoreTotal * ((px + 5.6) / 11.2)) - 400), 800); } }
+    scene.fog.density = fogFor(t);
+    if (DAY) setBloom(.25, .6, 1.02); else if (t < T.maze) setBloom(.6, .7, .65); else if (t >= T.cool && t < T.close) setBloom(.6, .9, .72); else if (t >= T.close) setBloom(.95, .85, .72); else setBloom(.55, .85, .72);
+  }
+
+  // ------------------------------------------------------------ seek
+  const barsEl = [document.getElementById("barT"), document.getElementById("barB")]; const grainEl = document.getElementById("grain");
+  window.seek = (t) => {
+    camAt(t); world(t); composer.render(); hideLeaders(); SCRIM.style.opacity = 0;
+    for (const b of beats) { const on = t >= b.t0 - .02 && t < b.t1 + .02; b.n.style.display = on ? "block" : "none"; if (!on) continue; b.n.style.opacity = P(t, b.t0, .12) * (1 - P(t, b.t1 - .12, .12)); b.upd(t, t - b.t0); }
+    const fr = Math.floor(t * 30); grainEl.style.backgroundPosition = `${(fr * 97) % 384}px ${(fr * 61) % 384}px`;
+    const bars = (t < 2.5 ? 138 * (1 - P(t, .54, 1.6)) : 0) + (t >= T.numbers && t < T.close ? 138 * eo(P(t, T.numbers, .54)) * (1 - P(t, T.close - 2 * BEAT, 2 * BEAT)) : 0); barsEl.forEach((b) => (b.style.height = bars + "px"));
+  };
+  const wait = () => { document.fonts.ready.then(() => { window.__info = "ok"; window.seek(0); window.__ready = true; }); }; wait();
+})();
+</script>
+</body></html>
