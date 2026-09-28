@@ -38,11 +38,12 @@ const FFMPEG = '/usr/local/lib/python3.11/dist-packages/imageio_ffmpeg/binaries/
     '-c:v', 'libx264', '-preset', 'medium', '-crf', '17', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-r', String(fps), out]);
   ff.stderr.on('data', (d) => process.stderr.write(d));
   const t0 = Date.now();
-  for (let i = 0; i < total; i++) {
+  const from = Number(process.env.FROM || 0), to = Math.min(total, Number(process.env.TO || total));
+  for (let i = from; i < to; i++) {
     await p.evaluate((t) => window.seek(t), i / fps);
     const png = await p.screenshot({ type: 'png' });
     if (!ff.stdin.write(png)) await new Promise((r) => ff.stdin.once('drain', r));
-    if (i % 200 === 0) console.log(`frame ${i}/${total} · ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+    if (i % 100 === 0) console.log(`frame ${i}/${total} · ${((Date.now() - t0) / 1000).toFixed(0)}s`);
   }
   ff.stdin.end();
   await new Promise((r) => ff.on('close', r));
