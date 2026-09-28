@@ -518,6 +518,60 @@ pub fn renamed(args: &[String]) -> Option<&'static str> {
     })
 }
 
+/// A clap usage error (unknown flag, missing argument, bad value) in the output grammar: the
+/// message; clap's tips (a similar argument, the possible values); then help with the usage and
+/// the command's `--help`. Returns the message and its labelled branches for `Out::error_items`.
+pub fn usage_error(e: &clap::Error, args: &[String]) -> (String, Vec<(&'static str, String)>) {
+    // The plain rendering (StyledStr's Display drops styling), which carries the tailored usage.
+    let text = e.render().to_string();
+    let (mut message, mut extra, mut tips, mut usage) = (String::new(), Vec::new(), Vec::new(), None);
+    let mut in_message = false;
+    for line in text.lines() {
+        let t = line.trim();
+        if let Some(m) = line.strip_prefix("error: ") {
+            message = m.trim().to_string();
+            in_message = true;
+        } else if let Some(tip) = t.strip_prefix("tip: ") {
+            tips.push(tip.to_string());
+        } else if let Some(u) = line.strip_prefix("Usage: ") {
+            usage.get_or_insert_with(|| u.trim().to_string());
+        } else if t.is_empty() || t.starts_with("For more information") {
+            in_message = false;
+        } else if in_message {
+            // `[possible values: a, b]` is a tip; anything else (the missing arguments) is part
+            // of the message.
+            match t.strip_prefix('[').and_then(|v| v.strip_suffix(']')) {
+                Some(v) => tips.push(v.to_string()),
+                None => extra.push(t.to_string()),
+            }
+        }
+    }
+    if message.is_empty() {
+        message = e.kind().to_string();
+    }
+    if !extra.is_empty() {
+        message = format!("{} {}", message, extra.join(", "));
+    }
+    // The subcommand the error is about, from the words on the command line.
+    let mut cmd = command(&Theme::plain());
+    let mut path = vec!["adage".to_string()];
+    for a in args {
+        if a.starts_with('-') {
+            continue;
+        }
+        let Some(sub) = cmd.find_subcommand(a).cloned() else { break };
+        path.push(sub.get_name().to_string());
+        cmd = sub;
+    }
+    let usage = usage.unwrap_or_else(|| {
+        let u = cmd.bin_name(path.join(" ")).render_usage().to_string();
+        u.trim().trim_start_matches("Usage:").trim().lines().next().unwrap_or_default().to_string()
+    });
+    let mut items: Vec<(&'static str, String)> = tips.into_iter().map(|t| ("tip", t)).collect();
+    items.push(("help", format!("usage: {usage} · see `{} --help`", path.join(" "))));
+    (message, items)
+}
+
 /// clap's help and error colours, from the design tokens.
 pub fn styles(t: &Theme) -> Styles {
     Styles::styled()
@@ -697,6 +751,46 @@ mod tests {
     fn typos_get_a_suggestion() {
         let e = command(&Theme::plain()).try_get_matches_from(["adage", "condtion"]).unwrap_err();
         assert!(e.to_string().contains("condition"), "{e}");
+    }
+
+    fn usage_of(args: &[&str]) -> (String, Vec<(&'static str, String)>) {
+        let e = command(&Theme::plain()).try_get_matches_from(std::iter::once(&"adage").chain(args)).unwrap_err();
+        assert_eq!(e.exit_code(), 2);
+        usage_error(&e, &args.iter().map(|s| s.to_string()).collect::<Vec<_>>())
+    }
+
+    #[test]
+    fn usage_errors_keep_the_suggestion_and_end_with_help() {
+        let (msg, items) = usage_of(&["status", "--jsn"]);
+        assert_eq!(msg, "unexpected argument '--jsn' found");
+        assert_eq!(items[0], ("tip", "a similar argument exists: '--json'".to_string()));
+        assert_eq!(items.last().unwrap(), &("help", "usage: adage status --json · see `adage status --help`".into()));
+
+        let (msg, items) = usage_of(&["condtion"]);
+        assert!(msg.contains("'condtion'"), "{msg}");
+        assert!(items.iter().any(|(l, t)| *l == "tip" && t.contains("'condition'")), "{items:?}");
+        assert!(items.last().unwrap().1.ends_with("see `adage --help`"), "{items:?}");
+    }
+
+    #[test]
+    fn missing_arguments_are_named_in_the_message() {
+        let (msg, items) = usage_of(&["share"]);
+        assert_eq!(msg, "the following required arguments were not provided: --out <DIR>, <SOURCE>");
+        assert_eq!(items, vec![("help", "usage: adage share --out <DIR> <SOURCE> · see `adage share --help`".into())]);
+
+        let (msg, items) = usage_of(&["review", "approve", "t"]);
+        assert!(msg.ends_with("<REFLEX>"), "{msg}");
+        assert!(items[0].1.ends_with("see `adage review approve --help`"), "{items:?}");
+    }
+
+    #[test]
+    fn bad_values_list_the_possible_ones() {
+        let (msg, items) = usage_of(&["install", "foo"]);
+        assert_eq!(msg, "invalid value 'foo' for '<HARNESS>'");
+        assert_eq!(items[0], ("tip", "possible values: claude-code, opencode, codex".to_string()));
+        // clap prints no usage for a bad value; the command's own usage stands in.
+        assert!(items[1].1.starts_with("usage: adage install "), "{items:?}");
+        assert!(items[1].1.ends_with("see `adage install --help`"), "{items:?}");
     }
 
     #[test]

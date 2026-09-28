@@ -127,11 +127,24 @@ fn run(args: &[String]) -> Result<()> {
         e.error(&format!("`adage {was}` is now `{now}`"), &[], Some(&format!("see `{now} --help`")))?;
         std::process::exit(2);
     }
-    let matches =
-        match cli::command(&theme).try_get_matches_from(std::iter::once("adage".to_string()).chain(args.clone())) {
-            Ok(m) => m,
-            Err(e) => e.exit(),
-        };
+    let matches = match cli::command(&theme)
+        .try_get_matches_from(std::iter::once("adage".to_string()).chain(args.clone()))
+    {
+        Ok(m) => m,
+        // Help and version are not errors: clap prints them as they are.
+        Err(e) if !e.use_stderr() || e.kind() == clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
+            e.exit()
+        }
+        // Usage errors in the output grammar, with clap's suggestions; exit code 2 as clap's.
+        Err(e) => {
+            let (message, items) = cli::usage_error(&e, &args);
+            let items: Vec<(&str, &str)> = items.iter().map(|(l, t)| (*l, t.as_str())).collect();
+            if adage_term::Out::stderr().error_items(&message, &items).is_err() {
+                e.exit()
+            }
+            std::process::exit(e.exit_code());
+        }
+    };
     let paths = Paths::from_env();
     // Root commits `condition` and `sense` find are left for hooks (repository keys).
     adage_core::repo::use_cache(paths.repo_keys());

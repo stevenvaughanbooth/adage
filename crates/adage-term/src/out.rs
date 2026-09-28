@@ -278,12 +278,17 @@ impl<W: Write> Out<W> {
     ///   ╰─ help   use another port, or let Adage pick one: adage map --port 0
     /// ```
     pub fn error(&mut self, message: &str, causes: &[String], help: Option<&str>) -> io::Result<()> {
-        self.line(&Line::new().bold(Role::Inhibit, "error").pad_to(7).bold(Role::Ink, message))?;
-        let (bar, tee, end) = if self.theme.caps.unicode { ("│", "├─", "╰─") } else { ("|", "|-", "`-") };
         let mut items: Vec<(&str, &str)> = causes.iter().map(|c| ("cause", c.as_str())).collect();
         if let Some(h) = help {
             items.push(("help", h));
         }
+        self.error_items(message, &items)
+    }
+
+    /// An error with labelled branches (`cause`, `tip`, `help`), in the order given.
+    pub fn error_items(&mut self, message: &str, items: &[(&str, &str)]) -> io::Result<()> {
+        self.line(&Line::new().bold(Role::Inhibit, "error").pad_to(7).bold(Role::Ink, message))?;
+        let (bar, tee, end) = if self.theme.caps.unicode { ("│", "├─", "╰─") } else { ("|", "|-", "`-") };
         for (i, (label, text)) in items.iter().enumerate() {
             self.line(&Line::new().text("  ").faint(bar))?;
             let branch = if i + 1 == items.len() { end } else { tee };
