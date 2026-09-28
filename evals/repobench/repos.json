@@ -1,0 +1,106 @@
+{
+  "_doc": "RepoBench-Local repositories. Per repository: url (the sandbox's origin; the Adage repository key is derived from it), since/until (the mining window, ISO dates; chosen so the toolchain here builds every base commit), test_globs/src_globs (what counts as a test or a source file of a fix commit), setup (shell steps, run in a fresh sandbox outside the agent's view, that give it the environment a contributor who followed CONTRIBUTING would have; {cache} is $REPOBENCH_CACHE), hidden (the scorer's command, run in the sandbox after the hidden tests are copied in; {tests} are the hidden test files, {pkgs} their Go packages), rescue (steps the scorer reruns before scoring, so an environment the agent broke does not decide the verdict), max_src_lines (the largest source diff a task may have).",
+  "repos": [
+    {
+      "id": "vue-core",
+      "url": "https://github.com/vuejs/core",
+      "lang": "typescript",
+      "since": "2025-03-01",
+      "until": "2026-09-16",
+      "test_globs": ["packages/*/__tests__/*", "packages/*/__tests__/**", "packages-private/*/__tests__/*"],
+      "src_globs": ["packages/*/src/*", "packages/*/src/**"],
+      "max_src_files": 2,
+      "max_src_lines": 40,
+      "setup": ["pnpm install --frozen-lockfile --prefer-offline --ignore-scripts --reporter=silent --store-dir {cache}/pnpm-store --config.manage-package-manager-versions=false"],
+      "rescue": [],
+      "hidden": "node_modules/.bin/vitest run --project unit --reporter=default --no-color {tests}",
+      "hidden_timeout": 90
+    },
+    {
+      "id": "commander",
+      "url": "https://github.com/tj/commander.js",
+      "lang": "javascript",
+      "since": "2026-01-13",
+      "until": "2026-09-27",
+      "test_globs": ["tests/*"],
+      "src_globs": ["lib/*", "index.js", "typings/*"],
+      "max_src_files": 3,
+      "max_src_lines": 60,
+      "setup": ["npm ci --ignore-scripts --prefer-offline --no-audit --no-fund --loglevel=error --cache {cache}/npm-cache"],
+      "rescue": [],
+      "hidden": "node --test {tests}",
+      "hidden_timeout": 60
+    },
+    {
+      "id": "urfave-cli",
+      "url": "https://github.com/urfave/cli",
+      "lang": "go",
+      "since": "2025-01-01",
+      "until": "2026-09-27",
+      "test_globs": ["*_test.go", "testdata/*", "testdata/**"],
+      "src_globs": ["*.go"],
+      "test_exclude": ["examples_test.go"],
+      "max_src_files": 2,
+      "max_src_lines": 50,
+      "setup": ["GOFLAGS=-mod=mod go mod download"],
+      "rescue": [],
+      "hidden": "go test -count=1 {pkgs}",
+      "hidden_timeout": 90
+    },
+    {
+      "id": "marshmallow",
+      "url": "https://github.com/marshmallow-code/marshmallow",
+      "lang": "python",
+      "since": "2021-01-01",
+      "until": "2026-09-27",
+      "test_globs": ["tests/*", "tests/**"],
+      "src_globs": ["src/marshmallow/*", "src/marshmallow/**"],
+      "max_src_files": 2,
+      "max_src_lines": 50,
+      "setup": [
+        "uv venv -q .venv --python /usr/bin/python3.12 --cache-dir {cache}/uv-cache",
+        "uv pip install -q --python .venv/bin/python --cache-dir {cache}/uv-cache -e . pytest simplejson python-dateutil pytz"
+      ],
+      "rescue": ["uv pip install -q --python .venv/bin/python --cache-dir {cache}/uv-cache -e . pytest simplejson python-dateutil pytz"],
+      "hidden": ".venv/bin/python -m pytest -q -p no:cacheprovider -p no:randomly {tests}",
+      "hidden_timeout": 60
+    },
+    {
+      "id": "attrs",
+      "url": "https://github.com/python-attrs/attrs",
+      "lang": "python",
+      "since": "2021-01-01",
+      "until": "2026-09-27",
+      "test_globs": ["tests/*", "tests/**"],
+      "src_globs": ["src/attr/*", "src/attrs/*"],
+      "test_exclude": ["tests/typing_example.py", "tests/test_mypy.yml"],
+      "max_src_files": 2,
+      "max_src_lines": 50,
+      "setup": [
+        "uv venv -q .venv --python /usr/bin/python3.12 --cache-dir {cache}/uv-cache",
+        "SETUPTOOLS_SCM_PRETEND_VERSION=26.1.0 uv pip install -q --python .venv/bin/python --cache-dir {cache}/uv-cache -e . pytest hypothesis cloudpickle pympler pytest-xdist"
+      ],
+      "rescue": ["SETUPTOOLS_SCM_PRETEND_VERSION=26.1.0 uv pip install -q --python .venv/bin/python --cache-dir {cache}/uv-cache -e . pytest hypothesis cloudpickle pympler pytest-xdist"],
+      "hidden": ".venv/bin/python -m pytest -q -p no:cacheprovider {tests}",
+      "hidden_timeout": 90
+    },
+    {
+      "id": "click",
+      "url": "https://github.com/pallets/click",
+      "lang": "python",
+      "since": "2021-01-01",
+      "until": "2026-09-27",
+      "test_globs": ["tests/*", "tests/**"],
+      "src_globs": ["src/click/*"],
+      "max_src_files": 2,
+      "max_src_lines": 50,
+      "setup": [
+        "uv venv -q .venv --python /usr/bin/python3.12 --cache-dir {cache}/uv-cache",
+        "uv pip install -q --python .venv/bin/python --cache-dir {cache}/uv-cache -e . pytest"
+      ],
+      "rescue": ["uv pip install -q --python .venv/bin/python --cache-dir {cache}/uv-cache -e . pytest"],
+      "hidden": ".venv/bin/python -m pytest -q -p no:cacheprovider {tests}",
+      "hidden_timeout": 60
+    }
+  ]
+}

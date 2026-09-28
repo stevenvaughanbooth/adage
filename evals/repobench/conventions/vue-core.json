@@ -1,0 +1,23 @@
+{
+  "schema": "adage-conventions/1",
+  "sandbox": "vue-core",
+  "description": "vuejs/core as a RepoBench-Local sandbox: a pnpm workspace (packages/*) with dependencies installed. Sources: .github/contributing.md (`nr test <fileNamePattern>`, `nr test run`, `nr test-unit`), package.json scripts (test: vitest; test-unit: vitest --project unit*; check: tsc --noEmit).",
+  "conventions": [
+    {
+      "id": "vitest-by-package",
+      "kind": "scope",
+      "command": "pnpm test {part} --run",
+      "glob": "packages/*/src/**",
+      "samples": ["runtime-core", "compiler-core", "reactivity", "compiler-sfc", "runtime-dom"],
+      "counter_samples": [],
+      "notes": "Run the suite of the package you changed: `pnpm test <package or file pattern>` (`nr test` in the guide). `npx vitest run packages/<pkg>` is the same."
+    },
+    {
+      "id": "no-nr",
+      "kind": "dead_end",
+      "command": "pnpm test",
+      "avoided": ["nr test", "yarn test"],
+      "notes": "The contributing guide says `nr test`; nr (@antfu/ni) is not installed."
+    }
+  ]
+}

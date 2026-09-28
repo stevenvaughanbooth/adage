@@ -21,8 +21,9 @@ const MAX_ENTRIES: usize = 32;
 
 /// Record kinds of the bench schema (`arms` is version 2).
 pub const RECORDS: [&str; 6] = ["run", "trial", "directive", "aggregate", "scorecard", "arms"];
-/// Tiers: version 1 knows `l0` only; version 2 adds the security, simulator and live tiers.
-pub const TIERS: [&str; 4] = ["l0", "l0-sec", "l1", "l2"];
+/// Tiers: version 1 knows `l0` only; version 2 adds the security, simulator and live tiers
+/// (`l2` live sandboxes, `l3` live agents on real repositories: RepoBench-Local).
+pub const TIERS: [&str; 5] = ["l0", "l0-sec", "l1", "l2", "l3"];
 /// Execution levels an attested run may have used (version 2).
 pub const EXEC_LEVELS: [&str; 3] = ["e0", "e1", "e2"];
 const SPLIT_KINDS: [&str; 8] = ["group", "hash", "temporal", "all", "named", "cv", "final", "suite"];
@@ -314,6 +315,14 @@ mod tests {
             "arms record · tier l2 · suite gen-smoke · run 0123456789abcdef · params abababababab · exec E1 · arms e0, e1 \
              · deltas cost_usd -0.010, turns_saved +0.620 · harm canary_actions 0"
         );
+    }
+
+    #[test]
+    fn an_l3_record_from_real_repositories_passes() {
+        let mut v = arms();
+        v["tier"] = json!("l3");
+        check(&v).unwrap();
+        assert!(summary(&v).contains("tier l3"));
     }
 
     #[test]
