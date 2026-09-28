@@ -28,6 +28,9 @@ adage-instincts = { path = "../adage-instincts" }
 adage-sign = { path = "../adage-sign" }
 adage-pack = { path = "../adage-pack" }
 adage-eval = { path = "../adage-eval" }
+adage-hook = { path = "../adage-hook" }
+# Approvals are written through adage-exec's API (the library only: `adage` never runs a route).
+adage-exec = { path = "../adage-exec" }
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true

@@ -163,18 +163,27 @@ pub fn steers(kind: &str) -> &'static [&'static str] {
 static SIGNAL_TAG: Lazy<Regex> = Lazy::new(|| Regex::new(r"<adage-signal\b([^>]*)>").unwrap());
 static ROUTE_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\broute=\\?"([A-Za-z0-9_.-]+)"#).unwrap());
 static KIND_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\bkind=\\?"([a-z-]*)"#).unwrap());
+/// `exec="e1"`: Adage ran the directed route itself and delivered its output (Track C §3.4).
+static EXEC_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"\bexec=\\?""#).unwrap());
 
 /// The miner kinds one directive steers, from its wrapper's attributes: its `kind` (rendered by
 /// `adage_runtime::render::wrap_kind`); in a wrapper from before `kind`, the kind its route id
-/// implies ([`route_kind`]); with neither, every kind.
-pub fn steered_kinds(attrs: &str) -> &'static [&'static str] {
-    if let Some(k) = KIND_ATTR.captures(attrs) {
-        return steers(&k[1]);
+/// implies ([`route_kind`]); with neither, every kind. A directive Adage also ran (an `exec`
+/// attribute, E1) steers the intent miner too, whatever its kind: the agent's first command after
+/// the prompt, which that miner learns from, is no longer its own (Track C D11).
+pub fn steered_kinds(attrs: &str) -> Vec<&'static str> {
+    let mut kinds: Vec<&'static str> = if let Some(k) = KIND_ATTR.captures(attrs) {
+        steers(&k[1]).to_vec()
+    } else {
+        match ROUTE_ATTR.captures(attrs) {
+            Some(r) => steers(route_kind(&r[1])).to_vec(),
+            None => MINER_KINDS.to_vec(),
+        }
+    };
+    if EXEC_ATTR.is_match(attrs) && !kinds.contains(&KIND_INTENTS) {
+        kinds.push(KIND_INTENTS);
     }
-    match ROUTE_ATTR.captures(attrs) {
-        Some(r) => steers(route_kind(&r[1])),
-        None => &MINER_KINDS,
-    }
+    kinds
 }
 
 /// What a transcript shows Adage delivered: the directives' routes, and the miners they steered.
@@ -202,6 +211,11 @@ impl Signals {
                 // A wrapper cut short: it could have been anything.
                 self.kinds.extend(MINER_KINDS.iter().map(|k| k.to_string()));
             }
+        }
+        if text.contains("<adage-data") && !SIGNAL_TAG.captures_iter(text).any(|t| EXEC_ATTR.is_match(&t[1])) {
+            // Execution output with no whole E1 wrapper beside it: it could have steered anything.
+            self.steered = true;
+            self.kinds.extend(MINER_KINDS.iter().map(|k| k.to_string()));
         }
         if text.contains("Adage finish-line check") {
             self.steered = true;
@@ -538,6 +552,21 @@ mod tests {
             r#"<adage-signal track="acme/instincts@0.1.0" route="dead-end-d41b1e" aspect="yellow" kind="dead-ends" origin="instinct">"#,
         );
         assert_eq!((d, k), (v(&["dead-end-d41b1e"]), v(&["dead-ends", "intents"])));
+    }
+
+    #[test]
+    fn a_directive_adage_ran_also_steers_the_intent_miner() {
+        // E1: the wrapper's exec marker, plain and JSON-escaped.
+        let (d, k) = kinds(
+            "<adage-signal track=\"t@1.0.0\" route=\"lookup-work-item\" aspect=\"green\" kind=\"work-items\" exec=\"e1\">x</adage-signal>\n<adage-data track=\"t@1.0.0\" route=\"lookup-work-item\">{}</adage-data>",
+        );
+        assert_eq!((d, k), (v(&["lookup-work-item"]), v(&["intents", "work-items"])));
+        let (_, k) = kinds(
+            r#"{"content":"<adage-signal track=\"t@1.0.0\" route=\"r\" aspect=\"green\" kind=\"finish-line\" exec=\"e1\">…"}"#,
+        );
+        assert_eq!(k, v(&["finish-line", "intents"]));
+        // A data block with no E1 wrapper (cut short): every miner.
+        assert_eq!(kinds("<adage-data track=\"t@1.0.0\" route=\"r\">{}").1.len(), 4);
     }
 
     #[test]

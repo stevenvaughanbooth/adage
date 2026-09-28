@@ -3,6 +3,11 @@
 //!
 //! Golden files live in `tests/golden/`. Regenerate them with `ADAGE_BLESS=1 cargo test -p
 //! adage-cli --test hooks` and review the diff: a changed Claude Code golden is a behaviour change.
+//!
+//! The same file is compiled into `adage-exec`'s parity test (`crates/adage-exec/tests/parity.rs`),
+//! where every hook runs through `adage-exec hook` instead: with nothing approved its output must
+//! equal these goldens byte for byte (Track C §3.2). Tests of other `adage` commands return early
+//! there ([`exec_parity`]).
 
 use adage_core::spans::SpanKind;
 use adage_core::{CommandTable, Effect};
@@ -11,6 +16,20 @@ use serde_json::{json, Value};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+
+/// The hook binary under test: `adage`, or `adage-exec` when compiled into adage-exec's parity test.
+fn hook_bin() -> &'static str {
+    match option_env!("CARGO_BIN_EXE_adage-exec") {
+        Some(p) => p,
+        #[allow(clippy::option_env_unwrap)] // compiled in adage-cli, where it is always set
+        None => option_env!("CARGO_BIN_EXE_adage").expect("the adage binary"),
+    }
+}
+
+/// Compiled into adage-exec's parity test: only the hook is under test.
+fn exec_parity() -> bool {
+    option_env!("CARGO_BIN_EXE_adage-exec").is_some()
+}
 
 struct World {
     _dir: tempfile::TempDir,
@@ -128,7 +147,7 @@ impl World {
     }
     /// Run `adage <args>` with `stdin`; returns (stdout, stderr, exit code).
     fn run(&self, args: &[&str], stdin: &[u8], env: &[(&str, &str)]) -> (String, String, i32) {
-        let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        let mut c = Command::new(hook_bin());
         c.args(args)
             .current_dir(self.p("plain"))
             .env("ADAGE_HOME", self.p("adage"))
@@ -178,7 +197,7 @@ fn golden(name: &str, w: &World, harness: &str, steps: &[(&str, Value)]) -> Stri
             .push_str(&format!("### {event}\n{}\n", if out.is_empty() { "(nothing)\n".to_string() } else { out }));
     }
     let transcript = transcript.replace(&w.root.to_string_lossy().to_string(), "{ROOT}");
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden").join(format!("{name}.txt"));
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../adage-cli/tests/golden").join(format!("{name}.txt"));
     if std::env::var("ADAGE_BLESS").is_ok_and(|v| v == "1") {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         std::fs::write(&path, &transcript).unwrap();
@@ -356,7 +375,7 @@ fn oversized_payloads_are_drained_not_cut_off() {
     let big = format!("{{\"session_id\":\"s\",\"cwd\":\"{}\",\"prompt\":\"{}\"}}", w.repo(), "x".repeat(12 << 20));
     // (environment, fail-open entries so far): a kill switch is not an error.
     for (env, logged) in [(None, 1), (Some(("ADAGE_DISABLE", "1")), 1)] {
-        let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        let mut c = Command::new(hook_bin());
         c.args(["hook", "claude", "UserPromptSubmit"])
             .env("ADAGE_HOME", w.p("adage"))
             .env("ADAGE_AUTO_LEARN", "0")
@@ -432,18 +451,21 @@ fn a_panic_in_the_hook_is_recorded_without_the_payload_and_doctor_warns() {
             (Some(h), Some(ev), Some("panic"))
         );
         let error = e["error"].as_str().unwrap();
-        assert!(error.starts_with("panic: panic at adage-cli/src/hook.rs:"), "{error}");
+        assert!(error.starts_with("panic: panic at adage-hook/src/lib.rs:"), "{error}");
     }
     let text = std::fs::read_to_string(w.p("adage/fail-open.log")).unwrap();
     for bad in [secret, "W-2042", "injected fault", &w.root.to_string_lossy()] {
         assert!(!text.contains(bad), "the log contains {bad:?}:\n{text}");
+    }
+    if exec_parity() {
+        return; // `doctor` is adage's
     }
     let (out, _, _) = w.run(&["doctor", "--json"], b"", &[]);
     let v: Value = serde_json::from_str(&out).unwrap();
     let fo = v["checks"].as_array().unwrap().iter().find(|c| c["check"] == "fail-open errors").unwrap();
     assert_eq!(fo["status"], "warn", "{fo}");
     assert!(fo["detail"].as_str().unwrap().contains("3 in the last 7 days"), "{fo}");
-    assert!(fo["detail"].as_str().unwrap().contains("panic at adage-cli/src/hook.rs"), "{fo}");
+    assert!(fo["detail"].as_str().unwrap().contains("panic at adage-hook/src/lib.rs"), "{fo}");
 }
 
 #[test]
@@ -683,7 +705,7 @@ fn git_repo(w: &World, name: &str) -> PathBuf {
 }
 
 fn install(w: &World, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> (String, String, i32) {
-    let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+    let mut c = Command::new(hook_bin());
     c.arg("install")
         .args(args)
         .current_dir(cwd)
@@ -729,6 +751,9 @@ fn files(dir: &Path) -> Vec<String> {
 #[test]
 #[cfg(unix)] // Unix path spellings throughout; Windows has its own test below
 fn install_prints_by_default_and_writes_nothing() {
+    if exec_parity() {
+        return; // `adage install` is adage's
+    }
     let w = World::new();
     let repo = git_repo(&w, "proj");
     let before = (files(&w.p("home")), files(&repo));
@@ -756,6 +781,9 @@ fn install_prints_by_default_and_writes_nothing() {
 #[test]
 #[cfg(unix)] // Unix path spellings throughout; Windows has its own test below
 fn install_write_merges_into_project_config_and_is_idempotent() {
+    if exec_parity() {
+        return; // `adage install` is adage's
+    }
     let w = World::new();
     let repo = git_repo(&w, "proj");
     std::fs::create_dir_all(repo.join(".codex")).unwrap();
@@ -788,6 +816,9 @@ fn install_write_merges_into_project_config_and_is_idempotent() {
 #[test]
 #[cfg(unix)] // Unix path spellings throughout; Windows has its own test below
 fn install_write_user_scope_uses_documented_paths_only() {
+    if exec_parity() {
+        return; // `adage install` is adage's
+    }
     let w = World::new();
     let repo = git_repo(&w, "proj");
     for h in ["codex", "opencode", "claude-code"] {
@@ -804,6 +835,9 @@ fn install_write_user_scope_uses_documented_paths_only() {
 #[test]
 #[cfg(unix)] // Unix path spellings throughout; Windows has its own test below
 fn install_write_refuses_what_it_should() {
+    if exec_parity() {
+        return; // `adage install` is adage's
+    }
     let w = World::new();
     let repo = git_repo(&w, "proj");
     // Inside an agent session.
@@ -848,6 +882,9 @@ fn install_write_refuses_what_it_should() {
 #[cfg(unix)]
 #[test]
 fn opencode_plugin_places_text_and_fails_open() {
+    if exec_parity() {
+        return; // `adage install` is adage's
+    }
     if Command::new("node").arg("--version").output().is_err() {
         eprintln!("node not found: skipping the OpenCode plugin test");
         return;
@@ -878,7 +915,7 @@ fn opencode_plugin_places_text_and_fails_open() {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
         plugin(name, path.to_str().unwrap());
     }
-    plugin("real", env!("CARGO_BIN_EXE_adage"));
+    plugin("real", hook_bin());
     plugin("missing", "/nonexistent/adage");
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugin/opencode/test/plugin.test.mjs");
     let o = Command::new("node")
@@ -902,6 +939,9 @@ fn opencode_plugin_places_text_and_fails_open() {
 #[test]
 #[cfg(windows)]
 fn install_accepts_windows_binary_paths() {
+    if exec_parity() {
+        return; // `adage install` is adage's
+    }
     let w = World::new();
     let repo = git_repo(&w, "proj");
     let bin = r"C:\Program Files\Adage\adage.exe";

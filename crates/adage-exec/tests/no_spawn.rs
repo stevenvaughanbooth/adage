@@ -9,14 +9,14 @@
 use std::path::{Path, PathBuf};
 
 /// Crates behind the `adage` binary and its hooks.
-const CRATES: &[&str] = &["adage-cli", "adage-runtime", "adage-store", "adage-tracks", "adage-learn"];
+const CRATES: &[&str] = &["adage-cli", "adage-hook", "adage-runtime", "adage-store", "adage-tracks", "adage-learn"];
 
 /// (file relative to `crates/`, occurrences, why it is allowed).
 const ALLOWED: &[(&str, usize, &str)] = &[
-    // Live learning: at the end of a turn the hook (`hook.rs` → `autolearn::on_turn_end`) may
+    // Live learning: at the end of a turn the hook (`adage-hook` → `autolearn::on_turn_end`) may
     // start `adage learn --auto`, re-executing the adage binary itself, detached. It runs Adage's
     // own learner over transcripts, never a repository or agent command.
-    ("adage-cli/src/autolearn.rs", 1, "spawns `adage learn` (itself), detached"),
+    ("adage-hook/src/autolearn.rs", 1, "spawns `adage learn` (itself), detached"),
     // The terminal UI's background jobs: `adage learn` again (itself), from `adage ui`.
     ("adage-cli/src/ui/jobs.rs", 1, "spawns `adage learn` (itself) from the terminal UI"),
     // `adage ui --demo`: the demo re-runs the adage binary against a throwaway home.

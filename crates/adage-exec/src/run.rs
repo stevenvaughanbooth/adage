@@ -483,6 +483,54 @@ pub struct Record {
     pub auto: bool,
 }
 
+/// Most entries mirrored from one repository directory into the shadow.
+const SHADOW_ENTRIES: usize = 4096;
+
+/// Write a hash-checked script's bytes to `<shadow>/<rel>`, inside a shadow of the repository:
+/// along the script's path, every other entry of each directory is a symlink to the real one. The
+/// private copy is what runs (a change to the repository file after the check cannot reach it),
+/// yet a script that finds its data relative to itself (`Path(__file__).parent.parent /
+/// ".tracker"`) still finds the repository's. The shadow lives in scratch; the symlinks lead only
+/// into the repository, which the sandbox already lets the run read.
+fn shadow_copy(repo: &Path, shadow: &Path, rel: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
+    let parts: Vec<&str> = rel.split('/').collect();
+    let (mut real, mut fake) = (repo.to_path_buf(), shadow.to_path_buf());
+    let make_dir = |d: &Path| -> std::io::Result<()> {
+        match std::fs::symlink_metadata(d) {
+            Ok(m) if m.file_type().is_symlink() => {
+                std::fs::remove_file(d)?;
+                std::fs::create_dir(d)
+            }
+            Ok(_) => Ok(()),
+            Err(_) => std::fs::create_dir(d),
+        }
+    };
+    make_dir(&fake)?;
+    for (i, part) in parts.iter().enumerate() {
+        for e in std::fs::read_dir(&real)?.take(SHADOW_ENTRIES).flatten() {
+            let name = e.file_name();
+            let link = fake.join(&name);
+            if name.to_string_lossy() == *part || std::fs::symlink_metadata(&link).is_ok() {
+                continue;
+            }
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(real.join(&name), &link)?;
+        }
+        if i + 1 == parts.len() {
+            let copy = fake.join(part);
+            if std::fs::symlink_metadata(&copy).is_ok() {
+                std::fs::remove_file(&copy)?;
+            }
+            std::fs::write(&copy, bytes)?;
+            return Ok(copy);
+        }
+        real = real.join(part);
+        fake = fake.join(part);
+        make_dir(&fake)?;
+    }
+    Err(std::io::Error::other("empty script path"))
+}
+
 fn sha256_file(p: &Path) -> std::io::Result<(String, Vec<u8>)> {
     let bytes = std::fs::read(p)?;
     Ok((crate::sha256_hex(&bytes), bytes))
@@ -527,8 +575,8 @@ pub fn execute(req: &ExecRequest, ctx: &Context) -> Result<Delivered, Refusal> {
         if hash != s.sha256 {
             return refuse("script", format!("script {rel} changed since it was approved (sha256 {hash})"));
         }
-        let copy = scratch.path.join("bin").join(format!("{}-{}", &hash[..12], rel.replace('/', "_")));
-        std::fs::write(&copy, &bytes).map_err(|e| Refusal { stage: "script", reason: e.to_string() })?;
+        let copy = shadow_copy(&repo, &scratch.path.join("shadow"), rel, &bytes)
+            .map_err(|e| Refusal { stage: "script", reason: format!("copying {rel} into scratch: {e}") })?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

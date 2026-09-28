@@ -8,7 +8,9 @@ version = "0.1.0"
 dependencies = [
  "adage-core",
  "adage-eval",
+ "adage-exec",
  "adage-graph",
+ "adage-hook",
  "adage-instincts",
  "adage-intent",
  "adage-learn",
@@ -76,7 +78,11 @@ version = "0.1.0"
 dependencies = [
  "adage-core",
  "adage-eval",
+ "adage-hook",
+ "adage-pack",
+ "adage-runtime",
  "adage-store",
+ "adage-tracks",
  "anyhow",
  "landlock",
  "libc",
@@ -101,6 +107,21 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
+]
+
+[[package]]
+name = "adage-hook"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-intent",
+ "adage-learn",
+ "adage-runtime",
+ "adage-store",
+ "adage-tracks",
+ "serde",
+ "serde_json",
  "tempfile",
 ]
 

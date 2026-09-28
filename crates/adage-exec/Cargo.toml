@@ -15,6 +15,12 @@ path = "src/main.rs"
 [dependencies]
 adage-core = { path = "../adage-core" }
 adage-store = { path = "../adage-store" }
+adage-tracks = { path = "../adage-tracks" }
+adage-runtime = { path = "../adage-runtime" }
+adage-pack = { path = "../adage-pack" }
+adage-hook = { path = "../adage-hook" }
+# The safety oracle re-checks every block `adage-exec hook` delivers (check_data_block).
+adage-eval = { path = "../adage-eval" }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
@@ -34,8 +40,6 @@ seccompiler = "0.5"
 
 [dev-dependencies]
 tempfile = "3"
-# The safety oracle re-checks every block the CLI tests deliver (check_data_block).
-adage-eval = { path = "../adage-eval" }
 
 [[test]]
 name = "escape"

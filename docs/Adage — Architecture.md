@@ -22,7 +22,8 @@
 | Q1 | **Fail open** | Any failure yields no directive and no delay; the hook always exits cleanly | Every error path in `adage hook` returns nothing and exits 0. Panics are caught, and their messages silenced (`crates/adage-cli/src/main.rs`, `hook.rs`). Gaps: a payload over 8 MiB is not drained, and nothing records fail-open incidents yet ([§14](#14-designed-but-not-built)) |
 | Q2 | **Hot-path latency** | p95 ≤ 10 ms with no match, ≤ 15 ms for a structured match, ≤ 25 ms with prompt intent, end to end, spawn included [D§13.2] | Measured at 1.76 / 3.18 / 6.39 ms p95 ([§9](#9-performance-budget)) |
 | Q3 | **Determinism** | Same situation and same index generation give the same directive, byte for byte | The runtime is a pure function of index, state and event (`crates/adage-runtime/src/lib.rs`). The index is content-addressed. Learning reproduces the live demo index byte for byte ([§11](#11-evals-and-the-harness-simulator)) |
-| Q4 | **Nothing executes** | No component runs a command, reads a repo file for the agent, or edits for it | The runtime has no process spawns. It checks only that bound repository paths exist. Directives are text |
+| Q4a | **`adage` spawns nothing** | The `adage` binary and its hooks run no command, read no repo file for the agent, and edit nothing | The runtime has no process spawns. It checks only that bound repository paths exist. Directives are text. CI greps the adage crates (`crates/adage-exec/tests/no_spawn.rs`; the listed exceptions start Adage itself or serve a person at a terminal) |
+| Q4b | **`adage-exec` runs only approved, sandboxed routes** | The optional executing binary runs a route only with a matching per-machine approval (every key field, the L-ref script hash re-read at execution), under an enforced OS sandbox, and returns typed, fenced data; any failure delivers E0 exactly | `crates/adage-exec` (`run.rs` gates, `sandbox/`, `hook.rs` for E1 prefetch); the L0-sec escape suite; the golden parity test (`tests/parity.rs`) pins `adage-exec hook` to `adage hook` with nothing approved ([execution](execution.md)) |
 | Q5 | **Local first** | No network listener by default; raw content never leaves the machine; sharing is explicit | No listener unless `adage graph --serve` is run, and then only on 127.0.0.1. No telemetry. Spools hold decisions and canonical keys, not prompt text |
 | Q6 | **Trust** | Every track is verified before it can influence an agent; untrusted text never reaches a directive | Tracks are validated on every read. Imports need a signature from a trusted signer. Directive text comes only from fixed templates ([§8](#8-security-architecture)) |
 | Q7 | **Portability** | Claude Code first; OpenCode and Codex through the same core | Three adapters over one event type ([§4.11](#411-harness-abstraction-a9)). Claude Code runs live; OpenCode and Codex are verified only in simulation. Runs on macOS, Linux and Windows |
@@ -155,9 +156,9 @@ learned ([§4.7.2](#472-live-learning)).
 
 | Harness | Registration | Invocation | Events Adage registers | Source |
 | --- | --- | --- | --- | --- |
-| Claude Code | Plugin `hooks/hooks.json`, or `adage install claude-code` into settings | **Exec form** (`command` + `args`): no shell | `SessionStart`, `UserPromptSubmit`, `PostToolBatch`, `PostToolUseFailure`, `Stop`, `SessionEnd` | `plugin/claude-code/hooks/hooks.json`, `crates/adage-cli/src/harness/claude.rs` (`settings`) |
-| Codex | `adage install codex` into `.codex/hooks.json` or `$CODEX_HOME/hooks.json` | Shell string with the binary path quoted; Codex has no exec form | `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `Stop`, `SessionEnd` | `crates/adage-cli/src/harness/codex.rs` (`settings`, `sh_quote`) |
-| OpenCode | `adage install opencode` writes the plugin to `.opencode/plugins/adage.js`, with the binary's absolute path embedded | The in-process plugin spawns `adage hook opencode <event>` with no shell and a 1 s timeout | `chat.message`, `tool.execute.after`, and on `event`: `session.created`, `message.part.updated` (tool errors), `session.idle`, `session.deleted` | `plugin/opencode/adage.js`, `crates/adage-cli/src/harness/opencode.rs` |
+| Claude Code | Plugin `hooks/hooks.json`, or `adage install claude-code` into settings | **Exec form** (`command` + `args`): no shell | `SessionStart`, `UserPromptSubmit`, `PostToolBatch`, `PostToolUseFailure`, `Stop`, `SessionEnd` | `plugin/claude-code/hooks/hooks.json`, `crates/adage-hook/src/harness/claude.rs` (`settings`) |
+| Codex | `adage install codex` into `.codex/hooks.json` or `$CODEX_HOME/hooks.json` | Shell string with the binary path quoted; Codex has no exec form | `SessionStart`, `UserPromptSubmit`, `PostToolUse`, `Stop`, `SessionEnd` | `crates/adage-hook/src/harness/codex.rs` (`settings`, `sh_quote`) |
+| OpenCode | `adage install opencode` writes the plugin to `.opencode/plugins/adage.js`, with the binary's absolute path embedded | The in-process plugin spawns `adage hook opencode <event>` with no shell and a 1 s timeout | `chat.message`, `tool.execute.after`, and on `event`: `session.created`, `message.part.updated` (tool errors), `session.idle`, `session.deleted` | `plugin/opencode/adage.js`, `crates/adage-hook/src/harness/opencode.rs` |
 
 **Exec form matters.** On Claude Code, a shell-form hook costs 10.4 ms p95 against 2.2 ms for exec
 form (S1). The plugin always uses exec form. Codex offers only shell strings.
@@ -201,7 +202,7 @@ sequenceDiagram
   end
 ```
 
-The steps are in `crates/adage-cli/src/hook.rs`, and the harness-independent core never sees a
+The steps are in `crates/adage-hook/src/lib.rs`, and the harness-independent core never sees a
 native payload. Three shortcuts keep the common path cheap:
 
 - **Repository check.** If the index holds no route for this repository, the hook exits before
@@ -636,7 +637,7 @@ Tracks arrive by `adage learn` or `adage add`.
 ### 4.11 Harness abstraction (A9)
 
 The decision core knows one event type and one output type (`crates/adage-runtime/src/lib.rs`,
-`crates/adage-cli/src/harness/mod.rs`):
+`crates/adage-hook/src/harness/mod.rs`):
 
 ```rust
 enum Event { SessionStart, Prompt { text }, Batch { calls: Vec<Call> }, Failure { call },
@@ -785,7 +786,7 @@ native response on stdout, or nothing. The exit code is always 0. Every payload 
 ### 6.2 OpenCode plugin → `adage hook opencode`
 
 The plugin builds its own small payloads from documented hooks. The fields are tabulated in
-`crates/adage-cli/src/harness/opencode.rs`. It spawns the binary with no shell and waits at most
+`crates/adage-hook/src/harness/opencode.rs`. It spawns the binary with no shell and waits at most
 1 s. A reply over 64 KiB, a non-JSON reply or a non-string field is ignored. Every hook body is
 wrapped in `try`. It never evaluates or executes text it receives.
 

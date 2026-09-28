@@ -1,0 +1,7 @@
+{
+  "name": "adage-exec",
+  "version": "0.1.0",
+  "description": "Adage with execution (E1 prefetch): approved, observe-only lookups run in an OS sandbox at the trigger, and their typed output arrives beside the directive. Serves only after `adage exec enable`; the Adage plugin then goes quiet.",
+  "author": { "name": "Adage" },
+  "repository": "https://github.com/stevenvaughanbooth/adage"
+}

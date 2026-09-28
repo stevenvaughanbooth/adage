@@ -84,9 +84,16 @@ and noticed when it stopped working.
 
 ## 3. Principles
 
-1. **The agent is the only actor.** Adage never runs a command, reads a file on the agent's behalf,
-   or edits anything. It emits text. The harness's permission system sees every action, as it would
-   without Adage.
+1. **The agent is the only actor, unless you delegate.** The `adage` binary and its hooks never
+   run a command, never read a file on the agent's behalf, and never edit anything; they emit text.
+   A separate, optional component, `adage-exec`, installed only by a person at a terminal, may run
+   a route **only** when all of these hold: this machine holds an approval for that route's exact
+   argv, inputs, scripts (by hash), effect and level; an OS sandbox enforces the approved profile;
+   and the route's effect is at most regenerate. Output returns to the agent as typed, fenced data,
+   never as instructions. Actions with effects (E3) run only when the agent calls them as tools,
+   under the harness's own permission prompts, and are staged and verified before anything in the
+   worktree changes. Approvals never travel with a track. (Track C §5.1;
+   [execution](execution.md).)
 2. **Deterministic by construction.** The same situation with the same installed tracks produces
    the same directive. (The one exception, experiment assignment, is itself a deterministic hash of
    the session ID — [§14](#14-measurement).)
@@ -125,7 +132,9 @@ and noticed when it stopped working.
 
 ### Non-goals (v1)
 
-- **Executing anything** on the agent's behalf — including pre-fetching reads.
+- **Executing anything** the user has not approved on this machine, anything outside a sandbox,
+  or anything at author or publish effect (Track C §5.1; pre-fetching an approved, observe-only
+  lookup is E1, [execution](execution.md)).
 - **Directing authorship or publication.** Adage never tells the agent what code to write, and
   never directs commits, pushes, pull requests, deploys, deletions, or writes to shared systems.
 - Autonomous edits or multi-step plans.

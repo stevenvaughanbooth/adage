@@ -16,6 +16,7 @@ pub mod bench;
 pub mod cli;
 pub mod conventions;
 pub mod dataset;
+pub mod exec_e1;
 pub mod fidelity;
 pub mod generate;
 pub mod replay;
@@ -65,6 +66,8 @@ pub struct Options {
     /// The repository's real files, for binding instincts (a dataset's `sandbox.txt` lists names
     /// only). Default: `evals/sandboxes/<repo>` beside the datasets directory.
     pub sandbox_dir: Option<PathBuf>,
+    /// Estimate E1 prefetch on the scored sessions (`--exec-e1`, [`exec_e1`]).
+    pub exec_e1: bool,
 }
 
 impl Default for Options {
@@ -78,6 +81,7 @@ impl Default for Options {
             params: None,
             instincts: InstinctMode::Off,
             sandbox_dir: None,
+            exec_e1: false,
         }
     }
 }
@@ -192,6 +196,9 @@ pub struct Report {
     /// Instinct directives against what the agents did; `None` when instincts were off.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub instincts: Option<InstinctsReport>,
+    /// The E1 prefetch estimate, with `--exec-e1`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exec_e1: Option<exec_e1::ExecE1>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -305,6 +312,7 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
 
     let mut tally = score::Tally::default();
     let mut fast = replay::FastCheck::default();
+    let mut e1 = opts.exec_e1.then(exec_e1::ExecE1::default);
     let (mut scored, mut skipped) = (0, 0);
     let mut test = split.test.clone();
     test.sort();
@@ -319,6 +327,9 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
         fast.events += rep.fast.events;
         fast.skipped += rep.fast.skipped;
         fast.mismatches.extend(rep.fast.mismatches.iter().cloned());
+        if let Some(e) = e1.as_mut() {
+            e.add(&exec_e1::measure(&rep, index, &repo_key, &table));
+        }
         score::score_session(
             &mut tally,
             &rep,
@@ -373,6 +384,7 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
         sessions: tally.sessions,
         instincts: (opts.instincts != InstinctMode::Off)
             .then(|| InstinctsReport { mode: opts.instincts, stats: tally.instincts.clone() }),
+        exec_e1: e1,
     })
 }
 
@@ -515,6 +527,9 @@ pub fn render_text(r: &Report) -> String {
     }
     for v in &r.safety.violations {
         let _ = writeln!(s, "  UNSAFE {}: {}", v.route, v.reason);
+    }
+    if let Some(e) = &r.exec_e1 {
+        s.push_str(&e.text());
     }
     s
 }
