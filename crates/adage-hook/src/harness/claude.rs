@@ -96,9 +96,9 @@ pub fn settings(bin: &str) -> Value {
         "hooks": {
             "SessionStart": h("SessionStart", 5),
             "UserPromptSubmit": h("UserPromptSubmit", 5),
-            "PostToolBatch": h("PostToolBatch", 5),
+            "PostToolBatch": h("PostToolBatch", super::action_timeout(bin)),
             "PostToolUseFailure": h("PostToolUseFailure", 5),
-            "Stop": h("Stop", 5),
+            "Stop": h("Stop", super::action_timeout(bin)),
             "SessionEnd": h("SessionEnd", 5)
         }
     })

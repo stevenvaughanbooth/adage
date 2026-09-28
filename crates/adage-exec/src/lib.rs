@@ -23,7 +23,6 @@ pub mod env;
 pub mod git;
 pub mod hook;
 pub mod limits;
-pub mod mcp;
 pub mod person;
 pub mod policy;
 pub mod project;
@@ -33,6 +32,7 @@ pub mod route;
 pub mod run;
 pub mod sandbox;
 pub mod scan;
+pub mod stage;
 pub mod time;
 
 pub use request::{ExecRequest, Level, OutputMode};

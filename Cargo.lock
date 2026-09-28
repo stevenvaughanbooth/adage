@@ -84,6 +84,7 @@ dependencies = [
  "adage-store",
  "adage-tracks",
  "anyhow",
+ "glob",
  "landlock",
  "libc",
  "once_cell",

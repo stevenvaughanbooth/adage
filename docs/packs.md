@@ -79,7 +79,7 @@ command_table = ">=3"
 repo_files = [{ path = "scripts/wi-lookup", sha256 = "9f2c…", deps = ["scripts/lib/*.py"] }]
 
 [exec]
-requested = "E1"                      # E0..E3: the author's ceiling request; grants nothing
+requested = "E1"                      # E0..E2: the author's ceiling request; grants nothing
 
 [provenance]
 tool = "adage 0.5.0"
@@ -104,14 +104,14 @@ summary: Look up the work item named in the prompt    # people only (review)
 shape: run                    # run | avoid | after | read | advise | obligation | sequence
 trigger: { on: prompt, span: ticket }
 entry: true                   # default; false: reachable only through another route's links
-inputs:                       # typed parameters (the E2 tool schema is generated from these)
+inputs:                       # typed parameters, bound from the stimulus and checked against their types
   item: { type: work-item-id, from: { prompt: { span: ticket } } }
 steps:                        # 1..=4; E0 renders steps[0] only
   - id: lookup
     run: { argv: ["./scripts/wi-lookup", "{item}", "--json"] }
     effect: observe           # declared; re-classified locally
     script: { path: scripts/wi-lookup, closure: ref, sha256: "9f2c…" }  # or closure: vendor
-    outputs:                  # typed output contract (the E1/E2 projection)
+    outputs:                  # typed output contract (the E1 projection)
       files: { type: repo-path-list, from: { json: files }, max: 5 }
       state: { type: wi-state, from: { json: state } }
   - id: read-linked
@@ -203,7 +203,10 @@ Each route renders with the template `<shape>@1` (and an advise step with
 - An instinct route (and every route of an `instinct` pack) is yellow.
 - `exec`: `level` at most the pack's `[exec] requested`; `timeout_ms` in 1..=600000 (default
   1500); `output` `typed` (default) or `raw`. Avoid and advise routes stay at E0. A request that
-  could never be granted is refused: E1 needs observe, E2 at most verify, E3 at most environment.
+  could never be granted is refused: E1 (prefetch) needs observe; E2 (an action a hook runs) is at
+  most environment. An E2 action may declare `outputs` and `cache`, each at most 16
+  repository-relative globs whose first segment is neither `.git`, hidden, nor a wildcard; a
+  regenerate action must declare `outputs` (the only paths it may change). They belong to E2 only.
 - `exit` predicates: `intent_changes`, `exploratory_change`, and
   `result_equals { step, field, value }`, whose value must pass the type of that output.
 
@@ -214,8 +217,25 @@ Each route renders with the template `<shape>@1` (and an advise step with
 `median_position`, `turns_saved`, `provenance`, `models`, `exposed`, `origin`, `by_origin`. It is
 not part of the route exec digest. `evidence.json` holds, per route id, the counts by origin:
 `{"<route>": {"organic": 9, "synthetic": 2, "declared": 0, "instinct": 0, "imported": 0}}`. Every
-key must be a route of the pack. Attestations are JSON objects of at most 64 KiB; they are
-informational and never grant aspect or level.
+key must be a route of the pack.
+
+## Attestations
+
+`attestations/<id>.json` (at most 16, each at most 64 KiB, `id` a safe id) are bench result
+records in the schema of `evals/bench/result.schema.json` (versions 1 and 2), checked strictly on
+read (`adage_pack::attest`): the envelope (`schema_version`, `record`, a 16-hex `run_id`, a `tier`
+of that version, `suite`, `adage_version`, `params` with `runtime` and `learn`, a SHA-256
+`params_hash`, `split`; optional `git_sha`, `dataset`, `reason`, and, in version 2, `exec_level`),
+each record kind's own keys and nothing else, printable bounded strings, finite numbers. The
+version 2 `arms` record carries `arms` (per arm, named numbers), `deltas` (metric → number) and
+`harm` (name → count).
+
+`adage share --attest <results.jsonl>` embeds a results file's `arms`, `scorecard` and
+`aggregate` records (in that order, at most 16). They are covered by the pack's signature, which
+proves who wrote the numbers, not that they are true: `adage review` and `adage review
+allow-exec` show each one as a single line, **self-reported by signer** `<fingerprint>`.
+Attestations are informational only: nothing reads them to set a reflex's strength (aspect), an
+execution level or an approval.
 
 ## Types
 
@@ -316,7 +336,17 @@ reformatting a route does not change it, since route lines carry exec digests.
 | --- | --- | --- | --- |
 | L-none | argv whose program is in the command table | the table's program on the machine | only if every program is `inert` (C2) |
 | L-ref | the repository path, its SHA-256 and optional `deps` | the repository's file, after a hash check at execution | never |
-| L-vendor | the bytes, `scripts/sha256-<hex>` | a read-only copy, through an interpreter named in argv | never |
+| L-vendor | the bytes, `scripts/sha256-<hex>` | the read-only CAS copy, through an interpreter named in argv (the shebang is ignored) | never |
+
+**L-vendor in practice.** `adage share --vendor` turns each L-ref script into L-vendor: it reads
+the bytes from the repository `share` runs in, checks them against the pin, rewrites argv to
+`scripts/sha256-<hex>`, and drops the `requires.repo_files` entry. Only a script run by an
+interpreter named in argv (`python3`, `node`, `sh`) and without `deps` can be vendored. `adage
+add` copies the bytes read-only to `$ADAGE_HOME/cas/<hex>`. A route that runs a vendored script is
+**exec-only**: bound live (at probation, never a draft) with its execution ceiling, but never
+directed at E0 (its argv names no file an agent could run); `adage-exec hook` brings it into play
+only once it is approved at E1 or E2 on this machine (policy `allow_vendor_scripts`, full text
+shown, never automatic). A vendored route whose pack requests no execution level is inert.
 
 ## Upgrading v1 tracks
 
@@ -434,8 +464,8 @@ level it may be approved at, or **inert**, with a reason. It checks, in order:
    files, whose hashes join the binding.
 5. **L-vendor scripts** must be in the cas.
 6. **A runtime form.** E0 delivers today's route model. Several steps, a sequence, a read of a
-   step's output, a vendored script, or a type with no runtime contract gives the reason "shape
-   not yet supported at runtime".
+   step's output, or a type with no runtime contract gives the reason "shape not yet supported at
+   runtime". A vendored script's route is exec-only (above).
 
 Only signature, schema or closure failures refuse a whole pack.
 

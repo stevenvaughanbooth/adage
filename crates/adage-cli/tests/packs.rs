@@ -267,7 +267,7 @@ fn share_then_add_binds_lref_scripts_and_marks_changes_inert() {
         "signature  good, namespace adage-pack",
         "repo       github.com/acme/billing: 3 live, 1 inert",
         "count-items",
-        "inert: shape not yet supported at runtime",
+        "inert: it runs a vendored script, which only adage-exec runs, at no execution level here",
         "(was green)",
         "approvals  none",
     ] {
@@ -429,7 +429,7 @@ fn smuggled_files_and_hostile_packs_are_refused_by_add() {
         ("an unknown field", edit(lookup, "aspect: green", "aspect: green\nstate: active"), "unknown field"),
         ("an unanchored contract", edit("types/work-item-id.yaml", "^W-\\d{4}$", "W-.*"), "anchored"),
         ("an invisible character", edit(lookup, "Look up", "Look\u{200B} up"), "invisible"),
-        ("a request beyond the pack's ceiling", edit(lookup, "level: E1", "level: E3"), "exceeds the pack"),
+        ("a request beyond the pack's ceiling", edit(lookup, "level: E1", "level: E2"), "exceeds the pack"),
         ("a wrong script pin", edit(lookup, "closure: ref, sha256: \"", "closure: ref, sha256: \"0"), "sha256"),
     ];
     for (what, files, why) in corpus {
