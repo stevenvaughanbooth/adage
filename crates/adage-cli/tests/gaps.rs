@@ -27,7 +27,7 @@ impl World {
             std::fs::create_dir_all(root.join(d)).unwrap();
         }
         // The recipient's checkout of the repository: `add` runs here, so the lookup's script is
-        // pinned (L-ref) when the v1 track is upgraded to a pack.
+        // pinned (L-ref) when the track is converted to a pack.
         std::fs::write(root.join("repo/.git/config"), "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n")
             .unwrap();
         std::fs::write(root.join("repo/scripts/wi-lookup"), "#!/bin/sh\necho '{}'\n").unwrap();
@@ -65,16 +65,12 @@ impl World {
         assert!(o.status.success(), "adage {args:?} failed:\n{}", text(&o));
         text(&o)
     }
-    /// The sender publishes `t` as `out`, a v1 track signed with the test key (the recipient
-    /// upgrades it to a pack in place).
+    /// The sender publishes `t` as `out`, a pack signed with the test key.
     fn publish(&self, t: &Track, out: &str) {
         let _ = std::fs::remove_dir_all(self.p("sender/tracks"));
         io::write(&self.p("sender/tracks").join(NAME), t).unwrap();
         let (o, key) = (self.p(out), self.p("keys/id_ed25519"));
-        self.ok(
-            "sender",
-            &["share", NAME, "--out", o.to_str().unwrap(), "--key", key.to_str().unwrap(), "--format", "v1"],
-        );
+        self.ok("sender", &["share", NAME, "--out", o.to_str().unwrap(), "--key", key.to_str().unwrap()]);
     }
     fn add(&self, out: &str) -> String {
         self.ok("recipient", &["add", self.p(out).to_str().unwrap()])
@@ -102,7 +98,7 @@ fn keygen(w: &World) -> ssh_key::PrivateKey {
     std::fs::write(w.p("keys/id_ed25519"), k.to_openssh(ssh_key::LineEnding::LF).unwrap().as_bytes()).unwrap();
     std::fs::write(
         w.p("recipient/trusted-signers"),
-        format!("alice@example namespaces=\"adage-track\" {}\n", adage_sign::key_line(k.public_key())),
+        format!("alice@example namespaces=\"adage-pack\" {}\n", adage_sign::key_line(k.public_key())),
     )
     .unwrap();
     k

@@ -4,7 +4,6 @@ use crate::model::*;
 use adage_core::{shell::normalize_shell, CommandTable, Effect};
 use anyhow::{bail, Context, Result};
 use regex::Regex;
-use sha2::{Digest, Sha256};
 use std::path::Path;
 
 pub fn write(dir: &Path, track: &Track) -> Result<()> {
@@ -593,104 +592,6 @@ fn validate_intent(family: &str, model: &str, centroid: &[i16], threshold: f32) 
     Ok(())
 }
 
-/// Canonical digest of a track directory (spike S6): every file, sorted by relative path, line
-/// endings normalised, hashed; then the hash of that manifest. Signatures refer to this digest.
-pub fn digest(dir: &Path) -> Result<String> {
-    // The canonical digest (spike S6 FINDINGS, "Canonical-digest spec"): walk without following
-    // symlinks; skip `track.sig` and any path component starting with `.`; hash `scripts/`
-    // verbatim and everything else with `\r\n` and lone `\r` normalised to `\n` — on the bytes,
-    // never through a lossy UTF-8 decode (which would map different invalid bytes to the same
-    // text, and so to the same digest).
-    let mut files = Vec::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        for e in std::fs::read_dir(&d)? {
-            let e = e?;
-            let p = e.path();
-            if e.file_name().to_string_lossy().starts_with('.') {
-                continue;
-            }
-            let t = e.file_type()?;
-            if t.is_symlink() {
-                bail!("{} is a symlink; a track may not contain symlinks", p.display());
-            } else if t.is_dir() {
-                stack.push(p);
-            } else if p.file_name().is_some_and(|n| n != "track.sig") {
-                files.push(p);
-            }
-        }
-    }
-    let mut entries: Vec<(String, String)> = files
-        .iter()
-        .map(|p| {
-            let rel = p.strip_prefix(dir).unwrap().to_string_lossy().replace('\\', "/");
-            let bytes = std::fs::read(p)?;
-            let norm = if rel.starts_with("scripts/") { bytes } else { normalise_line_endings(&bytes) };
-            Ok((rel, hex(&Sha256::digest(&norm))))
-        })
-        .collect::<Result<_>>()?;
-    entries.sort();
-    let manifest: String = entries.iter().map(|(p, h)| format!("{h}  {p}\n")).collect();
-    Ok(hex(&Sha256::digest(manifest.as_bytes())))
-}
-
-/// `\r\n` and lone `\r` become `\n`; every other byte is kept as is.
-fn normalise_line_endings(b: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(b.len());
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] == b'\r' {
-            out.push(b'\n');
-            if b.get(i + 1) == Some(&b'\n') {
-                i += 1;
-            }
-        } else {
-            out.push(b[i]);
-        }
-        i += 1;
-    }
-    out
-}
-
 pub fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
-}
-
-#[cfg(test)]
-mod digest_tests {
-    use super::{digest, normalise_line_endings};
-
-    #[test]
-    fn line_endings_normalise_on_bytes() {
-        assert_eq!(normalise_line_endings(b"a\r\nb\rc\n"), b"a\nb\nc\n");
-        assert_eq!(normalise_line_endings(b"\r\r\n"), b"\n\n");
-        // Invalid UTF-8 survives byte for byte: different bytes, different digests.
-        assert_ne!(normalise_line_endings(&[0xff, 0x0a]), normalise_line_endings(&[0xfe, 0x0a]));
-    }
-
-    #[test]
-    fn digest_follows_the_s6_spec() {
-        let d = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(d.path().join("routes")).unwrap();
-        std::fs::write(d.path().join("track.toml"), "a\r\nb\n").unwrap();
-        std::fs::write(d.path().join("routes/r.yaml"), "x\ry\n").unwrap();
-        let base = digest(d.path()).unwrap();
-        // Hidden files and the signature do not count; line endings do not either.
-        std::fs::write(d.path().join(".DS_Store"), "junk").unwrap();
-        std::fs::write(d.path().join("track.sig"), "sig").unwrap();
-        std::fs::write(d.path().join("track.toml"), "a\nb\n").unwrap();
-        std::fs::write(d.path().join("routes/r.yaml"), "x\ny\n").unwrap();
-        assert_eq!(digest(d.path()).unwrap(), base);
-        // Different invalid bytes are different content.
-        std::fs::write(d.path().join("routes/r.yaml"), [0xffu8, b'\n']).unwrap();
-        let a = digest(d.path()).unwrap();
-        std::fs::write(d.path().join("routes/r.yaml"), [0xfeu8, b'\n']).unwrap();
-        assert_ne!(digest(d.path()).unwrap(), a);
-        // Symlinks are refused, never followed.
-        #[cfg(unix)]
-        {
-            std::os::unix::fs::symlink("/etc", d.path().join("routes/link")).unwrap();
-            assert!(digest(d.path()).is_err());
-        }
-    }
 }

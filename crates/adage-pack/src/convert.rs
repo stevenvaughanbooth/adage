@@ -1,7 +1,9 @@
-//! Upgrade a v1 track (`track.toml` + `routes/*.yaml`, the `adage_tracks` model) to a pack with no
-//! vendored scripts: L-none, or L-ref where a route runs a repository script (Track C §1.1).
+//! Convert a local track (`track.toml` + `routes/*.yaml`, the `adage_tracks` model that
+//! `adage condition` writes) to a pack with no vendored scripts: L-none, or L-ref where a route
+//! runs a repository script (Track C §1.1). `adage share` uses this; packs are the only format
+//! that travels.
 //!
-//! | v1 trigger | v1 step | v2 shape |
+//! | track trigger | track step | pack shape |
 //! | --- | --- | --- |
 //! | `prompt`, `intent`, `session_start` | `run` | `run` |
 //! | `after_command`, `after_failure` | `run` | `after` |
@@ -27,27 +29,27 @@ use anyhow::{bail, Context, Result};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-/// A pack upgraded from a v1 track, and the routes that could not be carried (id, reason).
+/// A pack converted from a local track, and the routes that could not be carried (id, reason).
 #[derive(Debug, Clone)]
-pub struct Upgraded {
+pub struct Converted {
     pub pack: Pack,
     pub skipped: Vec<(String, String)>,
 }
 
-/// Upgrade the v1 track directory `dir` (read and validated with `adage_tracks::io::read`), with
+/// Convert the track directory `dir` (read and validated with `adage_tracks::io::read`), with
 /// no repository to pin scripts against.
-pub fn upgrade_track(dir: &Path) -> Result<Upgraded> {
-    upgrade_track_with(dir, None)
+pub fn from_track_dir(dir: &Path) -> Result<Converted> {
+    from_track_dir_with(dir, None)
 }
 
-/// [`upgrade_track`], pinning repository scripts against `repo_root` (L-ref).
-pub fn upgrade_track_with(dir: &Path, repo_root: Option<&Path>) -> Result<Upgraded> {
-    let t = io::read(dir).with_context(|| format!("{} is not a valid v1 track", dir.display()))?;
-    upgrade(&t, repo_root)
+/// [`from_track_dir`], pinning repository scripts against `repo_root` (L-ref).
+pub fn from_track_dir_with(dir: &Path, repo_root: Option<&Path>) -> Result<Converted> {
+    let t = io::read(dir).with_context(|| format!("{} is not a valid track", dir.display()))?;
+    from_track(&t, repo_root)
 }
 
-/// Upgrade an in-memory v1 track.
-pub fn upgrade(t: &Track, repo_root: Option<&Path>) -> Result<Upgraded> {
+/// Convert an in-memory track.
+pub fn from_track(t: &Track, repo_root: Option<&Path>) -> Result<Converted> {
     let table = CommandTable::load();
     let mut cx = Cx { types: BTreeMap::new(), repo_files: BTreeMap::new(), tools: BTreeSet::new(), table };
     let mut routes = Vec::new();
@@ -159,10 +161,10 @@ pub fn upgrade(t: &Track, repo_root: Option<&Path>) -> Result<Upgraded> {
         provenance: Provenance { tool: format!("adage {}", env!("CARGO_PKG_VERSION")), origins: total },
     };
     let mut pack = Pack::new(manifest, routes, cx.types, BTreeMap::new())
-        .with_context(|| format!("upgrading {}", m.track.name))?;
+        .with_context(|| format!("converting {}", m.track.name))?;
     pack.evidence = Some(evidence);
     pack.check()?;
-    Ok(Upgraded { pack, skipped })
+    Ok(Converted { pack, skipped })
 }
 
 struct Cx {

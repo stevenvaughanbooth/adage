@@ -313,18 +313,25 @@ enum Match {
     /// It delivers part of it (a finish line that is a sequence's first step): a true route, not a
     /// recovery.
     Partial,
+    /// It is the convention, but narrower than it: its contract accepts some of the convention's
+    /// ids and none of its counter-samples, or its glob covers some of the files the convention
+    /// owes. Fail-safe (it never fires where it should not), so not a false route; not a recovery
+    /// either.
+    Narrow,
 }
 
 /// Whether a route's glob covers a convention's: every sandbox file the convention's glob matches
-/// (or, with none, the convention's glob text).
-fn covers(paths: &str, conv: &str, cx: &Ctx) -> std::result::Result<(), String> {
+/// (or, with none, the convention's glob text). Some but not all of them: [`Match::Narrow`].
+fn covers(paths: &str, conv: &str, cx: &Ctx) -> std::result::Result<Match, String> {
     let (Ok(route_glob), Ok(conv_glob)) = (glob::Pattern::new(paths), glob::Pattern::new(conv)) else {
         return Err(format!("glob {paths:?} does not parse"));
     };
     let owed: Vec<&String> = cx.files.iter().filter(|f| conv_glob.matches(f)).collect();
-    let covered = if owed.is_empty() { route_glob.matches(conv) } else { owed.iter().all(|f| route_glob.matches(f)) };
-    if covered {
-        Ok(())
+    let hit = owed.iter().filter(|f| route_glob.matches(f)).count();
+    if (owed.is_empty() && route_glob.matches(conv)) || (!owed.is_empty() && hit == owed.len()) {
+        Ok(Match::Full)
+    } else if hit > 0 {
+        Ok(Match::Narrow)
     } else {
         Err(format!("glob {paths:?} does not cover {conv:?}"))
     }
@@ -351,14 +358,14 @@ fn matches(route: &Route, c: &Convention, cx: &Ctx) -> std::result::Result<Match
             if !same_cmd(first, &c.command) {
                 return Err(format!("first step {first:?} is not {:?}", c.command));
             }
-            return covers(paths, conv_glob, cx).map(|_| Match::Full);
+            return covers(paths, conv_glob, cx);
         }
         (Trigger::AfterEdit { paths }, Step::Run { command }, Kind::Sequence, Some(Kind::FinishLine)) => {
             let first = c.steps.first().map(String::as_str).unwrap_or(&c.command);
             if !same_cmd(command, first) {
                 return Err(format!("{command:?} is not the sequence's first step"));
             }
-            return covers(paths, conv_glob, cx).map(|_| Match::Partial);
+            return covers(paths, conv_glob, cx).map(|m| if m == Match::Full { Match::Partial } else { m });
         }
         _ => {}
     }
@@ -370,21 +377,21 @@ fn matches(route: &Route, c: &Convention, cx: &Ctx) -> std::result::Result<Match
             if commands.len() != c.steps.len() || !commands.iter().zip(&c.steps).all(|(a, b)| same_cmd(a, b)) {
                 return Err(format!("steps {commands:?} are not {:?}", c.steps));
             }
-            return covers(paths, conv_glob, cx).map(|_| Match::Full);
+            return covers(paths, conv_glob, cx);
         }
         (Kind::Sequence, _, _) => return Err("a sequence convention follows an edit".into()),
         (Kind::EnvSync, Trigger::AfterEdit { paths }, Step::Run { command }) => {
             if !same_cmd(command, &c.command) {
                 return Err(format!("command differs ({command} vs {})", c.command));
             }
-            return covers(paths, conv_glob, cx).map(|_| Match::Full);
+            return covers(paths, conv_glob, cx);
         }
         (Kind::Scope, Trigger::AfterEdit { paths }, Step::Run { command }) => {
             let sample = c.samples.first().map(String::as_str);
             if !same_cmd(&bind(command, sample), &bind(&c.command, sample)) {
                 return Err(format!("command differs ({command} vs {})", c.command));
             }
-            covers(paths, conv_glob, cx)?;
+            let glob = covers(paths, conv_glob, cx)?;
             for s in route.slots.iter().filter(|s| matches!(s.source, SlotSource::EditSegment { .. })) {
                 let Contract::Pattern { regex } = &s.contract else { return Err("not a pattern contract".into()) };
                 let Ok(re) = regex::Regex::new(regex) else { return Err(format!("contract {regex:?} does not parse")) };
@@ -395,12 +402,14 @@ fn matches(route: &Route, c: &Convention, cx: &Ctx) -> std::result::Result<Match
                     return Err(format!("contract {regex:?} accepts counter-sample {x:?}"));
                 }
             }
-            return Ok(Match::Full);
+            return Ok(glob);
         }
         _ => {}
     }
     let sample = c.samples.first().map(String::as_str);
     let want = Expect::of(&bind(&c.command, sample), cx.table);
+    // Set when the route is right but accepts less than the convention (fail-safe).
+    let narrow = std::cell::Cell::new(false);
     let same = |got: &Expect, what: &str| {
         if got.same(&want) {
             Ok(())
@@ -445,7 +454,8 @@ fn matches(route: &Route, c: &Convention, cx: &Ctx) -> std::result::Result<Match
             }
             (Trigger::AfterEdit { paths }, Step::Run { command }) => {
                 same(&Expect::of(command, cx.table), "command")?;
-                covers(paths, conv_glob, cx)
+                narrow.set(covers(paths, conv_glob, cx)? == Match::Narrow);
+                Ok(())
             }
             (_, Step::Run { command }) => {
                 same(&Expect::of(&bind(command, sample), cx.table), "command")?;
@@ -465,22 +475,29 @@ fn matches(route: &Route, c: &Convention, cx: &Ctx) -> std::result::Result<Match
                     let Ok(re) = regex::Regex::new(regex) else {
                         return Err(format!("contract {regex:?} does not parse"));
                     };
-                    if let Some(s) = c.samples.iter().find(|s| !re.is_match(s)) {
-                        return Err(format!("contract {regex:?} rejects sample {s:?}"));
-                    }
                     if let Some(s) = c.counter_samples.iter().find(|s| re.is_match(s)) {
                         return Err(format!("contract {regex:?} accepts counter-sample {s:?}"));
+                    }
+                    // Rejecting some of the convention's ids (but not all) is narrow, not false.
+                    if c.samples.iter().all(|s| !re.is_match(s)) {
+                        return Err(format!("contract {regex:?} rejects every sample"));
+                    }
+                    if c.samples.iter().any(|s| !re.is_match(s)) {
+                        narrow.set(true);
                     }
                     // A learned value type binds with its matcher, not the regex (Track G §4.3): the
                     // matcher must say the same on the convention's ids.
                     let vtype = route.slots.iter().find(|s| s.name == name).and_then(|s| s.source.vtype());
                     if let Some(t) = vtype {
                         let ok = |v: &str| adage_core::vtype::matches(&t.runs, v);
-                        if let Some(s) = c.samples.iter().find(|s| !ok(s)) {
-                            return Err(format!("value type {} rejects sample {s:?}", t.id));
-                        }
                         if let Some(s) = c.counter_samples.iter().find(|s| ok(s)) {
                             return Err(format!("value type {} accepts counter-sample {s:?}", t.id));
+                        }
+                        if c.samples.iter().all(|s| !ok(s)) {
+                            return Err(format!("value type {} rejects every sample", t.id));
+                        }
+                        if c.samples.iter().any(|s| !ok(s)) {
+                            narrow.set(true);
                         }
                     }
                 }
@@ -488,7 +505,7 @@ fn matches(route: &Route, c: &Convention, cx: &Ctx) -> std::result::Result<Match
             }
         }
     })();
-    res.map(|_| Match::Full)
+    res.map(|_| if narrow.get() { Match::Narrow } else { Match::Full })
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -503,8 +520,21 @@ pub struct RouteMatch {
     /// Conventions it delivers part of (a true route that recovers nothing).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub partial: Vec<String>,
+    /// Conventions it is too narrow for ([`Match::Narrow`]): fail-safe, so not false, but no
+    /// recovery.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub narrow: Vec<String>,
+    /// The route's strength (`fire`, `prime`, `inhibit`).
+    pub strength: String,
     /// Why it matches none of the conventions of its kind (`<convention>: <reason>`).
     pub misses: Vec<String>,
+}
+
+impl RouteMatch {
+    /// Not a false route: it matches a convention, delivers part of one, or is one too narrowly.
+    pub fn is_true(&self) -> bool {
+        !self.matches.is_empty() || !self.partial.is_empty() || !self.narrow.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -516,6 +546,9 @@ pub struct ConventionMatch {
     /// Learned routes that deliver part of it.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub partly_by: Vec<String>,
+    /// Learned routes that are this convention, but too narrow ([`Match::Narrow`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub narrowly_by: Vec<String>,
     /// Counted in recall (intent conventions are not: offline learning has no model).
     pub evaluable: bool,
 }
@@ -544,9 +577,13 @@ pub struct RoutesReport {
     /// nor false, and not in `learned_routes`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub inert_routes: Vec<String>,
-    /// Learned routes that match at least one convention (or deliver part of one).
+    /// Learned routes that match at least one convention (or deliver part of one, or are one too
+    /// narrowly).
     pub true_routes: usize,
     pub false_routes: Vec<String>,
+    /// Routes that are a convention but narrower than it: counted true (fail-safe), not recalled.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub narrow_routes: Vec<String>,
     pub conventions_evaluable: usize,
     pub conventions_found: usize,
     pub missed_conventions: Vec<String>,
@@ -581,6 +618,7 @@ pub fn score_routes(
             kind: c.kind.name().into(),
             matched_by: vec![],
             partly_by: vec![],
+            narrowly_by: vec![],
             evaluable: c.kind != Kind::Intent,
         })
         .collect();
@@ -594,6 +632,8 @@ pub fn score_routes(
             state: format!("{:?}", r.state).to_lowercase(),
             matches: vec![],
             partial: vec![],
+            narrow: vec![],
+            strength: format!("{:?}", r.strength).to_lowercase(),
             misses: vec![],
         };
         for (c, cm) in conv.conventions.iter().zip(cms.iter_mut()) {
@@ -606,11 +646,15 @@ pub fn score_routes(
                     rm.partial.push(c.id.clone());
                     cm.partly_by.push(r.id.clone());
                 }
+                Ok(Match::Narrow) => {
+                    rm.narrow.push(c.id.clone());
+                    cm.narrowly_by.push(r.id.clone());
+                }
                 Err(why) if Kind::of_route(r) == Some(c.kind) => rm.misses.push(format!("{}: {why}", c.id)),
                 Err(_) => {}
             }
         }
-        if !rm.matches.is_empty() || !rm.partial.is_empty() {
+        if rm.is_true() {
             rm.misses.clear();
         }
         rms.push(rm);
@@ -732,9 +776,10 @@ pub fn run_bundle(dir: &Path) -> Result<RoutesReport> {
     let files = repo_files(&dir.join("repo"));
     let (rms, cms) = score_routes(&live, &conv, &files, &CommandTable::load());
     let decoy_hits = decoy_hits(&live, &conv, &CommandTable::load());
-    let true_routes = rms.iter().filter(|r| !r.matches.is_empty() || !r.partial.is_empty()).count();
-    let false_routes: Vec<String> =
-        rms.iter().filter(|r| r.matches.is_empty() && r.partial.is_empty()).map(|r| r.id.clone()).collect();
+    let true_routes = rms.iter().filter(|r| r.is_true()).count();
+    let false_routes: Vec<String> = rms.iter().filter(|r| !r.is_true()).map(|r| r.id.clone()).collect();
+    let narrow_routes: Vec<String> =
+        rms.iter().filter(|r| r.matches.is_empty() && !r.narrow.is_empty()).map(|r| r.id.clone()).collect();
     let evaluable: Vec<&ConventionMatch> = cms.iter().filter(|c| c.evaluable).collect();
     let found = evaluable.iter().filter(|c| !c.matched_by.is_empty()).count();
     let missed: Vec<String> = evaluable.iter().filter(|c| c.matched_by.is_empty()).map(|c| c.id.clone()).collect();
@@ -760,6 +805,7 @@ pub fn run_bundle(dir: &Path) -> Result<RoutesReport> {
         inert_routes,
         true_routes,
         false_routes,
+        narrow_routes,
         conventions_evaluable: evaluable.len(),
         conventions_found: found,
         missed_conventions: missed,
@@ -805,9 +851,10 @@ pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
     let routes: Vec<&Route> = routes.iter().collect();
     let (rms, cms) = score_routes(&routes, &conv, &files, &table);
     let decoy_hits = decoy_hits(&routes, &conv, &table);
-    let true_routes = rms.iter().filter(|r| !r.matches.is_empty() || !r.partial.is_empty()).count();
-    let false_routes: Vec<String> =
-        rms.iter().filter(|r| r.matches.is_empty() && r.partial.is_empty()).map(|r| r.id.clone()).collect();
+    let true_routes = rms.iter().filter(|r| r.is_true()).count();
+    let false_routes: Vec<String> = rms.iter().filter(|r| !r.is_true()).map(|r| r.id.clone()).collect();
+    let narrow_routes: Vec<String> =
+        rms.iter().filter(|r| r.matches.is_empty() && !r.narrow.is_empty()).map(|r| r.id.clone()).collect();
     let evaluable: Vec<&ConventionMatch> = cms.iter().filter(|c| c.evaluable).collect();
     let found = evaluable.iter().filter(|c| !c.matched_by.is_empty()).count();
     let missed: Vec<String> = evaluable.iter().filter(|c| c.matched_by.is_empty()).map(|c| c.id.clone()).collect();
@@ -837,6 +884,7 @@ pub fn score_prepared(p: &Prepared) -> Result<RoutesReport> {
         inert_routes,
         true_routes,
         false_routes,
+        narrow_routes,
         conventions_evaluable: evaluable.len(),
         conventions_found: found,
         missed_conventions: missed,
@@ -876,12 +924,20 @@ pub fn render_text(r: &RoutesReport) -> String {
     }
     let _ = writeln!(s, "index {} with {} routes", r.index_generation, r.learned_routes);
     for x in &r.routes {
-        let verdict = match (x.matches.is_empty(), x.partial.is_empty()) {
-            (false, _) => format!("= {}", x.matches.join(", ")),
-            (true, false) => format!("part of {}", x.partial.join(", ")),
-            (true, true) => "FALSE".to_string(),
+        let verdict = match (x.matches.is_empty(), x.partial.is_empty(), x.narrow.is_empty()) {
+            (false, _, _) => format!("= {}", x.matches.join(", ")),
+            (true, false, _) => format!("part of {}", x.partial.join(", ")),
+            (true, true, false) => format!("too narrow for {} (fail-safe)", x.narrow.join(", ")),
+            (true, true, true) => "FALSE".to_string(),
         };
-        let state = if x.state == "firm" { String::new() } else { format!(" [{}]", x.state) };
+        let mut tags: Vec<&str> = Vec::new();
+        if x.state != "firm" {
+            tags.push(&x.state);
+        }
+        if x.strength != "fire" {
+            tags.push(&x.strength);
+        }
+        let state = if tags.is_empty() { String::new() } else { format!(" [{}]", tags.join(", ")) };
         let _ = writeln!(s, "  {:<22} {:<12} {:<44} {}{state}", x.id, x.kind, x.step, verdict);
         for m in &x.misses {
             let _ = writeln!(s, "      not {m}");
@@ -891,6 +947,9 @@ pub fn render_text(r: &RoutesReport) -> String {
     for c in &r.conventions {
         let found = match (c.evaluable, c.matched_by.is_empty()) {
             (false, _) => "not learnable offline (no model)".to_string(),
+            (true, true) if !c.narrowly_by.is_empty() => {
+                format!("MISSED (too narrow: {})", c.narrowly_by.join(", "))
+            }
             (true, true) => "MISSED".to_string(),
             (true, false) => format!("found by {}", c.matched_by.join(", ")),
         };
@@ -912,6 +971,9 @@ pub fn render_text(r: &RoutesReport) -> String {
     let none = || "none".to_string();
     let list = |v: &[String]| if v.is_empty() { none() } else { v.join(", ") };
     let _ = writeln!(s, "false routes: {}", list(&r.false_routes));
+    if !r.narrow_routes.is_empty() {
+        let _ = writeln!(s, "too narrow (fail-safe, counted true, not recalled): {}", r.narrow_routes.join(", "));
+    }
     if r.decoys > 0 {
         let _ = writeln!(s, "decoy hits ({} decoys): {}", r.decoys, list(&r.decoy_hits));
     }
@@ -1021,6 +1083,46 @@ mod tests {
         let matched: Vec<&str> = got.iter().filter(|(_, m)| !m.is_empty()).map(|(id, _)| id.as_str()).collect();
         // A glob broader than the convention's still covers it: coverage, not equality.
         assert_eq!(matched, ["ok", "broad-glob"], "{got:?}");
+    }
+
+    /// A route that is the convention but accepts less (a contract that rejects some of its ids,
+    /// a glob that covers some of its files) is fail-safe: "too narrow", never "false", and no
+    /// recovery. One that also accepts a counter-sample, or rejects every id, is false.
+    #[test]
+    fn narrow_routes_are_reported_apart_from_false_ones() {
+        use serde_json::json;
+        let contract = |re: &str| {
+            json!([{"name": "item", "source": {"from": "prompt", "span": "ticket"},
+                    "contract": {"kind": "pattern", "regex": re}}])
+        };
+        let lookup = |id: &str, re: &str| {
+            route(
+                id,
+                json!({"on": "prompt", "span": "ticket"}),
+                json!({"do": "run", "command": "python3 scripts/wi-lookup {item}"}),
+                contract(re),
+            )
+        };
+        let routes = [
+            lookup("narrow-contract", r"^W-10\d{2}$"),
+            lookup("loose-contract", r"^W-\d+$"),
+            lookup("disjoint-contract", r"^X-\d{4}$"),
+            route(
+                "narrow-glob",
+                json!({"on": "after_edit", "paths": "schema/invoice.json"}),
+                json!({"do": "run", "command": "make gen"}),
+                json!([]),
+            ),
+        ];
+        let files: Vec<String> = crate::generate::ACME_FILES.iter().map(|s| s.to_string()).collect();
+        let refs: Vec<&Route> = routes.iter().collect();
+        let (rms, cms) = score_routes(&refs, &acme(), &files, &CommandTable::load());
+        let narrow: Vec<&str> = rms.iter().filter(|r| !r.narrow.is_empty()).map(|r| r.id.as_str()).collect();
+        assert_eq!(narrow, ["narrow-contract", "narrow-glob"], "{rms:?}");
+        let false_ids: Vec<&str> = rms.iter().filter(|r| !r.is_true()).map(|r| r.id.as_str()).collect();
+        assert_eq!(false_ids, ["loose-contract", "disjoint-contract"]);
+        assert!(rms.iter().all(|r| r.matches.is_empty()), "narrow is no recovery");
+        assert!(cms.iter().any(|c| c.narrowly_by == ["narrow-contract"]));
     }
 
     #[test]

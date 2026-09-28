@@ -1,7 +1,6 @@
 //! Why a reflex exists (Track G §6.3): the evidence behind each route the graph engine compiled,
 //! kept beside the track in `.why.json` for people (`adage review`), **never rendered to the
-//! agent**. The file is hidden, so it is not part of the track's canonical digest
-//! ([`crate::io::digest`]) and never travels in a shared pack; the index does not read it.
+//! agent**. The file is hidden, so it never travels in a shared pack; the index does not read it.
 //!
 //! One entry per route id: the mined pattern (its canonical string), the backoff depth (context
 //! items), the compression gain in bits, lift, confidence and its lower bound, the members of
@@ -95,10 +94,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn round_trips_and_is_not_part_of_the_digest() {
+    fn round_trips() {
         let d = tempfile::tempdir().unwrap();
         std::fs::write(d.path().join("track.toml"), "x\n").unwrap();
-        let before = crate::io::digest(d.path()).unwrap();
         let mut m = BTreeMap::new();
         m.insert(
             "finish-line-e7e809".to_string(),
@@ -119,7 +117,7 @@ mod tests {
         );
         save(d.path(), &m).unwrap();
         assert_eq!(load(d.path()), m);
-        assert_eq!(crate::io::digest(d.path()).unwrap(), before, "hidden, so not in the digest");
+        assert!(FILE.starts_with('.'), "hidden, so never shared");
         assert!(m["finish-line-e7e809"].lines()[0].starts_with("why (obligation reflex)"));
         save(d.path(), &BTreeMap::new()).unwrap();
         assert!(!d.path().join(FILE).exists());

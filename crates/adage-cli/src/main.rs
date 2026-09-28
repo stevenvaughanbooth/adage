@@ -22,13 +22,13 @@
 //! adage hooks-config <adage-path>    print a Claude Code hooks settings block (exec form)
 //! adage install <claude-code|opencode|codex> [--print|--write] [--scope project|user]
 //!                                    print (default) or write a harness's hook registration
-//! adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>] [--ack-scripts] [--repo-root <dir>] [--format pack|v1]
+//! adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>] [--ack-scripts] [--repo-root <dir>]
 //!                                    redaction-check, build and sign a pack (namespace adage-pack)
-//! adage add <dir> [--trust]          verify a pack (or a v1 track, upgraded in place), install it,
+//! adage add <dir> [--trust]          verify a signed pack, install it,
 //!                                    and bind it to this repository at forming
 //! adage review [--json]              reflexes awaiting a person's decision, with evidence and directive text
-//! adage review delegate <track> <route> --level e1|e2 [--raw] [--fields ..] [--outputs <glob>]   approve an E1 prefetch or an E2 action (a person)
-//! adage review revoke <track> <route>   withdraw that grant
+//! adage review delegate <track> <reflex> --level e1|e2 [--raw] [--fields ..] [--outputs <glob>]   approve an E1 prefetch or an E2 action (a person)
+//! adage review revoke <track> <reflex>   withdraw that grant
 //! adage delegate on|off|status       hooks call adage-exec (E1 prefetch, E2 actions) or adage; grants per repository
 //! adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <route> [--by <name>]
 //! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
@@ -48,6 +48,7 @@ mod doctor;
 mod exec;
 use adage_hook::failopen;
 mod graph;
+mod help;
 use adage_hook::harness;
 mod hook;
 mod init;
@@ -78,6 +79,14 @@ use std::path::PathBuf;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // `--help` is never an argument: answered before anything runs (the hook included).
+    if let Some(cmd) = args.first().filter(|c| help::wants(c, &args[1..])) {
+        match help::command(cmd) {
+            Some(h) => print!("{h}"),
+            None => print!("{}", help::all()),
+        }
+        return;
+    }
     if args.first().map(String::as_str) == Some("hook") {
         // Fail open, always: no panic, error, or timeout may block or disturb the agent.
         hook::main(args.get(1).cloned().unwrap_or_default(), args.get(2).cloned().unwrap_or_default());
@@ -137,19 +146,18 @@ fn run(args: &[String]) -> Result<()> {
             println!("adage {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        other => {
-            println!("usage: adage <init|sense|condition|train|status|report|graph|map|review|delegate|share|add|install|models|doctor|watch|ui|config|hooks-config|version|hook>");
-            println!("       adage sense       read-only: which reflexes your traces would form");
-            println!("       adage condition   mine traces into reflexes and bind instincts");
-            println!("       adage watch       live pane for a split terminal: health, hook activity, conditioning");
-            println!(
-                "       adage ui          full-screen app: live feed, reflexes and review, health fixes, settings"
-            );
-            match other {
-                None | Some("help" | "--help" | "-h") => Ok(()),
-                Some(cmd) => bail!("unknown command `{cmd}` (see the usage above)"),
+        Some("help") if args.len() > 1 => match help::command(&args[1]) {
+            Some(h) => {
+                print!("{h}");
+                Ok(())
             }
+            None => bail!("unknown command `{}`: `adage --help` lists them", args[1]),
+        },
+        None | Some("help" | "--help" | "-h") => {
+            print!("{}", help::all());
+            Ok(())
         }
+        Some(cmd) => bail!("unknown command `{cmd}`: `adage --help` lists them"),
     }
 }
 
@@ -173,6 +181,9 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
             continue;
         }
         i += 1;
+    }
+    if let Some(missing) = transcripts.iter().find(|p| !p.is_file()) {
+        bail!("--transcripts {}: no such file. Name transcript files (Claude Code .jsonl, an `opencode export`, a Codex rollout)", missing.display());
     }
     // Codex rollouts: `--codex-sessions <dir>` (`$CODEX_HOME/sessions`), read only when asked.
     if let Some(dir) = flag(args, "--codex-sessions") {
@@ -219,7 +230,15 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         }
     }
     if transcripts.is_empty() {
-        bail!("no transcripts found");
+        bail!(
+            "no traces found{}. Point it at your history with --claude-projects <dir>, --codex-sessions <dir> \
+             or --transcripts <file>..., or run `adage condition --instincts-only` for instincts alone",
+            if explicit || flag(args, "--claude-projects").is_some() {
+                " in the sources given"
+            } else {
+                " in ~/.claude/projects"
+            }
+        );
     }
     let outcomes: BTreeMap<String, bool> = match flag(args, "--outcomes") {
         Some(p) => serde_json::from_str(&std::fs::read_to_string(p)?)?,

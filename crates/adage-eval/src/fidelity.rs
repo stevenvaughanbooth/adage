@@ -182,6 +182,26 @@ pub fn run_learned(dir: &Path, round: &str, exact_keys: bool) -> Result<LearnedF
             (run, events)
         })
         .collect();
+    // A finish line a sequence carries (the sequence begins with its command, after the same
+    // edits) is delivered as that sequence: one edit, one directive (`adage_runtime::decide`).
+    let mut carried_by: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for s in &index.routes {
+        let (adage_tracks::Trigger::AfterEdit { .. }, adage_tracks::Step::Sequence { commands }) =
+            (&s.route.trigger, &s.route.step)
+        else {
+            continue;
+        };
+        for o in index.routes.iter().filter(|o| o.repo == s.repo && !o.route.is_instinct()) {
+            if let (adage_tracks::Trigger::AfterEdit { .. }, adage_tracks::Step::Run { command }) =
+                (&o.route.trigger, &o.route.step)
+            {
+                let same = commands.first().is_some_and(|f| adage_core::pattern::same_command(f, command));
+                if same && adage_tracks::interlock::same_point(&s.route.trigger, &o.route.trigger) {
+                    carried_by.entry(o.route.id.clone()).or_default().push(s.route.id.clone());
+                }
+            }
+        }
+    }
     let table = CommandTable::load();
     let sandbox = crate::dataset::Sandbox::create(&ds.sandbox()?)?;
     let mut rep =
@@ -206,7 +226,10 @@ pub fn run_learned(dir: &Path, round: &str, exact_keys: bool) -> Result<LearnedF
         let (mut ok, mut same) = (true, true);
         for (i, l) in live.iter().enumerate() {
             let got: Vec<String> = events.get(i).map(|x| x.1.clone()).unwrap_or_default();
-            let given_by = |id: &String| events.iter().take(i + 1).any(|e| e.1.contains(id));
+            let given_by = |id: &String| {
+                let carriers = carried_by.get(id).map(Vec::as_slice).unwrap_or_default();
+                events.iter().take(i + 1).any(|e| e.1.contains(id) || carriers.iter().any(|c| e.1.contains(c)))
+            };
             let missing: Vec<&String> = l.would_have.iter().filter(|x| !given_by(x)).collect();
             let later = |id: &String| live.iter().skip(i + 1).any(|e| e.would_have.contains(id));
             let (early, added): (Vec<&String>, Vec<&String>) =

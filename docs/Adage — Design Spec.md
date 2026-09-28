@@ -40,8 +40,10 @@ a new hire a set of starter tracks so their agent is on the right path from the 
 
 > *Agent traces become reflexes.*
 
-Adage never executes anything itself. Every command is run by the agent, through the agent's own
-tools, under the harness's own permissions, in plain view. Adage only decides what to say, and when.
+Adage never runs the commands it directs. Every command is run by the agent, through the agent's
+own tools, under the harness's own permissions, in plain view. Adage only decides what to say, and
+when. (Execution, when a person turns it on, is a separate binary, `adage-exec`, that runs only
+reflexes approved on that machine, inside an OS sandbox: [execution.md](execution.md).)
 
 ---
 
@@ -839,7 +841,7 @@ Three further limits keep automation honest:
 - **Change is paced.** At most a few routes per repository are strengthened to fire each week, so
   behaviour changes gradually and the control can attribute each effect.
 - **Human edits win.** A person can edit any auto-built track. An edited route is marked `authored`,
-  and the miner stops overwriting it — it proposes changes in `adage review` instead.
+  and the learner stops overwriting it — it proposes changes in `adage review` instead.
 
 **Tracks as pull requests.** In team mode, when a personal track has cleared its bars and is
 portable — its requirements are met by the repository and its scope isn't specific to one person's
@@ -882,7 +884,7 @@ can tell which ones actually help. A track answers that question for itself.
 1. **Tracks can trigger skills.** A route step can be *"use the `db-migrations` skill now"*. The
    biggest weakness of skills — the model deciding whether and when to load them, and often getting
    it wrong — becomes a deterministic, well-timed directive. Loading a skill is already a canonical
-   action, so the miner learns *when* a skill helps, and skills gain the evidence they lack.
+   action, so the learner learns *when* a skill helps, and skills gain the evidence they lack.
 2. **Tracks can compile down to skills.** `adage share --as-skill` renders a stable track as a
    `SKILL.md`, for tools and teammates that don't run Adage. The result loses conditionality and
    evidence but gains reach. It is the "static guidance" arm of the experiment (§14.1), made
@@ -1346,7 +1348,7 @@ Questions phase 2 must answer:
 
 | Area | v2 | v3 |
 | --- | --- | --- |
-| Runtime action | Pre-execute read-only steps; inject results; lossless MCP prefetch | **Nothing executes.** Directives only; the agent acts |
+| Runtime action | Pre-execute read-only steps; inject results; lossless MCP prefetch | **Nothing executes.** Directives only; the agent acts (since Track C: opt-in execution of approved reflexes, in a separate binary, `adage-exec`, inside an OS sandbox) |
 | Injection classes | A result · B hint (shadow) · C plan (cut) | Fire · prime · inhibit signals; one block ahead |
 | Wording | Never instruct | Fire instructs, gated by evidence, with exit conditions |
 | Savings | Turns removed by pre-fetched results | Exploration, batching, compiled steps, dead ends, deliberation |

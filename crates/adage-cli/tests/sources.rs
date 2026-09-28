@@ -51,7 +51,7 @@ fn an_empty_explicit_source_never_falls_back_to_claude_history() {
     let empty = tempfile::tempdir().unwrap();
     let (_, err, ok) = adage(home.path(), &["condition", "--demo", "--codex-sessions", empty.path().to_str().unwrap()]);
     assert!(!ok, "an explicit source that finds nothing fails");
-    assert!(err.contains("no transcripts found"), "{err}");
+    assert!(err.contains("no traces found"), "{err}");
     assert!(!home.path().join("adage/tracks").exists(), "nothing was learned from the fallback");
 
     let (out, _, _) = adage(home.path(), &["sense", "--codex-sessions", empty.path().to_str().unwrap()]);

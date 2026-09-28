@@ -89,6 +89,11 @@ fn real_main(argv: Vec<String>) -> Result<()> {
         println!("{USAGE}");
         return Ok(());
     };
+    // `--help` anywhere is a request for help, never an argument (so nothing runs).
+    if argv.iter().any(|a| a == "--help" || a == "-h") {
+        println!("{USAGE}");
+        return Ok(());
+    }
     // `adage train --plan plan.json …` runs a plan: the options come first, with no subcommand.
     if cmd.starts_with("--") && cmd != "--help" {
         return cmd_run(Args { rest: argv });

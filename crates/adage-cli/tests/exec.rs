@@ -16,14 +16,20 @@ struct World {
 
 impl World {
     fn new() -> World {
+        World::with(|_| {})
+    }
+    /// A world whose one route is changed by `f` before the index is compiled.
+    fn with(f: impl Fn(&mut Route)) -> World {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
         for d in ["home", "adage", "acme-billing/.git", "acme-billing/scripts", "bin"] {
             std::fs::create_dir_all(root.join(d)).unwrap();
         }
         std::fs::write(root.join("acme-billing/scripts/wi-lookup"), "#!/usr/bin/env python3\nprint('{}')\n").unwrap();
+        std::fs::create_dir_all(root.join("acme-billing/tools")).unwrap();
+        std::fs::write(root.join("acme-billing/tools/case"), "#!/usr/bin/env python3\nprint('{}')\n").unwrap();
         std::fs::write(root.join("bin/adage-exec"), "#!/bin/sh\n").unwrap();
-        let t = Track {
+        let mut t = Track {
             manifest: Manifest {
                 track: TrackInfo {
                     name: "acme-billing/work-items".into(),
@@ -52,6 +58,7 @@ impl World {
                 authored: false,
             }],
         };
+        f(&mut t.routes[0]);
         Index::compile(&[t]).write_atomic(&root.join("adage/index.json")).unwrap();
         World { _dir: dir, root }
     }
@@ -118,7 +125,7 @@ fn approving_execution_is_a_persons_decision_and_shows_what_would_run() {
         "sandbox:  reads: repository, toolchain, cas",
         "script:   scripts/wi-lookup (L-ref) sha256 ",
         "exit:     when state is Closed",
-        "evidence: 9 of 10 sessions over 3 days",
+        "evidence: 9 of 10 traces over 3 days",
     ] {
         assert!(out.contains(want), "missing {want:?} in:\n{out}");
     }
@@ -209,4 +216,28 @@ fn allow_exec_at_e2_is_for_actions_only() {
     let (_, err, code) = w.run(&e3, &[]);
     assert_eq!(code, 1);
     assert!(err.contains("--level e1 or e2 is required"), "{err}");
+}
+
+/// A repository script the traces showed only reading (`tools/case`, whose name says nothing) is
+/// learned observe with its effect evidence. It can be delegated at E1 like a script named for
+/// reading, the evidence is shown at approval, and it is never approved automatically.
+#[test]
+fn a_script_inferred_observe_from_traces_can_be_delegated_at_e1_with_its_evidence_shown() {
+    const NOTE: &str = "observe from 4 traces: never followed by changes; its output was read next in 4 of 4";
+    let w = World::with(|r| {
+        r.step = Step::Run { command: "python3 tools/case {id} --json".into() };
+        r.evidence.effect_evidence = Some(NOTE.into());
+    });
+    std::fs::write(w.p("adage/policy.toml"), "[exec]\nauto_approve = \"inert-observe\"\n").unwrap();
+    let (out, err, code) = w.run(&allow(), &[]);
+    assert_eq!(code, 0, "{err}");
+    for want in [
+        "argv:     python3 tools/case {id} --json",
+        "effect:   observe, approved (the classifier says environment)",
+        &format!("inferred: {NOTE}"),
+        "script:   tools/case (L-ref) sha256 ",
+        "automatic: no (",
+    ] {
+        assert!(out.contains(want), "missing {want:?} in:\n{out}");
+    }
 }

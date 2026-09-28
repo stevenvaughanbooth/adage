@@ -169,7 +169,7 @@ pub struct Bound {
 }
 
 /// Bind an installed pack to every target and write the bound tracks, replacing this pack's
-/// earlier ones. `skipped` are routes the pack could not carry at all (a v1 upgrade's), recorded
+/// earlier ones. `skipped` are routes the pack could not carry at all (a converted track's), recorded
 /// as inert. The caller holds the tracks lock and recompiles the index afterwards.
 pub fn bind_installed(
     paths: &Paths,

@@ -303,19 +303,16 @@ fn learn_log_reads_both_shapes_and_skips_the_rest() {
     let t = learnlog::parse(
         &json!({ "ts": T0, "kind": "condition", "trigger": "manual", "repo": "r", "changes": [
             { "route": "finish-line-6a01b2", "track": "r/finish-line", "change": "strength", "from": "prime", "to": "fire",
-              "summary": "finish line route prime → fire (9 of 9 sessions, lower bound 0.70)" },
+              "summary": "reflex prime → fire (9 of 9 traces, lower bound 0.70)" },
             { "route": "finish-line-6a01b2", "track": "r/finish-line", "change": "evidence", "from": null, "to": null,
-              "summary": "fire finish line route evidence 6/8 → 7/8 sessions" },
+              "summary": "fire reflex evidence 6/8 → 7/8 traces" },
           ], "repos": { "r": { "tracks": [{ "name": "r/finish-line" }] } } })
         .to_string(),
     );
     assert_eq!(t.len(), 3, "the legacy per-track fields beside `changes` add nothing: {t:?}");
     assert_eq!(t[0].text, "condition (manual) r: 2 changes");
-    assert_eq!(
-        t[1].text,
-        "conditioned r/finish-line: finish-line-6a01b2 prime→fire (9 of 9 sessions, lower bound 0.70)"
-    );
-    assert_eq!(t[2].text, "evidence r/finish-line: finish-line-6a01b2 6/8 → 7/8 sessions");
+    assert_eq!(t[1].text, "conditioned r/finish-line: finish-line-6a01b2 prime→fire (9 of 9 traces, lower bound 0.70)");
+    assert_eq!(t[2].text, "evidence r/finish-line: finish-line-6a01b2 6/8 → 7/8 traces");
     let e = learnlog::parse(r#"{"ts":1,"kind":"condition_error","trigger":"auto","class":"lock","error":"busy"}"#);
     assert_eq!((e[0].tone, e[0].text.as_str()), (Tone::Error, "conditioning failed (lock): busy"));
     // Missing fields are tolerated; unknown kinds and non-JSON are skipped.

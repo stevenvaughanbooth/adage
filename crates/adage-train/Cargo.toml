@@ -12,9 +12,11 @@ homepage.workspace = true
 name = "adage-train"
 path = "src/main.rs"
 
-# An optional tool: not part of the `adage` release archives (yet).
+# Released by dist beside adage (its own archive, installer and Homebrew formula): `adage train`
+# runs it. The npm platform packages carry it beside adage (npm/config.mjs).
 [package.metadata.dist]
-dist = false
+dist = true
+formula = "adage-train"
 
 [dependencies]
 adage-core = { path = "../adage-core" }

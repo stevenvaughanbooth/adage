@@ -33,7 +33,8 @@ impl Tx {
             "…".to_string()
         };
         self.lines.push(json!({"type":"attachment","sessionId":self.sid,"cwd":CWD,
-            "content": format!("{wrapper}\n{body}\n</adage-reflex>")}));
+            "attachment": {"type": "hook_additional_context",
+                           "content": [format!("{wrapper}\n{body}\n</adage-reflex>")]}}));
         self
     }
     fn call(&mut self, name: &str, input: Value, output: &str) -> &mut Self {

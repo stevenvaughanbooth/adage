@@ -56,32 +56,40 @@ const OBJ_COMMIT: u8 = 1;
 const OBJ_OFS_DELTA: u8 = 6;
 const OBJ_REF_DELTA: u8 = 7;
 
-impl Repo {
-    /// The repository whose work tree is `root` (`root/.git` a directory, or a `gitdir:` file).
-    pub fn open(root: &Path) -> Option<Repo> {
-        let dotgit = root.join(".git");
-        let git = if dotgit.is_dir() {
-            dotgit
+/// The git directory of the work tree at `root` (`root/.git` a directory, or the directory a
+/// `gitdir:` file names, for a linked worktree), and its common directory (where the objects and
+/// the shared `config` live: the main repository's `.git` for a linked worktree).
+pub fn dirs(root: &Path) -> Option<(PathBuf, PathBuf)> {
+    let dotgit = root.join(".git");
+    let git = if dotgit.is_dir() {
+        dotgit
+    } else {
+        let text = std::fs::read_to_string(&dotgit).ok()?;
+        let p = PathBuf::from(text.lines().next()?.strip_prefix("gitdir:")?.trim());
+        if p.is_absolute() {
+            p
         } else {
-            let text = std::fs::read_to_string(&dotgit).ok()?;
-            let p = PathBuf::from(text.lines().next()?.strip_prefix("gitdir:")?.trim());
+            root.join(p)
+        }
+    };
+    let common = match std::fs::read_to_string(git.join("commondir")) {
+        Ok(c) => {
+            let p = PathBuf::from(c.trim());
             if p.is_absolute() {
                 p
             } else {
-                root.join(p)
+                git.join(p)
             }
-        };
-        let common = match std::fs::read_to_string(git.join("commondir")) {
-            Ok(c) => {
-                let p = PathBuf::from(c.trim());
-                if p.is_absolute() {
-                    p
-                } else {
-                    git.join(p)
-                }
-            }
-            Err(_) => git.clone(),
-        };
+        }
+        Err(_) => git.clone(),
+    };
+    Some((git, common))
+}
+
+impl Repo {
+    /// The repository whose work tree is `root` (`root/.git` a directory, or a `gitdir:` file).
+    pub fn open(root: &Path) -> Option<Repo> {
+        let (git, common) = dirs(root)?;
         // Objects this walk cannot see.
         if common.join("shallow").exists() || common.join("objects/info/alternates").exists() {
             return None;

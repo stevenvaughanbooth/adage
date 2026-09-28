@@ -454,6 +454,14 @@ fn has_flag(argv: &[String], flag: &str) -> bool {
 
 /// Effect classification for one `exec`-shaped command, table-driven per Design Spec §8.6:
 /// "Classification is data, per command template… Unknown commands default to Environment."
+/// Whether `argv` runs an interpreter on the program it reads from stdin: an interpreter named
+/// with no script operand (only options, or `-`).
+fn stdin_program(argv: &[String]) -> bool {
+    let Some(head) = argv.first().map(|a| a.rsplit('/').next().unwrap_or(a)) else { return false };
+    SCRIPT_INTERPRETERS.contains(&head)
+        && argv[1..].iter().all(|a| a == "-" || (a.starts_with('-') && !matches!(a.as_str(), "-c" | "-e" | "-m")))
+}
+
 fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect, f64, String) {
     // `python3 scripts/wi-lookup W-1` — classify the script, not the interpreter.
     const INTERPRETERS: [&str; 9] = ["python", "python3", "node", "bash", "sh", "zsh", "ruby", "perl", "deno"];
@@ -499,6 +507,9 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
                 }
             }
         }
+        if subspec.check_flags.iter().any(|f| args.iter().any(|a| a == f)) {
+            effect = Effect::Verify;
+        }
         if subspec.mutating_flags.iter().any(|f| args.iter().any(|a| a == f)) {
             effect = Effect::Author;
         }
@@ -519,6 +530,10 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
                 effect = *eff;
                 confidence = 0.9;
             }
+        }
+        if spec.check_flags.iter().any(|f| args.iter().any(|a| a == f)) {
+            effect = Effect::Verify;
+            confidence = 0.9;
         }
         if spec.mutating_flags.iter().any(|f| args.iter().any(|a| a == f)) {
             effect = Effect::Author;
@@ -619,6 +634,23 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
 
             let mut c = node.walk();
             let mut output_target: Option<String> = None;
+            // An interpreter fed its program by a heredoc (`python3 - <<'EOF'`) runs inline code,
+            // as `python3 -c '…'` does: it gets the same argv shape, so one-off scripts do not
+            // all share one bare `python3` identity.
+            let inline = node
+                .children(&mut node.walk())
+                .any(|ch| matches!(ch.kind(), "heredoc_redirect" | "herestring_redirect"));
+            if inline {
+                for a in actions.iter_mut() {
+                    if let CanonicalAction::Exec { argv, .. } = &mut a.action {
+                        if stdin_program(argv) {
+                            argv.retain(|x| x != "-");
+                            argv.push("-c".into());
+                            argv.push("<stdin>".into());
+                        }
+                    }
+                }
+            }
             for ch in node.children(&mut c) {
                 if ch.kind() == "file_redirect" {
                     let op = ch.child(0).map(|o| text(o, src)).unwrap_or("");
@@ -1063,6 +1095,35 @@ mod shadow_tests {
                 assert_eq!(a as char, b, "ASCII characters are kept in place");
             }
         }
+    }
+
+    /// An interpreter fed its program by a heredoc runs inline code: `python3 - <<'EOF'` is shaped
+    /// as `python3 -c …`, so its key is `python3 -c {code}`, never a bare `python3` that every
+    /// one-off script would share. A script operand keeps the script as the identity.
+    #[test]
+    fn a_heredoc_program_is_inline_code() {
+        let t = CommandTable::load();
+        let key = |cmd: &str| {
+            let out = normalize_shell(cmd, "/repo", &t);
+            crate::keys::template_key(&out[0].action)
+        };
+        assert_eq!(key("python3 - <<'EOF'\nprint(1)\nEOF"), "exec python3 -c {code}");
+        assert_eq!(key("python3 <<EOF\nprint(1)\nEOF"), "exec python3 -c {code}");
+        assert_eq!(key("python3 tools/gen.py <<EOF\nx\nEOF"), "exec python3 tools/gen.py");
+        assert_eq!(key("cat <<EOF\nhello\nEOF"), "exec cat");
+    }
+
+    /// A rewriting tool asked only to check is a check: `cargo fmt --all --check` verifies,
+    /// `cargo fmt --all` regenerates.
+    #[test]
+    fn check_flags_make_a_formatter_a_check() {
+        let t = CommandTable::load();
+        let effect = |cmd: &str| normalize_shell(cmd, "/repo", &t)[0].effect;
+        use crate::Effect;
+        assert_eq!(effect("cargo fmt --all --check"), Effect::Verify);
+        assert_eq!(effect("cargo fmt --all"), Effect::Regenerate);
+        assert_eq!(effect("black --check ."), Effect::Verify);
+        assert_eq!(effect("black ."), Effect::Regenerate);
     }
 
     #[test]

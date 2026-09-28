@@ -12,6 +12,12 @@ homepage.workspace = true
 name = "adage-exec"
 path = "src/main.rs"
 
+# Released by dist beside adage (its own archive, installer and Homebrew formula): `adage delegate`
+# runs it. The npm platform packages carry it beside adage (npm/config.mjs).
+[package.metadata.dist]
+dist = true
+formula = "adage-exec"
+
 [dependencies]
 adage-core = { path = "../adage-core" }
 adage-store = { path = "../adage-store" }

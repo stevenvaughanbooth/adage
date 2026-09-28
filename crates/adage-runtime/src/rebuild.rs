@@ -107,7 +107,35 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
                         stop_requested: false,
                         edited: String::new(),
                         fresh: false,
+                        via: String::new(),
                     });
+                }
+                // A sequence after an edit carries the finish lines it subsumes (`decide`).
+                (Trigger::AfterEdit { .. }, Step::Sequence { commands }) => {
+                    let Some(first) = commands.first() else { continue };
+                    for o in index.for_repo(repo) {
+                        let (Trigger::AfterEdit { paths }, Step::Run { command }) = (&o.route.trigger, &o.route.step)
+                        else {
+                            continue;
+                        };
+                        let carried = !o.route.is_instinct()
+                            && o.route.slots.is_empty()
+                            && adage_tracks::interlock::same_point(&ir.route.trigger, &o.route.trigger)
+                            && adage_core::pattern::same_command(first, command);
+                        if carried && !st.obligations.iter().any(|x| x.route == o.route.id) {
+                            st.obligations.push(Obligation {
+                                route: o.route.id.clone(),
+                                expect_key: command_key(command, table),
+                                command: command.clone(),
+                                paths: paths.clone(),
+                                met: false,
+                                stop_requested: false,
+                                edited: String::new(),
+                                fresh: false,
+                                via: dir.route.clone(),
+                            });
+                        }
+                    }
                 }
                 (Trigger::Intent { family, .. }, _) => st.intent = Some(family.clone()),
                 _ => {}

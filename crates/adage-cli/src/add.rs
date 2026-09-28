@@ -10,10 +10,6 @@
 //! ([`crate::packs`]): routes whose closure is unsatisfied here become inert, with a reason. No
 //! execution approval is created.
 //!
-//! A **v1 track** (`track.toml`) is verified as before (namespace `adage-track`) and upgraded in
-//! place to a pack (`adage_pack::upgrade_track_with`, pinning repository scripts against the
-//! repository `add` runs in, if any); routes it cannot carry are recorded inert.
-//!
 //! Trust anchors, in order:
 //! 1. `$ADAGE_HOME/trusted-signers` — the person's own `allowed_signers` file.
 //! 2. `<repo>/.adage/trusted-signers` of the repository the track is scoped to (when run inside
@@ -22,15 +18,15 @@
 //!    use). Any change to the file needs approval again.
 //! 3. A signer approved with `--trust`, pinned in `trust.json` to the repository key.
 //!
-//! An `allowed_signers` entry restricted to `namespaces="adage-track"` never authorises a pack.
+//! An `allowed_signers` entry restricted to another namespace (`git`, say) never authorises a pack.
 
 use crate::packs::{self, Bound};
-use crate::share::{list_files, require_person, SIG};
+use crate::share::require_person;
 use adage_core::repo::{find_root, repo_key};
 use adage_pack::bind::{Applies, Status};
 use adage_pack::Pack;
 use adage_sign::PublicKey;
-use adage_sign::{allowed_signers, fingerprint, key_line, NAMESPACE, PACK_NAMESPACE};
+use adage_sign::{allowed_signers, fingerprint, key_line, PACK_NAMESPACE};
 use adage_store::Paths;
 use adage_tracks::{io, Index, RouteState, Strength, Track};
 use anyhow::{anyhow, bail, Context, Result};
@@ -185,7 +181,7 @@ fn decide(
         return Ok(Decision { how: format!("approved now with --trust for {repo}"), record: Some(store) });
     }
     bail!(
-        "refusing: unknown signer {fp} for {repo}. Confirm the fingerprint with the track's author, then re-run \
+        "refusing: unknown signer {fp} for {repo}. Confirm the fingerprint with the pack's author, then re-run \
          with --trust, or add their key to {}.",
         personal.display()
     )
@@ -193,17 +189,25 @@ fn decide(
 
 pub fn add(args: &[String], paths: &Paths) -> Result<()> {
     require_person("add")?;
-    let usage = "usage: adage add <pack-or-track-dir> [--trust]";
+    let usage = "usage: adage add <pack-dir> [--trust]";
     let src = PathBuf::from(args.first().filter(|a| !a.starts_with("--")).context(usage)?);
     let trust = args.iter().any(|a| a == "--trust");
     let cwd_root = std::env::current_dir().ok().and_then(|d| find_root(&d));
     if src.join(adage_pack::validate::MANIFEST).is_file() {
         return add_pack(&src, paths, trust, cwd_root.as_deref());
     }
-    if !src.join("track.toml").is_file() {
-        bail!("{} is not a pack (no pack.toml) or a track directory (no track.toml)", src.display());
+    if src.join("track.toml").is_file() {
+        bail!(
+            "{} is a track directory, not a pack. Packs are the only format `adage add` installs: \
+             ask its author to run `adage share <track> --out <dir>` and send you that directory.",
+            src.display()
+        );
     }
-    add_v1(&src, paths, trust, cwd_root.as_deref())
+    bail!(
+        "{} is not a pack (no {}). Point `adage add` at the directory `adage share --out` wrote.",
+        src.display(),
+        adage_pack::validate::MANIFEST
+    )
 }
 
 /// The repository key trust decisions are pinned to: the pack's repository this `add` runs in, or
@@ -316,80 +320,6 @@ fn add_pack(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> 
             packs::cas_dir(paths).display(),
             cas.len()
         );
-    }
-    print_bound(&pack, &bound, &local_effects(&pack));
-    println!("index generation {}, {} reflexes", index.generation, index.routes.len());
-    Ok(())
-}
-
-fn add_v1(src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> Result<()> {
-    if !src.join(SIG).is_file() {
-        bail!("refusing an unsigned track: {} has no {SIG}", src.display());
-    }
-    let listing = list_files(src)?;
-    if let Some((rel, why)) = listing.other.iter().find(|(r, why)| r != SIG && *why != "hidden") {
-        bail!("refusing: {rel} does not belong in a shared track ({why})");
-    }
-    // Verify and install a private copy, so what is checked is exactly what is installed.
-    let stage = paths.root.join("staging").join(format!("add-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&stage);
-    let result = (|| {
-        for rel in listing.files.iter().chain([&SIG.to_string()]) {
-            let to = stage.join("in").join(rel);
-            std::fs::create_dir_all(to.parent().unwrap())?;
-            std::fs::copy(src.join(rel), to)?;
-        }
-        install_v1(&stage, src, paths, trust, cwd_root)
-    })();
-    let _ = std::fs::remove_dir_all(&stage);
-    result
-}
-
-fn install_v1(stage: &Path, src: &Path, paths: &Paths, trust: bool, cwd_root: Option<&Path>) -> Result<()> {
-    // One writer of the tracks and index at a time (`adage condition`, automatic learners).
-    let _tracks = adage_store::lock::exclusive(&paths.tracks_lock())?;
-    let dir = stage.join("in");
-    let digest = io::digest(&dir)?;
-    let msg = adage_sign::message(&digest)?;
-    let pem = std::fs::read_to_string(dir.join(SIG))?;
-    let signer = adage_sign::verify_embedded(&msg, NAMESPACE, &pem).map_err(|e| {
-        anyhow!("refusing: the signature does not match this track — it changed after signing, or was not signed as a track ({e:#})")
-    })?;
-    let track: Track = io::read(&dir).context("refusing: the track fails validation")?;
-    let repo = track.manifest.scope.repo.clone();
-    let decision = decide(paths, &repo, &msg, &pem, &signer, trust, NAMESPACE)?;
-
-    // Upgraded in place: a v1 track becomes a pack with no vendored scripts (L-none, or L-ref
-    // pinned against the repository `add` runs in).
-    let up = adage_pack::upgrade_track_with(&dir, cwd_root)
-        .map_err(|e| anyhow!("refusing: the track cannot be carried into a pack: {e:#}"))?;
-    let pack = up.pack;
-    packs::policy_check(paths, &pack, Some(&fingerprint(&signer)))?;
-    let pack_stage = stage.join("pack");
-    pack.write(&pack_stage)?;
-    let pack_digest = pack.digest()?;
-    let dest = packs::pack_dir(paths, &pack.manifest.pack.name);
-    if let Some(store) = &decision.record {
-        save_store(paths, store)?;
-    }
-    replace_dir(&pack_stage, &dest)?;
-    let verified = format!(
-        "v1 track signature by {}, namespace {NAMESPACE} (track digest {}); upgraded in place",
-        fingerprint(&signer),
-        &digest[..16]
-    );
-    let bound = packs::bind_installed(paths, &pack, &pack_digest, &verified, &up.skipped, cwd_root)?;
-    let index = recompile(paths)?;
-
-    let m = &track.manifest;
-    println!("adage add: {} @ {}  (repo {})  from {}", m.track.name, m.track.version, repo, src.display());
-    println!("  signature  good, namespace {NAMESPACE}, key {}", fingerprint(&signer));
-    println!("  trusted    {}", decision.how);
-    println!("  digest     sha256 {digest}");
-    println!("  upgraded   to pack {} (digest sha256 {pack_digest})", pack.manifest.pack.name);
-    println!("  installed  {}", dest.display());
-    for (id, why) in &up.skipped {
-        println!("  not carried {id}: {why}");
     }
     print_bound(&pack, &bound, &local_effects(&pack));
     println!("index generation {}, {} reflexes", index.generation, index.routes.len());

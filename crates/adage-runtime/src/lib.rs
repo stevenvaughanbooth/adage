@@ -123,6 +123,11 @@ pub struct Obligation {
     /// may carry it out now.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub fresh: bool,
+    /// The sequence that carries it, when a sequence after the same edit begins with this
+    /// obligation's command: the agent is told once (the sequence), and the obligation rides on
+    /// the sequence's first step (met when it runs, a Stop request if it does not).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub via: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -454,6 +459,31 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         st.first_edit_at_batch.get_or_insert(st.batches);
                         if let Some(p) = keys::action_path(&n.action) {
                             let rel = repo::relativize(ctx.root, p);
+                            let hits = |paths: &str| glob::Pattern::new(paths).is_ok_and(|g| g.matches(&rel));
+                            // One edit, one directive: a sequence after this edit whose first step
+                            // is a finish line's command subsumes that finish line. Returns the
+                            // sequence and the finish line's bound command.
+                            let subsumer = |o: &IndexedRoute| -> Option<(String, String)> {
+                                let (Trigger::AfterEdit { paths }, Step::Run { command }) =
+                                    (&o.route.trigger, &o.route.step)
+                                else {
+                                    return None;
+                                };
+                                if !hits(paths) {
+                                    return None;
+                                }
+                                let command = render::bind(command, &bind_edit_slots(&o.route, &rel, ctx)?);
+                                routes
+                                    .iter()
+                                    .find(|s| match (&s.route.trigger, &s.route.step) {
+                                        (Trigger::AfterEdit { paths }, Step::Sequence { commands }) => {
+                                            hits(paths)
+                                                && commands.first().is_some_and(|f| pattern::same_command(f, &command))
+                                        }
+                                        _ => false,
+                                    })
+                                    .map(|s| (s.route.id.clone(), command))
+                            };
                             for ir in routes.iter() {
                                 // Advice after an edit (a generated file, a lockfile): said once.
                                 if let (Trigger::AfterEdit { paths }, Step::Advise { .. }) =
@@ -468,17 +498,46 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                     continue;
                                 }
                                 // A sequence after an edit (Track G §6.1): said once, and judged on its
-                                // first command. It is not an obligation: no Stop request comes of it.
+                                // first command. On its own it is not an obligation, but it carries
+                                // the obligations of the finish lines it subsumes (their command is
+                                // its first step), which then say nothing themselves.
                                 if let (Trigger::AfterEdit { paths }, Step::Sequence { commands }) =
                                     (&ir.route.trigger, &ir.route.step)
                                 {
-                                    let hit = glob::Pattern::new(paths).map(|g| g.matches(&rel)).unwrap_or(false);
-                                    if hit && emit_ok(st, &out, &ir.route.id) {
-                                        if let (Some(t), Some(first)) =
-                                            (render::route_text(&ir.route, &[]), commands.first())
-                                        {
-                                            st.pending.push(pending_for(ir, first, ctx));
-                                            out.push(directive(ir, t));
+                                    if !hits(paths) {
+                                        continue;
+                                    }
+                                    let announced = st.emitted.iter().any(|e| e == &ir.route.id);
+                                    let emitted_now = !announced && emit_ok(st, &out, &ir.route.id) && {
+                                        match (render::route_text(&ir.route, &[]), commands.first()) {
+                                            (Some(t), Some(first)) => {
+                                                st.pending.push(pending_for(ir, first, ctx));
+                                                out.push(directive(ir, t));
+                                                true
+                                            }
+                                            _ => false,
+                                        }
+                                    };
+                                    if announced || emitted_now {
+                                        for o in routes.iter().filter(|o| !o.route.is_instinct()) {
+                                            let Some((via, command)) = subsumer(o) else { continue };
+                                            let Trigger::AfterEdit { paths } = &o.route.trigger else { continue };
+                                            if via != ir.route.id
+                                                || st.obligations.iter().any(|x| x.route == o.route.id)
+                                            {
+                                                continue;
+                                            }
+                                            st.obligations.push(Obligation {
+                                                route: o.route.id.clone(),
+                                                expect_key: command_key(&command, ctx.table),
+                                                command,
+                                                paths: paths.clone(),
+                                                met: false,
+                                                stop_requested: false,
+                                                edited: rel.clone(),
+                                                fresh: true,
+                                                via,
+                                            });
                                         }
                                     }
                                     continue;
@@ -494,10 +553,15 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                     // fixed command); a slot that cannot bind drops the route.
                                     let Some(bound) = bind_edit_slots(&ir.route, &rel, ctx) else { continue };
                                     let command = &render::bind(command, &bound);
+                                    let subsumed = subsumer(ir).is_some();
                                     // An instinct's finish line is advice, never an obligation: no
                                     // Stop request can come of it. Its directive is judged like
-                                    // any other (followed, ignored, or misfired).
+                                    // any other (followed, ignored, or misfired). A sequence that
+                                    // begins with its command says it instead.
                                     if ir.route.is_instinct() {
+                                        if subsumed {
+                                            continue;
+                                        }
                                         if emit_ok(st, &out, &ir.route.id) {
                                             if let Some(t) = render::route_text(&ir.route, &bound) {
                                                 st.pending.push(pending_for(ir, command, ctx));
@@ -514,6 +578,10 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                         }
                                         o.edited = rel.clone();
                                         o.fresh = true;
+                                        continue;
+                                    }
+                                    // Carried by the sequence that subsumes it (armed there).
+                                    if subsumed {
                                         continue;
                                     }
                                     // Only enforce a rule the agent was actually told about.
@@ -537,6 +605,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                             stop_requested: false,
                                             edited: rel.clone(),
                                             fresh: true,
+                                            via: String::new(),
                                         });
                                     }
                                 }
@@ -723,7 +792,7 @@ fn approach_lock(routes: &[&IndexedRoute], st: &mut SessionState, out: Vec<Direc
     if !dropped.is_empty() {
         let gone = |id: &String| dropped.iter().any(|d| &d.route == id);
         st.pending.retain(|p| !gone(&p.route));
-        st.obligations.retain(|o| !gone(&o.route));
+        st.obligations.retain(|o| !gone(&o.route) && !gone(&o.via));
     }
     keep
 }

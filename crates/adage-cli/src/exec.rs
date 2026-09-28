@@ -7,11 +7,11 @@
 //!                                                          E2 actions)
 //! adage delegate off [--repo <dir>]                        hooks call `adage hook` again
 //! adage delegate [status] [--repo <dir>] [--json]          registrations, and grants per repository
-//! adage review delegate <track> <route> --level e1 [--raw] [--fields '<json>']
+//! adage review delegate <track> <reflex> --level e1 [--raw] [--fields '<json>']
 //!                         [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
-//! adage review delegate <track> <route> --level e2 [--outputs <glob>]... [--cache <glob>]...
+//! adage review delegate <track> <reflex> --level e2 [--outputs <glob>]... [--cache <glob>]...
 //!                         [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
-//! adage review revoke <track> <route> [--repo <dir>]
+//! adage review revoke <track> <reflex> [--repo <dir>]
 //! ```
 //!
 //! **E2** (Track C §3.6, §4): an action a hook runs when the reflex's stimulus fires. It is
@@ -51,9 +51,9 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "usage: adage delegate <on [--bin <adage-exec>] | off | status [--json]> [--repo <dir>]";
-const REVIEW_USAGE: &str = "usage: adage review delegate <track> <route> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
-       adage review delegate <track> <route> --level e2 [--outputs <glob>]... [--cache <glob>]... [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
-       adage review revoke <track> <route> [--repo <dir>]";
+const REVIEW_USAGE: &str = "usage: adage review delegate <track> <reflex> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
+       adage review delegate <track> <reflex> --level e2 [--outputs <glob>]... [--cache <glob>]... [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
+       adage review revoke <track> <reflex> [--repo <dir>]";
 
 /// Harnesses whose registrations `delegate on` swaps.
 const HARNESSES: [&str; 3] = ["claude-code", "codex", "opencode"];
@@ -163,7 +163,7 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
             "the adage-exec plugin (/plugin install adage-exec@adage); with {} present the Adage plugin goes quiet.",
             m.display()
         );
-        println!("Nothing runs until you approve a reflex: adage review delegate <track> <route> --level e1|e2");
+        println!("Nothing runs until you approve a reflex: adage review delegate <track> <reflex> --level e1|e2");
         println!("Recommended: deny your agent edits to {} in the harness's permissions.", paths.root.display());
     } else {
         let _ = std::fs::remove_file(&m);
@@ -479,6 +479,11 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     } else {
         println!("  effect:   observe, approved (the classifier says {})", classified.as_str());
     }
+    // A script the command table does not know, learned observe from what the traces show it
+    // doing: the person approving sees why (it is never approved automatically: it runs a script).
+    if let Some(note) = ir.route.evidence.effect_evidence.as_deref().filter(|n| !n.trim().is_empty()) {
+        println!("  inferred: {note}");
+    }
     println!("  sandbox:  {}", req.profile.summary());
     if let (Level::E2, Some(a)) = (level, &req.action) {
         println!(
@@ -532,7 +537,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         println!("  exit:     when {f} is {v}, nothing further is directed");
     }
     println!(
-        "  evidence: {} of {} sessions over {} days{}",
+        "  evidence: {} of {} traces over {} days{}",
         e.support,
         e.opportunities,
         e.days,
@@ -552,7 +557,13 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         route: label.clone(),
         approved_on: adage_exec::time::now(),
         by: flag(args, "--by"),
-        basis: json!({ "support": e.support, "opportunities": e.opportunities, "days": e.days, "by_origin": e.by_origin }),
+        basis: json!({
+            "support": e.support,
+            "opportunities": e.opportunities,
+            "days": e.days,
+            "by_origin": e.by_origin,
+            "effect_evidence": e.effect_evidence,
+        }),
         auto: false,
         terms: Some(terms),
     });

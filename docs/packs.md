@@ -1,7 +1,7 @@
 # Track packs (format `adage-pack/1`)
 
 > Status: format reference for Track C milestones C0 and C1 ([design](tracks/track-c-compiled-skills.md)).
-> The crate `adage-pack` reads, validates, writes, digests, upgrades and binds packs. `adage share`
+> The crate `adage-pack` reads, validates, writes, digests, converts and binds packs. `adage share`
 > emits packs and `adage add` installs them ([Using packs](#using-packs)). Nothing here executes
 > anything.
 
@@ -321,14 +321,14 @@ reformatting a route does not change it, since route lines carry exec digests.
   {<path>: <sha256>}}`. Approvals are keyed by it: evidence updates and strength moves keep it; any
   change to a trigger, argv, input, output, type definition, script hash, exit or exec request
   changes it.
-- **Pack digest**: `adage_tracks::io::digest`'s algorithm over the pack's files: per-file SHA-256
+- **Pack digest** (`pack_digest`, spike S6's canonical digest): per-file SHA-256
   of line-ending-normalised bytes (`scripts/` verbatim), sorted by path, then the SHA-256 of the
   `"<hash>  <path>\n"` listing. `pack.sig` is excluded; `CLOSURE` is included, so the signature
   covers the declared closure. `digest_dir(dir)` is the digest of the directory as received;
   `Pack::digest()` is the digest of the canonical files `Pack::write` writes.
 - **Signature**: sshsig over the digest's 32 bytes, namespace **`adage-pack`**. An
-  `allowed_signers` entry with `namespaces="adage-track"` does not authorise a pack. Existing
-  `adage-track` signatures stay valid for v1 tracks.
+  `allowed_signers` entry restricted to another namespace does not authorise a pack. Packs are
+  the only format that travels: there is no other signed format.
 
 ## Script closure levels
 
@@ -348,12 +348,14 @@ directed at E0 (its argv names no file an agent could run); `adage-exec hook` br
 only once it is approved at E1 or E2 on this machine (policy `allow_vendor_scripts`, full text
 shown, never automatic). A vendored route whose pack requests no execution level is inert.
 
-## Upgrading v1 tracks
+## Converting a local track
 
-`upgrade_track(dir)` / `upgrade_track_with(dir, Some(repo_root))` read a v1 track
-(`track.toml` + `routes/*.yaml`, validated by `adage_tracks::io::read`) and build a pack:
+`adage condition` writes local tracks (`track.toml` + `routes/*.yaml`, validated by
+`adage_tracks::io::read`); they never travel as they are. `from_track_dir(dir)` /
+`from_track_dir_with(dir, Some(repo_root))` build a pack from one, which is what `adage share`
+does:
 
-| v1 trigger | v1 step | v2 shape |
+| track trigger | track step | pack shape |
 | --- | --- | --- |
 | `prompt`, `intent`, `session_start` | `run` | `run` |
 | `after_command`, `after_failure` | `run` | `after` |
@@ -367,7 +369,7 @@ Slots become inputs: a pattern contract becomes a user type `c-<first 12 hex of 
 slot a `read_batch` reads). A run step naming a repository script is pinned L-ref by hashing the
 file under `repo_root` (a regular file, no symlink on the way, inside the root, at most 1 MiB).
 Without a root, or when the file is missing, that route is skipped and reported in
-`Upgraded::skipped`: a pack never holds an unpinned script. The manifest gets applicability
+`Converted::skipped`: a pack never holds an unpinned script. The manifest gets applicability
 `repo` (the track's scope), tools, templates and models from the routes, the track's harness
 gauge, `[exec] requested = "E0"`, and `evidence.json` from each route's support and `by_origin`.
 `state`, `dormant_since` and `authored` are dropped.
@@ -377,15 +379,15 @@ gauge, `[exec] requested = "E0"`, and `evidence.json` from each route's support 
 ### Sharing
 
 ```sh
-adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format pack|v1]
+adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>] [--ack-scripts] [--repo-root <dir>]
 ```
 
 The source is resolved in this order:
 
-1. A learned track by name. It is upgraded to a pack. Only its live routes and nascent reflexes travel;
+1. A learned track by name. It is converted to a pack. Only its live routes and nascent reflexes travel;
    extinguished and weakened routes stay behind. A repository script is pinned L-ref against the
-   repository `share` runs in, if that repository is the track's; otherwise that route is listed
-   under "Not carried".
+   repository `share` runs in (or `--repo-root <dir>`), if that repository is the track's;
+   otherwise that route is listed under "Not carried".
 2. An installed pack by name.
 3. A pack directory.
 4. A track directory.
@@ -406,27 +408,24 @@ The pack is written in canonical form and re-read as a recipient would read it. 
 signed into `pack.sig` in namespace `adage-pack`. `share` prints the `trusted-signers` line
 recipients need, with `namespaces="adage-pack"`.
 
-`--format v1` writes a v1 track (`track.toml`, `routes/`, and `track.sig` in namespace
-`adage-track`) for recipients on an older Adage.
-
 ### Adding
 
 ```sh
-adage add <pack-or-track-dir> [--trust]
+adage add <pack-dir> [--trust]
 ```
 
 Run it inside the repository the pack is for. It refuses to run inside an agent session.
 
-For a pack, `add`:
+`add`:
 
 1. **Reads the directory strictly.** Only the listed files are read, with no symlinks and no
    smuggled files.
 2. **Checks the signature.** It computes the digest and checks `pack.sig` in namespace
    `adage-pack`.
-3. **Checks trust.** The trust anchors are the same as for tracks: `$ADAGE_HOME/trusted-signers`,
+3. **Checks trust.** The trust anchors are, in order: `$ADAGE_HOME/trusted-signers`,
    then the repository's `.adage/trusted-signers` once approved and pinned by hash, then a
-   signer approved with `--trust`. An entry restricted to `namespaces="adage-track"` refuses a
-   pack.
+   signer approved with `--trust`. An entry restricted to another namespace (`git`, say)
+   refuses a pack.
 4. **Validates the pack in full.** The schema and semantics are checked, and the closure is
    re-derived and compared with `CLOSURE`.
 5. **Re-classifies the steps.** The local command table classifies each step. A repository or
@@ -440,9 +439,8 @@ For a pack, `add`:
 
 It creates no execution approvals.
 
-A **v1 track** is verified as before (namespace `adage-track`) and upgraded in place: repository
-scripts are pinned against the repository `add` runs in, and routes that cannot be carried are
-recorded as inert.
+A track directory is refused with a pointer to `adage share`: packs are the only format `add`
+installs.
 
 ### Binding
 
@@ -495,7 +493,7 @@ The instinct catalogue ships as the pack `adage/core-instincts`
 `kind = "detector"`, `detector = "*"`, with `catalogue` set to this build's.
 
 The detectors are compiled Rust, so the pack names them and cannot supply them. For each
-repository, the compiled detectors propose the pack's routes, which are upgraded, validated and
+repository, the compiled detectors propose the pack's routes, which are converted, validated and
 closed like any pack's. Binding that pack gives exactly the routes the instinct binder gives; a
 test pins this.
 
@@ -507,7 +505,7 @@ pack.write(out)?;                                 // canonical files; removes a 
 pack.digest()?;                                   // pack digest of the canonical files
 pack.route_exec_digest("work-item-context");
 adage_pack::route_exec_digest(&route, &pack.types);
-adage_pack::upgrade_track_with(track_dir, Some(repo_root))?;
+adage_pack::from_track_dir_with(track_dir, Some(repo_root))?;
 adage_pack::sign_dir(dir, agent_sock, key)?;      // writes pack.sig (namespace adage-pack)
 adage_pack::verify_dir(dir, &allowed_signers, now)?;
 let env = adage_pack::BindEnv::current(Some(cas_dir));
@@ -515,4 +513,4 @@ let binding = adage_pack::bind(&pack, &adage_pack::Target::checkout(root), &env)
 for r in binding.inert() { println!("{}: {}", r.id, r.status.reason().unwrap()); }
 ```
 
-`adage-pack inspect|verify|digest|upgrade` is a small debugging binary over the same API.
+`adage-pack inspect|verify|digest` is a small debugging binary over the same API.

@@ -21,7 +21,7 @@ use std::path::{Path, PathBuf};
 
 /// What `adage share` reads.
 enum Source {
-    /// A track directory (upgraded to a pack).
+    /// A track directory (converted to a pack).
     Track(PathBuf),
     /// A pack directory (an installed pack, or one on disk).
     Pack(PathBuf),
@@ -118,7 +118,7 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
                     );
                 }
             }
-            let up = adage_pack::upgrade::upgrade(&track, root)
+            let up = adage_pack::convert::from_track(&track, root)
                 .with_context(|| format!("{} cannot be carried into a pack", track.manifest.track.name))?;
             skipped.extend(up.skipped);
             if let Ok(l) = list_files(&dir) {
@@ -251,10 +251,10 @@ pub fn share(name: &str, out: &Path, key: Option<&Path>, args: &[String], paths:
     for (rel, bytes) in &files {
         println!("  {rel:<48} {:>7} bytes", bytes.len());
     }
-    println!("\nRoutes (templates, types and aggregate statistics only):");
+    println!("\nReflexes (templates, types and aggregate statistics only):");
     for r in &pack.routes {
         let exec = r.exec.as_ref().map(|x| format!("{:?}", x.level)).unwrap_or_else(|| "E0".into());
-        let support = r.evidence.as_ref().map(|e| format!("  [{}/{} sessions]", e.support, e.opportunities));
+        let support = r.evidence.as_ref().map(|e| format!("  [{}/{} traces]", e.support, e.opportunities));
         println!(
             "  {:<24} {:<10} {:<6} exec {exec}{}",
             r.id,

@@ -450,7 +450,7 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
             if r.authored { " · authored" } else { "" }
         );
         println!(
-            "  evidence   {}/{} sessions over {} day(s) · rate {:.2} · Wilson lower bound {:.2}",
+            "  evidence   {}/{} traces over {} day(s) · rate {:.2} · Wilson lower bound {:.2}",
             e.support, e.opportunities, e.days, e.rate, e.lower_bound
         );
         println!("  runtime    followed {} · ignored {} (treated sessions)", it.followed, it.ignored);
