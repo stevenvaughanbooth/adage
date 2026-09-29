@@ -475,7 +475,10 @@ pub mod notice {
             let mut now = b(&[], &[]);
             now.quiet.insert("lookup".into());
             let (t, kind) = compose(&was, &now, None, None, "adage").unwrap();
-            assert_eq!(t, "adage: 1 quiet reflex waits (agents already do it); approve with adage review to deliver it.");
+            assert_eq!(
+                t,
+                "adage: 1 quiet reflex waits (agents already do it); approve with adage review to deliver it."
+            );
             assert_eq!(kind, "waiting");
             assert!(!t.contains("install step"));
         }

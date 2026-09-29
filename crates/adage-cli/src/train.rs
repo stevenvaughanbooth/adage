@@ -10,9 +10,9 @@
 //! what `adage` does for packs ([`crate::packs`]), and it runs nothing.
 
 use crate::packs;
-use adage_term::{Glyph, Line, Out, Role};
 use adage_pack::Pack;
 use adage_store::Paths;
+use adage_term::{Glyph, Line, Out, Role};
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
@@ -174,10 +174,16 @@ fn accept(args: &[String], paths: &Paths) -> Result<()> {
     o.blank()?;
     o.kv("installed", Line::new().text(dest.display().to_string()))?;
     match &signed {
-        Some(fp) => o.kv("signed", Line::new().text(fp.clone()).sep().quiet(format!("namespace {}", adage_sign::PACK_NAMESPACE)))?,
+        Some(fp) => o.kv(
+            "signed",
+            Line::new().text(fp.clone()).sep().quiet(format!("namespace {}", adage_sign::PACK_NAMESPACE)),
+        )?,
         None => o.kv(
             "signed",
-            Line::new().text("no").sep().quiet("no ssh-agent key and no --key; `adage share` signs it when you share it"),
+            Line::new()
+                .text("no")
+                .sep()
+                .quiet("no ssh-agent key and no --key; `adage share` signs it when you share it"),
         )?,
     }
     let mut nascent = 0;
@@ -232,7 +238,10 @@ fn accept(args: &[String], paths: &Paths) -> Result<()> {
     }
     o.kv(
         "index",
-        Line::new().text(format!("generation {}", index.generation)).sep().quiet(crate::words::count(index.routes.len(), "reflex")),
+        Line::new()
+            .text(format!("generation {}", index.generation))
+            .sep()
+            .quiet(crate::words::count(index.routes.len(), "reflex")),
     )?;
     o.blank()?;
     if nascent > 0 {

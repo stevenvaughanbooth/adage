@@ -94,7 +94,8 @@ pub(crate) fn trigger(t: &Trigger) -> Value {
 /// One event of a context trigger, as `{kind, label}`.
 fn ctx_item(i: &adage_tracks::CtxItem) -> Value {
     use adage_tracks::CtxItem;
-    let first = |keys: &[String]| keys.first().map(|k| k.strip_prefix("exec ").unwrap_or(k).to_string()).unwrap_or_default();
+    let first =
+        |keys: &[String]| keys.first().map(|k| k.strip_prefix("exec ").unwrap_or(k).to_string()).unwrap_or_default();
     let (kind, label) = match i {
         CtxItem::Act { keys } => ("act", format!("`{}` succeeds", first(keys))),
         CtxItem::Fail { keys, signature } => ("fail", format!("`{}` fails: {signature}", first(keys))),
@@ -696,7 +697,9 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
     let marker = adage_hook::rewrite_off(paths).exists();
     let pretool: Vec<Value> = pretool
         .iter()
-        .map(|(repo, p)| json!({ "repo": repo, "rewritten": p.rewritten, "advised": p.advised, "withheld": p.withheld }))
+        .map(
+            |(repo, p)| json!({ "repo": repo, "rewritten": p.rewritten, "advised": p.advised, "withheld": p.withheld }),
+        )
         .collect();
 
     let out = json!({

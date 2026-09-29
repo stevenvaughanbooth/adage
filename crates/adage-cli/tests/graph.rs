@@ -3,8 +3,8 @@
 
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
-use adage_tracks::*;
 use adage_tracks::card;
+use adage_tracks::*;
 use serde_json::{json, Value};
 use std::io::Write;
 use std::path::PathBuf;
@@ -254,7 +254,10 @@ fn graph_carries_quiet_cards_sequences_savings_and_rewrites() {
     assert_eq!(card["sessions"], 4);
     assert_eq!(card["passed"], 3);
     assert_eq!(card["files"][0]["path"], "flags/flag_<x>.go");
-    assert_eq!(card["commands"][0], json!({ "command": "go test ./flags", "sessions": 4, "runs": 5, "failed": 1, "error": null, "verified": true }));
+    assert_eq!(
+        card["commands"][0],
+        json!({ "command": "go test ./flags", "sessions": 4, "runs": 5, "failed": 1, "error": null, "verified": true })
+    );
     assert_eq!(card["finish"], "go vet ./...");
     assert_eq!(card["grey_from"], 0.711);
     assert_eq!(card["shared"], false);
