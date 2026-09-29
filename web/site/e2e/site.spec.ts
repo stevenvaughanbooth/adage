@@ -134,3 +134,68 @@ test("Escape still closes the film after Play is pressed", async ({ page }) => {
   await page.keyboard.press("Escape");
   await expect(page.locator("#film")).toBeHidden();
 });
+
+test.describe("/how", () => {
+  test("steps through chapters with the buttons, the keys and the URL", async ({ page }) => {
+    await page.goto("/how?ch=miners&step=2");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("From a transcript to a reflex");
+    await expect(page.locator("#capmeta")).toContainText("02 Condition with miners");
+    await expect(page.locator("#count")).toHaveText(/^3 \/ \d+$/);
+    await page.getByRole("button", { name: "Next step" }).click();
+    await expect(page.locator("#count")).toHaveText(/^4 \//);
+    await expect(page).toHaveURL(/step=3/);
+    await page.locator("#walk").click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press("ArrowLeft");
+    await expect(page.locator("#count")).toHaveText(/^3 \//);
+    await page.getByRole("button", { name: /Measure against control/ }).click();
+    await expect(page.locator("#captitle")).toHaveText("Two arms, task by task");
+    await expect(page.locator("#howgl")).toBeVisible();
+  });
+
+  test("every chapter builds and every step has words", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(String(e)));
+    await page.goto("/how");
+    const chapters = await page.locator("#chaplist .chap").count();
+    expect(chapters).toBe(9);
+    for (let c = 0; c < chapters; c++) {
+      await page.locator("#chaplist .chap").nth(c).click();
+      const steps = await page.locator("#ticks button").count();
+      expect(steps).toBeGreaterThan(2);
+      for (let s = 0; s < steps; s++) {
+        await page.locator("#ticks button").nth(s).click();
+        await expect(page.locator("#captitle")).not.toHaveText("");
+        await expect(page.locator("#capbody")).not.toHaveText("");
+      }
+    }
+    expect(errors).toEqual([]);
+  });
+
+  test("the Wilson calculator agrees with the Rust bound", async ({ page }) => {
+    await page.goto("/how#m-evidence");
+    await page.locator("#wn").fill("8");
+    await page.locator("#wk").fill("7");
+    // wilson_lower(7, 8) = 0.529 (crates/adage-tracks/src/model.rs)
+    await expect(page.locator("#w-say")).toContainText("lower bound 0.53");
+    await page.locator("#wn").fill("20");
+    await page.locator("#wk").fill("20");
+    await expect(page.locator("#w-say")).toContainText("it may fire");
+  });
+
+  for (const scheme of ["dark", "light"] as const) {
+    test(`no axe violations (${scheme})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme, reducedMotion: "reduce" });
+      await page.goto("/how");
+      await expect(page.locator("#captitle")).not.toHaveText("");
+      const r = await new AxeBuilder({ page }).exclude("#howgl").exclude("#howlayer").analyze();
+      expect(r.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(", ")}`)).toEqual([]);
+    });
+  }
+
+  test("a phone never scrolls sideways", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/how");
+    await page.evaluate(() => document.querySelectorAll(".reveal").forEach((n) => n.classList.add("in")));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
+  });
+});

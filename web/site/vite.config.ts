@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 
 // The site's absolute URL, for canonical and Open Graph tags: SITE_URL, or the production domain
@@ -14,8 +15,13 @@ const html = (): Plugin => ({
   },
 });
 
+// The How it works chapters are shared with the map (web/map/src/how): one source for both. They
+// import three, which resolves from this package (the map's node_modules are not installed here).
+const how = fileURLToPath(new URL("../map/src/how", import.meta.url));
+
 export default defineConfig({
   plugins: [html()],
+  resolve: { alias: { "@how": how }, dedupe: ["three"] },
   build: {
     outDir: "dist",
     emptyOutDir: true,
@@ -24,14 +30,19 @@ export default defineConfig({
     assetsInlineLimit: 0,
     chunkSizeWarningLimit: 900,
     rollupOptions: {
-      input: { main: "index.html", notfound: "404.html" },
-      // three.js and the scene are one lazy chunk: the words paint before it arrives.
+      input: { main: "index.html", how: "how.html", notfound: "404.html" },
+      // Chunks (Rolldown groups): three.js is shared by the hero and /how; the hero's scene and the
+      // walkthrough's chapters stay with their own pages, so the words paint before either arrives.
       output: {
-        manualChunks(id) {
-          if (id.includes("/node_modules/three/") || id.includes("/src/hero/")) return "scene";
+        advancedChunks: {
+          groups: [
+            { name: "three", test: /[\\/]node_modules[\\/]three[\\/]/ },
+            { name: "scene", test: /[\\/]src[\\/]hero[\\/]/ },
+            { name: "how", test: /[\\/]map[\\/]src[\\/]how[\\/]/ },
+          ],
         },
       },
     },
   },
-  server: { port: 5174 },
+  server: { port: 5174, fs: { allow: [".", "../map/src"] } },
 });

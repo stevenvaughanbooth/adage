@@ -15,7 +15,8 @@
     "noEmit": true,
     "allowJs": true,
     "checkJs": false,
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node"],
+    "paths": { "@how/*": ["../map/src/how/*"] }
   },
   "include": ["src", "api", "e2e", "scripts", "vite.config.ts", "playwright.config.ts"],
   "exclude": ["src/hero/scene.js"]

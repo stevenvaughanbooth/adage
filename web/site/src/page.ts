@@ -24,7 +24,8 @@ export function initPage() {
     links.hidden = false;
   }
 
-  const form = document.getElementById("signup") as HTMLFormElement;
+  const form = document.getElementById("signup") as HTMLFormElement | null;
+  if (!form) return;
   const status = document.getElementById("signup-status")!;
   const email = form.elements.namedItem("email") as HTMLInputElement;
   const say = (msg: string, kind: "" | "ok" | "err") => { status.textContent = msg; status.className = "status " + kind; };

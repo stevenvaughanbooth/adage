@@ -4,9 +4,10 @@
 
 const MEDIA = (import.meta.env.VITE_MEDIA_BASE as string | undefined) || "/media/";
 const OFF = import.meta.env.VITE_FILM === "off";
+// Each cut can also be named by its full URL (a Blob store keeps whatever name it was uploaded with).
 const SRC = {
-  dark: [MEDIA + "teaser-dark.mp4", "/media/poster-dark.jpg"],
-  light: [MEDIA + "teaser-day.mp4", "/media/poster-day.jpg"],
+  dark: [(import.meta.env.VITE_FILM_DARK_URL as string | undefined) || MEDIA + "teaser-dark.mp4", "/media/poster-dark.jpg"],
+  light: [(import.meta.env.VITE_FILM_DAY_URL as string | undefined) || MEDIA + "teaser-day.mp4", "/media/poster-day.jpg"],
 } as const;
 
 type Opts = { isLight(): boolean; reduced(): boolean; onOpen(): void; onClose(): void };

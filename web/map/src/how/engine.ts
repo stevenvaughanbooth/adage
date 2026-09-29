@@ -122,8 +122,9 @@ function cssVar(name: string): string {
 
 function isDark(): boolean {
   const t = document.documentElement.getAttribute("data-theme");
-  if (t === "night") return true;
-  if (t === "day") return false;
+  // The map says night/day; the public site (web/site), which shares these chapters, says dark/light.
+  if (t === "night" || t === "dark") return true;
+  if (t === "day" || t === "light") return false;
   return window.matchMedia("(prefers-color-scheme: dark)").matches;
 }
 

@@ -5,6 +5,7 @@ import "./styles.css";
 import { TABS, SCENE_OF } from "./tabs";
 import { createFilm } from "./film";
 import { initPage } from "./page";
+import { initTheme, isLight } from "./theme";
 
 type Scene = {
   go(id: string): void;
@@ -15,34 +16,9 @@ type Scene = {
 };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const root = document.documentElement;
 const mqReduce = matchMedia("(prefers-reduced-motion: reduce)");
-const mqLight = matchMedia("(prefers-color-scheme: light)");
 let reduced = mqReduce.matches;
 let scene: Scene | null = null;
-
-/* ------------------------------------------------------------ the theme */
-const THEME_KEY = "adage.theme";
-try {
-  const saved = localStorage.getItem(THEME_KEY);
-  if (saved === "light" || saved === "dark") root.dataset.theme = saved;
-} catch { /* storage may be blocked; the system theme applies */ }
-const isLight = () => (root.dataset.theme ? root.dataset.theme === "light" : mqLight.matches);
-const themeBtn = $<HTMLButtonElement>("theme");
-function syncTheme() {
-  const light = isLight();
-  themeBtn.setAttribute("aria-label", light ? "Switch to the night theme" : "Switch to the day theme");
-  themeBtn.textContent = light ? "Night" : "Day";
-  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((m) => (m.content = light ? "#ececef" : "#050507"));
-  scene?.theme(light);
-  film.source(true);
-}
-themeBtn.addEventListener("click", () => {
-  root.dataset.theme = isLight() ? "dark" : "light";
-  try { localStorage.setItem(THEME_KEY, root.dataset.theme); } catch { /* not remembered */ }
-  syncTheme();
-});
-mqLight.addEventListener("change", () => { if (!root.dataset.theme) syncTheme(); });
 
 /* ------------------------------------------------------------ the tabs and the tour */
 const DWELL = 12000;
@@ -121,7 +97,7 @@ function webgl() {
 }
 
 syncPause();
-syncTheme();
+initTheme((light) => { scene?.theme(light); film.source(true); });
 select(0);
 film.start();
 initPage();
