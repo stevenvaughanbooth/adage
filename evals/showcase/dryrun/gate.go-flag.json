@@ -1,17 +1,17 @@
 {
  "family": "go-flag",
- "home": "/tmp/sc-dry-go-flag-0qclexfm/adage-home",
+ "home": "/tmp/sc-dry-go-flag-koxrjf4v/adage-home",
  "adage": "/tmp/adage-showcase-target/release/adage",
  "cards": [
   {
    "id": "card-11e594f481",
-   "bytes": 9419
+   "bytes": 9454
   }
  ],
  "held_out": [
   {
    "task": "go-flag--percent",
-   "session": "a7cfa2e5-14b6-4d2c-adc2-139e9e3fbcde",
+   "session": "69eba861-efd2-40e2-ade0-3b5a8ddeafae",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -22,7 +22,7 @@
   },
   {
    "task": "go-flag--bytesize",
-   "session": "c45a11f1-0aa2-4da7-b551-2e53d2596a01",
+   "session": "1cf2157a-1447-42a0-ba1f-0fa263801fb5",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -33,7 +33,7 @@
   },
   {
    "task": "go-flag--date",
-   "session": "4b36fbfa-3fa8-4ebb-bbb1-1c95ff10b677",
+   "session": "69514023-a6ae-4b55-99be-1a7863da4524",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -44,7 +44,7 @@
   },
   {
    "task": "go-flag--hexcolor",
-   "session": "8b7b2eb9-c769-4af6-8507-a0805c5671c7",
+   "session": "0f9e64eb-ce37-449d-b1c0-996046b2d3ec",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -55,7 +55,7 @@
   },
   {
    "task": "go-flag--cidr",
-   "session": "f32b4e4a-7594-4684-b5da-3c6389a1f239",
+   "session": "90660522-13b9-409f-83be-239c39033b8d",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -66,7 +66,7 @@
   },
   {
    "task": "go-flag--semver",
-   "session": "8e28aa49-1eeb-478f-abee-e5b9a3084f37",
+   "session": "03d9a386-b1a2-4fb3-a3e5-5a9b6e8d6749",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -77,7 +77,7 @@
   },
   {
    "task": "go-flag--hostport",
-   "session": "390fb818-f89a-4c42-8a10-c8e8c3c199f4",
+   "session": "53ba790e-2580-4d94-82fc-f34e25922e51",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -88,7 +88,7 @@
   },
   {
    "task": "go-flag--uuid",
-   "session": "a0b4817b-8f6a-4411-ba0a-24c0cb83642b",
+   "session": "178d6959-1db2-467e-babb-0bb5b2467c61",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -102,7 +102,7 @@
   {
    "id": "urfave-cli-7492c456",
    "source": "repobench",
-   "session": "2ff0f4e6-7008-4093-b2df-c9ace1b3e247",
+   "session": "e52ea443-576a-4a15-be0f-9bd6778688bd",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -112,7 +112,7 @@
   {
    "id": "urfave-cli-72ca6b88",
    "source": "repobench",
-   "session": "86be48b5-318d-4c64-844c-d4a56d8c6da4",
+   "session": "90529311-5510-4d96-9d36-64b0744d2b90",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -122,7 +122,7 @@
   {
    "id": "urfave-cli-db7d18f2",
    "source": "repobench",
-   "session": "24977aae-ee89-484d-a475-f202e5049c4d",
+   "session": "7b0c748d-1045-4c5f-bb1e-ac693f265b8a",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -132,7 +132,7 @@
   {
    "id": "neg-go-trimspace-env",
    "source": "handwritten",
-   "session": "d51faae0-8528-476d-8908-07ffc81670ce",
+   "session": "586259e5-5d43-4dde-89f8-7f75858f4018",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -142,7 +142,7 @@
   {
    "id": "neg-go-timestamp-local",
    "source": "handwritten",
-   "session": "fccff7e6-5026-428a-96f3-90b3891cb594",
+   "session": "19b306cc-db2e-44a2-9410-8eb58fac2561",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -152,7 +152,7 @@
   {
    "id": "neg-go-yaml-docs",
    "source": "handwritten",
-   "session": "1d51754b-3efb-4322-b13a-c26113551d43",
+   "session": "969e44f5-dafc-4007-b383-32fc7e910036",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],

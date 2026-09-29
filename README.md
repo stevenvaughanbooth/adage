@@ -60,7 +60,7 @@ something is new, tells you in one line (`adage: 3 new reflexes active.`, or `1 
 for you: run adage review in a terminal.`; with no `adage` on your `PATH`, as with the plugin alone,
 the line names the plugin's own binary instead, so the command works as written).
 
-From a terminal, `brew install stevenvaughanbooth/tap/adage` or `npm install -g @adage/cli`
+From a terminal, `brew install stevenvaughanbooth/tap/adage` or `npm install -g @adage-ai/cli`
 (**not published yet:** until the first release is out, the tap and the npm package do not exist;
 build from source with `cargo install --locked --git https://github.com/stevenvaughanbooth/adage
 adage-cli`), then connect your agent once (`adage` tells you how: `adage install claude-code --write --scope user`,
@@ -303,7 +303,7 @@ From a tagged release, for macOS (arm64, x64), Linux (x64, arm64; static) and Wi
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.ps1 | iex"
 brew install stevenvaughanbooth/tap/adage   # not published yet: once the first release is out
-npm install -g @adage/cli                  # not published yet: once the scope is claimed (npm/config.mjs)
+npm install -g @adage-ai/cli               # not published yet: once the first release is out
 cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli
 ```
 

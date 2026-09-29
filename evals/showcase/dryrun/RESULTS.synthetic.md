@@ -2,7 +2,7 @@
 
 > **Status: SYNTHETIC.** SYNTHETIC DATA from the dry run: these numbers illustrate the pipeline, they are not results.
 
-On 5 recurring-task families on 5 open-source repositories, with the product learning each family from 4 ordinary sessions by itself, Adage cut the cost per task by 14.7% (90% CI 9.6-19.8%). That covers 80 held-out pairs (160 sessions, 40 task variants, 5 families) with Claude Haiku 4.5. Pre-registered in [prereg.json](prereg.json) (sha256 `61c640b49d9c`).
+On 5 recurring-task families on 5 open-source repositories, with the product learning each family from 4 ordinary sessions by itself, Adage cut the cost per task by 14.7% (90% CI 9.6-19.8%). That covers 80 held-out pairs (160 sessions, 40 task variants, 5 families) with Claude Haiku 4.5. Pre-registered in [prereg.json](prereg.json) (sha256 `ed27e353aa00`).
 
 ## Pooled (Claude Haiku 4.5)
 

@@ -1,10 +1,10 @@
 {
  "schema": "adage-showcase-results/1",
  "status": "synthetic",
- "generated": "2026-09-29T22:53:17Z",
+ "generated": "2026-09-29T23:03:55Z",
  "prereg": {
   "path": "evals/showcase/prereg.json",
-  "sha256": "61c640b49d9c76a39eb872e1d0044ed2454dd02b03bace511f23f6e5143062ac",
+  "sha256": "ed27e353aa00743c855738533acceccbf87ffad62a38e44e948dc4248081c771",
   "written": "2026-09-29, before any showcase session, any card learned on these families, or any detection score on their prompts"
  },
  "question": "What does the SHIPPED product (hooks installed as `adage init` installs them, the background learner `adage condition --auto`, procedure cards delivered by hook, uplift gating) do to the cost, speed and pass rate of recurring developer tasks, across 5 families on 5 repositories, when it learns each family from 4 ordinary sessions of the user's history with no harness intervention? Publishable numbers for the website: pooled and per family, with intervals, n, spend and caveats.",
