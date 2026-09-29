@@ -13,7 +13,7 @@
 //!              "summary":"reflex prime → fire (9 of 9 traces, lower bound 0.70)"}],
 //!  "version":"0.1.0","sessions_steered":3,"thresholds":"min_support=5 …","intent_model":null,
 //!  "repos":{"github.com/acme/billing":{"sessions":198,"tracks":[{"name":"…","version":"1.2.0",
-//!           "change":"route added","routes":4}]}}}
+//!           "change":"reflex added","routes":4}]}}}
 //! ```
 //!
 //! - `trigger`: `auto` (the background learner a hook started) or `manual` (`adage condition`).

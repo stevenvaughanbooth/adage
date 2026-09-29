@@ -255,8 +255,9 @@ fn indexed<'a>(
 ) -> Result<&'a adage_tracks::index::IndexedRoute> {
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
     let key = repo::lookup_key(root, Some(&paths.repo_keys()), &keys)
-        .with_context(|| format!("no routes are installed for {}", root.display()))?;
-    route::find(index, &key, track, route_id).with_context(|| format!("no route {route_id} in track {track} for {key}"))
+        .with_context(|| format!("no reflexes are installed for {}", root.display()))?;
+    route::find(index, &key, track, route_id)
+        .with_context(|| format!("no reflex {route_id} in track {track} for {key}"))
 }
 
 /// When an action runs, in words: its reflex's stimulus.
@@ -470,7 +471,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     let e = &ir.route.evidence;
 
     println!("Approving on this machine, for repository {}:", key.repo);
-    println!("  route:    {label} (track version {})", ir.version);
+    println!("  reflex:   {label} (track version {})", ir.version);
     println!("  level:    {}   output: {}", level.as_str().to_uppercase(), req.output.mode.as_str());
     println!("  argv:     {}", req.argv.join(" "));
     for (k, v) in &req.contracts {
@@ -579,7 +580,7 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     });
     store.save(&store_path)?;
     println!(
-        "Recorded in {}. It lapses if the route, its script or its sandbox profile changes.",
+        "Recorded in {}. It lapses if the reflex, its script or its sandbox profile changes.",
         store_path.display()
     );
     if !marker(paths).is_file() {

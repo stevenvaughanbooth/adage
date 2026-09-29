@@ -85,10 +85,9 @@ fn data_dir(paths: &Paths) -> Check {
         let ancestor = root.ancestors().skip(1).find(|a| a.is_dir());
         return match ancestor {
             // A fresh install: the first session (or `adage condition`) creates it.
-            Some(a) if probe(a) => pass(
-                name,
-                format!("{} does not exist yet; your first agent session creates it", detect::tilde(root)),
-            ),
+            Some(a) if probe(a) => {
+                pass(name, format!("{} does not exist yet; your first agent session creates it", detect::tilde(root)))
+            }
             _ => fail(
                 name,
                 format!("{} does not exist and cannot be created", detect::tilde(root)),
@@ -188,10 +187,7 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
         Ok(b) => b,
         // Nothing installed yet (a fresh install): the first session compiles it.
         Err(e) if e.kind() == std::io::ErrorKind::NotFound && scan.valid.is_empty() => {
-            return (
-                pass("index", "none yet: your first agent session in a repository compiles it"),
-                Index::default(),
-            )
+            return (pass("index", "none yet: your first agent session in a repository compiles it"), Index::default())
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return (
@@ -438,6 +434,22 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
                 (false, false) => pass(&name, "harness not installed; nothing to check"),
             });
             continue;
+        }
+        // The Claude Code plugin registers its own hooks: settings entries as well run every hook
+        // twice, so each notice the person sees appears twice.
+        if plugin {
+            let at: Vec<String> = mine.iter().map(|r| detect::tilde(&r.location)).collect();
+            out.push(warn(
+                &format!("{name} (twice)"),
+                format!(
+                    "registered by the Adage plugin and in {}: every hook runs twice, and each notice appears twice",
+                    at.join(" and ")
+                ),
+                format!(
+                    "keep one: remove Adage's hook entries from {} (the plugin keeps working), or uninstall the plugin",
+                    at.join(" and ")
+                ),
+            ));
         }
         for r in mine {
             let at = detect::tilde(&r.location);

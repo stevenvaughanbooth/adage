@@ -123,9 +123,9 @@ pub(crate) fn bump(prev: Option<&Track>, routes: &[Route]) -> (String, String) {
     }
     let removed_or_changed = old.iter().any(|(k, v)| new.get(k).is_some_and(|n| n != v) || !new.contains_key(k));
     if removed_or_changed {
-        (format!("{}.0.0", ma + 1), "route changed or removed".into())
+        (format!("{}.0.0", ma + 1), "reflex changed or removed".into())
     } else {
-        (format!("{ma}.{}.0", mi + 1), "route added".into())
+        (format!("{ma}.{}.0", mi + 1), "reflex added".into())
     }
 }
 

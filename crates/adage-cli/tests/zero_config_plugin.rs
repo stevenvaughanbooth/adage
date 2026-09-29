@@ -447,7 +447,7 @@ fn pretool_rewrites_to_the_verified_environment() {
     let out = pre("python -m pytest tests/test_formatting.py -xvs 2>&1 | head -50");
     let py = repo.join(".venv/bin/python");
     let want = json!({
-        "systemMessage": "adage: ran this test run with .venv/bin/python (the project's environment).",
+        "systemMessage": "adage: pointed this test run at .venv/bin/python (the project's environment).",
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "updatedInput": {

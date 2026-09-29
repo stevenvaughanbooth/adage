@@ -141,7 +141,14 @@ pub(crate) fn plan(harness: &str, scope: &str, repo: Option<&Path>, bin: Option<
 /// Make a planned write. Needs a person at a terminal, outside any agent session.
 pub(crate) fn apply(p: &Plan) -> Result<()> {
     require_person()?;
-    write_with_backup(p).map(drop)
+    write_atomic(&p.target, &p.after)
+}
+
+/// [`apply`], first keeping the file's previous version in `<file>.adage-bak` (`adage init` and
+/// `adage ui`, which show the diff first). Returns the backup's path, when one was made.
+pub(crate) fn apply_backed_up(p: &Plan) -> Result<Option<PathBuf>> {
+    require_person()?;
+    write_with_backup(p)
 }
 
 /// Write the plan's file, first copying what it holds now (if anything, and if it changes) to

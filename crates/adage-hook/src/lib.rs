@@ -333,7 +333,7 @@ fn pretool(
             let mut updated = input.clone();
             updated["command"] = Value::String(new.clone());
             let notice = format!(
-                "adage: ran this {} with {} (the project's environment).",
+                "adage: pointed this {} at {} (the project's environment).",
                 if *kind == "test" { "test run" } else { "Python run" },
                 env.interpreter
             );
@@ -485,10 +485,8 @@ fn unwritable_notice(paths: &Paths, e: &std::io::Error) -> Option<String> {
     let dir = paths.root.to_string_lossy();
     let marker = std::env::temp_dir().join(format!("adage-unwritable-{}", repo::short_hash(&dir)));
     std::fs::OpenOptions::new().write(true).create_new(true).open(marker).ok()?;
-    let why = match e.kind() {
-        std::io::ErrorKind::PermissionDenied => "permission denied".to_string(),
-        _ => e.to_string(),
-    };
+    let why = e.to_string();
+    let why = why.split(" (os error").next().unwrap_or(&why).to_lowercase();
     Some(format!(
         "adage: can't write its data directory {dir} ({why}), so it cannot learn here. Set ADAGE_HOME to a writable directory; `adage doctor` checks it."
     ))

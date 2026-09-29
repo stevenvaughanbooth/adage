@@ -32,7 +32,7 @@
 //! adage review delegate <track> <reflex> --level e1|e2 [--raw] [--fields ..] [--outputs <glob>]   approve an E1 prefetch or an E2 action (a person)
 //! adage review revoke <track> <reflex>   withdraw that grant
 //! adage delegate on|off|status       hooks call adage-exec (E1 prefetch, E2 actions) or adage; grants per repository
-//! adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <route> [--by <name>]
+//! adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <reflex> [--by <name>]
 //! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
 //! adage eval <dataset> [--split ..] [--json]  offline replay eval of what Adage would have said
 //! adage version
@@ -134,12 +134,10 @@ pub(crate) fn writable_data_dir(paths: &Paths) -> Result<()> {
     }
 }
 
-/// An I/O error in a few words.
+/// An I/O error in a few words, without the OS error number.
 fn io_reason(e: &std::io::Error) -> String {
-    match e.kind() {
-        std::io::ErrorKind::PermissionDenied => "permission denied".into(),
-        _ => e.to_string(),
-    }
+    let s = e.to_string();
+    s.split(" (os error").next().unwrap_or(&s).to_lowercase()
 }
 
 fn flag(args: &[String], name: &str) -> Option<String> {

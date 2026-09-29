@@ -275,7 +275,11 @@ impl Index {
     pub fn try_load(path: &Path) -> std::result::Result<Index, Unloaded> {
         let bytes = match std::fs::read(path) {
             Ok(b) => b,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(Unloaded::Missing),
+            // No index there (a data directory not created yet, or that cannot be: a file in the
+            // way) is missing, not damaged: there is nothing to rebuild.
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory) => {
+                return Err(Unloaded::Missing)
+            }
             Err(_) => return Err(Unloaded::Damaged),
         };
         serde_json::from_slice(&bytes).map_err(|_| Unloaded::Damaged)

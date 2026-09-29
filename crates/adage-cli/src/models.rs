@@ -182,14 +182,20 @@ fn switched(paths: &Paths, before: &str) -> String {
     let exe = std::env::current_exe().ok();
     let mut out = String::new();
     for (repo, (n, cards)) in stranded {
-        let mut what = if n == 1 { "1 reflex that matches prompts".to_string() } else { format!("{n} reflexes that match prompts") };
+        let mut what = if n == 1 {
+            "1 reflex that matches prompts".to_string()
+        } else {
+            format!("{n} reflexes that match prompts")
+        };
         if cards > 0 {
             what.push_str(&format!(" ({cards} procedure card{})", if cards == 1 { "" } else { "s" }));
         }
         let requeued = match (roots.get(repo), &exe) {
             (Some(req), Some(exe)) if Path::new(&req.root).join(".git").exists() => matches!(
                 crate::autolearn::on_turn_end(paths, Path::new(&req.root), &req.harness, None, exe, false),
-                Ok(crate::autolearn::Triggered::Started(_) | crate::autolearn::Triggered::Running | crate::autolearn::Triggered::Scheduled)
+                Ok(crate::autolearn::Triggered::Started(_)
+                    | crate::autolearn::Triggered::Running
+                    | crate::autolearn::Triggered::Scheduled)
             ),
             _ => false,
         };

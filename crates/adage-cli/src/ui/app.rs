@@ -936,9 +936,12 @@ fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Opt
                 loader.want(Want::Health);
             }
             Action::Install(p) => {
-                match crate::install::apply(&p) {
-                    Ok(()) => {
+                match crate::install::apply_backed_up(&p) {
+                    Ok(backup) => {
                         let mut lines = vec![format!("wrote {}", p.target.display())];
+                        if let Some(b) = backup {
+                            lines.push(format!("the previous version is in {}", b.display()));
+                        }
                         if p.harness == "codex" {
                             lines.push(
                                 "Codex asks you to review new hooks before they run: open /hooks in Codex.".into(),
