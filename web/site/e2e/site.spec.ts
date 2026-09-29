@@ -199,3 +199,47 @@ test.describe("/how", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(0);
   });
 });
+
+test.describe("the film plays once, on a fresh visit", () => {
+  test("not on a link to a section", async ({ page }) => {
+    await films(page, "hang");
+    await page.goto("/#evidence");
+    await expect(page.locator("#film")).toBeHidden();
+    await expect(page.locator("main")).toHaveJSProperty("inert", false);
+  });
+
+  test("not when coming from /how, and not twice in a visit", async ({ page }) => {
+    await films(page, "hang");
+    await page.goto("/how");
+    await page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Evidence" }).click();
+    await expect(page).toHaveURL(/\/#evidence$/);
+    await expect(page.locator("#film")).toBeHidden();
+    await page.goto("about:blank");
+    await page.goto("/");
+    await expect(page.locator("#film")).toBeHidden();
+  });
+
+  test("the hero's See how it works and the section's Learn more open /how", async ({ page }) => {
+    await films(page, "fail");
+    await page.goto("/#how");
+    await expect(page.getByRole("link", { name: /^Learn more/ })).toHaveAttribute("href", "/how");
+    await page.getByRole("link", { name: "See how it works" }).click();
+    await expect(page).toHaveURL(/\/how$/);
+  });
+});
+
+test("/how plays its tour by default, and stops when the visitor takes over", async ({ page }) => {
+  await page.goto("/how");
+  await page.locator("#walk").scrollIntoViewIfNeeded();
+  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+  await expect(page.locator("#count")).toHaveText(/^2 \//, { timeout: 20_000 });
+  await page.getByRole("button", { name: "Next step" }).click();
+  await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
+});
+
+test("/how does not play by itself with reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/how");
+  await page.locator("#walk").scrollIntoViewIfNeeded();
+  await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
+});

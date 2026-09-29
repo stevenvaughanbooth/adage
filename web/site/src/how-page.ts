@@ -14,13 +14,14 @@ import { initPage } from "./page";
 import { initTheme } from "./theme";
 import { initWilson } from "./wilson";
 
-const STEP_MS = 5200;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 let stage: Stage | null = null;
 let built: Built | null = null;
 let ch = 0, step = 0, playing = false, timer = 0;
+// The tour plays by default while the walk is on screen, until the visitor takes the controls.
+let userStopped = reduced, inView = false;
 
 /** Chapters build on this when there is no WebGL: they get their words, and nothing draws. */
 const textStage = {
@@ -84,9 +85,15 @@ const next = () => {
 };
 const prev = () => { if (step > 0) go(ch, step - 1); else if (ch > 0) go(ch - 1, 999); };
 
+/** Long enough to read the caption: about 230 words a minute, at least 6 seconds. */
+function dwell(): number {
+  const s = built?.steps[step];
+  const words = `${s?.title ?? ""} ${s?.body ?? ""}`.split(/\s+/).length;
+  return Math.max(6000, words * 260 + 1500);
+}
 function schedule() {
   clearTimeout(timer);
-  if (playing) timer = window.setTimeout(next, STEP_MS);
+  if (playing) timer = window.setTimeout(next, dwell());
 }
 function setPlaying(p: boolean) {
   playing = p;
@@ -94,7 +101,8 @@ function setPlaying(p: boolean) {
   $("playicon").setAttribute("d", p ? "M3 2h4v12H3zM9 2h4v12H9z" : "M4 2l10 6-10 6z");
   schedule();
 }
-const stop = () => setPlaying(false);
+/** The visitor took the controls: the tour stays stopped until they press play. */
+const stop = () => { userStopped = true; setPlaying(false); };
 
 /* ------------------------------------------------------------ drawing the page for a step */
 function render() {
@@ -186,17 +194,25 @@ function startStage() {
 /* ------------------------------------------------------------ controls */
 $("prev").addEventListener("click", () => { stop(); prev(); });
 $("next").addEventListener("click", () => { stop(); next(); });
-$("play").addEventListener("click", () => setPlaying(!playing));
+$("play").addEventListener("click", () => { userStopped = playing; setPlaying(!playing); });
 document.addEventListener("keydown", (e) => {
   const t = e.target as HTMLElement;
   if (e.altKey || e.ctrlKey || e.metaKey || t.closest("input, select, textarea")) return;
   const inWalk = !!t.closest("#walk") || t === document.body;
   if (e.key === "ArrowRight" && inWalk) { e.preventDefault(); stop(); next(); }
   if (e.key === "ArrowLeft" && inWalk) { e.preventDefault(); stop(); prev(); }
-  if (e.key === " " && t.closest("#walk") && !t.closest("button")) { e.preventDefault(); setPlaying(!playing); }
+  if (e.key === " " && t.closest("#walk") && !t.closest("button")) { e.preventDefault(); userStopped = playing; setPlaying(!playing); }
 });
-// Stop playing when the walk scrolls out of view.
-new IntersectionObserver((es) => { if (!es[0]?.isIntersecting && playing) stop(); }).observe($("walk"));
+// Play while the walk is on screen (unless the visitor stopped it); pause when it scrolls away.
+new IntersectionObserver((es) => {
+  inView = !!es[0]?.isIntersecting;
+  if (!inView && playing) setPlaying(false);
+  else if (inView && !userStopped && !playing) setPlaying(true);
+}, { threshold: 0.35 }).observe($("walk"));
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { if (playing) setPlaying(false); }
+  else if (inView && !userStopped) setPlaying(true);
+});
 
 initTheme();
 startStage();

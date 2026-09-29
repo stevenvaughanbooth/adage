@@ -10,6 +10,8 @@ const SRC = {
   light: [(import.meta.env.VITE_FILM_DAY_URL as string | undefined) || MEDIA + "teaser-day.mp4", "/media/poster-day.jpg"],
 } as const;
 
+const SEEN = "adage.film.seen";
+
 type Opts = { isLight(): boolean; reduced(): boolean; onOpen(): void; onClose(): void };
 
 export function createFilm(o: Opts) {
@@ -96,6 +98,12 @@ export function createFilm(o: Opts) {
     /** Open the page on the film, unless it is switched off for this build. */
     start() {
       if (OFF) { el.hidden = true; document.getElementById("teaser")?.remove(); return; }
+      // The film opens a visit, once: not on a link to a section (/#evidence), not when coming from
+      // another page of the site, and not again later in the same visit. "Watch the teaser" still plays it.
+      let seen = false;
+      try { seen = sessionStorage.getItem(SEEN) === "1"; sessionStorage.setItem(SEEN, "1"); } catch { /* no storage: play it */ }
+      const fromSite = !!document.referrer && new URL(document.referrer).origin === location.origin;
+      if (seen || fromSite || location.hash) { el.classList.add("live"); el.hidden = true; return; }
       show();
     },
   };

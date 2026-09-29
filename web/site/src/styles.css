@@ -464,5 +464,5 @@ math { color: inherit; font-family: "STIX Two Math", "Cambria Math", "Latin Mode
   .formula math { font-size: 1em; }
   .how-label { font-size: 9.5px; }
 }
-.deeper { margin: 20px 0 0; }
-.deeper .btn { display: inline-block; }
+.deeper { margin: 32px 0 0; text-align: center; }
+.deeper .btn { display: inline-block; padding: 12px 28px; font-size: 15.5px; }
