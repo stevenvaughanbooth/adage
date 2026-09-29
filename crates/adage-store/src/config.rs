@@ -198,7 +198,7 @@ pub const KEYS: &[Key] = &[
         kind: Kind::Bool,
         default: "true",
         env: None,
-        doc: "learn procedure cards for families of similar tasks (needs the embedding model)",
+        doc: "learn procedure cards for families of similar tasks (with the installed or bundled model)",
         guarded: false,
     },
     Key {

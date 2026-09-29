@@ -111,7 +111,10 @@ fn an_accepted_pack_is_installed_as_reviewed() {
     // Verified by replay, accepted here: the finish line may fire; without a sandbox, prime.
     let want = if replay { adage_tracks::Strength::Fire } else { adage_tracks::Strength::Prime };
     assert_eq!(strength("widget-work-s2-regenerate"), want, "{text}");
-    assert_eq!(strength("widget-work-s4-before-finish"), want, "{text}");
+    // The before-finish check (after any edit) and the regenerate step (after a schema edit) are
+    // two fires at one decision point, an edit of a schema: the index's interlock keeps the first
+    // and weakens the other to prime (`adage_tracks::interlock`), whatever the pack says.
+    assert_eq!(strength("widget-work-s4-before-finish"), adage_tracks::Strength::Prime, "{text}");
     let accepted: std::collections::BTreeMap<String, String> =
         serde_json::from_slice(&std::fs::read(home.join("train/accepted.json")).unwrap()).unwrap();
     assert_eq!(accepted.get(&out.pack_name), out.digest.as_ref());

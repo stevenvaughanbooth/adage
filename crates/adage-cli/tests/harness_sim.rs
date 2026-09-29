@@ -117,6 +117,9 @@ fn learned_routes(report: &Value) -> Vec<String> {
         .flatten()
         .flat_map(|t| t["routes"].as_array().cloned().unwrap_or_default())
         .filter_map(|r| r.as_str().map(|s| s.split(' ').next().unwrap().to_string()))
+        // Procedure cards (families of similar tasks, with the bundled model) are their own kind;
+        // `adage-learn/tests/cards.rs` covers them.
+        .filter(|id| !id.starts_with("card-"))
         .collect();
     v.sort();
     v
@@ -136,12 +139,15 @@ fn routes_in(text: &str) -> Vec<String> {
 
 /// The response carries exactly the expected routes (by id prefix), and nothing else.
 fn expect_routes(out: &str, want: &[&str], what: &str) {
-    let got = routes_in(&context_of(out));
+    let all = routes_in(&context_of(out));
+    // A procedure card may come with a task prompt (these histories are all one kind of task,
+    // so they form a family); it is the only thing besides the expected routes that may.
+    let got: Vec<&String> = all.iter().filter(|g| !g.starts_with("card-")).collect();
     assert_eq!(got.len(), want.len(), "{what}: got {got:?}, want {want:?}\n{out}");
     for w in want {
         assert!(got.iter().any(|g| g.starts_with(w)), "{what}: no {w} in {got:?}");
     }
-    if want.is_empty() {
+    if want.is_empty() && all.is_empty() {
         assert_eq!(out, "", "{what}: silence");
     }
 }
