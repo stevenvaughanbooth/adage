@@ -166,8 +166,8 @@ def effect(records: list[dict], treated: str, control: str, metric: str, b: int 
     }
 
 
-def analyse(records: list[dict], comparisons: Sequence[tuple[str, str]] = (("adage", "holdout"), ("adage", "off"),
-                                                                        ("holdout", "off")),
+def analyse(records: list[dict], comparisons: Sequence[tuple[str, str]] = (("adage", "control"), ("adage", "off"),
+                                                                        ("control", "off")),
             metrics: Sequence[str] = ("resolve", "cost", "turns"), b: int = 5000, seed: int = 0) -> dict:
     """Every (comparison x metric) effect, with Holm-adjusted p-values across the whole family."""
     rows = [effect(records, t, c, m, b=b, seed=seed) for t, c in comparisons for m in metrics]

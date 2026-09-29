@@ -51,7 +51,7 @@ class EmitTest(unittest.TestCase):
         self.assertEqual(a["adage"]["sessions"], ["sess-a"], "subagent transcripts excluded")
         self.assertEqual(a["harness"]["adage_version"], "adage 0.1.0")
         self.assertEqual(a["model"], "claude-sonnet-4-5")
-        self.assertEqual((b["status"], b["outcome"]["passed"], b["arm"]), ("censored", False, "holdout"))
+        self.assertEqual((b["status"], b["outcome"]["passed"], b["arm"]), ("censored", False, "control"))
         self.assertEqual((c["status"], c["outcome"]["passed"], c["arm"]), ("infra_error", None, "off"))
         self.assertTrue(d["adage"].get("hooks_inert"), "a hook arm with no spool is flagged")
 
@@ -157,7 +157,7 @@ class PhasesTest(unittest.TestCase):
             self.assertEqual(len(evals), 4)  # 2 repos x 2 repeats
             for c in evals:
                 labels = sorted(a["kwargs"].get("arm_label") or a["kwargs"]["arm"] for a in c["agents"])
-                self.assertEqual(labels, ["adage", "adage-lro", "holdout", "off"])
+                self.assertEqual(labels, ["adage", "adage-lro", "control", "off"])
                 self.assertEqual(len(c["tasks"]), 4)
                 repo = c["job_name"].split("-eval-")[1].rsplit("-r", 1)[0]
                 for a in c["agents"]:

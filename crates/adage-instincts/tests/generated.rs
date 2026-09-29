@@ -1,6 +1,6 @@
 //! Binding on the procedurally generated sandboxes (`evals/gen`, suite `smoke`), against their
 //! ground truth (`conventions.json`): nothing binds for a decoy, and nothing directs the command an
-//! instinct violation retires. Skipped (with a note) where python3 or git is unavailable.
+//! instinct violation extinguishes. Skipped (with a note) where python3 or git is unavailable.
 
 use adage_tracks::{Step, Trigger};
 use std::collections::BTreeSet;
@@ -37,8 +37,16 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
     let table = adage_core::CommandTable::load();
     for sb in sandboxes {
         let name = sb.file_name().unwrap().to_string_lossy().to_string();
-        let conv: Vec<serde_json::Value> =
+        // `adage-conventions/1`: the conventions, then the decoys (evals/gen).
+        let doc: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(sb.join("conventions.json")).unwrap()).unwrap();
+        let conv: Vec<serde_json::Value> = doc["conventions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .chain(doc["decoys"].as_array().into_iter().flatten())
+            .cloned()
+            .collect();
         let r = adage_instincts::bind(&sb.join("repo"), &[], &BTreeSet::new());
         let directed: Vec<String> = r
             .routes
@@ -53,7 +61,9 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
             eprintln!("{name}: {} {:?} -> {:?}", x.id, x.trigger, x.step);
         }
         for c in &conv {
-            let kind = c["kind"].as_str().unwrap_or("");
+            // A dead end planted as the superseded universal default says so in its mode.
+            let kind =
+                if c["mode"] == "instinct_violation" { "instinct_violation" } else { c["kind"].as_str().unwrap_or("") };
             let command = c["command"].as_str().unwrap_or("");
             match kind {
                 "decoy" => {
@@ -62,16 +72,38 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
                 }
                 "instinct_violation" => {
                     violations += 1;
-                    let avoided = c["avoided"].as_str().unwrap();
-                    assert!(!directed.iter().any(|d| d == avoided), "{name}: retired {avoided} was bound");
+                    let avoided = c["avoided"][0].as_str().unwrap();
+                    assert!(!directed.iter().any(|d| d == avoided), "{name}: extinguished {avoided} was bound");
                 }
                 "dead_end" => {
                     dead_ends += 1;
-                    let key = adage_instincts::safety::command_key(c["avoided"].as_str().unwrap(), &table);
-                    let hit = r.routes.iter().any(|x| {
-                        matches!(&x.trigger, Trigger::AfterFailure { command: k, .. } if Some(k) == key.as_ref())
-                            && x.step == Step::Run { command: command.into() }
+                    let avoided = c["avoided"][0].as_str().unwrap();
+                    let key = adage_instincts::safety::command_key(avoided, &table);
+                    let sigs: Vec<&str> = r
+                        .routes
+                        .iter()
+                        .filter_map(|x| match &x.trigger {
+                            Trigger::AfterFailure { command: k, signature }
+                                if Some(k) == key.as_ref() && x.step == Step::Run { command: command.into() } =>
+                            {
+                                Some(signature.as_str())
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    // The route must fire on what the dead end really prints: run it.
+                    let head = avoided.split(' ').next().unwrap();
+                    let output = available(head).then(|| {
+                        let o =
+                            Command::new("sh").arg("-c").arg(avoided).current_dir(sb.join("repo")).output().unwrap();
+                        assert!(!o.status.success(), "{name}: {avoided} is a dead end but succeeded");
+                        format!("{}{}", String::from_utf8_lossy(&o.stdout), String::from_utf8_lossy(&o.stderr))
                     });
+                    let hit = match &output {
+                        Some(out) => sigs.iter().any(|s| out.contains(s)),
+                        None => !sigs.is_empty(),
+                    };
+                    assert!(sigs.iter().all(|s| !s.is_empty()), "{name}: a dead end with no signature");
                     eprintln!(
                         "{name}: dead end {} -> {command}: {}",
                         c["avoided"],
@@ -95,7 +127,7 @@ fn generated_smoke_suite_binds_no_decoy_and_no_violation() {
         }
         // Whatever binds is valid and capped (the fixture tests check the details).
         for x in &r.routes {
-            assert_eq!(x.aspect, adage_tracks::Aspect::Yellow);
+            assert_eq!(x.strength, adage_tracks::Strength::Prime);
         }
     }
     eprintln!(

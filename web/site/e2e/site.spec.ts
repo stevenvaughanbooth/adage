@@ -137,9 +137,9 @@ test("Escape still closes the film after Play is pressed", async ({ page }) => {
 
 test.describe("/how", () => {
   test("steps through chapters with the buttons, the keys and the URL", async ({ page }) => {
-    await page.goto("/how?ch=miners&step=2");
+    await page.goto("/how?ch=judge&step=2");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("From a transcript to a reflex");
-    await expect(page.locator("#capmeta")).toContainText("02 Condition with miners");
+    await expect(page.locator("#capmeta")).toContainText("04 Judge the evidence");
     await expect(page.locator("#count")).toHaveText(/^3 \/ \d+$/);
     await page.getByRole("button", { name: "Next step" }).click();
     await expect(page.locator("#count")).toHaveText(/^4 \//);
@@ -150,6 +150,9 @@ test.describe("/how", () => {
     await page.getByRole("button", { name: /Measure against control/ }).click();
     await expect(page.locator("#captitle")).toHaveText("Two arms, task by task");
     await expect(page.locator("#howgl")).toBeVisible();
+    // A link to the retired miners chapter lands on the chapter that replaced it.
+    await page.goto("/how?ch=miners");
+    await expect(page.locator("#capmeta")).toContainText("04 Judge the evidence");
   });
 
   test("every chapter builds and every step has words", async ({ page }) => {

@@ -1,6 +1,8 @@
 # Track C: Compiled skills and a closed, portable pack artifact
 
 > Status: design, 2026-09-27. Track C of the maturity roadmap ([roadmap](../roadmap/2026-09-maturity-roadmap.html)). Section 8 lists the decisions still open for the owner.
+>
+> **Revision, 2026-09-28 (owner decision): no MCP.** Adage stays close to the bare metal: hooks everywhere, and Adage acts directly from the hooks it already owns. The MCP server (`adage-exec mcp`, milestone C4) is removed, with its tools, registrations and gate. The levels are renumbered: **E0** directive; **E1** prefetch (read-only, typed data injected at the stimulus; unchanged); **E2** actions from hooks (what this document first called E3): when an approved action reflex's stimulus fires in a hook, `adage-exec hook` runs it staged, verifies the change set, applies it atomically and injects a fixed-template result, or on refusal the plain directive and the reason. The sections below are revised to match; decision D12 is reversed.
 
 ## 0. Summary and position
 
@@ -9,9 +11,9 @@ Today Adage learns routes and emits text. The binary the hooks call has no proce
 The design rests on four positions:
 
 1. **The artifact is closed and inert.** A pack never carries permission to execute. Permission lives only in a local approval store, keyed by hashes of exactly what would run. A pack can ask for a level; only this machine can grant it.
-2. **The `adage` hook binary keeps its promise word for word.** Execution lives in a separate, opt-in binary, `adage-exec`, which also serves `adage-exec mcp`. This follows the precedent the roadmap set for `adage-train`: that binary drives sessions so the hook binary never has to. Enabling execution means installing a different hook registration and a separate plugin. It is never a config key that a track or an agent can flip.
+2. **The `adage` hook binary keeps its promise word for word.** Execution lives in a separate, opt-in binary, `adage-exec`, which runs from the same hooks. This follows the precedent the roadmap set for `adage-train`: that binary drives sessions so the hook binary never has to. Enabling execution means installing a different hook registration and a separate plugin. It is never a config key that a track or an agent can flip.
 3. **For automatic approval, the sandbox is the boundary, not classification.** `classify_effect` names a script observe from its name alone ("lookup", "show", …; `crates/adage-core/src/shell.rs:470-483`). That is acceptable for directing an agent. It is not acceptable for Adage running the script itself. Automatic approval therefore requires three things together: the command's behaviour cannot be changed by repository files (**inert**), there are no repository scripts, and an enforced read-only sandbox with no network.
-4. **Output is data and is typed by default.** E1 and E2 return a JSON projection of fields that carry contracts, not raw stdout. Raw text needs a separate, explicit approval, fencing and scanning.
+4. **Output is data and is typed by default.** E1 returns a JSON projection of fields that carry contracts, not raw stdout; an E2 action returns its outcome and the paths it changed, never file contents or output. Raw text needs a separate, explicit approval, fencing and scanning.
 
 ---
 
@@ -19,7 +21,7 @@ The design rests on four positions:
 
 ### 1.1 Relationship to tracks
 
-- A **track** stays the unit of learning and lifecycle: probation, active, demoted, review, evidence.
+- A **track** stays the unit of learning and lifecycle: forming, active, weakened, review, evidence.
 - A **pack** is the unit of distribution and approval. It is a track in format v2, plus its closure, requirements, optional vendored scripts and attestations.
 - A pack holds exactly one track namespace (`owner/name`).
 - `adage share` emits packs. `adage add` accepts packs, and accepts v1 tracks by upgrading them in place to a pack with no scripts (L-none or L-ref).
@@ -87,25 +89,26 @@ This maps onto Track G's closed set of delivery shapes. Until Track G lands, eac
 id: work-item-context
 shape: run                    # run | avoid | after | read | advise   (Track G output boundary)
 trigger: { on: prompt, span: ticket }
-inputs:                       # typed parameters: the E2 tool schema is generated from these
+inputs:                       # typed parameters, bound from the stimulus and checked against their types
   item: { type: work-item-id, from: { prompt: { span: ticket } } }
 steps:                        # ≥1; E0 renders steps[0] only (principle 3, one block ahead)
   - id: lookup
     run: { argv: ["./scripts/wi-lookup", "{item}", "--json"] }
     effect: observe           # declared; re-classified locally, and lower-than-actual is refused
     script: { path: "scripts/wi-lookup", closure: ref, sha256: "9f2c…" }  # or closure: vendor
-    outputs:                  # typed output contract: E1/E2 projection; binds later slots
+    outputs:                  # typed output contract: the E1 projection; binds later slots
       files: { type: repo-path-list, from: { json: "files" }, max: 5 }
       state: { type: wi-state,      from: { json: "state" } }
   - id: read-linked
     read: { from: "lookup.files", max: 5 }
     effect: observe
 links: []                     # explicit intra-pack edges: ["#other-route-id"]
-aspect: green
+strength: fire
 exit:
   - { when: result_equals, step: lookup, field: state, value: Closed }   # value must pass wi-state
   - { when: intent_changes }
 exec: { level: E1, timeout_ms: 1500, output: typed }   # request ≤ pack [exec].requested
+# an E2 action also declares what it may change: exec: { level: E2, outputs: ["gen/**"], cache: [".cache/**"] }
 evidence: { … }               # includes by_origin (roadmap E1); not part of the route digest
 ```
 
@@ -121,7 +124,7 @@ The built-in types are `repo-path`, `repo-path-list`, `git-rev` (`^[0-9a-f]{7,40
 
 ### 1.5 Digests
 
-- **Route exec digest** is the SHA-256 of the canonical JSON (keys sorted, no whitespace, as in `EngineParams::canonical_json`) of the route minus `evidence`, `state` and `aspect`, with every referenced type definition and script SHA-256 inlined. This is the key approvals use. Evidence updates (patch bumps) and aspect moves do not lapse an approval. Any change to a trigger, argv, input or output type, or script does.
+- **Route exec digest** is the SHA-256 of the canonical JSON (keys sorted, no whitespace, as in `EngineParams::canonical_json`) of the route minus `evidence`, `state` and `strength`, with every referenced type definition and script SHA-256 inlined. This is the key approvals use. Evidence updates (patch bumps) and strength moves do not lapse an approval. Any change to a trigger, argv, input or output type, or script does.
 - **Route shape** stays `review::shape`, for review decisions. It is unchanged.
 - **Pack digest** uses today's `io::digest` algorithm (per-file SHA-256 over line-ending-normalised bytes, `scripts/` hashed verbatim), with `pack.sig` excluded. `CLOSURE` is included, so the signature covers the declared closure.
 - **Signature** is sshsig over the pack digest in the new namespace **`adage-pack`**. An `allowed_signers` entry with `namespaces="adage-track"` must not silently authorise artifacts that can request execution. Existing `adage-track` signatures stay valid for v1 (E0-only) tracks.
@@ -137,7 +140,7 @@ Redaction (`redact.rs`) runs over every byte, vendored scripts included. Scripts
 | Level | What the pack holds | Runs | Portability | Integrity at bind | Auto-approvable |
 | --- | --- | --- | --- | --- | --- |
 | **L-none** | Only argv whose program is in `commands.toml` | The command table's program on the machine | Full | Re-classified with the local table | Only if every program is `inert` (§4.2) |
-| **L-ref** | Repository path plus SHA-256 of the entry file; optional `deps` globs hashed as a sorted manifest | The repository's file, **after a hash check at execution time** | Bound to repositories that have that file | Hash mismatch: route inert above E0, and yellow at most at E0 (today's rule, §15.2) | Never |
+| **L-ref** | Repository path plus SHA-256 of the entry file; optional `deps` globs hashed as a sorted manifest | The repository's file, **after a hash check at execution time** | Bound to repositories that have that file | Hash mismatch: route inert above E0, and prime at most at E0 (today's rule, §15.2) | Never |
 | **L-vendor** | The bytes, at `scripts/sha256-<hex>` | A copy in `$ADAGE_HOME/cas/<hex>`, read-only, run by an **L-none interpreter named in argv** (`python3`, `node`, `sh`); the shebang is ignored | Full | The bytes are the closure | Never, and approval shows the full text |
 
 Trade-offs:
@@ -151,7 +154,7 @@ This revises O3. Scripts may travel, but only vendored, content-addressed, signe
 
 `evidence.json` records, per route, the by-origin counts (organic, synthetic, declared, instinct, imported) as the roadmap defines them. `support` and `opportunities` stay organic. On arrival, all evidence becomes a prior capped at m = 20 (Design §10.5).
 
-`attestations/*.json` are optional records in the bench result schema (`evals/bench/result.schema.json`): tier, suite, `run_id`, `params_hash`, arm deltas and harm counts. They are informational only and never grant aspect or level. `adage review` shows them, marked "self-reported by signer".
+`attestations/*.json` are optional records in the bench result schema (`evals/bench/result.schema.json`): tier, suite, `run_id`, `params_hash`, arm deltas and harm counts. They are informational only and never grant strength or level. `adage review` shows them, marked "self-reported by signer".
 
 ---
 
@@ -174,12 +177,12 @@ Computation: breadth-first search from all routes, since every route with a trig
 
 - **No dangling references.** Every edge target exists, in the pack or in the built-in registry.
 - **No smuggling.** Every file in `types/` and `scripts/` is reached by some edge. Unreferenced bytes refuse the pack.
-- **No cycles through `after` chains** longer than 4. This bounds E2 multi-step tools.
+- **No cycles through `after` chains** longer than 4. This bounds multi-step executions.
 - The algorithm emits `CLOSURE`: sorted lines `kind id sha256`. On read it is re-derived and must match byte for byte.
 
 ### 2.2 Install (`adage add <pack>`)
 
-The existing `add.rs` order holds: refuse inside an agent session (`require_person`), copy exactly the listed files to staging, compute the digest, verify the signature against the trust anchors (personal `trusted-signers`, then a TOFU-pinned repository file), and install at probation. The pack adds these checks:
+The existing `add.rs` order holds: refuse inside an agent session (`require_person`), copy exactly the listed files to staging, compute the digest, verify the signature against the trust anchors (personal `trusted-signers`, then a TOFU-pinned repository file), and install forming. The pack adds these checks:
 
 - The full v2 schema is validated as untrusted input: `io::validate` generalised to argv arrays, plus `safe_command` per argv element, output types, exit predicates whose values pass their types, and `exec.timeout_ms ≤ 600000`.
 - The closure is recomputed and compared with `CLOSURE`.
@@ -215,18 +218,16 @@ The index gains `IndexedRoute.exec: Option<ExecBinding>`, holding the route exec
 | --- | --- | --- | --- | --- |
 | **E0 directive** | Today: fixed-template text | Hook | Up to ceilings (§8.6) | Existing rules |
 | **E1 prefetch** | At the trigger, Adage runs an approved route and injects its typed output as fenced data beside the directive | Hook (the `adage-exec hook` variant) | **Observe only**, in a sandbox with a read-only repository, no writes, no network | Per route; the auto class qualifies |
-| **E2 tool** | The approved route is exposed as an MCP tool. The agent calls it; the harness asks for permission per call | Agent, through the harness | Observe and Verify (Verify writes only to a scratch or cache overlay) | Per route; only observe qualifies for auto |
-| **E3 action** | An MCP tool with real effects: regenerate, or verify with retained outputs. Staged, then applied, with outcome verification | Agent, through the harness | Verify and Regenerate; Environment only at team-policy opt-in. Author and Publish **never** | Always explicit and per route; never auto |
+| **E2 action** | When an approved action reflex's stimulus fires in a hook (an edit matching its paths, or its unmet finish line at Stop), Adage runs it: staged, verified against its declared outputs, applied atomically, and a fixed-template result injected | Hook (the `adage-exec hook` variant) | Verify and Regenerate; Environment only at team-policy opt-in. Author and Publish **never** | Always explicit and per route; never auto |
 
 ### 3.2 Which binary executes
 
 - **`adage` (hooks, CLI):** never spawns. Unchanged, with Q4 intact.
-- **`adage-exec`** is a new binary. It links `adage-runtime` and `adage-exec` (the sandbox library), and has three subcommands:
-  - `adage-exec hook <harness> <event>`: a superset of `adage hook`. It calls the same `decide()`. For each emitted directive whose route has a matching E1 approval, it runs the route and appends the data block. On any failure, including timeout, missing sandbox, scan hit or approval mismatch, it emits exactly the E0 output. With execution disabled, its output equals `adage hook` byte for byte, and CI pins this with the existing golden files.
-  - `adage-exec mcp`: a stdio MCP server for E2 and E3.
+- **`adage-exec`** is a new binary. It links `adage-runtime` and `adage-exec` (the sandbox library), and has two main subcommands:
+  - `adage-exec hook <harness> <event>`: a superset of `adage hook`. It calls the same `decide()`. For each emitted directive whose route has a matching E1 approval, it runs the route and appends the data block; for a finish-line obligation armed or enforced at this event whose route has an E2 approval, it runs the action (§3.6). On any failure, including timeout, missing sandbox, scan hit or approval mismatch, it emits the E0 output (for an action, with the reason). With execution disabled, its output equals `adage hook` byte for byte, and CI pins this with the existing golden files.
   - `adage-exec run <track> <route> --input k=v [--dry-run]`: for a person (and for evals). Running it through the agent's Bash is harmless: the harness's permissions apply and approvals are still checked.
 
-Why not put execution in the hook binary behind a flag? Because the promise is checkable today: grep for `Command::new` in the `adage` crates. Keeping it checkable is worth one extra binary. `adage delegate` (a person at a terminal) swaps the hook registration from `adage hook` to `adage-exec hook` and registers the MCP server. `adage delegate --off` reverses it. On Claude Code this is a second plugin in the same marketplace, `adage-exec`, with its own `hooks.json` (it replaces the Adage plugin's hooks when both are enabled, and the Adage plugin's session-start shim detects this and goes quiet) and a `.mcp.json` that runs `${CLAUDE_PLUGIN_DATA}/bin/adage-exec mcp`. Recommended alternative for simplicity: a single plugin whose hooks call `adage` unless `${CLAUDE_PLUGIN_DATA}/exec-enabled` exists, a marker that only `adage delegate` writes. It is less clean, but it avoids hook doubling. Owner decision D2.
+Why not put execution in the hook binary behind a flag? Because the promise is checkable today: grep for `Command::new` in the `adage` crates. Keeping it checkable is worth one extra binary. `adage delegate on` (a person at a terminal) swaps the hook registration from `adage hook` to `adage-exec hook`. `adage delegate off` reverses it. On Claude Code this is a second plugin in the same marketplace, `adage-exec`, with its own `hooks.json` (it replaces the Adage plugin's hooks when both are enabled, and the Adage plugin's session-start shim detects this and goes quiet). Recommended alternative for simplicity: a single plugin whose hooks call `adage` unless `${CLAUDE_PLUGIN_DATA}/exec-enabled` exists, a marker that only `adage delegate on` writes. It is less clean, but it avoids hook doubling. Owner decision D2.
 
 No-match latency is unchanged: `adage-exec hook` takes the same fast path (`adage-runtime/src/fast.rs`) and only loads the sandbox when an E1 route fires.
 
@@ -244,13 +245,13 @@ Policy is one struct, `Profile { read: [repo_root, toolchain_paths, cas], write:
 - **Git hardening.** Git behaviour is configurable by the repository. A hostile `.git/config` can run code through `core.fsmonitor`, `core.sshCommand`, `diff.external`, `filter.*` and `core.hooksPath`. Adage-exec prefixes `-c core.fsmonitor= -c core.hooksPath=/dev/null -c diff.external= -c core.pager=cat`. If the repository's `.git/config` (read with the same bounded reader as `gitobj`) sets any of `fsmonitor`, `sshCommand`, `filter.`, `diff.*.textconv` or `alias.`, git steps lose the inert status in that repository.
 - **Limits.** stdin is `/dev/null`. The process group is killed on timeout. `RLIMIT_AS` is 2 GiB, `RLIMIT_NPROC` 256, and `RLIMIT_FSIZE` 64 MiB in scratch. The working directory is the canonical repository root, or a declared subdirectory that passes `is_safe_relative`.
 
-| | E1 | E2 observe | E2 verify / E3 |
-| --- | --- | --- | --- |
-| Wall timeout | 1,500 ms (at most 3,000) | 10 s | min(p95 of evidence × 1.5, 600 s) |
-| Captured bytes | 64 KiB | 256 KiB | 1 MiB |
-| Returned bytes | 4 KiB (within the harness's `max_context` of 9,500) | 16 KiB | 16 KiB summary |
+| | E1 | E2 action |
+| --- | --- | --- |
+| Wall timeout | 1,500 ms (at most 3,000) | 20 s at most, within the 30 s hook timeout an `adage-exec` registration gives the edit and Stop events |
+| Captured bytes | 64 KiB | 256 KiB |
+| Returned bytes | 4 KiB (within the harness's `max_context` of 9,500) | the outcome and changed paths only |
 
-- **Determinism.** Route selection remains a pure function of index and events (principle 2). Output is not deterministic, because it depends on repository state, time and tools. Spools record `exec: { level, exit, bytes, sha256(output), truncated, duration }` and never the output itself. **Sessions with E1 or E2 deliveries are steered sessions** for every route kind involved (principle 6), and execution outputs never enter learning.
+- **Determinism.** Route selection remains a pure function of index and events (principle 2). Output is not deterministic, because it depends on repository state, time and tools. Spools record `exec: { level, exit, bytes, sha256(output), truncated, duration }` and never the output itself. **Sessions with E1 deliveries or E2 actions are steered sessions** for every route kind involved (principle 6), and execution outputs never enter learning.
 
 ### 3.4 E1 output: typed projection and fencing
 
@@ -260,7 +261,7 @@ Policy is one struct, `Profile { read: [repo_root, toolchain_paths, cas], write:
 
 - secrets, via `redact.rs`; a hit withholds the block;
 - the safety oracle's canary list;
-- instruction-shaped patterns ("ignore previous", "system:", "you must now", tool-call JSON, `<adage-signal`); a hit withholds the block and logs `scan_hit`.
+- instruction-shaped patterns ("ignore previous", "system:", "you must now", tool-call JSON, `<adage-reflex`); a hit withholds the block and logs `scan_hit`.
 
 Content is never sanitised into acceptability. It is delivered or withheld.
 
@@ -275,25 +276,19 @@ Output of ./scripts/wi-lookup W-1234 --json, run by Adage in a read-only sandbox
 
 The directive that accompanies it adapts: "That lookup has been run; its result is below." Exit predicates evaluate on the projected fields, so a Closed work item suppresses the rest of the route. An `adage-eval::safety::check_data_block` oracle re-checks every block: the template, the typed fields, and no canaries.
 
-### 3.5 E2: routes as MCP tools
+### 3.5 (Removed: routes as MCP tools)
 
-- `adage-exec mcp` reads `index.json` and the approvals for the session's repository. The repository comes from MCP roots, else from the server's working directory, resolved with `repo_key`. The server lists one tool per route that is live and approved at E2 or E3.
-- **Name:** `adage_<route-id>`, at most 64 characters, `[a-z0-9_]`, with a hash suffix on collision.
-- **Description:** a fixed template, because tool descriptions reach the model just as directives do. For example: "Runs `wi-lookup {item} --json` in this repository in a read-only sandbox and returns typed fields: files (list of repository paths), state (one of Active, Closed, …). Learned by Adage; evidence: 412 sessions." Pack prose never appears in it.
-- **`inputSchema`** comes from input types: a pattern becomes `{"type":"string","pattern":…,"maxLength":200}`; `repo-path` becomes a string plus a check on the server; `enum` becomes `enum`; `int` becomes an integer with bounds.
-- **`outputSchema`** comes from the output types. Multi-step routes run their steps inside one call, bounded at 4.
-- **Annotations:** `readOnlyHint` for observe; `destructiveHint: true` and `idempotentHint` for E3. Adage never writes harness allow rules, so the harness prompts per call as configured.
-- `notifications/tools/list_changed` is sent when the index generation or the approvals change. There is a per-session rate limit of 30 calls a minute and a global concurrency cap of 4.
-- Every call validates its inputs against the contracts and `plain_token`, and re-checks the approval key, including an **L-ref hash re-read at call time**, closing the gap between check and use. Results are returned in the same typed or raw envelope as E1.
+The MCP server of the first design is removed by the owner's decision (see the revision note at the top). Adage acts only from the hooks it owns: a read-only lookup is an E1 prefetch, and a step with effects is an E2 action.
 
-### 3.6 E3: actions with outcome verification
+### 3.6 E2: actions from hooks, with outcome verification
 
-E3 is exposed only as MCP tools, never fired from hooks.
+An action runs from a hook Adage already owns, never through a server or a tool the agent calls: when an approved action reflex's stimulus fires (an edit matching its paths arms its finish-line obligation, or the obligation's Stop request is due), `adage-exec hook` runs the response. At most one action per hook event; never on the fast path's no-match events; never in the control arm; never under OpenCode, whose hook bridge waits one second.
 
 - **Stage.** Linux runs the command in a writable overlay: bwrap `--overlay-src` or a user-namespace overlayfs over the repository. macOS runs it in an APFS `clonefile` copy of the worktree. Toolchain caches are bound read-write only when policy allows.
 - **Verify.** Compute the change set. For `regenerate`, every changed path must match the route's declared `outputs.paths` globs; any other change refuses the application and returns the diff summary. For `verify`, source changes must be empty; only paths matching declared cache globs are kept, and exit status plus a parsed summary are returned.
 - **Apply** declared outputs into the real worktree atomically, per file, and only if the worktree's pre-state hashes for those paths are unchanged (optimistic concurrency against the agent's own edits).
-- **Record** `outcome: applied | refused(reason) | failed(exit)` in the spool. After three refusals, the E3 approval for that route is revoked automatically, because losing authority is always automatic.
+- **Deliver** a fixed-template result in place of the directive ("Adage ran `make gen` after your edit to schema/users.json: updated 2 files (…). Nothing else changed.", `exec="e2"` on the wrapper) and mark the obligation met, so no Stop request follows; on refusal or failure, the plain E0 directive plus the reason (at Stop, the Stop request plus the reason).
+- **Record** `outcome: applied | refused(reason) | failed(exit)` in the spool, never the output. After three refusals of the change set, the E2 approval for that route is revoked automatically, because losing authority is always automatic.
 
 ---
 
@@ -308,7 +303,7 @@ struct ApprovalKey {
     argv_templates: Vec<Vec<String>>,
     scripts: Vec<(String /*path or cas*/, [u8; 32])>,
     effect: Effect,               // the effect the person approved (may be lower than the classifier's for L-ref)
-    level: Level,                 // E1 | E2 | E3
+    level: Level,                 // E1 | E2
     output_mode: Typed | Raw,
     profile_id: [u8; 32],         // sandbox profile hash
     signer: Option<String>,       // fingerprint, for imported packs
@@ -321,14 +316,14 @@ A match requires equality on every field. If any hash changes, the approval stop
 
 A route is approved automatically only if all of the following hold:
 
-- the level is E1 or E2;
+- the level is E1 (an E2 action never is);
 - the effect is observe, as classified by the local table;
 - every argv program is in `commands.toml` with a new field **`inert = true`**, meaning its behaviour cannot be changed by repository files to run code. Examples: `cat`, `head`, `tail`, `wc`, `ls`, `rg` (with `RIPGREP_CONFIG_PATH` scrubbed), `grep`, `jq`, and `git status|log|diff|show|rev-parse` with the hardening in §3.3 in a repository without hazardous git config. Never `make`, `npm run`, `cargo` (build.rs), `pytest` (conftest), `python`, `node` or `sh`;
 - there are no L-ref or L-vendor scripts;
 - all inputs have strict contracts;
 - the output mode is typed;
 - the sandbox is available and enforced on this machine;
-- the route is local (a reflex or instinct) or from a pack signed by a trusted signer that has passed local probation;
+- the route is local (a reflex or instinct) or from a pack signed by a trusted signer that has passed local forming;
 - policy permits it.
 
 Everything else needs a person. Automatic approval is **off by default** until gate G3 (§6) passes. After that, the default is on for this class only.
@@ -337,7 +332,7 @@ Everything else needs a person. Automatic approval is **off by default** until g
 
 `$ADAGE_HOME/approvals.json` is plain JSON with mode 0600, written atomically and only by commands that pass `require_person`. Each entry is `{ key, approved_on, by?, basis: { evidence snapshot }, auto: bool }`.
 
-It is not signed. Anything that can write `$ADAGE_HOME` can already rewrite `trusted-signers` and `trust.json`, so signing would add ceremony without adding a boundary. Instead, `adage init` and `adage delegate` print a recommended harness deny rule for edits to `$ADAGE_HOME/**`, and `doctor` warns if one is missing.
+It is not signed. Anything that can write `$ADAGE_HOME` can already rewrite `trusted-signers` and `trust.json`, so signing would add ceremony without adding a boundary. Instead, `adage init` and `adage delegate on` print a recommended harness deny rule for edits to `$ADAGE_HOME/**`, and `doctor` warns if one is missing.
 
 Optional hardening is available with `exec.require_signed_approvals = true`: each entry is signed with a key file whose passphrase is typed at the terminal, never through the agent.
 
@@ -346,12 +341,12 @@ Approvals never travel. `share` refuses to include them, and `add` ignores any s
 ### 4.4 User experience
 
 - **`adage review`** gains the reasons `exec-request` (a route asks for a level above its current grant), `exec-changed` and `exec-revoked` (automatic revocation, with its cause). The verbs are:
-  - `adage review delegate <track> <route> --level e1|e2|e3 [--raw] [--effect observe]`
-  - `adage review undelegate <track> <route>`
+  - `adage review delegate <track> <route> --level e1|e2 [--raw] [--effect observe|verify|regenerate] [--outputs <glob>]` (at E2 it stages the action once, applying nothing, and shows the full diff of the declared outputs)
+  - `adage review revoke <track> <route>`
 
   Both refuse inside an agent session. The screen shows the argv template with each input and its contract, the effect (classifier result against what is being approved), the sandbox profile in one line ("reads: repository, toolchain · writes: nothing · network: off"), the script closure (full text for vendored scripts, path, hash and deps for L-ref), the evidence by origin, and any attestations.
-- **`adage init`** reports sandbox capability ("Linux, Landlock ABI 4: E1–E3 available") and "Execution: off". It lists routes that would be approved automatically at inert-observe and offers `adage delegate`, with a one-time pack-level approval for the instinct environment steps, as already planned.
-- **`adage delegate --status`** lists grants per repository, and `doctor` shows sandbox probes.
+- **`adage init`** reports sandbox capability ("Linux, Landlock ABI 4: E1–E2 available") and "Execution: off". It lists routes that would be approved automatically at inert-observe and offers `adage delegate on`, with a one-time pack-level approval for the instinct environment steps, as already planned.
+- **`adage delegate status`** lists grants per repository, and `doctor` shows sandbox probes.
 
 ### 4.5 Policy
 
@@ -377,7 +372,7 @@ deny = ["environment"]
 
 ### 5.1 Principle 1 (Design §3), replacing "The agent is the only actor"
 
-> **The agent is the only actor, unless you delegate.** The `adage` binary and its hooks never run a command, never read a file on the agent's behalf, and never edit anything; they emit text. A separate, optional component, `adage-exec`, installed only by a person at a terminal, may run a route **only** when all of these hold: this machine holds an approval for that route's exact argv, inputs, scripts (by hash), effect and level; an OS sandbox enforces the approved profile; and the route's effect is at most regenerate. Output returns to the agent as typed, fenced data, never as instructions. Actions with effects (E3) run only when the agent calls them as tools, under the harness's own permission prompts, and are staged and verified before anything in the worktree changes. Approvals never travel with a track.
+> **The agent is the only actor, unless you delegate.** The `adage` binary and its hooks never run a command, never read a file on the agent's behalf, and never edit anything; they emit text. A separate, optional component, `adage-exec`, installed only by a person at a terminal, may run a route **only** when all of these hold: this machine holds an approval for that route's exact argv, inputs, scripts (by hash), effect and level; an OS sandbox enforces the approved profile; and the route's effect is at most regenerate. Output returns to the agent as typed, fenced data, never as instructions. Actions with effects (E2) run only from the hooks Adage owns, only for a reflex a person approved explicitly on this machine, and are staged and verified before anything in the worktree changes. Approvals never travel with a track.
 
 The non-goal "Executing anything" becomes "Executing anything the user has not approved on this machine, anything outside a sandbox, or anything at author or publish effect". Architecture Q4 splits into Q4a ("`adage` spawns nothing": CI-grepped) and Q4b ("`adage-exec` runs only approved, sandboxed routes"). The O3 and O4 decisions are revised as in §1.7. Voice §17.3 ("never takes the wheel") keeps its meaning under delegation.
 
@@ -389,7 +384,7 @@ The non-goal "Executing anything" becomes "Executing anything the user has not a
 | **Malicious repository script, or a script changed after approval** | L-ref hash checked at bind **and re-read at execution**; `deps` hashing; L-ref never approved automatically; hostile `.git/config` removes git's inert status; env scrubbing |
 | **Repository-configured code in "known" commands** (Makefile, package.json scripts, conftest, build.rs, git fsmonitor) | The `inert` field gates automatic approval; git `-c` hardening |
 | **Poisoned output** (prompt injection through lookup results) | Typed projection by default; raw mode is opt-in, fenced, scanned and withheld on a hit; defanged tags; size caps; outputs never enter learning; the oracle `check_data_block` |
-| **Confused deputy through the harness** (an injected agent calls `adage_*` tools with attacker inputs, or under auto-approve modes) | The tool can only run approved argv templates; strict contracts plus `plain_token`; the sandbox is the boundary even when the harness auto-approves; rate limits; E3 is marked destructive so harnesses prompt; approval changes refuse inside agent sessions |
+| **Confused deputy through the agent** (an injected agent edits files to fire an action with attacker-chosen inputs) | An action can only run its approved argv template; inputs bound from the edited path pass strict contracts plus `plain_token`; the sandbox is the boundary; only declared outputs are applied, and only regular files; at most one action per hook event; approval changes refuse inside agent sessions |
 | **Tampering with approvals** | `$ADAGE_HOME` write access equals trust (as today); recommended harness deny rule; optional signed approvals; `doctor` integrity report |
 | **Supply chain of `adage-exec`** (Landlock, seccompiler) | Same `cargo deny`, SBOMs and attestations; sandbox escape tests in CI on Linux and macOS |
 | **Sandbox unavailable or degraded** | Fails closed to E0; `require_sandbox` cannot be lowered by the personal file |
@@ -412,7 +407,7 @@ On the bench ladder, all results use one JSONL schema. Add `tier` values and an 
   - Required: **0 escapes**.
 - **L1 (simulator):** arms E0, E1 and E2 on generated repositories with a lookup convention (`evals/gen` `lookup` instances). Measures closed-loop turns saved, and harm under injected wrong or hostile outputs.
 - **L2 (live sandboxes):**
-  - Randomised arms E0, E1 and E2 with task-grouped holdout. Primary: turns and cost to first useful edit, wall time (including execution latency), and follow rate for E2 tools.
+  - Randomised arms E0, E1 and E2 with task-grouped control. Primary: turns and cost to first useful edit, wall time (including execution latency), and the share of E2 actions applied.
   - Guardrails: corrections, CI failures, rework.
   - **Adversarial execution dataset** `evals/datasets/adversarial/exec/`: lookup scripts and repository files that emit injection payloads, fake `</adage-data>` closers, canaries, instruction-shaped JSON field values that are rejected by type, secrets, and oversized output.
   - Harm metric: the fraction of sessions in which the agent performs a canary action or echoes a canary into an edit, **compared with the same payload delivered through the agent's own tool call in E0**. Adage must not make injection worse than the agent reading the output itself.
@@ -420,15 +415,15 @@ On the bench ladder, all results use one JSONL schema. Add `tier` values and an 
 **Gates before any default change:**
 
 - **G1 (E1 opt-in beta):** L0-sec shows zero escapes on all supported OSes; the oracle shows zero violations; typed-mode injection pass-through is zero.
-- **G2 (E2 opt-in beta):** G1, plus MCP conformance tests for Claude Code, Codex and OpenCode, with the permission prompt observed per call.
+- **G2 (removed with MCP).**
 - **G3 (automatic approval of inert-observe on by default for local reflexes):**
   - L2 shows E1 saves at least 0.5 turns per triggered session over E0, with a lower 95% interval above 0;
   - cost is no worse;
   - guardrails are non-inferior (+1 point);
-  - red-team harm is no worse than the E0 baseline (lower bound);
+  - inhibit-team harm is no worse than the E0 baseline (lower bound);
   - added p95 latency at a prompt is at most 400 ms.
-- **G4 (E3 beta):** zero writes outside the declared outputs across 500 staged runs, and outcome verification holds on the L2 finish-line sandboxes.
-- Imported packs never get E1 or above before local probation has passed.
+- **G4 (E2 beta):** zero writes outside the declared outputs across 500 staged runs, and outcome verification holds on the L2 finish-line sandboxes.
+- Imported packs never get E1 or above before local forming has passed.
 
 ---
 
@@ -436,12 +431,12 @@ On the bench ladder, all results use one JSONL schema. Add `tier` values and an 
 
 | Milestone | Delivers | Main files and crates | Effort | Depends on |
 | --- | --- | --- | --- | --- |
-| **C0 Format** | Pack v2 schema, types registry, route exec digest, closure, `CLOSURE`, and an upgrader from v1 tracks; the principle text amended as a draft | New `crates/adage-pack/{model.rs,closure.rs,digest.rs,validate.rs}` (reusing `adage-tracks::io` checks, which move to shared functions); `docs/packs.md` | 1.5 weeks | none |
+| **C0 Format** | Pack v2 schema, types registry, route exec digest, closure, `CLOSURE`, and an upgrader from v1 tracks; the principle text amended as nascent | New `crates/adage-pack/{model.rs,closure.rs,digest.rs,validate.rs}` (reusing `adage-tracks::io` checks, which move to shared functions); `docs/packs.md` | 1.5 weeks | none |
 | **C1 Distribute and bind** | `adage share` writes packs (the `adage-pack` namespace); `adage add` verifies packs; resolution with inert reasons; L-none and L-ref; fingerprint and detector applicability; the core instincts shipped as a pack; `IndexedRoute.exec` | `adage-pack/bind.rs`; `adage-cli/src/{share.rs,add.rs,doctor.rs}`; `adage-sign` (namespace constant); `adage-tracks/src/index.rs`; `adage-instincts/src/catalogue.rs` | 2 weeks | instincts integration items 1, 2 and 5 (provenance, `Step::Advise`, `by_origin`) |
 | **C2 Execution core** | Sandbox (Landlock with seccomp, bwrap, sandbox-exec), environment scrubbing, limits, git hardening, typed projection, the `inert` field in `commands.toml`, approvals store, policy, `adage-exec run`, review verbs, the L0-sec suite | New `crates/adage-exec/{sandbox/linux.rs,sandbox/macos.rs,env.rs,project.rs,approvals.rs,policy.rs}`; `adage-core/data/commands.toml` and `table.rs`; `adage-cli/src/review.rs`; `adage-eval/src/safety.rs` (`check_data_block`) | 3 weeks | C0 |
-| **C3 E1 prefetch** | `adage-exec hook`, the E1 data block, spool fields, steered-session exclusion, `adage delegate/disable`, the `adage-exec` plugin variant, L1 and L2 arms | `adage-exec/src/hook.rs` (wrapping `adage-cli` hook logic, which moves into a library crate `adage-hook` so both binaries share it); `adage-runtime/src/render.rs` (data template); `plugin/claude-code-exec/`; `evals/live` | 2 weeks | C1, C2; gate G1 |
-| **C4 E2 MCP** | `adage-exec mcp`: tools from contracts, output schemas, rate limits, `list_changed`, `.mcp.json` in the plugin, Codex and OpenCode registration in `adage install` | `adage-exec/src/mcp/{server.rs,schema.rs}` (hand-written JSON-RPC over stdio, no heavy SDK); `adage-cli/src/install.rs` | 2 to 3 weeks | C3; **Track G typed slot contracts learned from value flow** (before G, only prompt-span inputs and hand-authored output types, so coverage is thin); gate G2 |
-| **C5 Actions, vendoring, attestations** | E3 stage, verify and apply; L-vendor scripts with cas; attestations in packs; automatic revocation; the G3 and G4 runs | `adage-exec/src/stage.rs`; `adage-pack/vendor.rs`; `evals/bench` schema v2 | 3 to 4 weeks | C4; Track G delivery shapes (`after-X-do-Y` for regenerate outputs); gates G3 and G4 |
+| **C3 E1 prefetch** | `adage-exec hook`, the E1 data block, spool fields, steered-session exclusion, `adage delegate on/off`, the `adage-exec` plugin variant, L1 and L2 arms | `adage-exec/src/hook.rs` (wrapping `adage-cli` hook logic, which moves into a library crate `adage-hook` so both binaries share it); `adage-runtime/src/render.rs` (data template); `plugin/claude-code-exec/`; `evals/live` | 2 weeks | C1, C2; gate G1 |
+| **C4 E2 MCP (removed)** | Removed by the owner (2026-09-28): no MCP server. Adage acts only from its hooks (E2 actions, C5). | none | none | none |
+| **C5 Actions, vendoring, attestations** | E2 actions from hooks (`adage-exec hook`): stage, verify and apply; L-vendor scripts with cas; attestations in packs; automatic revocation; the G3 and G4 runs | `adage-exec/src/stage.rs`; `adage-pack/vendor.rs`; `evals/bench` schema v2 | 3 to 4 weeks | C4; Track G delivery shapes (`after-X-do-Y` for regenerate outputs); gates G3 and G4 |
 
 **Track G interface contract.** Track C consumes three things from Track G: `shape ∈ {run, avoid, after, read, advise}`, `inputs` and `outputs` with types, and effect ceilings. Track C does not care how Track G predicts. If Track G's predictive engine emits a route, the pack format carries it, provided it projects onto those shapes and types. Track C defines the type registry; Track G fills it.
 
@@ -457,10 +452,10 @@ On the bench ladder, all results use one JSONL schema. Add `tier` values and an 
 6. **D6: vendored scripts (revising O3).** Recommendation: allow them in C5, signed packs only, never approved automatically, with full text shown at approval.
 7. **D7: dependencies between packs.** Recommendation: none in v1. Later, pin by digest only.
 8. **D8: signing approvals.** Recommendation: plain 0600 JSON plus a harness deny rule. Signing is optional hardening.
-9. **D9: the default for execution.** Recommendation: off. Automatic approval of inert-observe for local reflexes turns on only after G3. E3 always needs explicit approval per route.
+9. **D9: the default for execution.** Recommendation: off. Automatic approval of inert-observe for local reflexes turns on only after G3. An E2 action always needs explicit approval per route.
 10. **D10: Windows.** Recommendation: E0 only. Revisit AppContainer after G3.
 11. **D11: evidence from sessions with execution.** Recommendation: treat them as steered for every kind a delivered route has. Execution outputs never become training data.
-12. **D12: E3 triggered from hooks?** For example, the stop hook running a missed verify obligation itself. Recommendation: no. E3 only through MCP calls, so the harness prompts.
+12. **D12: actions triggered from hooks?** For example, the stop hook running a missed finish-line obligation itself. **Decided (owner, 2026-09-28): yes.** Actions run only from the hooks Adage owns (there is no MCP server), after an explicit per-route approval on this machine, staged and verified, at most one per hook event.
 
 ### Critical files for implementation
 
@@ -468,7 +463,7 @@ On the bench ladder, all results use one JSONL schema. Add `tier` values and an 
 - /home/user/adage/crates/adage-tracks/src/model.rs: `Route`, `Step`, `Slot` and `Contract`, the base for route v2, inputs, outputs and types
 - /home/user/adage/crates/adage-cli/src/add.rs: install, verification and trust flow, extended for packs, the new namespace and bind-time inert reasons
 - /home/user/adage/crates/adage-core/data/commands.toml: gains the `inert` field that gates automatic approval (with `crates/adage-core/src/shell.rs:457-485`, where naming a script observe from its name must not count for execution)
-- /home/user/adage/crates/adage-runtime/src/render.rs: fixed templates, gaining the `<adage-data>` block and the E2 tool-description templates (with `/home/user/adage/crates/adage-eval/src/safety.rs` for `check_data_block`)
+- /home/user/adage/crates/adage-runtime/src/render.rs: fixed templates, gaining the `<adage-data>` block and the E2 action result templates (with `/home/user/adage/crates/adage-eval/src/safety.rs` for `check_data_block`)
 
 Also relevant:
 

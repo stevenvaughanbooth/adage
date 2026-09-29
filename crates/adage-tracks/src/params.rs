@@ -3,7 +3,7 @@
 //! [`EngineParams`] is plain data with serde defaults equal to the values Adage has always used,
 //! so an empty file (`{}` or an empty TOML document) is exactly today's engine, and so is
 //! [`EngineParams::default`]. [`EngineParams::demo`] is the `--demo` preset (lower evidence bars
-//! for small histories); it differs only in `learn.min_support` and `learn.green_lower_bound`.
+//! for small histories); it differs only in `learn.min_support` and `learn.fire_lower_bound`.
 //!
 //! It lives here, in the track crate, because both the runtime and the learner depend on this
 //! crate and on nothing of each other's in that direction.
@@ -49,16 +49,16 @@ pub struct EngineParams {
 #[serde(default, deny_unknown_fields)]
 pub struct RuntimeParams {
     /// Tool batches after a directive within which running its command counts as following it;
-    /// after that the directive is judged derailed.
+    /// after that the directive is judged ignored.
     pub follow_window: u32,
     pub max_directives_per_session: usize,
     pub max_directives_per_decision: usize,
     pub max_stop_requests: u32,
     /// Recent call keys kept in the session state.
     pub history: usize,
-    /// The holdout share when neither `ADAGE_HOLDOUT` nor `runtime.holdout` sets one. Recorded
-    /// for completeness: offline replay is always the holdout arm, so L0 does not read it.
-    pub holdout_share: f64,
+    /// The control share when neither `ADAGE_CONTROL` nor `runtime.control` sets one. Recorded
+    /// for completeness: offline replay is always the control arm, so L0 does not read it.
+    pub control_share: f64,
 }
 
 impl Default for RuntimeParams {
@@ -69,7 +69,7 @@ impl Default for RuntimeParams {
             max_directives_per_decision: MAX_DIRECTIVES_PER_DECISION,
             max_stop_requests: MAX_STOP_REQUESTS,
             history: HISTORY,
-            holdout_share: 0.1,
+            control_share: 0.1,
         }
     }
 }
@@ -80,50 +80,74 @@ impl Default for RuntimeParams {
 pub struct LearnParams {
     /// Minimum distinct supporting sessions for any route.
     pub min_support: u32,
-    /// Wilson lower bound required for green.
-    pub green_lower_bound: f64,
-    /// Minimum support rate for yellow (a new route).
-    pub yellow_rate: f64,
+    /// Wilson lower bound required for fire.
+    pub fire_lower_bound: f64,
+    /// Minimum support rate for prime (a new route).
+    pub prime_rate: f64,
     /// The lower rate bar that keeps an existing route (hysteresis).
     pub retain_rate: f64,
-    /// A runner is named in a dead end only if it failed in at least `num/den` of the sessions
+    /// An avoid names a runner only if it failed in at least `num/den` of the sessions
     /// that ran it: `[num, den]`, integers so the rule is exact.
     pub dead_end_consistency: [u32; 2],
-    /// At most this many dead ends (failure signatures) per working command.
+    /// At most this many avoids (failure signatures) per working command.
     pub dead_end_signatures: usize,
-    /// A finish-line command must be this much more common after the edit than without it.
+    /// A step after an edit must be this much more common after the edit than without it.
     pub finish_line_contrast: f64,
-    /// Commands run before the first edit by more than this share of sessions are not specific
-    /// to any intent.
+    /// Prompt-intent prototypes: commands run before the first edit by more than this share of
+    /// sessions are not specific to any intent.
     pub intent_ubiquitous: f64,
-    /// An intent family's command must be this much more common inside the family than outside.
+    /// A prompt-intent prototype's command must be this much more common inside it than outside.
     pub intent_contrast: f64,
     /// Review: absolute movement of the Wilson lower bound that counts as a material change.
     pub material_lower_bound: f64,
-    /// Stale routes: the share of occurrences that must be exposed for a route's absence to be
+    /// Dormant routes: the share of occurrences that must be exposed for a route's absence to be
     /// put down to exposure alone.
-    pub stale_exposure: f64,
-    /// The learning engine (Track G §10): `miners` (today's miners, the default), `shadow` or
-    /// `graph`. Under `shadow` and `graph` the lookup miner takes its slot and contract from the
-    /// graph engine's learned value types, and session facts are computed (and cached).
-    /// Omitted from the canonical JSON when `miners`, so the default setting's hash is unchanged.
-    #[serde(skip_serializing_if = "is_miners")]
-    pub engine: String,
+    pub dormant_exposure: f64,
+    /// The outcome-lift path (`crate::lift`): a step that too few traces took for the rate bar
+    /// still forms a reflex, capped at prime (prime), when the traces that took it succeeded
+    /// more often than those that did not, with the 95% lower bound on the difference at least
+    /// this. Outcomes are the recorded ones (`--outcomes`), else transcript proxies. Omitted from
+    /// the canonical JSON at its default (0.2), so the presets' hashes are unchanged.
+    #[serde(skip_serializing_if = "is_default_lift")]
+    pub outcome_lift_lower_bound: f64,
+    /// The outcome-lift path needs at least this many traces that took the step; `None` (the
+    /// default, omitted from the canonical JSON) is `min_support`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub outcome_min_support: Option<u32>,
+    /// Cross-repository priors of the directive-value model (`adage_learn::value::Priors`: cells
+    /// of calls-to-goal statistics by situation), fitted over other repositories' traces. `None`
+    /// (the default, omitted from the canonical JSON) is the learner's built-in weak prior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome_priors: Option<Value>,
+    /// Uplift gating (`adage_learn::value::assess`): a route whose posterior uplift
+    /// (`p_follow − p_self`) is below this is kept quiet (nascent) until a person approves it.
+    /// 0 turns the gate off (uplift is still estimated and shown). Omitted from the canonical JSON
+    /// at its default ([`UPLIFT_MIN`]), so the default preset's hash is unchanged.
+    #[serde(skip_serializing_if = "is_default_uplift")]
+    pub uplift_min: f64,
 }
 
-/// The engines `LearnParams::engine` may name.
-pub const ENGINES: [&str; 3] = ["miners", "shadow", "graph"];
+/// The default `outcome_lift_lower_bound`.
+pub const OUTCOME_LIFT_LOWER_BOUND: f64 = 0.2;
 
-fn is_miners(e: &str) -> bool {
-    e == "miners"
+fn is_default_lift(x: &f64) -> bool {
+    *x == OUTCOME_LIFT_LOWER_BOUND
+}
+
+/// The default `uplift_min` (evals/lab/research/uptake-delivery: the bar under which 79% of
+/// deliveries lay, with no measurable loss).
+pub const UPLIFT_MIN: f64 = 0.1;
+
+fn is_default_uplift(x: &f64) -> bool {
+    *x == UPLIFT_MIN
 }
 
 impl Default for LearnParams {
     fn default() -> Self {
         LearnParams {
             min_support: 5,
-            green_lower_bound: 0.8,
-            yellow_rate: 0.5,
+            fire_lower_bound: 0.8,
+            prime_rate: 0.5,
             retain_rate: 0.3,
             dead_end_consistency: [9, 10],
             dead_end_signatures: 3,
@@ -131,16 +155,21 @@ impl Default for LearnParams {
             intent_ubiquitous: 0.8,
             intent_contrast: 0.3,
             material_lower_bound: crate::review::MATERIAL_LOWER_BOUND,
-            stale_exposure: 0.5,
-            engine: "miners".into(),
+            dormant_exposure: 0.5,
+            outcome_lift_lower_bound: OUTCOME_LIFT_LOWER_BOUND,
+            outcome_min_support: None,
+            outcome_priors: None,
+            uplift_min: UPLIFT_MIN,
         }
     }
 }
 
 impl LearnParams {
-    /// The `--demo` thresholds: lower evidence bars for demonstrations and small histories.
+    /// The `--demo` thresholds: lower evidence bars for demonstrations and small histories, and no
+    /// uplift gate: a scripted demonstration's agents take their steps every time, so every
+    /// reflex it shows would otherwise be quiet (its uplift is still estimated and shown).
     pub fn demo() -> Self {
-        LearnParams { min_support: 3, green_lower_bound: 0.5, ..Default::default() }
+        LearnParams { min_support: 3, fire_lower_bound: 0.5, uplift_min: 0.0, ..Default::default() }
     }
 }
 
@@ -176,22 +205,23 @@ impl EngineParams {
         if den == 0 || num > den {
             bail!("learn: dead_end_consistency [num, den] needs 0 < den and num <= den");
         }
+        if l.outcome_min_support == Some(0) {
+            bail!("learn: outcome_min_support must be at least 1");
+        }
         if l.dead_end_signatures == 0 {
             bail!("learn: dead_end_signatures must be at least 1");
         }
-        if !ENGINES.contains(&l.engine.as_str()) {
-            bail!("learn.engine must be one of {ENGINES:?} (got {:?})", l.engine);
-        }
         for (name, x) in [
-            ("runtime.holdout_share", r.holdout_share),
-            ("learn.green_lower_bound", l.green_lower_bound),
-            ("learn.yellow_rate", l.yellow_rate),
+            ("runtime.control_share", r.control_share),
+            ("learn.fire_lower_bound", l.fire_lower_bound),
+            ("learn.prime_rate", l.prime_rate),
             ("learn.retain_rate", l.retain_rate),
             ("learn.finish_line_contrast", l.finish_line_contrast),
             ("learn.intent_ubiquitous", l.intent_ubiquitous),
             ("learn.intent_contrast", l.intent_contrast),
             ("learn.material_lower_bound", l.material_lower_bound),
-            ("learn.stale_exposure", l.stale_exposure),
+            ("learn.dormant_exposure", l.dormant_exposure),
+            ("learn.outcome_lift_lower_bound", l.outcome_lift_lower_bound),
         ] {
             if !(0.0..=1.0).contains(&x) {
                 bail!("{name} must be within 0..=1 (got {x})");
@@ -304,7 +334,13 @@ mod tests {
         let from_toml: EngineParams = toml::from_str("").unwrap();
         assert_eq!(from_toml, d);
         let demo = EngineParams::demo();
-        assert_eq!((demo.learn.min_support, demo.learn.green_lower_bound), (3, 0.5));
+        assert_eq!((demo.learn.min_support, demo.learn.fire_lower_bound), (3, 0.5));
+        assert_eq!((d.learn.outcome_min_support, demo.learn.outcome_min_support), (None, None));
+        assert_eq!(d.learn.outcome_lift_lower_bound, 0.2);
+        // At their defaults the outcome-lift settings leave the canonical JSON (and hash) as it was.
+        assert!(!d.canonical_json().contains("outcome") && !demo.canonical_json().contains("outcome"));
+        let o = d.with_overrides(&serde_json::json!({"learn": {"outcome_min_support": 4}})).unwrap();
+        assert!(o.canonical_json().contains("\"outcome_min_support\":4"));
         assert_eq!(demo.runtime, d.runtime);
     }
 
@@ -313,9 +349,9 @@ mod tests {
         let p = EngineParams::demo()
             .with_overrides(&serde_json::json!({"learn": {"min_support": 4}, "runtime": {"follow_window": 5}}))
             .unwrap();
-        assert_eq!((p.learn.min_support, p.learn.green_lower_bound, p.runtime.follow_window), (4, 0.5, 5));
+        assert_eq!((p.learn.min_support, p.learn.fire_lower_bound, p.runtime.follow_window), (4, 0.5, 5));
         assert!(EngineParams::default().with_overrides(&serde_json::json!({"learn": {"min_suport": 4}})).is_err());
-        assert!(EngineParams::default().with_overrides(&serde_json::json!({"learn": {"yellow_rate": 2.0}})).is_err());
+        assert!(EngineParams::default().with_overrides(&serde_json::json!({"learn": {"prime_rate": 2.0}})).is_err());
     }
 
     #[test]
@@ -330,19 +366,5 @@ mod tests {
         b.learn.retain_rate = 0.31;
         assert_ne!(a.params_hash(), b.params_hash());
         assert_eq!(a.params_hash().len(), 64);
-    }
-
-    #[test]
-    fn the_engine_defaults_to_the_miners_and_keeps_the_default_hash() {
-        let d = EngineParams::default();
-        assert_eq!(d.learn.engine, "miners");
-        assert!(!d.canonical_json().contains("engine"));
-        let g = d.with_overrides(&serde_json::json!({"learn": {"engine": "graph"}})).unwrap();
-        assert_eq!(g.learn.engine, "graph");
-        assert!(g.canonical_json().contains("\"engine\":\"graph\""));
-        assert_ne!(g.params_hash(), d.params_hash());
-        let back = d.with_overrides(&serde_json::json!({"learn": {"engine": "miners"}})).unwrap();
-        assert_eq!(back.params_hash(), d.params_hash());
-        assert!(d.with_overrides(&serde_json::json!({"learn": {"engine": "gnn"}})).is_err());
     }
 }

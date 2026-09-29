@@ -36,10 +36,9 @@
    "detail": "installed in .codex/hooks.json"
   },
   {
-   "check": "model",
-   "status": "warn",
-   "detail": "no intent model installed; intent reflexes are off",
-   "fix": "`adage models install` fetches it (34 MB)"
+   "check": "embedding model",
+   "status": "pass",
+   "detail": "potion-base-8m-i8: bundled in this binary (int8, SHA-256 verified)"
   },
   {
    "check": "spools",
@@ -53,8 +52,8 @@
   }
  ],
  "summary": {
-  "pass": 9,
-  "warn": 1,
+  "pass": 10,
+  "warn": 0,
   "fail": 0
  }
 }

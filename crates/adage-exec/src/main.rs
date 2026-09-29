@@ -1,7 +1,7 @@
 //! `adage-exec`: runs approved routes in an OS sandbox (Track C §3.2).
 //!
 //! ```text
-//! adage-exec hook    <claude|opencode|codex> <Event>   (a superset of `adage hook`: E1 prefetch)
+//! adage-exec hook    <claude|opencode|codex> <Event>   (a superset of `adage hook`: E1 prefetch, E2 actions)
 //! adage-exec run     --repo <dir> --argv '<json array>' [request flags] [--dry-run] [--record]
 //! adage-exec approve --repo <dir> --argv '<json array>' [request flags] [--by <name>]
 //! adage-exec revoke  --repo <dir> [--track <t> --route <r>]
@@ -10,14 +10,19 @@
 //! ```
 //!
 //! Request flags: `--input k=v`, `--contract k=<regex>`, `--effect observe`, `--level e1|e2`,
-//! `--output typed|raw`, `--fields '<json>'`, `--script <path>=<sha256>`, `--track`, `--route`,
-//! `--step`, `--timeout-ms`, `--cwd <subdir>`, `--canary <text>`.
+//! `--output typed|raw`, `--fields '<json>'`, `--script <path>=<sha256>` (or `cas:<sha256>=<sha256>`
+//! for a vendored script), `--track`, `--route`, `--step`, `--timeout-ms`, `--cwd <subdir>`,
+//! `--canary <text>`; for E2, `--outputs <glob>` and `--cache <glob>` (the action is `verify` for
+//! `--effect verify`, else `regenerate`). An E2 `run` stages the action, verifies its change set
+//! and applies it (`--dry-run`: the gates only).
 //!
 //! Exit codes: 0 delivered (or, for `--dry-run`, would run); 2 usage; 3 refused or withheld.
 
 use adage_core::{CommandTable, Effect};
 use adage_exec::approvals::{self, Approval, ApprovalKey, Store};
-use adage_exec::request::{ExecRequest, FieldSpec, Labels, Level, Origin, OutputMode, OutputSpec, ScriptRef};
+use adage_exec::request::{
+    ActionKind, ActionSpec, ExecRequest, FieldSpec, Labels, Level, Origin, OutputMode, OutputSpec, ScriptRef,
+};
 use adage_exec::run::{self, Context};
 use adage_exec::sandbox::{self, Profile};
 use adage_exec::{person, policy};
@@ -29,6 +34,7 @@ const USAGE: &str = "usage:
   adage-exec hook    <claude|opencode|codex> <Event>
   adage-exec run     --repo <dir> --argv '<json array>' [--input k=v]... [--contract k=<regex>]...
                      [--effect observe] [--level e1|e2] [--output typed|raw] [--fields '<json>']
+                     [--outputs <glob>]... [--cache <glob>]...
                      [--script <path>=<sha256>]... [--track t --route r --step s]
                      [--timeout-ms n] [--cwd <subdir>] [--canary <text>]... [--dry-run] [--record]
   adage-exec approve <the same request flags> [--by <name>]
@@ -86,6 +92,8 @@ const REQUEST_FLAGS: &[&str] = &[
     "--timeout-ms",
     "--cwd",
     "--canary",
+    "--outputs",
+    "--cache",
 ];
 
 fn kv(s: &str, what: &str) -> Result<(String, String)> {
@@ -98,7 +106,7 @@ fn request(a: &Args) -> Result<ExecRequest> {
     let argv: Vec<String> = serde_json::from_str(&a.one("--argv").context("--argv is required")?)
         .context("--argv must be a JSON array of strings")?;
     let level = match a.one("--level") {
-        Some(l) => Level::parse(&l).with_context(|| format!("--level {l:?} is not e1, e2 or e3"))?,
+        Some(l) => Level::parse(&l).with_context(|| format!("--level {l:?} is not e1 or e2"))?,
         None => Level::E1,
     };
     let effect = match a.one("--effect") {
@@ -146,6 +154,11 @@ fn request(a: &Args) -> Result<ExecRequest> {
         labels,
         origin: Origin::Local,
         route_exec_digest: None,
+        action: (level == Level::E2).then(|| ActionSpec {
+            kind: if effect == Effect::Verify { ActionKind::Verify } else { ActionKind::Regenerate },
+            outputs: a.all("--outputs"),
+            cache: a.all("--cache"),
+        }),
     })
 }
 
@@ -185,6 +198,23 @@ fn cmd_run(a: &Args) -> Result<i32> {
         println!("{}", serde_json::to_string_pretty(&value)?);
         return Ok(if ok { 0 } else { 3 });
     }
+    if req.level == Level::E2 {
+        let staged = match adage_exec::stage::stage(&req, &ctx) {
+            Ok(s) => s,
+            Err(r) => {
+                eprintln!("adage-exec: not staged: {r}");
+                return Ok(3);
+            }
+        };
+        let outcome = adage_exec::stage::finish(&staged);
+        let route = approvals::route_label(&req);
+        let approved_on = store.find(&ctx_key(&req, &ctx)).map(|a| a.approved_on.clone()).unwrap_or_default();
+        let revoked = adage_exec::stage::record(&home, &ctx.repo_key, &route, &approved_on, "adage-exec run", &outcome);
+        let kind = req.action.as_ref().map(|a| a.kind).unwrap_or(ActionKind::Regenerate);
+        let v = adage_exec::stage::result_json(&req.labels.route, kind, Some(&staged), &outcome, revoked);
+        println!("{}", serde_json::to_string_pretty(&v)?);
+        return Ok(if outcome.name() == "applied" { 0 } else { 3 });
+    }
     match run::execute(&req, &ctx) {
         Ok(d) => {
             println!("{}", d.block);
@@ -198,6 +228,10 @@ fn cmd_run(a: &Args) -> Result<i32> {
             Ok(3)
         }
     }
+}
+
+fn ctx_key(req: &ExecRequest, ctx: &Context) -> ApprovalKey {
+    ApprovalKey::for_request(req, &ctx.repo_key)
 }
 
 fn cmd_approve(a: &Args) -> Result<i32> {
@@ -228,6 +262,9 @@ fn cmd_approve(a: &Args) -> Result<i32> {
     println!("  sandbox:  {}", req.profile.summary());
     for s in &req.scripts {
         println!("  script:   {} sha256 {}", s.path, s.sha256);
+    }
+    if let Some(x) = &req.action {
+        println!("  action:   {} · outputs {} · cache {}", x.kind.as_str(), x.outputs.join(", "), x.cache.join(", "));
     }
     store.approve(Approval {
         key,
@@ -291,13 +328,16 @@ fn cmd_doctor(a: &Args) -> Result<i32> {
         let v = serde_json::json!({
             "sandbox": cap,
             "summary": cap.line(),
+            "stage": adage_exec::stage::backend(&cap),
             "policy": pol.as_ref().ok(),
             "policy_error": pol.as_ref().err().map(|e| e.to_string()),
+            "last_withheld": adage_exec::last_withheld(&home),
         });
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(0);
     }
     println!("Sandbox: {}", cap.line());
+    println!("Staging (E2): {}", adage_exec::stage::backend(&cap).line());
     println!(
         "  Landlock:           {}",
         cap.landlock_abi.map(|a| format!("ABI {a}")).unwrap_or_else(|| "not available".into())
@@ -312,7 +352,10 @@ fn cmd_doctor(a: &Args) -> Result<i32> {
         cap.sandbox_exec.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "not present".into())
     );
     if cap.running_as_root {
-        println!("  running as root:    sandboxed commands run as nobody (65534); repositories must be world-readable");
+        println!(
+            "  running as root:    sandboxed commands run as nobody (65534); a repository nobody can reach is \
+             bind-mounted read-only where it can (E1)"
+        );
     }
     match pol {
         Ok(p) => println!(
@@ -324,6 +367,10 @@ fn cmd_doctor(a: &Args) -> Result<i32> {
         ),
         Err(e) => println!("Policy: unreadable ({e:#}); execution refuses until it is fixed"),
     }
+    match adage_exec::last_withheld(&home) {
+        Some(w) => println!("Last withheld: {}", w.line()),
+        None => println!("Last withheld: none recorded"),
+    }
     Ok(0)
 }
 
@@ -333,7 +380,7 @@ fn main() {
         // Before anything else: the no-match path must cost what `adage hook`'s does.
         adage_exec::hook::main(args.get(1).cloned().unwrap_or_default(), args.get(2).cloned().unwrap_or_default());
     }
-    if args.is_empty() || args[0] == "--help" || args[0] == "-h" {
+    if args.is_empty() || args.iter().any(|a| a == "--help" || a == "-h") {
         println!("{USAGE}");
         std::process::exit(if args.is_empty() { 2 } else { 0 });
     }

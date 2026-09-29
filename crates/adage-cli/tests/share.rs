@@ -22,8 +22,8 @@ impl World {
         for d in ["sender", "recipient", "home", "keys", "elsewhere", "checkout/.git", "checkout/scripts", "bin"] {
             std::fs::create_dir_all(root.join(d)).unwrap();
         }
-        // The recipient's checkout of the repository the track is for: the lookup's script is
-        // pinned against it when the v1 track is upgraded to a pack.
+        // A checkout of the repository the track is for: the lookup's script is pinned against it
+        // when the track is converted to a pack.
         std::fs::write(
             root.join("checkout/.git/config"),
             "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n",
@@ -55,10 +55,11 @@ impl World {
     fn run(&self, adage_home: &str, args: &[&str]) -> Output {
         self.cmd(adage_home, &self.p("elsewhere"), args).output().unwrap()
     }
+    /// `adage share` in the sender's checkout (so repository scripts are pinned L-ref).
     fn share(&self) -> Output {
         let (out, key) = (self.p("out"), self.p("keys/id_ed25519"));
-        let args = ["share", NAME, "--out", out.to_str().unwrap(), "--key", key.to_str().unwrap(), "--format", "v1"];
-        self.run("sender", &args)
+        let args = ["share", NAME, "--out", out.to_str().unwrap(), "--key", key.to_str().unwrap()];
+        self.cmd("sender", &self.p("checkout"), &args).output().unwrap()
     }
     /// `adage add` in the recipient's checkout.
     fn add(&self, extra: &[&str]) -> Output {
@@ -70,7 +71,7 @@ impl World {
     fn trust_personally(&self, pk: &ssh_key::PublicKey) {
         std::fs::write(
             self.p("recipient/trusted-signers"),
-            format!("alice@example namespaces=\"adage-track\" {}\n", adage_sign::key_line(pk)),
+            format!("alice@example namespaces=\"adage-pack\" {}\n", adage_sign::key_line(pk)),
         )
         .unwrap();
     }
@@ -88,7 +89,7 @@ fn keygen(w: &World, name: &str) -> ssh_key::PublicKey {
     k.public_key().clone()
 }
 
-fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, aspect: Aspect) -> Route {
+fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, strength: Strength) -> Route {
     Route {
         id: id.into(),
         summary: format!("route {id}"),
@@ -96,8 +97,8 @@ fn route(id: &str, trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effec
         step,
         slots,
         effect,
-        aspect,
-        state: RouteState::Active,
+        strength,
+        state: RouteState::Firm,
         exit: vec![Exit::IntentChanges],
         evidence: Evidence { support: 7, opportunities: 8, provenance: "desire-path".into(), ..Default::default() },
         authored: false,
@@ -127,7 +128,7 @@ fn track() -> Track {
                     contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
                 }],
                 Effect::Observe,
-                Aspect::Green,
+                Strength::Fire,
             ),
             route(
                 "dead-unittest",
@@ -139,7 +140,7 @@ fn track() -> Track {
                 },
                 vec![],
                 Effect::Verify,
-                Aspect::Red,
+                Strength::Inhibit,
             ),
         ],
     }
@@ -154,7 +155,7 @@ fn setup() -> (World, ssh_key::PublicKey) {
 }
 
 #[test]
-fn share_then_add_installs_routes_at_probation() {
+fn share_then_add_installs_routes_at_forming() {
     let (w, pk) = setup();
     std::fs::write(w.p("sender/tracks").join(NAME).join(".DS_Store"), "junk").unwrap();
     let o = w.share();
@@ -162,26 +163,30 @@ fn share_then_add_installs_routes_at_probation() {
     assert!(o.status.success(), "{t}");
     for s in [
         "Included",
-        "track.toml",
+        "pack.toml",
         "routes/lookup.yaml",
         "routes/dead-unittest.yaml",
         ".DS_Store",
         "hidden",
         "signed",
-        "namespace adage-track",
+        "namespace adage-pack",
     ] {
         assert!(t.contains(s), "summary lacks {s:?}:\n{t}");
     }
     let mut shared: Vec<String> = walk(&w.p("out"));
     shared.sort();
-    assert_eq!(shared, ["routes/dead-unittest.yaml", "routes/lookup.yaml", "track.sig", "track.toml"]);
-    assert!(std::fs::read_to_string(w.p("out/track.sig")).unwrap().starts_with("-----BEGIN SSH SIGNATURE-----"));
+    shared.retain(|f| !f.starts_with("types/"));
+    assert_eq!(
+        shared,
+        ["CLOSURE", "evidence.json", "pack.sig", "pack.toml", "routes/dead-unittest.yaml", "routes/lookup.yaml"]
+    );
+    assert!(std::fs::read_to_string(w.p("out/pack.sig")).unwrap().starts_with("-----BEGIN SSH SIGNATURE-----"));
 
     w.trust_personally(&pk);
     let o = w.add(&[]);
     assert!(o.status.success(), "{}", text(&o));
     assert!(text(&o).contains("was fire"), "{}", text(&o));
-    // Upgraded in place: the pack is installed as verified, and bound to this repository.
+    // Converted in place: the pack is installed as verified, and bound to this repository.
     assert!(adage_pack::Pack::load(&w.p("recipient/tracks/@imported").join(NAME)).is_ok());
     let installed =
         io::read(&w.p("recipient/tracks/@imported/@bound").join(NAME).join("github-com-acme-billing")).unwrap();
@@ -190,11 +195,11 @@ fn share_then_add_installs_routes_at_probation() {
     let index = Index::load(&w.p("recipient/index.json"));
     assert_eq!(index.routes.len(), 2);
     for r in &index.routes {
-        assert_eq!(r.route.state, RouteState::Probation, "{}", r.route.id);
-        assert_ne!(r.route.aspect, Aspect::Green, "{}", r.route.id);
+        assert_eq!(r.route.state, RouteState::Forming, "{}", r.route.id);
+        assert_ne!(r.route.strength, Strength::Fire, "{}", r.route.id);
     }
     let lookup = index.for_repo(REPO).find(|r| r.route.id == "lookup").unwrap();
-    assert_eq!(lookup.route.aspect, Aspect::Yellow);
+    assert_eq!(lookup.route.strength, Strength::Prime);
     assert!(!w.p("recipient/trust.json").exists(), "personal trust changes nothing");
     assert!(walk(&w.p("recipient/staging")).is_empty(), "the staging copy is removed");
 
@@ -206,7 +211,7 @@ fn share_then_add_installs_routes_at_probation() {
     let index = Index::compile(&all);
     assert_eq!(index.routes.len(), 2, "one route per id");
     let lookup = index.for_repo(REPO).find(|r| r.route.id == "lookup").unwrap();
-    assert_eq!(lookup.route.aspect, Aspect::Green, "the learned route wins over the import");
+    assert_eq!(lookup.route.strength, Strength::Fire, "the learned route wins over the import");
 }
 
 #[test]
@@ -231,7 +236,7 @@ fn unknown_signer_is_refused_without_trust_then_pinned() {
 }
 
 #[test]
-fn tampered_unsigned_wrong_namespace_and_invalid_tracks_are_refused() {
+fn tampered_unsigned_wrong_namespace_packs_and_track_directories_are_refused() {
     let (w, pk) = setup();
     assert!(w.share().status.success());
     w.trust_personally(&pk);
@@ -244,37 +249,28 @@ fn tampered_unsigned_wrong_namespace_and_invalid_tracks_are_refused() {
     assert!(text(&o).contains("does not match"), "{}", text(&o));
     std::fs::write(&lookup, &original).unwrap();
 
-    let sig = std::fs::read(w.p("out/track.sig")).unwrap();
-    std::fs::remove_file(w.p("out/track.sig")).unwrap();
+    let sig = std::fs::read(w.p("out/pack.sig")).unwrap();
+    std::fs::remove_file(w.p("out/pack.sig")).unwrap();
     let o = w.add(&["--trust"]);
     assert!(!o.status.success());
     assert!(text(&o).contains("unsigned"), "{}", text(&o));
 
     // A genuine signature by a trusted key, but in the git namespace.
     let key = w.p("keys/id_ed25519");
-    let msg = adage_sign::message(&io::digest(&w.p("out")).unwrap()).unwrap();
+    let msg = adage_sign::message(&adage_pack::digest_dir(&w.p("out")).unwrap()).unwrap();
     let git = adage_sign::sign_with_key_file(&msg, "git", &key).unwrap();
-    std::fs::write(w.p("out/track.sig"), git.pem).unwrap();
+    std::fs::write(w.p("out/pack.sig"), git.pem).unwrap();
     let o = w.add(&["--trust"]);
     assert!(!o.status.success());
     assert!(text(&o).contains("does not match"), "{}", text(&o));
-    std::fs::write(w.p("out/track.sig"), sig).unwrap();
-    assert!(w.add(&[]).status.success(), "the untouched track still installs");
+    std::fs::write(w.p("out/pack.sig"), sig).unwrap();
+    assert!(w.add(&[]).status.success(), "the untouched pack still installs");
 
-    // Correctly signed by a trusted key, but not a valid track.
-    let bad = w.p("bad");
-    let mut t = track();
-    t.routes[0].step = Step::Run { command: "gh issue close {item}".into() };
-    io::write(&bad, &t).unwrap();
-    let msg = adage_sign::message(&io::digest(&bad).unwrap()).unwrap();
-    std::fs::write(
-        bad.join("track.sig"),
-        adage_sign::sign_with_key_file(&msg, adage_sign::NAMESPACE, &key).unwrap().pem,
-    )
-    .unwrap();
-    let o = w.run("recipient", &["add", bad.to_str().unwrap(), "--trust"]);
+    // A track directory is not a pack: the refusal says how to get one.
+    let dir = w.p("sender/tracks").join(NAME);
+    let o = w.run("recipient", &["add", dir.to_str().unwrap(), "--trust"]);
     assert!(!o.status.success());
-    assert!(text(&o).contains("fails validation"), "{}", text(&o));
+    assert!(text(&o).contains("not a pack") && text(&o).contains("adage share"), "{}", text(&o));
 }
 
 #[test]
@@ -285,12 +281,13 @@ fn share_refuses_absolute_paths_and_tokens() {
     let dir = w.p("sender/tracks").join(NAME);
     io::write(&dir, &t).unwrap();
     let token = format!("ghp_{}", "Zx9Qw3Er7Ty1".repeat(3));
-    std::fs::write(dir.join("evidence.json"), format!("{{\"note\": \"{token}\"}}")).unwrap();
+    t.routes[1].summary = format!("the unittest runner needs {token}");
+    io::write(&dir, &t).unwrap();
     let o = w.share();
     let t = text(&o);
     assert!(!o.status.success());
     assert!(t.contains("absolute path") && t.contains("/opt/acme/tools/wi-lookup"), "{t}");
-    assert!(t.contains("GitHub token") && t.contains("evidence.json"), "{t}");
+    assert!(t.contains("GitHub token") && t.contains("routes/dead-unittest.yaml"), "{t}");
     assert!(!t.contains(&token), "the secret itself is never printed");
     assert!(!w.p("out").exists(), "nothing leaves the machine");
 }
@@ -338,7 +335,7 @@ fn repository_trusted_signers_are_approved_once_and_pinned_by_hash() {
     std::fs::create_dir_all(repo.join(".adage")).unwrap();
     std::fs::write(repo.join(".git/config"), "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n").unwrap();
     let signers = repo.join(".adage/trusted-signers");
-    std::fs::write(&signers, format!("alice@example namespaces=\"adage-track\" {}\n", adage_sign::key_line(&pk)))
+    std::fs::write(&signers, format!("alice@example namespaces=\"adage-pack\" {}\n", adage_sign::key_line(&pk)))
         .unwrap();
     let out = w.p("out");
     let add = |extra: &[&str]| {

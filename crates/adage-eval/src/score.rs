@@ -3,8 +3,8 @@
 //! Definitions (docs/evals.md has the long form):
 //!
 //! - A directive is **correct** if the agent later took its step unaided: ran the directed
-//!   command (the runtime's follow judgement, `adage_core::pattern::meets`: the same command, or
-//!   it with options added), read
+//!   command (the runtime's follow judgement, `adage_core::pattern::follows`: the same command,
+//!   with whatever the agent added to narrow it, not misfired), read
 //!   at least half of the files a linked-files directive listed, or ran a finish-line route's
 //!   command after the edit that triggered it. For a dead-end warning the step is the command
 //!   it recommends instead.
@@ -32,19 +32,20 @@ use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-/// The kind of route, from its trigger and step.
-pub fn kind(r: &Route) -> &'static str {
-    match (&r.trigger, &r.step) {
-        (_, Step::Avoid { .. }) => "dead-end",
-        // An instinct's dead end: after the failing runner, the working command.
-        (Trigger::AfterFailure { .. }, Step::Run { .. }) => "dead-end",
-        (_, Step::Advise { .. }) => "advice",
-        (_, Step::ReadBatch { .. }) => "linked-files",
-        (Trigger::AfterEdit { .. }, _) => "finish-line",
-        (Trigger::Prompt { .. }, _) => "lookup",
-        (Trigger::Intent { .. }, _) => "intent",
-        _ => "other",
-    }
+/// Where a route acts and how, for per-group metrics: its delivery shape
+/// ([`adage_tracks::shape`]) at its trigger, `run@prompt`, `read-batch@after-command`,
+/// `avoid@session-start`, `obligation@after-edit`, `run@intent`, ….
+pub fn point(r: &Route) -> String {
+    let at = match &r.trigger {
+        Trigger::Prompt { .. } => "prompt",
+        Trigger::Intent { .. } => "intent",
+        Trigger::AfterCommand { .. } => "after-command",
+        Trigger::AfterEdit { .. } => "after-edit",
+        Trigger::AfterFailure { .. } => "after-failure",
+        Trigger::SessionStart => "session-start",
+        Trigger::Context { .. } => "context",
+    };
+    format!("{}@{at}", adage_tracks::shape(r))
 }
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq)]
@@ -217,7 +218,7 @@ pub struct Safety {
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct Scored {
     pub route: String,
-    pub kind: String,
+    pub shape: String,
     pub event: String,
     pub turn: u32,
     pub correct: bool,
@@ -242,7 +243,7 @@ pub struct SessionScore {
 #[derive(Debug, Default)]
 pub struct Tally {
     pub overall: Metrics,
-    pub by_kind: BTreeMap<String, Metrics>,
+    pub by_shape: BTreeMap<String, Metrics>,
     pub by_route: BTreeMap<String, Metrics>,
     pub recall: BTreeMap<String, Recall>,
     pub dead_ends: DeadEnds,
@@ -255,7 +256,7 @@ pub struct Tally {
 impl Tally {
     pub fn finish(&mut self) {
         self.overall.finish();
-        self.by_kind.values_mut().for_each(Metrics::finish);
+        self.by_shape.values_mut().for_each(Metrics::finish);
         self.by_route.values_mut().for_each(Metrics::finish);
         let mut total = Recall::default();
         for r in self.recall.values_mut() {
@@ -313,9 +314,13 @@ impl Expect {
     pub(crate) fn same(&self, other: &Expect) -> bool {
         !self.key.is_empty() && (pattern::meets(&self.key, &other.key) || pattern::meets(&other.key, &self.key))
     }
-    /// The runtime's own judgement: the directed command, or it with options added.
+    /// The runtime's own follow judgement ([`pattern::follows`]): the directed command, with
+    /// whatever the agent added to narrow it, that did not misfire (a test run that ran and
+    /// reported failing tests was followed; one whose runner could not start was not).
     fn matches(&self, a: &Action) -> bool {
-        a.argv.is_some() && !a.failed && pattern::meets(&self.key, &a.key)
+        a.argv.is_some()
+            && !(a.failed && adage_core::outcome::misfired(&a.output))
+            && pattern::follows(&self.key, &a.key)
     }
 }
 
@@ -367,10 +372,10 @@ pub fn score_session(
             tally.safety.unsafe_directives += 1;
             tally.safety.violations.extend(v);
         }
-        let k = kind(route);
+        let k = point(route);
         let (correct, matched, saved) = match &route.step {
-            // Advice directs no command: it is checked for safety, and not scored.
-            Step::Advise { .. } => {
+            // Advice and cards direct no command: checked for safety, and not scored.
+            Step::Advise { .. } | Step::Card { .. } => {
                 tally.instincts.advice += u32::from(route.is_instinct());
                 continue;
             }
@@ -424,25 +429,32 @@ pub fn score_session(
                             && (a.turn > f.turn || (a.turn == f.turn && edit_call.is_some_and(|c| a.call > c)))
                     })
                     .map(|a| a.turn);
-                let fl = &mut tally.finish_line;
-                fl.obligations += 1;
-                let needed = meta.is_some_and(|m| m.stale_generated == Some(true) || m.passed == Some(false));
-                let clean = meta.is_some_and(|m| m.passed == Some(true) && m.stale_generated != Some(true));
-                if m.is_some() {
-                    fl.met += 1;
-                } else if needed {
-                    fl.caught += 1;
-                } else if clean {
-                    fl.false_alarms += 1;
-                } else {
-                    fl.unknown += 1;
-                }
+                tally_obligation(&mut tally.finish_line, m.is_some(), meta);
                 (m.is_some(), m, 0)
             }
             Step::Run { .. } => {
                 let Some(cmd) = command_in(text) else { continue };
                 let e = Expect::of(&cmd, table);
                 let m = acts.iter().find(|a| after(a, f) && e.matches(a)).map(|a| a.turn);
+                (m.is_some(), m, m.map(|t| t - f.turn - 1).unwrap_or(0))
+            }
+            // A sequence is judged on its first command (Track G §6.1). One that begins with a
+            // finish line's command after the same edits carries that obligation (the runtime
+            // delivers the sequence alone): it counts as the obligation given, too.
+            Step::Sequence { commands } => {
+                let Some(cmd) = commands.first() else { continue };
+                let e = Expect::of(cmd, table);
+                let m = acts.iter().find(|a| after(a, f) && e.matches(a)).map(|a| a.turn);
+                let carries = matches!(route.trigger, Trigger::AfterEdit { .. })
+                    && routes.values().any(|o| {
+                        !o.is_instinct()
+                            && matches!(o.trigger, Trigger::AfterEdit { .. })
+                            && adage_tracks::interlock::same_point(&route.trigger, &o.trigger)
+                            && matches!(&o.step, Step::Run { command } if pattern::same_command(cmd, command))
+                    });
+                if carries {
+                    tally_obligation(&mut tally.finish_line, m.is_some(), meta);
+                }
                 (m.is_some(), m, m.map(|t| t - f.turn - 1).unwrap_or(0))
             }
         };
@@ -465,7 +477,7 @@ pub fn score_session(
         }
         for m in [
             &mut tally.overall,
-            tally.by_kind.entry(k.into()).or_default(),
+            tally.by_shape.entry(k.clone()).or_default(),
             tally.by_route.entry(route.id.clone()).or_default(),
         ] {
             m.add(&rep.id, correct, in_window, saved);
@@ -475,7 +487,7 @@ pub fn score_session(
         }
         detail.push(Scored {
             route: route.id.clone(),
-            kind: k.into(),
+            shape: k,
             event: f.event.into(),
             turn: f.turn,
             correct,
@@ -498,8 +510,9 @@ pub fn score_session(
             fl.stop_requests_correct += 1;
         }
     }
-    let any_obligation =
-        rep.fired.iter().any(|f| routes.get(f.directive.route.as_str()).is_some_and(|r| kind(r) == "finish-line"));
+    let any_obligation = rep.fired.iter().any(|f| {
+        routes.get(f.directive.route.as_str()).is_some_and(|r| matches!(r.trigger, Trigger::AfterEdit { .. }))
+    });
     if meta.is_some_and(|m| m.stale_generated == Some(true)) && !any_obligation {
         tally.finish_line.missed += 1;
     }
@@ -542,16 +555,23 @@ fn recall(
     let fired: Vec<(&Fired, &Route)> =
         rep.fired.iter().filter_map(|f| routes.get(f.directive.route.as_str()).map(|r| (f, *r))).collect();
     // Commands the directives named, with the turn they were given.
-    let mut named: Vec<(u32, Expect, &'static str)> = Vec::new();
+    // (turn, command, given after an edit)
+    let mut named: Vec<(u32, Expect, bool)> = Vec::new();
     for (f, r) in &fired {
+        let by_edit = matches!(r.trigger, Trigger::AfterEdit { .. }) && !matches!(r.step, Step::Avoid { .. });
         match &r.step {
-            Step::Avoid { instead, .. } => named.push((f.turn, Expect::of(instead, table), kind(r))),
+            Step::Avoid { instead, .. } => named.push((f.turn, Expect::of(instead, table), false)),
             Step::Run { .. } => {
                 if let Some(c) = command_in(&f.directive.text) {
-                    named.push((f.turn, Expect::of(&c, table), kind(r)));
+                    named.push((f.turn, Expect::of(&c, table), by_edit));
                 }
             }
-            Step::ReadBatch { .. } | Step::Advise { .. } => {}
+            Step::Sequence { commands } => {
+                for c in commands {
+                    named.push((f.turn, Expect::of(c, table), by_edit));
+                }
+            }
+            Step::ReadBatch { .. } | Step::Advise { .. } | Step::Card { .. } => {}
         }
     }
     let covered_cmd = |a: &Action| named.iter().any(|(t, e, _)| *t < a.turn && e.matches(a));
@@ -621,7 +641,7 @@ fn recall(
         if let Some(g) =
             acts.iter().skip(first_edit + 1).find(|a| a.effect == Effect::Regenerate && a.argv.is_some() && !a.failed)
         {
-            let hit = named.iter().any(|(t, e, k)| *k == "finish-line" && *t <= g.turn && e.matches(g));
+            let hit = named.iter().any(|(t, e, by_edit)| *by_edit && *t <= g.turn && e.matches(g));
             steps.push(("regenerate", hit));
         }
     }
@@ -635,6 +655,22 @@ fn recall(
         }
     }
     (steps.len() as u32, covered)
+}
+
+/// One obligation given: met, or caught (the session needed it), a false alarm, or unknown.
+fn tally_obligation(fl: &mut FinishLine, met: bool, meta: Option<&SessionMeta>) {
+    fl.obligations += 1;
+    let needed = meta.is_some_and(|m| m.stale_generated == Some(true) || m.passed == Some(false));
+    let clean = meta.is_some_and(|m| m.passed == Some(true) && m.stale_generated != Some(true));
+    if met {
+        fl.met += 1;
+    } else if needed {
+        fl.caught += 1;
+    } else if clean {
+        fl.false_alarms += 1;
+    } else {
+        fl.unknown += 1;
+    }
 }
 
 #[cfg(test)]

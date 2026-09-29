@@ -96,16 +96,16 @@ fn random_route() -> impl Strategy<Value = Route> {
             vec![Slot { name: "files".into(), source: SlotSource::ResultField { field: f.into() }, contract: c }]
         });
     let shaped = prop_oneof![
-        4 => (command.clone(), item_slot, prop::sample::select(vec![Aspect::Green, Aspect::Green, Aspect::Yellow, Aspect::Yellow, Aspect::Red]))
-            .prop_map(|(command, slots, aspect)| (Step::Run { command }, slots, aspect)),
+        4 => (command.clone(), item_slot, prop::sample::select(vec![Strength::Fire, Strength::Fire, Strength::Prime, Strength::Prime, Strength::Inhibit]))
+            .prop_map(|(command, slots, strength)| (Step::Run { command }, slots, strength)),
         2 => (prop_oneof![9 => 1usize..=10, 1 => prop::sample::select(vec![0usize, 11])], files_slot,
-              prop::sample::select(vec![Aspect::Green, Aspect::Yellow, Aspect::Yellow, Aspect::Red]))
-            .prop_map(|(max, slots, aspect)| (Step::ReadBatch { slot: "files".into(), max }, slots, aspect)),
+              prop::sample::select(vec![Strength::Fire, Strength::Prime, Strength::Prime, Strength::Inhibit]))
+            .prop_map(|(max, slots, strength)| (Step::ReadBatch { slot: "files".into(), max }, slots, strength)),
         2 => (command.clone(), command, prop_oneof![3 => "[A-Za-z: ]{1,40}", 1 => hostile_text()],
-              prop::sample::select(vec![Aspect::Red, Aspect::Red, Aspect::Red, Aspect::Red, Aspect::Green]))
-            .prop_map(|(avoid, instead, signature, aspect)| (Step::Avoid { avoid, instead, signature }, vec![], aspect)),
-        1 => (advice(), prop::sample::select(vec![Aspect::Yellow, Aspect::Yellow, Aspect::Green, Aspect::Red]))
-            .prop_map(|(step, aspect)| (step, vec![], aspect)),
+              prop::sample::select(vec![Strength::Inhibit, Strength::Inhibit, Strength::Inhibit, Strength::Inhibit, Strength::Fire]))
+            .prop_map(|(avoid, instead, signature, strength)| (Step::Avoid { avoid, instead, signature }, vec![], strength)),
+        1 => (advice(), prop::sample::select(vec![Strength::Prime, Strength::Prime, Strength::Fire, Strength::Inhibit]))
+            .prop_map(|(step, strength)| (step, vec![], strength)),
     ];
     let effect = prop::sample::select(vec![
         Effect::Observe,
@@ -125,15 +125,15 @@ fn random_route() -> impl Strategy<Value = Route> {
         1 => prop::sample::select(vec!["Evil Id", "../x", ""]),
     ];
     let exits = prop::collection::vec(prop::sample::select(vec![Exit::IntentChanges, Exit::ExploratoryChange]), 0..3);
-    (id, trigger, shaped, effect, exits).prop_map(|(id, trigger, (step, slots, aspect), effect, exit)| Route {
+    (id, trigger, shaped, effect, exits).prop_map(|(id, trigger, (step, slots, strength), effect, exit)| Route {
         id: id.into(),
         summary: String::new(),
         trigger,
         step,
         slots,
         effect,
-        aspect,
-        state: RouteState::Active,
+        strength,
+        state: RouteState::Firm,
         exit,
         evidence: Evidence { support: 5, ..Default::default() },
         authored: false,
@@ -221,11 +221,17 @@ fn good_advice() -> impl Strategy<Value = (Trigger, Step)> {
                 }
             )
         ),
+        (mostly(vec!["exec python", "exec python3"]), mostly(vec![".venv/bin/python", "uv run python"])).prop_map(
+            move |(command, interpreter)| (
+                Trigger::AfterFailure { command, signature: "No module named 'click'".into() },
+                Step::Advise { template: "project-python".into(), slots: slots(vec![("interpreter", interpreter)]) }
+            )
+        ),
     ]
 }
 
 /// Routes shaped as instincts bind them: after a failure, the declared command; after an edit,
-/// the declared generator; or advice. Yellow, probation, with an instinct's origin.
+/// the declared generator; or advice. Prime, forming, with an instinct's origin.
 fn instinct_route() -> impl Strategy<Value = Route> {
     let failure = (
         prop::sample::select(vec![
@@ -259,8 +265,8 @@ fn instinct_route() -> impl Strategy<Value = Route> {
             step,
             slots: vec![],
             effect,
-            aspect: Aspect::Yellow,
-            state: RouteState::Probation,
+            strength: Strength::Prime,
+            state: RouteState::Forming,
             exit,
             evidence,
             authored: false,
@@ -279,7 +285,7 @@ fn build(
     step: Step,
     slots: Vec<Slot>,
     effect: Effect,
-    aspect: Aspect,
+    strength: Strength,
     exit: Vec<Exit>,
 ) -> Route {
     Route {
@@ -289,8 +295,8 @@ fn build(
         step,
         slots,
         effect,
-        aspect,
-        state: RouteState::Active,
+        strength,
+        state: RouteState::Firm,
         exit,
         evidence: Evidence { support: 5, ..Default::default() },
         authored: false,
@@ -305,7 +311,7 @@ fn plausible_route() -> impl Strategy<Value = Route> {
         3 => prop::sample::select(vec![r"^W-\d{4}$", r"^[A-Z]+-\d+$", r"^W-\d{1,5}$"]).prop_map(|r| Contract::Pattern { regex: r.into() }),
         1 => contract(),
     ];
-    let aspect = prop::sample::select(vec![Aspect::Green, Aspect::Yellow]);
+    let strength = prop::sample::select(vec![Strength::Fire, Strength::Prime]);
     let lookup = (
         mostly(vec![
             "python3 scripts/wi-lookup {item}",
@@ -314,10 +320,10 @@ fn plausible_route() -> impl Strategy<Value = Route> {
             "cat {item}",
         ]),
         ticket_contract,
-        aspect.clone(),
+        strength.clone(),
         exits.clone(),
     )
-        .prop_map(|(command, c, aspect, exit)| {
+        .prop_map(|(command, c, strength, exit)| {
             let slot = Slot { name: "item".into(), source: SlotSource::Prompt { span: SpanKind::Ticket }, contract: c };
             build(
                 "lookup-work-item",
@@ -325,7 +331,7 @@ fn plausible_route() -> impl Strategy<Value = Route> {
                 Step::Run { command },
                 vec![slot],
                 Effect::Observe,
-                aspect,
+                strength,
                 exit,
             )
         });
@@ -342,7 +348,7 @@ fn plausible_route() -> impl Strategy<Value = Route> {
                 Step::Run { command },
                 vec![slot],
                 Effect::Observe,
-                Aspect::Yellow,
+                Strength::Prime,
                 exit,
             )
         });
@@ -365,7 +371,7 @@ fn plausible_route() -> impl Strategy<Value = Route> {
                 Step::ReadBatch { slot: "files".into(), max },
                 vec![slot],
                 Effect::Observe,
-                Aspect::Yellow,
+                Strength::Prime,
                 vec![],
             )
         });
@@ -373,11 +379,11 @@ fn plausible_route() -> impl Strategy<Value = Route> {
         mostly(vec!["schema/*.json", "acme/*.py", "*.py"]),
         mostly(vec!["make gen", "python3 tools/gen.py", "make {item}"]),
         prop::sample::select(vec![Effect::Regenerate, Effect::Environment]),
-        aspect,
+        strength,
         exits,
     )
-        .prop_map(|(paths, command, effect, aspect, exit)| {
-            build("finish-line-1", Trigger::AfterEdit { paths }, Step::Run { command }, vec![], effect, aspect, exit)
+        .prop_map(|(paths, command, effect, strength, exit)| {
+            build("finish-line-1", Trigger::AfterEdit { paths }, Step::Run { command }, vec![], effect, strength, exit)
         });
     let dead_end = (
         mostly(vec!["python3 -m pytest", "python3 -m pytest / python3 -m unittest", "npm test"]),
@@ -385,7 +391,7 @@ fn plausible_route() -> impl Strategy<Value = Route> {
         prop_oneof![3 => "[A-Za-z: ]{1,40}", 1 => hostile_text()],
     )
         .prop_map(|(avoid, instead, signature)| {
-            // `a / b` is how the miner names several runners; validation sees one string.
+            // `a / b` is how the learner names several runners; validation sees one string.
             let avoid = avoid.replace(" / ", " ");
             build(
                 "dead-end-1",
@@ -393,7 +399,7 @@ fn plausible_route() -> impl Strategy<Value = Route> {
                 Step::Avoid { avoid, instead, signature },
                 vec![],
                 Effect::Verify,
-                Aspect::Red,
+                Strength::Inhibit,
                 vec![],
             )
         });
@@ -510,15 +516,15 @@ fn check(
             let r = &index.routes.iter().find(|ir| ir.route.id == dv.route).unwrap().route;
             let v = safety::check_directive(r, &dv.text, Some(&root), &[]);
             prop_assert!(v.is_empty(), "route {:?}\ntext {:?}\nviolations {:?}", r, dv.text, v);
-            let wrapped = adage_runtime::render::wrap(&dv.track, &dv.version, &dv.route, dv.aspect, &dv.text);
-            prop_assert_eq!(wrapped.matches("<adage-signal").count(), 1, "one signal per directive: {}", wrapped);
+            let wrapped = adage_runtime::render::wrap(&dv.track, &dv.version, &dv.route, dv.strength, &dv.text);
+            prop_assert_eq!(wrapped.matches("<adage-reflex").count(), 1, "one signal per directive: {}", wrapped);
             // As the agent receives it: the wrapper and its origin line are the runtime's exactly.
             let delivered = adage_runtime::render::wrap_directive(dv);
             let v = safety::check_wrapper(r, &delivered, Some(&root), &[]);
             prop_assert!(v.is_empty(), "route {:?}\nwrapped {:?}\nviolations {:?}", r, delivered, v);
-            // An instinct is never above yellow, and never asks the agent to keep going.
+            // An instinct is never above prime, and never asks the agent to keep going.
             if r.is_instinct() {
-                prop_assert_eq!(dv.aspect, Aspect::Yellow);
+                prop_assert_eq!(dv.strength, Strength::Prime);
                 INSTINCTS_CHECKED.fetch_add(1, Ordering::Relaxed);
                 if matches!(r.step, Step::Advise { .. }) {
                     ADVICE_CHECKED.fetch_add(1, Ordering::Relaxed);
@@ -576,13 +582,13 @@ const COMMANDS: &[&str] = &[
     "cargo test",
 ];
 
-/// (kind, command, aspect wanted, imported): a route at one of the decision points where
+/// (kind, command, strength wanted, imported): a route at one of the decision points where
 /// directives collide, in the learned track or the imported one.
 fn colliding_route() -> impl Strategy<Value = (u8, &'static str, bool, bool)> {
     (0u8..5, prop::sample::select(COMMANDS.to_vec()), any::<bool>(), any::<bool>())
 }
 
-fn colliding(i: usize, (kind, cmd, green, _): (u8, &'static str, bool, bool), table: &CommandTable) -> Route {
+fn colliding(i: usize, (kind, cmd, fire, _): (u8, &'static str, bool, bool), table: &CommandTable) -> Route {
     let effect = io::classify(cmd, table);
     let (trigger, step, slots) = match kind {
         // A dead end announced at the first prompt.
@@ -616,7 +622,7 @@ fn colliding(i: usize, (kind, cmd, green, _): (u8, &'static str, bool, bool), ta
         // A step after a failure: a dead end, or a command to run.
         _ => (
             Trigger::AfterFailure { command: "exec make lint".into(), signature: "boom".into() },
-            if green {
+            if fire {
                 Step::Run { command: cmd.into() }
             } else {
                 Step::Avoid { avoid: cmd.into(), instead: "make ci".into(), signature: "boom".into() }
@@ -624,17 +630,17 @@ fn colliding(i: usize, (kind, cmd, green, _): (u8, &'static str, bool, bool), ta
             vec![],
         ),
     };
-    let red = matches!(step, Step::Avoid { .. });
+    let inhibit = matches!(step, Step::Avoid { .. });
     let max = ceiling(effect, matches!(trigger, Trigger::AfterEdit { .. }));
-    let aspect = if red {
-        Aspect::Red
-    } else if green && max == Some(Aspect::Green) {
-        Aspect::Green
+    let strength = if inhibit {
+        Strength::Inhibit
+    } else if fire && max == Some(Strength::Fire) {
+        Strength::Fire
     } else {
-        Aspect::Yellow
+        Strength::Prime
     };
     let mut r =
-        build(&format!("r{i}"), trigger, step, slots, if red { Effect::Verify } else { effect }, aspect, vec![]);
+        build(&format!("r{i}"), trigger, step, slots, if inhibit { Effect::Verify } else { effect }, strength, vec![]);
     r.evidence.support = 5 + i as u32;
     r
 }
@@ -658,13 +664,13 @@ fn colliding_event() -> impl Strategy<Value = Event> {
     ]
 }
 
-/// Random sets of routes that collide (the same command directed and avoided, greens at one
+/// Random sets of routes that collide (the same command directed and avoided, fires at one
 /// decision point, learned and imported), compiled and driven: no session ever emits a directive
-/// after, or beside, a red that avoids its command, nor two greens at one decision point.
+/// after, or beside, an inhibit that avoids its command, nor two fires at one decision point.
 #[test]
 fn interlocking_holds_for_colliding_route_sets() {
     let table = CommandTable::load();
-    let (sessions, conflicts, reds, emitted) =
+    let (sessions, conflicts, inhibits, emitted) =
         (AtomicUsize::new(0), AtomicUsize::new(0), AtomicUsize::new(0), AtomicUsize::new(0));
     // As below: the generator guards need a reproducible sample (fixed seed), except in the slow
     // profile, whose 4,000 random cases clear them by a wide margin.
@@ -727,7 +733,8 @@ fn interlocking_holds_for_colliding_route_sets() {
                 e => e,
             };
             let d = decide(&ctx, &mut st, &ev);
-            reds.fetch_add(d.directives.iter().filter(|x| x.aspect == Aspect::Red).count(), Ordering::Relaxed);
+            inhibits
+                .fetch_add(d.directives.iter().filter(|x| x.strength == Strength::Inhibit).count(), Ordering::Relaxed);
             emitted.fetch_add(d.directives.len(), Ordering::Relaxed);
             decisions.push(d.directives.iter().map(|x| x.route.clone()).collect());
         }
@@ -739,11 +746,11 @@ fn interlocking_holds_for_colliding_route_sets() {
     if let Err(e) = result {
         panic!("{e}");
     }
-    // Guard the generator: the cases must collide, and must emit, reds included.
+    // Guard the generator: the cases must collide, and must emit, inhibits included.
     let n = cases() as usize;
     assert_eq!(sessions.into_inner(), n);
     assert!(conflicts.into_inner() >= n / 2, "too few conflicts generated");
-    assert!(reds.into_inner() >= n / 4, "too few red directives emitted");
+    assert!(inhibits.into_inner() >= n / 4, "too few inhibit directives emitted");
     assert!(emitted.into_inner() >= n, "too few directives emitted");
 }
 

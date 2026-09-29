@@ -19,7 +19,7 @@ pub const AGENT_ENV: &[&str] =
 pub fn require_person(env: &BTreeMap<String, String>, stdin_is_tty: bool) -> Result<()> {
     if let Some(v) = AGENT_ENV.iter().find(|v| env.get(**v).is_some_and(|x| !x.is_empty())) {
         bail!(
-            "`adage-train run --execute` starts agents that spend money, so it will not run inside an agent \
+            "`adage train --execute` starts agents that spend money, so it will not run inside an agent \
              session ({v} is set). Run it yourself, in a terminal."
         );
     }
@@ -28,7 +28,7 @@ pub fn require_person(env: &BTreeMap<String, String>, stdin_is_tty: bool) -> Res
     }
     if !stdin_is_tty {
         bail!(
-            "`adage-train run --execute` needs a person at a terminal (stdin is not a terminal). For CI, set \
+            "`adage train --execute` needs a person at a terminal (stdin is not a terminal). For CI, set \
              ADAGE_ALLOW_NONINTERACTIVE=1."
         );
     }

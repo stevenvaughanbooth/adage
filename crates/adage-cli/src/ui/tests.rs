@@ -20,7 +20,7 @@ use super::watch::{self, buffer_text, Sources};
 use super::wizard::{self, Wizard};
 use crate::doctor::{Check, Status};
 use adage_store::{spool, Paths};
-use adage_tracks::Aspect;
+use adage_tracks::Strength;
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::crossterm::event::{KeyCode, KeyModifiers};
@@ -38,8 +38,8 @@ fn rec(k: u64, arm: &str, event: &str, kind: &str, decision: Value) -> Value {
     json!({ "ts": T0 + k * 1000, "event": event, "kind": kind, "arm": arm, "repo": "harbor-dispatch", "generation": "8216e29f00", "decision": decision })
 }
 
-fn directive(route: &str, aspect: &str, text: &str) -> Value {
-    json!({ "route": route, "track": "harbor-dispatch/incidents", "version": "0.3.0", "aspect": aspect, "text": text })
+fn directive(route: &str, strength: &str, text: &str) -> Value {
+    json!({ "route": route, "track": "harbor-dispatch/incidents", "version": "0.3.0", "strength": strength, "text": text })
 }
 
 const LOOKUP: &str = "Incidents here are looked up with a script. A known next step here is:\n  bin/fetch-incident INC-2045. Ignore this if the user is asking for something else.";
@@ -59,7 +59,7 @@ fn fixture(dir: &Path) -> Paths {
     let a = "7c1e04d2-11aa-4a31-9f0e-00000000a11c";
     let b = "3f9b62e8-22bb-4c7d-8b21-000000000b0b";
     let c = "91d5aa70-33cc-47e2-a5c3-00000000c4a1";
-    let lookup = || directive("lookup-incident", "green", LOOKUP);
+    let lookup = || directive("lookup-incident", "fire", LOOKUP);
     spool::append(
         &s(a),
         &rec(0, "treated", "UserPromptSubmit", "prompt", decision(vec![lookup()], vec![lookup()], vec![], None)),
@@ -67,7 +67,7 @@ fn fixture(dir: &Path) -> Paths {
     .unwrap();
     spool::append(
         &s(c),
-        &rec(1, "holdout", "UserPromptSubmit", "prompt", decision(vec![], vec![lookup()], vec![], None)),
+        &rec(1, "control", "UserPromptSubmit", "prompt", decision(vec![], vec![lookup()], vec![], None)),
     )
     .unwrap();
     spool::append(
@@ -78,7 +78,7 @@ fn fixture(dir: &Path) -> Paths {
             "PostToolBatch",
             "batch",
             decision(
-                vec![directive("read-linked-files", "yellow", "That result lists these files: read them together.")],
+                vec![directive("read-linked-files", "prime", "That result lists these files: read them together.")],
                 vec![],
                 vec![json!({ "kind": "followed", "route": "lookup-incident" })],
                 None,
@@ -94,7 +94,7 @@ fn fixture(dir: &Path) -> Paths {
             "treated",
             "PostToolUseFailure",
             "failure",
-            decision(vec![directive("dead-end-npm-test", "red", DEAD_END)], vec![], vec![], None),
+            decision(vec![directive("dead-end-npm-test", "inhibit", DEAD_END)], vec![], vec![], None),
         ),
     )
     .unwrap();
@@ -105,7 +105,7 @@ fn fixture(dir: &Path) -> Paths {
             "treated",
             "PostToolBatch",
             "batch",
-            decision(vec![], vec![], vec![json!({ "kind": "derailed", "route": "lookup-incident" })], None),
+            decision(vec![], vec![], vec![json!({ "kind": "ignored", "route": "lookup-incident" })], None),
         ),
     )
     .unwrap();
@@ -113,7 +113,7 @@ fn fixture(dir: &Path) -> Paths {
         &s(c),
         &rec(
             6,
-            "holdout",
+            "control",
             "PostToolBatch",
             "batch",
             decision(vec![], vec![], vec![json!({ "kind": "followed", "route": "lookup-incident" })], None),
@@ -141,13 +141,13 @@ fn fixture(dir: &Path) -> Paths {
         ),
     )
     .unwrap();
-    // A record from another repository, and one from an older version (no kind, repo, harness).
+    // A record from another repository, written by an older version (`aspect`, not `strength`).
     let mut other = rec(
         9,
         "treated",
         "UserPromptSubmit",
         "prompt",
-        decision(vec![directive("lookup", "green", "")], vec![], vec![], None),
+        decision(vec![json!({ "route": "lookup", "aspect": "green", "text": "" })], vec![], vec![], None),
     );
     other["repo"] = json!("acme-billing");
     other["harness"] = json!("codex");
@@ -155,11 +155,11 @@ fn fixture(dir: &Path) -> Paths {
     let log = [
         json!({ "ts": T0 - 3_600_000, "sessions_read": 12, "sessions_used": 12, "index_generation": "1a2b3c4d5e", "repos": { "harbor-dispatch": { "sessions": 12, "tracks": [{ "name": "harbor-dispatch/incidents", "version": "0.2.0", "change": "new", "routes": 3 }] } } }).to_string(),
         "not json at all".to_string(),
-        json!({ "ts": T0 + 10_000, "kind": "learn", "trigger": "auto", "repo": "harbor-dispatch", "sessions_read": 25, "sessions_used": 24, "duration_ms": 730, "index_generation": "8216e29f00", "changes": [
-            { "route": "lookup-incident", "track": "harbor-dispatch/incidents", "change": "aspect", "from": "yellow", "to": "green", "summary": "work item route yellow → green (24 of 25 sessions, lower bound 0.80)" },
-            { "route": "dead-end-npm-test", "track": "harbor-dispatch/incidents", "change": "new", "to": "red", "summary": "6/7 sessions" },
+        json!({ "ts": T0 + 10_000, "kind": "condition", "trigger": "auto", "repo": "harbor-dispatch", "sessions_read": 25, "sessions_used": 24, "duration_ms": 730, "index_generation": "8216e29f00", "changes": [
+            { "route": "lookup-incident", "track": "harbor-dispatch/incidents", "change": "strength", "from": "prime", "to": "fire", "summary": "reflex prime → fire (24 of 25 traces, lower bound 0.80)" },
+            { "route": "dead-end-npm-test", "track": "harbor-dispatch/incidents", "change": "new", "to": "inhibit", "summary": "6/7 traces" },
         ] }).to_string(),
-        json!({ "ts": T0 + 20_000, "kind": "learn_error", "repo": "harbor-dispatch", "class": "io", "error": "tracks directory is not writable" }).to_string(),
+        json!({ "ts": T0 + 20_000, "kind": "condition_error", "repo": "harbor-dispatch", "class": "io", "error": "tracks directory is not writable" }).to_string(),
     ];
     std::fs::write(paths.learn_log(), log.join("\n") + "\n").unwrap();
     paths
@@ -180,7 +180,7 @@ fn health() -> Health {
             check(
                 "embedding model",
                 Status::Warn,
-                "not installed, so the index's intent routes cannot fire",
+                "no embedding model, so the hashed fallback is in use; intent reflexes cannot fire",
                 Some("run `adage models fetch`"),
             ),
             check(
@@ -202,11 +202,7 @@ fn health() -> Health {
             Light::new("hooks claude", Lamp::Ok),
             Light::new("4 reflexes", Lamp::Ok),
             Light::new("auto-condition", Lamp::Ok),
-            Light {
-                label: "intent model not fetched".into(),
-                lamp: Lamp::Off,
-                hint: Some("adage models fetch".into()),
-            },
+            Light { label: "no model".into(), lamp: Lamp::Warn, hint: Some("adage models fetch".into()) },
         ],
         harnesses: vec!["claude".into()],
         generation: Some("8216e29f00".into()),
@@ -296,8 +292,8 @@ fn find(buf: &Buffer, needle: &str) -> Option<(u16, u16)> {
 #[test]
 fn feed_items_say_what_adage_did() {
     let d = decision(
-        vec![directive("lookup-incident", "green", LOOKUP)],
-        vec![directive("lookup-incident", "green", LOOKUP)],
+        vec![directive("lookup-incident", "fire", LOOKUP)],
+        vec![directive("lookup-incident", "fire", LOOKUP)],
         vec![],
         None,
     );
@@ -306,33 +302,70 @@ fn feed_items_say_what_adage_did() {
         i.acts,
         vec![Act::Directed {
             route: "lookup-incident".into(),
-            aspect: Aspect::Green,
+            strength: Strength::Fire,
             detail: "bin/fetch-incident INC-2045".into(),
             instinct: false
         }],
         "would-have is not repeated"
     );
     assert_eq!(i.texts, vec![("lookup-incident".to_string(), LOOKUP.to_string())]);
-    assert_eq!((i.event.as_str(), i.harness.as_str(), i.holdout), ("prompt", "claude", false));
+    assert_eq!((i.event.as_str(), i.harness.as_str(), i.control), ("prompt", "claude", false));
     let h = feed::from_record(
         "s-2",
         &rec(
             0,
-            "holdout",
+            "control",
             "UserPromptSubmit",
             "prompt",
-            decision(vec![], vec![directive("x", "yellow", "")], vec![], Some("r")),
+            decision(vec![], vec![directive("x", "prime", "")], vec![], Some("r")),
         ),
     );
-    assert_eq!(h.acts, vec![Act::Withheld { route: "x".into(), aspect: Aspect::Yellow }, Act::StopRequest]);
-    // An older record: no kind, no repo, no harness.
+    assert_eq!(h.acts, vec![Act::Withheld { route: "x".into(), strength: Strength::Prime }, Act::StopRequest]);
+    // An older version's control arm was `holdout`.
+    let h = feed::from_record(
+        "s-2",
+        &rec(0, "holdout", "Stop", "stop", decision(vec![], vec![directive("x", "prime", "")], vec![], None)),
+    );
+    assert!(h.control && matches!(h.acts[0], Act::Withheld { .. }), "{h:?}");
+    // An older record: no kind, no repo, no harness, and the older judgement word.
     let old = feed::from_record(
         "s-3",
         &json!({ "ts": 5, "event": "PostToolUseFailure", "arm": "treated", "decision": { "judgements": [{ "kind": "derailed", "route": "r" }] } }),
     );
     assert_eq!(
         (old.event.as_str(), old.repo.as_str(), old.acts.clone()),
-        ("failure", "", vec![Act::Derailed("r".into())])
+        ("failure", "", vec![Act::Ignored("r".into())])
+    );
+    // Judgements: ignored and misfired (and their older words); a kind this version does not know
+    // is shown as it is, not dropped.
+    let j = feed::from_record(
+        "s-4",
+        &rec(
+            0,
+            "treated",
+            "PostToolBatch",
+            "batch",
+            decision(
+                vec![],
+                vec![],
+                vec![
+                    json!({ "kind": "ignored", "route": "a" }),
+                    json!({ "kind": "misfired", "route": "b" }),
+                    json!({ "kind": "followed_failed", "route": "c" }),
+                    json!({ "kind": "rewarded_somehow", "route": "d" }),
+                ],
+                None,
+            ),
+        ),
+    );
+    assert_eq!(
+        j.acts,
+        vec![
+            Act::Ignored("a".into()),
+            Act::Misfired("b".into()),
+            Act::Misfired("c".into()),
+            Act::Other("rewarded somehow".into(), "d".into())
+        ]
     );
     assert!(feed::from_record("s", &json!({})).quiet());
     assert_eq!(feed::short_session("7c1e04d2-11aa-4a31-9f0e-00000000a11c", 6), "00a11c");
@@ -343,51 +376,178 @@ fn feed_items_say_what_adage_did() {
         "That result lists these files: read them"
     );
     assert_eq!(feed::detail_of(""), "");
-    // New stored words read the same as the old.
+    // Older stored words read the same as the new.
+    for w in ["red", "inhibit"] {
+        let n = feed::from_record(
+            "s",
+            &json!({ "arm": "treated", "decision": { "directives": [{ "route": "r", "aspect": w }] } }),
+        );
+        assert!(matches!(&n.acts[0], Act::Directed { strength: Strength::Inhibit, .. }), "{w}");
+    }
+    // `strength` wins over `aspect` when a record has both.
     let n = feed::from_record(
         "s",
-        &json!({ "arm": "treated", "decision": { "directives": [{ "route": "r", "aspect": "inhibit" }] } }),
+        &json!({ "decision": { "directives": [{ "route": "r", "strength": "fire", "aspect": "red" }] } }),
     );
-    assert!(matches!(&n.acts[0], Act::Directed { aspect: Aspect::Red, .. }));
+    assert!(matches!(&n.acts[0], Act::Directed { strength: Strength::Fire, .. }));
+}
+
+#[test]
+fn pretool_records_and_cards_are_shown() {
+    // A PreToolUse rewrite: no decision, and never quiet.
+    let r = json!({ "ts": T0, "event": "PreToolUse", "kind": "pretool", "arm": "treated", "repo": "harbor-dispatch",
+        "pretool": { "rewrite": "test", "interpreter": ".venv/bin/python" } });
+    let i = feed::from_record("s", &r);
+    assert_eq!(i.event, "pretool");
+    assert!(!i.quiet());
+    assert_eq!(
+        i.acts,
+        vec![Act::Pretool {
+            rewrite: true,
+            kind: "test".into(),
+            interpreter: ".venv/bin/python".into(),
+            withheld: false
+        }]
+    );
+    // Advice, and the control arm's withheld rewrite.
+    let a = feed::from_record(
+        "s",
+        &json!({ "kind": "pretool", "arm": "treated", "pretool": { "advise": "pip-install", "interpreter": "x" } }),
+    );
+    assert!(matches!(&a.acts[0], Act::Pretool { rewrite: false, withheld: false, .. }));
+    let w = feed::from_record(
+        "s",
+        &json!({ "kind": "pretool", "arm": "control", "withheld": true, "pretool": { "rewrite": "test", "interpreter": "x" } }),
+    );
+    assert!(w.control && matches!(&w.acts[0], Act::Pretool { withheld: true, .. }));
+    // A session start is a quiet row, not a mystery.
+    let st = feed::from_record("s", &json!({ "event": "SessionStart", "kind": "session_start", "arm": "treated" }));
+    assert_eq!((st.event.as_str(), st.quiet()), ("start", true));
+    // A procedure card says what it is, not its first file as if it were a command.
+    let card = "<adage-reflex track=\"r/learned@0.1.0\" route=\"card-1\" strength=\"prime\" kind=\"card\">\nHow changes of this kind were done here before: learned from 3 earlier sessions of the same kind of task in this repository (2 passed the project's checks). Use it as a checklist; the specifics of your task differ.\nFiles such a change touched (in order):\n  - src/a.py (3/3 sessions)\n  - tests/test_a.py (2/3 sessions)\nCommands:\n  - pytest (ran in 3/3 sessions, 3/3 succeeded)\n</adage-reflex>";
+    let c = feed::from_record(
+        "s",
+        &rec(
+            0,
+            "treated",
+            "UserPromptSubmit",
+            "prompt",
+            decision(
+                vec![json!({ "route": "card-1", "strength": "prime", "kind": "card", "text": card })],
+                vec![],
+                vec![],
+                None,
+            ),
+        ),
+    );
+    assert!(
+        matches!(&c.acts[0], Act::Directed { detail, .. } if detail == "card · 2 files · 3 traces"),
+        "{:?}",
+        c.acts
+    );
+    // Drawn: the rewrite, the card, the misfire.
+    let paths = Paths::at(Path::new("/nonexistent"));
+    let cx = ctx(paths, false);
+    let mut m = feed::from_record(
+        "s",
+        &rec(
+            1,
+            "treated",
+            "PostToolBatch",
+            "batch",
+            decision(vec![], vec![], vec![json!({ "kind": "misfired", "route": "run-tests" })], None),
+        ),
+    );
+    m.session = "s-misfire".into();
+    let items = [&i, &w, &c, &m];
+    let lines: Vec<String> = view::feed_lines(&items, &cx, 110, &Default::default())
+        .into_iter()
+        .map(|(_, l)| l.spans.iter().map(|s| s.content.to_string()).collect::<String>().trim_end().to_string())
+        .collect();
+    let text = lines.join("\n");
+    assert!(text.contains("pointed the test run at .venv/bin/python"), "{text}");
+    assert!(text.contains("would have pointed the test run at x (withheld)"), "{text}");
+    assert!(text.contains("card · 2 files · 3 traces"), "{text}");
+    assert!(text.contains("misfired run-tests"), "{text}");
+}
+
+#[test]
+fn the_maps_json_reads_in_either_words() {
+    let new = json!({ "routes": [{ "reference": "r/t", "id": "a", "strength": "fire", "state": "firm",
+        "live": { "emitted": 4, "followed": 2, "ignored": 1, "control": { "unaided": 3, "not_reached": 1 } },
+        "arms": { "treated": { "applied": 5, "followed": 2 }, "control": { "applied": 2, "met": 1 } } }] });
+    let old = json!({ "routes": [{ "reference": "r/t", "id": "a", "aspect": "green", "state": "active",
+        "live": { "emitted": 4, "followed": 2, "derailed": 1, "holdout": { "unaided": 3, "not_reached": 1 } },
+        "arms": { "treated": { "applied": 5, "followed": 2 }, "holdout": { "applied": 2, "met": 1 } } }] });
+    let none = Default::default();
+    let rows: Vec<RouteRow> =
+        [new, old].iter().map(|g| super::routes::from_graph(g, &none, &Default::default()).rows.remove(0)).collect();
+    for r in &rows {
+        assert_eq!(r.strength, Strength::Fire);
+        assert_eq!(r.lifecycle(), "firm");
+        assert_eq!((r.live.ignored, r.live.unaided, r.live.not_reached), (1, 3, 1));
+        assert_eq!((r.control.applied, r.control.took), (2, 1));
+    }
 }
 
 #[test]
 fn learn_log_reads_both_shapes_and_skips_the_rest() {
-    let t = learnlog::parse(
-        &json!({ "ts": T0, "kind": "learn", "trigger": "auto", "repo": "harbor-dispatch", "sessions_read": 25, "sessions_used": 24, "changes": [
-            { "route": "lookup-work-item", "track": "harbor-dispatch/work-items", "change": "aspect", "from": "yellow", "to": "green", "summary": "24/25 sessions" }
-        ] })
-        .to_string(),
-    );
-    assert_eq!(t.len(), 2);
-    assert_eq!(t[0].tone, Tone::Run);
-    assert_eq!(t[0].text, "auto-condition harbor-dispatch: 24/25 traces used, 1 change");
-    assert_eq!(t[1].text, "harbor-dispatch/work-items: lookup-work-item prime → fire (24/25)");
-    assert_eq!(t[1].short, "work-items: lookup-work-item prime → fire (24/25)");
-    assert_eq!(t[1].aspect, Some(Aspect::Green));
-    let c = t[1].change.as_ref().unwrap();
-    assert_eq!((c.what, c.from.as_deref(), c.to.as_deref()), ("strength", Some("prime"), Some("fire")));
+    // Today's words, and the older ones (`learn`, `aspect`, `yellow` → `green`), read the same.
+    for (kind, change, from, to) in [("condition", "strength", "prime", "fire"), ("learn", "aspect", "yellow", "green")]
+    {
+        let t = learnlog::parse(
+            &json!({ "ts": T0, "kind": kind, "trigger": "auto", "repo": "harbor-dispatch", "sessions_read": 25, "sessions_used": 24, "changes": [
+                { "route": "lookup-work-item", "track": "harbor-dispatch/work-items", "change": change, "from": from, "to": to, "summary": "24/25 traces" }
+            ] })
+            .to_string(),
+        );
+        assert_eq!(t.len(), 2, "{kind}");
+        assert_eq!(t[0].tone, Tone::Run);
+        assert_eq!(t[0].text, "auto-condition harbor-dispatch: 24/25 traces used, 1 change");
+        assert_eq!(t[1].text, "harbor-dispatch/work-items: lookup-work-item prime → fire (24/25)");
+        assert_eq!(t[1].short, "work-items: lookup-work-item prime → fire (24/25)");
+        assert_eq!(t[1].strength, Some(Strength::Fire));
+        let c = t[1].change.as_ref().unwrap();
+        assert_eq!((c.what, c.from.as_deref(), c.to.as_deref()), ("strength", Some("prime"), Some("fire")));
+    }
     // `adage_learn::diff`'s summaries: the counts and bound, or the evidence counts alone.
     let t = learnlog::parse(
-        &json!({ "ts": T0, "kind": "learn", "trigger": "manual", "repo": "r", "changes": [
-            { "route": "finish-line-6a01b2", "track": "r/finish-line", "change": "aspect", "from": "yellow", "to": "green",
-              "summary": "finish line route yellow → green (9 of 9 sessions, lower bound 0.70)" },
+        &json!({ "ts": T0, "kind": "condition", "trigger": "manual", "repo": "r", "changes": [
+            { "route": "finish-line-6a01b2", "track": "r/finish-line", "change": "strength", "from": "prime", "to": "fire",
+              "summary": "reflex prime → fire (9 of 9 traces, lower bound 0.70)" },
             { "route": "finish-line-6a01b2", "track": "r/finish-line", "change": "evidence", "from": null, "to": null,
-              "summary": "green finish line route evidence 6/8 → 7/8 sessions" },
-            { "route": "old", "track": "r/finish-line", "change": "stale" },
-            { "route": "nascent-one", "track": "r/finish-line", "change": "draft", "summary": "3/4 sessions" },
+              "summary": "fire reflex evidence 6/8 → 7/8 traces" },
+            { "route": "old", "track": "r/finish-line", "change": "dormant" },
+            { "route": "nascent-one", "track": "r/finish-line", "change": "nascent", "summary": "3/4 traces" },
+            { "route": "gone", "track": "r/finish-line", "change": "extinguished" },
           ], "repos": { "r": { "tracks": [{ "name": "r/finish-line" }] } } })
         .to_string(),
     );
-    assert_eq!(t.len(), 5, "the legacy per-track fields beside `changes` add nothing: {t:?}");
-    assert_eq!(t[0].text, "condition r: 4 changes");
+    assert_eq!(t.len(), 6, "the legacy per-track fields beside `changes` add nothing: {t:?}");
+    assert_eq!(t[0].text, "condition r: 5 changes");
     assert_eq!(t[1].text, "r/finish-line: finish-line-6a01b2 prime → fire (9/9 · lb 0.70)");
     assert_eq!(t[2].text, "r/finish-line: finish-line-6a01b2 evidence (6/8 → 7/8)");
     assert_eq!(t[3].text, "r/finish-line: old firm → dormant");
     assert_eq!(t[4].text, "r/finish-line: nascent-one → nascent (3/4)");
-    let e = learnlog::parse(r#"{"ts":1,"kind":"learn_error","trigger":"auto","class":"lock","error":"busy"}"#);
-    assert_eq!((e[0].tone, e[0].text.as_str()), (Tone::Error, "conditioning failed (lock): busy"));
+    assert_eq!(t[5].text, "r/finish-line: gone → extinguished");
+    // The older change words.
+    let t = learnlog::parse(
+        &json!({ "kind": "learn", "repo": "r", "changes": [
+            { "route": "old", "track": "r/t", "change": "stale" },
+            { "route": "gone", "track": "r/t", "change": "retired" },
+            { "route": "new-one", "track": "r/t", "change": "draft" },
+        ] })
+        .to_string(),
+    );
+    let words: Vec<&str> = t[1..].iter().map(|k| k.change.as_ref().unwrap().what).collect();
+    assert_eq!(words, ["dormant", "extinguished", "nascent"]);
+    for kind in ["condition_error", "learn_error"] {
+        let e =
+            learnlog::parse(&format!(r#"{{"ts":1,"kind":"{kind}","trigger":"auto","class":"lock","error":"busy"}}"#));
+        assert_eq!((e[0].tone, e[0].text.as_str()), (Tone::Error, "conditioning failed (lock): busy"), "{kind}");
+    }
     // Missing fields are tolerated; unknown kinds and non-JSON are skipped.
+    assert_eq!(learnlog::parse(r#"{"kind":"condition"}"#)[0].text, "condition");
     assert_eq!(learnlog::parse(r#"{"kind":"learn"}"#)[0].text, "condition");
     assert!(learnlog::parse(r#"{"kind":"something-else"}"#).is_empty());
     assert!(learnlog::parse("[1,2]").is_empty() && learnlog::parse("garbage").is_empty());
@@ -580,7 +740,7 @@ fn watch_frames_at_split_pane_and_wide_sizes_in_colour_and_no_color() {
         "conditioning failed for harbor-dispatch (io)",
         "1 reflex waits for review · adage review",
         "─ health ─",
-        "○ intent model not fetched · adage models fetch",
+        "! no model · adage models fetch",
         "p pause · f scope · / filter · enter inspect · m open map · ? keys",
     ] {
         assert!(wide.contains(s), "the wide frame lacks {s:?}:\n{wide}");
@@ -856,7 +1016,7 @@ fn empty_home_says_what_to_do() {
 fn route_row(
     reference: &str,
     id: &str,
-    aspect: Aspect,
+    strength: Strength,
     state: &str,
     (support, opportunities): (u64, u64),
     trigger: (&str, &str),
@@ -869,11 +1029,11 @@ fn route_row(
         version: "0.3.0".into(),
         repo: "harbor-dispatch".into(),
         imported: false,
-        in_index: state != "draft" && state != "retired",
+        in_index: state != "nascent" && state != "extinguished",
         instinct: false,
         id: id.into(),
-        aspect,
-        ceiling: "green".into(),
+        strength,
+        ceiling: "fire".into(),
         effect: "observe".into(),
         state: state.into(),
         authored: false,
@@ -900,17 +1060,16 @@ fn routes() -> Routes {
     let mut lookup = route_row(
         t,
         "lookup-incident",
-        Aspect::Green,
-        "active",
+        Strength::Fire,
+        "firm",
         (24, 25),
         ("prompt", "a prompt names a ticket"),
         ("run", "bin/fetch-incident {item}"),
-        vec!["approve", "reject", "demote", "pin"],
+        vec!["approve", "extinguish", "weaken", "pin"],
     );
     lookup.lower_bound = 0.80;
     lookup.turns_saved = 8.0;
-    lookup.live =
-        LiveCounts { emitted: 3, followed: 2, derailed: 1, met: 0, would_have: 1, unaided: 1, not_reached: 0 };
+    lookup.live = LiveCounts { emitted: 3, followed: 2, ignored: 1, met: 0, would_have: 1, unaided: 1, not_reached: 0 };
     lookup.with = Arm { applied: 12, took: 10 };
     lookup.control = Arm { applied: 5, took: 1 };
     lookup.reasons = vec![("new".into(), "conditioned and never reviewed".into())];
@@ -918,42 +1077,42 @@ fn routes() -> Routes {
     let linked = route_row(
         t,
         "read-linked-files",
-        Aspect::Green,
-        "active",
+        Strength::Fire,
+        "firm",
         (13, 17),
         ("after_command", "`bin/fetch-incident {item}` succeeds"),
         ("read_batch", "read ≤5 listed files at once"),
-        vec!["approve", "reject", "demote", "pin"],
+        vec!["approve", "extinguish", "weaken", "pin"],
     );
     let dead = route_row(
         t,
         "dead-end-npm-test",
-        Aspect::Red,
-        "active",
+        Strength::Inhibit,
+        "firm",
         (11, 43),
         ("after_failure", "`npm test` fails: HARBOR_ENV is not set"),
         ("avoid", "npm run check (not npm test)"),
-        vec!["approve", "reject", "pin"],
+        vec!["approve", "extinguish", "pin"],
     );
     let forming = route_row(
         "harbor-dispatch/intents",
         "start-with-npm-check",
-        Aspect::Yellow,
-        "probation",
+        Strength::Prime,
+        "forming",
         (6, 9),
         ("intent", "a prompt means: run the tests"),
         ("avoid", "npm run check (not npm test)"),
-        vec!["approve", "reject", "promote", "pin"],
+        vec!["approve", "extinguish", "strengthen", "pin"],
     );
     let mut instinct = route_row(
         "instincts/finish-line",
         "finish-line/regenerate",
-        Aspect::Yellow,
-        "active",
+        Strength::Prime,
+        "firm",
         (0, 0),
         ("after_edit", "an edit touches registry/*.csv"),
         ("run", "npm run codegen"),
-        vec!["approve", "reject", "pin"],
+        vec!["approve", "extinguish", "pin"],
     );
     instinct.instinct = true;
     instinct.track = "adage/finish-line".into();
@@ -962,18 +1121,18 @@ fn routes() -> Routes {
     let nascent = route_row(
         t,
         "regen-openapi-client",
-        Aspect::Yellow,
-        "draft",
+        Strength::Prime,
+        "nascent",
         (3, 4),
         ("after_edit", "an edit touches api/*.yaml"),
         ("run", "npm run openapi"),
-        vec!["approve", "reject", "pin"],
+        vec!["approve", "extinguish", "pin"],
     );
     let gone = route_row(
         t,
         "grep-for-incident",
-        Aspect::Yellow,
-        "retired",
+        Strength::Prime,
+        "extinguished",
         (2, 9),
         ("prompt", "a prompt names a ticket"),
         ("run", "grep -rn {item} src"),
@@ -1127,7 +1286,7 @@ fn reflexes_keys_filter_chips_groups_and_review() {
         })
         .collect();
     assert_eq!(ids, vec!["start-with-npm-check"]);
-    // Strengthen, confirmed, records `promote` for the prime reflex.
+    // Strengthen, confirmed, records `strengthen` for the prime reflex.
     s.key(KeyCode::Down, NONE);
     assert_eq!(s.selected_route().unwrap().id, "start-with-npm-check");
     s.key(KeyCode::Char('s'), NONE);
@@ -1135,7 +1294,7 @@ fn reflexes_keys_filter_chips_groups_and_review() {
         Some(Cmd::Do(app::Action::Review { verb, reference, route })) => {
             assert_eq!(
                 (verb, reference.as_str(), route.as_str()),
-                ("promote", "harbor-dispatch/intents", "start-with-npm-check")
+                ("strengthen", "harbor-dispatch/intents", "start-with-npm-check")
             )
         }
         other => panic!("expected a review command, got {other:?}"),
@@ -1145,7 +1304,7 @@ fn reflexes_keys_filter_chips_groups_and_review() {
     // Chips: F hides fire; S cycles the lifecycle filter.
     s.key(KeyCode::Char('F'), NONE);
     assert!(tabs::reflexes::tree(&s).iter().all(|n| match n {
-        tabs::reflexes::Node::Reflex(i) => s.route_rows()[*i].aspect != Aspect::Green,
+        tabs::reflexes::Node::Reflex(i) => s.route_rows()[*i].strength != Strength::Fire,
         _ => true,
     }));
     s.key(KeyCode::Char('F'), NONE);

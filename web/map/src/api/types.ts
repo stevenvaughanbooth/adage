@@ -1,17 +1,18 @@
-// The JSON the adage binary serves (crates/adage-cli/src/graph.rs, map/http.rs). Stored values
-// (aspect green/yellow/red, state draft/probation/…) are kept as they are and translated for
-// people at display time (src/lib/words.ts); the newer stored words (fire/prime/inhibit,
-// nascent/forming/…) are accepted too.
+// The JSON the adage binary serves (crates/adage-cli/src/graph.rs, map/http.rs), in the lexicon's
+// stored words: strength fire/prime/inhibit, state nascent/forming/firm/dormant/extinguished, arms
+// treated/control, judgements followed/ignored/misfired/obligation_met. Older binaries wrote
+// aspect green/yellow/red, draft/probation/…, holdout and derailed; src/api/normalize.ts reads
+// those once, so these types hold only the new words.
 
-export type Arm = "treated" | "holdout" | string;
+export type Arm = "treated" | "control" | string;
 
 export interface Trigger {
-  kind: "prompt" | "after_command" | "after_failure" | "after_edit" | "session_start" | "intent" | string;
+  kind: "prompt" | "after_command" | "after_failure" | "after_edit" | "session_start" | "intent" | "context" | string;
   label: string;
 }
 
 export interface Step {
-  kind: "run" | "read_batch" | "avoid" | "advise" | string;
+  kind: "run" | "read_batch" | "avoid" | "advise" | "sequence" | "card" | string;
   label: string;
   avoid?: string;
   signature?: string;
@@ -35,7 +36,8 @@ export interface Evidence {
   turns_saved: number;
   days?: number;
   exposed?: number;
-  stale_since?: string | null;
+  /** Since when the reflex has starved its own evidence (older binaries: `stale_since`). */
+  dormant_since?: string | null;
   provenance?: string;
 }
 
@@ -43,9 +45,10 @@ export interface Live {
   emitted: number;
   would_have: number;
   followed: number;
-  derailed: number;
+  ignored: number;
+  misfired?: number;
   obligation_met: number;
-  holdout: { unaided: number; not_reached: number; obligation_met: number };
+  control: { unaided: number; not_reached: number; obligation_met: number };
   sessions: number;
 }
 
@@ -62,7 +65,8 @@ export interface Route {
   instinct?: boolean;
   origin?: string | null;
   review?: { verbs: string[]; reasons: { kind: string; why: string }[] };
-  aspect: string;
+  /** fire / prime / inhibit (older binaries: `aspect` green/yellow/red). */
+  strength: string;
   ceiling: string;
   effect: string;
   state: string;
@@ -72,7 +76,7 @@ export interface Route {
   directive: string;
   evidence: Evidence;
   live: Live;
-  arms: { treated?: ArmStats; holdout?: ArmStats };
+  arms: { treated?: ArmStats; control?: ArmStats };
 }
 
 /** One hook decision: routes directed, would-have (control), judgements `[kind, route]`. */
@@ -92,6 +96,7 @@ export interface TraceEvent {
 export interface LearnChange {
   route: string;
   track?: string;
+  /** new, nascent, extinguished, dormant, strength, evidence or proposal. */
   change: string;
   from?: string | null;
   to?: string | null;
@@ -100,6 +105,7 @@ export interface LearnChange {
 
 export interface LearnRun {
   ts: number;
+  /** `condition` or `condition_error` (older binaries: `learn`, `learn_error`). */
   kind?: string;
   trigger?: string;
   repo?: string | null;
@@ -121,7 +127,7 @@ export interface Observed {
 export interface Graph {
   generation: string;
   home: string;
-  sessions: { total: number; treated: number; holdout: number };
+  sessions: { total: number; treated: number; control: number };
   stop_requests: number;
   routes: Route[];
   observed: Observed[];

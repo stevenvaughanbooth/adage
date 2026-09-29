@@ -74,7 +74,7 @@ impl Tab {
 
 #[derive(Debug, Clone)]
 pub enum Action {
-    /// A review decision: `verb` is the one `crate::review` records (`promote`, …).
+    /// A review decision: `verb` is the one `crate::review` takes (`strengthen`, …).
     Review {
         verb: &'static str,
         reference: String,
@@ -492,8 +492,9 @@ impl AppState {
                 self.confirm(
                     "Fetch the intent model",
                     vec![
-                        Line::raw("Download potion-base-8M (31 MB, SHA-256 verified) with curl,"),
-                        Line::raw("into Adage's data directory. It lets conditioning find intent families."),
+                        Line::raw("Download potion-base-8M (SHA-256 verified) into Adage's data directory."),
+                        Line::raw("It lets conditioning find intent families; installed, it is used instead"),
+                        Line::raw("of the copy bundled in adage."),
                         Line::raw(""),
                         same("adage models fetch"),
                         hint,
@@ -642,7 +643,7 @@ fn draw_tabs(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         if full.iter().map(|s| s.width()).sum::<usize>() <= area.width as usize { full } else { tabs(true) };
     let mut right = vec![Span::styled(format!("{}{}", ctx.label, t.sep()), t.ink2())];
     if ctx.demo {
-        right.insert(0, Span::styled(format!("demo{}", t.sep()), t.holdout()));
+        right.insert(0, Span::styled(format!("demo{}", t.sep()), t.control()));
     }
     if s.live.paused {
         right.push(Span::styled(
@@ -858,7 +859,7 @@ fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Opt
         },
         Cmd::Do(action) => match action {
             Action::Review { verb, reference, route } => {
-                // `crate::review` records the stored verb; people see the lexicon's.
+                // `crate::review` takes the lexicon's verbs.
                 match crate::review::decide_quietly(verb, &reference, &route, &ctx.paths) {
                     Ok(_) => s.toast(format!("{route}: {} recorded", words::verb(verb)), true),
                     Err(e) => s.message("Refused", vec![format!("{e:#}")], true),
@@ -867,9 +868,12 @@ fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Opt
                 loader.want(Want::Health);
             }
             Action::Install(p) => {
-                match crate::install::apply(&p) {
-                    Ok(()) => {
+                match crate::install::apply_backed_up(&p) {
+                    Ok(backup) => {
                         let mut lines = vec![format!("wrote {}", p.target.display())];
+                        if let Some(b) = backup {
+                            lines.push(format!("the previous version is in {}", b.display()));
+                        }
                         if p.harness == "codex" {
                             lines.push(
                                 "Codex asks you to review new hooks before they run: open /hooks in Codex.".into(),

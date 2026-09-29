@@ -38,7 +38,7 @@ function usePulses(graph: Graph) {
     return m;
   }, [graph.routes]);
   const fire = useCallback((e: TraceEvent) => {
-    const control = e.arm === "holdout";
+    const control = e.arm === "control";
     const ids = control ? e.would : e.directed;
     if (!ids.length) return;
     setPulses((prev) => {

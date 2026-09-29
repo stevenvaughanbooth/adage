@@ -1,11 +1,11 @@
 //! `adage init [--repo <path>] [--yes | --print]` (plan §6.3): first run, in one command.
 //!
 //! 1. Detects the installed harnesses (read-only probing; see [`crate::detect`]).
-//! 2. Shows how to register Adage's hooks with each: `adage install <harness>`'s printed snippet,
-//!    and the `--write` command that would install it. `init` itself never writes a harness's
-//!    configuration.
-//! 3. Offers the optional embedding model: prints `adage models fetch`, and runs it only with
-//!    `--yes`.
+//! 2. Shows how to register Adage's hooks with each: one line per harness with the `--write`
+//!    command that would install it (`adage install <harness>` prints the snippet). `init` itself
+//!    never writes a harness's configuration.
+//! 3. The embedding model: the one bundled in this binary serves; a selected model that is not
+//!    installed is fetched with `--yes` (`adage models fetch <key>`).
 //! 4. Runs `adage sense` over existing history (read-only), for the repository at `--repo` if
 //!    given, else for every repository.
 //!
@@ -80,14 +80,14 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
         if yes { "download" } else { "offer" }
     )))?;
     out.line(&Line::new().faint(format!(
-        "  4. sense your existing agent traces{} — read-only;",
+        "  4. sense your agents' existing traces{}: which reflexes they would form (read-only);",
         match (&repo_arg, &repo_key) {
             (Some(_), Some(k)) => format!(" for {k}"),
             _ => String::new(),
         }
     )))?;
     out.line(&Line::new().faint(format!(
-        "  5. show which instincts would bind in this repository, from its files alone{}.",
+        "  5. show which instincts (Adage's built-in reflexes) would bind in this repository, from its files alone{}.",
         if yes { ", and bind them" } else { "" }
     )))?;
     if let Some(v) = agent {
@@ -156,37 +156,46 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
         match h {
             "claude-code" => o.line(
                 &row("")
-                    .quiet("or use the plugin: ")
-                    .cmd("claude --plugin-dir plugin/claude-code")
-                    .quiet(" (see README). The settings it would write:"),
+                    .quiet("or install the plugin: ")
+                    .cmd("/plugin marketplace add stevenvaughanbooth/adage")
+                    .quiet(", then ")
+                    .cmd("/plugin install adage@adage")
+                    .quiet("; ")
+                    .cmd(format!("adage install {h}"))
+                    .quiet(" prints the settings it would write"),
             )?,
-            "opencode" => {
-                o.line(
-                    &row("")
-                        .quiet("it writes Adage's plugin file (.opencode/plugins/adage.js); ")
-                        .cmd("adage install opencode")
-                        .quiet(" prints it in full"),
-                )?;
-                continue;
-            }
+            "opencode" => o.line(
+                &row("")
+                    .quiet("it writes Adage's plugin file (.opencode/plugins/adage.js); ")
+                    .cmd("adage install opencode")
+                    .quiet(" prints it in full"),
+            )?,
             _ => o.line(
                 &row("")
-                    .quiet("the hooks.json entries it would merge (Codex then asks you to approve them in /hooks):"),
+                    .quiet(
+                        "it merges Adage's entries into hooks.json (Codex then asks you to approve them in /hooks); ",
+                    )
+                    .cmd("adage install codex")
+                    .quiet(" prints them"),
             )?,
         }
-        // The registration itself, verbatim, to copy.
-        o.flush()?;
-        crate::install::print_only(h, None)?;
     }
 
-    // 3. The embedding model.
-    step(3, "Embedding model (optional)")?;
-    match adage_intent::model::status(&paths.models()) {
-        Ok(m) => o.line(&row("model").push(Role::Fire, "installed").sep().text(m.id))?,
-        Err(_) if yes => {
-            o.line(&row("model").quiet("fetching (31 MB, SHA-256 verified)…"))?;
+    // 3. The embedding model: hooks embed prompts with the installed one, else the one bundled in
+    // this binary (`model::resolve`).
+    step(3, "Embedding model")?;
+    let r = adage_intent::model::resolve(&paths.models(), false);
+    match r.source {
+        adage_intent::model::Source::Hashed { .. } if yes && r.selected != "hashed" => {
+            // The selected model (`ADAGE_EMBED_MODEL`, `adage models use`), else the default.
+            let spec = adage_intent::model::spec(&r.selected).unwrap_or(&adage_intent::model::BASE_8M);
+            o.line(&row("model").quiet(format!(
+                "fetching {} ({:.0} MB, SHA-256 verified)…",
+                spec.key,
+                spec.bytes() as f64 / 1e6
+            )))?;
             o.flush()?;
-            if let Err(e) = crate::models::run(&["fetch".to_string()], paths) {
+            if let Err(e) = crate::models::run(&["fetch".to_string(), spec.key.to_string()], paths) {
                 o.warn(&format!("could not fetch it: {e:#}"))?;
                 o.line(
                     &Line::new()
@@ -198,19 +207,24 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
                 )?;
             }
         }
-        Err(_) => {
-            o.line(
-                &row("model")
-                    .faint("not installed")
-                    .sep()
-                    .quiet("intent reflexes need it; everything else works without it"),
-            )?;
+        adage_intent::model::Source::Hashed { .. } => {
+            o.line(&row("model").push(Role::Prime, r.describe()))?;
             o.line(
                 &row("")
                     .cmd("adage models fetch")
-                    .quiet(" downloads it (31 MB, SHA-256 verified); ")
+                    .quiet(" downloads potion-base-8M (31 MB, SHA-256 verified) for intent families; ")
                     .cmd("adage init --yes")
                     .quiet(" does it for you"),
+            )?;
+        }
+        _ => {
+            o.line(&row("model").push(Role::Fire, r.describe()).sep().quiet("nothing to do"))?;
+            o.line(
+                &row("")
+                    .cmd("adage models fetch")
+                    .quiet(" installs it at full precision; ")
+                    .cmd("adage models fetch potion-code-16m-v2")
+                    .quiet(" adds the code model"),
             )?;
         }
     }
@@ -220,9 +234,9 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
     step(4, "Sense your traces")?;
     o.blank()?;
     o.flush()?;
-    let opts = crate::survey::Options { repo: repo_arg.as_ref().and(repo_key.clone()), ..Default::default() };
-    let s = crate::survey::run(&opts, paths)?;
-    crate::survey::print_text(&s)?;
+    let opts = crate::sense::Options { repo: repo_arg.as_ref().and(repo_key.clone()), ..Default::default() };
+    let s = crate::sense::run(&opts, paths)?;
+    crate::sense::print_text(&s)?;
 
     // 5. Instincts: what Adage's built-in defaults would bind here, from this repository's files.
     step(5, "Instincts (day 0)")?;
@@ -280,19 +294,19 @@ fn instincts(root: Option<&std::path::Path>, yes: bool, paths: &Paths) -> Result
             .text(instinct)
             .pad_to(8 + w)
             .text(crate::share::describe_step(&r.step));
-        if r.state == adage_tracks::RouteState::Draft {
-            l = l.sep().faint("nascent").quiet(": waits for you in ").cmd("adage review");
+        if r.state == adage_tracks::RouteState::Nascent {
+            l = l.sep().faint("nascent").quiet(": needs your approval in ").cmd("adage review");
         }
         say(&mut o, l)?;
     }
     say(
         &mut o,
         Line::new().quiet(
-            "Each primes at most, never blocks the agent from stopping, and gives way to any reflex Adage conditions.",
+            "Each is prime at most, never blocks the agent from stopping, and gives way to any reflex Adage conditions.",
         ),
     )?;
-    let drafts = dry.routes.iter().any(|r| r.state == adage_tracks::RouteState::Draft);
-    if drafts {
+    let nascent = dry.routes.iter().any(|r| r.state == adage_tracks::RouteState::Nascent);
+    if nascent {
         say(
             &mut o,
             Line::new()

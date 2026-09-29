@@ -4,6 +4,7 @@
 // itself is fetched again shortly after, and at once when learning changed the graph.
 
 import { useSyncExternalStore } from "react";
+import { normalizeEvent, normalizeGraph, normalizeLearnRun } from "./normalize";
 import type { Graph, Health, LearnRun, TraceEvent } from "./types";
 
 export type Connection = "connecting" | "live" | "offline";
@@ -35,8 +36,8 @@ export async function fetchJson<T>(url: string): Promise<T> {
 let inflight: Promise<void> | null = null;
 export function refresh(): Promise<void> {
   if (inflight) return inflight;
-  inflight = fetchJson<Graph>("/api/v1/graph")
-    .then((graph) => set({ graph, error: null }))
+  inflight = fetchJson<unknown>("/api/v1/graph")
+    .then((raw) => set({ graph: normalizeGraph(raw), error: null }))
     .catch((e: unknown) => set({ error: String(e) }))
     .finally(() => {
       inflight = null;
@@ -94,14 +95,14 @@ export function start() {
   source.addEventListener("hello", () => set({ connection: "live" }));
   source.addEventListener("decision", (m) => {
     try {
-      onDecision(JSON.parse((m as MessageEvent<string>).data) as TraceEvent);
+      onDecision(normalizeEvent(JSON.parse((m as MessageEvent<string>).data)));
     } catch {
       /* a malformed event is skipped */
     }
   });
   source.addEventListener("learn", (m) => {
     try {
-      onLearn(JSON.parse((m as MessageEvent<string>).data) as LearnRun);
+      onLearn(normalizeLearnRun(JSON.parse((m as MessageEvent<string>).data)));
     } catch {
       /* skipped */
     }

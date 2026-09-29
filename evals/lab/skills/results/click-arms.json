@@ -1,0 +1,372 @@
+{
+ "skill": "click-bugfix",
+ "skill_tokens": 363,
+ "tasks": [
+  "click-0cd28d65",
+  "click-2468b709",
+  "click-3bb230dc",
+  "click-c3535905"
+ ],
+ "arms": {
+  "neither": {
+   "n": 12,
+   "pass_rate": 0.583,
+   "task_pass_rate": 0.583,
+   "mean_cost_usd": 0.3148,
+   "median_turns": 36.5,
+   "mean_turns": 37.8333,
+   "mean_dead_ends": 1.0833,
+   "mean_input_tokens": 1478605.4167,
+   "mean_output_tokens": 16576.0833,
+   "mean_model_calls": 37.8333,
+   "mean_directive_tokens": 0,
+   "routes_delivered": {},
+   "procedure": {
+    "s1": {
+     "did": 0,
+     "applicable": 12,
+     "exact": 0,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s2": {
+     "did": 12,
+     "applicable": 12,
+     "exact": 0,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s3": {
+     "did": 9,
+     "applicable": 12,
+     "exact": 0,
+     "timely": null,
+     "forbidden_used": 30
+    },
+    "s4": {
+     "did": 7,
+     "applicable": 12,
+     "exact": 7,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s5": {
+     "did": 5,
+     "applicable": 12,
+     "exact": 0,
+     "timely": 4,
+     "forbidden_used": 0
+    },
+    "s6": {
+     "did": 4,
+     "applicable": 12,
+     "exact": 0,
+     "timely": 4,
+     "forbidden_used": 0
+    }
+   }
+  },
+  "skill": {
+   "n": 8,
+   "pass_rate": 0.5,
+   "task_pass_rate": 0.5,
+   "mean_cost_usd": 0.3571,
+   "median_turns": 41.0,
+   "mean_turns": 41.875,
+   "mean_dead_ends": 2.25,
+   "mean_input_tokens": 1686812.375,
+   "mean_output_tokens": 19756.375,
+   "mean_model_calls": 41.75,
+   "mean_directive_tokens": 0,
+   "routes_delivered": {},
+   "skill_tokens_read": 15155,
+   "procedure": {
+    "s1": {
+     "did": 4,
+     "applicable": 8,
+     "exact": 4,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s2": {
+     "did": 6,
+     "applicable": 8,
+     "exact": 0,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s3": {
+     "did": 6,
+     "applicable": 8,
+     "exact": 2,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s4": {
+     "did": 8,
+     "applicable": 8,
+     "exact": 8,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s5": {
+     "did": 8,
+     "applicable": 8,
+     "exact": 7,
+     "timely": 8,
+     "forbidden_used": 0
+    },
+    "s6": {
+     "did": 7,
+     "applicable": 8,
+     "exact": 4,
+     "timely": 7,
+     "forbidden_used": 0
+    }
+   }
+  },
+  "compiled": {
+   "n": 8,
+   "pass_rate": 0.75,
+   "task_pass_rate": 0.75,
+   "mean_cost_usd": 0.4379,
+   "median_turns": 53.5,
+   "mean_turns": 48.125,
+   "mean_dead_ends": 1.625,
+   "mean_input_tokens": 2198478.875,
+   "mean_output_tokens": 21913.5,
+   "mean_model_calls": 48,
+   "mean_directive_tokens": 310,
+   "routes_delivered": {
+    "skill-s3-avoid": 8,
+    "skill-s3-avoid-pytest": 8,
+    "skill-s6-run": 8
+   },
+   "procedure": {
+    "s1": {
+     "did": 1,
+     "applicable": 8,
+     "exact": 0,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s2": {
+     "did": 8,
+     "applicable": 8,
+     "exact": 0,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s3": {
+     "did": 6,
+     "applicable": 8,
+     "exact": 0,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s4": {
+     "did": 8,
+     "applicable": 8,
+     "exact": 8,
+     "timely": null,
+     "forbidden_used": 0
+    },
+    "s5": {
+     "did": 8,
+     "applicable": 8,
+     "exact": 0,
+     "timely": 8,
+     "forbidden_used": 0
+    },
+    "s6": {
+     "did": 4,
+     "applicable": 8,
+     "exact": 4,
+     "timely": 3,
+     "forbidden_used": 0
+    }
+   },
+   "value_captured": {
+    "pass_rate": -2.01,
+    "mean_cost_usd": 2.91,
+    "mean_turns": 2.55,
+    "mean_input_tokens": 3.46
+   }
+  }
+ },
+ "per_task": {
+  "click-0cd28d65": {
+   "compiled": [
+    {
+     "passed": true,
+     "cost": 0.3956,
+     "turns": 55
+    },
+    {
+     "passed": true,
+     "cost": 0.4261,
+     "turns": 61
+    }
+   ],
+   "skill": [
+    {
+     "passed": true,
+     "cost": 0.2968,
+     "turns": 49
+    },
+    {
+     "passed": true,
+     "cost": 0.3493,
+     "turns": 61
+    }
+   ],
+   "neither": [
+    {
+     "passed": true,
+     "cost": 0.2219,
+     "turns": 38
+    },
+    {
+     "passed": false,
+     "cost": 0.2324,
+     "turns": 41
+    },
+    {
+     "passed": true,
+     "cost": 0.3256,
+     "turns": 46
+    }
+   ]
+  },
+  "click-2468b709": {
+   "compiled": [
+    {
+     "passed": false,
+     "cost": 0.6857,
+     "turns": 54
+    },
+    {
+     "passed": false,
+     "cost": 0.6203,
+     "turns": 60
+    }
+   ],
+   "skill": [
+    {
+     "passed": false,
+     "cost": 0.5002,
+     "turns": 45
+    },
+    {
+     "passed": false,
+     "cost": 0.3521,
+     "turns": 30
+    }
+   ],
+   "neither": [
+    {
+     "passed": true,
+     "cost": 0.3095,
+     "turns": 28
+    },
+    {
+     "passed": false,
+     "cost": 0.5951,
+     "turns": 49
+    },
+    {
+     "passed": false,
+     "cost": 0.4924,
+     "turns": 51
+    }
+   ]
+  },
+  "click-3bb230dc": {
+   "compiled": [
+    {
+     "passed": true,
+     "cost": 0.4083,
+     "turns": 53
+    },
+    {
+     "passed": true,
+     "cost": 0.3407,
+     "turns": 40
+    }
+   ],
+   "skill": [
+    {
+     "passed": true,
+     "cost": 0.2114,
+     "turns": 29
+    },
+    {
+     "passed": true,
+     "cost": 0.2545,
+     "turns": 37
+    }
+   ],
+   "neither": [
+    {
+     "passed": true,
+     "cost": 0.1742,
+     "turns": 29
+    },
+    {
+     "passed": true,
+     "cost": 0.2281,
+     "turns": 33
+    },
+    {
+     "passed": true,
+     "cost": 0.2236,
+     "turns": 31
+    }
+   ]
+  },
+  "click-c3535905": {
+   "skill": [
+    {
+     "passed": false,
+     "cost": 0.3074,
+     "turns": 34
+    },
+    {
+     "passed": false,
+     "cost": 0.5853,
+     "turns": 50
+    }
+   ],
+   "compiled": [
+    {
+     "passed": true,
+     "cost": 0.288,
+     "turns": 31
+    },
+    {
+     "passed": true,
+     "cost": 0.3382,
+     "turns": 31
+    }
+   ],
+   "neither": [
+    {
+     "passed": false,
+     "cost": 0.4094,
+     "turns": 35
+    },
+    {
+     "passed": true,
+     "cost": 0.2865,
+     "turns": 35
+    },
+    {
+     "passed": false,
+     "cost": 0.2787,
+     "turns": 38
+    }
+   ]
+  }
+ },
+ "total_cost_usd": 6.3598
+}

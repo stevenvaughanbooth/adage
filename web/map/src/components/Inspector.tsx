@@ -114,10 +114,10 @@ function Bar({ label, k, n, control, better }: { label: string; k: number; n: nu
   );
 }
 
-/** With the reflex (treated arm) vs control (holdout arm), in distinct traces where it applied. */
+/** With the reflex (treated arm) vs the control arm, in distinct traces where it applied. */
 export function WithVsControl({ r }: { r: Route }) {
   const t: ArmStats = r.arms.treated ?? { sessions: 0, applied: 0, followed: 0, met: 0, hit_avoided: 0 };
-  const c: ArmStats = r.arms.holdout ?? { sessions: 0, applied: 0, followed: 0, met: 0, hit_avoided: 0 };
+  const c: ArmStats = r.arms.control ?? { sessions: 0, applied: 0, followed: 0, met: 0, hit_avoided: 0 };
   if (!t.applied && !c.applied) {
     return (
       <p className="m-0 text-[13px] text-ink-3">
@@ -155,7 +155,7 @@ const STEPS: Lifecycle[] = ["nascent", "forming", "firm"];
 export function LifecycleTrack({ r }: { r: Route }) {
   const l = lifecycle(r.state);
   const at = STEPS.indexOf(l);
-  const off = at < 0; // dormant, weakened, extinguished
+  const off = at < 0; // dormant, extinguished
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
       {STEPS.map((s, i) => {
@@ -188,7 +188,7 @@ export function LifecycleTrack({ r }: { r: Route }) {
           <span className="text-ink-1" aria-current="step">
             {l}
           </span>
-          {r.evidence.stale_since && <span className="font-mono text-[10.5px]">since {r.evidence.stale_since}</span>}
+          {r.evidence.dormant_since && <span className="font-mono text-[10.5px]">since {r.evidence.dormant_since}</span>}
         </span>
       )}
     </div>
@@ -251,7 +251,7 @@ export function Inspector({ graph }: { graph: Graph }) {
       </aside>
     );
   }
-  const s = strength(r.aspect);
+  const s = strength(r.strength);
   const l = lifecycle(r.state);
   const inst = isInstinct(r);
   const e = r.evidence;
@@ -307,7 +307,8 @@ export function Inspector({ graph }: { graph: Graph }) {
       <Section label="vs control" source={LIVE_SOURCE} note={CONTROL_NOTE}>
         <WithVsControl r={r} />
         <p className="m-0 font-mono text-[11px] text-ink-3">
-          live · directed {r.live.emitted} · {judgement("followed")} {r.live.followed} · {judgement("derailed")} {r.live.derailed}
+          live · directed {r.live.emitted} · {judgement("followed")} {r.live.followed} · {judgement("ignored")} {r.live.ignored}
+          {r.live.misfired ? ` · ${judgement("misfired")} ${r.live.misfired}` : ""}
           {" · "}control would have {r.live.would_have}
         </p>
       </Section>
@@ -323,8 +324,8 @@ export function Inspector({ graph }: { graph: Graph }) {
               <li key={`${t.ts}${i}`} className="flex gap-2">
                 <span className="text-ink-3">{new Date(t.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                 <span className="truncate">{t.session.slice(0, 8)}</span>
-                <span className={t.arm === "holdout" ? "text-ink-3" : "text-ink-1"}>
-                  {t.arm === "holdout" ? "control" : t.directed.includes(r.id) ? "directed" : t.judged.find(([, id]) => id === r.id)?.[0] ? judgement(t.judged.find(([, id]) => id === r.id)?.[0] ?? "") : "applied"}
+                <span className={t.arm === "control" ? "text-ink-3" : "text-ink-1"}>
+                  {t.arm === "control" ? "control" : t.directed.includes(r.id) ? "directed" : t.judged.find(([, id]) => id === r.id)?.[0] ? judgement(t.judged.find(([, id]) => id === r.id)?.[0] ?? "") : "applied"}
                 </span>
               </li>
             ))}

@@ -69,7 +69,13 @@ class Grammar(unittest.TestCase):
         self.bad({**base, "skin": "space"}, "spec.skin")
         self.bad({**base, "colour": 1}, "unknown keys")
         self.bad({**base, "conventions": {"dead_end": "path_alias"}}, "supports modes")
-        self.bad({**base, "conventions": {"scope": True}}, "unknown keys")
+        self.bad({**base, "conventions": {"scoped": True}}, "unknown keys")
+        # Track G G3 kinds: python-make only; a sequence needs the registry; tasks need their kind.
+        self.bad({**base, "stack": "node-npm", "conventions": {"scope": True}}, "only the python-make stack")
+        self.bad({**base, "conventions": {"sequence": True, "finish_line": False}, "tasks": {"registry": 0}},
+                 "conventions.sequence needs")
+        self.bad({**base, "tasks": {"scoped": 1}}, "tasks.scoped needs conventions.scope")
+        self.bad({**base, "tasks": {"deps": 1}}, "tasks.deps needs conventions.env_sync")
         self.bad({**base, "conventions": {"finish_line": False}, "tasks": {"registry": 1, "control": 2}}, "finish_line")
         self.bad({**base, "conventions": {"lookup": False, "linked_files": False}}, "need conventions.lookup")
         self.bad({**base, "tasks": {"bugfix": 6, "registry": 2, "control": 1}}, "at least 25%")
@@ -125,31 +131,46 @@ class Determinism(unittest.TestCase):
 
 
 class Schema(unittest.TestCase):
-    CONV_KEYS = {"id", "kind", "command", "avoided", "signature", "glob", "id_pattern", "notes", "mode"}
+    # `adage-conventions/1` (docs/evals.md), the schema `adage eval routes` reads.
+    CONV_KEYS = {"id", "kind", "command", "avoided", "signature", "glob", "id_pattern", "samples", "counter_samples",
+                 "steps", "notes", "mode"}
+    DOC_KEYS = {"schema", "sandbox", "description", "conventions", "decoys"}
+    # The schema's kinds (an instinct violation is a dead end with that mode; decoys are apart).
+    SCHEMA_KINDS = {"lookup", "linked_files", "dead_end", "finish_line", "scope", "env_sync", "sequence"}
 
     def test_conventions(self):
         for b in bundles():
-            conv = json.loads((b / "conventions.json").read_text())
-            ids = [c["id"] for c in conv]
+            doc = json.loads((b / "conventions.json").read_text())
+            self.assertLessEqual(set(doc), self.DOC_KEYS)
+            self.assertEqual(doc["schema"], grammar.CONVENTIONS_SCHEMA)
+            self.assertEqual(doc["sandbox"], json.loads((b / "tasks.json").read_text())["repo"])
+            ids = [c["id"] for c in grammar.entries(doc)]
             self.assertEqual(len(ids), len(set(ids)))
-            for c in conv:
+            for c in doc["conventions"]:
                 self.assertLessEqual(set(c), self.CONV_KEYS, c)
-                self.assertIn(c["kind"], grammar.KINDS)
+                self.assertIn(c["kind"], self.SCHEMA_KINDS)
                 self.assertTrue(c["command"] and c["notes"])
-                if c["kind"] in ("dead_end", "instinct_violation"):
+                if "{" in c["command"]:
+                    self.assertTrue(c["samples"], c)
+                if c["kind"] == "dead_end":
                     self.assertTrue(c["avoided"] and c["signature"])
+                    self.assertIsInstance(c["avoided"], list)
+                    self.assertIn(c["mode"], grammar.DEAD_END_MODES + ("instinct_violation",))
                 if c["kind"] == "finish_line":
                     self.assertTrue(c["glob"] and c["signature"])
                 if c["kind"] == "lookup":
-                    re.compile(c["id_pattern"])
+                    rx = re.compile(c["id_pattern"])
                     self.assertIn("{item}", c["command"])
-                if c["kind"] == "dead_end":
-                    self.assertIn(c["mode"], grammar.DEAD_END_MODES)
+                    self.assertTrue(all(rx.fullmatch(x) for x in c["samples"]))
+                    self.assertFalse(any(rx.fullmatch(x) for x in c["counter_samples"]))
+            for d in doc.get("decoys", []):
+                self.assertEqual(d["kind"], "decoy")
+                self.assertIn(d["mode"], grammar.DECOY_MODES)
 
     def test_tasks(self):
         for b in bundles():
             tasks = json.loads((b / "tasks.json").read_text())
-            conv_ids = {c["id"] for c in json.loads((b / "conventions.json").read_text())}
+            conv_ids = {c["id"] for c in grammar.entries(json.loads((b / "conventions.json").read_text()))}
             ts = tasks["tasks"]
             control = [t for t in ts if t["kind"] == "control"]
             self.assertGreaterEqual(len(control) * 4, len(ts), "at least 25% control tasks")
@@ -271,8 +292,8 @@ class Rehearsal(unittest.TestCase):
             self.assertEqual(rep["recovered"], rep["expected"])
             self.assertEqual(rep["decoys_learned"], 0)
 
-    def test_graph_engine_recovers_every_id_shape(self):
-        """Track G G1 gate: with `--engine graph`, every convention of every idshapes bundle is
+    def test_every_id_shape_is_recovered(self):
+        """Track G G1 gate: every convention of every idshapes bundle is
         recovered (the lookup included, whatever the id's shape), and end to end (learn, then the
         hook's decision on every prompt and on fresh and adversarial ids) lookup recall is at least
         0.95 with no unsafe bind."""
@@ -287,7 +308,7 @@ class Rehearsal(unittest.TestCase):
             for b in selfcheck.bundles(suite):
                 if not usable(b):
                     continue
-                rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, exe, learn=True, engine="graph")
+                rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, exe, learn=True)
                 self.assertTrue(rep["ok"], json.dumps({k: rep.get(k) for k in
                                                        ("bundle", "comparison", "unexpected_routes", "learn_error")},
                                                       indent=1)[:4000])
@@ -301,8 +322,62 @@ class Rehearsal(unittest.TestCase):
             self.assertEqual(r["all"]["unsafe_accepts"], 0)
 
 
+class NewKinds(unittest.TestCase):
+    """Track G G3: the scope, env_sync and sequence conventions (`specs/newkinds.json`)."""
+
+    def test_existing_specs_are_unchanged(self):
+        # The new keys are left out of a normalised spec unless asked for, so every existing
+        # bundle keeps its bytes (the smoke suite's are checked against a fresh build in CI by
+        # the determinism tests; here, the specs themselves).
+        for suite in ("smoke", "idshapes"):
+            for entry in gen.load_suite(suite)["sandboxes"]:
+                spec = grammar.normalise(entry["spec"], STACKS)
+                self.assertFalse(set(spec["conventions"]) & set(grammar.NEW_KINDS), (suite, spec["name"]))
+                self.assertFalse(set(spec["tasks"]) & {"scoped", "deps"}, (suite, spec["name"]))
+
+    def test_new_kinds_plan_and_conventions(self):
+        entry = gen.load_suite("newkinds")["sandboxes"][0]
+        plan, stack = gen.plan_for(entry["spec"], entry["seed"])
+        kinds = [t.kind for t in plan.tasks]
+        self.assertEqual((kinds.count("scoped"), kinds.count("deps")), (3, 3))
+        conv = {c["kind"]: c for c in stack.conventions()["conventions"]}
+        self.assertNotIn("finish_line", conv, "the sequence replaces the finish line")
+        self.assertEqual(conv["sequence"]["steps"], ["make gen", "make check"])
+        self.assertEqual(conv["scope"]["command"], "make -C packages/{part} check")
+        self.assertEqual(sorted(conv["scope"]["samples"]), sorted(plan.skin.packages))
+        self.assertEqual((conv["env_sync"]["command"], conv["env_sync"]["glob"]), ("make deps", "requirements.txt"))
+        for t in plan.tasks:
+            if t.kind in ("scoped", "deps"):
+                self.assertFalse(re.search(r"\b[A-Z][A-Z0-9]{0,9}-\d{1,7}\b", " ".join(stack.prompts(t))))
+
+    def test_the_new_kinds_are_learned(self):
+        entry = gen.load_suite("newkinds")["sandboxes"][0]
+        with tempfile.TemporaryDirectory() as t, contextlib.redirect_stdout(io.StringIO()):
+            b = gen.build(entry["spec"], entry["seed"], Path(t) / "b")
+            c = selfcheck.Checker(b)
+            try:
+                status = c.run_all()
+            finally:
+                c.tmp.cleanup()
+            self.assertEqual(status, "ok", f"{c.failed}\n" + "\n".join(c.lines))
+            exe = rehearse.find_adage(None)
+            if not exe:
+                rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, None, learn=False)
+                self.assertTrue(rep["all_passed"])
+                self.skipTest("no adage binary (cargo build -p adage-cli)")
+            graph = rehearse.rehearse_bundle(b, Path(t) / "graph", 2, exe, learn=True)
+        self.assertTrue(graph["ok"], json.dumps({k: graph.get(k) for k in
+                                                 ("comparison", "unexpected_routes", "learn_error")}, indent=1)[:4000])
+        rows = {r["kind"]: r for r in graph["comparison"]}
+        for kind in grammar.NEW_KINDS:
+            self.assertTrue(rows[kind]["ok"], f"{kind} was not learned")
+        env = next(r for r in graph["comparison"] if r["kind"] == "env_sync")
+        self.assertEqual(env["learned"]["state"], "nascent", "an environment step is nascent until reviewed")
+        self.assertEqual(graph["decoys_learned"], 0)
+
+
 class IdShapes(unittest.TestCase):
-    """Tracker id shapes (Track G §4.4): `id_shape` in a spec, and the holdout `adage eval types` uses."""
+    """Tracker id shapes (Track G §4.4): `id_shape` in a spec, and the held-out set `adage eval types` uses."""
 
     BASE = {"stack": "python-make", "skin": "billing", "tasks": {"bugfix": 4, "registry": 2, "control": 2}}
 
@@ -326,7 +401,7 @@ class IdShapes(unittest.TestCase):
                 plan, stack = gen.plan_for(spec, seed)
                 ids = [t.id for t in plan.tasks if t.kind != "control"]
                 self.assertEqual(len(set(ids)), len(ids))
-                pattern = re.compile(next(c for c in stack.conventions() if c["kind"] == "lookup")["id_pattern"])
+                pattern = re.compile(next(c for c in stack.conventions()["conventions"] if c["kind"] == "lookup")["id_pattern"])
                 found = grammar.mention_regex(shape, "BIL")
                 for t in plan.tasks:
                     prompts = stack.prompts(t)
@@ -339,8 +414,8 @@ class IdShapes(unittest.TestCase):
                     self.assertEqual({m.group(0) for p in prompts for m in found.finditer(p)}, {grammar.mention(t.id)})
                 if shape == "mixed":
                     self.assertEqual(sum(i.isdigit() for i in ids), len(ids) // 2)
-                ho = grammar.holdout(plan.spec, ids, seed)
-                self.assertEqual(ho, grammar.holdout(plan.spec, ids, seed))
+                ho = grammar.held_out(plan.spec, ids, seed)
+                self.assertEqual(ho, grammar.held_out(plan.spec, ids, seed))
                 self.assertEqual((len(ho["fresh"]), len(ho["near_miss"])), (200, 200), shape)
                 self.assertTrue(all(pattern.fullmatch(v) for v in ho["fresh"]))
                 self.assertFalse(set(ho["fresh"]) & set(ids))
@@ -360,7 +435,7 @@ class IdShapes(unittest.TestCase):
             self.assertEqual(status, "ok", f"{c.failed}\n" + "\n".join(c.lines))
             rep = rehearse.rehearse_bundle(b, b / "rehearsal", 2, None, learn=False)
             self.assertTrue(rep["all_passed"])
-            ho = json.loads((b / "rehearsal" / "holdout.json").read_text())
+            ho = json.loads((b / "rehearsal" / "held_out.json").read_text())
             self.assertEqual(ho["id_shape"], "path_num")
             exe = rehearse.find_adage(None)
             if not exe:

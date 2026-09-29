@@ -3,7 +3,7 @@
 // index.json: duplicates by (repo, id) keep the first-hand one, the interlock resolves conflicts,
 // and the survivors are hashed into the generation.
 //
-// Sample mode: nine sample reflexes in three tracks. Which survive, which are demoted or locked,
+// Sample mode: nine sample reflexes in three tracks. Which survive, which are weakened or locked,
 // and the generation, are all computed here by the rules of Index::compile and interlock::resolve.
 // This repository: the map's own routes, grouped into their tracks, and the real generation.
 
@@ -18,11 +18,12 @@ import { stable } from "./train";
 
 /** index.rs: the generation is this many hex digits of the SHA-256 of the serialised routes. */
 const GEN_HEX = 16;
-/** adage-instincts data/catalogue.toml (catalogue.rs test): entries, and those enabled. */
+/** adage-instincts data/catalogue.toml (catalogue.rs test): entries, and those enabled
+ * (U1 U3 U4 U5 U6 N1 P1 U11). */
 const CATALOGUE = 19;
-const ENABLED = 7;
+const ENABLED = 8;
 const INSTINCT_PROV = "instinct:core@0.1.0";
-/** adage-learn instincts.rs: auto-retirement. */
+/** adage-learn instincts.rs: auto-extinction (EXTINGUISH_*). */
 const RETIRE_MISFIRES = 3;
 const RETIRE_MIN_JUDGEMENTS = 5;
 const RETIRE_IGNORED_LB = 0.5;
@@ -109,7 +110,7 @@ interface Reflex {
   version: string;
   trigger: { kind: TrigKind; on: string };
   step: { kind: "run" | "avoid" | "read" | "advise"; command: string; instead?: string };
-  aspect: Strength;
+  strength: Strength;
   state: "forming" | "firm";
   support: number;
   opportunities: number;
@@ -119,17 +120,18 @@ const REPO = "registry-svc";
 const FL_GEN = `finish-line-${stable(["registry/*.csv", "make gen"])}`;
 const DEAD = `dead-end-${stable(["exec make check"])}`;
 
-/** Nine reflexes in three places: learned here, one imported pack, and the bound instincts. */
+/** Nine reflexes in three places: learned here (one track, `<repo>/learned`), one imported pack,
+ * and the bound instincts. */
 const SAMPLE: Reflex[] = [
-  { key: "A1", id: FL_GEN, source: "first-hand", track: `${REPO}/finish-lines`, version: "1.0.0", trigger: { kind: "after_edit", on: "registry/*.csv" }, step: { kind: "run", command: "make gen" }, aspect: "fire", state: "firm", support: 26, opportunities: 27 },
-  { key: "A2", id: `finish-line-${stable(["registry/**", "make registry"])}`, source: "first-hand", track: `${REPO}/finish-lines`, version: "1.0.0", trigger: { kind: "after_edit", on: "registry/**" }, step: { kind: "run", command: "make registry" }, aspect: "fire", state: "firm", support: 20, opportunities: 20 },
-  { key: "A3", id: DEAD, source: "first-hand", track: `${REPO}/dead-ends`, version: "0.1.2", trigger: { kind: "after_failure", on: "npm test" }, step: { kind: "avoid", command: "npm test", instead: "make check" }, aspect: "inhibit", state: "firm", support: 9, opportunities: 9 },
-  { key: "A4", id: "lookup-carrier", source: "first-hand", track: `${REPO}/lookups`, version: "0.2.0", trigger: { kind: "prompt", on: "a carrier id" }, step: { kind: "run", command: "scripts/carrier {id}" }, aspect: "prime", state: "forming", support: 7, opportunities: 11 },
-  { key: "B1", id: DEAD, source: "imported", track: "ops-team/registry", version: "0.3.0", trigger: { kind: "after_failure", on: "npm test" }, step: { kind: "avoid", command: "npm test", instead: "make check" }, aspect: "inhibit", state: "forming", support: 14, opportunities: 15 },
-  { key: "B2", id: `finish-line-${stable(["src/*.ts", "npm test"])}`, source: "imported", track: "ops-team/registry", version: "0.3.0", trigger: { kind: "after_edit", on: "src/*.ts" }, step: { kind: "run", command: "npm test" }, aspect: "prime", state: "forming", support: 12, opportunities: 16 },
-  { key: "B3", id: `read-linked-${stable(["registry/*.csv"])}`, source: "imported", track: "ops-team/registry", version: "0.3.0", trigger: { kind: "after_edit", on: "registry/*.csv" }, step: { kind: "read", command: "src/registry/schema.ts" }, aspect: "prime", state: "forming", support: 10, opportunities: 14 },
-  { key: "I1", id: FL_GEN, source: "instinct", track: `${REPO}/instincts`, version: "0.1.0", trigger: { kind: "after_edit", on: "registry/*.csv" }, step: { kind: "run", command: "make gen" }, aspect: "prime", state: "forming", support: 0, opportunities: 0 },
-  { key: "I2", id: `instinct-u4-${stable(["gen/**"])}`, source: "instinct", track: `${REPO}/instincts`, version: "0.1.0", trigger: { kind: "after_edit", on: "gen/**" }, step: { kind: "advise", command: "don't hand-edit generated files" }, aspect: "prime", state: "forming", support: 0, opportunities: 0 },
+  { key: "A1", id: FL_GEN, source: "first-hand", track: `${REPO}/learned`, version: "1.0.0", trigger: { kind: "after_edit", on: "registry/*.csv" }, step: { kind: "run", command: "make gen" }, strength: "fire", state: "firm", support: 26, opportunities: 27 },
+  { key: "A2", id: `finish-line-${stable(["registry/**", "make registry"])}`, source: "first-hand", track: `${REPO}/learned`, version: "1.0.0", trigger: { kind: "after_edit", on: "registry/**" }, step: { kind: "run", command: "make registry" }, strength: "fire", state: "firm", support: 20, opportunities: 20 },
+  { key: "A3", id: DEAD, source: "first-hand", track: `${REPO}/learned`, version: "1.0.0", trigger: { kind: "after_failure", on: "npm test" }, step: { kind: "avoid", command: "npm test", instead: "make check" }, strength: "inhibit", state: "firm", support: 9, opportunities: 9 },
+  { key: "A4", id: "lookup-carrier", source: "first-hand", track: `${REPO}/learned`, version: "1.0.0", trigger: { kind: "prompt", on: "a carrier id" }, step: { kind: "run", command: "scripts/carrier {id}" }, strength: "prime", state: "forming", support: 7, opportunities: 11 },
+  { key: "B1", id: DEAD, source: "imported", track: "ops-team/registry", version: "0.3.0", trigger: { kind: "after_failure", on: "npm test" }, step: { kind: "avoid", command: "npm test", instead: "make check" }, strength: "inhibit", state: "forming", support: 14, opportunities: 15 },
+  { key: "B2", id: `finish-line-${stable(["src/*.ts", "npm test"])}`, source: "imported", track: "ops-team/registry", version: "0.3.0", trigger: { kind: "after_edit", on: "src/*.ts" }, step: { kind: "run", command: "npm test" }, strength: "prime", state: "forming", support: 12, opportunities: 16 },
+  { key: "B3", id: `read-linked-${stable(["registry/*.csv"])}`, source: "imported", track: "ops-team/registry", version: "0.3.0", trigger: { kind: "after_edit", on: "registry/*.csv" }, step: { kind: "read", command: "src/registry/schema.ts" }, strength: "prime", state: "forming", support: 10, opportunities: 14 },
+  { key: "I1", id: FL_GEN, source: "instinct", track: `${REPO}/instincts`, version: "0.1.0", trigger: { kind: "after_edit", on: "registry/*.csv" }, step: { kind: "run", command: "make gen" }, strength: "prime", state: "forming", support: 0, opportunities: 0 },
+  { key: "I2", id: `instinct-u4-${stable(["gen/**"])}`, source: "instinct", track: `${REPO}/instincts`, version: "0.1.0", trigger: { kind: "after_edit", on: "gen/**" }, step: { kind: "advise", command: "don't hand-edit generated files" }, strength: "prime", state: "forming", support: 0, opportunities: 0 },
 ];
 
 const PREC: Record<Source, number> = { "first-hand": 0, imported: 1, instinct: 2 };
@@ -163,7 +165,7 @@ export function compileSample(rs: Reflex[] = SAMPLE) {
   // Two fires at one decision point: learned first, then more support, then the id.
   const out = kept.map((r) => ({ ...r }));
   const greens = out
-    .filter((r) => r.aspect === "fire" && r.step.kind === "run")
+    .filter((r) => r.strength === "fire" && r.step.kind === "run")
     .sort((a, b) => (a.source === "first-hand" ? 0 : 1) - (b.source === "first-hand" ? 0 : 1) || b.support - a.support || (a.id < b.id ? -1 : 1));
   const keptGreen: Reflex[] = [];
   const demoted: { winner: Reflex; loser: Reflex }[] = [];
@@ -171,7 +173,7 @@ export function compileSample(rs: Reflex[] = SAMPLE) {
     const k = keptGreen.find((x) => samePoint(x, g) && x.step.command !== g.step.command);
     if (k) {
       demoted.push({ winner: k, loser: { ...g } });
-      g.aspect = "prime";
+      g.strength = "prime";
     } else keptGreen.push(g);
   }
   // The generation: SHA-256 over the serialised routes, first 16 hex digits.
@@ -180,7 +182,7 @@ export function compileSample(rs: Reflex[] = SAMPLE) {
       repo: REPO,
       track: r.track,
       version: r.version,
-      route: { id: r.id, trigger: r.trigger, step: r.step, aspect: r.aspect, state: r.state, support: r.support, opportunities: r.opportunities },
+      route: { id: r.id, trigger: r.trigger, step: r.step, strength: r.strength, state: r.state, support: r.support, opportunities: r.opportunities },
     })),
   );
   const hash = sha256hex(body);
@@ -268,12 +270,12 @@ function buildSample(stage: Stage): Built {
     center: true,
     dy: 14,
   });
-  stage.label("inst", `${ENABLED} of ${CATALOGUE} enabled · always prime`, [colX.instinct, -3.2, 0], { cls: "chip", center: true, dy: 14 });
+  stage.label("inst", `${ENABLED} of ${CATALOGUE} enabled · prime at most`, [colX.instinct, -3.2, 0], { cls: "chip", center: true, dy: 14 });
   for (const d of c.dropped) stage.label(`drop-${d.lost.key}`, `${d.lost.source} copy dropped: ${d.to.source} wins`, d.to.key, { cls: "note", dx: 16, dy: 3 });
   if (lockedR) {
     stage.label("lockNote", `locked: never beside or after the inhibit`, lockedR.route.key, { cls: "note", dx: 16, dy: 10 });
   }
-  if (demotedR) stage.label("demNote", `fewer traces (${demotedR.loser.support} vs ${demotedR.winner.support}): demoted to prime`, demotedR.loser.key, { cls: "note", dx: 16, dy: 10 });
+  if (demotedR) stage.label("demNote", `fewer traces (${demotedR.loser.support} vs ${demotedR.winner.support}): compiled as prime`, demotedR.loser.key, { cls: "note", dx: 16, dy: 10 });
   stage.label("gen", `<small>INDEX.JSON · GENERATION</small>${c.generation}`, [0, -4.4, 0], { cls: "chip big", center: true, dy: 12 });
   function state(s: number): SceneState {
     const dots: Record<string, DotLook> = {};
@@ -285,7 +287,7 @@ function buildSample(stage: Stage): Built {
         const on = !focus || r.source === focus;
         dots[r.key] = {
           pos: colPos(r),
-          color: lamp(r.aspect),
+          color: lamp(r.strength),
           alpha: on ? (r.state === "forming" ? 0.8 : 1) : 0.2,
           scale: s === 1 && r.key === "A1" ? 1.35 : 1,
           glow: on ? 0.5 : 0,
@@ -307,12 +309,12 @@ function buildSample(stage: Stage): Built {
         if (lost) {
           if (s === 4) {
             const w = mergedPos(lost.to);
-            dots[r.key] = { pos: [w[0] - 1.1, w[1], w[2]], color: lamp(r.aspect), alpha: 0.3, scale: 0.8, glow: 0 };
+            dots[r.key] = { pos: [w[0] - 1.1, w[1], w[2]], color: lamp(r.strength), alpha: 0.3, scale: 0.8, glow: 0 };
           }
           continue;
         }
         let pos = mergedPos(r);
-        let color = lamp(o!.aspect);
+        let color = lamp(o!.strength);
         let alpha = 1;
         let scale = 1;
         let glow = 0.4;
@@ -332,7 +334,7 @@ function buildSample(stage: Stage): Built {
           glow = 0.8;
           if (r.key === demotedR.loser.key) pos = [pos[0] + 2.2, pos[1], pos[2]];
         }
-        if (s < 6 && demotedR && r.key === demotedR.loser.key) color = lamp(demotedR.loser.aspect);
+        if (s < 6 && demotedR && r.key === demotedR.loser.key) color = lamp(demotedR.loser.strength);
         dots[r.key] = { pos, color, alpha, scale, glow };
         if (s === 4 || (s === 5 && lockedR && (r.key === lockedR.by.key || r.key === lockedR.route.key)) || (s === 6 && demotedR && (r.key === demotedR.winner.key || r.key === demotedR.loser.key)))
           labels.push(`m-${r.key}`);
@@ -350,7 +352,7 @@ function buildSample(stage: Stage): Built {
         if (!narrow) labels.push("demNote");
       }
     } else {
-      c.out.forEach((r, i) => (dots[r.key] = { pos: ring(i, c.out.length), color: lamp(r.aspect), glow: 0.5 }));
+      c.out.forEach((r, i) => (dots[r.key] = { pos: ring(i, c.out.length), color: lamp(r.strength), glow: 0.5 }));
       dots.seal = { pos: [0, 0.2, 0], color: "accent", scale: 1, glow: 1 };
       links.toSeal = 0.35;
       links.ringBox = 0.5;
@@ -366,8 +368,8 @@ function buildSample(stage: Stage): Built {
   const text: Omit<Step, "state">[] = [
     {
       title: "Reflexes live in tracks",
-      body: `Learned reflexes are written as track directories, one per kind of reflex: a track.toml and one routes/<id>.yaml per reflex. This sample repository has ${fh} reflexes learned here, ${im} from an imported pack, and ${ins} instincts.`,
-      chips: [{ text: "tracks/<repo>/<kind>/track.toml" }, { text: "routes/<id>.yaml" }, { text: `${SAMPLE.length} sample reflexes` }],
+      body: `Everything Adage conditions in a repository goes into one track directory, <repo>/learned: a track.toml, one routes/<id>.yaml per reflex, and a .why.json beside them that says why each exists (read by people, never sent to the agent). Instincts get their own track. Tracks and the index are readable by their owner only. This sample repository has ${fh} reflexes learned here, ${im} from an imported pack, and ${ins} instincts.`,
+      chips: [{ text: "tracks/<repo>/learned/track.toml" }, { text: "routes/<id>.yaml · .why.json" }, { text: "mode 0600" }, { text: `${SAMPLE.length} sample reflexes` }],
     },
     {
       title: "Versions say what changed",
@@ -381,11 +383,11 @@ function buildSample(stage: Stage): Built {
     },
     {
       title: "Instincts ship with Adage",
-      body: `Instincts are bound on day one from files the repository declares, like its Makefile. They are always delivered as prime, only react to events, and never block the agent from stopping. An instinct that keeps misfiring retires itself.`,
+      body: `Instincts are bound on day one from files the repository declares, like its Makefile, package.json, CI and lockfiles. They are delivered as prime at most, only react to events, and never block the agent from stopping. One, U11, points a Python test run at the project's verified .venv before it runs. An instinct that keeps misfiring extinguishes itself.`,
       chips: [
         { text: `${ENABLED} of ${CATALOGUE} enabled` },
         { text: INSTINCT_PROV },
-        { text: `retire: ${RETIRE_MISFIRES} misfires` },
+        { text: `extinguish: ${RETIRE_MISFIRES} misfires` },
         { text: `or ≥ ${RETIRE_MIN_JUDGEMENTS} judgements, ignored LB ≥ ${f2(RETIRE_IGNORED_LB)}` },
       ],
     },
@@ -482,8 +484,8 @@ function buildRepo(stage: Stage, routes: ApiRoute[], generation: string): Built 
   stage.label("gen", `<small>YOUR INDEX · GENERATION</small>${esc(generation || "none yet")}`, [0, -4.4, 0], { cls: "chip big", center: true, dy: 12 });
 
   const count = (o: Origin) => routes.filter((r) => originOf(r) === o).length;
-  const aspects = { fire: 0, prime: 0, inhibit: 0 } as Record<Strength, number>;
-  for (const r of routes) if (r.in_index) aspects[strength(r.aspect) ?? "prime"]++;
+  const strengths = { fire: 0, prime: 0, inhibit: 0 } as Record<Strength, number>;
+  for (const r of routes) if (r.in_index) strengths[strength(r.strength) ?? "prime"]++;
   const labelsFor = (n: number) => (list.length <= 12 ? list.map((_, i) => `l${i}`).slice(0, n) : []);
 
   function state(s: number): SceneState {
@@ -491,7 +493,7 @@ function buildRepo(stage: Stage, routes: ApiRoute[], generation: string): Built 
     const labels: string[] = shown.map((_, ti) => `t${ti}`);
     ids.forEach((id, i) => {
       const r = list[i]!;
-      const lamp = strength(r.aspect) ?? "prime";
+      const lamp = strength(r.strength) ?? "prime";
       const p = pos.get(id)!;
       if (s <= 1) dots[id] = { pos: p, color: s === 0 ? "ink2" : lamp, glow: 0.4 };
       else if (s === 2) dots[id] = { pos: r.in_index ? p : [p[0], p[1] - 0.35, p[2]], color: lamp, alpha: r.in_index ? 1 : 0.2, glow: r.in_index ? 0.5 : 0 };
@@ -516,8 +518,8 @@ function buildRepo(stage: Stage, routes: ApiRoute[], generation: string): Built 
     },
     {
       title: "Each has a strength",
-      body: `Colour is strength as compiled: fire, prime or inhibit. Of the reflexes in your index, ${aspects.fire} fire, ${aspects.prime} prime and ${aspects.inhibit} inhibit.`,
-      chips: [{ text: `${aspects.fire} fire` }, { text: `${aspects.prime} prime` }, { text: `${aspects.inhibit} inhibit` }],
+      body: `Colour is strength as compiled: fire, prime or inhibit. Of the reflexes in your index, ${strengths.fire} fire, ${strengths.prime} prime and ${strengths.inhibit} inhibit.`,
+      chips: [{ text: `${strengths.fire} fire` }, { text: `${strengths.prime} prime` }, { text: `${strengths.inhibit} inhibit` }],
     },
     {
       title: "What the index serves",

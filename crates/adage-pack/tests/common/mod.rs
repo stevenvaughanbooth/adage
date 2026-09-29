@@ -69,7 +69,7 @@ steps:
   - id: read-linked
     read: {{ from: lookup.files, max: 5 }}
     effect: observe
-aspect: green
+strength: fire
 exit:
   - {{ when: result_equals, step: lookup, field: state, value: Closed }}
   - {{ when: intent_changes }}
@@ -96,7 +96,7 @@ steps:
   - id: read
     read: { from: files, max: 5 }
     effect: observe
-aspect: yellow
+strength: prime
 exit:
   - { when: intent_changes }
 "#;
@@ -113,7 +113,7 @@ steps:
     script: {{ path: "scripts/sha256-{v}", closure: vendor, sha256: "{v}" }}
     outputs:
       count: {{ type: int, from: {{ json: count }} }}
-aspect: yellow
+strength: prime
 "#,
         v = vendored_sha()
     )
@@ -129,7 +129,7 @@ steps:
       instead: ["make", "test"]
       signature: No module named pytest
     effect: verify
-aspect: red
+strength: inhibit
 "#;
 
 pub const FINISH_LINE: &str = r#"id: finish-line-tests
@@ -139,7 +139,7 @@ steps:
   - id: test
     run: { argv: ["make", "test"] }
     effect: verify
-aspect: green
+strength: fire
 exit:
   - { when: exploratory_change }
 "#;

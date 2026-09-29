@@ -14,7 +14,19 @@ pub fn args(res: &Resolved) -> Vec<String> {
         ["--unshare-all", "--die-with-parent", "--new-session", "--cap-drop", "ALL"].map(String::from).to_vec();
     for p in &res.read {
         let s = p.to_string_lossy().into_owned();
-        a.extend(["--ro-bind".into(), s.clone(), s]);
+        match &res.overlay {
+            // E2: the repository is a writable overlay whose upper layer bwrap mounts from
+            // outside the sandbox (bubblewrap 0.10 and later).
+            Some(o) if p == &res.repo => a.extend([
+                "--overlay-src".into(),
+                s.clone(),
+                "--overlay".into(),
+                o.upper.to_string_lossy().into_owned(),
+                o.work.to_string_lossy().into_owned(),
+                s,
+            ]),
+            _ => a.extend(["--ro-bind".into(), s.clone(), s]),
+        }
     }
     for (link, target) in &res.links {
         a.extend(["--symlink".into(), target.to_string_lossy().into_owned(), link.to_string_lossy().into_owned()]);
@@ -54,6 +66,8 @@ mod tests {
             links: vec![],
             limits: Limits::for_level(Level::E1),
             drop_to: None,
+            overlay: None,
+            bind: None,
         };
         let a = args(&res).join(" ");
         assert_eq!(
@@ -62,5 +76,11 @@ mod tests {
              --dev /dev --proc /proc --bind /tmp/s /tmp/s --chdir /r --"
         );
         assert!(!a.contains("--ro-bind / /"), "never the whole filesystem");
+        let staged = Resolved {
+            overlay: Some(super::super::Overlay { upper: PathBuf::from("/st/u"), work: PathBuf::from("/st/w") }),
+            ..res
+        };
+        let a = args(&staged).join(" ");
+        assert!(a.contains("--overlay-src /r --overlay /st/u /st/w /r --ro-bind /usr /usr"), "{a}");
     }
 }

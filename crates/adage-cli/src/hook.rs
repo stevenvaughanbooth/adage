@@ -16,7 +16,7 @@ mod tests {
     use adage_runtime::MAX_DIRECTIVES_PER_DECISION;
     use adage_tracks::*;
 
-    fn route(trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, aspect: Aspect) -> Route {
+    fn route(trigger: Trigger, step: Step, slots: Vec<Slot>, effect: Effect, strength: Strength) -> Route {
         Route {
             id: "r".repeat(64),
             summary: String::new(),
@@ -24,8 +24,8 @@ mod tests {
             step,
             slots,
             effect,
-            aspect,
-            state: RouteState::Active,
+            strength,
+            state: RouteState::Firm,
             exit: vec![Exit::IntentChanges, Exit::ExploratoryChange],
             evidence: Evidence::default(),
             authored: false,
@@ -70,28 +70,28 @@ mod tests {
                 Step::Run { command: format!("{} {{item}}", cmd(193)) },
                 vec![item],
                 Effect::Environment,
-                Aspect::Yellow,
+                Strength::Prime,
             ),
             route(
                 Trigger::AfterEdit { paths: format!("{}/*.json", "s".repeat(113)) },
                 Step::Run { command: cmd(200) },
                 vec![],
                 Effect::Environment,
-                Aspect::Yellow,
+                Strength::Prime,
             ),
             route(
                 Trigger::AfterCommand { command: "exec x".into() },
                 Step::ReadBatch { slot: "files".into(), max: 10 },
                 vec![files],
                 Effect::Observe,
-                Aspect::Yellow,
+                Strength::Prime,
             ),
             route(
                 Trigger::SessionStart,
                 Step::Avoid { avoid: cmd(200), instead: format!("pytest t{}", "x".repeat(192)), signature },
                 vec![],
                 Effect::Verify,
-                Aspect::Red,
+                Strength::Inhibit,
             ),
         ];
         for r in &routes {
@@ -127,8 +127,9 @@ mod tests {
                     _ => vec![("item".into(), "i".repeat(200))],
                 };
                 let body = render::route_text(r, &bound).expect("renders");
-                let kind = adage_tracks::route_kind(r);
-                render::wrap_kind(&t.manifest.track.name, &t.manifest.track.version, &r.id, kind, r.aspect, &body).len()
+                let kind = adage_tracks::shape(r);
+                render::wrap_kind(&t.manifest.track.name, &t.manifest.track.version, &r.id, kind, r.strength, &body)
+                    .len()
             })
             .max()
             .unwrap();

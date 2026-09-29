@@ -133,12 +133,32 @@ jobs:
         # for `aarch64-linux-musl-gcc` on arm64 unless told.
         env:
           CC_aarch64_unknown_linux_musl: musl-gcc
-        run: cargo build --locked --release -p adage-cli --target ${{ matrix.target }}
+        run: cargo build --locked --release -p adage-cli -p adage-exec -p adage-train --target ${{ matrix.target }}
       - name: static and runnable
         run: |
-          b=target/${{ matrix.target }}/release/adage
-          file "$b" | grep -Eq "statically linked|static-pie linked"
-          "$b" version
+          d=target/${{ matrix.target }}/release
+          for b in adage adage-exec adage-train; do
+            file "$d/$b" | grep -Eq "statically linked|static-pie linked"
+          done
+          "$d/adage" version
+          "$d/adage-exec" --help >/dev/null
+          "$d/adage-train" --help >/dev/null
+
+  # NOTICE lists every third-party crate the shipped binaries link (scripts/notice.sh, which
+  # also checks that adage-exec and adage-train link nothing adage does not).
+  notice:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install --locked cargo-about --features cli
+      - name: NOTICE is current
+        run: |
+          scripts/notice.sh "$RUNNER_TEMP/NOTICE"
+          diff -u --strip-trailing-cr NOTICE "$RUNNER_TEMP/NOTICE" || { echo "::error::NOTICE is stale: run scripts/notice.sh and commit it"; exit 1; }
 
   deny:
     runs-on: ubuntu-24.04
@@ -166,6 +186,7 @@ jobs:
       - name: claude plugin validate
         run: |
           claude plugin validate --strict plugin/claude-code
+          claude plugin validate --strict plugin/claude-code-exec
           claude plugin validate --strict .
 
   design:

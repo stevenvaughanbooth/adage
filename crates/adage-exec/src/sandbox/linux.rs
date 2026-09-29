@@ -12,7 +12,10 @@
 //!    become nobody (65534). Root is exempt from `RLIMIT_NPROC`, and a sandbox should not rest on
 //!    root's file ownership;
 //! 4. where unprivileged user namespaces work: `unshare(CLONE_NEWUSER | CLONE_NEWNET)` with an
-//!    identity map, so the process has no network interfaces at all;
+//!    identity map, so the process has no network interfaces at all. For an E2 stage also
+//!    `CLONE_NEWNS`: the mount tree is made private and an overlay (`userxattr`) is mounted over
+//!    the repository, its upper layer in a staging directory the sandbox is never granted, and
+//!    the working directory is entered again through it;
 //! 5. `PR_SET_NO_NEW_PRIVS` and Landlock: read-only access to the repository, the toolchain and
 //!    the CAS, read-write to the scratch directory only; TCP bind and connect denied (ABI ≥ 4);
 //!    signals and abstract Unix sockets scoped to the sandbox (ABI ≥ 6);
@@ -72,7 +75,7 @@ pub fn user_namespaces_available() -> bool {
             let pid = libc::fork();
             if pid == 0 {
                 let ok = drop_to.is_none_or(|(u, g)| drop_root(u, g).is_ok())
-                    && matches!(enter_namespaces(&uid_map, &gid_map), Ok(true));
+                    && matches!(enter_namespaces(&uid_map, &gid_map, false), Ok(true));
                 libc::_exit(if ok { 0 } else { 1 });
             }
             if pid < 0 {
@@ -103,13 +106,15 @@ unsafe fn drop_root(uid: u32, gid: u32) -> io::Result<()> {
     check(libc::prctl(libc::PR_SET_DUMPABLE, 1, 0, 0, 0))
 }
 
-/// `unshare(CLONE_NEWUSER | CLONE_NEWNET)` with an identity map. `Ok(false)` when the kernel
-/// refuses the `unshare` (nothing changed); an error when it allowed it but the map failed.
+/// `unshare(CLONE_NEWUSER | CLONE_NEWNET)` (and `CLONE_NEWNS` when `mounts`) with an identity
+/// map. `Ok(false)` when the kernel refuses the `unshare` (nothing changed); an error when it
+/// allowed it but the map failed.
 ///
 /// # Safety
 /// Call only in a forked child before `execve`.
-unsafe fn enter_namespaces(uid_map: &[u8], gid_map: &[u8]) -> io::Result<bool> {
-    if libc::unshare(libc::CLONE_NEWUSER | libc::CLONE_NEWNET) != 0 {
+unsafe fn enter_namespaces(uid_map: &[u8], gid_map: &[u8], mounts: bool) -> io::Result<bool> {
+    let flags = libc::CLONE_NEWUSER | libc::CLONE_NEWNET | if mounts { libc::CLONE_NEWNS } else { 0 };
+    if libc::unshare(flags) != 0 {
         return Ok(false);
     }
     write_proc(c"/proc/self/setgroups", b"deny")?;
@@ -155,7 +160,9 @@ pub fn ruleset(res: &Resolved) -> Result<RulesetCreated, String> {
         .map_err(err)?
         .create()
         .map_err(err)?
-        .add_rules(path_beneath_rules(&res.read, read))
+        // E2: the repository is an overlay mounted in the child. Landlock treats an overlay as
+        // distinct from its layers, so its rule is added there, on the mount itself.
+        .add_rules(path_beneath_rules(res.read.iter().filter(|p| res.overlay.is_none() || **p != res.repo), read))
         .map_err(err)?
         .add_rules(path_beneath_rules(res.dev.iter().filter(|p| !p.ends_with("null")), read))
         .map_err(err)?
@@ -287,6 +294,81 @@ pub fn filters() -> Result<Vec<BpfProgram>, String> {
     Ok(vec![deny, clone3])
 }
 
+/// An E2 overlay mount, as C strings built in the parent.
+pub struct OverlayMount {
+    target: std::ffi::CString,
+    options: std::ffi::CString,
+    cwd: std::ffi::CString,
+    /// Every filesystem right this kernel's Landlock handles, granted beneath the overlay.
+    access: u64,
+}
+
+/// Every filesystem access right of a Landlock ABI (a subset of what the ruleset handles, which
+/// is all this build requests, best effort).
+fn fs_rights(abi: u32) -> u64 {
+    match abi {
+        0 => 0,
+        1 => (1 << 13) - 1,     // execute … make_sym
+        2 => (1 << 14) - 1,     // + refer
+        3 | 4 => (1 << 15) - 1, // + truncate
+        _ => (1 << 16) - 1,     // + ioctl_dev
+    }
+}
+
+/// `struct landlock_path_beneath_attr` (packed, as the kernel declares it).
+#[repr(C, packed)]
+struct PathBeneathAttr {
+    allowed_access: u64,
+    parent_fd: i32,
+}
+
+/// Characters overlayfs's option parser gives a meaning to; a path holding one is refused.
+fn overlay_path_ok(p: &std::path::Path) -> bool {
+    let s = p.to_string_lossy();
+    !s.is_empty() && !s.contains([',', ':', '\\', '=', '\0'])
+}
+
+fn overlay_mount(res: &Resolved) -> Result<Option<OverlayMount>, String> {
+    let Some(o) = &res.overlay else { return Ok(None) };
+    for p in [&res.repo, &o.upper, &o.work, &res.cwd] {
+        if !overlay_path_ok(p) {
+            return Err(format!("{} holds a character an overlay mount cannot take (, : \\ =)", p.display()));
+        }
+    }
+    let c = |s: String| std::ffi::CString::new(s).map_err(|_| "a path holds NUL".to_string());
+    Ok(Some(OverlayMount {
+        target: c(res.repo.to_string_lossy().into_owned())?,
+        options: c(format!(
+            "lowerdir={},upperdir={},workdir={},userxattr",
+            res.repo.display(),
+            o.upper.display(),
+            o.work.display()
+        ))?,
+        cwd: c(res.cwd.to_string_lossy().into_owned())?,
+        access: fs_rights(landlock_abi().unwrap_or(0)),
+    }))
+}
+
+/// E1 as root: the repository bind-mounted read-only where the run (as nobody) can reach it,
+/// in a mount namespace of its own (`Resolved::bind`).
+struct BindMount {
+    source: std::ffi::CString,
+    target: std::ffi::CString,
+    /// The working directory, entered again through the bind mount.
+    cwd: std::ffi::CString,
+}
+
+fn bind_mount(res: &Resolved) -> Result<Option<BindMount>, String> {
+    let Some(target) = &res.bind else { return Ok(None) };
+    if res.overlay.is_some() {
+        return Err("a repository is bind-mounted for E1 only".into());
+    }
+    let rel = res.cwd.strip_prefix(&res.repo).map_err(|_| "the working directory is outside the repository")?;
+    let c =
+        |p: &std::path::Path| std::ffi::CString::new(p.to_string_lossy().into_owned()).map_err(|_| "a path holds NUL");
+    Ok(Some(BindMount { source: c(&res.repo)?, target: c(target)?, cwd: c(&target.join(rel))? }))
+}
+
 /// Everything the `pre_exec` hook needs, prepared in the parent.
 pub struct Prepared {
     ruleset: Option<RulesetCreated>,
@@ -298,11 +380,19 @@ pub struct Prepared {
     gid_map: Vec<u8>,
     /// `RLIMIT_NPROC`: the profile's budget on top of the tasks the user already runs.
     nproc: u64,
+    /// E2: the overlay to mount over the repository.
+    overlay: Option<OverlayMount>,
+    /// E1 as root: the repository bind-mounted where nobody can reach it.
+    bind: Option<BindMount>,
 }
 
 pub fn prepare(res: &Resolved, userns: bool) -> Result<Prepared, String> {
     // SAFETY: getters with no preconditions.
     let (uid, gid) = res.drop_to.unwrap_or_else(|| unsafe { (libc::geteuid(), libc::getegid()) });
+    let overlay = overlay_mount(res)?;
+    if overlay.is_some() && !userns {
+        return Err("an E2 stage mounts its overlay in a user namespace, and user namespaces are not available".into());
+    }
     Ok(Prepared {
         ruleset: Some(ruleset(res)?),
         filters: filters()?,
@@ -312,6 +402,8 @@ pub fn prepare(res: &Resolved, userns: bool) -> Result<Prepared, String> {
         uid_map: format!("{uid} {uid} 1").into_bytes(),
         gid_map: format!("{gid} {gid} 1").into_bytes(),
         nproc: super::nproc_budget(res),
+        overlay,
+        bind: bind_mount(res)?,
     })
 }
 
@@ -352,7 +444,7 @@ unsafe fn rlimit(res: Resource, v: u64) -> io::Result<()> {
 
 /// Install the sandbox on `cmd`: the hook runs in the child, after `fork`, before `execve`.
 pub fn install(cmd: &mut Command, prepared: Prepared) {
-    let Prepared { mut ruleset, filters, limits, drop_to, userns, uid_map, gid_map, nproc } = prepared;
+    let Prepared { mut ruleset, filters, limits, drop_to, userns, uid_map, gid_map, nproc, overlay, bind } = prepared;
     // SAFETY: the closure only makes system calls on data prepared before the fork. The one
     // library call, `restrict_self`, wraps `prctl` and `landlock_restrict_self`.
     unsafe {
@@ -363,17 +455,90 @@ pub fn install(cmd: &mut Command, prepared: Prepared) {
             rlimit(libc::RLIMIT_FSIZE, limits.file_size)?;
             rlimit(libc::RLIMIT_NOFILE, limits.open_files)?;
             rlimit(libc::RLIMIT_CORE, 0)?;
+            if let Some(b) = &bind {
+                // Still root: a mount namespace of the run's own, the repository bound read-only
+                // at a path nobody can reach, and the working directory entered through it.
+                check(libc::unshare(libc::CLONE_NEWNS))?;
+                check(libc::mount(
+                    std::ptr::null(),
+                    c"/".as_ptr(),
+                    std::ptr::null(),
+                    libc::MS_REC | libc::MS_PRIVATE,
+                    std::ptr::null(),
+                ))?;
+                check(libc::mount(
+                    b.source.as_ptr(),
+                    b.target.as_ptr(),
+                    std::ptr::null(),
+                    libc::MS_BIND | libc::MS_REC,
+                    std::ptr::null(),
+                ))?;
+                check(libc::mount(
+                    std::ptr::null(),
+                    b.target.as_ptr(),
+                    std::ptr::null(),
+                    libc::MS_BIND | libc::MS_REMOUNT | libc::MS_RDONLY | libc::MS_NOSUID | libc::MS_NODEV,
+                    std::ptr::null(),
+                ))?;
+                check(libc::chdir(b.cwd.as_ptr()))?;
+            }
             if let Some((uid, gid)) = drop_to {
                 drop_root(uid, gid)?;
             }
-            if userns {
-                enter_namespaces(&uid_map, &gid_map)?;
+            if userns && !enter_namespaces(&uid_map, &gid_map, overlay.is_some())? && overlay.is_some() {
+                return Err(io::Error::from_raw_os_error(libc::EPERM));
+            }
+            if let Some(o) = &overlay {
+                check(libc::mount(
+                    std::ptr::null(),
+                    c"/".as_ptr(),
+                    std::ptr::null(),
+                    libc::MS_REC | libc::MS_PRIVATE,
+                    std::ptr::null(),
+                ))?;
+                check(libc::mount(
+                    c"overlay".as_ptr(),
+                    o.target.as_ptr(),
+                    c"overlay".as_ptr(),
+                    0,
+                    o.options.as_ptr().cast(),
+                ))?;
+                // `Command::current_dir` entered the directory under the mount; enter it again.
+                check(libc::chdir(o.cwd.as_ptr()))?;
             }
             check(libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0))?;
             let rs = ruleset.take().ok_or_else(|| io::Error::from_raw_os_error(libc::EINVAL))?;
-            match rs.restrict_self() {
-                Ok(s) if s.ruleset != RulesetStatus::NotEnforced => {}
-                _ => return Err(io::Error::from_raw_os_error(libc::ENOTSUP)),
+            if let Some(o) = &overlay {
+                // The overlay's rule, on the mount itself (opened now that it exists), then the
+                // domain, with raw system calls: nothing here may allocate.
+                let fd: Option<std::os::fd::OwnedFd> = rs.into();
+                let fd = fd.ok_or_else(|| io::Error::from_raw_os_error(libc::ENOTSUP))?;
+                let rfd = std::os::fd::AsRawFd::as_raw_fd(&fd);
+                let dir = libc::open(o.target.as_ptr(), libc::O_PATH | libc::O_CLOEXEC | libc::O_DIRECTORY);
+                if dir < 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                let attr = PathBeneathAttr { allowed_access: o.access, parent_fd: dir };
+                let added = libc::syscall(
+                    libc::SYS_landlock_add_rule,
+                    rfd,
+                    1 as libc::c_int,
+                    &attr as *const PathBeneathAttr,
+                    0 as libc::c_uint,
+                );
+                libc::close(dir);
+                if added != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                if libc::syscall(libc::SYS_landlock_restrict_self, rfd, 0 as libc::c_uint) != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+                drop(fd);
+            } else {
+                match rs.restrict_self() {
+                    Ok(s) if s.ruleset != RulesetStatus::NotEnforced => {}
+                    _ => return Err(io::Error::from_raw_os_error(libc::ENOTSUP)),
+                }
             }
             for f in &filters {
                 seccompiler::apply_filter(f).map_err(|_| io::Error::from_raw_os_error(libc::ENOTSUP))?;

@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Graph } from "../api/types";
 import { Segmented, cx } from "../components/ui";
-import { CHAPTERS } from "../how/chapters";
+import { CHAPTERS, chapterIndex } from "../how/chapters";
 import { Stage, readPalette, webglAvailable } from "../how/engine";
 import type { Built } from "../how/types";
 import { useUrl } from "../state/url";
@@ -14,7 +14,7 @@ const STEP_MS = 5200;
 
 export default function HowItWorks({ graph }: { graph: Graph | null }) {
   const [url, setUrl] = useUrl();
-  const chIndex = Math.max(0, CHAPTERS.findIndex((c) => c.id === url.ch));
+  const chIndex = chapterIndex(url.ch);
   const chapter = CHAPTERS[chIndex]!;
   const canvas = useRef<HTMLCanvasElement>(null);
   const layer = useRef<HTMLDivElement>(null);
@@ -184,7 +184,7 @@ export default function HowItWorks({ graph }: { graph: Graph | null }) {
           ))}
         </ol>
         <p className="mt-4 mb-0 hidden max-w-[32ch] text-[13px] text-ink-3 lg:block">
-          Chapters marked behind the engine flag describe the graph engine, which is built but not yet the default.
+          Every chapter describes Adage as it ships: the graph engine is the only learner, and it is on by default.
         </p>
       </nav>
 

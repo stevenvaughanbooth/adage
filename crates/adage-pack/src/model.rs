@@ -9,7 +9,7 @@
 
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
-pub use adage_tracks::Aspect;
+pub use adage_tracks::Strength;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -165,6 +165,10 @@ pub struct Provenance {
     pub tool: String,
     #[serde(default)]
     pub origins: OriginCounts,
+    /// The skill a trained pack was compiled from: `sha256:<hex>` of the file's bytes. Required
+    /// with `procedure.json` ([`crate::procedure`]), and equal to its `skill.sha256`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill: Option<String>,
 }
 
 /// Counts by the origin of the evidence (roadmap E1).
@@ -241,7 +245,7 @@ pub struct RouteV2 {
     /// A route with `entry: false` is reachable only through another route's `links`.
     #[serde(default = "yes", skip_serializing_if = "is_true")]
     pub entry: bool,
-    /// Typed parameters (the E2 tool schema is generated from these).
+    /// Typed parameters (bound from the stimulus; an execution binds them against their types).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub inputs: BTreeMap<String, Input>,
     /// At least one; E0 renders `steps[0]` only.
@@ -249,7 +253,7 @@ pub struct RouteV2 {
     /// Explicit intra-pack edges: `#other-route-id`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub links: Vec<String>,
-    pub aspect: Aspect,
+    pub strength: Strength,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exit: Vec<ExitV2>,
     /// The route's execution request (at most the pack's `[exec].requested`).
@@ -310,12 +314,40 @@ pub struct InputFrom {
     /// A JSON field of the output of the command that triggered the route.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<ResultSource>,
+    /// The test files of the file whose edit triggered the route (an `after_edit` trigger), from
+    /// a map in the route.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edit_tests: Option<EditTestsSource>,
 }
+
+/// The tests of an edited file (`adage_tracks::SlotSource::EditTests`): the edited path is looked
+/// up in `map` (repository-relative source path → its test files, best first), and at most `k` of
+/// them that exist are bound, space-separated. A file the map does not list binds nothing, so the
+/// route says nothing for it. The map is the repository's (named tests, co-change, traces), made
+/// when the pack was compiled; it holds repository-relative paths only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EditTestsSource {
+    pub k: u8,
+    pub map: BTreeMap<String, Vec<String>>,
+}
+
+/// Bounds on an [`EditTestsSource`].
+pub const EDIT_TESTS_MAX_K: u8 = 5;
+pub const EDIT_TESTS_MAX_ENTRIES: usize = 512;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PromptSource {
     pub span: SpanKind,
+    /// A learned value type (Track G §4.3): the first prompt token it accepts binds the input,
+    /// instead of a span of `span`'s kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vtype: Option<adage_tracks::ValueType>,
+    /// How people wrote the value (`#` in `#482`), when every learning trace wrote it the same
+    /// one or two ways: only such a token binds.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mentions: Vec<adage_core::tokens::Mention>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -341,7 +373,7 @@ pub struct StepV2 {
     /// The script a run step's argv names (L-ref or L-vendor).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub script: Option<ScriptRef>,
-    /// Typed output contract (the E1/E2 projection).
+    /// Typed output contract (the E1 projection).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub outputs: BTreeMap<String, Output>,
 }
@@ -489,10 +521,21 @@ pub struct ExecSpec {
     pub timeout_ms: u32,
     #[serde(default)]
     pub output: OutputMode,
+    /// E2 only: the repository-relative globs an action may change. A regenerate action must
+    /// declare them; any other change refuses the application (Track C §3.6).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outputs: Vec<String>,
+    /// E2 only: cache globs. Changes there are kept by a verify action and discarded, never
+    /// refused, by a regenerate action.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cache: Vec<String>,
 }
 
+/// Most globs an action may declare in `outputs` or `cache`.
+pub const MAX_ACTION_GLOBS: usize = 16;
+
 /// A route's aggregate evidence (as `adage_tracks::Evidence`, without per-machine state such as
-/// `stale_since`).
+/// `dormant_since`).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RouteEvidence {

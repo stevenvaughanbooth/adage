@@ -1,12 +1,15 @@
-//! adage-train: compile a skill into staged reflexes (docs/training.md).
+//! adage-train: compile a skill into reflexes (docs/training.md). People reach it as `adage
+//! train`, which executes this binary with the same arguments (the `adage` binary never starts
+//! agent sessions itself; `adage train accept` is handled by `adage`, which installs packs).
 //!
-//! adage-train plan --from <SKILL.md|CONTRIBUTING.md|Makefile|package.json|workflow.yml|runbook.md>
+//! adage train <SKILL.md|runbook.md> [--repo <path>] [--no-replay] [--timeout-secs N] [--json]
+//! adage train plan --from <SKILL.md|CONTRIBUTING.md|Makefile|package.json|workflow.yml|runbook.md>
 //!                  [--repo <path>] [--seed N] [--sessions N] [--model ID] [--json] [--out plan.json]
-//! adage-train run --plan plan.json [--harness claude-code|fake] [--fake-world world.json]
+//! adage train --plan plan.json [--harness claude-code|fake] [--fake-world world.json]
 //!                 [--model ID] [--budget USD] [--max-turns N] [--concurrency N] [--validate N]
 //!                 [--oracle trajectory] [--container none] [--run-id ID] [--adage PATH]
 //!                 [--thresholds default|demo] [--timeout-secs N] [--keep] [--json] [--execute]
-//! adage-train report <run id|run dir> [--json]
+//! adage train report <run id|run dir> [--json]
 
 use adage_train::fake::{Fake, FakeWorld};
 use adage_train::harness::{ClaudeCode, Harness};
@@ -15,15 +18,30 @@ use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "usage:
-  adage-train plan --from <file> [--repo <path>] [--seed N] [--sessions N] [--model ID] [--json] [--out plan.json]
-  adage-train run --plan plan.json [--harness claude-code|fake] [--model ID] [--budget USD] [--max-turns N]
+  adage train <SKILL.md|runbook.md> [--repo <path>] [--no-replay] [--timeout-secs N] [--json]
+  adage train accept <name>   install a compiled skill's pack, as reviewed
+  adage train cards [--repo <path>] [--timeout-secs N] [--json]   replay this repository's procedure cards
+  adage train plan --from <file> [--repo <path>] [--seed N] [--sessions N] [--model ID] [--json] [--out plan.json]
+  adage train --plan plan.json [--harness claude-code|fake] [--model ID] [--budget USD] [--max-turns N]
                   [--concurrency N] [--validate N] [--oracle trajectory] [--container none] [--run-id ID]
                   [--adage PATH] [--thresholds default|demo] [--timeout-secs N] [--keep] [--json] [--execute]
-  adage-train report <run id | run dir> [--json]
+                  [--forward-env NAME,NAME..] [--host-auth]
+  adage train report <run id | run dir> [--json]
 
-`plan` is free: it reads files and executes nothing. `run` without --execute is a dry run: it prints
+`adage train <skill>` compiles the skill's procedure into one pack of reflexes, for free: no model
+and no agent session. It replays every compiled command on a clean checkout of HEAD in adage-exec's
+sandbox (network off, your working tree untouched), drops the commands that fail there (the skill is
+stale), prints the review, and stages the pack under $ADAGE_HOME/train/skills/<name>/. Nothing is
+installed until you run `adage train accept <name>`.
+
+Skill-steered sessions are optional evidence (`plan`, `--plan`, `report`). `plan` is free: it reads
+files and executes nothing. `--plan` without --execute is a dry run: it prints
 every session, the exact commands and the isolation, and exits. With --execute it starts real agent
 sessions that spend money, and refuses unless a person is at a terminal outside any agent session.
+`--forward-env` passes the named variables of your environment to every isolated session (for a
+login the host provides: Bedrock, Vertex); `--host-auth` adds the variables of a host-managed
+Claude Code login (session-ingress token file, organisation, account, base URL, proxies, CA
+bundles). An agent session's own markers (CLAUDECODE, a session id) are never forwarded.
 See docs/training.md.";
 
 struct Args {
@@ -82,17 +100,92 @@ fn real_main(argv: Vec<String>) -> Result<()> {
         println!("{USAGE}");
         return Ok(());
     };
+    // `--help` anywhere is a request for help, never an argument (so nothing runs).
+    if argv.iter().any(|a| a == "--help" || a == "-h") {
+        println!("{USAGE}");
+        return Ok(());
+    }
+    // `adage train --plan plan.json …` runs a plan: the options come first, with no subcommand.
+    if cmd.starts_with("--") && cmd != "--help" {
+        return cmd_run(Args { rest: argv });
+    }
     let mut a = Args { rest: argv[1..].to_vec() };
     match cmd.as_str() {
         "plan" => cmd_plan(&mut a).and_then(|_| a.done().map(|_| ())),
-        "run" => cmd_run(a),
         "report" => cmd_report(a),
+        "cards" => cmd_cards(a),
+        "accept" => bail!("`accept` installs a pack, which the adage binary does: run `adage train accept <name>`"),
+        _ if Path::new(&cmd).is_file() => cmd_compile(PathBuf::from(&cmd), a),
         "-h" | "--help" | "help" => {
             println!("{USAGE}");
             Ok(())
         }
         other => bail!("unknown command {other:?}\n\n{USAGE}"),
     }
+}
+
+fn cmd_cards(mut a: Args) -> Result<()> {
+    let repo = a.value("--repo")?.map(PathBuf::from);
+    let timeout: u64 = a.parsed("--timeout-secs")?.unwrap_or(300);
+    let json = a.flag("--json");
+    a.done()?;
+    let start = match repo {
+        Some(r) => r,
+        None => std::env::current_dir()?,
+    };
+    let root =
+        adage_core::repo::find_root(&start).context("run adage train cards inside a repository, or pass --repo")?;
+    let checked = adage_train::cards::verify(&adage_home(), &root, timeout.clamp(1, 3600) * 1000)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&checked)?);
+        return Ok(());
+    }
+    if checked.is_empty() {
+        println!("adage train cards: this repository has no procedure cards yet (one forms after a passing session of a recurring task)");
+        return Ok(());
+    }
+    println!(
+        "adage train cards: {}'s procedure cards, their commands on a clean checkout",
+        adage_core::repo::repo_key(&root)
+    );
+    for c in &checked {
+        println!(
+            "  {:<18} {:<5} {}  ({})",
+            c.card,
+            match c.works {
+                Some(true) => "works",
+                Some(false) => "fails",
+                None => "-",
+            },
+            c.command,
+            c.summary
+        );
+    }
+    println!("recorded: the next learn (adage condition, or the automatic one) applies them to the cards");
+    Ok(())
+}
+
+fn cmd_compile(skill: PathBuf, mut a: Args) -> Result<()> {
+    let repo = a.value("--repo")?.map(PathBuf::from);
+    let no_replay = a.flag("--no-replay");
+    let timeout: Option<u64> = a.parsed("--timeout-secs")?;
+    let json = a.flag("--json");
+    a.done()?;
+    let mut replay = adage_train::verify::Options { enabled: !no_replay, ..Default::default() };
+    if let Some(t) = timeout {
+        if t == 0 || t > 3600 {
+            bail!("--timeout-secs must be between 1 and 3600");
+        }
+        replay.wall_ms = t * 1000;
+    }
+    let o = adage_train::skill::Options { skill, repo, replay, home: adage_home() };
+    let out = adage_train::skill::run(&o)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else {
+        print!("{}", adage_train::skill::render(&out));
+    }
+    Ok(())
 }
 
 fn cmd_plan(a: &mut Args) -> Result<()> {
@@ -119,17 +212,17 @@ fn cmd_plan(a: &mut Args) -> Result<()> {
     } else {
         print!("{}", plan::render(&p));
         if let Some(out) = out {
-            println!("\nplan written to {out}; next: adage-train run --plan {out}   (a dry run)");
+            println!("\nplan written to {out}; next: adage train --plan {out}   (a dry run)");
         } else {
-            println!("\n(pass --out plan.json to save it for `adage-train run --plan`)");
+            println!("\n(pass --out plan.json to save it for `adage train --plan`)");
         }
     }
     Ok(())
 }
 
-fn harness_for(name: &str, world: Option<&str>) -> Result<Box<dyn Harness>> {
+fn harness_for(name: &str, world: Option<&str>, forward: &[String], host_auth: bool) -> Result<Box<dyn Harness>> {
     match name {
-        "claude-code" => Ok(Box::new(ClaudeCode::default())),
+        "claude-code" => Ok(Box::new(ClaudeCode::with_forward(forward, host_auth)?)),
         "fake" => {
             let path = world.context("--harness fake needs --fake-world <world.json> (see docs/training.md)")?;
             let w: FakeWorld =
@@ -141,12 +234,19 @@ fn harness_for(name: &str, world: Option<&str>) -> Result<Box<dyn Harness>> {
 }
 
 fn cmd_run(mut a: Args) -> Result<()> {
-    let plan_path = a.value("--plan")?.context("run needs --plan plan.json")?;
+    let plan_path = a
+        .value("--plan")?
+        .context("adage train needs --plan plan.json (make one with `adage train plan --from <file>`)")?;
     let p = plan::load(Path::new(&plan_path))?;
     let mut o = run::RunOptions::defaults(adage_home());
     o.model = p.estimate.model.clone();
     let harness = a.value("--harness")?.unwrap_or_else(|| "claude-code".into());
     let world = a.value("--fake-world")?;
+    let forward: Vec<String> = a
+        .value("--forward-env")?
+        .map(|v| v.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect())
+        .unwrap_or_default();
+    let host_auth = a.flag("--host-auth");
     if let Some(m) = a.value("--model")? {
         o.model = m;
     }
@@ -175,7 +275,7 @@ fn cmd_run(mut a: Args) -> Result<()> {
     if o.max_turns == 0 || o.concurrency == 0 {
         bail!("--max-turns and --concurrency must be at least 1");
     }
-    let h = harness_for(&harness, world.as_deref())?;
+    let h = harness_for(&harness, world.as_deref(), &forward, host_auth)?;
     let base = isolate::process_env();
     if !o.execute {
         let d = run::describe(&p, &o, h.as_ref(), &base);

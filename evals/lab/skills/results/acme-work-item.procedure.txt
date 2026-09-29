@@ -1,0 +1,21 @@
+skill acme-work-item  (1479 bytes, ~370 tokens)
+trigger: spans=['ticket'] keywords=acme-billing, acme-work-item, asks, billing, change, customer, item, names
+slots: id:work-item-id<-prompt e.g. W-2042
+s1 [lookup    ] always                       Read the work item
+      run   scripts/wi-lookup {id}   (repo-script, item)
+      compilable
+s2 [regenerate] after_edit(schema/*.json)    If the item adds or changes a record field
+      run   make gen   (make, repo)
+      compilable
+s3 [edit      ] always                       Make the code change
+      not compilable: no command: the step is the agent's judgment (an edit or a decision)
+s4 [verify    ] always                       Run the tests with `make test`
+      run   make test   (make, suite)
+      avoid python3 -m unittest -> make test  [RuntimeError: ACME_ENV is not set]
+      avoid pytest -> make test  [RuntimeError: ACME_ENV is not set]
+      expect ['OK']
+      compilable
+s5 [verify    ] before_finish                Before you finish, run `make ci`
+      run   make ci   (make, repo)
+      compilable
+advice (not compiled): 2 block(s)

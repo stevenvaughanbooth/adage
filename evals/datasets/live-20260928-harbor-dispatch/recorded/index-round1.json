@@ -1,0 +1,325 @@
+{
+ "generation": "1b6cda7c54641220",
+ "routes": [
+  {
+   "repo": "harbor-dispatch",
+   "route": {
+    "strength": "prime",
+    "authored": false,
+    "effect": "regenerate",
+    "evidence": {
+     "days": 1,
+     "deviations_failed": 0,
+     "lower_bound": 0.30064184009690814,
+     "median_position": 0.0,
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ],
+     "opportunities": 4,
+     "provenance": "desire-path",
+     "rate": 0.75,
+     "successes": 0,
+     "support": 3,
+     "turns_saved": 0.0
+    },
+    "exit": [
+     {
+      "when": "exploratory_change"
+     }
+    ],
+    "id": "finish-line-04e5d4",
+    "slots": [],
+    "state": "firm",
+    "step": {
+     "command": "npm run codegen",
+     "do": "run"
+    },
+    "summary": "A regeneration step this repository requires after editing these files",
+    "trigger": {
+     "on": "after_edit",
+     "paths": "registry/*.csv"
+    }
+   },
+   "track": "harbor-dispatch/finish-line",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "harbor-dispatch",
+   "route": {
+    "strength": "prime",
+    "authored": false,
+    "effect": "verify",
+    "evidence": {
+     "by_origin": {
+      "declared": 1
+     },
+     "days": 0,
+     "deviations_failed": 0,
+     "lower_bound": 0.0,
+     "median_position": 0.0,
+     "models": [],
+     "opportunities": 0,
+     "origin": {
+      "declared": "package.json",
+      "ecosystem": "Node.js",
+      "instinct": "U1",
+      "kind": "instinct",
+      "pack": "core",
+      "version": "0.1.0"
+     },
+     "provenance": "instinct:core@0.1.0",
+     "rate": 0.0,
+     "successes": 0,
+     "support": 0,
+     "turns_saved": 0.0
+    },
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "id": "dead-end-7f4b9d",
+    "slots": [],
+    "state": "forming",
+    "step": {
+     "command": "npm run check",
+     "do": "run"
+    },
+    "summary": "Instinct U1: a declared script runs this repository's test runner with the setup it needs",
+    "trigger": {
+     "command": "exec node --test",
+     "on": "after_failure",
+     "signature": "ERR_MODULE_NOT_FOUND"
+    }
+   },
+   "track": "harbor-dispatch/instincts",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "harbor-dispatch",
+   "route": {
+    "strength": "prime",
+    "authored": false,
+    "effect": "verify",
+    "evidence": {
+     "by_origin": {
+      "declared": 1
+     },
+     "days": 0,
+     "deviations_failed": 0,
+     "lower_bound": 0.0,
+     "median_position": 0.0,
+     "models": [],
+     "opportunities": 0,
+     "origin": {
+      "declared": "package.json",
+      "ecosystem": "Node.js",
+      "instinct": "U1",
+      "kind": "instinct",
+      "pack": "core",
+      "version": "0.1.0"
+     },
+     "provenance": "instinct:core@0.1.0",
+     "rate": 0.0,
+     "successes": 0,
+     "support": 0,
+     "turns_saved": 0.0
+    },
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "id": "dead-end-d0ca80",
+    "slots": [],
+    "state": "forming",
+    "step": {
+     "command": "npm run check",
+     "do": "run"
+    },
+    "summary": "Instinct U1: a declared script runs this repository's test runner with the setup it needs",
+    "trigger": {
+     "command": "exec npm test",
+     "on": "after_failure",
+     "signature": "ERR_MODULE_NOT_FOUND"
+    }
+   },
+   "track": "harbor-dispatch/instincts",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "harbor-dispatch",
+   "route": {
+    "strength": "prime",
+    "authored": false,
+    "effect": "observe",
+    "evidence": {
+     "by_origin": {
+      "declared": 1
+     },
+     "days": 0,
+     "deviations_failed": 0,
+     "lower_bound": 0.0,
+     "median_position": 0.0,
+     "models": [],
+     "opportunities": 0,
+     "origin": {
+      "declared": "package.json",
+      "instinct": "U4",
+      "kind": "instinct",
+      "pack": "core",
+      "version": "0.1.0"
+     },
+     "provenance": "instinct:core@0.1.0",
+     "rate": 0.0,
+     "successes": 0,
+     "support": 0,
+     "turns_saved": 0.0
+    },
+    "exit": [],
+    "id": "instinct-u4-e3eb8a",
+    "slots": [],
+    "state": "forming",
+    "step": {
+     "do": "advise",
+     "slots": {
+      "command": "npm run codegen",
+      "path": "src/generated/registry.ts"
+     },
+     "template": "generated-file"
+    },
+    "summary": "Instinct U4: Don't hand-edit generated files",
+    "trigger": {
+     "on": "after_edit",
+     "paths": "src/generated/registry.ts"
+    }
+   },
+   "track": "harbor-dispatch/instincts",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "harbor-dispatch",
+   "route": {
+    "strength": "prime",
+    "authored": false,
+    "effect": "observe",
+    "evidence": {
+     "days": 1,
+     "deviations_failed": 0,
+     "lower_bound": 0.4676946629183366,
+     "median_position": 12.0,
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ],
+     "opportunities": 12,
+     "provenance": "desire-path",
+     "rate": 0.75,
+     "successes": 0,
+     "support": 9,
+     "turns_saved": 10.0
+    },
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "id": "lookup-work-item",
+    "slots": [
+     {
+      "contract": {
+       "kind": "pattern",
+       "regex": "^INC-\\d{2,3}$"
+      },
+      "name": "item",
+      "source": {
+       "from": "prompt",
+       "span": "ticket"
+      }
+     }
+    ],
+    "state": "firm",
+    "step": {
+     "command": "node bin/fetch-incident {item}",
+     "do": "run"
+    },
+    "summary": "Look up the work item named in the prompt",
+    "trigger": {
+     "on": "prompt",
+     "span": "ticket"
+    }
+   },
+   "track": "harbor-dispatch/work-items",
+   "version": "0.1.0"
+  },
+  {
+   "repo": "harbor-dispatch",
+   "route": {
+    "strength": "prime",
+    "authored": false,
+    "effect": "observe",
+    "evidence": {
+     "days": 1,
+     "deviations_failed": 0,
+     "lower_bound": 0.6456695613241317,
+     "median_position": 0.0,
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ],
+     "opportunities": 7,
+     "provenance": "desire-path",
+     "rate": 1.0,
+     "successes": 0,
+     "support": 7,
+     "turns_saved": 1.0
+    },
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "id": "read-linked-files",
+    "slots": [
+     {
+      "contract": {
+       "kind": "repo_path"
+      },
+      "name": "files",
+      "source": {
+       "field": "*paths",
+       "from": "result_field"
+      }
+     }
+    ],
+    "state": "firm",
+    "step": {
+     "do": "read_batch",
+     "max": 5,
+     "slot": "files"
+    },
+    "summary": "Read the files the work item links, together",
+    "trigger": {
+     "command": "exec node bin/fetch-incident {id}",
+     "on": "after_command"
+    }
+   },
+   "track": "harbor-dispatch/work-items",
+   "version": "0.1.0"
+  }
+ ],
+ "triggers": {
+  "harbor-dispatch": {
+   "edit_globs": [
+    "registry/*.csv",
+    "src/generated/registry.ts"
+   ],
+   "prompt_spans": [
+    "ticket"
+   ],
+   "words": [
+    "fetch-incident",
+    "node",
+    "npm"
+   ]
+  }
+ }
+}

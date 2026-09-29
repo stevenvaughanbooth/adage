@@ -1,7 +1,7 @@
 //! `adage graph [--json] [--events <n>]`: Adage's live state as a graph, for people and tools.
 //!
 //! Judgements are split by arm. In treated sessions they say whether the agent followed what it
-//! was told; in holdout sessions nothing was delivered, so they say whether the agent found the
+//! was told; in control sessions nothing was delivered, so they say whether the agent found the
 //! same path unaided — the baseline every effect is measured against.
 //!
 //! Nodes are the situations Adage watches for (route triggers), the routes, the steps they
@@ -9,14 +9,18 @@
 //! spools under `$ADAGE_HOME`; nothing is estimated. Read-only, so agents may run it.
 //!
 //! The JSON is what the map draws (`web/map/`); `adage map` serves both from the binary (see
-//! `map/`), at `/api/v1/graph`, and streams new decisions shaped as [`event`] records.
+//! `map/`), at `/api/v1/graph`, and streams new decisions shaped as [`event`] records. Any other
+//! option is refused: `--serve` is gone (no aliases).
+//!
+//! Spools written before the lexicon's rename spell the control arm `holdout` and an ignored
+//! directive `derailed` (`followed_failed` for misfired); they are read as the new words.
 
 use crate::review::{ceiling_str, discover, origin_label, preview, standings};
 use adage_core::{pattern, CommandTable};
 use adage_runtime::{command_key, span_kind_label, SessionState};
 use adage_store::{spool, state, Paths};
 use adage_tracks::{index, Index, Route, Step, Trigger};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -29,10 +33,10 @@ struct Live {
     emitted: u64,
     would_have: u64,
     followed: u64,
-    derailed: u64,
+    ignored: u64,
     obligation_met: u64,
-    /// Holdout sessions: nothing was delivered, so a "followed" judgement means the agent took the
-    /// route's path unaided, and a "derailed" one means it did not.
+    /// Control sessions: nothing was delivered, so a "followed" judgement means the agent took the
+    /// route's path unaided, and a "ignored" one means it did not.
     unaided: u64,
     not_reached: u64,
     obligation_met_unaided: u64,
@@ -67,6 +71,7 @@ pub(crate) fn trigger(t: &Trigger) -> Value {
         Trigger::AfterEdit { paths } => ("after_edit", format!("an edit touches {paths}")),
         Trigger::SessionStart => ("session_start", "the first prompt of a session".to_string()),
         Trigger::Intent { family, .. } => ("intent", format!("a prompt means: {family}")),
+        Trigger::Context { items, .. } => ("context", format!("a context of {} events", items.len())),
     };
     json!({ "kind": kind, "label": label })
 }
@@ -83,6 +88,11 @@ fn step(s: &Step) -> Value {
         Step::Advise { template, slots } => {
             json!({ "kind": "advise", "label": adage_tracks::advice::text(template, slots).unwrap_or_default(), "template": template })
         }
+        Step::Sequence { commands } => json!({ "kind": "sequence", "label": commands.join(" → ") }),
+        Step::Card { card } => json!({
+            "kind": "card",
+            "label": format!("procedure card: {} file(s), from {} session(s)", card.files.len(), card.sessions),
+        }),
     }
 }
 
@@ -96,6 +106,8 @@ fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
             v.push((command_key(instead, table), "directs"));
             v
         }
+        Step::Sequence { commands } => commands.iter().map(|c| (command_key(c, table), "directs")).collect(),
+        Step::Card { card } => card.commands.iter().map(|c| (command_key(&c.command, table), "directs")).collect(),
         Step::ReadBatch { .. } | Step::Advise { .. } => vec![],
     }
 }
@@ -258,13 +270,24 @@ fn dump_learned(args: &[String], paths: &Paths) -> Result<()> {
         )?;
     }
     o.blank()?;
-    o.next("adage condition --engine graph", "condition reflexes with the graph engine")?;
+    o.next("adage condition", "condition reflexes from these traces")?;
     Ok(())
 }
 
 pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
     if args.iter().any(|a| a == "--learned") && args.iter().any(|a| a == "--dump") {
         return dump_learned(args, paths);
+    }
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--json" => i += 1,
+            "--events" if args.get(i + 1).is_some_and(|n| n.parse::<usize>().is_ok()) => i += 2,
+            "--events" => bail!("--events takes a number of events"),
+            other => bail!(
+                "unknown option `{other}` for `adage graph` (it takes --json and --events <n>; the map is `adage map`)"
+            ),
+        }
     }
     let max_events: usize = crate::flag(args, "--events").and_then(|n| n.parse().ok()).unwrap_or(80).min(1000);
     let out = build(paths, max_events)?;
@@ -282,7 +305,7 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
                     "{} ({} treated, {} control)",
                     crate::words::count(s["total"].as_u64().unwrap_or(0) as usize, "trace"),
                     s["treated"],
-                    s["holdout"]
+                    s["control"]
                 ),
             ],
         )?;
@@ -292,7 +315,7 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
         }
         for r in routes {
             let l = &r["live"];
-            let strength = match r["aspect"].as_str().unwrap_or("") {
+            let strength = match r["strength"].as_str().unwrap_or("") {
                 "green" | "fire" => Strength::Fire,
                 "red" | "inhibit" => Strength::Inhibit,
                 _ => Strength::Prime,
@@ -319,13 +342,13 @@ pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
                     .sep()
                     .faint(format!("followed {}", l["followed"]))
                     .sep()
-                    .faint(format!("ignored {}", l["derailed"]))
+                    .faint(format!("ignored {}", l["ignored"]))
                     .faint("   control: ")
                     .faint(format!("would have {}", l["would_have"]))
                     .sep()
-                    .faint(format!("unaided {}", l["holdout"]["unaided"]))
+                    .faint(format!("unaided {}", l["control"]["unaided"]))
                     .sep()
-                    .faint(format!("not reached {}", l["holdout"]["not_reached"])),
+                    .faint(format!("not reached {}", l["control"]["not_reached"])),
             )?;
         }
         o.blank()?;
@@ -351,7 +374,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
     let mut live: BTreeMap<(String, String), Live> = BTreeMap::new();
     let mut observed: BTreeMap<String, (u64, BTreeSet<String>)> = BTreeMap::new();
     let mut events: Vec<Value> = Vec::new();
-    let (mut treated, mut holdout, mut stops) = (0u64, 0u64, 0u64);
+    let (mut treated, mut control, mut stops) = (0u64, 0u64, 0u64);
 
     // The commands each dead-end route warns against, to count sessions that ran one anyway.
     let avoided: Vec<(String, String, Vec<String>)> = installed
@@ -380,9 +403,9 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
         // so sessions started together share a long prefix. Displays shorten it themselves.
         let sid: String = p.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
         let recs: Vec<Value> = spool::read_all(p).unwrap_or_default();
-        match recs.iter().find_map(|r| r["arm"].as_str()) {
+        match recs.iter().find_map(|r| r["arm"].as_str()).map(arm_word) {
             Some("treated") => treated += 1,
-            Some("holdout") => holdout += 1,
+            Some("control") => control += 1,
             _ => {}
         }
         for r in &recs {
@@ -399,8 +422,8 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
             for id in &would {
                 live.entry((repo.clone(), id.clone())).or_default().would_have += 1;
             }
-            let holdout = r["arm"] == "holdout";
-            let arm = r["arm"].as_str().unwrap_or("unknown").to_string();
+            let arm = r["arm"].as_str().map(arm_word).unwrap_or("unknown").to_string();
+            let control = arm == "control";
             arm_sessions.entry((repo.clone(), arm.clone())).or_default().insert(sid.clone());
             for id in directed.iter().chain(&would) {
                 sets(&mut arms, &repo, id, &arm).applied.insert(sid.clone());
@@ -427,12 +450,12 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
             for j in d["judgements"].as_array().into_iter().flatten() {
                 let (Some(kind), Some(id)) = (j["kind"].as_str(), j["route"].as_str()) else { continue };
                 let l = live.entry((repo.clone(), id.to_string())).or_default();
-                match (kind, holdout) {
+                match (judgement_word(kind), control) {
                     ("followed", false) => l.followed += 1,
-                    ("derailed", false) => l.derailed += 1,
+                    ("ignored", false) => l.ignored += 1,
                     ("obligation_met", false) => l.obligation_met += 1,
                     ("followed", true) => l.unaided += 1,
-                    ("derailed", true) => l.not_reached += 1,
+                    ("ignored", true) => l.not_reached += 1,
                     ("obligation_met", true) => l.obligation_met_unaided += 1,
                     _ => {}
                 }
@@ -460,7 +483,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
             for (k, how) in route_keys(r, &table) {
                 railed.entry(k).or_insert((r.id.clone(), how));
             }
-            let arm_stats: serde_json::Map<String, Value> = ["treated", "holdout"]
+            let arm_stats: serde_json::Map<String, Value> = ["treated", "control"]
                 .iter()
                 .map(|a| {
                     let s = arms.get(&(repo.clone(), r.id.clone(), a.to_string()));
@@ -494,7 +517,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                 "repo": repo,
                 "imported": inst.imported,
                 "in_index": indexed,
-                "aspect": lower(r.aspect),
+                "strength": lower(r.strength),
                 "ceiling": ceiling_str(r),
                 "effect": lower(r.effect),
                 "state": lower(r.state),
@@ -504,16 +527,16 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                 "directive": preview(t, r).0,
                 "evidence": {
                     "support": e.support, "opportunities": e.opportunities, "rate": e.rate, "lower_bound": e.lower_bound,
-                    "turns_saved": e.turns_saved, "days": e.days, "exposed": e.exposed, "stale_since": e.stale_since,
+                    "turns_saved": e.turns_saved, "days": e.days, "exposed": e.exposed, "dormant_since": e.dormant_since,
                     "provenance": e.provenance,
                 },
                 "live": {
                     "emitted": l.map_or(0, |l| l.emitted),
                     "would_have": l.map_or(0, |l| l.would_have),
                     "followed": l.map_or(0, |l| l.followed),
-                    "derailed": l.map_or(0, |l| l.derailed),
+                    "ignored": l.map_or(0, |l| l.ignored),
                     "obligation_met": l.map_or(0, |l| l.obligation_met),
-                    "holdout": {
+                    "control": {
                         "unaided": l.map_or(0, |l| l.unaided),
                         "not_reached": l.map_or(0, |l| l.not_reached),
                         "obligation_met": l.map_or(0, |l| l.obligation_met_unaided),
@@ -542,22 +565,32 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
     let out = json!({
         "generation": index.generation,
         "home": paths.root.display().to_string(),
-        "sessions": { "total": spools.len(), "treated": treated, "holdout": holdout },
+        "sessions": { "total": spools.len(), "treated": treated, "control": control },
         "stop_requests": stops,
         "routes": routes,
         "observed": observed,
         "events": events,
         "learning": learning(paths),
-        "bars": { "min_support": bar.min_support, "fire_lower_bound": bar.green_lower_bound },
+        "bars": { "min_support": bar.min_support, "fire_lower_bound": bar.fire_lower_bound },
     });
     Ok(out)
 }
 
 /// One spool record as a timeline event (`None` when nothing happened in it): the routes it
-/// directed, would have directed (holdout, or over a limit), the judgements it made as
+/// directed, would have directed (control, or over a limit), the judgements it made as
 /// `[kind, route]`, the command keys it observed, and whether it asked the agent to continue. The
 /// same shape in the graph's `events` and in the map's live stream.
 pub(crate) fn event(repo: &str, sid: &str, r: &Value) -> Option<Value> {
+    // A PreToolUse record (`kind: "pretool"`) has no decision: it says what the hook rewrote or
+    // advised before a command ran (`pretool`), or would have in a control session (`withheld`).
+    if r["kind"] == "pretool" {
+        let pretool = r.get("pretool").filter(|p| p.is_object())?;
+        return Some(json!({
+            "ts": r["ts"], "session": sid, "arm": r["arm"].as_str().map(arm_word), "event": r["event"],
+            "repo": repo, "kind": "pretool", "pretool": pretool, "withheld": r["withheld"] == true,
+            "directed": [], "would": [], "judged": [], "observed": [], "continue": false,
+        }));
+    }
     let d = &r["decision"];
     let ids = |k: &str| -> Vec<String> {
         d[k].as_array().into_iter().flatten().filter_map(|x| x["route"].as_str().map(String::from)).collect()
@@ -567,7 +600,7 @@ pub(crate) fn event(repo: &str, sid: &str, r: &Value) -> Option<Value> {
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|j| Some(json!([j["kind"].as_str()?, j["route"].as_str()?])))
+        .filter_map(|j| Some(json!([judgement_word(j["kind"].as_str()?), j["route"].as_str()?])))
         .collect();
     let keys: Vec<String> =
         d["observed"].as_array().into_iter().flatten().filter_map(|k| k.as_str().map(String::from)).collect();
@@ -576,7 +609,7 @@ pub(crate) fn event(repo: &str, sid: &str, r: &Value) -> Option<Value> {
         return None;
     }
     Some(json!({
-        "ts": r["ts"], "session": sid, "arm": r["arm"], "event": r["event"], "repo": repo,
+        "ts": r["ts"], "session": sid, "arm": r["arm"].as_str().map(arm_word), "event": r["event"], "repo": repo,
         "directed": directed, "would": would, "judged": judged, "observed": keys, "continue": cont,
     }))
 }
@@ -603,8 +636,9 @@ fn learning(paths: &Paths) -> Vec<Value> {
 }
 
 /// Whether a route's command key covers an observed key, as the runtime judges it
-/// (`adage_core::pattern`): a directed command is met by the same command with options added
-/// (`wi-lookup {item}` covers `wi-lookup {id} --json`, slots matching slots); an avoided runner
+/// (`adage_core::pattern::follows`): a directed command is followed by the same command with
+/// options and operands added (`wi-lookup {item}` covers `wi-lookup {id} --json`, slots matching
+/// slots; `.venv/bin/python -m pytest` covers `.venv/bin/python -m pytest {path} -x`); an avoided runner
 /// covers any run of its program and subcommand (`python3 -m pytest` covers
 /// `python3 -m pytest {path} -v`).
 fn speaks_for(route_key: &str, how: &str, observed: &str) -> bool {
@@ -613,7 +647,25 @@ fn speaks_for(route_key: &str, how: &str, observed: &str) -> bool {
             .map(|p| p.at_least(pattern::Level::HeadSub))
             .is_some_and(|p| p.matches_key(observed))
     } else {
-        pattern::meets(route_key, observed)
+        pattern::follows(route_key, observed)
+    }
+}
+
+/// A spool's arm in the lexicon's words: older spools say `holdout` for `control`.
+fn arm_word(arm: &str) -> &str {
+    if arm == "holdout" {
+        "control"
+    } else {
+        arm
+    }
+}
+
+/// A judgement kind in the lexicon's words: older spools say `derailed` and `followed_failed`.
+fn judgement_word(kind: &str) -> &str {
+    match kind {
+        "derailed" => "ignored",
+        "followed_failed" => "misfired",
+        k => k,
     }
 }
 
@@ -623,7 +675,28 @@ fn routes_len(v: &Value) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::speaks_for;
+    use super::{arm_word, judgement_word, speaks_for};
+
+    #[test]
+    fn pretool_records_reach_the_stream() {
+        let r = serde_json::json!({ "ts": 5, "event": "PreToolUse", "kind": "pretool", "arm": "holdout",
+            "withheld": true, "pretool": { "rewrite": "test", "interpreter": ".venv/bin/python" } });
+        let e = super::event("acme", "s1", &r).expect("an event");
+        assert_eq!(e["kind"], "pretool");
+        assert_eq!(e["arm"], "control");
+        assert_eq!(e["withheld"], true);
+        assert_eq!(e["pretool"]["rewrite"], "test");
+        assert!(super::event("acme", "s1", &serde_json::json!({ "kind": "pretool" })).is_none());
+    }
+
+    #[test]
+    fn old_spool_words_read_as_new_ones() {
+        assert_eq!(arm_word("holdout"), "control");
+        assert_eq!(arm_word("treated"), "treated");
+        assert_eq!(judgement_word("derailed"), "ignored");
+        assert_eq!(judgement_word("followed_failed"), "misfired");
+        assert_eq!(judgement_word("followed"), "followed");
+    }
 
     #[test]
     fn route_keys_cover_observed_variants() {
@@ -636,7 +709,10 @@ mod tests {
         assert!(!d("exec make test", "exec make gen"));
         assert!(!d("exec npm run check", "exec npm run build"));
         assert!(!d("exec make", "exec"));
-        assert!(!d("exec python3 -m pytest {path}", "exec python3 -m pytest"));
-        assert!(!d("exec python3 -m pytest", "exec python3 -m pytest {path} -v"), "a directed command is not a runner");
+        // The whole suite covers a narrowed run (the action classifier: `adage_core::action::satisfies`).
+        assert!(d("exec python3 -m pytest {path}", "exec python3 -m pytest"));
+        // Followed: the directed runner narrowed to a path, as agents run it.
+        assert!(d("exec .venv/bin/python -m pytest", "exec .venv/bin/python -m pytest {path} -xvs"));
+        assert!(!d("exec .venv/bin/python -m pytest", "exec python -m pytest {path}"));
     }
 }

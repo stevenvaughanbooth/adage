@@ -101,7 +101,7 @@ export function Evidence({ graph }: { graph: Graph }) {
     .filter((l) => l.ts >= (days[0]?.day ?? Infinity) && (!url.repo || !l.repo || l.repo === url.repo))
     .flatMap((l) =>
       (l.changes ?? [])
-        .filter((c) => c.change !== "evidence" && (c.to === "green" || c.to === "fire"))
+        .filter((c) => c.change !== "evidence" && c.to === "fire")
         .map((c) => ({ ts: l.ts, label: `${c.route} fires` })),
     )
     .slice(-3);
@@ -122,7 +122,7 @@ export function Evidence({ graph }: { graph: Graph }) {
         case "lb":
           return r.evidence.lower_bound;
         case "strength":
-          return ["fire", "prime", "inhibit"].indexOf(strength(r.aspect) ?? "");
+          return ["fire", "prime", "inhibit"].indexOf(strength(r.strength) ?? "");
         default:
           return r.id;
       }
@@ -291,9 +291,9 @@ export function Evidence({ graph }: { graph: Graph }) {
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const s = strength(r.aspect);
+                  const s = strength(r.strength);
                   const t = r.arms.treated;
-                  const c = r.arms.holdout;
+                  const c = r.arms.control;
                   const avoid = r.step.kind === "avoid";
                   const k = (a: typeof t) => (a ? (avoid ? a.hit_avoided : a.followed) : 0);
                   return (

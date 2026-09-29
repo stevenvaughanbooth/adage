@@ -28,8 +28,7 @@ function milestone(learning: LearnRun[], at: number): string | null {
   const last = runs[runs.length - 1];
   const c = last?.changes?.find((x) => x.change !== "evidence");
   if (!last || !c) return null;
-  const to = c.to === "green" ? "fire" : c.to === "yellow" ? "prime" : c.to === "red" ? "inhibit" : c.to;
-  return `${day(last.ts)} · ${c.route} ${to ?? c.change}`;
+  return `${day(last.ts)} · ${c.route} ${c.to ?? c.change}`;
 }
 
 export function Replay({

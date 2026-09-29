@@ -51,16 +51,16 @@ fn an_empty_explicit_source_never_falls_back_to_claude_history() {
     let empty = tempfile::tempdir().unwrap();
     let (_, err, ok) = adage(home.path(), &["condition", "--demo", "--codex-sessions", empty.path().to_str().unwrap()]);
     assert!(!ok, "an explicit source that finds nothing fails");
-    assert!(err.contains("no transcripts found"), "{err}");
+    assert!(err.contains("no traces found"), "{err}");
     assert!(!home.path().join("adage/tracks").exists(), "nothing was learned from the fallback");
 
     let (out, _, _) = adage(home.path(), &["sense", "--codex-sessions", empty.path().to_str().unwrap()]);
-    assert!(out.contains("0 traces"), "survey read only the named source:\n{out}");
+    assert!(out.contains("0 traces"), "sense read only the named source:\n{out}");
     assert!(!out.contains("Claude Code history"), "{out}");
 }
 
 #[test]
-fn codex_history_is_learned_and_surveyed_with_its_harness() {
+fn codex_history_is_learned_and_sensed_with_its_harness() {
     let home = tempfile::tempdir().unwrap();
     let sessions = fixtures().join("codex/sessions");
     let s = sessions.to_str().unwrap();

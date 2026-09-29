@@ -5,8 +5,10 @@
 //! dispatched here before anything else, on the fast path. Output goes through `adage_term`
 //! (docs/design/style.md); words follow docs/lexicon.md.
 //!
-//! Environment: `ADAGE_HOME` (data directory), `ADAGE_ARM` (`treated`|`holdout`, overrides
-//! assignment), `ADAGE_HOLDOUT` (holdout share; overrides `runtime.holdout`, default 0.1),
+//! Bare `adage` prints the status card (`status_card.rs`); `adage ui` opens the app.
+//!
+//! Environment: `ADAGE_HOME` (data directory), `ADAGE_ARM` (`treated`|`control`, overrides
+//! assignment), `ADAGE_CONTROL` (control share; overrides `runtime.control`, default 0.1),
 //! `ADAGE_AUTO_LEARN` (`0`/`1`; overrides `learn.auto`), `ADAGE_DISABLE=1` (kill switch),
 //! `ADAGE_ALLOW_NONINTERACTIVE=1` (let `share` and `add` run without a terminal, for CI);
 //! output: `NO_COLOR`, `ADAGE_COLOR=never|16|256|truecolor`, `ADAGE_THEME=day|night`,
@@ -19,6 +21,7 @@ mod condition_out;
 mod config;
 mod detect;
 mod doctor;
+mod evidence;
 mod exec;
 use adage_hook::failopen;
 mod graph;
@@ -34,9 +37,12 @@ mod proposal;
 mod redact;
 mod reimport;
 mod review;
+mod savings;
+mod sense;
 mod share;
 mod share_pack;
-mod survey;
+mod status_card;
+mod train;
 mod tty;
 mod ui;
 mod words;
@@ -69,7 +75,17 @@ fn main() {
         Some(Err(e)) => {
             // `error  what failed`, then each cause (adage_term::Out::error).
             let causes: Vec<String> = e.chain().skip(1).map(|c| c.to_string()).collect();
-            let help = e.chain().find_map(|c| c.downcast_ref::<Hint>()).map(|h| h.help.clone());
+            let mut help = e.chain().find_map(|c| c.downcast_ref::<Hint>()).map(|h| h.help.clone());
+            // A bare permission error names no path: say which directory to check.
+            let denied = e.chain().any(|c| {
+                c.downcast_ref::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::PermissionDenied)
+            });
+            if help.is_none() && denied {
+                help = Some(format!(
+                    "a file could not be written or read; Adage keeps its data in {} (ADAGE_HOME), and `adage doctor` checks it",
+                    detect::tilde(&Paths::from_env().root)
+                ));
+            }
             let mut err = adage_term::Out::stderr();
             if err.error(&e.to_string(), &causes, help.as_deref()).is_err() {
                 eprintln!("adage: {e:#}");
@@ -110,6 +126,30 @@ pub(crate) fn refusal(what: impl Into<String>, mut causes: Vec<String>, help: im
     e.context(what.into())
 }
 
+/// Create the data directory if need be and check that it can be written, with one clear message
+/// if not (rather than a bare "Permission denied" from whichever file came first).
+pub(crate) fn writable_data_dir(paths: &Paths) -> Result<()> {
+    let at = detect::tilde(&paths.root);
+    let fix = "set ADAGE_HOME to a writable directory (`adage doctor` checks it)";
+    if let Err(e) = std::fs::create_dir_all(&paths.root) {
+        return Err(hint(format!("cannot create the data directory {at} ({})", io_reason(&e)), fix));
+    }
+    let probe = paths.root.join(format!(".adage-probe-{}", std::process::id()));
+    match std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(&probe) {
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe);
+            Ok(())
+        }
+        Err(e) => Err(hint(format!("cannot write in the data directory {at} ({})", io_reason(&e)), fix)),
+    }
+}
+
+/// An I/O error in a few words, without the OS error number.
+fn io_reason(e: &std::io::Error) -> String {
+    let s = e.to_string();
+    s.split(" (os error").next().unwrap_or(&s).to_lowercase()
+}
+
 fn flag(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned())
 }
@@ -128,11 +168,7 @@ fn run(args: &[String]) -> Result<()> {
     // (`cli.rs` explains why, and tests that the two agree).
     let theme = adage_term::Theme::stdout();
     if let Some(now) = cli::renamed(&args) {
-        let was = match (args[0].as_str(), args.get(1)) {
-            ("graph", _) => "graph --serve".to_string(),
-            (v @ ("review" | "exec"), Some(s)) => format!("{v} {s}"),
-            (v, _) => v.to_string(),
-        };
+        let was = cli::renamed_from(&args);
         let mut e = adage_term::Out::stderr();
         e.error(&format!("`adage {was}` is now `{now}`"), &[], Some(&format!("see `{now} --help`")))?;
         std::process::exit(2);
@@ -164,52 +200,30 @@ fn run(args: &[String]) -> Result<()> {
     match sub.map(|(name, _)| name) {
         Some("condition") if has("--auto") => autolearn::run_auto(rest, &paths),
         Some("condition") if has("--instincts-only") => instincts_only(rest, &paths),
-        Some("condition") => learn(rest, &paths),
+        Some("condition") => condition(rest, &paths),
+        Some("train") => train::train(rest, &paths),
+        Some("savings") => savings::run(rest, &paths),
         Some("config") => config::run(rest, &paths),
         Some("status") => status(&paths, has("--json")),
         Some("report") => report(&paths, has("--json")),
         Some("share") => share::share(rest, &paths),
         Some("add") => add::add(rest, &paths),
         Some("review") => {
-            // The lexicon's verbs, onto the decisions `review.rs` records.
-            let verb = sub.and_then(|(_, m)| m.subcommand_name());
-            match verb {
-                Some("delegate") => exec::review("allow-exec", &rest[1..], &paths),
-                Some("undelegate") => exec::review("revoke-exec", &rest[1..], &paths),
-                Some(v) => {
-                    let internal = match v {
-                        "strengthen" => "promote",
-                        "weaken" => "demote",
-                        "extinguish" => "reject",
-                        other => other,
-                    };
-                    let mut a = rest.to_vec();
-                    if let Some(p) = a.iter().position(|x| x == v) {
-                        a[p] = internal.to_string();
-                    }
-                    review::review(&a, &paths)
+            // `review.rs` takes the lexicon's verbs as they are; execution grants are `exec.rs`'s.
+            match sub.and_then(|(_, m)| m.subcommand_name()) {
+                Some(v @ ("delegate" | "revoke")) => {
+                    let at = rest.iter().position(|a| a == v).map_or(1, |p| p + 1);
+                    exec::review(v, &rest[at..], &paths)
                 }
-                None => review::review(rest, &paths),
+                _ => review::review(rest, &paths),
             }
         }
-        Some("delegate") => {
-            let action = if has("--status") {
-                "status"
-            } else if has("--off") {
-                "disable"
-            } else {
-                "enable"
-            };
-            let a: Vec<String> = std::iter::once(action.to_string())
-                .chain(rest.iter().filter(|x| *x != "--status" && *x != "--off").cloned())
-                .collect();
-            exec::exec(&a, &paths)
-        }
+        Some("delegate") => exec::delegate(rest, &paths),
         Some("map") => map::run(rest, &paths),
         Some("graph") => graph::graph(rest, &paths),
         Some("eval") => adage_eval::cli::run(rest),
         Some("models") => models::run(rest, &paths),
-        Some("sense") => survey::survey(rest, &paths),
+        Some("sense") => sense::sense(rest, &paths),
         Some("init") => init::init(rest, &paths),
         Some("doctor") => doctor::doctor(rest, &paths),
         Some("watch") => ui::watch(rest, &paths),
@@ -234,18 +248,15 @@ fn run(args: &[String]) -> Result<()> {
             println!("adage {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
-        // Bare `adage` at a terminal opens the app; anywhere else (a pipe, an agent's shell) it
-        // prints the overview, as `--help` always does.
-        None if ui::interactive() => ui::app(&[], &paths),
-        _ => {
-            cli::command(&theme).print_help()?;
-            Ok(())
-        }
+        // Bare `adage` prints the status card, wherever it runs (a terminal, a pipe, `!adage` in
+        // Claude Code); `adage ui` opens the app and `--help` shows the usage.
+        None => status_card::run(&paths),
+        Some(other) => bail!("unknown command `{other}`: `adage --help` lists them"),
     }
 }
 
 /// `adage condition [--transcripts <file>...] [--claude-projects <dir>] [--codex-sessions <dir>] [--cwd-prefix <path>]
-///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--engine <miners|shadow|graph>] [--json]`
+///               [--outcomes <json>] [--repo <key>] [--demo] [--no-cache] [--no-instincts] [--json]`
 ///
 /// Thresholds: `--demo`, else `learn.thresholds` (`adage config`). Parses are cached under
 /// `$ADAGE_HOME/cache/sessions` unless `--no-cache` or `learn.parse_cache = false` (the result is
@@ -264,7 +275,7 @@ pub(crate) fn check_dirs(dirs: &[(&str, Option<&std::path::Path>)]) -> Result<()
     Ok(())
 }
 
-fn learn(args: &[String], paths: &Paths) -> Result<()> {
+fn condition(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
     let (cp, cs) =
         (flag(args, "--claude-projects").map(PathBuf::from), flag(args, "--codex-sessions").map(PathBuf::from));
@@ -338,13 +349,14 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         let source = if let Some(p) = flag(args, "--cwd-prefix") {
             format!("none has a working directory under {p}")
         } else if explicit || args.iter().any(|a| a == "--claude-projects") {
-            "the sources you named hold no transcripts".to_string()
+            "the sources you named hold no traces".to_string()
         } else {
             "no Claude Code history in ~/.claude/projects".to_string()
         };
         return Err(hint(
-            format!("no transcripts found: {source}"),
-            "name a source: adage condition --transcripts <file>… (or --claude-projects <dir>, --codex-sessions <dir>)",
+            format!("no traces found: {source}"),
+            "name a source: adage condition --transcripts <file>… (or --claude-projects <dir>, --codex-sessions <dir>), \
+             or run `adage condition --instincts-only` for instincts alone",
         ));
     }
     let outcomes: BTreeMap<String, bool> = match flag(args, "--outcomes") {
@@ -358,17 +370,23 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         autolearn::thresholds(settings.learn_thresholds)
     };
     let mut cfg = cfg;
-    // The learning engine (Track G): `miners` (the default), `shadow` or `graph`.
-    if let Some(e) = flag(args, "--engine") {
-        if !adage_tracks::params::ENGINES.contains(&e.as_str()) {
-            bail!("--engine must be one of {:?}", adage_tracks::params::ENGINES);
-        }
-        cfg.engine = e;
-    }
-    // Instincts are bound after mining, per repository, unless turned off (config, or --no-instincts).
+    // Instincts are bound after learning, per repository, unless turned off (config, or --no-instincts).
     if !args.iter().any(|a| a == "--no-instincts") {
-        cfg.instincts = Some(autolearn::instinct_config(&settings, paths));
+        let mut ic = autolearn::instinct_config(&settings, paths);
+        // Bind against the checkout this runs in, not whatever checkouts the traces name (per-task
+        // worktrees, containers, a clone since removed or without its `.venv`): the live one is
+        // the one the next session works in.
+        // Only when the checkout is the repository being learned: `--repo <key>` names another
+        // repository's traces from anywhere (an eval harness's working directory).
+        if let Some(root) = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d)) {
+            let own = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
+            if flag(args, "--repo").as_deref().is_none_or(|k| k.trim() == own) {
+                ic.roots.insert(own, root);
+            }
+        }
+        cfg.instincts = Some(ic);
     }
+    cfg.cards = autolearn::card_params(&settings, paths);
     let cache =
         (settings.learn_parse_cache && !args.iter().any(|a| a == "--no-cache")).then(|| paths.cache().join("sessions"));
     transcripts.sort();
@@ -382,7 +400,7 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
         only_repo: None,
     };
     // One writer of the tracks and index at a time (automatic learners, review decisions).
-    std::fs::create_dir_all(&paths.root)?;
+    writable_data_dir(paths)?;
     let tracks_lock = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let before = adage_learn::diff::snapshot_all(&paths.tracks());
     let result = adage_learn::learn(&inputs, &paths.tracks(), &paths.index(), &cfg);
@@ -391,7 +409,7 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
     let rep = match result {
         Ok(r) => r,
         Err(e) => {
-            let line = learnlog::error_line(learnlog::now_ms(), "manual", None, "learn", &learnlog::describe(&e));
+            let line = learnlog::error_line(learnlog::now_ms(), "manual", None, "condition", &learnlog::describe(&e));
             let _ = learnlog::append(paths, &line);
             return Err(e);
         }
@@ -423,9 +441,10 @@ fn learn(args: &[String], paths: &Paths) -> Result<()> {
     Ok(())
 }
 
-/// `adage condition --instincts-only [--repo-path <dir>] [--json]`: bind a repository's instincts
-/// from its declared files, with no sessions (day 0), and compile the index. The repository is
-/// `--repo-path` (default: the current directory), resolved to its root.
+/// `adage condition --instincts-only [--repo-path <dir>] [--repo <key>] [--json]`: bind a repository's
+/// instincts from its declared files, with no sessions (day 0), and compile the index. The repository
+/// is `--repo-path` (default: the current directory), resolved to its root; its key is `--repo <key>`
+/// when given (as `adage condition --repo` keys reflexes), else derived from the root.
 pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
     let started = std::time::Instant::now();
     let dir = match flag(args, "--repo-path").or_else(|| flag(args, "--repo-root")) {
@@ -434,10 +453,15 @@ pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
     };
     let dir = dir.canonicalize().map_err(|e| anyhow::anyhow!("{}: {e}", dir.display()))?;
     let root = adage_core::repo::find_root(&dir).unwrap_or(dir);
-    let repo = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
+    // The same key `adage condition --repo <key>` stores reflexes under, so both indexes of one
+    // repository agree (`adage_core::repo::key_with`).
+    let explicit = flag(args, "--repo");
+    let repo = adage_core::repo::key_with(explicit.as_deref(), || {
+        adage_core::repo::repo_key_cached(&root, &paths.repo_keys())
+    });
     let settings = adage_store::config::load(paths).config;
     let ic = autolearn::instinct_config(&settings, paths);
-    std::fs::create_dir_all(&paths.root)?;
+    writable_data_dir(paths)?;
     let tracks_lock = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let before = adage_learn::diff::snapshot(&paths.tracks(), &repo);
     let result = adage_learn::instincts::learn_only(&repo, &root, &paths.tracks(), &paths.index(), &ic);
@@ -505,11 +529,20 @@ fn log_learn(
 /// `adage status [--json]`: the reflexes and instincts in effect, with strength and evidence.
 fn status(paths: &Paths, json: bool) -> Result<()> {
     use adage_term::{Glyph, Line, Out, Role};
-    let tracks = io::read_all(&paths.tracks())?;
+    let dirs = io::read_all_dirs(&paths.tracks())?;
+    // The evidence each strength was decided on (`evidence::describe`), with its reasons.
+    let whys: Vec<_> = dirs.iter().map(|(dir, _)| adage_tracks::why::load(dir)).collect();
+    let tracks: Vec<adage_tracks::Track> = dirs.into_iter().map(|(_, t)| t).collect();
     let has_intents =
         tracks.iter().any(|t| t.routes.iter().any(|r| matches!(r.trigger, adage_tracks::Trigger::Intent { .. })));
-    let model =
-        adage_intent::model::StaticModel::open(&adage_intent::model::dir_in(&paths.models())).ok().map(|m| m.id);
+    // What hooks embed prompts with: the installed model, else the one bundled in this binary, else
+    // the hashed fallback (`model::resolve`, as hooks, doctor and the status card choose it).
+    let resolved = adage_intent::model::resolve(&paths.models(), false);
+    let hashed = match &resolved.source {
+        adage_intent::model::Source::Hashed { why } => Some(why.clone()),
+        _ => None,
+    };
+    let model = hashed.is_none().then(|| resolved.embedder.id().to_string());
     let origin = |t: &adage_tracks::Track| {
         if adage_tracks::index::is_imported(t) {
             "imported"
@@ -524,7 +557,8 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
     if json {
         let tracks: Vec<serde_json::Value> = tracks
             .iter()
-            .map(|t| {
+            .enumerate()
+            .map(|(i, t)| {
                 serde_json::json!({
                     "track": t.manifest.track.name,
                     "version": t.manifest.track.version,
@@ -533,13 +567,16 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
                     "reflexes": t.routes.iter().map(|r| serde_json::json!({
                         "id": r.id,
                         "kind": if instinct(t, r) { "instinct" } else { "reflex" },
-                        "strength": words::strength(r.aspect).word(),
+                        "strength": r.strength,
                         "lifecycle": words::lifecycle(r.state),
                         "support": r.evidence.support,
                         "opportunities": r.evidence.opportunities,
                         "rate": r.evidence.rate,
                         "lower_bound": r.evidence.lower_bound,
-                        "effect": format!("{:?}", r.effect).to_lowercase(),
+                        "effect": r.effect.as_str(),
+                        "evidence": evidence::describe(r, whys[i].get(&r.id)),
+                        "uplift": r.evidence.uplift.as_ref().map(|u| u.line()),
+                        "obligation": evidence::obligation(r),
                     })).collect::<Vec<_>>(),
                 })
             })
@@ -566,19 +603,16 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
             &words::count(n_instinct, "instinct"),
         ],
     )?;
-    match &model {
-        Some(id) => {
-            o.blank()?;
-            o.kv("intent model", Line::new().text(id))?
-        }
-        None if has_intents => {
-            o.blank()?;
-            o.kv(
-                "intent model",
-                Line::new().push(Role::Prime, "not installed").sep().quiet("intent reflexes cannot fire"),
-            )?
-        }
-        None => {}
+    o.blank()?;
+    match &hashed {
+        Some(why) if has_intents && resolved.selected != "hashed" => o.kv(
+            "intent model",
+            Line::new()
+                .push(Role::Prime, "none")
+                .sep()
+                .quiet(format!("{why}; intent reflexes will not fire (`adage models status` says why)")),
+        )?,
+        _ => o.kv("intent model", Line::new().text(resolved.describe()))?,
     }
     if tracks.is_empty() {
         o.blank()?;
@@ -589,7 +623,7 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
     }
     let id_w =
         tracks.iter().flat_map(|t| t.routes.iter().map(|r| r.id.chars().count())).max().unwrap_or(16).clamp(16, 34);
-    for t in &tracks {
+    for (t, whys) in tracks.iter().zip(&whys) {
         o.blank()?;
         let mut head = Line::new()
             .bold(Role::Ink, t.manifest.track.name.clone())
@@ -603,19 +637,33 @@ fn status(paths: &Paths, json: bool) -> Result<()> {
         for r in &t.routes {
             let e = &r.evidence;
             let glyph = if instinct(t, r) { Glyph::Instinct } else { Glyph::Reflex };
+            // The evidence its strength was decided on: counts, or (a valued reflex, often a
+            // desire path no trace took yet) the value estimate on a line of its own.
+            let evidence = evidence::describe(r, whys.get(&r.id));
+            let valued = evidence.starts_with("value:");
             let mut l = Line::new()
                 .text("  ")
-                .strength(words::strength(r.aspect))
+                .strength(words::strength(r.strength))
                 .pad_to(13)
                 .glyph(Role::Accent, glyph)
                 .text(" ")
                 .text(r.id.clone())
-                .pad_to(16 + id_w)
-                .extend(words::evidence(e));
-            if r.state != adage_tracks::RouteState::Active {
+                .pad_to(16 + id_w);
+            l = if valued { l.faint("valued") } else { l.extend(words::evidence(e)) };
+            if r.state != adage_tracks::RouteState::Firm {
                 l = l.sep().quiet(words::lifecycle(r.state));
             }
             o.line(&l)?;
+            let detail = |text: String| Line::new().text(" ".repeat(16)).quiet(text);
+            if valued {
+                o.line(&detail(evidence))?;
+            }
+            if let Some(u) = &e.uplift {
+                o.line(&detail(format!("uplift: {}", u.line())))?;
+            }
+            if let Some(ob) = evidence::obligation(r) {
+                o.line(&detail(ob))?;
+            }
         }
     }
     // Nascent reflexes, and new or changed ones nobody has decided on yet.
@@ -684,10 +732,15 @@ fn report(paths: &Paths, json: bool) -> Result<()> {
     for (k, v) in totals.iter().filter(|(k, _)| !known.contains(&k.as_str())) {
         let role = match k.as_str() {
             "followed" | "met" | "hit_avoided" => Role::Fire,
-            "derailed" | "followed_failed" | "misfired" => Role::Inhibit,
+            "ignored" | "derailed" | "followed_failed" | "misfired" => Role::Inhibit,
             _ => Role::Ink,
         };
-        let label = if k == "followed_failed" { "misfired".to_string() } else { words::prose(&k.replace('_', " ")) };
+        // Older spools spell these `followed_failed` and `derailed`.
+        let label = match k.as_str() {
+            "followed_failed" => "misfired".to_string(),
+            "derailed" => "ignored".to_string(),
+            _ => words::prose(&k.replace('_', " ")),
+        };
         o.kv(&label, Line::new().push(role, v.to_string()))?;
     }
     if n("stop_requests") > 0 {

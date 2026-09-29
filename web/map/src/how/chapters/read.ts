@@ -1,7 +1,7 @@
 // Chapter: read traces (crates/adage-learn/src/{lib,import,codex,opencode,cache}.rs). A real
 // Claude Code transcript streams in line by line, its tool calls gather into turns, results join
 // their calls, commands split into steps, and each step gets a template key and an effect. Then
-// the view widens to the sample traces the next chapter mines, one of them steered.
+// the view widens to the sample traces the graph learner mines, one of them steered.
 
 import type { CamSpec, DotLook, SceneState, Stage, V3 } from "../engine";
 import { PROTOS, TRACES, laneX, laneZ, type Event } from "../sample";
@@ -63,7 +63,7 @@ const RECORDS: Rec[] = [
 const PROMPT = "Pick up W-1041 and get it done.";
 
 type Effect = "observe" | "verify" | "regenerate" | "environment" | "author" | "publish";
-/** Effects in the order the code ranks them (mine.rs `max_by_rank`). */
+/** Effects in the order the code ranks them (adage-learn evidence.rs `max_by_rank`). */
 const EFFECTS: Effect[] = ["observe", "verify", "regenerate", "environment", "author", "publish"];
 const EFFECT_HUE: Record<Effect, number> = { observe: 205, verify: 140, regenerate: 95, environment: 40, author: 262, publish: 320 };
 
@@ -116,7 +116,7 @@ const MAX_PROMPT_KIB = 64; // MAX_PROMPT_BYTES = 64 * 1024
 const CODEX_MAX_LINE_MIB = 4; // MAX_LINE = 4 << 20
 const CODEX_MAX_CALLS = 4096;
 const OPENCODE_SNIFF = 64; // bytes read to find "info"
-const SESSION_FORMAT = 2;
+const SESSION_FORMAT = 3;
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -266,7 +266,7 @@ function build(stage: Stage): Built {
   stage.label("lk", `<small>KEY · ${lookup.effect.toUpperCase()}</small>${lookup.key}`, lookup.id, { cls: "chip", dy: -58, center: true });
   stage.label("pl", PROMPT, PROMPT_HIGH, { cls: "note", dx: 12, dy: -7 });
   rows.forEach((_, i) => stage.label(`T${i}`, i < TRACES.length ? `T${i + 1}` : "T+", `n${i}.0`, { dx: -34, dy: -7 }));
-  stage.label("sig", `<small>STEERED · KIND finish-line</small>&lt;adage-signal kind="finish-line"&gt;`, `n${TRACES.length}.${STEERED.length - 1}`, {
+  stage.label("sig", `<small>STEERED · NAMES make gen</small>&lt;adage-reflex strength="prime" kind="obligation"&gt;`, `n${TRACES.length}.${STEERED.length - 1}`, {
     cls: "chip",
     dx: 16,
     dy: -24,
@@ -384,7 +384,7 @@ function build(stage: Stage): Built {
     },
     {
       title: "Every step gets a key and an effect",
-      body: `Each step gets a template key, with the specifics replaced (the ticket becomes {id}), and an effect, ranked from observe to publish. The lookup is ${lookup.key}, an observe step. Keys are what the miners count.`,
+      body: `Each step gets a template key, with the specifics replaced (the ticket becomes {id}), and an effect, ranked from observe to publish. The lookup is ${lookup.key}, an observe step. Keys are what the learner counts.`,
       chips: EFFECTS.map((e, i) => ({ text: `${e} ${byEffect[i]}` })),
       figure: (g, w, h, pal) => {
         const padB = 16;
@@ -416,12 +416,12 @@ function build(stage: Stage): Built {
     },
     {
       title: "Steered traces are marked",
-      body: "Where Adage already directed the agent, the trace carries an <adage-signal> tag. The trace is marked as steered for that kind of reflex, and that kind's miner skips it, so a reflex never learns from its own advice. The other miners still read it.",
-      chips: [{ text: "steered: skipped by its own miner" }, { text: "illustrative steered trace" }],
+      body: "Where Adage already directed the agent, the trace carries an <adage-reflex> tag from the hook; only hook output counts, never text the agent wrote. What that directive named (here, make gen) is exposed from the point it arrived: it is not evidence for any reflex that directs it, so a reflex never learns from its own advice. The rest of the trace still counts.",
+      chips: [{ text: "exposed from the directive on" }, { text: "only hook output steers" }, { text: "illustrative steered trace" }],
     },
     {
       title: "Read once, then cached",
-      body: `Parsed traces are cached by path, size and modification time, and the cache is stamped with the build, so a new build starts it empty. Nothing is redacted here; that happens only when something leaves the machine. These ${TRACES.length} traces are what the miners read next.`,
+      body: `Parsed traces are cached by path, size and modification time, and the cache is stamped with the build, so a new build starts it empty. Nothing is redacted here; that happens only when something leaves the machine. These ${TRACES.length} traces are what the graph learner reads next.`,
       chips: [
         { text: `session format ${SESSION_FORMAT}` },
         { text: "owner-only cache" },

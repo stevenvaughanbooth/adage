@@ -166,7 +166,7 @@ function RailBody({ graph, inputId, onPick }: { graph: Graph; inputId: string; o
             {g.items.map((r) => {
               const key = routeKey(r);
               const sel = url.reflex === key || url.reflex === r.id;
-              const s = strength(r.aspect);
+              const s = strength(r.strength);
               const onMap = visible(r, filters);
               const l = lifecycle(r.state);
               return (

@@ -25,7 +25,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.15895080000000003,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2041-r1-holdout.jsonl",
@@ -59,7 +59,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.10767350000000002,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2041-r2-holdout.jsonl",
@@ -93,7 +93,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.0177787,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2041-r3-holdout.jsonl",
@@ -127,7 +127,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.11962840000000002,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2042-r1-holdout.jsonl",
@@ -161,7 +161,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.12864129999999996,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2042-r2-holdout.jsonl",
@@ -195,7 +195,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.08565059999999998,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2042-r3-holdout.jsonl",
@@ -229,7 +229,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.10826809999999999,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2043-r1-holdout.jsonl",
@@ -263,7 +263,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.14958980000000002,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2043-r2-holdout.jsonl",
@@ -297,7 +297,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.10518240000000001,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2043-r3-holdout.jsonl",
@@ -331,7 +331,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.10651730000000004,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2044-r1-holdout.jsonl",
@@ -365,7 +365,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1594998,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2044-r2-holdout.jsonl",
@@ -399,7 +399,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.08486450000000001,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2044-r3-holdout.jsonl",
@@ -433,7 +433,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.123226,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2045-r1-holdout.jsonl",
@@ -467,7 +467,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.0176787,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2045-r2-holdout.jsonl",
@@ -501,7 +501,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.13172520000000001,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2045-r3-holdout.jsonl",
@@ -535,7 +535,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.017802699999999998,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2046-r1-holdout.jsonl",
@@ -569,7 +569,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1205055,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2046-r2-holdout.jsonl",
@@ -603,7 +603,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1184555,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2046-r3-holdout.jsonl",
@@ -637,7 +637,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1697398,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2041-r1-holdout.jsonl",
@@ -671,7 +671,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.18998850000000003,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2041-r2-holdout.jsonl",
@@ -705,7 +705,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.13486800000000002,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2041-r3-holdout.jsonl",
@@ -739,7 +739,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1244228,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2042-r1-holdout.jsonl",
@@ -773,7 +773,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.11340929999999999,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2042-r2-holdout.jsonl",
@@ -807,7 +807,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.11151060000000004,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2042-r3-holdout.jsonl",
@@ -841,7 +841,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.0216037,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2043-r1-holdout.jsonl",
@@ -875,7 +875,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.10319339999999999,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2043-r2-holdout.jsonl",
@@ -909,7 +909,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.14469739999999998,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2043-r3-holdout.jsonl",
@@ -943,7 +943,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.15199340000000006,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2044-r1-holdout.jsonl",
@@ -977,7 +977,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.08871770000000001,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2044-r2-holdout.jsonl",
@@ -1011,7 +1011,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.15468380000000004,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2044-r3-holdout.jsonl",
@@ -1045,7 +1045,7 @@
    "turns_to_first_edit": 6
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.08916719999999999,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2045-r1-holdout.jsonl",
@@ -1079,7 +1079,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.2803691,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2045-r2-holdout.jsonl",
@@ -1113,7 +1113,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1845589,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2045-r3-holdout.jsonl",
@@ -1147,7 +1147,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.0925282,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2046-r1-holdout.jsonl",
@@ -1181,7 +1181,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.17019720000000005,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2046-r2-holdout.jsonl",
@@ -1215,7 +1215,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.11136510000000001,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2046-r3-holdout.jsonl",

@@ -1,8 +1,9 @@
-//! The lexicon at display time (docs/lexicon.md). Stored values (route states, aspects, the
-//! review verbs `crate::review` takes) keep their names; people see these words.
+//! The lexicon at display time (docs/lexicon.md). Stored values and the review verbs
+//! `crate::review` takes are the lexicon's words; the older spellings (route states `active`,
+//! `retired`…, verbs `promote`, `demote`, `reject`) still read as the same words.
 
-/// A route's stored state as its lifecycle word. Accepts the lexicon's words as well, so tracks
-/// written after the on-disk migration read the same.
+/// A route's stored state as its lifecycle word. Accepts the older spellings as well, so tracks
+/// written before the on-disk migration read the same.
 pub fn lifecycle(state: &str) -> &str {
     match state {
         "draft" | "nascent" => "nascent",
@@ -10,7 +11,6 @@ pub fn lifecycle(state: &str) -> &str {
         "active" | "firm" => "firm",
         "stale" | "dormant" => "dormant",
         "retired" | "extinguished" => "extinguished",
-        "demoted" | "weakened" => "weakened",
         other => other,
     }
 }
@@ -25,12 +25,12 @@ pub fn lifecycle_rank(word: &str) -> usize {
     }
 }
 
-/// The review verb a person sees for the one `crate::review` records.
+/// The review verb, in the lexicon's words (the older spellings map to them).
 pub fn verb(internal: &str) -> &'static str {
     match internal {
-        "promote" => "strengthen",
-        "demote" => "weaken",
-        "reject" | "retire" => "extinguish",
+        "strengthen" | "promote" => "strengthen",
+        "weaken" | "demote" => "weaken",
+        "extinguish" | "reject" | "retire" => "extinguish",
         "approve" => "approve",
         "pin" => "pin",
         "dismiss" => "dismiss",
@@ -45,15 +45,15 @@ pub fn review_command(internal: &str, reference: &str, id: &str) -> String {
 
 /// What a decision does, in a sentence.
 pub fn verb_effect(internal: &str) -> &'static str {
-    match internal {
+    match verb(internal) {
         "approve" => {
             "Approve: accept the reflex as it is (or apply its proposed change, or put a nascent reflex into service)."
         }
-        "reject" => {
-            "Extinguish: retire the reflex; conditioning keeps it extinguished unless it strengthens materially."
+        "extinguish" => {
+            "Extinguish: take it out of service; conditioning keeps it extinguished unless it strengthens materially."
         }
-        "demote" => "Weaken: fire → prime, held across conditioning.",
-        "promote" => "Strengthen: prime → fire, never above the reflex's effect ceiling.",
+        "weaken" => "Weaken: fire → prime, held across conditioning.",
+        "strengthen" => "Strengthen: prime → fire, never above the reflex's effect ceiling.",
         "pin" => "Pin: mark it authored; conditioning proposes changes instead of overwriting it.",
         "dismiss" => "Dismiss: keep the pinned reflex and silence its proposed change.",
         _ => "",
@@ -114,12 +114,13 @@ mod tests {
             ("active", "firm"),
             ("stale", "dormant"),
             ("retired", "extinguished"),
-            ("demoted", "weakened"),
             ("firm", "firm"),
         ] {
             assert_eq!(lifecycle(s), w);
         }
+        assert_eq!(review_command("weaken", "acme/work", "lookup"), "adage review weaken acme/work lookup");
         assert_eq!(review_command("demote", "acme/work", "lookup"), "adage review weaken acme/work lookup");
+        assert_eq!(verb_effect("promote"), verb_effect("strengthen"));
         assert_eq!(fit_with("abcdef", 4, "…"), "abc…");
         assert_eq!(fit_with("abcdef", 5, "..."), "ab...");
         assert_eq!(fit_with("abcdef", 2, "..."), "ab");

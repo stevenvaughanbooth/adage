@@ -30,6 +30,12 @@ CONTROL_PROMPTS = (
     "There is a bug in {path}: {problem}. Can you fix it?",
     "Fix this in {path}, please: {problem}.",
 )
+SCOPED_PROMPTS = CONTROL_PROMPTS
+DEPS_PROMPTS = (
+    "Pin {lib} to {version} in requirements.txt, please.",
+    "We need {lib} {version}: add it to requirements.txt.",
+    "Please add {lib} at version {version} to requirements.txt.",
+)
 BRIEF_PROMPTS = (
     "The change to make is described in BRIEF.md. Please make it.",
     "Please read BRIEF.md and do what it asks.",
@@ -108,7 +114,7 @@ class Stack:
         rng = random.Random(f"adage-gen/tracker/{self.plan.stack}/{self.skin.name}/{self.plan.seed}")
         out = []
         for t in self.plan.tasks:
-            if t.kind == "control":
+            if t.kind not in grammar.TRACKER_KINDS:
                 continue
             item = {"id": t.id, "status": "open", "priority": rng.choice(["P1", "P2", "P3"]),
                     "reported": f"2026-{rng.randint(7, 9):02d}-{rng.randint(1, 28):02d}",
@@ -161,10 +167,22 @@ class Stack:
     def prompts(self, t):
         if t.kind == "control":
             return [p.format(path=self.module_path(t.module), problem=self.control_problem(t)) for p in CONTROL_PROMPTS]
+        if t.kind == "scoped":
+            return [p.format(path=self.package_path(t.package), problem=self.control_problem(t)) for p in SCOPED_PROMPTS]
+        if t.kind == "deps":
+            return [p.format(lib=t.dep[0], version=t.dep[1]) for p in DEPS_PROMPTS]
         return [p.format(id=grammar.mention(t.id)) for p in self.skin.prompts]
 
     def solution(self, t):
         """The reference solution: exact text edits, then commands to run."""
+        if t.kind == "scoped":
+            return {"edits": [{"file": self.package_path(t.package), "old": self.function_code(t.template, True),
+                               "new": self.function_code(t.template, False)}],
+                    "run": [self.scope_cmd.replace("{part}", t.package)]}
+        if t.kind == "deps":
+            old = self.requirements_text()
+            return {"edits": [{"file": "requirements.txt", "old": old, "new": old + f"{t.dep[0]}=={t.dep[1]}\n"}],
+                    "run": [self.deps_cmd]}
         if t.kind in ("bugfix", "control"):
             path = self.module_path(t.module)
             return {"edits": [{"file": path, "old": self.function_code(t.template, True),
@@ -180,20 +198,40 @@ class Stack:
             old = next(r for r in tab.rows if r[0] == rt.code)
             new = [rt.values.get(c, v) for c, v in zip(tab.columns, old)]
             edit = {"file": path, "old": ",".join(old) + "\n", "new": ",".join(new) + "\n"}
-        return {"edits": [edit], "run": [self.regen_cmd]}
+        run = [self.regen_cmd, self.verify_cmd] if self.conv.sequence else [self.regen_cmd]
+        return {"edits": [edit], "run": run}
 
     def exercises(self, t):
         if t.kind == "control":
             return []
+        if t.kind == "scoped":
+            return ["scope"]
+        if t.kind == "deps":
+            return ["env-sync"]
         out = ["lookup"] + (["linked-files"] if self.conv.linked_files else [])
         if t.kind == "registry":
-            out.append("finish-line")
+            out.append("sequence" if self.conv.sequence else "finish-line")
         return out
 
     def task_files(self, t):
         if t.kind == "registry":
             return [f"registry/{t.registry.table}.csv"]
+        if t.kind == "scoped":
+            return [self.package_path(t.package)]
+        if t.kind == "deps":
+            return ["requirements.txt"]
         return [self.module_path(t.module)]
+
+    # ------------------------------------------------------------------ Track G G3 kinds (python-make)
+
+    scope_cmd = ""
+    deps_cmd = ""
+
+    def package_path(self, package):
+        raise NotImplementedError
+
+    def requirements_text(self):
+        return "".join(f"{lib}=={ver}\n" for lib, ver in self.skin.deps[:2])
 
     def hidden_count(self, text):
         raise NotImplementedError
@@ -201,9 +239,11 @@ class Stack:
     # ------------------------------------------------------------------ ground truth
 
     def conventions(self):
+        """conventions.json: the ground truth in `adage-conventions/1` (grammar.CONVENTIONS_SCHEMA),
+        exactly what `adage eval routes` reads, decoys included (grammar.entries lists both)."""
         c, sk = self.conv, self.skin
-        out = []
-        ids = [t.id for t in self.plan.tasks if t.kind != "control"]
+        out, decoys = [], []
+        ids = [t.id for t in self.plan.tasks if t.kind in grammar.TRACKER_KINDS]
         if c.lookup:
             shape = self.plan.spec.get("id_shape", "prefix_dash")
             if shape == "prefix_dash":
@@ -213,35 +253,65 @@ class Stack:
                 pattern = f"^{re.escape(sk.id_prefix)}-\\d{rep}$"
             else:
                 pattern = grammar.id_pattern(shape, sk.id_prefix, ids, self.plan.spec["id_digits"])
+            rx = re.compile(pattern)
             out.append({"id": "lookup", "kind": "lookup", "command": self.lookup_cmd(),
-                        "id_pattern": pattern,
+                        "id_pattern": pattern, "samples": ids,
+                        "counter_samples": [x for x in grammar.COUNTER_SAMPLES if not rx.fullmatch(x)],
                         "notes": f"Task prompts name only an item ID. Items live in {sk.tracker_phrase}: an opaque "
                                  f"store ({sk.store}) that only {sk.tool} reads. The README mentions only "
                                  f"{sk.tracker_phrase}."})
         if c.linked_files:
             out.append({"id": "linked-files", "kind": "linked_files", "command": self.lookup_cmd(),
+                        "samples": ids[:1],
                         "notes": "The lookup output lists the files to change under 'Files:' (the `files` field "
                                  "with --json). Registry items list the CSV and the module that reads it, never "
                                  "the generated file."})
         if c.dead_end:
             out.append({"id": "dead-end", "kind": "dead_end", "mode": c.dead_end, "command": self.verify_cmd,
-                        "avoided": self.dead_end_runner(), "signature": self.dead_end_signature(),
+                        "avoided": [self.dead_end_runner()], "signature": self.dead_end_signature(),
                         "notes": self.dead_end_notes()})
         if c.instinct_violation:
-            out.append({"id": "instinct-violation", "kind": "instinct_violation", "command": self.verify_cmd,
-                        "avoided": self.instinct_cmd, "signature": self.instinct_signature(),
+            out.append({"id": "instinct-violation", "kind": "dead_end", "mode": "instinct_violation",
+                        "command": self.verify_cmd, "avoided": [self.instinct_cmd],
+                        "signature": self.instinct_signature(),
                         "notes": f"The universal default ({self.instinct_cmd}) is retired here and fails; the suite "
                                  f"runs with {self.verify_cmd}, declared only in .ci/pipeline.yml."})
-        if c.finish_line:
+        if c.sequence:
+            out.append({"id": "sequence", "kind": "sequence", "command": self.regen_cmd,
+                        "steps": [self.regen_cmd, self.verify_cmd], "glob": "registry/*.csv",
+                        "signature": self.stale_signature(),
+                        "notes": f"Editing a CSV under registry/ requires {self.regen_cmd} and then {self.verify_cmd} "
+                                 f"(which checks the generated tables before anything else runs), in that order, as "
+                                 f".ci/pipeline.yml declares."})
+        if c.scope:
+            out.append({"id": "scope", "kind": "scope", "command": self.scope_cmd, "glob": "packages/**/*.py",
+                        "samples": list(self.skin.packages),
+                        "notes": f"Each package under packages/ has its own suite; after changing one, run "
+                                 f"{self.scope_cmd} with that package's directory name. {self.verify_cmd} covers "
+                                 f"tests/ only."})
+        if c.env_sync:
+            out.append({"id": "env-sync", "kind": "env_sync", "command": self.deps_cmd, "glob": "requirements.txt",
+                        "signature": self.deps_signature(),
+                        "notes": f"After changing requirements.txt, run {self.deps_cmd} to refresh requirements.lock; "
+                                 f"{self.verify_cmd} fails on a stale lock. An environment step: nascent until a "
+                                 f"person approves it."})
+        if c.finish_line and not c.sequence:
             out.append({"id": "finish-line", "kind": "finish_line", "command": self.regen_cmd, "glob": "registry/*.csv",
                         "signature": self.stale_signature(),
                         "notes": f"Lookups read {self.generated_path()}, generated from registry/*.csv. Editing a CSV "
                                  f"requires {self.regen_cmd}; {self.verify_cmd} and the hidden checks fail on stale "
                                  f"output."})
         for mode in c.decoys:
-            out.append({"id": f"decoy-{mode.replace('_', '-')}", "kind": "decoy", "mode": mode,
-                        "command": self.decoy_command(mode), "notes": self.decoy_notes(mode)})
-        return out
+            decoys.append({"id": f"decoy-{mode.replace('_', '-')}", "kind": "decoy", "mode": mode,
+                           "command": self.decoy_command(mode), "notes": self.decoy_notes(mode)})
+        doc = {"schema": grammar.CONVENTIONS_SCHEMA, "sandbox": sk.repo,
+               "description": f"The hidden conventions of the {sk.repo} sandbox (evals/gen, {self.NAME}, seed "
+                              f"{self.plan.seed}): what a learner should find. Decoys are planted commands no route "
+                              f"may direct.",
+               "conventions": out}
+        if decoys:
+            doc["decoys"] = decoys
+        return doc
 
     def decoy_notes(self, mode):
         return {
@@ -261,8 +331,10 @@ class Stack:
         for t in self.plan.tasks:
             e = {"id": t.id, "kind": t.kind, "split": t.split, "prompts": self.prompts(t),
                  "exercises": self.exercises(t), "files": self.task_files(t), "hidden": f"hidden/{hidden_names[t.id]}"}
-            if t.kind == "control":
+            if t.kind in ("control", "scoped"):
                 e["summary"] = self.control_problem(t)
+            elif t.kind == "deps":
+                e["summary"] = f"Pin {t.dep[0]} to {t.dep[1]} in requirements.txt"
             elif t.kind == "bugfix":
                 e["summary"] = self.fill(bugs.TEMPLATES[t.template].title, t.template)
             else:
@@ -300,7 +372,7 @@ class Stack:
                                f"tracker tasks",
                 **base, "prompts": list(self.skin.prompts),
                 "train": {"tasks": split(("bugfix", "registry"), "train"), "repeats": 2},
-                "eval": {"tasks": split(("bugfix", "registry"), "eval"), "repeats": 3, "arms": ["holdout", "adage"]},
+                "eval": {"tasks": split(("bugfix", "registry"), "eval"), "repeats": 3, "arms": ["control", "adage"]},
                 "budget_usd": 20.0,
             }
         if split(("control",), "train") and split(("control",), "eval"):
@@ -310,7 +382,7 @@ class Stack:
                                f"exercise no task convention (the brief is written to BRIEF.md)",
                 **base, "prompts": list(BRIEF_PROMPTS),
                 "train": {"tasks": split(("control",), "train"), "repeats": 2},
-                "eval": {"tasks": split(("control",), "eval"), "repeats": 3, "arms": ["holdout", "adage"]},
+                "eval": {"tasks": split(("control",), "eval"), "repeats": 3, "arms": ["control", "adage"]},
                 "budget_usd": 10.0,
             }
         return out

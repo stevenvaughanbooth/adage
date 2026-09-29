@@ -15,13 +15,14 @@ use std::path::PathBuf;
 
 use crate::sandbox::Profile;
 
-/// Execution levels (Track C §3.1). E0 (directives only) never reaches this crate.
+/// Execution levels (Track C §3.1). E0 (directives only) never reaches this
+/// crate. E1 prefetches read-only, typed data at the stimulus; E2 is an action a hook runs: staged,
+/// verified against its declared outputs, applied atomically.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Level {
     E1,
     E2,
-    E3,
 }
 
 impl Level {
@@ -29,7 +30,6 @@ impl Level {
         match s.to_ascii_lowercase().as_str() {
             "e1" => Some(Level::E1),
             "e2" => Some(Level::E2),
-            "e3" => Some(Level::E3),
             _ => None,
         }
     }
@@ -38,7 +38,6 @@ impl Level {
         match self {
             Level::E1 => "e1",
             Level::E2 => "e2",
-            Level::E3 => "e3",
         }
     }
 }
@@ -81,7 +80,17 @@ pub enum FieldType {
     Bool,
     Enum,
     Pattern,
+    /// Bounded plain text (a work item's title, description, state): control and invisible
+    /// characters stripped, whitespace collapsed to single spaces, capped at `max` characters
+    /// ([`DEFAULT_TEXT`], never above [`MAX_TEXT`]), and withheld when the output scanner finds
+    /// instruction-shaped text, a secret or an Adage tag in it (`crate::scan`).
+    Text,
 }
+
+/// Default cap on a text field, in characters.
+pub const DEFAULT_TEXT: usize = 600;
+/// Hard cap on a text field, in characters.
+pub const MAX_TEXT: usize = 2000;
 
 /// Hard cap on a list field, whatever the spec says.
 pub const MAX_LIST: usize = 64;
@@ -101,7 +110,8 @@ pub struct FieldSpec {
     /// Dotted path of object keys in stdout's JSON; the field's own name when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub json: Option<String>,
-    /// `repo-path-list`: at most this many entries are kept (default 20, never above 64).
+    /// `repo-path-list`: at most this many entries are kept (default 20, never above 64). `text`:
+    /// at most this many characters (default 600, never above 2000).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max: Option<usize>,
     /// `enum`: the allowed values (each a safe id, at most 32).
@@ -118,6 +128,15 @@ pub struct FieldSpec {
     /// When true, a missing field is left out instead of withholding the block.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub optional: bool,
+    /// `repo-path-list`: read from line-oriented **text** output, not JSON: the repository
+    /// paths its lines mention, in order, each validated as a `repo-path` (an existing file or
+    /// directory inside the repository); nothing else of the text passes. So a plain-text lookup
+    /// (`Linked files: acme/customers.py, tests/test_customers.py`) is approved typed, no raw
+    /// output needed. `text` (the type): read from whichever shape the output has, the JSON
+    /// object's field, or else the text line labelled with the field's name (`Title: ...` for
+    /// `title`, `_` read as a space, any case).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub text: bool,
 }
 
 /// The output contract: typed fields, or raw text.
@@ -160,9 +179,59 @@ pub enum Origin {
         signer: Option<String>,
         /// The signer is in the trust anchors.
         trusted: bool,
-        /// The pack has passed local probation.
-        probation_passed: bool,
+        /// The pack has passed local forming.
+        forming_passed: bool,
     },
+}
+
+/// What an E2 action does (Track C §3.6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ActionKind {
+    /// Rewrites generated files: only the declared outputs may change.
+    Regenerate,
+    /// Checks: no source may change; only cache paths are kept.
+    Verify,
+}
+
+impl ActionKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ActionKind::Regenerate => "regenerate",
+            ActionKind::Verify => "verify",
+        }
+    }
+}
+
+/// An E2 action's declared change set: the globs it may change (`outputs`) and cache globs
+/// (`cache`). Part of the route exec digest, so an approval covers exactly these.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ActionSpec {
+    pub kind: ActionKind,
+    #[serde(default)]
+    pub outputs: Vec<String>,
+    #[serde(default)]
+    pub cache: Vec<String>,
+}
+
+impl ActionSpec {
+    /// Check the globs: safe, repository-relative, never under `.git`, bounded; a regenerate
+    /// action declares at least one output.
+    pub fn validate(&self) -> Result<()> {
+        for (what, globs) in [("outputs", &self.outputs), ("cache", &self.cache)] {
+            if globs.len() > adage_pack::MAX_ACTION_GLOBS {
+                bail!("{what}: at most {} globs", adage_pack::MAX_ACTION_GLOBS);
+            }
+            if let Some(g) = globs.iter().find(|g| !adage_pack::validate::action_glob_ok(g)) {
+                bail!("{what}: {g:?} is not a repository-relative glob outside .git");
+            }
+        }
+        if self.kind == ActionKind::Regenerate && self.outputs.is_empty() {
+            bail!("a regenerate action declares the outputs it may change");
+        }
+        Ok(())
+    }
 }
 
 /// A request to run one step.
@@ -192,6 +261,9 @@ pub struct ExecRequest {
     /// The route exec digest (§1.5) when a pack supplies one; otherwise derived from the request.
     #[serde(default)]
     pub route_exec_digest: Option<String>,
+    /// E2 only: what the action may change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<ActionSpec>,
 }
 
 /// A slot placeholder: `{name}` with a safe id inside.
@@ -249,6 +321,12 @@ impl OutputSpec {
             if !safe_id(name) {
                 bail!("field name {name:?} is not a safe id");
             }
+            if f.text && f.ty == FieldType::RepoPathList && f.json.is_some() {
+                bail!("field {name}: only a repo-path-list with no json path is read from text output");
+            }
+            if f.text && !matches!(f.ty, FieldType::RepoPathList | FieldType::Text) {
+                bail!("field {name}: only a repo-path-list or a text field is read from text output");
+            }
             if let Some(j) = &f.json {
                 if j.is_empty() || !j.split('.').all(safe_id) {
                     bail!("field {name}: json path {j:?} is not a dotted path of safe ids");
@@ -272,6 +350,11 @@ impl OutputSpec {
                 FieldType::RepoPathList => {
                     if f.max.is_some_and(|m| m == 0 || m > MAX_LIST) {
                         bail!("field {name}: max must be 1 to {MAX_LIST}");
+                    }
+                }
+                FieldType::Text => {
+                    if f.max.is_some_and(|m| m == 0 || m > MAX_TEXT) {
+                        bail!("field {name}: max must be 1 to {MAX_TEXT} characters");
                     }
                 }
                 _ => {}
@@ -335,13 +418,17 @@ impl ExecRequest {
         if let Some(d) = &self.route_exec_digest {
             return d.clone();
         }
-        let v = serde_json::json!({
+        let mut v = serde_json::json!({
             "argv": self.argv,
             "contracts": self.contracts,
             "output": self.output,
             "scripts": self.scripts,
             "effect": self.effect,
         });
+        // Only when present, so requests without an action keep their digests.
+        if let Some(a) = &self.action {
+            v["action"] = serde_json::json!(a);
+        }
         crate::sha256_hex(crate::canonical_json(&v).as_bytes())
     }
 }
@@ -368,6 +455,7 @@ mod tests {
             labels: Labels::default(),
             origin: Origin::Local,
             route_exec_digest: None,
+            action: None,
         }
     }
 

@@ -1,0 +1,274 @@
+{
+ "schema": "adage-procedure/0",
+ "skill": {
+  "name": "click-bugfix",
+  "source": "skills/click-bugfix/SKILL.md",
+  "sha256": "2f762d469d1e47bcde684db0b89eb7b6ff27b26cd39404ebfbc8cb048b49c960",
+  "bytes": 1452,
+  "approx_tokens": 363
+ },
+ "trigger": {
+  "description": "How to reproduce, test and fix a reported bug in the pallets/click repository. Use when a prompt reports wrong behaviour in click (options, completion, prompts, help output).",
+  "keywords": [
+   "behaviour",
+   "click",
+   "click-bugfix",
+   "completion",
+   "help",
+   "options",
+   "output",
+   "pallets",
+   "prompt",
+   "prompts",
+   "reported",
+   "reports",
+   "repository",
+   "reproduce",
+   "test",
+   "wrong"
+  ],
+  "spans": []
+ },
+ "slots": {
+  "symbol": {
+   "name": "symbol",
+   "type": "symbol",
+   "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$",
+   "source": "judgment",
+   "example": ""
+  },
+  "module": {
+   "name": "module",
+   "type": "module",
+   "pattern": "^[a-z_][a-z0-9_]{0,63}$",
+   "source": "edit",
+   "example": ""
+  }
+ },
+ "steps": [
+  {
+   "id": "s1",
+   "order": 1,
+   "title": "Reproduce the bug first",
+   "role": "run",
+   "text": "**Reproduce the bug first.** Put the example from the report in `repro.py` at the repository root and run it with `.venv/bin/python repro.py`. Expect it to show the wrong behaviour.",
+   "commands": [
+    {
+     "template": ".venv/bin/python repro.py",
+     "role": "run",
+     "env": "project-venv",
+     "scope": "path",
+     "slots": []
+    }
+   ],
+   "avoid": [],
+   "precondition": {
+    "kind": "always",
+    "glob": "",
+    "text": ""
+   },
+   "expect": {
+    "exit": "",
+    "contains": [],
+    "text": "it to show the wrong behaviour"
+   },
+   "compilable": true,
+   "why_not": ""
+  },
+  {
+   "id": "s2",
+   "order": 2,
+   "title": "Find the code",
+   "role": "search",
+   "text": "**Find the code.** Search the package, for example `grep -rn \"prompt_suffix\" src/click`, and read the module that defines it.",
+   "commands": [
+    {
+     "template": "grep -rn {symbol} src/click",
+     "role": "search",
+     "env": "tool",
+     "scope": "path",
+     "slots": [
+      "symbol"
+     ]
+    }
+   ],
+   "avoid": [],
+   "precondition": {
+    "kind": "always",
+    "glob": "",
+    "text": ""
+   },
+   "expect": {
+    "exit": "",
+    "contains": [],
+    "text": ""
+   },
+   "compilable": false,
+   "why_not": "slot {symbol} is chosen by the agent (no stimulus binds it)"
+  },
+  {
+   "id": "s3",
+   "order": 3,
+   "title": "Run the tests for that module",
+   "role": "verify",
+   "text": "**Run the tests for that module** with `.venv/bin/python -m pytest tests/test_<module>.py -q`. Never use `python -m pytest`, `python3 -m pytest` or bare `pytest` instead of `.venv/bin/python -m pytest`: they fail with `No module named pytest`.",
+   "commands": [
+    {
+     "template": ".venv/bin/python -m pytest tests/test_{module}.py -q",
+     "role": "verify",
+     "env": "project-venv",
+     "scope": "file",
+     "slots": [
+      "module"
+     ]
+    }
+   ],
+   "avoid": [
+    {
+     "command": "python -m pytest",
+     "instead": ".venv/bin/python -m pytest",
+     "signature": "No module named pytest"
+    },
+    {
+     "command": "python3 -m pytest",
+     "instead": ".venv/bin/python -m pytest",
+     "signature": "No module named pytest"
+    },
+    {
+     "command": "pytest",
+     "instead": ".venv/bin/python -m pytest",
+     "signature": "No module named pytest"
+    }
+   ],
+   "precondition": {
+    "kind": "always",
+    "glob": "",
+    "text": ""
+   },
+   "expect": {
+    "exit": "",
+    "contains": [],
+    "text": ""
+   },
+   "compilable": true,
+   "why_not": ""
+  },
+  {
+   "id": "s4",
+   "order": 4,
+   "title": "Fix the code",
+   "role": "edit",
+   "text": "**Fix the code** in `src/click/<module>.py` and add a regression test to `tests/test_<module>.py`.",
+   "commands": [],
+   "avoid": [],
+   "precondition": {
+    "kind": "always",
+    "glob": "",
+    "text": ""
+   },
+   "expect": {
+    "exit": "",
+    "contains": [],
+    "text": ""
+   },
+   "compilable": false,
+   "why_not": "no command: the step is the agent's judgment (an edit or a decision)"
+  },
+  {
+   "id": "s5",
+   "order": 5,
+   "title": "After editing `src/click/*.py`, run `.venv/bin/python -m pytest tests -q -x` to check the whole suite",
+   "role": "verify",
+   "text": "After editing `src/click/*.py`, run `.venv/bin/python -m pytest tests -q -x` to check the whole suite. Expect `passed` and no failures.",
+   "commands": [
+    {
+     "template": ".venv/bin/python -m pytest tests -q -x",
+     "role": "verify",
+     "env": "project-venv",
+     "scope": "suite",
+     "slots": []
+    }
+   ],
+   "avoid": [],
+   "precondition": {
+    "kind": "after_edit",
+    "glob": "src/click/*.py",
+    "text": ""
+   },
+   "expect": {
+    "exit": "zero",
+    "contains": [
+     "passed"
+    ],
+    "text": ""
+   },
+   "compilable": true,
+   "why_not": ""
+  },
+  {
+   "id": "s6",
+   "order": 6,
+   "title": "Before you finish",
+   "role": "run",
+   "text": "**Before you finish**, run `.venv/bin/python repro.py` again to confirm the fix, then delete `repro.py`.",
+   "commands": [
+    {
+     "template": ".venv/bin/python repro.py",
+     "role": "run",
+     "env": "project-venv",
+     "scope": "path",
+     "slots": []
+    }
+   ],
+   "avoid": [],
+   "precondition": {
+    "kind": "before_finish",
+    "glob": "",
+    "text": "Before you finish"
+   },
+   "expect": {
+    "exit": "",
+    "contains": [],
+    "text": ""
+   },
+   "compilable": true,
+   "why_not": ""
+  }
+ ],
+ "edges": [
+  {
+   "from": "s1",
+   "to": "s2",
+   "kind": "next"
+  },
+  {
+   "from": "s2",
+   "to": "s3",
+   "kind": "next"
+  },
+  {
+   "from": "s3",
+   "to": "s4",
+   "kind": "next"
+  },
+  {
+   "from": "s4",
+   "to": "s5",
+   "kind": "next"
+  },
+  {
+   "from": "s4",
+   "to": "s6",
+   "kind": "skip-if-not",
+   "when": "after_edit"
+  },
+  {
+   "from": "s5",
+   "to": "s6",
+   "kind": "next"
+  }
+ ],
+ "advice": [
+  "Source lives in `src/click/`, tests in `tests/`, roughly one test file per module (`src/click/shell_completion.py` is tested by `tests/test_shell_completion.py`). The project's virtualenv `.venv` has click installed editable and pytest; the system Python has neither."
+ ]
+}

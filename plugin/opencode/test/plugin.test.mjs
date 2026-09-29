@@ -34,13 +34,13 @@ async function real() {
   assert.equal(ctx.path.id, "ses_js")
   assert.equal(ctx.body.noReply, true, "context only: no model reply")
   assert.equal(ctx.body.parts[0].synthetic, true)
-  assert.match(ctx.body.parts[0].text, /^<adage-signal [^\n]*route="lookup"/)
+  assert.match(ctx.body.parts[0].text, /^<adage-reflex [^\n]*route="lookup"/)
   assert.match(ctx.body.parts[0].text, /wi-lookup W-2042 --json/)
 
   // Directives ride on the tool result the model reads next; the original output is kept.
   const out = { title: "", output: '{"linked_files":["acme/billing.py"]}', metadata: { exit: 0 } }
   await hooks["tool.execute.after"]({ tool: "bash", sessionID: "ses_js", callID: "c1", args: { command: "./scripts/wi-lookup W-2042 --json" } }, out)
-  assert.ok(out.output.startsWith('{"linked_files":["acme/billing.py"]}\n\n<adage-signal'), out.output)
+  assert.ok(out.output.startsWith('{"linked_files":["acme/billing.py"]}\n\n<adage-reflex'), out.output)
   assert.match(out.output, /route="read-linked"/)
 
   // A tool that threw: held, then delivered with the next tool result.
@@ -81,7 +81,7 @@ async function failsOpen(env, label) {
 
 async function synthetic() {
   const { hooks } = await load("PLUGIN_RECORD")
-  await hooks["chat.message"]({ sessionID: "s" }, { message: {}, parts: [{ type: "text", text: "<adage-signal x>", synthetic: true }] })
+  await hooks["chat.message"]({ sessionID: "s" }, { message: {}, parts: [{ type: "text", text: "<adage-reflex x>", synthetic: true }] })
   assert.ok(!existsSync(process.env.RECORD_FILE), "synthetic parts are never sent as prompts")
   await hooks["chat.message"]({ sessionID: "s" }, { message: {}, parts: [{ type: "text", text: "hello" }, { type: "file", url: "x" }] })
   const sent = JSON.parse(readFileSync(process.env.RECORD_FILE, "utf8"))

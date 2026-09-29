@@ -1,12 +1,12 @@
 //! Harness simulator, end to end through the binary. For each harness: learn from that harness's
 //! mock history (`sim/fixtures`, written by `adage-sim`), then replay a held-out session
 //! (`adage_sim::scenario::replay`) through `adage hook <harness> <event>` in that harness's native
-//! payloads — once in the treated arm, once in the holdout arm — and check:
+//! payloads — once in the treated arm, once in the control arm — and check:
 //!
 //! - the treated arm gets each directive at its moment, in the harness's output shape: the lookup
 //!   and the known dead end at the prompt, the linked files after the lookup, the finish line
 //!   after the schema edit, a request to continue at the first stop, and nothing at the second;
-//! - the holdout arm gets nothing at all;
+//! - the control arm gets nothing at all;
 //! - `adage graph --json` then counts both sessions, split by arm.
 //!
 //! Also: learning from Codex history and delivering in OpenCode, learning from all three
@@ -117,6 +117,9 @@ fn learned_routes(report: &Value) -> Vec<String> {
         .flatten()
         .flat_map(|t| t["routes"].as_array().cloned().unwrap_or_default())
         .filter_map(|r| r.as_str().map(|s| s.split(' ').next().unwrap().to_string()))
+        // Procedure cards (families of similar tasks, with the bundled model) are their own kind;
+        // `adage-learn/tests/cards.rs` covers them.
+        .filter(|id| !id.starts_with("card-"))
         .collect();
     v.sort();
     v
@@ -130,18 +133,21 @@ fn context_of(out: &str) -> String {
 
 /// Route ids in a response, in order.
 fn routes_in(text: &str) -> Vec<String> {
-    let re = regex::Regex::new(r#"<adage-signal [^>]*route="([^"]+)""#).unwrap();
+    let re = regex::Regex::new(r#"<adage-reflex [^>]*route="([^"]+)""#).unwrap();
     re.captures_iter(text).map(|c| c[1].to_string()).collect()
 }
 
 /// The response carries exactly the expected routes (by id prefix), and nothing else.
 fn expect_routes(out: &str, want: &[&str], what: &str) {
-    let got = routes_in(&context_of(out));
+    let all = routes_in(&context_of(out));
+    // A procedure card may come with a task prompt (these histories are all one kind of task,
+    // so they form a family); it is the only thing besides the expected routes that may.
+    let got: Vec<&String> = all.iter().filter(|g| !g.starts_with("card-")).collect();
     assert_eq!(got.len(), want.len(), "{what}: got {got:?}, want {want:?}\n{out}");
     for w in want {
         assert!(got.iter().any(|g| g.starts_with(w)), "{what}: no {w} in {got:?}");
     }
-    if want.is_empty() {
+    if want.is_empty() && all.is_empty() {
         assert_eq!(out, "", "{what}: silence");
     }
 }
@@ -217,7 +223,7 @@ fn replay_claude(sb: &Sandbox, sid: &str, arm: &str) {
                 && v["reason"].as_str().unwrap().contains("make gen")
         );
     } else {
-        assert_eq!(stop, "", "holdout: no stop request");
+        assert_eq!(stop, "", "control: no stop request");
     }
     turns(&r.finish, &mut rng);
     assert_eq!(h("Stop", json!({ "stop_hook_active": treated })), "", "obligation met: nothing more");
@@ -330,13 +336,13 @@ fn route<'a>(g: &'a Value, prefix: &str) -> &'a Value {
         .unwrap_or_else(|| panic!("no route {prefix}"))
 }
 
-/// One treated and one holdout replay of the same session: every route applied once per arm,
+/// One treated and one control replay of the same session: every route applied once per arm,
 /// delivered only in the treated arm.
 fn check_graph(sb: &Sandbox, harness: &str) {
     let g = sb.graph();
     assert_eq!(
         g["sessions"],
-        json!({ "total": 2, "treated": 1, "holdout": 1 }),
+        json!({ "total": 2, "treated": 1, "control": 1 }),
         "{harness}: both sessions, split by arm"
     );
     let mut all: Vec<(String, &Value)> = ["lookup-work-item", "read-linked-files", "finish-line-"]
@@ -345,27 +351,27 @@ fn check_graph(sb: &Sandbox, harness: &str) {
         .collect();
     all.extend(dead_ends(&g).into_iter().map(|r| (r["id"].as_str().unwrap().to_string(), r)));
     for (id, r) in all {
-        for arm in ["treated", "holdout"] {
+        for arm in ["treated", "control"] {
             assert_eq!(r["arms"][arm]["sessions"], 1, "{harness} {id} {arm}");
             assert_eq!(r["arms"][arm]["applied"], 1, "{harness} {id} {arm}: applied (delivered or withheld) once");
         }
         assert_eq!(r["live"]["emitted"], 1, "{harness} {id}: delivered once, in the treated arm only");
-        assert_eq!(r["live"]["derailed"], 0, "{harness} {id}");
+        assert_eq!(r["live"]["ignored"], 0, "{harness} {id}");
     }
     let lookup = route(&g, "lookup-work-item");
     assert_eq!(lookup["arms"]["treated"]["followed"], 1, "{harness}");
-    assert_eq!(lookup["arms"]["holdout"]["followed"], 1, "{harness}: the holdout session looked it up unaided");
+    assert_eq!(lookup["arms"]["control"]["followed"], 1, "{harness}: the control session looked it up unaided");
     assert_eq!(lookup["live"]["followed"], 1);
-    assert_eq!(lookup["live"]["holdout"]["unaided"], 1);
+    assert_eq!(lookup["live"]["control"]["unaided"], 1);
     let fin = route(&g, "finish-line-");
     assert_eq!(
-        (fin["arms"]["treated"]["met"].clone(), fin["arms"]["holdout"]["met"].clone()),
+        (fin["arms"]["treated"]["met"].clone(), fin["arms"]["control"]["met"].clone()),
         (json!(1), json!(1)),
         "{harness}: make gen ran in both"
     );
     let dead = dead_end(&g, "python3 -m unittest");
     assert_eq!(
-        (dead["arms"]["treated"]["hit_avoided"].clone(), dead["arms"]["holdout"]["hit_avoided"].clone()),
+        (dead["arms"]["treated"]["hit_avoided"].clone(), dead["arms"]["control"]["hit_avoided"].clone()),
         (json!(1), json!(1)),
         "{harness}: both replays ran unittest"
     );
@@ -416,7 +422,7 @@ fn claude_code_learn_then_replay() {
     assert_all_four(&rep, "claude", 2);
     let (a, b) = ids("claude");
     replay_claude(&sb, &a, "treated");
-    replay_claude(&sb, &b, "holdout");
+    replay_claude(&sb, &b, "control");
     check_graph(&sb, "claude");
 }
 
@@ -427,7 +433,7 @@ fn opencode_learn_then_replay() {
     assert_all_four(&rep, "opencode", 2);
     let (a, b) = ids("opencode");
     replay_opencode(&sb, &a, "treated");
-    replay_opencode(&sb, &b, "holdout");
+    replay_opencode(&sb, &b, "control");
     check_graph(&sb, "opencode");
 }
 
@@ -439,7 +445,7 @@ fn codex_learn_then_replay() {
     assert_all_four(&rep, "codex", 1);
     let (a, b) = ids("codex");
     replay_codex(&sb, &a, "treated");
-    replay_codex(&sb, &b, "holdout");
+    replay_codex(&sb, &b, "control");
     check_graph(&sb, "codex");
 }
 
@@ -452,7 +458,7 @@ fn learn_from_codex_history_deliver_in_opencode() {
     assert_all_four(&rep, "codex", 1);
     let (a, b) = ids("opencode");
     replay_opencode(&sb, &a, "treated");
-    replay_opencode(&sb, &b, "holdout");
+    replay_opencode(&sb, &b, "control");
     check_graph(&sb, "codex → opencode");
 }
 
@@ -508,7 +514,7 @@ fn learn_from_all_three_histories_together() {
     replay_opencode(&sb, &a, "treated");
     let (a, _) = ids("codex");
     replay_codex(&sb, &a, "treated");
-    assert_eq!(sb.graph()["sessions"], json!({ "total": 3, "treated": 3, "holdout": 0 }));
+    assert_eq!(sb.graph()["sessions"], json!({ "total": 3, "treated": 3, "control": 0 }));
 }
 
 /// The OpenCode plugin (plugin/opencode/adage.js) driven through the whole held-out session by
@@ -529,7 +535,7 @@ fn opencode_plugin_full_session_in_node() {
     std::fs::write(&plugin, src).unwrap();
     let r = replay_for(&sb);
     let (a, b) = ids("opencode");
-    for (sid, arm) in [(a, "treated"), (b, "holdout")] {
+    for (sid, arm) in [(a, "treated"), (b, "control")] {
         let script = sb.root.join(format!("script-{arm}.json"));
         std::fs::write(&script, opencode::plugin_script(&r, &sid, arm == "treated").to_string()).unwrap();
         let driver =
@@ -568,7 +574,7 @@ fn graph_counts_sessions_whose_ids_share_a_prefix() {
     replay_codex(&sb, &c, "treated");
     replay_codex(&sb, &d, "treated");
     let g = sb.graph();
-    assert_eq!(g["sessions"], json!({ "total": 4, "treated": 4, "holdout": 0 }));
+    assert_eq!(g["sessions"], json!({ "total": 4, "treated": 4, "control": 0 }));
     let lookup = route(&g, "lookup-work-item");
     assert_eq!(lookup["arms"]["treated"]["sessions"], 4);
     assert_eq!(lookup["arms"]["treated"]["applied"], 4);

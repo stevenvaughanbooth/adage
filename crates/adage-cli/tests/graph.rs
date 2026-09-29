@@ -1,5 +1,5 @@
 //! `adage graph` through the binary: counts come from real hook decisions, split by arm, so a
-//! holdout session (nothing delivered) is never counted as a derail.
+//! control session (nothing delivered) is never counted as an ignore.
 
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
@@ -32,8 +32,8 @@ fn track() -> Track {
                 contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
             }],
             effect: Effect::Observe,
-            aspect: Aspect::Green,
-            state: RouteState::Active,
+            strength: Strength::Fire,
+            state: RouteState::Firm,
             exit: vec![Exit::IntentChanges],
             evidence: Evidence { support: 7, opportunities: 8, provenance: "desire-path".into(), ..Default::default() },
             authored: false,
@@ -95,28 +95,28 @@ impl World {
 fn graph_splits_judgements_by_arm() {
     let w = World::new();
     w.session("s-treated", "treated", true);
-    w.session("s-holdout", "holdout", false);
+    w.session("s-control", "control", false);
     let g: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
-    assert_eq!(g["sessions"], json!({ "total": 2, "treated": 1, "holdout": 1 }));
+    assert_eq!(g["sessions"], json!({ "total": 2, "treated": 1, "control": 1 }));
     let r = &g["routes"][0];
     assert_eq!(r["id"], "lookup");
     assert_eq!(r["trigger"]["kind"], "prompt");
     assert!(r["directive"].as_str().unwrap().contains("wi-lookup W-"), "{}", r["directive"]);
     assert_eq!(r["live"]["emitted"], 1, "delivered once, in the treated session");
     assert_eq!(r["live"]["followed"], 1);
-    assert_eq!(r["live"]["derailed"], 0, "the holdout session never saw it, so it cannot have derailed");
-    assert_eq!(r["live"]["holdout"]["not_reached"], 1);
+    assert_eq!(r["live"]["ignored"], 0, "the control session never saw it, so it cannot have ignored");
+    assert_eq!(r["live"]["control"]["not_reached"], 1);
     assert_eq!(r["arms"]["treated"], json!({ "sessions": 1, "applied": 1, "followed": 1, "met": 0, "hit_avoided": 0 }));
-    assert_eq!(r["arms"]["holdout"], json!({ "sessions": 1, "applied": 1, "followed": 0, "met": 0, "hit_avoided": 0 }));
+    assert_eq!(r["arms"]["control"], json!({ "sessions": 1, "applied": 1, "followed": 0, "met": 0, "hit_avoided": 0 }));
     let railed = g["observed"]
         .as_array()
         .unwrap()
         .iter()
         .find(|o| o["route"] == "lookup")
-        .expect("the lookup command is on rails");
+        .expect("a reflex directs the lookup command");
     assert_eq!(railed["how"], "directs");
     let kinds: Vec<&str> = g["events"].as_array().unwrap().iter().filter_map(|e| e["arm"].as_str()).collect();
-    assert!(kinds.contains(&"treated") && kinds.contains(&"holdout"));
+    assert!(kinds.contains(&"treated") && kinds.contains(&"control"));
 }
 
 #[test]

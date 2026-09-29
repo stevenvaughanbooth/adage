@@ -1,12 +1,13 @@
-// The lexicon (docs/lexicon.md) at display time. Stored values stay as the binary writes them.
+// The lexicon (docs/lexicon.md) at display time. The binary stores the lexicon's words now; the
+// older spellings are still read here (and once in src/api/normalize.ts) for older data.
 
 import type { Route, Step, Trigger } from "../api/types";
 
 export type Strength = "fire" | "prime" | "inhibit";
-export type Lifecycle = "nascent" | "forming" | "firm" | "dormant" | "extinguished" | "weakened";
+export type Lifecycle = "nascent" | "forming" | "firm" | "dormant" | "extinguished";
 
 export const STRENGTHS: Strength[] = ["fire", "prime", "inhibit"];
-export const LIFECYCLE: Lifecycle[] = ["nascent", "forming", "firm", "dormant", "extinguished", "weakened"];
+export const LIFECYCLE: Lifecycle[] = ["nascent", "forming", "firm", "dormant", "extinguished"];
 
 const STRENGTH: Record<string, Strength> = {
   green: "fire",
@@ -17,9 +18,9 @@ const STRENGTH: Record<string, Strength> = {
   inhibit: "inhibit",
 };
 
-/** fire / prime / inhibit, from a stored aspect (or the newer stored word). */
-export function strength(aspect: string | null | undefined): Strength | null {
-  return (aspect && STRENGTH[aspect.toLowerCase()]) || null;
+/** fire / prime / inhibit, from the stored strength (or an older stored aspect green/yellow/red). */
+export function strength(stored: string | null | undefined): Strength | null {
+  return (stored && STRENGTH[stored.toLowerCase()]) || null;
 }
 
 const STATE: Record<string, Lifecycle> = {
@@ -28,13 +29,14 @@ const STATE: Record<string, Lifecycle> = {
   active: "firm",
   stale: "dormant",
   retired: "extinguished",
-  demoted: "weakened",
+  // No weakened state: a demoted route was still delivered, at its lower strength.
+  demoted: "firm",
   nascent: "nascent",
   forming: "forming",
   firm: "firm",
   dormant: "dormant",
   extinguished: "extinguished",
-  weakened: "weakened",
+  weakened: "firm",
 };
 
 export function lifecycle(state: string | null | undefined): Lifecycle {
@@ -66,6 +68,8 @@ export function stimulusKind(t: Trigger): string {
       return "session start";
     case "intent":
       return "intent";
+    case "context":
+      return "context";
     default:
       return t.kind.replace(/_/g, " ");
   }
@@ -82,30 +86,36 @@ export function responseKind(s: Step): string {
       return "run instead";
     case "advise":
       return "advise";
+    case "sequence":
+      return "steps in order";
+    case "card":
+      return "procedure card";
     default:
       return s.kind.replace(/_/g, " ");
   }
 }
 
-/** A judgement's word: derailed is "ignored" (lexicon), obligation_met is "met". */
+/** A judgement's word: obligation_met is "met"; older spools' derailed / followed_failed are ignored / misfired. */
 export function judgement(kind: string): string {
   switch (kind) {
     case "followed":
       return "followed";
+    case "ignored":
     case "derailed":
       return "ignored";
     case "obligation_met":
       return "met";
     case "misfired":
+    case "followed_failed":
       return "misfired";
     default:
       return kind.replace(/_/g, " ");
   }
 }
 
-/** The arm's word: the holdout arm is "control". */
+/** The arm's word (older spools called the control arm "holdout"). */
 export function arm(a: string | null | undefined): string {
-  if (a === "holdout") return "control";
+  if (a === "control" || a === "holdout") return "control";
   if (a === "treated") return "with reflexes";
   return a ?? "unknown";
 }

@@ -1,11 +1,11 @@
-// Chapter: choose and compile (Track G, crates/adage-graph on the rebrand branch, G3–G4:
-// score.rs, select.rs, compile/). Candidate patterns are scored as predictions, calibrated,
-// selected by compression with one code table per delivery shape, and compiled to reflexes whose
-// strength is decided at compile time; an avoid interlocks the runs it contradicts, and shadow mode
-// writes the result beside the live tracks.
+// Chapter: choose and compile (Track G, crates/adage-graph: score.rs, select.rs, compile/).
+// Candidate patterns are scored as predictions, calibrated, selected by compression with one code
+// table per delivery shape, and compiled to reflexes whose strength is decided at compile time; an
+// avoid interlocks the runs it contradicts, and the survivors are written to one track,
+// `<repo>/learned`, with a `.why.json` beside it.
 //
-// The traces are sample data in the registry-driven service of chapter 4; the candidates are the
-// patterns a miner would hand the scorer. Everything else is the real arithmetic, ported: the
+// The traces are sample data in the registry-driven service of "Find repeated subgraphs"; the
+// candidates are the patterns mining would hand the scorer. Everything else is the real arithmetic, ported: the
 // discounted Beta posterior with its backoff prior, the anchor-level contrast, p_soon and Δturns,
 // the value, the gates, the isotonic calibration over 200 bins on 3 task-grouped folds, and the
 // SQS-style MDL gain of select.rs with its lazy greedy order. Every number a caption states is
@@ -130,7 +130,7 @@ export interface Cand {
 
 const it = (code: Code, o: Partial<Item> = {}): Item => ({ code, ...o });
 
-/** The candidates the chapter follows, as a miner hands them to the scorer. */
+/** The candidates the chapter follows, as mining hands them to the scorer. */
 export const CANDS: Cand[] = [
   { key: "seq", text: "edit registry/*.csv → make gen → make check", items: [it("E"), it("G"), it("C")], cut: 1 },
   { key: "obl", text: "last edit of registry/*.csv → make gen", items: [it("E", { last: true }), it("G")], cut: 1 },
@@ -659,12 +659,12 @@ function compile(scored: Scored[], tables: Table[], runners: Map<string, number>
 
 // ------------------------------------------------------------------ the scene
 
-const CAM: Record<"cards" | "axis" | "tables" | "reflexes" | "shadow", CamSpec> = {
+const CAM: Record<"cards" | "axis" | "tables" | "reflexes" | "track", CamSpec> = {
   cards: { target: [-0.6, 0, 0], yaw: -0.08, pitch: 0.1, dist: 21 },
   axis: { target: [0, 0, 0], yaw: 0, pitch: 0.08, dist: 21 },
   tables: { target: [0, 0.4, 0], yaw: 0, pitch: 0.12, dist: 21 },
   reflexes: { target: [-0.6, 0, 0], yaw: -0.06, pitch: 0.1, dist: 21 },
-  shadow: { target: [0, 0, 0], yaw: 0, pitch: 0.1, dist: 22 },
+  track: { target: [0, 0, 0], yaw: 0, pitch: 0.1, dist: 22 },
 };
 
 /** Short names, and how each compiled reflex reads. */
@@ -694,7 +694,6 @@ const TABLE_NAME: Record<string, string> = {
   avoid: "npm test ✗ → check",
   npm: "[read, edit] → npm test",
 };
-const LIVE_NAME: Record<string, string> = { obl: "finish line", avoid: "dead end" };
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -721,8 +720,8 @@ function build(stage: Stage): Built {
     stage.dot(`${k}.b`, 0.26);
     stage.dot(`${k}.c`, 0.16);
   }
-  stage.dot("live.obl", 0.2);
-  stage.dot("live.avoid", 0.2);
+  stage.dot("why.a", 0.2);
+  stage.dot("why.b", 0.2);
 
   // Positions.
   const row = (i: number, n = keys.length, top = 4.3) => top - (i * (2 * top)) / (n - 1);
@@ -744,7 +743,7 @@ function build(stage: Stage): Built {
   const RX = [-8.2, -7, -5.8];
 
   // Links: the calibration shift, the axis, the tables' frames, each reflex arc, the interlock, and
-  // the two track folders.
+  // the track folder and the file beside it.
   const calKeys = passing.map((s) => s.cand.key);
   stage.link("shift", calKeys.map((k) => [`${k}.raw`, k]), "ink3");
   stage.link("axis", [[[ax(0.5), -4.3, 0], [ax(1), -4.3, 0]], ...[0.5, 0.6, 0.7, 0.8, 0.9, 1].map((x): [V3, V3] => [[ax(x), -4.3, 0], [ax(x), -4.5, 0]])], "ink3");
@@ -804,19 +803,16 @@ function build(stage: Stage): Built {
   stage.label("ax.hi", "1.00", [ax(1), -4.5, 0], { dy: 4, center: true });
   stage.label("ax.name", "posterior mean · raw → calibrated", [0, -4.5, 0], { dy: 4, center: true });
   stage.label("ax.prime", "prime needs 0.50", [ax(YELLOW_RATE), 3.8, 0], { cls: "note", dy: -16, center: true });
-  const shadowReflexes = delivered.map((c) => c.sc.cand.key);
-  stage.label("f.live", "<small>LIVE TRACKS · MINERS</small>&lt;repo&gt;/finish-line, dead-ends", [-5.5, 3.2, 0], { cls: "chip", dy: -44, center: true });
-  stage.label("f.shadow", "<small>SHADOW · GRAPH ENGINE</small>&lt;repo&gt;/.shadow/&lt;track&gt;", [2.6, 3.2, 0], { cls: "chip", dy: -44, center: true });
-  const legacy = ["obl", "avoid"].filter((k) => shadowReflexes.includes(k));
-  const onlyGraph = shadowReflexes.filter((k) => !legacy.includes(k));
+  stage.label("f.why", "<small>BESIDE IT · PEOPLE ONLY</small>.why.json", [-5.5, 3.2, 0], { cls: "chip", dy: -44, center: true });
+  stage.label("f.track", "<small>ONE TRACK</small>&lt;repo&gt;/learned", [2.6, 3.2, 0], { cls: "chip", dy: -44, center: true });
   stage.label(
     "report",
-    `<small>.SHADOW/SHADOW-REPORT.JSON</small>in both: ${legacy.map((k) => LIVE_NAME[k]).join(", ")}<br>only the graph engine: ${onlyGraph.map((k) => comp.get(k)!.shape).join(", ")}`,
+    `<small>NEXT</small>each is judged again on the traces,<br>then weighed by what telling changes (uplift)`,
     [2.6, -3.4, 0],
     { cls: "chip", dy: 12, center: true },
   );
-  stage.label("live.obl", "finish line · make gen", "live.obl", { dx: 12, dy: -8 });
-  stage.label("live.avoid", "dead end · npm test", "live.avoid", { dx: 12, dy: -8 });
+  stage.label("why.a", "pattern · backoff · gain in bits", "why.a", { dx: 12, dy: -8 });
+  stage.label("why.b", "lift · confidence · example traces", "why.b", { dx: 12, dy: -8 });
   for (const c of delivered) stage.label(`sh.${c.sc.cand.key}`, esc(c.shape), `${c.sc.cand.key}.b`, { dy: 14, center: true });
 
   function state(s: number): SceneState {
@@ -867,13 +863,13 @@ function build(stage: Stage): Built {
       }
     }
     if (s === 7) {
-      dots["live.obl"] = { pos: [-7.1, 1.6, 0], color: "prime", glow: 0.7 };
-      dots["live.avoid"] = { pos: [-7.1, -0.8, 0], color: "inhibit", glow: 0.7 };
-      labels.push("live.obl", "live.avoid", "f.live", "f.shadow", "report", ...delivered.map((c) => `sh.${c.sc.cand.key}`));
+      dots["why.a"] = { pos: [-7.1, 1.6, 0], color: "ink2", glow: 0.3 };
+      dots["why.b"] = { pos: [-7.1, -0.8, 0], color: "ink2", glow: 0.3 };
+      labels.push("why.a", "why.b", "f.why", "f.track", "report", ...delivered.map((c) => `sh.${c.sc.cand.key}`));
     }
     if (s === 2) labels.push("ax.lo", "ax.hi", "ax.name", "ax.prime");
     if (s === 3 || s === 4) labels.push(...Object.keys(SHAPE_COL).map((x) => `col.${x}`));
-    const cam = s <= 1 ? CAM.cards : s === 2 ? CAM.axis : s <= 4 ? CAM.tables : s <= 6 ? CAM.reflexes : CAM.shadow;
+    const cam = s <= 1 ? CAM.cards : s === 2 ? CAM.axis : s <= 4 ? CAM.tables : s <= 6 ? CAM.reflexes : CAM.track;
     return {
       dots,
       labels,
@@ -970,7 +966,7 @@ function build(stage: Stage): Built {
   const text: Omit<Step, "state">[] = [
     {
       title: "Candidates arrive with their evidence",
-      body: `Mining hands over closed patterns, each read as a prediction: after this context, this follows. Here are ${S.length} sample candidates over ${r.traces.length} sample traces, among them chapter 4's registry pattern. Support counts distinct traces; opportunities are the traces where the context occurs.`,
+      body: `Mining hands over closed patterns, each read as a prediction: after this context, this follows. Here are ${S.length} sample candidates over ${r.traces.length} sample traces, among them the registry pattern from the previous chapter. Support counts distinct traces; opportunities are the traces where the context occurs.`,
       chips: [{ text: `${S.length} sample candidates` }, { text: `≤ ${MAX_CLOSED.toLocaleString("en")} closed patterns scored` }, { text: `${r.traces.length} traces over ${r.days} days` }],
     },
     {
@@ -1016,9 +1012,9 @@ function build(stage: Stage): Built {
       chips: [{ text: "interlock before emission" }, { text: `${delivered.length} reflexes delivered` }],
     },
     {
-      title: "Shadow mode compares engines",
-      body: `Behind the engine flag, shadow mode writes the miners' tracks as usual and the graph engine's to <repo>/.shadow/<track>, with shadow-report.json listing what only one engine learned and what differs. Measured on the core suite, the graph engine scores J 0.9759 against 0.6307 for the miners.`,
-      chips: [{ text: "L0 bench J 0.9759 vs 0.6307" }, { text: "next action top-1 0.449 vs 0.399 (demo-haiku45)" }, { text: "unsafe 0 · fast-path mismatches 0" }],
+      title: "One track, with its reasons",
+      body: `The ${delivered.length} survivors are written to one track, <repo>/learned: the graph engine is the only learner, so there is no track per kind of reflex. Beside it, .why.json records why each exists: the mined pattern, how many context items it conditions on, the bits it saved, its lift and confidence, and example traces. adage review reads it; the agent never sees it, and it never travels in a shared pack. Each reflex is then judged again on the traces, next.`,
+      chips: [{ text: "tracks/<repo>/learned" }, { text: ".why.json · never rendered to the agent" }, { text: "stable ids: review decisions survive re-learning" }],
     },
   ];
 
@@ -1039,11 +1035,11 @@ function build(stage: Stage): Built {
 export const choose: Chapter = {
   id: "choose",
   title: "Choose and compile",
-  status: "Track G · behind the engine flag",
-  kind: "flag",
+  status: "Built · the learner",
+  kind: "built",
   summary:
     "Candidates are scored as predictions, calibrated, then selected by compression: a reflex earns its place by describing traces in fewer bits. Winners compile to delivery shapes, and their strength is decided at compile time.",
-  source: "crates/adage-graph/src/{score,select,compile} · Track G G2–G4",
+  source: "crates/adage-graph/src/{score,select,compile} · crates/adage-tracks/src/why.rs",
   usesRepo: false,
   build,
 };

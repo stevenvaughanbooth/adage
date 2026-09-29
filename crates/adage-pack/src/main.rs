@@ -4,12 +4,11 @@
 //! adage-pack inspect <pack-dir>                 validate and summarise; print CLOSURE
 //! adage-pack verify <pack-dir> <allowed_signers>  validate, then check pack.sig (namespace adage-pack)
 //! adage-pack digest <pack-dir>                  the pack digest and every route exec digest
-//! adage-pack upgrade <track-dir> <out-dir> [--repo <root>]   v1 track → pack
 //! ```
 
-use adage_pack::{digest_dir, upgrade_track_with, verify_dir, Pack, NAMESPACE};
+use adage_pack::{digest_dir, verify_dir, Pack, NAMESPACE};
 use anyhow::{bail, Context, Result};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -19,7 +18,7 @@ fn main() {
     }
 }
 
-const USAGE: &str = "usage: adage-pack inspect <pack> | verify <pack> <allowed_signers> | digest <pack> | upgrade <track> <out> [--repo <root>]";
+const USAGE: &str = "usage: adage-pack inspect <pack> | verify <pack> <allowed_signers> | digest <pack>";
 
 fn run(args: &[String]) -> Result<()> {
     let arg = |i: usize| args.get(i).map(PathBuf::from).context(USAGE);
@@ -38,7 +37,7 @@ fn run(args: &[String]) -> Result<()> {
                     "  {:<24} {:<10} {:<7} exec {}",
                     r.id,
                     r.shape.as_str(),
-                    format!("{:?}", r.aspect).to_lowercase(),
+                    format!("{:?}", r.strength).to_lowercase(),
                     &p.route_exec_digest(&r.id).unwrap_or_default()[..16]
                 );
             }
@@ -64,19 +63,6 @@ fn run(args: &[String]) -> Result<()> {
             for r in &p.routes {
                 println!("route {} {}", r.id, p.route_exec_digest(&r.id).unwrap_or_default());
             }
-        }
-        Some("upgrade") => {
-            let (src, out) = (arg(1)?, arg(2)?);
-            let repo = args.iter().position(|a| a == "--repo").and_then(|i| args.get(i + 1)).map(PathBuf::from);
-            if out.exists() && std::fs::read_dir(&out)?.next().is_some() {
-                bail!("{} is not empty", out.display());
-            }
-            let u = upgrade_track_with(&src, repo.as_deref().map(Path::new))?;
-            u.pack.write(&out)?;
-            for (id, why) in &u.skipped {
-                eprintln!("skipped {id}: {why}");
-            }
-            println!("wrote {} ({} routes)", out.display(), u.pack.routes.len());
         }
         _ => bail!(USAGE),
     }

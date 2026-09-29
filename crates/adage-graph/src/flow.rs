@@ -12,7 +12,12 @@
 //! - **Flow**: exact string equality between a source seen earlier and the sink token, or else one
 //!   of its sub-tokens (the first, left to right).
 //! - **Value slot test** ([`FlowParams`]): at least 3 distinct values; at least 60% of the sink's
-//!   occurrences flow-bound; no single value holding 50% or more of them.
+//!   occurrences flow-bound; no single value holding more than half of them (a task repeated twice in four traces is not a literal). A value the sink took
+//!   from no source in two or more traces and that never flowed there is a **literal use** (a
+//!   default id a script or a habit repeats): it is left out of the test, and is no negative.
+//! - **Thin slots** (G5): exactly 2 distinct flowed values, every flow-bound occurrence from a
+//!   prompt, and at least 60% flow-bound. Such a slot is kept, marked [`Slot::thin`]; its type must
+//!   start with a literal prefix (`BIL-`), and it may only compile on outcome lift, at prime.
 //!
 //! Determinism: sessions are observed independently (in parallel when asked) and folded in
 //! session-id order; every map is a `BTreeMap`.
@@ -96,13 +101,16 @@ impl Source {
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct FlowParams {
     pub min_distinct: u32,
+    /// Distinct values of a thin slot (below `min_distinct`); 0 turns thin slots off.
+    #[serde(default)]
+    pub thin_distinct: u32,
     pub min_flow_rate: f64,
     pub max_top_share: f64,
 }
 
 impl Default for FlowParams {
     fn default() -> Self {
-        FlowParams { min_distinct: 3, min_flow_rate: 0.6, max_top_share: 0.5 }
+        FlowParams { min_distinct: 3, thin_distinct: 2, min_flow_rate: 0.6, max_top_share: 0.5 }
     }
 }
 
@@ -284,6 +292,12 @@ pub struct Slot {
     /// seen at this sink from no source.
     pub negatives: BTreeSet<String>,
     pub is_slot: bool,
+    /// Passed as a thin slot only (two values from prompts): its route needs outcome lift.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub thin: bool,
+    /// Literal uses left out of the test (values from no source, repeated in 2+ traces).
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub literals: BTreeSet<String>,
 }
 
 impl Slot {
@@ -306,6 +320,8 @@ struct Acc {
     positives: BTreeMap<String, u32>,
     unflowed: BTreeSet<String>,
     prompt_sessions: BTreeSet<String>,
+    /// Sessions per unflowed value.
+    unflowed_in: BTreeMap<String, BTreeSet<String>>,
 }
 
 /// Fold observations (in the order given, which [`observe_all`] makes canonical) into sinks, and
@@ -370,6 +386,7 @@ pub fn fold(obs: &[SessionObs], p: &FlowParams) -> Vec<Slot> {
                     }
                 }
                 None => {
+                    a.unflowed_in.entry(value.clone()).or_default().insert(o.id.clone());
                     a.unflowed.insert(value);
                 }
             }
@@ -378,19 +395,35 @@ pub fn fold(obs: &[SessionObs], p: &FlowParams) -> Vec<Slot> {
     acc.into_iter()
         .filter(|(_, a)| a.flowed > 0)
         .map(|(sink, a)| {
-            let n = a.occurrences.max(1) as f64;
-            let top = a.values.values().copied().max().unwrap_or(0) as f64;
+            // Literal uses: a value from no source, in two or more traces, that never flowed here.
+            let literals: BTreeSet<String> = a
+                .unflowed_in
+                .iter()
+                .filter(|(v, ss)| ss.len() >= 2 && !a.positives.contains_key(*v))
+                .map(|(v, _)| v.clone())
+                .collect();
+            let lit_occ: u32 = literals.iter().map(|v| a.values.get(v).copied().unwrap_or(0)).sum();
+            let n = a.occurrences.saturating_sub(lit_occ).max(1) as f64;
+            let top =
+                a.values.iter().filter(|(v, _)| !literals.contains(*v)).map(|(_, c)| *c).max().unwrap_or(0) as f64;
             let flow_rate = a.flowed as f64 / n;
             let top_share = top / n;
-            let distinct = a.values.len() as u32;
+            let distinct = a.values.keys().filter(|v| !literals.contains(*v)).count() as u32;
             let mut negatives: BTreeSet<String> = a.unflowed.clone();
             for sid in &a.prompt_sessions {
                 if let Some(w) = words.get(sid) {
                     negatives.extend(w.iter().cloned());
                 }
             }
-            negatives.retain(|v| !a.positives.contains_key(v));
-            let is_slot = distinct >= p.min_distinct && flow_rate >= p.min_flow_rate && top_share < p.max_top_share;
+            negatives.retain(|v| !a.positives.contains_key(v) && !literals.contains(v));
+            let is_slot = distinct >= p.min_distinct && flow_rate >= p.min_flow_rate && top_share <= p.max_top_share;
+            let prompt = a.sources.get("prompt").copied().unwrap_or(0);
+            let thin = !is_slot
+                && p.thin_distinct > 0
+                && a.positives.len() as u32 == p.thin_distinct
+                && distinct == p.thin_distinct
+                && prompt == a.flowed
+                && flow_rate >= p.min_flow_rate;
             Slot {
                 sink,
                 occurrences: a.occurrences,
@@ -401,7 +434,9 @@ pub fn fold(obs: &[SessionObs], p: &FlowParams) -> Vec<Slot> {
                 sources: a.sources,
                 positives: a.positives,
                 negatives,
-                is_slot,
+                is_slot: is_slot || thin,
+                thin,
+                literals,
             }
         })
         .collect()

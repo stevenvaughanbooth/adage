@@ -18,12 +18,12 @@ const pick = (xs) => xs[Math.floor(rnd() * xs.length)];
 
 const REPO = "acme-billing";
 const wrap = (id, strength, body) =>
-  `<adage-reflex reflex="${id}" strength="${strength}">\n${body}\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>`;
+  `<adage-reflex track="acme-billing/learned@0.3.0" route="${id}" strength="${strength}">\n${body}\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>`;
 
 function route(o) {
   const arms = (t, c) => ({
     treated: { sessions: 43, applied: t[0], followed: t[1], met: t[2] ?? 0, hit_avoided: t[3] ?? 0 },
-    holdout: { sessions: 11, applied: c[0], followed: c[1], met: c[2] ?? 0, hit_avoided: c[3] ?? 0 },
+    control: { sessions: 11, applied: c[0], followed: c[1], met: c[2] ?? 0, hit_avoided: c[3] ?? 0 },
   });
   return {
     id: o.id,
@@ -33,12 +33,12 @@ function route(o) {
     reference: o.reference ?? o.track,
     repo: REPO,
     imported: o.imported ?? false,
-    in_index: o.state !== "draft",
+    in_index: o.state !== "nascent",
     instinct: o.instinct ?? false,
     origin: o.origin ?? null,
     review: { verbs: o.verbs, reasons: o.reasons ?? [] },
-    aspect: o.aspect,
-    ceiling: o.ceiling ?? "green",
+    strength: o.strength,
+    ceiling: o.ceiling ?? "fire",
     effect: o.effect ?? "observe",
     state: o.state,
     authored: false,
@@ -53,16 +53,17 @@ function route(o) {
       turns_saved: o.ev[3],
       days: 9,
       exposed: 0,
-      stale_since: null,
+      dormant_since: null,
       provenance: o.instinct ? "instinct" : "desire-path",
     },
     live: {
       emitted: o.live?.[0] ?? 0,
       would_have: o.live?.[1] ?? 0,
       followed: o.live?.[2] ?? 0,
-      derailed: o.live?.[3] ?? 0,
+      ignored: o.live?.[3] ?? 0,
+      misfired: 0,
       obligation_met: o.live?.[4] ?? 0,
-      holdout: { unaided: o.live?.[5] ?? 0, not_reached: o.live?.[6] ?? 0, obligation_met: 0 },
+      control: { unaided: o.live?.[5] ?? 0, not_reached: o.live?.[6] ?? 0, obligation_met: 0 },
       sessions: o.live?.[7] ?? 0,
     },
     arms: arms(o.t ?? [0, 0], o.c ?? [0, 0]),
@@ -73,10 +74,10 @@ const routes = [
   route({
     id: "lookup-work-item",
     summary: "work items are looked up with scripts/wi-lookup",
-    track: "acme-billing/work-items",
+    track: "acme-billing/learned",
     version: "0.3.0",
-    aspect: "green",
-    state: "active",
+    strength: "fire",
+    state: "firm",
     trigger: { kind: "prompt", label: "a prompt names a work item" },
     step: { kind: "run", label: "python3 scripts/wi-lookup {item}" },
     directive: wrap("lookup-work-item", "fire", "In this repository, work item details are looked up with:\n  python3 scripts/wi-lookup W-2045"),
@@ -84,15 +85,15 @@ const routes = [
     t: [18, 15],
     c: [9, 3],
     live: [31, 9, 26, 4, 0, 3, 6, 18],
-    verbs: ["approve", "reject", "demote", "pin"],
+    verbs: ["approve", "extinguish", "weaken", "pin"],
   }),
   route({
     id: "read-linked-files",
     summary: "files a lookup lists are read together",
-    track: "acme-billing/work-items",
+    track: "acme-billing/learned",
     version: "0.3.0",
-    aspect: "green",
-    state: "active",
+    strength: "fire",
+    state: "firm",
     trigger: { kind: "after_command", label: "`python3 scripts/wi-lookup {item}` succeeds" },
     step: { kind: "read_batch", label: "read ≤5 listed files at once", slot: "files" },
     directive: wrap("read-linked-files", "fire", "That result lists these files: src/billing/invoice.py, docs/billing.md.\nIf you need them, read them together in one turn rather than one at a time."),
@@ -100,16 +101,16 @@ const routes = [
     t: [14, 12],
     c: [6, 2],
     live: [22, 7, 19, 2, 0, 2, 4, 14],
-    verbs: ["approve", "reject", "demote", "pin"],
+    verbs: ["approve", "extinguish", "weaken", "pin"],
   }),
   route({
     id: "dead-end-d41b1e",
     summary: "unittest cannot run here; make test works",
-    track: "acme-billing/work-items",
+    track: "acme-billing/learned",
     version: "0.3.0",
-    aspect: "red",
-    ceiling: "red",
-    state: "active",
+    strength: "inhibit",
+    ceiling: "inhibit",
+    state: "firm",
     trigger: { kind: "after_failure", label: "`python3 -m unittest` fails: No module named pytest" },
     step: { kind: "avoid", label: "make test", avoid: "python3 -m unittest", signature: "No module named pytest" },
     directive: wrap("dead-end-d41b1e", "inhibit", "In this repository `python3 -m unittest` fails (No module named pytest). Run instead:\n  make test"),
@@ -117,15 +118,15 @@ const routes = [
     t: [12, 10, 0, 1],
     c: [5, 1, 0, 4],
     live: [14, 5, 10, 2, 0, 1, 4, 12],
-    verbs: ["approve", "reject", "pin"],
+    verbs: ["approve", "extinguish", "pin"],
   }),
   route({
     id: "start-with-make-test",
     summary: "“run the tests” means make test",
-    track: "acme-billing/intents",
-    version: "0.1.0",
-    aspect: "yellow",
-    state: "probation",
+    track: "acme-billing/learned",
+    version: "0.3.0",
+    strength: "prime",
+    state: "forming",
     trigger: { kind: "intent", label: "a prompt means: run the tests" },
     step: { kind: "run", label: "make test" },
     directive: wrap("start-with-make-test", "prime", "Agents in this repository usually start the tests with:\n  make test"),
@@ -133,7 +134,7 @@ const routes = [
     t: [7, 5],
     c: [3, 1],
     live: [8, 3, 5, 3, 0, 1, 2, 7],
-    verbs: ["approve", "reject", "promote", "pin"],
+    verbs: ["approve", "extinguish", "strengthen", "pin"],
   }),
   route({
     id: "finish-line/regenerate",
@@ -141,10 +142,10 @@ const routes = [
     track: "adage/finish-line",
     reference: "acme-billing/instincts",
     version: "0.1.0",
-    aspect: "yellow",
-    ceiling: "yellow",
+    strength: "prime",
+    ceiling: "prime",
     effect: "regenerate",
-    state: "active",
+    state: "firm",
     instinct: true,
     origin: "instinct U1 (from Makefile)",
     trigger: { kind: "after_edit", label: "an edit touches schema/*.json" },
@@ -154,35 +155,35 @@ const routes = [
     t: [10, 0, 9],
     c: [4, 0, 2],
     live: [12, 4, 0, 1, 9, 0, 0, 10],
-    verbs: ["approve", "reject", "pin"],
+    verbs: ["approve", "extinguish", "pin"],
   }),
   route({
     id: "regen-openapi-client",
     summary: "openapi edits need make client",
-    track: "acme-billing/work-items",
+    track: "acme-billing/learned",
     version: "0.3.0",
-    aspect: "yellow",
-    state: "draft",
+    strength: "prime",
+    state: "nascent",
     effect: "regenerate",
     trigger: { kind: "after_edit", label: "an edit touches api/openapi.yaml" },
     step: { kind: "run", label: "make client" },
     directive: wrap("regen-openapi-client", "prime", "In this repository, changes to api/openapi.yaml are followed by:\n  make client"),
     ev: [3, 4, 0.3, 0.9],
-    verbs: ["approve", "reject", "pin"],
-    reasons: [{ kind: "draft", why: "an environment step, a draft until a person approves it" }],
+    verbs: ["approve", "extinguish", "pin"],
+    reasons: [{ kind: "nascent", why: "an environment step, nascent until a person approves it" }],
   }),
   route({
     id: "read-adr-before-schema",
     summary: "schema changes start from ADR 0007",
-    track: "acme-billing/work-items",
+    track: "acme-billing/learned",
     version: "0.3.0",
-    aspect: "yellow",
-    state: "draft",
+    strength: "prime",
+    state: "nascent",
     trigger: { kind: "after_edit", label: "an edit touches schema/*.json" },
     step: { kind: "advise", label: "read docs/adr/0007-schema.md first", template: "read_first" },
     directive: wrap("read-adr-before-schema", "prime", "Before changing the schema, agents here read:\n  docs/adr/0007-schema.md"),
     ev: [3, 5, 0.23, 0.5],
-    verbs: ["approve", "reject", "pin"],
+    verbs: ["approve", "extinguish", "pin"],
     reasons: [{ kind: "new", why: "learned by `adage condition` and never reviewed" }],
   }),
   route({
@@ -192,9 +193,9 @@ const routes = [
     reference: "@imported/team/python-basics",
     version: "1.2.0",
     imported: true,
-    aspect: "yellow",
-    ceiling: "red",
-    state: "active",
+    strength: "prime",
+    ceiling: "inhibit",
+    state: "firm",
     trigger: { kind: "after_failure", label: "`pip install` fails: externally-managed-environment" },
     step: { kind: "avoid", label: "uv pip install", avoid: "pip install", signature: "externally-managed-environment" },
     directive: wrap("prefer-uv-pip", "prime", "Here `pip install` fails (externally-managed-environment). Consider instead:\n  uv pip install"),
@@ -202,19 +203,19 @@ const routes = [
     t: [3, 2, 0, 0],
     c: [2, 0, 0, 1],
     live: [3, 2, 2, 1, 0, 0, 1, 3],
-    verbs: ["approve", "reject", "pin"],
+    verbs: ["approve", "extinguish", "pin"],
   }),
 ];
 
-// 54 traces over two weeks, one in five a control (holdout), each a few decisions.
+// 54 traces over two weeks, one in five in the control arm, each a few decisions.
 const events = [];
 const learning = [];
 const SESSIONS = 54;
 const hex = (n) => Math.floor(rnd() * 16 ** n).toString(16).padStart(n, "0");
 for (let i = 0; i < SESSIONS; i++) {
   const session = `${hex(8)}-${hex(4)}-4${hex(3)}-a${hex(3)}-${hex(12)}`;
-  const arm = i % 5 === 3 ? "holdout" : "treated";
-  const control = arm === "holdout";
+  const arm = i % 5 === 3 ? "control" : "treated";
+  const control = arm === "control";
   let ts = START + (i / SESSIONS) * 13.6 * DAY + Math.floor(rnd() * 3 * 3600e3);
   const ev = (event, o = {}) => {
     ts += 20e3 + Math.floor(rnd() * 90e3);
@@ -237,7 +238,7 @@ for (let i = 0; i < SESSIONS; i++) {
   const took = control ? rnd() < 0.35 : rnd() < 0.85;
   ev("PostToolBatch", {
     o: [took ? "exec python3 scripts/wi-lookup {id}" : pick(["search:content {pattern}", "list {path}"])],
-    j: formed ? [[took ? "followed" : "derailed", "lookup-work-item"]] : [],
+    j: formed ? [[took ? "followed" : "ignored", "lookup-work-item"]] : [],
     d: took && i > 16 ? ["read-linked-files"] : [],
   });
   if (rnd() < 0.3) ev("PostToolUseFailure", { d: ["dead-end-d41b1e"], o: ["exec python3 -m unittest !failed"] });
@@ -252,7 +253,7 @@ events.sort((a, b) => a.ts - b.ts);
 
 const run = (ts, changes, used) => ({
   ts,
-  kind: "learn",
+  kind: "condition",
   trigger: "auto",
   repo: REPO,
   sessions_read: used + 1,
@@ -262,10 +263,10 @@ const run = (ts, changes, used) => ({
   changes,
 });
 learning.push(
-  run(START + 2 * DAY, [{ route: "lookup-work-item", track: "acme-billing/work-items", change: "added", from: null, to: "yellow", summary: "work item route added at prime (6 of 9 traces)" }], 9),
-  run(START + 5 * DAY + 3 * 3600e3, [{ route: "lookup-work-item", track: "acme-billing/work-items", change: "aspect", from: "yellow", to: "green", summary: "work item route prime → fire (lower bound 0.51)" }], 21),
-  run(START + 8 * DAY, [{ route: "read-linked-files", track: "acme-billing/work-items", change: "aspect", from: "yellow", to: "green", summary: "linked files route prime → fire (15 of 16 traces)" }], 33),
-  run(START + 11 * DAY, [{ route: "lookup-work-item", track: "acme-billing/work-items", change: "evidence", summary: "evidence 22/32 → 23/33 traces" }], 45),
+  run(START + 2 * DAY, [{ route: "lookup-work-item", track: "acme-billing/learned", change: "new", from: null, to: "prime", summary: "work item reflex added at prime (6 of 9 traces)" }], 9),
+  run(START + 5 * DAY + 3 * 3600e3, [{ route: "lookup-work-item", track: "acme-billing/learned", change: "strength", from: "prime", to: "fire", summary: "work item reflex prime → fire (lower bound 0.51)" }], 21),
+  run(START + 8 * DAY, [{ route: "read-linked-files", track: "acme-billing/learned", change: "strength", from: "prime", to: "fire", summary: "linked files reflex prime → fire (15 of 16 traces)" }], 33),
+  run(START + 11 * DAY, [{ route: "lookup-work-item", track: "acme-billing/learned", change: "evidence", summary: "evidence 22/32 → 23/33 traces" }], 45),
 );
 
 const observed = [
@@ -288,7 +289,7 @@ const graph = (o) => ({
 
 const treated = new Set(events.filter((e) => e.arm === "treated").map((e) => e.session)).size;
 const busy = graph({
-  sessions: { total: SESSIONS, treated, holdout: SESSIONS - treated },
+  sessions: { total: SESSIONS, treated, control: SESSIONS - treated },
   stops: events.filter((e) => e.continue).length,
   routes,
   observed,
@@ -296,8 +297,8 @@ const busy = graph({
   learning,
 });
 const empty = graph({
-  sessions: { total: 0, treated: 0, holdout: 0 },
-  routes: routes.filter((r) => r.instinct).map((r) => ({ ...r, arms: { treated: { sessions: 0, applied: 0, followed: 0, met: 0, hit_avoided: 0 }, holdout: { sessions: 0, applied: 0, followed: 0, met: 0, hit_avoided: 0 } }, live: { ...r.live, emitted: 0, would_have: 0, obligation_met: 0, sessions: 0 } })),
+  sessions: { total: 0, treated: 0, control: 0 },
+  routes: routes.filter((r) => r.instinct).map((r) => ({ ...r, arms: { treated: { sessions: 0, applied: 0, followed: 0, met: 0, hit_avoided: 0 }, control: { sessions: 0, applied: 0, followed: 0, met: 0, hit_avoided: 0 } }, live: { ...r.live, emitted: 0, would_have: 0, obligation_met: 0, sessions: 0 } })),
 });
 const health = {
   checks: [
@@ -308,11 +309,11 @@ const health = {
     { check: "instincts", status: "pass", detail: "on; 1 bound for acme-billing" },
     { check: "hooks (Claude Code)", status: "pass", detail: "installed in .claude/settings.local.json" },
     { check: "hooks (Codex)", status: "pass", detail: "installed in .codex/hooks.json" },
-    { check: "model", status: "warn", detail: "no intent model installed; intent reflexes are off", fix: "`adage models install` fetches it (34 MB)" },
+    { check: "embedding model", status: "pass", detail: "potion-base-8m-i8: bundled in this binary (int8, SHA-256 verified)" },
     { check: "spools", status: "pass", detail: "54 session spool(s), 1.2 MB" },
     { check: "fail-open", status: "pass", detail: "no fail-open events in 7 days" },
   ],
-  summary: { pass: 9, warn: 1, fail: 0 },
+  summary: { pass: 10, warn: 0, fail: 0 },
 };
 
 writeFileSync(join(here, "busy.json"), JSON.stringify(busy, null, 1) + "\n");

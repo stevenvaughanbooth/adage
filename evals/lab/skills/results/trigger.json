@@ -1,0 +1,31 @@
+[
+ {
+  "skill": "acme-work-item",
+  "positives": 6,
+  "negatives": 166,
+  "threshold": 0.276,
+  "lexical_auc": 1.0,
+  "lexical_recall": 0.667,
+  "lexical_false_positive_rate": 0.0,
+  "span_recall": 1.0,
+  "span_false_positive_rate": 0.0
+ },
+ {
+  "skill": "click-bugfix",
+  "positives": 15,
+  "negatives": 157,
+  "threshold": 0.125,
+  "lexical_auc": 0.915,
+  "lexical_recall": 0.6,
+  "lexical_false_positive_rate": 0.0
+ },
+ {
+  "skill": "click-bugfix (description only)",
+  "positives": 15,
+  "negatives": 157,
+  "threshold": 0.1,
+  "lexical_auc": 0.96,
+  "lexical_recall": 0.133,
+  "lexical_false_positive_rate": 0.0
+ }
+]

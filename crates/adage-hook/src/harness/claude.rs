@@ -80,6 +80,16 @@ impl Adapter for Claude {
             Output::Context(text) => {
                 json!({ "hookSpecificOutput": { "hookEventName": event, "additionalContext": text } }).to_string()
             }
+            // Shown to the person as a hook system message; the model never receives it (Claude
+            // Code 2.1: `hook_system_message` attachments are not sent to the API).
+            Output::Notice(text) => json!({ "systemMessage": text }).to_string(),
+            // `updatedInput` with no `permissionDecision`: Claude Code applies the new input and
+            // then runs its own permission checks on it, as for the original (2.1.28x).
+            Output::Rewrite { input, context, notice } => json!({
+                "systemMessage": notice,
+                "hookSpecificOutput": { "hookEventName": "PreToolUse", "updatedInput": input, "additionalContext": context }
+            })
+            .to_string(),
         })
     }
 
@@ -96,9 +106,11 @@ pub fn settings(bin: &str) -> Value {
         "hooks": {
             "SessionStart": h("SessionStart", 5),
             "UserPromptSubmit": h("UserPromptSubmit", 5),
-            "PostToolBatch": h("PostToolBatch", 5),
+            "PostToolBatch": h("PostToolBatch", super::action_timeout(bin)),
             "PostToolUseFailure": h("PostToolUseFailure", 5),
-            "Stop": h("Stop", 5),
+            // Only shell calls: the project's environment for a Python test run or repro.
+            "PreToolUse": [{ "matcher": "Bash", "hooks": [{ "type": "command", "command": bin, "args": ["hook", "claude", "PreToolUse"], "timeout": 5 }] }],
+            "Stop": h("Stop", super::action_timeout(bin)),
             "SessionEnd": h("SessionEnd", 5)
         }
     })

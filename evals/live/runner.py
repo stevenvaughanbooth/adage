@@ -14,8 +14,10 @@ and each session gets a fresh sandbox and its own empty home directory:
           of tasks outside this round's held-out pool)
   eval    held-out tasks; each (task, repeat) runs every arm, in an order drawn from the seed:
             adage    hooks installed, directives delivered
-            holdout  hooks installed, directives computed and logged but not delivered (the control)
+            control  hooks installed, directives computed and logged but not delivered (the control)
             off      no hooks at all (to measure hook overhead, if wanted)
+            instincts, e1, agents-md   see evals/live/README.md (agents-md: the control's hooks
+                     plus a context file the sandbox command commits when given `{arm}`)
   report  summary.json (per-arm aggregates, task-level permutation p-values with Holm adjustment,
           task-bootstrap CIs, per round) and a results page like demo/results:
           <root>/results/{index.html, summary.json, state.json}
@@ -46,6 +48,12 @@ Options:
                        state.json, else a fresh one; always recorded in state.json)
   --no-isolate         run agents with your own HOME, ~/.claude and environment (not
                        recommended: auto-memory and earlier transcripts leak into the control arm)
+  --host-auth          forward the variables of a host-managed login to isolated sessions (HOST_AUTH_ENV:
+                       the ingress token file, organisation, account, base URL, proxies and CA
+                       bundles; never CLAUDECODE or a session id). Same as `"host_auth": true`
+  --no-resume          run every session of each phase again; by default a phase skips its sessions
+                       that already finished in this root (a pass or a fail, a max-turns cutoff
+                       included) and runs only the rest: new repeats, runs cut short, infra errors
   --json               print the plan as JSON (dry run)
   --adage PATH         the adage binary (default: target/release/adage in this repository)
 
@@ -74,7 +82,7 @@ import report as demo_report  # noqa: E402 - demo/report.py: statuses, statistic
 EDIT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 EXPLORE_TOOLS = {"Read", "Glob", "Grep", "LS"}
 EXPLORE_COMMANDS = ("ls", "find", "cat", "grep", "rg", "head", "tail", "tree", "sed -n", "wc")
-ARMS = ("adage", "holdout", "off")
+ARMS = ("adage", "control", "off", "instincts", "e1", "agents-md")
 SPOOL_MAGIC = bytes([0xAD, 0xA6, 0xE5, 0x01])
 DEFAULTS = {
     "model": "claude-haiku-4-5-20251001",
@@ -88,6 +96,11 @@ DEFAULTS = {
     "workdir": "repo",
     # Extra environment variables passed to isolated sessions (e.g. Bedrock or Vertex settings).
     "forward_env": [],
+    # Forward HOST_AUTH_ENV too (`--host-auth`): for hosts that provide Claude Code's login.
+    "host_auth": False,
+    # Run each session under bubblewrap (`confine_argv`): see only its run directory, its ADAGE_HOME
+    # and what it needs. `confine_hide`, `confine_expose` adjust what is hidden and mounted back.
+    "confine": False,
     # How tool calls are categorised for the timeline and the metrics (substrings of a Bash
     # command). The defaults describe the acme-billing demo; other sandboxes set their own.
     "classify": {
@@ -114,6 +127,26 @@ PASS_ENV = ("PATH", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TERM", "SHELL", "
 # ~/.claude/.credentials.json (Linux; macOS keeps it in the Keychain, so set a variable there).
 AUTH_ENV = ("ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_AUTH_TOKEN")
 AUTH_PASS = AUTH_ENV + ("ANTHROPIC_BASE_URL",)
+# `--host-auth` (or `"host_auth": true`): the allowlist a host-managed Claude Code login needs when
+# the host, not a credentials file, provides auth (Claude Code on the web and similar containers:
+# a session-ingress token file and the organisation and account it belongs to). Exactly these, and
+# only when set. Never the host session's own identity (CLAUDECODE, CLAUDE_CODE_SESSION_ID, ...):
+# those would attach every child session to the operator's session.
+HOST_AUTH_ENV = ("ANTHROPIC_BASE_URL", "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST", "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
+                 "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CODE_ORGANIZATION_UUID", "CLAUDE_CODE_ACCOUNT_UUID",
+                 "HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "https_proxy", "http_proxy", "no_proxy",
+                 "SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE")
+# Of those, the ones that actually carry a credential.
+HOST_AUTH_TOKENS = ("CLAUDE_SESSION_INGRESS_TOKEN_FILE", "CLAUDE_CODE_OAUTH_TOKEN")
+
+
+def forbidden_forward(name):
+    """Variables `forward_env` must never pass: an agent session's own markers and identity (a
+    child session carrying them attaches to, or reports into, the operator's session) and Adage's
+    own settings (the runner sets those per arm)."""
+    return (name == "CLAUDECODE" or name.startswith("ADAGE_") or "SESSION_ID" in name
+            or name in ("CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_PID")
+            or name.startswith("CLAUDE_CODE_MESSAGING_") or name.startswith("CLAUDE_CODE_REMOTE"))
 
 
 # ------------------------------------------------------------------------------------- config
@@ -129,11 +162,17 @@ def load_config(path, overrides):
     missing = [k for k in ("name", "repo_key", "sandbox", "score", "prompts", "train", "eval") if k not in cfg]
     if missing:
         raise SystemExit(f"config {path}: missing {', '.join(missing)}")
-    for arm in cfg["eval"].get("arms", ["holdout", "adage"]):
+    for arm in cfg["eval"].get("arms", ["control", "adage"]):
         if arm not in ARMS:
             raise SystemExit(f"config {path}: unknown arm {arm!r} (one of {', '.join(ARMS)})")
     if not isinstance(cfg["rounds"], int) or cfg["rounds"] < 1:
         raise SystemExit(f"config {path}: rounds must be a positive integer")
+    if cfg.get("host_auth"):
+        cfg["forward_env"] = list(dict.fromkeys([*(cfg.get("forward_env") or []), *HOST_AUTH_ENV]))
+    bad = [k for k in cfg.get("forward_env") or [] if forbidden_forward(k)]
+    if bad:
+        raise SystemExit(f"config {path}: forward_env may not pass {', '.join(bad)} (an agent session's own "
+                         "markers, or Adage's settings)")
     tbr = cfg["eval"].get("tasks_by_round")
     if tbr is None and "tasks" not in cfg["eval"]:
         raise SystemExit(f"config {path}: eval needs tasks or tasks_by_round")
@@ -158,8 +197,9 @@ def load_config(path, overrides):
 
 
 def expand(argv, **kv):
-    """Fill `{repo}`, `{dir}`, `{task}` placeholders in a command given as an argv list."""
+    """Fill `{repo}`, `{dir}`, `{task}`, `{arm}` placeholders in a command given as an argv list."""
     kv.setdefault("repo", str(REPO))
+    kv.setdefault("arm", "")
     return [a.format(**kv) for a in argv]
 
 
@@ -190,6 +230,13 @@ def arm_order(arms, seed, round_, task, repeat):
     return order
 
 
+def task_prompt(cfg, task, template):
+    """A task's own prompt (`task_prompts`, e.g. a paraphrased issue in RepoBench), braces escaped
+    so that `.format(id=...)` leaves it as written; else the rotating template."""
+    own = (cfg.get("task_prompts") or {}).get(task)
+    return own.replace("{", "{{").replace("}", "}}") if own is not None else template
+
+
 def plan(cfg, phases, round_):
     """Every session one round would run, in order: (run id, phase, arm, task, prompt)."""
     out = []
@@ -198,14 +245,15 @@ def plan(cfg, phases, round_):
         t = cfg["train"]
         for r in range(t.get("repeats", 1)):
             for i, task in enumerate(t["tasks"]):
-                out.append((f"train-{task}-r{r + 1}", "train", "train", task, prompts[(i + r) % len(prompts)]))
+                out.append((f"train-{task}-r{r + 1}", "train", "train", task,
+                            task_prompt(cfg, task, prompts[(i + r) % len(prompts)])))
     if "eval" in phases:
         e = cfg["eval"]
         tag = "eval" if round_ == 1 else f"eval{round_}"
         for r in range(e.get("repeats", 1)):
             for i, task in enumerate(tasks_for_round(cfg, round_)):
-                prompt = prompts[(i + r) % len(prompts)]
-                for arm in arm_order(e.get("arms", ["holdout", "adage"]), cfg.get("seed") or 0, round_, task, r + 1):
+                prompt = task_prompt(cfg, task, prompts[(i + r) % len(prompts)])
+                for arm in arm_order(e.get("arms", ["control", "adage"]), cfg.get("seed") or 0, round_, task, r + 1):
                     out.append((f"{tag}-{task}-r{r + 1}-{arm}", "eval", arm, task, prompt))
     return out
 
@@ -219,18 +267,48 @@ def claude_command(cfg, prompt, settings):
         "--setting-sources", "project,local",
         "--strict-mcp-config",
         "--settings", str(settings),
+        # The tool set itself, not only what is pre-approved: newer harnesses offer more built-in
+        # tools (TaskGet/TaskList, Cron*, ToolSearch, ...), and an agent asked to "pick up W-1042"
+        # looked for it with TaskGet, found no such task and asked what to do. `tools` (default:
+        # the allowed tools) keeps every session, of every harness version, on the same tools.
+        "--tools", ",".join(cfg.get("tools") or cfg["allowed_tools"]),
         "--allowedTools", *cfg["allowed_tools"],
         "--disallowedTools", *cfg["disallowed_tools"],
     ]
 
 
+def instincts_home(home):
+    """The `instincts` arm's ADAGE_HOME, next to the learned one: Adage's built-in defaults bound
+    from the repository's files alone (`adage condition --instincts-only`), no learned reflex."""
+    return Path(home).parent / "instincts-home"
+
+
+def e1_home(home):
+    """The `e1` arm's ADAGE_HOME: a copy of the learned home in which a person approved E1
+    prefetches (`adage review delegate ... --level e1`, which needs a terminal). Its hooks run
+    `adage-exec`, not `adage`. The runner never approves anything itself."""
+    return Path(home).parent / "e1-home"
+
+
+def settings_kind(arm):
+    """Which settings file a session loads: no hooks, Adage's hooks, or adage-exec's (E1)."""
+    return "exec" if arm == "e1" else "hooks" if env_for(arm, "/x") else "none"
+
+
 def env_for(arm, home):
     """Adage's environment overrides for one session. Training and `off` sessions have no hooks at
-    all. Automatic learning is off: the rounds decide when learning happens, so the index stays
-    fixed within a round."""
+    all. The `instincts` arm is treated, reading the day-0 index (instincts only). Automatic
+    learning is off: the rounds decide when learning happens, so the index stays fixed within a
+    round."""
     if arm in ("train", "off"):
         return {}
-    return {"ADAGE_HOME": str(home), "ADAGE_ARM": "holdout" if arm == "holdout" else "treated",
+    if arm == "instincts":
+        return {"ADAGE_HOME": str(instincts_home(home)), "ADAGE_ARM": "treated", "ADAGE_AUTO_LEARN": "0"}
+    if arm == "e1":
+        return {"ADAGE_HOME": str(e1_home(home)), "ADAGE_ARM": "treated", "ADAGE_AUTO_LEARN": "0"}
+    # `agents-md`: the control's hooks (directives logged, not delivered) plus a context file the
+    # sandbox command commits (it gets `{arm}`): an up-front CLAUDE.md against just-in-time reflexes.
+    return {"ADAGE_HOME": str(home), "ADAGE_ARM": "control" if arm in ("control", "agents-md") else "treated",
             "ADAGE_AUTO_LEARN": "0"}
 
 
@@ -256,6 +334,55 @@ def isolation_env(run_home, base, forward=()):
     return env
 
 
+# `confine`: run each session in a bubblewrap mount namespace in which the hidden directories are
+# empty and only what the session needs is mounted back. Without it an agent can walk out of its
+# sandbox: real Haiku sessions ran `find /tmp -name "*hidden*"`, read the hidden test of their own
+# task, and read the runner's state.json (every other session's commands and prompts).
+CONFINE_HIDE = ("/tmp", "/home", "/root", "/var/tmp", "/mnt", "/workspace")
+# Environment variables whose values are files a session needs (CA bundles, the host's token file).
+CONFINE_FILE_ENV = ("SSL_CERT_FILE", "NODE_EXTRA_CA_CERTS", "REQUESTS_CA_BUNDLE", "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
+                    "SSL_CERT_DIR")
+
+
+def under(path, dirs):
+    p = str(path)
+    return any(p == d or p.startswith(d.rstrip("/") + "/") for d in dirs)
+
+
+def confine_argv(cfg, run_dir, env, ro=(), rw=()):
+    """The bubblewrap prefix for one session: the whole filesystem read-only, the directories in
+    `confine_hide` (default CONFINE_HIDE) empty, then mounted back: the run directory (read-write:
+    the sandbox and the session's own home), `rw` (the arm's ADAGE_HOME), and read-only `ro` (the
+    settings file and the hook binaries), the files named by CONFINE_FILE_ENV, the PATH entries
+    under a hidden directory, and the config's `confine_expose`. A fresh /proc (own PID namespace)
+    and /dev. The network is shared."""
+    hide = list(cfg.get("confine_hide") or CONFINE_HIDE)
+    argv = ["bwrap", "--die-with-parent", "--unshare-pid", "--ro-bind", "/", "/", "--proc", "/proc", "--dev", "/dev"]
+    for d in hide:
+        if Path(d).is_dir():
+            argv += ["--tmpfs", d]
+    seen = set()
+
+    def mount(kind, path):
+        path = str(path)
+        if path in seen or not Path(path).exists() or not under(path, hide):
+            return
+        seen.add(path)
+        argv.extend([kind, path, path])
+
+    for x in rw:
+        mount("--bind", x)
+    mount("--bind", run_dir)
+    # Their directories, not the files: a bind mount pins the file's inode, and the host replaces
+    # its token file by rename (a session confined with the file alone was "Not logged in").
+    ro = list(ro) + [str(Path(env[k]).parent) for k in CONFINE_FILE_ENV if env.get(k)]
+    ro += [x for x in (env.get("PATH") or "").split(":") if x]
+    ro += list(cfg.get("confine_expose") or [])
+    for x in ro:
+        mount("--ro-bind", x)
+    return argv
+
+
 def session_env(arm, run_home, adage_home, isolate, base, forward=()):
     """The environment one session runs with: isolated (the default) or the operator's own."""
     env = isolation_env(run_home, base, forward) if isolate else dict(base)
@@ -268,11 +395,15 @@ def operator_config_dir(base=None):
     return Path(base.get("CLAUDE_CONFIG_DIR") or Path(base.get("HOME") or Path.home()) / ".claude")
 
 
-def auth_source(base, forward=()):
-    """How isolated sessions will authenticate: ("env", [names]) when an auth variable is set,
+def auth_source(base, forward=(), host=False):
+    """How isolated sessions will authenticate: with `host_auth`, ("host", [names]) when a host token
+    variable is set (no credentials file is ever copied then); else ("env", [names]) when an auth variable is set,
     ("file", path) for the operator's credentials file (copied into each run's config directory
     for the session and removed after it), ("forward", [names]) when only `forward_env` variables
     are set (Bedrock, Vertex: trusted as given), or None."""
+    if host:
+        tok = [k for k in HOST_AUTH_TOKENS if base.get(k)]
+        return ("host", tok) if tok else None
     names = [k for k in AUTH_ENV if base.get(k)]
     if names:
         return "env", names
@@ -290,7 +421,7 @@ def rounds_for(cfg, round_):
 def estimate(cfg, phases, rounds):
     """How many agent runs the plan makes, as the product that produces the number."""
     t, e = cfg["train"], cfg["eval"]
-    arms = e.get("arms", ["holdout", "adage"])
+    arms = e.get("arms", ["control", "adage"])
     train_runs = len(t["tasks"]) * t.get("repeats", 1) if ("train" in phases and 1 in rounds) else 0
     eval_rounds = rounds if "eval" in phases else []
     sizes = [len(tasks_for_round(cfg, r)) for r in (eval_rounds or rounds[:1])]
@@ -319,8 +450,8 @@ def describe(cfg, phases, rounds, root, adage, isolate=True):
                 "run": run_id, "round": round_, "phase": phase, "arm": arm, "task": task, "prompt": text,
                 "cwd": str(workdir),
                 "home": str(root / "runs" / run_id / "home") if isolate else None,
-                "sandbox": expand(cfg["sandbox"], dir=str(workdir), task=task),
-                "command": claude_command(cfg, text, private / f"settings-{'hooks' if env_for(arm, '') else 'none'}.json"),
+                "sandbox": expand(cfg["sandbox"], dir=str(workdir), task=task, arm=arm),
+                "command": claude_command(cfg, text, private / f"settings-{settings_kind(arm)}.json"),
                 "env": env_for(arm, private / "adage-home"),
                 "score": expand(cfg["score"], dir=str(workdir), task=task),
             })
@@ -477,20 +608,37 @@ def spool_directives(home, session_id):
         for k in ("directives", "would_have"):
             for x in d.get(k, []):
                 out.append({"ts": rec.get("ts"), "event": rec.get("event"), "kind": k, "route": x.get("route"),
-                            "aspect": x.get("aspect"), "text": x.get("text", "")[:600]})
+                            "strength": x.get("strength"), "text": x.get("text", "")[:600]})
         for jd in d.get("judgements", []):
             out.append({"ts": rec.get("ts"), "event": rec.get("event"), "kind": jd.get("kind"), "route": jd.get("route")})
         if d.get("continue_reason"):
             out.append({"ts": rec.get("ts"), "event": rec.get("event"), "kind": "stop_request", "text": d["continue_reason"]})
+        # An E2 action the hook ran and applied (adage-exec: the event's `exec` records).
+        for x in rec.get("exec") or []:
+            if isinstance(x, dict) and x.get("level") == "e2" and x.get("outcome") == "applied":
+                out.append({"ts": rec.get("ts"), "event": rec.get("event"), "kind": "e2_applied", "route": x.get("route")})
     return out
+
+
+def e2_applied_after(spool, events, last_edit, t0):
+    """Did an approved E2 action regenerate after the last edit the obligation covers? The hook runs
+    it right after that edit (PostToolUse), so its spool record comes at or after the edit's event.
+    Without the run's start time any applied action counts."""
+    applied = [d for d in spool or [] if d.get("kind") == "e2_applied"]
+    if not applied:
+        return False
+    if t0 is None or last_edit is None or not isinstance(applied[0].get("ts"), (int, float)):
+        return True
+    edit_t = events[last_edit]["t"]
+    return any(d["ts"] / 1000.0 - t0 >= edit_t for d in applied)
 
 
 def follow_counts(spool):
     """Routes the session was exposed to (would-have), and how many of them it followed."""
     exposed = {d["route"] for d in spool if d["kind"] == "would_have" and d.get("route")}
     followed = {d["route"] for d in spool if d["kind"] in ("followed", "obligation_met") and d.get("route")} & exposed
-    derailed = {d["route"] for d in spool if d["kind"] == "derailed" and d.get("route")}
-    return {"exposed": len(exposed), "followed": len(followed), "derailed": len(derailed)}
+    ignored = {d["route"] for d in spool if d["kind"] == "ignored" and d.get("route")}
+    return {"exposed": len(exposed), "followed": len(followed), "ignored": len(ignored)}
 
 
 def shell_segments(cmd):
@@ -549,13 +697,16 @@ def regen_after_obligation(cfg, events, workdir):
     return any(e["cat"] == "regen" and not e.get("failed") for e in events[ob[-1] + 1:])
 
 
-def run_metrics(cfg, events, result, score, workdir, elapsed, sid, spool):
+def run_metrics(cfg, events, result, score, workdir, elapsed, sid, spool, t0=None):
     first_edit = next((e for e in events if e["cat"] == "edit"), None)
     before = [e for e in events if not first_edit or e["t"] < first_edit["t"]]
     lookup = next((e for e in events if e["cat"] == "lookup" and not e.get("failed")), None)
     ob_edits = [i for i, e in enumerate(events) if touches_obligation(cfg, e, workdir)]
     ob_applies = bool(ob_edits)
-    regen_after = ob_applies and regen_after_obligation(cfg, events, workdir)
+    # Met when the agent regenerated after its last covered edit, or an approved E2 action did.
+    regen_after = ob_applies and (
+        regen_after_obligation(cfg, events, workdir) or e2_applied_after(spool, events, ob_edits[-1], t0)
+    )
     stale = bool(score.get("stale_generated"))
     passed = bool(score.get("passed"))
     return {
@@ -581,6 +732,25 @@ def run_metrics(cfg, events, result, score, workdir, elapsed, sid, spool):
 # ------------------------------------------------------------------------------------ execute
 
 ARCHIVE = ("adage-home", "transcripts", "outcomes.json")
+
+
+def finished(run, phase, arm, task, round_):
+    """Whether a recorded run is this session, and it finished: it ran to a result the summary
+    counts (passed or failed, a max-turns cutoff included), with a session id. A run still marked
+    running (the runner was killed), skipped for the spend cap, or an infrastructure error is not
+    finished, and runs again."""
+    if not run or (run.get("phase"), run.get("arm"), run.get("task"), run.get("round", 1)) != (phase, arm, task, round_):
+        return False
+    m = run.get("metrics") or {}
+    status = m.get("status") or run.get("run_status")
+    return (run.get("status") in ("passed", "failed") and bool(m.get("session_id"))
+            and status not in (None, "infra_error", "running"))
+
+
+def pending(state, sessions, round_):
+    """The sessions of a phase still to run (resume): those without a finished run in `state`."""
+    runs = state.get("runs", {})
+    return [s for s in sessions if not finished(runs.get(s[0]), s[1], s[2], s[3], round_)]
 
 
 def learning_runs(runs, round_, pool=None):
@@ -625,8 +795,10 @@ def harness_version(env=None):
 
 
 class Live:
-    def __init__(self, cfg, root, adage, round_, isolate=True):
+    def __init__(self, cfg, root, adage, round_, isolate=True, resume=True):
         self.cfg, self.root, self.adage, self.round, self.isolate = cfg, root, adage, round_, isolate
+        # Re-running a phase skips its sessions that already finished (`pending`).
+        self.resume = resume
         self.private = root / "private"
         self.private.mkdir(parents=True, exist_ok=True)
         # A root written before private/ existed: move its archive in, once.
@@ -638,10 +810,12 @@ class Live:
         self.home = self.private / "adage-home"
         self.transcripts = self.private / "transcripts"
         self.lock = threading.Lock()
+        self.written = set()
+        self.adage_exec = Path(cfg.get("adage_exec") or Path(adage).parent / "adage-exec")
         self.spent = 0.0
         self.base_env = dict(os.environ)
         self.forward = list(cfg.get("forward_env") or [])
-        self.auth = auth_source(self.base_env, self.forward) if isolate else None
+        self.auth = auth_source(self.base_env, self.forward, bool(cfg.get("host_auth"))) if isolate else None
         p = root / "state.json"
         self.state = json.loads(p.read_text()) if p.exists() else {"config": cfg["name"], "runs": {}, "rounds": {}}
         self.state["model"] = cfg["model"]
@@ -673,13 +847,22 @@ class Live:
             self.state["runs"].setdefault(run_id, {}).update(kv)
             self.save()
 
-    def settings(self, hooks):
-        p = self.private / f"settings-{'hooks' if hooks else 'none'}.json"
-        if hooks:
-            out = subprocess.run([str(self.adage), "hooks-config", str(self.adage)], capture_output=True, text=True, check=True)
-            p.write_text(out.stdout)
-        else:
-            p.write_text("{}")
+    def settings(self, kind):
+        """The settings file of one kind (`settings_kind`). Written once per invocation and
+        atomically: concurrent sessions once rewrote the same file while others started reading it."""
+        p = self.private / f"settings-{kind}.json"
+        with self.lock:
+            if kind not in self.written:
+                if kind == "none":
+                    body = "{}"
+                else:
+                    bin_ = self.adage if kind == "hooks" else self.adage_exec
+                    body = subprocess.run([str(self.adage), "hooks-config", str(bin_)], capture_output=True, text=True,
+                                          check=True).stdout
+                tmp = p.with_suffix(".tmp")
+                tmp.write_text(body)
+                tmp.replace(p)
+                self.written.add(kind)
         return p
 
     def prepare_home(self, run_home):
@@ -726,16 +909,19 @@ class Live:
         run_home = run_dir / "home"
         self.update(run_id, id=run_id, phase=phase, arm=arm, task=task, prompt=prompt_t.format(id=task), round=self.round,
                     seed=self.cfg.get("seed"), status="running", t0=time.time(), events=[], directives=[])
-        subprocess.run(expand(self.cfg["sandbox"], dir=str(workdir), task=task), check=True, capture_output=True)
+        subprocess.run(expand(self.cfg["sandbox"], dir=str(workdir), task=task, arm=arm), check=True, capture_output=True)
         prompt = prompt_t.format(id=task)
-        hooks = bool(env_for(arm, self.home))
         env = session_env(arm, run_home, self.home, self.isolate, self.base_env, self.forward)
         if self.isolate:
             self.prepare_home(run_home)
             config_dir = Path(env["CLAUDE_CONFIG_DIR"])
         else:
             config_dir = operator_config_dir(self.base_env)
-        cmd = claude_command(self.cfg, prompt, self.settings(hooks))
+        settings = self.settings(settings_kind(arm))
+        cmd = claude_command(self.cfg, prompt, settings)
+        if self.cfg.get("confine"):
+            rw = [env["ADAGE_HOME"]] if env.get("ADAGE_HOME") else []
+            cmd = confine_argv(self.cfg, run_dir, env, ro=[settings, self.adage, self.adage_exec], rw=rw) + cmd
         t0 = time.time()
         events, directives, uses_by_id, sid, result, turns, version = [], [], {}, None, {}, 0, None
         try:
@@ -754,7 +940,7 @@ class Live:
                         version = m.get("claude_code_version")
                     elif typ == "system" and "hook" in str(m.get("subtype", "")):
                         text = json.dumps(m)
-                        if "adage-signal" in text or "finish-line check" in text:
+                        if "adage-reflex" in text or "finish-line check" in text:
                             directives.append({"t": t, "raw": text[:4000]})
                             self.update(run_id, directives=directives)
                     elif typ == "assistant":
@@ -789,8 +975,9 @@ class Live:
             self.spent += cost
         if sid:
             self.archive_transcript(sid, config_dir)
-        spool = spool_directives(self.home, sid) if arm not in ("train", "off") else []
-        metrics = run_metrics(self.cfg, events, result, score, workdir, round(time.time() - t0, 2), sid, spool)
+        # The spool is in the arm's own ADAGE_HOME (instincts-home, e1-home), not always adage-home.
+        spool = spool_directives(Path(env.get("ADAGE_HOME") or self.home), sid) if arm not in ("train", "off") else []
+        metrics = run_metrics(self.cfg, events, result, score, workdir, round(time.time() - t0, 2), sid, spool, t0)
         status, reason = demo_report.classify_status(result, len(events), metrics["turns"], score, scorer_ok,
                                                      self.cfg["max_turns"])
         metrics.update(status=status, status_reason=reason, exit_code=proc.returncode, harness_version=version)
@@ -805,6 +992,12 @@ class Live:
     def phase(self, name, sessions):
         unlink_archive(self.root)
         self.set_phase(name)
+        if self.resume:
+            todo = pending(self.state, sessions, self.round)
+            if len(todo) < len(sessions):
+                print(f"  resume: {len(sessions) - len(todo)} of {len(sessions)} {name} session(s) already finished; "
+                      f"running {len(todo)} (--no-resume runs them all again)", flush=True)
+            sessions = todo
         with ThreadPoolExecutor(max_workers=self.cfg["concurrency"]) as ex:
             futures = [(s, ex.submit(self.run_one, *s)) for s in sessions]
             for s, f in futures:
@@ -845,8 +1038,33 @@ class Live:
         self.state["rounds"][str(self.round)] = {"learn": rep, "tracks": tracks, "sessions": len(transcripts),
                                                  "leaky": leaky, "pool": sorted(pool) if pool is not None else None}
         self.state["learn"], self.state["tracks"] = rep, tracks
+        if "instincts" in self.cfg["eval"].get("arms", []):
+            self.state["rounds"][str(self.round)]["instincts_only"] = self.bind_instincts()
         self.save()
         print(json.dumps(rep, indent=2))
+
+    def bind_instincts(self):
+        """The `instincts` arm's index: `adage condition --instincts-only` over a fresh sandbox (of the
+        round's first held-out task), in its own ADAGE_HOME. No session is read."""
+        home = instincts_home(self.home)
+        shutil.rmtree(home, ignore_errors=True)
+        home.mkdir(parents=True)
+        task = tasks_for_round(self.cfg, self.round)[0]
+        work = self.private / "instincts-sandbox" / self.cfg["workdir"]
+        shutil.rmtree(work.parent, ignore_errors=True)
+        work.parent.mkdir(parents=True)
+        subprocess.run(expand(self.cfg["sandbox"], dir=str(work), task=task, arm="instincts"), check=True,
+                       capture_output=True)
+        # Keyed as `adage condition --repo` keys the reflexes, so both indexes of one sandbox agree.
+        out = subprocess.run([str(self.adage), "condition", "--instincts-only", "--repo-path", str(work),
+                              "--repo", self.cfg["repo_key"], "--json"],
+                             capture_output=True, text=True, env=dict(os.environ, ADAGE_HOME=str(home)))
+        if out.returncode != 0:
+            raise SystemExit(out.stderr)
+        idx = home / "index.json"
+        routes = json.loads(idx.read_text()).get("routes", []) if idx.exists() else []
+        print(f"instincts-only index: {len(routes)} route(s)", flush=True)
+        return {"report": json.loads(out.stdout), "routes": routes}
 
 
 # ------------------------------------------------------------------------------------- report
@@ -862,7 +1080,7 @@ holm = demo_report.holm
 
 def summarise(state, round_, n_perm=10000, n_boot=2000):
     """The held-out runs of one round per arm: aggregates, n per metric (and how many runs had no
-    value or a restricted one), the difference between adage and holdout with a task-bootstrap
+    value or a restricted one), the difference between adage and control with a task-bootstrap
     95% CI, the task-stratified permutation p-value and its Holm adjustment across the metrics,
     and the task-level sign-flip p-value. Runs whose harness or scorer failed are left out of
     every arm and counted (`status_counts`, `excluded`); censored runs stay, and are counted."""
@@ -904,7 +1122,8 @@ def redact_home(state):
 
 def parse(argv):
     opts = {"execute": False, "dry_run": False, "json": False, "root": None, "model": None, "round": None,
-            "adage": None, "phases": [], "config": None, "seed": None, "isolate": True}
+            "adage": None, "phases": [], "config": None, "seed": None, "isolate": True,
+            "host_auth": None, "resume": True}
     it = iter(argv)
     for a in it:
         if a == "--execute":
@@ -915,6 +1134,10 @@ def parse(argv):
             opts["json"] = True
         elif a == "--no-isolate":
             opts["isolate"] = False
+        elif a == "--host-auth":
+            opts["host_auth"] = True
+        elif a == "--no-resume":
+            opts["resume"] = False
         elif a in ("--root", "--model", "--round", "--adage", "--config", "--seed"):
             v = next(it, None)
             if v is None:
@@ -962,7 +1185,7 @@ def resolve_seed(cfg, root):
 
 def main(argv):
     config, opts = parse(argv)
-    cfg = load_config(config, {"model": opts["model"], "seed": opts["seed"]})
+    cfg = load_config(config, {"model": opts["model"], "seed": opts["seed"], "host_auth": opts["host_auth"]})
     root = Path(opts["root"] or f"/tmp/adage-live/{cfg['name']}").resolve()
     adage = Path(opts["adage"] or REPO / "target" / "release" / "adage")
     rounds = rounds_for(cfg, opts["round"])
@@ -983,17 +1206,20 @@ def main(argv):
         raise SystemExit("`claude` is not on PATH")
     if not adage.exists():
         raise SystemExit(f"build first: cargo build --release -p adage-cli  (missing {adage})")
-    if opts["isolate"] and not auth_source(os.environ, cfg.get("forward_env") or []):
+    if cfg.get("confine") and not shutil.which("bwrap"):
+        raise SystemExit("confine needs bubblewrap (`bwrap`) on PATH")
+    if opts["isolate"] and not auth_source(os.environ, cfg.get("forward_env") or [], bool(cfg.get("host_auth"))):
         raise SystemExit("isolated sessions cannot find your Claude Code login: set ANTHROPIC_API_KEY, or "
                          "CLAUDE_CODE_OAUTH_TOKEN (from `claude setup-token`), or have ~/.claude/.credentials.json "
-                         "(see evals/live/README.md, Isolation). --no-isolate runs without isolation.")
+                         "(see evals/live/README.md, Isolation); where the host manages the login, --host-auth. "
+                         "--no-isolate runs without isolation.")
     if not opts["isolate"]:
         print("WARNING: --no-isolate: sessions use your HOME and ~/.claude (auto-memory, earlier transcripts); "
               "the control arm is not isolated.", flush=True)
     if p["leaky_rounds"]:
         print(leak_warning(p["leaky_rounds"]), flush=True)
     root.mkdir(parents=True, exist_ok=True)
-    live = Live(cfg, root, adage, rounds[0], opts["isolate"])
+    live = Live(cfg, root, adage, rounds[0], opts["isolate"], opts["resume"])
     print(f"seed {cfg['seed']}  harness {live.state['harness_version']}  isolation {'on' if opts['isolate'] else 'OFF'}"
           f"{' (auth: ' + live.auth[0] + ')' if live.auth else ''}", flush=True)
     summaries = {}
@@ -1006,6 +1232,9 @@ def main(argv):
         if "learn" in opts["phases"]:
             live.learn()
         if "eval" in opts["phases"]:
+            if "e1" in cfg["eval"].get("arms", []) and not (e1_home(live.home) / "index.json").exists():
+                raise SystemExit(f"the e1 arm needs {e1_home(live.home)}: copy private/adage-home there and approve "
+                                 "its prefetches as a person (adage review delegate ... --level e1); see README")
             live.phase("eval", [s for s in sessions if s[1] == "eval"])
         if "report" in opts["phases"]:
             summaries[str(round_)] = summarise(live.state, round_)
@@ -1038,7 +1267,11 @@ def report_only(cfg, root):
         if not m or not m.get("obligation_applies"):
             continue
         workdir = root / "runs" / rid / cfg["workdir"]
-        met = regen_after_obligation(cfg, r.get("events", []), workdir) and not bool(score.get("stale_generated"))
+        events = r.get("events", [])
+        ob = [i for i, e in enumerate(events) if touches_obligation(cfg, e, workdir)]
+        regen = regen_after_obligation(cfg, events, workdir) or e2_applied_after(
+            m.get("adage"), events, ob[-1] if ob else None, r.get("t0"))
+        met = regen and not bool(score.get("stale_generated"))
         if m.get("obligation_met") != met:
             m["obligation_met"] = met
             changed += 1

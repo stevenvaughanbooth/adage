@@ -108,6 +108,19 @@ pub fn safe_glob(g: &str) -> bool {
     adage_tracks::advice::safe_glob(g)
 }
 
+/// An E2 action's output or cache glob: a safe repository-relative glob that cannot name `.git`
+/// (its first segment is neither `.git` nor a wildcard that could match it).
+pub fn action_glob_ok(g: &str) -> bool {
+    let first = g.split('/').next().unwrap_or_default();
+    safe_glob(g)
+        && g.len() <= 200
+        && first != ".git"
+        && !first.starts_with('.')
+        && !first.starts_with('*')
+        && !first.starts_with('?')
+        && !first.starts_with('[')
+}
+
 /// Lowercase hex SHA-256.
 pub fn sha256_hex_ok(s: &str) -> bool {
     s.len() == 64 && s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
@@ -174,7 +187,7 @@ pub fn command_key_ok(k: &str) -> bool {
 }
 
 /// A JSON field of a command's output: `name` or `a.b` (at most four segments), or `*paths`
-/// (the repository paths plain-text output mentions, as the miner reads them).
+/// (the repository paths plain-text output mentions, as the learner reads them).
 pub fn json_field_ok(f: &str) -> bool {
     f == "*paths"
         || (f.len() <= 128
@@ -212,7 +225,7 @@ pub fn allowed(rel: &str) -> bool {
     let leaf = |dir: &str, ext: &str| {
         rel.strip_prefix(dir).and_then(|f| f.strip_suffix(ext)).is_some_and(|stem| !stem.contains('/') && safe_id(stem))
     };
-    matches!(rel, MANIFEST | CLOSURE | EVIDENCE | SIG)
+    matches!(rel, MANIFEST | CLOSURE | EVIDENCE | SIG | crate::procedure::PROCEDURE)
         || leaf("routes/", ".yaml")
         || leaf("types/", ".yaml")
         || leaf("attestations/", ".json")
@@ -312,6 +325,8 @@ pub struct Parsed {
     pub scripts: BTreeMap<String, Vec<u8>>,
     pub evidence: Option<PackEvidence>,
     pub attestations: BTreeMap<String, serde_json::Value>,
+    /// `procedure.json`, for a pack compiled from a skill.
+    pub procedure: Option<crate::procedure::Procedure>,
     /// The `CLOSURE` file as found, if any.
     pub closure: Option<String>,
 }
@@ -333,6 +348,7 @@ pub fn parse(files: &BTreeMap<String, Vec<u8>>) -> Result<Parsed> {
         scripts: BTreeMap::new(),
         evidence: None,
         attestations: BTreeMap::new(),
+        procedure: None,
         closure: None,
     };
     for (rel, bytes) in files {
@@ -370,6 +386,10 @@ pub fn parse(files: &BTreeMap<String, Vec<u8>>) -> Result<Parsed> {
             p.attestations.insert(stem.to_string(), v);
         } else if rel == CLOSURE {
             p.closure = Some(text(rel, bytes)?);
+        } else if rel == crate::procedure::PROCEDURE {
+            p.procedure = Some(
+                serde_json::from_str(&text(rel, bytes)?).with_context(|| format!("{rel} is not a valid procedure"))?,
+            );
         }
     }
     Ok(p)
@@ -385,8 +405,13 @@ pub enum Program {
     /// A program in the command table, found on PATH (L-none).
     Tool(String),
     /// A repository or vendored script: its path (normalised, without `./`), and the
-    /// interpreter named before it, if any (which is itself a tool).
+    /// interpreter named before it, if any (a tool, or an environment program's path).
     Script { path: String, interpreter: Option<String> },
+    /// A program of the project's own environment (`.venv/bin/python`, `node_modules/.bin/vitest`):
+    /// its repository-relative path and the command-table program it is. The environment is the
+    /// project's, made by its setup, not content of the repository: it is never pinned or
+    /// vendored, never executed by adage-exec, and binds only where the checkout has it.
+    Env { path: String, tool: String },
 }
 
 fn looks_like_script(op: &str) -> bool {
@@ -400,17 +425,20 @@ pub fn program(argv: &[String], table: &CommandTable) -> Result<Program> {
     if a0.contains('{') {
         bail!("argv[0] {a0:?} is a placeholder; the program is never bound from input");
     }
-    if a0.contains('/') {
+    let env = env_program(a0, table);
+    if a0.contains('/') && env.is_none() {
         let p = a0.strip_prefix("./").unwrap_or(a0);
         if !safe_path(p) {
             bail!("argv[0] {a0:?} is not a repository-relative path");
         }
         return Ok(Program::Script { path: p.to_string(), interpreter: None });
     }
-    if table.get(a0).is_none() {
+    // The program as the command table names it (`python` for `.venv/bin/python`).
+    let name = env.as_ref().map(|(_, tool)| tool.clone()).unwrap_or_else(|| a0.clone());
+    if table.get(&name).is_none() {
         bail!("program {a0:?} is not in the command table, and no script covers it (dangling reference)");
     }
-    if INTERPRETERS.contains(&a0.as_str()) {
+    if INTERPRETERS.contains(&name.as_str()) {
         if let Some(f) = argv.iter().skip(1).find(|a| CODE_FLAGS.contains(&a.as_str())) {
             bail!("{a0} {f} runs inline code; a pack step is a plain argv");
         }
@@ -436,7 +464,24 @@ pub fn program(argv: &[String], table: &CommandTable) -> Result<Program> {
             break;
         }
     }
-    Ok(Program::Tool(a0.clone()))
+    Ok(match env {
+        Some((path, tool)) => Program::Env { path, tool },
+        None => Program::Tool(a0.clone()),
+    })
+}
+
+/// A program of the project's own environment: `<dir>/bin/<tool>` (a virtualenv: `.venv/bin/python`)
+/// or `node_modules/.bin/<tool>`, where `<dir>` is a repository-relative directory and `<tool>` is
+/// in the command table. Returns its path (without `./`) and the tool.
+pub fn env_program(a0: &str, table: &CommandTable) -> Option<(String, String)> {
+    let p = a0.strip_prefix("./").unwrap_or(a0);
+    if !safe_path(p) {
+        return None;
+    }
+    let (dir, tool) = p.rsplit_once('/')?;
+    let env_dir = dir.ends_with("/bin") || dir == "bin" || dir.ends_with("node_modules/.bin");
+    let in_env = adage_core::action::venv_of(p).is_some() || dir.ends_with("node_modules/.bin");
+    (env_dir && in_env && table.get(tool).is_some()).then(|| (p.to_string(), tool.to_string()))
 }
 
 /// Everything [`validate`] learns that the closure needs.
@@ -488,10 +533,32 @@ pub fn validate(p: &Parsed) -> Result<Checked> {
             }
         }
     }
+    if p.attestations.len() > crate::attest::MAX_ATTESTATIONS {
+        bail!(
+            "the pack has {} attestations; at most {} are allowed",
+            p.attestations.len(),
+            crate::attest::MAX_ATTESTATIONS
+        );
+    }
     for (id, a) in &p.attestations {
         if serde_json::to_string(a)?.len() > 64 << 10 {
             bail!("attestation {id} is larger than 64 KiB");
         }
+        if !safe_id(id) {
+            bail!("attestation id {id:?} is not allowed");
+        }
+        crate::attest::check(a).with_context(|| format!("attestation {id} is not a bench result record"))?;
+    }
+    let skill = p.manifest.provenance.skill.as_deref();
+    match &p.procedure {
+        Some(_) if p.manifest.pack.origin != PackOrigin::Trained => {
+            bail!("{} belongs to a trained pack", crate::procedure::PROCEDURE)
+        }
+        Some(proc_) => proc_.check(skill, &ids)?,
+        None if skill.is_some() && p.manifest.pack.origin != PackOrigin::Trained => {
+            bail!("[provenance] skill belongs to a trained pack")
+        }
+        None => {}
     }
     Ok(checked)
 }
@@ -618,6 +685,11 @@ fn validate_manifest(m: &PackManifest, table: &CommandTable) -> Result<()> {
     if !people_text_ok(&m.provenance.tool, 64) {
         bail!("provenance.tool contains characters that may not be shown");
     }
+    if let Some(s) = &m.provenance.skill {
+        if !s.strip_prefix("sha256:").is_some_and(sha256_hex_ok) {
+            bail!("provenance.skill {s:?} is not `sha256:<lowercase hex>`");
+        }
+    }
     Ok(())
 }
 
@@ -657,13 +729,13 @@ fn validate_route(
             bail!("input name {name:?} is not allowed");
         }
         let t = types::resolve(&i.ty, i.values.as_deref(), i.max, &p.types, &format!("input {name}"))?;
-        match (&i.from.prompt, &i.from.result) {
-            (Some(_), None) => {
+        match (&i.from.prompt, &i.from.result, &i.from.edit_tests) {
+            (Some(_), None, None) => {
                 if !matches!(r.trigger, TriggerV2::Prompt { .. }) {
                     bail!("input {name} comes from the prompt, but the trigger is not a prompt");
                 }
             }
-            (None, Some(src)) => {
+            (None, Some(src), None) => {
                 if !matches!(r.trigger, TriggerV2::AfterCommand { .. } | TriggerV2::AfterFailure { .. }) {
                     bail!("input {name} comes from a command's result, but the trigger follows no command");
                 }
@@ -671,7 +743,32 @@ fn validate_route(
                     bail!("input {name}: result field {:?} is not allowed", src.field);
                 }
             }
-            _ => bail!("input {name}: `from` names exactly one source (prompt or result)"),
+            (None, None, Some(src)) => {
+                if !matches!(r.trigger, TriggerV2::AfterEdit { .. }) {
+                    bail!("input {name} comes from the edited file, but the trigger is not an edit");
+                }
+                if !t.is_repo_path_list() {
+                    bail!("input {name}: the tests of an edited file are a repo-path-list");
+                }
+                if src.k == 0 || src.k > EDIT_TESTS_MAX_K {
+                    bail!("input {name}: k must be 1..={EDIT_TESTS_MAX_K}");
+                }
+                if src.map.is_empty() || src.map.len() > EDIT_TESTS_MAX_ENTRIES {
+                    bail!("input {name}: the map has 1..={EDIT_TESTS_MAX_ENTRIES} entries");
+                }
+                for (from, tests) in &src.map {
+                    if !safe_path(from) || tests.is_empty() || tests.len() > src.k as usize {
+                        bail!("input {name}: map entry {from:?} is not a path with 1..=k test files");
+                    }
+                    if let Some(t) = tests.iter().find(|t| !safe_path(t)) {
+                        bail!("input {name}: map test {t:?} is not a repository-relative path");
+                    }
+                }
+                if r.exec.as_ref().is_some_and(|x| x.level > Level::E0) {
+                    bail!("input {name}: an edited file's tests are delivered at E0 only (never executed)");
+                }
+            }
+            _ => bail!("input {name}: `from` names exactly one source (prompt, result or edit_tests)"),
         }
         resolved.insert(name.clone(), t);
     }
@@ -771,19 +868,19 @@ fn validate_route(
     }
     validate_shape(r, &kinds)?;
 
-    // Effects and aspect.
+    // Effects and strength.
     let by_edit = matches!(r.trigger, TriggerV2::AfterEdit { .. });
     match adage_tracks::ceiling(max_effect, by_edit) {
         None => bail!("effect {max_effect:?} may never be directed"),
-        Some(max) if r.aspect == Aspect::Green && max != Aspect::Green => {
-            bail!("aspect green exceeds the ceiling for {max_effect:?}")
+        Some(max) if r.strength == Strength::Fire && max != Strength::Fire => {
+            bail!("strength fire exceeds the ceiling for {max_effect:?}")
         }
         _ => {}
     }
     let instinct = p.manifest.pack.origin == PackOrigin::Instinct
         || matches!(r.evidence.as_ref().and_then(|e| e.origin.as_ref()), Some(RouteOrigin::Instinct { .. }));
-    if instinct && r.aspect != Aspect::Yellow {
-        bail!("an instinct route is yellow");
+    if instinct && r.strength != Strength::Prime {
+        bail!("an instinct route is prime");
     }
 
     // Links.
@@ -830,11 +927,25 @@ fn validate_route(
         let ceiling = match x.level {
             Level::E0 => Effect::Publish,
             Level::E1 => Effect::Observe,
-            Level::E2 => Effect::Verify,
-            Level::E3 => Effect::Environment,
+            Level::E2 => Effect::Environment,
         };
         if rank(max_effect) > rank(ceiling) {
             bail!("exec level {:?} can never be granted to a {max_effect:?} route", x.level);
+        }
+        if x.level != Level::E2 && !(x.outputs.is_empty() && x.cache.is_empty()) {
+            bail!("exec outputs and cache globs belong to an E2 action only");
+        }
+        for (what, globs) in [("outputs", &x.outputs), ("cache", &x.cache)] {
+            if globs.len() > MAX_ACTION_GLOBS {
+                bail!("exec {what}: at most {MAX_ACTION_GLOBS} globs");
+            }
+            if let Some(g) = globs.iter().find(|g| !action_glob_ok(g)) {
+                bail!("exec {what}: {g:?} is not a repository-relative glob outside .git");
+            }
+            unique(globs, &format!("exec {what}"))?;
+        }
+        if x.level == Level::E2 && max_effect == Effect::Regenerate && x.outputs.is_empty() {
+            bail!("an E2 regenerate action declares the outputs it may change (exec outputs)");
         }
     }
 
@@ -867,8 +978,17 @@ fn validate_run(
             if !r.inputs.contains_key(&n) {
                 bail!("argv references undeclared input {{{n}}}");
             }
-            if r.inputs[&n].from.prompt.is_none() {
-                bail!("argv input {{{n}}} must come from the prompt");
+            let from = &r.inputs[&n].from;
+            // The tests of an edited file fill one whole token with their paths (E0 only).
+            if from.edit_tests.is_some() {
+                if t != &format!("{{{n}}}") {
+                    bail!("argv input {{{n}}} (an edited file's tests) is a whole token");
+                }
+                used.insert(n);
+                continue;
+            }
+            if from.prompt.is_none() {
+                bail!("argv input {{{n}}} must come from the prompt or the edited file");
             }
             if types::resolve(&r.inputs[&n].ty, r.inputs[&n].values.as_deref(), None, &p.types, "input")
                 .is_ok_and(|t| t.is_list())
@@ -881,7 +1001,13 @@ fn validate_run(
     let prog = program(argv, table)?;
     match (&prog, &s.script) {
         (Program::Tool(_), Some(sc)) => bail!("script {:?} is declared, but argv does not run it", sc.path),
-        (Program::Tool(_), None) => {
+        (Program::Env { path, .. }, Some(_)) => {
+            bail!("{path} is the project's environment, not a script: it has no script entry")
+        }
+        (Program::Env { .. }, None) if r.exec.as_ref().is_some_and(|x| x.level > Level::E0) => {
+            bail!("a program of the project's environment is delivered at E0 only (never executed)")
+        }
+        (Program::Tool(_) | Program::Env { .. }, None) => {
             // Never trust a declared effect: classify the command ourselves.
             let actual = classify(&argv.join(" "), table);
             if rank(actual) > rank(s.effect) {
@@ -958,14 +1084,14 @@ fn validate_shape(r: &RouteV2, kinds: &[StepKind]) -> Result<()> {
         bail!("shape {} does not fit its trigger and steps", r.shape.as_str());
     }
     match r.shape {
-        Shape::Avoid if r.aspect != Aspect::Red => bail!("an avoid route is red"),
+        Shape::Avoid if r.strength != Strength::Inhibit => bail!("an avoid route is inhibit"),
         Shape::Advise => {
-            if r.aspect != Aspect::Yellow || r.steps[0].effect != Effect::Observe || !r.inputs.is_empty() {
-                bail!("an advise route is yellow, observe, with no inputs");
+            if r.strength != Strength::Prime || r.steps[0].effect != Effect::Observe || !r.inputs.is_empty() {
+                bail!("an advise route is prime, observe, with no inputs");
             }
         }
         Shape::Avoid => {}
-        _ if r.aspect == Aspect::Red => bail!("only an avoid route is red"),
+        _ if r.strength == Strength::Inhibit => bail!("only an avoid route is inhibit"),
         _ => {}
     }
     Ok(())

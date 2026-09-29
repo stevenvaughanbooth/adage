@@ -1,0 +1,37 @@
+{
+ "id": "skill-s2-regenerate",
+ "summary": "If the item adds or changes a record field",
+ "trigger": {
+  "on": "after_edit",
+  "paths": "schema/*.json"
+ },
+ "step": {
+  "do": "run",
+  "command": "make gen"
+ },
+ "slots": [],
+ "effect": "regenerate",
+ "strength": "fire",
+ "state": "firm",
+ "exit": [
+  {
+   "when": "exploratory_change"
+  }
+ ],
+ "evidence": {
+  "opportunities": 2,
+  "support": 2,
+  "days": 1,
+  "successes": 0,
+  "deviations_failed": 0,
+  "rate": 1.0,
+  "lower_bound": 0.3424,
+  "median_position": 0.0,
+  "turns_saved": 0.0,
+  "provenance": "authored",
+  "models": [
+   "claude-haiku-4-5-20251001"
+  ]
+ },
+ "authored": true
+}

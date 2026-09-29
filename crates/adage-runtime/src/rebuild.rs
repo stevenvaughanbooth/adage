@@ -16,6 +16,12 @@
 //! | `obligations` | each finish-line route emitted, from the index; met by `obligation_met` |
 //! | `stop_requests`, `stop_requested` | each recorded stop request, applied as the runtime does |
 //! | `intent` | the family of the last intent route emitted |
+//! | `ctx` | the last context state recorded (a decision records it when its event changed it), if it belongs to the index's alphabet for the repository |
+//!
+//! Every event that changes the context state reaches the runtime and is recorded (the no-match
+//! fast path skips only events outside the alphabet), so the last recorded state is the state. A
+//! state recorded under another alphabet (the index was relearned since) is dropped: its symbol
+//! ids mean other items now.
 //!
 //! What a record does not show is left out, on the quiet side: an in-flight follow judgement
 //! (`pending`, at most three batches long) is dropped, and an obligation re-armed by a later edit
@@ -76,6 +82,9 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
         let Some(d) = r.get("decision").and_then(|d| serde_json::from_value::<Decision>(d.clone()).ok()) else {
             continue;
         };
+        if let Some(c) = d.ctx {
+            st.ctx = c;
+        }
         for key in d.observed {
             if kind == "batch" && (key.starts_with("edit ") || key.starts_with("write ")) {
                 st.first_edit_at_batch.get_or_insert(st.batches);
@@ -96,7 +105,37 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
                         paths: paths.clone(),
                         met: false,
                         stop_requested: false,
+                        edited: String::new(),
+                        fresh: false,
+                        via: String::new(),
                     });
+                }
+                // A sequence after an edit carries the finish lines it subsumes (`decide`).
+                (Trigger::AfterEdit { .. }, Step::Sequence { commands }) => {
+                    let Some(first) = commands.first() else { continue };
+                    for o in index.for_repo(repo) {
+                        let (Trigger::AfterEdit { paths }, Step::Run { command }) = (&o.route.trigger, &o.route.step)
+                        else {
+                            continue;
+                        };
+                        let carried = !o.route.is_instinct()
+                            && o.route.slots.is_empty()
+                            && adage_tracks::interlock::same_point(&ir.route.trigger, &o.route.trigger)
+                            && adage_core::pattern::same_command(first, command);
+                        if carried && !st.obligations.iter().any(|x| x.route == o.route.id) {
+                            st.obligations.push(Obligation {
+                                route: o.route.id.clone(),
+                                expect_key: command_key(command, table),
+                                command: command.clone(),
+                                paths: paths.clone(),
+                                met: false,
+                                stop_requested: false,
+                                edited: String::new(),
+                                fresh: false,
+                                via: dir.route.clone(),
+                            });
+                        }
+                    }
                 }
                 (Trigger::Intent { family, .. }, _) => st.intent = Some(family.clone()),
                 _ => {}
@@ -117,6 +156,9 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
                 o.stop_requested = true;
             }
         }
+    }
+    if st.ctx.alphabet != index.contexts(repo).digest {
+        st.ctx = Default::default();
     }
     st.repo.get_or_insert_with(|| repo.to_string());
     Some(st)

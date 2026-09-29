@@ -68,6 +68,8 @@ impl Adapter for Codex {
             Output::Context(text) => {
                 json!({ "hookSpecificOutput": { "hookEventName": event, "additionalContext": text } }).to_string()
             }
+            // Codex documents no person-only channel: notices go to the card and `adage watch`.
+            Output::Notice(_) | Output::Rewrite { .. } => return None,
         })
     }
 }
@@ -88,8 +90,8 @@ pub fn settings(bin: &str) -> Value {
         "hooks": {
             "SessionStart": h("SessionStart", 5),
             "UserPromptSubmit": h("UserPromptSubmit", 5),
-            "PostToolUse": h("PostToolUse", 5),
-            "Stop": h("Stop", 5),
+            "PostToolUse": h("PostToolUse", super::action_timeout(bin)),
+            "Stop": h("Stop", super::action_timeout(bin)),
             "SessionEnd": h("SessionEnd", 2)
         }
     })

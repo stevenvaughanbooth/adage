@@ -1,19 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/stevenvaughanbooth/adage/evals/bench/result.schema.json",
-  "title": "Adage bench result record (schema v1)",
-  "description": "One line of a bench results file (JSON Lines, keys sorted). Written by `adage eval bench run|sweep` and kept in evals/baselines/*.jsonl. Every record carries the envelope; `record` says which body follows.",
+  "title": "Adage bench result record (schema v1 and v2)",
+  "description": "One line of a bench results file (JSON Lines, keys sorted). Written by `adage eval bench run|sweep` and kept in evals/baselines/*.jsonl. Every record carries the envelope; `record` says which body follows. Version 2 adds the security, simulator and live tiers, `exec_level`, and the `arms` record (arm deltas and harm counts); packs carry such records as attestations (Track C §1.8), self-reported by their signer.",
   "type": "object",
   "required": ["schema_version", "record", "run_id", "tier", "suite", "adage_version", "params", "params_hash", "split"],
   "properties": {
-    "schema_version": { "const": 1 },
-    "record": { "enum": ["run", "trial", "directive", "aggregate", "scorecard"] },
+    "schema_version": { "enum": [1, 2] },
+    "record": { "enum": ["run", "trial", "directive", "aggregate", "scorecard", "arms"] },
     "run_id": {
       "type": "string",
       "pattern": "^[0-9a-f]{16}$",
       "description": "Deterministic: SHA-256 (first 16 hex digits) of the canonical JSON of the schema version, tier, suite definition, dataset content hashes and params hash."
     },
-    "tier": { "const": "l0", "description": "l0: offline replay of recorded sessions." },
+    "tier": { "enum": ["l0", "l0-sec", "l1", "l2", "l3"], "description": "l0: offline replay of recorded sessions (the only tier of version 1). l0-sec: the sandbox escape and staging suites. l1: the simulator. l2: live sandboxes. l3 (version 2): live agents on real open-source repositories at pinned commits (RepoBench-Local, evals/repobench)." },
+    "exec_level": { "enum": ["e0", "e1", "e2"], "description": "Version 2: the execution level the attested arm used." },
     "suite": { "type": "string" },
     "git_sha": { "type": "string", "description": "Only when given (--git-sha or ADAGE_GIT_SHA), and never with --deterministic." },
     "adage_version": { "type": "string" },
@@ -46,9 +47,21 @@
     { "if": { "properties": { "record": { "const": "trial" } } }, "then": { "$ref": "#/$defs/trial" } },
     { "if": { "properties": { "record": { "const": "directive" } } }, "then": { "$ref": "#/$defs/directive" } },
     { "if": { "properties": { "record": { "const": "aggregate" } } }, "then": { "$ref": "#/$defs/aggregate" } },
-    { "if": { "properties": { "record": { "const": "scorecard" } } }, "then": { "$ref": "#/$defs/scorecard" } }
+    { "if": { "properties": { "record": { "const": "scorecard" } } }, "then": { "$ref": "#/$defs/scorecard" } },
+    { "if": { "properties": { "record": { "const": "arms" } } }, "then": { "$ref": "#/$defs/arms" } },
+    { "if": { "properties": { "schema_version": { "const": 1 } } }, "then": { "properties": { "tier": { "const": "l0" }, "record": { "not": { "const": "arms" } } }, "not": { "required": ["exec_level"] } } }
   ],
   "$defs": {
+    "arms": {
+      "description": "Version 2: arms compared on one suite (for example E0 against E2), their deltas, and harm counts.",
+      "required": ["arms", "deltas"],
+      "properties": {
+        "arms": { "type": "object", "minProperties": 1, "maxProperties": 32, "additionalProperties": { "type": "object", "additionalProperties": { "type": "number" } } },
+        "deltas": { "type": "object", "maxProperties": 32, "additionalProperties": { "type": "number" } },
+        "harm": { "type": "object", "maxProperties": 32, "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "sessions": { "type": "integer", "minimum": 0 }
+      }
+    },
     "role": { "enum": ["cv", "final", "safety"] },
     "params": {
       "type": "object",
@@ -57,24 +70,24 @@
       "properties": {
         "runtime": {
           "type": "object",
-          "required": ["follow_window", "max_directives_per_session", "max_directives_per_decision", "max_stop_requests", "history", "holdout_share"],
+          "required": ["follow_window", "max_directives_per_session", "max_directives_per_decision", "max_stop_requests", "history", "control_share"],
           "properties": {
             "follow_window": { "type": "integer", "minimum": 1 },
             "max_directives_per_session": { "type": "integer", "minimum": 1 },
             "max_directives_per_decision": { "type": "integer", "minimum": 1 },
             "max_stop_requests": { "type": "integer", "minimum": 0 },
             "history": { "type": "integer", "minimum": 1 },
-            "holdout_share": { "type": "number", "minimum": 0, "maximum": 1 }
+            "control_share": { "type": "number", "minimum": 0, "maximum": 1 }
           },
           "additionalProperties": false
         },
         "learn": {
           "type": "object",
-          "required": ["min_support", "green_lower_bound", "yellow_rate", "retain_rate", "dead_end_consistency", "dead_end_signatures", "finish_line_contrast", "intent_ubiquitous", "intent_contrast", "material_lower_bound", "stale_exposure"],
+          "required": ["min_support", "fire_lower_bound", "prime_rate", "retain_rate", "dead_end_consistency", "dead_end_signatures", "finish_line_contrast", "intent_ubiquitous", "intent_contrast", "material_lower_bound", "dormant_exposure"],
           "properties": {
             "min_support": { "type": "integer", "minimum": 1 },
-            "green_lower_bound": { "type": "number", "minimum": 0, "maximum": 1 },
-            "yellow_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+            "fire_lower_bound": { "type": "number", "minimum": 0, "maximum": 1 },
+            "prime_rate": { "type": "number", "minimum": 0, "maximum": 1 },
             "retain_rate": { "type": "number", "minimum": 0, "maximum": 1 },
             "dead_end_consistency": { "type": "array", "items": { "type": "integer", "minimum": 0 }, "minItems": 2, "maxItems": 2 },
             "dead_end_signatures": { "type": "integer", "minimum": 1 },
@@ -82,7 +95,7 @@
             "intent_ubiquitous": { "type": "number", "minimum": 0, "maximum": 1 },
             "intent_contrast": { "type": "number", "minimum": 0, "maximum": 1 },
             "material_lower_bound": { "type": "number", "minimum": 0, "maximum": 1 },
-            "stale_exposure": { "type": "number", "minimum": 0, "maximum": 1 }
+            "dormant_exposure": { "type": "number", "minimum": 0, "maximum": 1 }
           },
           "additionalProperties": false
         }

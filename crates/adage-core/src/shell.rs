@@ -454,6 +454,14 @@ fn has_flag(argv: &[String], flag: &str) -> bool {
 
 /// Effect classification for one `exec`-shaped command, table-driven per Design Spec §8.6:
 /// "Classification is data, per command template… Unknown commands default to Environment."
+/// Whether `argv` runs an interpreter on the program it reads from stdin: an interpreter named
+/// with no script operand (only options, or `-`).
+fn stdin_program(argv: &[String]) -> bool {
+    let Some(head) = argv.first().map(|a| a.rsplit('/').next().unwrap_or(a)) else { return false };
+    SCRIPT_INTERPRETERS.contains(&head)
+        && argv[1..].iter().all(|a| a == "-" || (a.starts_with('-') && !matches!(a.as_str(), "-c" | "-e" | "-m")))
+}
+
 fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect, f64, String) {
     // `python3 scripts/wi-lookup W-1` — classify the script, not the interpreter.
     const INTERPRETERS: [&str; 9] = ["python", "python3", "node", "bash", "sh", "zsh", "ruby", "perl", "deno"];
@@ -469,7 +477,7 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
     let Some(spec) = table.get(cmd) else {
         // Unlisted commands default to environment (Design §8.6). One narrow exception: a
         // project script whose name leads with a read verb (`wi-lookup`, `show-config`,
-        // `list_services`) is classified observe by name, at reduced confidence. The miner still
+        // `list_services`) is classified observe by name, at reduced confidence. The learner still
         // needs session evidence before such a step can be directed.
         const READ_VERBS: [&str; 13] = [
             "lookup", "show", "get", "list", "view", "status", "info", "describe", "search", "find", "query", "print",
@@ -483,6 +491,47 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
         }
         return (Effect::Environment, 0.5, format!("'{cmd}' has no flag-grammar entry — defaulted to environment"));
     };
+
+    // `pnpm --filter pkg test`, `npm --prefix web test`: skip the flags before the subcommand.
+    let mut args = args;
+    if !spec.leading_value_flags.is_empty() {
+        let mut i = 0;
+        while i < args.len() && args[i].starts_with('-') && args[i] != "--" {
+            i += if spec.leading_value_flags.iter().any(|f| *f == args[i]) { 2 } else { 1 };
+        }
+        args = &args[i.min(args.len())..];
+    }
+
+    // `uv run pytest`, `uvx ruff check`, `pnpm exec vitest`: the program a wrapper runs.
+    if spec.wraps {
+        if let Some(r) = wrapped_effect(cmd, spec, args, table) {
+            return r;
+        }
+    }
+    if let Some(sub) = args.first().and_then(|s| spec.subcommands.get(s)).filter(|s| s.wraps) {
+        if let Some(r) = wrapped_effect(cmd, sub, &args[1..], table) {
+            return r;
+        }
+    }
+    // `pnpm check`, `yarn vitest`: a package manager's first word runs a script or a local binary.
+    if spec.run_shorthand {
+        if let Some(word) = args.first().filter(|w| !w.starts_with('-') && !spec.subcommands.contains_key(*w)) {
+            let base = basename(word);
+            if base != *cmd && table.get(&base).is_some() {
+                let (effect, _, _) = classify_effect(&base, &args[1..], table);
+                return (effect, 0.8, format!("'{cmd} {base}' runs {base}"));
+            }
+            if let Some(run) = spec.subcommands.get("run") {
+                let mut effect = run.effect;
+                for (re, eff) in &run.pattern_effects {
+                    if re.is_match(word) {
+                        effect = *eff;
+                    }
+                }
+                return (effect, 0.8, format!("'{cmd} {word}' classified as '{cmd} run {word}'"));
+            }
+        }
+    }
 
     let mut effect = spec.effect;
     let mut confidence = 0.85;
@@ -498,6 +547,9 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
                     effect = *eff;
                 }
             }
+        }
+        if subspec.check_flags.iter().any(|f| args.iter().any(|a| a == f)) {
+            effect = Effect::Verify;
         }
         if subspec.mutating_flags.iter().any(|f| args.iter().any(|a| a == f)) {
             effect = Effect::Author;
@@ -520,6 +572,10 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
                 confidence = 0.9;
             }
         }
+        if spec.check_flags.iter().any(|f| args.iter().any(|a| a == f)) {
+            effect = Effect::Verify;
+            confidence = 0.9;
+        }
         if spec.mutating_flags.iter().any(|f| args.iter().any(|a| a == f)) {
             effect = Effect::Author;
             confidence = 0.9;
@@ -534,6 +590,36 @@ fn classify_effect(cmd: &str, args: &[String], table: &CommandTable) -> (Effect,
         }
     }
     (effect, confidence, note)
+}
+
+/// The effect of the program a wrapper runs (`uv run pytest -x` → pytest's), if the table knows
+/// that program. `args` follow the wrapper (and its subcommand); `spec.value_flags` are the
+/// wrapper's own flags that take a value. `None` leaves the wrapper to its own classification.
+fn wrapped_effect(
+    wrapper: &str,
+    spec: &crate::table::CommandSpec,
+    args: &[String],
+    table: &CommandTable,
+) -> Option<(Effect, f64, String)> {
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        if a == "--" {
+            i += 1;
+            break;
+        }
+        if !a.starts_with('-') {
+            break;
+        }
+        i += if !a.contains('=') && spec.value_flags.iter().any(|f| f == a) { 2 } else { 1 };
+    }
+    let program = args.get(i)?;
+    let base = basename(program);
+    if base == wrapper || table.get(&base).is_none() {
+        return None;
+    }
+    let (effect, _, _) = classify_effect(program, &args[i + 1..], table);
+    Some((effect, 0.8, format!("'{wrapper}' runs '{base}'")))
 }
 
 /// The head command name of a pipeline stage, without a full walk — used only to decide whether
@@ -619,6 +705,23 @@ fn walk_statement(node: Node, cwd: &mut String, ctx: &Ctx) -> Vec<Normalized> {
 
             let mut c = node.walk();
             let mut output_target: Option<String> = None;
+            // An interpreter fed its program by a heredoc (`python3 - <<'EOF'`) runs inline code,
+            // as `python3 -c '…'` does: it gets the same argv shape, so one-off scripts do not
+            // all share one bare `python3` identity.
+            let inline = node
+                .children(&mut node.walk())
+                .any(|ch| matches!(ch.kind(), "heredoc_redirect" | "herestring_redirect"));
+            if inline {
+                for a in actions.iter_mut() {
+                    if let CanonicalAction::Exec { argv, .. } = &mut a.action {
+                        if stdin_program(argv) {
+                            argv.retain(|x| x != "-");
+                            argv.push("-c".into());
+                            argv.push("<stdin>".into());
+                        }
+                    }
+                }
+            }
             for ch in node.children(&mut c) {
                 if ch.kind() == "file_redirect" {
                     let op = ch.child(0).map(|o| text(o, src)).unwrap_or("");
@@ -1065,6 +1168,106 @@ mod shadow_tests {
         }
     }
 
+    /// An interpreter fed its program by a heredoc runs inline code: `python3 - <<'EOF'` is shaped
+    /// as `python3 -c …`, so its key is `python3 -c {code}`, never a bare `python3` that every
+    /// one-off script would share. A script operand keeps the script as the identity.
+    #[test]
+    fn a_heredoc_program_is_inline_code() {
+        let t = CommandTable::load();
+        let key = |cmd: &str| {
+            let out = normalize_shell(cmd, "/repo", &t);
+            crate::keys::template_key(&out[0].action)
+        };
+        assert_eq!(key("python3 - <<'EOF'\nprint(1)\nEOF"), "exec python3 -c {code}");
+        assert_eq!(key("python3 <<EOF\nprint(1)\nEOF"), "exec python3 -c {code}");
+        assert_eq!(key("python3 tools/gen.py <<EOF\nx\nEOF"), "exec python3 tools/gen.py");
+        assert_eq!(key("cat <<EOF\nhello\nEOF"), "exec cat");
+    }
+
+    /// A rewriting tool asked only to check is a check: `cargo fmt --all --check` verifies,
+    /// `cargo fmt --all` regenerates.
+    #[test]
+    fn check_flags_make_a_formatter_a_check() {
+        let t = CommandTable::load();
+        let effect = |cmd: &str| normalize_shell(cmd, "/repo", &t)[0].effect;
+        use crate::Effect;
+        assert_eq!(effect("cargo fmt --all --check"), Effect::Verify);
+        assert_eq!(effect("cargo fmt --all"), Effect::Regenerate);
+        assert_eq!(effect("black --check ."), Effect::Verify);
+        assert_eq!(effect("black ."), Effect::Regenerate);
+    }
+
+    /// Python project managers, task runners and package-manager shorthands classify by what they
+    /// run: a wrapper as its program, an environment sync as environment, tox and nox as verify.
+    #[test]
+    fn wrappers_and_task_runners_classify_by_what_they_run() {
+        let t = CommandTable::load();
+        let effect = |cmd: &str| normalize_shell(cmd, "/repo", &t)[0].effect;
+        use crate::Effect::*;
+        for (cmd, want) in [
+            ("uv run pytest -x tests/test_a.py", Verify),
+            ("uv run --group dev tox run", Verify),
+            ("uv run python -m pytest", Verify),
+            ("uv run -- pytest", Verify),
+            ("uv run --with rich scripts/x.py", Environment),
+            ("uv run black .", Regenerate),
+            ("uv run rm -rf build", Publish),
+            ("uv sync", Environment),
+            ("uv pip install -e .", Environment),
+            ("uv pip list", Observe),
+            ("uv lock", Environment),
+            ("uv publish", Publish),
+            ("uvx ruff check .", Verify),
+            ("tox", Verify),
+            ("tox -e py", Verify),
+            ("tox run -e py312", Verify),
+            ("tox list", Observe),
+            ("tox exec -e py -- pytest", Verify),
+            ("nox -s tests", Verify),
+            ("poetry run pytest", Verify),
+            ("poetry install", Environment),
+            ("poetry publish", Publish),
+            ("hatch run test", Verify),
+            ("hatch run pytest", Verify),
+            ("hatch test", Verify),
+            ("hatch fmt --check", Verify),
+            ("pdm run pytest", Verify),
+            ("pdm install", Environment),
+            ("pipenv run pytest", Verify),
+            ("just test", Verify),
+            ("just gen", Regenerate),
+            ("just deploy", Environment),
+            ("just --list", Observe),
+            ("task test", Verify),
+            ("task release", Environment),
+            ("coverage run -m pytest", Verify),
+            ("pytest -q", Verify),
+            ("vitest run", Verify),
+            ("jest --ci", Verify),
+            ("go test ./...", Verify),
+            ("cargo nextest run", Verify),
+            ("pnpm vitest run", Verify),
+            ("pnpm exec vitest", Verify),
+            ("pnpm test-unit", Verify),
+            ("pnpm check", Verify),
+            ("pnpm --filter runtime-core test", Verify),
+            ("pnpm -r build", Verify),
+            ("pnpm deploy out", Environment),
+            ("pnpm publish", Publish),
+            ("yarn lint", Verify),
+            ("yarn npm publish", Publish),
+            ("npm run lint", Verify),
+            ("npm --prefix web test", Verify),
+            ("npm exec -- jest", Verify),
+            ("bun run test", Verify),
+            ("bun publish", Publish),
+            ("bunx vitest", Verify),
+            ("make test", Verify),
+        ] {
+            assert_eq!(effect(cmd), want, "{cmd}");
+        }
+    }
+
     #[test]
     fn non_ascii_arguments_survive_normalisation() {
         let out = normalize_shell("cat résumé.txt && ls 日本", "/repo", &CommandTable::load());
@@ -1073,5 +1276,82 @@ mod shadow_tests {
         // The input shape that crashed tree-sitter-bash's scanner on glibc: no crash, some result.
         let _ = normalize_shell("{\u{10FFFF}", "/repo", &CommandTable::load());
         let _ = normalize_shell("echo {\u{1F600}..}", "/repo", &CommandTable::load());
+    }
+}
+
+/// Interpreters whose first path argument is the script they run.
+pub const SCRIPT_INTERPRETERS: [&str; 9] = ["python", "python3", "node", "bash", "sh", "zsh", "ruby", "perl", "deno"];
+
+/// Words in a script's name that say it changes something, reaches the network, or runs other
+/// programs: such a script is never classified observe from the traces.
+const MUTATING_WORDS: [&str; 34] = [
+    "set", "update", "write", "delete", "del", "remove", "rm", "create", "add", "apply", "deploy", "push", "publish",
+    "install", "sync", "migrate", "gen", "generate", "build", "fix", "format", "fmt", "commit", "reset", "clean",
+    "init", "post", "send", "upload", "download", "curl", "wget", "http", "exec",
+];
+
+/// The repository script a plain command runs, when the command table does not know it:
+/// `python3 tools/case {item}` and `./tools/case {item}` → `tools/case`. `None` for a known
+/// program, anything with shell syntax, a path outside the repository, or a script whose name
+/// says it changes something ([`MUTATING_WORDS`]).
+pub fn unlisted_repo_script(command: &str, table: &CommandTable) -> Option<String> {
+    let words: Vec<&str> = command.split_whitespace().collect();
+    if words.is_empty()
+        || words
+            .iter()
+            .any(|w| w.contains(['|', ';', '&', '<', '>', '$', '`', '(', ')', '\'', '"', '\\']) || w.contains("://"))
+    {
+        return None;
+    }
+    let script = if SCRIPT_INTERPRETERS.contains(&words[0]) {
+        let s = words.get(1)?;
+        if s.starts_with('-') {
+            return None;
+        }
+        *s
+    } else {
+        words[0]
+    };
+    let rel = script.strip_prefix("./").unwrap_or(script);
+    if !script.contains('/')
+        || rel.starts_with('/')
+        || rel.split('/').any(|p| p.is_empty() || p == "..")
+        || rel.contains('{')
+    {
+        return None;
+    }
+    let base = basename(rel);
+    if table.get(&base).is_some() {
+        return None;
+    }
+    let lower = base.to_ascii_lowercase();
+    if lower.split(['-', '_', '.']).any(|p| MUTATING_WORDS.contains(&p)) {
+        return None;
+    }
+    Some(rel.to_string())
+}
+
+#[cfg(test)]
+mod repo_script_tests {
+    use super::*;
+
+    #[test]
+    fn unlisted_repo_scripts_are_found_and_known_programs_are_not() {
+        let t = CommandTable::load();
+        assert_eq!(unlisted_repo_script("python3 tools/case {item}", &t).as_deref(), Some("tools/case"));
+        assert_eq!(unlisted_repo_script("./tools/case {item}", &t).as_deref(), Some("tools/case"));
+        assert_eq!(
+            unlisted_repo_script("node bin/fetch-ticket {item} --json", &t).as_deref(),
+            Some("bin/fetch-ticket")
+        );
+        assert_eq!(unlisted_repo_script("make test", &t), None);
+        assert_eq!(unlisted_repo_script("python3 -m pytest", &t), None);
+        assert_eq!(unlisted_repo_script("cat tools/case", &t), None);
+        assert_eq!(unlisted_repo_script("python3 tools/case {item} | sh", &t), None);
+        assert_eq!(unlisted_repo_script("python3 /usr/bin/case x", &t), None);
+        assert_eq!(unlisted_repo_script("python3 ../case x", &t), None);
+        assert_eq!(unlisted_repo_script("python3 scripts/update-case x", &t), None);
+        assert_eq!(unlisted_repo_script("python3 tools/gen.py", &t), None);
+        assert_eq!(unlisted_repo_script("./scripts/deploy x", &t), None);
     }
 }

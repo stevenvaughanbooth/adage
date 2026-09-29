@@ -27,7 +27,7 @@ impl World {
             std::fs::create_dir_all(root.join(d)).unwrap();
         }
         // The recipient's checkout of the repository: `add` runs here, so the lookup's script is
-        // pinned (L-ref) when the v1 track is upgraded to a pack.
+        // pinned (L-ref) when the track is converted to a pack.
         std::fs::write(root.join("repo/.git/config"), "[remote \"origin\"]\n\turl = git@github.com:acme/billing.git\n")
             .unwrap();
         std::fs::write(root.join("repo/scripts/wi-lookup"), "#!/bin/sh\necho '{}'\n").unwrap();
@@ -65,16 +65,12 @@ impl World {
         assert!(o.status.success(), "adage {args:?} failed:\n{}", text(&o));
         text(&o)
     }
-    /// The sender publishes `t` as `out`, a v1 track signed with the test key (the recipient
-    /// upgrades it to a pack in place).
+    /// The sender publishes `t` as `out`, a pack signed with the test key.
     fn publish(&self, t: &Track, out: &str) {
         let _ = std::fs::remove_dir_all(self.p("sender/tracks"));
         io::write(&self.p("sender/tracks").join(NAME), t).unwrap();
         let (o, key) = (self.p(out), self.p("keys/id_ed25519"));
-        self.ok(
-            "sender",
-            &["share", NAME, "--out", o.to_str().unwrap(), "--key", key.to_str().unwrap(), "--format", "v1"],
-        );
+        self.ok("sender", &["share", NAME, "--out", o.to_str().unwrap(), "--key", key.to_str().unwrap()]);
     }
     fn add(&self, out: &str) -> String {
         self.ok("recipient", &["add", self.p(out).to_str().unwrap()])
@@ -102,13 +98,13 @@ fn keygen(w: &World) -> ssh_key::PrivateKey {
     std::fs::write(w.p("keys/id_ed25519"), k.to_openssh(ssh_key::LineEnding::LF).unwrap().as_bytes()).unwrap();
     std::fs::write(
         w.p("recipient/trusted-signers"),
-        format!("alice@example namespaces=\"adage-track\" {}\n", adage_sign::key_line(k.public_key())),
+        format!("alice@example namespaces=\"adage-pack\" {}\n", adage_sign::key_line(k.public_key())),
     )
     .unwrap();
     k
 }
 
-fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, aspect: Aspect) -> Route {
+fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, strength: Strength) -> Route {
     let slots = match &step {
         Step::Run { command } if command.contains("{item}") => vec![Slot {
             name: "item".into(),
@@ -124,8 +120,8 @@ fn route(id: &str, trigger: Trigger, step: Step, effect: Effect, aspect: Aspect)
         step,
         slots,
         effect,
-        aspect,
-        state: RouteState::Active,
+        strength,
+        state: RouteState::Firm,
         exit: vec![Exit::IntentChanges],
         evidence: Evidence {
             support: 7,
@@ -148,7 +144,7 @@ fn track(version: &str, lookup: &str, extra: bool) -> Track {
             Trigger::Prompt { span: SpanKind::Ticket },
             Step::Run { command: lookup.into() },
             Effect::Observe,
-            Aspect::Green,
+            Strength::Fire,
         ),
         route(
             "dead-unittest",
@@ -159,14 +155,14 @@ fn track(version: &str, lookup: &str, extra: bool) -> Track {
                 signature: "ACME_ENV is not set".into(),
             },
             Effect::Verify,
-            Aspect::Red,
+            Strength::Inhibit,
         ),
         route(
             "check",
             Trigger::SessionStart,
             Step::Run { command: "make check".into() },
             Effect::Verify,
-            Aspect::Yellow,
+            Strength::Prime,
         ),
     ];
     if extra {
@@ -175,7 +171,7 @@ fn track(version: &str, lookup: &str, extra: bool) -> Track {
             Trigger::SessionStart,
             Step::Run { command: "make lint".into() },
             Effect::Verify,
-            Aspect::Yellow,
+            Strength::Prime,
         ));
     }
     Track {
@@ -219,10 +215,14 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
     let decisions: Vec<(&str, Decision)> = reviews.routes.iter().map(|(k, v)| (k.as_str(), v.decision)).collect();
     assert_eq!(
         decisions,
-        vec![("check", Decision::Approved), ("dead-unittest", Decision::Rejected), ("lookup", Decision::Pinned)]
+        vec![("check", Decision::Approved), ("dead-unittest", Decision::Extinguished), ("lookup", Decision::Pinned)]
     );
     assert_eq!(reviews.routes["check"].by.as_deref(), Some("bob"));
-    assert_eq!(w.route("dead-unittest").state, RouteState::Retired, "a rejection survives the re-import");
+    assert_eq!(
+        w.route("dead-unittest").state,
+        RouteState::Extinguished,
+        "an extinguish decision survives the re-import"
+    );
     let lookup = w.route("lookup");
     assert!(lookup.authored);
     assert_eq!(
@@ -230,7 +230,7 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
         Step::Run { command: "./scripts/wi-lookup {item} --json".into() },
         "the recipient's pinned copy is kept"
     );
-    assert_eq!(w.route("lint").state, RouteState::Probation);
+    assert_eq!(w.route("lint").state, RouteState::Forming);
 
     // The queue: the pin's drift is proposed with a diff; the new route waits as an import.
     let q = w.queue();
@@ -267,7 +267,7 @@ fn reimport_keeps_decisions_and_proposes_changes_to_pinned_routes() {
     let lookup = w.route("lookup");
     assert_eq!(lookup.step, Step::Run { command: "./scripts/wi-lookup {item} --full".into() });
     assert!(lookup.authored, "an applied proposal stays pinned");
-    assert_ne!(lookup.aspect, Aspect::Green, "an import never becomes green by a proposal");
+    assert_ne!(lookup.strength, Strength::Fire, "an import never becomes fire by a proposal");
     assert!(reasons(&w.queue(), "lookup").is_empty());
     assert!(
         !w.installed().join(adage_tracks::proposals::FILE).exists()

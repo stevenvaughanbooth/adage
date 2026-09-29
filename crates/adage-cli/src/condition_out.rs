@@ -96,14 +96,14 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
                 let glyph = if r.is_instinct() { Glyph::Instinct } else { Glyph::Reflex };
                 let mut l = Line::new()
                     .text("    ")
-                    .strength(words::strength(r.aspect))
+                    .strength(words::strength(r.strength))
                     .pad_to(15)
                     .glyph(Role::Accent, glyph)
                     .text(" ")
                     .text(r.id.clone())
                     .pad_to(18 + id_w)
                     .extend(words::evidence(&r.evidence));
-                if r.state != RouteState::Active {
+                if r.state != RouteState::Firm {
                     l = l.sep().quiet(words::lifecycle(r.state));
                 }
                 o.line(&l)?;
@@ -125,6 +125,25 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
                 }
             }
         }
+        // What learning mined, compiled and kept (`adage_learn::engine::EngineReport`).
+        if run.command == "condition" {
+            let e = &rr.engine;
+            let mut l = Line::new()
+                .text("  ")
+                .faint("conditioned")
+                .pad_to(16)
+                .text(words::count(e.sessions, "trace"))
+                .sep()
+                .text(format!("{} patterns selected", e.reflexes))
+                .sep()
+                .text(format!("{} compiled", words::count(e.compiled, "reflex")))
+                .sep()
+                .text(format!("{} kept", e.routes));
+            if e.contexts > 0 {
+                l = l.quiet(format!(" ({} with a context trigger)", e.contexts));
+            }
+            o.line(&l)?;
+        }
     }
     if !rep.conflicts.is_empty() {
         o.blank()?;
@@ -132,6 +151,21 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
         for c in &rep.conflicts {
             o.line(&Line::new().text("  ").quiet(words::prose(&c.describe())))?;
         }
+    }
+    // Nascent reflexes are formed but never delivered until a person decides.
+    let nascent = rep
+        .repos
+        .values()
+        .flat_map(|rr| rr.tracks.iter())
+        .flat_map(|t| t.routes.iter())
+        .filter(|l| l.contains(" NASCENT: "))
+        .count();
+    if nascent > 0 {
+        o.blank()?;
+        o.note(&format!(
+            "{} formed but not delivered: each waits for a person.",
+            words::count(nascent, "nascent reflex")
+        ))?;
     }
     o.blank()?;
     o.kv("index", Line::new().text(format!("gen {}", &rep.index_generation[..rep.index_generation.len().min(8)])))?;
@@ -167,14 +201,14 @@ pub fn render<W: Write>(o: &mut Out<W>, run: &Run) -> io::Result<()> {
     Ok(())
 }
 
-/// The evidence bars in the lexicon's words: `min_support=3 green_lower_bound=0.5
-/// yellow_rate=0.5` → `support ≥ 3 · fire at lb ≥ 0.5 · prime at rate ≥ 0.5`.
+/// The evidence bars in the lexicon's words: `min_support=3 fire_lower_bound=0.5
+/// prime_rate=0.5` (or the older `green_lower_bound`, `yellow_rate`) → `support ≥ 3 · fire at lb ≥ 0.5 · prime at rate ≥ 0.5`.
 fn thresholds(s: &str) -> String {
     s.split_whitespace()
         .map(|kv| match kv.split_once('=') {
             Some(("min_support", v)) => format!("support ≥ {v}"),
-            Some(("green_lower_bound", v)) => format!("fire at lb ≥ {v}"),
-            Some(("yellow_rate", v)) => format!("prime at rate ≥ {v}"),
+            Some(("fire_lower_bound" | "green_lower_bound", v)) => format!("fire at lb ≥ {v}"),
+            Some(("prime_rate" | "yellow_rate", v)) => format!("prime at rate ≥ {v}"),
             _ => kv.to_string(),
         })
         .collect::<Vec<_>>()
@@ -190,14 +224,14 @@ fn short_name(name: &str, repo: &str) -> String {
 fn change_line(c: &Change, id_w: usize) -> Line {
     let l = Line::new().faint("changed").pad_to(14).text(c.route.clone()).pad_to(16 + id_w);
     match (c.change, c.from, c.to) {
-        (ChangeKind::Aspect, Some(a), Some(b)) => l
+        (ChangeKind::Strength, Some(a), Some(b)) => l
             .push(words::strength(a).role(), words::strength(a).word())
             .faint(" → ")
             .push(words::strength(b).role(), words::strength(b).word()),
         (ChangeKind::New, _, Some(b)) => l.quiet("new ").push(words::strength(b).role(), words::strength(b).word()),
-        (ChangeKind::Draft, _, _) => l.quiet("nascent").sep().quiet("waits for review"),
-        (ChangeKind::Retired, _, _) => l.quiet(words::prose(&c.summary)),
-        (ChangeKind::Stale, _, _) => l.quiet("dormant"),
+        (ChangeKind::Nascent, _, _) => l.quiet("nascent").sep().quiet("waits for review"),
+        (ChangeKind::Extinguished, _, _) => l.quiet(words::prose(&c.summary)),
+        (ChangeKind::Dormant, _, _) => l.quiet("dormant"),
         _ => l.quiet(words::prose(&c.summary)),
     }
 }
@@ -208,11 +242,11 @@ fn instincts_line(ir: &InstinctReport) -> Line {
         return l.quiet("none bound").sep().quiet(words::prose(why));
     }
     let mut l = l.text(format!("{} bound", ir.bound)).sep().text(format!("{} advice", ir.advice));
-    if ir.drafts > 0 {
-        l = l.sep().push(Role::Prime, format!("{} wait for review", ir.drafts));
+    if ir.nascent > 0 {
+        l = l.sep().push(Role::Prime, format!("{} wait for review", ir.nascent));
     }
-    if !ir.retired.is_empty() {
-        l = l.sep().quiet(format!("{} extinguished after failing", ir.retired.len()));
+    if !ir.extinguished.is_empty() {
+        l = l.sep().quiet(format!("{} extinguished after failing", ir.extinguished.len()));
     }
     if !ir.confirmed.is_empty() {
         l = l.sep().quiet(format!("{} confirmed by traces", ir.confirmed.len()));
@@ -227,8 +261,13 @@ mod tests {
     #[test]
     fn thresholds_read_in_the_lexicon() {
         assert_eq!(
-            thresholds("min_support=3 green_lower_bound=0.5 yellow_rate=0.5"),
+            thresholds("min_support=3 fire_lower_bound=0.5 prime_rate=0.5"),
             "support ≥ 3 · fire at lb ≥ 0.5 · prime at rate ≥ 0.5"
+        );
+        assert_eq!(
+            thresholds("min_support=3 green_lower_bound=0.5 yellow_rate=0.5"),
+            "support ≥ 3 · fire at lb ≥ 0.5 · prime at rate ≥ 0.5",
+            "older learn.log lines"
         );
     }
 

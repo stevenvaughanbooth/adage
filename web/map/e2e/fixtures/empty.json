@@ -4,7 +4,7 @@
  "sessions": {
   "total": 0,
   "treated": 0,
-  "holdout": 0
+  "control": 0
  },
  "stop_requests": 0,
  "routes": [
@@ -22,15 +22,15 @@
    "review": {
     "verbs": [
      "approve",
-     "reject",
+     "extinguish",
      "pin"
     ],
     "reasons": []
    },
-   "aspect": "yellow",
-   "ceiling": "yellow",
+   "strength": "prime",
+   "ceiling": "prime",
    "effect": "regenerate",
-   "state": "active",
+   "state": "firm",
    "authored": false,
    "trigger": {
     "kind": "after_edit",
@@ -40,7 +40,7 @@
     "kind": "run",
     "label": "make gen"
    },
-   "directive": "<adage-reflex reflex=\"finish-line/regenerate\" strength=\"prime\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "directive": "<adage-reflex track=\"acme-billing/learned@0.3.0\" route=\"finish-line/regenerate\" strength=\"prime\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
    "evidence": {
     "support": 7,
     "opportunities": 7,
@@ -49,16 +49,17 @@
     "turns_saved": 0.6,
     "days": 9,
     "exposed": 0,
-    "stale_since": null,
+    "dormant_since": null,
     "provenance": "instinct"
    },
    "live": {
     "emitted": 0,
     "would_have": 0,
     "followed": 0,
-    "derailed": 1,
+    "ignored": 1,
+    "misfired": 0,
     "obligation_met": 0,
-    "holdout": {
+    "control": {
      "unaided": 0,
      "not_reached": 0,
      "obligation_met": 0
@@ -73,7 +74,7 @@
      "met": 0,
      "hit_avoided": 0
     },
-    "holdout": {
+    "control": {
      "sessions": 0,
      "applied": 0,
      "followed": 0,

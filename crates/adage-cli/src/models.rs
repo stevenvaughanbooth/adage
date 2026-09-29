@@ -1,12 +1,26 @@
-//! `adage models fetch | install <dir> | status` — the embedding model for intent families.
+//! `adage models [status] | fetch [<key>] | install <dir> [<key>] | use <key|auto|hashed>` — the
+//! static embedding models.
 //!
-//! The model is never bundled: `fetch` downloads the pinned upstream files with `curl` (argv, no
-//! shell) into a scratch directory, and `install` verifies every file's SHA-256 against the pinned
-//! digest before anything is written under `$ADAGE_HOME/models`. Offline machines download the
-//! three files any other way and run `adage models install <dir>`. Without a model, everything
-//! else works: `adage condition` skips intent families and hooks never fire intent routes.
+//! **Nothing to do by default.** The `adage` binary carries potion-base-8M quantised to int8
+//! (`adage_intent::model`, "The bundled model"), so a fresh install embeds with no download. `fetch`
+//! installs a model's pinned upstream files instead (full precision, or another model:
+//! `potion-code-16m-v2`), and `use` selects which one hooks and the learner embed with.
+//!
+//! **Where `fetch` downloads from.** The pinned Hugging Face revision (or `ADAGE_MODEL_BASE_URL`, a
+//! mirror holding the same files), file by file with `curl` (argv, no shell); when that fails, the
+//! model's npm package, whose tarball is pinned by SHA-256 and holds the same files byte for byte
+//! (`registry.npmjs.org` is reachable where Hugging Face is often blocked). Every file's SHA-256 is
+//! checked against its pin before anything is written under `$ADAGE_HOME/models`. Offline machines
+//! download the files any other way (or unpack the npm package) and run `adage models install
+//! <dir>`.
+//!
+//! **Failures are never silent** (docs/zero-config.md §5). A failed download is not retried by
+//! itself: it is classified from curl's exit code and message ([`classify`]) and recorded in
+//! `models/.fetch-failed.json` (`{class, host, at, detail}`), which `adage doctor` and the status
+//! card read, next to what the process embeds with instead (the bundled model, or the explicit
+//! hashed fallback).
 
-use adage_intent::model;
+use adage_intent::model::{self, Spec};
 use adage_store::Paths;
 use adage_term::{Line, Out, Role};
 use anyhow::{bail, Context, Result};
@@ -14,71 +28,284 @@ use std::path::Path;
 
 pub fn run(args: &[String], paths: &Paths) -> Result<()> {
     match args.first().map(String::as_str) {
-        Some("fetch") => fetch(paths),
+        Some("fetch") => fetch(args.get(1).map(String::as_str), paths),
         Some("install") => {
-            let dir = args
-                .get(1)
-                .context("usage: adage models install <dir with model.safetensors, tokenizer.json, config.json>")?;
-            install(Path::new(dir), paths)
+            let dir = args.get(1).context(
+                "usage: adage models install <dir with model.safetensors and tokenizer.json, or an unpacked npm package> [<key>]",
+            )?;
+            install(Path::new(dir), args.get(2).map(String::as_str), paths)
         }
-        Some("status") | None => {
-            let mut o = Out::stdout();
-            match model::status(&paths.models()) {
-                Ok(m) => {
-                    o.header("models", &["installed"])?;
-                    o.blank()?;
-                    o.kv("model", Line::new().text(m.id).sep().quiet(format!("{} x {}", m.vocab_size, m.dim)))?;
-                    o.kv("in", Line::new().text(crate::detect::tilde(&model::dir_in(&paths.models()))))?;
-                    o.kv("enables", Line::new().quiet("intent families: similar prompts share a reflex"))?;
-                }
-                Err(e) => {
-                    o.header("models", &["not installed"])?;
-                    o.blank()?;
-                    o.kv("model", Line::new().push(Role::Prime, format!("{e:#}")))?;
-                    o.kv("without it", Line::new().quiet("everything works except intent families"))?;
-                    o.blank()?;
-                    o.next("adage models fetch", "downloads and verifies it (31 MB, SHA-256 checked)")?;
-                    o.also("adage models install <dir>", "offline: from files you downloaded yourself")?;
-                }
+        Some("use") => {
+            let which =
+                args.get(1).context("usage: adage models use <auto|hashed|potion-base-8m|potion-code-16m-v2>")?;
+            let which = which.trim().to_lowercase();
+            if !matches!(which.as_str(), "auto" | "hashed") && model::spec(&which).is_none() {
+                return Err(crate::hint(
+                    format!("unknown model {which:?}"),
+                    format!("use auto, hashed, or one of: {}", keys()),
+                ));
             }
+            let before = embedder_id(paths);
+            std::fs::create_dir_all(paths.models())?;
+            adage_store::config::write_atomic(&paths.models().join(model::ACTIVE_FILE), which.as_bytes())?;
+            let r = model::resolve(&paths.models(), false);
+            let mut o = Out::stdout();
+            o.header("models use", &[&which])?;
+            o.blank()?;
+            o.kv("embedding", Line::new().text(r.describe()))?;
+            switched_notes(&mut o, &switched(paths, &before))?;
             Ok(())
         }
-        Some(other) => bail!("unknown `adage models {other}`; use fetch, install <dir>, or status"),
+        Some("status") | None => {
+            render_status(&mut Out::stdout(), paths)?;
+            Ok(())
+        }
+        Some(other) => {
+            bail!("unknown `adage models {other}`; use fetch [<key>], install <dir> [<key>], use <key>, or status")
+        }
     }
 }
 
-fn install(dir: &Path, paths: &Paths) -> Result<()> {
-    if !dir.is_dir() {
-        return Err(crate::hint(
-            format!("{} is not a directory", dir.display()),
-            "download model.safetensors, tokenizer.json and config.json into one directory, or run `adage models fetch`",
-        ));
-    }
-    let m = model::install(dir, &paths.models())?;
-    let mut o = Out::stdout();
-    o.header("models install", &["SHA-256 verified"])?;
-    o.blank()?;
-    installed(&mut o, &m.id, paths)
+fn keys() -> String {
+    model::SPECS.iter().map(|s| s.key).collect::<Vec<_>>().join(", ")
 }
 
-fn installed<W: std::io::Write>(o: &mut Out<W>, id: &str, paths: &Paths) -> Result<()> {
-    o.kv("installed", Line::new().text(id))?;
-    o.kv("in", Line::new().text(crate::detect::tilde(&model::dir_in(&paths.models()))))?;
+/// What `adage models status` prints: what this process embeds with, then every known model.
+fn render_status<W: std::io::Write>(o: &mut Out<W>, paths: &Paths) -> std::io::Result<()> {
+    let root = paths.models();
+    let r = model::resolve(&root, false);
+    let source = match r.source {
+        model::Source::Installed { .. } => "installed",
+        model::Source::Bundled => "bundled",
+        model::Source::Hashed { .. } => "hashed fallback",
+    };
+    o.header("models", &[source])?;
     o.blank()?;
-    o.next("adage condition", "forms intent families from your traces")?;
+    let role = if matches!(r.source, model::Source::Hashed { .. }) { Role::Prime } else { Role::Ink };
+    o.kv("embeddings", Line::new().push(role, r.describe()))?;
+    if matches!(r.source, model::Source::Bundled) {
+        match model::bundled_verified() {
+            Ok(()) => o.kv("", Line::new().quiet("bundled table and vocabulary match their pinned SHA-256"))?,
+            Err(e) => o.kv("", Line::new().push(Role::Inhibit, format!("{e:#}")))?,
+        }
+    }
+    o.blank()?;
+    for spec in model::SPECS {
+        let dir = root.join(spec.key);
+        let state = match model::status_of(&dir) {
+            Ok(m) => Line::new()
+                .push(Role::Fire, "installed")
+                .sep()
+                .quiet(format!("{} x {}, checksums verified", m.vocab_size, m.dim)),
+            Err(_) if !dir.join("manifest.json").exists() => Line::new()
+                .faint("not installed")
+                .sep()
+                .cmd(format!("adage models fetch {}", spec.key))
+                .quiet(format!(" ({:.0} MB)", spec.bytes() as f64 / 1e6)),
+            Err(e) => Line::new().push(Role::Inhibit, format!("installed but unusable: {e:#}")),
+        };
+        let w = model::SPECS.iter().map(|s| s.key.len()).max().unwrap_or(0) + 2;
+        o.line(&Line::new().text(spec.key).pad_to(w).extend(state).sep().faint(format!(
+            "{} ({})",
+            spec.id(),
+            spec.licence
+        )))?;
+    }
+    if let Some(f) = fetch_failed(paths) {
+        o.blank()?;
+        o.warn(&format!(
+            "last download failed: {}",
+            explain(
+                f["class"].as_str().unwrap_or("error"),
+                f["host"].as_str().unwrap_or("the model host"),
+                f["detail"].as_str().unwrap_or("")
+            )
+        ))?;
+    }
     Ok(())
 }
 
-fn fetch(paths: &Paths) -> Result<()> {
+/// The spec of a key given on the command line (the default model when none is).
+fn spec_arg(key: Option<&str>) -> Result<&'static Spec> {
+    match key {
+        None => Ok(&model::BASE_8M),
+        Some(k) => model::spec(k)
+            .ok_or_else(|| crate::hint(format!("unknown model {k:?}"), format!("known models: {}", keys()))),
+    }
+}
+
+fn install(dir: &Path, key: Option<&str>, paths: &Paths) -> Result<()> {
+    if !dir.is_dir() {
+        return Err(crate::hint(
+            format!("{} is not a directory", dir.display()),
+            "download model.safetensors, tokenizer.json and config.json into one directory (or unpack the npm package), or run `adage models fetch`",
+        ));
+    }
+    // Without a key: the known model whose pinned table is in `dir`.
+    let spec = match key {
+        Some(_) => spec_arg(key)?,
+        None => model::SPECS
+            .iter()
+            .copied()
+            .find(|s| model::verify(s, dir).is_ok())
+            .with_context(|| format!("{} holds none of the pinned models ({})", dir.display(), keys()))?,
+    };
+    let before = embedder_id(paths);
+    let m = model::install_spec(spec, dir, &paths.models())?;
+    let _ = std::fs::remove_file(paths.models().join(FETCH_FAILED));
     let mut o = Out::stdout();
-    let _ = o.header("models fetch", &["pinned model, SHA-256 verified"]);
+    o.header("models install", &[spec.key, "SHA-256 verified"])?;
+    o.blank()?;
+    installed(&mut o, &m.id, spec, paths, &before)
+}
+
+/// The rows after a model is installed, and what changed for reflexes learned with another one.
+fn installed<W: std::io::Write>(o: &mut Out<W>, id: &str, spec: &Spec, paths: &Paths, before: &str) -> Result<()> {
+    o.kv("installed", Line::new().text(id))?;
+    o.kv("in", Line::new().text(crate::detect::tilde(&paths.models().join(spec.key))))?;
+    switched_notes(o, &switched(paths, before))?;
+    o.blank()?;
+    if spec.key != model::BUNDLED_SPEC.key && model::selection(&paths.models()) != spec.key {
+        o.next(&format!("adage models use {}", spec.key), "makes hooks and the learner embed with it")?;
+    } else {
+        o.next("adage condition", "forms intent families from your traces")?;
+    }
+    Ok(())
+}
+
+/// Each line [`switched`] returned, as a note.
+fn switched_notes<W: std::io::Write>(o: &mut Out<W>, text: &str) -> std::io::Result<()> {
+    if text.is_empty() {
+        return Ok(());
+    }
+    o.blank()?;
+    for l in text.lines() {
+        o.note(l)?;
+    }
+    Ok(())
+}
+
+fn fetch(key: Option<&str>, paths: &Paths) -> Result<()> {
+    let spec = spec_arg(key)?;
+    let before = embedder_id(paths);
+    let mut o = Out::stdout();
+    let _ = o.header("models fetch", &[spec.key, "pinned, SHA-256 verified"]);
     let _ = o.blank();
-    let m = fetch_with(paths, &mut |p| {
+    let m = fetch_spec(spec, paths, &mut |p| {
         if p.file_done == 0 {
             let _ = o.kv("fetching", Line::new().text(p.url).sep().quiet(format!("{} bytes", p.file_bytes)));
         }
     })?;
-    installed(&mut o, &m, paths)
+    installed(&mut o, &m, spec, paths, &before)
+}
+
+/// The id of the model hooks embed prompts with now.
+fn embedder_id(paths: &Paths) -> String {
+    model::resolve(&paths.models(), false).embedder.id()
+}
+
+/// After a command that may have changed the model hooks embed with (`fetch`, `install`, `use`):
+/// an intent reflex (a procedure card included) matches only prompts embedded by the model it
+/// was learned with, so reflexes learned with the previous model stop firing until their
+/// repository is conditioned again. Say so, and ask each such repository's learner to condition
+/// it again now (in the background, as a session end would), where its checkout is known.
+fn switched(paths: &Paths, before: &str) -> String {
+    let now = embedder_id(paths);
+    if now == before {
+        return String::new();
+    }
+    let index = adage_tracks::Index::load(&paths.index());
+    let mut stranded: std::collections::BTreeMap<&str, (usize, usize)> = Default::default();
+    for r in &index.routes {
+        if let adage_tracks::Trigger::Intent { model, .. } = &r.route.trigger {
+            if *model != now {
+                let e = stranded.entry(r.repo.as_str()).or_default();
+                e.0 += 1;
+                e.1 += usize::from(matches!(r.route.step, adage_tracks::Step::Card { .. }));
+            }
+        }
+    }
+    if stranded.is_empty() {
+        return String::new();
+    }
+    // Each repository's checkout, from the learn queue (the latest session there).
+    let mut roots: std::collections::BTreeMap<String, crate::autolearn::Request> = Default::default();
+    for e in std::fs::read_dir(paths.learn_queue()).into_iter().flatten().flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        if name.ends_with(".json") && name.matches('.').count() == 1 {
+            if let Some(req) = crate::autolearn::read_json::<crate::autolearn::Request>(&e.path()) {
+                roots.insert(req.repo.clone(), req);
+            }
+        }
+    }
+    let exe = std::env::current_exe().ok();
+    let mut out = String::new();
+    for (repo, (n, cards)) in stranded {
+        let mut what = if n == 1 {
+            "1 reflex that matches prompts".to_string()
+        } else {
+            format!("{n} reflexes that match prompts")
+        };
+        if cards > 0 {
+            what.push_str(&format!(" ({cards} procedure card{})", if cards == 1 { "" } else { "s" }));
+        }
+        let requeued = match (roots.get(repo), &exe) {
+            (Some(req), Some(exe)) if Path::new(&req.root).join(".git").exists() => matches!(
+                crate::autolearn::on_turn_end(paths, Path::new(&req.root), &req.harness, None, exe, false),
+                Ok(crate::autolearn::Triggered::Started(_)
+                    | crate::autolearn::Triggered::Running
+                    | crate::autolearn::Triggered::Scheduled)
+            ),
+            _ => false,
+        };
+        out.push_str(&format!(
+            "{repo}: {what} learned with {before} {} not fire with {now} until the repository is conditioned again; {}\n",
+            if n == 1 { "does" } else { "do" },
+            if requeued {
+                "Adage is conditioning it again in the background now (`adage condition` there does it at once)"
+            } else {
+                "run `adage condition` in that repository"
+            }
+        ));
+    }
+    out
+}
+
+/// Written under `$ADAGE_HOME/models` when a download fails; removed when one succeeds.
+pub const FETCH_FAILED: &str = ".fetch-failed.json";
+
+/// Why a download failed, from curl's exit code and message: `offline` (6, 7: no network or
+/// name resolution), `blocked` (a 403 or 407 from a proxy or policy: 22 or 56), `tls` (35, 60:
+/// TLS interception; set `CURL_CA_BUNDLE` or `SSL_CERT_FILE`), `timeout` (28), `http` (another
+/// HTTP error), or `error`.
+pub fn classify(code: Option<i32>, stderr: &str) -> &'static str {
+    let blocked = stderr.contains(" 403") || stderr.contains(" 407");
+    match code {
+        Some(6 | 7) => "offline",
+        Some(22 | 56) if blocked => "blocked",
+        Some(35 | 60) => "tls",
+        Some(28) => "timeout",
+        Some(22) => "http",
+        _ => "error",
+    }
+}
+
+/// One sentence for a classified failure, with its fix.
+pub fn explain(class: &str, host: &str, detail: &str) -> String {
+    let status = if detail.contains("407") { "407" } else { "403" };
+    match class {
+        "blocked" => format!("{host} blocked by proxy ({status}). Use a mirror (ADAGE_MODEL_BASE_URL) or adage models install <dir>."),
+        "offline" => format!("{host} not reachable (no network). Run adage models fetch when online, or adage models install <dir>."),
+        "tls" => format!("TLS to {host} was intercepted. Set CURL_CA_BUNDLE or SSL_CERT_FILE to your proxy's CA and run adage models fetch again."),
+        "timeout" => format!("{host} timed out. Run adage models fetch again later, or adage models install <dir>."),
+        _ => format!("downloading from {host} failed ({detail}). Use a mirror (ADAGE_MODEL_BASE_URL) or adage models install <dir>."),
+    }
+}
+
+/// The recorded failure, if the last download failed and no model has been installed since.
+pub fn fetch_failed(paths: &Paths) -> Option<serde_json::Value> {
+    let v: serde_json::Value = serde_json::from_slice(&std::fs::read(paths.models().join(FETCH_FAILED)).ok()?).ok()?;
+    Some(v)
 }
 
 /// Download progress, reported about five times a second while `curl` runs.
@@ -91,59 +318,161 @@ pub(crate) struct Progress<'a> {
     pub(crate) total: u64,
 }
 
-/// Download and install the pinned model, reporting progress; returns its id. `curl`'s own output
-/// is captured, so a terminal UI can call this.
-pub(crate) fn fetch_with(paths: &Paths, progress: &mut dyn FnMut(&Progress)) -> Result<String> {
+/// A failed download: (class, host, curl's message).
+struct Failed {
+    class: &'static str,
+    host: String,
+    detail: String,
+}
+
+/// Download `url` to `out` with curl (at most `max` bytes), reporting progress. The one place
+/// `adage` starts a download.
+fn curl(url: &str, out: &Path, max: u64, report: &mut dyn FnMut(u64)) -> Result<Result<(), Failed>> {
     use std::process::Stdio;
+    report(0);
+    let mut child = std::process::Command::new("curl")
+        .args(["-fsSL", "--proto", "=https", "--connect-timeout", "20", "--max-filesize"])
+        .arg((max + 4096).to_string())
+        .arg("-o")
+        .arg(out)
+        .arg(url)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("could not run curl; download the files yourself and use `adage models install <dir>`")?;
+    let status = loop {
+        if let Some(s) = child.try_wait()? {
+            break s;
+        }
+        let done = std::fs::metadata(out).map(|m| m.len()).unwrap_or(0);
+        report(done.max(1).min(max));
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    };
+    if status.success() {
+        report(max);
+        return Ok(Ok(()));
+    }
+    let mut err = String::new();
+    if let Some(mut e) = child.stderr.take() {
+        use std::io::Read;
+        let _ = e.read_to_string(&mut err);
+    }
+    let err = err.trim().to_string();
+    Ok(Err(Failed {
+        class: classify(status.code(), &err),
+        host: model::host(url),
+        detail: if err.is_empty() { format!("{status}") } else { err },
+    }))
+}
+
+/// Download and install the default model, reporting progress; returns its id.
+pub(crate) fn fetch_with(paths: &Paths, progress: &mut dyn FnMut(&Progress)) -> Result<String> {
+    fetch_spec(&model::BASE_8M, paths, progress)
+}
+
+/// Download and install a model (Hugging Face or the mirror file by file, else its npm tarball),
+/// reporting progress; returns its id. `curl`'s own output is captured, so a terminal UI can call
+/// this.
+pub(crate) fn fetch_spec(spec: &Spec, paths: &Paths, progress: &mut dyn FnMut(&Progress)) -> Result<String> {
     let tmp = paths.models().join(format!(".download{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp)?;
-    let total: u64 = model::FILES.iter().map(|f| f.bytes).sum();
     let result = (|| -> Result<String> {
+        // 1. File by file from the pinned revision (or the mirror).
+        let total = spec.bytes();
         let mut before = 0u64;
-        for f in &model::FILES {
-            let url = model::url(f.name);
-            let out = tmp.join(f.name);
-            let report = |progress: &mut dyn FnMut(&Progress), done: u64| {
+        let mut first: Option<Failed> = None;
+        for f in spec.files {
+            let url = spec.url(f.name);
+            let got = curl(&url, &tmp.join(f.name), f.bytes, &mut |done| {
                 progress(&Progress { url: &url, file_done: done, file_bytes: f.bytes, done: before + done, total })
-            };
-            report(progress, 0);
-            let mut child = std::process::Command::new("curl")
-                .args(["-fsSL", "--proto", "=https", "--max-filesize"])
-                .arg((f.bytes + 4096).to_string())
-                .arg("-o")
-                .arg(&out)
-                .arg(&url)
-                .stdin(Stdio::null())
-                .stdout(Stdio::null())
-                .stderr(Stdio::piped())
-                .spawn()
-                .context("could not run curl; download the files yourself and use `adage models install <dir>`")?;
-            let status = loop {
-                if let Some(s) = child.try_wait()? {
-                    break s;
-                }
-                let done = std::fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
-                report(progress, done.max(1).min(f.bytes));
-                std::thread::sleep(std::time::Duration::from_millis(200));
-            };
-            if !status.success() {
-                let mut err = String::new();
-                if let Some(mut e) = child.stderr.take() {
-                    use std::io::Read;
-                    let _ = e.read_to_string(&mut err);
-                }
-                let err = err.trim();
-                bail!(
-                    "downloading {} failed ({status}){}",
-                    f.name,
-                    if err.is_empty() { String::new() } else { format!(": {err}") }
-                );
+            })?;
+            if let Err(e) = got {
+                first = Some(e);
+                break;
             }
-            report(progress, f.bytes);
             before += f.bytes;
         }
-        Ok(model::install(&tmp, &paths.models())?.id)
+        let first = match first {
+            None => {
+                let id = model::install_spec(spec, &tmp, &paths.models())?.id;
+                return Ok(id);
+            }
+            Some(e) => e,
+        };
+        // 2. The npm package: its pinned tarball holds the same files.
+        let npm = &spec.npm;
+        let tgz = tmp.join("package.tgz");
+        let got = curl(npm.tarball, &tgz, npm.tarball_bytes, &mut |done| {
+            progress(&Progress {
+                url: npm.tarball,
+                file_done: done,
+                file_bytes: npm.tarball_bytes,
+                done,
+                total: npm.tarball_bytes,
+            })
+        })?;
+        match got {
+            Ok(()) => {
+                let bytes = std::fs::read(&tgz)?;
+                let digest: String =
+                    <sha2::Sha256 as sha2::Digest>::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+                if digest != npm.tarball_sha256 {
+                    bail!(
+                        "{} {}: tarball sha256 {digest} does not match the pinned {}",
+                        npm.package,
+                        npm.version,
+                        npm.tarball_sha256
+                    );
+                }
+                let files = tmp.join("npm");
+                adage_intent::npm::extract(spec, &bytes, &files)?;
+                Ok(model::install_spec(spec, &files, &paths.models())?.id)
+            }
+            Err(second) => {
+                let record = serde_json::json!({
+                    "class": first.class,
+                    "host": first.host,
+                    "at": crate::learnlog::now_ms(),
+                    "detail": first.detail.chars().take(200).collect::<String>(),
+                    "fallback": { "class": second.class, "host": second.host, "detail": second.detail.chars().take(200).collect::<String>() },
+                });
+                let _ = adage_store::config::write_atomic(
+                    &paths.models().join(FETCH_FAILED),
+                    record.to_string().as_bytes(),
+                );
+                bail!(
+                    "downloading {} failed. {} Fallback: {} Still embedding with {}.",
+                    spec.key,
+                    explain(first.class, &first.host, &first.detail),
+                    explain(second.class, &second.host, &second.detail),
+                    model::resolve(&paths.models(), false).describe()
+                );
+            }
+        }
     })();
+    if result.is_ok() {
+        let _ = std::fs::remove_file(paths.models().join(FETCH_FAILED));
+    }
     let _ = std::fs::remove_dir_all(&tmp);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn curl_failures_are_classified() {
+        assert_eq!(classify(Some(22), "curl: (22) The requested URL returned error: 403"), "blocked");
+        assert_eq!(classify(Some(56), "curl: (56) CONNECT tunnel failed, response 407"), "blocked");
+        assert_eq!(classify(Some(22), "curl: (22) The requested URL returned error: 404"), "http");
+        assert_eq!(classify(Some(6), "Could not resolve host"), "offline");
+        assert_eq!(classify(Some(7), ""), "offline");
+        assert_eq!(classify(Some(60), "SSL certificate problem"), "tls");
+        assert_eq!(classify(Some(35), ""), "tls");
+        assert_eq!(classify(None, ""), "error");
+        assert!(explain("blocked", "huggingface.co", "403").contains("huggingface.co blocked by proxy (403)"));
+    }
 }

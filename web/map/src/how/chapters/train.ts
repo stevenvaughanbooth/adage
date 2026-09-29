@@ -1,11 +1,13 @@
-// Chapter: train on a skill (crates/adage-train, docs/training.md). A SKILL.md becomes typed
-// claims; generated tasks run headlessly in sealed clones; the traces go through the same learner
-// into staged reflexes that are never activated; each claim gets a verdict, and held-out tasks
-// compare three arms.
+// Chapter: train on a skill (crates/adage-train, docs/training.md). `adage train <SKILL.md>`
+// compiles a skill deterministically and replays its commands in a sandbox (the first step says
+// so); the chapter then follows the optional evidence path: a SKILL.md becomes typed claims;
+// generated tasks run headlessly in sealed clones; the traces go through the same learner into
+// staged reflexes that are never activated; each claim gets a verdict, and held-out tasks compare
+// three arms.
 //
 // The skill, the repository's files and every session outcome below are sample data. Each count,
 // rate and verdict a caption states is computed from them here, with the rules of plan.rs,
-// tasks.rs, report.rs and the miners (mine.rs), whose constants are copied below.
+// tasks.rs, report.rs and the learner's evidence rules, whose constants are copied below.
 
 import type { CamSpec, DotLook, SceneState, Stage, V3 } from "../engine";
 import { f2, seeded, wilson } from "../sample";
@@ -30,13 +32,13 @@ const FOLLOW_MIN = 0.7;
 const NON_INFERIORITY = 0.1;
 const COST_TOLERANCE = 0.1;
 const CONSISTENT: [number, number] = [9, 10];
-/** adage-tracks params.rs LearnParams::default(): the miners' bars. */
+/** adage-tracks params.rs LearnParams::default(): the learner's bars. */
 const MIN_SUPPORT = 5;
 const FIRE_LB = 0.8;
 const PRIME_RATE = 0.5;
 const FINISH_CONTRAST = 0.3;
 
-/** mine.rs `stable`: the 6-hex id suffix the miners derive from content (FNV-1a, 64-bit). */
+/** adage-graph compile/stable.rs `stable`: the 6-hex id suffix derived from content (FNV-1a, 64-bit). */
 export function stable(parts: string[]): string {
   let h = 0xcbf29ce484222325n;
   const mask = (1n << 64n) - 1n;
@@ -200,7 +202,7 @@ function build(stage: Stage): Built {
   const estimate = perUsd * tasks.length;
   const active = SKILL.filter((c) => !notExercisable(c));
 
-  // --- mining, as the miners count it (in distinct sessions)
+  // --- learning, as the learner counts it (in distinct sessions)
   const ranAll = (s: Session, cmd: string) => s.runs.filter(([c]) => c === cmd);
   // c1: sessions that ran npm test, and those where every run of it failed (report.rs `contradiction`).
   const ranTest = sessions.filter((s) => ranAll(s, "npm test").length > 0);
@@ -211,7 +213,7 @@ function build(stage: Stage): Built {
     const f = s.runs.findIndex(([c, ok]) => c === "npm test" && !ok);
     return f >= 0 && s.runs.some(([c, ok], j) => j > f && c === "make check" && ok);
   }).length;
-  // The dead-end miner also needs the avoided command to fail consistently (params.rs [9, 10]).
+  // A dead end also needs the avoided command to fail consistently (params.rs [9, 10]).
   const deadLearned = deadSupport >= MIN_SUPPORT && consistent;
   const deadId = `dead-end-${stable(["exec make check"])}`;
   // c2: a finish line. Opportunities: sessions that edited a matching file; support: those that
@@ -340,7 +342,7 @@ function build(stage: Stage): Built {
   stage.label("ctl", "controls", `t${tasks.length - 3}`, { cls: "note", dy: 16, center: true });
   stage.label("repo", "<small>YOUR REPOSITORY</small>HEAD · working tree untouched", "repo", { cls: "chip big", center: true, dy: -62 });
   stage.label("noorigin", "clones: git clone --local --no-hardlinks · origin removed", [tPos(0)[0] - 0.5, tPos(18)[1] - 0.9, 0], { cls: "note", dy: 4 });
-  stage.label("learn", "<small>LEARNER</small>the same miners", "learn", { cls: "chip big", center: true, dy: 26 });
+  stage.label("learn", "<small>LEARNER</small>the same graph learner", "learn", { cls: "chip big", center: true, dy: 26 });
   stage.label("fl", `<small>PRIME · FORMING</small>${esc(flId)}`, "fl", { cls: "chip big", dx: 18, dy: -20 });
   stage.label("de", `<small>INHIBIT · FORMING</small>${esc(deadId)}`, "de", { cls: "chip big", dx: 18, dy: -20 });
   stage.label("staged", "staged/tracks · not activated", [3.8, FL[1] + 0.7, 0], { cls: "note", dy: -18 });
@@ -468,8 +470,8 @@ function build(stage: Stage): Built {
   const text: Omit<Step, "state">[] = [
     {
       title: "A skill is a set of claims",
-      body: `A skill file says what an agent should do here. This sample SKILL.md for the registry service makes ${SKILL.length} instructions. Adage treats each one as a hypothesis to test, not as a fact.`,
-      chips: [{ text: "SKILL.md · CONTRIBUTING.md · runbook" }, { text: "Makefile · package.json · CI workflow" }, { text: "no model reads it: rules only" }],
+      body: `A skill file says what an agent should do here. adage train <SKILL.md> compiles its procedure into one pack of reflexes, for free: no model and no agent session. Every compiled command is replayed on a clean checkout of HEAD in adage-exec's sandbox (network off, your working tree untouched); one that fails there is dropped as stale, and nothing is installed until adage train accept. Sessions are optional evidence, and the rest of this chapter follows them: this sample SKILL.md for the registry service makes ${SKILL.length} instructions, and each one is a hypothesis to test, not a fact.`,
+      chips: [{ text: "compile + sandbox replay: free" }, { text: "sessions: adage train plan, then --plan … --execute" }, { text: "SKILL.md · CONTRIBUTING.md · Makefile · package.json · CI · runbook" }, { text: "no model reads it: rules only" }],
     },
     {
       title: "Each claim gets a type",
@@ -523,12 +525,12 @@ function build(stage: Stage): Built {
     },
     {
       title: "The traces go to the same learner",
-      body: `Exploration runs with the skill in the system prompt and Adage switched off, so no reflex steers it. The ${sessions.length} traces then go through the same miners as your own traces.`,
+      body: `Exploration runs with the skill in the system prompt and Adage switched off, so no reflex steers it. The ${sessions.length} traces then go through the same learner as your own traces.`,
       chips: [{ text: "ADAGE_DISABLE=1" }, { text: "synthetic:skill:<sha256>@<run>" }, { text: `min support ${MIN_SUPPORT}` }],
     },
     {
       title: "Reflexes are staged, never activated",
-      body: `The miners found ${[flLearned, deadLearned].filter(Boolean).length} reflexes. They are written to staged/tracks, capped at prime and forming, and never reach the index your hooks read. The finish line ${flFires ? "would fire, but is capped" : "primes"}: ${flSupport} of ${editors.length} sessions regenerated after the edit, a lower bound of ${f2(flLb)}.`,
+      body: `The learner found ${[flLearned, deadLearned].filter(Boolean).length} reflexes. They are written to staged/tracks, capped at prime and forming, and never reach the index your hooks read. The finish line ${flFires ? "would fire, but is capped" : "primes"}: ${flSupport} of ${editors.length} sessions regenerated after the edit, a lower bound of ${f2(flLb)}.`,
       chips: [
         { text: "never fire · never firm" },
         { text: "a dead end stays inhibit" },
@@ -551,7 +553,7 @@ function build(stage: Stage): Built {
       chips: [
         ...acc.map((a) => ({ text: `${a.id} reflex ${pct(a.st.reflex.rate)} · skill ${pct(a.st.skill.rate)}`, ok: a.accepted })),
         { text: `follow ≥ ${f2(FOLLOW_MIN)} · within ${f2(NON_INFERIORITY)} · ≤ +${pct(COST_TOLERANCE)}` },
-        { text: "reflex arm: ADAGE_HOLDOUT=0" },
+        { text: "reflex arm: ADAGE_CONTROL=0" },
       ],
       figure: (g, w, h, pal) => {
         // Followed share per claim and arm, against the acceptance bar.
@@ -616,10 +618,10 @@ function build(stage: Stage): Built {
 export const train: Chapter = {
   id: "train",
   title: "Train on a skill",
-  status: "Built",
+  status: "Built · sessions optional",
   kind: "built",
   summary:
-    "A SKILL.md, Makefile or CI file becomes typed claims. Your agent runs headlessly on generated tasks in disposable clones, the same learner stages what it did, and each claim gets a verdict.",
+    "adage train compiles a skill into a pack of reflexes with no model and no session, and replays every command in a sandbox. Optionally, your agent runs headlessly on generated tasks in disposable clones, the same learner stages what it did, and each claim gets a verdict.",
   source: "crates/adage-train · docs/training.md",
   usesRepo: false,
   build,

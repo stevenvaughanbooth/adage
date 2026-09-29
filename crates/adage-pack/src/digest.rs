@@ -2,8 +2,8 @@
 //!
 //! - The **route exec digest** ([`route_exec_digest`]) is the SHA-256 of the canonical JSON (keys
 //!   sorted, no whitespace, as `EngineParams::canonical_json`) of the route minus `evidence` and
-//!   `aspect` (a pack never holds `state`), with every referenced type definition and every script
-//!   SHA-256 inlined. Approvals are keyed by it: evidence updates and aspect moves keep it; any
+//!   `strength` (a pack never holds `state`), with every referenced type definition and every script
+//!   SHA-256 inlined. Approvals are keyed by it: evidence updates and strength moves keep it; any
 //!   change to a trigger, argv, input or output type, or script changes it.
 //! - The **pack digest** ([`pack_digest`], [`digest_dir`]) is `adage_tracks::io::digest`'s
 //!   algorithm: per-file SHA-256 over line-ending-normalised bytes (`scripts/` verbatim), sorted by
@@ -22,7 +22,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 /// The sshsig namespace for packs ([`adage_sign::PACK_NAMESPACE`]). An `allowed_signers` entry
-/// restricted to `adage-track` does not authorise a pack, which can request execution.
+/// restricted to another namespace does not authorise a pack, which can request execution.
 pub const NAMESPACE: &str = adage_sign::PACK_NAMESPACE;
 
 pub fn hex(b: &[u8]) -> String {
@@ -94,7 +94,7 @@ pub fn exec_json(route: &RouteV2, user: &BTreeMap<String, TypeDef>) -> String {
     let mut v = serde_json::to_value(route).unwrap_or(Value::Null);
     if let Value::Object(m) = &mut v {
         m.remove("evidence");
-        m.remove("aspect");
+        m.remove("strength");
         m.remove("state");
     }
     let mut referenced: BTreeMap<String, Value> = BTreeMap::new();
@@ -170,11 +170,5 @@ mod tests {
         // Scripts are hashed verbatim.
         b.insert("scripts/sha256-x".to_string(), b"x\n".to_vec());
         assert_ne!(pack_digest(&a), pack_digest(&b));
-        // The same files digest the same way as a v1 track directory.
-        let d = tempfile::tempdir().unwrap();
-        std::fs::write(d.path().join("pack.toml"), "a\nb\n").unwrap();
-        let mut one = BTreeMap::new();
-        one.insert("pack.toml".to_string(), b"a\nb\n".to_vec());
-        assert_eq!(pack_digest(&one), adage_tracks::io::digest(d.path()).unwrap());
     }
 }

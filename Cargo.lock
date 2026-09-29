@@ -21,6 +21,7 @@ dependencies = [
  "adage-store",
  "adage-term",
  "adage-tracks",
+ "adage-train",
  "anyhow",
  "clap",
  "clap_complete",
@@ -60,6 +61,7 @@ version = "0.1.0"
 dependencies = [
  "adage-core",
  "adage-graph",
+ "adage-intent",
  "adage-learn",
  "adage-runtime",
  "adage-store",
@@ -88,6 +90,7 @@ dependencies = [
  "adage-store",
  "adage-tracks",
  "anyhow",
+ "glob",
  "landlock",
  "libc",
  "once_cell",
@@ -106,6 +109,7 @@ version = "0.1.0"
 dependencies = [
  "adage-core",
  "adage-intent",
+ "adage-tracks",
  "proptest",
  "regex",
  "serde",
@@ -148,6 +152,7 @@ name = "adage-intent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "miniz_oxide",
  "once_cell",
  "regex",
  "serde",
@@ -278,8 +283,11 @@ name = "adage-train"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-exec",
  "adage-instincts",
  "adage-learn",
+ "adage-pack",
+ "adage-sign",
  "adage-store",
  "adage-tracks",
  "anyhow",

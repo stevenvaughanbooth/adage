@@ -23,6 +23,6 @@ expression: text
 
 ─ health ───────────────────────────────────────────────────────────────────────
  + hooks claude    + 4 reflexes    + auto-condition
- - intent model not fetched · adage models fetch
+ ! no model · adage models fetch
 ────────────────────────────────────────────────────────────────────────────────
  p pause · f scope · / filter · enter inspect · m open map · ? keys      q quit

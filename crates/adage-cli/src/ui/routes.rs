@@ -1,11 +1,14 @@
 //! The Reflexes and Map tabs' data: every installed reflex (a stored route) and instinct,
 //! grouped by track, with its evidence and live counts (from the map's build, `crate::graph`)
 //! and the review decisions that apply to it (from `adage review`).
+//!
+//! The map's JSON uses the lexicon's keys (`strength`, `ignored`, `control`); the older ones
+//! (`aspect`, `derailed`, `holdout`) are read when the new ones are missing.
 
-use super::theme::parse_aspect;
+use super::theme::parse_strength;
 use super::words;
 use adage_store::Paths;
-use adage_tracks::Aspect;
+use adage_tracks::Strength;
 use anyhow::Result;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -14,7 +17,7 @@ use std::collections::BTreeSet;
 pub struct LiveCounts {
     pub emitted: u64,
     pub followed: u64,
-    pub derailed: u64,
+    pub ignored: u64,
     pub met: u64,
     pub would_have: u64,
     pub unaided: u64,
@@ -40,10 +43,10 @@ pub struct RouteRow {
     /// Ships with Adage (an instinct), rather than conditioned from traces.
     pub instinct: bool,
     pub id: String,
-    pub aspect: Aspect,
+    pub strength: Strength,
     pub ceiling: String,
     pub effect: String,
-    /// The stored state (`active`, `draft`, …); [`RouteRow::lifecycle`] is its word.
+    /// The stored state (`firm`, `nascent`, …); [`RouteRow::lifecycle`] is its word.
     pub state: String,
     pub authored: bool,
     /// `prompt`, `after_command`, `after_failure`, `after_edit`, `session_start`, `intent`.
@@ -124,6 +127,10 @@ pub fn from_graph(
 ) -> Routes {
     let n = |v: &Value| v.as_u64().unwrap_or(0);
     let arm = |a: &Value| Arm { applied: n(&a["applied"]), took: n(&a["followed"]) + n(&a["met"]) };
+    // The first of `keys` present in `v`: the lexicon's key, then the older one.
+    let either = |v: &Value, keys: [&str; 2]| -> Value {
+        keys.iter().map(|k| &v[*k]).find(|x| !x.is_null()).cloned().unwrap_or(Value::Null)
+    };
     let rows = g["routes"]
         .as_array()
         .into_iter()
@@ -140,7 +147,10 @@ pub fn from_graph(
                 imported: r["imported"].as_bool().unwrap_or(false),
                 in_index: r["in_index"].as_bool().unwrap_or(false),
                 instinct: instincts.contains(&(reference.clone(), id.clone())),
-                aspect: r["aspect"].as_str().and_then(parse_aspect).unwrap_or(Aspect::Yellow),
+                strength: either(r, ["strength", "aspect"])
+                    .as_str()
+                    .and_then(parse_strength)
+                    .unwrap_or(Strength::Prime),
                 ceiling: r["ceiling"].as_str().unwrap_or("").to_string(),
                 effect: r["effect"].as_str().unwrap_or("").to_string(),
                 state: r["state"].as_str().unwrap_or("").to_string(),
@@ -157,14 +167,14 @@ pub fn from_graph(
                 live: LiveCounts {
                     emitted: n(&l["emitted"]),
                     followed: n(&l["followed"]),
-                    derailed: n(&l["derailed"]),
+                    ignored: n(&either(l, ["ignored", "derailed"])),
                     met: n(&l["obligation_met"]),
                     would_have: n(&l["would_have"]),
-                    unaided: n(&l["holdout"]["unaided"]),
-                    not_reached: n(&l["holdout"]["not_reached"]),
+                    unaided: n(&either(l, ["control", "holdout"])["unaided"]),
+                    not_reached: n(&either(l, ["control", "holdout"])["not_reached"]),
                 },
                 with: arm(&r["arms"]["treated"]),
-                control: arm(&r["arms"]["holdout"]),
+                control: arm(&either(&r["arms"], ["control", "holdout"])),
                 directive: r["directive"].as_str().unwrap_or("").to_string(),
                 verbs: st.map(|s| s.verbs.clone()).unwrap_or_default(),
                 reasons: st
@@ -196,7 +206,6 @@ pub fn load(paths: &Paths) -> Result<Routes> {
     Ok(from_graph(&g, &standings, &instincts))
 }
 
-/// A review decision and its key in the Reflexes tab: `(key, verb crate::review records)`. The
-/// person sees [`words::verb`] of it.
+/// A review decision and its key in the Reflexes tab: `(key, verb crate::review takes)`.
 pub const ACTIONS: [(char, &str); 6] =
-    [('s', "promote"), ('w', "demote"), ('x', "reject"), ('a', "approve"), ('n', "pin"), ('m', "dismiss")];
+    [('s', "strengthen"), ('w', "weaken"), ('x', "extinguish"), ('a', "approve"), ('n', "pin"), ('m', "dismiss")];

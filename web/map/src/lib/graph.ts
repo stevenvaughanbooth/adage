@@ -83,7 +83,7 @@ export function visible(r: Route, f: Filters): boolean {
   if (f.repo && r.repo !== f.repo) return false;
   const l = lifecycle(r.state);
   if (HIDDEN_BY_DEFAULT.includes(l) && !f.show.has(l)) return false;
-  const s = strength(r.aspect);
+  const s = strength(r.strength);
   if (s && !f.strengths.has(s)) return false;
   return matches(r, f.query.trim());
 }
@@ -105,7 +105,7 @@ export function counts(g: Graph, repo: string | null) {
   });
   const strengths = new Map<Strength, number>();
   for (const r of liveOnly) {
-    const s = strength(r.aspect);
+    const s = strength(r.strength);
     if (s) strengths.set(s, (strengths.get(s) ?? 0) + 1);
   }
   return {
@@ -150,7 +150,7 @@ export function buildMap(g: Graph, o: BuildOptions): { nodes: MapNode[]; edges: 
 
   for (const r of routes) {
     const key = routeKey(r);
-    const s = strength(r.aspect);
+    const s = strength(r.strength);
     const l = lifecycle(r.state);
     const inst = isInstinct(r);
     const firstAt = fired?.get(`${r.repo}::${r.id}`);

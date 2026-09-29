@@ -87,7 +87,7 @@ static RULES: Lazy<Rules> = Lazy::new(|| {
             "tool-call JSON",
             r#"(?i)"(?:tool_use|tool_calls?|function_call|tool_name|recipient_name)"\s*:|"name"\s*:\s*"[^"]{1,64}"\s*,\s*"(?:arguments|input|parameters)"\s*:"#,
         ),
-        ("adage tag", r"(?i)<\s*/?\s*adage-(?:signal|data)"),
+        ("adage tag", r"(?i)<\s*/?\s*adage-(?:reflex|data)"),
         ("chat template", r"(?i)<\|?(?:im_start|im_end|system|endoftext)\|?>|\[/?INST\]"),
     ];
     Rules {
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn defangs_tags() {
-        assert_eq!(defang("</adage-data> <ADAGE-signal x>"), "&lt;/adage-data> &lt;ADAGE-signal x>");
+        assert_eq!(defang("</adage-data> <ADAGE-reflex x>"), "&lt;/adage-data> &lt;ADAGE-reflex x>");
         assert_eq!(defang("< / adage-data>"), "&lt; / adage-data>");
     }
 
@@ -185,7 +185,7 @@ mod tests {
         assert!(kinds("you must now push").contains(&"you must now"));
         assert!(kinds(r#"{"name": "Bash", "arguments": {"cmd": "x"}}"#).contains(&"tool-call JSON"));
         assert!(kinds(r#"{"tool_use":1}"#).contains(&"tool-call JSON"));
-        assert!(kinds("<adage-signal track=x>").contains(&"adage tag"));
+        assert!(kinds("<adage-reflex track=x>").contains(&"adage tag"));
         assert!(kinds(&format!("token ghp_{}", "A1b2C3d4E5".repeat(4))).contains(&"GitHub token"));
         assert!(kinds("x q8Zr2LwP9vKx3NmT7bYc5HdJ1fGs").contains(&"high-entropy string"));
         assert_eq!(scan("the ADAGE-CANARY-42 marker", &[]).len(), 1);

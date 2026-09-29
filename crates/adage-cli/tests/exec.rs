@@ -1,4 +1,4 @@
-//! `adage review delegate | revoke-exec` and `adage delegate | disable | status` (Track C
+//! `adage review delegate | revoke` and `adage delegate on | off | status` (Track C
 //! §3.2, §4.4): a person's decisions, refused inside agent sessions; approvals written through
 //! adage-exec's API; hook registrations swapped between `adage hook` and `adage-exec hook`.
 
@@ -16,14 +16,20 @@ struct World {
 
 impl World {
     fn new() -> World {
+        World::with(|_| {})
+    }
+    /// A world whose one route is changed by `f` before the index is compiled.
+    fn with(f: impl Fn(&mut Route)) -> World {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().canonicalize().unwrap();
         for d in ["home", "adage", "acme-billing/.git", "acme-billing/scripts", "bin"] {
             std::fs::create_dir_all(root.join(d)).unwrap();
         }
         std::fs::write(root.join("acme-billing/scripts/wi-lookup"), "#!/usr/bin/env python3\nprint('{}')\n").unwrap();
+        std::fs::create_dir_all(root.join("acme-billing/tools")).unwrap();
+        std::fs::write(root.join("acme-billing/tools/case"), "#!/usr/bin/env python3\nprint('{}')\n").unwrap();
         std::fs::write(root.join("bin/adage-exec"), "#!/bin/sh\n").unwrap();
-        let t = Track {
+        let mut t = Track {
             manifest: Manifest {
                 track: TrackInfo {
                     name: "acme-billing/work-items".into(),
@@ -45,13 +51,14 @@ impl World {
                     contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
                 }],
                 effect: Effect::Observe,
-                aspect: Aspect::Green,
-                state: RouteState::Active,
+                strength: Strength::Fire,
+                state: RouteState::Firm,
                 exit: vec![Exit::IntentChanges],
                 evidence: Evidence { support: 9, opportunities: 10, days: 3, ..Default::default() },
                 authored: false,
             }],
         };
+        f(&mut t.routes[0]);
         Index::compile(&[t]).write_atomic(&root.join("adage/index.json")).unwrap();
         World { _dir: dir, root }
     }
@@ -135,17 +142,56 @@ fn approving_execution_is_a_persons_decision_and_shows_what_would_run() {
         assert_eq!(std::fs::metadata(&store).unwrap().permissions().mode() & 0o777, 0o600);
     }
 
-    let (out, _, code) = w.run(&["delegate", "--status", "--json"], &[]);
+    let (out, _, code) = w.run(&["delegate", "status", "--json"], &[]);
     assert_eq!(code, 0);
     let s: Value = serde_json::from_str(&out).unwrap();
     assert_eq!(s["grants"]["acme-billing"][0]["route"], "acme-billing/work-items/lookup-work-item");
     assert_eq!(s["enabled"], false);
 
     let (_, _, code) =
-        w.run(&["review", "undelegate", "acme-billing/work-items", "lookup-work-item"], &[("OPENCODE", "1")]);
+        w.run(&["review", "revoke", "acme-billing/work-items", "lookup-work-item"], &[("OPENCODE", "1")]);
     assert_eq!(code, 1, "revoking is a person's decision too");
-    let (out, _, code) = w.run(&["review", "undelegate", "acme-billing/work-items", "lookup-work-item"], &[]);
+    let (out, _, code) = w.run(&["review", "revoke", "acme-billing/work-items", "lookup-work-item"], &[]);
     assert_eq!((code, out.contains("withdrawn   1 delegation")), (0, true), "{out}");
+}
+
+/// Review S5 and fresh-install B6: rewrites to the project's environment have their own switch
+/// (`runtime.rewrite`), apart from execution: a plugin-only install (no adage-exec) turns them
+/// off and on again, from a script or from `!` in an agent session; `delegate off` needs no
+/// terminal, and neither `delegate on` nor `off` touches rewrites.
+#[test]
+fn rewrites_switch_on_and_off_without_adage_exec() {
+    let w = World::new();
+    let rewrite = || {
+        let (out, _, _) = w.run(&["config", "get", "runtime.rewrite"], &[]);
+        out.trim().to_string()
+    };
+    let scripted = [("ADAGE_ALLOW_NONINTERACTIVE", "0")];
+    assert_eq!(rewrite(), "true", "on by default");
+    let (out, err, code) = w.run(&["delegate", "rewrites", "off"], &scripted);
+    assert_eq!(code, 0, "no terminal needed to turn it off: {err}");
+    assert!(out.contains("off, from the next command"), "{out}");
+    assert_eq!(rewrite(), "false");
+    let (_, err, code) = w.run(&["delegate", "rewrites", "on"], &[("CLAUDECODE", "1")]);
+    assert_eq!(code, 0, "`!adage delegate rewrites on` inside a session: {err}");
+    assert_eq!(rewrite(), "true");
+    // The older marker is cleared by `rewrites on`.
+    std::fs::create_dir_all(w.p("adage/exec")).unwrap();
+    std::fs::write(w.p("adage/exec/rewrite-off"), "").unwrap();
+    w.run(&["delegate", "rewrites", "on"], &[]);
+    assert!(!w.p("adage/exec/rewrite-off").exists());
+    let (_, _, code) = w.run(&["delegate", "rewrites", "maybe"], &[]);
+    assert_eq!(code, 2, "on|off only: a usage error");
+
+    // Execution off: no terminal needed, and rewrites are left as they are.
+    let (out, err, code) = w.run(&["delegate", "off"], &scripted);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("adage delegate rewrites on|off"), "{out}");
+    assert_eq!(rewrite(), "true");
+    let (_, _, code) = w.run(&["delegate", "on", "--bin", "/nonexistent/adage-exec"], &[]);
+    assert_eq!(code, 1);
+    let (_, _, code) = w.run(&["delegate", "on"], &scripted);
+    assert_eq!(code, 1, "turning execution on needs a person");
 }
 
 #[test]
@@ -159,12 +205,12 @@ fn exec_enable_swaps_hook_registrations_and_disable_swaps_them_back() {
 
     let bin = w.p("bin/adage-exec");
     let bin = bin.to_str().unwrap();
-    let (_, err, code) = w.run(&["delegate", "--bin", bin], &[("CODEX_SANDBOX", "1")]);
+    let (_, err, code) = w.run(&["delegate", "on", "--bin", bin], &[("CODEX_SANDBOX", "1")]);
     assert_eq!(code, 1, "refused inside an agent session: {err}");
-    let (_, err, code) = w.run(&["delegate", "--bin", "/nonexistent/adage-exec"], &[]);
+    let (_, err, code) = w.run(&["delegate", "on", "--bin", "/nonexistent/adage-exec"], &[]);
     assert_eq!(code, 1, "{err}");
 
-    let (out, err, code) = w.run(&["delegate", "--bin", bin], &[]);
+    let (out, err, code) = w.run(&["delegate", "on", "--bin", bin], &[]);
     assert_eq!(code, 0, "{err}");
     assert!(out.contains("now runs"), "{out}");
     let on: Value = serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
@@ -176,13 +222,61 @@ fn exec_enable_swaps_hook_registrations_and_disable_swaps_them_back() {
         "the same arguments as adage hook"
     );
     assert!(Path::new(&w.p("adage/exec/enabled")).is_file(), "the plugins' marker");
-    let (out, _, _) = w.run(&["delegate", "--status", "--json"], &[]);
+    // An action runs at the edit and Stop events: they get room for it; the others keep 5 s.
+    assert_eq!(on["hooks"]["PostToolBatch"][0]["hooks"][0]["timeout"], 30);
+    assert_eq!(on["hooks"]["Stop"][0]["hooks"][0]["timeout"], 30);
+    assert_eq!(h["timeout"], 5);
+    let (out, _, _) = w.run(&["delegate", "status", "--json"], &[]);
     let s: Value = serde_json::from_str(&out).unwrap();
     assert_eq!((s["enabled"].as_bool(), s["registrations"][0]["runs"].as_str()), (Some(true), Some("adage-exec")));
 
-    let (_, err, code) = w.run(&["delegate", "--off"], &[]);
+    let (_, err, code) = w.run(&["delegate", "off"], &[]);
     assert_eq!(code, 0, "{err}");
     let off = std::fs::read_to_string(&settings).unwrap();
     assert!(!off.contains("adage-exec"), "{off}");
+    assert!(!off.contains("\"timeout\": 30"), "adage hook keeps 5 s everywhere: {off}");
     assert!(!w.p("adage/exec/enabled").exists());
+}
+
+#[test]
+fn allow_exec_at_e2_is_for_actions_only() {
+    let w = World::new();
+    let mut args = allow();
+    args[5] = "e2";
+    args.truncate(6);
+    std::fs::write(w.p("adage/policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
+    // A lookup is read-only: an E1 prefetch, never an E2 action.
+    let (_, err, code) = w.run(&args, &[]);
+    assert_eq!(code, 1);
+    assert!(err.contains("is not an E2 action"), "{err}");
+    assert!(!w.p("adage/approvals.json").exists());
+    let mut e3 = allow();
+    e3[5] = "e3";
+    let (_, err, code) = w.run(&e3, &[]);
+    assert_eq!(code, 1);
+    assert!(err.contains("--level e1 or e2 is required"), "{err}");
+}
+
+/// A repository script the traces showed only reading (`tools/case`, whose name says nothing) is
+/// learned observe with its effect evidence. It can be delegated at E1 like a script named for
+/// reading, the evidence is shown at approval, and it is never approved automatically.
+#[test]
+fn a_script_inferred_observe_from_traces_can_be_delegated_at_e1_with_its_evidence_shown() {
+    const NOTE: &str = "observe from 4 traces: never followed by changes; its output was read next in 4 of 4";
+    let w = World::with(|r| {
+        r.step = Step::Run { command: "python3 tools/case {id} --json".into() };
+        r.evidence.effect_evidence = Some(NOTE.into());
+    });
+    std::fs::write(w.p("adage/policy.toml"), "[exec]\nauto_approve = \"inert-observe\"\n").unwrap();
+    let (out, err, code) = w.run(&allow(), &[]);
+    assert_eq!(code, 0, "{err}");
+    for want in [
+        "argv        python3 tools/case {id} --json",
+        "effect      observe, approved (the classifier says environment)",
+        &format!("inferred    {NOTE}"),
+        "script      tools/case (L-ref) sha256 ",
+        "automatic   no (",
+    ] {
+        assert!(out.contains(want), "missing {want:?} in:\n{out}");
+    }
 }

@@ -10,10 +10,15 @@ use adage_core::{CommandTable, Effect};
 use std::collections::BTreeMap;
 
 /// `(template id, required slots, optional slots)`.
-pub const TEMPLATES: [(&str, &[&str], &[&str]); 3] = [
+pub const TEMPLATES: [(&str, &[&str], &[&str]); 6] = [
     ("generated-file", &["path"], &["command"]),
     ("lockfile", &["path", "manager"], &[]),
     ("package-manager", &["manager", "lockfile"], &[]),
+    ("project-python", &["interpreter"], &[]),
+    ("test-command", &["command"], &[]),
+    // A skill's prohibition on committing ("do not commit; leave the working tree for review"),
+    // compiled by `adage train`. No slots: the sentence is the whole advice.
+    ("uncommitted", &[], &[]),
 ];
 
 /// Root lockfiles and the tool that maintains each: the only values the `lockfile` and
@@ -50,6 +55,13 @@ pub fn template(id: &str, with_command: bool) -> Option<&'static str> {
         ("package-manager", _) => {
             "This repository uses {manager} ({lockfile}), not npm: use {manager} for installs and scripts here."
         }
+        ("project-python", _) => {
+            "That Python is not this repository's environment, which has the project and its test dependencies installed: run Python here as {interpreter}."
+        }
+        ("test-command", _) => "In this repository, tests run with {command}, followed by the test files or names to run.",
+        ("uncommitted", _) => {
+            "In this repository, leave your changes uncommitted: do not commit them, the working tree is reviewed as it is."
+        }
         _ => return None,
     })
 }
@@ -84,6 +96,18 @@ fn rank(e: Effect) -> u8 {
     }
 }
 
+/// The project's own Python interpreter as a directive may name it: a virtual environment's
+/// (`.venv/bin/python`, a repository-relative directory), or uv's (`uv run python`, `uv run
+/// --group tests python`).
+pub fn project_interpreter(v: &str) -> bool {
+    let id =
+        |s: &str| !s.is_empty() && s.len() <= 48 && s.chars().all(|c| c.is_ascii_alphanumeric() || "_-".contains(c));
+    if let Some(dir) = v.strip_suffix("/bin/python") {
+        return !dir.is_empty() && dir.len() <= 64 && safe_glob(dir) && !dir.contains('*');
+    }
+    v == "uv run python" || v.strip_prefix("uv run --group ").and_then(|r| r.strip_suffix(" python")).is_some_and(id)
+}
+
 /// Whether `value` passes slot `name`'s contract.
 pub fn slot_ok(name: &str, value: &str, table: &CommandTable) -> bool {
     match name {
@@ -91,6 +115,7 @@ pub fn slot_ok(name: &str, value: &str, table: &CommandTable) -> bool {
         "lockfile" => LOCKFILES.iter().any(|(l, _)| *l == value),
         "manager" => LOCKFILES.iter().any(|(_, m)| *m == value),
         "command" => plain_command(value) && rank(crate::io::classify(value, table)) <= rank(Effect::Regenerate),
+        "interpreter" => project_interpreter(value),
         _ => false,
     }
 }
@@ -151,6 +176,17 @@ mod tests {
         );
         assert!(check("lockfile", &slots(&[("path", "uv.lock"), ("manager", "uv")]), &t).is_ok());
         assert!(check("package-manager", &slots(&[("manager", "pnpm"), ("lockfile", "pnpm-lock.yaml")]), &t).is_ok());
+        let s = slots(&[("command", ".venv/bin/python -m pytest")]);
+        assert!(check("test-command", &s, &t).is_ok());
+        assert_eq!(
+            text("test-command", &s).unwrap(),
+            "In this repository, tests run with .venv/bin/python -m pytest, followed by the test files or names to run."
+        );
+        assert!(check("uncommitted", &slots(&[]), &t).is_ok());
+        assert!(check("uncommitted", &slots(&[("command", "git commit")]), &t).is_err());
+        assert!(text("uncommitted", &slots(&[]))
+            .unwrap()
+            .starts_with("In this repository, leave your changes uncommitted"));
         // Refused: unknown template, unknown slot, missing slot, hostile values.
         assert!(check("free-text", &slots(&[("path", "x")]), &t).is_err());
         assert!(check("lockfile", &slots(&[("path", "uv.lock")]), &t).is_err());

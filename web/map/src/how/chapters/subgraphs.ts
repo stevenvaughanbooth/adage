@@ -1,4 +1,4 @@
-// Chapter: find repeated subgraphs (Track G, crates/adage-graph on the rebrand branch). Events
+// Chapter: find repeated subgraphs (Track G, crates/adage-graph: the only learner). Events
 // embed, cluster into prototype labels, traces become label strings, and a closed pattern grows
 // around a target, is scored as a prediction and compiles to a reflex.
 
@@ -12,7 +12,7 @@ const CAM: Record<"lanes" | "cloud" | "compile", CamSpec> = {
   compile: { target: [0, 1.8, 1], yaw: -0.12, pitch: 0.46, dist: 24 },
 };
 
-// Track G constants shown on screen (docs/tracks/track-g-graph-engine.md).
+// Track G constants shown on screen (score.rs `ScoreParams::default`, params.rs fire bar).
 const KAPPA = 2;
 const FIRE_BAR = 0.8;
 
@@ -214,7 +214,7 @@ function build(stage: Stage): Built {
   const text: Omit<Step, "state">[] = [
     {
       title: "Traces arrive as event sequences",
-      body: `Each row is one of ${T.length} sample agent traces; each dot is an event: a prompt, a file read, an edit, a command. Order is kept, and so is which events came in the same tool batch.`,
+      body: `Each row is one of ${T.length} sample agent traces; each dot is an event: a prompt, a file read, an edit, a command. Order is kept, and so is which events came in the same tool batch. This is how Adage conditions: the graph engine is its only learner, with no list of reflex kinds written by hand.`,
       chips: [{ text: "≤ 2,000 events per trace" }, { text: "edges: follows · reads · writes · binds" }],
     },
     {
@@ -319,7 +319,7 @@ function build(stage: Stage): Built {
     {
       title: "Compile to a reflex",
       body: "The pattern compiles to a sequence reflex: after an edit to registry/*.csv, run make gen, then make check. A sequence starts provisional, so it primes until its evidence is counted again on its own trigger; to fire, a reflex needs its lower bound at the 0.80 fire bar. This is the reflex the Map tab then shows.",
-      chips: [{ text: "shape: sequence" }, { text: "8 shapes in all" }, { text: "then MDL selection, ≤ 256 reflexes" }],
+      chips: [{ text: "shape: sequence" }, { text: "shapes: run · avoid · read-batch · obligation · sequence · advise · card" }, { text: "then MDL selection, ≤ 256 reflexes" }],
     },
   ];
 
@@ -339,11 +339,11 @@ function build(stage: Stage): Built {
 export const subgraphs: Chapter = {
   id: "subgraphs",
   title: "Find repeated subgraphs",
-  status: "Track G · behind the engine flag",
-  kind: "flag",
+  status: "Built · the learner",
+  kind: "built",
   summary:
     "Traces become typed event graphs. Events cluster into prototype labels, so traces become strings, and frequent closed patterns are grown around targets worth delivering.",
-  source: "crates/adage-graph · Track G G0–G4",
+  source: "crates/adage-graph/src/{events,embed,proto,mine} · crates/adage-learn/src/bridge.rs",
   usesRepo: false,
   build,
 };

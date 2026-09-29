@@ -88,6 +88,15 @@ pub trait Harness: Send + Sync {
     /// The operator's variables that carry this harness's credentials; the only ones passed
     /// through besides the isolation allowlist.
     fn auth_env(&self) -> &'static [&'static str];
+    /// Further operator variables the person named for this run (`--forward-env`, `--host-auth`),
+    /// passed through like [`Harness::auth_env`].
+    fn forward_env(&self) -> &[String] {
+        &[]
+    }
+    /// How sessions will authenticate, for the dry run and the preflight (`None`: no login found).
+    fn auth_source(&self, _base: &BTreeMap<String, String>) -> Option<String> {
+        None
+    }
     /// Put credentials into a fresh config directory, when auth needs a file rather than a
     /// variable. Removed again by [`Harness::cleanup`] right after the session.
     fn prepare(&self, _config_dir: &Path, _base: &BTreeMap<String, String>) -> Result<()> {
@@ -109,11 +118,80 @@ pub const DISALLOWED_TOOLS: &[&str] = &["WebFetch", "WebSearch", "Task", "Agent"
 pub struct ClaudeCode {
     /// The `claude` executable.
     pub bin: String,
+    /// Extra operator variables sessions see (`--forward-env`, `--host-auth`); checked by
+    /// [`ClaudeCode::with_forward`].
+    pub forward: Vec<String>,
 }
 
 impl Default for ClaudeCode {
     fn default() -> Self {
-        ClaudeCode { bin: "claude".into() }
+        ClaudeCode { bin: "claude".into(), forward: Vec::new() }
+    }
+}
+
+/// `--host-auth`: what a host-managed Claude Code login needs (Claude Code on the web and similar
+/// containers: a session-ingress token file, and the organisation and account it belongs to), with
+/// the proxies and CA bundles. The same list as `evals/live/runner.py`'s `HOST_AUTH_ENV`.
+pub const HOST_AUTH_ENV: &[&str] = &[
+    "ANTHROPIC_BASE_URL",
+    "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+    "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "CLAUDE_CODE_ORGANIZATION_UUID",
+    "CLAUDE_CODE_ACCOUNT_UUID",
+    "HTTPS_PROXY",
+    "HTTP_PROXY",
+    "NO_PROXY",
+    "https_proxy",
+    "http_proxy",
+    "no_proxy",
+    "SSL_CERT_FILE",
+    "NODE_EXTRA_CA_CERTS",
+    "REQUESTS_CA_BUNDLE",
+];
+
+/// Of [`HOST_AUTH_ENV`], the variables that carry a credential.
+const HOST_AUTH_TOKENS: &[&str] = &["CLAUDE_SESSION_INGRESS_TOKEN_FILE", "CLAUDE_CODE_OAUTH_TOKEN"];
+
+/// Variables no session may be given: an agent session's own markers and identity (a child
+/// session carrying them attaches to, or reports into, the operator's session) and Adage's own.
+pub fn forbidden_forward(name: &str) -> bool {
+    crate::isolate::AGENT_ENV.contains(&name)
+        || name.starts_with("ADAGE_")
+        || name.contains("SESSION_ID")
+        || matches!(name, "CLAUDE_CODE_CHILD_SESSION" | "CLAUDE_CODE_ENTRYPOINT" | "CLAUDE_PID")
+        || name.starts_with("CLAUDE_CODE_MESSAGING_")
+        || name.starts_with("CLAUDE_CODE_REMOTE")
+}
+
+impl ClaudeCode {
+    /// Claude Code with extra variables forwarded to every session: the names given, plus
+    /// [`HOST_AUTH_ENV`] with `host_auth`. Session markers are refused.
+    pub fn with_forward(names: &[String], host_auth: bool) -> Result<ClaudeCode> {
+        let mut forward: Vec<String> = Vec::new();
+        let host = if host_auth { HOST_AUTH_ENV } else { &[] };
+        for n in names.iter().map(String::as_str).chain(host.iter().copied()) {
+            if n.is_empty() || !n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                anyhow::bail!("--forward-env: {n:?} is not a variable name");
+            }
+            if forbidden_forward(n) {
+                anyhow::bail!("--forward-env: {n} marks an agent session (or is Adage's own); it is never forwarded");
+            }
+            if !forward.iter().any(|f| f == n) {
+                forward.push(n.to_string());
+            }
+        }
+        Ok(ClaudeCode { forward, ..ClaudeCode::default() })
+    }
+
+    /// A host token among the forwarded variables, if one is set: auth then comes from the host,
+    /// and no credentials file is copied.
+    fn host_tokens(&self, base: &BTreeMap<String, String>) -> Vec<&'static str> {
+        HOST_AUTH_TOKENS
+            .iter()
+            .copied()
+            .filter(|k| self.forward.iter().any(|f| f == k) && base.get(*k).is_some_and(|v| !v.is_empty()))
+            .collect()
     }
 }
 
@@ -154,8 +232,20 @@ impl Harness for ClaudeCode {
     fn auth_env(&self) -> &'static [&'static str] {
         CLAUDE_AUTH_ENV
     }
+    fn forward_env(&self) -> &[String] {
+        &self.forward
+    }
+    fn auth_source(&self, base: &BTreeMap<String, String>) -> Option<String> {
+        let host = self.host_tokens(base);
+        if !host.is_empty() {
+            return Some(format!("host: {}", host.join(", ")));
+        }
+        ClaudeCode::auth_source(base)
+    }
     fn prepare(&self, config_dir: &Path, base: &BTreeMap<String, String>) -> Result<()> {
-        if CLAUDE_AUTH_ENV[..3].iter().any(|k| base.get(*k).is_some_and(|v| !v.is_empty())) {
+        if CLAUDE_AUTH_ENV[..3].iter().any(|k| base.get(*k).is_some_and(|v| !v.is_empty()))
+            || !self.host_tokens(base).is_empty()
+        {
             return Ok(());
         }
         if let Some(src) = Self::credentials(base) {
@@ -199,6 +289,12 @@ impl Harness for ClaudeCode {
             c.push("--append-system-prompt".into());
             c.push(t.clone());
         }
+        // `--tools` is the set of tools the model sees at all. `--allowedTools` only pre-approves:
+        // Claude Code 2.1 still exposes TaskGet/TaskList, Cron* and ToolSearch beside them, and an
+        // agent asked to "pick up W-1042" looked for it with TaskGet, found nothing and asked what
+        // to do (the live corpus, evals/corpus/README.md finding 2). As the live runner does.
+        c.push("--tools".into());
+        c.push(ALLOWED_TOOLS.join(","));
         c.push("--allowedTools".into());
         c.extend(ALLOWED_TOOLS.iter().map(|t| t.to_string()));
         c.push("--disallowedTools".into());
@@ -286,4 +382,74 @@ pub fn find_transcript(config_dir: &Path, session_id: &str) -> Option<PathBuf> {
     let mut dirs: Vec<PathBuf> = std::fs::read_dir(&projects).ok()?.flatten().map(|e| e.path()).collect();
     dirs.sort();
     dirs.into_iter().map(|d| d.join(format!("{session_id}.jsonl"))).find(|p| p.is_file())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn env(kv: &[(&str, &str)]) -> BTreeMap<String, String> {
+        kv.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn host_auth_forwards_exactly_its_allowlist() {
+        let base = env(&[
+            ("PATH", "/bin"),
+            ("HOME", "/nonexistent"),
+            ("CLAUDECODE", "1"),
+            ("CLAUDE_CODE_SESSION_ID", "lead"),
+            ("CLAUDE_CODE_REMOTE_SESSION_ID", "lead"),
+            ("CLAUDE_CODE_ENTRYPOINT", "remote"),
+            ("CLAUDE_CODE_MESSAGING_TOKEN", "t"),
+            ("GH_TOKEN", "gh"),
+            ("CLAUDE_SESSION_INGRESS_TOKEN_FILE", "/run/token"),
+            ("CLAUDE_CODE_ORGANIZATION_UUID", "org"),
+            ("CLAUDE_CODE_ACCOUNT_UUID", "acct"),
+            ("CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST", "1"),
+            ("ANTHROPIC_BASE_URL", "https://api"),
+            ("HTTPS_PROXY", "http://p"),
+        ]);
+        let plain = ClaudeCode::default();
+        assert!(plain.auth_source(&base).is_none(), "without --host-auth the host login is not used");
+        let h = ClaudeCode::with_forward(&[], true).unwrap();
+        assert_eq!(h.auth_source(&base).as_deref(), Some("host: CLAUDE_SESSION_INGRESS_TOKEN_FILE"));
+        let pass: Vec<&str> = h.auth_env().iter().copied().chain(h.forward_env().iter().map(String::as_str)).collect();
+        let e = crate::isolate::isolation_env(Path::new("/run/h"), &base, &pass);
+        for k in [
+            "CLAUDE_SESSION_INGRESS_TOKEN_FILE",
+            "CLAUDE_CODE_ORGANIZATION_UUID",
+            "CLAUDE_CODE_ACCOUNT_UUID",
+            "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+            "ANTHROPIC_BASE_URL",
+        ] {
+            assert_eq!(e.get(k), base.get(k), "{k}");
+        }
+        for gone in [
+            "CLAUDECODE",
+            "CLAUDE_CODE_SESSION_ID",
+            "CLAUDE_CODE_REMOTE_SESSION_ID",
+            "CLAUDE_CODE_ENTRYPOINT",
+            "CLAUDE_CODE_MESSAGING_TOKEN",
+            "GH_TOKEN",
+        ] {
+            assert!(!e.contains_key(gone), "{gone}");
+        }
+        assert_eq!(e.get("HOME").map(String::as_str), Some("/run/h"));
+        // A host token means no credentials file is copied.
+        let tmp = tempfile::tempdir().unwrap();
+        h.prepare(tmp.path(), &base).unwrap();
+        assert!(!tmp.path().join(".credentials.json").exists());
+    }
+
+    #[test]
+    fn session_markers_are_never_forwarded() {
+        for bad in
+            ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "ADAGE_HOME", "ADAGE_ARM", "CLAUDE_CODE_REMOTE_SESSION_ID", "a b"]
+        {
+            assert!(ClaudeCode::with_forward(&[bad.to_string()], false).is_err(), "{bad}");
+        }
+        let h = ClaudeCode::with_forward(&["AWS_REGION".into(), "AWS_REGION".into()], false).unwrap();
+        assert_eq!(h.forward_env(), ["AWS_REGION".to_string()]);
+    }
 }

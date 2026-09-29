@@ -134,7 +134,7 @@ def main(argv):
     state = {"config": CFG["name"], "model": "scripted-rehearsal", "runs": {}, "rounds": {}, "labels": CFG["labels"],
              "phase": "done", "started": 1790000000.0}
     plan = runner.plan(CFG, ["train", "eval"], 1)
-    plan = [p for p in plan if p[2] in ("train", "holdout")]
+    plan = [p for p in plan if p[2] in ("train", "control")]
     t0 = 1790000000.0
     print(f"scripting {len(plan)} sessions in fresh sandboxes under {root}/runs")
     for i, (run_id, phase, arm, task, prompt_t) in enumerate(plan):
@@ -173,7 +173,7 @@ def main(argv):
     for t in tracks:
         r = t["route"]
         slots = "; ".join(f"{x['name']}: {json.dumps(x['contract'])}" for x in r.get("slots", []))
-        print(f"  {r['id']:<22} {r['aspect']:<6} trigger={json.dumps(r['trigger'])}\n{'':<25}step={json.dumps(r['step'])}"
+        print(f"  {r['id']:<22} {r['strength']:<7} trigger={json.dumps(r['trigger'])}\n{'':<25}step={json.dumps(r['step'])}"
               + (f"\n{'':<25}slots={slots}" if slots else ""))
     lookup = next((t["route"] for t in tracks if t["route"]["id"] == "lookup-work-item"), None)
     dead = next((t["route"] for t in tracks if t["route"]["id"].startswith("dead-end")), None)
@@ -194,8 +194,8 @@ def main(argv):
     # 2. the runner's report and results page over the scripted state.
     summary = runner.summarise(state, 1)
     page = report.build(state, root / "results")
-    print(f"\nrunner summary (holdout arm only here; no directives were delivered): "
-          f"{json.dumps({k: v.get('holdout') for k, v in summary['metrics'].items()})}")
+    print(f"\nrunner summary (control arm only here; no directives were delivered): "
+          f"{json.dumps({k: v.get('control') for k, v in summary['metrics'].items()})}")
     print(f"results page: {page / 'index.html'}")
 
     # 3. build an offline dataset and replay the held-out sessions.

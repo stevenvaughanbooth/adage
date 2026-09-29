@@ -61,7 +61,7 @@ fn dangling_script_references_are_refused() {
             put(
                 f,
                 "routes/other.yaml",
-                "id: other\nshape: run\ntrigger: { on: session_start }\nsteps:\n  - id: s\n    run: { argv: [\"./scripts/other\"] }\n    effect: observe\naspect: yellow\n",
+                "id: other\nshape: run\ntrigger: { on: session_start }\nsteps:\n  - id: s\n    run: { argv: [\"./scripts/other\"] }\n    effect: observe\nstrength: prime\n",
             )
         },
         true,
@@ -73,7 +73,7 @@ fn dangling_script_references_are_refused() {
             put(
                 f,
                 "routes/other.yaml",
-                "id: other\nshape: run\ntrigger: { on: session_start }\nsteps:\n  - id: s\n    run: { argv: [python3, tools/x.py] }\n    effect: observe\naspect: yellow\n",
+                "id: other\nshape: run\ntrigger: { on: session_start }\nsteps:\n  - id: s\n    run: { argv: [python3, tools/x.py] }\n    effect: observe\nstrength: prime\n",
             )
         },
         true,
@@ -329,7 +329,7 @@ fn invisible_and_control_characters_are_refused() {
 
 #[test]
 fn unknown_fields_are_refused() {
-    refused_with(|f| edit(f, WIC, "aspect: green\n", "aspect: green\nstate: active\n"), true, "unknown field `state`");
+    refused_with(|f| edit(f, WIC, "strength: fire\n", "strength: fire\nstate: firm\n"), true, "unknown field `state`");
     refused_with(
         |f| edit(f, "pack.toml", "requested = \"E1\"", "requested = \"E1\"\ngranted = \"E3\""),
         true,
@@ -356,7 +356,7 @@ fn unknown_fields_are_refused() {
 #[test]
 fn after_cycles_and_long_chains_are_refused() {
     let after = |id: &str, on: &str, run: &str| {
-        format!("id: {id}\nshape: after\ntrigger: {{ on: after_command, command: \"exec make {on}\" }}\nsteps:\n  - id: s\n    run: {{ argv: [make, {run}] }}\n    effect: environment\naspect: yellow\n")
+        format!("id: {id}\nshape: after\ntrigger: {{ on: after_command, command: \"exec make {on}\" }}\nsteps:\n  - id: s\n    run: {{ argv: [make, {run}] }}\n    effect: environment\nstrength: prime\n")
     };
     refused_with(
         |f| {
@@ -378,7 +378,7 @@ fn after_cycles_and_long_chains_are_refused() {
     // a → b → c → d → e: five routes.
     let chain = |f: &mut Files| {
         let names = ["a", "b", "c", "d", "e"];
-        put(f, "routes/s0.yaml", "id: s0\nshape: run\ntrigger: { on: session_start }\nsteps:\n  - id: s\n    run: { argv: [make, a] }\n    effect: environment\naspect: yellow\n");
+        put(f, "routes/s0.yaml", "id: s0\nshape: run\ntrigger: { on: session_start }\nsteps:\n  - id: s\n    run: { argv: [make, a] }\n    effect: environment\nstrength: prime\n");
         for w in names.windows(2) {
             put(f, &format!("routes/{}.yaml", w[1]), &after(w[1], w[0], w[1]));
         }
@@ -402,14 +402,14 @@ fn requests_beyond_the_ceiling_are_refused() {
         "may never be directed",
     );
     refused_with(
-        |f| edit(f, "routes/dead-end-pytest.yaml", "aspect: red", "aspect: green"),
+        |f| edit(f, "routes/dead-end-pytest.yaml", "strength: inhibit", "strength: fire"),
         true,
-        "an avoid route is red",
+        "an avoid route is inhibit",
     );
     refused_with(
         |f| edit(f, "pack.toml", "origin = \"reflex\"", "origin = \"instinct\""),
         true,
-        "an instinct route is yellow",
+        "an instinct route is prime",
     );
 }
 

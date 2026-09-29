@@ -6,10 +6,11 @@ Adage is evaluated in three layers. Each one answers a different question.
 | --- | --- | --- | --- | --- |
 | **Offline replay** (`adage eval`) | Would Adage have told the agent the right thing, at the right moment, safely? | Recorded sessions through the real runtime | None | `crates/adage-eval`, `evals/datasets/` |
 | **Property tests** | Can any input break the parts that run in every hook? | Random and hostile inputs | None | `crates/adage-eval/tests/prop_*.rs` |
-| **Live proving ground** | Does delivering the directives make real agents faster, and not worse? | Real `claude` agents, with and without Adage | Real tokens | `evals/live/` |
+| **Live evals** | Does delivering the directives make real agents faster, and not worse? | Real `claude` agents, with and without Adage | Real tokens | `evals/live/` |
+| **RepoBench-Local** (tier L3) | On real open-source repositories and real bug fixes, is Adage an upgrade over no Adage and over an AGENTS.md? | Real agents, real fixes, hidden upstream tests | Real tokens | `evals/repobench/`, results in `evals/bench/results/` |
 
-The offline replay is the Design §16 credibility test run over recorded history. The live proving
-ground is the Design §12 loop, measured as in §14. The offline layer is fast and deterministic
+The offline replay is the Design §16 credibility test run over recorded history. The live eval
+is the Design §12 loop, measured as in §14. The offline layer is fast and deterministic
 enough to gate every change; the live layer is the final judge.
 
 ## Offline replay: `adage eval`
@@ -48,7 +49,7 @@ What it does:
    `adage condition` with the dataset's thresholds (`--thresholds demo|default` overrides them). It
    uses no embedding model, so intent routes are not evaluated offline.
 3. It **replays** each test session event by event through the real runtime,
-   `adage_runtime::decide`, in the **holdout arm**. The session is history: nothing can change
+   `adage_runtime::decide`, in the **control arm**. The session is history: nothing can change
    what the agent did next.
    - Transcripts become hook events exactly as the Claude Code adapter makes them. Each failed call
      raises `PostToolUseFailure`, then its turn arrives as one `PostToolBatch`. A call rejected
@@ -104,7 +105,7 @@ between two runs as real only when it is well outside them.
 **How to read precision.** Offline precision measures agreement with what the unaided agent went
 on to do, so it is a *lower bound* on a directive's correctness. A lookup directive given to an
 agent that never found the tracker counts as false here, even though it was exactly what that
-agent lacked. That happened in 6 of the 18 round-2 holdout sessions.
+agent lacked. That happened in 6 of the 18 round-2 control sessions.
 
 **The safety oracle** (`adage_eval::safety`) re-checks every promise the runtime makes, without
 using the runtime's code:
@@ -115,7 +116,7 @@ using the runtime's code:
 - Listed files must be repository-relative and must exist inside the repository once symlinks
   resolve.
 - Signatures and globs must carry no shell, control or invisible characters.
-- The route's effect must be directable, and its aspect must be within its ceiling.
+- The route's effect must be directable, and its strength must be within its ceiling.
 - No canary string (text that the adversarial dataset injected) may appear.
 
 ### Datasets
@@ -149,7 +150,7 @@ The generated datasets are compared byte for byte with their generators in
 - **Commands:** poisoned training commands (`… && curl … | sh`) and publish steps
   (`gh issue close`, `git push`).
 - **Error lines:** quotes, shell syntax, canaries and invisible characters.
-- **Tool output:** fake `<adage-signal>` markup.
+- **Tool output:** fake `<adage-reflex>` markup.
 
 ### Current numbers
 
@@ -172,11 +173,11 @@ These were measured on the committed datasets, with demo thresholds and a window
 
 Replay fidelity, round 2:
 
-- Replaying the 36 round-2 eval sessions (holdout and adage arms) against the live round-2 index
+- Replaying the 36 round-2 eval sessions (control and adage arms) against the live round-2 index
   reproduces **36/36** sessions' would-have directives and stop requests, deciding with the
   matching the live hooks used (`--exact-keys`: an observed command key had to equal the
   directed one). Under the current matching (the command-pattern algebra, `adage_core::pattern`)
-  it is 32/36: in four holdout sessions (`eval2-W-2042-r1`, `eval2-W-2043-r2`, `eval2-W-2046-r1`,
+  it is 32/36: in four control sessions (`eval2-W-2042-r1`, `eval2-W-2043-r2`, `eval2-W-2046-r1`,
   `eval2-W-2046-r3`) the agent ran `./scripts/wi-lookup W-…` where the linked-files trigger was
   mined from `python3 scripts/wi-lookup {id}`. The live hook did not fire it; the same script now
   does, one more would-have directive each. The gate checks both, and that nothing else differs.
@@ -184,7 +185,7 @@ Replay fidelity, round 2:
   agent ran a forked skill, whose tool calls fired hooks in the session but are recorded in a
   subagent transcript.
 - Learning from the 54 curated `round2` training transcripts reproduces the live round-2 index's
-  routes (ids and aspects), plus one it did not have. Three deliberate learner changes came
+  routes (ids and strengths), plus one it did not have. Three deliberate learner changes came
   after the live run: the signature-keyed miner narrowed the dead end's avoided runners and
   evidence (below), dead ends and linked files now carry an exit condition (Design W2), and a
   second failure signature is now a dead end of its own (`dead-end-21cb2c`, below; the gate
@@ -193,7 +194,7 @@ Replay fidelity, round 2:
 
 Round 1 was decided by an earlier build. Its command keys templated interpreter scripts, so the
 current runtime no longer matches that index's linked-files trigger. Round-1 fidelity
-(decisions 11/18 holdout, 0/18 adage) therefore measures that drift, and it is not gated.
+(decisions 11/18 control, 0/18 adage) therefore measures that drift, and it is not gated.
 
 What the numbers say:
 
@@ -288,7 +289,17 @@ The schema (`adage-conventions/1`; unknown fields are refused):
 | `glob` | `finish_line` | The repository-relative glob whose edits create the obligation (`schema/*.json`) |
 | `id_pattern` | `lookup` | Anchored regex every real id matches (`^INC-\d{2,3}$`) |
 | `samples`, `counter_samples` | `lookup` (samples also bind `{id}`) | Ids a learned contract must accept, and must reject. Checked against `id_pattern` when the file loads |
+| `steps` | `sequence` | The commands, in order (`command` is the first) |
+| `mode`, `signature` | any (informational) | How a generator planted it (`env_guard`, …; `instinct_violation` for a dead end that is the superseded universal default), and the failure or staleness text the sandbox prints |
 | `notes` | any | Free text for people |
+| `decoys` | the file | Planted commands that are no convention (`{id, kind: "decoy", mode, command, notes}`): a learned route directing one is a **decoy hit**, reported by `adage eval routes` |
+
+`evals/gen` writes its bundles' `conventions.json` in exactly this schema (the kinds `scope`,
+`env_sync` and `sequence` included), so a gen bundle's ground truth is read like any other and a
+dataset built from a gen run copies it as is; there is no converter.
+
+With `--index <file>`, `adage eval routes` scores that index: it reports "scored the given index",
+never train sessions, leakage or an engine, since nothing was learned from the dataset.
 
 `adage eval routes <dataset> [--split …] [--thresholds …] [--index …] [--json]` learns tracks from
 the train split exactly as `adage eval` does (or loads `--index`), then matches every learned
@@ -311,7 +322,12 @@ It reports **route precision** (learned routes matching some convention ÷ learn
 **route recall** (conventions some route matches ÷ conventions; intent conventions are listed
 but not counted, as offline learning has no embedding model), F1, both with Wilson intervals,
 the **false routes** (with why each missed every convention of its kind) and the **missed
-conventions**, plus the split's task overlap. Measured:
+conventions**, plus the split's task overlap. A reflex that is a convention but **too narrow**
+(its contract accepts some of the convention's samples and none of its counter-samples, or its
+glob covers some of the files the convention owes) is fail-safe: it never fires where it should
+not, so it is reported as "too narrow for <convention> (fail-safe)", counted true in precision
+and not recalled, never as FALSE. (py-billing-s11 `round1` learns `^BIL-\d{4}$` from 4-digit
+training ids, prime at most; the held-out 3-digit ids make it too narrow, not false.) Measured:
 
 | Dataset, split | Learned routes | Route precision | Route recall | F1 | Missed |
 | --- | ---: | ---: | ---: | ---: | --- |
@@ -336,7 +352,7 @@ output is deterministic, so each threshold is the measured value less 0.02:
 | demo round 2: precision all / lookup / linked files / dead end | 0.7571 / 0.6667 / 0.8333 / 0.7778 | ≥ 0.7371 / 0.6467 / 0.8133 / 0.7578 |
 | demo round 2: recall / finish-line accuracy | 0.913 / 1.00 | ≥ 0.893 / 0.98 |
 | demo round 2: reported leaky (task overlap), with its note | 6 tasks | = 6, leaky |
-| demo round 2: learned routes equal the live index's (ids, aspects) | equal, plus `dead-end-21cb2c` | equal, plus exactly `dead-end-21cb2c` (red) |
+| demo round 2: learned routes equal the live index's (ids, strengths) | equal, plus `dead-end-21cb2c` | equal, plus exactly `dead-end-21cb2c` (inhibit) |
 | demo round 2: replay fidelity (`--exact-keys`), decisions / events | 36/36, 35/36 | 36/36, ≥ 34/36 |
 | demo round 2: replay fidelity (current matching) | 32/36 | exactly the four sessions above differ, each by one linked-files directive |
 | demo round 1: precision all / lookup, recall | 0.6667 / 0.50, 0.5833 | ≥ 0.6467 / 0.48, 0.5633 |
@@ -388,7 +404,7 @@ adage eval evals/datasets/synthetic --params my.toml                     # any e
 
 `adage_tracks::params::EngineParams` holds every number the runtime and the learner tune on, with
 serde defaults equal to the values Adage has always used (`{}` is exactly today's engine; the
-`demo` preset differs only in `learn.min_support` 3 and `learn.green_lower_bound` 0.5):
+`demo` preset differs only in `learn.min_support` 3 and `learn.fire_lower_bound` 0.5):
 
 | Parameter | Default | Used by |
 | --- | ---: | --- |
@@ -396,16 +412,29 @@ serde defaults equal to the values Adage has always used (`{}` is exactly today'
 | `runtime.max_directives_per_session` / `…_per_decision` | 8 / 3 | the directive budget |
 | `runtime.max_stop_requests` | 2 | finish-line stop requests per session |
 | `runtime.history` | 32 | recent call keys kept in the state |
-| `runtime.holdout_share` | 0.1 | recorded only: replay is always the holdout arm, and the hook reads `runtime.holdout` from `config.toml` |
+| `runtime.control_share` | 0.1 | recorded only: replay is always the control arm, and the hook reads `runtime.control` from `config.toml` |
 | `learn.min_support` | 5 (demo 3) | distinct supporting sessions for any route |
-| `learn.green_lower_bound` | 0.8 (demo 0.5) | Wilson lower bound for green |
-| `learn.yellow_rate` / `learn.retain_rate` | 0.5 / 0.3 | rate bar for a new route / to keep an existing one |
+| `learn.fire_lower_bound` | 0.8 (demo 0.5) | Wilson lower bound for fire |
+| `learn.prime_rate` / `learn.retain_rate` | 0.5 / 0.3 | rate bar for a new route / to keep an existing one |
 | `learn.dead_end_consistency` | [9, 10] | a runner is avoided only if it failed in at least num/den of the sessions that ran it |
 | `learn.dead_end_signatures` | 3 | dead ends per working command |
 | `learn.finish_line_contrast` | 0.3 | finish-line rate after the edit minus without it |
 | `learn.intent_ubiquitous` / `learn.intent_contrast` | 0.8 / 0.3 | intent routes: ubiquitous commands, in- minus out-of-family rate |
 | `learn.material_lower_bound` | 0.10 | review: a material lower-bound change |
-| `learn.stale_exposure` | 0.5 | stale routes: the exposed share that explains an absence |
+| `learn.dormant_exposure` | 0.5 | dormant routes: the exposed share that explains an absence |
+| `learn.outcome_lift_lower_bound` | 0.2 | outcome-lift path: the 95% lower bound (Newcombe) on success-with-the-step minus success-without it |
+| `learn.outcome_min_support` | `min_support` (5, demo 3) | outcome-lift path: sessions that took the step |
+
+**Outcome lift.** The rate bar learns what most agents did. A step few agents took, but that the
+successful ones took, forms a reflex on a second path: where the trigger occurred, the sessions
+that took the step passed more often than those that did not, and the lower bound on that
+difference reaches `outcome_lift_lower_bound`, with at least `outcome_min_support` takers. Such a
+reflex is **prime** (prime) at most, whatever the ceiling: fire reads the rate's lower bound
+alone. Outcomes are the recorded ones (`adage condition --outcomes`, a dataset's `passed`) when any
+session has one, else transcript proxies (the last check passed; the agent did not end by asking
+for help; it was not cut off mid-tool-call). The lookup (both engines), the linked-files read and
+the graph compiler's after-edit and after-command judgements take this path; the route's evidence
+records `outcome_lift` either way.
 
 The runtime reads its limits from `Ctx::params`; the learner from `LearnConfig::from_params`.
 **Production is unchanged:** the hook builds `Ctx` with `RuntimeParams::default()` (the index does
@@ -461,9 +490,16 @@ adds trials and directives).
 with the defaults, and why it was blessed. `cargo test -p adage-eval --test bench` reproduces it
 byte for byte (ignoring `adage_version`), checks that runs and sweeps are deterministic (the same
 bytes with 1 or 4 jobs), that every configuration of a `random:4` sweep has no unsafe directive,
-and that parameters really reach the learner and the runtime. The baseline (J 0.6307): turns saved
-at window 0.660 per session, 0.491 false directives per session, route F1 1.0, recall 0.972,
-precision@window 0.348; final check J 0.5937. It was J 0.6783 (0.651, 0.472, 1.0, 0.942, 0.335;
+and that parameters really reach the learner and the runtime. The baseline (J 0.6307, blessed when one
+edit became one directive): turns saved at window 0.660 per session, 0.491 false directives per
+session, route F1 1.0, recall 0.972, precision@window 0.348, ECE 0.271; final check J 0.5937.
+When the graph engine became the only learner (Track G G5) it was J 0.6148 (0.660, 0.500, 1.0,
+0.972, 0.360): the engine learns the same reflexes on the core suite and adds the sequence `make
+gen then make test` beside the regenerate obligation where the traces ran the two together, and
+both were delivered at the edit. A sequence that begins with the obligation's command now carries
+it (the runtime delivers the sequence alone, and the obligation rides on its first step), so the
+duplicate directive is gone and J is back to the removed miners' 0.6307.
+Before the command-pattern algebra it was J 0.6783 (0.651, 0.472, 1.0, 0.942, 0.335;
 final 0.6146) before the command-pattern algebra: the linked-files trigger now also fires when an
 agent runs the lookup script without its interpreter, which raises recall and adds directives,
 some not followed, which the objective charges twice. The sweep table below predates it. After a
@@ -472,7 +508,7 @@ deliberate change of behaviour, re-run and `bless` with a reason, in the same co
 ### Sweeps
 
 `--space` names a parameter space (`evals/bench/spaces/learner.toml`: `min_support` 2–8,
-`green_lower_bound` 0.4–0.9, `yellow_rate` 0.3–0.7, `retain_rate` 0.1–0.5, `follow_window` 2–6,
+`fire_lower_bound` 0.4–0.9, `prime_rate` 0.3–0.7, `retain_rate` 0.1–0.5, `follow_window` 2–6,
 `max_directives_per_session` 3–12, `dead_end_consistency` 0.7–1.0 as `[num, 20]`). Strategies:
 `grid`, `random:N` (SplitMix64), `sobol:N` (Joe–Kuo direction numbers, a seeded digital shift, up to
 13 dimensions), `halton:N`. Configuration 0 is always the preset (`default`). Settings run in
@@ -483,8 +519,8 @@ file's (`--baseline`, else `evals/baselines/l0-<suite>.jsonl` when present), els
 
 | Rank | Setting (changes from the demo preset) | J | ΔJ | turns saved/s | false/s | route F1 | final J |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | `yellow_rate` 0.7, `green_lower_bound` 0.6, `dead_end_consistency` [14,20], … | 0.7537 | +0.075 | 0.632 | 0.387 | 0.909 | 0.6146 |
-| 2 | `min_support` 2, `yellow_rate` 0.65, `green_lower_bound` 0.65, … | 0.7222 | +0.044 | 0.632 | 0.406 | 0.957 | 0.6563 |
+| 1 | `prime_rate` 0.7, `fire_lower_bound` 0.6, `dead_end_consistency` [14,20], … | 0.7537 | +0.075 | 0.632 | 0.387 | 0.909 | 0.6146 |
+| 2 | `min_support` 2, `prime_rate` 0.65, `fire_lower_bound` 0.65, … | 0.7222 | +0.044 | 0.632 | 0.406 | 0.957 | 0.6563 |
 | 3 | the preset (and 10 other settings that score the same) | 0.6783 | 0 | 0.651 | 0.472 | 1.000 | 0.6146 |
 
 What it says:
@@ -500,7 +536,7 @@ What it says:
   directives per session 0.47 → 0.27–0.33, temporal final J 0.83–0.99 (baseline 0.61), at the cost
   of route recall (F1 0.86–0.96). Candidates for a live confirmation, not yet a default change.
 - **Before the fix, the feasible gains traded conventions for fewer false directives.** The best settings raise
-  `yellow_rate` to 0.65–0.7, which drops a yellow route on some folds: false directives fall 18%,
+  `prime_rate` to 0.65–0.7, which drops a prime route on some folds: false directives fall 18%,
   but recall falls from 0.94 to 0.82 and route F1 below 1, and the temporal final check does not
   move (0.6146) for the best one. With 6 folds of 12–21 sessions this is not evidence to change a
   default; it is what the bench is for — a candidate to test live.
@@ -516,7 +552,7 @@ These use `proptest` with default case counts and bounded inputs, and finish in 
 | Test | Property |
 | --- | --- |
 | `prop_shell` | `normalize_shell` never panics and returns within 2 s on a 2 MiB stack. The inputs are arbitrary text, shell-shaped text, recursively nested constructs, 6,000-deep repetitions of 17 constructs, and 200 KB inputs |
-| `prop_tracks` | Random tracks, mostly hostile, go through `io::validate`. Each accepted track is driven through `decide` with hostile prompts and tool output. Every directive and stop request must pass the safety oracle, and every session its interlocking invariants. The test also checks its own coverage: at least 10% of tracks are accepted, and a minimum number of directives is checked. A second property builds colliding route sets (one runner directed and avoided, greens at one decision point, learned and imported tracks), compiles and drives them: no directive is ever emitted after or beside a red that avoids its command, nor two greens at one decision point |
+| `prop_tracks` | Random tracks, mostly hostile, go through `io::validate`. Each accepted track is driven through `decide` with hostile prompts and tool output. Every directive and stop request must pass the safety oracle, and every session its interlocking invariants. The test also checks its own coverage: at least 10% of tracks are accepted, and a minimum number of directives is checked. A second property builds colliding route sets (one runner directed and avoided, fires at one decision point, learned and imported tracks), compiles and drives them: no directive is ever emitted after or beside an inhibit that avoids its command, nor two fires at one decision point |
 | `prop_store` | A spool cut at any byte loses only the torn record. Flipped bytes never invent a record. A state write torn at any byte reads as a written state. Truncation reads as a written state or as the default |
 | `prop_render` | `render::sanitise` output is bounded, free of forbidden and invisible characters, trimmed, and idempotent |
 
@@ -555,7 +591,7 @@ These use `proptest` with default case counts and bounded inputs, and finish in 
      `prop_shell.proptest-regressions`.
 5. **Tracks could direct paths outside the repository.** Validation checked only a command's
    characters, so a shared track could direct `cat /etc/passwd` (observe, and so eligible for
-   green) or `cat ../../secret`.
+   fire) or `cat ../../secret`.
    - Regression tests: `adage-tracks/tests/hostile.rs`.
 6. **Unbound slot placeholders were rendered.** A run step with `{slot}` under a trigger that
    cannot bind it rendered the placeholder itself as the command (`make {item}`). Only a prompt may
@@ -571,7 +607,7 @@ These use `proptest` with default case counts and bounded inputs, and finish in 
    the fix read as the default once, which is safe because state is a cache.
    - Regression test: `adage-store` `a_write_torn_after_the_sequence_number_is_not_read_as_newest`.
 
-## Live proving ground: `evals/live/`
+## Live evals: `evals/live/`
 
 `evals/live/runner.py` generalises `demo/run.py`. It runs the with/without A/B on any sandbox and
 task set, with any `claude` model. A JSON config supplies:
@@ -579,7 +615,7 @@ task set, with any `claude` model. A JSON config supplies:
 - a sandbox generator and a scorer;
 - prompts;
 - training and held-out tasks, with repeats;
-- the arms (`adage`, `holdout`, `off`);
+- the arms (`adage`, `control`, `off`);
 - the model, max turns, concurrency, learn thresholds and a spend cap.
 
 `evals/live/configs/acme-billing.json` is the demo. `evals/live/configs/harbor-dispatch.json` is
@@ -609,12 +645,12 @@ See [evals/live/README.md](../evals/live/README.md).
 | | Offline replay | Live A/B (demo, round 2) |
 | --- | --- | --- |
 | Question | Would the directives have been right, and safe? | Does delivering them help? |
-| Control | The agent's own later actions in unsteered sessions | The holdout arm, same hooks (arm order was fixed, not randomised, in the published runs; see Known limitations) |
+| Control | The agent's own later actions in unsteered sessions | The control arm, same hooks (arm order was fixed, not randomised, in the published runs; see Known limitations) |
 | Headline | Lookup directive correct for 12 of 18 held-out agents; they took a median of 9 turns to find the lookup unaided | Turns before the first edit fell from a median of 20 to 2 (p = 0.0002); cost per run fell from $0.135 to $0.053 |
-| Blind spots | Cannot see effects of delivery (anchoring, derailing); precision is a lower bound; no intent routes without the model | Small n (18 runs per arm, but only 6 tasks); costs tokens; one sandbox |
+| Blind spots | Cannot see effects of delivery (anchoring, ignoring); precision is a lower bound; no intent routes without the model | Small n (18 runs per arm, but only 6 tasks); costs tokens; one sandbox |
 
 The offline numbers are the cheap, deterministic early warning; a change that lowers them is
-unlikely to help live. The live proving ground is the judge. A track is published only when it
+unlikely to help live. The live eval is the judge. A track is published only when it
 is non-inferior on success and faster (Design §12.2). Offline replay is also how a live run is
 audited: its fidelity check confirms that a replay of the recorded sessions reproduces what the
 hooks decided.
@@ -629,15 +665,15 @@ with these in mind:
   work items (W-2041 to W-2046) that it then tests. Routes are repository conventions, not
   per-task answers, so the effect is smaller than it sounds, but it breaks the Design Spec's rule
   of held-out tasks for every published number. The offline `round2` split has the same overlap.
-- **Arm order was fixed** (holdout queued before adage for every task and repeat), not randomised.
-- **The arms were not isolated from the operator's Claude Code auto-memory.** Holdout agents read
+- **Arm order was fixed** (control queued before adage for every task and repeat), not randomised.
+- **The arms were not isolated from the operator's Claude Code auto-memory.** Control agents read
   `MEMORY.md` in 23 of 36 Haiku eval runs; Adage-arm agents in none.
 - **Pseudo-replication.** p-values permute individual runs, but 18 runs are 6 tasks × 3 repeats,
   so the effective sample is closer to 6. No correction was applied across the 11 metrics.
 - **Infrastructure failures counted as task failures**, and runs cut off at `max_turns` entered
   medians as if complete.
 - **A harm signal went unreported.** In Haiku round 1 the Adage arm hit 26 failed verify runs and
-  the holdout arm 0: skipping exploration also skipped the agent's incidental discovery of
+  the control arm 0: skipping exploration also skipped the agent's incidental discovery of
   `make test`. Round 2 learned the dead end that fixed it, but no metric treated this as a
   regression.
 

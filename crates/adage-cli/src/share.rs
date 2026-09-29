@@ -1,28 +1,24 @@
-//! `adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format pack|v1]`
+//! `adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>]...
+//! [--ack-scripts] [--repo-root <dir>]`
 //! (Design §10.7, §10.8; Track C §1.6): emit a signed **pack** (format `adage-pack/1`).
 //!
-//! The source is a learned track (upgraded to a pack: its live routes, repository scripts pinned
-//! L-ref against the repository `share` runs in), an installed pack by name, or a pack or track
+//! The source is a learned track (converted to a pack: its live routes, repository scripts pinned
+//! L-ref against `--repo-root <dir>` or else the repository `share` runs in), an installed pack by name, or a pack or track
 //! directory. Every byte of every pack file, vendored scripts included, goes through the
 //! redaction check; vendored scripts that name URLs or hosts, run network tools, use absolute
 //! paths or read secret environment variables are listed and need `--ack-scripts`. Approvals,
 //! `review.yaml`, proposals and `trust.json` are never part of a pack. The pack digest is signed
 //! into `pack.sig` in namespace `adage-pack`.
 //!
-//! `--format v1` writes a v1 track as before (`track.toml` + `routes/`, `track.sig` in namespace
-//! `adage-track`), for recipients on an older Adage.
-//!
-//! Also the pieces `adage add` shares: the person-at-a-terminal guard (review finding F11) and the
-//! file layout a shared track may have.
+//! Also the pieces other commands share: the person-at-a-terminal guard (review finding F11), the
+//! files of a track directory, and how a step is described to people.
 
-use crate::redact;
 use adage_store::Paths;
-use adage_tracks::{index, io, Step, Track};
+use adage_tracks::{index, io, Step};
 use anyhow::{bail, Context, Result};
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
-pub const SIG: &str = "track.sig";
 const MAX_FILES: usize = 256;
 const MAX_FILE_BYTES: u64 = 1 << 20;
 
@@ -54,8 +50,8 @@ pub fn require_person(cmd: &str) -> Result<()> {
     Ok(())
 }
 
-/// The files a shared track may contain (Design §10.1). `scripts/` travels only with
-/// repository-committed tracks, never in a direct share.
+/// The files of a track directory that go into a pack (Design §10.1). `scripts/` travels only
+/// with repository-committed tracks, never in a direct share.
 fn allowed(rel: &str) -> bool {
     matches!(rel, "track.toml" | "evidence.json" | "CHANGELOG.md" | "review.yaml")
         || ["routes/", "intents/"].iter().any(|d| {
@@ -85,8 +81,6 @@ pub fn list_files(dir: &Path) -> Result<Listing> {
                 stack.push((p, depth + 1));
             } else if meta.is_dir() {
                 l.other.push((format!("{rel}/"), why_not(&rel)));
-            } else if rel == SIG {
-                l.other.push((rel, "the signature, written by adage share"));
             } else if !meta.is_file() {
                 bail!("{rel} is not a regular file");
             } else if allowed(&rel) {
@@ -156,12 +150,25 @@ pub fn describe_step(step: &Step) -> String {
         Step::Run { command } => format!("run `{command}`"),
         Step::ReadBatch { slot, max } => format!("read up to {max} files listed in {{{slot}}}"),
         Step::Avoid { avoid, instead, .. } => format!("avoid `{avoid}`, use `{instead}`"),
-        Step::Advise { template, .. } => format!("advise ({template})"),
+        Step::Advise { template, slots } => match slots.get("path") {
+            Some(p) => format!("advise ({template}: {p})"),
+            None => format!("advise ({template})"),
+        },
+        Step::Sequence { commands } => {
+            format!("run in order: {}", commands.iter().map(|c| format!("`{c}`")).collect::<Vec<_>>().join(", "))
+        }
+        Step::Card { card } => format!(
+            "procedure card: {} file(s), {} command(s), from {} earlier session(s) of this family ({} passed)",
+            card.files.len(),
+            card.commands.len() + card.avoid.len(),
+            card.sessions,
+            card.passed
+        ),
     }
 }
 
 /// The redaction check's findings as an error: one cause per finding; nothing was written.
-pub(crate) fn redaction_refusal(name: &str, findings: &[redact::Finding]) -> anyhow::Error {
+pub(crate) fn redaction_refusal(name: &str, findings: &[crate::redact::Finding]) -> anyhow::Error {
     let causes = findings
         .iter()
         .map(|f| {
@@ -183,7 +190,7 @@ pub(crate) fn redaction_refusal(name: &str, findings: &[redact::Finding]) -> any
     )
 }
 
-const USAGE: &str = "usage: adage share <track-or-pack> --out <dir> [--key <path>] [--ack-scripts] [--format pack|v1]";
+const USAGE: &str = "usage: adage share <track-or-pack> --out <dir> [--key <path>] [--vendor] [--attest <results.jsonl>]... [--ack-scripts] [--repo-root <dir>]";
 
 pub fn share(args: &[String], paths: &Paths) -> Result<()> {
     require_person("share")?;
@@ -196,159 +203,5 @@ pub fn share(args: &[String], paths: &Paths) -> Result<()> {
             "pass --key <private key file> (e.g. ~/.ssh/id_ed25519), or leave it out to sign with ssh-agent",
         ));
     }
-    match crate::flag(args, "--format").as_deref() {
-        None | Some("pack") => crate::share_pack::share(name, &out, key.as_deref(), args, paths),
-        Some("v1") => share_v1(name, &out, key, paths),
-        Some(other) => bail!("--format {other}: expected pack or v1\n{USAGE}"),
-    }
-}
-
-fn share_v1(name: &str, out: &Path, key: Option<PathBuf>, paths: &Paths) -> Result<()> {
-    let out = out.to_path_buf();
-    let src = find_track(&paths.tracks(), name)?;
-    let track = io::read(&src).with_context(|| format!("{} fails validation", src.display()))?;
-    let listing = list_files(&src)?;
-
-    // Redaction and safety check, over exactly the bytes that will be written, before any are.
-    let home = adage_store::home_dir().map(|h| h.to_string_lossy().into_owned());
-    let mut contents = Vec::new();
-    let mut findings = Vec::new();
-    for rel in &listing.files {
-        let bytes = std::fs::read(src.join(rel))?;
-        match std::str::from_utf8(&bytes) {
-            Ok(text) => findings.extend(redact::scan(rel, text, home.as_deref())),
-            Err(_) => findings.push(redact::Finding {
-                file: rel.clone(),
-                line: 0,
-                kind: "not UTF-8 text",
-                excerpt: String::new(),
-            }),
-        }
-        contents.push((rel.clone(), bytes));
-    }
-    if !findings.is_empty() {
-        return Err(redaction_refusal(name, &findings));
-    }
-
-    if out.exists() && (!out.is_dir() || std::fs::read_dir(&out)?.next().is_some()) {
-        bail!("{} already exists and is not an empty directory", out.display());
-    }
-    let leaf = out.file_name().with_context(|| format!("--out {} needs a directory name", out.display()))?;
-    let stage = out.with_file_name(format!(".{}.adage-{}", leaf.to_string_lossy(), std::process::id()));
-    let _ = std::fs::remove_dir_all(&stage);
-    let signed = write_and_sign(&stage, &contents, &track, key.as_deref());
-    let (digest, signed) = match signed {
-        Ok(v) => v,
-        Err(e) => {
-            let _ = std::fs::remove_dir_all(&stage);
-            return Err(e);
-        }
-    };
-    if out.exists() {
-        std::fs::remove_dir(&out)?;
-    }
-    std::fs::rename(&stage, &out)?;
-    print_summary(&track, &out, &contents, &listing, &digest, &signed)?;
-    Ok(())
-}
-
-fn write_and_sign(
-    stage: &Path,
-    contents: &[(String, Vec<u8>)],
-    track: &Track,
-    key: Option<&Path>,
-) -> Result<(String, adage_sign::Signed)> {
-    for (rel, bytes) in contents {
-        let p = stage.join(rel);
-        std::fs::create_dir_all(p.parent().unwrap())?;
-        std::fs::write(p, bytes)?;
-    }
-    let copy = io::read(stage).context("the copied track fails validation")?;
-    if &copy != track {
-        bail!("the copied track differs from the source");
-    }
-    let digest = io::digest(stage)?;
-    let sock = std::env::var_os("SSH_AUTH_SOCK").filter(|s| !s.is_empty()).map(PathBuf::from);
-    // A passphrase-protected key file is decrypted with a passphrase asked for at the terminal.
-    let ask = |p: &Path| crate::tty::secret(&format!("Enter passphrase for {}: ", p.display()));
-    let signed =
-        adage_sign::sign_with(&adage_sign::message(&digest)?, adage_sign::NAMESPACE, sock.as_deref(), key, &ask)
-            .context("signing the track")?;
-    std::fs::write(stage.join(SIG), &signed.pem)?;
-    Ok((digest, signed))
-}
-
-fn print_summary(
-    t: &Track,
-    out: &Path,
-    contents: &[(String, Vec<u8>)],
-    l: &Listing,
-    digest: &str,
-    s: &adage_sign::Signed,
-) -> Result<()> {
-    use adage_term::{Line, Out};
-    let m = &t.manifest;
-    let mut o = Out::stdout();
-    o.header("share", &[&format!("track {}@{}", m.track.name, m.track.version), &m.scope.repo, "format v1"])?;
-    o.blank()?;
-    o.section(&format!("Included: exactly these files, plus {SIG}"))?;
-    for (rel, bytes) in contents {
-        o.line(&Line::new().text(format!("  {rel:<48} ")).faint(format!("{:>7} bytes", bytes.len())))?;
-    }
-    o.blank()?;
-    o.section("Reflexes: templates and aggregate statistics only")?;
-    for r in &t.routes {
-        let e = &r.evidence;
-        o.line(
-            &Line::new()
-                .text(format!("  {:<24} ", r.id))
-                .strength(crate::words::strength(r.aspect))
-                .pad_to(38)
-                .quiet(format!("{:<11} {}", format!("{:?}", r.effect).to_lowercase(), describe_step(&r.step)))
-                .sep()
-                .faint(format!("{}/{} traces", e.support, e.opportunities)),
-        )?;
-    }
-    let other: Vec<_> = l.other.iter().filter(|(r, _)| r != SIG).collect();
-    if !other.is_empty() {
-        o.blank()?;
-        o.section("Not included")?;
-        for (rel, why) in other {
-            o.line(&Line::new().text(format!("  {rel:<40} ")).quiet(why.to_string()))?;
-        }
-    }
-    o.blank()?;
-    o.kv(
-        "checked",
-        Line::new().text("no absolute paths, home-directory paths, or secret-looking strings in any file"),
-    )?;
-    o.kv("digest", Line::new().quiet(format!("sha256 {digest}")))?;
-    let how = match s.method {
-        adage_sign::Method::Agent => "via ssh-agent",
-        adage_sign::Method::KeyFile => "with key file",
-    };
-    o.kv(
-        "signed",
-        Line::new().text(format!(
-            "{} ({}, {how}), namespace {}",
-            adage_sign::fingerprint(&s.key),
-            s.key.algorithm(),
-            adage_sign::NAMESPACE
-        )),
-    )?;
-    o.kv("wrote", Line::new().text(out.display().to_string()))?;
-    let principal =
-        Some(s.key.comment()).filter(|c| !c.is_empty() && !c.contains(char::is_whitespace)).unwrap_or("adage-signer");
-    o.blank()?;
-    o.note(
-        "Recipients trust this signer with a line in <repo>/.adage/trusted-signers or $ADAGE_HOME/trusted-signers:",
-    )?;
-    o.line(&Line::new().text(format!(
-        "  {principal} namespaces=\"{}\" {}",
-        adage_sign::NAMESPACE,
-        adage_sign::key_line(&s.key)
-    )))?;
-    o.blank()?;
-    o.next(&format!("adage add {}", out.display()), "on the recipient's machine, once they trust the signer")?;
-    Ok(())
+    crate::share_pack::share(name, &out, key.as_deref(), args, paths)
 }

@@ -8,32 +8,32 @@ expression: text
  the same settings as adage config; environment variables win over the file
 
 ▌learn.auto               false    (file)
-   condition automatically, in the background, when an agent's trace stops or ends
+   condition automatically, in the background, when an agent session stops or ends
  learn.min_interval_secs  120      (default)
-   at most one auto-condition run per repository in this many seconds (0 to 86400)
+   at most one automatic conditioning run per repository in this many seconds (0 to 86400)
  learn.thresholds         default  (default)
-   evidence bars for `adage condition` and auto-condition: default, or demo (lower)
+   evidence bars for `adage condition` and automatic conditioning: default, or demo (lower)
  learn.claude_projects    ""       (default)
-   Claude Code history to condition from ("" = ~/.claude/projects)
- learn.codex_sessions     ""       (default)
-   Codex rollouts auto-condition reads, e.g. ~/.codex/sessions ("" = none)
+   Claude Code traces to condition on ("" = ~/.claude/projects)
+ learn.codex_sessions     auto     (default)
+   Codex rollouts to condition on: auto (once Codex hooks are registered), a directory, or "" (none)
  learn.opencode_exports   ""       (default)
-   a directory of `opencode export` files auto-condition reads ("" = none)
+   a directory of `opencode export` files automatic conditioning reads ("" = none)
  learn.parse_cache        true     (default)
    keep parsed traces in cache/sessions so conditioning again parses only what changed
+ learn.cards              true     (default)
+   learn procedure cards for families of similar tasks (with the installed or bundled model)
+ learn.card_threshold     0.811    (default)
+   how similar a prompt must be to a family's prompts for its procedure card (0.5 to 0.99)
  instincts.enabled        true     (default)
    bind Adage's built-in defaults (instincts) from each repository's declared files
  instincts.packs          core     (default)
    instinct packs to bind, comma-separated (only core exists)
  instincts.disabled       ""       (default)
    instinct ids never to bind, comma-separated, e.g. U3,N1 (see docs/instincts.md)
- runtime.holdout          0.1      (default)
-   share of traces in the control arm (Adage decides but says nothing)
-
- enter edits (space toggles on/off and switches thresholds); every value is validated before it is saved.
-
-
-
-
+ ui.notices               daily    (default)
+   one-line notices at session start (Claude Code): daily, only when something is new; or off
+ runtime.control          0.1      (default)
+   share of sessions held out as the control arm (Adage decides but says nothing)
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
  ? keys · : palette · enter edit · space toggle                                                                                                q quit

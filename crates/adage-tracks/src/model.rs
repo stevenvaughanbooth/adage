@@ -7,33 +7,39 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum Aspect {
-    Green,
-    Yellow,
-    Red,
+pub enum Strength {
+    /// Do this: strong evidence (shown fire).
+    Fire,
+    /// Consider this: a suggestion (shown prime).
+    Prime,
+    /// Don't do this: a known dead end (shown inhibit).
+    Inhibit,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum RouteState {
-    Draft,
-    Probation,
-    Active,
-    Demoted,
-    Retired,
+    /// Learned, but waits for a person's review; never delivered.
+    Nascent,
+    /// Delivered while its evidence builds.
+    Forming,
+    /// Established.
+    Firm,
+    /// Extinguished: kept on disk, never delivered.
+    Extinguished,
     /// In service, but no longer re-found by learning *because of its own exposure*: most of the
     /// sessions where it could apply were steered by routes of its kind, so they are excluded from
-    /// its miner (Design §11), and too few unsteered sessions remain to confirm it. Its last
-    /// evidence is kept, with [`Evidence::stale_since`] set, and it is delivered at yellow at most
-    /// (red dead ends stay red). Re-found, it returns to the state the miner gives it; contrary
+    /// its learner (Design §11), and too few unsteered sessions remain to confirm it. Its last
+    /// evidence is kept, with [`Evidence::dormant_since`] set, and it is delivered at prime at most
+    /// (inhibit dead ends stay inhibit). Re-found, it returns to the state the learner gives it; contrary
     /// evidence among unsteered sessions drops it as before (`adage_learn`, E1).
-    Stale,
+    Dormant,
 }
 
 impl RouteState {
-    /// Compiled into the index and delivered (`Active`, `Probation`, `Stale`).
+    /// Compiled into the index and delivered (`Firm`, `Forming`, `Dormant`).
     pub fn is_live(self) -> bool {
-        matches!(self, RouteState::Active | RouteState::Probation | RouteState::Stale)
+        matches!(self, RouteState::Firm | RouteState::Forming | RouteState::Dormant)
     }
 }
 
@@ -67,6 +73,12 @@ pub enum SlotSource {
     /// Segment `depth` (0 = the first directory) of the path whose edit fired the route's
     /// after-edit trigger, which must match `glob`. Bound by an after-edit trigger.
     EditSegment { glob: String, depth: u8 },
+    /// The tests of the file whose edit fired the route's after-edit trigger (which must match
+    /// `glob`): at most `k` test files from a learned map (edited source path → its test files,
+    /// best first; from the repository's naming and co-change, confirmed by the traces). A file
+    /// the map does not list binds nothing; each bound file must exist (the slot's contract is a
+    /// repository path), and they are bound space-separated. Bound by an after-edit trigger.
+    EditTests { glob: String, k: u8, map: std::collections::BTreeMap<String, Vec<String>> },
 }
 
 impl SlotSource {
@@ -130,7 +142,38 @@ pub enum Trigger {
     /// Raw prompts never travel in a track; only the centroid does, as integers in units of 1e-4
     /// (`adage_intent::quantize`). A different or missing model means the route never fires.
     Intent { family: String, model: String, centroid: Vec<i16>, threshold: f32 },
+    /// A learned context of two or three events (Track G §6.2): `items` in time order, each
+    /// within `within` alphabet events of the one before, the last one the event that fires the
+    /// route. Matched as a subsequence over **alphabet events only** (events satisfying some
+    /// context item of the repository, [`crate::context`]), so no other event can change a match;
+    /// the runtime keeps the session's recent symbols and walks the index's discrimination net
+    /// (Track G §7, `adage_runtime::context`).
+    Context { items: Vec<CtxItem>, within: u8 },
 }
+
+/// At most this many items in a context trigger, and at most this gap between them.
+pub const CONTEXT_MAX_ITEMS: usize = 3;
+pub const CONTEXT_MAX_WITHIN: u8 = 8;
+
+/// One item of a [`Trigger::Context`] (Track G §6.2): symbolic, never an embedding (an intent
+/// item is the existing intent family test).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "item", rename_all = "snake_case")]
+pub enum CtxItem {
+    /// A successful command whose canonical key meets one of `keys` (`pattern::meets`).
+    Act { keys: Vec<String> },
+    /// A failed command whose key meets one of `keys`, with this failure signature.
+    Fail { keys: Vec<String>, signature: String },
+    /// An edit of a file matching `glob`.
+    Edit { glob: String },
+    /// A prompt holding a token of the learned value type.
+    PromptValue { vtype: ValueType },
+    /// A prompt of an intent family (the [`Trigger::Intent`] test).
+    Intent { family: String, model: String, centroid: Vec<i16>, threshold: f32 },
+}
+
+/// At most this many commands in a [`Step::Sequence`].
+pub const SEQUENCE_MAX_COMMANDS: usize = 3;
 
 /// Bounds on intent triggers (tracks are untrusted input).
 pub const INTENT_MIN_DIM: usize = 8;
@@ -156,6 +199,13 @@ pub enum Step {
         #[serde(default)]
         slots: BTreeMap<String, String>,
     },
+    /// Two or three commands, run in this order (Track G §6.1). Rendered as a numbered list from a
+    /// fixed template; the route's strength is at most the lowest ceiling of its commands, and
+    /// whether it was followed is judged on the first.
+    Sequence { commands: Vec<String> },
+    /// A procedure card for a family of similar tasks ([`crate::card`]): learned from this
+    /// repository's traces, triggered by an intent (the family's prompts), delivered once, prime.
+    Card { card: crate::card::Card },
 }
 
 /// Typed exit predicates, rendered by Adage from fixed templates — never free text from a track.
@@ -164,7 +214,7 @@ pub enum Step {
 pub enum Exit {
     /// The user is asking for something the route doesn't cover.
     IntentChanges,
-    /// The change is exploratory or a draft.
+    /// The change is exploratory or a nascent.
     ExploratoryChange,
 }
 
@@ -197,10 +247,10 @@ pub struct Evidence {
     /// `opportunities`. High exposure explains a route that learning can no longer confirm.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub exposed: u32,
-    /// Set while the route is [`RouteState::Stale`]: the UTC date (`YYYY-MM-DD`) of the learn run
+    /// Set while the route is [`RouteState::Dormant`]: the UTC date (`YYYY-MM-DD`) of the learn run
     /// that first kept it on its last evidence.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub stale_since: Option<String>,
+    pub dormant_since: Option<String>,
     /// Where the route came from ([`Origin`]); `None` in a route written before origins were
     /// recorded, whose origin is read from `provenance` ([`Route::origin`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -208,10 +258,96 @@ pub struct Evidence {
     /// Counts by the origin of the evidence (roadmap E1): `support` and `opportunities` are
     /// organic sessions only; anything else is counted here. An instinct route records
     /// `declared: 1` (the declared fact that bound it) and, once the runtime has judged it, its
-    /// `followed`, `followed_failed` and `derailed` judgements from treated sessions. An
-    /// instinct never earns green on these.
+    /// `followed`, `misfired` and `ignored` judgements from treated sessions. An
+    /// instinct never earns fire on these.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub by_origin: BTreeMap<String, u32>,
+    /// The outcome lift the step showed (`crate::lift`): recorded whenever the traces' outcomes
+    /// were known, and the reason the route exists when it formed on lift alone (prime at most).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome_lift: Option<crate::lift::OutcomeLift>,
+    /// Why a repository script's step was classified observe from the traces rather than by its
+    /// name or the command table (`adage_learn::effects`); `None` for every other route.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_evidence: Option<String>,
+    /// What delivering the route changes (`adage_learn::value::uplift`): how much more often an
+    /// agent takes the directed step when told than it does unaided. `None` on a route written
+    /// before uplift was estimated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uplift: Option<Uplift>,
+}
+
+/// A route's uplift, `p_follow − p_self` (evals/lab/research/uptake-delivery): agents follow
+/// nearly every directive, so what a directive is worth is how often the agent would **not** have
+/// taken the step unaided. Each probability is a Beta posterior; the counts are what it rests on.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Uplift {
+    /// The kind whose prior the posteriors start from (`avoid`, `run-after-edit`, `read-batch`,
+    /// `lookup`, `obligation`, `sequence`, `advise`, `run`).
+    pub kind: String,
+    /// Posterior mean of `p_follow` (followed when delivered).
+    pub p_follow: f64,
+    /// Posterior mean of `p_self` (took the step unaided in the matching situation).
+    pub p_self: f64,
+    /// Posterior mean of the uplift, and its one-sided 90% lower bound.
+    pub mean: f64,
+    pub lower: f64,
+    /// `p_self`'s prior mean, and whether it was fitted across repositories (else the research
+    /// constant of its kind).
+    pub prior_self: f64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub prior_fitted: bool,
+    /// Training traces in the matching situation, and those whose agent took the step unaided.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub traces: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub traces_took: u32,
+    /// Control-arm `would_have` situations judged, and those whose agent took the step unaided.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub control: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub control_took: u32,
+    /// Treated judgements: delivered, and followed.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub delivered: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub followed: u32,
+    /// Below the bar: delivering it changes too little, so it is not delivered (nascent) until a
+    /// person approves it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub gated: bool,
+}
+
+impl Uplift {
+    /// One line for people: why a reflex speaks or is quiet.
+    pub fn line(&self) -> String {
+        let mut from = Vec::new();
+        if self.traces > 0 {
+            from.push(format!("{} of {} traces did it unaided", self.traces_took, self.traces));
+        }
+        if self.control > 0 {
+            from.push(format!("{} of {} control situations did it unaided", self.control_took, self.control));
+        }
+        if self.delivered > 0 {
+            from.push(format!("followed {} of {} deliveries", self.followed, self.delivered));
+        }
+        if from.is_empty() {
+            from.push(format!(
+                "no evidence yet: the {} prior{}",
+                self.kind,
+                if self.prior_fitted { ", fitted across repositories" } else { "" }
+            ));
+        }
+        format!(
+            "uplift {:+.2} (lower bound {:+.2}): followed {:.2} when told, {:.2} unaided; {}{}",
+            self.mean,
+            self.lower,
+            self.p_follow,
+            self.p_self,
+            from.join("; "),
+            if self.gated { ". Quiet: agents already do this, so delivering it changes little" } else { "" }
+        )
+    }
 }
 
 /// Where a route came from.
@@ -259,12 +395,12 @@ pub struct Route {
     #[serde(default)]
     pub slots: Vec<Slot>,
     pub effect: Effect,
-    pub aspect: Aspect,
+    pub strength: Strength,
     pub state: RouteState,
     #[serde(default)]
     pub exit: Vec<Exit>,
     pub evidence: Evidence,
-    /// A person edited this route; the miner proposes changes instead of overwriting it.
+    /// A person edited this route; the learner proposes changes instead of overwriting it.
     #[serde(default)]
     pub authored: bool,
 }
@@ -298,7 +434,7 @@ impl Route {
         }
     }
 
-    /// Whether an instinct bound this route (weaker than any reflex: yellow at most, never a
+    /// Whether an instinct bound this route (weaker than any reflex: prime at most, never a
     /// Stop request, lowest precedence in the index).
     pub fn is_instinct(&self) -> bool {
         matches!(self.evidence.origin, Some(Origin::Instinct { .. }))
@@ -342,75 +478,67 @@ pub struct Track {
     pub routes: Vec<Route>,
 }
 
-/// Route kinds: the miner (and learned track `<repo>/<kind>`) a route belongs to.
-pub const KIND_WORK_ITEMS: &str = "work-items";
-pub const KIND_FINISH_LINE: &str = "finish-line";
-pub const KIND_DEAD_ENDS: &str = "dead-ends";
-pub const KIND_INTENTS: &str = "intents";
-/// Advisory steps ([`Step::Advise`]): no miner learns them, and they steer no miner but their own.
-pub const KIND_ADVICE: &str = "advice";
-/// Anything no miner produces (an imported or hand-written shape): it may influence anything.
-pub const KIND_OTHER: &str = "other";
-/// Every kind a miner learns.
-pub const MINER_KINDS: [&str; 4] = [KIND_WORK_ITEMS, KIND_FINISH_LINE, KIND_DEAD_ENDS, KIND_INTENTS];
-
-/// The kind of a route, from its *shape* (trigger and step), never from its id or track name,
-/// which an imported track chooses freely. Each shape is one a miner produces:
+/// The delivery shape of a route (Track G §6.1), from its trigger and step alone, never from its
+/// id or track name. The learner knows no route kinds; shapes are the closed set of things a
+/// directive can do, and the directive wrapper names one (`kind="obligation"`).
 ///
-/// | Trigger | Step | Kind |
+/// | Step | Trigger | Shape |
 /// | --- | --- | --- |
-/// | `prompt` | `run` | `work-items` (the lookup) |
-/// | `after_command` | `read_batch` | `work-items` (the linked files) |
-/// | `after_edit` | `run` | `finish-line` |
-/// | `session_start` | `avoid` | `dead-ends` |
-/// | `after_failure` | `run` | `dead-ends` (the instinct form of a dead end: the ids line up) |
-/// | `intent` | `run` | `intents` |
-/// | any | `advise` | `advice` |
-/// | anything else | | `other` |
-pub fn route_kind(r: &Route) -> &'static str {
+/// | `avoid` | any | `avoid` |
+/// | `run` | `after_failure` | `avoid` (announced after the failure) |
+/// | `read_batch` | any | `read-batch` |
+/// | `sequence` | any | `sequence` |
+/// | `advise` | any | `advise` |
+/// | `run`, a regenerate step with no slot | `after_edit` | `obligation` |
+/// | `run` | anything else | `run` |
+pub fn shape(r: &Route) -> &'static str {
     match (&r.trigger, &r.step) {
-        (Trigger::Prompt { .. }, Step::Run { .. }) => KIND_WORK_ITEMS,
-        (Trigger::AfterCommand { .. }, Step::ReadBatch { .. }) => KIND_WORK_ITEMS,
-        (Trigger::AfterEdit { .. }, Step::Run { .. }) => KIND_FINISH_LINE,
-        (Trigger::SessionStart, Step::Avoid { .. }) => KIND_DEAD_ENDS,
-        (Trigger::AfterFailure { .. }, Step::Run { .. }) => KIND_DEAD_ENDS,
-        (Trigger::Intent { .. }, Step::Run { .. }) => KIND_INTENTS,
-        (_, Step::Advise { .. }) => KIND_ADVICE,
-        _ => KIND_OTHER,
+        (_, Step::Avoid { .. }) | (Trigger::AfterFailure { .. }, Step::Run { .. }) => "avoid",
+        (_, Step::ReadBatch { .. }) => "read-batch",
+        (_, Step::Sequence { .. }) => "sequence",
+        (_, Step::Advise { .. }) => "advise",
+        (_, Step::Card { .. }) => "card",
+        (Trigger::AfterEdit { .. }, Step::Run { .. }) if r.effect == Effect::Regenerate && r.slots.is_empty() => {
+            "obligation"
+        }
+        _ => "run",
     }
 }
 
-/// The aspect a route is delivered at: its own, except that a route on probation or stale, or
-/// an instinct, is never delivered green (and an instinct never red).
-pub fn delivered_aspect(r: &Route) -> Aspect {
+/// Every delivery shape [`shape`] names.
+pub const SHAPES: [&str; 7] = ["run", "avoid", "read-batch", "obligation", "sequence", "advise", "card"];
+
+/// The strength a route is delivered at: its own, except that a route forming or dormant, or
+/// an instinct, is never delivered fire (and an instinct never inhibit).
+pub fn delivered_strength(r: &Route) -> Strength {
     if r.is_instinct() {
-        return Aspect::Yellow;
+        return Strength::Prime;
     }
-    match (r.state, r.aspect) {
-        (RouteState::Probation | RouteState::Stale, Aspect::Green) => Aspect::Yellow,
+    match (r.state, r.strength) {
+        (RouteState::Forming | RouteState::Dormant, Strength::Fire) => Strength::Prime,
         (_, a) => a,
     }
 }
 
-/// The strongest aspect an effect class may ever be given (Design §8.6).
-pub fn ceiling(effect: Effect, triggered_by_edit: bool) -> Option<Aspect> {
+/// The strongest strength an effect class may ever be given (Design §8.6).
+pub fn ceiling(effect: Effect, triggered_by_edit: bool) -> Option<Strength> {
     match effect {
-        Effect::Observe | Effect::Verify => Some(Aspect::Green),
-        Effect::Regenerate => Some(if triggered_by_edit { Aspect::Green } else { Aspect::Yellow }),
-        Effect::Environment => Some(Aspect::Yellow),
+        Effect::Observe | Effect::Verify => Some(Strength::Fire),
+        Effect::Regenerate => Some(if triggered_by_edit { Strength::Fire } else { Strength::Prime }),
+        Effect::Environment => Some(Strength::Prime),
         Effect::Author | Effect::Publish => None,
     }
 }
 
 /// The state a learned or imported route starts in (Design §10.4, O11). An environment step may
-/// be delivered only on a route a person approved in `adage review`, so it starts as a draft, which
-/// is never delivered; `approve` puts it into service (yellow at most, its ceiling). Every other
+/// be delivered only on a route a person approved in `adage review`, so it starts as nascent, which
+/// is never delivered; `approve` puts it into service (prime at most, its ceiling). Every other
 /// directable step starts in service.
 pub fn initial_state(effect: Effect) -> RouteState {
     if effect == Effect::Environment {
-        RouteState::Draft
+        RouteState::Nascent
     } else {
-        RouteState::Active
+        RouteState::Firm
     }
 }
 
@@ -440,8 +568,8 @@ mod tests {
     fn ceilings() {
         assert_eq!(ceiling(Effect::Author, false), None);
         assert_eq!(ceiling(Effect::Publish, true), None);
-        assert_eq!(ceiling(Effect::Environment, true), Some(Aspect::Yellow));
-        assert_eq!(ceiling(Effect::Regenerate, false), Some(Aspect::Yellow));
-        assert_eq!(ceiling(Effect::Regenerate, true), Some(Aspect::Green));
+        assert_eq!(ceiling(Effect::Environment, true), Some(Strength::Prime));
+        assert_eq!(ceiling(Effect::Regenerate, false), Some(Strength::Prime));
+        assert_eq!(ceiling(Effect::Regenerate, true), Some(Strength::Fire));
     }
 }

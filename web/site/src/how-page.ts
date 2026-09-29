@@ -7,7 +7,7 @@ import "@fontsource-variable/bricolage-grotesque/wght.css";
 import "@fontsource-variable/hanken-grotesk/wght.css";
 import "@fontsource-variable/red-hat-mono/wght.css";
 import "./styles.css";
-import { CHAPTERS } from "@how/chapters";
+import { CHAPTERS, chapterIndex } from "@how/chapters";
 import { Stage, readPalette, webglAvailable } from "@how/engine";
 import type { Built } from "@how/types";
 import { initPage } from "./page";
@@ -217,7 +217,7 @@ document.addEventListener("visibilitychange", () => {
 initTheme();
 startStage();
 const params = new URLSearchParams(location.search);
-const start = Math.max(0, CHAPTERS.findIndex((c) => c.id === params.get("ch")));
+const start = chapterIndex(params.get("ch"));
 built = null;
 go(start, Number(params.get("step") ?? 0) || 0, true);
 initWilson();

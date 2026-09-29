@@ -654,7 +654,7 @@ pub fn records(env: &Env, m: &Measured, label: &str, baseline_route_precision: O
                     out.push(with(
                         envelope("directive", Some(&u.unit), split.clone()),
                         json!({
-                            "role": u.unit.role.as_str(), "session": sess.id, "route": d.route, "kind": d.kind,
+                            "role": u.unit.role.as_str(), "session": sess.id, "route": d.route, "shape": d.shape,
                             "event": d.event, "turn": d.turn, "correct": d.correct,
                             "in_window": in_window(d, env.suite.window), "matched_turn": d.matched_turn,
                             "turns_saved": d.turns_saved,

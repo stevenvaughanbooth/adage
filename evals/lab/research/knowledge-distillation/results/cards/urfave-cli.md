@@ -1,0 +1,48 @@
+Repository notes learned from earlier sessions in this repo:
+- `Read: command.go` shows: cli, fmt
+- `Grep: Hidden type=go head_limit=30` shows: flag_impl.go, help.go
+- `Read: flag.go limit=100` shows: interface
+- `Read: template.go` shows: .Flags, GLOBAL, OPTIONS
+- `Read: flag_generic.go` shows: FlagBase, cli, tracef
+- `Bash: cd /tmp && go run test_empty.go` shows: go.mod
+- `Bash: go test -run TestBoolWithInverse ./... -v` shows: github.com/urfave, github.com/urfave/cli, github.com/urfave/cli/v3
+- `Read: value_source.go limit=150` shows: EnvVar, NewValueSourceChain
+- `Bash: find . -type f -name "*.go" | head -20` shows: command_setup.go, help_test.go
+- `Bash: find . -type f -name "*.go" | grep -E "(command|app)" | head -20` shows: command.go, command_parse.go, command_run.go, command_test.go
+- `Read: errors.go` shows: flag1Name, flag2Name
+- `Read: flag_bool.go limit=50` shows: FlagBase
+- `Read: command_test.go limit=100` shows: testing
+- `Read: flag.go offset=195 limit=30` shows: IsLocal
+- `Bash: mv test_version_clash.go command_version_test.go && go test -run TestVersionFlagWithVerboseCla` shows: Incorrect
+- `Read: command.go` shows: cli, cmd.Command, cmd.Name, tracef
+- `Bash: find . -type f -name "*.go" | head -20` shows: completion.go, completion_test.go, flag.go, help_test.go, suggestions_test.go
+- `Bash: find . -type f -name "*.go" | head -20` shows: args.go
+- `Bash: go run /tmp/test_completion_order.go 2>&1` shows: COMMANDS
+- `Grep: BoolFlag.*Hidden|Hidden.*BoolFlag type=go output_mode=content` shows: bflag, bflag.Hidden
+- `Read: completion_test.go` shows: Flag, Flags, lastArg, strings.HasPrefix
+- `Read: flag.go limit=200 offset=100` shows: IsVisible, VisibleFlag, vf.IsVisible
+- `Bash: go test ./... -v -run TestRunWithEmptyArgs 2>&1` shows: example-hello-world
+- `Read: command.go` shows: Usage, Writer, cli, cmd.Name, cmd.allFlags, struct, tracef
+- `Read: command_parse.go` shows: cmd.lFlag, firstArg, flagName, strings.Index, strings.TrimPrefix
+- `Read: completion.go` shows: Command, bash, cli, cmd, completionFlag, fmt.Sprintf, generate, shell
+- `Read: help.go` shows: CommandHelpTemplate, SubcommandHelpTemplate, UsageCommandHelp, app, cmd.Root, nil
+- `Bash: grep -n "VisiblePersistentFlags" command.go | head -20` shows: Hidden, LocalFlag, Persistent, slice
+- `Read: flag_bool_with_inverse_test.go offset=545 limit=30` shows: panic, strings.Contains, t.Errorf, verbose
+- `Read: flag_bool_with_inverse.go` shows: .ToString, Required, Usage, bif, bif.DefaultText, bif.Required, bif.Value, boolValue, cli, fmt, fmt.Sprintf, struct
+- `Read: command.go offset=307 limit=50` shows: append, cmd.isCompletionCommand, pfl, pfl.IsLocal, visibleFlags
+- `Read: flag_bool_with_inverse_test.go` shows: flag.String, require.New, t.Run, tc.testName, tcs, testName, testing.T
+- `Bash: grep -A 50 "TestCommand_RunDefaultCommandWithFlags" command_test.go | head -100` shows: defaultCommandFlagTests
+- `Bash: git add help.go help_test.go && git commit -m "$(cat <<'EOF'
+Fix shell completion to exclude a` shows: 8c0bc39
+- `Read: flag.go` shows: JSON, PostParse, Schema, SchemaItemsType, SchemaItemsTyper, SchemaType, SchemaTyper, fmt, slice
+- `Grep: hideHelpCommand|HideHelpCommand type=go output_mode=content context=3` shows: TestHideHelpCommand_WithSubcommands
+- `Grep: mutually|MutuallyExclusive type=go output_mode=files_with_matches` shows: errors.go, flag_mutex.go, flag_mutex_test.go
+- `Read: help_test.go` shows: assert.Contains, buildTestContext, bytes.Buffer, cmd.Writer, out.String, output.String, testing.T
+- `Bash: find . -type f -name "*.go" | grep -E "(flag|generic)" | head -20` shows: flag.go, flag_generic.go, flag_schema_type_test.go
+- `Read: command_run.go` shows: cmd.DefaultCommand, cmd.SkipFlagParsing, cmd.argsWithDefaultCommand, cmd.parseFlags, cmd.parsedArgs, skipping
+- `Bash: go test -v ./... -run TestCompletion` shows: TestCompletionShellRenderError, TestCompletionShellWriteError, github.com/urfave/cli/v3, junky-sheell, mock-shell, writer
+- `Read: help_test.go limit=1500 offset=1300` shows: Commands, Int64Flag, SHELL, argv, everybody-jump-on, flag-suggestion-double-dash-shows-all-flags, happiness, hat-shape, putz, typical-flag-suggestion-hidden-bool
+- `Read: completion_test.go` shows: EnableShellCompletion, TestCompletionShell, Writer, buildTestContext, bytes.Buffer, cmd.Run, github.com/urfave, github.com/urfave/cli, non-empty, out.String, r.NoError, r.NotEmpty
+- `Read: command_setup.go` shows: VersionFlag, appending, cmd.HideVersion, cmd.appendFlag, cmd.globaVersionFlagAdded, cmd.versionFlag, flagNamesInUse, globalVersionFlag, isRoot, localVersionFlag, localVersionFlag.Names
+- `Read: help_test.go` shows: BoolFlag, buf, buf.String, byte, bytes.Buffer, bytes.Contains, context.Background, err.Error, github.com/stretchr, github.com/stretchr/testify, github.com/stretchr/testify/require, r.NotContains
+- `Bash: find . -type f -name "*.go" | head -20` shows: args.go, command_setup.go, flag.go, flag_bool.go, flag_bool_with_inverse.go, flag_duration.go, flag_ext.go, flag_int_slice.go, flag_string_map.go, flag_string_slice.go, value_source.go

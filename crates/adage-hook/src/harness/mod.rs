@@ -10,6 +10,22 @@ pub mod codex;
 pub mod opencode;
 
 use adage_runtime::Call;
+
+/// The hook timeout, in seconds, of the events an E2 action runs at (the edit and Stop events)
+/// when the registration runs `adage-exec`: an action's wall limit (20 s) stays well under it.
+/// Every other event, and every `adage` registration, keeps 5 s. OpenCode's bridge waits 1 s, so
+/// actions never run under OpenCode.
+pub const ACTION_HOOK_TIMEOUT_S: u32 = 30;
+
+/// The timeout for an action event of a registration running `bin`.
+pub fn action_timeout(bin: &str) -> u32 {
+    let name = bin.rsplit(['/', '\\']).next().unwrap_or(bin);
+    if name == "adage-exec" || name == "adage-exec.exe" {
+        ACTION_HOOK_TIMEOUT_S
+    } else {
+        5
+    }
+}
 pub use adage_runtime::Event;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -21,6 +37,15 @@ pub enum Output {
     Context(String),
     /// A stop-hook request to continue, with its reason (fixed template).
     Continue(String),
+    /// One line for the person, not the model (docs/zero-config.md §3.3): Claude Code shows a
+    /// `systemMessage` in its UI and never sends it to the model. Harnesses without such a channel
+    /// render nothing; their notices reach the status card and `adage watch` only.
+    Notice(String),
+    /// Before a tool call (`PreToolUse`): run it with this input instead (only the interpreter
+    /// prefix of its command changed), telling the model why (`context`) and the person
+    /// (`notice`). Harnesses that cannot rewrite a call render nothing (the post-hoc directive
+    /// still follows the failure).
+    Rewrite { input: Value, context: String, notice: String },
 }
 
 /// Who is calling: the session and working directory every native payload must carry.
@@ -68,7 +93,7 @@ pub fn adapter(harness: &str) -> Option<&'static dyn Adapter> {
 /// be mistaken for the user's prompt.
 pub fn is_own_text(prompt: &str) -> bool {
     let t = prompt.trim_start();
-    t.starts_with("Adage finish-line check:") || t.starts_with("<adage-signal ")
+    t.starts_with("Adage finish-line check:") || t.starts_with("<adage-reflex ")
 }
 
 /// Calls for translated `(tool, input)` pairs, with relative file paths anchored at the session's

@@ -7,6 +7,7 @@ use crate::autolearn::Queue;
 use crate::detect;
 use crate::doctor::{self, Check, Status};
 use adage_core::repo;
+use adage_intent::model;
 use adage_store::{config, lock, Paths};
 use adage_tracks::Index;
 use std::path::Path;
@@ -99,7 +100,7 @@ fn fail_open_recent(paths: &Paths) -> usize {
         .count()
 }
 
-/// The repository key hooks would use for `root`, given the index; else the key `adage learn`
+/// The repository key hooks would use for `root`, given the index; else the key `adage condition`
 /// would give it.
 pub fn repo_key(paths: &Paths, root: &Path, index: &Index) -> String {
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
@@ -141,10 +142,22 @@ fn fix_for(c: &Check) -> Option<Fix> {
         return None;
     }
     if let Some(h) = c.check.strip_prefix("hooks: ") {
+        // Registered twice (the plugin and a settings file): installing again cannot fix that;
+        // the check's own advice says which entries to remove.
+        if h.ends_with(" (twice)") {
+            return None;
+        }
         return Some(Fix::InstallHooks(h.to_string()));
     }
     match c.check.as_str() {
-        "embedding model" => Some(Fix::FetchModel),
+        // The fix fetches the default model: only when that is what the check asks for (not the
+        // reinstall of another installed model, nor a binary whose bundled model is damaged).
+        "embedding model" => {
+            let fix = c.fix.as_deref().unwrap_or("");
+            let other = fix.contains("models fetch ") && !fix.contains(&format!("models fetch {}", model::BASE_8M.key));
+            (fix.contains("adage models fetch") && !other && !fix.starts_with("reinstall adage"))
+                .then_some(Fix::FetchModel)
+        }
         "index" | "tracks" | "auto-learn runs" | "auto-learn queue" => Some(Fix::LearnNow),
         "fail-open errors" => Some(Fix::OpenFailOpen),
         "config" => Some(Fix::OpenSettings),
@@ -194,7 +207,8 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
     let n = routes_repo.unwrap_or(index.routes.len());
     let index_check = by("index");
     lights.push(match index_check.map(|c| c.status) {
-        Some(Status::Pass) if n == 0 => Light::new("no reflexes yet", Lamp::Warn).hint("adage condition"),
+        // A fresh install has none yet: nothing is wrong, the first session conditions.
+        Some(Status::Pass) if n == 0 => Light::new("no reflexes yet", Lamp::Off).hint("adage condition"),
         Some(Status::Pass) => Light::new(format!("{n} reflex{}", if n == 1 { "" } else { "es" }), Lamp::Ok),
         Some(s) => Light::new("index", lamp(s)).hint("adage condition"),
         None => Light::new("no index", Lamp::Off).hint("adage condition"),
@@ -206,12 +220,24 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
         (Some((true, _)), false) => Light::new("auto-condition", Lamp::Ok),
         _ => Light::new("auto-condition off", Lamp::Off),
     });
+    // What hooks embed with: an installed model, the one bundled in the binary, or the hashed
+    // fallback (`status_card::embeddings`, as the status card and doctor say it).
     let model = by("embedding model");
-    let model_installed = model.is_some_and(|c| c.status == Status::Pass && c.detail.contains("installed;"));
+    let (embedder, unchosen_fallback) = crate::status_card::embeddings(paths);
+    let hashed = embedder == "hashed fallback";
+    let label = if hashed {
+        "no model"
+    } else if embedder.ends_with("(bundled)") {
+        "bundled model"
+    } else {
+        "model"
+    };
     lights.push(match model.map(|c| c.status) {
-        Some(Status::Pass) if model_installed => Light::new("intent model", Lamp::Ok),
-        Some(Status::Pass) | None => Light::new("intent model not fetched", Lamp::Off).hint("adage models fetch"),
-        Some(s) => Light::new("intent model", lamp(s)).hint("adage models fetch"),
+        Some(Status::Pass) if !hashed => Light::new(label, Lamp::Ok),
+        Some(Status::Pass) | None => Light::new(label, Lamp::Off),
+        // An installed model that cannot be used, while another one serves.
+        Some(_) if !hashed && !unchosen_fallback => Light::new(label, Lamp::Warn).hint("adage doctor"),
+        Some(s) => Light::new(label, lamp(s)).hint("adage models fetch"),
     });
     if fail_open > 0 {
         lights.push(

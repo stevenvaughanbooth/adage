@@ -22,10 +22,10 @@ const EVENT: Record<string, string> = {
 
 function Row({ e, graph, fresh }: { e: TraceEvent; graph: Graph; fresh: boolean }) {
   const [, setUrl] = useUrl();
-  const control = e.arm === "holdout";
+  const control = e.arm === "control";
   const chip = (id: string, would: boolean) => {
     const r = graph.routes.find((x) => x.id === id && x.repo === e.repo);
-    const s = strength(r?.aspect);
+    const s = strength(r?.strength);
     return (
       <button
         key={`${would ? "w" : "d"}${id}`}
@@ -64,7 +64,7 @@ function Row({ e, graph, fresh }: { e: TraceEvent; graph: Graph; fresh: boolean 
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-2">
             {e.judged.map(([k, id], i) => (
               <span key={`${k}${id}${i}`}>
-                <span className={k === "derailed" ? "text-inhibit" : k === "followed" || k === "obligation_met" ? "text-fire" : ""}>{judgement(k)}</span>{" "}
+                <span className={k === "ignored" || k === "misfired" ? "text-inhibit" : k === "followed" || k === "obligation_met" ? "text-fire" : ""}>{judgement(k)}</span>{" "}
                 <span className="font-mono text-ink-1">{id}</span>
                 {control && k === "followed" && <span className="text-ink-3"> unaided</span>}
               </span>
@@ -85,7 +85,7 @@ export function Traces({ graph }: { graph: Graph }) {
   const [url, setUrl] = useUrl();
   const { streamed } = useStore();
   const [at, setAt] = useState<number | null>(null);
-  const [armFilter, setArm] = useState<"all" | "treated" | "holdout">("all");
+  const [armFilter, setArm] = useState<"all" | "treated" | "control">("all");
   const [loadedWith] = useState(streamed);
   const now = Math.max(Date.now(), ...graph.events.map((e) => e.ts));
   const selected = findRoute(graph, url.reflex);
@@ -139,7 +139,7 @@ export function Traces({ graph }: { graph: Graph }) {
             options={[
               { value: "all", label: "Both arms" },
               { value: "treated", label: "With reflexes" },
-              { value: "holdout", label: "Control" },
+              { value: "control", label: "Control" },
             ]}
           />
           <Segmented<Window>

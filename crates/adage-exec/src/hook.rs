@@ -1,4 +1,4 @@
-//! `adage-exec hook <harness> <event>`: E1 prefetch (Track C §3.2, §3.4).
+//! `adage-exec hook <harness> <event>`: E1 prefetch and E2 actions (Track C §3.2, §3.4, §3.6).
 //!
 //! The same pipeline as `adage hook` (`adage-hook`: adapters, fast path, state lock, `decide()`,
 //! spool, render), with one [`Extension`]. For each directive about to be delivered whose route
@@ -17,17 +17,29 @@
 //! The spool record gains `exec`: per attempted route, `{ route, level, exit, bytes, sha256,
 //! truncated, duration_ms, auto }` when delivered, `{ route, level, withheld }` when not. The
 //! output itself is never recorded.
+//!
+//! **E2 actions.** When an edit arms a finish-line obligation (after editing `registry/*.csv`, run
+//! `make gen`), or the obligation's Stop request is due, and the reflex holds an explicit E2
+//! approval for this repository, the action runs here ([`act`]): at most one per event, never in
+//! the control arm, never under OpenCode (whose bridge waits one second), within 20 s. It is
+//! staged, its change set verified against the declared outputs, and applied only if nothing it
+//! touches changed meanwhile ([`crate::stage`]). Applied: the directive becomes a result block
+//! ("Adage ran `make gen` after your edit to registry/currencies.csv: updated 1 file (…). Nothing
+//! else changed."), the obligation is met, and no Stop request follows. Refused or failed: the
+//! plain E0 directive and the reason. The outcome goes to `$ADAGE_HOME/exec/actions.spool` and to
+//! this event's `exec` record; three refused change sets revoke the approval.
 
 use adage_core::CommandTable;
 use adage_eval::safety::{check_data_block, DataType};
 use adage_hook::{Delivery, Extension, Turn};
 use adage_runtime::{render, Directive};
+use adage_tracks::Step;
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::time::Instant;
 
 use crate::approvals::{self, Approval, Store};
-use crate::request::{FieldSpec, FieldType, Level, OutputMode, DEFAULT_LIST, MAX_LIST};
+use crate::request::{FieldSpec, FieldType, Level, OutputMode, DEFAULT_LIST, DEFAULT_TEXT, MAX_LIST, MAX_TEXT};
 use crate::run::{self, Context};
 use crate::{limits, policy, route, sandbox};
 
@@ -52,16 +64,227 @@ pub fn adage_beside() -> Option<std::path::PathBuf> {
 
 impl Extension for Prefetch {
     fn deliver(&self, turn: &Turn<'_>, directives: &[Directive]) -> Delivery {
-        match prefetch(turn, directives) {
-            Ok(None) => Delivery::default(),
-            Ok(Some((texts, records))) => Delivery { texts: Some(texts), spool: Some(Value::Array(records)) },
-            Err(records) => Delivery { texts: None, spool: Some(Value::Array(records)) },
+        let mut d = Delivery::default();
+        let mut records: Vec<Value> = Vec::new();
+        if !directives.is_empty() {
+            match prefetch(turn, directives) {
+                Ok(None) => {}
+                Ok(Some((texts, r))) => {
+                    d.texts = Some(texts);
+                    records.extend(r);
+                }
+                Err(r) => records.extend(r),
+            }
         }
+        if !turn.stimuli.is_empty() {
+            let a = act(turn, directives);
+            records.extend(a.records);
+            if !a.replace.is_empty() {
+                let mut texts =
+                    d.texts.take().unwrap_or_else(|| directives.iter().map(render::wrap_directive).collect());
+                for (i, dir) in directives.iter().enumerate() {
+                    if let Some(t) = a.replace.get(&dir.route) {
+                        texts[i] = t.clone();
+                    }
+                }
+                d.texts = Some(texts);
+            }
+            d.extra = a.extra;
+            d.met = a.met;
+            d.stop = a.stop;
+        }
+        if !records.is_empty() {
+            d.spool = Some(Value::Array(records));
+        }
+        d
+    }
+
+    /// Exec-only reflexes (vendored scripts) approved here at E1 or E2: only then are they
+    /// directed, and only because this binary carries them out.
+    fn exec_only(
+        &self,
+        repo_key: &str,
+        index: &adage_tracks::Index,
+        paths: &adage_store::Paths,
+    ) -> Vec<(String, String)> {
+        let Ok(store) = Store::load(&approvals::path(&paths.root)) else { return Vec::new() };
+        index
+            .for_repo(repo_key)
+            .filter(|r| r.exec_only())
+            .filter(|r| {
+                let label = format!("{}/{}", r.track, r.route.id);
+                store.approvals.iter().any(|a| a.key.repo == repo_key && a.route == label)
+            })
+            .map(|r| (r.track.clone(), r.route.id.clone()))
+            .collect()
     }
 }
 
-fn withheld(route: &str, stage: &str) -> Value {
-    json!({ "route": route, "level": "e1", "withheld": stage })
+/// What the E2 step decided for one event.
+#[derive(Default)]
+struct Acted {
+    /// Route → the text replacing its directive in this event.
+    replace: BTreeMap<String, String>,
+    extra: Vec<String>,
+    met: Vec<String>,
+    stop: Option<Option<String>>,
+    records: Vec<Value>,
+}
+
+/// The directive for a route: the one about to be delivered, else rebuilt from the index entry
+/// (the obligation was announced earlier and re-armed now).
+fn directive_for(ir: &adage_tracks::index::IndexedRoute, directives: &[Directive], command: &str) -> Option<Directive> {
+    if let Some(d) = directives.iter().find(|d| d.route == ir.route.id && d.track == ir.track) {
+        return Some(d.clone());
+    }
+    let Step::Run { command: template } = &ir.route.step else { return None };
+    let bound: Vec<(String, String)> =
+        route::bound_from_command(&template.split_whitespace().map(String::from).collect::<Vec<_>>(), command)?
+            .into_iter()
+            .collect();
+    Some(Directive {
+        route: ir.route.id.clone(),
+        track: ir.track.clone(),
+        version: ir.version.clone(),
+        strength: ir.route.strength,
+        text: render::route_text(&ir.route, &bound)?,
+        kind: adage_tracks::shape(&ir.route).to_string(),
+        origin: None,
+    })
+}
+
+/// E2: run at most one approved action for the obligations this event armed or enforces.
+fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
+    let mut out = Acted::default();
+    if turn.arm == Some(adage_runtime::Arm::Control) {
+        return out;
+    }
+    let home = &turn.paths.root;
+    let Ok(store) = Store::load(&approvals::path(home)) else { return out };
+    let approved = |s: &adage_hook::Stimulus| -> Option<(&Approval, &adage_tracks::index::IndexedRoute)> {
+        store.approvals.iter().filter(|a| a.key.repo == turn.repo_key && a.key.level == Level::E2).find_map(|a| {
+            let ir = turn.index.routes.iter().find(|r| {
+                r.repo == turn.repo_key && r.route.id == s.route && a.route == format!("{}/{}", r.track, r.route.id)
+            })?;
+            Some((a, ir))
+        })
+    };
+    // At most one action per event.
+    let Some((s, a, ir)) = turn.stimuli.iter().find_map(|s| approved(s).map(|(a, ir)| (s, a, ir))) else { return out };
+    let label = a.route.clone();
+    let Some(dir) = directive_for(ir, directives, &s.command) else {
+        out.records.push(json!({ "route": label, "level": "e2", "withheld": "render",
+                                 "reason": "the action's directive could not be rendered" }));
+        return out;
+    };
+    let not_run = |out: &mut Acted, stage: &str, reason: &str| {
+        out.records
+            .push(json!({ "route": label, "level": "e2", "withheld": stage, "reason": crate::reason_text(reason) }));
+        if s.at_stop && ir.exec_only() {
+            // The agent cannot run a vendored script itself: asking it to would be unfollowable.
+            out.stop = Some(None);
+        } else if s.at_stop {
+            out.stop = Some(Some(render::stop_reason_not_run(&s.paths, &s.command, reason)));
+        } else if directives.iter().any(|d| d.route == dir.route) {
+            out.replace.insert(dir.route.clone(), render::action_not_run(&dir, reason));
+        } else {
+            out.extra.push(render::action_not_run(&dir, reason));
+        }
+    };
+    if turn.harness == "opencode" {
+        not_run(&mut out, "harness", "actions do not run under OpenCode, whose hook bridge waits one second");
+        return out;
+    }
+    let table = CommandTable::load();
+    let plan = match route::plan(ir, turn.index, turn.root, &turn.paths.tracks(), Level::E2, a.terms.as_ref(), &table) {
+        Ok(p) => p,
+        Err(e) => {
+            not_run(&mut out, "route", &e);
+            return out;
+        }
+    };
+    let mut req = plan.request;
+    match route::bound_from_command(&req.argv, &s.command) {
+        Some(inputs) => req.inputs = inputs,
+        None => {
+            not_run(&mut out, "bind", "its command could not be bound from the edit");
+            return out;
+        }
+    }
+    let Ok(pol) = policy::load(home) else {
+        not_run(&mut out, "policy", "the policy file is unreadable");
+        return out;
+    };
+    let cap = sandbox::detect();
+    let ctx = Context {
+        inherited_env: std::env::vars().collect(),
+        policy: &pol,
+        store: &store,
+        capability: &cap,
+        table: &table,
+        repo_key: turn.repo_key.to_string(),
+        cas: Some(home.join("cas")).filter(|p| p.is_dir()),
+        home: adage_store::home_dir(),
+        canaries: Vec::new(),
+    };
+    let staged = match crate::stage::stage(&req, &ctx) {
+        Ok(x) => x,
+        Err(r) => {
+            not_run(&mut out, r.stage, &r.reason);
+            return out;
+        }
+    };
+    let outcome = crate::stage::finish(&staged);
+    let revoked = crate::stage::record(home, turn.repo_key, &label, &a.approved_on, turn.session, &outcome);
+    let mut rec = json!({
+        "route": label, "level": "e2", "outcome": outcome.name(), "exit": staged.exit,
+        "duration_ms": staged.duration_ms,
+    });
+    if revoked {
+        rec["revoked"] = json!(true);
+    }
+    match &outcome {
+        crate::stage::Outcome::Applied { changed, .. } => {
+            out.records.push(rec);
+            out.met.push(s.route.clone());
+            if s.at_stop {
+                // The Stop hook cannot carry context: the request is withdrawn, the record kept.
+                out.stop = Some(None);
+            } else {
+                let paths: Vec<String> = changed.iter().map(|l| l.path.clone()).collect();
+                let text = render::action_applied(&dir, &s.edited, &s.command, &paths);
+                if directives.iter().any(|d| d.route == dir.route) {
+                    out.replace.insert(dir.route.clone(), text);
+                } else {
+                    out.extra.push(text);
+                }
+            }
+        }
+        crate::stage::Outcome::Refused { reason, .. } => {
+            let reason = if revoked { format!("{reason}; its approval is now revoked") } else { reason.clone() };
+            let records = std::mem::take(&mut out.records);
+            not_run(&mut out, "refused", &reason);
+            out.records = records;
+            out.records.push(rec);
+        }
+        crate::stage::Outcome::Failed { exit, .. } => {
+            let reason = match exit {
+                Some(e) => format!("it exited {e} in the staged copy, and nothing was applied"),
+                None => "it was stopped in the staged copy, and nothing was applied".to_string(),
+            };
+            let records = std::mem::take(&mut out.records);
+            not_run(&mut out, "failed", &reason);
+            out.records = records;
+            out.records.push(rec);
+        }
+    }
+    out
+}
+
+/// A withheld attempt's spool record: the stage that refused it and why (never output text), so
+/// `adage-exec doctor` and `adage review` can say what went wrong ([`crate::last_withheld`]).
+fn withheld(route: &str, stage: &str, reason: &str) -> Value {
+    json!({ "route": route, "level": "e1", "withheld": stage, "reason": crate::reason_text(reason) })
 }
 
 /// The oracle's view of a declared field.
@@ -74,6 +297,7 @@ pub fn data_type(f: &FieldSpec) -> DataType {
         FieldType::Bool => DataType::Bool,
         FieldType::Enum => DataType::Enum(f.values.clone()),
         FieldType::Pattern => DataType::Pattern(f.regex.clone().unwrap_or_default()),
+        FieldType::Text => DataType::Text { max: f.max.unwrap_or(DEFAULT_TEXT).min(MAX_TEXT) },
     }
 }
 
@@ -89,7 +313,7 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
     let home = &turn.paths.root;
     let store = match Store::load(&approvals::path(home)) {
         Ok(s) => s,
-        Err(_) => return Err(vec![withheld("*", "approvals")]),
+        Err(e) => return Err(vec![withheld("*", "approvals", &format!("the approvals file is unreadable: {e:#}"))]),
     };
     let label = |d: &Directive| format!("{}/{}", d.track, d.route);
     let grant = |d: &Directive| -> Option<&Approval> {
@@ -100,7 +324,8 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
     }
     let started = Instant::now();
     let mut records = Vec::new();
-    let pol = policy::load(home).map_err(|_| vec![withheld("*", "policy")])?;
+    let pol = policy::load(home)
+        .map_err(|e| vec![withheld("*", "policy", &format!("the execution policy is unreadable: {e:#}"))])?;
     let cap = sandbox::detect();
     let table = CommandTable::load();
     let cas = Some(home.join("cas")).filter(|p| p.is_dir());
@@ -123,36 +348,41 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
             continue;
         };
         let name = label(d);
-        let fail = |mut records: Vec<Value>, stage: &str| {
-            records.push(withheld(&name, stage));
+        let fail = |mut records: Vec<Value>, stage: &str, reason: &str| {
+            records.push(withheld(&name, stage, reason));
             records
         };
         let Some(ir) = route::find(turn.index, turn.repo_key, &d.track, &d.route) else {
-            return Err(fail(records, "route"));
+            return Err(fail(records, "route", "the index holds no such route for this repository"));
         };
         let plan = match route::plan(ir, turn.index, turn.root, &tracks, Level::E1, a.terms.as_ref(), &table) {
             Ok(p) => p,
-            Err(_) => return Err(fail(records, "route")),
+            Err(e) => return Err(fail(records, "route", &e)),
         };
         let mut req = plan.request;
         match route::bound_inputs(&req.argv, &d.text) {
             Some(inputs) => req.inputs = inputs,
-            None => return Err(fail(records, "bind")),
+            None => {
+                return Err(fail(records, "bind", "the directive's command line does not match the route's template"))
+            }
         }
         // All E1 runs of one event together stay within E1's longest wall timeout.
         let left = limits::E1_MAX_WALL_MS.saturating_sub(started.elapsed().as_millis() as u64);
         if left < req.profile.limits.wall_ms {
-            return Err(fail(records, "limits"));
+            let why = format!("{left} ms left of the event's {} ms for prefetches", limits::E1_MAX_WALL_MS);
+            return Err(fail(records, "limits", &why));
         }
         let delivered = match run::execute(&req, &ctx) {
             Ok(x) => x,
-            Err(r) => return Err(fail(records, r.stage)),
+            Err(r) => return Err(fail(records, r.stage, &r.reason)),
         };
         let fields: Vec<(String, DataType)> =
             req.output.fields.iter().map(|(k, f)| (k.clone(), data_type(f))).collect();
         let decl = (req.output.mode == OutputMode::Typed).then_some(fields.as_slice());
-        if !check_data_block(&d.route, &delivered.block, decl, Some(turn.root), &ctx.canaries).is_empty() {
-            return Err(fail(records, "oracle"));
+        let violations = check_data_block(&d.route, &delivered.block, decl, Some(turn.root), &ctx.canaries);
+        if !violations.is_empty() {
+            let why: Vec<String> = violations.iter().map(|v| v.reason.clone()).collect();
+            return Err(fail(records, "oracle", &format!("the safety oracle refused the block: {}", why.join("; "))));
         }
         // Exit predicates, on the projected fields.
         let projected: BTreeMap<String, Value> = payload(&delivered.block)
@@ -164,17 +394,26 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
             .iter()
             .find(|(f, v)| projected.get(f.as_str()).and_then(|x| x.as_str()) == Some(v.as_str()))
             .and_then(|(f, v)| render::e1_exit_note(f, v));
-        let Some(text) = render::wrap_directive_e1(d, &delivered.block, note.as_deref()) else {
-            return Err(fail(records, "render"));
+        // The lookup's own text came through (not only the paths it links): the agent need not
+        // run it again.
+        let whole = req
+            .output
+            .fields
+            .iter()
+            .any(|(k, f)| f.ty == FieldType::Text && projected.get(k).is_some_and(|v| v.is_string()));
+        let Some(text) = render::wrap_directive_e1(d, &delivered.block, note.as_deref(), whole) else {
+            return Err(fail(records, "render", "the data block is not one whole <adage-data> block"));
         };
         texts.push(text);
         let mut rec = serde_json::to_value(&delivered.record).unwrap_or(Value::Null);
         rec["route"] = json!(name);
         records.push(rec);
     }
-    if texts.join("\n\n").len() > turn.max_context {
+    let size = texts.join("\n\n").len();
+    if size > turn.max_context {
         return Err({
-            records.push(withheld("*", "size"));
+            let why = format!("{size} bytes with the data blocks, over the harness's {} bytes", turn.max_context);
+            records.push(withheld("*", "size", &why));
             records
         });
     }

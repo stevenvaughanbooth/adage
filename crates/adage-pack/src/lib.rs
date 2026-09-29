@@ -17,23 +17,26 @@
 //!
 //! A pack is inert: nothing in it grants execution. [`Pack::load`] reads one as untrusted input
 //! (strict files, strict schema, semantic validation, then the closure, which must equal
-//! `CLOSURE` byte for byte); [`Pack::write`] writes the canonical form; [`upgrade_track`] turns a
-//! v1 track directory into a pack.
+//! `CLOSURE` byte for byte); [`Pack::write`] writes the canonical form; [`from_track_dir`] turns a
+//! local track directory into a pack.
 
+pub mod attest;
 pub mod bind;
 pub mod closure;
+pub mod convert;
 pub mod digest;
 pub mod instincts;
 pub mod model;
+pub mod procedure;
 pub mod types;
-pub mod upgrade;
 pub mod validate;
+pub mod vendor;
 
 pub use bind::{bind, BindEnv, Binding, BoundRoute, Status, Target};
 pub use closure::Closure;
+pub use convert::{from_track_dir, from_track_dir_with, Converted};
 pub use digest::{digest_dir, pack_digest, route_exec_digest, sign_dir, verify_dir, NAMESPACE};
 pub use model::*;
-pub use upgrade::{upgrade_track, upgrade_track_with, Upgraded};
 
 use anyhow::{bail, Context, Result};
 use std::collections::BTreeMap;
@@ -51,6 +54,8 @@ pub struct Pack {
     pub scripts: BTreeMap<String, Vec<u8>>,
     pub evidence: Option<PackEvidence>,
     pub attestations: BTreeMap<String, serde_json::Value>,
+    /// `procedure.json`: the procedure a trained pack was compiled from ([`procedure`]).
+    pub procedure: Option<procedure::Procedure>,
 }
 
 impl Pack {
@@ -82,7 +87,8 @@ impl Pack {
         types: BTreeMap<String, TypeDef>,
         scripts: BTreeMap<String, Vec<u8>>,
     ) -> Result<Pack> {
-        let mut p = Pack { manifest, routes, types, scripts, evidence: None, attestations: BTreeMap::new() };
+        let mut p =
+            Pack { manifest, routes, types, scripts, evidence: None, attestations: BTreeMap::new(), procedure: None };
         p.routes.sort_by(|a, b| a.id.cmp(&b.id));
         Pack::from_parsed(p.parsed())
     }
@@ -103,6 +109,7 @@ impl Pack {
             scripts: parsed.scripts,
             evidence: parsed.evidence,
             attestations: parsed.attestations,
+            procedure: parsed.procedure,
         })
     }
 
@@ -114,6 +121,7 @@ impl Pack {
             scripts: self.scripts.clone(),
             evidence: self.evidence.clone(),
             attestations: self.attestations.clone(),
+            procedure: self.procedure.clone(),
             closure: None,
         }
     }
@@ -146,6 +154,9 @@ impl Pack {
         }
         for (id, a) in &self.attestations {
             f.insert(format!("attestations/{id}.json"), json_file(a));
+        }
+        if let Some(p) = &self.procedure {
+            f.insert(procedure::PROCEDURE.to_string(), json_file(&serde_json::to_value(p)?));
         }
         f.insert(CLOSURE.to_string(), self.closure()?.render().into_bytes());
         Ok(f)
@@ -184,7 +195,7 @@ impl Pack {
                 }
             }
         }
-        for stale in [SIG, EVIDENCE] {
+        for stale in [SIG, EVIDENCE, procedure::PROCEDURE] {
             if !files.contains_key(stale) && dir.join(stale).is_file() {
                 std::fs::remove_file(dir.join(stale))?;
             }

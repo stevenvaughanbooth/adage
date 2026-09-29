@@ -13,7 +13,7 @@
    "import_path": "adage_harbor:AdageClaudeCode",
    "model_name": "anthropic/claude-sonnet-4-5",
    "kwargs": {
-    "arm": "holdout",
+    "arm": "control",
     "disable_web_search": true
    }
   }

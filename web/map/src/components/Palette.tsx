@@ -73,7 +73,7 @@ export function Palette({ graph, open, onClose, onShortcuts }: { graph: Graph | 
                     onSelect={run(() => setUrl({ reflex: routeKey(r), view: "map" }, true))}
                     className={`${ITEM} h-11`}
                   >
-                    <Lamp strength={strength(r.aspect)} hollow={l === "nascent"} glow={l !== "nascent"} />
+                    <Lamp strength={strength(r.strength)} hollow={l === "nascent"} glow={l !== "nascent"} />
                     <KindGlyph instinct={isInstinct(r)} />
                     <span className="shrink-0 font-mono text-[13.5px]">
                       <Hl text={r.id} q={q.trim()} />

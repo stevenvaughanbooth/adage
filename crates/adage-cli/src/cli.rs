@@ -7,7 +7,7 @@
 //! `main` handles it first, on the hook's fast path.
 //!
 //! Words follow the lexicon (docs/lexicon.md): traces, reflexes, instincts; `sense`,
-//! `condition`, `map`, `delegate`; `review strengthen | weaken | extinguish`.
+//! `condition`, `map`, `delegate`; `review strengthen | weaken | extinguish | delegate | revoke`.
 
 use adage_term::{Role, Theme};
 use clap::builder::styling::Styles;
@@ -57,6 +57,8 @@ pub enum Command {
     /// Reflexes waiting for a person, and the decisions you make about them.
     #[command(args_conflicts_with_subcommands = true)]
     Review(ReviewArgs),
+    /// What Adage saves in this repository, measured against control sessions.
+    Savings(SavingsArgs),
 
     // ------------------------------------------------------------------ learning
     /// What your agents actually do, read from past traces (read-only).
@@ -67,6 +69,9 @@ pub enum Command {
     Report(JsonArgs),
     /// Adage's live state as a graph (JSON for tools; the map draws it).
     Graph(GraphArgs),
+    /// Compile a skill into one reviewed pack of reflexes (runs adage-train).
+    #[command(disable_help_flag = true)]
+    Train(TrainArgs),
 
     // ------------------------------------------------------------------ sharing
     /// Build and sign a pack from a track, to share it.
@@ -75,7 +80,8 @@ pub enum Command {
     Add(AddArgs),
 
     // ------------------------------------------------------------------ execution
-    /// Let hooks run delegated reflexes (E1 prefetch), or stop them.
+    /// Let hooks run delegated reflexes (E1 prefetch, E2 actions), or stop them.
+    #[command(args_conflicts_with_subcommands = true)]
     Delegate(DelegateArgs),
 
     // ------------------------------------------------------------------ setup
@@ -206,10 +212,10 @@ pub enum ReviewDecision {
     Pin(Decide),
     /// Keep a pinned reflex and silence its proposed change.
     Dismiss(Decide),
-    /// Approve a reflex for delegated execution (E1 prefetch).
+    /// Approve a reflex for delegated execution (E1 prefetch or E2 action).
     Delegate(DelegateRoute),
     /// Withdraw a reflex's delegation.
-    Undelegate(UndelegateRoute),
+    Revoke(RevokeRoute),
 }
 
 #[derive(Args, Debug)]
@@ -229,9 +235,18 @@ pub struct DelegateRoute {
     pub track: String,
     /// The reflex id.
     pub reflex: String,
-    /// Execution level (only `e1`).
+    /// Execution level: `e1` (prefetch) or `e2` (an action).
     #[arg(long, value_name = "LEVEL")]
     pub level: String,
+    /// E2: files the action may write, as globs (repeatable).
+    #[arg(long, value_name = "GLOB", action = clap::ArgAction::Append)]
+    pub outputs: Vec<String>,
+    /// E2: files the action reads that key its cache, as globs (repeatable).
+    #[arg(long, value_name = "GLOB", action = clap::ArgAction::Append)]
+    pub cache: Vec<String>,
+    /// E2: what the action does to the repository.
+    #[arg(long, value_name = "EFFECT", value_parser = ["verify", "regenerate"])]
+    pub effect: Option<String>,
     /// Pass the raw output through instead of selected fields.
     #[arg(long)]
     pub raw: bool,
@@ -253,7 +268,7 @@ pub struct DelegateRoute {
 }
 
 #[derive(Args, Debug)]
-pub struct UndelegateRoute {
+pub struct RevokeRoute {
     /// The track (name, or path).
     pub track: String,
     /// The reflex id.
@@ -304,7 +319,7 @@ pub struct ConditionArgs {
     /// Session outcomes, as a JSON file of {session: bool}.
     #[arg(long, value_name = "FILE")]
     pub outcomes: Option<PathBuf>,
-    /// Force every trace into this repository key.
+    /// Force every trace into this repository key (with --instincts-only: the key to bind under).
     #[arg(long, value_name = "KEY")]
     pub repo: Option<String>,
     /// Low thresholds, for the sample scenario.
@@ -316,9 +331,6 @@ pub struct ConditionArgs {
     /// Do not bind instincts.
     #[arg(long)]
     pub no_instincts: bool,
-    /// The conditioning engine.
-    #[arg(long, value_name = "ENGINE", value_parser = ["miners", "shadow", "graph"])]
-    pub engine: Option<String>,
     /// Bind only instincts, from the repository's files, with no traces (day 0).
     #[arg(long)]
     pub instincts_only: bool,
@@ -332,6 +344,9 @@ pub struct ConditionArgs {
     pub repo_root: Option<PathBuf>,
     #[arg(long, value_name = "MS", hide = true)]
     pub after: Option<u64>,
+    /// With --auto: the first run in a repository (hooks pass it).
+    #[arg(long, hide = true, requires = "auto")]
+    pub bootstrap: bool,
     /// Machine-readable output.
     #[arg(long)]
     pub json: bool,
@@ -372,8 +387,15 @@ pub struct ShareArgs {
     /// Acknowledge vendored scripts that reach the network or read secrets.
     #[arg(long)]
     pub ack_scripts: bool,
-    #[arg(long, value_name = "FORMAT", value_parser = ["pack", "v1"], hide = true)]
-    pub format: Option<String>,
+    /// Vendor the repository scripts reflexes run into the pack.
+    #[arg(long)]
+    pub vendor: bool,
+    /// Attach self-reported test results (JSONL; repeatable).
+    #[arg(long, value_name = "FILE", action = clap::ArgAction::Append)]
+    pub attest: Vec<PathBuf>,
+    /// The repository checkout scripts are pinned against (default: the current one).
+    #[arg(long, value_name = "DIR")]
+    pub repo_root: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -387,21 +409,49 @@ pub struct AddArgs {
 
 #[derive(Args, Debug)]
 pub struct DelegateArgs {
-    /// Stop: hooks call adage again (delegations are kept).
-    #[arg(long, conflicts_with = "status")]
-    pub off: bool,
-    /// Show registrations and delegated reflexes instead of changing anything.
-    #[arg(long)]
-    pub status: bool,
-    /// The adage-exec binary.
-    #[arg(long, value_name = "PATH")]
-    pub bin: Option<PathBuf>,
-    /// The repository whose hook registrations change (default: the current one).
-    #[arg(long, value_name = "DIR")]
-    pub repo: Option<PathBuf>,
-    /// Machine-readable output (with --status).
+    /// With no subcommand: the status, as machine-readable output.
     #[arg(long)]
     pub json: bool,
+    /// With no subcommand: the repository whose status to show (default: the current one).
+    #[arg(long, value_name = "DIR")]
+    pub repo: Option<PathBuf>,
+    /// With no subcommand, `status`.
+    #[command(subcommand)]
+    pub action: Option<DelegateAction>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum DelegateAction {
+    /// Hooks call adage-exec, which runs delegated reflexes (grants are per repository).
+    On {
+        /// The adage-exec binary.
+        #[arg(long, value_name = "PATH")]
+        bin: Option<PathBuf>,
+        /// The repository whose hook registrations change (default: the current one).
+        #[arg(long, value_name = "DIR")]
+        repo: Option<PathBuf>,
+    },
+    /// Hooks call adage again (delegations are kept).
+    Off {
+        /// The repository whose hook registrations change (default: the current one).
+        #[arg(long, value_name = "DIR")]
+        repo: Option<PathBuf>,
+    },
+    /// Registrations and delegated reflexes; changes nothing.
+    Status {
+        /// Machine-readable output.
+        #[arg(long)]
+        json: bool,
+        /// The repository (default: the current one).
+        #[arg(long, value_name = "DIR")]
+        repo: Option<PathBuf>,
+    },
+    /// Rewrites to the project's environment (PreToolUse), on their own switch.
+    Rewrites {
+        /// `on` or `off`.
+        #[arg(value_parser = ["on", "off"])]
+        state: String,
+    },
 }
 
 #[derive(ValueEnum, Clone, Debug)]
@@ -419,9 +469,12 @@ pub struct InstallArgs {
     /// Print the registration (the default).
     #[arg(long, conflicts_with = "write")]
     pub print: bool,
-    /// Write it.
+    /// Write it (a diff is shown first, and a terminal asks before writing).
     #[arg(long)]
     pub write: bool,
+    /// With --write: write without asking.
+    #[arg(long, short = 'y', requires = "write")]
+    pub yes: bool,
     /// This repository only (project, the default) or every repository (user).
     #[arg(long, value_parser = ["project", "user"])]
     pub scope: Option<String>,
@@ -441,14 +494,24 @@ pub struct ModelsArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum ModelsAction {
-    /// Download the pinned model and verify it.
-    Fetch,
+    /// Download a pinned model and verify it (default: the one selected).
+    Fetch {
+        /// The model (`adage models status` lists them).
+        key: Option<String>,
+    },
     /// Install from a directory you downloaded yourself.
     Install {
-        /// Holds model.safetensors, tokenizer.json and config.json.
+        /// Holds model.safetensors, tokenizer.json and config.json, or an unpacked npm package.
         dir: PathBuf,
+        /// The model it is (default: detected).
+        key: Option<String>,
     },
-    /// Whether it is installed.
+    /// Choose what hooks embed prompts with: auto, hashed, or a model key.
+    Use {
+        /// auto, hashed, potion-base-8m or potion-code-16m-v2.
+        which: String,
+    },
+    /// What hooks embed with now, and every known model.
     Status,
 }
 
@@ -491,6 +554,24 @@ pub struct CompletionsArgs {
 }
 
 #[derive(Args, Debug)]
+pub struct SavingsArgs {
+    /// The repository (default: the current one).
+    #[arg(long, value_name = "PATH")]
+    pub repo: Option<PathBuf>,
+    /// Machine-readable output.
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct TrainArgs {
+    /// `<SKILL.md>`, `accept <name>`, `plan`, `--plan <file>` or `report <run-dir>`
+    /// (`adage train --help` lists every option).
+    #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+    pub args: Vec<String>,
+}
+
+#[derive(Args, Debug)]
 pub struct EvalArgs {
     /// Arguments for the evaluator (`adage eval --help`).
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
@@ -505,17 +586,32 @@ pub fn renamed(args: &[String]) -> Option<&'static str> {
     Some(match (first, second) {
         ("learn", _) => "adage condition",
         ("survey", _) => "adage sense",
-        ("exec", Some("disable")) => "adage delegate --off",
-        ("exec", Some("status")) => "adage delegate --status",
-        ("exec", _) => "adage delegate",
+        ("exec", Some("disable")) => "adage delegate off",
+        ("exec", Some("status")) => "adage delegate status",
+        ("exec", _) => "adage delegate on",
+        ("delegate", _) if args.iter().any(|a| a == "--off") => "adage delegate off",
+        ("delegate", _) if args.iter().any(|a| a == "--status") => "adage delegate status",
         ("graph", _) if args.iter().any(|a| a == "--serve") => "adage map",
         ("review", Some("promote")) => "adage review strengthen",
         ("review", Some("demote")) => "adage review weaken",
         ("review", Some("reject" | "retire")) => "adage review extinguish",
         ("review", Some("allow-exec")) => "adage review delegate",
-        ("review", Some("revoke-exec")) => "adage review undelegate",
+        ("review", Some("revoke-exec" | "undelegate")) => "adage review revoke",
         _ => return None,
     })
+}
+
+/// The old spelling [`renamed`] matched, as the person wrote it (`graph --serve`, `review promote`).
+pub fn renamed_from(args: &[String]) -> String {
+    match (args[0].as_str(), args.get(1)) {
+        ("graph", _) => "graph --serve".to_string(),
+        ("delegate", _) => {
+            let old = args.iter().find(|a| *a == "--off" || *a == "--status").map_or("", String::as_str);
+            format!("delegate {old}")
+        }
+        (v @ ("review" | "exec"), Some(s)) => format!("{v} {s}"),
+        (v, _) => v.to_string(),
+    }
 }
 
 /// A clap usage error (unknown flag, missing argument, bad value) in the output grammar: the
@@ -599,6 +695,7 @@ fn overview(t: &Theme) -> StyledStr {
                 ("ui", "the full-screen app"),
                 ("map", "open the map in your browser"),
                 ("review", "reflexes waiting for you"),
+                ("savings", "what Adage saves here"),
             ],
         ),
         (
@@ -608,10 +705,11 @@ fn overview(t: &Theme) -> StyledStr {
                 ("condition", "condition reflexes from traces"),
                 ("report", "what Adage said, and what agents did"),
                 ("graph", "Adage's state as a graph"),
+                ("train", "compile a skill into reflexes"),
             ],
         ),
         ("Sharing", &[("share", "build and sign a pack"), ("add", "verify and install a pack")]),
-        ("Execution", &[("delegate", "let hooks run delegated reflexes")]),
+        ("Execution", &[("delegate", "let hooks run delegated reflexes, and rewrites")]),
         (
             "Setup",
             &[
@@ -651,7 +749,11 @@ pub fn command(t: &Theme) -> clap::Command {
         ))
         .before_help(overview(t))
         .after_help(StyledStr::from(format!(
-            "{tip}Start with{tip:#} adage init{tip}. `adage <command> --help` explains each command.{tip:#}"
+            "{tip}Start with{tip:#} adage init{tip}. `adage <command> --help` explains each command.{tip:#}\n\
+             {tip}Bare `adage` prints the status card; `adage ui` opens the app.{tip:#}\n\
+             {tip}Environment: ADAGE_HOME (data directory), ADAGE_DISABLE=1 (kill switch),\n\
+             ADAGE_ARM=treated|control, ADAGE_CONTROL (control share), ADAGE_AUTO_LEARN=0|1,\n\
+             ADAGE_ALLOW_NONINTERACTIVE=1 (share and add in CI).{tip:#}"
         )))
 }
 
@@ -718,7 +820,8 @@ mod tests {
     fn every_flag_a_module_reads_is_declared() {
         // Flags a module reads that are not command-line flags (arguments it passes to curl, or
         // the top-level --version it handles for scripts).
-        let not_flags: BTreeSet<&str> = ["--max-filesize", "--proto", "--version", "--help", "--serve"].into();
+        let not_flags: BTreeSet<&str> =
+            ["--max-filesize", "--proto", "--connect-timeout", "--version", "--help", "--serve"].into();
         let table: &[(&str, &[&str])] = &[
             ("add.rs", &["add"]),
             ("autolearn.rs", &["condition"]),
@@ -731,7 +834,9 @@ mod tests {
             ("review.rs", &["review"]),
             ("share.rs", &["share"]),
             ("share_pack.rs", &["share"]),
-            ("survey.rs", &["sense"]),
+            ("sense.rs", &["sense"]),
+            ("savings.rs", &["savings"]),
+            ("models.rs", &["models"]),
             ("main.rs", &["condition", "status", "report", "delegate"]),
             ("ui/mod.rs", &["watch", "ui"]),
         ];
@@ -798,7 +903,7 @@ mod tests {
         for old in ["learn", "survey", "exec"] {
             assert!(command(&Theme::plain()).try_get_matches_from(["adage", old]).is_err(), "{old}");
         }
-        for old in ["promote", "demote", "reject", "allow-exec"] {
+        for old in ["promote", "demote", "reject", "allow-exec", "undelegate"] {
             assert!(
                 command(&Theme::plain()).try_get_matches_from(["adage", "review", old, "t", "r"]).is_err(),
                 "{old}"
@@ -813,7 +918,45 @@ mod tests {
         assert_eq!(renamed(&a(&["review", "promote", "t", "r"])), Some("adage review strengthen"));
         assert_eq!(renamed(&a(&["graph", "--serve"])), Some("adage map"));
         assert_eq!(renamed(&a(&["graph", "--json"])), None);
+        assert_eq!(renamed(&a(&["review", "undelegate", "t", "r"])), Some("adage review revoke"));
+        assert_eq!(renamed(&a(&["delegate", "--off"])), Some("adage delegate off"));
+        assert_eq!(renamed(&a(&["delegate", "off"])), None);
+        assert_eq!(renamed_from(&a(&["delegate", "--bin", "x", "--off"])), "delegate --off");
+        assert_eq!(renamed_from(&a(&["review", "promote", "t", "r"])), "review promote");
         assert_eq!(renamed(&a(&["condition"])), None);
+    }
+
+    #[test]
+    fn hook_spawned_conditioning_parses() {
+        // adage-hook starts `adage condition --auto --repo-root <r> [--bootstrap] [--after ms]`.
+        let m = command(&Theme::plain()).try_get_matches_from([
+            "adage",
+            "condition",
+            "--auto",
+            "--repo-root",
+            "/r",
+            "--bootstrap",
+            "--after",
+            "1500",
+        ]);
+        assert!(m.is_ok(), "{m:?}");
+        assert!(command(&Theme::plain()).try_get_matches_from(["adage", "condition", "--engine", "graph"]).is_err());
+    }
+
+    #[test]
+    fn delegate_takes_subcommands() {
+        for args in [
+            &["delegate"][..],
+            &["delegate", "on", "--bin", "/x"],
+            &["delegate", "off"],
+            &["delegate", "status", "--json"],
+            &["delegate", "--json"],
+            &["delegate", "rewrites", "off"],
+        ] {
+            let m = command(&Theme::plain()).try_get_matches_from(std::iter::once(&"adage").chain(args));
+            assert!(m.is_ok(), "{args:?}: {m:?}");
+        }
+        assert!(command(&Theme::plain()).try_get_matches_from(["adage", "delegate", "rewrites", "maybe"]).is_err());
     }
 
     #[test]

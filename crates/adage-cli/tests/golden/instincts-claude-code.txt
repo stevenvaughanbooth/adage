@@ -5,16 +5,16 @@
 (nothing)
 
 ### PostToolUseFailure
-{"hookSpecificOutput":{"additionalContext":"<adage-signal track=\"github-com-acme-billing/instincts@0.1.0\" route=\"dead-end-d41b1e\" aspect=\"yellow\" kind=\"dead-ends\" origin=\"instinct\">\nThat failed. In this repository, run this instead:\n  make test\nIgnore this if the user is asking for something else.\nAdage default for Python repositories (from this repository's Makefile); not requested by the user.\n</adage-signal>","hookEventName":"PostToolUseFailure"}}
+{"hookSpecificOutput":{"additionalContext":"<adage-reflex track=\"github-com-acme-billing/instincts@0.1.0\" route=\"dead-end-d41b1e\" strength=\"prime\" kind=\"avoid\" origin=\"instinct\">\nThat failed. In this repository, run this instead:\n  make test\nIgnore this if the user is asking for something else.\nAdage default for Python repositories (from this repository's Makefile); not requested by the user.\n</adage-reflex>","hookEventName":"PostToolUseFailure"}}
 
 ### PostToolBatch
 (nothing)
 
 ### PostToolBatch
-{"hookSpecificOutput":{"additionalContext":"<adage-signal track=\"github-com-acme-billing/instincts@0.1.0\" route=\"finish-line-e7e809\" aspect=\"yellow\" kind=\"finish-line\" origin=\"instinct\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nMakefile declares this. Ignore this if this is an exploratory or draft change.\nAdage default for repositories like this one (from this repository's Makefile); not requested by the user.\n</adage-signal>","hookEventName":"PostToolBatch"}}
+{"hookSpecificOutput":{"additionalContext":"<adage-reflex track=\"github-com-acme-billing/instincts@0.1.0\" route=\"finish-line-e7e809\" strength=\"prime\" kind=\"obligation\" origin=\"instinct\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nMakefile declares this. Ignore this if this is an exploratory or draft change.\nAdage default for repositories like this one (from this repository's Makefile); not requested by the user.\n</adage-reflex>","hookEventName":"PostToolBatch"}}
 
 ### PostToolBatch
-{"hookSpecificOutput":{"additionalContext":"<adage-signal track=\"github-com-acme-billing/instincts@0.1.0\" route=\"instinct-u4-23bde3\" aspect=\"yellow\" kind=\"advice\" origin=\"instinct\">\nIn this repository, acme/generated/models.py is generated: change its inputs and run make gen rather than editing it by hand.\nAdage default for repositories like this one (from this repository's Makefile); not requested by the user.\n</adage-signal>","hookEventName":"PostToolBatch"}}
+{"hookSpecificOutput":{"additionalContext":"<adage-reflex track=\"github-com-acme-billing/instincts@0.1.0\" route=\"instinct-u4-23bde3\" strength=\"prime\" kind=\"advise\" origin=\"instinct\">\nIn this repository, acme/generated/models.py is generated: change its inputs and run make gen rather than editing it by hand.\nAdage default for repositories like this one (from this repository's Makefile); not requested by the user.\n</adage-reflex>","hookEventName":"PostToolBatch"}}
 
 ### Stop
 (nothing)

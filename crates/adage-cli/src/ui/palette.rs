@@ -52,7 +52,7 @@ pub struct Entry {
     pub key: Option<&'static str>,
     pub run: Run,
     /// A reflex's strength and instinct flag, for its lamp and glyph.
-    pub lamp: Option<(adage_tracks::Aspect, bool)>,
+    pub lamp: Option<(adage_tracks::Strength, bool)>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -91,10 +91,10 @@ pub fn entries(s: &AppState) -> Vec<Entry> {
             v.push(Entry {
                 section: Section::Reflexes,
                 title: row.id.clone(),
-                note: format!("{} · {} · {}", Theme::strength_word(row.aspect), row.lifecycle(), row.count()),
+                note: format!("{} · {} · {}", Theme::strength_word(row.strength), row.lifecycle(), row.count()),
                 key: None,
                 run: Run::Reflex(row.reference.clone(), row.id.clone()),
-                lamp: Some((row.aspect, row.instinct)),
+                lamp: Some((row.strength, row.instinct)),
             });
         }
     }
@@ -247,7 +247,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, p: &Palette, t: &Theme) {
         }];
         let base = if chosen { t.bold() } else { Style::default() };
         if let Some((a, instinct)) = e.lamp {
-            spans.push(Span::styled(format!("{} ", t.aspect_mark(a)), t.aspect(a)));
+            spans.push(Span::styled(format!("{} ", t.strength_mark(a)), t.strength(a)));
             spans.push(Span::styled(
                 format!("{} ", t.glyph(if instinct { Glyph::Instinct } else { Glyph::Reflex })),
                 t.accent(),

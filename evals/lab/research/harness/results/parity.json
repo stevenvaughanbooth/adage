@@ -1,0 +1,170 @@
+{
+ "click post-hoc": {
+  "sessions": 24,
+  "rust": 0.4904,
+  "rust_ci": [
+   0.2046,
+   0.7806
+  ],
+  "python": 0.4904,
+  "python_ci": [
+   0.2046,
+   0.7806
+  ],
+  "mismatched_sessions": []
+ },
+ "attrs post-hoc": {
+  "sessions": 24,
+  "rust": 2.0227,
+  "rust_ci": [
+   1.0721,
+   3.0179
+  ],
+  "python": 2.0227,
+  "python_ci": [
+   1.0721,
+   3.0179
+  ],
+  "mismatched_sessions": []
+ },
+ "marshmallow post-hoc": {
+  "sessions": 18,
+  "rust": 1.2144,
+  "rust_ci": [
+   0.3857,
+   2.1544
+  ],
+  "python": 1.2144,
+  "python_ci": [
+   0.3857,
+   2.1544
+  ],
+  "mismatched_sessions": []
+ },
+ "vue-core post-hoc": {
+  "sessions": 16,
+  "rust": 0.0,
+  "rust_ci": [
+   0.0,
+   0.0
+  ],
+  "python": 0.0,
+  "python_ci": [
+   0.0,
+   0.0
+  ],
+  "mismatched_sessions": []
+ },
+ "click-sonnet5 post-hoc": {
+  "sessions": 8,
+  "rust": 0.0,
+  "rust_ci": [
+   0.0,
+   0.0
+  ],
+  "python": 0.0,
+  "python_ci": [
+   0.0,
+   0.0
+  ],
+  "mismatched_sessions": []
+ },
+ "vue-core-sonnet5 post-hoc": {
+  "sessions": 8,
+  "rust": 0.0,
+  "rust_ci": [
+   0.0,
+   0.0
+  ],
+  "python": 0.0,
+  "python_ci": [
+   0.0,
+   0.0
+  ],
+  "mismatched_sessions": []
+ },
+ "click pre-emptive": {
+  "sessions": 24,
+  "rust": 1.6458,
+  "rust_ci": [
+   1.3552,
+   1.9773
+  ],
+  "python": 1.6458,
+  "python_ci": [
+   1.3552,
+   1.9773
+  ],
+  "mismatched_sessions": []
+ },
+ "attrs pre-emptive": {
+  "sessions": 24,
+  "rust": 3.3078,
+  "rust_ci": [
+   2.1056,
+   4.4259
+  ],
+  "python": 3.3078,
+  "python_ci": [
+   2.1056,
+   4.4259
+  ],
+  "mismatched_sessions": []
+ },
+ "marshmallow pre-emptive": {
+  "sessions": 18,
+  "rust": 2.9855,
+  "rust_ci": [
+   1.7134,
+   4.145
+  ],
+  "python": 2.9855,
+  "python_ci": [
+   1.7134,
+   4.145
+  ],
+  "mismatched_sessions": []
+ },
+ "vue-core pre-emptive": {
+  "sessions": 16,
+  "rust": 0.0,
+  "rust_ci": [
+   0.0,
+   0.0
+  ],
+  "python": 0.0,
+  "python_ci": [
+   0.0,
+   0.0
+  ],
+  "mismatched_sessions": []
+ },
+ "click-sonnet5 pre-emptive": {
+  "sessions": 8,
+  "rust": 1.3626,
+  "rust_ci": [
+   0.7404,
+   1.987
+  ],
+  "python": 1.3626,
+  "python_ci": [
+   0.7404,
+   1.987
+  ],
+  "mismatched_sessions": []
+ },
+ "vue-core-sonnet5 pre-emptive": {
+  "sessions": 8,
+  "rust": 0.0,
+  "rust_ci": [
+   0.0,
+   0.0
+  ],
+  "python": 0.0,
+  "python_ci": [
+   0.0,
+   0.0
+  ],
+  "mismatched_sessions": []
+ }
+}

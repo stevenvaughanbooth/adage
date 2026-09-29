@@ -57,7 +57,7 @@ fn s<'a>(v: &'a Value, path: &[&str]) -> Option<&'a str> {
 
 fn own_text(t: &str) -> bool {
     let t = t.trim_start();
-    t.starts_with("<adage-signal ") || t.starts_with("Adage finish-line check:")
+    t.starts_with("<adage-reflex ") || t.starts_with("Adage finish-line check:")
 }
 
 /// Parse one export. `None` for sub-agent sessions and sessions without a usable prompt.
@@ -86,6 +86,7 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
                     let text = s(p, &["text"]).unwrap_or("");
                     let synthetic = p.get("synthetic").and_then(|x| x.as_bool()) == Some(true);
                     if synthetic {
+                        signals.at(uses.len());
                         signals.note(text);
                     } else if p.get("ignored").and_then(|x| x.as_bool()) != Some(true)
                         && !text.trim().is_empty()
@@ -120,6 +121,8 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
                         Some("error") => (s(st, &["error"]).unwrap_or("").to_string(), true),
                         _ => continue, // pending or running: the call never finished
                     };
+                    // Delivered with this call's result: it steers the calls after it.
+                    signals.at(uses.len() + 1);
                     signals.note(&output);
                     any = true;
                     uses.push((
@@ -143,10 +146,12 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
     let prompt = prompt?;
     let cwd_path = PathBuf::from(&cwd);
     let root = repo::find_root(&cwd_path).unwrap_or(cwd_path);
-    let repo_key = repo_override.map(str::to_string).unwrap_or_else(|| repo::repo_key(&root));
+    let repo_key = repo::key_for(&root, repo_override);
     let root_str = root.to_string_lossy().to_string();
     let mut steps = Vec::new();
+    let mut first_step: Vec<u32> = Vec::with_capacity(uses.len());
     for (turn, at, native, input, output, failed) in uses {
+        first_step.push(steps.len() as u32);
         for (tool, mut input) in from_opencode(&native, &input) {
             if let Some(p) = input.get("file_path").and_then(|v| v.as_str()) {
                 if !p.is_empty() && !p.starts_with('/') {
@@ -164,6 +169,7 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
         }
     }
     let prompts = prompts.anchor(&steps);
+    let influence = signals.anchor(&first_step, steps.len());
     Some(Session {
         id,
         root,
@@ -174,10 +180,11 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
         steps,
         steered: signals.steered,
         directed: signals.directed,
-        steered_kinds: signals.kinds,
+        influence,
         outcome: None,
         harness: OPENCODE.into(),
         prompts,
+        ending: Default::default(),
     })
 }
 

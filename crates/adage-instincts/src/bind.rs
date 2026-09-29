@@ -4,14 +4,14 @@
 //!
 //! 1. **One directive per trigger.** Detectors run in [`BIND_ORDER`]; a trigger (a failing
 //!    command, an edited glob) already claimed by an earlier instinct is not bound again.
-//! 2. **Ids the miner would derive.** A dead-end-shaped route directing `S` takes
+//! 2. **Ids the learner would derive.** A dead-end-shaped route directing `S` takes
 //!    `dead-end-<stable(key(S))>` (further triggers for the same `S` add the trigger's key); a
 //!    finish line takes `finish-line-<stable(glob, command)>`. So a learned route for the same
 //!    behaviour has the same id, and the index's "learned wins" de-duplication applies.
 //! 3. **Learned routes win.** An instinct is skipped if a learned route has its id, avoids its
 //!    command, directs something (the same or different) for the same trigger, or a person
 //!    rejected its id in review.
-//! 4. **Capped.** Yellow, probation (an environment step: draft, which waits for review, as
+//! 4. **Capped.** Prime, forming (an environment step: nascent, which waits for review, as
 //!    Design O11 requires), no slots, provenance `instinct:<pack>@<version>`, no evidence.
 //! 5. **Validated.** Every route passes [`adage_tracks::io::validate`] plus the checks here.
 //!
@@ -25,7 +25,7 @@ use crate::files::safe_rel;
 use crate::safety::{command_key, rank, stable};
 use adage_core::{CommandTable, Effect};
 use adage_tracks::{
-    Aspect, Evidence, Gauge, Manifest, Origin, Route, RouteState, Scope, Step, Track, TrackInfo, Trigger,
+    Evidence, Gauge, Manifest, Origin, Route, RouteState, Scope, Step, Strength, Track, TrackInfo, Trigger,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -60,7 +60,7 @@ pub struct BindResult {
     /// `(instinct id, reason)` for each candidate not bound, and each file the binder skipped
     /// (instinct id `declared`).
     pub skipped: Vec<(String, String)>,
-    /// Route id → the instinct that bound it (route ids equal the miner's, so the id alone does
+    /// Route id → the instinct that bound it (route ids equal the learner's, so the id alone does
     /// not say).
     pub origins: BTreeMap<String, String>,
 }
@@ -115,11 +115,12 @@ pub fn bind_with(
     bind_facts(&facts, existing, rejections, opts)
 }
 
-/// A trigger's identity for "one directive per trigger": a failure trigger is its command,
-/// whatever the signature.
+/// A trigger's identity for "one directive per trigger": a failure trigger is its command and
+/// the signature that says why it failed (`pytest: command not found` and `DJANGO_SETTINGS_MODULE`
+/// are different failures of `pytest`, with different answers).
 fn trigger_slot(t: &Trigger) -> String {
     match t {
-        Trigger::AfterFailure { command, .. } => format!("failure:{command}"),
+        Trigger::AfterFailure { command, signature } => format!("failure:{command}\u{0}{signature}"),
         Trigger::AfterCommand { command } => format!("command:{command}"),
         Trigger::AfterEdit { paths } => format!("edit:{paths}"),
         other => serde_json::to_string(other).unwrap_or_default(),
@@ -129,6 +130,9 @@ fn trigger_slot(t: &Trigger) -> String {
 fn describe(c: &RouteCandidate) -> String {
     match (&c.trigger, &c.runner) {
         (Trigger::AfterEdit { paths }, _) => format!("after editing {paths}, {}", c.command),
+        (Trigger::AfterFailure { signature, .. }, Some(r)) => {
+            format!("after {r} fails with {signature:?}, {}", c.command)
+        }
         (_, Some(r)) => format!("after {r} fails, {}", c.command),
         _ => c.command.clone(),
     }
@@ -174,7 +178,7 @@ pub fn bind_facts(
                     continue;
                 }
             };
-            // Reserved even if this candidate is not bound: a learned route holding the miner's id
+            // Reserved even if this candidate is not bound: a learned route holding the learner's id
             // covers this trigger, not the others that direct the same command.
             ids.insert(rid.clone());
             if rejections.contains(&rid) {
@@ -217,8 +221,8 @@ pub fn bind_facts(
                 step: Step::Advise { template: a.template_id, slots: a.slots },
                 slots: vec![],
                 effect: Effect::Observe,
-                aspect: Aspect::Yellow,
-                state: RouteState::Probation,
+                strength: Strength::Prime,
+                state: RouteState::Forming,
                 exit: vec![],
                 evidence: evidence(cat, &a.instinct, a.ecosystem, a.declared),
                 authored: false,
@@ -239,21 +243,34 @@ pub fn bind_facts(
 }
 
 fn route_id(c: &RouteCandidate, used: &BTreeSet<String>) -> Option<String> {
-    let id = match &c.id {
+    // Further failures of the same command, with other signatures, add the signature.
+    let signature = match &c.trigger {
+        Trigger::AfterFailure { signature, .. } => Some(signature.as_str()),
+        _ => None,
+    };
+    let (first, then) = match &c.id {
         IdHint::DeadEnd { wkey } => {
             let first = format!("dead-end-{}", stable(&[wkey]));
+            let Trigger::AfterFailure { command, .. } = &c.trigger else {
+                return (!used.contains(&first)).then_some(first);
+            };
             if !used.contains(&first) {
                 return Some(first);
             }
-            let Trigger::AfterFailure { command, .. } = &c.trigger else { return None };
-            format!("dead-end-{}", stable(&[wkey, command]))
+            (
+                format!("dead-end-{}", stable(&[wkey, command])),
+                signature.map(|s| format!("dead-end-{}", stable(&[wkey, command, s]))),
+            )
         }
-        IdHint::FinishLine { glob } => format!("finish-line-{}", stable(&[glob, &c.command])),
+        IdHint::FinishLine { glob } => (format!("finish-line-{}", stable(&[glob, &c.command])), None),
         IdHint::Own { tag, parts } => {
-            format!("instinct-{tag}-{}", stable(&parts.iter().map(String::as_str).collect::<Vec<_>>()))
+            let mut p: Vec<&str> = parts.iter().map(String::as_str).collect();
+            let first = format!("instinct-{tag}-{}", stable(&p));
+            p.extend(signature);
+            (first, signature.map(|_| format!("instinct-{tag}-{}", stable(&p))))
         }
     };
-    (!used.contains(&id)).then_some(id)
+    [Some(first), then].into_iter().flatten().find(|id| !used.contains(id))
 }
 
 /// Why a learned (or imported, or authored) route overrides this candidate, if one does.
@@ -320,9 +337,9 @@ fn build(c: &RouteCandidate, id: &str, cat: &Catalogue) -> Route {
         step: Step::Run { command: c.command.clone() },
         slots: vec![],
         effect: c.effect,
-        aspect: Aspect::Yellow,
+        strength: Strength::Prime,
         // Design O11: an environment step is delivered only on a route a person approved.
-        state: if c.effect == Effect::Environment { RouteState::Draft } else { RouteState::Probation },
+        state: if c.effect == Effect::Environment { RouteState::Nascent } else { RouteState::Forming },
         exit: vec![c.exit.clone()],
         evidence: evidence(cat, &c.instinct, c.ecosystem, c.declared.clone()),
         authored: false,
@@ -364,8 +381,8 @@ pub fn check_route(r: &Route, cat: &Catalogue, table: &CommandTable) -> Result<(
         routes: vec![r.clone()],
     };
     adage_tracks::io::validate(&t).map_err(|e| format!("fails track validation: {e:#}"))?;
-    if r.aspect != Aspect::Yellow {
-        return Err("an instinct is yellow".into());
+    if r.strength != Strength::Prime {
+        return Err("an instinct is prime".into());
     }
     let Step::Run { command } = &r.step else { return Err("an instinct directs a run step".into()) };
     if !plain_command(command) || !r.slots.is_empty() {
@@ -376,8 +393,8 @@ pub fn check_route(r: &Route, cat: &Catalogue, table: &CommandTable) -> Result<(
         return Err(format!("{command:?} classifies as {}", actual.as_str()));
     }
     match (r.effect, r.state) {
-        (Effect::Observe | Effect::Verify | Effect::Regenerate, RouteState::Probation) => {}
-        (Effect::Environment, RouteState::Draft) => {}
+        (Effect::Observe | Effect::Verify | Effect::Regenerate, RouteState::Forming) => {}
+        (Effect::Environment, RouteState::Nascent) => {}
         (e, s) => return Err(format!("effect {} in state {s:?} may not be bound", e.as_str())),
     }
     match &r.trigger {
@@ -389,6 +406,11 @@ pub fn check_route(r: &Route, cat: &Catalogue, table: &CommandTable) -> Result<(
         {
             return Err("failure trigger is not a plain command key".into())
         }
+        // Any non-zero exit includes a test failing on its assertions, which no other command
+        // fixes: an instinct fires only on the failure it answers.
+        Trigger::AfterFailure { signature, .. } if signature.trim().is_empty() => {
+            return Err("a failure trigger without a signature would fire on any failure".into())
+        }
         Trigger::AfterEdit { .. } | Trigger::AfterFailure { .. } => {}
         _ => return Err("an instinct is reactive: after a failure or an edit".into()),
     }
@@ -399,7 +421,7 @@ pub fn check_route(r: &Route, cat: &Catalogue, table: &CommandTable) -> Result<(
 }
 
 /// An advisory route: track validation (which checks the template and each slot's contract),
-/// then the instinct rules: yellow, observe, probation, a repository-relative glob or a plain
+/// then the instinct rules: prime, observe, forming, a repository-relative glob or a plain
 /// command key for its trigger, the instinct provenance, and nothing invisible.
 pub fn check_advisory(r: &Route, cat: &Catalogue, table: &CommandTable) -> Result<(), String> {
     let Step::Advise { template, slots } = &r.step else { return Err("not an advisory step".into()) };
@@ -418,13 +440,19 @@ pub fn check_advisory(r: &Route, cat: &Catalogue, table: &CommandTable) -> Resul
         routes: vec![r.clone()],
     };
     adage_tracks::io::validate(&t).map_err(|e| format!("fails track validation: {e:#}"))?;
-    if (r.aspect, r.effect, r.state) != (Aspect::Yellow, Effect::Observe, RouteState::Probation) {
-        return Err("advice is yellow, observe, in probation".into());
+    if (r.strength, r.effect, r.state) != (Strength::Prime, Effect::Observe, RouteState::Forming) {
+        return Err("advice is prime, observe, in forming".into());
     }
     match &r.trigger {
         Trigger::AfterEdit { paths } if safe_glob(paths) => {}
         Trigger::AfterCommand { command } if command.starts_with("exec ") && plain_command(&command[5..]) => {}
-        _ => return Err("advisory trigger is not an edit glob or a plain command key".into()),
+        // After a failure with this signature (never any failure: see `check_route`).
+        Trigger::AfterFailure { command, signature }
+            if command.starts_with("exec ")
+                && plain_command(&command[5..])
+                && !signature.trim().is_empty()
+                && adage_tracks::io::safe_text(signature) => {}
+        _ => return Err("advisory trigger is not an edit glob, a plain command key or a signed failure".into()),
     }
     if !r.evidence.provenance.starts_with("instinct:") {
         return Err("provenance must name the instinct pack".into());

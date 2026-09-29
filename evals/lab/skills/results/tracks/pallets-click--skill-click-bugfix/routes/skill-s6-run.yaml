@@ -1,0 +1,37 @@
+{
+ "id": "skill-s6-run",
+ "summary": "Before you finish",
+ "trigger": {
+  "on": "after_edit",
+  "paths": "src/click/*.py"
+ },
+ "step": {
+  "do": "run",
+  "command": ".venv/bin/python repro.py"
+ },
+ "slots": [],
+ "effect": "environment",
+ "strength": "prime",
+ "state": "firm",
+ "exit": [
+  {
+   "when": "exploratory_change"
+  }
+ ],
+ "evidence": {
+  "opportunities": 3,
+  "support": 1,
+  "days": 1,
+  "successes": 0,
+  "deviations_failed": 0,
+  "rate": 0.3333,
+  "lower_bound": 0.0615,
+  "median_position": 0.0,
+  "turns_saved": 0.0,
+  "provenance": "authored",
+  "models": [
+   "claude-haiku-4-5-20251001"
+  ]
+ },
+ "authored": true
+}

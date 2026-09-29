@@ -11,7 +11,7 @@
 read at harbor commit 3c82380) with Adage's Claude Code hooks added for the arms that have them:
 
   off        no hooks, no binary, no Adage files: plain Claude Code (the baseline)
-  holdout    hooks installed, `ADAGE_ARM=holdout`: every decision is made and spooled, nothing is
+  control    hooks installed, `ADAGE_ARM=control`: every decision is made and spooled, nothing is
              delivered (crates/adage-cli/src/hook.rs forces the arm from ADAGE_ARM). The control.
   adage      hooks installed, `ADAGE_ARM=treated`: directives delivered via additionalContext
   agents-md  no hooks; the learned routes' summaries are appended to the system prompt
@@ -58,8 +58,8 @@ import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-ARMS = ("off", "holdout", "adage", "agents-md")
-HOOK_ARMS = ("holdout", "adage")
+ARMS = ("off", "control", "adage", "agents-md")
+HOOK_ARMS = ("control", "adage")
 REMOTE_BIN = PurePosixPath("/installed-agent/adage/bin/adage")
 # The Claude Code events Adage registers (crates/adage-cli/src/harness/claude.rs `settings`).
 CLAUDE_EVENTS = ("SessionStart", "UserPromptSubmit", "PostToolBatch", "PostToolUseFailure", "Stop", "SessionEnd")
@@ -142,11 +142,11 @@ ISOLATION_ENV = {
 
 def arm_env(arm: str, adage_home: str) -> dict:
     """Environment for one arm. Mirrors evals/live/runner.py `env_for`: hook arms force the arm
-    (ADAGE_ARM wins over ADAGE_HOLDOUT/runtime.holdout in hook.rs) and freeze learning."""
+    (ADAGE_ARM wins over ADAGE_CONTROL/runtime.control in hook.rs) and freeze learning."""
     check_arm(arm)
     env = dict(ISOLATION_ENV)
     if arm in HOOK_ARMS:
-        env.update({"ADAGE_HOME": adage_home, "ADAGE_ARM": "holdout" if arm == "holdout" else "treated",
+        env.update({"ADAGE_HOME": adage_home, "ADAGE_ARM": "control" if arm == "control" else "treated",
                     "ADAGE_AUTO_LEARN": "0"})
     return env
 
@@ -358,7 +358,7 @@ except ImportError:  # pragma: no cover - exercised only where Harbor is install
 
 if HARBOR:  # pragma: no cover
     class AdageClaudeCodeOptions(ClaudeCodeOptions):
-        arm: str = Field(default="off", description="off | holdout | adage | agents-md")
+        arm: str = Field(default="off", description="off | control | adage | agents-md")
         adage_bin: str | None = Field(default=None, description="Host path of a static linux adage binary.")
         adage_home: str | None = Field(default=None, description="Host path of the frozen ADAGE_HOME (.tgz or dir).")
         adage_repo_key: str | None = Field(default=None, description="Key the index was learned under.")

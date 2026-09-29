@@ -187,8 +187,13 @@ const HEADLINE = [
   { label: "all 10 · adage − control", diff: -8, lo: -13, hi: -1.5, holm: "0.029" },
   { label: "all 10 · instincts − control", diff: -1, lo: -4, hi: 3, holm: "1.0" },
 ];
-// L0 bench (docs/evals.md, docs/tracks/track-g-graph-engine.md on the rebrand branch).
-const L0 = { miners: 0.6307, graphG3: 0.9759, graphG5: 0.6148 };
+// L0 bench (docs/evals.md "Baseline and gate", evals/baselines/l0-core.jsonl): the graph engine,
+// the only learner, on the core suite.
+const L0 = { graph: 0.6307 };
+// The per-install estimate (crates/adage-cli/src/savings.rs): NEED_CONTROL, NEED_TREATED, RESAMPLES.
+const SAVINGS = { control: 10, treated: 30, resamples: 2000 };
+
+const SAVINGS_NOTE = `For a whole repository, adage savings estimates what a session costs with Adage against the control arm (API-list-equivalent dollars, model turns, turns to the first edit), weighted by each session's recorded arm propensity, with a ${SAVINGS.resamples.toLocaleString("en")}-resample bootstrap interval. It states dollars only once ${SAVINGS.control} control and ${SAVINGS.treated} treated sessions have finished; before that it shows counts, and beside it always how often each arm ended asking the person for help.`;
 
 // ------------------------------------------------------------------ the scene
 
@@ -580,16 +585,16 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
           title: "Your reflexes against control",
           body: `Each row is one of your reflexes: a dot per trace where it applied, lit where the agent took its path (or, for an inhibit, hit the dead end). Treated above, control below. A share is stated only with at least ${MIN_TREATED} treated and ${MIN_CONTROL} control traces; ${
             rows.filter((r) => r.enough).length ? `${rows.filter((r) => r.enough).length} of ${rows.length} have that many.` : `none of your ${rows.length} has that many yet, so these numbers are too small to conclude anything.`
-          }${k0 ? ` In all: took the known path ${k0.treated.k}/${k0.treated.n} treated, ${k0.control.k}/${k0.control.n} control.` : ""}`,
+          }${k0 ? ` In all: took the known path ${k0.treated.k}/${k0.treated.n} treated, ${k0.control.k}/${k0.control.n} control.` : ""} ${SAVINGS_NOTE}`,
           chips: [{ text: `≥ ${MIN_TREATED} treated · ≥ ${MIN_CONTROL} control` }, { text: "counts are distinct traces" }],
         }
       : {
           title: "Where nothing was learned, nothing changed",
-          body: `In ${haiku - learnedHaiku} of ${haiku} Haiku sandboxes the agents found the lookup in too few training traces, so no reflex was learned; there, instincts alone showed no measurable effect (turns −1, CI [−4, 3]). No learned reflex was false. Offline, before any agent runs, the L0 bench scores a learner by J = turns saved − 2.0 × false directives + 1.0 × route F1, per session.`,
+          body: `In ${haiku - learnedHaiku} of ${haiku} Haiku sandboxes the agents found the lookup in too few training traces, so no reflex was learned; there, instincts alone showed no measurable effect (turns −1, CI [−4, 3]). No learned reflex was false. Offline, before any agent runs, the L0 bench scores a learner by J = turns saved − 2.0 × false directives + 1.0 × route F1, per session. ${SAVINGS_NOTE}`,
           chips: [
             { text: `nothing learned: ${haiku - learnedHaiku}/${haiku}` },
             { text: "0 false learned reflexes" },
-            { text: `L0 J: miners ${L0.miners} · graph ${L0.graphG3} (G3), ${L0.graphG5} (G5)` },
+            { text: `L0 J ${L0.graph} · core suite` },
           ],
         },
   ];
@@ -620,7 +625,7 @@ function repoRow(r: Route): RepoRow {
   const avoid = r.step.kind === "avoid";
   const ratio = (a: Route["arms"]["treated"]) => ({ k: a ? (avoid ? a.hit_avoided : a.followed) : 0, n: a?.applied ?? 0 });
   const t = ratio(r.arms.treated);
-  const c = ratio(r.arms.holdout);
+  const c = ratio(r.arms.control);
   return { r, word: avoid ? "hit the dead end" : "took the path", t, c, enough: t.n >= MIN_TREATED && c.n >= MIN_CONTROL && share(t) !== null };
 }
 
@@ -723,7 +728,7 @@ export const measure: Chapter = {
   status: "Built",
   kind: "built",
   summary:
-    "Effects are measured treated against control on the same tasks. The task is the unit, and the tests shuffle arms rather than assume a distribution.",
+    "Effects are measured treated against control on the same tasks. The task is the unit, and the tests shuffle arms rather than assume a distribution. On your machine, adage savings compares your own treated and control sessions, and states dollars only once there are 10 control and 30 treated sessions.",
   source: "crates/adage-eval · evals/live · evals/corpus",
   usesRepo: true,
   build,

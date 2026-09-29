@@ -52,7 +52,8 @@ def classify_status(result, tool_calls, turns, score, scorer_ok=True, max_turns=
     """(status, reason) of one finished run.
 
     infra_error   the harness failed: no result message, an error result other than the turn
-                  limit, or a session that did nothing (no tool calls in at most one turn)
+                  limit, or a session that did nothing (no tool calls in at most one turn, and no
+                  reply: one that only answered, e.g. asked what the ticket means, is `ok`, failed)
     scorer_error  the scorer crashed or printed no verdict (`passed`)
     censored      the session hit max_turns: its outcome is what it had done by then
     ok            everything else"""
@@ -64,6 +65,10 @@ def classify_status(result, tool_calls, turns, score, scorer_ok=True, max_turns=
         detail = str(result.get("result") or "")[:200]
         return "infra_error", f"harness error ({subtype or 'is_error'})" + (f": {detail}" if detail else "")
     if not tool_calls and (turns or 0) <= 1:
+        # A successful reply with text but no tool call is the agent's own choice (real Haiku
+        # sessions answered "What does W-1043 entail?" and stopped): a failed task, not the harness's.
+        if subtype == "success" and str(result.get("result") or "").strip():
+            return "ok", "answered without a tool call"
         return "infra_error", f"no tool calls in {turns or 0} turn(s)"
     if not scorer_ok or not isinstance(score, dict) or "passed" not in score:
         return "scorer_error", "the scorer crashed or printed no verdict"
@@ -156,13 +161,13 @@ def _task_mean_diff(groups):
     return sum(sum(x) / len(x) - sum(y) / len(y) for x, y in groups) / len(groups)
 
 
-def task_mean_diff(points, a="adage", b="holdout"):
+def task_mean_diff(points, a="adage", b="control"):
     """Mean over tasks of (task mean of a - task mean of b), or None if no task has both arms."""
     groups = _by_task(points, a, b)
     return _task_mean_diff(groups) if groups else None
 
 
-def cluster_perm_p(points, a="adage", b="holdout", n=10000, seed=7):
+def cluster_perm_p(points, a="adage", b="control", n=10000, seed=7):
     """Two-sided permutation test stratified by task: arm labels are shuffled within each task (the
     randomisation unit), and the statistic is the mean over tasks of the difference in task means.
     `points` is [(task, arm, value)]. None with fewer than two tasks that have both arms."""
@@ -181,7 +186,7 @@ def cluster_perm_p(points, a="adage", b="holdout", n=10000, seed=7):
     return (hits + 1) / (n + 1)
 
 
-def task_signflip_p(points, a="adage", b="holdout", n=10000, seed=7):
+def task_signflip_p(points, a="adage", b="control", n=10000, seed=7):
     """Two-sided sign-flip test on the per-task differences in means: the task is the only unit, so
     it asks whether the effect would hold for new tasks, not only new runs of these. Exact up to 16
     tasks (its smallest p is 2 / 2^tasks), Monte Carlo above. None with fewer than two tasks."""
@@ -205,7 +210,7 @@ def _quantile(sorted_v, q):
     return sorted_v[lo] + (sorted_v[hi] - sorted_v[lo]) * (i - lo)
 
 
-def cluster_boot_ci(points, agg, a="adage", b="holdout", n=2000, seed=11, level=0.95):
+def cluster_boot_ci(points, agg, a="adage", b="control", n=2000, seed=11, level=0.95):
     """Percentile bootstrap CI for agg(a) - agg(b) that resamples whole tasks with replacement (a
     task's runs stay together). None with fewer than two tasks that have both arms."""
     groups = _by_task(points, a, b)
@@ -237,7 +242,7 @@ def holm(pvals):
     return out
 
 
-def compare(runs, max_turns=None, a="adage", b="holdout", n_perm=10000, n_boot=2000):
+def compare(runs, max_turns=None, a="adage", b="control", n_perm=10000, n_boot=2000):
     """Per-arm statistics of held-out runs (records with `arm`, `task` and `metrics`): each arm's
     aggregate and n (with the runs that had no value and the runs whose value was restricted), and
     between arms `a` and `b` the difference of the aggregates with a task-bootstrap 95% CI, the
@@ -284,7 +289,7 @@ def fmt(x, digits=3):
     return "-" if x is None else f"{x:.{digits}g}" if isinstance(x, float) else str(x)
 
 
-def table(cmp, a="adage", b="holdout"):
+def table(cmp, a="adage", b="control"):
     """compare()'s result as a plain-text table, with the Holm-adjusted p-values."""
     lines = [f"{'metric':<26} {a:>9} {b:>9} {'diff':>9} {'95% CI (tasks)':>20} {'n':>7} {'tasks':>5} "
              f"{'p':>7} {'p_holm':>7} {'p_tasks':>7}"]
@@ -299,12 +304,12 @@ def table(cmp, a="adage", b="holdout"):
 
 
 def stats_for(runs, max_turns=None):
-    """compare() in this page's summary format (without_adage / with_adage; n as [adage, holdout])."""
+    """compare() in this page's summary format (without_adage / with_adage; n as [adage, control])."""
     cmp = compare(runs, max_turns)
-    pair = lambda d: [d.get("adage", 0), d.get("holdout", 0)]  # noqa: E731
+    pair = lambda d: [d.get("adage", 0), d.get("control", 0)]  # noqa: E731
     out = {}
     for name, r in cmp["metrics"].items():
-        out[name] = {"without_adage": r.get("holdout"), "with_adage": r.get("adage"), "aggregate": r["aggregate"],
+        out[name] = {"without_adage": r.get("control"), "with_adage": r.get("adage"), "aggregate": r["aggregate"],
                      "diff": r.get("diff"), "ci95": r.get("ci95"), "n_tasks": r.get("n_tasks"),
                      "p_value": r.get("p_value"), "p_holm": r.get("p_holm"), "p_tasks": r.get("p_tasks"),
                      "n": pair(r["n"]), "n_missing": pair(r["n_missing"]), "n_imputed": pair(r["n_imputed"])}
@@ -313,7 +318,7 @@ def stats_for(runs, max_turns=None):
 
 def summarise(state):
     runs = [r for r in state["runs"].values() if r.get("metrics")]
-    all_ev = [r for r in runs if r["phase"] == "eval" and r.get("arm") in ("holdout", "adage")]
+    all_ev = [r for r in runs if r["phase"] == "eval" and r.get("arm") in ("control", "adage")]
     rounds = sorted({r.get("round", 1) for r in all_ev})
     latest = rounds[-1] if rounds else 1
     ev = [r for r in all_ev if r.get("round", 1) == latest]
@@ -330,10 +335,10 @@ def summarise(state):
         "training_runs": sum(1 for r in runs if r["phase"] == "train"),
         "training_pass_rate": avg([1.0 if r["metrics"].get("passed") else 0.0 for r in runs if r["phase"] == "train"
                                    and status_of(r["metrics"], max_turns)[0] not in EXCLUDED]),
-        "eval_runs": {a: sum(1 for r in ev if r["arm"] == a) for a in ("holdout", "adage")},
+        "eval_runs": {a: sum(1 for r in ev if r["arm"] == a) for a in ("control", "adage")},
         "learned": state.get("learn"),
         "routes": [
-            {"track": r["track"], "id": r["route"]["id"], "aspect": r["route"]["aspect"], "effect": r["route"]["effect"],
+            {"track": r["track"], "id": r["route"]["id"], "strength": r["route"]["strength"], "effect": r["route"]["effect"],
              "trigger": r["route"]["trigger"], "step": r["route"]["step"], "evidence": r["route"]["evidence"]}
             for r in state.get("tracks", [])
         ],
@@ -348,7 +353,7 @@ def summarise(state):
         summary["rounds"][str(rd)] = {
             "metrics": metrics, "runs_by_status": by_status,
             "leaky": bool(info.get("leaky", rd > 1 and "leaky" not in state)),
-            "routes": [x["route"]["id"] + ":" + x["route"]["aspect"] for x in (info.get("tracks") or [])],
+            "routes": [x["route"]["id"] + ":" + x["route"]["strength"] for x in (info.get("tracks") or [])],
         }
     followed = sum(1 for r in ev if r["arm"] == "adage" for d in r["metrics"].get("adage", []) if d.get("kind") == "followed")
     emitted = sum(1 for r in ev if r["arm"] == "adage" for d in r["metrics"].get("adage", []) if d.get("kind") == "directives")

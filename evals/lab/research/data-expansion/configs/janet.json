@@ -1,0 +1,115 @@
+{
+ "name": "dx-janet",
+ "repo_key": "github.com/janet-lang/janet",
+ "workdir": "repo",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/repobench/sandbox.py",
+  "janet",
+  "{task}",
+  "{dir}",
+  "--arm",
+  "{arm}",
+  "--context",
+  "{repo}/evals/repobench/context/janet.md"
+ ],
+ "score": [
+  "python3",
+  "{repo}/evals/repobench/score.py",
+  "janet",
+  "{task}",
+  "{dir}"
+ ],
+ "prompts": [
+  "Fix {id}."
+ ],
+ "task_prompts": {
+  "janet-e05bc7eb": "When a function uses the result of a `break` expression (e.g. assigns it to a variable, or passes it as an argument), the compiler can emit invalid bytecode. It runs fine when called directly, but marshalling the compiled function fails. For example:\n\n```\n(defn f [&] (def x (break 1)))\n(unmarshal (marshal f))\n```\n\nThis errors during unmarshal even though `f` itself works. Similar problems occur with forms like `(foo (break (foo)))` or nested `(break (break (break)))`. Please investigate and fix the compiler so functions using `break` results always produce valid, marshallable bytecode.",
+  "janet-56f33f51": "Redefining a top-level binding with `def` where the new value's expression references the old value of that same name gives the wrong result. For example:\n\n```\n(def x \"A\")\n(def x (if (= nil x) \"B\" x))\n```\n\nSince `x` was not `nil` at the time of the second `def`, `x` should still end up equal to `\"A\"`, but it doesn't. Please investigate and fix this.",
+  "janet-43ecd4f2": "Weak containers created with `array/weak`, `table/weak`, `table/weak-keys`, or `table/weak-values` lose their weakness after being marshalled and unmarshalled \u2014 the round-tripped copy behaves like an ordinary (strong) container, so entries whose only other references are collected by the GC are not cleared from it the way they are in the original. Prototypes attached to weak tables should also survive the round trip. Please fix marshalling so unmarshalled containers preserve the weak-keys/weak-values/weak semantics of the original.",
+  "janet-60d9f977": "peg's `split` rule can hang forever (or OOM) when the pattern used for splitting can match a zero-width string. For example, `(peg/match ~(split \"\" (capture (to -1))) \"hello there friends\")` never returns, and `(peg/match ~(split \",\" (capture 0)) \"abc123,,,,\")` also misbehaves. Splitting should terminate and produce the captured pieces even when the separator/capture pattern matches an empty string at some position. Please fix this.",
+  "janet-e0a0e2ed": "`os/proc-wait` doesn't respect cancellation via `ev/with-deadline`: if a subprocess is spawned and waited on inside a deadline block, the deadline expiring should abort the wait with an error rather than letting the waited-on code continue running past the deadline (or causing scheduling issues). For example, spawning a process that sleeps several seconds and calling `(ev/with-deadline 0.01 (os/proc-wait p) ...)` should raise a \"deadline expired\" error immediately and not execute the code after `os/proc-wait`. Please fix this.",
+  "janet-9b9f2a17": "When `bundle/install` fails, the error message doesn't distinguish between different failure causes, making it hard to diagnose problems. Specifically, installing a bundle directory that is missing a `bundle.janet`/`bundle/init.janet` script should raise a clear error saying so (e.g. \"bundle must contain bundle.janet or bundle/init.janet\"), and this should be distinct from the error raised when a bundle's `:check` hook itself fails (e.g. reporting the actual check failure message like \"Check failed!\"). Currently both cases seem to produce the same generic error. Please fix this.",
+  "janet-d5a56caa": "Destructuring `def` or `var` forms that use a splice (`;`) on the right-hand side incorrectly raise a compile error, even though the code is valid. For example, `(def [a] [;[1]]) a` and `(var [a] [;[1]]) a` should both work fine, as should `(def (n) [(splice [])]) n`, but they currently fail. An optimization that avoids building an intermediate tuple appears to be too aggressive about flagging splices as invalid destructuring targets. Please fix this.",
+  "janet-d47f8271": "The arity linting for functions that combine `&opt` and `&named` parameters doesn't correctly validate calls in several edge cases, e.g. when `&opt` params come before `&named`, or when there's no leading positional/optional param at all. For example:\n\n```\n(defn f [x &opt y &named z] [x y z])\n(f 1 2 :z)        ; should be flagged as a lint error (missing value for :z)\n(f 1 2 :z 4 5)     ; should be flagged as a lint error (extra trailing arg)\n(f 1 2 :z 10)      ; should compile fine\n```\n\nPlease fix the compiler's arity/keyword-argument linting so these cases involving `&opt` combined with `&named` are handled correctly.",
+  "janet-c6b802b0": "The pretty-printing formatter (`%m`/`%M` in `string/format`, and peg error printing) incorrectly eats/collapses explicit newlines and doesn't correctly handle the case where the print formatter doesn't start at the beginning of the buffer. For example, `(string/format \"   %M\" @[])` should produce `\"   @[]\"` but doesn't preserve the leading spaces correctly, and multi-line output like peg match failure traces (e.g. from `(peg/match ~(* (constant @[]) (??)) \"a\")` with `*err*` capturing output) loses its intended newline structure. Please fix the pretty printer so leading content before a `%m`/`%M` specifier and explicit newlines in formatted output are preserved correctly.",
+  "janet-ffb83301": "Calling `ev/thread` with a malformed argument (e.g. something that isn't a proper function value, or a function whose arity doesn't match the arguments being passed) causes memory corruption instead of a clean error. For example:\n\n```\n(ev/thread in)\n(ev/thread (fn [x y] x) 1)\n```\n\nBoth of these should just raise a normal error rather than corrupting state. Please fix `ev/thread`'s argument validation to reject bad thread construction gracefully."
+ },
+ "train": {
+  "tasks": [
+   "janet-e05bc7eb",
+   "janet-56f33f51",
+   "janet-43ecd4f2",
+   "janet-60d9f977",
+   "janet-e0a0e2ed"
+  ],
+  "repeats": 1
+ },
+ "eval": {
+  "tasks": [
+   "janet-9b9f2a17",
+   "janet-d5a56caa",
+   "janet-d47f8271",
+   "janet-c6b802b0",
+   "janet-ffb83301"
+  ],
+  "repeats": 1,
+  "arms": [
+   "control"
+  ]
+ },
+ "seed": 20260928,
+ "model": "claude-haiku-4-5-20251001",
+ "max_turns": 60,
+ "concurrency": 2,
+ "budget_usd": 4.5,
+ "host_auth": true,
+ "confine": true,
+ "learn_args": [
+  "--demo"
+ ],
+ "classify": {
+  "lookup": [],
+  "regen": [
+   "make generate",
+   "go generate",
+   "vitest -u",
+   "--update-snapshots"
+  ],
+  "verify": [
+   "pytest",
+   "vitest",
+   "go test",
+   "make test",
+   "npm test",
+   "npm run test",
+   "pnpm test",
+   "pnpm run test",
+   "pnpm vitest",
+   "tox",
+   "nox",
+   "node --test",
+   "unittest",
+   "go vet"
+  ],
+  "bash_edit": [
+   "sed -i",
+   "cat >",
+   "cat <<",
+   "tee ",
+   "write_text(",
+   "patch -p",
+   "git apply",
+   "perl -pi"
+  ],
+  "check_flags": []
+ },
+ "obligation": {
+  "paths": null
+ },
+ "labels": {
+  "lookup": "lookup",
+  "regen": "regenerate"
+ },
+ "split_digest": "3c3135cfb73237e38f2b69d7e28d4e4579140e5a7ed289041d828828978c0496"
+}

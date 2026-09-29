@@ -5,7 +5,7 @@
 //! TypeScript service whose incidents resolve only through `bin/fetch-incident`, whose `npm test`
 //! fails where `npm run check` works, and whose `registry/*.csv` edits need `npm run codegen`.
 //! Three agent sessions run side by side in each round — one follows every directive, one
-//! derails and trips the finish line, one is a holdout — and each hook call is a real `adage
+//! ignores and trips the finish line, one is a control — and each hook call is a real `adage
 //! hook claude <event>` run of this binary, so the spools hold real decisions. After each round a
 //! learning run is simulated: the track is updated, the index recompiled, and a `learn.log` line
 //! written in the live-learning format.
@@ -58,7 +58,15 @@ fn evidence(support: u32, opportunities: u32) -> Evidence {
     }
 }
 
-fn route(id: &str, summary: &str, trigger: Trigger, step: Step, effect: Effect, aspect: Aspect, ev: Evidence) -> Route {
+fn route(
+    id: &str,
+    summary: &str,
+    trigger: Trigger,
+    step: Step,
+    effect: Effect,
+    strength: Strength,
+    ev: Evidence,
+) -> Route {
     Route {
         id: id.into(),
         summary: summary.into(),
@@ -66,8 +74,8 @@ fn route(id: &str, summary: &str, trigger: Trigger, step: Step, effect: Effect, 
         step,
         slots: vec![],
         effect,
-        aspect,
-        state: RouteState::Active,
+        strength,
+        state: RouteState::Firm,
         exit: vec![Exit::IntentChanges],
         evidence: ev,
         authored: false,
@@ -85,7 +93,7 @@ pub fn track(round: usize) -> Track {
         Trigger::Prompt { span: SpanKind::Ticket },
         Step::Run { command: "bin/fetch-incident {item}".into() },
         Effect::Observe,
-        Aspect::Green,
+        Strength::Fire,
         evidence(24 + round as u32, 25 + round as u32),
     );
     lookup.slots = vec![Slot {
@@ -93,14 +101,14 @@ pub fn track(round: usize) -> Track {
         source: SlotSource::Prompt { span: SpanKind::Ticket },
         contract: Contract::Pattern { regex: r"^INC-\d{1,5}$".into() },
     }];
-    let linked_aspect = if round >= 1 { Aspect::Green } else { Aspect::Yellow };
+    let linked_strength = if round >= 1 { Strength::Fire } else { Strength::Prime };
     let mut linked = route(
         "read-linked-files",
         "the files an incident lists are read together, in one turn",
         Trigger::AfterCommand { command: lookup_key },
         Step::ReadBatch { slot: "files".into(), max: 5 },
         Effect::Observe,
-        linked_aspect,
+        linked_strength,
         evidence(9 + 4 * round as u32, 14 + 3 * round as u32),
     );
     linked.slots = vec![Slot {
@@ -114,7 +122,7 @@ pub fn track(round: usize) -> Track {
         Trigger::AfterEdit { paths: "registry/*.csv".into() },
         Step::Run { command: "npm run codegen".into() },
         Effect::Regenerate,
-        Aspect::Green,
+        Strength::Fire,
         evidence(18 + round as u32, 19 + round as u32),
     );
     let sig = "HARBOR_ENV is not set";
@@ -124,7 +132,7 @@ pub fn track(round: usize) -> Track {
         Trigger::AfterFailure { command: npm_test, signature: sig.into() },
         Step::Avoid { avoid: "npm test".into(), instead: "npm run check".into(), signature: sig.into() },
         Effect::Verify,
-        Aspect::Red,
+        Strength::Inhibit,
         evidence(6 + round as u32, 7 + round as u32),
     );
     Track {
@@ -260,12 +268,12 @@ fn sessions(repo: &Path, round: usize) -> Vec<Vec<Beat>> {
             hook(&b, "treated", "PostToolBatch", bash("npm run codegen")),
             hook(&b, "treated", "Stop", json!({ "stop_hook_active": true })),
         ],
-        // C: the holdout — Adage decides, logs, and says nothing.
+        // C: the control — Adage decides, logs, and says nothing.
         vec![
-            hook(&c, "holdout", "UserPromptSubmit", json!({ "prompt": format!("Please look at {}", inc(2)) })),
-            hook(&c, "holdout", "PostToolBatch", lookup(2)),
-            hook(&c, "holdout", "PostToolBatch", edit("registry/carriers.csv")),
-            hook(&c, "holdout", "Stop", json!({ "stop_hook_active": false })),
+            hook(&c, "control", "UserPromptSubmit", json!({ "prompt": format!("Please look at {}", inc(2)) })),
+            hook(&c, "control", "PostToolBatch", lookup(2)),
+            hook(&c, "control", "PostToolBatch", edit("registry/carriers.csv")),
+            hook(&c, "control", "Stop", json!({ "stop_hook_active": false })),
         ],
     ]
 }
@@ -296,7 +304,7 @@ fn run_hook(exe: &Path, home: &DemoHome, arm: &str, event: &str, payload: &Value
         // history (HOME is the demo's) and has nothing to add.
         .env("ADAGE_AUTO_LEARN", "0")
         .env_remove("ADAGE_DISABLE")
-        .env_remove("ADAGE_HOLDOUT")
+        .env_remove("ADAGE_CONTROL")
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -326,7 +334,7 @@ fn learn(home: &DemoHome, round: usize) {
     let mut changes = vec![json!({
         "route": "lookup-incident", "track": TRACK, "change": "evidence", "from": null, "to": null,
         "summary": format!(
-            "green work item route evidence {}/{} → {}/{} sessions",
+            "fire reflex evidence {}/{} → {}/{} traces",
             lookup.support - 1, lookup.opportunities - 1, lookup.support, lookup.opportunities
         ),
     })];
@@ -334,16 +342,16 @@ fn learn(home: &DemoHome, round: usize) {
         changes.insert(
             0,
             json!({
-                "route": "read-linked-files", "track": TRACK, "change": "aspect", "from": "yellow", "to": "green",
+                "route": "read-linked-files", "track": TRACK, "change": "strength", "from": "prime", "to": "fire",
                 "summary": format!(
-                    "linked files route yellow → green ({} of {} sessions, lower bound {:.2})",
+                    "reflex prime → fire ({} of {} traces, lower bound {:.2})",
                     linked.support, linked.opportunities, linked.lower_bound
                 ),
             }),
         );
     }
     let line = json!({
-        "ts": now_ms(), "kind": "learn", "trigger": "auto", "repo": REPO,
+        "ts": now_ms(), "kind": "condition", "trigger": "auto", "repo": REPO,
         "sessions_read": read, "sessions_used": used, "duration_ms": 640 + 90 * round as u64,
         "index_generation": generation, "changes": changes,
     });

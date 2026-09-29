@@ -1,9 +1,9 @@
 //! `adage eval types --end-to-end`: learned value types from learning to the hook (Track G G1
-//! gate). For each bundle or dataset, `adage condition`'s plan runs with `engine = graph` (demo
+//! gate). For each bundle or dataset, `adage condition`'s plan runs (demo
 //! thresholds, no instincts) on the sessions; the tracks it would write are compiled into an
-//! index (a draft is replayed as if a person approved it, which an environment-effect lookup
+//! index (a nascent is replayed as if a person approved it, which an environment-effect lookup
 //! needs before it is ever delivered); then the runtime decides every session's prompts, and a
-//! prompt naming each fresh holdout id and each near miss:
+//! prompt naming each fresh control id and each near miss:
 //!
 //! - **recall**: sessions that looked an item up (their lookup call's value is the truth) whose
 //!   prompt got the lookup directive with exactly that value; and fresh ids (in the prompt
@@ -87,13 +87,13 @@ pub fn run(
 ) -> Result<EndToEnd> {
     let mut out = EndToEnd::default();
     let home = tempfile::tempdir()?;
-    let cfg = LearnConfig { engine: "graph".into(), ..LearnConfig::demo() };
+    let cfg = LearnConfig::demo();
     let (_, planned) = adage_learn::plan(sessions.to_vec(), None, &home.path().join("tracks"), &cfg)?;
     let mut tracks: Vec<adage_tracks::Track> = planned.into_iter().map(|p| p.track).collect();
     for t in &mut tracks {
         for r in &mut t.routes {
-            if r.state == RouteState::Draft {
-                r.state = RouteState::Active;
+            if r.state == RouteState::Nascent {
+                r.state = RouteState::Firm;
             }
         }
     }

@@ -1,0 +1,53 @@
+{
+ "name": "launch-acme-e1",
+ "description": "Launch check: E1 prefetch of the approved wi-lookup (acme-billing), 3 held-out sessions with the prefetch (e1) vs 3 without (adage)",
+ "repo_key": "acme-billing",
+ "workdir": "acme-billing",
+ "sandbox": [
+  "python3",
+  "{repo}/demo/sandbox/generate.py",
+  "{dir}"
+ ],
+ "score": [
+  "python3",
+  "{repo}/demo/sandbox/score.py",
+  "{dir}",
+  "{task}"
+ ],
+ "prompts": [
+  "Pick up {id} and get it done.",
+  "Please work on {id}.",
+  "Can you take care of {id}?"
+ ],
+ "train": {
+  "tasks": [
+   "W-1041",
+   "W-1042",
+   "W-1043",
+   "W-1044",
+   "W-1045",
+   "W-1046"
+  ],
+  "repeats": 2
+ },
+ "eval": {
+  "tasks": [
+   "W-2041",
+   "W-2042",
+   "W-2043"
+  ],
+  "repeats": 1,
+  "arms": [
+   "adage",
+   "e1"
+  ]
+ },
+ "model": "claude-haiku-4-5-20251001",
+ "max_turns": 30,
+ "concurrency": 2,
+ "learn_args": [],
+ "budget_usd": 4.0,
+ "host_auth": true,
+ "confine": true,
+ "seed": 20260929
+}

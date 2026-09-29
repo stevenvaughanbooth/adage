@@ -29,6 +29,6 @@ expression: text
    ○ 1 reflex waits for review · adage review
 
 ─ health ─────────────────────────────────────────────────────────────────────────────────────────────────────
- + hooks claude    + 4 reflexes    + auto-condition    - intent model not fetched · adage models fetch
+ + hooks claude    + 4 reflexes    + auto-condition    ! no model · adage models fetch
 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
  p pause · f scope · / filter · enter inspect · m open map · ? keys                                    q quit

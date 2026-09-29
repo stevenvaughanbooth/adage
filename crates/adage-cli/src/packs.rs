@@ -5,7 +5,7 @@
 //! ```text
 //! $ADAGE_HOME/tracks/@imported/<owner>/<name>/                  the pack, exactly as verified
 //! $ADAGE_HOME/tracks/@imported/@bound/<owner>/<name>/<repo>/    one bound track per repository:
-//!     track.toml, routes/*.yaml    the live routes, in the runtime model, at probation
+//!     track.toml, routes/*.yaml    the live routes, in the runtime model, at forming
 //!     exec.json                    route id → ExecBinding (IndexedRoute.exec)
 //!     binding.json                 every route live or inert (with the reason), the pack digest,
 //!                                  how the pack was verified, and the checkout it was bound against
@@ -15,15 +15,15 @@
 //!
 //! A bound track is derived state: `adage add` rewrites it from the pack each time (carrying the
 //! recipient's review decisions, as a re-import does), and the index compiles it like any
-//! imported track (probation, yellow at most). Nothing here creates an execution approval.
+//! imported track (forming, prime at most). Nothing here creates an execution approval.
 
-use crate::add::at_probation;
+use crate::add::at_forming;
 use crate::reimport;
 use adage_pack::bind::{Applies, BindEnv, Binding, BoundRoute, Status, Target};
 use adage_pack::Pack;
 use adage_store::Paths;
 use adage_tracks::index::{ExecBinding, BOUND_DIR, EXEC_FILE, IMPORTED_DIR};
-use adage_tracks::{io, Aspect, Gauge, Manifest, Scope, Track, TrackInfo};
+use adage_tracks::{io, Gauge, Manifest, Scope, Strength, Track, TrackInfo};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -159,17 +159,17 @@ pub struct Bound {
     pub binding: Binding,
     /// Where the bound track was written (`None`: the pack does not apply there).
     pub dir: Option<PathBuf>,
-    /// The bound track as installed (at probation, the recipient's decisions carried).
+    /// The bound track as installed (at forming, the recipient's decisions carried).
     pub track: Option<Track>,
-    /// Each live route's aspect before probation capped it.
-    pub was: BTreeMap<String, Aspect>,
+    /// Each live route's strength before forming capped it.
+    pub was: BTreeMap<String, Strength>,
     pub kept: Vec<(String, adage_tracks::review::Decision)>,
     /// Pinned routes whose new version differs: proposed in `adage review`.
     pub proposed: Vec<String>,
 }
 
 /// Bind an installed pack to every target and write the bound tracks, replacing this pack's
-/// earlier ones. `skipped` are routes the pack could not carry at all (a v1 upgrade's), recorded
+/// earlier ones. `skipped` are routes the pack could not carry at all (a converted track's), recorded
 /// as inert. The caller holds the tracks lock and recompiles the index afterwards.
 pub fn bind_installed(
     paths: &Paths,
@@ -228,7 +228,7 @@ pub fn bind_installed(
 
 struct Written {
     track: Track,
-    was: BTreeMap<String, Aspect>,
+    was: BTreeMap<String, Strength>,
     kept: Vec<(String, adage_tracks::review::Decision)>,
     proposed: Vec<String>,
 }
@@ -258,8 +258,25 @@ fn write_bound(
         },
         routes: binding.live().filter_map(|r| r.route.clone()).collect(),
     };
-    let was: BTreeMap<String, Aspect> = track.routes.iter().map(|r| (r.id.clone(), r.aspect)).collect();
-    let (track, _) = at_probation(track);
+    let was: BTreeMap<String, Strength> = track.routes.iter().map(|r| (r.id.clone(), r.strength)).collect();
+    // A skill compiled here and accepted by the person who reviewed it (`adage train accept`)
+    // keeps the strengths its replay earned: it is first-hand, not an import. Any other pack
+    // (including the same pack received from someone else, or changed since its review) is an
+    // import: forming, prime at most (O2).
+    let mut track = if reviewed_here(paths, pack, digest) {
+        reviewed_track(track, pack_origin(m.pack.origin))
+    } else {
+        at_forming(track).0
+    };
+    // A reflex that runs a vendored script is exec-only (never directed at E0), so it does not
+    // wait as nascent: running it always needs its own explicit approval (Track C §1.7).
+    let exec_only: BTreeSet<&str> =
+        pack.routes.iter().filter(|r| adage_pack::bind::vendored(r)).map(|r| r.id.as_str()).collect();
+    for r in track.routes.iter_mut().filter(|r| exec_only.contains(r.id.as_str())) {
+        if r.state == adage_tracks::RouteState::Nascent {
+            r.state = adage_tracks::RouteState::Forming;
+        }
+    }
     io::validate(&track).context("the bound track fails validation")?;
     let carried = reimport::carry(dest, track, &paths.tracks())?;
     io::validate(&carried.track).context("the bound track fails validation")?;
@@ -312,6 +329,71 @@ fn pack_origin(o: adage_pack::PackOrigin) -> &'static str {
         adage_pack::PackOrigin::Trained => "trained",
         adage_pack::PackOrigin::Authored => "authored",
     }
+}
+
+/// `$ADAGE_HOME/train/accepted.json`: trained packs a person accepted on this machine after
+/// reviewing them (`adage train accept`), by name, with the digest they reviewed.
+pub fn accepted_path(paths: &Paths) -> PathBuf {
+    paths.root.join("train").join("accepted.json")
+}
+
+pub fn accepted(paths: &Paths) -> BTreeMap<String, String> {
+    std::fs::read(accepted_path(paths)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+}
+
+pub fn record_accepted(paths: &Paths, name: &str, digest: &str) -> Result<()> {
+    let mut all = accepted(paths);
+    all.insert(name.to_string(), digest.to_string());
+    let p = accepted_path(paths);
+    std::fs::create_dir_all(p.parent().context("the accepted list has a parent directory")?)?;
+    let tmp = p.with_extension(format!("tmp{}", std::process::id()));
+    std::fs::write(&tmp, serde_json::to_vec_pretty(&all)?)?;
+    std::fs::rename(tmp, p)?;
+    Ok(())
+}
+
+/// Whether `pack` is a trained pack a person accepted here, at exactly this digest.
+pub fn reviewed_here(paths: &Paths, pack: &Pack, digest: &str) -> bool {
+    pack.manifest.pack.origin == adage_pack::PackOrigin::Trained
+        && accepted(paths).get(&pack.manifest.pack.name).is_some_and(|d| d == digest)
+}
+
+/// A reviewed trained pack's bound track: each route at the strength the pack gives it (the
+/// replay-verified ones may fire, within their effect ceilings, which validation enforces),
+/// forming, and an environment step still nascent until approved (O11). Its provenance is
+/// first-hand (`trained:reviewed`), not `imported`.
+pub fn reviewed_track(mut t: Track, origin: &str) -> Track {
+    for r in &mut t.routes {
+        r.state = adage_tracks::initial_state(r.effect);
+    }
+    t.manifest.track.provenance = format!("{origin}:reviewed");
+    t
+}
+
+/// The fingerprint of the key that signed an installed pack (re-verified from its `pack.sig`).
+pub fn signer(paths: &Paths, name: &str) -> Option<String> {
+    let dir = pack_dir(paths, name);
+    let pem = std::fs::read_to_string(dir.join(adage_pack::validate::SIG)).ok()?;
+    let digest = adage_pack::digest_dir(&dir).ok()?;
+    let msg = adage_sign::message(&digest).ok()?;
+    let key = adage_sign::verify_embedded(&msg, adage_sign::PACK_NAMESPACE, &pem).ok()?;
+    Some(adage_sign::fingerprint(&key))
+}
+
+/// An installed pack's attestations (Track C §1.8), one line each, marked self-reported by its
+/// signer. Informational only: nothing reads them to grant a strength, a level or an approval.
+pub fn attestation_lines(paths: &Paths, name: &str) -> Vec<String> {
+    let Ok(pack) = Pack::load(&pack_dir(paths, name)) else { return Vec::new() };
+    if pack.attestations.is_empty() {
+        return Vec::new();
+    }
+    let by = signer(paths, name).unwrap_or_else(|| "an unverified signer".into());
+    pack.attestations
+        .iter()
+        .map(|(id, a)| {
+            format!("{id}: {} (self-reported by signer {by}; informational only)", adage_pack::attest::summary(a))
+        })
+        .collect()
 }
 
 /// Copy a pack's vendored scripts into `$ADAGE_HOME/cas/<sha256>`, read-only. An entry already

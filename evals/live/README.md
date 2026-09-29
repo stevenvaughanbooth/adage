@@ -1,8 +1,8 @@
-# Live proving ground
+# Live evals
 
 `runner.py` runs real headless Claude Code agents on a sandbox repository, with and without
 Adage. It generalises `demo/run.py`: the sandbox, tasks, prompts, arms, model and budget all come
-from a config file. It covers the with/without comparison of Design §12 (the proving ground) and
+from a config file. It covers the with/without comparison of Design §12 (the eval loop) and
 §14 (measurement). For what the numbers mean next to the offline replay eval, see
 [docs/evals.md](../../docs/evals.md).
 
@@ -22,7 +22,7 @@ python3 evals/live/runner.py evals/live/configs/acme-billing.json --execute --ro
 ```
 
 The dry run prints the number of agent runs as the product that makes it, e.g. `train 6 tasks x
-2 repeats = 12; eval 6 tasks x 3 repeats x 2 arms (holdout, adage) x 2 rounds = 72; total 84
+2 repeats = 12; eval 6 tasks x 3 repeats x 2 arms (control, adage) x 2 rounds = 72; total 84
 agent runs`.
 
 ## Phases and rounds
@@ -31,8 +31,8 @@ agent runs`.
 | --- | --- |
 | `train` | Round 1 only. Baseline agents work the training tasks with no Adage hooks installed |
 | `learn` | `adage condition` reads the training transcripts. In later rounds it also reads earlier rounds' eval sessions (see below), with each route kind excluded from the sessions it steered |
-| `eval` | Agents work the held-out tasks: every (task, repeat) runs one session per arm, in a seeded random order: `adage` (hooks installed, directives delivered), `holdout` (hooks installed, directives logged but not delivered: the control) and optionally `off` (no hooks: measures hook overhead) |
-| `report` | `summary.json` and a results page (below): per-arm aggregates, task-level statistics between `adage` and `holdout` (see [Statistics](#statistics)) |
+| `eval` | Agents work the held-out tasks: every (task, repeat) runs one session per arm, in a seeded random order: `adage` (hooks installed, directives delivered), `control` (hooks installed, directives logged but not delivered: the control) and optionally `off` (no hooks: measures hook overhead), `instincts` (hooks installed, directives delivered, from a day-0 index of instincts only: `adage condition --instincts-only` over a fresh sandbox, in `private/instincts-home`) and `e1` (the learned index plus E1 prefetch through `adage-exec`, from `private/e1-home`, which a person prepares: a copy of `adage-home` with `adage review delegate ... --level e1` approvals; the runner refuses the arm without it) and `agents-md` (the control's hooks, directives withheld, plus a context file the sandbox command commits as `CLAUDE.md` when it gets `{arm}` = `agents-md`: an up-front context file against just-in-time reflexes; see evals/repobench) |
+| `report` | `summary.json` and a results page (below): per-arm aggregates, task-level statistics between `adage` and `control` (see [Statistics](#statistics)) |
 
 The phases default to all four. Name some to run only those: for example `eval report --round 2`.
 A config's `rounds` (default 1) run in order in one invocation: round 1 is train, learn, eval,
@@ -107,9 +107,9 @@ the same):
 
 | Field | Meaning |
 | --- | --- |
-| `adage`, `holdout` | The arm's aggregate over its runs (median or mean, as in the table above) |
-| `diff`, `ci95` | `adage - holdout`, with a 95% percentile bootstrap CI that resamples whole tasks (2000 resamples) |
-| `task_mean_diff` | The test statistic: the mean over tasks of (task mean of adage - task mean of holdout) |
+| `adage`, `control` | The arm's aggregate over its runs (median or mean, as in the table above) |
+| `diff`, `ci95` | `adage - control`, with a 95% percentile bootstrap CI that resamples whole tasks (2000 resamples) |
+| `task_mean_diff` | The test statistic: the mean over tasks of (task mean of adage - task mean of control) |
 | `p_value` | Two-sided permutation test that shuffles arm labels **within each task** (the randomisation unit) and recomputes `task_mean_diff` (10000 permutations) |
 | `p_holm` | `p_value` after Holm's step-down adjustment across the round's metrics (the family) |
 | `p_tasks` | Two-sided sign-flip test on the per-task differences alone: whether the effect would hold for *new tasks*. Exact; with k tasks its smallest possible value is 2/2^k (0.031 for 6) |
@@ -129,7 +129,7 @@ and its environment is built from scratch: only `PATH`, locale, terminal, time z
 variables, the auth variables below, and the config's `forward_env` pass through. So no session,
 of either arm, can read your Claude Code auto-memory (`MEMORY.md`), your earlier transcripts
 (`~/.claude/projects`), your settings or MCP servers, or another session's transcript. (Before
-this, holdout agents read the operator's auto-memory in 23 of 36 runs.) Transcripts are archived
+this, control agents read the operator's auto-memory in 23 of 36 runs.) Transcripts are archived
 from the session's own `CLAUDE_CONFIG_DIR/projects`. The learned index, the transcripts and
 `outcomes.json` live in `<root>/private/`, outside every session's run directory; the hooks reach
 the index through `ADAGE_HOME`. The home also gets a `.gitconfig` with a neutral identity, and
@@ -145,6 +145,17 @@ the index through `ADAGE_HOME`. The home also gets a `.gitconfig` with a neutral
    the login in the Keychain instead, so there use option 1.
 3. Bedrock, Vertex or anything else: name the variables in the config's `forward_env`
    (e.g. `["CLAUDE_CODE_USE_BEDROCK", "AWS_REGION", "AWS_BEARER_TOKEN_BEDROCK"]`).
+4. A host that manages the login itself (Claude Code on the web and similar containers): `--host-auth`
+   (or `"host_auth": true`) forwards exactly `HOST_AUTH_ENV`, when set: `ANTHROPIC_BASE_URL`,
+   `CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST`, `CLAUDE_SESSION_INGRESS_TOKEN_FILE`,
+   `CLAUDE_CODE_OAUTH_TOKEN`, `CLAUDE_CODE_ORGANIZATION_UUID`, `CLAUDE_CODE_ACCOUNT_UUID`, the
+   proxy variables (both cases) and `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`.
+   Auth is then the host's token (`auth: host`); no credentials file is copied.
+
+`forward_env` never passes an agent session's own markers: `CLAUDECODE`, any `*SESSION_ID*`,
+`CLAUDE_CODE_REMOTE*`, `CLAUDE_CODE_MESSAGING_*`, `CLAUDE_CODE_ENTRYPOINT`, `ADAGE_*` are refused
+when the config loads. A child session that carried the host's session id would attach to, and
+report into, the operator's own session.
 
 `--execute` refuses to start when it finds none of these. `state.json` records which was used
 (`auth`), never the secret.
@@ -154,7 +165,26 @@ transcripts from your `~/.claude/projects`, as the runner used to. It prints a w
 `state.json` says `isolated: false`. Use it only to debug the harness.
 
 This is isolation from accidents, not a security boundary: a session runs as you, can walk the
-filesystem, and sees `ADAGE_HOME` in its environment. Use a container for more.
+filesystem, and sees `ADAGE_HOME` in its environment. Real agents do walk it: in the first corpus run
+(evals/corpus), Haiku sessions ran `find /tmp -name "*hidden*"`, read the hidden test of their own task,
+and read the runner's `state.json` (every other session's commands and prompts). So for anything you
+mean to measure, confine the sessions:
+
+**Confinement** (`"confine": true`, needs bubblewrap). Each `claude -p` runs under `bwrap` in its own
+mount and PID namespace: the whole filesystem read-only, `/tmp`, `/home`, `/root`, `/var/tmp`, `/mnt`
+and `/workspace` (`confine_hide`) replaced by empty directories, then mounted back: the run directory
+(read-write: the sandbox and the session's home), the arm's `ADAGE_HOME` (read-write, hooks write
+spools there), the settings file and the hook binaries (read-only), the directories of the files named
+by `SSL_CERT_FILE`, `NODE_EXTRA_CA_CERTS`, `REQUESTS_CA_BUNDLE`, `CLAUDE_SESSION_INGRESS_TOKEN_FILE`
+(directories, because a bind mount pins the inode and the host replaces its token file by rename),
+the `PATH` entries under a hidden directory, and `confine_expose` (e.g. a newer Node). A fresh `/proc`
+hides other processes' environments. The network is shared. The sandbox command and the scorer run
+outside, so the hidden tests, the solutions, other runs and `private/` are out of the agent's reach.
+
+**The tool set.** `claude -p` gets `--tools <allowed_tools>` (or the config's `tools`), not only
+`--allowedTools`: newer Claude Code versions offer more built-in tools, and a session asked to "pick
+up W-1042" called `TaskGet W-1042` (the harness's own task list), found nothing and asked the user
+what to do. Pinning the tool set keeps sessions of different harness versions comparable.
 
 ## Arm order
 
@@ -173,14 +203,19 @@ The config is JSON. `configs/acme-billing.json` is the demo.
 | --- | --- |
 | `name`, `repo_key` | The run's name, and the repository key tracks are learned under (`adage condition --repo`) |
 | `workdir` | The sandbox directory name inside each run directory |
-| `sandbox` | argv that creates a fresh sandbox at `{dir}` for task `{task}` (`{repo}` = this repository) |
+| `sandbox` | argv that creates a fresh sandbox at `{dir}` for task `{task}` (`{repo}` = this repository, `{arm}` = the session's arm) |
 | `score` | argv that scores a finished sandbox and prints JSON with `passed` (and optionally `stale_generated`, `ci_passed`, `hidden_passed`) |
 | `prompts` | Prompt templates, with `{id}` replaced by the task. Tasks rotate through them |
-| `train`, `eval` | `{"tasks": [...], "repeats": n}`. `eval.arms` defaults to `["holdout", "adage"]` |
+| `task_prompts` | `{task: prompt}`: a task's own prompt, used as written instead of the templates (RepoBench's issue paraphrases) |
+| `train`, `eval` | `{"tasks": [...], "repeats": n}`. `eval.arms` defaults to `["control", "adage"]` |
 | `eval.tasks_by_round` | One disjoint held-out pool per round (list of lists, or `{"1": [...], "2": [...]}`); replaces `eval.tasks`. Without it later rounds are `leaky` |
 | `rounds` | Learning rounds run by one invocation (default 1) |
 | `seed` | Arm-order seed (`--seed` overrides) |
-| `forward_env` | Extra environment variables passed to isolated sessions (default none) |
+| `forward_env` | Extra environment variables passed to isolated sessions (default none; session markers are refused) |
+| `host_auth` | Forward `HOST_AUTH_ENV`, a host-managed login (`--host-auth`; see [Isolation](#isolation)) |
+| `confine`, `confine_hide`, `confine_expose` | Run sessions under bubblewrap, seeing only their run directory and what they need (see [Isolation](#isolation)) |
+| `tools` | The built-in tools a session has (`claude --tools`); default `allowed_tools` |
+| `adage_exec` | The `adage-exec` binary the `e1` arm's hooks run (default: next to `--adage`) |
 | `model`, `max_turns`, `concurrency` | Passed to `claude -p`, and the number of sessions run in parallel |
 | `learn_args` | Extra `adage condition` arguments (`["--demo"]` for small runs) |
 | `allowed_tools`, `disallowed_tools` | `claude --allowedTools/--disallowedTools` |
@@ -230,7 +265,7 @@ comment names a fix.
 
 **The scorer.** `score.py <dir> <INC-id>` copies the hidden test into `test/`, runs the repository's
 CI (`npm run check`), then runs the hidden test again explicitly with its own resolver hook and the
-TAP reporter, and removes it. `passed` needs all of: CI green, the hidden suite visible in the CI
+TAP reporter, and removes it. `passed` needs all of: CI fire, the hidden suite visible in the CI
 output (`ci_ran_hidden`: a CI that skipped it does not count), the explicit run executing at least
 as many tests as the file declares with none failing (`hidden_passed`), and generated code fresh
 by the template's own generator, not the sandbox's (`stale_generated`).
@@ -251,7 +286,7 @@ and checks that `adage condition` learns all four conventions from them, that th
 results page work, and that `build_demo.py` plus `adage eval` ingest the root.
 
 **The run.** 84 agent runs: 6 training incidents x 2 repeats (no hooks), then in each of 2 rounds 6
-held-out incidents x 3 repeats x 2 arms (holdout, adage). Round 2 learns from all 48 earlier
+held-out incidents x 3 repeats x 2 arms (control, adage). Round 2 learns from all 48 earlier
 sessions, including round 1's sessions of the same six held-out incidents, so it is `leaky` (see
 [Phases and rounds](#phases-and-rounds)). The spend cap is $45.
 
@@ -310,7 +345,7 @@ adage eval evals/datasets/my-run --split round1
 ```
 
 The dataset gets one split per round (`round1`, `round2`, …): train on the training sessions and
-every earlier round's eval sessions, test on that round's holdout arm.
+every earlier round's eval sessions, test on that round's control arm.
 
 ## Tests
 

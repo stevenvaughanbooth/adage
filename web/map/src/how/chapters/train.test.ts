@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { _internal, stable, train } from "./train";
 
 describe("train on a skill", () => {
-  it("derives route ids as the miners do", () => {
-    // adage-instincts safety.rs `ids_match_the_miner`; docs/training.md (acme fixture).
+  it("derives route ids as the compiler does", () => {
+    // adage-instincts safety.rs `ids_match_the_learner`; docs/training.md (acme fixture).
     expect(`dead-end-${stable(["exec make test"])}`).toBe("dead-end-d41b1e");
     expect(`finish-line-${stable(["schema/*.json", "make gen"])}`).toBe("finish-line-e7e809");
   });

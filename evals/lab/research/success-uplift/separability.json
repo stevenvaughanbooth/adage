@@ -1,0 +1,24 @@
+[
+ {
+  "pop": "all",
+  "within_task_auc": 0.57,
+  "ci90": [
+   0.483,
+   0.658
+  ],
+  "mixed_strata": 24,
+  "pairs": 135,
+  "n_features": 444
+ },
+ {
+  "pop": "uncensored",
+  "within_task_auc": 0.523,
+  "ci90": [
+   0.409,
+   0.656
+  ],
+  "mixed_strata": 9,
+  "pairs": 44,
+  "n_features": 444
+ }
+]

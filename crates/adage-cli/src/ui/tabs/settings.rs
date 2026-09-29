@@ -30,6 +30,10 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
                 let next = if row.value == "demo" { "default" } else { "demo" };
                 return Some(Cmd::Do(Action::SetConfig { key: row.key, value: next.into() }));
             }
+            if row.key == "ui.notices" && code == KeyCode::Char(' ') {
+                let next = if row.value == "off" { "daily" } else { "off" };
+                return Some(Cmd::Do(Action::SetConfig { key: row.key, value: next.into() }));
+            }
             s.modal = Some(Modal::Edit { key: row.key, buffer: row.value.clone(), error: None });
         }
         _ => {}

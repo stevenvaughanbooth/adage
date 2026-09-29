@@ -4,6 +4,7 @@
 //! installed tracks into `index.json`, written atomically (temp file + rename). The same inputs
 //! always produce the same bytes, and `generation` identifies exactly which inputs decided.
 
+use crate::context::CtxNet;
 use crate::interlock;
 use crate::io;
 use crate::model::*;
@@ -24,6 +25,11 @@ pub struct Index {
     /// existed has none, and [`Index::triggers`] derives them on the fly.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub triggers: BTreeMap<String, Triggers>,
+    /// Per repository with context triggers, their alphabet and discrimination net
+    /// ([`CtxNet`], Track G §7.2). Derived from `routes` like `triggers`; an index written before
+    /// it existed has none, and [`Index::contexts`] derives it on the fly.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub contexts: BTreeMap<String, CtxNet>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -38,6 +44,14 @@ pub struct IndexedRoute {
     pub exec: Option<ExecBinding>,
 }
 
+impl IndexedRoute {
+    /// A route only `adage-exec` can carry out: it runs a vendored script (`cas/<hex>`), which
+    /// has no path in the repository an agent could run, so E0 never directs it (Track C §1.7).
+    pub fn exec_only(&self) -> bool {
+        self.exec.as_ref().is_some_and(|b| b.scripts.iter().any(|(p, _)| p.starts_with("cas/")))
+    }
+}
+
 /// Execution levels (Track C §3.1). A pack may only *request* one; only a machine grants it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Level {
@@ -46,10 +60,9 @@ pub enum Level {
     E0,
     /// Prefetch: run at the trigger, inject typed output.
     E1,
-    /// An MCP tool the agent calls.
+    /// An action a hook runs when its stimulus fires: staged, verified against its declared
+    /// outputs, applied atomically (Track C §3.6).
     E2,
-    /// An MCP tool with real effects, staged and verified.
-    E3,
 }
 
 /// A pack route's binding on this machine (Track C §2.3): the route exec digest, the scripts it
@@ -132,7 +145,7 @@ impl Index {
 
     /// Compile tracks into an index, with the interlocking rules applied
     /// ([`crate::interlock`]): a route a dead end contradicts at the prompt is left out, and of two
-    /// greens at one decision point one is compiled yellow. Returns the conflicts found, for
+    /// fires at one decision point one is compiled prime. Returns the conflicts found, for
     /// `adage condition` and `adage doctor` to report.
     pub fn compile_with_conflicts(tracks: &[Track]) -> (Index, Vec<interlock::Conflict>) {
         let imported_tracks: BTreeSet<(&str, &str)> = tracks
@@ -141,13 +154,13 @@ impl Index {
             .map(|t| (t.manifest.scope.repo.as_str(), t.manifest.track.name.as_str()))
             .collect();
         let live = |r: &Route| r.state.is_live();
-        // A first-hand route a person retired still takes part in de-duplication, so an import of
+        // A first-hand route a person extinguished still takes part in de-duplication, so an import of
         // the same route cannot slip back in behind the rejection; it is dropped afterwards.
         let mut routes: Vec<(u8, IndexedRoute)> = tracks
             .iter()
             .flat_map(|t| {
                 let imported = is_imported(t);
-                t.routes.iter().filter(move |r| live(r) || (!imported && r.state == RouteState::Retired)).map(
+                t.routes.iter().filter(move |r| live(r) || (!imported && r.state == RouteState::Extinguished)).map(
                     move |r| {
                         let ir = IndexedRoute {
                             repo: t.manifest.scope.repo.clone(),
@@ -163,8 +176,8 @@ impl Index {
             .collect();
         // A route learned here and the same route imported from a teammate, or bound by an
         // instinct, share a content-derived id: keep one, and prefer first-hand evidence over an
-        // import, and an import over an instinct (a live first-hand route over a retired one, and
-        // a retired first-hand route over any import or instinct). By provenance, never by track
+        // import, and an import over an instinct (a live first-hand route over an extinguished one, and
+        // an extinguished first-hand route over any import or instinct). By provenance, never by track
         // name.
         routes.sort_by(|(ia, a), (ib, b)| {
             (&a.repo, &a.route.id, ia, !live(&a.route), &a.track).cmp(&(
@@ -184,10 +197,16 @@ impl Index {
         let generation = io::hex(&Sha256::digest(&body))[..16].to_string();
         let mut triggers: BTreeMap<String, Triggers> = BTreeMap::new();
         let repos: BTreeSet<&str> = routes.iter().map(|r| r.repo.as_str()).collect();
+        let mut contexts: BTreeMap<String, CtxNet> = BTreeMap::new();
         for repo in repos {
-            triggers.insert(repo.to_string(), Triggers::of(routes.iter().filter(|r| r.repo == repo).map(|r| &r.route)));
+            let of_repo = || routes.iter().filter(|r| r.repo == repo).map(|r| &r.route);
+            triggers.insert(repo.to_string(), Triggers::of(of_repo()));
+            let net = CtxNet::of(of_repo());
+            if !net.is_empty() {
+                contexts.insert(repo.to_string(), net);
+            }
         }
-        (Index { generation, routes, triggers }, conflicts)
+        (Index { generation, routes, triggers, contexts }, conflicts)
     }
 
     /// [`Index::compile_with_conflicts`], then the exec bindings of pack-sourced routes read from
@@ -221,6 +240,16 @@ impl Index {
         }
     }
 
+    /// `repo`'s context alphabet and net: precomputed, or derived from the routes for an index
+    /// compiled before they were stored (empty when the repository has no context trigger).
+    pub fn contexts(&self, repo: &str) -> Cow<'_, CtxNet> {
+        match self.contexts.get(repo) {
+            Some(n) => Cow::Borrowed(n),
+            None if self.triggers.contains_key(repo) => Cow::Owned(CtxNet::default()),
+            None => Cow::Owned(CtxNet::of(self.for_repo(repo).map(|r| &r.route))),
+        }
+    }
+
     pub fn for_repo<'a>(&'a self, repo: &'a str) -> impl Iterator<Item = &'a IndexedRoute> + 'a {
         self.routes.iter().filter(move |r| r.repo == repo)
     }
@@ -230,13 +259,37 @@ impl Index {
             std::fs::create_dir_all(d)?;
         }
         let tmp = path.with_extension(format!("tmp{}", std::process::id()));
-        std::fs::write(&tmp, serde_json::to_vec_pretty(self)?)?;
+        // Owner-only: procedure cards quote the person's traces (review B3).
+        crate::io::write_private(&tmp, &serde_json::to_vec_pretty(self)?)?;
         std::fs::rename(tmp, path)?;
         Ok(())
     }
 
     /// Load the index; any failure yields an empty index (fail open).
     pub fn load(path: &Path) -> Index {
-        std::fs::read(path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+        Index::try_load(path).unwrap_or_default()
     }
+
+    /// Load the index, saying why it could not be: [`Unloaded::Missing`] when there is no file (a
+    /// fresh machine), [`Unloaded::Damaged`] when there is one that cannot be read or parsed (a
+    /// truncated write, a disk error). The hook treats a damaged index as a request to rebuild it.
+    pub fn try_load(path: &Path) -> std::result::Result<Index, Unloaded> {
+        let bytes = match std::fs::read(path) {
+            Ok(b) => b,
+            // No index there (a data directory not created yet, or that cannot be: a file in the
+            // way) is missing, not damaged: there is nothing to rebuild.
+            Err(e) if matches!(e.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory) => {
+                return Err(Unloaded::Missing)
+            }
+            Err(_) => return Err(Unloaded::Damaged),
+        };
+        serde_json::from_slice(&bytes).map_err(|_| Unloaded::Damaged)
+    }
+}
+
+/// Why [`Index::try_load`] found no index.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Unloaded {
+    Missing,
+    Damaged,
 }

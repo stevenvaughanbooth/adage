@@ -96,7 +96,7 @@
       <li class="step reveal">
         <span class="num">02</span>
         <h3>Condition reflexes</h3>
-        <p><code>adage condition</code> keeps the steps that got work done and compiles them into reflexes: small, typed rules with their evidence attached. Dead ends become inhibit reflexes.</p>
+        <p>After each session, one learner keeps the steps that got work done and compiles them into reflexes: small, typed rules with their evidence attached. Dead ends become inhibit reflexes, and a task the repository keeps repeating gets a procedure card.</p>
       </li>
       <li class="step reveal">
         <span class="num">03</span>
@@ -107,8 +107,8 @@
 
     <figure class="pipe reveal" aria-labelledby="pipe-cap">
       <ol class="pipe-row">
-        <li><b>agent traces</b><span>transcripts, instincts, adage-train</span></li>
-        <li><b>condition</b><span>mine what worked</span></li>
+        <li><b>agent traces</b><span>transcripts, instincts, adage train &lt;SKILL.md&gt;</span></li>
+        <li><b>condition</b><span>one learner mines what worked</span></li>
         <li><b>reflexes</b><span>tracks and packs</span></li>
         <li><b>index</b><span>compiled</span></li>
         <li><b>hooks</b><span>Claude Code, Codex, OpenCode</span></li>
@@ -119,19 +119,24 @@
 
     <p class="deeper reveal"><a class="btn" href="/how" aria-label="Learn more: every stage, step by step, with the math">Learn more</a></p>
 
-    <h3 class="subhead reveal">Five kinds of reflex, learned today</h3>
-    <div class="kinds reveal" role="region" aria-label="Reflex kinds" tabindex="0">
+    <h3 class="subhead reveal">What one learner finds in your traces</h3>
+    <div class="kinds reveal" role="region" aria-label="Reflexes Adage learns" tabindex="0">
       <table>
         <thead><tr><th scope="col">Reflex</th><th scope="col">Learned from</th><th scope="col">What the agent sees</th></tr></thead>
         <tbody>
-          <tr><th scope="row">Prompt → lookup</th><td>Agents passing an ID from the prompt to the same command</td><td><span class="lamp fire">fire</span><q>Work item details are looked up with: <code>python3 scripts/wi-lookup W-2042</code></q></td></tr>
-          <tr><th scope="row">Linked files</th><td>Agents reading, one turn at a time, the files a lookup listed</td><td><span class="lamp prime">prime</span><q>That result lists these files … read them together in one turn</q></td></tr>
-          <tr><th scope="row">Dead ends</th><td>A verify command that fails, followed by one that works</td><td><span class="lamp inhibit">inhibit</span><q>Running <code>python3 -m unittest</code> fails. Use this instead: <code>make test</code></q></td></tr>
-          <tr><th scope="row">Finish line</th><td>A regenerate step that follows edits to a path pattern</td><td><span class="lamp fire">fire</span><q>Changes to <code>schema/*.json</code> must be followed by <code>make gen</code></q></td></tr>
-          <tr><th scope="row">Intent</th><td>Prompts that mean the same thing, whose sessions ran the same command first</td><td><span class="lamp prime">prime</span><q>Requests like this one usually start by running: <code>make test</code></q></td></tr>
+          <tr><th scope="row">Look the item up</th><td>Agents passing a value from the prompt to the same command; the value's type (<code>W-2042</code>, <code>#482</code>) is learned from the values themselves</td><td><span class="lamp fire">fire</span><q>Work item details are looked up with: <code>python3 scripts/wi-lookup W-2042</code></q></td></tr>
+          <tr><th scope="row">Read what it lists</th><td>Agents reading, one turn at a time, the files a lookup listed</td><td><span class="lamp prime">prime</span><q>That result lists these files … read them together in one turn</q></td></tr>
+          <tr><th scope="row">Avoid a dead end</th><td>A command that fails with the same signature, followed by one that works</td><td><span class="lamp inhibit">inhibit</span><q>Running <code>python3 -m unittest</code> fails. Use this instead: <code>make test</code></q></td></tr>
+          <tr><th scope="row">Regenerate after an edit</th><td>A regenerate step that follows edits to a path pattern</td><td><span class="lamp fire">fire</span><q>Changes to <code>schema/*.json</code> must be followed by <code>make gen</code></q></td></tr>
+          <tr><th scope="row">Steps in order</th><td>Commands run one after another after edits to a path pattern</td><td><span class="lamp prime">prime</span><q>Changes to <code>registry/*.csv</code> are followed by these steps, in order: <code>make gen</code>, <code>make check</code></q></td></tr>
+          <tr><th scope="row">Check the part you edited</th><td>A command naming the directory an edit touched, or the tests of the edited file</td><td><span class="lamp prime">prime</span><q>After an edit under <code>packages/ledger/</code>: <code>make -C packages/ledger check</code></q></td></tr>
+          <tr><th scope="row">Sync the environment</th><td>A dependency step after a dependency file changes; waits for your approval</td><td><span class="lamp prime">prime</span><q>Once <code>requirements.txt</code> changes: <code>make deps</code></q></td></tr>
+          <tr><th scope="row">Start like others did</th><td>Prompts that mean the same thing, whose sessions ran the same command first</td><td><span class="lamp prime">prime</span><q>Requests like this one usually start by running: <code>make test</code></q></td></tr>
+          <tr><th scope="row">Procedure card</th><td>Two or more earlier sessions of a task the repository repeats, one of them passing</td><td><span class="lamp prime">prime</span><q>Once, at the prompt: the files to edit in order, the lines added last time, the commands that worked and those that failed, the finishing check</q></td></tr>
         </tbody>
       </table>
     </div>
+    <p class="caveat reveal">Every reflex carries its evidence and is weighed by uplift: how much more often agents take the step when told than on their own. A reflex under +0.1 stays quiet until you approve it in <code>adage review</code>.</p>
   </div>
 </section>
 
@@ -139,7 +144,7 @@
   <div class="wrap">
     <p class="kicker reveal">Evidence</p>
     <h2 class="display reveal" id="ev-h">Measured against a control, <span class="soft">not a vibe.</span></h2>
-    <p class="lede reveal">Real agents, headless, each in a fresh copy of a repository whose conventions they cannot guess. The same work, with and without Adage, scored by hidden tests.</p>
+    <p class="lede reveal">Real agents, headless, on sandbox repositories whose conventions they cannot guess and on real open-source repositories. The same work, with and without Adage, scored by hidden tests.</p>
 
     <div class="runs">
       <article class="trial reveal" aria-labelledby="run1">
@@ -166,8 +171,30 @@
         </dl>
         <p class="note">A stronger model found every convention on its own. Adage's effect moved from avoiding failures to skipping exploration: half the turns before the first edit, 24% lower cost, quality unchanged.</p>
       </article>
+      <article class="trial reveal" aria-labelledby="run3">
+        <header>
+          <h3 id="run3">Recurring work: procedure cards</h3>
+          <p>Claude Haiku 4.5 on real open-source repositories · a card learned from 4 earlier sessions · each session paired with a control on the same task</p>
+        </header>
+        <dl class="stats">
+          <div><dt>Cost per task: new parameter type (click), new validator (marshmallow)</dt><dd><span class="now">−18.8%</span><small>interval −25.8% to −11.6% · hidden tests 20/24 with, 19/24 without</small></dd></div>
+          <div><dt>Cost per task: new flag type (urfave/cli, Go)</dt><dd><span class="now">−33.8%</span><small>interval −44.3% to −23.6% · hidden tests 2/12 in both arms</small></dd></div>
+        </dl>
+        <p class="note">Read the Go row with care: half its control sessions hit the 60-turn cap. The card was a Python prototype in these runs; the shipped card is on by default, and its live validation is pre-registered.</p>
+      </article>
+      <article class="trial reveal" aria-labelledby="run4">
+        <header>
+          <h3 id="run4">A compiled skill</h3>
+          <p>A repository workflow skill compiled by <code>adage train</code> · 12 sessions per arm</p>
+        </header>
+        <dl class="stats">
+          <div><dt>Hidden tests passed</dt><dd><span class="sr">with neither </span><span class="was">9/12</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, compiled </span><span class="now">12/12</span><small>the skill in context: 12/12</small></dd></div>
+          <div><dt>Cost per session</dt><dd><span class="sr">with neither </span><span class="was">$0.122</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, compiled </span><span class="now">$0.034</span><small>the skill in context: $0.032</small></dd></div>
+        </dl>
+        <p class="note">The compiled reflexes keep the skill's effect without its text in context. The repository is a lab sandbox, and a skill that is mostly judgment stays text.</p>
+      </article>
     </div>
-    <p class="caveat reveal">Early runs, published with their caveats: round 2 reused round 1's work items, arm order was fixed, and both arms shared the operator's auto-memory, so treat the numbers as indicative until they are repeated under the stricter protocol. Every install keeps about one session in ten as a control, so the effect can be measured on your own work.</p>
+    <p class="caveat reveal">Published with their caveats. The two sandbox runs reused round 1's work items in round 2, fixed the arm order and shared the operator's auto-memory, so treat them as indicative until they are repeated under the stricter protocol. The card intervals are 90% bootstrap intervals clustered by task; with 6–12 tasks per comparison, read them as closer to 80%. On one-off bug fixes the effect is small: the <code>.venv</code> instinct took the system-Python dead end from 5 of 6 sessions to 0 of 6, and every lever a hook can pull was worth 0–4% of cost. Every install keeps about one session in ten as a control, and <code>adage savings</code> states what Adage saves on your own work only once 10 control and 30 treated sessions have finished.</p>
   </div>
 </section>
 
@@ -176,9 +203,9 @@
     <p class="kicker reveal">Built to stay out of the way</p>
     <h2 class="display reveal" id="trust-h">It speaks up only when it matches. <span class="soft">Otherwise it isn't there.</span></h2>
     <ul class="grid">
-      <li class="card reveal"><h3>Never executes</h3><p>The <code>adage</code> binary never runs your repository's commands. Your agent runs every step through its own tools, under its harness's permissions. Delegating a step is opt-in, per reflex, inside an OS sandbox.</p></li>
+      <li class="card reveal"><h3>Never runs a command for you</h3><p>Your agent runs every step through its own tools, under its harness's permissions. One change is on by default in Claude Code: a Python test run under the system Python is pointed at the project's verified <code>.venv</code>, shown to you each time; <code>adage delegate rewrites off</code> turns it off. Delegating a step is opt-in, per reflex, inside an OS sandbox.</p></li>
       <li class="card reveal"><h3>Fails open</h3><p>If Adage errors or runs out of time at a hook, the agent carries on as if it were not installed.</p></li>
-      <li class="card reveal"><h3>Evidence attached</h3><p>Every reflex carries its distinct sessions and a Wilson lower bound. Review any of them, then strengthen, weaken or extinguish it.</p></li>
+      <li class="card reveal"><h3>Evidence attached</h3><p>Every reflex carries its distinct sessions, a Wilson lower bound and its uplift, what telling the agent changes. Review any of them, then strengthen, weaken or extinguish it.</p></li>
       <li class="card reveal"><h3>Yours, on disk</h3><p>Traces stay on your machine. Reflexes live in tracks on disk and travel as signed packs you can review, commit and share.</p></li>
     </ul>
   </div>
@@ -188,17 +215,19 @@
   <div class="wrap split">
     <div>
       <p class="kicker reveal">Get started</p>
-      <h2 class="display reveal" id="start-h">One binary. <span class="soft">Three commands.</span></h2>
-      <p class="lede reveal"><code>adage init</code> finds your harnesses, installs the hooks (showing you the diff first) and conditions reflexes from the traces you already have. The first release is on its way; early access gets it first.</p>
+      <h2 class="display reveal" id="start-h">Install the plugin. <span class="soft">Start a session.</span></h2>
+      <p class="lede reveal">In Claude Code, two commands install Adage with its binaries verified, so nothing else is downloaded. At the first session in a repository, Adage binds its instincts and learns from that repository's earlier sessions, and one line tells you so. Plain <code>adage</code>, in a terminal or as <code>!adage</code> in Claude Code, prints where things stand. For Codex and OpenCode, install the binary with Homebrew or npm and run <code>adage install codex</code> or <code>adage install opencode</code>. The first release is on its way; early access gets it first.</p>
       <p class="links reveal" id="repo-links" hidden><a href="#" data-repo="">Read the README</a><a href="#" data-repo="/blob/main/docs/lexicon.md">The lexicon</a></p>
     </div>
     <div class="term reveal" role="region" aria-label="Install and set up">
       <div class="term-top" aria-hidden="true"><i></i><i></i><i></i></div>
-      <pre><code><span class="c"># macOS and Linux, once the first release ships</span>
-<span class="p">$</span> brew install stevenvaughanbooth/tap/adage
-<span class="p">$</span> adage init
+      <pre><code><span class="c"># in Claude Code, once the first release ships</span>
+/plugin marketplace add stevenvaughanbooth/adage
+/plugin install adage@adage
+<span class="c"># then start a session; in a terminal, any time:</span>
+<span class="p">$</span> adage          <span class="c"># where things stand, and what it saves</span>
 <span class="p">$</span> adage watch    <span class="c"># a live pane for a split terminal</span></code></pre>
-      <button class="copybtn" type="button" data-copy="brew install stevenvaughanbooth/tap/adage &amp;&amp; adage init">Copy</button>
+      <button class="copybtn" type="button" data-copy="/plugin marketplace add stevenvaughanbooth/adage&#10;/plugin install adage@adage">Copy</button>
     </div>
   </div>
 </section>

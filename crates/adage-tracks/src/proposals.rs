@@ -1,6 +1,6 @@
 //! Proposed changes to pinned routes (Implementation plan §4.1): `proposals.yaml` beside a track.
 //!
-//! A pinned (`authored`) route is edit-locked: `adage condition` never overwrites it. When the miner's
+//! A pinned (`authored`) route is edit-locked: `adage condition` never overwrites it. When the learner's
 //! own version of that route differs from it *materially* — by [`crate::review::material_change`],
 //! the same definition the review queue uses — learn records the mined version here as a
 //! proposal, and `adage review` shows it with a diff. Approving applies it (the route stays
@@ -28,7 +28,7 @@ pub struct Proposal {
     /// The pinned route the proposal was made against. If the pinned route has changed since
     /// (edited by hand), the proposal is stale and is not applied.
     pub against: Basis,
-    /// The miner's version of the route.
+    /// The learner's version of the route.
     pub route: Route,
 }
 
@@ -98,7 +98,7 @@ pub fn save(dir: &Path, p: &Proposals) -> Result<()> {
 
 /// Recompute a track's proposals after a learn run.
 ///
-/// For each pinned route, `mined` holds the miner's version of it, if the miner still finds it.
+/// For each pinned route, `mined` holds the learner's version of it, if the learner still finds it.
 /// A proposal is made when that version differs materially from the pinned route, unless a person
 /// dismissed an equivalent proposal. An unchanged proposal keeps its original date, so re-learning
 /// the same sessions writes the same bytes.
@@ -111,7 +111,7 @@ pub fn propose_with(prev: &Proposals, pinned: &[(Route, Option<Route>)], today: 
     let mut out = Proposals::default();
     for (p, mined) in pinned {
         let Some(m) = mined else {
-            // The miner no longer finds it: nothing to propose, but a dismissal still stands.
+            // The learner no longer finds it: nothing to propose, but a dismissal still stands.
             if let Some(d) = prev.dismissed.get(&p.id) {
                 out.dismissed.insert(p.id.clone(), d.clone());
             }
@@ -149,8 +149,8 @@ mod tests {
             step: Step::Run { command: command.into() },
             slots: vec![],
             effect: Effect::Verify,
-            aspect: Aspect::Yellow,
-            state: RouteState::Active,
+            strength: Strength::Prime,
+            state: RouteState::Firm,
             exit: vec![],
             evidence: Evidence {
                 support,

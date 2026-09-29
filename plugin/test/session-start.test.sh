@@ -1,7 +1,8 @@
 #!/bin/sh
 # Exercises plugin/claude-code/scripts/session-start: how it finds the binary (bundled and verified,
-# then PATH, including npm's launcher), and that every path exits 0 with nothing on stdout but the
-# binary's own output.
+# then PATH, including npm's launcher), that every path exits 0, that a failure is one JSON
+# `systemMessage` line on stdout (what Claude Code shows the person) with the other hooks pointed
+# at scripts/quiet, and that `delegate on` without the adage-exec plugin keeps serving.
 #
 #   plugin/test/session-start.test.sh [path/to/adage]     (default: target/debug/adage)
 #
@@ -48,15 +49,24 @@ check "bundled: binary runs" sh -c "'$W/data1/bin/adage' version | grep -q '^ada
 
 # 2. Bundled binary tampered with: ignored, with a hint; PATH has nothing: fail open.
 R2="$W/root2"; cp -R "$R1" "$R2"; printf 'x' >>"$R2/dist/$T/adage"
+mkdir -p "$R2/scripts"; cp "$REPO/plugin/claude-code/scripts/quiet" "$R2/scripts/quiet"
 run "$R2" "$W/data2" "$BASE"
 check "tampered: exits 0" [ "$code" = 0 ]
-check "tampered: nothing on stdout" [ ! -s "$W/out" ]
-check "tampered: says why on stderr" grep -q "does not match dist/SHA256SUMS" "$W/err"
-check "tampered: hint to install" grep -q "no adage binary found" "$W/err"
-check "tampered: no binary linked" [ ! -e "$W/data2/bin/adage" ]
+check "tampered: one systemMessage line on stdout" sh -c "[ \$(wc -l <'$W/out') = 1 ] && grep -q '^{\"systemMessage\":\"adage: the bundled binary for .* does not match its checksum' '$W/out'"
+check "tampered: stdout is JSON" node -e "JSON.parse(require('fs').readFileSync('$W/out','utf8'))"
+check "tampered: nothing on stderr" [ ! -s "$W/err" ]
+check "tampered: reason in \$DATA/status" grep -q "does not match its checksum" "$W/data2/status"
+check "tampered: other hooks run scripts/quiet" [ "$(target_of "$W/data2/bin/adage")" = "$R2/scripts/quiet" ]
+
+# 2b. No bundled binary and nothing on PATH: the install hint, as a systemMessage.
+R2B="$W/root2b"; mkdir -p "$R2B/scripts"; cp "$REPO/plugin/claude-code/scripts/quiet" "$R2B/scripts/quiet"
+run "$R2B" "$W/data2b" "$BASE"
+check "no binary: exits 0" [ "$code" = 0 ]
+check "no binary: install hint" grep -q '"systemMessage":"adage: no binary for .*; install with brew install .* or npm i -g' "$W/out"
+check "no binary: a quiet hook still answers" sh -c "echo '{}' | '$W/data2b/bin/adage' hook claude UserPromptSubmit; [ \$? = 0 ]"
 
 # 3. No bundled binary; adage on PATH (Homebrew, installers, cargo): linked at its PATH location.
-R3="$W/root3"; mkdir -p "$R3"
+R3="$W/root3"; mkdir -p "$R3/scripts"; cp "$REPO/plugin/claude-code/scripts/quiet" "$R3/scripts/quiet"
 mkdir -p "$W/pathbin"; ln -s "$BIN" "$W/pathbin/adage"
 run "$R3" "$W/data3" "$W/pathbin:$BASE"
 check "PATH: exits 0" [ "$code" = 0 ]
@@ -95,6 +105,14 @@ runx "$W/xdata1" "$W/pathbin:$BASE"
 check "exec off: exec plugin exits 0 silently" sh -c "[ '$code' = 0 ] && [ ! -s '$W/out' ]"
 check "exec off: exec plugin is quiet" [ "$(target_of "$W/xdata1/bin/adage-exec")" = "$XR/scripts/quiet" ]
 mkdir -p "$ADAGE_HOME/exec"; echo '{}' >"$ADAGE_HOME/exec/enabled"
+# The adage-exec plugin is not installed: the Adage plugin keeps serving, and says why.
+rm -f "$ADAGE_HOME/exec/plugin-seen"
+run "$R3" "$W/data7" "$W/pathbin:$BASE"
+check "exec on, no exec plugin: exits 0" [ "$code" = 0 ]
+check "exec on, no exec plugin: still serves" [ "$(target_of "$W/data7/bin/adage")" = "$W/pathbin/adage" ]
+check "exec on, no exec plugin: says so" grep -q "delegation is on but the adage-exec plugin isn't installed" "$W/out"
+# Installed (beside this plugin, as in a checkout): the Adage plugin goes quiet.
+mkdir -p "$W/claude-code-exec"
 run "$R3" "$W/data6" "$W/pathbin:$BASE"
 check "exec on: adage plugin exits 0 silently" sh -c "[ '$code' = 0 ] && [ ! -s '$W/out' ]"
 check "exec on: adage plugin is quiet" [ "$(target_of "$W/data6/bin/adage")" = "$R3/scripts/quiet" ]

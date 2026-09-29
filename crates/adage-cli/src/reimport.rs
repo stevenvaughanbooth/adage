@@ -1,11 +1,11 @@
 //! Re-running `adage add` for a track already imported (Implementation plan §4.1): the recipient's
 //! own review decisions carry across for every route whose id survives in the new version.
 //!
-//! - **Rejected / demoted / promoted / approved:** recorded again and re-applied exactly as
-//!   `adage condition` re-applies them ([`review::reconcile`]): a rejected route stays retired unless
-//!   the new version strengthened materially, a demotion holds, and a promotion holds only while the
+//! - **Rejected / weakened / strengthened / approved:** recorded again and re-applied exactly as
+//!   `adage condition` re-applies them ([`review::reconcile`]): a rejected route stays extinguished unless
+//!   the new version strengthened materially, a weakening holds, and a strengthening holds only while the
 //!   route is materially unchanged *and* local first-hand evidence still allows an import to be
-//!   green (Design O2).
+//!   fire (Design O2).
 //! - **Pinned:** the recipient's pinned copy is kept, as learn keeps it; where the new version
 //!   differs materially it is recorded as a proposal for `adage review`.
 //!
@@ -14,7 +14,7 @@
 use crate::review::{discover, first_hand};
 use adage_tracks::proposals::{self, Proposals};
 use adage_tracks::review::{self, Decision, Reviews};
-use adage_tracks::{io, Aspect, Route, Track};
+use adage_tracks::{io, Route, Strength, Track};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -27,7 +27,7 @@ pub(crate) struct Carried {
 }
 
 /// Carry the recipient's decisions from the installed copy at `dest` (if any) onto `incoming`,
-/// which is already at probation.
+/// which is already at forming.
 pub(crate) fn carry(dest: &Path, incoming: Track, tracks_root: &Path) -> Result<Carried> {
     let fresh = |track| Carried { track, reviews: Reviews::default(), proposals: Proposals::default(), kept: vec![] };
     if !dest.join("track.toml").is_file() {
@@ -64,10 +64,10 @@ pub(crate) fn carry(dest: &Path, incoming: Track, tracks_root: &Path) -> Result<
     let all = discover(tracks_root)?;
     let repo = track.manifest.scope.repo.clone();
     for r in &mut track.routes {
-        // An import is green only by a person's promotion, and only with local first-hand evidence.
-        let promoted = reviews.routes.get(&r.id).is_some_and(|v| v.decision == Decision::Promoted);
-        if r.aspect == Aspect::Green && !(promoted && first_hand(&all, &repo, &r.id).is_some()) {
-            r.aspect = Aspect::Yellow;
+        // An import is fire only by a person's strengthening, and only with local first-hand evidence.
+        let strengthened = reviews.routes.get(&r.id).is_some_and(|v| v.decision == Decision::Strengthened);
+        if r.strength == Strength::Fire && !(strengthened && first_hand(&all, &repo, &r.id).is_some()) {
+            r.strength = Strength::Prime;
         }
     }
     let kept = reviews.routes.iter().map(|(id, v)| (id.clone(), v.decision)).collect();

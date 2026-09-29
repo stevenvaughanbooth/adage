@@ -1,0 +1,1437 @@
+{
+ "n_sessions": 239,
+ "n_strata": 76,
+ "variance": {
+  "total": 0.2138,
+  "within_stratum": 0.0356,
+  "share_within": 0.166,
+  "pass_rate": 0.69,
+  "mixed_strata": 9,
+  "sessions_in_mixed": 43,
+  "oracle_pass_if_every_attempt_matched_best": 0.791
+ },
+ "cluster_names": {
+  "12": [
+   "Write {test_file} (191) | Write {src_file} (38) | Write {arg} (1)",
+   "Bash:grep {arg} (431) | Bash:grep {arg} {src_file} (278) | Bash:grep {arg} {test_file} (236)",
+   "Read {src_file} (2027) | Read {test_file} (1321) | Read {dir} (99)",
+   "Edit {src_file} (986) | Edit {test_file} (784) | Edit {dir} (82)",
+   "Bash:python3 <<heredoc (694) | Bash:cat (233) | Bash:python <<heredoc (98)",
+   "Grep {pattern} (701) | Bash:grep {arg} {dir} (13) | Bash:grep {arg} (10)",
+   "Bash:pip install -q {dir} (186) | Bash:pip install -q {arg} (122) | Bash:pip install {dir} (21)",
+   "Bash:git log (245) | Bash:git status (171) | Bash:git commit {arg} (168)",
+   "Bash:python3 -c (213) | Bash:python {test_file} (185) | Bash:python -c (132)",
+   "Bash:npm test {test_file} {arg} (159) | Bash:grep {arg} (127) | Bash:npx vitest {arg} {test_file} (87)",
+   "Bash:go test -run -v {arg} (211) | Bash:find {dir} {arg} {src_file} (181) | Bash:npm test {test_file} (139)",
+   "Bash:python -m pytest {test_file} (341) | Bash:.venv/bin/python -m pytest {test_file} (149) | Bash:python -m pytest -x {test_file} (84)"
+  ],
+  "40": [
+   "Bash:grep {arg} (309) | Bash:grep {arg} {test_file} (131) | Bash:grep {arg} {src_file} (106)",
+   "Read {src_file} (2027) | Read {test_file} (1321) | Read {dir} (99)",
+   "Edit {src_file} (986) | Edit {test_file} (784) | Edit {dir} (82)",
+   "Bash:find {dir} {arg} {src_file} (176) | Bash:find {dir} {arg} (18) | Bash:find {dir} {src_file} {arg} (12)",
+   "Bash:go test -run -v {arg} (160) | Bash:go test -v (25) | Bash:go test -run {arg} (6)",
+   "Bash:python3 <<heredoc (650) | Bash:python <<heredoc (72) | Bash:.venv/bin/python <<heredoc (57)",
+   "Bash:python {test_file} (255) | Bash:python3 -c (27) | Bash:python {test_file} {arg} (17)",
+   "Bash:git log (227) | Bash:git diff {src_file} (115) | Bash:git diff {test_file} (28)",
+   "Bash:pip install -q {arg} (93) | Bash:pip install -q {dir} (23) | Bash:python -m pytest -q {test_file} (16)",
+   "Grep {pattern} (682) | Bash:grep {arg} {src_file} (3) | Bash:grep {arg} {dir} (2)",
+   "Bash:python -m pytest {test_file} (303) | Bash:.venv/bin/python -m pytest {test_file} (149) | Bash:python -m pytest -x {test_file} (78)",
+   "Write {test_file} (191) | Write {src_file} (38) | Write {arg} (1)",
+   "Bash:pip install -q {dir} (156) | Bash:pip install -q {arg} (105) | Bash:pip install {dir} (18)",
+   "Bash:grep {num} {arg} {test_file} (44) | Bash:grep {arg} (39) | Bash:grep {arg} {test_file} (13)",
+   "Bash:wc {test_file} (54) | Bash:wc {src_file} (9) | Bash:wc {dir} (1)",
+   "Bash:ls {dir} (62) | Bash:ls (38) | Bash:ls {src_file} (17)",
+   "Bash:find {dir} {arg} {src_file} (223) | Bash:find {test_dir} {src_file} {arg} (12) | Bash:find {dir} {src_file} {arg} (12)",
+   "Bash:python3 -c (161) | Bash:python -c (94) | Bash:.venv/bin/python -c (54)",
+   "Grep {pattern} (2) | Bash:grep {arg} (1)",
+   "Bash:rm {src_file} (28) | Bash:rm {test_file} (20) | Bash:pytest {test_file} (11)",
+   "Bash:git commit {arg} (168) | Bash:git add {src_file} {test_file} (74) | Bash:git add {src_file} (58)",
+   "Bash:npm test {test_file} (106) | Bash:npx vitest {arg} {test_file} (39) | Bash:tail {test_file} (35)",
+   "Glob {pattern} (48)",
+   "Bash:grep {arg} {src_file} (171) | Bash:grep {arg} (120) | Bash:grep {arg} {test_file} (105)",
+   "Bash:npm test {test_file} {arg} (155) | Bash:npx vitest {arg} {test_file} (82) | Bash:npm test --run {test_file} {arg} (53)",
+   "Bash:git status (168) | Bash:git add (62) | Bash:git diff (23)",
+   "Bash:python -m pytest {test_file} (56) | Bash:python3 <<heredoc (44) | Bash:python -c (33)",
+   "Bash:python {arg} (4)",
+   "Bash:find {dir} {arg} {src_file} (41) | Bash:find {dir} {arg} (21) | Bash:find {dir} {arg} {test_file} (8)",
+   "Bash:go test -run -v {arg} (8) | Bash:mv {src_file} {test_file} (6) | Bash:grep {num} {arg} {test_file} (3)",
+   "Bash:npm run build (17) | Bash:npm test (16) | Bash:find {test_dir} {arg} (13)",
+   "Bash:cat (233) | Bash:cat {test_file} (6) | Bash:cat {dir} (1)",
+   "Bash:go test -run -v {arg} (51) | Bash:npm test --run {test_file} (35) | Bash:npm test {test_file} (33)",
+   "Bash:grep {arg} (42) | Bash:grep {arg} {src_file} (24) | Bash:grep {arg} {dir} (18)",
+   "Bash:grep {arg} (37) | Bash:sed {arg} {src_file} (34) | Bash:grep {arg} {src_file} (18)",
+   "Bash:find {dir} {arg} (16) | Bash:find {dir} {src_file} (12) | Bash:find {test_dir} {arg} (3)",
+   "Bash:ls (32) | Bash:ls {dir} (10) | Bash:ls {src_file} (8)",
+   "Grep {pattern} (4)",
+   "Grep {pattern} (5) | Bash:grep {arg} {dir} (1)",
+   "Bash:grep {arg} {test_dir} (1) | Bash:grep {num} {arg} {test_file} (1) | Bash:grep {arg} (1)"
+  ]
+ },
+ "results": {
+  "cv": {
+   "top1": {
+    "rd": -0.012,
+    "ci90": [
+     -0.072,
+     0.041
+    ],
+    "weight": 60.9,
+    "strata": 244
+   },
+   "picked": {
+    "late:k12:c10|c2": {
+     "times": 16,
+     "held_out": {
+      "rd": 0.074,
+      "ci90": [
+       0.014,
+       0.144
+      ],
+      "weight": 50.4,
+      "strata": 202
+     }
+    },
+    "early:k12:c7": {
+     "times": 14,
+     "held_out": {
+      "rd": 0.062,
+      "ci90": [
+       0.021,
+       0.115
+      ],
+      "weight": 156.0,
+      "strata": 164
+     }
+    },
+    "late:k12:c10|c3": {
+     "times": 11,
+     "held_out": {
+      "rd": 0.036,
+      "ci90": [
+       0.0,
+       0.083
+      ],
+      "weight": 23.4,
+      "strata": 137
+     }
+    },
+    "early:k40:c25": {
+     "times": 9,
+     "held_out": {
+      "rd": 0.052,
+      "ci90": [
+       0.008,
+       0.104
+      ],
+      "weight": 101.6,
+      "strata": 105
+     }
+    },
+    "endok:k40:c25": {
+     "times": 9,
+     "held_out": {
+      "rd": 0.02,
+      "ci90": [
+       -0.022,
+       0.084
+      ],
+      "weight": 54.8,
+      "strata": 114
+     }
+    },
+    "tail:k40:c31": {
+     "times": 8,
+     "held_out": {
+      "rd": NaN,
+      "ci90": [
+       NaN,
+       NaN
+      ],
+      "weight": 0.0,
+      "strata": 91
+     }
+    },
+    "early:k40:c26": {
+     "times": 6,
+     "held_out": {
+      "rd": 0.022,
+      "ci90": [
+       -0.035,
+       0.08
+      ],
+      "weight": 67.4,
+      "strata": 66
+     }
+    },
+    "any:k40:c25": {
+     "times": 5,
+     "held_out": {
+      "rd": 0.026,
+      "ci90": [
+       -0.039,
+       0.117
+      ],
+      "weight": 32.0,
+      "strata": 66
+     }
+    },
+    "again:k40:c31": {
+     "times": 3,
+     "held_out": {
+      "rd": -0.238,
+      "ci90": [
+       -0.5,
+       0.0
+      ],
+      "weight": 4.2,
+      "strata": 44
+     }
+    },
+    "early:k40:c7": {
+     "times": 3,
+     "held_out": {
+      "rd": -0.03,
+      "ci90": [
+       -0.091,
+       0.038
+      ],
+      "weight": 33.6,
+      "strata": 28
+     }
+    },
+    "many:k40:c36": {
+     "times": 2,
+     "held_out": {
+      "rd": -0.139,
+      "ci90": [
+       -0.305,
+       0.0
+      ],
+      "weight": 8.4,
+      "strata": 24
+     }
+    },
+    "endok:k40:c36": {
+     "times": 2,
+     "held_out": {
+      "rd": -0.139,
+      "ci90": [
+       -0.305,
+       0.0
+      ],
+      "weight": 8.4,
+      "strata": 24
+     }
+    },
+    "any:k40:c36": {
+     "times": 2,
+     "held_out": {
+      "rd": -0.139,
+      "ci90": [
+       -0.305,
+       0.0
+      ],
+      "weight": 8.4,
+      "strata": 24
+     }
+    },
+    "again:k12:c10": {
+     "times": 2,
+     "held_out": {
+      "rd": -0.078,
+      "ci90": [
+       -0.306,
+       0.128
+      ],
+      "weight": 10.7,
+      "strata": 25
+     }
+    },
+    "any:k40:c31": {
+     "times": 1,
+     "held_out": {
+      "rd": -0.317,
+      "ci90": [
+       -0.6,
+       -0.154
+      ],
+      "weight": 3.4,
+      "strata": 14
+     }
+    }
+   }
+  },
+  "full_data_top": [
+   {
+    "key": "tail:k40:c31",
+    "rd": 0.357,
+    "lb90": 0.094
+   },
+   {
+    "key": "late:k12:c10|c2",
+    "rd": 0.153,
+    "lb90": 0.023
+   },
+   {
+    "key": "early:k12:c7",
+    "rd": 0.082,
+    "lb90": 0.017
+   },
+   {
+    "key": "late:k12:c10|c3",
+    "rd": 0.158,
+    "lb90": 0.013
+   },
+   {
+    "key": "early:k40:c25",
+    "rd": 0.074,
+    "lb90": 0.008
+   },
+   {
+    "key": "endok:k40:c25",
+    "rd": 0.101,
+    "lb90": 0.008
+   },
+   {
+    "key": "any:k40:c25",
+    "rd": 0.101,
+    "lb90": 0.008
+   },
+   {
+    "key": "early:k40:c26",
+    "rd": 0.064,
+    "lb90": -0.001
+   },
+   {
+    "key": "early:k40:c7",
+    "rd": 0.047,
+    "lb90": -0.018
+   },
+   {
+    "key": "early:k40:c10",
+    "rd": 0.048,
+    "lb90": -0.019
+   },
+   {
+    "key": "early:k12:c11",
+    "rd": 0.047,
+    "lb90": -0.019
+   },
+   {
+    "key": "many:k40:c25",
+    "rd": 0.081,
+    "lb90": -0.022
+   },
+   {
+    "key": "tail:k40:c25",
+    "rd": 0.053,
+    "lb90": -0.023
+   },
+   {
+    "key": "early:k40:c19",
+    "rd": 0.039,
+    "lb90": -0.028
+   },
+   {
+    "key": "early:k40:c20",
+    "rd": 0.04,
+    "lb90": -0.028
+   },
+   {
+    "key": "late:k12:c4|c10",
+    "rd": 0.064,
+    "lb90": -0.03
+   },
+   {
+    "key": "again:k12:c10",
+    "rd": 0.074,
+    "lb90": -0.031
+   },
+   {
+    "key": "early:k40:c33",
+    "rd": 0.029,
+    "lb90": -0.036
+   },
+   {
+    "key": "again:k12:c7",
+    "rd": 0.169,
+    "lb90": -0.036
+   },
+   {
+    "key": "early:k40:c36",
+    "rd": 0.029,
+    "lb90": -0.037
+   },
+   {
+    "key": "early:k40:c34",
+    "rd": 0.03,
+    "lb90": -0.037
+   },
+   {
+    "key": "early:k12:c6",
+    "rd": 0.03,
+    "lb90": -0.037
+   },
+   {
+    "key": "early:k40:c3",
+    "rd": 0.041,
+    "lb90": -0.037
+   },
+   {
+    "key": "early:k40:c12",
+    "rd": 0.03,
+    "lb90": -0.037
+   },
+   {
+    "key": "late:k12:c4|c6",
+    "rd": 0.063,
+    "lb90": -0.038
+   }
+  ],
+  "loro:attrs": {
+   "selected": [
+    "tail:k40:c20",
+    "tail:k12:c4",
+    "late:k12:c4|c10",
+    "early:k12:c1",
+    "early:k40:c22"
+   ],
+   "top1_held_out": {
+    "rd": NaN,
+    "ci90": [
+     NaN,
+     NaN
+    ],
+    "weight": 0.0,
+    "strata": 12
+   }
+  },
+  "loro:click": {
+   "selected": [
+    "late:k12:c2|c1",
+    "many:k40:c12",
+    "endok:k40:c12",
+    "any:k40:c12",
+    "again:k40:c31"
+   ],
+   "top1_held_out": {
+    "rd": -0.104,
+    "ci90": [
+     -0.242,
+     0.026
+    ],
+    "weight": 8.0,
+    "strata": 22
+   }
+  },
+  "loro:marshmallow": {
+   "selected": [
+    "tail:k40:c27",
+    "endok:k40:c6",
+    "any:k40:c6",
+    "early:k40:c6",
+    "early:k12:c1"
+   ],
+   "top1_held_out": {
+    "rd": NaN,
+    "ci90": [
+     NaN,
+     NaN
+    ],
+    "weight": 0.0,
+    "strata": 10
+   }
+  },
+  "loro:urfave-cli": {
+   "selected": [
+    "endok:k40:c11",
+    "any:k40:c11",
+    "early:k40:c11",
+    "early:k12:c7",
+    "late:k12:c6|c1"
+   ],
+   "top1_held_out": {
+    "rd": NaN,
+    "ci90": [
+     NaN,
+     NaN
+    ],
+    "weight": 0.0,
+    "strata": 1
+   }
+  },
+  "loro:vue-core": {
+   "selected": [
+    "tail:k40:c34",
+    "many:k40:c34",
+    "any:k40:c34",
+    "again:k40:c34",
+    "endok:k40:c34"
+   ],
+   "top1_held_out": {
+    "rd": NaN,
+    "ci90": [
+     NaN,
+     NaN
+    ],
+    "weight": 0.0,
+    "strata": 16
+   }
+  }
+ },
+ "prespecified": {
+  "H1 test run after the last edit (before finishing)": {
+   "prevalence": 0.849,
+   "all": {
+    "rd": 0.0,
+    "ci90": [
+     -0.098,
+     0.111
+    ],
+    "weight": 13.9,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": 0.0,
+    "ci90": [
+     -0.098,
+     0.111
+    ],
+    "weight": 13.9,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 4.4,
+     "strata": 12
+    },
+    "click": {
+     "rd": 0.0,
+     "ci90": [
+      -0.182,
+      0.239
+     ],
+     "weight": 6.6,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 1.7,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 1.2,
+     "strata": 16
+    }
+   }
+  },
+  "H1b last test run after the last edit exited 0": {
+   "prevalence": 0.841,
+   "all": {
+    "rd": 0.0,
+    "ci90": [
+     -0.093,
+     0.107
+    ],
+    "weight": 14.7,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": 0.0,
+    "ci90": [
+     -0.093,
+     0.107
+    ],
+    "weight": 14.7,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 4.6,
+     "strata": 12
+    },
+    "click": {
+     "rd": 0.0,
+     "ci90": [
+      -0.174,
+      0.225
+     ],
+     "weight": 7.3,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 1.7,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 1.2,
+     "strata": 16
+    }
+   }
+  },
+  "H2 ran the task's existing test module (targeted) [gold instrument]": {
+   "prevalence": 0.833,
+   "all": {
+    "rd": 0.061,
+    "ci90": [
+     -0.084,
+     0.249
+    ],
+    "weight": 13.6,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": 0.061,
+    "ci90": [
+     -0.084,
+     0.249
+    ],
+    "weight": 13.6,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 0.8,
+     "strata": 12
+    },
+    "click": {
+     "rd": 0.102,
+     "ci90": [
+      -0.161,
+      0.407
+     ],
+     "weight": 8.2,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 4.2,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 0.5,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 16
+    }
+   }
+  },
+  "H2b targeted test run after the last edit [gold instrument]": {
+   "prevalence": 0.732,
+   "all": {
+    "rd": 0.035,
+    "ci90": [
+     -0.046,
+     0.13
+    ],
+    "weight": 19.3,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": 0.035,
+    "ci90": [
+     -0.046,
+     0.13
+    ],
+    "weight": 19.3,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 2.2,
+     "strata": 12
+    },
+    "click": {
+     "rd": 0.072,
+     "ci90": [
+      -0.095,
+      0.296
+     ],
+     "weight": 9.2,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 5.5,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 2.4,
+     "strata": 16
+    }
+   }
+  },
+  "H3 ad-hoc reproduction script (python -c / heredoc / script) ": {
+   "prevalence": 0.736,
+   "all": {
+    "rd": -0.028,
+    "ci90": [
+     -0.107,
+     0.041
+    ],
+    "weight": 17.9,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": -0.028,
+    "ci90": [
+     -0.107,
+     0.041
+    ],
+    "weight": 17.9,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": 0.053,
+     "ci90": [
+      0.0,
+      0.176
+     ],
+     "weight": 4.8,
+     "strata": 12
+    },
+    "click": {
+     "rd": -0.054,
+     "ci90": [
+      -0.214,
+      0.061
+     ],
+     "weight": 9.3,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": -0.065,
+     "ci90": [
+      -0.158,
+      0.0
+     ],
+     "weight": 3.8,
+     "strata": 16
+    }
+   }
+  },
+  "H3b ad-hoc script after the last edit": {
+   "prevalence": 0.632,
+   "all": {
+    "rd": 0.004,
+    "ci90": [
+     -0.066,
+     0.077
+    ],
+    "weight": 22.1,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": 0.004,
+    "ci90": [
+     -0.066,
+     0.077
+    ],
+    "weight": 22.1,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": 0.04,
+     "ci90": [
+      0.0,
+      0.141
+     ],
+     "weight": 6.2,
+     "strata": 12
+    },
+    "click": {
+     "rd": -0.015,
+     "ci90": [
+      -0.152,
+      0.122
+     ],
+     "weight": 11.5,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 3.0,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 1.4,
+     "strata": 16
+    }
+   }
+  },
+  "H4 kept going after the first green test run": {
+   "prevalence": 0.87,
+   "all": {
+    "rd": 0.0,
+    "ci90": [
+     -0.061,
+     0.071
+    ],
+    "weight": 11.8,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": 0.0,
+    "ci90": [
+     -0.061,
+     0.071
+    ],
+    "weight": 11.8,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": 0.082,
+     "ci90": [
+      0.0,
+      0.207
+     ],
+     "weight": 4.0,
+     "strata": 12
+    },
+    "click": {
+     "rd": -0.091,
+     "ci90": [
+      -0.167,
+      0.0
+     ],
+     "weight": 3.7,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 2.4,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 1.7,
+     "strata": 16
+    }
+   }
+  },
+  "H5 ran a broad/full test suite (no file or selector) [hand instrument]": {
+   "prevalence": 0.523,
+   "all": {
+    "rd": -0.044,
+    "ci90": [
+     -0.084,
+     -0.01
+    ],
+    "weight": 36.1,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": -0.044,
+    "ci90": [
+     -0.084,
+     -0.01
+    ],
+    "weight": 36.1,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": -0.021,
+     "ci90": [
+      -0.054,
+      0.0
+     ],
+     "weight": 11.8,
+     "strata": 12
+    },
+    "click": {
+     "rd": -0.098,
+     "ci90": [
+      -0.193,
+      -0.028
+     ],
+     "weight": 13.6,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 8.4,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 2.3,
+     "strata": 16
+    }
+   }
+  },
+  "H5b broad suite after the last edit [hand instrument]": {
+   "prevalence": 0.427,
+   "all": {
+    "rd": -0.045,
+    "ci90": [
+     -0.084,
+     -0.011
+    ],
+    "weight": 34.8,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": -0.045,
+    "ci90": [
+     -0.084,
+     -0.011
+    ],
+    "weight": 34.8,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": -0.025,
+     "ci90": [
+      -0.059,
+      0.0
+     ],
+     "weight": 9.9,
+     "strata": 12
+    },
+    "click": {
+     "rd": -0.099,
+     "ci90": [
+      -0.165,
+      -0.028
+     ],
+     "weight": 13.5,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 7.8,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 3.6,
+     "strata": 16
+    }
+   }
+  },
+  "R1 read a gold source file [gold instrument]": {
+   "prevalence": 1.0,
+   "all": {
+    "rd": NaN,
+    "ci90": [
+     NaN,
+     NaN
+    ],
+    "weight": 0.0,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": NaN,
+    "ci90": [
+     NaN,
+     NaN
+    ],
+    "weight": 0.0,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 12
+    },
+    "click": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 16
+    }
+   }
+  },
+  "R2 edited a gold source file [gold instrument]": {
+   "prevalence": 1.0,
+   "all": {
+    "rd": NaN,
+    "ci90": [
+     NaN,
+     NaN
+    ],
+    "weight": 0.0,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": NaN,
+    "ci90": [
+     NaN,
+     NaN
+    ],
+    "weight": 0.0,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 12
+    },
+    "click": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 16
+    }
+   }
+  },
+  "R3 first edit was to a gold source file [gold instrument]": {
+   "prevalence": 0.833,
+   "all": {
+    "rd": -0.005,
+    "ci90": [
+     -0.179,
+     0.146
+    ],
+    "weight": 15.5,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": -0.005,
+    "ci90": [
+     -0.179,
+     0.146
+    ],
+    "weight": 15.5,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": 0.056,
+     "ci90": [
+      0.0,
+      0.2
+     ],
+     "weight": 4.5,
+     "strata": 12
+    },
+    "click": {
+     "rd": -0.151,
+     "ci90": [
+      -0.553,
+      0.238
+     ],
+     "weight": 5.5,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 1.3,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 0.5,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": 0.136,
+     "ci90": [
+      0.0,
+      0.429
+     ],
+     "weight": 3.7,
+     "strata": 16
+    }
+   }
+  },
+  "R4 edited a file outside the gold source + test files": {
+   "prevalence": 0.1,
+   "all": {
+    "rd": -0.143,
+    "ci90": [
+     -0.381,
+     0.0
+    ],
+    "weight": 4.7,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": -0.143,
+    "ci90": [
+     -0.381,
+     0.0
+    ],
+    "weight": 4.7,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "weight": 1.3,
+     "strata": 12
+    },
+    "click": {
+     "rd": -0.2,
+     "ci90": [
+      -0.444,
+      0.0
+     ],
+     "weight": 3.3,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 16
+    }
+   }
+  },
+  "C1 session censored (hit max_turns)": {
+   "prevalence": 0.0,
+   "all": {
+    "rd": NaN,
+    "ci90": [
+     NaN,
+     NaN
+    ],
+    "weight": 0.0,
+    "strata": 61
+   },
+   "uncensored": {
+    "rd": NaN,
+    "ci90": [
+     NaN,
+     NaN
+    ],
+    "weight": 0.0,
+    "strata": 61
+   },
+   "by_repo": {
+    "attrs": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 12
+    },
+    "click": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 22
+    },
+    "marshmallow": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 10
+    },
+    "urfave-cli": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 1
+    },
+    "vue-core": {
+     "rd": NaN,
+     "ci90": [
+      NaN,
+      NaN
+     ],
+     "weight": 0.0,
+     "strata": 16
+    }
+   }
+  }
+ }
+}

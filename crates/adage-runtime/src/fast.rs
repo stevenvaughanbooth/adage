@@ -4,9 +4,10 @@
 //!
 //! [`skip`] says an event can be skipped only when running [`crate::decide`] on it would give no
 //! directive, no judgement and no stop request, and would change nothing in the session state that
-//! a later decision reads (`emitted`, `pending`, `obligations`, `stop_requests`, and `prompts`
-//! while it is 0). What a skipped event leaves out is measurement only: the `batches` and
-//! `history` counters, and its spool record, so `adage graph` lists commands only from recorded
+//! a later decision reads (`emitted`, `pending`, `obligations`, `stop_requests`, `prompts`
+//! while it is 0, and the context state `ctx`). What a skipped event leaves out is measurement
+//! only: the `batches` and `history` counters, and its spool record, so `adage graph` lists
+//! commands only from recorded
 //! events. Runs of a dead end's avoided commands are always recorded (they are words in the
 //! triggers), as are all events of a session with a pending judgement or an obligation.
 //!
@@ -16,9 +17,14 @@
 //! | --- | --- |
 //! | session start, session end | always: nothing decides on them |
 //! | prompt | no intent routes; no prompt route's span kind in the text; no prompt token a prompt route's learned value type accepts; not the session's first prompt (`prompts` > 0) |
-//! | batch | no pending judgement and no obligation in the state; no call might match ([`Triggers::call_might_match`]) |
-//! | failure | no call might match, and no pending judgement (a failure of a directed command judges it `followed_failed`) |
+//! | batch | no pending judgement, no obligation and no procedure card waiting for an edit (`card_waiting`) in the state; no call might match ([`Triggers::call_might_match`]) |
+//! | failure | no call might match, and no pending judgement (a failure of a directed command judges it `misfired`) |
 //! | stop | no obligation both unmet and not yet requested |
+//!
+//! **Context triggers** (Track G §7.3) match a subsequence over *alphabet* events only: an event
+//! that satisfies no context item pushes nothing and changes no match. Every item's words, globs,
+//! value types and intents are in the triggers ([`Triggers::of`]), so an event that might be an
+//! alphabet event is never skipped, and skipping the rest is exactly equivalent.
 //!
 //! The eval replay checks this on every event of every dataset: a skipped event's full decision
 //! must be empty, and deciding with the fast path must give the same decisions as without it
@@ -53,7 +59,9 @@ pub fn skip(t: &Triggers, ev: &Event, cwd: &str, state: impl FnOnce() -> Option<
             if t.calls_matter() && calls.iter().any(|c| t.call_might_match(&haystack(cwd, &c.tool, &c.input))) {
                 return false;
             }
-            state().is_some_and(|st| st.pending.is_empty() && st.obligations.is_empty())
+            // A procedure card waiting for the session's first edit of one of its files (a prompt
+            // just below its threshold) is said at an edit no trigger word names.
+            state().is_some_and(|st| st.pending.is_empty() && st.obligations.is_empty() && st.card_waiting.is_none())
         }
         // A failure can also judge a pending directive (followed, and it failed).
         Event::Failure { call } => {
@@ -106,6 +114,8 @@ mod tests {
             })
         };
         assert!(!skip(&t, &ls(), "/r", met), "an edit may re-arm it");
+        let waiting = || Some(SessionState { card_waiting: Some("card-1".into()), ..Default::default() });
+        assert!(!skip(&t, &ls(), "/r", waiting), "a card may be due at this edit");
         assert!(skip(&t, &Event::Stop { stop_hook_active: false }, "/r", met));
         let unmet = || Some(SessionState { obligations: vec![Obligation::default()], ..Default::default() });
         assert!(!skip(&t, &Event::Stop { stop_hook_active: false }, "/r", unmet));

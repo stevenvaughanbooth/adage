@@ -6,7 +6,7 @@
 // own recorded hook decisions, with their real arms.
 
 import type { Graph, TraceEvent } from "../../api/types";
-import { shortSession, strength as strengthOf } from "../../lib/words";
+import { judgement, shortSession, strength as strengthOf } from "../../lib/words";
 import type { CamSpec, DotLook, Palette, Role, SceneState, Stage, V3 } from "../engine";
 import { TRACES, laneZ } from "../sample";
 import type { Built, Chapter, Step } from "../types";
@@ -18,7 +18,8 @@ const MAX_PER_SESSION = 8;
 const MAX_PER_DECISION = 3;
 const MAX_STOP_REQUESTS = 2;
 const FOLLOW_WINDOW = 3;
-// The control share when neither ADAGE_HOLDOUT nor `runtime.holdout` sets one.
+// The control share when neither ADAGE_CONTROL nor `runtime.control` sets one (params.rs
+// `RuntimeParams::default`).
 const CONTROL_SHARE = 0.1;
 // crates/adage-runtime/src/lib.rs `plain_token`.
 const PLAIN_MAX = 200;
@@ -225,7 +226,7 @@ function eventKind(name: string): Kind {
 
 /** The most recent traces' recorded hook decisions, as lanes. Every recorded event passed the fast path. */
 function fromRepo(g: Graph): Sess[] {
-  const strengths = new Map(g.routes.map((r) => [r.id, (strengthOf(r.aspect) ?? "prime") as Strength]));
+  const strengths = new Map(g.routes.map((r) => [r.id, (strengthOf(r.strength) ?? "prime") as Strength]));
   const by = new Map<string, TraceEvent[]>();
   for (const e of g.events) by.set(e.session, [...(by.get(e.session) ?? []), e]);
   const latest = (evs: TraceEvent[]) => Math.max(...evs.map((e) => e.ts));
@@ -234,7 +235,7 @@ function fromRepo(g: Graph): Sess[] {
     .slice(0, 12)
     .map(([id, evs], i) => {
       const x = armDraw(id);
-      const control = evs.some((e) => e.arm === "holdout");
+      const control = evs.some((e) => e.arm === "control");
       const shown = [...evs].sort((a, b) => a.ts - b.ts).slice(-7);
       return {
         id,
@@ -250,7 +251,7 @@ function fromRepo(g: Graph): Sess[] {
             ...(control ? e.would : e.directed).map((r) => ({ route: r, strength: strengths.get(r) ?? "prime", what: r })),
             ...(e.continue ? [{ route: "stop", strength: "fire" as const, what: "stop request", stop: true }] : []),
           ],
-          judged: e.judged.map(([k]) => (k === "derailed" ? "ignored" : k === "obligation_met" ? "met" : k.replace(/_/g, " "))),
+          judged: e.judged.map(([k]) => judgement(k)),
         })),
       };
     });
@@ -648,7 +649,7 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
     },
     {
       title: "A hash picks the arm",
-      body: `The trace id is hashed: x is the first 4 bytes of sha256("adage-arm:" + id), little-endian, divided by u32::MAX. A trace is control if x is below the share, ${CONTROL_SHARE} unless ADAGE_HOLDOUT or runtime.holdout says otherwise. ${
+      body: `The trace id is hashed: x is the first 4 bytes of sha256("adage-arm:" + id), little-endian, divided by u32::MAX. A trace is control if x is below the share, ${CONTROL_SHARE} unless ADAGE_CONTROL or runtime.control says otherwise. ${
         useRepo
           ? `Computed here in your browser for your ${S.length} traces, ${agree} of ${S.length} land on the arm the hook recorded; an arm forced with ADAGE_ARM, or drawn with another share, would not.`
           : `Computed here in your browser: ${control.map((s) => `${s.name} (x ${s.x.toFixed(3)})`).join(" and ")} are control; the other ${treated.length} are treated.`
@@ -658,13 +659,14 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
     {
       title: "decide() answers by event",
       body: useRepo
-        ? `Above each event are the reflexes it directed, coloured by strength: ${delivered} delivered in treated traces, ${would} recorded as would-have in control traces. A prompt runs inhibit announcements first, then prompt reflexes by strength and support, then intent; a batch judges follows and opens finish lines; a failure fires only on its signature; a stop asks at most ${MAX_STOP_REQUESTS} times.`
-        : `At the first prompt the dead end is announced (inhibit). An edit to registry/*.csv raises the finish line and opens an obligation; make gen meets it in ${met} traces. ${stops.length ? `${stops.map((x) => x.s.name).join(", ")} tries to stop without it, so the stop hook asks the agent to run it first.` : ""} Edits to src/*.ts raise a candidate: run npm test.`,
+        ? `Above each event are the reflexes it directed, coloured by strength: ${delivered} delivered in treated traces, ${would} recorded as would-have in control traces. A prompt runs inhibit announcements first, then prompt reflexes by strength and support, then intent; a batch judges follows and opens finish lines; a failure fires only on its signature; a stop asks at most ${MAX_STOP_REQUESTS} times. On Claude Code one more event comes before a shell command runs: the one change Adage makes by default. A Python test run under the system Python is pointed at the project's verified .venv, the person sees each rewrite, and adage delegate rewrites off turns it off.`
+        : `At the first prompt the dead end is announced (inhibit). An edit to registry/*.csv raises the finish line and opens an obligation; make gen meets it in ${met} traces. ${stops.length ? `${stops.map((x) => x.s.name).join(", ")} tries to stop without it, so the stop hook asks the agent to run it first.` : ""} Edits to src/*.ts raise a candidate: run npm test. On Claude Code one more event comes before a shell command runs: the one change Adage makes by default. A Python test run under the system Python is pointed at the project's verified .venv, the person sees each rewrite, and adage delegate rewrites off turns it off.`,
       chips: [
         { text: "prompt: inhibit first · then strength, support · intent" },
         { text: "batch: follows, finish lines" },
         { text: "failure: signature in output" },
         { text: `stop: ≤ ${MAX_STOP_REQUESTS}, unmet obligations only` },
+        { text: "before a shell command (Claude Code): the .venv rewrite" },
       ],
     },
     {
@@ -694,7 +696,7 @@ function build(stage: Stage, ctx: { graph: Graph | null; repo: boolean }): Built
     },
     {
       title: "Control records, and stays silent",
-      body: `The same decision runs in both arms. Treated traces received ${delivered} directive${delivered === 1 ? "" : "s"}; the ${control.length} control trace${control.length === 1 ? "" : "s"} logged ${would} would-have directive${would === 1 ? "" : "s"} and received none. That gives the next chapter its comparison: what agents did with a reflex, against what they did without it.`,
+      body: `The same decision runs in both arms. Treated traces received ${delivered} directive${delivered === 1 ? "" : "s"}; the ${control.length} control trace${control.length === 1 ? "" : "s"} logged ${would} would-have directive${would === 1 ? "" : "s"} and received none, and no command of theirs was rewritten. That gives the next chapter its comparison: what agents did with a reflex, against what they did without it.`,
       chips: [{ text: "would_have: both arms" }, { text: "directives: treated only" }, { text: `control ≈ ${Math.round(CONTROL_SHARE * 100)}% of traces` }],
     },
   ];

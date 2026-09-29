@@ -198,7 +198,7 @@ test("how it works steps through every chapter, from the keyboard", async ({ pag
   await page.goto(`${DEMO}/?view=how&ch=subgraphs&step=0`);
   await ready(page);
   await page.keyboard.press("ArrowLeft");
-  await expect(page).toHaveURL(/ch=intent/);
+  await expect(page).toHaveURL(/ch=read/);
   // The scoring step computes its numbers and draws its figure.
   await page.goto(`${DEMO}/?view=how&ch=subgraphs&step=9`);
   await ready(page);

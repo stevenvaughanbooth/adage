@@ -1,8 +1,9 @@
 //! Repository keys end to end: two unrelated repositories without `origin` that share a directory
 //! name. `adage condition` keys one's routes by `<name>@<root commit>`, its hooks draw them, and the
 //! other's do not; routes learned under the bare name before the change keep working until a
-//! repository of that name is re-keyed. Needs git to build the repositories (skipped without it);
-//! Adage itself never runs git.
+//! repository of that name is re-keyed. And linked worktrees: one repository with their main
+//! checkout, before and after a worktree is removed. Needs git to build the repositories (skipped
+//! without it); Adage itself never runs git.
 
 use serde_json::{json, Value};
 use std::io::Write;
@@ -55,6 +56,10 @@ fn transcript(dir: &Path, sid: &str, cwd: &Path) -> PathBuf {
 }
 
 fn adage(home: &Path, args: &[&str], stdin: &str) -> String {
+    adage_with(home, args, stdin, &[])
+}
+
+fn adage_with(home: &Path, args: &[&str], stdin: &str, env: &[(&str, &str)]) -> String {
     let mut c = Command::new(env!("CARGO_BIN_EXE_adage"))
         .args(args)
         .env("ADAGE_HOME", home)
@@ -62,6 +67,7 @@ fn adage(home: &Path, args: &[&str], stdin: &str) -> String {
         .env("ADAGE_ARM", "treated")
         .env_remove("ADAGE_DISABLE")
         .env_remove("CLAUDECODE")
+        .envs(env.iter().copied())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -76,6 +82,13 @@ fn adage(home: &Path, args: &[&str], stdin: &str) -> String {
 fn prompt(home: &Path, cwd: &Path, sid: &str) -> String {
     let p = json!({ "session_id": sid, "cwd": cwd, "prompt": "Fix the rounding bug." });
     adage(home, &["hook", "claude", "UserPromptSubmit"], &p.to_string())
+}
+
+/// The end of a turn with automatic learning on; the learner it starts is only recorded.
+fn stop(home: &Path, cwd: &Path, sid: &str) {
+    let p = json!({ "session_id": sid, "cwd": cwd, "stop_hook_active": false });
+    let env = [("ADAGE_AUTO_LEARN", "1"), ("ADAGE_TEST_NO_SPAWN", "record")];
+    adage_with(home, &["hook", "claude", "Stop"], &p.to_string(), &env);
 }
 
 #[test]
@@ -98,7 +111,15 @@ fn unrelated_repositories_with_one_name_do_not_share_routes() {
     let report: Value = serde_json::from_str(&adage(&home, &args, "")).unwrap();
     let key = format!("app@{}", &root_a[..12]);
     assert!(report["repos"].get(&key).is_some(), "learned under {key}: {report}");
-    assert_eq!(std::fs::read_dir(home.join("repo-keys")).unwrap().count(), 1, "learn leaves the root for hooks");
+    let cached: Vec<String> = std::fs::read_dir(home.join("repo-keys"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(
+        cached.iter().filter(|n| !n.ends_with(".key")).count(),
+        1,
+        "learn leaves the root for hooks: {cached:?}"
+    );
 
     assert!(prompt(&home, &a, "a1").contains("dead-end-"), "the repository the routes were learned in");
     assert_eq!(prompt(&home, &b, "b1"), "", "an unrelated repository with the same name");
@@ -117,4 +138,62 @@ fn unrelated_repositories_with_one_name_do_not_share_routes() {
     std::fs::write(home.join("index.json"), v.to_string()).unwrap();
     assert_eq!(prompt(&home, &b, "b3"), "", "legacy key superseded");
     assert!(prompt(&home, &a, "a2").contains("dead-end-"));
+}
+
+/// Linked worktrees (`git worktree add`: one per task in tools that run agents in parallel) are
+/// one repository with their main checkout: routes learned in one worktree reach the others and
+/// the main checkout, and a worktree's sessions still count after it is removed, even when no
+/// learn ran before it was.
+#[test]
+fn worktrees_share_routes_with_their_main_checkout() {
+    let d = tempfile::tempdir().unwrap();
+    let root = d.path().canonicalize().unwrap();
+    let main = root.join("app");
+    if repo(&main, "one").is_none() {
+        eprintln!("git not available: skipping");
+        return;
+    }
+    git(&main, &["remote", "add", "origin", "git@github.com:acme/app.git"]).unwrap();
+    let (istanbul, paris) = (root.join("workspaces/app/istanbul"), root.join("workspaces/app/paris"));
+    // Relative to the main checkout: git on Windows does not take `\\?\` paths.
+    let worktree = |args: &[&str], name: &str| {
+        git(&main, &[&["worktree"], args, &[&format!("../workspaces/app/{name}")]].concat())
+    };
+    for name in ["istanbul", "paris"] {
+        worktree(&["add", "-q", "--detach"], name).expect("git worktree add");
+    }
+
+    let home = root.join("home");
+    let sessions = |dir: &Path, prefix: &str| -> Vec<String> {
+        (0..3).map(|i| transcript(&root, &format!("{prefix}{i}"), dir).to_string_lossy().to_string()).collect()
+    };
+    let mut files = sessions(&istanbul, "i");
+    let learn = |files: &[String]| -> Value {
+        let mut args = vec!["condition", "--demo", "--json", "--transcripts"];
+        args.extend(files.iter().map(String::as_str));
+        serde_json::from_str(&adage(&home, &args, "")).unwrap()
+    };
+    let key = "github.com/acme/app";
+    let repos = |report: &Value| report["repos"].as_object().unwrap().keys().cloned().collect::<Vec<_>>();
+    let report = learn(&files);
+    assert_eq!(repos(&report), [key], "keyed by origin: {report}");
+    for (dir, sid) in [(&istanbul, "i-p"), (&paris, "p-p"), (&main, "m-p")] {
+        assert!(prompt(&home, dir, sid).contains("dead-end-"), "{}", dir.display());
+    }
+
+    // The task is done and its worktree removed: the sessions in it keep their repository.
+    worktree(&["remove", "--force"], "istanbul").unwrap();
+    assert!(!istanbul.exists());
+    let report = learn(&files);
+    assert_eq!(repos(&report), [key], "not `istanbul`: {report}");
+
+    // Sessions in the other worktree, removed as its last turn ends, before any learner has run:
+    // the hook at the end of the turn remembered its repository.
+    files.extend(sessions(&paris, "p"));
+    stop(&home, &paris, "p2");
+    worktree(&["remove", "--force"], "paris").unwrap();
+    let report = learn(&files);
+    assert_eq!(repos(&report), [key], "not `paris`: {report}");
+    assert_eq!(report["repos"][key]["sessions"], 6, "{report}");
+    assert!(prompt(&home, &main, "m-p2").contains("dead-end-"));
 }

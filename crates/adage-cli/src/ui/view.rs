@@ -15,7 +15,7 @@ use super::theme::{Lamp, Theme};
 use adage_core::repo;
 use adage_store::Paths;
 use adage_term::Glyph;
-use adage_tracks::Aspect;
+use adage_tracks::Strength;
 use anyhow::{bail, Context, Result};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
@@ -174,7 +174,7 @@ impl Live {
             let mut item = feed::from_record(&r.session, &r.value);
             self.next_seq += 1;
             item.seq = self.next_seq;
-            if item.fired() && !item.holdout {
+            if item.fired() && !item.control {
                 fired = Some(item.seq);
             }
             if self.paused {
@@ -260,11 +260,11 @@ impl Live {
         let mut c = (0, 0, 0);
         for i in self.visible(repo_key) {
             for a in &i.acts {
-                if let Act::Directed { aspect, .. } = a {
-                    match aspect {
-                        Aspect::Green => c.0 += 1,
-                        Aspect::Yellow => c.1 += 1,
-                        Aspect::Red => c.2 += 1,
+                if let Act::Directed { strength, .. } = a {
+                    match strength {
+                        Strength::Fire => c.0 += 1,
+                        Strength::Prime => c.1 += 1,
+                        Strength::Inhibit => c.2 += 1,
                     }
                 }
             }
@@ -321,11 +321,11 @@ pub fn rule(label: &str, note: Option<Span<'static>>, width: u16, t: &Theme) -> 
 }
 
 /// The lamp and word of a strength, padded to one column width: `● fire     ` / `FIRE       `.
-fn strength_cell(a: Aspect, t: &Theme, w: usize, bold: bool) -> Vec<Span<'static>> {
-    let style = if bold { t.aspect(a).patch(t.bold()) } else { t.aspect(a) };
+fn strength_cell(a: Strength, t: &Theme, w: usize, bold: bool) -> Vec<Span<'static>> {
+    let style = if bold { t.strength(a).patch(t.bold()) } else { t.strength(a) };
     if t.color {
         vec![
-            Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.aspect(a)),
+            Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.strength(a)),
             Span::styled(t.pad(Theme::strength_word(a), w.saturating_sub(2)), style),
         ]
     } else {
@@ -358,7 +358,7 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
     let verb = |v: &str| if narrow { String::new() } else { format!("{v} ") };
     let off = t.glyph(Glyph::Off);
     let mut spans = match a {
-        Act::Directed { route, aspect, detail, instinct } => {
+        Act::Directed { route, strength, detail, instinct } => {
             let glyph = if *instinct { Glyph::Instinct } else { Glyph::Reflex };
             let id_w = match fit_ {
                 Fit::Wide => 25,
@@ -375,8 +375,8 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
                 Span::styled(format!("{} ", t.glyph(glyph)), t.accent()),
                 Span::styled(t.pad(route, id_w), id_style),
             ];
-            let cell_w = if narrow { Theme::strength_word(*aspect).len() + 3 } else { 11 };
-            let mut cell = strength_cell(*aspect, t, cell_w, hot > 0);
+            let cell_w = if narrow { Theme::strength_word(*strength).len() + 3 } else { 11 };
+            let mut cell = strength_cell(*strength, t, cell_w, hot > 0);
             if hot == 3 {
                 if let Some(first) = cell.first_mut() {
                     first.style = first.style.add_modifier(Modifier::REVERSED);
@@ -389,17 +389,25 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
             }
             v
         }
-        Act::Withheld { route, aspect } => {
-            vec![Span::styled(format!("{off} would {} {route} (withheld)", Theme::strength_word(*aspect)), t.holdout())]
+        Act::Withheld { route, strength } => {
+            vec![Span::styled(
+                format!("{off} would {} {route} (withheld)", Theme::strength_word(*strength)),
+                t.control(),
+            )]
         }
         Act::Followed(r) => vec![
             Span::styled(format!("{} ", t.glyph(Glyph::Ok)), t.green()),
             Span::styled(verb("followed"), t.ink2()),
             Span::raw(r.clone()),
         ],
-        Act::Derailed(r) => vec![
+        Act::Ignored(r) => vec![
             Span::styled(format!("{} ", t.glyph(Glyph::Fail)), t.red()),
             Span::styled(verb("ignored"), t.ink2()),
+            Span::raw(r.clone()),
+        ],
+        Act::Misfired(r) => vec![
+            Span::styled(format!("{} ", t.glyph(Glyph::Fail)), t.red()),
+            Span::styled(verb("misfired"), t.ink2()),
             Span::raw(r.clone()),
         ],
         Act::Met(r) => vec![
@@ -407,15 +415,31 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
             Span::styled("finish line met ".to_string(), t.ink2()),
             Span::raw(r.clone()),
         ],
-        Act::Unaided(r) => vec![Span::styled(format!("{off} found {r} unaided"), t.holdout())],
-        Act::NotReached(r) => vec![Span::styled(format!("{off} missed {r}"), t.holdout())],
+        Act::Unaided(r) => vec![Span::styled(format!("{off} found {r} unaided"), t.control())],
+        Act::NotReached(r) => vec![Span::styled(format!("{off} missed {r}"), t.control())],
         Act::StopRequest => vec![
             Span::styled(format!("{} ", t.ch("■", "#")), t.yellow().patch(t.bold())),
             Span::raw("finish line: asked the agent to continue".to_string()),
         ],
         Act::StopWithheld => {
-            vec![Span::styled(format!("{off} would ask the agent to continue (withheld)"), t.holdout())]
+            vec![Span::styled(format!("{off} would ask the agent to continue (withheld)"), t.control())]
         }
+        Act::Pretool { rewrite, kind, interpreter, withheld } => {
+            let what = pretool_words(*rewrite, kind, interpreter);
+            if *withheld {
+                vec![Span::styled(format!("{off} would have {what} (withheld)"), t.control())]
+            } else {
+                vec![
+                    Span::styled(format!("{} ", t.glyph(Glyph::Arrow)), t.accent()),
+                    Span::styled(what, if *rewrite { t.accent().patch(t.bold()) } else { t.ink2() }),
+                ]
+            }
+        }
+        Act::Other(kind, r) => vec![
+            Span::styled(format!("{} ", t.glyph(Glyph::Sep)), t.dim()),
+            Span::styled(format!("{kind} "), t.ink2()),
+            Span::raw(r.clone()),
+        ],
     };
     // Whatever is left over is cut to the room there is (padding goes first, without an
     // ellipsis).
@@ -436,14 +460,27 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
     spans
 }
 
+/// What a PreToolUse record says Adage did: `pointed the test run at .venv/bin/python`.
+fn pretool_words(rewrite: bool, kind: &str, interpreter: &str) -> String {
+    let at = if interpreter.is_empty() { String::new() } else { format!(" at {interpreter}") };
+    match (rewrite, kind) {
+        (true, "test") => format!("pointed the test run{at}"),
+        (true, "repro") => format!("pointed the Python run{at}"),
+        (true, k) => format!("rewrote the command ({k}){at}"),
+        (false, "pip-install") => "advised on pip install (the project's environment)".to_string(),
+        (false, "permissions") => "advised a rewrite your permission rules would treat differently".to_string(),
+        (false, k) => format!("advised ({k})"),
+    }
+}
+
 /// Each item as lines (one per act), tagged with the item's `seq`.
 pub fn feed_lines(items: &[&FeedItem], ctx: &Ctx, width: u16, pulse: &Pulse) -> Vec<(u64, Line<'static>)> {
     let t = &ctx.theme;
     let f = fit_for(width);
     let mut out = Vec::new();
     for i in items {
-        let dimmed = i.holdout;
-        let st = |s: Style| if dimmed { t.holdout() } else { s };
+        let dimmed = i.control;
+        let st = |s: Style| if dimmed { t.control() } else { s };
         let (sid_n, harness) = match f {
             Fit::Wide => (6, t.pad(feed::harness_name(&i.harness), 9)),
             Fit::Mid => (6, t.pad(feed::harness_short(&i.harness), 3)),
@@ -509,7 +546,7 @@ pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16) -> Line<'static> {
             ];
             let word_style = |w: &str| match w {
                 "fire" | "firm" => t.green().patch(t.bold()),
-                "prime" | "weakened" => t.yellow().patch(t.bold()),
+                "prime" => t.yellow().patch(t.bold()),
                 "inhibit" => t.red().patch(t.bold()),
                 "forming" => t.accent().patch(t.bold()),
                 _ => t.dim(),
@@ -790,7 +827,7 @@ pub fn inspect_lines(i: &FeedItem, ctx: &Ctx, width: u16) -> Vec<Line<'static>> 
             t.ink2(),
         ),
     ])];
-    if i.holdout {
+    if i.control {
         v.push(Line::from(Span::styled("control arm: nothing was delivered to the agent in this trace", t.dim())));
     }
     v.push(Line::raw(""));
@@ -804,7 +841,7 @@ pub fn inspect_lines(i: &FeedItem, ctx: &Ctx, width: u16) -> Vec<Line<'static>> 
     }
     for (route, text) in &i.texts {
         v.push(Line::raw(""));
-        let head = if i.holdout { "WHAT THE AGENT WOULD HAVE SEEN (WITHHELD)" } else { "WHAT THE AGENT SAW" };
+        let head = if i.control { "WHAT THE AGENT WOULD HAVE SEEN (WITHHELD)" } else { "WHAT THE AGENT SAW" };
         v.push(Line::from(vec![
             Span::styled(head, t.dim().patch(t.bold())),
             Span::styled(format!("{}{route}", t.sep()), t.dim()),
@@ -868,15 +905,15 @@ fn header(live: &Live, health: Option<&Health>, key: Option<&str>, ctx: &Ctx, wi
         vec![Span::styled("LIVE", t.bold())]
     };
     let (fire, prime, inhibit) = live.counts(key);
-    let counter = |a: Aspect, n: usize, long: bool| -> Vec<Span<'static>> {
+    let counter = |a: Strength, n: usize, long: bool| -> Vec<Span<'static>> {
         let word = Theme::strength_word(a);
         match (t.color, long) {
             (true, true) => vec![
-                Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.aspect(a)),
+                Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.strength(a)),
                 Span::styled(format!("{word} {n}"), t.ink2()),
             ],
             (true, false) => vec![
-                Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.aspect(a)),
+                Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.strength(a)),
                 Span::styled(n.to_string(), t.ink2()),
             ],
             (false, _) => vec![Span::styled(format!("{} {n}", word.to_ascii_uppercase()), t.ink2())],
@@ -885,7 +922,7 @@ fn header(live: &Live, health: Option<&Health>, key: Option<&str>, ctx: &Ctx, wi
     let right = |long: bool, counters: bool| -> Vec<Span<'static>> {
         let mut v = state.clone();
         if counters {
-            for (a, n) in [(Aspect::Green, fire), (Aspect::Yellow, prime), (Aspect::Red, inhibit)] {
+            for (a, n) in [(Strength::Fire, fire), (Strength::Prime, prime), (Strength::Inhibit, inhibit)] {
                 v.push(Span::raw(if long { "   " } else { "  " }));
                 v.extend(counter(a, n, long));
             }
@@ -899,7 +936,7 @@ fn header(live: &Live, health: Option<&Health>, key: Option<&str>, ctx: &Ctx, wi
         parts.extend(facts.iter().filter_map(|f| (*f).clone()));
         v.push(Span::styled(format!("  {}", parts.join(&t.sep())), t.ink2()));
         if ctx.demo {
-            v.push(Span::styled(format!("{}demo", t.sep()), t.holdout()));
+            v.push(Span::styled(format!("{}demo", t.sep()), t.control()));
         }
         v
     };

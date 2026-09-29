@@ -1,0 +1,2 @@
+haiku 974 {'first run in session': (149, 0.94), 'no edit since previous run': (624, 3.95), 'after edit': (201, 1.27), 'after edit & covered by previous run': (173, 1.09), 'after edit & new targets': (11, 0.07), 'after edit & covered by some earlier run': (17, 0.11)}
+sonnet 174 {'first run in session': (32, 1.0), 'no edit since previous run': (90, 2.81), 'after edit': (52, 1.62), 'after edit & covered by some earlier run': (4, 0.12), 'after edit & covered by previous run': (44, 1.38), 'after edit & new targets': (4, 0.12)}

@@ -2,19 +2,20 @@
 //!
 //! Two shapes are read, and any field may be missing:
 //!
-//! * the live contract: `{"ts", "kind": "learn", "trigger": "auto"|"manual", "repo",
+//! * the live contract: `{"ts", "kind": "condition", "trigger": "auto"|"manual", "repo",
 //!   "sessions_read", "sessions_used", "duration_ms", "index_generation", "changes": [{"route",
-//!   "track", "change": "new"|"retired"|"aspect"|"evidence"|"draft"|"proposal"|"stale", "from", "to",
-//!   "summary"}]}` and `{"ts", "kind": "learn_error", "repo", "class", "error"}`;
+//!   "track", "change": "new"|"extinguished"|"strength"|"evidence"|"nascent"|"proposal"|"dormant",
+//!   "from", "to", "summary"}]}` and `{"ts", "kind": "condition_error", "repo", "class", "error"}`;
 //! * the older per-run summary (no `kind`): `{"ts", "sessions_read", "sessions_used",
 //!   "index_generation", "repos": {repo: {"sessions", "tracks": [{"name", "version", "change",
 //!   "routes"}]}}}`.
 //!
-//! Anything else (a line that is not JSON, an unknown `kind`) is skipped. The stored words stay
-//! (`learn`, `green`, `draft`); lines are told in the lexicon's (conditioning, fire, nascent).
+//! Anything else (a line that is not JSON, an unknown `kind`) is skipped. Lines written by older
+//! versions use older words (`learn`, `learn_error`; changes `aspect`, `draft`, `stale`,
+//! `retired`; strengths `green`, `yellow`, `red`): they read the same.
 
-use super::theme::{parse_aspect, Theme};
-use adage_tracks::Aspect;
+use super::theme::{parse_strength, Theme};
+use adage_tracks::Strength;
 use regex::Regex;
 use serde_json::Value;
 use std::sync::OnceLock;
@@ -63,7 +64,7 @@ pub struct Tick {
     /// The same, without the repository or track (for narrow panes).
     pub short: String,
     /// The strength a change leaves the reflex at, for colour.
-    pub aspect: Option<Aspect>,
+    pub strength: Option<Strength>,
     pub repo: Option<String>,
     pub change: Option<Change>,
     pub run: Option<Run>,
@@ -92,7 +93,7 @@ pub fn parse(line: &str) -> Vec<Tick> {
     let ts = v["ts"].as_u64().unwrap_or(0);
     let repo = s(&v, "repo").map(String::from);
     match v["kind"].as_str() {
-        Some("learn_error") => {
+        Some("condition_error" | "learn_error") => {
             let class = s(&v, "class").map(|c| format!(" ({c})")).unwrap_or_default();
             let err: String = s(&v, "error").unwrap_or("unknown error").chars().take(200).collect();
             let on = repo.as_deref().map(|r| format!(" for {r}")).unwrap_or_default();
@@ -101,13 +102,13 @@ pub fn parse(line: &str) -> Vec<Tick> {
                 tone: Tone::Error,
                 text: format!("conditioning failed{on}{class}: {err}"),
                 short: format!("conditioning failed{class}: {err}"),
-                aspect: None,
+                strength: None,
                 repo,
                 change: None,
                 run: None,
             }]
         }
-        Some("learn") | None if v.is_object() => run(&v, ts, repo),
+        Some("condition" | "learn") | None if v.is_object() => run(&v, ts, repo),
         _ => vec![],
     }
 }
@@ -166,7 +167,7 @@ fn run(v: &Value, ts: u64, repo: Option<String>) -> Vec<Tick> {
         tone: Tone::Run,
         text: format!("{long_head}{tail}"),
         short: format!("{head}{tail}"),
-        aspect: None,
+        strength: None,
         repo: repo.clone(),
         change: None,
         run: Some(info),
@@ -185,7 +186,7 @@ fn run(v: &Value, ts: u64, repo: Option<String>) -> Vec<Tick> {
             tone: Tone::Change,
             short: text.clone(),
             text,
-            aspect: None,
+            strength: None,
             repo: Some(r),
             change: Some(Change {
                 route: format!("{name}@{version}"),
@@ -228,7 +229,7 @@ pub fn numbers(summary: &str, evidence: bool) -> String {
 }
 
 fn strength_of(x: Option<&str>) -> Option<String> {
-    x.map(|w| parse_aspect(w).map_or_else(|| w.to_string(), |a| Theme::strength_word(a).to_string()))
+    x.map(|w| parse_strength(w).map_or_else(|| w.to_string(), |a| Theme::strength_word(a).to_string()))
 }
 
 fn change(c: &Value, ts: u64, repo: Option<String>) -> Tick {
@@ -238,12 +239,12 @@ fn change(c: &Value, ts: u64, repo: Option<String>) -> Tick {
     let kind = s(c, "change").unwrap_or("");
     let summary = s(c, "summary").unwrap_or("");
     let (what, from_w, to_w) = match kind {
-        "aspect" => ("strength", strength_of(from), strength_of(to)),
+        "strength" | "aspect" => ("strength", strength_of(from), strength_of(to)),
         "new" => ("new", None, strength_of(to)),
         "evidence" => ("evidence", None, None),
-        "draft" => ("nascent", None, Some("nascent".to_string())),
-        "stale" => ("dormant", Some("firm".to_string()), Some("dormant".to_string())),
-        "retired" => ("extinguished", None, Some("extinguished".to_string())),
+        "nascent" | "draft" => ("nascent", None, Some("nascent".to_string())),
+        "dormant" | "stale" => ("dormant", Some("firm".to_string()), Some("dormant".to_string())),
+        "extinguished" | "retired" => ("extinguished", None, Some("extinguished".to_string())),
         "proposal" => ("proposal", None, None),
         _ => ("changed", strength_of(from), strength_of(to)),
     };
@@ -267,7 +268,7 @@ fn change(c: &Value, ts: u64, repo: Option<String>) -> Tick {
         tone: Tone::Change,
         text: format!("{long_track}{route} {transition}{nums_s}"),
         short: format!("{short_track}{route} {transition}{nums_s}"),
-        aspect: to.and_then(parse_aspect),
+        strength: to.and_then(parse_strength),
         repo,
         change: Some(Change { route, track, what, from: from_w, to: to_w, numbers: nums }),
         run: None,

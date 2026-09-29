@@ -8,6 +8,15 @@ export const PACKAGE_NAME = "@adage/cli"
 
 // Release targets (dist-workspace.toml) and the npm platform package each one becomes. Linux builds
 // are static musl binaries, so one package per CPU serves glibc and musl systems alike.
+// Binaries shipped beside `adage` in each platform package, each from its own release archive
+// (`<app>-<target>`). `adage delegate on` finds adage-exec beside the running adage, and `adage
+// train` finds adage-train there. Execution (adage-exec) needs an OS sandbox, which Windows lacks
+// (E0 only there), so it is not required on Windows.
+export const COMPANIONS = [
+  { name: "adage-exec", app: "adage-exec", required: (p) => p.os !== "win32" },
+  { name: "adage-train", app: "adage-train", required: () => true },
+]
+
 export const PLATFORMS = [
   { target: "aarch64-apple-darwin", os: "darwin", cpu: "arm64", exe: "adage" },
   { target: "x86_64-apple-darwin", os: "darwin", cpu: "x64", exe: "adage" },

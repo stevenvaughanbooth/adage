@@ -84,17 +84,16 @@ fn signs_and_verifies_in_the_pack_namespace() {
     let line = adage_sign::key_line(&pk);
     let open = adage_sign::allowed_signers::parse(&format!("t {line}")).unwrap();
     let pack_only = adage_sign::allowed_signers::parse(&format!("t namespaces=\"{NAMESPACE}\" {line}")).unwrap();
-    let track_only = adage_sign::allowed_signers::parse(&format!("t namespaces=\"adage-track\" {line}")).unwrap();
+    let other_only = adage_sign::allowed_signers::parse(&format!("t namespaces=\"other\" {line}")).unwrap();
     assert!(verify_dir(d.path(), &open, SystemTime::now()).is_ok());
     assert!(verify_dir(d.path(), &pack_only, SystemTime::now()).is_ok());
-    // An entry that authorises tracks does not authorise packs, which can request execution.
-    let e = verify_dir(d.path(), &track_only, SystemTime::now()).unwrap_err();
+    // An entry for another namespace does not authorise packs, which can request execution.
+    let e = verify_dir(d.path(), &other_only, SystemTime::now()).unwrap_err();
     assert!(e.to_string().contains("namespaces"), "{e}");
-    // A track signature over the same digest is not a pack signature.
+    // A signature in another namespace over the same digest is not a pack signature.
     let digest = digest_dir(d.path()).unwrap();
-    let track_sig =
-        adage_sign::sign(&adage_sign::message(&digest).unwrap(), adage_sign::NAMESPACE, None, Some(&priv_key)).unwrap();
-    std::fs::write(d.path().join("pack.sig"), &track_sig.pem).unwrap();
+    let other_sig = adage_sign::sign(&adage_sign::message(&digest).unwrap(), "other", None, Some(&priv_key)).unwrap();
+    std::fs::write(d.path().join("pack.sig"), &other_sig.pem).unwrap();
     assert!(verify_dir(d.path(), &open, SystemTime::now()).is_err());
     // Any change to a signed file breaks the signature.
     sign_dir(d.path(), None, Some(&priv_key)).unwrap();

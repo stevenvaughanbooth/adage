@@ -12,9 +12,9 @@ def rec(task, arm, passed, cost=1.0, turns=10, repo="r1", status="ok"):
 class MeansTest(unittest.TestCase):
     def test_per_task_means_over_repeats_skip_errors(self):
         rs = [rec("t1", "adage", True), rec("t1", "adage", False), rec("t1", "adage", True, status="infra_error"),
-              rec("t1", "holdout", False), rec("t1", "holdout", False, status="censored")]
+              rec("t1", "control", False), rec("t1", "control", False, status="censored")]
         m = s.per_task_means(rs, "resolve")
-        self.assertEqual(m[("r1", "t1")], {"adage": 0.5, "holdout": 0.0})
+        self.assertEqual(m[("r1", "t1")], {"adage": 0.5, "control": 0.0})
 
     def test_paired_and_log_ratio(self):
         m = {("r", "t1"): {"a": 2.0, "c": 1.0}, ("r", "t2"): {"a": 1.0}}
@@ -60,13 +60,13 @@ class EffectTest(unittest.TestCase):
             for i in range(8):
                 t = f"{repo}-t{i}"
                 for rep in range(2):
-                    rs.append(rec(t, "holdout", i % 4 == 0, cost=2.0, turns=20, repo=repo))
+                    rs.append(rec(t, "control", i % 4 == 0, cost=2.0, turns=20, repo=repo))
                     rs.append(rec(t, "adage", i % 2 == 0, cost=1.5, turns=15, repo=repo))
                     rs.append(rec(t, "off", i % 4 == 0, cost=2.0, turns=20, repo=repo))
         return rs
 
     def test_effects(self):
-        out = s.analyse(self.data(), comparisons=[("adage", "holdout")], b=500)
+        out = s.analyse(self.data(), comparisons=[("adage", "control")], b=500)
         by = {e["metric"]: e for e in out["effects"]}
         self.assertAlmostEqual(by["resolve"]["estimate"], 0.25)
         self.assertEqual(by["resolve"]["pairs"], 24)
@@ -81,7 +81,7 @@ class EffectTest(unittest.TestCase):
         self.assertEqual(out["status_by_arm"]["adage"], {"ok": 48})
 
     def test_no_pairs(self):
-        e = s.effect([rec("t", "adage", True)], "adage", "holdout", "resolve")
+        e = s.effect([rec("t", "adage", True)], "adage", "control", "resolve")
         self.assertEqual(e["pairs"], 0)
 
 

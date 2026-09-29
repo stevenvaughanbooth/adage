@@ -1,28 +1,36 @@
-//! Instincts in learning (docs/instincts.md): after the miners and review reconciliation, bind
+//! Instincts in learning (docs/instincts.md): after the learners and review reconciliation, bind
 //! the repository's instincts from its declared files and write them as one track,
 //! `<repo>/instincts`, provenance `instinct:<pack>@<version>`.
 //!
 //! - **Learned wins.** The binder sees every other route of the repository (learned, imported,
 //!   authored) and skips an instinct any of them covers; the index prefers any other source by
-//!   provenance ([`adage_tracks::index`]). When the miner learns a route with an instinct's id,
+//!   provenance ([`adage_tracks::index`]). When the learner learns a route with an instinct's id,
 //!   the instinct route leaves the track (reported as confirmed by sessions).
 //! - **Review.** Ids a person rejected in any of the repository's `review.yaml` files are never
-//!   bound again; a rejected instinct route stays in the track, retired, so the decision shows.
-//!   Environment-effect instincts (`pnpm install`) are drafts until a person approves one: that
+//!   bound again; a rejected instinct route stays in the track, extinguished, so the decision shows.
+//!   Environment-effect instincts (`pnpm install`) are nascent until a person approves one: that
 //!   approves the pack's environment steps for the repository (`Reviews::packs`).
-//! - **Auto-retire.** The runtime judges every instinct directive ([`adage_runtime::Judgement`]).
-//!   From the treated arm's spools, an instinct route with at least [`RETIRE_FOLLOWED_FAILED`]
-//!   `followed_failed` judgements (the agent ran the directed command and it failed), or whose
-//!   derail rate has a Wilson lower bound of at least [`RETIRE_DERAIL_LOWER_BOUND`] over at least
-//!   [`RETIRE_MIN_JUDGEMENTS`] judgements, is retired, recorded like a review rejection (so a
-//!   re-bind does not bring it back), and the change appears in `learn.log`. Losing authority is
-//!   always automatic.
-//! - **Capped.** Yellow, probation at most (never active), never an obligation or a Stop request
+//! - **Auto-extinguish.** The runtime judges every instinct directive ([`adage_runtime::Judgement`]).
+//!   From the spools, an instinct route is extinguished ([`should_extinguish`]) when it
+//!   misfired at least [`EXTINGUISH_MISFIRED`] times (the agent ran the directed command and it
+//!   failed for want of its environment or target), no fewer than its working follows; or when,
+//!   over at least [`EXTINGUISH_MIN_JUDGEMENTS`] judgements, a control-arm comparison shows
+//!   delivering it changes nothing (its ignore rate's Wilson lower bound reaches
+//!   [`EXTINGUISH_IGNORE_LOWER_BOUND`] and it is followed no more often than when withheld); or
+//!   when it misfired and its value ([`crate::value::judged`]) is positive with probability under
+//!   [`EXTINGUISH_P_POSITIVE`]. Never on ignores alone: an ignore may be a follow the matcher
+//!   missed. It is recorded as a person's `extinguish` is (so a re-bind does not bring it back),
+//!   and the change appears in `learn.log`. Losing authority is always automatic.
+//! - **Quiet on uplift.** A route agents already take unaided (training traces, control-arm
+//!   `would_have` judgements) is not extinguished, since it does no harm and the evidence can
+//!   change: [`crate::value::assess`] keeps it nascent each run, with why, until a person approves
+//!   it (approving the pack's environment steps does not).
+//! - **Capped.** Prime, forming at most (never firm), never an obligation or a Stop request
 //!   (the runtime's part).
 
 use crate::{bump, slug, Planned, TrackReport};
 use adage_tracks::review::{self, Decision, Review};
-use adage_tracks::{io, Aspect, Gauge, Manifest, Route, RouteState, Scope, Track, TrackInfo};
+use adage_tracks::{io, Gauge, Manifest, Route, RouteState, Scope, Strength, Track, TrackInfo};
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::Value;
@@ -31,12 +39,16 @@ use std::path::{Path, PathBuf};
 
 /// The track instincts are written to, under the repository's directory.
 pub const TRACK: &str = "instincts";
-/// Followed-and-failed judgements that retire an instinct route.
-pub const RETIRE_FOLLOWED_FAILED: u32 = 3;
-/// A derail rate whose Wilson lower bound reaches this retires an instinct route...
-pub const RETIRE_DERAIL_LOWER_BOUND: f64 = 0.5;
+/// misfired judgements that extinguish an instinct route.
+pub const EXTINGUISH_MISFIRED: u32 = 3;
+/// With a control-arm comparison, an ignore rate whose Wilson lower bound reaches this
+/// extinguishes an instinct route that delivering changes nothing for.
+pub const EXTINGUISH_IGNORE_LOWER_BOUND: f64 = 0.5;
+/// A route that misfired and whose value is positive with less than this probability is
+/// extinguished...
+pub const EXTINGUISH_P_POSITIVE: f64 = 0.1;
 /// ...over at least this many judgements.
-pub const RETIRE_MIN_JUDGEMENTS: u32 = 5;
+pub const EXTINGUISH_MIN_JUDGEMENTS: u32 = 5;
 
 /// How learning binds instincts (`instincts.*` in `config.toml`).
 #[derive(Debug, Clone)]
@@ -47,7 +59,7 @@ pub struct Config {
     pub packs: Vec<String>,
     /// `instincts.disabled`: catalogue ids never to bind.
     pub disabled: BTreeSet<String>,
-    /// The spools directory (`$ADAGE_HOME/sessions`), whose judgements retire instinct routes.
+    /// The spools directory (`$ADAGE_HOME/sessions`), whose judgements extinguish instinct routes.
     pub spools: Option<PathBuf>,
     /// Repository key → its root on disk, overriding what the sessions' working directories say.
     pub roots: BTreeMap<String, PathBuf>,
@@ -81,34 +93,93 @@ pub struct InstinctReport {
     /// Advisory routes in service.
     pub advice: usize,
     /// Environment steps waiting for approval in `adage review`.
-    pub drafts: usize,
+    pub nascent: usize,
     /// Candidates not bound, and why (`U3: 2 test entry points`, `declared: Makefile: …`).
     pub skipped: Vec<String>,
-    /// Routes retired this run because agents followed them and they failed.
-    pub retired: Vec<String>,
+    /// Routes extinguished this run because agents followed them and they failed.
+    pub extinguished: Vec<String>,
     /// Instinct routes a learned route with the same id took over this run.
     pub confirmed: Vec<String>,
+    /// Routes kept quiet (nascent) because agents already take their step unaided: delivering them
+    /// changes too little (`value::assess`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub quiet: Vec<String>,
     /// Why nothing was bound, if nothing was.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub not_bound: Option<String>,
+    /// The checkout the instincts were bound against (recorded with [`record_binding`] once the
+    /// track is written).
+    #[serde(skip)]
+    pub root: Option<PathBuf>,
 }
 
-/// Runtime judgements of one route, from the treated arm's spools.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct Judged {
-    pub followed: u32,
-    pub followed_failed: u32,
-    pub derailed: u32,
+/// Where the checkout a repository's instincts were bound against is recorded, beside its tracks
+/// (a hidden file: never a track).
+pub fn binding_path(tracks_root: &Path, repo: &str) -> PathBuf {
+    tracks_root.join(slug(repo)).join(".instincts-binding.json")
 }
 
-impl Judged {
-    pub fn total(&self) -> u32 {
-        self.followed + self.followed_failed + self.derailed
+/// What a binding was made from: the checkout and its declared files' fingerprint
+/// (`adage_instincts::fingerprint`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct Binding {
+    pub root: String,
+    pub declared: String,
+    /// The checkout's project environment, verified from its files at bind time
+    /// (`adage_instincts::verify_env`): what a `PreToolUse` interpreter rewrite may use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env: Option<adage_instincts::VerifiedEnv>,
+}
+
+/// Record that the repository's instincts are bound against `root` as its files are now.
+pub fn record_binding(tracks_root: &Path, repo: &str, root: &Path) {
+    let b = Binding {
+        root: root.to_string_lossy().into(),
+        declared: adage_instincts::fingerprint(root),
+        env: adage_instincts::verify_env(root),
+    };
+    let p = binding_path(tracks_root, repo);
+    if let (Some(dir), Ok(body)) = (p.parent(), serde_json::to_vec(&b)) {
+        let _ = std::fs::create_dir_all(dir);
+        let _ = adage_store::config::write_atomic(&p, &body);
     }
 }
 
-/// Judgements per (repository, route) from the spools in `dir` (the treated arm only: in the
-/// holdout nothing was delivered), as `adage review` and `adage graph` count them.
+/// The recorded binding of a repository's instincts, if any.
+pub fn binding(tracks_root: &Path, repo: &str) -> Option<Binding> {
+    std::fs::read(binding_path(tracks_root, repo)).ok().and_then(|b| serde_json::from_slice(&b).ok())
+}
+
+/// Whether the repository's instincts should be bound again against the live checkout `root` (the
+/// session's): never bound, bound against another checkout (paths named in old traces, another
+/// worktree), or its declared files changed since (a `.venv` made, a Makefile edited).
+pub fn stale_binding(tracks_root: &Path, repo: &str, root: &Path) -> bool {
+    binding(tracks_root, repo)
+        .is_none_or(|b| b.root != root.to_string_lossy() || b.declared != adage_instincts::fingerprint(root))
+}
+
+/// Runtime judgements of one route: the treated arm's (the directive was delivered), and the
+/// control arm's (withheld: a "followed" there is the agent taking the step unaided).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Judged {
+    pub followed: u32,
+    pub misfired: u32,
+    pub ignored: u32,
+    /// Control sessions: the agent took the step without being told.
+    pub control_followed: u32,
+    /// Control sessions: judged in all (followed, misfired or ignored).
+    pub control_total: u32,
+}
+
+impl Judged {
+    /// Treated judgements.
+    pub fn total(&self) -> u32 {
+        self.followed + self.misfired + self.ignored
+    }
+}
+
+/// Judgements per (repository, route) from the spools in `dir`, by arm, as `adage review` and
+/// `adage graph` count them.
 pub fn judgements(dir: &Path) -> BTreeMap<(String, String), Judged> {
     let mut out: BTreeMap<(String, String), Judged> = BTreeMap::new();
     let Ok(rd) = std::fs::read_dir(dir) else { return out };
@@ -117,15 +188,25 @@ pub fn judgements(dir: &Path) -> BTreeMap<(String, String), Judged> {
     spools.sort();
     for p in spools {
         let recs: Vec<Value> = adage_store::spool::read_all(&p).unwrap_or_default();
-        for r in recs.iter().filter(|r| r["arm"] == "treated") {
+        for r in recs.iter() {
+            let control = match r["arm"].as_str() {
+                Some("treated") => false,
+                Some("control") => true,
+                _ => continue,
+            };
             let Some(repo) = r["repo"].as_str() else { continue };
             for j in r["decision"]["judgements"].as_array().into_iter().flatten() {
                 let Some(route) = j["route"].as_str() else { continue };
                 let e = out.entry((repo.to_string(), route.to_string())).or_default();
-                match j["kind"].as_str() {
-                    Some("followed") => e.followed += 1,
-                    Some("followed_failed") => e.followed_failed += 1,
-                    Some("derailed") => e.derailed += 1,
+                match (control, j["kind"].as_str()) {
+                    (false, Some("followed")) => e.followed += 1,
+                    (false, Some("misfired")) => e.misfired += 1,
+                    (false, Some("ignored")) => e.ignored += 1,
+                    (true, Some("followed")) => {
+                        e.control_followed += 1;
+                        e.control_total += 1;
+                    }
+                    (true, Some("misfired" | "ignored")) => e.control_total += 1,
                     _ => {}
                 }
             }
@@ -134,16 +215,50 @@ pub fn judgements(dir: &Path) -> BTreeMap<(String, String), Judged> {
     out
 }
 
-/// Why an instinct route with these judgements is retired, if it is.
-pub fn should_retire(j: &Judged) -> Option<String> {
-    if j.followed_failed >= RETIRE_FOLLOWED_FAILED {
-        return Some(format!("followed and failed {} times", j.followed_failed));
+/// Why an instinct route with these judgements is extinguished, if it is. Conservative: losing a
+/// route that works costs more than keeping one that does not.
+///
+/// - **Misfires**: at least [`EXTINGUISH_MISFIRED`] (agents followed it and the directed command
+///   failed without running), and at least as many as the follows that worked.
+/// - **Never on ignores alone**: an "ignored" may be a follow the matcher did not recognise
+///   (RepoBench v2 judged 41 of 41 real follows "ignored" that way). An ignore rate whose Wilson
+///   lower bound reaches [`EXTINGUISH_IGNORE_LOWER_BOUND`] over at least
+///   [`EXTINGUISH_MIN_JUDGEMENTS`] extinguishes only with a control-arm comparison (at least as
+///   many control judgements) that shows the matcher sees follows of this route at all (a follow
+///   in either arm) and that delivering it made agents take the step no more often than
+///   withholding it did.
+pub fn should_extinguish(j: &Judged) -> Option<String> {
+    if j.misfired >= EXTINGUISH_MISFIRED && j.misfired >= j.followed {
+        return Some(format!("misfired {} times", j.misfired));
     }
     let n = j.total();
-    if n >= RETIRE_MIN_JUDGEMENTS && adage_tracks::wilson_lower(j.derailed, n) >= RETIRE_DERAIL_LOWER_BOUND {
-        return Some(format!("derailed {} of {n} times", j.derailed));
+    if n < EXTINGUISH_MIN_JUDGEMENTS {
+        return None;
     }
-    None
+    let ignored = adage_tracks::wilson_lower(j.ignored, n) >= EXTINGUISH_IGNORE_LOWER_BOUND;
+    let compared = j.control_total >= EXTINGUISH_MIN_JUDGEMENTS;
+    let seen = j.followed + j.misfired + j.control_followed > 0;
+    // The treated follow rate is at most the control's: f_t / n_t <= f_c / n_c.
+    let no_better =
+        u64::from(j.followed + j.misfired) * u64::from(j.control_total) <= u64::from(j.control_followed) * u64::from(n);
+    if ignored && compared && seen && no_better {
+        return Some(format!(
+            "ignored {} of {n} times; unaided {} of {}",
+            j.ignored, j.control_followed, j.control_total
+        ));
+    }
+    // The value model reads ignores as lowering p_follow: with no misfire, many ignores may be a
+    // matching gap, not a worthless route, so it decides only when the route has misfired.
+    if j.misfired == 0 {
+        return None;
+    }
+    let a = crate::value::judged(j.followed, j.ignored, j.misfired);
+    (a.p_positive < EXTINGUISH_P_POSITIVE).then(|| {
+        format!(
+            "worth {:.1} calls, with probability {:.2} of helping ({} followed, {} ignored, {} misfired)",
+            a.mean, a.p_positive, j.followed, j.ignored, j.misfired
+        )
+    })
 }
 
 /// The repository's root on disk: the working directory most of its sessions recorded that still
@@ -164,7 +279,7 @@ fn rejected_ids(repo_dir: &Path) -> BTreeSet<String> {
     let Ok(rd) = std::fs::read_dir(repo_dir) else { return out };
     for e in rd.flatten() {
         if let Ok(r) = review::load(&e.path()) {
-            out.extend(r.routes.into_iter().filter(|(_, v)| v.decision == Decision::Rejected).map(|(id, _)| id));
+            out.extend(r.routes.into_iter().filter(|(_, v)| v.decision == Decision::Extinguished).map(|(id, _)| id));
         }
     }
     out
@@ -172,7 +287,7 @@ fn rejected_ids(repo_dir: &Path) -> BTreeSet<String> {
 
 fn record(r: &mut Route, j: Option<&Judged>) {
     if let Some(j) = j {
-        for (k, v) in [("followed", j.followed), ("followed_failed", j.followed_failed), ("derailed", j.derailed)] {
+        for (k, v) in [("followed", j.followed), ("misfired", j.misfired), ("ignored", j.ignored)] {
             if v > 0 {
                 r.evidence.by_origin.insert(k.to_string(), v);
             }
@@ -180,19 +295,40 @@ fn record(r: &mut Route, j: Option<&Judged>) {
     }
 }
 
-/// Plan the instinct track of one repository: bind, apply review decisions and auto-retirement,
+/// What is known of how agents take a repository's instinct routes: the runtime's judgements (by
+/// arm) and the training traces, for their uplift ([`crate::value::assess`]).
+#[derive(Clone, Copy)]
+pub struct Seen<'a> {
+    pub judged: &'a BTreeMap<(String, String), Judged>,
+    pub sessions: &'a [&'a crate::import::Session],
+    pub priors: &'a crate::value::Priors,
+    /// Uplift gating's bar (`learn.uplift_min`).
+    pub uplift_min: f64,
+}
+
+static NO_PRIORS: std::sync::LazyLock<crate::value::Priors> = std::sync::LazyLock::new(Default::default);
+
+impl<'a> Seen<'a> {
+    /// Judgements alone: no traces (day 0), the built-in priors.
+    pub fn of(judged: &'a BTreeMap<(String, String), Judged>) -> Seen<'a> {
+        Seen { judged, sessions: &[], priors: &NO_PRIORS, uplift_min: crate::value::UPLIFT_MIN }
+    }
+}
+
+/// Plan the instinct track of one repository: bind, apply review decisions and auto-extinction,
 /// and version it like any learned track. `root` is the repository on disk; `learned` its routes
 /// from every other source. Nothing is written; the returned [`Planned`] carries the track and,
-/// when a route was retired, the `review.yaml` to save beside it.
+/// when a route was extinguished, the `review.yaml` to save beside it.
 pub fn plan_repo(
     repo: &str,
     root: Option<&Path>,
     tracks_root: &Path,
     learned: &[Route],
     cfg: &Config,
-    judged: &BTreeMap<(String, String), Judged>,
+    seen: &Seen,
     today: &str,
 ) -> Result<(InstinctReport, Option<(TrackReport, Planned)>)> {
+    let judged = seen.judged;
     let mut rep = InstinctReport::default();
     let repo_dir = tracks_root.join(slug(repo));
     let dir = repo_dir.join(TRACK);
@@ -207,7 +343,7 @@ pub fn plan_repo(
     };
     let cat = adage_instincts::catalogue();
     let mut routes: Vec<Route> = Vec::new();
-    let mut retired_now: BTreeMap<String, String> = BTreeMap::new();
+    let mut extinguished_now: BTreeMap<String, String> = BTreeMap::new();
     if !cfg.binds() {
         rep.not_bound = Some("instincts are turned off (instincts.enabled, instincts.packs)".into());
         if prev.as_ref().is_none_or(|p| p.routes.is_empty()) {
@@ -218,26 +354,28 @@ pub fn plan_repo(
             rep.not_bound = Some("the repository's directory is not known here, so its files cannot be read".into());
             return Ok((rep, None));
         };
-        // Auto-retire what agents followed and saw fail.
+        rep.root = Some(root.to_path_buf());
+        // Auto-extinguish what agents followed and saw fail.
         for p in prev.iter().flat_map(|t| &t.routes).filter(|r| r.state.is_live()) {
             let j = judged.get(&(repo.to_string(), p.id.clone()));
-            let Some(why) = j.and_then(should_retire) else { continue };
+            let Some(why) = j.and_then(should_extinguish) else { continue };
             let j = j.copied().unwrap_or_default();
             let by: String = format!("adage: {why}").chars().take(64).collect();
             reviews.routes.insert(
                 p.id.clone(),
                 Review {
-                    decision: Decision::Rejected,
+                    decision: Decision::Extinguished,
                     on: today.to_string(),
                     by: Some(by),
-                    basis: review::basis(p, j.followed, j.derailed),
+                    basis: review::basis(p, j.followed, j.ignored),
                 },
             );
-            retired_now.insert(p.id.clone(), why);
+            extinguished_now.insert(p.id.clone(), why);
         }
         let mut rejections = rejected_ids(&repo_dir);
-        rejections
-            .extend(reviews.routes.iter().filter(|(_, v)| v.decision == Decision::Rejected).map(|(id, _)| id.clone()));
+        rejections.extend(
+            reviews.routes.iter().filter(|(_, v)| v.decision == Decision::Extinguished).map(|(id, _)| id.clone()),
+        );
         let opts = adage_instincts::BindOptions { disabled: cfg.disabled.clone() };
         let others: Vec<Route> = learned.iter().filter(|r| !r.is_instinct()).cloned().collect();
         let result = adage_instincts::bind_with(root, &others, &rejections, &opts);
@@ -255,26 +393,33 @@ pub fn plan_repo(
         for r in routes.iter_mut() {
             record(r, judged.get(&(repo.to_string(), r.id.clone())));
         }
-        // A rejected (or auto-retired) route stays in the track, retired, so the decision shows.
+        // A rejected (or auto-extinguished) route stays in the track, extinguished, so the decision shows.
         for (id, rv) in &reviews.routes {
-            if rv.decision != Decision::Rejected || routes.iter().any(|r| &r.id == id) {
+            if rv.decision != Decision::Extinguished || routes.iter().any(|r| &r.id == id) {
                 continue;
             }
             if let Some(p) = prev.as_ref().and_then(|t| t.routes.iter().find(|r| &r.id == id)) {
                 let mut r = p.clone();
-                r.state = RouteState::Retired;
+                r.state = RouteState::Extinguished;
                 record(&mut r, judged.get(&(repo.to_string(), id.clone())));
                 routes.push(r);
             }
         }
+        // What delivering each changes (uplift, `value::assess`): one agents already take unaided
+        // waits, nascent, until a person approves the route itself (approving the pack does not).
+        let gated: BTreeSet<String> =
+            crate::value::assess(&mut routes, seen.sessions, repo, judged, seen.priors, seen.uplift_min)
+                .into_iter()
+                .collect();
+        rep.quiet = gated.iter().cloned().collect();
         routes = review::reconcile(prev.as_ref(), &reviews, routes);
         let pack_approved = reviews.packs.contains_key(&cat.pack.name);
         for r in routes.iter_mut() {
-            // Capped whatever a decision says: yellow, probation at most.
-            r.aspect = Aspect::Yellow;
+            // Capped whatever a decision says: prime, forming at most.
+            r.strength = Strength::Prime;
             match r.state {
-                RouteState::Active => r.state = RouteState::Probation,
-                RouteState::Draft if pack_approved => r.state = RouteState::Probation,
+                RouteState::Firm => r.state = RouteState::Forming,
+                RouteState::Nascent if pack_approved && !gated.contains(&r.id) => r.state = RouteState::Forming,
                 _ => {}
             }
         }
@@ -297,8 +442,8 @@ pub fn plan_repo(
             rep.bound += 1;
         }
     }
-    rep.drafts = routes.iter().filter(|r| r.state == RouteState::Draft).count();
-    rep.retired = retired_now.keys().cloned().collect();
+    rep.nascent = routes.iter().filter(|r| r.state == RouteState::Nascent && !rep.quiet.contains(&r.id)).count();
+    rep.extinguished = extinguished_now.keys().cloned().collect();
     let (version, change) = bump(prev.as_ref(), &routes);
     let t = track(&name, repo, &version, &cat.provenance(), routes);
     io::validate(&t)?;
@@ -310,13 +455,23 @@ pub fn plan_repo(
                 adage_tracks::Origin::Instinct { instinct, .. } if !instinct.is_empty() => format!(" {instinct}"),
                 _ => String::new(),
             };
-            format!("{} [{:?}, instinct{instinct}, {:?}]", r.id, r.aspect, r.state).to_lowercase()
+            let line = format!("{} [{:?}, instinct{instinct}, {:?}]", r.id, r.strength, r.state).to_lowercase();
+            match r.evidence.uplift.as_ref().filter(|u| u.gated && r.state == RouteState::Nascent) {
+                Some(u) => format!("{line} ({})", u.line()),
+                None => line,
+            }
         })
         .collect();
-    lines.extend(retired_now.iter().map(|(id, why)| format!("{id}: retired automatically ({why})")));
+    lines.extend(extinguished_now.iter().map(|(id, why)| format!("{id}: extinguished automatically ({why})")));
     let tr = TrackReport { name, version, change, routes: lines };
-    let planned =
-        Planned { dir, track: t, proposals: Default::default(), reviews: (!retired_now.is_empty()).then_some(reviews) };
+    let planned = Planned {
+        dir,
+        track: t,
+        proposals: Default::default(),
+        reviews: (!extinguished_now.is_empty()).then_some(reviews),
+        why: None,
+        replaces: Vec::new(),
+    };
     Ok((rep, Some((tr, planned))))
 }
 
@@ -370,12 +525,15 @@ pub fn learn_only(
 ) -> Result<crate::Report> {
     let judged = cfg.spools.as_deref().map(judgements).unwrap_or_default();
     let others = other_routes(tracks_root, repo);
-    let (ir, plan) = plan_repo(repo, Some(root), tracks_root, &others, cfg, &judged, &review::today())?;
+    let (ir, plan) = plan_repo(repo, Some(root), tracks_root, &others, cfg, &Seen::of(&judged), &review::today())?;
     let mut report = crate::Report::default();
     let mut rr = crate::RepoReport::default();
     if let Some((tr, p)) = plan {
         p.write()?;
         rr.tracks.push(tr);
+    }
+    if let Some(r) = &ir.root {
+        record_binding(tracks_root, repo, r);
     }
     rr.instincts = Some(ir);
     report.repos.insert(repo.to_string(), rr);
@@ -401,38 +559,87 @@ mod tests {
         let tracks = home.path().join("tracks");
         let cfg = Config::default();
         let none = BTreeMap::new();
-        let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &none, "2026-09-27").unwrap();
+        let (rep, plan) =
+            plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
         let (tr, p) = plan.expect("a track");
         assert_eq!((tr.name.as_str(), tr.version.as_str(), tr.change.as_str()), ("acme/instincts", "0.1.0", "created"));
-        assert_eq!((rep.bound, rep.advice, rep.drafts), (6, 1, 0), "{rep:#?}");
+        // One route per failure signature (docs/instincts.md, Failure signatures).
+        assert_eq!((rep.bound, rep.advice, rep.nascent), (17, 1, 0), "{rep:#?}");
         assert!(p.track.manifest.track.provenance.starts_with("instinct:core@"));
-        assert!(p.track.routes.iter().all(|r| r.is_instinct() && r.aspect == Aspect::Yellow));
+        assert!(p.track.routes.iter().all(|r| r.is_instinct() && r.strength == Strength::Prime));
         p.write().unwrap();
         // Unchanged files: unchanged track.
-        let (_, again) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &none, "2026-09-27").unwrap();
+        let (_, again) =
+            plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
         assert_eq!(again.unwrap().0.change, "unchanged");
-        // The miner learns the same dead end: the instinct route leaves, confirmed by sessions.
+        // The learner learns the same dead end: the instinct route leaves, confirmed by sessions.
         let learned = Route {
             evidence: adage_tracks::Evidence { provenance: "desire-path".into(), support: 5, ..Default::default() },
             ..p.track.routes.iter().find(|r| r.id == "dead-end-d41b1e").unwrap().clone()
         };
-        let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[learned], &cfg, &none, "2026-09-27").unwrap();
+        let (rep, plan) =
+            plan_repo("acme", Some(&sandbox()), &tracks, &[learned], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
         assert_eq!(rep.confirmed, vec!["dead-end-d41b1e".to_string()]);
         assert!(!plan.unwrap().1.track.routes.iter().any(|r| r.id == "dead-end-d41b1e"));
         // Turned off: the track empties; the root unknown: nothing is planned.
         let off = Config { enabled: false, ..Config::default() };
-        let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &off, &none, "2026-09-27").unwrap();
+        let (rep, plan) =
+            plan_repo("acme", Some(&sandbox()), &tracks, &[], &off, &Seen::of(&none), "2026-09-27").unwrap();
         assert!(rep.not_bound.is_some() && plan.unwrap().1.track.routes.is_empty());
-        let (rep, plan) = plan_repo("acme", None, &tracks, &[], &cfg, &none, "2026-09-27").unwrap();
+        let (rep, plan) = plan_repo("acme", None, &tracks, &[], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
         assert!(rep.not_bound.is_some() && plan.is_none());
     }
 
+    /// Launch report, bug 7: bound against another checkout (the one old traces name), or before
+    /// the checkout's declared files changed, the binding is stale.
     #[test]
-    fn retirement_rules() {
-        assert!(should_retire(&Judged { followed_failed: 2, ..Default::default() }).is_none());
-        assert!(should_retire(&Judged { followed_failed: 3, ..Default::default() }).is_some());
-        assert!(should_retire(&Judged { derailed: 4, ..Default::default() }).is_none(), "too few");
-        assert!(should_retire(&Judged { derailed: 5, followed: 0, ..Default::default() }).is_some());
-        assert!(should_retire(&Judged { derailed: 5, followed: 5, ..Default::default() }).is_none());
+    fn a_binding_is_stale_for_another_checkout_or_changed_files() {
+        let d = tempfile::tempdir().unwrap();
+        let tracks = d.path().join("tracks");
+        let (live, old) = (d.path().join("live"), d.path().join("old"));
+        for r in [&live, &old] {
+            std::fs::create_dir_all(r).unwrap();
+            std::fs::write(r.join("pyproject.toml"), "[project]\nname = 'click'\n").unwrap();
+        }
+        assert!(stale_binding(&tracks, "click", &live), "never bound");
+        record_binding(&tracks, "click", &old);
+        assert!(stale_binding(&tracks, "click", &live), "bound against another checkout");
+        record_binding(&tracks, "click", &live);
+        assert!(!stale_binding(&tracks, "click", &live));
+        std::fs::create_dir_all(live.join(".venv/bin")).unwrap();
+        std::fs::write(live.join(".venv/pyvenv.cfg"), "home = /usr/bin\n").unwrap();
+        assert!(stale_binding(&tracks, "click", &live), "a .venv made since");
+        // The record is a hidden file beside the tracks, never a track.
+        assert!(io::read_all(&tracks).unwrap().is_empty());
+    }
+
+    #[test]
+    fn extinction_rules() {
+        let j = |followed, misfired, ignored, control_followed, control_total| Judged {
+            followed,
+            misfired,
+            ignored,
+            control_followed,
+            control_total,
+        };
+        assert!(should_extinguish(&j(0, 2, 0, 0, 0)).is_none());
+        assert!(should_extinguish(&j(0, 3, 0, 0, 0)).is_some());
+        assert!(should_extinguish(&j(10, 3, 0, 0, 0)).is_none(), "most follows worked");
+        // The launch report's reproduction, "ignored 10 of 10 times", came from follows the
+        // matcher missed: ignores alone never extinguish.
+        assert!(should_extinguish(&j(0, 0, 10, 0, 0)).is_none());
+        assert!(should_extinguish(&j(0, 0, 40, 0, 0)).is_none());
+        // Nor with a control arm where nothing is ever seen followed (a matching gap looks so).
+        assert!(should_extinguish(&j(0, 0, 10, 0, 10)).is_none());
+        // With a control arm: agents took the step as often unaided, and ignored it when told.
+        assert!(should_extinguish(&j(1, 0, 9, 2, 10)).is_some());
+        assert!(should_extinguish(&j(1, 0, 9, 2, 4)).is_none(), "too few control judgements");
+        // Delivering it made a difference: kept.
+        assert!(should_extinguish(&j(4, 0, 6, 1, 10)).is_none());
+        assert!(should_extinguish(&j(5, 0, 5, 0, 0)).is_none());
+        // The value model decides only for a route that misfired: two hundred ignores alone are
+        // no evidence against it (a broken follow judge reads every follow as one).
+        assert!(should_extinguish(&j(0, 0, 200, 0, 0)).is_none());
+        assert!(should_extinguish(&j(0, 1, 200, 0, 0)).is_some());
     }
 }

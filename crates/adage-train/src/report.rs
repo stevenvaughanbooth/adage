@@ -1,4 +1,4 @@
-//! `adage-train report <run>`: what became of each claim, what the run cost, and (with
+//! `adage train report <run>`: what became of each claim, what the run cost, and (with
 //! validation) whether each compiled reflex does as well as the skill it came from.
 
 use crate::claims::{argv_of, Claim, ClaimKind};
@@ -54,7 +54,7 @@ pub enum Verdict {
 impl Verdict {
     pub fn line(&self) -> String {
         match self {
-            Verdict::Compiled { route } => format!("compiled → route {route}"),
+            Verdict::Compiled { route } => format!("compiled → reflex {route}"),
             Verdict::Contradicted { route, instead, failed_sessions, ran_sessions } => format!(
                 "contradicted: failed in {failed_sessions}/{ran_sessions} sessions; learned dead end {route} → `{instead}` (your skill is stale)"
             ),
@@ -249,8 +249,10 @@ pub fn build(dir: &Path, plan: &Plan, state: &RunState) -> Result<Report> {
         } else {
             let reason = match &c.kind {
                 ClaimKind::Verify { command } if followed > 0 => format!(
-                    "`{command}` was followed in {followed}/{exercised} sessions without a failure to learn from; \
-                     no miner compiles a plain verify step yet"
+                    "`{command}` was followed in {followed}/{exercised} sessions, but not after the last edit in \
+                     enough of them, or as often without an edit (a claimed check is compiled when sessions run it \
+                     after their edits; thresholds {})",
+                    state.thresholds
                 ),
                 _ => format!(
                     "followed in {followed}/{exercised} exploration sessions; below the learning thresholds ({})",
@@ -386,7 +388,7 @@ fn num(x: Option<f64>, d: usize) -> String {
 
 pub fn render(r: &Report) -> String {
     let mut s = String::new();
-    let _ = writeln!(s, "adage-train report {}", r.run);
+    let _ = writeln!(s, "adage train report {}", r.run);
     let _ = writeln!(s, "source     {} (sha256 {})", r.source, &r.source_sha256[..12.min(r.source_sha256.len())]);
     let _ = writeln!(s, "harness    {} · model {} · repo {}", r.harness, r.model, r.repo_key);
     let _ = writeln!(
@@ -400,7 +402,7 @@ pub fn render(r: &Report) -> String {
     let _ = writeln!(s, "cost       ${:.2} of a ${:.2} cap (as reported by the harness)", r.cost_usd, r.budget_usd);
     let _ = writeln!(
         s,
-        "staged     {} ({} routes; provenance {}); nothing is active until reviewed",
+        "staged     {} ({} reflexes; provenance {}); nothing is delivered until reviewed",
         r.staged,
         r.staged_routes.len(),
         r.provenance

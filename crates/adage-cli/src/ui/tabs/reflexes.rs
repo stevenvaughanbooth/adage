@@ -13,7 +13,7 @@ use crate::ui::theme::Theme;
 use crate::ui::view::{self, Ctx};
 use crate::ui::words;
 use adage_term::Glyph;
-use adage_tracks::Aspect;
+use adage_tracks::Strength;
 use ratatui::crossterm::event::KeyCode;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
@@ -23,7 +23,7 @@ use ratatui::Frame;
 use std::collections::BTreeSet;
 
 /// The lifecycle filter's choices, in the order `S` cycles them.
-pub const STATES: [&str; 7] = ["all states", "firm", "forming", "nascent", "dormant", "weakened", "extinguished"];
+pub const STATES: [&str; 6] = ["all states", "firm", "forming", "nascent", "dormant", "extinguished"];
 
 #[derive(Debug, Default)]
 pub struct State {
@@ -73,17 +73,17 @@ fn default_open(group: &str) -> bool {
     group != "extinguished"
 }
 
-fn strength_index(a: Aspect) -> usize {
+fn strength_index(a: Strength) -> usize {
     match a {
-        Aspect::Green => 0,
-        Aspect::Yellow => 1,
-        Aspect::Red => 2,
+        Strength::Fire => 0,
+        Strength::Prime => 1,
+        Strength::Inhibit => 2,
     }
 }
 
 /// Whether a row passes the chips and the filter.
 fn passes(st: &State, r: &RouteRow) -> bool {
-    !st.hidden[strength_index(r.aspect)]
+    !st.hidden[strength_index(r.strength)]
         && (st.states == 0 || r.lifecycle() == STATES[st.states])
         && matches_filter(&st.filter, &r.id, &r.haystack())
 }
@@ -281,12 +281,13 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
                         .acts
                         .iter()
                         .filter_map(|a| match a {
-                            Act::Directed { route, aspect, .. } if *route == r.id => {
-                                Some(format!("fired {}", Theme::strength_word(aspect.to_owned())))
+                            Act::Directed { route, strength, .. } if *route == r.id => {
+                                Some(format!("fired {}", Theme::strength_word(*strength)))
                             }
                             Act::Withheld { route, .. } if *route == r.id => Some("withheld (control)".into()),
                             Act::Followed(x) if *x == r.id => Some("followed".into()),
-                            Act::Derailed(x) if *x == r.id => Some("ignored".into()),
+                            Act::Ignored(x) if *x == r.id => Some("ignored".into()),
+                            Act::Misfired(x) if *x == r.id => Some("misfired".into()),
                             Act::Met(x) if *x == r.id => Some("finish line met".into()),
                             Act::Unaided(x) if *x == r.id => Some("found unaided (control)".into()),
                             Act::NotReached(x) if *x == r.id => Some("missed (control)".into()),
@@ -390,9 +391,9 @@ fn lamp_spans(r: &RouteRow, t: &Theme) -> Vec<Span<'static>> {
     let lamp = if r.nascent() || r.extinguished() {
         Span::styled(format!("{} ", t.glyph(Glyph::Off)), t.dim())
     } else if t.color {
-        Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.aspect(r.aspect))
+        Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.strength(r.strength))
     } else {
-        Span::styled(format!("{} ", &Theme::strength_word(r.aspect)[..1].to_ascii_uppercase()), t.bold())
+        Span::styled(format!("{} ", &Theme::strength_word(r.strength)[..1].to_ascii_uppercase()), t.bold())
     };
     vec![lamp, Span::styled(format!("{} ", t.glyph(glyph)), t.accent())]
 }
@@ -400,13 +401,13 @@ fn lamp_spans(r: &RouteRow, t: &Theme) -> Vec<Span<'static>> {
 fn chips(s: &AppState, t: &Theme, width: usize) -> Line<'static> {
     let rows = s.route_rows();
     let mut spans = vec![Span::raw(" ")];
-    for (k, a) in [Aspect::Green, Aspect::Yellow, Aspect::Red].into_iter().enumerate() {
-        let n = rows.iter().filter(|r| r.aspect == a && !r.extinguished()).count();
+    for (k, a) in [Strength::Fire, Strength::Prime, Strength::Inhibit].into_iter().enumerate() {
+        let n = rows.iter().filter(|r| r.strength == a && !r.extinguished()).count();
         let on = !s.reflexes.hidden[k];
         let word = Theme::strength_word(a);
         if t.color {
             let lamp = if on { t.glyph(Glyph::Lamp) } else { t.glyph(Glyph::Off) };
-            spans.push(Span::styled(format!("{lamp} "), if on { t.aspect(a) } else { t.dim() }));
+            spans.push(Span::styled(format!("{lamp} "), if on { t.strength(a) } else { t.dim() }));
             spans.push(Span::styled(format!("{word} {n}  "), if on { t.ink2() } else { t.dim() }));
         } else {
             let w = if on { word.to_ascii_uppercase() } else { format!("({word})") };
@@ -501,10 +502,10 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
     }
     let mut line = vec![];
     if t.color {
-        line.push(Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.aspect(r.aspect)));
-        line.push(Span::styled(Theme::strength_word(r.aspect), t.aspect(r.aspect).patch(t.bold())));
+        line.push(Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.strength(r.strength)));
+        line.push(Span::styled(Theme::strength_word(r.strength), t.strength(r.strength).patch(t.bold())));
     } else {
-        line.push(Span::styled(Theme::strength_word(r.aspect).to_ascii_uppercase(), t.bold()));
+        line.push(Span::styled(Theme::strength_word(r.strength).to_ascii_uppercase(), t.bold()));
     }
     line.push(Span::styled(format!("{}{}", t.sep(), facts.join(&t.sep())), t.ink2()));
     v.push(Line::from(line));
@@ -553,7 +554,7 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
             "fired {}{sep}followed {}{sep}ignored {}{sep}finish line met {}",
             l.emitted,
             l.followed,
-            l.derailed,
+            l.ignored,
             l.met,
             sep = t.sep()
         ),
@@ -598,14 +599,13 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
     }
     if rank == 2 && now != "firm" {
         spans.push(Span::styled(dash.clone(), t.rule()));
-        let style = if now == "weakened" { t.yellow() } else { t.dim() };
-        spans.push(Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), style));
+        spans.push(Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.dim()));
         spans.push(Span::styled(now.to_string(), t.bold()));
     }
     v.push(Line::from(spans));
     let mut notes = vec![format!(
         "ceiling {}",
-        crate::ui::theme::parse_aspect(&r.ceiling)
+        crate::ui::theme::parse_strength(&r.ceiling)
             .map_or_else(|| r.ceiling.clone(), |a| Theme::strength_word(a).to_string())
     )];
     notes.push(format!("effect {}", r.effect));
@@ -635,7 +635,7 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
         Span::styled("o", t.key()),
         Span::styled(" open in map", t.ink2()),
     ]));
-    if let Some(verb) = ["demote", "promote", "reject", "approve"].into_iter().find(|v| r.verbs.contains(v)) {
+    if let Some(verb) = ["weaken", "strengthen", "extinguish", "approve"].into_iter().find(|v| r.verbs.contains(v)) {
         v.push(Line::from(vec![
             Span::styled("  same as ", t.dim()),
             Span::styled(words::review_command(verb, &r.reference, &r.id), t.command()),

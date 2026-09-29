@@ -47,7 +47,7 @@ class DryRun(unittest.TestCase):
     def test_the_demo_plan(self):
         p = self.plan()
         self.assertEqual(p["totals"]["sessions"], 54)
-        self.assertEqual(p["totals"]["by_arm"], {"adage": 18, "holdout": 18, "train": 18})
+        self.assertEqual(p["totals"]["by_arm"], {"adage": 18, "control": 18, "train": 18})
         for s in p["sessions"]:
             self.assertEqual(s["command"][:3], ["claude", "-p", s["prompt"]])
             self.assertIn("claude-haiku-4-5-20251001", s["command"])
@@ -55,7 +55,7 @@ class DryRun(unittest.TestCase):
             self.assertTrue(s["cwd"].startswith(str(self.root.resolve())))
         by_arm = {s["arm"]: s["env"] for s in p["sessions"]}
         self.assertEqual(by_arm["train"], {}, "training sessions run without hooks")
-        self.assertEqual(by_arm["holdout"]["ADAGE_ARM"], "holdout")
+        self.assertEqual(by_arm["control"]["ADAGE_ARM"], "control")
         self.assertEqual(by_arm["adage"]["ADAGE_ARM"], "treated")
         self.assertIn("condition", p["learn"])
 
@@ -90,7 +90,7 @@ class DryRun(unittest.TestCase):
         self.assertEqual(p["estimate"]["total_runs"], 84)
         self.assertEqual(p["estimate"]["train"]["runs"], 12)
         self.assertEqual(p["estimate"]["eval"]["runs"], 72)
-        self.assertEqual(p["totals"]["by_arm"], {"adage": 36, "holdout": 36, "train": 12})
+        self.assertEqual(p["totals"]["by_arm"], {"adage": 36, "control": 36, "train": 12})
         self.assertEqual(p["totals"]["by_round"], {"1": 48, "2": 36})
         self.assertTrue(all("claude-sonnet-5" in s["command"] for s in p["sessions"]))
         self.assertTrue(all(s["run"].startswith("eval2-") for s in p["sessions"] if s["round"] == 2))
@@ -101,7 +101,7 @@ class DryRun(unittest.TestCase):
         text = dry_with("--config", HARBOR, "--dry-run", "--root", str(self.root))
         self.assertIn("DRY RUN", text)
         self.assertIn("total 84 agent runs", text)
-        self.assertIn("6 tasks x 3 repeats x 2 arms (holdout, adage) x 2 rounds = 72", text)
+        self.assertIn("6 tasks x 3 repeats x 2 arms (control, adage) x 2 rounds = 72", text)
         self.assertFalse(self.root.exists())
         with self.assertRaises(SystemExit):
             runner.main(["--config", HARBOR, "--dry-run", "--execute"])
@@ -140,9 +140,40 @@ class DryRun(unittest.TestCase):
                                wd, 12.0, "sid", spool)
         self.assertEqual((m["turns_to_first_edit"], m["dead_end_hits"], m["lookup_turn"]), (2, 1, 1))
         self.assertEqual((m["obligation_applies"], m["obligation_met"]), (True, True))
-        self.assertEqual(m["follow"], {"exposed": 2, "followed": 1, "derailed": 0})
+        self.assertEqual(m["follow"], {"exposed": 2, "followed": 1, "ignored": 0})
         m2 = runner.run_metrics(cfg, events[:4], {}, {"passed": False, "stale_generated": True}, wd, 1.0, "sid", [])
         self.assertEqual((m2["obligation_applies"], m2["obligation_met"]), (True, False))
+
+    def test_an_applied_e2_action_meets_the_obligation(self):
+        # Launch report, bug 8: the gen E2 check. The agent edited registry/wards.csv and never ran
+        # the generator; the approved E2 action (`make gen`) ran from the hook and applied, and the
+        # generated code was fresh. obligation_met read False because only the agent's own
+        # regeneration counted.
+        cfg = runner.load_config(HARBOR, {})
+        wd = "/w/harbor-dispatch"
+        t0 = 1_800_000_000.0
+        ev = lambda turn, tool, cat, cmd: {"t": turn * 2.0, "turn": turn, "tool": tool, "id": str(turn), "cat": cat, "cmd": cmd}
+        events = [ev(1, "Read", "explore", f"{wd}/registry/wards.csv"), ev(2, "Edit", "edit", f"{wd}/registry/wards.csv"),
+                  ev(3, "Bash", "verify", "npm run check")]
+        home = Path(self.tmp.name) / "adage-home"
+        (home / "sessions").mkdir(parents=True)
+        rec = {"ts": int((t0 + 4.5) * 1000), "event": "PostToolUse", "kind": "batch", "arm": "treated",
+               "decision": {"directives": [], "judgements": [{"kind": "obligation_met", "route": "finish-line-1"}]},
+               "exec": [{"route": "gen/finish-line-1", "level": "e2", "outcome": "applied", "exit": 0}]}
+        body = json.dumps(rec).encode()
+        frame = runner.SPOOL_MAGIC + len(body).to_bytes(4, "little") + bytes(4) + body
+        (home / "sessions" / "sid.spool").write_bytes(frame)
+        spool = runner.spool_directives(home, "sid")
+        self.assertIn({"ts": rec["ts"], "event": "PostToolUse", "kind": "e2_applied", "route": "gen/finish-line-1"}, spool)
+        m = runner.run_metrics(cfg, events, {}, {"passed": True}, wd, 9.0, "sid", spool, t0)
+        self.assertEqual((m["obligation_applies"], m["obligation_met"]), (True, True))
+        # Applied before the last covered edit: that edit is still not regenerated.
+        late = events + [ev(4, "Edit", "edit", f"{wd}/registry/ports.csv")]
+        m = runner.run_metrics(cfg, late, {}, {"passed": True}, wd, 9.0, "sid", spool, t0)
+        self.assertEqual(m["obligation_met"], False)
+        # Stale generated code is never met, whoever regenerated.
+        m = runner.run_metrics(cfg, events, {}, {"passed": True, "stale_generated": True}, wd, 9.0, "sid", spool, t0)
+        self.assertEqual(m["obligation_met"], False)
 
     def test_regeneration_inside_the_editing_command_counts(self):
         # Found in the Sonnet 5 run: `sed … registry/ports.csv && npm run codegen && npm run check` is one
@@ -209,13 +240,13 @@ class ArmOrder(unittest.TestCase):
         self.assertEqual(a, b, "the same seed gives the same order")
         self.assertEqual(len(a), 18)
         for arms in a.values():
-            self.assertEqual(sorted(arms), ["adage", "holdout"], "every (task, repeat) runs each arm once")
+            self.assertEqual(sorted(arms), ["adage", "control"], "every (task, repeat) runs each arm once")
         firsts = [arms[0] for arms in a.values()]
-        self.assertTrue(0 < firsts.count("holdout") < len(firsts), "neither arm always goes first")
+        self.assertTrue(0 < firsts.count("control") < len(firsts), "neither arm always goes first")
         other = self.pairs(runner.load_config(HARBOR, {"seed": 12}))
         self.assertNotEqual(a, other, "another seed gives another order")
-        self.assertEqual(runner.arm_order(["holdout", "adage"], 11, 1, "INC-86", 1),
-                         runner.arm_order(["holdout", "adage"], 11, 1, "INC-86", 1))
+        self.assertEqual(runner.arm_order(["control", "adage"], 11, 1, "INC-86", 1),
+                         runner.arm_order(["control", "adage"], 11, 1, "INC-86", 1))
 
     def test_the_seed_is_in_the_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -239,6 +270,8 @@ class Status(unittest.TestCase):
         self.assertEqual(c({"subtype": "error_during_execution"}, 3, 4, self.ok_score)[0], "infra_error")
         self.assertEqual(c({"subtype": "success"}, 0, 1, {"passed": False}),
                          ("infra_error", "no tool calls in 1 turn(s)"))
+        self.assertEqual(c({"subtype": "success", "result": "What does W-1043 entail?"}, 0, 1, {"passed": False}),
+                         ("ok", "answered without a tool call"), "asking instead of acting is the agent's failure")
         self.assertEqual(c({"subtype": "error_max_turns", "is_error": True}, 30, 31, {"passed": False}, True, 30)[0],
                          "censored")
         self.assertEqual(c({"subtype": "success"}, 5, 6, {}, False)[0], "scorer_error")
@@ -261,23 +294,23 @@ class Status(unittest.TestCase):
                     "dead_end_hits": 0, "explore_calls_before_edit": 2}
             base.update(m)
             return f"{task}-{rep}-{arm}", {"phase": "eval", "round": 1, "arm": arm, "task": task, "metrics": base}
-        runs = dict([run(t, a, r) for t in ("T1", "T2", "T3") for a in ("adage", "holdout") for r in (1, 2)])
-        runs.update([run("T1", "holdout", 3, tool_calls=0, turns=1, passed=False),  # infra: not a failure
+        runs = dict([run(t, a, r) for t in ("T1", "T2", "T3") for a in ("adage", "control") for r in (1, 2)])
+        runs.update([run("T1", "control", 3, tool_calls=0, turns=1, passed=False),  # infra: not a failure
                      run("T2", "adage", 3, status="scorer_error"),
-                     run("T3", "holdout", 3, turns=31, tool_turns=30, result_subtype="error_max_turns",
+                     run("T3", "control", 3, turns=31, tool_turns=30, result_subtype="error_max_turns",
                          turns_to_first_edit=None, time_to_first_edit=None, passed=False, elapsed=90.0)])
-        runs["T3-9-holdout"] = {"phase": "eval", "round": 1, "arm": "holdout", "task": "T3", "status": "skipped"}
+        runs["T3-9-control"] = {"phase": "eval", "round": 1, "arm": "control", "task": "T3", "status": "skipped"}
         s = runner.summarise({"runs": runs, "max_turns": 30}, 1, n_perm=200, n_boot=200)
-        self.assertEqual(s["excluded"], {"adage": 1, "holdout": 1})
-        self.assertEqual(s["n_censored"], {"adage": 0, "holdout": 1})
-        self.assertEqual(s["status_counts"]["holdout"]["infra_error"], 1)
-        self.assertEqual(s["unfinished"], {"adage": 0, "holdout": 1})
+        self.assertEqual(s["excluded"], {"adage": 1, "control": 1})
+        self.assertEqual(s["n_censored"], {"adage": 0, "control": 1})
+        self.assertEqual(s["status_counts"]["control"]["infra_error"], 1)
+        self.assertEqual(s["unfinished"], {"adage": 0, "control": 1})
         pr = s["metrics"]["pass_rate"]
-        self.assertEqual(pr["n"], {"adage": 6, "holdout": 7}, "the infra error is not a failed task")
-        self.assertAlmostEqual(pr["holdout"], 6 / 7)
+        self.assertEqual(pr["n"], {"adage": 6, "control": 7}, "the infra error is not a failed task")
+        self.assertAlmostEqual(pr["control"], 6 / 7)
         fe = s["metrics"]["turns_to_first_edit"]
-        self.assertEqual(fe["n"]["holdout"], 7, "a censored run without an edit is kept, not dropped")
-        self.assertEqual(fe["n_imputed"]["holdout"], 1)
+        self.assertEqual(fe["n"]["control"], 7, "a censored run without an edit is kept, not dropped")
+        self.assertEqual(fe["n_imputed"]["control"], 1)
         tt = [r for r in runs.values() if r.get("metrics", {}).get("result_subtype") == "error_max_turns"]
         self.assertEqual(runner.demo_report.METRICS["total_turns"][0](tt[0]["metrics"], "censored", 30), (30, False))
         for row in s["metrics"].values():
@@ -288,7 +321,7 @@ class Statistics(unittest.TestCase):
     # Four tasks, two runs per arm each; adage is 2 better in every task, and the tasks differ a lot.
     TOY = [(t, arm, base + (0 if arm == "adage" else 2) + e)
            for t, base in (("a", 1), ("b", 10), ("c", 50), ("d", 100))
-           for arm in ("adage", "holdout") for e in (0.0, 0.5)]
+           for arm in ("adage", "control") for e in (0.0, 0.5)]
 
     def test_the_permutation_is_within_tasks(self):
         p = runner.cluster_perm_p(self.TOY, n=2000)
@@ -302,7 +335,7 @@ class Statistics(unittest.TestCase):
 
     def test_the_task_level_test_is_limited_by_the_number_of_tasks(self):
         self.assertAlmostEqual(runner.task_signflip_p(self.TOY), 2 / 16, msg="4 tasks: the smallest p is 2/2^4")
-        many = [(f"t{i}", arm, v) for i in range(6) for arm, v in (("adage", 1.0), ("holdout", 2.0))]
+        many = [(f"t{i}", arm, v) for i in range(6) for arm, v in (("adage", 1.0), ("control", 2.0))]
         self.assertAlmostEqual(runner.task_signflip_p(many), 2 / 64)
 
     def test_the_bootstrap_resamples_tasks(self):
@@ -331,14 +364,14 @@ class Isolation(unittest.TestCase):
 
     def test_the_environment_is_built_from_scratch(self):
         root = Path("/r")
-        env = runner.session_env("holdout", root / "runs" / "x" / "home", root / "private" / "adage-home", True, self.BASE)
+        env = runner.session_env("control", root / "runs" / "x" / "home", root / "private" / "adage-home", True, self.BASE)
         self.assertEqual(env["HOME"], "/r/runs/x/home")
         for k in ("CLAUDE_CONFIG_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "CODEX_HOME", "TMPDIR"):
             self.assertTrue(env[k].startswith("/r/runs/x/home/"), k)
             self.assertFalse(env[k].startswith("/r/private"), k)
         self.assertEqual(env["ANTHROPIC_API_KEY"], "sk-test", "auth is forwarded explicitly")
         self.assertEqual(env["PATH"], self.BASE["PATH"])
-        self.assertEqual(env["ADAGE_ARM"], "holdout")
+        self.assertEqual(env["ADAGE_ARM"], "control")
         self.assertEqual(env["ADAGE_HOME"], "/r/private/adage-home")
         for k in ("CLAUDECODE", "AWS_SECRET_ACCESS_KEY"):
             self.assertNotIn(k, env)
@@ -360,6 +393,94 @@ class Isolation(unittest.TestCase):
             self.assertEqual(runner.auth_source({"CLAUDE_CONFIG_DIR": tmp + "/none", "HOME": tmp}), None)
             self.assertEqual(runner.auth_source({"HOME": "/nonexistent", "CLAUDE_CODE_USE_BEDROCK": "1"},
                                                 ["CLAUDE_CODE_USE_BEDROCK"]), ("forward", ["CLAUDE_CODE_USE_BEDROCK"]))
+
+    def test_host_auth_forwards_exactly_the_allowlist(self):
+        host = {**self.BASE, "CLAUDE_SESSION_INGRESS_TOKEN_FILE": "/run/token", "CLAUDE_CODE_ORGANIZATION_UUID": "org",
+                "CLAUDE_CODE_ACCOUNT_UUID": "acct", "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST": "1",
+                "ANTHROPIC_BASE_URL": "https://api", "HTTPS_PROXY": "http://p", "no_proxy": "localhost",
+                "CLAUDE_CODE_SESSION_ID": "lead", "CLAUDE_CODE_REMOTE_SESSION_ID": "lead", "CLAUDE_CODE_ENTRYPOINT": "remote",
+                "CLAUDE_CODE_MESSAGING_TOKEN": "t", "GH_TOKEN": "gh"}
+        del host["ANTHROPIC_API_KEY"]
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = Path(tmp) / "c.json"
+            cfg_path.write_text(json.dumps({**json.loads(Path(CONFIG).read_text()), "name": "t"}))
+            cfg = runner.load_config(cfg_path, {"host_auth": True})
+            self.assertTrue(set(runner.HOST_AUTH_ENV) <= set(cfg["forward_env"]))
+            env = runner.session_env("adage", Path(tmp) / "h", Path(tmp) / "a", True, host, cfg["forward_env"])
+            for k in ("CLAUDE_SESSION_INGRESS_TOKEN_FILE", "CLAUDE_CODE_ORGANIZATION_UUID", "CLAUDE_CODE_ACCOUNT_UUID",
+                      "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST", "ANTHROPIC_BASE_URL", "HTTPS_PROXY", "no_proxy"):
+                self.assertEqual(env[k], host[k], k)
+            for k in ("CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_REMOTE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT",
+                      "CLAUDE_CODE_MESSAGING_TOKEN", "GH_TOKEN", "AWS_SECRET_ACCESS_KEY"):
+                self.assertNotIn(k, env, k)
+            self.assertEqual(env["HOME"], str(Path(tmp) / "h"))
+            # Only the host's variables beyond the isolation allowlist get through.
+            extra = set(env) - set(runner.PASS_ENV) - set(runner.home_dirs("")) - {"DISABLE_AUTOUPDATER", "ADAGE_HOME",
+                                                                                  "ADAGE_ARM", "ADAGE_AUTO_LEARN"}
+            self.assertTrue(extra <= set(runner.HOST_AUTH_ENV), extra)
+            # Auth: the host token, never a copied credentials file (even when one exists).
+            (Path(tmp) / ".claude").mkdir()
+            (Path(tmp) / ".claude" / ".credentials.json").write_text("{}")
+            self.assertEqual(runner.auth_source({**host, "HOME": tmp, "CLAUDE_CONFIG_DIR": tmp + "/.claude"}, cfg["forward_env"], True),
+                             ("host", ["CLAUDE_SESSION_INGRESS_TOKEN_FILE"]))
+            self.assertIsNone(runner.auth_source({"HOME": tmp, "HTTPS_PROXY": "p"}, cfg["forward_env"], True))
+            # A session marker in forward_env is refused.
+            for bad in ("CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "ADAGE_HOME"):
+                cfg_path.write_text(json.dumps({**json.loads(Path(CONFIG).read_text()), "forward_env": [bad]}))
+                with self.assertRaises(SystemExit):
+                    runner.load_config(cfg_path, {})
+        # The flag is parsed, and the dry run shows the forwarded variables.
+        _, opts = runner.parse([CONFIG, "--host-auth"])
+        self.assertTrue(opts["host_auth"])
+        out = dry("--host-auth", "--json", "--root", tempfile.mkdtemp())
+        self.assertIn("CLAUDE_SESSION_INGRESS_TOKEN_FILE", json.loads(out)["isolation"]["passed_through"])
+
+    def test_confinement_hides_everything_but_the_run(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Path(tmp)
+            run_dir, home, tok = t / "runs" / "r1", t / "private" / "adage-home", t / "host" / "token"
+            for d in (run_dir, home, tok.parent, t / "tools" / "bin"):
+                d.mkdir(parents=True)
+            tok.write_text("x")
+            env = {"PATH": f"{t}/tools/bin:/usr/bin", "CLAUDE_SESSION_INGRESS_TOKEN_FILE": str(tok),
+                   "ADAGE_HOME": str(home)}
+            argv = runner.confine_argv({"confine_hide": [tmp]}, run_dir, env, ro=[t / "private" / "none"], rw=[home])
+            self.assertEqual(argv[0], "bwrap")
+            self.assertEqual(argv[argv.index("--tmpfs") + 1], tmp)
+            pairs = {argv[i + 1]: argv[i] for i, a in enumerate(argv) if a in ("--bind", "--ro-bind") and argv[i + 1] != "/"}
+            self.assertEqual(pairs[str(run_dir)], "--bind")
+            self.assertEqual(pairs[str(home)], "--bind")
+            self.assertEqual(pairs[str(tok.parent)], "--ro-bind", "the token's directory, not the file (it is replaced)")
+            self.assertEqual(pairs[f"{t}/tools/bin"], "--ro-bind", "PATH entries under a hidden directory")
+            self.assertNotIn("/usr/bin", pairs, "what is not hidden needs no mount")
+            self.assertNotIn(str(t / "private"), pairs, "the private tree stays hidden")
+            self.assertNotIn(str(t / "private" / "none"), pairs, "a missing path is not mounted")
+        # Every session gets the same tool set, not the harness's default one.
+        cmd = runner.claude_command({**runner.DEFAULTS, "allowed_tools": ["Bash", "Read"]}, "p", "/s.json")
+        self.assertEqual(cmd[cmd.index("--tools") + 1], "Bash,Read")
+
+    def test_the_instincts_arm_reads_its_own_home(self):
+        env = runner.env_for("instincts", Path("/r/private/adage-home"))
+        self.assertEqual(env["ADAGE_HOME"], "/r/private/instincts-home")
+        self.assertEqual(env["ADAGE_ARM"], "treated")
+        self.assertEqual(runner.env_for("adage", Path("/r/private/adage-home"))["ADAGE_HOME"], "/r/private/adage-home")
+
+    def test_the_agents_md_arm_is_the_control_plus_a_context_file(self):
+        env = runner.env_for("agents-md", Path("/r/private/adage-home"))
+        self.assertEqual(env["ADAGE_ARM"], "control")
+        self.assertEqual(env["ADAGE_HOME"], "/r/private/adage-home")
+        self.assertEqual(runner.settings_kind("agents-md"), "hooks")
+        # The sandbox command learns the arm, so it can commit the context file for this arm only.
+        self.assertEqual(runner.expand(["mk", "{dir}", "--arm", "{arm}"], dir="/d", task="t", arm="agents-md"),
+                         ["mk", "/d", "--arm", "agents-md"])
+        self.assertEqual(runner.expand(["{arm}"], dir="/d", task="t"), [""])
+
+    def test_task_prompts_replace_the_rotating_templates(self):
+        cfg = {**runner.DEFAULTS, "prompts": ["Fix {id}."], "task_prompts": {"T-1": "Calling f({}) crashes; fix it."},
+               "train": {"tasks": ["T-1", "T-2"], "repeats": 1}, "eval": {"tasks": ["T-3"], "repeats": 1}}
+        rows = {r[3]: r[4].format(id=r[3]) for r in runner.plan(cfg, ["train", "eval"], 1)}
+        self.assertEqual(rows["T-1"], "Calling f({}) crashes; fix it.")
+        self.assertEqual(rows["T-2"], "Fix T-2.")
 
     def test_the_plan_puts_homes_outside_the_private_tree(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -392,7 +513,7 @@ class Rounds(unittest.TestCase):
         self.assertEqual(p["estimate"]["eval"]["runs"], 36)
         text = dry_with(path, "--root", self.tmp.name)
         self.assertNotIn("WARNING", text)
-        self.assertIn("eval 3 tasks x 3 repeats x 2 arms (holdout, adage) x 2 rounds = 36", text)
+        self.assertIn("eval 3 tasks x 3 repeats x 2 arms (control, adage) x 2 rounds = 36", text)
 
     def test_uneven_pools_as_a_dict(self):
         path = write_config(self.tmp.name, tasks_by_round={"1": ["INC-86", "INC-94"], "2": ["INC-219", "INC-245", "INC-268"]})
@@ -422,8 +543,8 @@ class Rounds(unittest.TestCase):
     def test_learning_leaves_out_the_rounds_own_tasks(self):
         def r(phase, task, rnd, arm="train"):
             return {"phase": phase, "task": task, "round": rnd, "arm": arm, "metrics": {"session_id": f"{phase}{task}{rnd}{arm}"}}
-        runs = [r("train", "T0", 1), r("eval", "A", 1, "adage"), r("eval", "A", 1, "holdout"), r("eval", "B", 1, "holdout"),
-                r("eval", "C", 2, "holdout"), {"phase": "eval", "task": "B", "round": 1, "arm": "adage"}]
+        runs = [r("train", "T0", 1), r("eval", "A", 1, "adage"), r("eval", "A", 1, "control"), r("eval", "B", 1, "control"),
+                r("eval", "C", 2, "control"), {"phase": "eval", "task": "B", "round": 1, "arm": "adage"}]
         tasks = lambda rs: sorted((x["phase"], x["task"], x["round"]) for x in rs)  # noqa: E731
         self.assertEqual(tasks(runner.learning_runs(runs, 1)), [("train", "T0", 1)])
         self.assertEqual(tasks(runner.learning_runs(runs, 2, {"C", "D"})),
@@ -431,6 +552,39 @@ class Rounds(unittest.TestCase):
         self.assertEqual(tasks(runner.learning_runs(runs, 3, {"A", "C"})), [("eval", "B", 1), ("train", "T0", 1)],
                          "never a session of a task in this round's pool")
         self.assertEqual(len(runner.learning_runs(runs, 2, None)), 4, "without pools: every earlier session (leaky)")
+
+
+class Resume(unittest.TestCase):
+    def test_a_rerun_skips_finished_sessions(self):
+        cfg = runner.load_config(CONFIG, {})
+        sessions = runner.plan(cfg, ["train", "eval"], 1)
+        done = lambda phase, arm, task, status="passed", m_status="ok": {  # noqa: E731
+            "phase": phase, "arm": arm, "task": task, "round": 1, "status": status,
+            "metrics": {"status": m_status, "session_id": "s"}}
+        (t0, t1), ev = sessions[:2], next(s for s in sessions if s[1] == "eval")
+        state = {"runs": {
+            t0[0]: done("train", "train", t0[3]),                          # passed: finished
+            t1[0]: done("train", "train", t1[3], "failed", "error_max_turns"),  # a cutoff is a result too
+            ev[0]: done("eval", ev[2], ev[3], "failed", "infra_error"),    # an infra error runs again
+        }}
+        todo = runner.pending(state, sessions, 1)
+        self.assertNotIn(t0, todo)
+        self.assertNotIn(t1, todo)
+        self.assertIn(ev, todo)
+        self.assertEqual(len(todo), len(sessions) - 2)
+        # Killed mid-run (still "running", no metrics) or skipped for the spend cap: runs again.
+        state["runs"][t0[0]] = {"phase": "train", "arm": "train", "task": t0[3], "round": 1, "status": "running"}
+        state["runs"][t1[0]]["status"] = "skipped"
+        self.assertEqual(len(runner.pending(state, sessions, 1)), len(sessions))
+        # Another round's run of the same id does not count.
+        state["runs"][t0[0]] = {**done("train", "train", t0[3]), "round": 2}
+        self.assertIn(t0, runner.pending(state, sessions, 1))
+
+    def test_no_resume_is_an_option(self):
+        _, opts = runner.parse([CONFIG, "--no-resume"])
+        self.assertFalse(opts["resume"])
+        _, opts = runner.parse([CONFIG])
+        self.assertTrue(opts["resume"])
 
 
 class Redaction(unittest.TestCase):

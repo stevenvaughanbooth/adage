@@ -122,7 +122,9 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
                 <CommandLine command="adage init" />
               </>
             )}
-            <span className="text-sm text-ink-2">Have earlier agent sessions in this repository? Condition from them now:</span>
+            <span className="text-sm text-ink-2">
+              Adage conditions on this repository's agent sessions by itself, in the background. To do it now, earlier sessions included:
+            </span>
             <CommandLine command="adage condition" />
             <span className="text-[13.5px] text-ink-2">
               Or try the map with sample traces:{" "}
@@ -143,7 +145,7 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
                   <span className="truncate font-mono text-[13.5px]">{r.id}</span>
                   <span className="truncate text-[12.5px] text-ink-2">{r.summary || `${r.trigger.label.replace(/`/g, "")} → ${r.step.label}`}</span>
                 </div>
-                <StrengthChip strength={strength(r.aspect)} />
+                <StrengthChip strength={strength(r.strength)} />
               </div>
             ))}
             <span className="text-[12.5px] text-ink-3">Instincts start as prime. Your own traces confirm them to fire.</span>

@@ -7,7 +7,7 @@ use adage_learn::codex::{discover, parse_rollout, read_rollout};
 use adage_learn::opencode::read_export;
 use adage_learn::{learn, Inputs, LearnConfig};
 use adage_sim::{codex as sim, scenario, CODEX_SEED};
-use adage_tracks::{Aspect, Index, SlotSource, Step, Trigger};
+use adage_tracks::{Index, SlotSource, Step, Strength, Trigger};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -103,7 +103,7 @@ fn learns_all_four_route_kinds_from_codex_rollouts() {
     let routes: Vec<_> = index.routes.iter().map(|r| &r.route).collect();
     let lookup = routes.iter().find(|r| matches!(r.trigger, Trigger::Prompt { .. })).expect("prompt route");
     assert_eq!(lookup.step, Step::Run { command: "python3 scripts/wi-lookup {item}".into() });
-    assert_eq!(lookup.aspect, Aspect::Green);
+    assert_eq!(lookup.strength, Strength::Fire);
     let linked = routes
         .iter()
         .find(|r| matches!(r.step, Step::ReadBatch { .. }))
@@ -223,7 +223,7 @@ fn steering_subagents_paginated_prompts_and_hostile_rollouts() {
         user("Pick up W-2042 please"),
         line(
             "response_item",
-            json!({ "type": "message", "role": "developer", "content": [{ "type": "input_text", "text": "<adage-signal track=\"acme-billing/work-items@0.1.0\" route=\"lookup-work-item\" aspect=\"green\">\nIn this repository…\n</adage-signal>" }] }),
+            json!({ "type": "message", "role": "developer", "content": [{ "type": "input_text", "text": "<adage-reflex track=\"acme-billing/work-items@0.1.0\" route=\"lookup-work-item\" strength=\"fire\">\nIn this repository…\n</adage-reflex>" }] }),
         ),
         exec("c1", "python3 scripts/wi-lookup W-2042"),
         exec("c2", "ls"),

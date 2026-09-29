@@ -13,7 +13,7 @@ describe("the hook chapter's arm assignment", () => {
   });
 
   it("draws x as adage_runtime::assign_arm does", () => {
-    // Checked against the Rust function: assign_arm("T2", 0.0638) is treated, 0.0639 holdout;
+    // Checked against the Rust function: assign_arm("T2", 0.0638) is treated, 0.0639 control;
     // "T11" flips between 0.0871 and 0.0872; "T1" between 0.2961 and 0.2962.
     expect(armDraw("T2")).toBeGreaterThan(0.0638);
     expect(armDraw("T2")).toBeLessThan(0.0639);

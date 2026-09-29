@@ -23,6 +23,6 @@ expression: text
 
 [darkgray]─ [/][b d]health[/][darkgray] ───────────────────────────────────────────────────────────────────────[/]
  [green]✓ [/][d]hooks claude[/]    [green]✓ [/][d]4 reflexes[/]    [green]✓ [/][d]auto-condition[/]
- [darkgray]○ [/][d]intent model not fetched[/][darkgray] · [/][lightmagenta]adage models fetch[/]
+ [yellow]! [/][d]no model[/][darkgray] · [/][lightmagenta]adage models fetch[/]
 [darkgray]────────────────────────────────────────────────────────────────────────────────[/]
  [lightmagenta b]p[/][darkgray] pause · [/][lightmagenta b]f[/][darkgray] scope · [/][lightmagenta b]/[/][darkgray] filter · [/][lightmagenta b]enter[/][darkgray] inspect · [/][lightmagenta b]m[/][darkgray] open map · [/][lightmagenta b]?[/][darkgray] keys[/]      [lightmagenta b]q[/][darkgray] quit [/]

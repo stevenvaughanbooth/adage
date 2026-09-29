@@ -22,12 +22,12 @@ describe("seal the index", () => {
     expect(c.out).toHaveLength(7);
     expect(c.locked.map((l) => [l.by.key, l.route.key])).toEqual([["A3", "B2"]]);
     expect(c.demoted.map((d) => [d.winner.key, d.loser.key])).toEqual([["A1", "A2"]]);
-    expect(c.out.find((r) => r.key === "A2")!.aspect).toBe("prime");
+    expect(c.out.find((r) => r.key === "A2")!.strength).toBe("prime");
     expect(c.generation).toMatch(/^[0-9a-f]{16}$/);
   });
 
   it("states this repository's generation, not a recomputed one", () => {
-    const route = { id: "x", track: "a/b", version: "0.1.0", imported: false, in_index: true, aspect: "green" } as never;
+    const route = { id: "x", track: "a/b", version: "0.1.0", imported: false, in_index: true, strength: "fire" } as never;
     const built = seal.build(stage, { graph: { generation: "0123456789abcdef", routes: [route] } as never, repo: true });
     expect(built.source).toBe("your 1 reflexes");
     expect(built.steps.at(-1)!.body).toContain("0123456789abcdef");

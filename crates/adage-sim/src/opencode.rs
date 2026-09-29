@@ -155,7 +155,7 @@ pub fn turn_hooks(turn: &Turn, sid: &str, cwd: &str) -> Vec<(&'static str, Value
 }
 
 /// A script for the node driver: each step calls one plugin hook, exactly as OpenCode would, and
-/// says what the fake client should see afterwards. With `treated = false` (the holdout arm)
+/// says what the fake client should see afterwards. With `treated = false` (the control arm)
 /// every expectation is silence.
 pub fn plugin_script(r: &Replay, sid: &str, treated: bool) -> Value {
     let x = |v: &[&str]| if treated { json!(v) } else { json!([]) };

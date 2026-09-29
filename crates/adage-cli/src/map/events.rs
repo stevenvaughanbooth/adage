@@ -199,7 +199,7 @@ impl Tailer {
         }
         for line in self.log.poll() {
             if let Ok(v) = serde_json::from_str::<Value>(&line) {
-                shared.hub.publish("learn", &v);
+                shared.hub.publish("learn", &lexicon(v));
             }
         }
         let at = index_mtime(shared);
@@ -212,6 +212,47 @@ impl Tailer {
             }
         }
     }
+}
+
+/// A learn.log line in the lexicon's words, whatever version wrote it: kinds `learn` and
+/// `learn_error` become `condition` and `condition_error`; change kinds `aspect`, `draft`,
+/// `stale` and `retired` become `strength`, `nascent`, `dormant` and `extinguished`; strengths
+/// `green`, `yellow` and `red` become `fire`, `prime` and `inhibit`. Everything else is kept.
+pub(crate) fn lexicon(mut v: Value) -> Value {
+    let kind = match v["kind"].as_str() {
+        Some("learn") => Some("condition"),
+        Some("learn_error") => Some("condition_error"),
+        _ => None,
+    };
+    if let Some(k) = kind {
+        v["kind"] = json!(k);
+    }
+    let strength = |x: &Value| match x.as_str() {
+        Some("green") => json!("fire"),
+        Some("yellow") => json!("prime"),
+        Some("red") => json!("inhibit"),
+        _ => x.clone(),
+    };
+    if let Some(changes) = v["changes"].as_array_mut() {
+        for c in changes {
+            let change = match c["change"].as_str() {
+                Some("aspect") => Some("strength"),
+                Some("draft") => Some("nascent"),
+                Some("stale") => Some("dormant"),
+                Some("retired") => Some("extinguished"),
+                _ => None,
+            };
+            if let Some(ch) = change {
+                c["change"] = json!(ch);
+            }
+            for k in ["from", "to"] {
+                if !c[k].is_null() {
+                    c[k] = strength(&c[k]);
+                }
+            }
+        }
+    }
+    v
 }
 
 pub(crate) fn spawn_tailer(shared: Arc<Shared>) -> std::thread::JoinHandle<()> {
@@ -227,6 +268,22 @@ pub(crate) fn spawn_tailer(shared: Arc<Shared>) -> std::thread::JoinHandle<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn older_learn_log_lines_read_in_the_lexicons_words() {
+        let old = json!({ "kind": "learn", "changes": [
+            { "change": "aspect", "from": "yellow", "to": "green" },
+            { "change": "retired", "from": null, "to": null },
+        ] });
+        let v = lexicon(old);
+        assert_eq!(v["kind"], "condition");
+        assert_eq!(v["changes"][0], json!({ "change": "strength", "from": "prime", "to": "fire" }));
+        assert_eq!(v["changes"][1]["change"], "extinguished");
+        assert!(v["changes"][1]["to"].is_null());
+        assert_eq!(lexicon(json!({ "kind": "learn_error" }))["kind"], "condition_error");
+        let new = json!({ "kind": "condition", "changes": [{ "change": "nascent", "to": "prime" }] });
+        assert_eq!(lexicon(new.clone()), new);
+    }
 
     #[test]
     fn replays_what_a_page_missed_and_resets_when_too_much_was_missed() {

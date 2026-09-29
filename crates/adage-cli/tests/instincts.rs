@@ -2,7 +2,7 @@
 //! built-in defaults from its files with no session history, the hooks deliver them with their
 //! own wrapper (golden per harness), they never ask the agent to keep going, `adage doctor` and
 //! `adage review` show them, a person's rejection holds, pack-level approval works, and agents
-//! that follow an instinct into a failure retire it at the next learn.
+//! that follow an instinct into a failure extinguish it at the next learn.
 //!
 //! Goldens: `tests/golden/instincts-<harness>.txt`; regenerate with `ADAGE_BLESS=1 cargo test -p
 //! adage-cli --test instincts` and review the diff.
@@ -139,7 +139,7 @@ fn assert_instinct_text(t: &str) {
     assert!(t.contains("Adage default for"), "{t}");
     assert!(!t.contains("Learned by Adage"), "an instinct never claims to be learned:\n{t}");
     assert!(!t.contains("CI fails") && !t.contains("Agents in this repository run it"), "{t}");
-    assert!(!t.contains("aspect=\\\"green\\\"") && !t.contains("aspect=\\\"red\\\""), "yellow only:\n{t}");
+    assert!(!t.contains("strength=\\\"fire\\\"") && !t.contains("strength=\\\"inhibit\\\""), "prime only:\n{t}");
     assert!(!t.contains("\"decision\":\"block\"") && !t.contains("{\"continue\""), "never a stop request:\n{t}");
 }
 
@@ -284,7 +284,7 @@ fn doctor_review_and_pack_approval() {
     assert!(
         detail.starts_with(&format!("on; {KEY}: "))
             && detail.contains(" bound, ")
-            && detail.contains("2 awaiting approval"),
+            && detail.contains("4 awaiting approval"),
         "{detail}"
     );
     // review lists instinct routes with their origin; environment steps wait for approval.
@@ -293,15 +293,17 @@ fn doctor_review_and_pack_approval() {
     let rows = q["queue"].as_array().unwrap();
     let inst: Vec<&Value> = rows.iter().filter(|r| r["origin"]["kind"] == "instinct").collect();
     assert!(!inst.is_empty(), "{q:#}");
-    assert!(inst.iter().all(|r| r["track"] == TRACK && r["aspect"] == "yellow"), "{q:#}");
-    assert!(inst.iter().all(|r| !r["decisions"].as_array().unwrap().iter().any(|d| d == "promote")));
-    let drafts: Vec<&str> =
-        inst.iter().filter(|r| r["state"] == "draft").map(|r| r["route"].as_str().unwrap()).collect();
-    assert_eq!(drafts.len(), 2, "npm install and npm ci → pnpm install: {q:#}");
+    assert!(inst.iter().all(|r| r["track"] == TRACK && r["strength"] == "prime"), "{q:#}");
+    assert!(inst.iter().all(|r| !r["decisions"].as_array().unwrap().iter().any(|d| d == "strengthen")));
+    let nascent: Vec<&str> =
+        inst.iter().filter(|r| r["state"] == "nascent").map(|r| r["route"].as_str().unwrap()).collect();
+    // `npm ci` (no package-lock.json) and `yarn install` (missing, or refused by corepack) →
+    // `pnpm install`; `npm install` refuses nothing here, so it binds nothing.
+    assert_eq!(nascent.len(), 4, "npm ci and yarn install → pnpm install: {q:#}");
     let text = w.ok(&["review"]);
     assert!(text.contains(" · instinct U1 (from Makefile)"), "{text}");
     // Approving one environment step approves the pack's for this repository.
-    let out = w.ok(&["review", "approve", TRACK, drafts[0]]);
+    let out = w.ok(&["review", "approve", TRACK, nascent[0]]);
     assert!(out.contains(&format!("approved    pack core's environment steps for {KEY}")), "{out}");
     let yaml = std::fs::read_to_string(w.p(&format!("adage/tracks/{TRACK}/review.yaml"))).unwrap();
     assert!(yaml.contains("packs:") && yaml.contains("core:"), "{yaml}");
@@ -310,21 +312,22 @@ fn doctor_review_and_pack_approval() {
     let idx: Value = serde_json::from_str(&std::fs::read_to_string(w.p("adage/index.json")).unwrap()).unwrap();
     let install =
         idx["routes"].as_array().unwrap().iter().filter(|r| r["route"]["step"]["command"] == "pnpm install").count();
-    assert_eq!(install, 2, "both environment steps are delivered after pack approval");
-    // A rejected instinct stays retired across re-binds.
+    assert_eq!(install, 4, "every environment step is delivered after pack approval");
+    // An extinguished instinct stays extinguished across re-binds.
     let out = w.ok(&["review", "extinguish", TRACK, "finish-line-e7e809"]);
     assert!(out.contains("→ extinguished"), "{out}");
     w.bind();
     let idx = std::fs::read_to_string(w.p("adage/index.json")).unwrap();
-    assert!(!idx.contains("finish-line-e7e809"), "a rejection holds");
+    assert!(!idx.contains("finish-line-e7e809"), "an extinguish decision holds");
 }
 
 #[test]
-fn followed_and_failed_instincts_retire_at_the_next_learn() {
+fn followed_and_failed_instincts_extinguish_at_the_next_learn() {
     let w = World::new();
     w.bind();
     let cwd = w.repo();
-    // Three sessions follow the instinct's `make test` after the unittest failure, and it fails.
+    // Three sessions follow the instinct's `make test` after the unittest failure, and it cannot
+    // run (the target is gone): misfires. A test run that fails its tests is followed, not misfired.
     for i in 0..3 {
         let base = |ev: &str, extra: Value| {
             let mut b = json!({ "session_id": format!("s-ff{i}"), "transcript_path": "/dev/null", "cwd": cwd, "hook_event_name": ev });
@@ -348,7 +351,7 @@ fn followed_and_failed_instincts_retire_at_the_next_learn() {
             "PostToolUseFailure",
             &base(
                 "PostToolUseFailure",
-                json!({ "tool_name": "Bash", "tool_input": { "command": "make test" }, "error": "make: *** [test] Error 1" }),
+                json!({ "tool_name": "Bash", "tool_input": { "command": "make test" }, "error": "make: *** No rule to make target 'test'.  Stop." }),
             ),
         );
     }
@@ -358,17 +361,17 @@ fn followed_and_failed_instincts_retire_at_the_next_learn() {
         .filter(|e| e.path().extension().is_some_and(|x| x == "spool"))
         .map(|e| String::from_utf8_lossy(&std::fs::read(e.path()).unwrap()).to_string())
         .collect();
-    assert_eq!(spools.matches("followed_failed").count(), 3, "{spools}");
+    assert_eq!(spools.matches("misfired").count(), 3, "{spools}");
     let out = w.bind();
     assert!(out.contains("1 extinguished after failing"), "{out}");
     assert!(out.contains("extinguished automatically: agents followed it and it failed"), "{out}");
     let yaml = std::fs::read_to_string(w.p(&format!("adage/tracks/{TRACK}/review.yaml"))).unwrap();
-    assert!(yaml.contains("rejected") && yaml.contains("adage: followed and failed 3 times"), "{yaml}");
+    assert!(yaml.contains("extinguished") && yaml.contains("adage: misfired 3 times"), "{yaml}");
     let log = std::fs::read_to_string(w.p("adage/learn.log")).unwrap();
-    assert!(log.lines().last().unwrap().contains("\"change\":\"retired\""), "{log}");
-    // It stays retired: the next bind does not bring it back.
+    assert!(log.lines().last().unwrap().contains("\"change\":\"extinguished\""), "{log}");
+    // It stays extinguished: the next bind does not bring it back.
     w.bind();
     let idx: Value = serde_json::from_str(&std::fs::read_to_string(w.p("adage/index.json")).unwrap()).unwrap();
-    let retired = idx["routes"].as_array().unwrap().iter().any(|r| r["route"]["id"] == "dead-end-d41b1e");
-    assert!(!retired, "the retired route is not delivered");
+    let extinguished = idx["routes"].as_array().unwrap().iter().any(|r| r["route"]["id"] == "dead-end-d41b1e");
+    assert!(!extinguished, "the extinguished route is not delivered");
 }

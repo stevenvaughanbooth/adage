@@ -8,7 +8,7 @@ expression: text
 
 ▌ + binary               adage 0.1.0 at ~/bin/adage
   + index                generation 8216e29f00, 4 route(s) in 1 repository
-  ! embedding model    ⏎ not installed, so the index's intent routes cannot fire
+  ! embedding model    ⏎ no embedding model, so the hashed fallback is in use; intent reflexes cannot fire
   + hooks: claude-co…    ~/work/harbor-dispatch/.claude/settings.local.json runs ~/bin/adage (this binary)
   ! hooks: codex       ⏎ codex is installed, but Adage's hooks are not registered with it
   + fail-open errors     none in the last 7 days

@@ -10,14 +10,14 @@
 //! ◇  Harnesses · claude-code, codex                ← finished steps, in the scrollback
 //! ◇  Hooks · claude-code · wrote ~/.claude/settings.json
 //! ◆  Embedding model                               ← the active step, live
-//! │  Optional: …
-//! │  › Fetch it (31 MB)
-//! │    Skip for now
+//! │  Ready: potion-base-8m (bundled).
+//! │  › Continue
 //! └  ↑↓ choose · enter confirm · q stop
 //! ```
 //!
 //! Steps: harnesses (read-only); hooks, per harness found (the exact file and diff first; this
-//! repository or every repository); the embedding model (optional); a first `adage condition`;
+//! repository or every repository); the embedding model (bundled in adage, so usually nothing
+//! to do; offered for download only when none is usable); a first `adage condition`;
 //! auto-condition; then the doctor's summary and what to run next. `y` takes the first choice,
 //! `n` skips, `q` (or esc) stops: nothing already done is undone, and nothing else is written.
 
@@ -160,7 +160,7 @@ impl Wizard {
                 v
             }
             Kind::Model if self.model.is_some() => vec!["Continue".into()],
-            Kind::Model => vec!["Fetch it · 31 MB, SHA-256 verified".into(), "Skip for now".into()],
+            Kind::Model => vec!["Fetch it · SHA-256 verified".into(), "Skip for now".into()],
             Kind::Learn => vec!["Condition now".into(), "Skip · it runs by itself as traces end".into()],
             Kind::AutoLearn if self.auto_learn.as_ref().is_some_and(|(on, _)| *on) => vec!["Keep it on".into()],
             Kind::AutoLearn => vec!["Turn it on".into(), "Leave it off".into()],
@@ -260,7 +260,7 @@ impl Wizard {
             },
             Kind::Model if yes && self.model.is_some() => {
                 let m = self.model.clone().unwrap_or_default();
-                self.advance(StepStatus::Done(format!("{m} already installed")))
+                self.advance(StepStatus::Done(format!("{m} ready")))
             }
             Kind::Model if yes => Some(Cmd::FetchModel),
             Kind::Learn if yes => Some(Cmd::Learn),
@@ -413,9 +413,12 @@ fn body(w: &Wizard, t: &Theme, width: usize) -> Vec<Line<'static>> {
             }
         }
         Kind::Model => match &w.model {
-            Some(m) => out.extend(text(&format!("Installed: {m}."), plain)),
+            Some(m) => out.extend(text(
+                &format!("Ready: {m}. Prompts that mean the same thing (\"run the tests\", \"check my change\") share a reflex."),
+                plain,
+            )),
             None => out.extend(text(
-                "Optional. With the embedding model, prompts that mean the same thing (\"run the tests\", \"check my change\") share a reflex. Everything else works without it.",
+                "No usable embedding model (none installed, and none bundled in this adage). With one, prompts that mean the same thing (\"run the tests\", \"check my change\") share a reflex. Everything else works without it.",
                 plain,
             )),
         },
@@ -717,9 +720,16 @@ fn fold(line: Line<'static>, cols: usize) -> Vec<Line<'static>> {
     out
 }
 
+/// What hooks embed with, when it is a model: an installed one, or the one bundled in adage
+/// (`potion-base-8m (bundled)`). `None` for the hashed fallback.
+fn usable_model(ctx: &Ctx) -> Option<String> {
+    let (embedder, _) = crate::status_card::embeddings(&ctx.paths);
+    (embedder != "hashed fallback").then_some(embedder)
+}
+
 pub fn run(ctx: Ctx) -> Result<()> {
     let mut w = Wizard::new(detect::harnesses(), detect::registrations(ctx.root.as_deref()), ctx.root.is_some());
-    w.model = adage_intent::model::status(&ctx.paths.models()).ok().map(|m| m.id);
+    w.model = usable_model(&ctx);
     let loaded = config::load(&ctx.paths);
     w.auto_learn = loaded.get("learn.auto").map(|(_, src)| (loaded.config.learn_auto, src.to_string()));
     w.config_path = detect::tilde(&ctx.paths.config());
@@ -756,7 +766,7 @@ pub fn run(ctx: Ctx) -> Result<()> {
                     w.progress = None;
                     match (kind, done) {
                         (Kind::Model, Ok(lines)) => {
-                            w.model = adage_intent::model::status(&ctx.paths.models()).ok().map(|m| m.id);
+                            w.model = usable_model(&ctx);
                             let note = lines.first().cloned().unwrap_or_default();
                             w.advance(StepStatus::Done(note));
                         }
@@ -792,10 +802,12 @@ pub fn run(ctx: Ctx) -> Result<()> {
                 w.health = Some(health::gather(&ctx.paths, ctx.root.as_deref()));
                 None
             }
-            Cmd::Install(p) => match crate::install::apply(&p) {
-                Ok(()) => {
+            Cmd::Install(p) => match crate::install::apply_backed_up(&p) {
+                Ok(backup) => {
                     w.registrations = detect::registrations(ctx.root.as_deref());
-                    w.advance(StepStatus::Done(format!("wrote {}", detect::tilde(&p.target))))
+                    let kept =
+                        backup.map(|b| format!(" (previous version in {})", detect::tilde(&b))).unwrap_or_default();
+                    w.advance(StepStatus::Done(format!("wrote {}{kept}", detect::tilde(&p.target))))
                 }
                 Err(e) => {
                     w.plan = Some(Err(format!("not written: {e:#}")));

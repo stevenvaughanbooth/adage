@@ -14,14 +14,14 @@
 //!
 //! The terminal is restored on every exit path, including a panic ([`term`]). `NO_COLOR` is
 //! honoured: colour is dropped and strengths and lamps are spelled out. Words follow the lexicon
-//! (docs/lexicon.md) at display time; stored values keep their names ([`words`]).
+//! (docs/lexicon.md); older spellings in spools and learn.log are still read ([`words`]).
 
 mod app;
 pub(crate) mod demo;
 mod diff;
 mod feed;
 mod fuzzy;
-mod health;
+pub(crate) mod health;
 mod jobs;
 mod keys;
 mod learnlog;

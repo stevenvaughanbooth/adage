@@ -7,7 +7,7 @@
 //! glyph for its ASCII fallback, and `ADAGE_REDUCED_MOTION=1` turns the one-shot pulses off.
 
 use adage_term::{Caps, Glyph, Level, Role};
-use adage_tracks::Aspect;
+use adage_tracks::Strength;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Line;
 
@@ -80,7 +80,7 @@ impl Theme {
         self.role(Role::Accent)
     }
     /// The control arm: reflexes withheld on purpose.
-    pub fn holdout(&self) -> Style {
+    pub fn control(&self) -> Style {
         self.role(Role::Ink3).add_modifier(Modifier::ITALIC)
     }
     /// Tertiary text.
@@ -212,30 +212,30 @@ impl Theme {
         self.accent().add_modifier(Modifier::BOLD)
     }
 
-    pub fn aspect(&self, a: Aspect) -> Style {
+    pub fn strength(&self, a: Strength) -> Style {
         match a {
-            Aspect::Green => self.green(),
-            Aspect::Yellow => self.yellow(),
-            Aspect::Red => self.red(),
+            Strength::Fire => self.green(),
+            Strength::Prime => self.yellow(),
+            Strength::Inhibit => self.red(),
         }
     }
 
     /// The strength's word: fire, prime, inhibit.
-    pub fn strength_word(a: Aspect) -> &'static str {
+    pub fn strength_word(a: Strength) -> &'static str {
         match a {
-            Aspect::Green => "fire",
-            Aspect::Yellow => "prime",
-            Aspect::Red => "inhibit",
+            Strength::Fire => "fire",
+            Strength::Prime => "prime",
+            Strength::Inhibit => "inhibit",
         }
     }
 
     /// The strength's lamp: a coloured dot, or its word without colour.
-    pub fn aspect_mark(&self, a: Aspect) -> &'static str {
+    pub fn strength_mark(&self, a: Strength) -> &'static str {
         match (self.color, a) {
             (true, _) => self.glyph(Glyph::Lamp),
-            (false, Aspect::Green) => "FIRE",
-            (false, Aspect::Yellow) => "PRIME",
-            (false, Aspect::Red) => "INHIBIT",
+            (false, Strength::Fire) => "FIRE",
+            (false, Strength::Prime) => "PRIME",
+            (false, Strength::Inhibit) => "INHIBIT",
         }
     }
 
@@ -264,11 +264,12 @@ impl Theme {
     }
 }
 
-pub fn parse_aspect(s: &str) -> Option<Aspect> {
+/// A stored strength: the lexicon's words, or the colours older versions wrote.
+pub fn parse_strength(s: &str) -> Option<Strength> {
     match s {
-        "green" | "fire" => Some(Aspect::Green),
-        "yellow" | "prime" => Some(Aspect::Yellow),
-        "red" | "inhibit" => Some(Aspect::Red),
+        "green" | "fire" => Some(Strength::Fire),
+        "yellow" | "prime" => Some(Strength::Prime),
+        "red" | "inhibit" => Some(Strength::Inhibit),
         _ => None,
     }
 }

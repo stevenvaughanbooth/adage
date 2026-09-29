@@ -67,8 +67,8 @@ pub enum Read {
 /// The version of the parsed session's format. Bumped whenever [`Session`] gains or changes what
 /// a parse records, so an entry written before is never read as if it had it, even by a build
 /// whose executable happens to match (format 2: per-prompt import, `Session::prompts` and
-/// `StepObs::prompt`, Track G G0).
-pub const SESSION_FORMAT: u32 = 2;
+/// `StepObs::prompt`, Track G G0; format 3: `Session::ending`, the outcome proxies).
+pub const SESSION_FORMAT: u32 = 3;
 
 /// The identity of this parser: a cache written by any other build is not trusted.
 fn parser_id() -> String {
@@ -130,10 +130,16 @@ impl Cache {
         only_repo: Option<&str>,
         repo_of: &mut dyn FnMut(&Path) -> String,
     ) -> Read {
-        let Ok(meta) = std::fs::metadata(path) else { return Read::Nothing };
+        let meta = match std::fs::metadata(path) {
+            Ok(m) => m,
+            // Out of this process's sight but not verifiably gone (a sandboxed learner): the parse
+            // already cached for it still counts, so evidence does not come and go.
+            Err(_) if !crate::scope::gone(path) => return self.cached(path, repo_override, only_repo, repo_of),
+            Err(_) => return Read::Nothing,
+        };
         let (size, mtime_ns) = (meta.len(), stamp(&meta));
         let repo_for = |root: &Path, repo_of: &mut dyn FnMut(&Path) -> String| {
-            repo_override.map(str::to_string).unwrap_or_else(|| repo_of(root))
+            adage_core::repo::key_with(repo_override, || repo_of(root))
         };
         if let Some(e) = self.manifest.entries.get(path).filter(|e| e.size == size && e.mtime_ns == mtime_ns) {
             let Some(root) = e.root.clone() else {
@@ -177,6 +183,32 @@ impl Cache {
         }
     }
 
+    /// The cached parse of a transcript that cannot be read now, whatever its size and time.
+    fn cached(
+        &mut self,
+        path: &Path,
+        repo_override: Option<&str>,
+        only_repo: Option<&str>,
+        repo_of: &mut dyn FnMut(&Path) -> String,
+    ) -> Read {
+        let Some(root) = self.manifest.entries.get(path).and_then(|e| e.root.clone()) else { return Read::Nothing };
+        let repo = adage_core::repo::key_with(repo_override, || repo_of(&root));
+        if only_repo.is_some_and(|r| r != repo) {
+            return Read::Elsewhere;
+        }
+        match std::fs::read(self.dir.join(file_name(path)))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Session>(&b).ok())
+        {
+            Some(mut s) if s.root == root => {
+                self.hits += 1;
+                s.repo = repo;
+                Read::Session(Box::new(s))
+            }
+            _ => Read::Nothing,
+        }
+    }
+
     /// Write the manifest: the one on disk now (another learner may have saved since this one
     /// opened it), plus this run's entries, minus transcripts that no longer exist. Best effort: a
     /// cache that cannot be saved costs a re-parse next time.
@@ -190,7 +222,8 @@ impl Cache {
             .filter(|m| m.parser == self.parser)
             .unwrap_or_else(|| Manifest { parser: self.parser.clone(), entries: BTreeMap::new() });
         m.entries.extend(self.fresh);
-        m.entries.retain(|p, _| p.exists());
+        // Only transcripts verifiably gone are forgotten (`crate::scope::gone`).
+        m.entries.retain(|p, _| !crate::scope::gone(p));
         // Session files no entry names: transcripts that are gone, and parses by another build.
         let named: std::collections::BTreeSet<String> =
             m.entries.iter().filter(|(_, e)| e.root.is_some()).map(|(p, _)| file_name(p)).collect();

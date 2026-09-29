@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Serve the live demo dashboard: http://127.0.0.1:8765  (reads $DEMO_ROOT/state.json), and the
-signal box at /brain, which draws `adage graph --json` for $ADAGE_HOME (default
-$DEMO_ROOT/adage-home) and refreshes it live. $ADAGE_BIN overrides the binary. The signal box page
+map at /brain, which draws `adage graph --json` for $ADAGE_HOME (default
+$DEMO_ROOT/adage-home) and refreshes it live. $ADAGE_BIN overrides the binary. The map page
 lives with the binary (crates/adage-cli/assets/brain.html), which also serves it on its own:
 `adage map`."""
 import functools
@@ -76,7 +76,7 @@ class H(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == "__main__":
     print(f"Adage dashboard: http://127.0.0.1:{PORT}  (state: {ROOT / 'state.json'})")
-    print(f"Signal box:      http://127.0.0.1:{PORT}/brain  (ADAGE_HOME={ADAGE_HOME})")
+    print(f"Map:             http://127.0.0.1:{PORT}/brain  (ADAGE_HOME={ADAGE_HOME})")
     # An explicit directory avoids os.getcwd(), which fails when the cwd is not readable.
     handler = functools.partial(H, directory=str(HERE))
     http.server.ThreadingHTTPServer(("127.0.0.1", PORT), handler).serve_forever()

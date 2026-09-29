@@ -82,7 +82,7 @@ export function betaGrid(a: number, b: number, n = 600): { xs: number[]; ps: num
   return { xs, ps, q05, mean: a / (a + b) };
 }
 
-/** Wilson score lower bound at 95%, as the miners compute it (adage-tracks model.rs). */
+/** Wilson score lower bound at 95%, as the learner computes it (adage-tracks `wilson_lower`). */
 export function wilson(k: number, n: number, z = 1.959964): number {
   if (!n) return 0;
   const p = k / n;

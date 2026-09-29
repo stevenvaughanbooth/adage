@@ -43,7 +43,12 @@ for emphasis: Bricolage has none, and emphasis is carried by colour (the accent)
   and commands the reader can run (`accent.soft`).
 - **Lamps mean strength.** Green, amber and red appear only on fire, prime and inhibit (and on
   success, warning and failure marks). Never decorative, never bullets.
-- **Orange means cost.** `cost` is for GPU spend and nothing else.
+- **Orange means cost.** `cost` is for GPU spend and nothing else, so savings never use it.
+- **Savings use no new colour.** The amounts (`~$0.034`, `3.1 turns`, the interval) stay in
+  the default ink: they are evidence, not a celebration. Only the verdict carries a mark, with
+  the existing roles: `saved` a `✓` in `lamp.fire` (success), `adds cost` a `✗` in
+  `lamp.inhibit` (failure), `measuring` and `no measurable difference` a `○` in `ink.3`.
+  Under `NO_COLOR` the verdict is the words alone.
 - **Degrade by meaning.** Under `NO_COLOR` strengths are spelled out (`FIRE`, `PRIME`,
   `INHIBIT`), tertiary text dims and the accent is bold. Pipes and files get no escape codes at
   all. `ADAGE_COLOR=never|16|256|truecolor`, `ADAGE_THEME=day|night` and `ADAGE_ASCII=1`
@@ -61,6 +66,16 @@ for emphasis: Bricolage has none, and emphasis is carried by colour (the accent)
 | directs to | `→` | `->` |
 | active / finished step | `◆` / `◇` | `*` / `+` |
 | separator | `·` | `-` |
+| procedure card | `▤` | `[=]` |
+| rewrite (the command was changed before it ran) | `↪` | `=>` |
+| quiet (uplift below the bar; waits for a person) | `◌` | `(.)` |
+| from a skill (`adage train`) | `◈` | `<>` |
+| notice | `»` | `>>` |
+
+The last five are proposed for the newer concepts (procedure cards, PreToolUse rewrites, uplift,
+compiled skills, notices); they are not yet in `adage.tokens.json`'s `glyph` group, which stays
+the source: add them there (with their ASCII fallbacks) before any surface uses them. Each is
+one column wide in common terminal fonts.
 
 ## The output grammar
 

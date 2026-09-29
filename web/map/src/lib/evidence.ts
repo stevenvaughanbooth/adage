@@ -32,9 +32,9 @@ export function pct(r: Ratio): string {
 export function kpis(routes: Route[]): Kpi[] {
   const paths = routes.filter((r) => r.step.kind !== "avoid");
   const dead = routes.filter((r) => r.step.kind === "avoid");
-  const lines = routes.filter((r) => (r.arms.treated?.met ?? 0) + (r.arms.holdout?.met ?? 0) > 0);
+  const lines = routes.filter((r) => (r.arms.treated?.met ?? 0) + (r.arms.control?.met ?? 0) > 0);
   const t = (f: (a: NonNullable<Route["arms"]["treated"]>) => number) => (r: Route) => (r.arms.treated ? f(r.arms.treated) : 0);
-  const c = (f: (a: NonNullable<Route["arms"]["holdout"]>) => number) => (r: Route) => (r.arms.holdout ? f(r.arms.holdout) : 0);
+  const c = (f: (a: NonNullable<Route["arms"]["control"]>) => number) => (r: Route) => (r.arms.control ? f(r.arms.control) : 0);
   return [
     {
       label: "Took the known path",
@@ -68,7 +68,7 @@ export function perDay(events: TraceEvent[]): { day: number; treated: number; co
     d.setHours(0, 0, 0, 0);
     const k = d.getTime();
     const b = days.get(k) ?? { t: new Set<string>(), c: new Set<string>() };
-    (e.arm === "holdout" ? b.c : b.t).add(e.session);
+    (e.arm === "control" ? b.c : b.t).add(e.session);
     days.set(k, b);
   }
   return [...days.entries()]
@@ -80,7 +80,7 @@ export function perDay(events: TraceEvent[]): { day: number; treated: number; co
 export function armTraces(g: Graph, events: TraceEvent[]): { treated: number; control: number } {
   const t = new Set<string>();
   const c = new Set<string>();
-  for (const e of events) (e.arm === "holdout" ? c : t).add(e.session);
-  if (!events.length) return { treated: g.sessions.treated, control: g.sessions.holdout };
+  for (const e of events) (e.arm === "control" ? c : t).add(e.session);
+  if (!events.length) return { treated: g.sessions.treated, control: g.sessions.control };
   return { treated: t.size, control: c.size };
 }

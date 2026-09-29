@@ -349,9 +349,9 @@ const STEP: usize = 5;
 
 fn reflex_spans(r: &RouteRow, t: &Theme, chosen: bool) -> Vec<Span<'static>> {
     let lamp = if t.color {
-        Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.aspect(r.aspect))
+        Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.strength(r.strength))
     } else {
-        Span::styled(format!("{} ", &Theme::strength_word(r.aspect)[..1].to_ascii_uppercase()), t.bold())
+        Span::styled(format!("{} ", &Theme::strength_word(r.strength)[..1].to_ascii_uppercase()), t.bold())
     };
     let glyph = if r.instinct { Glyph::Instinct } else { Glyph::Reflex };
     vec![
@@ -363,7 +363,7 @@ fn reflex_spans(r: &RouteRow, t: &Theme, chosen: bool) -> Vec<Span<'static>> {
 
 fn reflex_facts(r: &RouteRow, long: bool, t: &Theme) -> String {
     let mut v = vec![
-        Theme::strength_word(r.aspect).to_string(),
+        Theme::strength_word(r.strength).to_string(),
         if r.instinct { "instinct".into() } else { r.lifecycle().to_string() },
         t.text(&r.count()),
     ];
@@ -554,7 +554,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let offset = (top_of_sel + step).saturating_sub(h).min(lines.len().saturating_sub(h));
     f.render_widget(Paragraph::new(lines).scroll((offset as u16, 0)), canvas_a);
 
-    let mut facts = vec![Theme::strength_word(r.aspect).to_string(), r.lifecycle().to_string()];
+    let mut facts = vec![Theme::strength_word(r.strength).to_string(), r.lifecycle().to_string()];
     if r.opportunities > 0 {
         facts.push(format!("{}/{} traces", r.support, r.opportunities));
     }

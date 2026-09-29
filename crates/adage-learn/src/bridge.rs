@@ -14,14 +14,35 @@
 
 use crate::import::{Session, StepObs};
 use adage_core::keys::template_key;
-use adage_core::types::CanonicalAction;
+use adage_core::types::{CanonicalAction, Effect, Normalized};
+use adage_core::CommandTable;
 use adage_graph::input;
 
-fn push(action: &CanonicalAction, step: &StepObs, out: &mut Vec<(input::Step, input::StepMeta)>) {
+/// The effect class of a command as the graph engine labels it: the command's own. Each part of a
+/// compound keeps its own class (in `cargo fmt --all && git commit -m …` the format step
+/// regenerates; it is no author step), and a command whose output was redirected to a file is
+/// still the command it ran (`cargo test --workspace > log` verifies; the log is the agent's).
+pub(crate) fn effect_of(n: &Normalized) -> Effect {
+    match &n.action {
+        CanonicalAction::Exec { argv, .. } if n.note.starts_with("redirected to ") => {
+            adage_graph::events::classify(argv, table())
+        }
+        _ => n.effect,
+    }
+}
+
+fn table() -> &'static CommandTable {
+    static T: std::sync::OnceLock<CommandTable> = std::sync::OnceLock::new();
+    T.get_or_init(CommandTable::load)
+}
+
+fn push(n: &Normalized, step: &StepObs, out: &mut Vec<(input::Step, input::StepMeta)>) {
+    let action = &n.action;
+    let effect = effect_of(n);
     let meta = |key: String| input::StepMeta {
         turn: step.turn,
         prompt: step.prompt,
-        effect: step.norm.effect.as_str().to_string(),
+        effect: effect.as_str().to_string(),
         key,
     };
     match action {
@@ -41,7 +62,7 @@ fn push(action: &CanonicalAction, step: &StepObs, out: &mut Vec<(input::Step, in
         }
         CanonicalAction::Compound { actions, .. } => {
             for a in actions {
-                push(&a.action, step, out);
+                push(a, step, out);
             }
         }
         _ => {}
@@ -61,7 +82,7 @@ pub fn annotate_prefix(s: &Session, n: usize) -> input::Annotated {
     let mut start: Vec<u32> = Vec::with_capacity(steps.len() + 1);
     for st in steps {
         start.push(out.len() as u32);
-        push(&st.norm.action, st, &mut out);
+        push(&st.norm, st, &mut out);
     }
     start.push(out.len() as u32);
     let prompts: Vec<input::Prompt> = if s.prompts.is_empty() {
@@ -80,9 +101,63 @@ pub fn annotate_prefix(s: &Session, n: usize) -> input::Annotated {
     input::Annotated { session: input::Session { id: s.id.clone(), prompts, steps }, meta, day: s.day.clone() }
 }
 
+/// The first bridged step of each import step of `s` (and one past the end).
+fn starts(s: &Session) -> Vec<u32> {
+    let mut out: Vec<(input::Step, input::StepMeta)> = Vec::new();
+    let mut start = Vec::with_capacity(s.steps.len() + 1);
+    for st in &s.steps {
+        start.push(out.len() as u32);
+        push(&st.norm, st, &mut out);
+    }
+    start.push(out.len() as u32);
+    start
+}
+
+/// The directives `s` received, as the graph engine reads them: anchored at bridged steps.
+pub fn influence(s: &Session) -> Vec<adage_graph::events::Influence> {
+    if s.influence.is_empty() {
+        return Vec::new();
+    }
+    let start = starts(s);
+    let last = start.last().copied().unwrap_or(0);
+    s.graph_influence()
+        .into_iter()
+        .map(|mut d| {
+            d.at_step = start.get(d.at_step as usize).copied().unwrap_or(last);
+            d
+        })
+        .collect()
+}
+
 /// The session as the graph engine reads it (what value-flow induction needs).
 pub fn to_input(s: &Session) -> input::Session {
     annotate(s).session
+}
+
+/// The session as the graph engine's miner reads it (Track G §1.1): [`annotate`], then
+/// `adage_graph::events::from_input` with each step's model turn as its batch and its effect
+/// class, the day, the outcome and the directives it received ([`influence`]).
+pub fn events(a: &input::Annotated, s: &Session) -> adage_graph::events::EventSession {
+    let effect = |e: &str| -> Option<adage_core::Effect> {
+        Some(match e {
+            "observe" => adage_core::Effect::Observe,
+            "verify" => adage_core::Effect::Verify,
+            "regenerate" => adage_core::Effect::Regenerate,
+            "environment" => adage_core::Effect::Environment,
+            "author" => adage_core::Effect::Author,
+            "publish" => adage_core::Effect::Publish,
+            _ => return None,
+        })
+    };
+    let meta = adage_graph::events::Meta {
+        day: Some(a.day.clone()),
+        task: None,
+        outcome: s.outcome,
+        turns: Some(a.meta.iter().map(|m| m.turn).collect()),
+        effects: Some(a.meta.iter().map(|m| effect(&m.effect)).collect()),
+        influence: influence(s),
+    };
+    adage_graph::events::from_input(&a.session, &meta, &adage_core::CommandTable::load())
 }
 
 #[cfg(test)]
@@ -128,7 +203,7 @@ mod tests {
             ],
             steered: false,
             directed: BTreeSet::new(),
-            steered_kinds: BTreeSet::new(),
+            influence: vec![],
             outcome: None,
             harness: "claude-code".into(),
             prompts: vec![
@@ -136,6 +211,7 @@ mod tests {
                 PromptObs { text: "second".into(), at_step: 2 },
                 PromptObs { text: "after".into(), at_step: 4 },
             ],
+            ending: Default::default(),
         };
         let a = annotate(&s);
         assert_eq!(a.session.steps.len(), 3);

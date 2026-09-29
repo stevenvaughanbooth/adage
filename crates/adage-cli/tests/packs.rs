@@ -165,7 +165,7 @@ steps:
     run: {{ argv: ["./scripts/wi-lookup", "{{item}}", "--json"] }}
     effect: observe
     script: {{ path: scripts/wi-lookup, closure: ref, sha256: "{sha}" }}
-aspect: green
+strength: fire
 exit:
   - {{ when: intent_changes }}
 exec: {{ level: E1 }}
@@ -175,16 +175,16 @@ evidence: {{ opportunities: 10, support: 9, days: 5, rate: 0.9, lower_bound: 0.6
     );
     put(
         "routes/finish-line-tests.yaml",
-        "id: finish-line-tests\nshape: obligation\ntrigger: { on: after_edit, paths: \"src/*.py\" }\nsteps:\n  - id: test\n    run: { argv: [make, test] }\n    effect: verify\naspect: green\n".into(),
+        "id: finish-line-tests\nshape: obligation\ntrigger: { on: after_edit, paths: \"src/*.py\" }\nsteps:\n  - id: test\n    run: { argv: [make, test] }\n    effect: verify\nstrength: fire\n".into(),
     );
     put(
         "routes/dead-end-unittest.yaml",
-        "id: dead-end-unittest\nshape: avoid\ntrigger: { on: session_start }\nsteps:\n  - id: avoid\n    avoid:\n      runners: [[python3, -m, unittest]]\n      instead: [make, test]\n      signature: ACME_ENV is not set\n    effect: verify\naspect: red\n".into(),
+        "id: dead-end-unittest\nshape: avoid\ntrigger: { on: session_start }\nsteps:\n  - id: avoid\n    avoid:\n      runners: [[python3, -m, unittest]]\n      instead: [make, test]\n      signature: ACME_ENV is not set\n    effect: verify\nstrength: inhibit\n".into(),
     );
     put(
         "routes/count-items.yaml",
         format!(
-            "id: count-items\nshape: run\ntrigger: {{ on: session_start }}\nsteps:\n  - id: count\n    run: {{ argv: [python3, \"scripts/sha256-{v}\"] }}\n    effect: observe\n    script: {{ path: \"scripts/sha256-{v}\", closure: vendor, sha256: \"{v}\" }}\naspect: yellow\n"
+            "id: count-items\nshape: run\ntrigger: {{ on: session_start }}\nsteps:\n  - id: count\n    run: {{ argv: [python3, \"scripts/sha256-{v}\"] }}\n    effect: observe\n    script: {{ path: \"scripts/sha256-{v}\", closure: vendor, sha256: \"{v}\" }}\nstrength: prime\n"
         ),
     );
     put("types/work-item-id.yaml", "id: work-item-id\nbase: string\npattern: ^W-\\d{4}$\n".into());
@@ -268,7 +268,7 @@ fn share_then_add_binds_lref_scripts_and_marks_changes_inert() {
         "repo        github.com/acme/billing · 3 live, 1 inert",
         "count-items",
         "inert    ◠ ",
-        "shape not yet supported at runtime",
+        "it runs a vendored script, which only adage-exec runs, at no execution level here",
         "was fire",
         "approvals   none",
     ] {
@@ -283,13 +283,13 @@ fn share_then_add_binds_lref_scripts_and_marks_changes_inert() {
     assert!(std::fs::metadata(&cas).unwrap().permissions().readonly());
     assert!(!w.p("recipient/approvals.json").exists());
 
-    // The index: live routes at probation, never green, with their exec binding.
+    // The index: live routes at forming, never fire, with their exec binding.
     let index = Index::load(&w.p("recipient/index.json"));
     let ids: Vec<&str> = index.for_repo(REPO).map(|r| r.route.id.as_str()).collect();
     assert_eq!(ids, ["dead-end-unittest", "finish-line-tests", "lookup"]);
     let lookup = index.for_repo(REPO).find(|r| r.route.id == "lookup").unwrap();
-    assert_eq!(lookup.route.aspect, adage_tracks::Aspect::Yellow);
-    assert_eq!(lookup.route.state, adage_tracks::RouteState::Probation);
+    assert_eq!(lookup.route.strength, adage_tracks::Strength::Prime);
+    assert_eq!(lookup.route.state, adage_tracks::RouteState::Forming);
     let exec = lookup.exec.as_ref().expect("a pack route carries its exec binding");
     assert_eq!(exec.max_level, adage_tracks::index::Level::E1);
     assert_eq!(exec.scripts, vec![("scripts/wi-lookup".to_string(), sha256_hex(LOOKUP.as_bytes()))]);
@@ -427,10 +427,10 @@ fn smuggled_files_and_hostile_packs_are_refused_by_add() {
             ),
             "but the step declares",
         ),
-        ("an unknown field", edit(lookup, "aspect: green", "aspect: green\nstate: active"), "unknown field"),
+        ("an unknown field", edit(lookup, "strength: fire", "strength: fire\nstate: firm"), "unknown field"),
         ("an unanchored contract", edit("types/work-item-id.yaml", "^W-\\d{4}$", "W-.*"), "anchored"),
         ("an invisible character", edit(lookup, "Look up", "Look\u{200B} up"), "invisible"),
-        ("a request beyond the pack's ceiling", edit(lookup, "level: E1", "level: E3"), "exceeds the pack"),
+        ("a request beyond the pack's ceiling", edit(lookup, "level: E1", "level: E2"), "exceeds the pack"),
         ("a wrong script pin", edit(lookup, "closure: ref, sha256: \"", "closure: ref, sha256: \"0"), "sha256"),
     ];
     for (what, files, why) in corpus {
@@ -547,7 +547,7 @@ fn the_core_instincts_detector_pack_travels_and_binds() {
     assert!(!got.is_empty());
     assert_eq!(got.iter().map(|r| &r.id).collect::<Vec<_>>(), direct.routes.iter().map(|r| &r.id).collect::<Vec<_>>());
     for (a, b) in got.iter().zip(&direct.routes) {
-        assert_eq!((&a.trigger, &a.step, a.effect, a.aspect), (&b.trigger, &b.step, b.effect, b.aspect));
+        assert_eq!((&a.trigger, &a.step, a.effect, a.strength), (&b.trigger, &b.step, b.effect, b.strength));
         assert!(a.is_instinct());
     }
     // Elsewhere, the detectors find nothing to bind to.
@@ -555,4 +555,76 @@ fn the_core_instincts_detector_pack_travels_and_binds() {
     std::fs::create_dir_all(empty.join(".git")).unwrap();
     let t = ok(w.add("out", &empty));
     assert!(t.contains("not applicable"), "{t}");
+}
+
+/// A Claude Code transcript: the prompt names `ticket`, the agent looks it up, then edits.
+fn lookup_transcript(id: &str, cwd: &Path, ticket: &str) -> String {
+    let line = |v: Value| v.to_string();
+    let cwd = cwd.to_string_lossy();
+    [
+        line(serde_json::json!({"type": "user", "sessionId": id, "cwd": cwd, "timestamp": "2026-09-28T10:00:00Z",
+            "message": {"role": "user", "content": format!("Pick up {ticket}")}})),
+        line(serde_json::json!({"type": "assistant", "sessionId": id, "cwd": cwd,
+            "message": {"id": "m1", "model": "m", "content": [{"type": "tool_use", "id": "t1", "name": "Bash",
+                "input": {"command": format!("python3 scripts/wi-lookup {ticket}")}}]}})),
+        line(serde_json::json!({"type": "user", "sessionId": id, "cwd": cwd,
+            "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t1",
+                "content": "{\"files\": [\"acme/billing.py\"]}", "is_error": false}]}})),
+        line(serde_json::json!({"type": "assistant", "sessionId": id, "cwd": cwd,
+            "message": {"id": "m2", "model": "m", "content": [{"type": "tool_use", "id": "t2", "name": "Edit",
+                "input": {"file_path": format!("{cwd}/acme/billing.py"), "old_string": "a", "new_string": "b"}}]}})),
+        line(serde_json::json!({"type": "user", "sessionId": id, "cwd": cwd,
+            "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t2", "content": "ok"}]}})),
+    ]
+    .join("\n")
+}
+
+#[test]
+fn learn_then_share_carries_the_lookup_with_its_script_pinned_against_repo_root() {
+    // Reflexes learned with `--repo <key>` (as the live runner learns them), a key no checkout
+    // derives; `adage share --repo-root <dir>` still pins the lookup's script (L-ref).
+    let w = World::new();
+    keygen(&w);
+    let traces = w.p("traces");
+    std::fs::create_dir_all(&traces).unwrap();
+    let mut files = Vec::new();
+    for (i, t) in ["W-1041", "W-1042", "W-1043", "W-1044"].iter().enumerate() {
+        let f = traces.join(format!("s{i}.jsonl"));
+        std::fs::write(&f, lookup_transcript(&format!("s{i}"), &w.p("checkout"), t)).unwrap();
+        files.push(f.to_string_lossy().into_owned());
+    }
+    let mut args =
+        vec!["condition", "--demo", "--no-instincts", "--no-cache", "--repo", "acme-billing", "--transcripts"];
+    args.extend(files.iter().map(String::as_str));
+    let t = ok(w.run("sender", &w.p("elsewhere"), &args));
+    assert!(t.contains("lookup-work-item"), "{t}");
+
+    // Without a root, the lookup cannot be carried (the only route here), and the message names
+    // the flag that fixes it.
+    refused(w.share(Path::new("acme-billing/learned"), "no-root", &[]), "adage share --repo-root <dir>");
+    // With it, the pack holds the lookup, its script pinned by hash.
+    let root = w.p("checkout");
+    let t = ok(w.share(Path::new("acme-billing/learned"), "out", &["--repo-root", root.to_str().unwrap()]));
+    assert!(!t.contains("Not carried\n  lookup-work-item"), "{t}");
+    let pack = adage_pack::Pack::load(&w.p("out")).unwrap();
+    let lookup = pack.routes.iter().find(|r| r.id == "lookup-work-item").expect("the lookup is carried");
+    let script = lookup.steps[0].script.as_ref().expect("its script is pinned");
+    assert_eq!(script.path, "scripts/wi-lookup");
+    assert_eq!(script.sha256, sha256_hex(LOOKUP.as_bytes()));
+    assert!(pack.manifest.requires.repo_files.iter().any(|f| f.path == "scripts/wi-lookup"));
+}
+
+#[test]
+fn instincts_only_keys_the_repository_as_learn_does() {
+    // `--repo <key>` names the same key for both learn paths (adage_core::repo::key_with).
+    let w = World::new();
+    std::fs::write(w.p("checkout/Makefile"), "test:\n\tpython3 -m pytest\n").unwrap();
+    let dir = w.p("checkout");
+    let dir = dir.to_str().unwrap();
+    let args = ["condition", "--instincts-only", "--repo-path", dir, "--repo", "acme-billing"];
+    let t = ok(w.run("sender", &w.p("elsewhere"), &args));
+    assert!(t.starts_with("adage condition --instincts-only") && t.contains("\nacme-billing\n"), "{t}");
+    // Without it, the key is derived from the checkout (its origin here).
+    let t = ok(w.run("sender2", &w.p("elsewhere"), &["condition", "--instincts-only", "--repo-path", dir]));
+    assert!(t.contains(&format!("\n{REPO}\n")), "{t}");
 }

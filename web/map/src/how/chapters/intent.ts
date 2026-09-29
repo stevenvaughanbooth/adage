@@ -1,9 +1,9 @@
-// Chapter: group prompts by intent (crates/adage-learn/src/intent.rs, crates/adage-intent). Prompts
+// Chapter: group prompts by intent (crates/adage-graph/src/compile/intent.rs, crates/adage-intent). Prompts
 // are normalised, embedded, clustered by kNN + Louvain, then split, merged and kept by what their
 // traces ran first; each kept family gets a centroid and a calibrated similarity threshold.
 //
 // The prompts and their first commands are sample data. Their embeddings are stand-ins: unit
-// vectors built per family (the real ones come from the pinned model), and the 3D positions are
+// vectors built per family (the real ones come from the bundled model), and the 3D positions are
 // illustrative. Everything else runs the real algorithm on them: the normaliser's rules, exact kNN,
 // the eps graph, deterministic Louvain, the purity split and merge, the bar, quantisation, the
 // Wilson calibration and the contrast gate. Every number a caption states is computed here.
@@ -13,6 +13,10 @@ import { f2, seeded, wilson } from "../sample";
 import type { Built, Chapter, Step } from "../types";
 
 // ------------------------------------------------------------------ constants (cited)
+
+// Procedure cards: crates/adage-learn/src/cards.rs (`CardParams::default`, THRESHOLD, MIN_TRACES,
+// MAX_CARDS) and crates/adage-tracks/src/card.rs (GREY_MARGIN; MAX_TEXT 3200 bytes = 800 tokens).
+const CARD = { family: 0.6, overlap: 0.25, minTraces: 2, max: 16, threshold: 0.811, grey: 0.1, tokens: 800 };
 
 // crates/adage-intent/src/normalize.rs
 const HEAD_TOKENS = 128;
@@ -420,7 +424,7 @@ function merge(vecs: number[][], labels: number[], routes: Route[], notes: Merge
   }
 }
 
-// ------------------------------------------------------------------ the pipeline (intent.rs)
+// ------------------------------------------------------------------ the pipeline (compile/intent.rs)
 
 export interface Family {
   label: number;
@@ -873,8 +877,8 @@ function build(stage: Stage): Built {
     },
     {
       title: "Each prompt becomes a point",
-      body: "A pinned static model embeds the normalised text: WordPiece tokens, the mean of their rows, scaled to unit length. Requests that mean the same thing land near each other. The model runs in-process; without it there are no intent reflexes, and nothing fails.",
-      chips: [{ text: "potion-base-8M · 31 MB · SHA-256 pinned" }, { text: "≤ 512 WordPiece tokens" }, { text: "mean · L2 · 256-d" }],
+      body: "A static model embeds the normalised text: WordPiece tokens, the mean of their rows, scaled to unit length. Requests that mean the same thing land near each other. The model ships inside the adage binary, so nothing is downloaded; adage models fetch installs the full-precision table or a code model if you want one. Without a real model (the explicit hashed fallback) there are no intent reflexes, and nothing fails.",
+      chips: [{ text: "potion-base-8M · int8 · bundled (7.7 MB)" }, { text: "SHA-256 pinned" }, { text: "≤ 512 WordPiece tokens" }, { text: "mean · L2 · 256-d" }],
     },
     {
       title: "Near neighbours link",
@@ -917,23 +921,35 @@ function build(stage: Stage): Built {
       body: `At the hook, a new prompt is normalised, embedded and compared with the centre of each of the ${reflexes.length} intent reflexes. The most similar one whose threshold it clears matches: cosine ${f2(probeSim)} against t ${f4(fam.t)}. Its lower bound, ${f2(fam.lb)}, is under the ${f2(FIRE_LB)} fire bar, so the reflex primes rather than fires.`,
       chips: [{ text: `cos ${f2(probeSim)} ≥ t ${f4(fam.t)}`, ok: probeSim >= fam.t }, { text: `${fam.lamp} · lower bound ${f2(fam.lb)}` }, { text: "p95 budget 25 ms with intent" }],
     },
+    {
+      title: "Recurring tasks get a procedure card",
+      body: `The same model groups whole tasks. Two traces are one family when their first prompts are at least ${f2(CARD.family)} alike and the files they edited have the same shapes (Jaccard ≥ ${f2(CARD.overlap)}). A family of at least ${CARD.minTraces} traces, one of them passing, gets a card: the files it touched in order, the lines the latest passing trace added, the commands that worked and those that failed, and the check it finished with, within ${CARD.tokens} tokens. A card never quotes .env files, files git ignores, or anything that looks like a secret. A new prompt at cosine ≥ ${CARD.threshold} to the family's prompts gets the card once, as prime; up to ${f2(CARD.grey)} below, it waits for the first edit of one of the card's files.`,
+      chips: [
+        { text: `family: cos ≥ ${f2(CARD.family)} · files Jaccard ≥ ${f2(CARD.overlap)}` },
+        { text: `≥ ${CARD.minTraces} traces · ≤ ${CARD.max} cards per repo` },
+        { text: `deliver at cos ≥ ${CARD.threshold} (learn.card_threshold)` },
+        { text: "prime · once per session · never shared" },
+        { text: "adage train cards replays its commands" },
+      ],
+    },
   ];
 
   return {
     source: `${n} sample prompts · positions illustrative`,
     legend: [...Object.entries(ROUTE_HUE).map(([label, hue]) => ({ label, role: "hue" as const, hue })), { label: "no route", role: "ink3" }],
-    steps: text.map((t, i) => ({ ...t, state: state(i) })),
+    // The card step has no scene of its own: it keeps the new prompt's.
+    steps: text.map((t, i) => ({ ...t, state: state(Math.min(i, 7)) })),
   };
 }
 
 export const intent: Chapter = {
   id: "intent",
   title: "Group prompts by intent",
-  status: "Built · optional model",
+  status: "Built · model bundled",
   kind: "built",
   summary:
-    "Prompts are normalised, embedded with a pinned 31 MB model and clustered. Families split or merge by what their traces ran first, and each kept family gets a threshold calibrated on this repository's prompts.",
-  source: "crates/adage-learn/src/intent.rs · crates/adage-intent",
+    "Prompts are normalised, embedded with the model bundled in the binary and clustered. Families split or merge by what their traces ran first, and each kept family gets a threshold calibrated on this repository's prompts.",
+  source: "crates/adage-graph/src/compile/intent.rs · crates/adage-intent",
   usesRepo: false,
   build,
 };

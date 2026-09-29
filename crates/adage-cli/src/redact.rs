@@ -1,6 +1,8 @@
 //! The export check `adage share` runs before anything leaves the machine (Design §10.8, §15.2):
 //! absolute paths, home-directory paths, and secret-looking strings, in every file of the package.
+//! The token rules are shared with procedure cards ([`adage_core::secrets`]).
 
+use adage_core::secrets::high_entropy;
 use regex::Regex;
 use std::sync::OnceLock;
 
@@ -15,60 +17,21 @@ pub struct Finding {
 struct Rules {
     home: Regex,
     absolute: Regex,
-    tokens: Vec<(&'static str, Regex)>,
+    tokens: &'static [(&'static str, Regex)],
     candidate: Regex,
     hex: Regex,
 }
 
 fn rules() -> &'static Rules {
     static R: OnceLock<Rules> = OnceLock::new();
-    R.get_or_init(|| {
-        let tokens = [
-            ("GitHub token", r"\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,})"),
-            ("GitLab token", r"\bglpat-[A-Za-z0-9_-]{20,}"),
-            ("API key (sk-)", r"\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{20,}"),
-            ("Stripe key", r"\b[rsp]k_(?:live|test)_[A-Za-z0-9]{16,}"),
-            ("Slack token", r"\bxox[abposr]-[A-Za-z0-9-]{10,}"),
-            ("AWS access key", r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
-            ("Google API key", r"\bAIza[0-9A-Za-z_-]{35}"),
-            ("npm token", r"\bnpm_[A-Za-z0-9]{36}"),
-            ("PyPI token", r"\bpypi-[A-Za-z0-9_-]{50,}"),
-            ("private key", r"-----BEGIN [A-Z ]*PRIVATE KEY"),
-            ("JSON web token", r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}"),
-            (
-                "credential assignment",
-                r"(?i)\b(?:password|passwd|secret|api[_-]?key|access[_-]?token|auth[_-]?token)\s*[:=]\s*\S{8,}",
-            ),
-        ];
-        Rules {
-            home: Regex::new(r#"(?:^|[^A-Za-z0-9_.])~/|\$HOME\b|\$\{HOME\}|/(?:Users|home)/[^/\s"']+"#).unwrap(),
-            absolute: Regex::new(
-                r#"(?:^|[\s"'`=:,(\[{])(/[A-Za-z0-9._@+~-]+/[^\s"'`]*|[A-Za-z]:\\[^\s"'`]*|file://\S*)"#,
-            )
+    R.get_or_init(|| Rules {
+        home: Regex::new(r#"(?:^|[^A-Za-z0-9_.])~/|\$HOME\b|\$\{HOME\}|/(?:Users|home)/[^/\s"']+"#).unwrap(),
+        absolute: Regex::new(r#"(?:^|[\s"'`=:,(\[{])(/[A-Za-z0-9._@+~-]+/[^\s"'`]*|[A-Za-z]:\\[^\s"'`]*|file://\S*)"#)
             .unwrap(),
-            tokens: tokens.into_iter().map(|(k, r)| (k, Regex::new(r).unwrap())).collect(),
-            candidate: Regex::new(r"[A-Za-z0-9+_=-]{24,}").unwrap(),
-            hex: Regex::new(r"(?:^|[^A-Za-z0-9])([0-9a-fA-F]{32,})\b").unwrap(),
-        }
+        tokens: adage_core::secrets::token_rules(),
+        candidate: Regex::new(r"[A-Za-z0-9+_=-]{24,}").unwrap(),
+        hex: Regex::new(r"(?:^|[^A-Za-z0-9])([0-9a-fA-F]{32,})\b").unwrap(),
     })
-}
-
-/// Shannon entropy in bits per character.
-fn entropy(s: &str) -> f64 {
-    let mut counts = [0u32; 256];
-    for b in s.bytes() {
-        counts[b as usize] += 1;
-    }
-    let n = s.len() as f64;
-    counts.iter().filter(|&&c| c > 0).map(|&c| -(c as f64 / n) * (c as f64 / n).log2()).sum()
-}
-
-/// Random-looking: long, mixed upper, lower and digits, and near the entropy of random base64.
-fn high_entropy(t: &str) -> bool {
-    t.bytes().any(|c| c.is_ascii_uppercase())
-        && t.bytes().any(|c| c.is_ascii_lowercase())
-        && t.bytes().any(|c| c.is_ascii_digit())
-        && entropy(t) >= 4.0
 }
 
 /// Show enough to find a secret, never the secret itself.
@@ -94,7 +57,7 @@ pub fn scan(file: &str, text: &str, home: Option<&str>) -> Vec<Finding> {
             push("absolute path", c[1].to_string());
         }
         let mut secret = false;
-        for (kind, re) in &r.tokens {
+        for (kind, re) in r.tokens {
             if let Some(m) = re.find(line) {
                 push(kind, mask(m.as_str()));
                 secret = true;
@@ -126,7 +89,7 @@ pub fn scrub(text: &str, home: Option<&str>) -> String {
     static OTHER_HOME: OnceLock<Regex> = OnceLock::new();
     let other = OTHER_HOME.get_or_init(|| Regex::new(r#"/(?:Users|home)/([^/\s"']+)"#).unwrap());
     s = other.replace_all(&s, "~$1").into_owned();
-    for (_, re) in &r.tokens {
+    for (_, re) in r.tokens {
         s = re.replace_all(&s, "[redacted]").into_owned();
     }
     s = r

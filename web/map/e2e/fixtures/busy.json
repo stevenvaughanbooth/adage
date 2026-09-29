@@ -4,16 +4,16 @@
  "sessions": {
   "total": 54,
   "treated": 43,
-  "holdout": 11
+  "control": 11
  },
  "stop_requests": 0,
  "routes": [
   {
    "id": "lookup-work-item",
    "summary": "work items are looked up with scripts/wi-lookup",
-   "track": "acme-billing/work-items",
+   "track": "acme-billing/learned",
    "version": "0.3.0",
-   "reference": "acme-billing/work-items",
+   "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
@@ -22,16 +22,16 @@
    "review": {
     "verbs": [
      "approve",
-     "reject",
-     "demote",
+     "extinguish",
+     "weaken",
      "pin"
     ],
     "reasons": []
    },
-   "aspect": "green",
-   "ceiling": "green",
+   "strength": "fire",
+   "ceiling": "fire",
    "effect": "observe",
-   "state": "active",
+   "state": "firm",
    "authored": false,
    "trigger": {
     "kind": "prompt",
@@ -41,7 +41,7 @@
     "kind": "run",
     "label": "python3 scripts/wi-lookup {item}"
    },
-   "directive": "<adage-reflex reflex=\"lookup-work-item\" strength=\"fire\">\nIn this repository, work item details are looked up with:\n  python3 scripts/wi-lookup W-2045\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "directive": "<adage-reflex track=\"acme-billing/learned@0.3.0\" route=\"lookup-work-item\" strength=\"fire\">\nIn this repository, work item details are looked up with:\n  python3 scripts/wi-lookup W-2045\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
    "evidence": {
     "support": 23,
     "opportunities": 33,
@@ -50,16 +50,17 @@
     "turns_saved": 8,
     "days": 9,
     "exposed": 0,
-    "stale_since": null,
+    "dormant_since": null,
     "provenance": "desire-path"
    },
    "live": {
     "emitted": 31,
     "would_have": 9,
     "followed": 26,
-    "derailed": 4,
+    "ignored": 4,
+    "misfired": 0,
     "obligation_met": 0,
-    "holdout": {
+    "control": {
      "unaided": 3,
      "not_reached": 6,
      "obligation_met": 0
@@ -74,7 +75,7 @@
      "met": 0,
      "hit_avoided": 0
     },
-    "holdout": {
+    "control": {
      "sessions": 11,
      "applied": 9,
      "followed": 3,
@@ -86,9 +87,9 @@
   {
    "id": "read-linked-files",
    "summary": "files a lookup lists are read together",
-   "track": "acme-billing/work-items",
+   "track": "acme-billing/learned",
    "version": "0.3.0",
-   "reference": "acme-billing/work-items",
+   "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
@@ -97,16 +98,16 @@
    "review": {
     "verbs": [
      "approve",
-     "reject",
-     "demote",
+     "extinguish",
+     "weaken",
      "pin"
     ],
     "reasons": []
    },
-   "aspect": "green",
-   "ceiling": "green",
+   "strength": "fire",
+   "ceiling": "fire",
    "effect": "observe",
-   "state": "active",
+   "state": "firm",
    "authored": false,
    "trigger": {
     "kind": "after_command",
@@ -117,7 +118,7 @@
     "label": "read ≤5 listed files at once",
     "slot": "files"
    },
-   "directive": "<adage-reflex reflex=\"read-linked-files\" strength=\"fire\">\nThat result lists these files: src/billing/invoice.py, docs/billing.md.\nIf you need them, read them together in one turn rather than one at a time.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "directive": "<adage-reflex track=\"acme-billing/learned@0.3.0\" route=\"read-linked-files\" strength=\"fire\">\nThat result lists these files: src/billing/invoice.py, docs/billing.md.\nIf you need them, read them together in one turn rather than one at a time.\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
    "evidence": {
     "support": 15,
     "opportunities": 16,
@@ -126,16 +127,17 @@
     "turns_saved": 1.9,
     "days": 9,
     "exposed": 0,
-    "stale_since": null,
+    "dormant_since": null,
     "provenance": "desire-path"
    },
    "live": {
     "emitted": 22,
     "would_have": 7,
     "followed": 19,
-    "derailed": 2,
+    "ignored": 2,
+    "misfired": 0,
     "obligation_met": 0,
-    "holdout": {
+    "control": {
      "unaided": 2,
      "not_reached": 4,
      "obligation_met": 0
@@ -150,7 +152,7 @@
      "met": 0,
      "hit_avoided": 0
     },
-    "holdout": {
+    "control": {
      "sessions": 11,
      "applied": 6,
      "followed": 2,
@@ -162,9 +164,9 @@
   {
    "id": "dead-end-d41b1e",
    "summary": "unittest cannot run here; make test works",
-   "track": "acme-billing/work-items",
+   "track": "acme-billing/learned",
    "version": "0.3.0",
-   "reference": "acme-billing/work-items",
+   "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
@@ -173,15 +175,15 @@
    "review": {
     "verbs": [
      "approve",
-     "reject",
+     "extinguish",
      "pin"
     ],
     "reasons": []
    },
-   "aspect": "red",
-   "ceiling": "red",
+   "strength": "inhibit",
+   "ceiling": "inhibit",
    "effect": "observe",
-   "state": "active",
+   "state": "firm",
    "authored": false,
    "trigger": {
     "kind": "after_failure",
@@ -193,7 +195,7 @@
     "avoid": "python3 -m unittest",
     "signature": "No module named pytest"
    },
-   "directive": "<adage-reflex reflex=\"dead-end-d41b1e\" strength=\"inhibit\">\nIn this repository `python3 -m unittest` fails (No module named pytest). Run instead:\n  make test\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "directive": "<adage-reflex track=\"acme-billing/learned@0.3.0\" route=\"dead-end-d41b1e\" strength=\"inhibit\">\nIn this repository `python3 -m unittest` fails (No module named pytest). Run instead:\n  make test\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
    "evidence": {
     "support": 11,
     "opportunities": 43,
@@ -202,16 +204,17 @@
     "turns_saved": 2.4,
     "days": 9,
     "exposed": 0,
-    "stale_since": null,
+    "dormant_since": null,
     "provenance": "desire-path"
    },
    "live": {
     "emitted": 14,
     "would_have": 5,
     "followed": 10,
-    "derailed": 2,
+    "ignored": 2,
+    "misfired": 0,
     "obligation_met": 0,
-    "holdout": {
+    "control": {
      "unaided": 1,
      "not_reached": 4,
      "obligation_met": 0
@@ -226,7 +229,7 @@
      "met": 0,
      "hit_avoided": 1
     },
-    "holdout": {
+    "control": {
      "sessions": 11,
      "applied": 5,
      "followed": 1,
@@ -238,9 +241,9 @@
   {
    "id": "start-with-make-test",
    "summary": "“run the tests” means make test",
-   "track": "acme-billing/intents",
-   "version": "0.1.0",
-   "reference": "acme-billing/intents",
+   "track": "acme-billing/learned",
+   "version": "0.3.0",
+   "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": true,
@@ -249,16 +252,16 @@
    "review": {
     "verbs": [
      "approve",
-     "reject",
-     "promote",
+     "extinguish",
+     "strengthen",
      "pin"
     ],
     "reasons": []
    },
-   "aspect": "yellow",
-   "ceiling": "green",
+   "strength": "prime",
+   "ceiling": "fire",
    "effect": "observe",
-   "state": "probation",
+   "state": "forming",
    "authored": false,
    "trigger": {
     "kind": "intent",
@@ -268,7 +271,7 @@
     "kind": "run",
     "label": "make test"
    },
-   "directive": "<adage-reflex reflex=\"start-with-make-test\" strength=\"prime\">\nAgents in this repository usually start the tests with:\n  make test\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "directive": "<adage-reflex track=\"acme-billing/learned@0.3.0\" route=\"start-with-make-test\" strength=\"prime\">\nAgents in this repository usually start the tests with:\n  make test\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
    "evidence": {
     "support": 6,
     "opportunities": 9,
@@ -277,16 +280,17 @@
     "turns_saved": 0.4,
     "days": 9,
     "exposed": 0,
-    "stale_since": null,
+    "dormant_since": null,
     "provenance": "desire-path"
    },
    "live": {
     "emitted": 8,
     "would_have": 3,
     "followed": 5,
-    "derailed": 3,
+    "ignored": 3,
+    "misfired": 0,
     "obligation_met": 0,
-    "holdout": {
+    "control": {
      "unaided": 1,
      "not_reached": 2,
      "obligation_met": 0
@@ -301,7 +305,7 @@
      "met": 0,
      "hit_avoided": 0
     },
-    "holdout": {
+    "control": {
      "sessions": 11,
      "applied": 3,
      "followed": 1,
@@ -324,15 +328,15 @@
    "review": {
     "verbs": [
      "approve",
-     "reject",
+     "extinguish",
      "pin"
     ],
     "reasons": []
    },
-   "aspect": "yellow",
-   "ceiling": "yellow",
+   "strength": "prime",
+   "ceiling": "prime",
    "effect": "regenerate",
-   "state": "active",
+   "state": "firm",
    "authored": false,
    "trigger": {
     "kind": "after_edit",
@@ -342,7 +346,7 @@
     "kind": "run",
     "label": "make gen"
    },
-   "directive": "<adage-reflex reflex=\"finish-line/regenerate\" strength=\"prime\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "directive": "<adage-reflex track=\"acme-billing/learned@0.3.0\" route=\"finish-line/regenerate\" strength=\"prime\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
    "evidence": {
     "support": 7,
     "opportunities": 7,
@@ -351,16 +355,17 @@
     "turns_saved": 0.6,
     "days": 9,
     "exposed": 0,
-    "stale_since": null,
+    "dormant_since": null,
     "provenance": "instinct"
    },
    "live": {
     "emitted": 12,
     "would_have": 4,
     "followed": 0,
-    "derailed": 1,
+    "ignored": 1,
+    "misfired": 0,
     "obligation_met": 9,
-    "holdout": {
+    "control": {
      "unaided": 0,
      "not_reached": 0,
      "obligation_met": 0
@@ -375,7 +380,7 @@
      "met": 9,
      "hit_avoided": 0
     },
-    "holdout": {
+    "control": {
      "sessions": 11,
      "applied": 4,
      "followed": 0,
@@ -387,9 +392,9 @@
   {
    "id": "regen-openapi-client",
    "summary": "openapi edits need make client",
-   "track": "acme-billing/work-items",
+   "track": "acme-billing/learned",
    "version": "0.3.0",
-   "reference": "acme-billing/work-items",
+   "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": false,
@@ -398,20 +403,20 @@
    "review": {
     "verbs": [
      "approve",
-     "reject",
+     "extinguish",
      "pin"
     ],
     "reasons": [
      {
-      "kind": "draft",
-      "why": "an environment step, a draft until a person approves it"
+      "kind": "nascent",
+      "why": "an environment step, nascent until a person approves it"
      }
     ]
    },
-   "aspect": "yellow",
-   "ceiling": "green",
+   "strength": "prime",
+   "ceiling": "fire",
    "effect": "regenerate",
-   "state": "draft",
+   "state": "nascent",
    "authored": false,
    "trigger": {
     "kind": "after_edit",
@@ -421,7 +426,7 @@
     "kind": "run",
     "label": "make client"
    },
-   "directive": "<adage-reflex reflex=\"regen-openapi-client\" strength=\"prime\">\nIn this repository, changes to api/openapi.yaml are followed by:\n  make client\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "directive": "<adage-reflex track=\"acme-billing/learned@0.3.0\" route=\"regen-openapi-client\" strength=\"prime\">\nIn this repository, changes to api/openapi.yaml are followed by:\n  make client\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
    "evidence": {
     "support": 3,
     "opportunities": 4,
@@ -430,16 +435,17 @@
     "turns_saved": 0.9,
     "days": 9,
     "exposed": 0,
-    "stale_since": null,
+    "dormant_since": null,
     "provenance": "desire-path"
    },
    "live": {
     "emitted": 0,
     "would_have": 0,
     "followed": 0,
-    "derailed": 0,
+    "ignored": 0,
+    "misfired": 0,
     "obligation_met": 0,
-    "holdout": {
+    "control": {
      "unaided": 0,
      "not_reached": 0,
      "obligation_met": 0
@@ -454,7 +460,7 @@
      "met": 0,
      "hit_avoided": 0
     },
-    "holdout": {
+    "control": {
      "sessions": 11,
      "applied": 0,
      "followed": 0,
@@ -466,9 +472,9 @@
   {
    "id": "read-adr-before-schema",
    "summary": "schema changes start from ADR 0007",
-   "track": "acme-billing/work-items",
+   "track": "acme-billing/learned",
    "version": "0.3.0",
-   "reference": "acme-billing/work-items",
+   "reference": "acme-billing/learned",
    "repo": "acme-billing",
    "imported": false,
    "in_index": false,
@@ -477,7 +483,7 @@
    "review": {
     "verbs": [
      "approve",
-     "reject",
+     "extinguish",
      "pin"
     ],
     "reasons": [
@@ -487,10 +493,10 @@
      }
     ]
    },
-   "aspect": "yellow",
-   "ceiling": "green",
+   "strength": "prime",
+   "ceiling": "fire",
    "effect": "observe",
-   "state": "draft",
+   "state": "nascent",
    "authored": false,
    "trigger": {
     "kind": "after_edit",
@@ -501,7 +507,7 @@
     "label": "read docs/adr/0007-schema.md first",
     "template": "read_first"
    },
-   "directive": "<adage-reflex reflex=\"read-adr-before-schema\" strength=\"prime\">\nBefore changing the schema, agents here read:\n  docs/adr/0007-schema.md\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "directive": "<adage-reflex track=\"acme-billing/learned@0.3.0\" route=\"read-adr-before-schema\" strength=\"prime\">\nBefore changing the schema, agents here read:\n  docs/adr/0007-schema.md\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
    "evidence": {
     "support": 3,
     "opportunities": 5,
@@ -510,16 +516,17 @@
     "turns_saved": 0.5,
     "days": 9,
     "exposed": 0,
-    "stale_since": null,
+    "dormant_since": null,
     "provenance": "desire-path"
    },
    "live": {
     "emitted": 0,
     "would_have": 0,
     "followed": 0,
-    "derailed": 0,
+    "ignored": 0,
+    "misfired": 0,
     "obligation_met": 0,
-    "holdout": {
+    "control": {
      "unaided": 0,
      "not_reached": 0,
      "obligation_met": 0
@@ -534,7 +541,7 @@
      "met": 0,
      "hit_avoided": 0
     },
-    "holdout": {
+    "control": {
      "sessions": 11,
      "applied": 0,
      "followed": 0,
@@ -557,15 +564,15 @@
    "review": {
     "verbs": [
      "approve",
-     "reject",
+     "extinguish",
      "pin"
     ],
     "reasons": []
    },
-   "aspect": "yellow",
-   "ceiling": "red",
+   "strength": "prime",
+   "ceiling": "inhibit",
    "effect": "observe",
-   "state": "active",
+   "state": "firm",
    "authored": false,
    "trigger": {
     "kind": "after_failure",
@@ -577,7 +584,7 @@
     "avoid": "pip install",
     "signature": "externally-managed-environment"
    },
-   "directive": "<adage-reflex reflex=\"prefer-uv-pip\" strength=\"prime\">\nHere `pip install` fails (externally-managed-environment). Consider instead:\n  uv pip install\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
+   "directive": "<adage-reflex track=\"acme-billing/learned@0.3.0\" route=\"prefer-uv-pip\" strength=\"prime\">\nHere `pip install` fails (externally-managed-environment). Consider instead:\n  uv pip install\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\n</adage-reflex>",
    "evidence": {
     "support": 4,
     "opportunities": 6,
@@ -586,16 +593,17 @@
     "turns_saved": 0.7,
     "days": 9,
     "exposed": 0,
-    "stale_since": null,
+    "dormant_since": null,
     "provenance": "desire-path"
    },
    "live": {
     "emitted": 3,
     "would_have": 2,
     "followed": 2,
-    "derailed": 1,
+    "ignored": 1,
+    "misfired": 0,
     "obligation_met": 0,
-    "holdout": {
+    "control": {
      "unaided": 0,
      "not_reached": 1,
      "obligation_met": 0
@@ -610,7 +618,7 @@
      "met": 0,
      "hit_avoided": 0
     },
-    "holdout": {
+    "control": {
      "sessions": 11,
      "applied": 2,
      "followed": 0,
@@ -812,7 +820,7 @@
   {
    "ts": 1789458737206,
    "session": "50198000-dfdb-48ed-a335-764600800000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -824,7 +832,7 @@
   {
    "ts": 1789458832829,
    "session": "50198000-dfdb-48ed-a335-764600800000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
@@ -1045,7 +1053,7 @@
   {
    "ts": 1789563793575,
    "session": "97c8b000-e613-4b89-af97-41b830000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -1057,7 +1065,7 @@
   {
    "ts": 1789563859167,
    "session": "97c8b000-e613-4b89-af97-41b830000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
@@ -1094,7 +1102,7 @@
    "would": [],
    "judged": [
     [
-     "derailed",
+     "ignored",
      "lookup-work-item"
     ]
    ],
@@ -1163,7 +1171,7 @@
    "would": [],
    "judged": [
     [
-     "derailed",
+     "ignored",
      "lookup-work-item"
     ]
    ],
@@ -1261,7 +1269,7 @@
   {
    "ts": 1789672470479,
    "session": "c17daa00-284d-4e63-a532-18e8c8000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -1275,14 +1283,14 @@
   {
    "ts": 1789672542516,
    "session": "c17daa00-284d-4e63-a532-18e8c8000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
    "would": [],
    "judged": [
     [
-     "derailed",
+     "ignored",
      "lookup-work-item"
     ]
    ],
@@ -1294,7 +1302,7 @@
   {
    "ts": 1789672599123,
    "session": "c17daa00-284d-4e63-a532-18e8c8000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolUseFailure",
    "repo": "acme-billing",
    "directed": [],
@@ -1576,7 +1584,7 @@
   {
    "ts": 1789788851524,
    "session": "fc9cb800-9eca-4b06-ae13-53c4b8000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -1590,14 +1598,14 @@
   {
    "ts": 1789788955672,
    "session": "fc9cb800-9eca-4b06-ae13-53c4b8000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
    "would": [],
    "judged": [
     [
-     "derailed",
+     "ignored",
      "lookup-work-item"
     ]
    ],
@@ -1609,7 +1617,7 @@
   {
    "ts": 1789789039088,
    "session": "fc9cb800-9eca-4b06-ae13-53c4b8000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
@@ -1625,7 +1633,7 @@
   {
    "ts": 1789789113487,
    "session": "fc9cb800-9eca-4b06-ae13-53c4b8000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "Stop",
    "repo": "acme-billing",
    "directed": [],
@@ -1811,7 +1819,7 @@
    "would": [],
    "judged": [
     [
-     "derailed",
+     "ignored",
      "lookup-work-item"
     ]
    ],
@@ -1898,7 +1906,7 @@
   {
    "ts": 1789897847307,
    "session": "9e07ec00-3b47-44aa-a036-e0d52a700000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -1912,14 +1920,14 @@
   {
    "ts": 1789897936591,
    "session": "9e07ec00-3b47-44aa-a036-e0d52a700000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
    "would": [],
    "judged": [
     [
-     "derailed",
+     "ignored",
      "lookup-work-item"
     ]
    ],
@@ -1931,7 +1939,7 @@
   {
    "ts": 1789897975269,
    "session": "9e07ec00-3b47-44aa-a036-e0d52a700000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -1945,7 +1953,7 @@
   {
    "ts": 1789898056179,
    "session": "9e07ec00-3b47-44aa-a036-e0d52a700000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
@@ -1961,7 +1969,7 @@
   {
    "ts": 1789898121993,
    "session": "9e07ec00-3b47-44aa-a036-e0d52a700000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "Stop",
    "repo": "acme-billing",
    "directed": [],
@@ -2254,7 +2262,7 @@
   {
    "ts": 1790003665634,
    "session": "191e8400-1636-4717-a2b4-f4c2d3800000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -2268,7 +2276,7 @@
   {
    "ts": 1790003739707,
    "session": "191e8400-1636-4717-a2b4-f4c2d3800000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
@@ -2289,7 +2297,7 @@
   {
    "ts": 1790003771458,
    "session": "191e8400-1636-4717-a2b4-f4c2d3800000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -2565,7 +2573,7 @@
   {
    "ts": 1790112357503,
    "session": "20ba4400-4807-4c1d-ae71-97c02a000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -2579,7 +2587,7 @@
   {
    "ts": 1790112457194,
    "session": "20ba4400-4807-4c1d-ae71-97c02a000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
@@ -2600,7 +2608,7 @@
   {
    "ts": 1790112499447,
    "session": "20ba4400-4807-4c1d-ae71-97c02a000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
@@ -2616,7 +2624,7 @@
   {
    "ts": 1790112552259,
    "session": "20ba4400-4807-4c1d-ae71-97c02a000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "Stop",
    "repo": "acme-billing",
    "directed": [],
@@ -2853,7 +2861,7 @@
   {
    "ts": 1790219348662,
    "session": "67428e00-129a-49d2-a72c-2017ec000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -2867,7 +2875,7 @@
   {
    "ts": 1790219444060,
    "session": "67428e00-129a-49d2-a72c-2017ec000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
@@ -2888,7 +2896,7 @@
   {
    "ts": 1790219483918,
    "session": "67428e00-129a-49d2-a72c-2017ec000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
@@ -2904,7 +2912,7 @@
   {
    "ts": 1790219568168,
    "session": "67428e00-129a-49d2-a72c-2017ec000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "Stop",
    "repo": "acme-billing",
    "directed": [],
@@ -3130,7 +3138,7 @@
   {
    "ts": 1790327078574,
    "session": "4f4d8200-ed9c-4c86-ace9-41b822000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -3144,14 +3152,14 @@
   {
    "ts": 1790327166836,
    "session": "4f4d8200-ed9c-4c86-ace9-41b822000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
    "would": [],
    "judged": [
     [
-     "derailed",
+     "ignored",
      "lookup-work-item"
     ]
    ],
@@ -3353,7 +3361,7 @@
   {
    "ts": 1790438880207,
    "session": "45dcce00-59c8-434e-a79b-631764000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -3367,14 +3375,14 @@
   {
    "ts": 1790438901060,
    "session": "45dcce00-59c8-434e-a79b-631764000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
    "would": [],
    "judged": [
     [
-     "derailed",
+     "ignored",
      "lookup-work-item"
     ]
    ],
@@ -3386,7 +3394,7 @@
   {
    "ts": 1790438970131,
    "session": "45dcce00-59c8-434e-a79b-631764000000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -3462,7 +3470,7 @@
    "would": [],
    "judged": [
     [
-     "derailed",
+     "ignored",
      "lookup-work-item"
     ]
    ],
@@ -3536,7 +3544,7 @@
    "would": [],
    "judged": [
     [
-     "derailed",
+     "ignored",
      "lookup-work-item"
     ]
    ],
@@ -3548,7 +3556,7 @@
   {
    "ts": 1790547712825,
    "session": "6323e200-f123-4a11-a23a-2c9482800000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -3562,7 +3570,7 @@
   {
    "ts": 1790547804525,
    "session": "6323e200-f123-4a11-a23a-2c9482800000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "PostToolBatch",
    "repo": "acme-billing",
    "directed": [],
@@ -3583,7 +3591,7 @@
   {
    "ts": 1790547896938,
    "session": "6323e200-f123-4a11-a23a-2c9482800000",
-   "arm": "holdout",
+   "arm": "control",
    "event": "UserPromptSubmit",
    "repo": "acme-billing",
    "directed": [],
@@ -3598,7 +3606,7 @@
  "learning": [
   {
    "ts": 1789560000000,
-   "kind": "learn",
+   "kind": "condition",
    "trigger": "auto",
    "repo": "acme-billing",
    "sessions_read": 10,
@@ -3608,17 +3616,17 @@
    "changes": [
     {
      "route": "lookup-work-item",
-     "track": "acme-billing/work-items",
-     "change": "added",
+     "track": "acme-billing/learned",
+     "change": "new",
      "from": null,
-     "to": "yellow",
-     "summary": "work item route added at prime (6 of 9 traces)"
+     "to": "prime",
+     "summary": "work item reflex added at prime (6 of 9 traces)"
     }
    ]
   },
   {
    "ts": 1789830000000,
-   "kind": "learn",
+   "kind": "condition",
    "trigger": "auto",
    "repo": "acme-billing",
    "sessions_read": 22,
@@ -3628,17 +3636,17 @@
    "changes": [
     {
      "route": "lookup-work-item",
-     "track": "acme-billing/work-items",
-     "change": "aspect",
-     "from": "yellow",
-     "to": "green",
-     "summary": "work item route prime → fire (lower bound 0.51)"
+     "track": "acme-billing/learned",
+     "change": "strength",
+     "from": "prime",
+     "to": "fire",
+     "summary": "work item reflex prime → fire (lower bound 0.51)"
     }
    ]
   },
   {
    "ts": 1790078400000,
-   "kind": "learn",
+   "kind": "condition",
    "trigger": "auto",
    "repo": "acme-billing",
    "sessions_read": 34,
@@ -3648,17 +3656,17 @@
    "changes": [
     {
      "route": "read-linked-files",
-     "track": "acme-billing/work-items",
-     "change": "aspect",
-     "from": "yellow",
-     "to": "green",
-     "summary": "linked files route prime → fire (15 of 16 traces)"
+     "track": "acme-billing/learned",
+     "change": "strength",
+     "from": "prime",
+     "to": "fire",
+     "summary": "linked files reflex prime → fire (15 of 16 traces)"
     }
    ]
   },
   {
    "ts": 1790337600000,
-   "kind": "learn",
+   "kind": "condition",
    "trigger": "auto",
    "repo": "acme-billing",
    "sessions_read": 46,
@@ -3668,7 +3676,7 @@
    "changes": [
     {
      "route": "lookup-work-item",
-     "track": "acme-billing/work-items",
+     "track": "acme-billing/learned",
      "change": "evidence",
      "summary": "evidence 22/32 → 23/33 traces"
     }

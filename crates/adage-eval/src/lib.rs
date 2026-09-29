@@ -2,12 +2,12 @@
 //!
 //! `adage eval` is the credibility test run over recorded history: learn tracks from a train
 //! split into a temporary home, replay each held-out session event by event through the real
-//! runtime (`adage_runtime::decide`, holdout arm), and score every directive Adage would have
+//! runtime (`adage_runtime::decide`, control arm), and score every directive Adage would have
 //! given against what the agent actually did later in that session. Nothing runs: no agent, no
 //! command, no model. The same dataset gives the same bytes on every run.
 //!
 //! Modules: [`dataset`] (manifests, splits, sandboxes), [`transcript`] (transcripts as hook
-//! events), [`replay`] (the runtime, holdout arm), [`score`] (metrics), [`safety`] (the
+//! events), [`replay`] (the runtime, control arm), [`score`] (metrics), [`safety`] (the
 //! directive oracle), [`fidelity`] (replay versus what the live hooks recorded), [`conventions`]
 //! (learned routes versus a sandbox's known conventions), [`generate`] (the synthetic and
 //! adversarial datasets), [`cli`].
@@ -16,11 +16,14 @@ pub mod bench;
 pub mod cli;
 pub mod conventions;
 pub mod dataset;
+pub mod embed_eval;
 pub mod exec_e1;
 pub mod fidelity;
 pub mod generate;
+pub mod graph_mine;
 pub mod replay;
 pub mod safety;
+pub mod savings_replay;
 pub mod score;
 pub mod transcript;
 pub mod value_types;
@@ -128,7 +131,7 @@ pub fn sandbox_files(dir: &Path, ds: &Dataset, opts: &Options) -> Result<PathBuf
 }
 
 /// The instinct configuration for an eval: the default packs, the sandbox as the repository's root,
-/// and no spools (nothing to retire).
+/// and no spools (nothing to extinguish).
 fn instinct_config(repo: &str, root: &Path) -> adage_learn::instincts::Config {
     let mut c = adage_learn::instincts::Config::default();
     c.roots.insert(repo.to_string(), root.to_path_buf());
@@ -152,8 +155,8 @@ pub fn instincts_index(repo: &str, root: &Path) -> Result<Index> {
 #[derive(Debug, Clone, Serialize)]
 pub struct LearnedRoute {
     pub id: String,
-    pub kind: String,
-    pub aspect: String,
+    pub shape: String,
+    pub strength: String,
     pub step: String,
     pub support: u32,
     pub opportunities: u32,
@@ -184,7 +187,7 @@ pub struct Report {
     pub params_hash: String,
     pub routes: Vec<LearnedRoute>,
     pub overall: score::Metrics,
-    pub by_kind: BTreeMap<String, score::Metrics>,
+    pub by_shape: BTreeMap<String, score::Metrics>,
     pub by_route: BTreeMap<String, score::Metrics>,
     pub recall: BTreeMap<String, score::Recall>,
     pub dead_ends: score::DeadEnds,
@@ -218,6 +221,8 @@ fn step_text(s: &adage_tracks::Step) -> String {
             let s: Vec<String> = slots.iter().map(|(k, v)| format!("{k}={v}")).collect();
             format!("advise {template} ({})", s.join(", "))
         }
+        adage_tracks::Step::Sequence { commands } => commands.join(" then "),
+        adage_tracks::Step::Card { card } => format!("card of {} file(s)", card.files.len()),
     }
 }
 
@@ -271,6 +276,8 @@ pub struct Prepared {
     pub overlap: Vec<String>,
     /// The engine parameters: the index was learned with `learn`; replay decides with `runtime`.
     pub params: EngineParams,
+    /// The index file given with `--index`: nothing was learned from the dataset's sessions.
+    pub index_file: Option<PathBuf>,
 }
 
 /// Load a dataset, resolve the split, and learn the index from the train split, exactly as
@@ -287,7 +294,14 @@ pub fn prepare(dir: &Path, opts: &Options) -> Result<Prepared> {
             let p = if p.is_relative() && !p.exists() { dir.join(p) } else { p.clone() };
             serde_json::from_slice::<Index>(&std::fs::read(&p).with_context(|| p.display().to_string())?)?
         }
-        (None, InstinctMode::Off) => learn_index(&ds, &split.train, &cfg)?,
+        (None, InstinctMode::Off) => {
+            // The repository's files, when given, are read for the value model's static scan
+            // (`adage_learn::value::Statics`), with no instinct bound.
+            if let Some(d) = &opts.sandbox_dir {
+                cfg.roots.insert(ds.manifest.repo.clone(), d.clone());
+            }
+            learn_index(&ds, &split.train, &cfg)?
+        }
         (None, InstinctMode::With) => {
             cfg.instincts = Some(instinct_config(&ds.manifest.repo, &sandbox_files(dir, &ds, opts)?));
             learn_index(&ds, &split.train, &cfg)?
@@ -295,7 +309,8 @@ pub fn prepare(dir: &Path, opts: &Options) -> Result<Prepared> {
         (None, InstinctMode::Only) => instincts_index(&ds.manifest.repo, &sandbox_files(dir, &ds, opts)?)?,
     };
     let overlap = ds.task_overlap(&split);
-    Ok(Prepared { ds, split_name, split, thresholds, index, overlap, params })
+    let index_file = opts.index.clone();
+    Ok(Prepared { ds, split_name, split, thresholds, index, overlap, params, index_file })
 }
 
 /// Run the offline eval over a dataset directory.
@@ -305,7 +320,7 @@ pub fn run(dir: &Path, opts: &Options) -> Result<Report> {
 
 /// Replay and score a prepared dataset (the second half of [`run`]).
 pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
-    let Prepared { ds, split_name, split, thresholds, index, overlap, params } = p;
+    let Prepared { ds, split_name, split, thresholds, index, overlap, params, .. } = p;
     let table = CommandTable::load();
     let sandbox = Sandbox::create(&ds.sandbox()?)?;
     let repo_key = ds.manifest.repo.clone();
@@ -349,8 +364,8 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
         .for_repo(&repo_key)
         .map(|ir| LearnedRoute {
             id: ir.route.id.clone(),
-            kind: score::kind(&ir.route).into(),
-            aspect: format!("{:?}", ir.route.aspect).to_lowercase(),
+            shape: score::point(&ir.route),
+            strength: format!("{:?}", ir.route.strength).to_lowercase(),
             step: step_text(&ir.route.step),
             support: ir.route.evidence.support,
             opportunities: ir.route.evidence.opportunities,
@@ -374,7 +389,7 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
         params_hash: params.params_hash(),
         routes,
         overall: tally.overall,
-        by_kind: tally.by_kind,
+        by_shape: tally.by_shape,
         by_route: tally.by_route,
         recall: tally.recall,
         dead_ends: tally.dead_ends,
@@ -386,16 +401,6 @@ pub fn evaluate(p: &Prepared, opts: &Options) -> Result<Report> {
             .then(|| InstinctsReport { mode: opts.instincts, stats: tally.instincts.clone() }),
         exec_e1: e1,
     })
-}
-
-/// A stored aspect as the lexicon's strength (docs/lexicon.md), for the text reports only.
-pub(crate) fn strength(aspect: &str) -> &str {
-    match aspect {
-        "green" => "fire",
-        "yellow" => "prime",
-        "red" => "inhibit",
-        other => other,
-    }
 }
 
 /// `n` and a noun, pluralised (`1 reflex`, `3 reflexes`).
@@ -458,12 +463,7 @@ pub fn render_text(r: &Report) -> String {
         let _ = writeln!(
             s,
             "  {:<22} {:<12} {:<7} {:>3}/{:<3} {}",
-            x.id,
-            x.kind,
-            strength(&x.aspect),
-            x.support,
-            x.opportunities,
-            x.step
+            x.id, x.shape, x.strength, x.support, x.opportunities, x.step
         );
     }
     let _ = writeln!(
@@ -486,8 +486,8 @@ pub fn render_text(r: &Report) -> String {
         );
     };
     row("all", &r.overall);
-    for (k, m) in &r.by_kind {
-        row(&format!("kind:{k}"), m);
+    for (k, m) in &r.by_shape {
+        row(&format!("shape:{k}"), m);
     }
     for (k, m) in &r.by_route {
         row(k, m);
