@@ -44,7 +44,7 @@ export function Pill({ children, mono = false, title }: { children: ReactNode; m
   );
 }
 
-export function LifecycleChip({ lifecycle }: { lifecycle: Lifecycle }) {
+export function LifecycleChip({ lifecycle }: { lifecycle: Lifecycle | "quiet" }) {
   return <Pill>{lifecycle}</Pill>;
 }
 

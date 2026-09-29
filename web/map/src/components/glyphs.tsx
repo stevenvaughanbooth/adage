@@ -24,8 +24,43 @@ export function InstinctGlyph({ size = 14 }: { size?: number }) {
   );
 }
 
-export function KindGlyph({ instinct, size }: { instinct: boolean; size?: number }) {
+/** A procedure card: a sheet with ruled lines (style guide ▤). */
+export function CardGlyph({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true" className="shrink-0">
+      <rect x="1.8" y="1.8" width="10.4" height="10.4" rx="1.6" style={{ stroke: "var(--glyph-arc)" }} strokeWidth="1.3" />
+      <path d="M4.3 5h5.4M4.3 7h5.4M4.3 9h3.4" style={{ stroke: "var(--color-accent-soft)" }} strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Quiet: uplift below the bar, waiting for a person (style guide ◌). Takes the lamp's place. */
+export function QuietGlyph({ size = 8 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 10 10" fill="none" aria-hidden="true" className="shrink-0">
+      <circle cx="5" cy="5" r="4" style={{ stroke: "var(--color-ink-3)" }} strokeWidth="1.4" strokeDasharray="1.6 1.5" />
+    </svg>
+  );
+}
+
+/** A rewrite: the command was changed before it ran (style guide ↪). */
+export function RewriteGlyph({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true" className="shrink-0">
+      <path d="M3 3v3.2a2.3 2.3 0 0 0 2.3 2.3H11" style={{ stroke: "currentColor" }} strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M8.6 6.1L11 8.5 8.6 10.9" style={{ stroke: "currentColor" }} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function KindGlyph({ instinct, card = false, size }: { instinct: boolean; card?: boolean; size?: number }) {
+  if (card) return <CardGlyph size={size} />;
   return instinct ? <InstinctGlyph size={size} /> : <ReflexGlyph size={size} />;
+}
+
+/** The lamp, or the quiet mark in its place. */
+export function StateMark({ strength, hollow, quiet, glow, size = 8 }: { strength: Strength | null | undefined; hollow: boolean; quiet: boolean; glow?: boolean; size?: number }) {
+  return quiet ? <QuietGlyph size={size + 1} /> : <Lamp strength={strength} hollow={hollow} glow={glow} size={size} />;
 }
 
 export const LAMP_VAR: Record<Strength, string> = {

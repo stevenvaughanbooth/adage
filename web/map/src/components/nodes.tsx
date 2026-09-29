@@ -14,7 +14,7 @@ import {
 } from "@xyflow/react";
 import type { MapNode } from "../lib/graph";
 import type { Strength } from "../lib/words";
-import { KindGlyph, LAMP_VAR, Lamp } from "./glyphs";
+import { KindGlyph, LAMP_VAR, StateMark } from "./glyphs";
 import { cx } from "./ui";
 
 export interface NodeData extends Record<string, unknown> {
@@ -62,7 +62,7 @@ function Card({ data }: { data: NodeData }) {
         )}
       >
         {handles}
-        {reflexish ? <Lamp strength={n.strength} hollow={hollow} glow size={26} /> : <span className="lbl text-[18px]">{n.tag.split(" ")[0]}</span>}
+        {reflexish ? <StateMark strength={n.strength} hollow={hollow} quiet={Boolean(n.quiet)} glow size={26} /> : <span className="lbl text-[18px]">{n.tag.split(" ")[0]}</span>}
       </div>
     );
   }
@@ -84,8 +84,8 @@ function Card({ data }: { data: NodeData }) {
       {handles}
       <div className="truncate font-mono text-[10px] leading-3 tracking-[0.12em] text-ink-3">{n.tag}</div>
       <div className="flex h-4 min-w-0 items-center gap-1.5">
-        {reflexish && <Lamp strength={n.strength} hollow={hollow} glow={!hollow} />}
-        {reflexish && <KindGlyph instinct={n.kind === "instinct"} />}
+        {reflexish && <StateMark strength={n.strength} hollow={hollow} quiet={Boolean(n.quiet)} glow={!hollow} />}
+        {reflexish && <KindGlyph instinct={n.kind === "instinct"} card={Boolean(n.card)} />}
         <span title={n.title} className={cx("truncate text-[12.5px] leading-4 text-ink-1", n.kind === "stimulus" ? "font-body" : "font-mono")}>{n.title}</span>
       </div>
       <div

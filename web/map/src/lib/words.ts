@@ -1,13 +1,16 @@
 // The lexicon (docs/lexicon.md) at display time. The binary stores the lexicon's words now; the
 // older spellings are still read here (and once in src/api/normalize.ts) for older data.
 
-import type { Route, Step, Trigger } from "../api/types";
+import type { Pretool, Route, Savings, Step, Trigger } from "../api/types";
 
 export type Strength = "fire" | "prime" | "inhibit";
 export type Lifecycle = "nascent" | "forming" | "firm" | "dormant" | "extinguished";
 
 export const STRENGTHS: Strength[] = ["fire", "prime", "inhibit"];
 export const LIFECYCLE: Lifecycle[] = ["nascent", "forming", "firm", "dormant", "extinguished"];
+/** What the map's filters can show or hide: the lifecycles, and quiet (nascent on its uplift). */
+export type Showable = Lifecycle | "quiet";
+export const SHOWABLE: Showable[] = [...LIFECYCLE, "quiet"];
 
 const STRENGTH: Record<string, Strength> = {
   green: "fire",
@@ -51,6 +54,50 @@ export function live(r: Route): boolean {
 
 export function isInstinct(r: Route): boolean {
   return Boolean(r.instinct);
+}
+
+/** Kept quiet on its uplift (agents already do this): waits for a person, it is not an install step. */
+export function isQuiet(r: Route): boolean {
+  return Boolean(r.quiet);
+}
+
+/** A procedure card: files, commands and a finishing check for a family of similar tasks. */
+export function isCard(r: Route): boolean {
+  return r.step?.kind === "card";
+}
+
+/** The lifecycle as a chip says it: a quiet nascent reflex is "quiet". */
+export function lifecycleWord(r: Route): string {
+  return isQuiet(r) ? "quiet" : lifecycle(r.state);
+}
+
+/** The uplift bar a reflex must clear to be delivered (`learn.uplift_min`, an engine parameter). */
+export const UPLIFT_MIN = 0.1;
+
+/** A signed two-decimal number: +0.05, −0.02 (never −0.00). */
+export function signed(x: number): string {
+  const v = Math.abs(x) < 0.005 ? 0 : x;
+  return `${v < 0 ? "−" : "+"}${Math.abs(v).toFixed(2)}`;
+}
+
+/**
+ * A reflex's evidence in a few characters, by what its strength was decided on: `23/33` traces
+ * took it; `~1.25 calls` saved (value); `3/4 passed` (a card's family); `instinct`.
+ */
+export function evidenceShort(r: Route): string {
+  const e = r.evidence;
+  if (isCard(r) && r.step.card) return `${r.step.card.passed}/${r.step.card.sessions} passed`;
+  if (e.basis === "value" && e.why) return `~${e.why.gain.toFixed(2)} calls`;
+  if (isInstinct(r) && !e.opportunities) return "instinct";
+  return `${e.support}/${e.opportunities}`;
+}
+
+/** What that short form means, for a title or an accessible name. */
+export function evidenceShortWhy(r: Route): string {
+  const e = r.evidence;
+  if (isCard(r) && r.step.card) return `from ${plural(r.step.card.sessions, "trace")} of its family, ${r.step.card.passed} passed`;
+  if (e.basis === "value" && e.why) return `saves ~${e.why.gain.toFixed(2)} calls when followed (P(saves) ${e.why.conf.toFixed(2)})`;
+  return `${e.support}/${e.opportunities} traces took it`;
 }
 
 /** The stimulus kind, as the node's label says it. */
@@ -135,7 +182,49 @@ export function evidenceSource(r: Route): string {
 export function evidenceNote(r: Route): string {
   if (isInstinct(r)) return "Instincts carry no traces of their own: bound from what this repository declares.";
   if (r.imported) return "Counted in the traces the pack was conditioned on, not in yours.";
+  if (isCard(r)) return "Learned from earlier traces of a family of similar tasks in this repository.";
+  if (r.evidence.basis === "value")
+    return "Formed on value: the calls saved when the step is taken, estimated from traces that took it and those that did not.";
   return "Counted in past traces when Adage conditioned this reflex.";
+}
+
+// Savings (crates/adage-cli/src/savings.rs): the verdict's words and mark. Amounts stay in the
+// default ink; only the verdict carries a mark, with the existing roles (style guide, Colour).
+
+export function verdictWord(v: Savings["verdict"]): string {
+  switch (v) {
+    case "saved":
+      return "saved";
+    case "adds_cost":
+      return "adds cost";
+    case "no_difference":
+      return "no measurable difference yet";
+    default:
+      return "measuring";
+  }
+}
+
+/** Dollars as the CLI prints them: $0.034, $1.20, $140. */
+export function usd(x: number): string {
+  const a = Math.abs(x);
+  if (a >= 100) return `$${a.toFixed(0)}`;
+  if (a >= 1) return `$${a.toFixed(2)}`;
+  return `$${a.toFixed(3)}`;
+}
+
+/** A PreToolUse record in words: what was changed (or advised) before the command ran. */
+export function pretoolWords(p: Pretool | undefined, withheld: boolean): string {
+  if (!p) return "";
+  const at = p.interpreter ? ` at ${p.interpreter}` : "";
+  if (p.rewrite) {
+    const what = p.rewrite === "test" ? "test run" : p.rewrite === "repro" ? "reproduction run" : `${p.rewrite} run`;
+    return withheld ? `would have pointed this ${what}${at} (control: left as it was)` : `pointed this ${what}${at}, the project's environment`;
+  }
+  if (p.advise) {
+    const what = p.advise === "pip-install" ? "pip install into the system Python" : p.advise === "permissions" ? "a command your permission rules would not allow rewritten" : p.advise;
+    return withheld ? `would have advised on ${what} (control)` : `advised on ${what}`;
+  }
+  return "";
 }
 
 /** The source of the per-arm numbers. */

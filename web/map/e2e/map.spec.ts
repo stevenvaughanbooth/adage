@@ -206,3 +206,100 @@ test("how it works steps through every chapter, from the keyboard", async ({ pag
   await expect(caption.getByRole("img", { name: /Figure/ })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+// The newer concepts, from the fixtures (e2e/fixtures/make.mjs) served in place of the demo's
+// data: a quiet reflex, a procedure card, the savings estimate, rewrites, the runtime rows.
+const FIXTURES = new URL("./fixtures/", import.meta.url);
+async function fixtures(page: Page) {
+  await page.route("**/api/v1/graph", (r) => r.fulfill({ path: new URL("busy.json", FIXTURES).pathname, contentType: "application/json" }));
+  await page.route("**/api/v1/health", (r) => r.fulfill({ path: new URL("health.json", FIXTURES).pathname, contentType: "application/json" }));
+  await page.route("**/api/v1/events", (r) => r.abort());
+}
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test.describe(`newer concepts, ${colorScheme}`, () => {
+    test.use({ colorScheme });
+
+    test("a quiet reflex says why, against the bar, with the command that delivers it", async ({ page }) => {
+      await fixtures(page);
+      await page.goto(`${DEMO}/?reflex=lint-after-edit&show=quiet`);
+      await ready(page);
+      const inspector = page.getByRole("complementary", { name: "Inspector" });
+      const quiet = inspector.getByRole("region", { name: "Quiet" });
+      await expect(quiet.getByRole("heading", { name: "Quiet: agents already do this" })).toBeVisible();
+      await expect(quiet.getByRole("img", { name: /uplift \+0\.04 against the 0\.10 bar/ })).toBeVisible();
+      await expect(quiet.getByRole("button", { name: /adage review approve acme-billing\/learned lint-after-edit/ })).toBeVisible();
+      await expect(inspector.getByText("What the agent would see")).toBeVisible();
+      // It has its own place in the tree, apart from install steps, and its own chip.
+      const rail = page.getByRole("navigation", { name: "Reflex tree" });
+      await expect(rail.getByText("Quiet · agents already do this")).toBeVisible();
+      await expect(page.getByRole("group", { name: "Show on the map" }).getByRole("button", { name: /^quiet/ })).toHaveAttribute("aria-pressed", "true");
+      await expect(page.getByTestId("node-lint-after-edit")).toContainText("quiet");
+      expect(await axe(page)).toEqual([]);
+    });
+
+    test("a procedure card shows its files, commands, threshold and grey zone, and is never shared", async ({ page }) => {
+      await fixtures(page);
+      await page.goto(`${DEMO}/?reflex=card-add-invoice-field`);
+      await ready(page);
+      const inspector = page.getByRole("complementary", { name: "Inspector" });
+      const card = inspector.getByRole("region", { name: "Procedure card" });
+      await expect(card.getByText("src/billing/invoice_<x>.py")).toBeVisible();
+      await expect(card.getByText("✓ verified")).toBeVisible();
+      await expect(card.getByText("not replayed")).toBeVisible();
+      await expect(card.getByText("0.811")).toBeVisible();
+      await expect(card.getByText("0.711")).toBeVisible();
+      await expect(card.getByText(/Never shared: a card is first-hand only/)).toBeVisible();
+      await expect(inspector.getByText("never shared", { exact: true })).toBeVisible();
+      await expect(inspector.getByText("traces passed")).toBeVisible();
+      expect(await axe(page)).toEqual([]);
+      // Cards can be taken off the map, and the URL says so.
+      await page.getByRole("group", { name: "Show on the map" }).getByRole("button", { name: /cards/ }).click();
+      await expect(page).toHaveURL(/cards=hide/);
+      await expect(page.getByTestId("node-card-add-invoice-field")).toHaveCount(0);
+    });
+
+    test("Evidence states the savings estimate with its interval, and the rewrites", async ({ page }) => {
+      await fixtures(page);
+      await page.goto(`${DEMO}/?view=evidence`);
+      await ready(page);
+      const panel = page.getByRole("region", { name: "Savings · acme-billing" });
+      await expect(panel.getByTestId("savings-verdict")).toHaveText(/saved/);
+      await expect(panel.getByText("~$0.034", { exact: true })).toBeVisible();
+      await expect(panel.getByText(/95% CI \$0\.011–\$0\.058 · 42 vs 12 quiet/)).toBeVisible();
+      await expect(panel.getByText("ended asking you for help: 5% with Adage, 8% without")).toBeVisible();
+      await expect(panel.getByTestId("rewrites-count")).toHaveText("3");
+      expect(await axe(page)).toEqual([]);
+    });
+
+    test("Traces show each rewrite, and the one withheld in control", async ({ page }) => {
+      await fixtures(page);
+      await page.goto(`${DEMO}/?view=traces`);
+      await ready(page);
+      const rows = page.getByTestId("pretool-row");
+      await expect(rows).toHaveCount(4);
+      await expect(rows.filter({ hasText: "would have rewritten" })).toHaveCount(1);
+      await expect(rows.filter({ hasText: /rewrote.*pointed this test run at \.venv\/bin\/python/ })).toHaveCount(3);
+      await expect(rows.filter({ hasText: "(control: left as it was)" })).toHaveCount(1);
+      expect(await axe(page)).toEqual([]);
+    });
+
+    test("Health shows the rewrite switch and the bundled model", async ({ page }) => {
+      await fixtures(page);
+      await page.goto(`${DEMO}/?view=health`);
+      await ready(page);
+      await expect(page.getByTestId("runtime-rewrites")).toContainText("Rewrites to the project’s environment: on");
+      await expect(page.getByTestId("runtime-rewrites").getByRole("button", { name: /adage delegate rewrites off/ })).toBeVisible();
+      await expect(page.getByTestId("runtime-model")).toContainText("Bundled model");
+      await expect(page.getByTestId("runtime-model")).toContainText("potion-base-8m-i8 (bundled)");
+      expect(await axe(page)).toEqual([]);
+    });
+  });
+}
+
+test("the live Health view carries the runtime rows from the binary", async ({ page }) => {
+  await page.goto(`${DEMO}/?view=health`);
+  await ready(page);
+  await expect(page.getByTestId("runtime-rewrites")).toContainText(/Rewrites to the project’s environment: (on|off)/);
+  await expect(page.getByTestId("runtime-model")).toBeVisible();
+});

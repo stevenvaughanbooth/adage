@@ -34,6 +34,7 @@ struct Live {
     would_have: u64,
     followed: u64,
     ignored: u64,
+    misfired: u64,
     obligation_met: u64,
     /// Control sessions: nothing was delivered, so a "followed" judgement means the agent took the
     /// route's path unaided, and a "ignored" one means it did not.
@@ -73,7 +74,64 @@ pub(crate) fn trigger(t: &Trigger) -> Value {
         Trigger::Intent { family, .. } => ("intent", format!("a prompt means: {family}")),
         Trigger::Context { items, .. } => ("context", format!("a context of {} events", items.len())),
     };
+    let mut v = json!({ "kind": kind, "label": label });
+    match t {
+        // How close a prompt must be to the family (cosine), what a card's grey zone is measured from.
+        Trigger::Intent { family, threshold, .. } => {
+            v["family"] = json!(family);
+            v["threshold"] = json!(round(f64::from(*threshold)));
+        }
+        // The events, in time order, each within `within` of the one before.
+        Trigger::Context { items, within } => {
+            v["within"] = json!(within);
+            v["items"] = items.iter().map(ctx_item).collect();
+        }
+        _ => {}
+    }
+    v
+}
+
+/// One event of a context trigger, as `{kind, label}`.
+fn ctx_item(i: &adage_tracks::CtxItem) -> Value {
+    use adage_tracks::CtxItem;
+    let first = |keys: &[String]| keys.first().map(|k| k.strip_prefix("exec ").unwrap_or(k).to_string()).unwrap_or_default();
+    let (kind, label) = match i {
+        CtxItem::Act { keys } => ("act", format!("`{}` succeeds", first(keys))),
+        CtxItem::Fail { keys, signature } => ("fail", format!("`{}` fails: {signature}", first(keys))),
+        CtxItem::Edit { glob } => ("edit", format!("an edit touches {glob}")),
+        CtxItem::PromptValue { .. } => ("prompt_value", "a prompt names a known value".to_string()),
+        CtxItem::Intent { family, .. } => ("intent", format!("a prompt means: {family}")),
+    };
     json!({ "kind": kind, "label": label })
+}
+
+/// Three decimals: thresholds and posteriors as people compare them.
+fn round(x: f64) -> f64 {
+    (x * 1000.0).round() / 1000.0
+}
+
+/// A procedure card's contents (`adage_tracks::card`): files in order, the commands that worked
+/// (with their replay verdict: `verified` true, false, or null when not replayed), the commands
+/// that mostly failed, and the finishing check. Delivered once a session at a prompt at least
+/// `threshold` close to the family, or, from `grey_from` up, at the first edit of one of its
+/// files. It never travels in a pack.
+fn card_json(card: &adage_tracks::card::Card, threshold: Option<f32>) -> Value {
+    let cmd = |c: &adage_tracks::card::CardCommand| {
+        json!({ "command": c.command, "sessions": c.sessions, "runs": c.runs, "failed": c.failed,
+                "error": (!c.error.is_empty()).then_some(&c.error), "verified": c.verified })
+    };
+    json!({
+        "sessions": card.sessions,
+        "passed": card.passed,
+        "files": card.files.iter().map(|f| json!({ "path": f.path, "sessions": f.sessions })).collect::<Vec<_>>(),
+        "exemplars": card.exemplars.iter().map(|x| json!({ "path": x.path, "lines": x.lines })).collect::<Vec<_>>(),
+        "commands": card.commands.iter().map(cmd).collect::<Vec<_>>(),
+        "avoid": card.avoid.iter().map(cmd).collect::<Vec<_>>(),
+        "finish": card.finish,
+        "threshold": threshold.map(|t| round(f64::from(t))),
+        "grey_from": threshold.map(|t| round(f64::from(t - adage_tracks::card::GREY_MARGIN))),
+        "shared": false,
+    })
 }
 
 fn step(s: &Step) -> Value {
@@ -88,10 +146,16 @@ fn step(s: &Step) -> Value {
         Step::Advise { template, slots } => {
             json!({ "kind": "advise", "label": adage_tracks::advice::text(template, slots).unwrap_or_default(), "template": template })
         }
-        Step::Sequence { commands } => json!({ "kind": "sequence", "label": commands.join(" → ") }),
+        Step::Sequence { commands } => {
+            json!({ "kind": "sequence", "label": commands.join(" → "), "commands": commands })
+        }
         Step::Card { card } => json!({
             "kind": "card",
-            "label": format!("procedure card: {} file(s), from {} session(s)", card.files.len(), card.sessions),
+            "label": format!(
+                "procedure card: {} · from {}",
+                crate::words::count(card.files.len(), "file"),
+                crate::words::count(card.sessions as usize, "trace")
+            ),
         }),
     }
 }
@@ -391,6 +455,9 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
         .collect();
     let mut arms: ArmMap = BTreeMap::new();
     let mut arm_sessions: BTreeMap<(String, String), BTreeSet<String>> = BTreeMap::new();
+    // PreToolUse records per repository: commands rewritten to the project's environment, advice
+    // given instead (a permission rule, `pip install`), and either withheld in the control arm.
+    let mut pretool: BTreeMap<String, Pretool> = BTreeMap::new();
 
     let mut spools: Vec<PathBuf> = std::fs::read_dir(paths.sessions())
         .map(|rd| rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "spool")).collect())
@@ -409,6 +476,17 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
             _ => {}
         }
         for r in &recs {
+            if r["kind"] == "pretool" {
+                let p = pretool.entry(repo.clone()).or_default();
+                let what = &r["pretool"];
+                if r["withheld"] == true {
+                    p.withheld += 1;
+                } else if what["rewrite"].is_string() {
+                    p.rewritten += 1;
+                } else if what["advise"].is_string() {
+                    p.advised += 1;
+                }
+            }
             let d = &r["decision"];
             let ids = |k: &str| -> Vec<String> {
                 d[k].as_array().into_iter().flatten().filter_map(|x| x["route"].as_str().map(String::from)).collect()
@@ -453,6 +531,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                 match (judgement_word(kind), control) {
                     ("followed", false) => l.followed += 1,
                     ("ignored", false) => l.ignored += 1,
+                    ("misfired", false) => l.misfired += 1,
                     ("obligation_met", false) => l.obligation_met += 1,
                     ("followed", true) => l.unaided += 1,
                     ("ignored", true) => l.not_reached += 1,
@@ -477,6 +556,8 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
     for inst in &installed {
         let t = &inst.track;
         let repo = &t.manifest.scope.repo;
+        // Why each learned reflex exists (`.why.json`): what its strength was decided on.
+        let whys = adage_tracks::why::load(&inst.dir);
         for r in &t.routes {
             let indexed =
                 index.routes.iter().any(|x| &x.repo == repo && x.route.id == r.id && x.track == t.manifest.track.name);
@@ -505,6 +586,49 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
             let reasons: Vec<Value> = standing
                 .map(|s| s.reasons.iter().map(|(k, why)| json!({ "kind": k, "why": why })).collect())
                 .unwrap_or_default();
+            let why = whys.get(&r.id);
+            let described = crate::evidence::describe(r, why);
+            // What the strength was decided on: shipped facts, a value estimate, or a follow count.
+            let basis = if r.is_instinct() {
+                "instinct"
+            } else if crate::evidence::value_line(r, why).is_some() {
+                "value"
+            } else if matches!(r.step, Step::Card { .. }) {
+                "family"
+            } else {
+                "count"
+            };
+            let mut step_json = step(&r.step);
+            if let Step::Card { card } = &r.step {
+                let threshold = match &r.trigger {
+                    Trigger::Intent { threshold, .. } => Some(*threshold),
+                    _ => None,
+                };
+                step_json["card"] = card_json(card, threshold);
+            }
+            let uplift = e.uplift.as_ref().map(|u| {
+                let mut v = serde_json::to_value(u).unwrap_or(Value::Null);
+                v["line"] = json!(u.line());
+                v
+            });
+            let evidence = json!({
+                "support": e.support, "opportunities": e.opportunities, "rate": e.rate, "lower_bound": e.lower_bound,
+                "turns_saved": e.turns_saved, "days": e.days, "exposed": e.exposed, "dormant_since": e.dormant_since,
+                "provenance": e.provenance,
+                "describe": described,
+                "basis": basis,
+                "why": why.map(|w| json!({
+                    "shape": w.shape, "pattern": w.pattern, "gain": w.gain, "lift": w.lift, "conf": w.conf,
+                    "conf_lb": w.conf_lb, "support": w.support, "days": w.days, "backoff": w.backoff,
+                })),
+                "uplift": uplift,
+                "outcome_lift": e.outcome_lift,
+                "effect_evidence": e.effect_evidence,
+            });
+            // Kept quiet on its uplift: agents already take the step unaided, so it waits for a person.
+            let quiet = r.state == adage_tracks::RouteState::Nascent
+                && !r.authored
+                && e.uplift.as_ref().is_some_and(|u| u.gated);
             routes.push(json!({
                 "id": r.id,
                 "summary": r.summary,
@@ -522,19 +646,19 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                 "effect": lower(r.effect),
                 "state": lower(r.state),
                 "authored": r.authored,
+                "shape": adage_tracks::shape(r),
+                "quiet": quiet,
                 "trigger": trigger(&r.trigger),
-                "step": step(&r.step),
+                "step": step_json,
                 "directive": preview(t, r).0,
-                "evidence": {
-                    "support": e.support, "opportunities": e.opportunities, "rate": e.rate, "lower_bound": e.lower_bound,
-                    "turns_saved": e.turns_saved, "days": e.days, "exposed": e.exposed, "dormant_since": e.dormant_since,
-                    "provenance": e.provenance,
-                },
+                "obligation": crate::evidence::obligation(r),
+                "evidence": evidence,
                 "live": {
                     "emitted": l.map_or(0, |l| l.emitted),
                     "would_have": l.map_or(0, |l| l.would_have),
                     "followed": l.map_or(0, |l| l.followed),
                     "ignored": l.map_or(0, |l| l.ignored),
+                    "misfired": l.map_or(0, |l| l.misfired),
                     "obligation_met": l.map_or(0, |l| l.obligation_met),
                     "control": {
                         "unaided": l.map_or(0, |l| l.unaided),
@@ -550,7 +674,8 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
 
     // The bars this home conditions with (`learn.thresholds`), so the map measures evidence
     // against the bar that actually set each strength.
-    let bar = crate::autolearn::thresholds(adage_store::config::load(paths).config.learn_thresholds);
+    let config = adage_store::config::load(paths).config;
+    let bar = crate::autolearn::thresholds(config.learn_thresholds);
     let mut obs: Vec<(&String, &(u64, BTreeSet<String>))> = observed.iter().collect();
     obs.sort_by(|a, b| b.1 .1.len().cmp(&a.1 .1.len()).then(b.1 .0.cmp(&a.1 .0)).then(a.0.cmp(b.0)));
     let observed: Vec<Value> = obs
@@ -562,6 +687,18 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
         })
         .collect();
 
+    // The savings estimate per repository, as `adage savings` and the status card state it.
+    let mut repos: BTreeSet<String> = installed.iter().map(|i| i.track.manifest.scope.repo.clone()).collect();
+    repos.extend(pretool.keys().cloned());
+    repos.extend(arm_sessions.keys().map(|(r, _)| r.clone()));
+    repos.remove("");
+    let savings: Vec<Value> = repos.iter().map(|r| savings_json(paths, r)).collect();
+    let marker = adage_hook::rewrite_off(paths).exists();
+    let pretool: Vec<Value> = pretool
+        .iter()
+        .map(|(repo, p)| json!({ "repo": repo, "rewritten": p.rewritten, "advised": p.advised, "withheld": p.withheld }))
+        .collect();
+
     let out = json!({
         "generation": index.generation,
         "home": paths.root.display().to_string(),
@@ -571,9 +708,54 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
         "observed": observed,
         "events": events,
         "learning": learning(paths),
-        "bars": { "min_support": bar.min_support, "fire_lower_bound": bar.fire_lower_bound },
+        "bars": { "min_support": bar.min_support, "fire_lower_bound": bar.fire_lower_bound, "uplift_min": bar.uplift_min },
+        "savings": savings,
+        "pretool": pretool,
+        "runtime": {
+            // Rewrites to the project's environment: on unless `runtime.rewrite` is false or the
+            // marker `delegate off` wrote before the switch existed is there.
+            "rewrite": { "on": config.runtime_rewrite && !marker, "config": config.runtime_rewrite, "marker": marker },
+            "control": config.runtime_control,
+            "card_threshold": round(config.learn_card_threshold),
+        },
     });
     Ok(out)
+}
+
+#[derive(Default)]
+struct Pretool {
+    rewritten: u64,
+    advised: u64,
+    withheld: u64,
+}
+
+/// One repository's savings summary (`crate::savings`), with the lines every surface prints. The
+/// summary `adage savings` last wrote when it is newer than the ledger, else computed here and
+/// not written (the graph is read-only). Dollars only past the gate (10 control, 30 treated
+/// sessions), always with the 95% interval.
+fn savings_json(paths: &Paths, repo: &str) -> Value {
+    use crate::savings;
+    let l = adage_learn::ledger::Ledger::new(&paths.ledger(), repo);
+    let mtime = |p: &std::path::Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    let fresh = match (mtime(&l.summary_path()), mtime(&l.path())) {
+        (Some(s), Some(g)) => s >= g,
+        _ => false,
+    };
+    let cached: Option<savings::Summary> =
+        if fresh { std::fs::read(l.summary_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()) } else { None };
+    let s = cached.unwrap_or_else(|| {
+        let ledger = l.read();
+        let now = crate::learnlog::now_ms();
+        let (units, counts) = savings::gather(paths, repo, &ledger, now);
+        let mut s = savings::summarise(repo, &units, counts, now);
+        s.unpriced = ledger.values().filter(|x| x.cost.usd.is_none()).count();
+        s
+    });
+    let mut v = serde_json::to_value(&s).unwrap_or(Value::Null);
+    v["need"] = json!({ "control": savings::NEED_CONTROL, "treated": savings::NEED_TREATED });
+    v["lines"] = json!(savings::lines(&s));
+    v["guardrail"] = json!(savings::guardrail(&s));
+    v
 }
 
 /// One spool record as a timeline event (`None` when nothing happened in it): the routes it

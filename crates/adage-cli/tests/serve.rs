@@ -70,10 +70,18 @@ fn serves_the_map_and_its_api_from_the_binary() {
         let v: serde_json::Value = serde_json::from_str(&body).unwrap();
         assert_eq!(v["sessions"]["total"], 0);
         assert!(v["routes"].as_array().unwrap().is_empty());
+        // Nothing to estimate yet, and rewrites to the project's environment are on by default.
+        assert_eq!(v["savings"], serde_json::json!([]));
+        assert_eq!(v["pretool"], serde_json::json!([]));
+        assert_eq!(v["runtime"]["rewrite"]["on"], true);
     }
     let (head, body) = get(&addr, "/api/v1/health", &addr);
     assert!(head.starts_with("HTTP/1.1 200"), "{head}");
-    assert!(serde_json::from_str::<serde_json::Value>(&body).unwrap()["checks"].is_array(), "{body}");
+    let h: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(h["checks"].is_array(), "{body}");
+    // Beside the checks: the rewrite switch and what intent reflexes embed with.
+    assert_eq!(h["runtime"]["rewrite"]["on"], true, "{body}");
+    assert!(h["runtime"]["embeddings"]["model"].as_str().is_some_and(|m| !m.is_empty()), "{body}");
 
     let (head, _) = get(&addr, "/graph.json", "attacker.example");
     assert!(head.starts_with("HTTP/1.1 403"), "other hosts are refused: {head}");

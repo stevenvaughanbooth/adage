@@ -3,11 +3,12 @@
 
 import { useMemo, useState } from "react";
 import type { Graph, Route } from "../api/types";
-import { KindGlyph, Lamp } from "../components/glyphs";
+import { KindGlyph, StateMark } from "../components/glyphs";
+import { SavingsPanel } from "../components/Savings";
 import { Segmented, cx, day } from "../components/ui";
 import { armTraces, kpis, pct, perDay, share } from "../lib/evidence";
 import { routeKey } from "../lib/graph";
-import { CONTROL_NOTE, LIVE_SOURCE, isInstinct, lifecycle, plural, strength } from "../lib/words";
+import { CONTROL_NOTE, LIVE_SOURCE, evidenceShort, evidenceShortWhy, isCard, isInstinct, isQuiet, lifecycle, plural, strength } from "../lib/words";
 import { type Window, useUrl, windowStart } from "../state/url";
 
 const GROUP_TH =
@@ -240,6 +241,8 @@ export function Evidence({ graph }: { graph: Graph }) {
         </div>
       </div>
 
+      <SavingsPanel graph={graph} repo={url.repo} />
+
       <div className="grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
         <section aria-label="Traces per day" className="flex flex-col gap-3 rounded-lg border border-line-strong bg-panel px-5 py-[18px]">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -304,18 +307,18 @@ export function Evidence({ graph }: { graph: Graph }) {
                           onClick={() => setUrl({ reflex: routeKey(r), view: "map" }, true)}
                           className="flex items-center gap-2 text-left font-mono text-[12.5px] text-ink-1 hover:text-accent-soft"
                         >
-                          <KindGlyph instinct={isInstinct(r)} />
+                          <KindGlyph instinct={isInstinct(r)} card={isCard(r)} />
                           {r.id}
                         </button>
                       </td>
                       <td className="border-b border-line px-3 py-[11px] text-[13.5px] text-ink-2">
                         <span className="inline-flex items-center gap-1.5">
-                          <Lamp strength={s} hollow={lifecycle(r.state) === "nascent"} />
-                          {s}
+                          <StateMark strength={s} hollow={lifecycle(r.state) === "nascent"} quiet={isQuiet(r)} />
+                          {isQuiet(r) ? "quiet" : s}
                         </span>
                       </td>
-                      <td className="border-b border-line px-3 py-[11px] font-mono text-[12.5px] text-ink-2">
-                        {r.evidence.support}/{r.evidence.opportunities}
+                      <td className="border-b border-line px-3 py-[11px] font-mono text-[12.5px] whitespace-nowrap text-ink-2" title={evidenceShortWhy(r)}>
+                        {evidenceShort(r)}
                       </td>
                       <td className="border-b border-line px-3 py-[11px] font-mono text-[12.5px] text-ink-2">{r.evidence.lower_bound.toFixed(2)}</td>
                       <td className="border-b border-line px-3 py-[11px] font-mono text-[12.5px] text-ink-1">{r.evidence.turns_saved.toFixed(1)}</td>

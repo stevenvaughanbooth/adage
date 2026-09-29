@@ -117,7 +117,7 @@ export function App() {
       case "k": {
         const m = buildMap(graph, {
           mode: url.mode,
-          filters: { repo: url.repo, strengths: url.strengths, show: url.show, query: url.q },
+          filters: { repo: url.repo, strengths: url.strengths, show: url.show, query: url.q, cards: url.cards },
         });
         const keys = m.nodes.filter((n) => n.kind === "reflex" || n.kind === "instinct").map((n) => n.routes[0] ?? "");
         if (!keys.length) return true;

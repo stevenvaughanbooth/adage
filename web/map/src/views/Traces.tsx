@@ -3,11 +3,11 @@
 import { useMemo, useState } from "react";
 import type { Graph, TraceEvent } from "../api/types";
 import { useStore } from "../api/client";
-import { Lamp } from "../components/glyphs";
+import { Lamp, RewriteGlyph } from "../components/glyphs";
 import { Replay } from "../components/Replay";
 import { Segmented, clock, cx, day } from "../components/ui";
 import { findRoute, routeKey } from "../lib/graph";
-import { arm, judgement, lifecycle, plural, shortSession, strength } from "../lib/words";
+import { arm, judgement, lifecycle, plural, pretoolWords, shortSession, strength } from "../lib/words";
 import { WINDOWS, type Window, useUrl, windowStart } from "../state/url";
 
 const EVENT: Record<string, string> = {
@@ -18,7 +18,33 @@ const EVENT: Record<string, string> = {
   PostToolUseFailure: "tool failed",
   Stop: "stop",
   "session.start": "start",
+  PreToolUse: "before a command",
 };
+
+/** A PreToolUse record: the command was rewritten (or advice given) before it ran. */
+function PretoolLine({ e }: { e: TraceEvent }) {
+  const withheld = Boolean(e.withheld);
+  const rewrite = Boolean(e.pretool?.rewrite);
+  const word = withheld ? (rewrite ? "would have rewritten" : "would have advised") : rewrite ? "rewrote" : "advised";
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" data-testid="pretool-row">
+      <span className="lbl mr-1">{EVENT[e.event] ?? e.event}</span>
+      <span
+        className={cx(
+          "inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-[11.5px]",
+          withheld ? "border-dashed border-line-strong text-ink-3" : "border-line-strong bg-raised text-ink-1",
+        )}
+        title={withheld ? "Control arm: recorded, not done" : "Adage changed the command before it ran; the agent saw a note"}
+      >
+        <span className="text-accent-soft">
+          <RewriteGlyph size={12} />
+        </span>
+        {word}
+      </span>
+      <span className="text-xs text-ink-2">{pretoolWords(e.pretool, withheld)}</span>
+    </div>
+  );
+}
 
 function Row({ e, graph, fresh }: { e: TraceEvent; graph: Graph; fresh: boolean }) {
   const [, setUrl] = useUrl();
@@ -54,7 +80,8 @@ function Row({ e, graph, fresh }: { e: TraceEvent; graph: Graph; fresh: boolean 
         <span className="font-mono text-[11px] text-ink-3">{shortSession(e.session)}</span>
       </span>
       <div className="col-span-2 flex min-w-0 flex-col gap-1.5 sm:col-span-1">
-        <div className="flex flex-wrap items-center gap-1.5">
+        {e.kind === "pretool" && <PretoolLine e={e} />}
+        <div className={cx("flex flex-wrap items-center gap-1.5", e.kind === "pretool" && "hidden")}>
           <span className="lbl mr-1">{EVENT[e.event] ?? e.event}</span>
           {e.directed.map((id) => chip(id, false))}
           {e.would.filter((id) => !directed.has(id)).map((id) => chip(id, true))}

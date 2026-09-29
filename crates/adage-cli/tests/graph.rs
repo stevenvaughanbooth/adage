@@ -4,6 +4,7 @@
 use adage_core::spans::SpanKind;
 use adage_core::Effect;
 use adage_tracks::*;
+use adage_tracks::card;
 use serde_json::{json, Value};
 use std::io::Write;
 use std::path::PathBuf;
@@ -132,4 +133,163 @@ fn graph_on_an_empty_home_is_empty_not_an_error() {
     let g: Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(g["routes"], json!([]));
     assert_eq!(g["sessions"]["total"], 0);
+}
+
+/// A reflex kept quiet on its uplift, a procedure card, an ordered sequence and a context
+/// trigger: the graph carries what the map shows for each, and the repository's savings
+/// estimate, rewrite counts and the rewrite switch.
+#[test]
+fn graph_carries_quiet_cards_sequences_savings_and_rewrites() {
+    let w = World::new();
+    let mut t = track();
+    let base = t.routes[0].clone();
+    t.routes.push(Route {
+        id: "quiet-lint".into(),
+        summary: "agents already lint".into(),
+        trigger: Trigger::AfterEdit { paths: "src/*.py".into() },
+        step: Step::Run { command: "make lint".into() },
+        slots: vec![],
+        effect: Effect::Verify,
+        strength: Strength::Prime,
+        state: RouteState::Nascent,
+        evidence: Evidence {
+            support: 9,
+            opportunities: 10,
+            provenance: "desire-path".into(),
+            uplift: Some(Uplift {
+                kind: "run-after-edit".into(),
+                p_follow: 0.95,
+                p_self: 0.9,
+                mean: 0.05,
+                lower: -0.02,
+                prior_self: 0.6,
+                traces: 10,
+                traces_took: 9,
+                gated: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        },
+        ..base.clone()
+    });
+    t.routes.push(Route {
+        id: "card-add-flag".into(),
+        summary: "adding a flag".into(),
+        trigger: Trigger::Intent {
+            family: "add-flag".into(),
+            model: "potion-base-8m@b9c0e3a1b2c3".into(),
+            centroid: vec![3536; 8],
+            threshold: 0.811,
+        },
+        step: Step::Card {
+            card: card::Card {
+                sessions: 4,
+                passed: 3,
+                files: vec![
+                    card::CardFile { path: "flags/flag_<x>.go".into(), sessions: 4 },
+                    card::CardFile { path: "docs/flags.md".into(), sessions: 3 },
+                ],
+                exemplars: vec![],
+                commands: vec![card::CardCommand {
+                    command: "go test ./flags".into(),
+                    sessions: 4,
+                    runs: 5,
+                    failed: 1,
+                    error: String::new(),
+                    verified: Some(true),
+                }],
+                avoid: vec![],
+                finish: Some("go vet ./...".into()),
+                prompts: vec![],
+            },
+        },
+        slots: vec![],
+        effect: Effect::Observe,
+        strength: Strength::Prime,
+        state: RouteState::Firm,
+        ..base.clone()
+    });
+    t.routes.push(Route {
+        id: "seq-gen-test".into(),
+        summary: "generate, then test".into(),
+        trigger: Trigger::AfterEdit { paths: "schema/*.json".into() },
+        step: Step::Sequence { commands: vec!["make gen".into(), "make test".into()] },
+        slots: vec![],
+        effect: Effect::Regenerate,
+        ..base.clone()
+    });
+    io::write(&w.root.join("adage/tracks/acme/work"), &t).unwrap();
+    io::read(&w.root.join("adage/tracks/acme/work")).expect("the track reads back");
+    Index::compile(&[t]).write_atomic(&w.root.join("adage/index.json")).unwrap();
+    w.session("s-treated", "treated", true);
+    // A PreToolUse rewrite, and one withheld in a control session.
+    let spool = w.root.join("adage/sessions/s-treated.spool");
+    assert!(spool.exists(), "the hook spooled the session");
+    for (arm, withheld) in [("treated", false), ("control", true)] {
+        let mut r = json!({ "ts": 9, "event": "PreToolUse", "kind": "pretool", "arm": arm, "repo": "acme",
+                            "pretool": { "rewrite": "test", "interpreter": ".venv/bin/python" } });
+        if withheld {
+            r["withheld"] = json!(true);
+        }
+        adage_store::spool::append(&spool, &r).unwrap();
+    }
+
+    let g: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
+    let route = |id: &str| g["routes"].as_array().unwrap().iter().find(|r| r["id"] == id).cloned().expect(id);
+
+    let q = route("quiet-lint");
+    assert_eq!(q["quiet"], true);
+    assert_eq!(q["evidence"]["uplift"]["gated"], true);
+    assert!(q["evidence"]["uplift"]["line"].as_str().unwrap().contains("Quiet: agents already do this"), "{q}");
+    assert!(q["review"]["reasons"].as_array().unwrap().iter().any(|r| r["kind"] == "quiet"), "{q}");
+    assert_eq!(q["evidence"]["basis"], "count");
+    assert!(q["evidence"]["describe"].as_str().unwrap().starts_with("9/10 traces"), "{q}");
+    assert_eq!(g["bars"]["uplift_min"], 0.1);
+
+    let c = route("card-add-flag");
+    assert_eq!(c["shape"], "card");
+    assert_eq!(c["quiet"], false);
+    assert_eq!(c["trigger"]["threshold"], 0.811);
+    let card = &c["step"]["card"];
+    assert_eq!(card["sessions"], 4);
+    assert_eq!(card["passed"], 3);
+    assert_eq!(card["files"][0]["path"], "flags/flag_<x>.go");
+    assert_eq!(card["commands"][0], json!({ "command": "go test ./flags", "sessions": 4, "runs": 5, "failed": 1, "error": null, "verified": true }));
+    assert_eq!(card["finish"], "go vet ./...");
+    assert_eq!(card["grey_from"], 0.711);
+    assert_eq!(card["shared"], false);
+    assert_eq!(c["evidence"]["basis"], "family");
+    assert!(!c["review"]["verbs"].as_array().unwrap().contains(&json!("strengthen")), "a card is prime at most");
+
+    let s = route("seq-gen-test");
+    assert_eq!(s["step"]["commands"], json!(["make gen", "make test"]));
+    assert_eq!(s["step"]["label"], "make gen → make test");
+
+    // The lookup reflex is followed and delivered in the treated session; nothing misfired.
+    assert_eq!(route("lookup")["live"]["misfired"], 0);
+    assert!(route("lookup")["obligation"].is_null());
+
+    // PreToolUse: one rewrite, one withheld in the control arm; rewrites are on by default.
+    assert_eq!(g["pretool"], json!([{ "repo": "acme", "rewritten": 1, "advised": 0, "withheld": 1 }]));
+    assert_eq!(g["runtime"]["rewrite"], json!({ "on": true, "config": true, "marker": false }));
+    assert_eq!(g["runtime"]["card_threshold"], 0.811);
+    let kinds: Vec<&str> = g["events"].as_array().unwrap().iter().filter_map(|e| e["kind"].as_str()).collect();
+    assert_eq!(kinds, ["pretool", "pretool"], "rewrites reach the timeline");
+
+    // Savings: below the gate, counts only, never dollars.
+    let sv = g["savings"].as_array().unwrap().iter().find(|s| s["repo"] == "acme").expect("acme's savings");
+    assert_eq!(sv["verdict"], "measuring");
+    assert_eq!(sv["gate_met"], false);
+    assert!(sv.get("cost_usd").is_none(), "{sv}");
+    assert_eq!(sv["need"], json!({ "control": 10, "treated": 30 }));
+    assert!(sv["lines"][0].as_str().unwrap().starts_with("measuring savings: 0 of 10"), "{sv}");
+    assert!(sv["guardrail"].is_null());
+    assert_eq!(sv["counts"]["rewritten"], 1);
+    assert!(!w.root.join("adage/ledger").exists(), "the graph writes no summary");
+
+    // The marker `delegate off` wrote before the switch turns them off too.
+    std::fs::create_dir_all(w.root.join("adage/exec")).unwrap();
+    std::fs::write(w.root.join("adage/exec/rewrite-off"), "").unwrap();
+    let g: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
+    assert_eq!(g["runtime"]["rewrite"], json!({ "on": false, "config": true, "marker": true }));
 }

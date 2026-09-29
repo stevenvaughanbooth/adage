@@ -4,8 +4,12 @@
 import type { Graph, Route, TraceEvent } from "../api/types";
 import {
   type Lifecycle,
+  type Showable,
   type Strength,
+  evidenceShort,
+  isCard,
   isInstinct,
+  isQuiet,
   lifecycle,
   responseKind,
   stimulusKind,
@@ -31,6 +35,9 @@ export interface MapNode {
   strike?: boolean;
   /** Replay: not fired yet at the scrubbed time. */
   unformed?: boolean;
+  /** Reflex nodes: kept quiet on its uplift; a procedure card. */
+  quiet?: boolean;
+  card?: boolean;
 }
 
 export interface MapEdge {
@@ -45,12 +52,19 @@ export interface MapEdge {
 export interface Filters {
   repo: string | null;
   strengths: ReadonlySet<Strength>;
-  /** Lifecycles hidden unless asked for: nascent, dormant, extinguished by default. */
-  show: ReadonlySet<Lifecycle>;
+  /** Lifecycles hidden unless asked for: nascent, quiet, dormant, extinguished by default. */
+  show: ReadonlySet<Showable>;
   query: string;
+  /** Procedure cards on the map (shown unless turned off). */
+  cards?: boolean;
 }
 
-export const HIDDEN_BY_DEFAULT: Lifecycle[] = ["nascent", "dormant", "extinguished"];
+export const HIDDEN_BY_DEFAULT: Showable[] = ["nascent", "quiet", "dormant", "extinguished"];
+
+/** The filter bucket a reflex falls in: its lifecycle, or quiet. */
+export function showKey(r: Route): Showable {
+  return isQuiet(r) ? "quiet" : lifecycle(r.state);
+}
 
 /** A reflex's key: its track reference and id (ids repeat across tracks and repositories). */
 export function routeKey(r: Pick<Route, "reference" | "id">): string {
@@ -81,8 +95,9 @@ function matches(r: Route, q: string): boolean {
 /** Whether a reflex passes the filters. */
 export function visible(r: Route, f: Filters): boolean {
   if (f.repo && r.repo !== f.repo) return false;
-  const l = lifecycle(r.state);
+  const l = showKey(r);
   if (HIDDEN_BY_DEFAULT.includes(l) && !f.show.has(l)) return false;
+  if (f.cards === false && isCard(r)) return false;
   const s = strength(r.strength);
   if (s && !f.strengths.has(s)) return false;
   return matches(r, f.query.trim());
@@ -110,7 +125,8 @@ export function counts(g: Graph, repo: string | null) {
   }
   return {
     strengths,
-    lifecycles: by((r) => lifecycle(r.state)),
+    lifecycles: by<Showable>(showKey),
+    cards: rs.filter(isCard).length,
     reflexes: rs.filter((r) => !isInstinct(r)).length,
     instincts: rs.filter(isInstinct).length,
   };
@@ -155,16 +171,17 @@ export function buildMap(g: Graph, o: BuildOptions): { nodes: MapNode[]; edges: 
     const inst = isInstinct(r);
     const firstAt = fired?.get(`${r.repo}::${r.id}`);
     const unformed = o.at != null && !inst && (firstAt === undefined || firstAt > o.at);
-    const e = r.evidence;
     const rid = `r:${key}`;
     nodes.set(rid, {
       id: rid,
       kind: inst ? "instinct" : "reflex",
-      tag: inst ? "INSTINCT" : "REFLEX",
+      tag: inst ? "INSTINCT" : isQuiet(r) ? "REFLEX · QUIET" : isCard(r) ? "REFLEX · CARD" : "REFLEX",
       title: r.id,
-      sub: [s ?? "", inst ? "instinct" : l, `${e.support}/${e.opportunities}`].filter(Boolean).join(" · "),
+      sub: [s ?? "", inst ? "instinct" : isQuiet(r) ? "quiet" : l, evidenceShort(r)].filter(Boolean).join(" · "),
       strength: s,
       lifecycle: l,
+      quiet: isQuiet(r),
+      card: isCard(r),
       routes: [key],
       unformed,
     });

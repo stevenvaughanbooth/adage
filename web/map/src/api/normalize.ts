@@ -6,7 +6,7 @@
 // read older data, so every reader goes through here once, and the rest of the app sees only the
 // new words.
 
-import type { ArmStats, Graph, LearnChange, LearnRun, Live, Route, TraceEvent } from "./types";
+import type { ArmStats, Graph, LearnChange, LearnRun, Live, Route, Savings, TraceEvent } from "./types";
 
 type Loose = Record<string, unknown>;
 
@@ -89,12 +89,22 @@ export function normalizeRoute(raw: unknown): Route {
   const review = r.review
     ? { ...r.review, reasons: (r.review.reasons ?? []).map((x) => ({ ...x, kind: x.kind === "derailing" ? "ignoring" : x.kind === "draft" ? "nascent" : x.kind })) }
     : undefined;
+  const state = stateWord(r.state);
+  const uplift = (ev.uplift ?? null) as Route["evidence"]["uplift"];
+  // Older binaries sent no `quiet`: a nascent reflex whose uplift was gated, or whose review
+  // reason says so, is quiet.
+  const quiet =
+    typeof r.quiet === "boolean"
+      ? r.quiet
+      : state === "nascent" && (Boolean(uplift?.gated) || Boolean(review?.reasons.some((x) => x.kind === "quiet")));
   return {
     ...(r as Route),
     review,
+    quiet,
+    obligation: (r.obligation ?? null) as string | null,
     strength: strengthWord(r.strength ?? r.aspect),
     ceiling: strengthWord(r.ceiling),
-    state: stateWord(r.state),
+    state,
     evidence: {
       ...(ev as unknown as Route["evidence"]),
       support: num(ev.support),
@@ -103,6 +113,7 @@ export function normalizeRoute(raw: unknown): Route {
       lower_bound: num(ev.lower_bound),
       turns_saved: num(ev.turns_saved),
       dormant_since: (ev.dormant_since ?? ev.stale_since ?? null) as string | null,
+      uplift,
     },
     live: live(r.live),
     arms: { treated: armStats(arms.treated), control: armStats(arms.control ?? arms.holdout) },
@@ -136,6 +147,31 @@ export function normalizeLearnRun(raw: unknown): LearnRun {
   };
 }
 
+function savings(raw: unknown): Savings {
+  const s = obj(raw) as Loose & Partial<Savings>;
+  const c = obj(s.counts);
+  const need = obj(s.need);
+  return {
+    ...(s as Savings),
+    repo: String(s.repo ?? ""),
+    n_treated: num(s.n_treated),
+    n_control: num(s.n_control),
+    gate_met: Boolean(s.gate_met),
+    verdict: typeof s.verdict === "string" ? s.verdict : "measuring",
+    counts: {
+      days: num(c.days) || 30,
+      sessions: num(c.sessions),
+      directives: num(c.directives),
+      followed: num(c.followed),
+      dead_ends_headed_off: num(c.dead_ends_headed_off),
+      finish_lines_met: num(c.finish_lines_met),
+      rewritten: num(c.rewritten),
+    },
+    need: { control: num(need.control) || 10, treated: num(need.treated) || 30 },
+    lines: Array.isArray(s.lines) ? s.lines : [],
+  };
+}
+
 export function normalizeGraph(raw: unknown): Graph {
   const g = obj(raw) as Loose & Partial<Graph>;
   const s = obj(g.sessions);
@@ -147,5 +183,8 @@ export function normalizeGraph(raw: unknown): Graph {
     observed: g.observed ?? [],
     events: (g.events ?? []).map(normalizeEvent),
     learning: g.learning?.map(normalizeLearnRun),
+    // Older binaries sent neither.
+    savings: Array.isArray(g.savings) ? g.savings.map(savings) : [],
+    pretool: Array.isArray(g.pretool) ? g.pretool : [],
   };
 }

@@ -3,7 +3,7 @@
 import { useCallback, useSyncExternalStore } from "react";
 import type { Direction, Mode } from "../lib/graph";
 import { HIDDEN_BY_DEFAULT } from "../lib/graph";
-import { LIFECYCLE, type Lifecycle, STRENGTHS, type Strength } from "../lib/words";
+import { SHOWABLE, type Showable, STRENGTHS, type Strength } from "../lib/words";
 
 export type View = "map" | "traces" | "evidence" | "health" | "how";
 export const VIEWS: View[] = ["map", "traces", "evidence", "health", "how"];
@@ -19,7 +19,9 @@ export interface UrlState {
   dir: Direction;
   q: string;
   strengths: Set<Strength>;
-  show: Set<Lifecycle>;
+  show: Set<Showable>;
+  /** Procedure cards on the map; `cards=hide` turns them off. */
+  cards: boolean;
   window: Window;
   /** Replay: the scrubbed time, or live. */
   at: number | null;
@@ -48,7 +50,8 @@ export function parse(search: string): UrlState {
     dir: p.get("dir") === "down" ? "DOWN" : "RIGHT",
     q: p.get("q") ?? "",
     strengths: list(p.get("strength"), STRENGTHS, STRENGTHS),
-    show: list(p.get("show"), LIFECYCLE, []),
+    show: list(p.get("show"), SHOWABLE, []),
+    cards: p.get("cards") !== "hide",
     window: WINDOWS.includes(win as Window) ? (win as Window) : "all",
     at: p.has("at") && Number.isFinite(at) && at > 0 ? at : null,
     ch: p.get("ch") || null,
@@ -66,8 +69,9 @@ export function serialize(s: UrlState): string {
   if (s.dir === "DOWN") p.set("dir", "down");
   if (s.q) p.set("q", s.q);
   if (s.strengths.size !== STRENGTHS.length) p.set("strength", STRENGTHS.filter((x) => s.strengths.has(x)).join(","));
-  const shown = LIFECYCLE.filter((x) => s.show.has(x) && HIDDEN_BY_DEFAULT.includes(x));
+  const shown = SHOWABLE.filter((x) => s.show.has(x) && HIDDEN_BY_DEFAULT.includes(x));
   if (shown.length) p.set("show", shown.join(","));
+  if (!s.cards) p.set("cards", "hide");
   if (s.window !== "all") p.set("window", s.window);
   if (s.at) p.set("at", String(s.at));
   if (s.view === "how" && s.ch) p.set("ch", s.ch);

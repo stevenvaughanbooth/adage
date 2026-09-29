@@ -81,7 +81,10 @@
      "met": 0,
      "hit_avoided": 0
     }
-   }
+   },
+   "shape": "run",
+   "quiet": false,
+   "obligation": null
   }
  ],
  "observed": [],
@@ -89,6 +92,18 @@
  "learning": [],
  "bars": {
   "min_support": 3,
-  "fire_lower_bound": 0.5
+  "fire_lower_bound": 0.5,
+  "uplift_min": 0.1
+ },
+ "savings": [],
+ "pretool": [],
+ "runtime": {
+  "rewrite": {
+   "on": true,
+   "config": true,
+   "marker": false
+  },
+  "control": 0.1,
+  "card_threshold": 0.811
  }
 }

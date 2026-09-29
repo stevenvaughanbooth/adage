@@ -80,10 +80,10 @@ function Canvas({ graph, onFilter }: { graph: Graph; onFilter?: () => void }) {
     () =>
       buildMap(graph, {
         mode: url.mode,
-        filters: { repo: url.repo, strengths: url.strengths, show: url.show, query: url.q },
+        filters: { repo: url.repo, strengths: url.strengths, show: url.show, query: url.q, cards: url.cards },
         at,
       }),
-    [graph, url.mode, url.repo, url.strengths, url.show, url.q, at],
+    [graph, url.mode, url.repo, url.strengths, url.show, url.q, url.cards, at],
   );
   const selNode = selKey ? `r:${selKey}` : null;
   const keep = useMemo(() => neighbourhood(full.edges, selNode, url.focus), [full.edges, selNode, url.focus]);

@@ -1,9 +1,9 @@
 import { type KeyboardEvent, useMemo } from "react";
 import type { Graph, Route } from "../api/types";
 import { counts, routeKey, visible } from "../lib/graph";
-import { type Lifecycle, STRENGTHS, type Strength, isInstinct, lifecycle, strength } from "../lib/words";
+import { type Showable, STRENGTHS, type Strength, evidenceShort, evidenceShortWhy, isCard, isInstinct, isQuiet, lifecycle, strength } from "../lib/words";
 import { useUrl } from "../state/url";
-import { Icons, KindGlyph, Lamp } from "./glyphs";
+import { CardGlyph, Icons, KindGlyph, StateMark } from "./glyphs";
 import { FilterChip, Modal, cx } from "./ui";
 
 interface Group {
@@ -24,9 +24,12 @@ function groupBy(rs: Route[], section: string, ver: (r: Route) => string): Group
   }));
 }
 
-/** The tree: tracks, reflexes waiting for review, instincts, packs. */
+/** The tree: tracks, reflexes waiting for review, quiet ones, instincts, packs. */
 export function tree(rs: Route[]): Group[] {
-  const nascent = rs.filter((r) => lifecycle(r.state) === "nascent");
+  const waiting = rs.filter((r) => lifecycle(r.state) === "nascent");
+  // Quiet is not an install step: agents already do it, so it waits for a person to want it said.
+  const quiet = waiting.filter(isQuiet);
+  const nascent = waiting.filter((r) => !isQuiet(r));
   const rest = rs.filter((r) => lifecycle(r.state) !== "nascent");
   const learned = rest.filter((r) => !isInstinct(r) && !r.imported);
   const packs = rest.filter((r) => !isInstinct(r) && r.imported);
@@ -34,16 +37,17 @@ export function tree(rs: Route[]): Group[] {
   const out: Group[] = [];
   out.push(...groupBy(learned, "Tracks", (r) => `@${r.version}`));
   if (nascent.length) out.push({ section: "Nascent · wait for review", items: nascent });
+  if (quiet.length) out.push({ section: "Quiet · agents already do this", items: quiet });
   out.push(...groupBy(instincts, "Instincts", (r) => `@${r.version}`));
   out.push(...groupBy(packs, "Packs", (r) => `@${r.version} · imported`));
   return out;
 }
 
-const HIDEABLE: Lifecycle[] = ["nascent", "dormant", "extinguished"];
+const HIDEABLE: Showable[] = ["nascent", "quiet", "dormant", "extinguished"];
 
 /** The filters hidden on the map, as a count for the Filter button on narrow screens. */
-export function activeFilters(url: { q: string; strengths: Set<Strength>; show: Set<Lifecycle> }): number {
-  return (url.q ? 1 : 0) + STRENGTHS.filter((s) => !url.strengths.has(s)).length + url.show.size;
+export function activeFilters(url: { q: string; strengths: Set<Strength>; show: Set<Showable>; cards?: boolean }): number {
+  return (url.q ? 1 : 0) + STRENGTHS.filter((s) => !url.strengths.has(s)).length + url.show.size + (url.cards === false ? 1 : 0);
 }
 
 /** The rail on wide screens (1024 px and up). */
@@ -90,7 +94,7 @@ function RailBody({ graph, inputId, onPick }: { graph: Graph; inputId: string; o
     [graph, url.repo, url.q],
   );
   const groups = tree(inRepo);
-  const filters = { repo: url.repo, strengths: url.strengths, show: url.show, query: url.q };
+  const filters = { repo: url.repo, strengths: url.strengths, show: url.show, query: url.q, cards: url.cards };
 
   const toggleStrength = (s: Strength) => {
     const next = new Set(url.strengths);
@@ -98,7 +102,7 @@ function RailBody({ graph, inputId, onPick }: { graph: Graph; inputId: string; o
     else next.add(s);
     setUrl({ strengths: next });
   };
-  const toggleShow = (l: Lifecycle) => {
+  const toggleShow = (l: Showable) => {
     const next = new Set(url.show);
     if (next.has(l)) next.delete(l);
     else next.add(l);
@@ -146,11 +150,17 @@ function RailBody({ graph, inputId, onPick }: { graph: Graph; inputId: string; o
             {s}
           </FilterChip>
         ))}
-        {HIDEABLE.filter((l) => l !== "extinguished" || (c.lifecycles.get(l) ?? 0) > 0).map((l) => (
+        {HIDEABLE.filter((l) => (l !== "extinguished" && l !== "quiet") || (c.lifecycles.get(l) ?? 0) > 0).map((l) => (
           <FilterChip key={l} pressed={url.show.has(l)} onClick={() => toggleShow(l)} count={c.lifecycles.get(l) ?? 0}>
             {l}
           </FilterChip>
         ))}
+        {c.cards > 0 && (
+          <FilterChip pressed={url.cards} onClick={() => setUrl({ cards: !url.cards })} count={c.cards}>
+            <CardGlyph size={12} />
+            cards
+          </FilterChip>
+        )}
       </div>
       <nav aria-label="Reflex tree" className="scroll-thin -mx-1 flex min-h-0 flex-col gap-3 overflow-y-auto px-1 pb-2" onKeyDown={onKey}>
         {groups.length === 0 && <p className="px-1 text-[13px] text-ink-3">{url.q ? `Nothing matches “${url.q}”.` : "No reflexes yet."}</p>}
@@ -175,7 +185,7 @@ function RailBody({ graph, inputId, onPick }: { graph: Graph; inputId: string; o
                   type="button"
                   data-reflex={key}
                   aria-current={sel ? "true" : undefined}
-                  title={`${onMap ? r.summary || r.id : `${r.id} · hidden on the map by the filters`} · from conditioning, ${r.evidence.support}/${r.evidence.opportunities} traces took it`}
+                  title={`${onMap ? r.summary || r.id : `${r.id} · hidden on the map by the filters`}${isQuiet(r) ? " · quiet: agents already do this" : ""} · ${evidenceShortWhy(r)}`}
                   onClick={() => {
                     setUrl({ reflex: sel ? null : key, view: "map" }, true);
                     onPick?.();
@@ -184,14 +194,14 @@ function RailBody({ graph, inputId, onPick }: { graph: Graph; inputId: string; o
                     "flex h-[30px] w-full items-center gap-2 rounded-sm pr-2 text-left transition-colors duration-100",
                     g.title ? "pl-[22px]" : "pl-2",
                     sel ? "bg-[var(--sel)] shadow-[inset_0_0_0_1px_var(--sel-ring)]" : "hover:bg-raised",
-                    !onMap && "opacity-55",
                   )}
                 >
-                  <Lamp strength={s} hollow={l === "nascent" || l === "extinguished"} size={7} />
-                  <KindGlyph instinct={isInstinct(r)} />
-                  <span className="grow truncate font-mono text-xs text-ink-1">{r.id}</span>
+                  <StateMark strength={s} hollow={l === "nascent" || l === "extinguished"} quiet={isQuiet(r)} size={7} />
+                  <KindGlyph instinct={isInstinct(r)} card={isCard(r)} />
+                  {/* Hidden on the map: dimmer ink, never below the contrast floor. */}
+                  <span className={cx("grow truncate font-mono text-xs", onMap ? "text-ink-1" : "text-ink-3")}>{r.id}</span>
                   <span className={cx("shrink-0 font-mono text-[11px]", sel ? "text-ink-2" : "text-ink-3")}>
-                    {r.evidence.support}/{r.evidence.opportunities}
+                    {evidenceShort(r)}
                   </span>
                 </button>
               );

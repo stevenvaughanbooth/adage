@@ -55,5 +55,17 @@
   "pass": 10,
   "warn": 0,
   "fail": 0
+ },
+ "runtime": {
+  "rewrite": {
+   "on": true,
+   "config": true,
+   "marker": false
+  },
+  "embeddings": {
+   "model": "potion-base-8m-i8 (bundled)",
+   "bundled": true,
+   "fallback": false
+  }
  }
 }

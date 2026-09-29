@@ -88,6 +88,20 @@ fn text(status: &'static str, body: &str) -> Response {
         .header("Cache-Control", "no-store")
 }
 
+/// Beside the doctor's checks: what the hooks do on this machine that is a setting, not a
+/// problem. Rewrites to the project's environment (on unless `runtime.rewrite` is false or the
+/// `exec/rewrite-off` marker is there), and what intent reflexes embed with (the model bundled in
+/// the binary, an installed one, or the hashed fallback).
+fn runtime(paths: &adage_store::Paths) -> Value {
+    let config = adage_store::config::load(paths).config;
+    let marker = adage_hook::rewrite_off(paths).exists();
+    let (model, fallback) = crate::status_card::embeddings(paths);
+    json!({
+        "rewrite": { "on": config.runtime_rewrite && !marker, "config": config.runtime_rewrite, "marker": marker },
+        "embeddings": { "model": model, "bundled": model.ends_with("(bundled)"), "fallback": fallback },
+    })
+}
+
 fn json_response(v: &Value) -> Response {
     Response::new("200 OK", "application/json", v.to_string().into_bytes()).header("Cache-Control", "no-store")
 }
@@ -186,6 +200,7 @@ pub(crate) fn route(req: &Request, shared: &Shared) -> Reply {
             json_response(&json!({
                 "checks": checks,
                 "summary": { "pass": count("pass"), "warn": count("warn"), "fail": count("fail") },
+                "runtime": runtime(&shared.paths),
             }))
         }
         p if p.starts_with("/api/v1/reflex/") => {
