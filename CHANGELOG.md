@@ -29,7 +29,13 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 - **Bootstrap at the first session start.** In a repository with no reflexes (or a damaged index)
   the SessionStart hook starts the learner at once (`condition --auto --bootstrap`): instincts and
   the index first, then this repository's earlier traces, so the first prompt is already directed.
-  The hook says `adage: learning from N past sessions in this repo…` once.
+  The hook says `adage: learning from N past sessions in this repo…` once. Only in a repository:
+  a session opened in `~`, `/` or a deleted directory says nothing and starts no learner. A data
+  directory that cannot be written is said once, with the fix (`ADAGE_HOME`), instead.
+- **A fresh install is healthy.** Before the first session, doctor passes (no tracks or index yet
+  is not a problem), the card counts the repository's past traces, and `adage status` and
+  `adage watch` show the bundled embedding model. Switching models (`models fetch|install|use`)
+  says which prompt-matching reflexes stop matching and conditions their repository again.
 - **Every session start is counted.** In a repository with reflexes, SessionStart assigns the arm
   and spools one `session_start` record, so the savings estimate's denominator includes sessions
   where nothing matched.
@@ -173,7 +179,8 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 ### Runtime
 
 - Hook clients for Claude Code (plugin with exec-form hooks), OpenCode (bridge plugin) and Codex
-  (`hooks.json`); `adage install <harness>` prints, or with `--write` merges, the registration.
+  (`hooks.json`); `adage install <harness>` prints, or with `--write` merges, the registration
+  (showing the diff, asking at a terminal unless `--yes`, and keeping `<file>.adage-bak`).
   Hooks always fail open, and a no-match fast path skips events that cannot change a decision.
 - Directives are rendered from fixed templates inside `<adage-reflex … strength="…">`; slot values
   reach them only through validated contracts and safe, existing repository-relative paths.
