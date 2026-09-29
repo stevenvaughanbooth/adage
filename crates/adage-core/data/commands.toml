@@ -13,14 +13,23 @@
 #   value_flags     - flags that consume the following token as their value (command-specific:
 #                      -n is boolean for rg but takes a value for head).
 #   mutating_flags  - flags whose presence alone forces effect to "author" (e.g. sed -i).
+#   check_flags     - flags whose presence makes a rewriting tool only check: "verify"
+#                     (cargo fmt --check, black --check).
 #   publish_flags   - flags whose presence forces effect to "publish" (e.g. git reset --hard,
 #                      curl -X POST).
+#   inert           - (default false) true only when the program's behaviour cannot be changed
+#                      by repository files to run code (Track C §4.2): it gates automatic
+#                      approval of execution by adage-exec. Never set it for make, npm, cargo,
+#                      pytest, python, node, sh or anything that reads repository config as code.
+#                      It is not inherited: `git` is not inert, only the listed git subcommands
+#                      are, and only with adage-exec's git hardening in a non-hazardous repository.
 #   subcommands     - table of first-positional-argument overrides (git status, npm install, ...).
 #     each subcommand entry may itself carry effect / value_flags / mutating_flags / publish_flags,
 #     and for a few (npm/pnpm/yarn "run") a `pattern_effects` list of (regex-on-next-arg, effect).
 
 [[commands]]
 name = "cat"
+inert = true
 effect = "observe"
 value_flags = []
 
@@ -31,11 +40,13 @@ value_flags = ["-b", "-w", "-s"]
 
 [[commands]]
 name = "head"
+inert = true
 effect = "observe"
 value_flags = ["-n", "-c"]
 
 [[commands]]
 name = "tail"
+inert = true
 effect = "observe"
 value_flags = ["-n", "-c", "-f"]
 
@@ -47,11 +58,13 @@ mutating_flags = ["-i", "-i.bak"]   # -i[SUFFIX] handled specially in code too
 
 [[commands]]
 name = "rg"
+inert = true
 effect = "observe"
 value_flags = ["-e", "-A", "-B", "-C", "-m", "-t", "-T", "-g", "--type", "--max-count", "--glob", "--type-add"]
 
 [[commands]]
 name = "grep"
+inert = true
 effect = "observe"
 value_flags = ["-e", "-A", "-B", "-C", "-m", "-f", "--max-count", "--include", "--exclude"]
 
@@ -69,6 +82,7 @@ publish_flags = ["-x", "-X", "--exec", "--exec-batch"]  # fd -x rm ... is a publ
 
 [[commands]]
 name = "ls"
+inert = true
 effect = "observe"
 value_flags = []
 
@@ -79,6 +93,7 @@ value_flags = ["-L", "-I", "-P"]
 
 [[commands]]
 name = "wc"
+inert = true
 effect = "observe"
 value_flags = []
 
@@ -129,6 +144,7 @@ value_flags = []
 
 [[commands]]
 name = "jq"
+inert = true
 effect = "observe"
 value_flags = ["-f", "--arg", "--argjson", "--slurpfile"]
 
@@ -353,15 +369,19 @@ effect = "observe"
 value_flags = []
 [[commands.subcommands]]
 name = "status"
+inert = true
 effect = "observe"
 [[commands.subcommands]]
 name = "log"
+inert = true
 effect = "observe"
 [[commands.subcommands]]
 name = "diff"
+inert = true
 effect = "observe"
 [[commands.subcommands]]
 name = "show"
+inert = true
 effect = "observe"
 [[commands.subcommands]]
 name = "blame"
@@ -371,6 +391,7 @@ name = "describe"
 effect = "observe"
 [[commands.subcommands]]
 name = "rev-parse"
+inert = true
 effect = "observe"
 [[commands.subcommands]]
 name = "ls-files"
@@ -463,9 +484,27 @@ effect = "environment"
 name = "npm"
 effect = "environment"
 value_flags = []
+leading_value_flags = ["--prefix", "-w", "--workspace", "-C"]
 [[commands.subcommands]]
 name = "test"
 effect = "verify"
+[[commands.subcommands]]
+name = "t"
+effect = "verify"
+[[commands.subcommands]]
+name = "run-script"
+effect = "environment"
+pattern_effects = [
+  ["test", "verify"], ["typecheck", "verify"], ["lint", "verify"], ["check", "verify"],
+  ["build", "verify"], ["compile", "verify"],
+  ["format", "regenerate"], ["fmt", "regenerate"], ["gen", "regenerate"], ["generate", "regenerate"],
+  ["fix", "regenerate"],
+]
+[[commands.subcommands]]
+name = "exec"
+effect = "environment"
+wraps = true
+value_flags = ["--package", "-p", "-c", "--call", "-w", "--workspace"]
 [[commands.subcommands]]
 name = "run"
 effect = "environment"
@@ -516,9 +555,46 @@ effect = "publish"
 name = "pnpm"
 effect = "environment"
 value_flags = []
+run_shorthand = true
+leading_value_flags = ["--filter", "-F", "-C", "--dir", "--reporter", "--loglevel"]
 [[commands.subcommands]]
 name = "test"
 effect = "verify"
+[[commands.subcommands]]
+name = "t"
+effect = "verify"
+[[commands.subcommands]]
+name = "exec"
+effect = "environment"
+wraps = true
+value_flags = ["--filter", "-F", "-C", "--dir", "--reporter"]
+[[commands.subcommands]]
+name = "i"
+effect = "environment"
+[[commands.subcommands]]
+name = "ci"
+effect = "environment"
+[[commands.subcommands]]
+name = "rm"
+effect = "environment"
+[[commands.subcommands]]
+name = "up"
+effect = "environment"
+[[commands.subcommands]]
+name = "link"
+effect = "environment"
+[[commands.subcommands]]
+name = "store"
+effect = "environment"
+[[commands.subcommands]]
+name = "ls"
+effect = "observe"
+[[commands.subcommands]]
+name = "why"
+effect = "observe"
+[[commands.subcommands]]
+name = "outdated"
+effect = "observe"
 [[commands.subcommands]]
 name = "run"
 effect = "environment"
@@ -546,17 +622,54 @@ effect = "observe"
 [[commands.subcommands]]
 name = "publish"
 effect = "publish"
-[[commands.subcommands]]
-name = "--filter"
-effect = "environment"       # `pnpm --filter x test` etc.; refined by pattern in code
 
 [[commands]]
 name = "yarn"
 effect = "environment"
 value_flags = []
+run_shorthand = true
+leading_value_flags = ["--cwd"]
 [[commands.subcommands]]
 name = "test"
 effect = "verify"
+[[commands.subcommands]]
+name = "exec"
+effect = "environment"
+wraps = true
+[[commands.subcommands]]
+name = "dlx"
+effect = "environment"
+[[commands.subcommands]]
+name = "up"
+effect = "environment"
+[[commands.subcommands]]
+name = "upgrade"
+effect = "environment"
+[[commands.subcommands]]
+name = "link"
+effect = "environment"
+[[commands.subcommands]]
+name = "workspace"
+effect = "environment"
+[[commands.subcommands]]
+name = "workspaces"
+effect = "environment"
+[[commands.subcommands]]
+name = "npm"
+effect = "environment"
+pattern_effects = [["^publish$", "publish"]]
+[[commands.subcommands]]
+name = "version"
+effect = "environment"
+[[commands.subcommands]]
+name = "why"
+effect = "observe"
+[[commands.subcommands]]
+name = "info"
+effect = "observe"
+[[commands.subcommands]]
+name = "list"
+effect = "observe"
 [[commands.subcommands]]
 name = "run"
 effect = "environment"
@@ -588,12 +701,58 @@ value_flags = []
 name = "bun"
 effect = "environment"
 value_flags = []
+run_shorthand = true
+leading_value_flags = ["--cwd"]
 [[commands.subcommands]]
 name = "test"
 effect = "verify"
 [[commands.subcommands]]
 name = "install"
 effect = "environment"
+[[commands.subcommands]]
+name = "i"
+effect = "environment"
+[[commands.subcommands]]
+name = "add"
+effect = "environment"
+[[commands.subcommands]]
+name = "remove"
+effect = "environment"
+[[commands.subcommands]]
+name = "update"
+effect = "environment"
+[[commands.subcommands]]
+name = "link"
+effect = "environment"
+[[commands.subcommands]]
+name = "x"
+effect = "environment"
+wraps = true
+[[commands.subcommands]]
+name = "run"
+effect = "environment"
+wraps = true
+pattern_effects = [
+  ["test", "verify"], ["typecheck", "verify"], ["lint", "verify"], ["check", "verify"],
+  ["build", "verify"], ["compile", "verify"],
+  ["format", "regenerate"], ["fmt", "regenerate"], ["gen", "regenerate"], ["generate", "regenerate"],
+  ["fix", "regenerate"],
+]
+[[commands.subcommands]]
+name = "build"
+effect = "verify"
+[[commands.subcommands]]
+name = "publish"
+effect = "publish"
+[[commands.subcommands]]
+name = "pm"
+effect = "environment"
+
+[[commands]]
+name = "bunx"
+effect = "environment"
+wraps = true
+value_flags = ["-p", "--package"]
 
 # --- toolchains ----------------------------------------------------------
 
@@ -616,6 +775,7 @@ effect = "verify"
 [[commands.subcommands]]
 name = "fmt"
 effect = "regenerate"
+check_flags = ["--check"]
 [[commands.subcommands]]
 name = "run"
 effect = "verify"
@@ -639,6 +799,12 @@ name = "publish"
 effect = "publish"
 [[commands.subcommands]]
 name = "doc"
+effect = "verify"
+[[commands.subcommands]]
+name = "nextest"
+effect = "verify"
+[[commands.subcommands]]
+name = "bench"
 effect = "verify"
 
 [[commands]]
@@ -685,6 +851,282 @@ pattern_effects = [
   ["^(gen|generate|codegen|proto)$", "regenerate"], ["^(fmt|format)$", "regenerate"],
   ["^(clean|distclean)$", "publish"],
 ]
+
+# --- task runners -----------------------------------------------------------
+# A recipe's effect is unknowable from its name alone; as for make, canonical names are refined
+# by pattern and anything else stays environment.
+
+[[commands]]
+name = "just"
+effect = "environment"
+value_flags = ["-f", "--justfile", "-d", "--working-directory", "--set"]
+pattern_effects = [
+  ["^(test|tests|check|ci|lint|typecheck|verify)$", "verify"], ["^(build|all)$", "verify"],
+  ["^(gen|generate|codegen|proto)$", "regenerate"], ["^(fmt|format)$", "regenerate"],
+  ["^(clean|distclean)$", "publish"], ["^(--list|-l|--summary|--list-all|-a)$", "observe"],
+]
+
+[[commands]]
+name = "task"
+effect = "environment"
+value_flags = ["-t", "--taskfile", "-d", "--dir"]
+pattern_effects = [
+  ["^(test|tests|check|ci|lint|typecheck|verify)$", "verify"], ["^(build|all)$", "verify"],
+  ["^(gen|generate|codegen|proto)$", "regenerate"], ["^(fmt|format)$", "regenerate"],
+  ["^(clean|distclean)$", "publish"], ["^(--list|-l|--summary|--list-all|-a)$", "observe"],
+]
+
+# --- Python project and environment managers -------------------------------------------------
+# `uv run X`, `poetry run X`, `pdm run X`, `hatch run X`, `pipenv run X`, `uvx X` wrap a program
+# (`wraps`): they classify as X when the table knows X, else as the subcommand's own effect.
+# Syncing or installing an environment is environment; tox and nox run a project's declared test
+# environments and are verify.
+
+[[commands]]
+name = "uv"
+effect = "environment"
+value_flags = ["--directory", "--project", "--cache-dir", "--config-file"]
+[[commands.subcommands]]
+name = "run"
+effect = "environment"
+wraps = true
+value_flags = [
+  "--with", "--with-requirements", "--with-editable", "--group", "--only-group", "--no-group",
+  "--extra", "--package", "-p", "--python", "--directory", "--project", "--env-file", "--index",
+  "--default-index", "--index-url", "--extra-index-url", "-C", "--config-setting", "--cache-dir",
+]
+[[commands.subcommands]]
+name = "sync"
+effect = "environment"
+[[commands.subcommands]]
+name = "lock"
+effect = "environment"
+[[commands.subcommands]]
+name = "add"
+effect = "environment"
+[[commands.subcommands]]
+name = "remove"
+effect = "environment"
+[[commands.subcommands]]
+name = "venv"
+effect = "environment"
+[[commands.subcommands]]
+name = "pip"
+effect = "environment"
+pattern_effects = [["^(list|show|freeze|tree|check)$", "observe"]]
+[[commands.subcommands]]
+name = "tool"
+effect = "environment"
+[[commands.subcommands]]
+name = "python"
+effect = "environment"
+[[commands.subcommands]]
+name = "tree"
+effect = "observe"
+[[commands.subcommands]]
+name = "build"
+effect = "verify"
+[[commands.subcommands]]
+name = "format"
+effect = "regenerate"
+check_flags = ["--check", "--diff"]
+[[commands.subcommands]]
+name = "publish"
+effect = "publish"
+
+[[commands]]
+name = "uvx"
+effect = "environment"
+wraps = true
+value_flags = ["--from", "--with", "--with-requirements", "-p", "--python", "--index", "--cache-dir"]
+
+[[commands]]
+name = "tox"
+effect = "verify"
+value_flags = ["-e", "-c", "--conf", "-m", "--root", "--workdir", "-x", "--override", "-p", "--parallel"]
+[[commands.subcommands]]
+name = "run"
+effect = "verify"
+[[commands.subcommands]]
+name = "r"
+effect = "verify"
+[[commands.subcommands]]
+name = "run-parallel"
+effect = "verify"
+[[commands.subcommands]]
+name = "p"
+effect = "verify"
+[[commands.subcommands]]
+name = "legacy"
+effect = "verify"
+[[commands.subcommands]]
+name = "list"
+effect = "observe"
+[[commands.subcommands]]
+name = "l"
+effect = "observe"
+[[commands.subcommands]]
+name = "config"
+effect = "observe"
+[[commands.subcommands]]
+name = "c"
+effect = "observe"
+[[commands.subcommands]]
+name = "depends"
+effect = "observe"
+[[commands.subcommands]]
+name = "devenv"
+effect = "environment"
+[[commands.subcommands]]
+name = "quickstart"
+effect = "environment"
+[[commands.subcommands]]
+name = "exec"
+effect = "environment"
+wraps = true
+value_flags = ["-e", "-c", "--conf", "-x", "--override"]
+
+[[commands]]
+name = "nox"
+effect = "verify"
+value_flags = [
+  "-s", "--session", "--sessions", "-e", "-k", "-t", "--tags", "-f", "--noxfile", "-p", "--python",
+  "--envdir", "--default-venv-backend", "-db", "--force-venv-backend", "-fb",
+]
+
+[[commands]]
+name = "poetry"
+effect = "environment"
+value_flags = ["-C", "--directory", "-P", "--project"]
+[[commands.subcommands]]
+name = "run"
+effect = "environment"
+wraps = true
+[[commands.subcommands]]
+name = "install"
+effect = "environment"
+[[commands.subcommands]]
+name = "add"
+effect = "environment"
+[[commands.subcommands]]
+name = "remove"
+effect = "environment"
+[[commands.subcommands]]
+name = "lock"
+effect = "environment"
+[[commands.subcommands]]
+name = "update"
+effect = "environment"
+[[commands.subcommands]]
+name = "sync"
+effect = "environment"
+[[commands.subcommands]]
+name = "show"
+effect = "observe"
+[[commands.subcommands]]
+name = "check"
+effect = "verify"
+[[commands.subcommands]]
+name = "build"
+effect = "verify"
+[[commands.subcommands]]
+name = "publish"
+effect = "publish"
+
+[[commands]]
+name = "hatch"
+effect = "environment"
+value_flags = ["-e", "--env"]
+[[commands.subcommands]]
+name = "run"
+effect = "environment"
+wraps = true
+pattern_effects = [
+  ["test", "verify"], ["typecheck", "verify"], ["lint", "verify"], ["check", "verify"],
+  ["build", "verify"], ["compile", "verify"],
+  ["format", "regenerate"], ["fmt", "regenerate"], ["gen", "regenerate"], ["generate", "regenerate"],
+  ["fix", "regenerate"],
+]
+[[commands.subcommands]]
+name = "test"
+effect = "verify"
+[[commands.subcommands]]
+name = "fmt"
+effect = "regenerate"
+check_flags = ["--check"]
+[[commands.subcommands]]
+name = "build"
+effect = "verify"
+[[commands.subcommands]]
+name = "clean"
+effect = "publish"
+[[commands.subcommands]]
+name = "status"
+effect = "observe"
+[[commands.subcommands]]
+name = "publish"
+effect = "publish"
+
+[[commands]]
+name = "pdm"
+effect = "environment"
+value_flags = ["-p", "--project"]
+[[commands.subcommands]]
+name = "run"
+effect = "environment"
+wraps = true
+pattern_effects = [
+  ["test", "verify"], ["typecheck", "verify"], ["lint", "verify"], ["check", "verify"],
+  ["build", "verify"], ["compile", "verify"],
+  ["format", "regenerate"], ["fmt", "regenerate"], ["gen", "regenerate"], ["generate", "regenerate"],
+  ["fix", "regenerate"],
+]
+[[commands.subcommands]]
+name = "list"
+effect = "observe"
+[[commands.subcommands]]
+name = "show"
+effect = "observe"
+[[commands.subcommands]]
+name = "info"
+effect = "observe"
+[[commands.subcommands]]
+name = "build"
+effect = "verify"
+[[commands.subcommands]]
+name = "publish"
+effect = "publish"
+
+[[commands]]
+name = "pipenv"
+effect = "environment"
+[[commands.subcommands]]
+name = "run"
+effect = "environment"
+wraps = true
+[[commands.subcommands]]
+name = "graph"
+effect = "observe"
+[[commands.subcommands]]
+name = "check"
+effect = "verify"
+
+[[commands]]
+name = "coverage"
+effect = "verify"
+[[commands.subcommands]]
+name = "report"
+effect = "observe"
+[[commands.subcommands]]
+name = "erase"
+effect = "environment"
+
+[[commands]]
+name = "pre-commit"
+effect = "environment"
+[[commands.subcommands]]
+name = "run"
+effect = "regenerate"
 
 [[commands]]
 name = "cmake"
@@ -794,6 +1236,7 @@ effect = "verify"
 [[commands]]
 name = "black"
 effect = "regenerate"       # black rewrites by default unless --check
+check_flags = ["--check", "--diff"]
 
 [[commands]]
 name = "clippy"

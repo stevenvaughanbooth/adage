@@ -15,12 +15,15 @@ adage-core = { path = "../adage-core" }
 adage-tracks = { path = "../adage-tracks" }
 adage-runtime = { path = "../adage-runtime" }
 adage-learn = { path = "../adage-learn" }
+adage-intent = { path = "../adage-intent" }
+adage-graph = { path = "../adage-graph" }
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
 regex.workspace = true
 once_cell.workspace = true
 sha2.workspace = true
+toml.workspace = true
 glob.workspace = true
 tempfile = "3"
 

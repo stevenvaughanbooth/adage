@@ -8,13 +8,19 @@ version = "0.1.0"
 dependencies = [
  "adage-core",
  "adage-eval",
+ "adage-exec",
+ "adage-graph",
+ "adage-hook",
+ "adage-instincts",
  "adage-intent",
  "adage-learn",
+ "adage-pack",
  "adage-runtime",
  "adage-sign",
  "adage-sim",
  "adage-store",
  "adage-tracks",
+ "adage-train",
  "anyhow",
  "libc",
  "rand_core 0.6.4",
@@ -50,6 +56,8 @@ name = "adage-eval"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-graph",
+ "adage-intent",
  "adage-learn",
  "adage-runtime",
  "adage-store",
@@ -63,6 +71,76 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "adage-exec"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-eval",
+ "adage-hook",
+ "adage-pack",
+ "adage-runtime",
+ "adage-store",
+ "adage-tracks",
+ "anyhow",
+ "glob",
+ "landlock",
+ "libc",
+ "once_cell",
+ "regex",
+ "seccompiler",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "toml",
+]
+
+[[package]]
+name = "adage-graph"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-intent",
+ "adage-tracks",
+ "proptest",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+]
+
+[[package]]
+name = "adage-hook"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-intent",
+ "adage-learn",
+ "adage-runtime",
+ "adage-store",
+ "adage-tracks",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
+name = "adage-instincts"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-tracks",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]
@@ -70,6 +148,7 @@ name = "adage-intent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "miniz_oxide",
  "once_cell",
  "regex",
  "serde",
@@ -83,9 +162,12 @@ name = "adage-learn"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-graph",
+ "adage-instincts",
  "adage-intent",
  "adage-runtime",
  "adage-sim",
+ "adage-store",
  "adage-tracks",
  "anyhow",
  "glob",
@@ -95,6 +177,30 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+]
+
+[[package]]
+name = "adage-pack"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-instincts",
+ "adage-intent",
+ "adage-sign",
+ "adage-tracks",
+ "anyhow",
+ "glob",
+ "proptest",
+ "rand_core 0.6.4",
+ "regex",
+ "regex-syntax",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2",
+ "ssh-key",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]
@@ -155,6 +261,28 @@ dependencies = [
  "sha2",
  "tempfile",
  "toml",
+]
+
+[[package]]
+name = "adage-train"
+version = "0.1.0"
+dependencies = [
+ "adage-core",
+ "adage-exec",
+ "adage-instincts",
+ "adage-learn",
+ "adage-pack",
+ "adage-sign",
+ "adage-store",
+ "adage-tracks",
+ "anyhow",
+ "glob",
+ "once_cell",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
 ]
 
 [[package]]
@@ -646,6 +774,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "enumflags2"
+version = "0.7.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1027f7680c853e056ebcec683615fb6fbbc07dbaa13b4d5d9442b146ded4ecef"
+dependencies = [
+ "enumflags2_derive",
+]
+
+[[package]]
+name = "enumflags2_derive"
+version = "0.7.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67c78a4d8fdf9953a5c9d458f9efe940fd97a0cab0941c075a813ac594733827"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -888,6 +1036,17 @@ checksum = "bde5057d6143cc94e861d90f591b9303d6716c6b9602309150bd068853c10899"
 dependencies = [
  "hashbrown 0.16.1",
  "portable-atomic",
+ "thiserror",
+]
+
+[[package]]
+name = "landlock"
+version = "0.4.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cca98e95f35b29d469dade6724c6f96cec9236640f745a0e99b0334ec320ab1"
+dependencies = [
+ "enumflags2",
+ "libc",
  "thiserror",
 ]
 
@@ -1547,6 +1706,15 @@ dependencies = [
  "pkcs8",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "seccompiler"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4ae55de56877481d112a559bbc12667635fdaf5e005712fd4e2b2fa50ffc884"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

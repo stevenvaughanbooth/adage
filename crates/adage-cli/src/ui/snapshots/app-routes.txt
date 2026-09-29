@@ -1,21 +1,21 @@
- adage  1 Live  2 Routes (1 to review)  3 Health (2)  4 Settings
-harbor-dispatch/incidents @ 0.3.0  [harbor-di│ ● lookup-incident  green (ceiling green)
+ adage  1 Live  2 Reflexes (1 to review)  3 Health (2)  4 Settings
+harbor-dispatch/incidents @ 0.3.0  [harbor-di│ ● lookup-incident  fire (ceiling fire)
 * ● lookup-incident 24/25 · ✓2 ✗1            │ track    harbor-dispatch/incidents @ 0.3.0
   ● read-linked-files 24/25 · ✓2 ✗1          │ repo     harbor-dispatch
-                                             │ state    active · effect observe
+                                             │ state    firm · effect observe
                                              │ when     a prompt names a ticket
                                              │ do       run `bin/fetch-incident {item}`
-                                             │ evidence 24/25 sessions · rate 0.96 · Wilson lb 0.80
-                                             │ live     directed 3 · followed 2 · derailed 1 · met 0
-                                             │ holdout  would-have 1 · unaided 1 · missed 0
-                                             │ review   new: learned by `adage learn` and never reviewed
-                                             │ keys     a approve · r reject · d demote · n pin
+                                             │ evidence 24/25 traces · rate 0.96 · Wilson lb 0.80
+                                             │ live     directed 3 · followed 2 · ignored 1 · met 0
+                                             │ control  would-have 1 · unaided 1 · missed 0
+                                             │ review   new: from `adage condition`, never reviewed
+                                             │ keys     a approve · w weaken · n pin
                                              │
                                              │ directive, exactly as delivered (example values):
-                                             │   <adage-signal track="harbor-dispatch/incidents@0.3.0"
-                                             │ route="lookup-incident" aspect="green">
+                                             │   <adage-reflex track="harbor-dispatch/incidents@0.3.0"
+                                             │ route="lookup-incident" strength="fire">
                                              │   Incidents are looked up with: `bin/fetch-incident INC-12`
-                                             │   </adage-signal>
+                                             │   </adage-reflex>
                                              │
                                              │
                                              │
@@ -27,4 +27,4 @@ harbor-dispatch/incidents @ 0.3.0  [harbor-di│ ● lookup-incident  green (cei
                                              │
                                              │
 ─────────────────────────────────────────────┘
- harbor-dispatch · gen 8216e29f · 4 routes · auto-learn on    a/r/d/p/n/x review · R reload · ? help · q quit
+ harbor-dispatch · gen 8216e29f · 4 reflexes · auto-learn on  a/e/w/s/n/x review · R reload · ? help · q quit

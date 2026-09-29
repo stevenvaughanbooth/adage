@@ -1,0 +1,106 @@
+{
+ "repo": "serde-json",
+ "url": "https://github.com/serde-rs/json",
+ "repo_key": "github.com/serde-rs/json",
+ "tasks": [
+  {
+   "id": "serde-json-82c5182b",
+   "sha": "82c5182bfa4aae1c90aafce0d12af438ce72cb79",
+   "base": "6ac689b2b327ed00e8a56d812a5c860177ab10dd",
+   "date": "2019-02-28T01:07:20-08:00",
+   "subject": "Merge pull request #521 from dtolnay/f",
+   "src_files": [
+    "src/number.rs"
+   ],
+   "test_files": [
+    "tests/regression.rs",
+    "tests/regression/issue520.rs",
+    "tests/regression/mod.rs"
+   ],
+   "gold_files": [
+    "Cargo.toml",
+    "src/number.rs"
+   ],
+   "hidden_command": "cargo test -q --test regression",
+   "base_exit": 101,
+   "base_tail": "1371 |     fn unexpected(&self) -> Unexpected<'_> {\n     |                                       ++++\n\nwarning: hiding a lifetime that's elided elsewhere is confusing\n   --> src/number.rs:737:23\n    |\n737 |     pub fn unexpected(&self) -> Unexpected {\n    |                       ^^^^^     ^^^^^^^^^^ the same lifetime is hidden here\n    |                       |\n    |                       the lifetime is elided here\n    |\n    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing\nhelp: use `'_` for type paths\n    |\n737 |     pub fn unexpected(&self) -> Unexpected<'_> {\n    |                                           ++++\n\nerror[E0463]: can't find crate for `automod`\n --> tests/regression.rs:1:1\n  |\n1 | extern crate automod;\n  | ^^^^^^^^^^^^^^^^^^^^^ can't find crate\n\nFor more information about this error, try `rustc --explain E0463`.\nerror: could not compile `serde_json` (test \"regression\") due to 1 previous error",
+   "fixed_seconds": 2.25,
+   "n_tests": 1,
+   "prompt": "When round-tripping an adjacently tagged enum variant holding an `f32` through `serde_json::Value`, the value comes back different from the original. For example:\n\n```rust\n#[derive(Serialize, Deserialize, Debug)]\n#[serde(tag = \"type\", content = \"data\")]\nenum E {\n    Float(f32),\n}\n\nlet e = E::Float(159.1);\nlet v = serde_json::to_value(e).unwrap();\nlet e: E = serde_json::from_value(v).unwrap();\n// e is not E::Float(159.1) anymore\n```\n\nI'd expect the f32 to survive the trip through `to_value`/`from_value` unchanged. Can you fix this regression?",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "serde-json-2c8e2b08",
+   "sha": "2c8e2b08afe754df39b1d541a8353c8cecc28fc5",
+   "base": "6b8b07365e6c5d56b2a73ada2bd938227a68d166",
+   "date": "2022-08-21T14:07:10-07:00",
+   "subject": "Merge pull request #919 from serde-rs/displaynum",
+   "src_files": [
+    "src/number.rs"
+   ],
+   "test_files": [
+    "tests/debug.rs"
+   ],
+   "gold_files": [
+    "src/number.rs"
+   ],
+   "hidden_command": "cargo test -q --test debug",
+   "base_exit": 101,
+   "base_tail": "     |                   ^^^^^     ^^^^^^^^^^ the same lifetime is hidden here\n     |                   |\n     |                   the lifetime is elided here\n     |\n     = help: the same lifetime is referred to in inconsistent ways, making the signature confusing\nhelp: use `'_` for type paths\n     |\n1276 |     fn unexpected(&self) -> Unexpected<'_> {\n     |                                       ++++\n\nwarning: hiding a lifetime that's elided elsewhere is confusing\n   --> src/number.rs:759:30\n    |\n759 |     pub(crate) fn unexpected(&self) -> Unexpected {\n    |                              ^^^^^     ^^^^^^^^^^ the same lifetime is hidden here\n    |                              |\n    |                              the lifetime is elided here\n    |\n    = help: the same lifetime is referred to in inconsistent ways, making the signature confusing\nhelp: use `'_` for type paths\n    |\n759 |     pub(crate) fn unexpected(&self) -> Unexpected<'_> {\n    |                                                  ++++\n\nerror: test failed, to rerun pass `--test debug`",
+   "fixed_seconds": 1.56,
+   "n_tests": 9,
+   "prompt": "When a `Number` built from a float via `Number::from_f64` is converted to a string (or displayed), it loses information that distinguishes it from an integer, and large floats aren't formatted the way I'd expect. For instance:\n\n```rust\nuse serde_json::Number;\n\nassert_eq!(Number::from_f64(1.0).unwrap().to_string(), \"1\"); // currently \"1\", should be \"1.0\"\nassert_eq!(Number::from_f64(12e40).unwrap().to_string(), \"120000000000000000000000000000000000000000\"); // should print in exponential form like \"1.2e41\"\n```\n\nThe string representation of a float-derived `Number` should preserve the fact that it's a float (keeping a trailing `.0` when the value is a whole number) and use exponential notation for very large magnitudes, matching how such numbers are actually serialized to JSON. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "serde-json-d796aaa4",
+   "sha": "d796aaa45f371d1797f988c2fd0aa030e09303bc",
+   "base": "b8d8d102425dac0d4728a95da95c2018df38ac40",
+   "date": "2023-07-10T22:24:23-07:00",
+   "subject": "Merge pull request #1035 from dtolnay/numkey",
+   "src_files": [
+    "src/de.rs",
+    "src/error.rs"
+   ],
+   "test_files": [
+    "tests/test.rs"
+   ],
+   "gold_files": [
+    "src/de.rs",
+    "src/error.rs"
+   ],
+   "hidden_command": "cargo test -q --test test",
+   "base_exit": 101,
+   "base_tail": "warning: unexpected `cfg` condition value: `trace-macros`\n  --> tests/test.rs:18:7\n   |\n18 | #[cfg(feature = \"trace-macros\")]\n   |       ^^^^^^^^^^^^^^^^^^^^^^^^\n   |\n   = note: expected values for `feature` are: `alloc`, `arbitrary_precision`, `default`, `float_roundtrip`, `indexmap`, `preserve_order`, `raw_value`, `std`, and `unbounded_depth`\n   = help: consider adding `trace-macros` as a feature in `Cargo.toml`\n   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration\n\nwarning: unexpected `cfg` condition name: `integer128`\n    --> tests/test.rs:2120:7\n     |\n2120 | #[cfg(integer128)]\n     |       ^^^^^^^^^^\n     |\n     = help: expected names are: `docsrs`, `feature`, and `test` and 31 more\n     = help: consider using a Cargo feature instead\n     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:\n              [lints.rust]\n              unexpected_cfgs = { level = \"warn\", check-cfg = ['cfg(integer128)'] }\n     = help: or consider adding `println!(\"cargo::rustc-check-cfg=cfg(integer128)\");` to the top of the `build.rs`\n     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration\n\nerror: test failed, to rerun pass `--test test`",
+   "fixed_seconds": 5.77,
+   "n_tests": 74,
+   "prompt": "When deserializing into a map with a numeric key type (e.g. `BTreeMap<i32, ()>`) and the JSON has a non-numeric value where a quoted numeric key is expected, the error message is unhelpful. For example:\n\n```rust\nuse std::collections::BTreeMap;\n\nlet j = r#\"{\"x\":null}\"#;\nlet _: Result<BTreeMap<i32, ()>, _> = serde_json::from_str(j);\n// currently errors with \"expected value at line 1 column 3\", which doesn't explain the real problem\n```\n\nThe error should clearly indicate that the map key was expected to be a number given in quotes, and point at the key rather than somewhere later in the input. Please improve this error message (this applies to both integer and float map keys).",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "serde-json-7933880d",
+   "sha": "7933880d5f7b25282450ee67ce78e0bd9e53fa1d",
+   "base": "6c8523fe89bcae1d4949b7b06fd0f1a33ff2d5e7",
+   "date": "2023-07-10T23:14:59-07:00",
+   "subject": "Delete dedicated whitespace-in-key error message",
+   "src_files": [
+    "src/de.rs",
+    "src/error.rs"
+   ],
+   "test_files": [
+    "tests/test.rs"
+   ],
+   "gold_files": [
+    "src/de.rs",
+    "src/error.rs"
+   ],
+   "hidden_command": "cargo test -q --test test",
+   "base_exit": 101,
+   "base_tail": "warning: unexpected `cfg` condition value: `trace-macros`\n  --> tests/test.rs:18:7\n   |\n18 | #[cfg(feature = \"trace-macros\")]\n   |       ^^^^^^^^^^^^^^^^^^^^^^^^\n   |\n   = note: expected values for `feature` are: `alloc`, `arbitrary_precision`, `default`, `float_roundtrip`, `indexmap`, `preserve_order`, `raw_value`, `std`, and `unbounded_depth`\n   = help: consider adding `trace-macros` as a feature in `Cargo.toml`\n   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration\n\nwarning: unexpected `cfg` condition name: `integer128`\n    --> tests/test.rs:2117:7\n     |\n2117 | #[cfg(integer128)]\n     |       ^^^^^^^^^^\n     |\n     = help: expected names are: `docsrs`, `feature`, and `test` and 31 more\n     = help: consider using a Cargo feature instead\n     = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:\n              [lints.rust]\n              unexpected_cfgs = { level = \"warn\", check-cfg = ['cfg(integer128)'] }\n     = help: or consider adding `println!(\"cargo::rustc-check-cfg=cfg(integer128)\");` to the top of the `build.rs`\n     = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration\n\nerror: test failed, to rerun pass `--test test`",
+   "fixed_seconds": 6.78,
+   "n_tests": 73,
+   "prompt": "Deserializing a numeric map key that has extra whitespace inside the quotes produces a different, inconsistent error message from other invalid numeric keys. For example:\n\n```rust\nuse std::collections::BTreeMap;\n\nlet j = r#\"{\" 123\":null}\"#;\nlet _: Result<BTreeMap<i32, ()>, _> = serde_json::from_str(j);\n// currently errors with \"unexpected whitespace in object key at line 1 column 3\"\n// but other invalid numeric keys error with \"invalid value: expected key to be a number in quotes at line 1 column 2\"\n```\n\nBoth cases represent the same underlying problem (the quoted key isn't a valid number), so they should report the same, single consistent error message and column. Please fix this inconsistency.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  }
+ ]
+}

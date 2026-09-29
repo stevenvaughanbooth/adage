@@ -1,0 +1,13 @@
+skill webapp-testing  (3913 bytes, ~965 tokens)
+trigger: spans=[] keywords=applications, behavior, browser, capturing, debugging, frontend, functionality, interacting
+slots: 
+s1 [lookup    ] always                       Decision Tree: Choosing Your Approach
+      run   python scripts/with_server.py --help   (system, path)
+      compilable
+s2 [run       ] always                       Example: Using with_server.py
+      run   python scripts/with_server.py --server "npm run dev" --port 5173 -- python your_automation.py   (system, path)
+      not compilable: not one plain command (quoted shell in its arguments)
+s3 [run       ] always                       Example: Using with_server.py
+      run   python scripts/with_server.py --server "cd backend && python server.py" --port 3000 --server "cd frontend && npm run dev" --port 5173 -- python your_automation.py   (system, path)
+      not compilable: not one plain command (quoted shell in its arguments)
+advice (not compiled): 14 block(s)

@@ -2,19 +2,26 @@
 //! no longer be read.
 //!
 //! Every hook event that reaches [`crate::decide`] appends one spool record after the state is
-//! stored: `{ ts, event, kind, arm, repo, generation, decision }` (`kind` and `repo` since this
+//! stored: `{ ts, event, kind, arm, propensity, repo, generation, decision }` (`propensity` since
+//! E1; `kind` and `repo` since this
 //! module; older records carry only the harness's event name, which [`kind_of`] maps). Replaying
 //! the recorded decisions in order restores what the state is for:
 //!
 //! | Field | From |
 //! | --- | --- |
-//! | `arm`, `repo` | the first record carrying them (`repo` falls back to the caller's key) |
+//! | `arm`, `repo`, `propensity` | the first record carrying them (`repo` falls back to the caller's key) |
 //! | `prompts`, `batches` | the count of prompt and batch events |
 //! | `emitted` | every would-have directive, in order (both arms record them) |
 //! | `history`, `first_edit_at_batch` | the observed call keys, in order |
 //! | `obligations` | each finish-line route emitted, from the index; met by `obligation_met` |
 //! | `stop_requests`, `stop_requested` | each recorded stop request, applied as the runtime does |
 //! | `intent` | the family of the last intent route emitted |
+//! | `ctx` | the last context state recorded (a decision records it when its event changed it), if it belongs to the index's alphabet for the repository |
+//!
+//! Every event that changes the context state reaches the runtime and is recorded (the no-match
+//! fast path skips only events outside the alphabet), so the last recorded state is the state. A
+//! state recorded under another alphabet (the index was relearned since) is dropped: its symbol
+//! ids mean other items now.
 //!
 //! What a record does not show is left out, on the quiet side: an in-flight follow judgement
 //! (`pending`, at most three batches long) is dropped, and an obligation re-armed by a later edit
@@ -60,6 +67,9 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
         if st.arm.is_none() {
             st.arm = r.get("arm").and_then(|a| serde_json::from_value::<Arm>(a.clone()).ok());
         }
+        if st.propensity.is_none() {
+            st.propensity = r.get("propensity").and_then(Value::as_f64).filter(|p| (0.0..=1.0).contains(p));
+        }
         if st.repo.is_none() {
             st.repo = r.get("repo").and_then(Value::as_str).map(str::to_string);
         }
@@ -72,6 +82,9 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
         let Some(d) = r.get("decision").and_then(|d| serde_json::from_value::<Decision>(d.clone()).ok()) else {
             continue;
         };
+        if let Some(c) = d.ctx {
+            st.ctx = c;
+        }
         for key in d.observed {
             if kind == "batch" && (key.starts_with("edit ") || key.starts_with("write ")) {
                 st.first_edit_at_batch.get_or_insert(st.batches);
@@ -83,7 +96,7 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
             let Some(ir) = index.for_repo(repo).find(|ir| ir.route.id == dir.route) else { continue };
             match (&ir.route.trigger, &ir.route.step) {
                 (Trigger::AfterEdit { paths }, Step::Run { command })
-                    if !st.obligations.iter().any(|o| o.route == dir.route) =>
+                    if !ir.route.is_instinct() && !st.obligations.iter().any(|o| o.route == dir.route) =>
                 {
                     st.obligations.push(Obligation {
                         route: dir.route.clone(),
@@ -92,7 +105,37 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
                         paths: paths.clone(),
                         met: false,
                         stop_requested: false,
+                        edited: String::new(),
+                        fresh: false,
+                        via: String::new(),
                     });
+                }
+                // A sequence after an edit carries the finish lines it subsumes (`decide`).
+                (Trigger::AfterEdit { .. }, Step::Sequence { commands }) => {
+                    let Some(first) = commands.first() else { continue };
+                    for o in index.for_repo(repo) {
+                        let (Trigger::AfterEdit { paths }, Step::Run { command }) = (&o.route.trigger, &o.route.step)
+                        else {
+                            continue;
+                        };
+                        let carried = !o.route.is_instinct()
+                            && o.route.slots.is_empty()
+                            && adage_tracks::interlock::same_point(&ir.route.trigger, &o.route.trigger)
+                            && adage_core::pattern::same_command(first, command);
+                        if carried && !st.obligations.iter().any(|x| x.route == o.route.id) {
+                            st.obligations.push(Obligation {
+                                route: o.route.id.clone(),
+                                expect_key: command_key(command, table),
+                                command: command.clone(),
+                                paths: paths.clone(),
+                                met: false,
+                                stop_requested: false,
+                                edited: String::new(),
+                                fresh: false,
+                                via: dir.route.clone(),
+                            });
+                        }
+                    }
                 }
                 (Trigger::Intent { family, .. }, _) => st.intent = Some(family.clone()),
                 _ => {}
@@ -113,6 +156,9 @@ pub fn rebuild(records: &[Value], index: &Index, repo: &str, table: &CommandTabl
                 o.stop_requested = true;
             }
         }
+    }
+    if st.ctx.alphabet != index.contexts(repo).digest {
+        st.ctx = Default::default();
     }
     st.repo.get_or_insert_with(|| repo.to_string());
     Some(st)

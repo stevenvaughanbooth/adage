@@ -4,7 +4,6 @@ use crate::model::*;
 use adage_core::{shell::normalize_shell, CommandTable, Effect};
 use anyhow::{bail, Context, Result};
 use regex::Regex;
-use sha2::{Digest, Sha256};
 use std::path::Path;
 
 pub fn write(dir: &Path, track: &Track) -> Result<()> {
@@ -67,7 +66,8 @@ pub fn read_all(root: &Path) -> Result<Vec<Track>> {
         for e in std::fs::read_dir(&d)? {
             let e = e?;
             // Never follow symlinked directories (loops, and escapes from the tracks directory).
-            if e.file_type()?.is_dir() {
+            // Hidden directories are never tracks in service.
+            if e.file_type()?.is_dir() && !e.file_name().to_string_lossy().starts_with('.') {
                 stack.push(e.path());
             }
         }
@@ -81,7 +81,7 @@ pub fn slot_refs(command: &str) -> Vec<String> {
     re.captures_iter(command).map(|c| c[1].to_string()).collect()
 }
 
-fn safe_id(id: &str) -> bool {
+pub fn safe_id(id: &str) -> bool {
     let b = id.as_bytes();
     !b.is_empty()
         && b.len() <= 64
@@ -89,7 +89,7 @@ fn safe_id(id: &str) -> bool {
         && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
 }
 
-fn safe_name(n: &str) -> bool {
+pub fn safe_name(n: &str) -> bool {
     n.len() <= 128
         && n.split('/').count() <= 2
         && n.split('/').all(|p| {
@@ -102,7 +102,7 @@ fn safe_name(n: &str) -> bool {
 /// Directed commands are plain argv: no shell operators, substitutions, redirections, or quoting,
 /// and no path outside the repository (absolute, or with a `..` segment), in an argument or in a
 /// flag's value.
-fn safe_command(c: &str) -> bool {
+pub fn safe_command(c: &str) -> bool {
     let inside = |part: &str| !part.starts_with('/') && !part.split('/').any(|seg| seg == "..");
     // Words separated by single spaces: a blank or padded command renders as nothing.
     !c.is_empty()
@@ -156,8 +156,18 @@ pub fn classify(command: &str, table: &CommandTable) -> Effect {
         .unwrap_or(Effect::Environment)
 }
 
+/// Whether a run step declared observe over the table's `environment` is a repository script
+/// learning classified from the traces (`adage_learn::effects`): the command runs an unlisted
+/// repository script whose name says nothing of changing anything, and the route says why.
+pub fn inferred_observe(r: &Route, command: &str, actual: Effect, table: &CommandTable) -> bool {
+    r.effect == Effect::Observe
+        && actual == Effect::Environment
+        && r.evidence.effect_evidence.as_deref().is_some_and(|n| !n.trim().is_empty())
+        && adage_core::shell::unlisted_repo_script(command, table).is_some()
+}
+
 /// A contract must reject values that could carry shell syntax, whitespace, traversal, or flags.
-fn contract_is_strict(regex: &str) -> bool {
+pub fn contract_is_strict(regex: &str) -> bool {
     let Ok(re) = Regex::new(regex) else { return false };
     let probes = ["a b", "a;b", "a|b", "$(x)", "`x`", "a&b", "a\nb", "../x", "-x", "a>b", "a<b", "a'b", "a\"b", ""];
     regex.starts_with('^') && regex.ends_with('$') && !probes.iter().any(|p| re.is_match(p))
@@ -183,8 +193,8 @@ pub fn validate(t: &Track) -> Result<()> {
         let by_edit = matches!(r.trigger, Trigger::AfterEdit { .. });
         match ceiling(r.effect, by_edit) {
             None => bail!("{}: effect {:?} may never be directed", ctx(), r.effect),
-            Some(max) if r.aspect == Aspect::Green && max != Aspect::Green => {
-                bail!("{}: aspect green exceeds the ceiling for {:?}", ctx(), r.effect)
+            Some(max) if r.strength == Strength::Fire && max != Strength::Fire => {
+                bail!("{}: strength fire exceeds the ceiling for {:?}", ctx(), r.effect)
             }
             _ => {}
         }
@@ -197,6 +207,7 @@ pub fn validate(t: &Track) -> Result<()> {
                     bail!("{}: slot {} contract {:?} is not anchored and strict", ctx(), s.name, regex);
                 }
             }
+            validate_source(s).map_err(|e| anyhow::anyhow!("{}: slot {}: {e}", ctx(), s.name))?;
         }
         let declared = |n: &str| r.slots.iter().any(|s| s.name == n);
         match &r.step {
@@ -209,18 +220,25 @@ pub fn validate(t: &Track) -> Result<()> {
                         bail!("{}: command references undeclared slot {{{n}}}", ctx());
                     }
                 }
-                // Only a prompt binds a run step's slots; any other trigger would render the
-                // placeholder itself (`make {item}`) as the directed command.
-                if !slot_refs(command).is_empty() && !matches!(r.trigger, Trigger::Prompt { .. }) {
-                    bail!("{}: command {:?} has slots its trigger cannot bind", ctx(), command);
+                // Every slot a run step names must be bound by its trigger's event (Track G §4.3):
+                // a prompt binds prompt spans and prompt values, a command its output values, an
+                // edit its path's segments. Anything else would render the placeholder itself
+                // (`make {item}`) as the directed command.
+                for n in slot_refs(command) {
+                    let Some(s) = r.slots.iter().find(|s| s.name == n) else { continue };
+                    if !trigger_binds(&r.trigger, &s.source) {
+                        bail!("{}: command {:?} has slots its trigger cannot bind", ctx(), command);
+                    }
                 }
-                // Never trust a declared effect: classify the command ourselves.
+                // Never trust a declared effect: classify the command ourselves. The one exception
+                // is a repository script the table does not know, which learning classified
+                // observe from the traces and says why (`evidence.effect_evidence`).
                 let actual = classify(command, &table);
-                if rank(actual) > rank(r.effect) {
+                if rank(actual) > rank(r.effect) && !inferred_observe(r, command, actual, &table) {
                     bail!("{}: command {:?} is {:?}, but the track declares {:?}", ctx(), command, actual, r.effect);
                 }
-                if r.aspect == Aspect::Red {
-                    bail!("{}: a run step cannot be red", ctx());
+                if r.strength == Strength::Inhibit {
+                    bail!("{}: a run step cannot be inhibit", ctx());
                 }
             }
             Step::ReadBatch { slot, max } => {
@@ -234,8 +252,8 @@ pub fn validate(t: &Track) -> Result<()> {
                 }
             }
             Step::Avoid { avoid, instead, signature } => {
-                if r.aspect != Aspect::Red {
-                    bail!("{}: an avoid step must be red", ctx());
+                if r.strength != Strength::Inhibit {
+                    bail!("{}: an avoid step must be inhibit", ctx());
                 }
                 // `avoid` names one or more failing runners, joined with " / ".
                 if !avoid.split(" / ").all(safe_command) || !safe_command(instead) || !safe_text(signature) {
@@ -249,6 +267,90 @@ pub fn validate(t: &Track) -> Result<()> {
                     bail!("{}: the suggested command {:?} is not a verify or regenerate step", ctx(), instead);
                 }
             }
+            Step::Sequence { commands } => {
+                if !(2..=SEQUENCE_MAX_COMMANDS).contains(&commands.len()) {
+                    bail!("{}: a sequence has 2 to {SEQUENCE_MAX_COMMANDS} commands", ctx());
+                }
+                let by_edit = matches!(r.trigger, Trigger::AfterEdit { .. });
+                for command in commands {
+                    if !safe_command(command) {
+                        bail!("{}: command {:?} contains characters a directed command may not", ctx(), command);
+                    }
+                    // Nothing binds a sequence's slots (its commands are fixed).
+                    if !slot_refs(command).is_empty() {
+                        bail!("{}: a sequence step has slots nothing can bind", ctx());
+                    }
+                    let actual = classify(command, &table);
+                    if rank(actual) > rank(r.effect) {
+                        bail!(
+                            "{}: command {:?} is {:?}, but the track declares {:?}",
+                            ctx(),
+                            command,
+                            actual,
+                            r.effect
+                        );
+                    }
+                    // The strength is at most the lowest ceiling of its commands.
+                    match ceiling(actual, by_edit) {
+                        None => bail!("{}: command {:?} may never be directed", ctx(), command),
+                        Some(max) if r.strength == Strength::Fire && max != Strength::Fire => {
+                            bail!("{}: strength fire exceeds the ceiling of {:?}", ctx(), command)
+                        }
+                        _ => {}
+                    }
+                }
+                if r.strength == Strength::Inhibit {
+                    bail!("{}: a sequence cannot be inhibit", ctx());
+                }
+                if !matches!(
+                    r.trigger,
+                    Trigger::AfterEdit { .. }
+                        | Trigger::AfterCommand { .. }
+                        | Trigger::AfterFailure { .. }
+                        | Trigger::Context { .. }
+                ) {
+                    bail!("{}: a sequence follows an edit, a command, a failure or a context", ctx());
+                }
+            }
+            Step::Card { card } => {
+                crate::card::check(card).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
+                // A card suggests; it directs nothing on its own: prime, observe, no slots, and
+                // the prompt of a task of its family.
+                if r.strength != Strength::Prime || r.effect != Effect::Observe || !r.slots.is_empty() {
+                    bail!("{}: a card is prime, observe, with no slots", ctx());
+                }
+                let Trigger::Intent { centroid, .. } = &r.trigger else {
+                    bail!("{}: a card follows the prompt of a task of its family (an intent)", ctx());
+                };
+                if card.prompts.iter().any(|p| p.len() != centroid.len()) {
+                    bail!("{}: the card's prompts and its trigger differ in dimension", ctx());
+                }
+            }
+            Step::Advise { template, slots } => {
+                crate::advice::check(template, slots, &table).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
+                // Advice directs nothing: prime, observe, no route slots, and a reactive trigger.
+                if r.strength != Strength::Prime || r.effect != Effect::Observe || !r.slots.is_empty() {
+                    bail!("{}: an advisory step is prime, observe, with no route slots", ctx());
+                }
+                if !matches!(
+                    r.trigger,
+                    Trigger::AfterEdit { .. } | Trigger::AfterCommand { .. } | Trigger::AfterFailure { .. }
+                ) {
+                    bail!("{}: an advisory step follows an edit, a command or a failure", ctx());
+                }
+            }
+        }
+        if let Some(o) = &r.evidence.origin {
+            validate_origin(o).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
+        }
+        // An instinct is prime at most and never a Stop request (Design; docs/instincts.md).
+        if r.is_instinct() && r.strength != Strength::Prime {
+            bail!("{}: an instinct route is prime", ctx());
+        }
+        for k in r.evidence.by_origin.keys() {
+            if !safe_id(k.replace('_', "-").as_str()) || k.len() > 32 {
+                bail!("{}: evidence origin {:?} is not allowed", ctx(), k);
+            }
         }
         match &r.trigger {
             Trigger::AfterEdit { paths } if !safe_glob(paths) => bail!("{}: glob {:?} is not allowed", ctx(), paths),
@@ -259,16 +361,236 @@ pub fn validate(t: &Track) -> Result<()> {
                 validate_intent(family, model, centroid, *threshold).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
                 // An intent route directs one fixed command: no slots, so nothing from the prompt
                 // (or the track) is interpolated into what the agent reads.
-                if !matches!(r.step, Step::Run { .. }) || !r.slots.is_empty() {
-                    bail!("{}: an intent route must be a run step with no slots", ctx());
+                if !matches!(r.step, Step::Run { .. } | Step::Card { .. }) || !r.slots.is_empty() {
+                    bail!("{}: an intent route must be a run step or a card, with no slots", ctx());
+                }
+            }
+            Trigger::Context { items, within } => {
+                validate_context(items, *within).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
+                // A context binds no slot (its items are matched symbolically, and no value of
+                // theirs is kept), so its step directs fixed commands only.
+                if !r.slots.is_empty() || !matches!(r.step, Step::Run { .. } | Step::Sequence { .. }) {
+                    bail!("{}: a context route is a run or sequence step with no slots", ctx());
                 }
             }
             _ => {}
+        }
+        // `dormant_since` is shown in `adage review` and `adage status`: a plain date or nothing.
+        // (Any state may carry `exposed`; a dormant route is delivered at prime at most whatever
+        // its stored strength, so a strengthen decision on one is not refused here.)
+        if let Some(d) = &r.evidence.dormant_since {
+            let date = d.len() == 10
+                && d.bytes().enumerate().all(|(i, c)| if i == 4 || i == 7 { c == b'-' } else { c.is_ascii_digit() });
+            if !date {
+                bail!("{}: dormant_since {:?} is not a YYYY-MM-DD date", ctx(), d);
+            }
         }
     }
     let intents = t.routes.iter().filter(|r| matches!(r.trigger, Trigger::Intent { .. })).count();
     if intents > MAX_INTENT_ROUTES {
         bail!("track {} has {intents} intent routes; at most {MAX_INTENT_ROUTES} are allowed", t.manifest.track.name);
+    }
+    Ok(())
+}
+
+/// Whether a trigger's event supplies what a slot source binds from.
+pub fn trigger_binds(t: &Trigger, s: &SlotSource) -> bool {
+    matches!(
+        (t, s),
+        (Trigger::Prompt { .. }, SlotSource::Prompt { .. } | SlotSource::PromptValue { .. })
+            | (Trigger::AfterCommand { .. }, SlotSource::OutputValue { .. })
+            | (Trigger::AfterEdit { .. }, SlotSource::EditSegment { .. } | SlotSource::EditTests { .. })
+    )
+}
+
+/// Strings a learned type must accept: for each branch, its shortest and its longest member
+/// (first literal of a set, first character of a class).
+fn type_examples(runs: &adage_core::vtype::Runs) -> Vec<String> {
+    use adage_core::vtype::Run;
+    let fill = |class: adage_core::vtype::Class, n: u8| {
+        let c = ['A', 'a', '0', '0', 'A'][class as usize];
+        std::iter::repeat_n(c, n as usize).collect::<String>()
+    };
+    let mut out = Vec::new();
+    for b in &runs.branches {
+        for long in [false, true] {
+            let mut s = String::new();
+            for r in b {
+                match r {
+                    Run::Lit { text } => s.push_str(text),
+                    Run::Set { texts } => s.push_str(texts.first().map(String::as_str).unwrap_or("")),
+                    Run::Class { class, lo, hi } => s.push_str(&fill(*class, if long { *hi } else { *lo })),
+                    Run::Star { sep, class, lo, hi, min, max } => {
+                        for _ in 0..(if long { *max } else { *min }) {
+                            s.push(*sep);
+                            s.push_str(&fill(*class, if long { *hi } else { *lo }));
+                        }
+                    }
+                }
+            }
+            out.push(s);
+        }
+    }
+    out
+}
+
+/// A learned value type is only as good as the agreement between what the hook runs (the
+/// matcher over `runs`) and what the contract says (the regex): they must be the same language.
+fn validate_vtype(t: &ValueType, contract: &Contract) -> Result<()> {
+    use adage_core::vtype;
+    let hex = |s: &str| s.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c));
+    if !(t.id.len() == 19 && t.id.starts_with("vt-") && hex(&t.id[3..])) {
+        bail!("value type id {:?} is not allowed", t.id);
+    }
+    if !(t.samples_hash.is_empty() || (t.samples_hash.len() == 64 && hex(&t.samples_hash))) {
+        bail!("value type samples_hash is not a SHA-256");
+    }
+    let branches = t.runs.branches.len();
+    if branches == 0 || branches > vtype::MAX_BRANCHES || t.runs.branches.iter().any(|b| b.is_empty() || b.len() > 64) {
+        bail!("value type {} has {branches} branches; 1..={} are allowed", t.id, vtype::MAX_BRANCHES);
+    }
+    if vtype::max_len(&t.runs) > vtype::MAX_LEN {
+        bail!("value type {} accepts values longer than {} bytes", t.id, vtype::MAX_LEN);
+    }
+    if vtype::to_regex(&t.runs) != t.regex {
+        bail!("value type {}: runs and regex {:?} disagree", t.id, t.regex);
+    }
+    if *contract != (Contract::Pattern { regex: t.regex.clone() }) {
+        bail!("value type {}: the slot's contract is not its regex", t.id);
+    }
+    let re = Regex::new(&t.regex).map_err(|e| anyhow::anyhow!("value type {}: {e}", t.id))?;
+    for ex in type_examples(&t.runs) {
+        if !vtype::matches(&t.runs, &ex) || !re.is_match(&ex) {
+            bail!("value type {}: runs and regex disagree on {ex:?}", t.id);
+        }
+    }
+    // The matcher must refuse what a strict contract refuses (the regex already does).
+    let probes = ["a b", "a;b", "a|b", "$(x)", "`x`", "a&b", "a\nb", "-x", "a>b", "a<b", "a'b", "a\"b", ""];
+    if let Some(p) = probes.iter().find(|p| vtype::matches(&t.runs, p)) {
+        bail!("value type {} accepts {p:?}", t.id);
+    }
+    Ok(())
+}
+
+/// At most this many test files an `edit_tests` slot binds.
+pub const MAX_EDIT_TESTS: u8 = 5;
+/// At most this many edited files an `edit_tests` map lists.
+pub const MAX_TEST_MAP: usize = 4096;
+
+/// Checks on a slot's source beyond its contract: a learned value type agrees with its contract,
+/// an edit segment names a safe glob, and an edit-tests map lists plain repository paths.
+fn validate_source(s: &Slot) -> Result<()> {
+    match &s.source {
+        SlotSource::PromptValue { vtype, mentions } => {
+            let affix =
+                |a: &str| a.len() <= 16 && a.bytes().all(|c| c.is_ascii_alphanumeric() || b"-_./#:@+=".contains(&c));
+            if mentions.len() > 4 || !mentions.iter().all(|m| affix(&m.prefix) && affix(&m.suffix)) {
+                bail!("prompt mentions {mentions:?} are not allowed");
+            }
+            validate_vtype(vtype, &s.contract)
+        }
+        SlotSource::OutputValue { field, vtype } => {
+            if let Some(f) = field {
+                let ok = !f.is_empty()
+                    && f.len() <= 128
+                    && f.bytes().all(|c| c.is_ascii_alphanumeric() || b"_.-[]".contains(&c));
+                if !ok {
+                    bail!("output field {f:?} is not allowed");
+                }
+            }
+            validate_vtype(vtype, &s.contract)
+        }
+        SlotSource::EditSegment { glob, depth } => {
+            if !safe_glob(glob) || *depth > 32 {
+                bail!("edit segment {glob:?} at depth {depth} is not allowed");
+            }
+            if !matches!(s.contract, Contract::Pattern { .. }) {
+                bail!("an edit segment needs a pattern contract");
+            }
+            Ok(())
+        }
+        SlotSource::EditTests { glob, k, map } => {
+            if !safe_glob(glob) || !(1..=MAX_EDIT_TESTS).contains(k) || map.len() > MAX_TEST_MAP {
+                bail!("edit tests {glob:?} (k {k}, {} files) are not allowed", map.len());
+            }
+            if s.contract != Contract::RepoPath {
+                bail!("edit tests need a repository-path contract");
+            }
+            let path_ok = |p: &str| {
+                p.len() <= 200
+                    && adage_core::repo::is_safe_relative(p)
+                    && p.bytes().all(|c| c.is_ascii_alphanumeric() || b"_./-@+".contains(&c))
+            };
+            for (src, tests) in map {
+                if !path_ok(src) || tests.is_empty() || tests.len() > *k as usize || !tests.iter().all(|t| path_ok(t)) {
+                    bail!("edit tests map entry {src:?} → {tests:?} is not allowed");
+                }
+            }
+            Ok(())
+        }
+        SlotSource::Prompt { .. } | SlotSource::ResultField { .. } => Ok(()),
+    }
+}
+
+/// A context trigger (Track G §6.2): 2 to 3 items, a gap of 1 to 8 events, and every item safe:
+/// command keys are short plain keys, globs are repository globs (never `**/*.ext`), signatures
+/// are renderable text, and a value type or intent item passes the checks its own trigger or
+/// slot would.
+fn validate_context(items: &[CtxItem], within: u8) -> Result<()> {
+    if !(2..=CONTEXT_MAX_ITEMS).contains(&items.len()) {
+        bail!("a context has 2 to {CONTEXT_MAX_ITEMS} items");
+    }
+    if !(1..=CONTEXT_MAX_WITHIN).contains(&within) {
+        bail!("a context's gap is 1 to {CONTEXT_MAX_WITHIN} events");
+    }
+    let key_ok = |k: &str| {
+        k.len() <= 200 && k.starts_with("exec ") && !k.chars().any(|c| c.is_control() || "`<>\"\\$;|&".contains(c))
+    };
+    let keys_ok = |keys: &[String]| !keys.is_empty() && keys.len() <= 16 && keys.iter().all(|k| key_ok(k));
+    for it in items {
+        match it {
+            CtxItem::Act { keys } => {
+                if !keys_ok(keys) {
+                    bail!("context command keys {keys:?} are not allowed");
+                }
+            }
+            CtxItem::Fail { keys, signature } => {
+                if !keys_ok(keys) || !safe_text(signature) {
+                    bail!("context failure {keys:?} ({signature:?}) is not allowed");
+                }
+            }
+            CtxItem::Edit { glob } => {
+                if !safe_glob(glob) || glob.starts_with("**") {
+                    bail!("context glob {glob:?} is not allowed");
+                }
+            }
+            CtxItem::PromptValue { vtype } => validate_vtype(vtype, &Contract::Pattern { regex: vtype.regex.clone() })?,
+            CtxItem::Intent { family, model, centroid, threshold } => {
+                validate_intent(family, model, centroid, *threshold)?
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Where a route came from: every field is rendered into the directive's wrapper, so each is a
+/// short safe token from a closed set or a repository-relative path.
+fn validate_origin(o: &Origin) -> Result<()> {
+    if let Origin::Instinct { pack, version, instinct, ecosystem, declared } = o {
+        let token = |s: &str| s.len() <= 32 && s.bytes().all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c));
+        if !token(pack) || !token(version) || !token(instinct) {
+            bail!("instinct origin {pack:?}@{version:?} ({instinct:?}) is not allowed");
+        }
+        if let Some(e) = ecosystem {
+            if !ECOSYSTEMS.contains(&e.as_str()) {
+                bail!("ecosystem {e:?} is not one of {ECOSYSTEMS:?}");
+            }
+        }
+        if let Some(d) = declared {
+            if !crate::advice::safe_glob(d) || d.contains('*') {
+                bail!("declared file {d:?} is not a repository-relative path");
+            }
+        }
     }
     Ok(())
 }
@@ -308,104 +630,6 @@ fn validate_intent(family: &str, model: &str, centroid: &[i16], threshold: f32) 
     Ok(())
 }
 
-/// Canonical digest of a track directory (spike S6): every file, sorted by relative path, line
-/// endings normalised, hashed; then the hash of that manifest. Signatures refer to this digest.
-pub fn digest(dir: &Path) -> Result<String> {
-    // The canonical digest (spike S6 FINDINGS, "Canonical-digest spec"): walk without following
-    // symlinks; skip `track.sig` and any path component starting with `.`; hash `scripts/`
-    // verbatim and everything else with `\r\n` and lone `\r` normalised to `\n` — on the bytes,
-    // never through a lossy UTF-8 decode (which would map different invalid bytes to the same
-    // text, and so to the same digest).
-    let mut files = Vec::new();
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(d) = stack.pop() {
-        for e in std::fs::read_dir(&d)? {
-            let e = e?;
-            let p = e.path();
-            if e.file_name().to_string_lossy().starts_with('.') {
-                continue;
-            }
-            let t = e.file_type()?;
-            if t.is_symlink() {
-                bail!("{} is a symlink; a track may not contain symlinks", p.display());
-            } else if t.is_dir() {
-                stack.push(p);
-            } else if p.file_name().is_some_and(|n| n != "track.sig") {
-                files.push(p);
-            }
-        }
-    }
-    let mut entries: Vec<(String, String)> = files
-        .iter()
-        .map(|p| {
-            let rel = p.strip_prefix(dir).unwrap().to_string_lossy().replace('\\', "/");
-            let bytes = std::fs::read(p)?;
-            let norm = if rel.starts_with("scripts/") { bytes } else { normalise_line_endings(&bytes) };
-            Ok((rel, hex(&Sha256::digest(&norm))))
-        })
-        .collect::<Result<_>>()?;
-    entries.sort();
-    let manifest: String = entries.iter().map(|(p, h)| format!("{h}  {p}\n")).collect();
-    Ok(hex(&Sha256::digest(manifest.as_bytes())))
-}
-
-/// `\r\n` and lone `\r` become `\n`; every other byte is kept as is.
-fn normalise_line_endings(b: &[u8]) -> Vec<u8> {
-    let mut out = Vec::with_capacity(b.len());
-    let mut i = 0;
-    while i < b.len() {
-        if b[i] == b'\r' {
-            out.push(b'\n');
-            if b.get(i + 1) == Some(&b'\n') {
-                i += 1;
-            }
-        } else {
-            out.push(b[i]);
-        }
-        i += 1;
-    }
-    out
-}
-
 pub fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
-}
-
-#[cfg(test)]
-mod digest_tests {
-    use super::{digest, normalise_line_endings};
-
-    #[test]
-    fn line_endings_normalise_on_bytes() {
-        assert_eq!(normalise_line_endings(b"a\r\nb\rc\n"), b"a\nb\nc\n");
-        assert_eq!(normalise_line_endings(b"\r\r\n"), b"\n\n");
-        // Invalid UTF-8 survives byte for byte: different bytes, different digests.
-        assert_ne!(normalise_line_endings(&[0xff, 0x0a]), normalise_line_endings(&[0xfe, 0x0a]));
-    }
-
-    #[test]
-    fn digest_follows_the_s6_spec() {
-        let d = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(d.path().join("routes")).unwrap();
-        std::fs::write(d.path().join("track.toml"), "a\r\nb\n").unwrap();
-        std::fs::write(d.path().join("routes/r.yaml"), "x\ry\n").unwrap();
-        let base = digest(d.path()).unwrap();
-        // Hidden files and the signature do not count; line endings do not either.
-        std::fs::write(d.path().join(".DS_Store"), "junk").unwrap();
-        std::fs::write(d.path().join("track.sig"), "sig").unwrap();
-        std::fs::write(d.path().join("track.toml"), "a\nb\n").unwrap();
-        std::fs::write(d.path().join("routes/r.yaml"), "x\ny\n").unwrap();
-        assert_eq!(digest(d.path()).unwrap(), base);
-        // Different invalid bytes are different content.
-        std::fs::write(d.path().join("routes/r.yaml"), [0xffu8, b'\n']).unwrap();
-        let a = digest(d.path()).unwrap();
-        std::fs::write(d.path().join("routes/r.yaml"), [0xfeu8, b'\n']).unwrap();
-        assert_ne!(digest(d.path()).unwrap(), a);
-        // Symlinks are refused, never followed.
-        #[cfg(unix)]
-        {
-            std::os::unix::fs::symlink("/etc", d.path().join("routes/link")).unwrap();
-            assert!(digest(d.path()).is_err());
-        }
-    }
 }

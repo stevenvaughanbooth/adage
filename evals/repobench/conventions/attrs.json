@@ -1,0 +1,14 @@
+{
+  "schema": "adage-conventions/1",
+  "sandbox": "attrs",
+  "description": "python-attrs/attrs as a RepoBench-Local sandbox: the project's .venv (Python 3.12, attrs editable, pytest, hypothesis, pytest-xdist) is set up, not activated. Sources: .github/CONTRIBUTING.md (`uv run pytest`, `uv run tox`), tox.ini (`pytest -n auto`). Documented but not a command: a towncrier news fragment in changelog.d/ (`<pr>.change.md`) for each user-visible change; no hidden test checks it.",
+  "conventions": [
+    {
+      "id": "tests-in-venv",
+      "kind": "dead_end",
+      "command": ".venv/bin/python -m pytest",
+      "avoided": ["pytest", "python -m pytest", "python3 -m pytest", "tox", "nox"],
+      "notes": "pytest is only in the project's .venv. CONTRIBUTING's `uv run pytest` also works (it syncs the venv first, which needs the network)."
+    }
+  ]
+}

@@ -1,0 +1,1175 @@
+{
+ "slug": "hindsight-shortcuts",
+ "headline": "Hindsight relabelling by data flow finds 25% of $ (7.3 calls/session) removable by an oracle shortcut, but only 5.4% of $ recurs across tasks with today's memory (12% with 60-110 sessions); the learned situation->shortcut matcher saves +0.15 calls/task (+0.4% of $, CI to +0.8%) on the common harness: a negative result limited by transfer, not by the matcher.",
+ "metric_name": "calls and $ saved per held-out session (common harness: net of 2-call misfires, p_follow 1; own instrument: hindsight data-flow removable set D in the delivery window, cumulative-context $)",
+ "held_out": {
+  "harness_headline": {
+   "test_set_id": "6a795a362ccb",
+   "sessions": 158,
+   "tasks": 38,
+   "calls_saved_per_task": 0.148,
+   "calls_ci90": [
+    0.009,
+    0.313
+   ],
+   "usd_saved_per_task": 0.00098,
+   "usd_ci90": [
+    -9e-05,
+    0.00212
+   ],
+   "share_of_usd": 0.0038,
+   "share_of_usd_ci90": [
+    -0.0003,
+    0.0084
+   ],
+   "directives": 78,
+   "useful_rate": 0.372,
+   "s_hat_rust": 0.237,
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   }
+  },
+  "harness_p_follow_0.5": {
+   "test_set_id": "6a795a362ccb",
+   "sessions": 158,
+   "tasks": 38,
+   "calls_saved_per_task": 0.066,
+   "calls_ci90": [
+    -0.002,
+    0.147
+   ],
+   "usd_saved_per_task": 0.0004,
+   "usd_ci90": [
+    -0.00013,
+    0.00095
+   ],
+   "share_of_usd": 0.0015,
+   "share_of_usd_ci90": [
+    -0.0005,
+    0.0037
+   ],
+   "directives": 78,
+   "useful_rate": 0.372,
+   "s_hat_rust": 0.237,
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 0.5,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   }
+  },
+  "harness_lambda0_learner": {
+   "test_set_id": "6a795a362ccb",
+   "sessions": 158,
+   "tasks": 38,
+   "calls_saved_per_task": -0.174,
+   "calls_ci90": [
+    -0.668,
+    0.3
+   ],
+   "usd_saved_per_task": -0.00234,
+   "usd_ci90": [
+    -0.00561,
+    0.00079
+   ],
+   "share_of_usd": -0.009,
+   "share_of_usd_ci90": [
+    -0.0225,
+    0.0029
+   ],
+   "directives": 283,
+   "useful_rate": 0.406,
+   "s_hat_rust": 0.927,
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   }
+  },
+  "harness_lambda0_misfires_free_upper_bound": {
+   "test_set_id": "6a795a362ccb",
+   "sessions": 158,
+   "tasks": 38,
+   "calls_saved_per_task": 0.927,
+   "calls_ci90": [
+    0.641,
+    1.207
+   ],
+   "usd_saved_per_task": 0.00588,
+   "usd_ci90": [
+    0.0041,
+    0.00757
+   ],
+   "share_of_usd": 0.0226,
+   "share_of_usd_ci90": [
+    0.0155,
+    0.0296
+   ],
+   "directives": 283,
+   "useful_rate": 0.406,
+   "s_hat_rust": 0.927,
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 0.0,
+    "hindsight": false
+   }
+  },
+  "own_instrument_knn_lambda0": {
+   "value": 1.0919,
+   "ci90": [
+    0.4526,
+    1.9431
+   ],
+   "n_sessions": 158,
+   "tasks": 38,
+   "share_of_usd": {
+    "mean": 0.0326,
+    "lo": 0.014,
+    "hi": 0.0564,
+    "n": 158,
+    "tasks": 38
+   },
+   "precision_wilson90": {
+    "p": 0.148,
+    "lo": 0.123,
+    "hi": 0.176,
+    "k": 72,
+    "n": 487
+   },
+   "net_if_misfire_2_calls": {
+    "mean": -3.8322,
+    "lo": -4.8912,
+    "hi": -2.6886,
+    "n": 158,
+    "tasks": 38
+   }
+  },
+  "own_instrument_knn_lambda2": {
+   "value": 0.2223,
+   "ci90": [
+    0.0572,
+    0.4185
+   ],
+   "n_sessions": 158,
+   "tasks": 38,
+   "share_of_usd": {
+    "mean": 0.0079,
+    "lo": 0.002,
+    "hi": 0.0151,
+    "n": 158,
+    "tasks": 38
+   },
+   "precision_wilson90": {
+    "p": 0.187,
+    "lo": 0.124,
+    "hi": 0.271,
+    "k": 14,
+    "n": 75
+   }
+  },
+  "own_instrument_frequency_prior": {
+   "value": 0.7031,
+   "ci90": [
+    0.1323,
+    1.5498
+   ],
+   "n_sessions": 158,
+   "tasks": 38,
+   "share_of_usd": {
+    "mean": 0.0207,
+    "lo": 0.0042,
+    "hi": 0.0442,
+    "n": 158,
+    "tasks": 38
+   }
+  },
+  "own_instrument_v2_82_sessions_knn_lambda0": {
+   "value": 1.17,
+   "ci90": [
+    0.4906,
+    2.0982
+   ],
+   "n_sessions": 82,
+   "tasks": 30,
+   "share_of_usd": {
+    "mean": 0.0336,
+    "lo": 0.0135,
+    "hi": 0.0605,
+    "n": 82,
+    "tasks": 30
+   }
+  },
+  "own_instrument_adage_arm_after_U11": {
+   "value": 1.2563,
+   "ci90": [
+    0.7141,
+    1.889
+   ],
+   "n_sessions": 82,
+   "tasks": 30,
+   "share_of_usd": {
+    "mean": 0.0372,
+    "lo": 0.0222,
+    "hi": 0.0542,
+    "n": 82,
+    "tasks": 30
+   }
+  },
+  "sonnet5_control_knn_lambda0": {
+   "value": 0.3596,
+   "ci90": [
+    -0.0935,
+    1.1902
+   ],
+   "n_sessions": 32,
+   "tasks": 16,
+   "precision_wilson90": {
+    "p": 0.061,
+    "lo": 0.03,
+    "hi": 0.12,
+    "k": 5,
+    "n": 82
+   }
+  }
+ },
+ "leave_one_repo_out": {
+  "harness_pool_all_misfire2": {
+   "test_set_id": "6a795a362ccb",
+   "sessions": 158,
+   "tasks": 38,
+   "calls_saved_per_task": -0.0,
+   "calls_ci90": [
+    -0.0,
+    0.0
+   ],
+   "usd_saved_per_task": -0.0,
+   "usd_ci90": [
+    -1e-05,
+    0.0
+   ],
+   "share_of_usd": -0.0,
+   "share_of_usd_ci90": [
+    -0.0,
+    0.0
+   ],
+   "directives": 1,
+   "useful_rate": 0.0,
+   "s_hat_rust": -0.0,
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   }
+  },
+  "own_instrument_train_memory": {
+   "attrs": {
+    "knn_lambda0": {
+     "value": 1.6392,
+     "ci90": [
+      0.9909,
+      2.304
+     ],
+     "n_sessions": 40,
+     "tasks": 8
+    },
+    "knn_lambda2": {
+     "value": 0.0732,
+     "ci90": [
+      0.0,
+      0.2195
+     ],
+     "n_sessions": 40,
+     "tasks": 8
+    },
+    "ceiling_calls": {
+     "value": 2.275,
+     "ci90": [
+      1.5,
+      3.05
+     ],
+     "n_sessions": 40,
+     "tasks": 8
+    },
+    "ceiling_share_of_usd": {
+     "mean": 0.0845,
+     "lo": 0.0573,
+     "hi": 0.112,
+     "n": 40,
+     "tasks": 8
+    }
+   },
+   "click": {
+    "knn_lambda0": {
+     "value": 0.5104,
+     "ci90": [
+      0.1674,
+      0.9119
+     ],
+     "n_sessions": 40,
+     "tasks": 8
+    },
+    "knn_lambda2": {
+     "value": -0.0052,
+     "ci90": [
+      -0.0118,
+      -0.0007
+     ],
+     "n_sessions": 40,
+     "tasks": 8
+    },
+    "ceiling_calls": {
+     "value": 1.8,
+     "ci90": [
+      1.125,
+      2.475
+     ],
+     "n_sessions": 40,
+     "tasks": 8
+    },
+    "ceiling_share_of_usd": {
+     "mean": 0.0567,
+     "lo": 0.0369,
+     "hi": 0.0771,
+     "n": 40,
+     "tasks": 8
+    }
+   },
+   "marshmallow": {
+    "knn_lambda0": {
+     "value": 1.607,
+     "ci90": [
+      0.9038,
+      2.3809
+     ],
+     "n_sessions": 30,
+     "tasks": 6
+    },
+    "knn_lambda2": {
+     "value": 0.0964,
+     "ci90": [
+      0.0,
+      0.2891
+     ],
+     "n_sessions": 30,
+     "tasks": 6
+    },
+    "ceiling_calls": {
+     "value": 2.5667,
+     "ci90": [
+      2.0333,
+      3.0667
+     ],
+     "n_sessions": 30,
+     "tasks": 6
+    },
+    "ceiling_share_of_usd": {
+     "mean": 0.0868,
+     "lo": 0.0668,
+     "hi": 0.1077,
+     "n": 30,
+     "tasks": 6
+    }
+   },
+   "urfave-cli": {
+    "knn_lambda0": {
+     "value": -0.1987,
+     "ci90": [
+      -0.2176,
+      -0.1776
+     ],
+     "n_sessions": 16,
+     "tasks": 8
+    },
+    "knn_lambda2": {
+     "value": -0.0107,
+     "ci90": [
+      -0.0213,
+      0.0
+     ],
+     "n_sessions": 16,
+     "tasks": 8
+    },
+    "ceiling_calls": {
+     "value": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "n_sessions": 16,
+     "tasks": 8
+    },
+    "ceiling_share_of_usd": {
+     "mean": 0.0,
+     "lo": 0.0,
+     "hi": 0.0,
+     "n": 16,
+     "tasks": 8
+    }
+   },
+   "vue-core": {
+    "knn_lambda0": {
+     "value": -0.2747,
+     "ci90": [
+      -0.3254,
+      -0.2253
+     ],
+     "n_sessions": 32,
+     "tasks": 8
+    },
+    "knn_lambda2": {
+     "value": -0.0057,
+     "ci90": [
+      -0.0136,
+      0.0
+     ],
+     "n_sessions": 32,
+     "tasks": 8
+    },
+    "ceiling_calls": {
+     "value": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "n_sessions": 32,
+     "tasks": 8
+    },
+    "ceiling_share_of_usd": {
+     "mean": 0.0,
+     "lo": 0.0,
+     "hi": 0.0,
+     "n": 32,
+     "tasks": 8
+    }
+   }
+  },
+  "reading": "Python environment procedures (pip install -e . first; python -m pytest <file>) transfer between Python repos (ceiling 5.7-8.7% of $); nothing transfers to Go/TypeScript; files and facts never transfer."
+ },
+ "learning_curve": {
+  "own_instrument": {
+   "2": {
+    "knn_lambda0": {
+     "value": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "n_sessions": 790,
+     "tasks": 38
+    },
+    "knn_lambda0_share_usd": {
+     "mean": 0.0,
+     "lo": 0.0,
+     "hi": 0.0,
+     "n": 790,
+     "tasks": 38
+    },
+    "knn_lambda0_precision": null,
+    "knn_lambda2": {
+     "value": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ],
+     "n_sessions": 790,
+     "tasks": 38
+    },
+    "ceiling_calls": {
+     "value": 0.6456,
+     "ci90": [
+      0.3541,
+      0.9274
+     ],
+     "n_sessions": 790,
+     "tasks": 38
+    },
+    "ceiling_share_usd": {
+     "mean": 0.0193,
+     "lo": 0.0105,
+     "hi": 0.0283,
+     "n": 790,
+     "tasks": 38
+    }
+   },
+   "5": {
+    "knn_lambda0": {
+     "value": 0.8594,
+     "ci90": [
+      0.3958,
+      1.3708
+     ],
+     "n_sessions": 790,
+     "tasks": 38
+    },
+    "knn_lambda0_share_usd": {
+     "mean": 0.0257,
+     "lo": 0.012,
+     "hi": 0.0403,
+     "n": 790,
+     "tasks": 38
+    },
+    "knn_lambda0_precision": {
+     "p": 0.161,
+     "lo": 0.146,
+     "hi": 0.178,
+     "k": 234,
+     "n": 1451
+    },
+    "knn_lambda2": {
+     "value": 0.6154,
+     "ci90": [
+      0.2681,
+      1.0202
+     ],
+     "n_sessions": 790,
+     "tasks": 38
+    },
+    "ceiling_calls": {
+     "value": 1.3684,
+     "ci90": [
+      0.7762,
+      2.0478
+     ],
+     "n_sessions": 790,
+     "tasks": 38
+    },
+    "ceiling_share_usd": {
+     "mean": 0.0424,
+     "lo": 0.0249,
+     "hi": 0.0614,
+     "n": 790,
+     "tasks": 38
+    }
+   },
+   "10": {
+    "knn_lambda0": {
+     "value": 1.0919,
+     "ci90": [
+      0.4526,
+      1.9431
+     ],
+     "n_sessions": 158,
+     "tasks": 38
+    },
+    "knn_lambda0_share_usd": {
+     "mean": 0.0326,
+     "lo": 0.014,
+     "hi": 0.0564,
+     "n": 158,
+     "tasks": 38
+    },
+    "knn_lambda0_precision": {
+     "p": 0.148,
+     "lo": 0.123,
+     "hi": 0.176,
+     "k": 72,
+     "n": 487
+    },
+    "knn_lambda2": {
+     "value": 0.2223,
+     "ci90": [
+      0.0572,
+      0.4185
+     ],
+     "n_sessions": 158,
+     "tasks": 38
+    },
+    "ceiling_calls": {
+     "value": 1.6266,
+     "ci90": [
+      0.9467,
+      2.465
+     ],
+     "n_sessions": 158,
+     "tasks": 38
+    },
+    "ceiling_share_usd": {
+     "mean": 0.0537,
+     "lo": 0.0313,
+     "hi": 0.0783,
+     "n": 158,
+     "tasks": 38
+    }
+   },
+   "all": {
+    "knn_lambda0": {
+     "value": 2.2143,
+     "ci90": [
+      1.5636,
+      2.878
+     ],
+     "n_sessions": 158,
+     "tasks": 38
+    },
+    "knn_lambda0_share_usd": {
+     "mean": 0.0779,
+     "lo": 0.0561,
+     "hi": 0.0995,
+     "n": 158,
+     "tasks": 38
+    },
+    "knn_lambda0_precision": {
+     "p": 0.106,
+     "lo": 0.094,
+     "hi": 0.119,
+     "k": 179,
+     "n": 1693
+    },
+    "knn_lambda2": {
+     "value": 0.1743,
+     "ci90": [
+      0.0274,
+      0.3476
+     ],
+     "n_sessions": 158,
+     "tasks": 38
+    },
+    "ceiling_calls": {
+     "value": 3.5759,
+     "ci90": [
+      2.6993,
+      4.5255
+     ],
+     "n_sessions": 158,
+     "tasks": 38
+    },
+    "ceiling_share_usd": {
+     "mean": 0.1214,
+     "lo": 0.0924,
+     "hi": 0.1496,
+     "n": 158,
+     "tasks": 38
+    }
+   }
+  },
+  "harness_curve_calls": {
+   "2": 0.0,
+   "5": 0.0,
+   "10": 0.148
+  },
+  "harness_leave_task_out_lambda0": {
+   "test_set_id": "6a795a362ccb",
+   "sessions": 158,
+   "tasks": 38,
+   "calls_saved_per_task": 0.054,
+   "calls_ci90": [
+    -1.086,
+    1.207
+   ],
+   "usd_saved_per_task": -0.00143,
+   "usd_ci90": [
+    -0.00997,
+    0.00688
+   ],
+   "share_of_usd": -0.0055,
+   "share_of_usd_ci90": [
+    -0.0383,
+    0.0269
+   ],
+   "directives": 713,
+   "useful_rate": 0.39,
+   "s_hat_rust": 3.32,
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   }
+  },
+  "harness_leave_task_out_lambda2": {
+   "test_set_id": "6a795a362ccb",
+   "sessions": 158,
+   "tasks": 38,
+   "calls_saved_per_task": -0.014,
+   "calls_ci90": [
+    -0.041,
+    0.0
+   ],
+   "usd_saved_per_task": -0.00011,
+   "usd_ci90": [
+    -0.00034,
+    0.0
+   ],
+   "share_of_usd": -0.0004,
+   "share_of_usd_ci90": [
+    -0.0012,
+    0.0
+   ],
+   "directives": 9,
+   "useful_rate": 0.222,
+   "s_hat_rust": 0.011,
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   }
+  },
+  "reading": "ceiling grows with memory (1.9% -> 4.2% -> 5.4% -> 12.1% of $ at 2/5/10/60-110 sessions) but matcher precision falls (0.16 -> 0.11); net of misfires it stays ~0."
+ },
+ "vs_baseline": {
+  "baseline": "U11 + learned reflexes: +1.00 \u015c calls/session post-hoc, +2.11 pre-emptive (82 v2 Haiku sessions)",
+  "learner_s_hat_rust_proxy": 0.237,
+  "learner_v2": {
+   "test_set_id": "bbeaa02c4163",
+   "sessions": 82,
+   "tasks": 30,
+   "calls_saved_per_task": 0.065,
+   "calls_ci90": [
+    -0.103,
+    0.221
+   ],
+   "usd_saved_per_task": 0.00058,
+   "usd_ci90": [
+    -0.00124,
+    0.0022
+   ],
+   "share_of_usd": 0.0019,
+   "share_of_usd_ci90": [
+    -0.0041,
+    0.0075
+   ],
+   "directives": 46,
+   "useful_rate": 0.348,
+   "s_hat_rust": 0.187,
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   }
+  },
+  "u11_posthoc_v2": {
+   "test_set_id": "bbeaa02c4163",
+   "sessions": 82,
+   "tasks": 30,
+   "calls_saved_per_task": 1.002,
+   "calls_ci90": [
+    0.652,
+    1.385
+   ],
+   "usd_saved_per_task": 0.0058,
+   "usd_ci90": [
+    0.00371,
+    0.00807
+   ],
+   "share_of_usd": 0.0193,
+   "share_of_usd_ci90": [
+    0.0116,
+    0.0287
+   ],
+   "directives": 35,
+   "useful_rate": 1.0,
+   "s_hat_rust": 1.002,
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   }
+  },
+  "u11_plus_shortcuts_v2": {
+   "test_set_id": "bbeaa02c4163",
+   "sessions": 82,
+   "tasks": 30,
+   "calls_saved_per_task": 0.971,
+   "calls_ci90": [
+    0.571,
+    1.38
+   ],
+   "usd_saved_per_task": 0.00593,
+   "usd_ci90": [
+    0.00295,
+    0.00888
+   ],
+   "share_of_usd": 0.0197,
+   "share_of_usd_ci90": [
+    0.0093,
+    0.0315
+   ],
+   "directives": 79,
+   "useful_rate": 0.62,
+   "s_hat_rust": 1.093,
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   }
+  },
+  "reading": "the learner is a quarter of U11 post-hoc on \u015c and adds nothing on top of U11 (+0.97 vs +1.00 calls)."
+ },
+ "hard_coded_parts": [
+  "token regex [A-Za-z_][\\w./-]* (len>=3) and thresholds W_FLOW=3, T_IN=0.5, T_OUT=0.3, CHAIN_GAP=12, FACT_IDF=2, T_ATTR=0.3, T_CMD=0.6, M_MIN=1.0, writer size ratio 5, k=20, similarity weights 0.3/0.5/0.2 (hyperparameters, not lists)",
+  "trace schema used as features: tool name, is_error, input field values",
+  "a location = token containing '/' or a tracked file/dir of the repository checkout (git ls-files)",
+  "state.json changed_files used to mark persisting writes in TRAINING traces only",
+  "measurement only: my usefulness/removable-set rule; the harness's hand-written Sat/W classes (never seen by the learner)",
+  "harness adapter maps class family to Directive kind (Bash command -> run, location -> read_files, fact -> advice)"
+ ],
+ "ceiling": {
+  "hindsight_waste_all_non_achieving": {
+   "calls": {
+    "mean": 14.9241,
+    "lo": 13.7372,
+    "hi": 16.1554,
+    "n": 158,
+    "tasks": 38
+   },
+   "share_calls": {
+    "mean": 0.4614,
+    "lo": 0.4376,
+    "hi": 0.4856,
+    "n": 158,
+    "tasks": 38
+   },
+   "share_usd": {
+    "mean": 0.4823,
+    "lo": 0.4535,
+    "hi": 0.5118,
+    "n": 158,
+    "tasks": 38
+   }
+  },
+  "absolute_oracle_all_shortcut_kinds": {
+   "calls": {
+    "mean": 7.3228,
+    "lo": 6.3393,
+    "hi": 8.3638,
+    "n": 158,
+    "tasks": 38
+   },
+   "share_calls": {
+    "mean": 0.2264,
+    "lo": 0.2004,
+    "hi": 0.2524,
+    "n": 158,
+    "tasks": 38
+   },
+   "share_usd": {
+    "mean": 0.2485,
+    "lo": 0.2171,
+    "hi": 0.2789,
+    "n": 158,
+    "tasks": 38
+   },
+   "by_kind_share_usd": {
+    "command_procedure": {
+     "mean": 0.1887,
+     "lo": 0.1611,
+     "hi": 0.2149,
+     "n": 158,
+     "tasks": 38
+    },
+    "file": {
+     "mean": 0.0467,
+     "lo": 0.033,
+     "hi": 0.0618,
+     "n": 158,
+     "tasks": 38
+    },
+    "fact": {
+     "mean": 0.0405,
+     "lo": 0.0243,
+     "hi": 0.0578,
+     "n": 158,
+     "tasks": 38
+    }
+   }
+  },
+  "perfect_matcher_training_memory": {
+   "calls": {
+    "mean": 1.6266,
+    "lo": 0.9467,
+    "hi": 2.465,
+    "n": 158,
+    "tasks": 38
+   },
+   "share_usd": {
+    "mean": 0.0537,
+    "lo": 0.0313,
+    "hi": 0.0783,
+    "n": 158,
+    "tasks": 38
+   },
+   "by_kind_calls": {
+    "cmd": {
+     "mean": 1.5506,
+     "lo": 0.8654,
+     "hi": 2.3939,
+     "n": 158,
+     "tasks": 38
+    },
+    "file": {
+     "mean": 0.1456,
+     "lo": 0.0497,
+     "hi": 0.2645,
+     "n": 158,
+     "tasks": 38
+    },
+    "fact": {
+     "mean": 0.0,
+     "lo": 0.0,
+     "hi": 0.0,
+     "n": 158,
+     "tasks": 38
+    }
+   }
+  },
+  "perfect_matcher_grown_memory": {
+   "calls": {
+    "mean": 3.5759,
+    "lo": 2.6993,
+    "hi": 4.5255,
+    "n": 158,
+    "tasks": 38
+   },
+   "share_usd": {
+    "mean": 0.1214,
+    "lo": 0.0924,
+    "hi": 0.1496,
+    "n": 158,
+    "tasks": 38
+   },
+   "by_kind_calls": {
+    "cmd": {
+     "mean": 3.0823,
+     "lo": 2.2626,
+     "hi": 3.9866,
+     "n": 158,
+     "tasks": 38
+    },
+    "file": {
+     "mean": 0.6076,
+     "lo": 0.4204,
+     "hi": 0.8344,
+     "n": 158,
+     "tasks": 38
+    },
+    "fact": {
+     "mean": 0.0,
+     "lo": 0.0,
+     "hi": 0.0,
+     "n": 158,
+     "tasks": 38
+    }
+   }
+  },
+  "reading": "the lever's absolute ceiling (25% of $) meets the North star, but only 22-49% of it recurs across tasks; facts never recur, files barely."
+ },
+ "build_recommendation": "Do not build a situation->shortcut learner in Rust (harness: +0.15 calls, +0.4% of $ per task; perfect-matcher ceiling 5.4% of $ with today's memory). Keep the data-flow hindsight labeller (achieving closure, retry chains with learned failure, repairs) as an offline label source for the existing usefulness-target learner in place of hand-written 'exploratory' lists: expected value equal to that learner (+0.3-1 call/session), not more. The one valuable recurring shortcut (click: failed whole-file Reads of core.py) belongs to a context-size lever (Read-with-offset/output cap). Revisit at >=100 sessions per repo with a precision-first matcher (grown-memory ceiling 12% of $).",
+ "so_what": "If shipped: +0.15 calls/task [0.01, 0.31], +$0.0010 [-0.0001, +0.0021] = +0.4% of $ [-0.0, +0.8], pass rate unchanged (worst case -0.0 pts); >90% confident a live A/B shows < 2% of $. Micro-slice to confirm: click held-out tasks, 'pip install -e . first' + 'Read core.py with offset' deliveries.",
+ "test_set_id": "6a795a362ccb",
+ "harness_to_json_headline": {
+  "name": "split",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 0.14847222238882754,
+   "calls_saved_ci": [
+    0.009048363237708705,
+    0.31325604695774195
+   ],
+   "calls_saved_share": 0.00459072624998723,
+   "calls_saved_share_ci": [
+    0.00027725675415870123,
+    0.009815064324674173
+   ],
+   "usd_saved_per_task": 0.0009803906546951757,
+   "usd_saved_ci": [
+    -8.755915622315204e-05,
+    0.0021224300784779674
+   ],
+   "usd_saved_share": 0.003765052018095445,
+   "usd_saved_share_ci": [
+    -0.0003159192950015415,
+    0.008403175793163206
+   ],
+   "tokens_saved_per_task": 9605.462025316456,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 0.23707981732553635,
+   "s_hat_rust_ci95": [
+    0.08262498845157326,
+    0.4362917626280555
+   ],
+   "directives": 78,
+   "useful": 29,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 0.3717948717948718,
+   "useful_lb90": 0.28750175633764674,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.15264187866927592,
+   "gates": {
+    "useful_lb90>=0.8": false,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "advice",
+    "command",
+    "read_files"
+   ]
+  },
+  "by_route": {
+   "hs-command-1": {
+    "directives": 39,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 1.1900742497223418
+   },
+   "hs-procedure-5": {
+    "directives": 7,
+    "useful": 6,
+    "harmful": 0,
+    "saved": 8.0,
+    "cost": 0.4634224305312971
+   },
+   "hs-file-0": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.013336656565789072
+   },
+   "hs-command-6": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 11.0,
+    "cost": 0.06754818405784505
+   },
+   "hs-procedure-9": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0830913697572737
+   },
+   "hs-procedure-1": {
+    "directives": 25,
+    "useful": 19,
+    "harmful": 0,
+    "saved": 21.0,
+    "cost": 0.6467615385780453
+   },
+   "hs-command-3": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0771544333526655
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0018537358333333333,
+    "usd_saved_ci": [
+     -0.00030210916666666664,
+     0.004534260000000001
+    ],
+    "usd_saved_share": 0.00980274924246688,
+    "calls_saved_per_task": 0.38268232601029006,
+    "calls_saved_ci": [
+     -0.030870443999311124,
+     0.9323478255665878
+    ],
+    "s_hat_rust": 0.43268232601028994,
+    "directives": 48
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": -3.197e-05,
+    "usd_saved_ci": [
+     -9.591000000000001e-05,
+     0.0
+    ],
+    "usd_saved_share": -0.00011236045881867929,
+    "calls_saved_per_task": -0.0031191482761536585,
+    "calls_saved_ci": [
+     -0.009357444828460976,
+     0.0
+    ],
+    "s_hat_rust": -0.0031191482761536585,
+    "directives": 2
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.00273436967028348,
+    "usd_saved_ci": [
+     -0.0017753065315995195,
+     0.006977817491638797
+    ],
+    "usd_saved_share": 0.012058520592579905,
+    "calls_saved_per_task": 0.2758694676023097,
+    "calls_saved_ci": [
+     -0.15386171180094876,
+     0.6728431009877095
+    ],
+    "s_hat_rust": 0.6758694676023097,
+    "directives": 28
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ }
+}

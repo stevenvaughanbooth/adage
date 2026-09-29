@@ -209,22 +209,22 @@ impl Live {
 
 /// What Adage did, as spans; `narrow` drops the verbs the marks already carry.
 fn act_spans(a: &Act, t: &Theme, narrow: bool) -> Vec<Span<'static>> {
-    let aspect_note = |asp| if t.color { String::new() } else { format!(" {}", t.aspect_mark(asp)) };
+    let strength_note = |asp| if t.color { String::new() } else { format!(" {}", t.strength_mark(asp)) };
     let verb = |v: &str| if narrow { String::new() } else { format!("{v} ") };
     match a {
-        Act::Directed { route, aspect } => {
-            vec![Span::styled(format!("→ {route}{}", aspect_note(*aspect)), t.aspect(*aspect).patch(t.bold()))]
+        Act::Directed { route, strength } => {
+            vec![Span::styled(format!("→ {route}{}", strength_note(*strength)), t.strength(*strength).patch(t.bold()))]
         }
-        Act::Withheld { route, aspect } => {
-            vec![Span::styled(format!("withheld {route}{}", aspect_note(*aspect)), t.holdout())]
+        Act::Withheld { route, strength } => {
+            vec![Span::styled(format!("withheld {route}{}", strength_note(*strength)), t.control())]
         }
         Act::Followed(r) => vec![Span::styled(format!("✓ {}{r}", verb("followed")), t.green())],
-        Act::Derailed(r) => vec![Span::styled(format!("✗ {}{r}", verb("derailed")), t.red())],
+        Act::Ignored(r) => vec![Span::styled(format!("✗ {}{r}", verb("ignored")), t.red())],
         Act::Met(r) => vec![Span::styled(format!("✓ met {r}"), t.green())],
-        Act::Unaided(r) => vec![Span::styled(format!("✓ {}{r}", verb("unaided")), t.holdout())],
-        Act::NotReached(r) => vec![Span::styled(format!("· {}{r}", verb("missed")), t.holdout())],
+        Act::Unaided(r) => vec![Span::styled(format!("✓ {}{r}", verb("unaided")), t.control())],
+        Act::NotReached(r) => vec![Span::styled(format!("· {}{r}", verb("missed")), t.control())],
         Act::StopRequest => vec![Span::styled("■ stop-request".to_string(), t.yellow().patch(t.bold()))],
-        Act::StopWithheld => vec![Span::styled("withheld stop-request".to_string(), t.holdout())],
+        Act::StopWithheld => vec![Span::styled("withheld stop-request".to_string(), t.control())],
     }
 }
 
@@ -233,7 +233,7 @@ pub fn feed_line(i: &FeedItem, ctx: &Ctx, width: u16) -> Line<'static> {
     let t = &ctx.theme;
     let wide = width >= 90;
     let mut spans = vec![Span::styled(clock(i.ts, ctx.tz, true), t.dim()), Span::raw(" ")];
-    let (mark, style) = if i.holdout { ("◌", t.holdout()) } else { ("●", t.accent()) };
+    let (mark, style) = if i.control { ("◌", t.control()) } else { ("●", t.accent()) };
     spans.push(Span::styled(format!("{mark}{}", feed::short_session(&i.session, 6)), style));
     spans.push(Span::raw(" "));
     let h = if wide { format!("{:<8}", i.harness) } else { feed::harness_short(&i.harness).to_string() };
@@ -256,8 +256,8 @@ pub fn feed_line(i: &FeedItem, ctx: &Ctx, width: u16) -> Line<'static> {
             spans.extend(act_spans(a, t, width < 72));
         }
     }
-    if wide && i.holdout {
-        spans.push(Span::styled("  (holdout)", t.holdout()));
+    if wide && i.control {
+        spans.push(Span::styled("  (control)", t.control()));
     }
     Line::from(spans)
 }
@@ -265,9 +265,9 @@ pub fn feed_line(i: &FeedItem, ctx: &Ctx, width: u16) -> Line<'static> {
 /// One ticker line; below 100 columns without the track's name, which the pane's title gives.
 pub fn tick_line(k: &Tick, ctx: &Ctx, width: u16) -> Line<'static> {
     let t = &ctx.theme;
-    let style = match (k.tone, k.aspect) {
+    let style = match (k.tone, k.strength) {
         (Tone::Error, _) => t.red(),
-        (Tone::Change, Some(a)) => t.aspect(a),
+        (Tone::Change, Some(a)) => t.strength(a),
         (Tone::Change, None) => Style::default(),
         (Tone::Run, _) => t.dim(),
     };
@@ -331,14 +331,14 @@ pub fn watch_help(t: &Theme) -> Vec<Line<'static>> {
         k("↑ ↓", "scroll the feed (G: back to newest)"),
         k("?", "this help"),
         Line::raw(""),
-        Line::from(Span::styled("● treated session   ◌ holdout (nothing delivered)", t.dim())),
+        Line::from(Span::styled("● treated session   ◌ control (nothing delivered)", t.dim())),
         Line::from(vec![
-            Span::styled("→ route", t.green()),
-            Span::raw(" directive (colour = aspect)  "),
+            Span::styled("→ reflex", t.green()),
+            Span::raw(" directive (colour = strength)  "),
             Span::styled("✓", t.green()),
             Span::raw(" followed  "),
             Span::styled("✗", t.red()),
-            Span::raw(" derailed"),
+            Span::raw(" ignored"),
         ]),
     ]
 }
@@ -374,7 +374,7 @@ fn draw_ticker(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &
     if ticks.is_empty() {
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
-                "Nothing learned yet. Learning runs appear here as they finish.",
+                "Nothing conditioned yet. Conditioning runs appear here as they finish.",
                 t.dim(),
             )))
             .wrap(Wrap { trim: true }),
@@ -426,7 +426,7 @@ pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>
         let left = Line::from(vec![
             Span::styled(" adage watch", t.title()),
             Span::styled(format!(" · {}{}", ctx.label, gen.unwrap_or_default()), t.dim()),
-            Span::styled(if ctx.demo { " · demo" } else { "" }.to_string(), t.holdout()),
+            Span::styled(if ctx.demo { " · demo" } else { "" }.to_string(), t.control()),
         ]);
         let state = if live.paused {
             Span::styled(format!("PAUSED +{} ", live.held.len()), t.yellow().patch(t.bold()))
@@ -448,17 +448,17 @@ pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>
     draw_feed(f, inner, live, key, ctx);
 
     let tick_block = if live.learning.is_empty() {
-        section(" learning ".to_string(), t)
+        section(" conditioning ".to_string(), t)
     } else {
         let what = if live.learning.len() == 1 {
-            "learning now…".to_string()
+            "conditioning now…".to_string()
         } else {
             format!("{} learners running…", live.learning.len())
         };
         Block::default()
             .borders(Borders::TOP)
             .border_style(t.dim())
-            .title(Span::styled(format!(" learning · {what} "), t.yellow().patch(t.bold())))
+            .title(Span::styled(format!(" conditioning · {what} "), t.yellow().patch(t.bold())))
     };
     let inner = tick_block.inner(ticker);
     f.render_widget(tick_block, ticker);

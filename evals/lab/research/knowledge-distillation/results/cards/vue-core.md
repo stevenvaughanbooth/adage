@@ -1,0 +1,44 @@
+Repository notes learned from earlier sessions in this repo:
+- `Bash: ls -la packages/` shows: shared
+- `Read: packages/runtime-core/src/components/Teleport.ts limit=100` shows: mounted
+- `Bash: grep -n "test.*prop" packages/runtime-core/__tests__/hydration.spec.ts | tail -10` shows: .prop, modifier
+- `Read: packages/runtime-core/src/hydration.ts limit=100` shows: invokeDirectiveHook, invokeVNodeHook
+- `Bash: ls -la packages/runtime-dom/src/directives/` shows: vModel.ts
+- `Read: packages/runtime-dom/src/patchProp.ts` shows: el.tagName.includes, isSVG
+- `Read: packages/compiler-core/src/transforms/transformSlotOutlet.ts` shows: buildProps
+- `Bash: grep -n "transition" packages/runtime-core/src/renderer.ts | head -30` shows: shapeFlag
+- `Bash: ls -la packages/` shows: runtime-dom
+- `Read: packages/shared/src/patchFlags.ts` shows: dynamicProps, force, iterated, listeners, style, v-bind
+- `Bash: ls -la packages/runtime-dom/src/modules/` shows: attrs.ts, props.ts
+- `Read: packages/runtime-core/src/hydrationStrategies.ts` shows: elements, fragment
+- `Bash: find packages/runtime-dom/__tests__ -name "*vModel*"` shows: packages/runtime-dom/__tests__/directives, packages/runtime-dom/__tests__/directives/vModel.spec.ts, vModel.spec.ts
+- `Read: packages/reactivity/__tests__/effectScope.spec.ts limit=300` shows: .toBe, watch
+- `Bash: npm test -- packages/runtime-core/__tests__/scheduler.spec.ts 2>&1 | head -100` shows: Files
+- `Read: packages/runtime-core/__tests__/hydration.spec.ts offset=1610 limit=50` shows: indeterminate
+- `Read: packages/runtime-dom/src/modules/props.ts` shows: compare, el.getAttribute, newValue, patching
+- `Bash: tail -50 packages/runtime-core/__tests__/hydration.spec.ts` shows: Object.defineProperty, PatchFlags.PROPS, configurable, data-allow-mismatch, patches
+- `Read: packages/runtime-core/__tests__/hydration.spec.ts offset=1617 limit=100` shows: camel-case, svg
+- `Read: packages/runtime-core/src/apiAsyncComponent.ts` shows: .catch, Promise, __asyncHydrate, loader, throw
+- `Read: packages/runtime-core/__tests__/apiAsyncComponent.spec.ts limit=100` shows: .mount, .toBe, await, div, nextTick
+- `Read: packages/runtime-core/__tests__/hydration.spec.ts limit=40 offset=2788` shows: .toContain, el.namespaceURI
+- `Grep: svg|SVG path=packages/runtime-core/__tests__/hydration.spec.ts output_mode=content` shows: /svg, SVGElement
+- `Read: packages/runtime-core/__tests__/hydration.spec.ts offset=1514 limit=100` shows: /div, root.innerHTML, show.value
+- `Read: packages/runtime-core/__tests__/hydration.spec.ts limit=100` shows: .toBe, /div, createElementVNode, mountWithHydration
+- `Bash: grep -r "v-bind" packages/compiler-core/__tests__/transforms/transformSlotOutlet.spec.ts | hea` shows: dynamically, outlet
+- `Read: packages/runtime-core/__tests__/hydration.spec.ts limit=100` shows: .not.toHaveBeenWarned, .toBe, /div, mountWithHydration
+- `Bash: find . -type f -name "*.ts" -o -name "*.js" | grep -E "(hydrate|svg)" | head -20` shows: packages/vue, packages/vue/__tests__, packages/vue/__tests__/e2e, packages/vue/__tests__/e2e/svg.spec.ts, packages/vue/__tests__/svgNamespace.spec.ts, svg.spec.ts, svgNamespace.spec.ts
+- `Read: packages/runtime-core/__tests__/scheduler.spec.ts` shows: .toBe, .toEqual, async, await, calls.length, calls.push, cb1, cb2, cb2.id
+- `Grep: isSSRSafeAttrName head_limit=20` shows: domAttrConfig.ts, packages/shared, packages/shared/src, packages/shared/src/domAttrConfig.ts
+- `Bash: npm test -- packages/server-renderer/__tests__/ssrRenderAttrs.spec.ts 2>&1 | head -100` shows: scripts/setup-vitest.ts, setup-vitest.ts
+- `Read: packages/server-renderer/__tests__/ssrRenderAttrs.spec.ts` shows: .toBe, describe, htmlFor, initial, readOnly, readonly, renderAttr, ssr, title
+- `Read: packages/runtime-core/__tests__/helpers/renderSlot.spec.ts` shows: .toBe, .toEqual, Slot, comments, createCommentVNode, describe, div, receivedProps, vnode.children, vnode.patchFlag
+- `Read: packages/runtime-core/src/scheduler.ts` shows: ...cb, ...deduped, SchedulerJob, activePostFlushCbs, activePostFlushCbs.push, component, deduped, flushPostFlushCbs, hook, improve, job, lifecycle
+- `Read: packages/runtime-core/__tests__/components/BaseTransition.spec.ts` shows: .not.toHaveBeenCalled, .toHaveBeenCalledTimes, /div, @vue/runtime-test, App, async, await, cbs, cbs.doneEnter, cbs.doneLeave, div, mockProps
+- `Read: packages/runtime-core/src/components/BaseTransition.ts` shows: @vue, TransitionHooks, VNode, VNodeArrayChildren, children, enter, enter/leave, export, findNonCommentChild, getInnerChild, isFunction, isKeepAlive
+- `Bash: find . -type f -name "*.ts" -o -name "*.js" | grep -E "(hydrate|model|input|ssr)" | head -20` shows: packages/server-renderer, packages/server-renderer/__tests__, packages/server-renderer/__tests__/ssrRender.spec.ts, ssrRender.spec.ts
+- `Grep: enum PatchFlags|PatchFlags\. path=packages/shared output_mode=content head_limit=50` shows: PatchFlags.FULL_PROPS, PatchFlags.NEED_HYDRATION, PatchFlags.PROPS, PatchFlags.STYLE, packages/shared/src, packages/shared/src/patchFlags.ts, patchFlags.ts
+- `Bash: find packages/server-renderer -type f -name "*.ts" | xargs grep -l "slot" | head -10` shows: packages/server-renderer/__tests__, packages/server-renderer/__tests__/ssrSlot.spec.ts, packages/server-renderer/src/helpers/ssrRenderSlot.ts, ssrRenderSlot.ts, ssrSlot.spec.ts
+- `Read: packages/runtime-core/src/helpers/renderSlot.ts` shows: ._c, ._d, .ce, .key, .length, .parent, .parent.ce, ContextualRenderFn, Data, Fragment, Object.keys, PatchFlags.BAIL
+- `Grep: hydrateOnVisible output_mode=files_with_matches` shows: hydration-strat-visible.html, hydrationStrategies.ts, packages/runtime-core, packages/runtime-core/src, packages/runtime-core/src/hydrationStrategies.ts, packages/vue, packages/vue/__tests__, packages/vue/__tests__/e2e, packages/vue/__tests__/e2e/hydration-strat-visible.html
+- `Grep: ssrRenderAttrs head_limit=20` shows: packages/compiler-ssr, packages/compiler-ssr/__tests__, packages/server-renderer, packages/server-renderer/__tests__, packages/server-renderer/__tests__/ssrRenderAttrs.spec.ts, packages/server-renderer/src, packages/server-renderer/src/helpers, packages/server-renderer/src/helpers/ssrRenderAttrs.ts, ssrRenderAttrs.spec.ts, ssrRenderAttrs.ts
+- `Bash: find . -type f -name "*.ts" -o -name "*.js" | grep -E "(scope|effect)" | head -20` shows: effect.spec.ts, effect.ts, effectScope.spec.ts, effectScope.ts, index.js, packages/reactivity, packages/reactivity/__tests__, packages/reactivity/__tests__/effect.spec.ts, packages/reactivity/__tests__/effectScope.spec.ts, packages/reactivity/src, packages/reactivity/src/effect.ts, packages/reactivity/src/effectScope.ts

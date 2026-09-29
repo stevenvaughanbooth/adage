@@ -2,17 +2,25 @@
 members = ["cargo:."]
 
 # Release configuration for dist (cargo-dist): https://axodotdev.github.io/cargo-dist/
-# After editing, regenerate the workflow with `dist generate` (CI fails if it is stale).
+# After editing, regenerate the workflow with `dist generate`, then re-apply the one local patch:
+# dist 0.32's template uploads the SBOMs from `steps.cargo-cyclonedx.output.paths`, which does not
+# exist, so no `.cdx.xml` reached a release; release.yml reads `outputs.paths`. `allow-dirty`
+# keeps dist's staleness check from failing on that patch.
 [dist]
+allow-dirty = ["ci"]
 cargo-dist-version = "0.32.0"
 ci = "github"
 # The npm channel is not dist's npm installer, which downloads the binary in a postinstall script.
 # Plan §6.2 calls for per-platform packages selected by optionalDependencies and no install-time
 # download, so the release publishes npm/ through the custom job .github/workflows/publish-npm.yml.
+# Three apps ship: adage (adage-cli), adage-exec (`adage delegate`) and adage-train (`adage train`),
+# each with its own archive, installers and formula (the per-package `formula` in their Cargo.toml).
 installers = ["shell", "powershell", "homebrew"]
 tap = "stevenvaughanbooth/homebrew-tap"
 formula = "adage"
-publish-jobs = ["homebrew", "./publish-npm"]
+# ./publish-marketplace writes the `marketplace` branch: the Claude Code plugins with verified
+# binaries for every target bundled, which `/plugin install adage@adage` installs.
+publish-jobs = ["homebrew", "./publish-npm", "./publish-marketplace"]
 targets = [
   "aarch64-apple-darwin",
   "x86_64-apple-darwin",
@@ -29,7 +37,7 @@ cargo-cyclonedx = true
 # PRs only check that the release would plan; tags build and publish.
 pr-run-mode = "plan"
 # The npm job checks out npm/ (contents) and publishes with provenance (id-token).
-github-custom-job-permissions = { "publish-npm" = { contents = "read", id-token = "write" } }
+github-custom-job-permissions = { "publish-npm" = { contents = "read", id-token = "write" }, "publish-marketplace" = { contents = "write" } }
 # LICENSE ships in every archive automatically; NOTICE (third-party licenses, scripts/notice.sh)
 # is included explicitly.
 include = ["NOTICE"]

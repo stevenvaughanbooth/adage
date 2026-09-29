@@ -1,9 +1,9 @@
-//! Track signatures (Architecture §4.9, spike S6): `sshsig` over a track's canonical digest, in
-//! namespace `adage-track`, created natively — through ssh-agent when one is running, else from a
+//! Pack signatures (Architecture §4.9, spike S6): `sshsig` over a pack's canonical digest, in
+//! namespace `adage-pack`, created natively — through ssh-agent when one is running, else from a
 //! key file — and verified natively against an `allowed_signers` file. No `ssh-keygen` process.
 //!
-//! The signed message is the 32 raw bytes of the canonical digest (`adage_tracks::io::digest`),
-//! exactly as in S6, so `ssh-keygen -Y verify -n adage-track` over those bytes agrees.
+//! The signed message is the 32 raw bytes of the canonical digest (`adage_pack::pack_digest`),
+//! exactly as in S6, so `ssh-keygen -Y verify -n adage-pack` over those bytes agrees.
 //!
 //! A passphrase-protected key file is decrypted in memory with a passphrase the caller obtains
 //! (`adage share` asks at the terminal, echo off); the passphrase is zeroised after use.
@@ -24,9 +24,10 @@ pub type Passphrase<'a> = &'a dyn Fn(&Path) -> Option<Zeroizing<String>>;
 /// Wrong passphrases accepted before giving up, as ssh-keygen does.
 const PASSPHRASE_TRIES: usize = 3;
 
-/// The sshsig namespace for track signatures. A git commit signature (namespace `git`) can never
-/// be replayed as a track signature.
-pub const NAMESPACE: &str = "adage-track";
+/// The sshsig namespace for packs (format `adage-pack/1`, Track C §1.5). A git commit signature
+/// (namespace `git`) can never be replayed as a pack signature, and an `allowed_signers` entry
+/// restricted to another namespace never authorises one.
+pub const PACK_NAMESPACE: &str = "adage-pack";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
@@ -36,7 +37,7 @@ pub enum Method {
 
 #[derive(Debug, Clone)]
 pub struct Signed {
-    /// The `-----BEGIN SSH SIGNATURE-----` armoured signature, as written to `track.sig`.
+    /// The `-----BEGIN SSH SIGNATURE-----` armoured signature, as written to `pack.sig`.
     pub pem: String,
     pub key: PublicKey,
     pub method: Method,
@@ -172,7 +173,7 @@ fn public_key_for(p: &Path) -> Result<PublicKey> {
 }
 
 pub fn parse_signature(pem: &str) -> Result<SshSig> {
-    pem.parse::<SshSig>().context("track.sig is not an SSH signature")
+    pem.parse::<SshSig>().context("pack.sig is not an SSH signature")
 }
 
 /// The key embedded in a signature, once the signature is checked against it in `namespace`. This
@@ -243,13 +244,13 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let (key, pk) = keypair(d.path());
         let msg = message(DIGEST).unwrap();
-        let s = sign(&msg, NAMESPACE, None, Some(&key)).unwrap();
+        let s = sign(&msg, PACK_NAMESPACE, None, Some(&key)).unwrap();
         assert_eq!(s.method, Method::KeyFile);
         assert!(s.pem.starts_with("-----BEGIN SSH SIGNATURE-----"));
         let allowed = signers(&format!("tester@example {}", key_line(&pk)));
-        let who = verify(&msg, NAMESPACE, &s.pem, &allowed, SystemTime::now()).unwrap();
+        let who = verify(&msg, PACK_NAMESPACE, &s.pem, &allowed, SystemTime::now()).unwrap();
         assert_eq!(who.principals, vec!["tester@example".to_string()]);
-        assert_eq!(fingerprint(&verify_embedded(&msg, NAMESPACE, &s.pem).unwrap()), fingerprint(&pk));
+        assert_eq!(fingerprint(&verify_embedded(&msg, PACK_NAMESPACE, &s.pem).unwrap()), fingerprint(&pk));
     }
 
     #[test]
@@ -261,7 +262,7 @@ mod tests {
         std::fs::write(&p, enc.to_openssh(LineEnding::LF).unwrap().as_bytes()).unwrap();
         let msg = message(DIGEST).unwrap();
         // No way to ask: refused, pointing at ssh-agent.
-        let e = sign(&msg, NAMESPACE, None, Some(&p)).unwrap_err().to_string();
+        let e = sign(&msg, PACK_NAMESPACE, None, Some(&p)).unwrap_err().to_string();
         assert!(e.contains("passphrase-protected") && e.contains("ssh-add"), "{e}");
         // A wrong passphrase first, then the right one.
         let tries = std::cell::Cell::new(0);
@@ -269,11 +270,11 @@ mod tests {
             tries.set(tries.get() + 1);
             Some(Zeroizing::new(if tries.get() == 1 { "wrong" } else { "correct horse" }.to_string()))
         };
-        let s = sign_with(&msg, NAMESPACE, None, Some(&p), &ask).unwrap();
+        let s = sign_with(&msg, PACK_NAMESPACE, None, Some(&p), &ask).unwrap();
         assert_eq!((s.method, tries.get()), (Method::KeyFile, 2));
         assert_eq!(fingerprint(&s.key), fingerprint(k.public_key()));
         // Always wrong: gives up after three tries.
-        let e = sign_with(&msg, NAMESPACE, None, Some(&p), &|_| Some(Zeroizing::new("nope".into()))).unwrap_err();
+        let e = sign_with(&msg, PACK_NAMESPACE, None, Some(&p), &|_| Some(Zeroizing::new("nope".into()))).unwrap_err();
         assert!(e.to_string().contains("wrong passphrase"), "{e}");
     }
 
@@ -281,11 +282,11 @@ mod tests {
     fn tampered_digest_is_rejected() {
         let d = tempfile::tempdir().unwrap();
         let (key, pk) = keypair(d.path());
-        let s = sign(&message(DIGEST).unwrap(), NAMESPACE, None, Some(&key)).unwrap();
+        let s = sign(&message(DIGEST).unwrap(), PACK_NAMESPACE, None, Some(&key)).unwrap();
         let other = message(&DIGEST.replace('7', "8")).unwrap();
         let allowed = signers(&format!("t {}", key_line(&pk)));
-        assert!(verify(&other, NAMESPACE, &s.pem, &allowed, SystemTime::now()).is_err());
-        assert!(verify_embedded(&other, NAMESPACE, &s.pem).is_err());
+        assert!(verify(&other, PACK_NAMESPACE, &s.pem, &allowed, SystemTime::now()).is_err());
+        assert!(verify_embedded(&other, PACK_NAMESPACE, &s.pem).is_err());
     }
 
     #[test]
@@ -296,15 +297,15 @@ mod tests {
         // A git-namespace signature is never a track signature.
         let git = sign(&msg, "git", None, Some(&key)).unwrap();
         let open = signers(&format!("t {}", key_line(&pk)));
-        assert!(verify(&msg, NAMESPACE, &git.pem, &open, SystemTime::now()).is_err());
-        assert!(verify_embedded(&msg, NAMESPACE, &git.pem).is_err());
+        assert!(verify(&msg, PACK_NAMESPACE, &git.pem, &open, SystemTime::now()).is_err());
+        assert!(verify_embedded(&msg, PACK_NAMESPACE, &git.pem).is_err());
         // An entry restricted to other namespaces refuses a genuine track signature.
-        let s = sign(&msg, NAMESPACE, None, Some(&key)).unwrap();
+        let s = sign(&msg, PACK_NAMESPACE, None, Some(&key)).unwrap();
         let git_only = signers(&format!("t namespaces=\"git\" {}", key_line(&pk)));
-        let err = verify(&msg, NAMESPACE, &s.pem, &git_only, SystemTime::now()).unwrap_err();
+        let err = verify(&msg, PACK_NAMESPACE, &s.pem, &git_only, SystemTime::now()).unwrap_err();
         assert!(err.to_string().contains("namespaces"), "{err}");
         let globbed = signers(&format!("t namespaces=\"git,adage-*\" {}", key_line(&pk)));
-        assert!(verify(&msg, NAMESPACE, &s.pem, &globbed, SystemTime::now()).is_ok());
+        assert!(verify(&msg, PACK_NAMESPACE, &s.pem, &globbed, SystemTime::now()).is_ok());
     }
 
     #[test]
@@ -312,14 +313,14 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let (key, pk) = keypair(d.path());
         let msg = message(DIGEST).unwrap();
-        let s = sign(&msg, NAMESPACE, None, Some(&key)).unwrap();
+        let s = sign(&msg, PACK_NAMESPACE, None, Some(&key)).unwrap();
         let now = SystemTime::now();
         let expired = signers(&format!("t valid-before=20200101 {}", key_line(&pk)));
-        assert!(verify(&msg, NAMESPACE, &s.pem, &expired, now).is_err());
+        assert!(verify(&msg, PACK_NAMESPACE, &s.pem, &expired, now).is_err());
         let future = signers(&format!("t valid-after=20990101 {}", key_line(&pk)));
-        assert!(verify(&msg, NAMESPACE, &s.pem, &future, now).is_err());
+        assert!(verify(&msg, PACK_NAMESPACE, &s.pem, &future, now).is_err());
         let inside = allowed_signers::parse_timestamp("20191231").unwrap() + Duration::from_secs(60);
-        assert!(verify(&msg, NAMESPACE, &s.pem, &expired, inside).is_ok());
+        assert!(verify(&msg, PACK_NAMESPACE, &s.pem, &expired, inside).is_ok());
     }
 
     #[test]
@@ -329,12 +330,12 @@ mod tests {
         let e = tempfile::tempdir().unwrap();
         let (_, stranger) = keypair(e.path());
         let msg = message(DIGEST).unwrap();
-        let s = sign(&msg, NAMESPACE, None, Some(&key)).unwrap();
+        let s = sign(&msg, PACK_NAMESPACE, None, Some(&key)).unwrap();
         let allowed = signers(&format!("t {}", key_line(&stranger)));
-        let err = verify(&msg, NAMESPACE, &s.pem, &allowed, SystemTime::now()).unwrap_err();
+        let err = verify(&msg, PACK_NAMESPACE, &s.pem, &allowed, SystemTime::now()).unwrap_err();
         assert!(err.to_string().contains("no allowed signer"), "{err}");
         // A cert-authority entry is never a plain signer.
-        let pk = verify_embedded(&msg, NAMESPACE, &s.pem).unwrap();
+        let pk = verify_embedded(&msg, PACK_NAMESPACE, &s.pem).unwrap();
         assert!(signers(&format!("t cert-authority {}", key_line(&pk))).is_empty());
     }
 
@@ -379,17 +380,17 @@ mod tests {
         ssh_agent_client_rs::Client::connect(&sock).unwrap().add_identity(&private).unwrap();
         let msg = message(DIGEST).unwrap();
         // With --key naming the key, the agent is preferred over the file.
-        let via_agent = sign(&msg, NAMESPACE, Some(&sock), Some(&key)).unwrap();
+        let via_agent = sign(&msg, PACK_NAMESPACE, Some(&sock), Some(&key)).unwrap();
         assert_eq!(via_agent.method, Method::Agent);
         let allowed = signers(&format!("t {}", key_line(&pk)));
-        assert!(verify(&msg, NAMESPACE, &via_agent.pem, &allowed, SystemTime::now()).is_ok());
+        assert!(verify(&msg, PACK_NAMESPACE, &via_agent.pem, &allowed, SystemTime::now()).is_ok());
         // Ed25519 is deterministic: agent and file signatures are byte-identical.
-        let via_file = sign(&msg, NAMESPACE, None, Some(&key)).unwrap();
+        let via_file = sign(&msg, PACK_NAMESPACE, None, Some(&key)).unwrap();
         assert_eq!(via_agent.pem, via_file.pem);
         // No key named: the agent's key is used.
-        assert_eq!(sign(&msg, NAMESPACE, Some(&sock), None).unwrap().method, Method::Agent);
+        assert_eq!(sign(&msg, PACK_NAMESPACE, Some(&sock), None).unwrap().method, Method::Agent);
         // An agent without the named key falls back to the key file.
         ssh_agent_client_rs::Client::connect(&sock).unwrap().remove_all_identities().unwrap();
-        assert_eq!(sign(&msg, NAMESPACE, Some(&sock), Some(&key)).unwrap().method, Method::KeyFile);
+        assert_eq!(sign(&msg, PACK_NAMESPACE, Some(&sock), Some(&key)).unwrap().method, Method::KeyFile);
     }
 }

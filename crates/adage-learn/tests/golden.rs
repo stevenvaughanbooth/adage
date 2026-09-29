@@ -1,7 +1,7 @@
 //! End-to-end learner test over synthetic Claude Code transcripts in the real on-disk format.
 
 use adage_learn::{learn, Inputs, LearnConfig};
-use adage_tracks::{io, Aspect, Exit, Index, Step, Trigger};
+use adage_tracks::{io, Exit, Index, Step, Strength, Trigger};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -89,7 +89,7 @@ fn run(dir: &Path, files: &[PathBuf], home: &Path) -> Index {
 }
 
 #[test]
-fn mines_all_four_route_kinds() {
+fn learns_the_lookup_linked_files_an_avoid_and_an_obligation() {
     let d = tempfile::tempdir().unwrap();
     let (files, _) = corpus(d.path());
     let home = d.path().join("home");
@@ -98,7 +98,7 @@ fn mines_all_four_route_kinds() {
 
     let lookup = routes.iter().find(|r| matches!(r.trigger, Trigger::Prompt { .. })).expect("prompt route");
     assert_eq!(lookup.step, Step::Run { command: "python3 scripts/wi-lookup {item}".into() });
-    assert_eq!(lookup.aspect, Aspect::Green, "6/6 sessions clears the demo green bar");
+    assert_eq!(lookup.strength, Strength::Fire, "6/6 sessions clears the demo fire bar");
     assert_eq!(format!("{:?}", lookup.effect), "Observe");
 
     let linked = routes.iter().find(|r| matches!(r.step, Step::ReadBatch { .. })).expect("linked-files route");
@@ -113,7 +113,7 @@ fn mines_all_four_route_kinds() {
         assert_eq!(instead, "make test");
         assert!(signature.contains("ACME_ENV is not set"));
     }
-    assert_eq!(dead.aspect, Aspect::Red);
+    assert_eq!(dead.strength, Strength::Inhibit);
     assert_eq!(dead.exit, vec![Exit::IntentChanges]);
 
     let fin = routes.iter().find(|r| matches!(r.trigger, Trigger::AfterEdit { .. })).expect("finish-line route");
@@ -130,25 +130,25 @@ fn learning_is_deterministic_and_versioned() {
     let home = d.path().join("home");
     run(d.path(), &files, &home);
     let first = std::fs::read(home.join("index.json")).unwrap();
-    let t1 = io::read(&home.join("tracks/acme-billing/work-items")).unwrap();
+    let t1 = io::read(&home.join("tracks/acme-billing/learned")).unwrap();
     run(d.path(), &files, &home);
     assert_eq!(first, std::fs::read(home.join("index.json")).unwrap(), "same inputs, same index bytes");
-    let t2 = io::read(&home.join("tracks/acme-billing/work-items")).unwrap();
+    let t2 = io::read(&home.join("tracks/acme-billing/learned")).unwrap();
     assert_eq!(t1.manifest.track.version, t2.manifest.track.version, "no change, no version bump");
 }
 
 #[test]
-fn steered_sessions_are_excluded_only_from_their_own_route_kind() {
+fn steered_traces_are_exposed_only_to_what_their_directives_named() {
     let d = tempfile::tempdir().unwrap();
     let cwd = "/fixture/acme-billing";
     let (mut files, _) = corpus(d.path());
-    // Three sessions steered by the lookup route, which then hit a dead end the route never
-    // mentioned: they must count as dead-end evidence but not as lookup evidence. (The dead end
-    // is the corpus's, same failure signature: evidence for a dead end shares its signature.)
+    // Three traces steered by the lookup route, which then hit a dead end the directive never
+    // named: they must count as dead-end evidence but not as lookup evidence (Track G §3.2). (The
+    // dead end is the corpus's, same failure signature: evidence for a dead end shares it.)
     for i in 0..3 {
         let mut t = Tx::new(&format!("steered{i}"), cwd, "Pick up W-2099");
         t.lines.push(json!({"type":"attachment","sessionId":format!("steered{i}"),"cwd":cwd,
-            "content":"<adage-signal track=\"x\" route=\"lookup-work-item\" aspect=\"green\">…</adage-signal>"}));
+            "attachment":{"type":"hook_additional_context","content":["<adage-reflex track=\"x\" route=\"lookup-work-item\" strength=\"fire\" kind=\"run\">\nIn this repository, work item details are looked up with:\n  python3 scripts/wi-lookup W-2099\n</adage-reflex>"]}}));
         t.bash("./scripts/other-lookup W-2099", "ok", false)
             .call("Edit", json!({"file_path": format!("{cwd}/acme/billing.py")}), "ok", false)
             .bash("python3 -m pytest", "RuntimeError: ACME_ENV is not set — run tests with 'make test'", true)
@@ -158,13 +158,14 @@ fn steered_sessions_are_excluded_only_from_their_own_route_kind() {
     let p = files.last().unwrap();
     let s = adage_learn::import::parse_transcript(p, &adage_core::CommandTable::load(), None).unwrap();
     assert!(s.steered && s.directed.contains("lookup-work-item"));
-    assert!(!s.steps.is_empty(), "steps are kept; exclusion is per route kind");
+    assert!(!s.steps.is_empty(), "steps are kept; exposure is per command named");
+    assert_eq!(s.influence[0].commands, ["python3 scripts/wi-lookup W-2099"]);
     let home = d.path().join("home");
     let index = run(d.path(), &files, &home);
     let lookup = index.routes.iter().find(|r| r.route.id == "lookup-work-item").unwrap();
-    assert_eq!(lookup.route.evidence.opportunities, 6, "steered sessions are not lookup opportunities");
+    assert_eq!(lookup.route.evidence.opportunities, 6, "steered traces are not lookup opportunities");
     let dead = index.routes.iter().find(|r| r.route.id.starts_with("dead-end")).unwrap();
-    assert_eq!(dead.route.evidence.support, 9, "steered sessions still count as dead-end evidence");
+    assert_eq!(dead.route.evidence.support, 9, "steered traces still count as dead-end evidence");
 }
 
 const NO_PYTEST: &str = "/usr/bin/python3: No module named pytest";
@@ -373,11 +374,11 @@ fn the_dry_run_plans_exactly_what_learn_writes_and_writes_nothing() {
     let sessions: Vec<_> =
         files.iter().filter_map(|p| adage_learn::read_session(p, &table, Some("acme-billing"))).collect();
     assert_eq!(sessions[0].harness, "claude-code");
-    assert_eq!(sessions[0].prompts, 1);
+    assert_eq!(sessions[0].prompt_count(), 1);
     let (rep, planned) = adage_learn::plan(sessions, None, &home.join("tracks"), &LearnConfig::demo()).unwrap();
     assert_eq!(rep.sessions_used, 6);
     assert!(!home.exists(), "a plan writes nothing");
-    assert_eq!(planned.len(), 3);
+    assert_eq!(planned.len(), 1, "one track per repository: <repo>/learned");
     run(d.path(), &files, &home);
     for p in &planned {
         assert_eq!(io::read(&p.dir).unwrap(), p.track, "learn wrote what the plan said");
@@ -391,7 +392,7 @@ fn a_pinned_route_that_drifts_is_proposed_not_overwritten() {
     let (files, _) = corpus(d.path());
     let home = d.path().join("home");
     run(d.path(), &files, &home);
-    let dir = home.join("tracks/acme-billing/work-items");
+    let dir = home.join("tracks/acme-billing/learned");
     let mut t = io::read(&dir).unwrap();
     let r = t.routes.iter_mut().find(|r| r.id == "lookup-work-item").unwrap();
     r.authored = true;

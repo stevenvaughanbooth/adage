@@ -1,0 +1,662 @@
+{
+ "slug": "action-equivalence",
+ "headline": "No learned action representation matches action.rs at deciding equivalence (gold pair F1 <= 0.72 vs 0.81, leave-one-repo-out <= 0.61 vs 0.88); outcome supervision restricted to first-in-session outcomes is the one learned signal that recovers the project-vs-system environment split (95% of cross-env pytest pairs), but downstream gains (+1.41 calls/task LORO, +2.7% of $) rest on uncalibrated or implausible directives and the lever's ceiling is ~8% of calls.",
+ "metric_name": "Primary: $ and calls saved per task (common harness, Haiku held-out control) for one reflex learner run over each action representation; instrument: pair F1 / purity against a hand-labelled gold set (350 commands, 61,075 pairs; 300-pair stratified sample)",
+ "held_out": {
+  "harness_split_rrr_first": {
+   "usd_saved_per_task": -0.0009741568469232272,
+   "usd_ci90": [
+    -0.0027155793196696155,
+    0.0007360263283984347
+   ],
+   "share_of_usd": -0.003741111958671387,
+   "share_ci90": [
+    -0.010288758478397596,
+    0.0027942678476416535
+   ],
+   "calls_saved_per_task": -0.07180249893272457,
+   "calls_ci90": [
+    -0.2567315988905265,
+    0.10962375987026128
+   ],
+   "directives": 70,
+   "useful_rate": 0.6,
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb"
+  },
+  "harness_split_taxonomy": {
+   "usd_saved_per_task": 0.0,
+   "usd_ci90": [
+    0.0,
+    0.0
+   ],
+   "share_of_usd": 0.0,
+   "share_ci90": [
+    0.0,
+    0.0
+   ],
+   "calls_saved_per_task": 0.0,
+   "calls_ci90": [
+    0.0,
+    0.0
+   ],
+   "directives": 0,
+   "useful_rate": 0.0,
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb"
+  },
+  "harness_grown_rrr_first": {
+   "usd_saved_per_task": 0.003993792832814996,
+   "usd_ci90": [
+    0.0016167937248348038,
+    0.006517239060363931
+   ],
+   "share_of_usd": 0.015337598020781317,
+   "share_ci90": [
+    0.006349386736080561,
+    0.024565689443534617
+   ],
+   "calls_saved_per_task": 0.6493262902950119,
+   "calls_ci90": [
+    0.28235572809084236,
+    1.0412061012651794
+   ],
+   "directives": 114,
+   "useful_rate": 0.7719298245614035,
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb"
+  },
+  "harness_grown_rrr_first_strict_sat": {
+   "usd_saved_per_task": -0.00031154544318911034,
+   "usd_ci90": [
+    -0.0026836083775827703,
+    0.0021055386185596502
+   ],
+   "share_of_usd": -0.0011964463288078853,
+   "share_ci90": [
+    -0.010160378320863443,
+    0.008104055658309123
+   ],
+   "calls_saved_per_task": 0.08603515105450557,
+   "calls_ci90": [
+    -0.20825129410680063,
+    0.41590611585651166
+   ],
+   "directives": 114,
+   "useful_rate": 0.5877192982456141,
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb"
+  },
+  "harness_grown_rrr_first_pfollow05": {
+   "usd_saved_per_task": 0.001894193568306233,
+   "usd_ci90": [
+    0.000709372440020346,
+    0.003146948887765006
+   ],
+   "share_of_usd": 0.007274383209244483,
+   "share_ci90": [
+    0.002816523807308454,
+    0.011868920954051725
+   ],
+   "calls_saved_per_task": 0.3170478092823538,
+   "calls_ci90": [
+    0.13489685622697775,
+    0.5126711576648335
+   ],
+   "directives": 114,
+   "useful_rate": 0.7719298245614035,
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb"
+  },
+  "harness_grown_taxonomy": {
+   "usd_saved_per_task": -0.0015240291772383391,
+   "usd_ci90": [
+    -0.004871718725456154,
+    0.001726386882342203
+   ],
+   "share_of_usd": -0.005852819079738818,
+   "share_ci90": [
+    -0.018654277508115193,
+    0.006669217452162204
+   ],
+   "calls_saved_per_task": 0.07870226246562186,
+   "calls_ci90": [
+    -0.4385162659075356,
+    0.6047033931115475
+   ],
+   "directives": 108,
+   "useful_rate": 0.42592592592592593,
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb"
+  },
+  "gold_pair_f1_test_half": {
+   "head": {
+    "value": 0.654452180285819,
+    "ci90": [
+     0.5768235034497461,
+     0.7279426336388828
+    ]
+   },
+   "headsub": {
+    "value": 0.5369891360579411,
+    "ci90": [
+     0.4551381168777078,
+     0.6119744678761693
+    ]
+   },
+   "taxonomy": {
+    "value": 0.806131650135257,
+    "ci90": [
+     0.7616665472935955,
+     0.860073252718709
+    ]
+   },
+   "intent": {
+    "value": 0.6052422557585385,
+    "ci90": [
+     0.5528749634182031,
+     0.6594517093686106
+    ]
+   },
+   "lgg-loose": {
+    "value": 0.15405589638718473,
+    "ci90": [
+     0.10652099978347357,
+     0.21363058857940248
+    ]
+   },
+   "lgg-H": {
+    "value": 0.44756029164329786,
+    "ci90": [
+     0.33776157549591196,
+     0.5383817618134028
+    ]
+   },
+   "a2v": {
+    "value": 0.7218376337319069,
+    "ci90": [
+     0.6666462730702559,
+     0.792458183635109
+    ]
+   },
+   "hybrid": {
+    "value": 0.6894117647058824,
+    "ci90": [
+     0.613823792759976,
+     0.7698263521215948
+    ]
+   },
+   "hybrid-first": {
+    "value": 0.636622005684125,
+    "ci90": [
+     0.5606098896335139,
+     0.7076839819568254
+    ]
+   },
+   "rrr-first": {
+    "value": 0.5478436657681941,
+    "ci90": [
+     0.47325107233440933,
+     0.6205444749069408
+    ]
+   },
+   "tfidf": {
+    "value": 0.5606390704429919,
+    "ci90": [
+     0.4944257951687036,
+     0.6307259091479108
+    ]
+   }
+  },
+  "gold_n": {
+   "commands": 350,
+   "test_half_items": 175,
+   "test_half_pairs": 15225
+  },
+  "env_split_python_test_runs": {
+   "taxonomy": {
+    "same_env_recall": 1.0,
+    "cross_env_split": 1.0,
+    "pairs": [
+     1357,
+     1128
+    ]
+   },
+   "a2v": {
+    "same_env_recall": 0.9299926308032425,
+    "cross_env_split": 0.20833333333333334,
+    "pairs": [
+     1357,
+     1128
+    ]
+   },
+   "potion": {
+    "same_env_recall": 1.0,
+    "cross_env_split": 0.0,
+    "pairs": [
+     1357,
+     1128
+    ]
+   },
+   "rrr": {
+    "same_env_recall": 0.6853352984524687,
+    "cross_env_split": 0.40070921985815605,
+    "pairs": [
+     1357,
+     1128
+    ]
+   },
+   "rrr-first": {
+    "same_env_recall": 0.6212232866617539,
+    "cross_env_split": 0.9530141843971631,
+    "pairs": [
+     1357,
+     1128
+    ]
+   },
+   "hybrid-first": {
+    "same_env_recall": 0.8378776713338246,
+    "cross_env_split": 0.7118794326241135,
+    "pairs": [
+     1357,
+     1128
+    ]
+   }
+  },
+  "n_sessions": 158,
+  "note": "split = the brief's protocol (7-10 training sessions/repo): every representation forms ~0 useful reflexes."
+ },
+ "leave_one_repo_out": {
+  "harness_rrr_first": {
+   "usd_saved_per_task": 0.0070019603922709134,
+   "usd_ci90": [
+    0.0016562961262262157,
+    0.012696198274912
+   ],
+   "share_of_usd": 0.02689004120886966,
+   "share_ci90": [
+    0.006164005424755953,
+    0.05083373152949445
+   ],
+   "calls_saved_per_task": 1.405673462087788,
+   "calls_ci90": [
+    0.6083366334928477,
+    2.2350371455723996
+   ],
+   "directives": 137,
+   "useful_rate": 0.5912408759124088,
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb"
+  },
+  "harness_hybrid_first": {
+   "usd_saved_per_task": 0.007567524427347414,
+   "usd_ci90": [
+    0.002227562478510573,
+    0.012996027628621074
+   ],
+   "share_of_usd": 0.029062010108643663,
+   "share_ci90": [
+    0.008259077171341864,
+    0.051571764527222334
+   ],
+   "calls_saved_per_task": 1.3996194377495126,
+   "calls_ci90": [
+    0.6196365608662773,
+    2.188498166757694
+   ],
+   "directives": 141,
+   "useful_rate": 0.6453900709219859,
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb"
+  },
+  "harness_taxonomy": {
+   "usd_saved_per_task": 0.001570466746116909,
+   "usd_ci90": [
+    -0.00018154452458751544,
+    0.00329288073613246
+   ],
+   "share_of_usd": 0.006031156012658744,
+   "share_ci90": [
+    -0.0007132963377698272,
+    0.012796035443229917
+   ],
+   "calls_saved_per_task": 0.6470401066286061,
+   "calls_ci90": [
+    0.35524977430828036,
+    0.9563035509014617
+   ],
+   "directives": 185,
+   "useful_rate": 0.518918918918919,
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb"
+  },
+  "harness_lgg_loose_prior_lab": {
+   "usd_saved_per_task": 0.003412371717651196,
+   "usd_ci90": [
+    0.0016461684201388893,
+    0.0053389652596975675
+   ],
+   "share_of_usd": 0.013104732241689,
+   "share_ci90": [
+    0.005949700790343357,
+    0.021450547088846594
+   ],
+   "calls_saved_per_task": 0.7089211268870529,
+   "calls_ci90": [
+    0.3752159771339159,
+    1.0766628574434964
+   ],
+   "directives": 57,
+   "useful_rate": 0.8771929824561403,
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb"
+  },
+  "gold_within_pair_f1_mean": {
+   "taxonomy": 0.8759257703081232,
+   "head": 0.6374958774259215,
+   "a2v": 0.5497506362508668,
+   "hybrid": 0.6070852011516729,
+   "hybrid-first": 0.5845647421382524,
+   "rrr-first": 0.44484491016379557,
+   "potion": 0.49926253543683713,
+   "tfidf": 0.5476783881952706,
+   "lgg-H": 0.6602345341717321
+  },
+  "gold_within_pair_f1_rrr_first_nobpe": {
+   "attrs": 0.6181818181818182,
+   "click": 0.6041666666666667,
+   "marshmallow": 0.5202312138728323,
+   "urfave-cli": 0.8313253012048194,
+   "vue-core": 0.4263959390862945
+  },
+  "per_repo_gold": {
+   "taxonomy": {
+    "attrs": 0.8533333333333333,
+    "click": 0.9583333333333334,
+    "marshmallow": 0.8375,
+    "urfave-cli": 0.9226190476190476,
+    "vue-core": 0.8078431372549019
+   },
+   "a2v": {
+    "attrs": 0.6190476190476191,
+    "click": 0.6203208556149732,
+    "marshmallow": 0.5610859728506787,
+    "urfave-cli": 0.4291497975708502,
+    "vue-core": 0.5191489361702127
+   },
+   "hybrid": {
+    "attrs": 0.654320987654321,
+    "click": 0.5567010309278351,
+    "marshmallow": 0.6910994764397905,
+    "urfave-cli": 0.6147859922178988,
+    "vue-core": 0.5185185185185185
+   },
+   "rrr-first": {
+    "attrs": 0.4912280701754386,
+    "click": 0.5538461538461539,
+    "marshmallow": 0.55,
+    "urfave-cli": 0.3644444444444444,
+    "vue-core": 0.2647058823529412
+   },
+   "head": {
+    "attrs": 0.6486486486486486,
+    "click": 0.4875,
+    "marshmallow": 0.5750000000000001,
+    "urfave-cli": 0.7959183673469388,
+    "vue-core": 0.6804123711340205
+   }
+  },
+  "caveat": "rrr-first's LORO gain is concentrated in attrs (+3.5 calls) from a directive running another repo's test id in the system Python, credited by the goal-class Sat rule; not credible."
+ },
+ "vs_baseline": {
+  "baseline": "U11 + learned reflexes: +1.00 calls/session post-hoc, +2.11 pre-emptive (Rust replay, 82 Haiku v2 sessions); harness U11 predictive: split +1.63 calls (+3.5% $), loro +0.88 (+1.9% $) on the same 158-session test set",
+  "this_lever_best_credible": "~0 (learned representation in place of action.rs: split -0.07 calls/task [-0.26, +0.11]; grown-memory strict Sat +0.09 [-0.21, +0.42])",
+  "this_lever_replay_optimistic": "rrr-first LORO +1.41 calls/task [0.61, 2.24], +2.7% of $ [0.6, 5.1] \u2014 above U11 predictive LORO (+0.88) but driven by uncalibrated `pip install -e .` and implausible directives",
+  "action_rs_in_same_learner": {
+   "split": 0.0,
+   "loro_calls": 0.6470401066286061,
+   "grown_calls": 0.07870226246562186
+  }
+ },
+ "hard_coded_parts": [
+  "MEASUREMENT: instrument.py (port of the Rust replay's hand-written Sat/W features: runner names, env-signature and probe regexes); the common harness's features",
+  "MEASUREMENT: the gold set (350 commands hand-labelled by this agent into 18 classes; rubric close to action.rs's categories)",
+  "MEASUREMENT: ceiling.py's shell-write heuristic for the redundancy ceiling",
+  "BASELINE: taxonomy/intent labels from evals/lab/abstraction/grammar.py (the ancestor of action.rs); lgg-loose (prior lab, hand-typed holes)",
+  "LEARNED METHODS: shell syntax only (separators, pipes, heredocs, quoting, 2>&1, leading '-' = flag); numeric thresholds (vocab >= 2-3 sessions, reflex >= 3 sessions and fail(Y) <= fail(X)/2, failure template >= 80% is_error, window 6, coarse level tau-0.2); choice of outcome features (output words, first-line template, is_error, next head)",
+  "DATA CHOICE: reflexes learned from train + control arms only (adage arm steered by U11)"
+ ],
+ "ceiling": {
+  "perfect_recovery_reflex_calls_per_session": {
+   "value": 2.4875789473684216,
+   "ci90": [
+    2.1944000000000004,
+    2.7812631578947373
+   ],
+   "share_of_calls": 0.08063829156939493,
+   "usd_per_session_flat": 0.020092247950770244,
+   "sessions": 190
+  },
+  "all_failed_or_env_friction_share_of_calls": [
+   0.13601843710299097,
+   0.12544502338280392,
+   0.14611918180244912
+  ],
+  "redundant_repeat_exact_calls_per_session": {
+   "value": 2.9789473684210526,
+   "ci90": [
+    2.5892105263157896,
+    3.395
+   ],
+   "share": 0.0869992293631102
+  },
+  "redundant_repeat_best_learned_equivalence": {
+   "method": "a2v",
+   "value": 3.136842105263158,
+   "share": 0.09214136902292366
+  },
+  "harness_oracle_every_failed_call_share_of_usd": 0.103,
+  "reading": "Action equivalence only decides which calls in these pools a reflex can match; the pools are <= ~9-10% of calls/$, so this lever cannot reach 15-20%."
+ },
+ "build_recommendation": {
+  "decision": "Keep action.rs. Do not replace it with a learned representation now.",
+  "optional_small_build": "rrr-first without BPE as a fallback labeller for commands action.rs labels `other` and as a learned env-class signal: shell-syntax lex -> ~17 sparse positional features (hash map, ~1.1k vocab) -> sum rows of W (1.1k x 32 f32, ~140 KB; 35 KB int8) -> L2 normalise -> nearest of ~20-30 prototypes (32-d) if cos >= tau else new class. ~1.3k FLOPs/command: a few microseconds in Rust (Python: 0.34 ms lex+features, 0.14 ms project, 1.4 us nearest). Fitted offline at condition time by reduced-rank ridge regression from command features to FIRST-IN-SESSION outcome features.",
+  "expected_value": "~0 calls and ~0% of $ on repositories action.rs covers; on repositories with unknown tools at most the recovery ceiling (<= 2.5 calls/session, ~8% of calls), realistically a fraction (LORO gold agreement 0.44-0.60).",
+  "gate": "Before any build: live micro-slice (~$5, harness protocol) of the learned `pip install -e .` reflex on marshmallow/attrs; drop the learned route if p_follow < 0.6 or local saving < 50% of replay.",
+  "transferable_finding": "Condition outcome-based learning on 'before any repair' (first-in-session outcomes): it recovers state-independent action properties (the .venv/system split) with no hand-written features."
+ },
+ "so_what": "Shipped in place of action.rs: expected ~0 calls/task and ~0% of $ (credible estimate; replay-optimistic LORO +1.41 calls [0.61, 2.24], +2.7% of $ [0.6, 5.1] rests on uncalibrated directives), no pass-rate effect; confidence it survives a live A/B as a gain < 20%. The lever's ceiling is ~8% of calls.",
+ "harness_report_rrr_first_loro": {
+  "name": "loro",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 1.405673462087788,
+   "calls_saved_ci": [
+    0.6083366334928477,
+    2.2350371455723996
+   ],
+   "calls_saved_share": 0.043463093348311214,
+   "calls_saved_share_ci": [
+    0.01844426683223908,
+    0.07039141973767832
+   ],
+   "usd_saved_per_task": 0.0070019603922709134,
+   "usd_saved_ci": [
+    0.0016562961262262157,
+    0.012696198274912
+   ],
+   "usd_saved_share": 0.02689004120886966,
+   "usd_saved_share_ci": [
+    0.006164005424755953,
+    0.05083373152949445
+   ],
+   "tokens_saved_per_task": 87126.12658227848,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 2.1145342215814584,
+   "s_hat_rust_ci95": [
+    1.335195082863547,
+    2.9344056518164403
+   ],
+   "directives": 137,
+   "useful": 81,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 0.5912408759124088,
+   "useful_lb90": 0.5210384393872861,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.26810176125244617,
+   "gates": {
+    "useful_lb90>=0.8": false,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "command"
+   ]
+  },
+  "by_route": {
+   "ae:c10": {
+    "directives": 56,
+    "useful": 32,
+    "harmful": 0,
+    "saved": 159.0,
+    "cost": 1.297822961441169
+   },
+   "ae:c5": {
+    "directives": 40,
+    "useful": 19,
+    "harmful": 0,
+    "saved": 22.0,
+    "cost": 0.8424825734932518
+   },
+   "ae:c9": {
+    "directives": 30,
+    "useful": 30,
+    "harmful": 0,
+    "saved": 156.0,
+    "cost": 0.651197325881184
+   },
+   "ae:c19": {
+    "directives": 11,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.11209012931401413
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.018735083844129558,
+    "usd_saved_ci": [
+     0.009445748021592445,
+     0.026302953333333334
+    ],
+    "usd_saved_share": 0.09907308563505017,
+    "calls_saved_per_task": 3.548635371355328,
+    "calls_saved_ci": [
+     2.0285426115947924,
+     4.793992255247711
+    ],
+    "s_hat_rust": 3.9486353713553277,
+    "directives": 40
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": -0.005855670964726026,
+    "usd_saved_ci": [
+     -0.011021815311882312,
+     -0.0010458064193831363
+    ],
+    "usd_saved_share": -0.020580102480069893,
+    "calls_saved_per_task": -0.5210620643373313,
+    "calls_saved_ci": [
+     -1.0442458381518602,
+     0.004448587464705178
+    ],
+    "s_hat_rust": 0.5289379356626686,
+    "directives": 40
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.03492867333333334,
+    "usd_saved_ci": [
+     0.029798373333333336,
+     0.03960261
+    ],
+    "usd_saved_share": 0.15403481513084175,
+    "calls_saved_per_task": 5.178293422470627,
+    "calls_saved_ci": [
+     4.546176654761308,
+     5.778690363568756
+    ],
+    "s_hat_rust": 5.178293422470627,
+    "directives": 30
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": -0.01075634317466267,
+    "usd_saved_ci": [
+     -0.013946033174662672,
+     -0.007407557083333334
+    ],
+    "usd_saved_share": -0.04800681952989839,
+    "calls_saved_per_task": -1.3820056330821258,
+    "calls_saved_ci": [
+     -1.7592710330414425,
+     -1.0035358911869598
+    ],
+    "s_hat_rust": -0.007005633082125883,
+    "directives": 11
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": -0.008894546325085443,
+    "usd_saved_ci": [
+     -0.0113891747363863,
+     -0.006049124773107328
+    ],
+    "usd_saved_share": -0.02410257265260852,
+    "calls_saved_per_task": -1.0076011817391965,
+    "calls_saved_ci": [
+     -1.2629755888283851,
+     -0.6922397736654496
+    ],
+    "s_hat_rust": -0.007601181739196433,
+    "directives": 16
+   }
+  }
+ }
+}

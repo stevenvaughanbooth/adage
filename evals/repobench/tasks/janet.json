@@ -1,0 +1,552 @@
+{
+ "repo": "janet",
+ "url": "https://github.com/janet-lang/janet",
+ "repo_key": "github.com/janet-lang/janet",
+ "tasks": [
+  {
+   "id": "janet-e05bc7eb",
+   "sha": "e05bc7eb5471d7ea49f4407b641f3b2795190477",
+   "base": "b63d41102eef04d7698a4ad07769038aa88f50c4",
+   "date": "2023-09-28T20:14:22-05:00",
+   "subject": "Address compiler bug with `break`.",
+   "src_files": [
+    "src/core/emit.c",
+    "src/core/specials.c"
+   ],
+   "test_files": [
+    "test/suite-boot.janet"
+   ],
+   "gold_files": [
+    "src/core/emit.c",
+    "src/core/specials.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-boot.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite boot...\n\u001b[31m\u2718\u001b[0m test/suite-boot.janet:933: \"bytecode round-trip\": false\n\u001b[31m\u2718\u001b[0m test/suite-boot.janet:938: \"bytecode round-trip\": false\n\u001b[31m\u2718\u001b[0m test/suite-boot.janet:941: \"bytecode round-trip\": false\nFinished suite boot in 0.015 seconds - 510 of 513 tests passed.",
+   "fixed_seconds": 17.14,
+   "n_tests": 513,
+   "prompt": "When a function uses the result of a `break` expression (e.g. assigns it to a variable, or passes it as an argument), the compiler can emit invalid bytecode. It runs fine when called directly, but marshalling the compiled function fails. For example:\n\n```\n(defn f [&] (def x (break 1)))\n(unmarshal (marshal f))\n```\n\nThis errors during unmarshal even though `f` itself works. Similar problems occur with forms like `(foo (break (foo)))` or nested `(break (break (break)))`. Please investigate and fix the compiler so functions using `break` results always produce valid, marshallable bytecode.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-56f33f51",
+   "sha": "56f33f514b4a29a449869ca2899f73d34b292ef7",
+   "base": "1ccd544b941e8f0debe3a0f02216ea8ccbef0a01",
+   "date": "2023-11-14T19:52:22-06:00",
+   "subject": "Fix regression #1327",
+   "src_files": [
+    "src/boot/boot.janet",
+    "src/core/specials.c"
+   ],
+   "test_files": [
+    "test/suite-specials.janet"
+   ],
+   "gold_files": [
+    "src/boot/boot.janet",
+    "src/core/specials.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-specials.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-specials.janet...\n\u001b[31m\u2718\u001b[0m test/suite-specials.janet:204: \"assert error\": false\nFinished suite test/suite-specials.janet in 0.006 seconds - 57 of 58 tests passed.",
+   "fixed_seconds": 15.96,
+   "n_tests": 58,
+   "prompt": "Redefining a top-level binding with `def` where the new value's expression references the old value of that same name gives the wrong result. For example:\n\n```\n(def x \"A\")\n(def x (if (= nil x) \"B\" x))\n```\n\nSince `x` was not `nil` at the time of the second `def`, `x` should still end up equal to `\"A\"`, but it doesn't. Please investigate and fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-a9176a77",
+   "sha": "a9176a77e6a93a5e10b5c069e9b1c88d4b25e40e",
+   "base": "16f409c6a9d84035e615fb76f3404a84167c11cb",
+   "date": "2023-11-22T08:18:23-06:00",
+   "subject": "Prevent bytecode optimization from remove mk* instructions.",
+   "src_files": [
+    "src/core/bytecode.c"
+   ],
+   "test_files": [
+    "test/suite-boot.janet"
+   ],
+   "gold_files": [
+    "src/core/bytecode.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-boot.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-boot.janet...\nerror: <function identity> called with 4 arguments, expected 1\n  in regress-1330 [test/suite-boot.janet] on line 968, column 3\n  in _thunk [test/suite-boot.janet] (tailcall) on line 969, column 20",
+   "fixed_seconds": 18.09,
+   "n_tests": 522,
+   "prompt": "Inside a function, defining a local array/struct that splices another local array into it (using `;`) can corrupt the array that was defined earlier, even if the new value is never used. For example:\n\n```\n(defn f [&]\n  (def a [1 2 3])\n  (def b [;a])\n  (identity a))\n(f)\n```\n\nThis should return `[1 2 3]`, but `a` ends up with unexpected/wrong contents. Please fix this bug.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-9142f38c",
+   "sha": "9142f38cbceb72e7d2d8a12846d2c22c2322fc34",
+   "base": "e8ed961572fea327bd337dd0b39070a15a67da25",
+   "date": "2024-01-01T08:58:31-06:00",
+   "subject": "Fix #1341.",
+   "src_files": [
+    "src/boot/boot.janet"
+   ],
+   "test_files": [
+    "test/suite-boot.janet"
+   ],
+   "gold_files": [
+    "src/boot/boot.janet"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-boot.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-boot.janet...\nerror: expected integer key for tuple in range [0, 0), got 0\n  in dotup [boot.janet] on line 2130, column 12\n  in macex1 [boot.janet] on line 2144, column 16\n  in macex [boot.janet] on line 2241, column 16\n  in _thunk [test/suite-boot.janet] (tailcall) on line 972, column 19",
+   "fixed_seconds": 20.57,
+   "n_tests": 524,
+   "prompt": "Calling `macex` on an empty tuple or empty array does not return an equal empty value back. For instance, `(macex '())` should equal `'()` and `(macex '[])` should equal `'[]`, but the actual results differ. Please fix `macex`'s handling of these empty collection literals.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-9e6abbf4",
+   "sha": "9e6abbf4d40b3ebe121147b9e51a68f6746e3848",
+   "base": "6032a6d65874514f88690aaf35e97f53a0ab6176",
+   "date": "2024-03-10T09:07:11-05:00",
+   "subject": "Fix asm roundtrip issue.",
+   "src_files": [
+    "src/core/asm.c"
+   ],
+   "test_files": [
+    "test/suite-asm.janet",
+    "test/suite-boot.janet"
+   ],
+   "gold_files": [
+    "src/core/asm.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-asm.janet test/suite-boot.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-asm.janet...\n\u001b[31m\u2718\u001b[0m test/helper.janet:17: \"arity > used slots (issue #1424)\": false\nFinished suite test/suite-asm.janet in 0.005 seconds - 5 of 6 tests passed.",
+   "fixed_seconds": 23.04,
+   "n_tests": 531,
+   "prompt": "Disassembling and then reassembling a function via `asm`/`disasm` fails when an inner function defined inside it has an arity greater than the number of stack slots the outer function uses. For example:\n\n```\n(asm (disasm (fn []\n               (def foo (fn [one two] one))\n               (foo 100 200))))\n```\n\nThis should succeed and reproduce an equivalent function, but currently errors out. Please fix the asm/disasm round-trip for this case.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-43ecd4f2",
+   "sha": "43ecd4f2d895d2f0dd9d5e109bcaa1b34a3bffb5",
+   "base": "c5a9602be9fcf883dff0e16a7d3b78e5e07dcf39",
+   "date": "2024-08-22T19:37:41-05:00",
+   "subject": "Add fixes for marshalling weak containers - Fix #1488",
+   "src_files": [
+    "src/core/marsh.c",
+    "src/include/janet.h"
+   ],
+   "test_files": [
+    "test/suite-marsh.janet"
+   ],
+   "gold_files": [
+    "CHANGELOG.md",
+    "src/core/marsh.c",
+    "src/include/janet.h"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-marsh.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-marsh.janet...\n\u001b[31m\u2718\u001b[0m test/suite-marsh.janet:170: \"array/weak marsh 6\": false\n\u001b[31m\u2718\u001b[0m test/suite-marsh.janet:171: \"array/weak marsh 7\": false\n\u001b[31m\u2718\u001b[0m test/suite-marsh.janet:183: \"table/weak marsh 3\": false\n\u001b[31m\u2718\u001b[0m test/suite-marsh.janet:187: \"table/weak marsh 7\": false\n\u001b[31m\u2718\u001b[0m test/suite-marsh.janet:197: \"table/weak-keys marsh 3\": false\n\u001b[31m\u2718\u001b[0m test/suite-marsh.janet:199: \"table/weak-keys marsh 5\": false\n\u001b[31m\u2718\u001b[0m test/suite-marsh.janet:210: \"table/weak-values marsh 4\": false\n\u001b[31m\u2718\u001b[0m test/suite-marsh.janet:222: \"marsh weak tables with prototypes 4\": false\nFinished suite test/suite-marsh.janet in 0.009 seconds - 61 of 69 tests passed.",
+   "fixed_seconds": 34.52,
+   "n_tests": 69,
+   "prompt": "Weak containers created with `array/weak`, `table/weak`, `table/weak-keys`, or `table/weak-values` lose their weakness after being marshalled and unmarshalled \u2014 the round-tripped copy behaves like an ordinary (strong) container, so entries whose only other references are collected by the GC are not cleared from it the way they are in the original. Prototypes attached to weak tables should also survive the round trip. Please fix marshalling so unmarshalled containers preserve the weak-keys/weak-values/weak semantics of the original.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-07155ce6",
+   "sha": "07155ce65728c2885afdff1a13e5cd04c450d48e",
+   "base": "046d28662ddc87c244560a941ca10b5137830ad7",
+   "date": "2024-10-18T17:53:21-05:00",
+   "subject": "Don't error on empty struct.",
+   "src_files": [
+    "src/core/ffi.c"
+   ],
+   "test_files": [
+    "test/suite-ffi.janet"
+   ],
+   "gold_files": [
+    "src/core/ffi.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-ffi.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-ffi.janet...\nbash: line 1: 30043 Floating point exceptionbuild/janet $t",
+   "fixed_seconds": 24.98,
+   "n_tests": 10,
+   "prompt": "Calling `ffi/struct` with `:void` as its only field type errors out instead of producing a usable empty struct. It's expected that `(ffi/struct :void)` succeeds and yields a struct with `ffi/size` equal to `0` and `ffi/align` equal to `1`. Please fix `ffi/struct` so it no longer errors on this case.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-2b84fb14",
+   "sha": "2b84fb14b4efda23c8ee78550644c7fce3f8b899",
+   "base": "07155ce65728c2885afdff1a13e5cd04c450d48e",
+   "date": "2024-10-18T18:17:06-05:00",
+   "subject": "Fix Issue #1512",
+   "src_files": [
+    "src/core/ffi.c"
+   ],
+   "test_files": [
+    "test/suite-ffi.janet"
+   ],
+   "gold_files": [
+    "src/core/ffi.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-ffi.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-ffi.janet...\n\u001b[31m\u2718\u001b[0m test/suite-ffi.janet:56: \"bad struct issue #1512\": false\nFinished suite test/suite-ffi.janet in 0.001 seconds - 8 of 9 tests passed (0 skipped).",
+   "fixed_seconds": 38.55,
+   "n_tests": 9,
+   "prompt": "`ffi/struct` called with `:void` as its only field currently does not raise an error, but it should \u2014 a struct made up solely of a `:void` field is not a valid struct layout and should be rejected. Please make `(ffi/struct :void)` raise an error instead of succeeding.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-60d9f977",
+   "sha": "60d9f97750fff592d7d8444c4443dca263dd6eca",
+   "base": "f252933f62b240725739698a966fc0fd66de908c",
+   "date": "2025-01-01T11:28:10-06:00",
+   "subject": "Address issue #1539 - infinite loop in peg split",
+   "src_files": [
+    "src/core/peg.c"
+   ],
+   "test_files": [
+    "test/suite-peg.janet"
+   ],
+   "gold_files": [
+    "src/core/peg.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-peg.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-peg.janet...\nbash: line 1: 22675 Killed                  build/janet $t",
+   "fixed_seconds": 41.8,
+   "n_tests": 225,
+   "prompt": "peg's `split` rule can hang forever (or OOM) when the pattern used for splitting can match a zero-width string. For example, `(peg/match ~(split \"\" (capture (to -1))) \"hello there friends\")` never returns, and `(peg/match ~(split \",\" (capture 0)) \"abc123,,,,\")` also misbehaves. Splitting should terminate and produce the captured pieces even when the separator/capture pattern matches an empty string at some position. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-06d581dd",
+   "sha": "06d581dde3595f372ef2ac94fcbcc1bc34bd1bae",
+   "base": "2b49903c828c8667cbbbda4c5f4404d3bd3e7af1",
+   "date": "2025-01-20T09:02:22-06:00",
+   "subject": "Fix #1546 - large ranges.",
+   "src_files": [
+    "src/core/corelib.c"
+   ],
+   "test_files": [
+    "test/suite-corelib.janet"
+   ],
+   "gold_files": [
+    "src/core/corelib.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-corelib.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-corelib.janet...\njanet internal error at line 458 in file src/core/corelib.c: bad range code\nbash: line 1: 15670 Aborted                 build/janet $t",
+   "fixed_seconds": 37.92,
+   "n_tests": 93,
+   "prompt": "Calling `range` with a very large argument, e.g. `(range 0xFFFFFFFFFF)`, crashes the interpreter via an internal assertion failure instead of failing gracefully. It should instead raise a normal Janet error that can be caught, like other invalid-argument cases. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-d30fd275",
+   "sha": "d30fd2757555ea38c1ae5693be1766ef5bb23919",
+   "base": "1b278fc657e1ecf258c2ed8778e8529a3861fa7e",
+   "date": "2025-02-02T20:34:36-06:00",
+   "subject": "Address #1554 - capture first 0-width match in repeating rules and optionals.",
+   "src_files": [
+    "src/core/peg.c"
+   ],
+   "test_files": [
+    "test/suite-peg.janet"
+   ],
+   "gold_files": [
+    "src/core/peg.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-peg.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-peg.janet...\n\u001b[31m\u2718\u001b[0m test/suite-peg.janet:793: \"issue 1554 case 1\": false\n\u001b[31m\u2718\u001b[0m test/suite-peg.janet:794: \"issue 1554 case 2\": false\n\u001b[31m\u2718\u001b[0m test/suite-peg.janet:795: \"issue 1554 case 3\": false\n\u001b[31m\u2718\u001b[0m test/suite-peg.janet:797: \"issue 1554 case 5\": false\nFinished suite test/suite-peg.janet in 0.018 seconds - 228 of 232 tests passed (0 skipped).",
+   "fixed_seconds": 37.01,
+   "n_tests": 232,
+   "prompt": "peg loop constructs like `any` combined with a lookahead pattern (using `>`) are dropping captures they should keep. For instance, `(peg/match '(any (> '1)) \"abc\")` should capture `\"a\"` but doesn't behave as expected, and similar issues occur with `(any (? (> '1)))`, `(any (> (? '1)))`, and the same combinations preceded by `(* \"a\" ...)`. When a repeating or optional rule's very first iteration is a zero-width match caused by a lookahead, the capture from that iteration should still be kept even though the loop stops afterward. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-e0a0e2ed",
+   "sha": "e0a0e2ed421d26fe3477f9ffe0735a7477dd0238",
+   "base": "3441bcbd69e304aefa34ff5ec272f0a6b8d3e783",
+   "date": "2025-03-02T10:44:15-06:00",
+   "subject": "Prevent multi-scheduling with os/proc-wait. (address #1562)",
+   "src_files": [
+    "src/core/os.c"
+   ],
+   "test_files": [
+    "test/suite-ev.janet"
+   ],
+   "gold_files": [
+    "src/core/os.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-ev.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "uhoh\n\nStarting suite test/suite-ev.janet...\n\u001b[31m\u2718\u001b[0m test/suite-ev.janet:544: \"deadline expired\": false\n\u001b[31m\u2718\u001b[0m test/suite-ev.janet:549: \"early termination failure 2\": false\n\u001b[31m\u2718\u001b[0m test/suite-ev.janet:551: \"early termination failure 3\": false\nFinished suite test/suite-ev.janet in 1.046 seconds - 691 of 694 tests passed (0 skipped).",
+   "fixed_seconds": 47.56,
+   "n_tests": 694,
+   "prompt": "`os/proc-wait` doesn't respect cancellation via `ev/with-deadline`: if a subprocess is spawned and waited on inside a deadline block, the deadline expiring should abort the wait with an error rather than letting the waited-on code continue running past the deadline (or causing scheduling issues). For example, spawning a process that sleeps several seconds and calling `(ev/with-deadline 0.01 (os/proc-wait p) ...)` should raise a \"deadline expired\" error immediately and not execute the code after `os/proc-wait`. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-2a330800",
+   "sha": "2a3308005dce3b6d11df5181c4c1187f108d6ff6",
+   "base": "98265f0637b447160724d04376e71049150fa2c1",
+   "date": "2025-10-25T12:15:12-05:00",
+   "subject": "Merge pull request #1659 from ianthehenry/try-macro-hygiene",
+   "src_files": [
+    "src/boot/boot.janet"
+   ],
+   "test_files": [
+    "test/suite-boot.janet"
+   ],
+   "gold_files": [
+    "src/boot/boot.janet"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-boot.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-boot.janet...\nerror: bad slot #0, expected fiber, got :error\n  in fiber/status [src/core/fiber.c] on line 585\n  in thunk [test/suite-boot.janet] (tail call) on line 1031, column 12",
+   "fixed_seconds": 39.22,
+   "n_tests": 1543,
+   "prompt": "The `try` macro doesn't hygienically handle its optional two-argument catch clause when both the error and fiber bindings use the same symbol name (e.g. an ignored binding). For example, `(try (error :error) ([_ _] :caught))` fails to work correctly, even though single-symbol forms like `([e] e)` and `([e fib] [e (fiber? fib)])` work fine. `try` should correctly bind both the error value and the fiber regardless of what symbols (including duplicates or ignored names) are used in the destructuring form. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-9b9f2a17",
+   "sha": "9b9f2a17136c1aedab2e3494567487778d991345",
+   "base": "8df4d47edec8f03ea0df1e82dcea66348cd36494",
+   "date": "2025-11-09T09:06:06-06:00",
+   "subject": "Merge pull request #1660 from pyrmont/bugfix.confirm-bundle-files",
+   "src_files": [
+    "src/boot/boot.janet"
+   ],
+   "test_files": [
+    "test/helper.janet",
+    "test/suite-bundle.janet"
+   ],
+   "gold_files": [
+    "examples/sample-bad-bundle1/info.jdn",
+    "examples/sample-bad-bundle2/badmod.janet",
+    "examples/sample-bad-bundle2/bundle.janet",
+    "examples/sample-bad-bundle2/info.jdn",
+    "src/boot/boot.janet"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-bundle.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-bundle.janet...\n\u001b[31m\u2718\u001b[0m test/suite-bundle.janet:121: \"bundle missing bundle script\": false\n\u001b[31m\u2718\u001b[0m test/suite-bundle.janet:128: \"bundle check hook fails\": false\nFinished suite test/suite-bundle.janet in 0.036 seconds - 31 of 33 tests passed (0 skipped).",
+   "fixed_seconds": 33.34,
+   "n_tests": 33,
+   "prompt": "When `bundle/install` fails, the error message doesn't distinguish between different failure causes, making it hard to diagnose problems. Specifically, installing a bundle directory that is missing a `bundle.janet`/`bundle/init.janet` script should raise a clear error saying so (e.g. \"bundle must contain bundle.janet or bundle/init.janet\"), and this should be distinct from the error raised when a bundle's `:check` hook itself fails (e.g. reporting the actual check failure message like \"Check failed!\"). Currently both cases seem to produce the same generic error. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-d5a56caa",
+   "sha": "d5a56caa33a4cd62ba17d8e7627a03993016aea1",
+   "base": "7d672f43fcd572965c8b63c61dd835d6e680ac1d",
+   "date": "2025-12-22T07:40:29-06:00",
+   "subject": "Add fix for issue #1687 - destrucutre + splice",
+   "src_files": [
+    "src/core/filewatch.c",
+    "src/core/specials.c"
+   ],
+   "test_files": [
+    "test/suite-corelib.janet"
+   ],
+   "gold_files": [
+    "src/core/filewatch.c",
+    "src/core/specials.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-corelib.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-corelib.janet...\ntest/suite-corelib.janet:199:65: compile error: splice can only be used in function parameters and data constructors, it has no effect here",
+   "fixed_seconds": 37.08,
+   "n_tests": 97,
+   "prompt": "Destructuring `def` or `var` forms that use a splice (`;`) on the right-hand side incorrectly raise a compile error, even though the code is valid. For example, `(def [a] [;[1]]) a` and `(var [a] [;[1]]) a` should both work fine, as should `(def (n) [(splice [])]) n`, but they currently fail. An optimization that avoids building an intermediate tuple appears to be too aggressive about flagging splices as invalid destructuring targets. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-7366fbed",
+   "sha": "7366fbed1fa52add394a7c35720bb43043780d8e",
+   "base": "797643716b56a0b8608f18ac5ed2eb8ca77662a8",
+   "date": "2026-01-28T10:55:00-06:00",
+   "subject": "Disallow scheduling already modified fibers.",
+   "src_files": [
+    "src/core/ev.c"
+   ],
+   "test_files": [
+    "test/suite-ev2.janet"
+   ],
+   "gold_files": [
+    "src/core/ev.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-ev2.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-ev2.janet...\n\u001b[31m\u2718\u001b[0m test/suite-ev2.janet:84: \"cannot schedule non-new fiber\": false\nFinished suite test/suite-ev2.janet in 0.709 seconds - 5 of 6 tests passed (0 skipped).",
+   "fixed_seconds": 36.14,
+   "n_tests": 6,
+   "prompt": "Scheduling a fiber with `ev/go` after it has already been resumed/modified should be rejected, but currently it's allowed, which leads to confusing misuse. For example, creating a fiber with `coro`, calling `(resume f)` once, and then calling `(ev/go f)` should raise an error like \"cannot schedule non-new fiber\" instead of silently proceeding. Please fix this so already-started fibers can't be scheduled via `ev/go`.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-0c1585fd",
+   "sha": "0c1585fdfee7bbc6a9fba9520611cc91ced4b170",
+   "base": "a5c4e929e82a8e42456b022f9ac128db21dcbdc4",
+   "date": "2026-01-29T06:52:43-06:00",
+   "subject": "Preserve tuple type to fix #1709",
+   "src_files": [
+    "src/boot/boot.janet"
+   ],
+   "test_files": [
+    "test/suite-corelib.janet"
+   ],
+   "gold_files": [
+    "src/boot/boot.janet"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-corelib.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-corelib.janet...\n\u001b[31m\u2718\u001b[0m test/suite-corelib.janet:206: \"Macro expand inside set preserves tuple type correctly\": false\nFinished suite test/suite-corelib.janet in 0.019 seconds - 103 of 104 tests passed (0 skipped).",
+   "fixed_seconds": 38.45,
+   "n_tests": 104,
+   "prompt": "When `macex1` is used to expand a short-fn form that contains a `set` on a tuple-indexed location, the tuple type information gets lost during expansion. For example:\n\n```\n(macex1 '|(set (my-table [2 1]) 'foo))\n```\n\nis expected to produce `(fn :short-fn [] (set (my-table [2 1]) (quote foo)))` with the `[2 1]` remaining a tuple, but the expansion currently mangles it. Please fix `macex1` so that macro expansion preserves tuple semantics inside `set` forms.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-d47f8271",
+   "sha": "d47f82713b1d7fbc483fb89fa4f24575aa8bc0df",
+   "base": "497e363401f50381cdb843b89d8e9310838bccea",
+   "date": "2026-01-31T23:57:08-06:00",
+   "subject": "More tweaks for named arity linting.",
+   "src_files": [
+    "src/core/compile.c"
+   ],
+   "test_files": [
+    "test/suite-compile.janet"
+   ],
+   "gold_files": [
+    "src/core/compile.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-compile.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-compile.janet...\n\u001b[31m\u2718\u001b[0m test/suite-compile.janet:143: \"named 4 good\": false\n\u001b[31m\u2718\u001b[0m test/suite-compile.janet:145: \"named 5 good\": false\n\u001b[31m\u2718\u001b[0m test/suite-compile.janet:148: \"g good 2\": false\n\u001b[31m\u2718\u001b[0m test/suite-compile.janet:149: \"g good 3\": false\nFinished suite test/suite-compile.janet in 0.001 seconds - 32 of 36 tests passed (0 skipped).",
+   "fixed_seconds": 35.14,
+   "n_tests": 36,
+   "prompt": "The arity linting for functions that combine `&opt` and `&named` parameters doesn't correctly validate calls in several edge cases, e.g. when `&opt` params come before `&named`, or when there's no leading positional/optional param at all. For example:\n\n```\n(defn f [x &opt y &named z] [x y z])\n(f 1 2 :z)        ; should be flagged as a lint error (missing value for :z)\n(f 1 2 :z 4 5)     ; should be flagged as a lint error (extra trailing arg)\n(f 1 2 :z 10)      ; should compile fine\n```\n\nPlease fix the compiler's arity/keyword-argument linting so these cases involving `&opt` combined with `&named` are handled correctly.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-c6b802b0",
+   "sha": "c6b802b082aa21b6e65e8c2729c85237b0cc8a24",
+   "base": "a261a8f6b4afca9f44b69e85c623dac32dffef14",
+   "date": "2026-04-03T08:38:12-05:00",
+   "subject": "Add #1737",
+   "src_files": [
+    "src/core/pp.c"
+   ],
+   "test_files": [
+    "test/suite-pp.janet"
+   ],
+   "gold_files": [
+    "src/core/pp.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-pp.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-pp.janet...\n\u001b[31m\u2718\u001b[0m test/suite-pp.janet:67: \"(deep= \\\"  @[]\\\" (string/format \\\"  %M\\\" @[]))\": false\n\u001b[31m\u2718\u001b[0m test/suite-pp.janet:68: \"(deep= \\\"   @[]\\\" (string/format \\\"   %M\\\" @[]))\": false\n\u001b[31m\u2718\u001b[0m test/suite-pp.janet:69: \"(deep= \\\"    @[]\\\" (string/format \\\"    %M\\\" @[]))\": false\n\u001b[31m\u2718\u001b[0m test/suite-pp.janet:70: \"(deep= \\\"     @[]\\\" (string/format \\\"     %M\\\" @[]))\": false\n\u001b[31m\u2718\u001b[0m test/suite-pp.janet:73: \"(deep= \\\"  @[3]\\\" (string/format \\\"  %m\\\" @[3]))\": false\n\u001b[31m\u2718\u001b[0m test/suite-pp.janet:74: \"(deep= \\\"   @[4]\\\" (string/format \\\"   %m\\\" @[4]))\": false\n\u001b[31m\u2718\u001b[0m test/suite-pp.janet:75: \"(deep= \\\"    @[5]\\\" (string/format \\\"    %m\\\" @[5]))\": false\n\u001b[31m\u2718\u001b[0m test/suite-pp.janet:76: \"(deep= \\\"     @[6]\\\" (string/format \\\"     %m\\\" @[6]))\": false\n\u001b[31m\u2718\u001b[0m test/suite-pp.janet:133: \"(deep= \\\"?? at [a] (index 0)\\\\nstack [1]:\\\\n  [0]: @[]\\\\n\\\" (string capture-buf))\": false\n\u001b[31m\u2718\u001b[0m test/suite-pp.janet:141: \"pretty format should not eat explicit newlines\": false\nFinished suite test/suite-pp.janet in 0.001 seconds - 18 of 28 tests passed (0 skipped).",
+   "fixed_seconds": 36.55,
+   "n_tests": 28,
+   "prompt": "The pretty-printing formatter (`%m`/`%M` in `string/format`, and peg error printing) incorrectly eats/collapses explicit newlines and doesn't correctly handle the case where the print formatter doesn't start at the beginning of the buffer. For example, `(string/format \"   %M\" @[])` should produce `\"   @[]\"` but doesn't preserve the leading spaces correctly, and multi-line output like peg match failure traces (e.g. from `(peg/match ~(* (constant @[]) (??)) \"a\")` with `*err*` capturing output) loses its intended newline structure. Please fix the pretty printer so leading content before a `%m`/`%M` specifier and explicit newlines in formatted output are preserved correctly.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-ffb83301",
+   "sha": "ffb83301c58917c26efdd165cfd39ac676bec2d8",
+   "base": "de3bb4ceb2cb2e223dff89e948d4644c978d7d9a",
+   "date": "2026-06-21T11:46:57-05:00",
+   "subject": "Handle bad ev/thread construction better.",
+   "src_files": [
+    "src/core/ev.c"
+   ],
+   "test_files": [
+    "test/fuzzers/fuzz_dobytes.c",
+    "test/suite-ev.janet"
+   ],
+   "gold_files": [
+    "src/core/ev.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-ev.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-ev.janet...\nerror: expected string, symbol, keyword, array, tuple, table, struct or buffer, got nil\n  in in pc=0\n\u001b[31m\u2718\u001b[0m test/suite-ev.janet:609: \"bad thread\": false\n\u001b[31m\u2718\u001b[0m test/suite-ev.janet:610: \"bad thread 2\": false\nFinished suite test/suite-ev.janet in 1.336 seconds - 735 of 737 tests passed (0 skipped).",
+   "fixed_seconds": 34.99,
+   "n_tests": 737,
+   "prompt": "Calling `ev/thread` with a malformed argument (e.g. something that isn't a proper function value, or a function whose arity doesn't match the arguments being passed) causes memory corruption instead of a clean error. For example:\n\n```\n(ev/thread in)\n(ev/thread (fn [x y] x) 1)\n```\n\nBoth of these should just raise a normal error rather than corrupting state. Please fix `ev/thread`'s argument validation to reject bad thread construction gracefully.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-27000dee",
+   "sha": "27000deed5f7899c8f659c2da6ed32c0b00ff618",
+   "base": "e5e13489c2b27deaba1ee23f2525c871f418be4f",
+   "date": "2026-08-15T11:35:15-05:00",
+   "subject": "Address #1790 - limit number of automatic parameters.",
+   "src_files": [
+    "src/boot/boot.janet"
+   ],
+   "test_files": [
+    "test/suite-corelib.janet"
+   ],
+   "gold_files": [
+    "src/boot/boot.janet"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-corelib.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-corelib.janet...\n\u001b[31m\u2718\u001b[0m test/suite-corelib.janet:214: \"limit short-fn parameters 2\": false\n\u001b[31m\u2718\u001b[0m test/suite-corelib.janet:215: \"limit short-fn parameters 3\": false\n\u001b[31m\u2718\u001b[0m test/suite-corelib.janet:216: \"limit short-fn parameters 4\": false\n\u001b[31m\u2718\u001b[0m test/suite-corelib.janet:217: \"limit short-fn parameters 5\": false\n\u001b[31m\u2718\u001b[0m test/suite-corelib.janet:218: \"limit short-fn parameters 6\": false\n\u001b[31m\u2718\u001b[0m test/suite-corelib.janet:219: \"limit short-fn parameters 7\": false\nFinished suite test/suite-corelib.janet in 7.969 seconds - 106 of 112 tests passed (0 skipped).",
+   "fixed_seconds": 42.91,
+   "n_tests": 112,
+   "prompt": "Short-fn automatic parameters like `$9999` should macro-expand fine, but malformed or excessively large automatic parameter symbols (like `$10000`, `$8.8`, or huge numbers) are not properly rejected at macro-expansion time \u2014 currently something like `$88888888888888` just silently gets treated as an ordinary symbol and fails later with a confusing unknown-binding error instead of a clear error immediately. For example:\n\n```\n(macex1 '|$9999)     ; should succeed\n(macex1 '|$10000)    ; should error immediately\n(macex1 '|$8.8)      ; should error immediately\n```\n\nPlease add proper limits/validation so automatic parameter symbols of the form `$<number>` produce an immediate, clear macro-expansion error when they're out of range or not a valid index, instead of silently falling through.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-d177131c",
+   "sha": "d177131c84095f29d7af7f57a0a9f999f1153c95",
+   "base": "5b07408181e3483e6045259003a09579d629c196",
+   "date": "2026-08-23T13:14:47-05:00",
+   "subject": "Handle empty tuple as lhs in def/var without fatal error.",
+   "src_files": [
+    "src/core/specials.c"
+   ],
+   "test_files": [
+    "test/suite-compile.janet"
+   ],
+   "gold_files": [
+    "src/core/specials.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-compile.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-compile.janet...\njanet abort at src/core/specials.c:593: bad destructure\nbash: line 1: 16321 Aborted                 build/janet $t",
+   "fixed_seconds": 43.07,
+   "n_tests": 45,
+   "prompt": "Using an empty tuple as the left-hand side of `def` (e.g. `(def [] [1])`) causes a fatal/abort error in the interpreter instead of compiling normally with no bindings created. For example:\n\n```\n(def [] [1])\n```\n\nThis should compile successfully and simply create no bindings, not crash the interpreter. Please fix compilation of `def`/`var` to handle an empty tuple destructuring pattern gracefully.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "janet-cea6dd22",
+   "sha": "cea6dd22617a790ec9f31cd1d2f81057cc94b0e8",
+   "base": "021a17cda1f76c7f00f99f69b10fb83e818cae13",
+   "date": "2026-08-23T13:25:54-05:00",
+   "subject": "Handle degnerate range case gracefully.",
+   "src_files": [
+    "src/core/corelib.c"
+   ],
+   "test_files": [
+    "test/suite-corelib.janet"
+   ],
+   "gold_files": [
+    "src/core/corelib.c"
+   ],
+   "hidden_command": "make -s -j2 build/janet >/dev/null && for t in test/suite-corelib.janet; do build/janet $t || exit 1; done",
+   "base_exit": 1,
+   "base_tail": "Starting suite test/suite-corelib.janet...\njanet abort at src/core/corelib.c:468: bad range code\nbash: line 1:  3580 Aborted                 build/janet $t",
+   "fixed_seconds": 36.58,
+   "n_tests": 114,
+   "prompt": "Calling `range` with a zero step and non-equal start/end causes a problem instead of just returning an empty array. For example:\n\n```\n(range 10 0 0)\n(range 0 10 0)\n```\n\nBoth of these should simply return `@[]` since a zero step can never reach the end value, but currently this degenerate case isn't handled gracefully. Please fix `range` to handle a zero step by returning an empty result instead of erroring or hanging.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  }
+ ]
+}

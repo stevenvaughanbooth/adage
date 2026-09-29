@@ -1,5 +1,5 @@
  adage watch · harbor-dispatch · gen 8216e29f          LIVE
-● adage 0.1.0  ● hooks cc  ● 4 routes  ● auto-learn on
+● adage 0.1.0  ● hooks cc  ● 4 reflexes  ● auto-learn on
 ● no model  ● fail-open 0
  activity · harbor-dispatch ────────────────────────────────
 12:04:00 ●00a11c cc prompt  → lookup-incident
@@ -13,8 +13,8 @@
 12:04:08 ●00a11c cc tools   ✓ met codegen-after-registry
 
 
- learning ──────────────────────────────────────────────────
-12:04   learned incidents: lookup-incident yellow→green (24/
-12:04   new route incidents: dead-end-npm-test red (6/7 sess
-12:04 learning failed (io): tracks directory is not writable
+ conditioning ──────────────────────────────────────────────
+12:04   conditioned incidents: lookup-incident prime→fire (2
+12:04   new reflex incidents: dead-end-npm-test inhibit (6/7
+12:04 conditioning failed (io): tracks directory is not writ
  q quit · p pause · f all repos · v hide quiet · ? help

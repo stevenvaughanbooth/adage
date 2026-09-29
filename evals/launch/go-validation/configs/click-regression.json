@@ -1,0 +1,143 @@
+{
+ "name": "go-validation-click-regression",
+ "repo_key": "github.com/pallets/click",
+ "workdir": "repo",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/repobench/sandbox.py",
+  "click",
+  "{task}",
+  "{dir}",
+  "--arm",
+  "{arm}",
+  "--context",
+  "{repo}/evals/repobench/context/click.md"
+ ],
+ "score": [
+  "python3",
+  "{repo}/evals/repobench/score.py",
+  "click",
+  "{task}",
+  "{dir}"
+ ],
+ "prompts": [
+  "Fix {id}."
+ ],
+ "task_prompts": {
+  "click-b7cf0697": "Shell completion doesn't work correctly for commands nested more than one level deep inside groups. For example, with a group `cli` containing a group `get`, which contains another group `full`, which contains a command `data`, tab-completing after `get full` should suggest `data`, and completing after `get full data` should suggest that command's own options \u2014 but the suggestions returned are wrong or empty for these deeper nesting levels. Please fix shell completion so it works correctly for arbitrarily nested groups.",
+  "click-a1235aac": "Zsh completion output is broken for commands or subcommands whose names contain a colon (`:`). For example, given a group with subcommands named `c:d` and `c:e`, requesting completions (e.g. by setting `COMP_WORDS`/`COMP_CWORD` and invoking with `_CLI_COMPLETE=zsh_complete`) produces malformed output where the colon isn't properly escaped, so Zsh doesn't parse the completion entries correctly. Please fix the Zsh completion output so command names containing colons are handled properly.",
+  "click-eaf33a95": "When a `click.Choice` is built from a Python `Enum` (including `IntEnum`, `StrEnum`, `Flag`, `IntFlag`), the rendered default value shown in `--help` and the metavar/usage listing don't match the enum's name as expected. For example:\n```python\nimport enum, click\n\nclass HashType(enum.Enum):\n    MD5 = enum.auto()\n    SHA1 = enum.auto()\n\n@click.command()\n@click.option(\"-g\", type=click.Choice(HashType), default=HashType.SHA1, show_default=True)\ndef cli(g):\n    pass\n```\nRunning `--help` should show the choice list and default rendered using the enum member names (e.g. `SHA1`), not the enum's raw value or `repr()`. Please fix how Enum-based `Choice` values are rendered for both the option listing and the default.",
+  "click-0be2bd38": "When a required option is missing and `show_envvar=True` is set but the option doesn't actually have an `envvar` configured, the resulting error message still includes a misleading `(env var: ...)` hint. For example:\n```python\nimport click\n\ncli = click.Command(\"cli\", params=[click.Option([\"--foo\"], show_envvar=True, required=True)])\n```\nRunning this command without `--foo` currently prints something like `Error: Missing option '--foo' (env var: 'FOO').` even though no envvar was actually set for the option. The error should just say `Error: Missing option '--foo'.` when there's no real envvar configured. Please fix this.",
+  "click-4f936ac1": "Shell completion returns the wrong values for an `nargs`-based choice option when a boolean flag option appears earlier on the command line. For example:\n```python\nfrom click.shell_completion import ShellComplete\nfrom click import Command, Argument, Option, Choice\n\ncli = Command(\n    \"cli\",\n    add_help_option=False,\n    params=[\n        Argument([\"a\"], type=Choice([\"a1\", \"a2\", \"b\"])),\n        Option([\"--flag\"], is_flag=True),\n        Option([\"-c\"], type=Choice([\"p\", \"q\"]), nargs=2),\n    ],\n)\n```\nCompleting after `a1 --flag -c ` should suggest `p` and `q` (the choices for `-c`), but instead the completion doesn't correctly recognize that `-c` is awaiting its argument, presumably because the preceding flag option throws off the parsing. Please fix shell completion so `nargs` options work correctly after a flag option.",
+  "click-701b3131": "Fish shell completion breaks when a parameter on the command line contains quote or escape characters. For example, when the current word being completed is something like `\"b` (a value with an embedded/unclosed quote), Fish completion should still correctly suggest the matching command (e.g. `b`, described as `bee`) instead of failing to match or returning nothing. Please fix Fish shell completion to correctly handle quoted/escaped parameters.",
+  "click-27aaed3f": "When multiple `@click.option` flags share the same destination parameter name and more than one of them sets `default=True`, the resulting default value is inconsistent/unpredictable depending on decorator order, instead of consistently honoring the first one declared. For example:\n```python\nimport click\n\n@click.command()\n@click.option(\"--red\", \"color\", flag_value=\"red\")\n@click.option(\"--green\", \"color\", flag_value=\"green\", default=True)\ndef cli(color):\n    click.echo(color)\n```\nRunning this with no arguments should print `green` (the first-declared default), and running with `--red` should print `red`; reversing which option has `default=True` should analogously prefer the newly-first one. Please fix default resolution so the first flag declared with a default is consistently preferred.",
+  "click-8533c966": "click.prompt() and click.confirm() render incorrectly when prompt_suffix is set to an empty string. For example:\n\n```python\nclick.prompt(\"Name\", prompt_suffix=\"\")\nclick.confirm(\"OK\", prompt_suffix=\"\", err=True)\n```\n\nInstead of printing the text cleanly, part of the message ends up missing or displayed on the wrong stream (stdout vs stderr), and characters near the end of the prompt seem to get truncated or misplaced. Please investigate and fix the handling of an empty prompt_suffix so the full prompt text is always written to the correct stream.",
+  "click-8d4051e9": "When a custom Argument or Option subclass overrides `type_cast_value(self, ctx, value)`, the `value` it receives is sometimes an internal placeholder sentinel instead of the actual value that should be passed through (e.g. it can happen with `nargs=-1` and no args given, or `required=False` with no argv). For example:\n\n```python\nfrom click._utils import UNSET\n\nclass CustomArgument(click.Argument):\n    def type_cast_value(self, ctx, value):\n        assert value is not UNSET\n        return value\n\n@click.command()\n@click.argument(\"myarg\", nargs=-1, cls=CustomArgument)\ndef cmd(myarg):\n    click.echo(\"ok\")\n```\n\nRunning this command (with or without an argument) can trigger the assertion. `type_cast_value` overrides should never observe this internal placeholder for Arguments or Options. Please fix this.",
+  "click-ebcd548d": "An option defined with both `is_flag=False` and a `flag_value=...` doesn't behave correctly across its three usage forms (omitted, bare flag, flag with an explicit value). For example:\n\n```python\n@click.command()\n@click.option(\"--theflag\", type=str, is_flag=False, flag_value=\"FlagValue\", default=\"Default\")\ndef cmd(theflag):\n    click.echo(theflag)\n```\n\nRunning `cmd` with no args should print `Default`, `cmd --theflag` should print `FlagValue`, and `cmd --theflag value` should print `value`. The same pattern should also work correctly with an int type and a flag_value like `1`. Currently these three cases don't all produce the expected output. Please fix this.",
+  "click-0cd28d65": "When a group uses custom `help_option_names` (e.g. `-h` and `--help`) and a subcommand defines its own option that reuses one of those names, the 'Try ... for help' hint shown on usage errors can point to a help flag name that is actually shadowed and unusable on that subcommand. For example, if a subcommand has `click.option(\"--help-file\", \"--help\")`, running it with a missing required argument should suggest `-h` (the still-available help name), not `--help`. If every configured help name is shadowed, no hint should be shown at all. Please fix the error hint so it only ever references a help option name that is actually available on that command, preferring the longest available name.",
+  "click-2468b709": "On non-Windows platforms, `click.prompt()` and `click.confirm()` print the prompt text separately from calling the input function, which breaks readline features like backspace and line-wrapping while typing at the prompt. Additionally, when `err=True` and/or `prompt_suffix=\"\"` is used, output ends up split incorrectly between stdout and stderr. For example:\n\n```python\nclick.prompt(\"Prompt to stderr with no suffix\", prompt_suffix=\"\", err=True)\n```\n\nshould write the full prompt text `\"Prompt to stderr with no suffix\"` cleanly to stderr with nothing leaking to stdout, but currently part of the text is misplaced. The full prompt (including any suffix) should be passed directly to the underlying input function so terminal line-editing behaves correctly. Please fix this.",
+  "click-19fd4d6e": "Fish shell completion breaks when an option's help text contains literal newlines (e.g. using a `\\b` preformatted block). For example:\n\n```python\nOption(\n    [\"--at\", \"--attachment-type\"],\n    type=(str, str),\n    multiple=True,\n    help=\"\\b\\nAttachment with explicit mimetype,\\n--at image.jpg image/jpeg\",\n)\n```\n\nWhen generating fish completions for a command using this option, the multiline help text isn't escaped, resulting in malformed completion output (extra/garbled lines) instead of a single completion entry with the newlines escaped as `\\n`. Please fix the fish completion output so multiline help strings are handled correctly.",
+  "click-c943271a": "When using click.prompt(..., hide_input=True) together with a custom ParamType whose convert() calls self.fail() with a message built from the typed value, the error message shown to the user doesn't behave correctly with input hiding. For example:\n```python\nimport click\n\nclass Password(click.ParamType):\n    name = \"password\"\n    def convert(self, value, param, ctx):\n        if len(value) < 10:\n            self.fail(f\"{value} is too short\", param, ctx)\n        return value\n\nclick.prompt(\"Password\", type=Password(), hide_input=True)\n```\nWith hide_input=True, click should still surface the custom validation message, but any occurrence of the raw typed value inside that message (whether it appears quoted via repr or bare) must be masked out (e.g. replaced with '***') rather than leaked in plain text or dropped entirely, including cases where the value appears multiple times or mixed with a static message that never references it. Please fix this.",
+  "click-3bb230dc": "HelpFormatter.write_usage produces a broken usage line when there are no args to show. For example:\n```python\nimport click\nf = click.HelpFormatter()\nf.write_usage(\"myprog\", \"\")\nprint(repr(f.getvalue()))\n```\nThis currently prints just a blank line instead of \"Usage: myprog\\n\". The same problem shows up end-to-end: a Command created with `options_metavar=\"\"` and no parameters renders a blank/garbled usage line in its --help output instead of \"Usage: cli\". A custom or styled prefix passed to write_usage should also still be honored correctly even when args is empty. Please fix this so the usage line renders correctly regardless of whether args is empty.",
+  "click-c3535905": "Shell completion for fish is broken (a recent change regressed it) and multi-line option help also causes bad output. Reproduce by invoking a CLI with a command that has options with help text under fish completion, e.g. setting `_CLI_COMPLETE=fish_complete` with `COMP_WORDS`/`COMP_CWORD` env vars for a CLI that has an option whose help string contains multiple lines (using the `\\b` no-rewrap marker). The completion output is emitted in the wrong format for fish (newline-separated blocks instead of fish's expected `type,value` / `type,value\\thelp` lines), and when an option's help text spans multiple lines it either breaks completion or leaks literal newlines into the output instead of escaping them. Please fix fish completion so it produces correctly formatted, single-line entries even when help text contains newlines.",
+  "click-b67832c2": "Defining a command parameter literally named `help` breaks argument parsing because it collides with click's automatic --help option. For example:\n```python\nimport click\n\n@click.command()\n@click.argument(\"help\")\ndef cli(help):\n    click.echo(help)\n\ncli([\"value\"])\n```\nThis should print \"value\", but the parameter named `help` conflicts internally with the automatically generated help option, so parsing fails or behaves incorrectly. The same problem occurs with an option named `help` (e.g. `click.Option(['--assist'], 'help')`) or when a custom `help_option_names` is configured. Additionally, if a user parameter happens to use whatever internal name click reserves for its automatic help option, the collision should be reported with a clear warning instead of silently breaking. Separately, if a user explicitly defines their own `--help` option, it should replace the automatic one entirely rather than conflicting with it. Please fix the parsing so parameters named `help` (or reusing the help flag) work correctly.",
+  "click-fc5c7f45": "When an exception is raised while content is being displayed through click's pager (the code path used via `click.echo_via_pager` / `click.get_pager_file`), the original exception can get replaced by an unrelated error on Windows. Reproduce with:\n```python\nimport click\n\nwith click.get_pager_file():\n    raise RuntimeError(\"boom\")\n```\nThe RuntimeError should propagate normally. Instead, on the Windows temp-file pager backend, the temporary file is not closed before it is unlinked in the cleanup path when an exception occurs, so deleting it raises `PermissionError: [WinError 32] The process cannot access the file because it is being used by another process`, which masks the real error the user was trying to see. Please fix this so the temp file is always closed before cleanup runs, even when an exception is raised."
+ },
+ "train": {
+  "tasks": [
+   "click-b7cf0697",
+   "click-a1235aac",
+   "click-eaf33a95",
+   "click-0be2bd38",
+   "click-4f936ac1",
+   "click-701b3131",
+   "click-27aaed3f",
+   "click-8533c966",
+   "click-8d4051e9",
+   "click-ebcd548d"
+  ],
+  "repeats": 1
+ },
+ "eval": {
+  "tasks": [
+   "click-0cd28d65",
+   "click-2468b709",
+   "click-19fd4d6e",
+   "click-c943271a",
+   "click-3bb230dc",
+   "click-c3535905"
+  ],
+  "repeats": 1,
+  "arms": [
+   "control",
+   "adage"
+  ]
+ },
+ "seed": 20260929,
+ "model": "claude-haiku-4-5-20251001",
+ "max_turns": 40,
+ "concurrency": 2,
+ "budget_usd": 6.13,
+ "host_auth": true,
+ "confine": true,
+ "learn_args": [],
+ "classify": {
+  "lookup": [],
+  "regen": [
+   "make generate",
+   "go generate",
+   "vitest -u",
+   "--update-snapshots"
+  ],
+  "verify": [
+   "pytest",
+   "vitest",
+   "go test",
+   "make test",
+   "npm test",
+   "npm run test",
+   "pnpm test",
+   "pnpm run test",
+   "pnpm vitest",
+   "tox",
+   "nox",
+   "node --test",
+   "unittest",
+   "go vet"
+  ],
+  "bash_edit": [
+   "sed -i",
+   "cat >",
+   "cat <<",
+   "tee ",
+   "write_text(",
+   "patch -p",
+   "git apply",
+   "perl -pi"
+  ],
+  "check_flags": []
+ },
+ "obligation": {
+  "paths": null
+ },
+ "labels": {
+  "lookup": "lookup",
+  "regen": "regenerate"
+ },
+ "description": "Regression slice of the GO validation: click-a3slice's 6 held-out one-off bug fixes, control vs adage (the product under test), conditioned without outcomes on the same 10 archived training sessions. Checks that uplift gating and procedure cards do no harm on one-off work. See prereg.json.",
+ "go_validation": {
+  "learn_outcomes": false,
+  "seed_train_from": "/tmp/adage-repobench/runs/click",
+  "min_remaining_usd": 3.0,
+  "global_cap_usd": 15.0,
+  "spend_roots": [
+   "/tmp/adage-launch/go-validation/runs/ufo-util",
+   "/tmp/adage-launch/go-validation/runs/click-regression"
+  ]
+ },
+ "based_on": {
+  "config": "evals/repobench/configs/v2/click-a3slice.json",
+  "split_digest": "b343e9578d6ab4d3f8d919af87b550725aa8d69fe2d6b8c91a3c58168edc7eae",
+  "seeded_train_cost_usd": 2.126
+ }
+}

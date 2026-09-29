@@ -21,19 +21,17 @@
 //! output, message, or prompt between them. Compressed rollouts (`.jsonl.zst`, written only with
 //! the `local_thread_store_compression` feature) are not read.
 
-use crate::import::{Session, StepObs};
-use adage_core::keys::{self, template_key};
+use crate::import::{Prompts, Session, Signals};
 use adage_core::tools::{from_codex, normalize_tool};
 use adage_core::{repo, CommandTable};
 use adage_runtime::Call;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde_json::{json, Value};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::io::{BufRead, Read};
 use std::path::{Path, PathBuf};
 
-static ROUTE_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<adage-signal [^>]*route="([A-Za-z0-9_.-]+)""#).unwrap());
 static EXIT_LINE: Lazy<Regex> = Lazy::new(|| Regex::new(r"^(?:Process exited with code|Exit code:) (-?\d+)$").unwrap());
 static CONTEXT_TAG: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?s)^<([a-z_]+)(?:\s[^>]*)?>.*</([a-z_]+)>$").unwrap());
 
@@ -127,7 +125,7 @@ fn contextual(t: &str) -> bool {
 
 fn own_text(t: &str) -> bool {
     let t = t.trim_start();
-    t.starts_with("<adage-signal ") || t.starts_with("Adage finish-line check:")
+    t.starts_with("<adage-reflex ") || t.starts_with("Adage finish-line check:")
 }
 
 /// The shell command an argv runs: `["bash", "-lc", cmd]` → `cmd`; anything else is joined.
@@ -152,6 +150,8 @@ fn argv_command(argv: &[Value]) -> String {
 /// A call as recorded: the canonical tool pairs it stands for, and the directory it ran in.
 struct Recorded {
     turn: u32,
+    /// The prompt it served, counted in `user_message` events and in user messages.
+    prompt: (u16, u16),
     pairs: Vec<(String, Value)>,
     cwd: Option<String>,
 }
@@ -213,17 +213,9 @@ fn exec_result(text: &str) -> (String, bool) {
 }
 
 /// Directives Adage delivered (hook context, or its finish-line continuation prompt).
-fn note(text: &str, steered: &mut bool, directed: &mut BTreeSet<String>) {
-    if text.contains("<adage-signal ") {
-        *steered = true;
-        for c in ROUTE_ATTR.captures_iter(text) {
-            directed.insert(c[1].to_string());
-        }
-    }
-    if text.contains("Adage finish-line check:") {
-        *steered = true;
-        directed.insert("finish-line-stop".to_string());
-    }
+fn note(text: &str, signals: &mut Signals, calls: usize) {
+    signals.at(calls);
+    signals.note(text);
 }
 
 /// Parse one rollout. `None` for sub-agent threads and sessions without a usable prompt.
@@ -241,9 +233,8 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
     let mut item_prompt: Option<String> = None;
     // Prompts the person typed: counted from `user_message` events when present, else from user
     // messages (the same precedence as the first prompt).
-    let (mut event_prompts, mut item_prompts) = (0u32, 0u32);
-    let mut steered = false;
-    let mut directed: BTreeSet<String> = BTreeSet::new();
+    let (mut event_prompts, mut item_prompts) = (Prompts::default(), Prompts::default());
+    let mut signals = Signals::default();
     let mut calls: Vec<(String, Recorded)> = Vec::new();
     let mut outputs: HashMap<String, String> = HashMap::new();
     let mut turns = 0u32;
@@ -262,9 +253,9 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
             (Some("event_msg"), Some("user_message")) => {
                 let t = s(p, &["message"]).unwrap_or("");
                 in_calls = false;
-                note(t, &mut steered, &mut directed);
+                note(t, &mut signals, calls.len());
                 if !t.trim().is_empty() && !own_text(t) {
-                    event_prompts += 1;
+                    event_prompts.push(t);
                     if event_prompt.is_none() {
                         event_prompt = Some(t.to_string());
                     }
@@ -272,6 +263,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
             }
             (Some("response_item"), Some(kind)) => {
                 let call_id = s(p, &["call_id"]).or_else(|| s(p, &["id"])).unwrap_or("").to_string();
+                let prompt = (event_prompts.current(), item_prompts.current());
                 let mut call = |pairs_cwd: (Vec<(String, Value)>, Option<String>)| {
                     if !in_calls {
                         turns += 1;
@@ -280,7 +272,7 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
                     if calls.len() < MAX_CALLS {
                         calls.push((
                             call_id.clone(),
-                            Recorded { turn: turns - 1, pairs: pairs_cwd.0, cwd: pairs_cwd.1 },
+                            Recorded { turn: turns - 1, prompt, pairs: pairs_cwd.0, cwd: pairs_cwd.1 },
                         ));
                     }
                 };
@@ -290,16 +282,16 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
                         match s(p, &["role"]) {
                             Some("user") => {
                                 in_calls = false;
-                                note(&t, &mut steered, &mut directed);
+                                note(&t, &mut signals, calls.len());
                                 if !t.trim().is_empty() && !own_text(&t) && !contextual(&t) {
-                                    item_prompts += 1;
+                                    item_prompts.push(&t);
                                     if item_prompt.is_none() {
                                         item_prompt = Some(t);
                                     }
                                 }
                             }
                             // Hook `additionalContext` is recorded as a developer message.
-                            Some("developer") => note(&t, &mut steered, &mut directed),
+                            Some("developer") => note(&t, &mut signals, calls.len()),
                             _ => in_calls = false,
                         }
                     }
@@ -334,10 +326,15 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
     let prompt = event_prompt.or(item_prompt)?;
     let cwd_path = PathBuf::from(&cwd);
     let root = repo::find_root(&cwd_path).unwrap_or(cwd_path);
-    let repo_key = repo_override.map(str::to_string).unwrap_or_else(|| repo::repo_key(&root));
+    let repo_key = repo::key_for(&root, repo_override);
     let root_str = root.to_string_lossy().to_string();
+    // Prompts from `user_message` events when there are any, else from user messages (the same
+    // precedence as the first prompt).
+    let by_event = !event_prompts.is_empty();
     let mut steps = Vec::new();
+    let mut first_step: Vec<u32> = Vec::with_capacity(calls.len());
     for (call_id, rec) in calls {
+        first_step.push(steps.len() as u32);
         // A call with no recorded output never finished (interrupted, or the file was cut off).
         let Some(raw) = outputs.get(&call_id) else { continue };
         let (output, failed) = exec_result(raw);
@@ -350,20 +347,18 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
             }
             let call = Call { tool: tool.clone(), input: input.clone(), output: output.clone(), failed };
             let at = if tool == "Bash" { run_in.as_str() } else { root_str.as_str() };
-            for mut n in keys::flatten(&normalize_tool(&tool, &input, at, table)) {
-                keys::canonicalise(&mut n, &root);
-                let rel_path = keys::action_path(&n.action).map(|p| repo::relativize(&root, p));
-                steps.push(StepObs {
-                    turn: rec.turn,
-                    key: template_key(&n.action),
-                    norm: n,
-                    call: call.clone(),
-                    rel_path,
-                });
-            }
+            let prompt = if by_event { rec.prompt.0 } else { rec.prompt.1 };
+            steps.extend(crate::import::call_steps(
+                rec.turn,
+                prompt,
+                &call,
+                normalize_tool(&tool, &input, at, table),
+                &root,
+            ));
         }
     }
-    let prompts = if event_prompts > 0 { event_prompts } else { item_prompts };
+    let prompts = if by_event { event_prompts } else { item_prompts }.anchor(&steps);
+    let influence = signals.anchor(&first_step, steps.len());
     Some(Session {
         id,
         root,
@@ -372,11 +367,13 @@ pub fn parse_rollout(lines: &[Value], table: &CommandTable, repo_override: Optio
         day,
         prompt,
         steps,
-        steered,
-        directed,
+        steered: signals.steered,
+        directed: signals.directed,
+        influence,
         outcome: None,
         harness: "codex".into(),
         prompts,
+        ending: Default::default(),
     })
 }
 

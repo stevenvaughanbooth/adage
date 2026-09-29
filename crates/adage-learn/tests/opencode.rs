@@ -5,7 +5,7 @@
 use adage_core::CommandTable;
 use adage_learn::opencode::{parse_export, read_export};
 use adage_learn::{learn, Inputs, LearnConfig};
-use adage_tracks::{Aspect, Index, Step, Trigger};
+use adage_tracks::{Index, Step, Strength, Trigger};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -47,6 +47,9 @@ fn export_fixture_golden() {
     }
     golden("opencode-session.txt", &got);
     assert_eq!(s.prompt, "Pick up W-1040 and get it done.", "synthetic parts are never the prompt");
+    assert_eq!(s.prompts[0].text, s.prompt);
+    assert!(s.steps.iter().all(|x| (x.prompt as usize) < s.prompts.len()));
+    assert!(s.prompts.windows(2).all(|w| w[0].at_step <= w[1].at_step));
     assert!(s.directed.contains("lookup-work-item") && s.directed.contains("read-linked-files"));
     assert!(!got.contains("sleep 100"), "unfinished calls are skipped");
 }
@@ -172,7 +175,7 @@ fn learns_all_four_route_kinds_from_opencode_exports() {
     let routes: Vec<_> = index.routes.iter().map(|r| &r.route).collect();
     let lookup = routes.iter().find(|r| matches!(r.trigger, Trigger::Prompt { .. })).expect("prompt route");
     assert_eq!(lookup.step, Step::Run { command: "python3 scripts/wi-lookup {item}".into() });
-    assert_eq!(lookup.aspect, Aspect::Green);
+    assert_eq!(lookup.strength, Strength::Fire);
     assert!(routes.iter().any(|r| matches!(r.step, Step::ReadBatch { .. })), "linked-files route");
     assert!(
         routes.iter().any(|r| matches!(&r.step, Step::Avoid { instead, .. } if instead == "make test")),

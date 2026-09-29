@@ -1,7 +1,7 @@
- adage  1 Live  2 Routes (1 to review)  3 Health (2)  4 Settings
+ adage  1 Live  2 Reflexes (1 to review)  3 Health (2)  4 Settings
 ● binary               adage 0.1.0 at ~/bin/adage
 ● index                generation 8216e29f00, 4 route(s) in 1 repository
-● embedding model    ⏎ not installed, so the index's intent routes cannot fire
+● embedding model    ⏎ not installed, so intent reflexes cannot fire
 ● hooks: claude-code   ~/work/harbor-dispatch/.claude/settings.local.json runs ~/bin/adage (this binary)
 ● hooks: codex       ⏎ codex is installed, but Adage's hooks are not registered with it
 ● fail-open errors     none in the last 7 days
@@ -27,4 +27,4 @@ adage 0.1.0 at ~/bin/adage
 
 
 
- harbor-dispatch · gen 8216e29f · 4 routes · auto-learn o Enter fix · i m l o s · R recheck · ? help · q quit
+ harbor-dispatch · gen 8216e29f · 4 reflexes · auto-learn Enter fix · i m l o s · R recheck · ? help · q quit

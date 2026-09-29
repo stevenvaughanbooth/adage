@@ -5,7 +5,7 @@
   "training_runs": 12,
   "training_pass_rate": 1.0,
   "eval_runs": {
-    "holdout": 18,
+    "control": 18,
     "adage": 18
   },
   "learned": {
@@ -22,8 +22,8 @@
             "version": "0.1.1",
             "change": "evidence updated",
             "routes": [
-              "lookup-work-item [green]",
-              "read-linked-files [yellow]"
+              "lookup-work-item [fire]",
+              "read-linked-files [prime]"
             ]
           },
           {
@@ -31,7 +31,7 @@
             "version": "0.1.0",
             "change": "created",
             "routes": [
-              "finish-line-04e5d4 [green]"
+              "finish-line-04e5d4 [fire]"
             ]
           }
         ]
@@ -45,7 +45,7 @@
     {
       "track": "harbor-dispatch/finish-line",
       "id": "finish-line-04e5d4",
-      "aspect": "green",
+      "strength": "fire",
       "effect": "regenerate",
       "trigger": {
         "on": "after_edit",
@@ -74,7 +74,7 @@
     {
       "track": "harbor-dispatch/work-items",
       "id": "lookup-work-item",
-      "aspect": "green",
+      "strength": "fire",
       "effect": "observe",
       "trigger": {
         "on": "prompt",
@@ -103,7 +103,7 @@
     {
       "track": "harbor-dispatch/work-items",
       "id": "read-linked-files",
-      "aspect": "yellow",
+      "strength": "prime",
       "effect": "observe",
       "trigger": {
         "on": "after_command",
@@ -379,8 +379,8 @@
         }
       },
       "routes": [
-        "lookup-work-item:green",
-        "read-linked-files:yellow"
+        "lookup-work-item:fire",
+        "read-linked-files:prime"
       ]
     },
     "2": {
@@ -507,9 +507,9 @@
         }
       },
       "routes": [
-        "finish-line-04e5d4:green",
-        "lookup-work-item:green",
-        "read-linked-files:yellow"
+        "finish-line-04e5d4:fire",
+        "lookup-work-item:fire",
+        "read-linked-files:prime"
       ]
     }
   },

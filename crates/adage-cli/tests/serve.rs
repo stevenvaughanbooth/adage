@@ -1,4 +1,4 @@
-//! `adage graph --serve`, through the binary: the signal box page and its live JSON, from an
+//! `adage map`, through the binary: the map page and its live JSON, from an
 //! isolated `ADAGE_HOME`, on a free port on 127.0.0.1.
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -32,7 +32,7 @@ fn get(addr: &str, path: &str, host: &str) -> (String, String) {
 fn serves_the_signal_box_and_live_json_from_the_binary() {
     let d = tempfile::tempdir().unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_adage"))
-        .args(["graph", "--serve", "--port", "0"])
+        .args(["map", "--port", "0"])
         .env("ADAGE_HOME", d.path().join("data"))
         .env("HOME", d.path())
         .env_remove("CLAUDECODE")
@@ -58,7 +58,7 @@ fn serves_the_signal_box_and_live_json_from_the_binary() {
         body.starts_with("<!doctype html>") && body.contains("name=\"viewport\""),
         "doctype and viewport are prepended"
     );
-    assert!(body.contains("<title>Adage Signal Box</title>") && body.contains("graph.json"));
+    assert!(body.contains("<title>Adage map</title>") && body.contains("graph.json"));
 
     let (head, body) = get(&addr, "/graph.json", &addr);
     assert!(head.starts_with("HTTP/1.1 200") && head.contains("application/json"), "{head}");
@@ -77,7 +77,7 @@ fn serves_the_signal_box_and_live_json_from_the_binary() {
 fn keeps_serving_after_its_stdout_is_closed() {
     let d = tempfile::tempdir().unwrap();
     let mut child = Command::new(env!("CARGO_BIN_EXE_adage"))
-        .args(["graph", "--serve", "--port", "0"])
+        .args(["map", "--port", "0"])
         .env("ADAGE_HOME", d.path().join("data"))
         .env("HOME", d.path())
         .stdin(Stdio::null())

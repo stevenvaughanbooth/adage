@@ -1,0 +1,22 @@
+{
+ "U11 dead ends": {
+  "n": 114,
+  "learned_flags": 67
+ },
+ "U11 dead ends, piped (is_error False)": {
+  "n": 47,
+  "learned_flags": 0
+ },
+ "env-signature calls": {
+  "n": 291,
+  "learned_flags": 210
+ },
+ "env-signature, is_error False": {
+  "n": 81,
+  "learned_flags": 0
+ },
+ "control calls": 6018,
+ "learned flags on control": 459,
+ "is_error on control": 456,
+ "learned flags with is_error False": 3
+}

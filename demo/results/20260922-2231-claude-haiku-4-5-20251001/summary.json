@@ -4,7 +4,7 @@
   "training_runs": 18,
   "training_pass_rate": 0.8888888888888888,
   "eval_runs": {
-    "holdout": 18,
+    "control": 18,
     "adage": 18
   },
   "learned": {
@@ -20,8 +20,8 @@
             "version": "0.1.0",
             "change": "created",
             "routes": [
-              "lookup-work-item [green]",
-              "read-linked-files [yellow]"
+              "lookup-work-item [fire]",
+              "read-linked-files [prime]"
             ]
           },
           {
@@ -29,7 +29,7 @@
             "version": "0.1.0",
             "change": "created",
             "routes": [
-              "finish-line-e7e809 [green]"
+              "finish-line-e7e809 [fire]"
             ]
           },
           {
@@ -37,7 +37,7 @@
             "version": "0.1.0",
             "change": "created",
             "routes": [
-              "dead-end-d41b1e [red]"
+              "dead-end-d41b1e [inhibit]"
             ]
           }
         ]
@@ -50,7 +50,7 @@
     {
       "track": "acme-billing/dead-ends",
       "id": "dead-end-d41b1e",
-      "aspect": "red",
+      "strength": "inhibit",
       "effect": "verify",
       "trigger": {
         "on": "session_start"
@@ -80,7 +80,7 @@
     {
       "track": "acme-billing/finish-line",
       "id": "finish-line-e7e809",
-      "aspect": "green",
+      "strength": "fire",
       "effect": "regenerate",
       "trigger": {
         "on": "after_edit",
@@ -109,7 +109,7 @@
     {
       "track": "acme-billing/work-items",
       "id": "lookup-work-item",
-      "aspect": "green",
+      "strength": "fire",
       "effect": "observe",
       "trigger": {
         "on": "prompt",
@@ -138,7 +138,7 @@
     {
       "track": "acme-billing/work-items",
       "id": "read-linked-files",
-      "aspect": "yellow",
+      "strength": "prime",
       "effect": "observe",
       "trigger": {
         "on": "after_command",
@@ -354,9 +354,9 @@
         }
       },
       "routes": [
-        "finish-line-1:green",
-        "lookup-work-item:yellow",
-        "read-linked-files:yellow"
+        "finish-line-1:fire",
+        "lookup-work-item:prime",
+        "read-linked-files:prime"
       ]
     },
     "2": {
@@ -453,10 +453,10 @@
         }
       },
       "routes": [
-        "dead-end-d41b1e:red",
-        "finish-line-e7e809:green",
-        "lookup-work-item:green",
-        "read-linked-files:yellow"
+        "dead-end-d41b1e:inhibit",
+        "finish-line-e7e809:fire",
+        "lookup-work-item:fire",
+        "read-linked-files:prime"
       ]
     }
   },

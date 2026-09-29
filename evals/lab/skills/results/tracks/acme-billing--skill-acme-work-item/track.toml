@@ -1,0 +1,12 @@
+[track]
+name = "acme-billing/skill-acme-work-item"
+version = "0.1.0"
+description = "Compiled from the skill acme-work-item (sha256 87c0e73b3cbe)"
+provenance = "authored"
+
+[scope]
+repo = "acme-billing"
+
+[gauge]
+harness = ["claude-code"]
+models = ["claude-haiku-4-5-20251001"]

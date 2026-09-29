@@ -37,7 +37,7 @@ pub enum Tab {
 }
 
 const TABS: [(Tab, &str); 4] =
-    [(Tab::Live, "Live"), (Tab::Routes, "Routes"), (Tab::Health, "Health"), (Tab::Settings, "Settings")];
+    [(Tab::Live, "Live"), (Tab::Routes, "Reflexes"), (Tab::Health, "Health"), (Tab::Settings, "Settings")];
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -369,7 +369,7 @@ impl AppState {
                     "Fetch the embedding model",
                     vec![
                         Line::raw("Download potion-base-8M (31 MB, SHA-256 verified) with curl,"),
-                        Line::raw("into Adage's data directory. It lets `adage learn` find intent families."),
+                        Line::raw("into Adage's data directory. It lets `adage condition` find intent families."),
                         Line::raw(""),
                         hint,
                     ],
@@ -379,10 +379,10 @@ impl AppState {
             }
             Fix::LearnNow => {
                 self.confirm(
-                    "Learn now",
+                    "Condition now",
                     vec![
-                        Line::raw("Learn this repository now, exactly as a background learner does"),
-                        Line::raw("(`adage learn --auto --repo-root <repo>`): read its sessions, mine routes,"),
+                        Line::raw("Condition this repository now, exactly as a background learner does"),
+                        Line::raw("(`adage condition --auto --repo-root <repo>`): read its traces, mine reflexes,"),
                         Line::raw("update its tracks, recompile the index, and log what changed."),
                         Line::raw(""),
                         hint,
@@ -399,7 +399,7 @@ impl AppState {
                 self.confirm(
                     "Turn auto-learn on",
                     vec![
-                        Line::raw("Set learn.auto = true in config.toml: Adage then learns in the background"),
+                        Line::raw("Set learn.auto = true in config.toml: Adage then conditions in the background"),
                         Line::raw("whenever an agent session in a repository stops or ends."),
                         Line::raw(""),
                         hint,
@@ -434,18 +434,22 @@ impl AppState {
     }
 }
 
-fn aspect_name(a: adage_tracks::Aspect) -> &'static str {
-    adage_tracks::review::aspect_str(a)
+fn strength_name(a: adage_tracks::Strength) -> &'static str {
+    adage_tracks::review::strength_str(a)
 }
 
 fn verb_effect(verb: &str) -> &'static str {
     match verb {
-        "approve" => "Approve: accept the route as it is (or apply its proposed change, or put a draft into service).",
-        "reject" => "Reject: retire the route; `adage learn` keeps it retired unless it strengthens materially.",
-        "demote" => "Demote: green → yellow, held across re-learning.",
-        "promote" => "Promote: yellow → green, never above the route's effect ceiling.",
-        "pin" => "Pin: mark it authored; learning proposes changes instead of overwriting it.",
-        "dismiss" => "Dismiss: keep the pinned route and silence its proposed change.",
+        "approve" => {
+            "Approve: accept the reflex as it is (or apply its proposed change, or put a nascent one into service)."
+        }
+        "extinguish" => {
+            "Extinguish: take it out of service; `adage condition` keeps it out unless it strengthens materially."
+        }
+        "weaken" => "Weaken: fire → prime, held across conditioning.",
+        "strengthen" => "Strengthen: prime → fire, never above the reflex's effect ceiling.",
+        "pin" => "Pin: mark it authored; conditioning proposes changes instead of overwriting it.",
+        "dismiss" => "Dismiss: keep the pinned reflex and silence its proposed change.",
         _ => "",
     }
 }
@@ -482,7 +486,7 @@ fn draw_tabs(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let t = &ctx.theme;
     let mut spans = vec![Span::styled(" adage ", t.title())];
     if ctx.demo {
-        spans.push(Span::styled("demo ", t.holdout()));
+        spans.push(Span::styled("demo ", t.control()));
     }
     for (i, (tab, name)) in TABS.iter().enumerate() {
         let mut label = format!(" {} {name} ", i + 1);
@@ -526,13 +530,13 @@ fn draw_status(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     };
     let keys = match s.tab {
         Tab::Live => "p pause · f scope · v quiet",
-        Tab::Routes => "a/r/d/p/n/x review · R reload",
+        Tab::Routes => "a/e/w/s/n/x review · R reload",
         Tab::Health => "Enter fix · i m l o s · R recheck",
         Tab::Settings => "Enter edit · Space toggle",
     };
     let left = Line::from(vec![
         Span::styled(format!(" {} ", ctx.label), t.bold()),
-        Span::styled(format!("· gen {gen} · {routes} routes · auto-learn {auto}"), t.dim()),
+        Span::styled(format!("· gen {gen} · {routes} reflexes · auto-learn {auto}"), t.dim()),
     ]);
     // The keys stay whole at the right; the state on the left gives way.
     let right = format!(" {keys} · ? help · q quit ");
@@ -550,9 +554,9 @@ pub fn route_detail(r: &RouteRow, t: &Theme) -> Vec<Line<'static>> {
     let l = &r.live;
     let mut lines = vec![
         Line::from(vec![
-            Span::styled(format!("{} ", t.aspect_mark(r.aspect)), t.aspect(r.aspect)),
+            Span::styled(format!("{} ", t.strength_mark(r.strength)), t.strength(r.strength)),
             Span::styled(r.id.clone(), t.bold()),
-            Span::styled(format!("  {} (ceiling {})", aspect_name(r.aspect), r.ceiling), t.aspect(r.aspect)),
+            Span::styled(format!("  {} (ceiling {})", strength_name(r.strength), r.ceiling), t.strength(r.strength)),
         ]),
         kv("track", format!("{} @ {}{}", r.track, r.version, if r.imported { " (imported)" } else { "" }), t),
         kv("repo", r.repo.clone(), t),
@@ -571,15 +575,15 @@ pub fn route_detail(r: &RouteRow, t: &Theme) -> Vec<Line<'static>> {
         kv("do", r.step.clone(), t),
         kv(
             "evidence",
-            format!("{}/{} sessions · rate {:.2} · Wilson lb {:.2}", r.support, r.opportunities, r.rate, r.lower_bound),
+            format!("{}/{} traces · rate {:.2} · Wilson lb {:.2}", r.support, r.opportunities, r.rate, r.lower_bound),
             t,
         ),
         kv(
             "live",
-            format!("directed {} · followed {} · derailed {} · met {}", l.emitted, l.followed, l.derailed, l.met),
+            format!("directed {} · followed {} · ignored {} · met {}", l.emitted, l.followed, l.ignored, l.met),
             t,
         ),
-        kv("holdout", format!("would-have {} · unaided {} · missed {}", l.would_have, l.unaided, l.not_reached), t),
+        kv("control", format!("would-have {} · unaided {} · missed {}", l.would_have, l.unaided, l.not_reached), t),
     ];
     for (k, d) in &r.reasons {
         lines.push(Line::from(vec![
@@ -594,7 +598,7 @@ pub fn route_detail(r: &RouteRow, t: &Theme) -> Vec<Line<'static>> {
     lines.push(Line::raw(""));
     lines.push(Line::from(Span::styled("directive, exactly as delivered (example values):", t.dim())));
     for d in r.directive.lines() {
-        lines.push(Line::from(Span::styled(format!("  {d}"), t.aspect(r.aspect))));
+        lines.push(Line::from(Span::styled(format!("  {d}"), t.strength(r.strength))));
     }
     lines
 }
@@ -603,20 +607,20 @@ fn draw_routes(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let t = &ctx.theme;
     let rows = match &s.routes {
         None => {
-            f.render_widget(Paragraph::new(Span::styled("loading routes…", t.dim())), area);
+            f.render_widget(Paragraph::new(Span::styled("loading reflexes…", t.dim())), area);
             return;
         }
         Some(Err(e)) => {
-            f.render_widget(Paragraph::new(Span::styled(format!("could not load routes: {e}"), t.red())), area);
+            f.render_widget(Paragraph::new(Span::styled(format!("could not load reflexes: {e}"), t.red())), area);
             return;
         }
         Some(Ok(r)) => &r.rows,
     };
     if rows.is_empty() {
         let lines = vec![
-            Line::raw("No routes installed yet."),
+            Line::raw("No reflexes installed yet."),
             Line::from(Span::styled(
-                "`adage learn` builds them from your agents' sessions (Health tab: l learns now).",
+                "`adage condition` forms them from your agents' traces (Health tab: l conditions now).",
                 t.dim(),
             )),
         ];
@@ -646,10 +650,10 @@ fn draw_routes(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         }
         let mark = if r.reasons.is_empty() { " " } else { "*" };
         let row_style = if i == s.route_sel { t.selected() } else { Style::default() };
-        let counts = format!(" {}/{} · ✓{} ✗{}", r.support, r.opportunities, r.live.followed, r.live.derailed);
+        let counts = format!(" {}/{} · ✓{} ✗{}", r.support, r.opportunities, r.live.followed, r.live.ignored);
         lines.push(Line::from(vec![
             Span::styled(format!("{mark} "), t.yellow().patch(t.bold())),
-            Span::styled(format!("{} ", t.aspect_mark(r.aspect)), t.aspect(r.aspect)),
+            Span::styled(format!("{} ", t.strength_mark(r.strength)), t.strength(r.strength)),
             Span::styled(r.id.clone(), row_style),
             Span::styled(counts, t.dim()),
         ]));
@@ -771,20 +775,20 @@ fn app_help(tab: Tab, t: &Theme) -> Vec<Line<'static>> {
     match tab {
         Tab::Live => v.extend(view::watch_help(t).into_iter().skip(1)),
         Tab::Routes => {
-            v.push(k("↑ ↓", "select a route"));
+            v.push(k("↑ ↓", "select a reflex"));
             v.push(k("PgUp PgDn", "scroll the detail"));
             for (c, verb) in routes::ACTIONS {
                 v.push(k(&c.to_string(), verb_effect(verb)));
             }
             v.push(k("R", "reload"));
-            v.push(Line::from(Span::styled("* marks routes awaiting review", t.dim())));
+            v.push(Line::from(Span::styled("* marks reflexes awaiting review", t.dim())));
         }
         Tab::Health => {
             v.push(k("↑ ↓", "select a check"));
             v.push(k("Enter", "fix the selected check (⏎ marks fixable ones)"));
             v.push(k("i", "install hooks for a harness"));
             v.push(k("m", "fetch the embedding model"));
-            v.push(k("l", "run learn now"));
+            v.push(k("l", "condition now"));
             v.push(k("s", "open the settings"));
             v.push(k("o", "open the fail-open log"));
             v.push(k("R", "re-run the checks"));

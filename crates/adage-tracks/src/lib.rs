@@ -2,12 +2,19 @@
 //! evidence, reading and writing track directories, validation, canonical digests, and the
 //! compiled index the runtime reads.
 
+pub mod advice;
+pub mod card;
+pub mod context;
 pub mod index;
+pub mod interlock;
 pub mod io;
+pub mod lift;
 pub mod model;
+pub mod params;
 pub mod proposals;
 pub mod review;
 pub mod triggers;
+pub mod why;
 
 pub use index::{Index, IndexedRoute};
 pub use model::*;
@@ -41,8 +48,8 @@ mod tests {
                     contract: Contract::Pattern { regex: r"^W-\d{4}$".into() },
                 }],
                 effect: Effect::Observe,
-                aspect: Aspect::Green,
-                state: RouteState::Active,
+                strength: Strength::Fire,
+                state: RouteState::Firm,
                 exit: vec![Exit::IntentChanges],
                 evidence: Evidence::default(),
                 authored: false,
@@ -51,17 +58,14 @@ mod tests {
     }
 
     #[test]
-    fn round_trip_and_digest_is_stable() {
+    fn round_trip() {
         let d = tempfile::tempdir().unwrap();
         let t = sample();
         io::write(d.path(), &t).unwrap();
         let back = io::read(d.path()).unwrap();
         assert_eq!(back, t);
-        let a = io::digest(d.path()).unwrap();
         io::write(d.path(), &t).unwrap();
-        assert_eq!(a, io::digest(d.path()).unwrap());
-        std::fs::write(d.path().join("routes/lookup.yaml"), "tampered").unwrap();
-        assert_ne!(a, io::digest(d.path()).unwrap());
+        assert_eq!(io::read(d.path()).unwrap(), t);
     }
 
     #[test]
@@ -77,7 +81,7 @@ mod tests {
         assert!(io::validate(&t).is_err());
         let mut t = sample();
         t.routes[0].effect = Effect::Environment;
-        assert!(io::validate(&t).is_err(), "environment steps may not be green");
+        assert!(io::validate(&t).is_err(), "environment steps may not be fire");
     }
 
     #[test]
@@ -104,7 +108,7 @@ mod tests {
         assert!(io::validate(&t).is_err());
         // Attribute spoofing through the track name.
         let mut t = sample();
-        t.manifest.track.name = "t\" aspect=\"green".into();
+        t.manifest.track.name = "t\" strength=\"fire".into();
         assert!(io::validate(&t).is_err());
         // The honest track still passes.
         assert!(io::validate(&sample()).is_ok());
@@ -125,8 +129,8 @@ mod tests {
             step: Step::Run { command: "make test".into() },
             slots: vec![],
             effect: Effect::Verify,
-            aspect: Aspect::Yellow,
-            state: RouteState::Active,
+            strength: Strength::Prime,
+            state: RouteState::Firm,
             exit: vec![Exit::IntentChanges],
             evidence: Evidence::default(),
             authored: false,
@@ -173,7 +177,7 @@ mod tests {
         assert!(set(&|_, _, c, _| *c = vec![-32768, 0, 0, 0, 0, 0, 0, 0]).is_err(), "out of range");
         // Ids that could escape a directory or spoof an attribute.
         assert!(set(&|f, _, _, _| *f = "../../x".into()).is_err());
-        assert!(set(&|_, m, _, _| *m = "potion\" aspect=\"green@f65d0f325fad".into()).is_err());
+        assert!(set(&|_, m, _, _| *m = "potion\" strength=\"fire@f65d0f325fad".into()).is_err());
         assert!(set(&|_, m, _, _| *m = "potion-base-8m".into()).is_err(), "no digest");
         assert!(set(&|_, m, _, _| *m = "potion-base-8m@XYZ".into()).is_err());
         // Intent routes direct one fixed command: no slots, no other step kinds.
@@ -185,7 +189,7 @@ mod tests {
         .is_err());
         assert!(with(&|r| {
             r.step = Step::Avoid { avoid: "pytest".into(), instead: "make test".into(), signature: "x".into() };
-            r.aspect = Aspect::Red;
+            r.strength = Strength::Inhibit;
         })
         .is_err());
         // The usual command checks still apply.
@@ -210,6 +214,68 @@ mod tests {
         assert!(io::read(d.path()).is_err());
     }
 
+    /// Track G G3: sequences and context triggers are validated like every other step and trigger.
+    #[test]
+    fn sequences_and_contexts_are_validated() {
+        let with = |f: &dyn Fn(&mut Route)| {
+            let mut t = sample();
+            let r = &mut t.routes[0];
+            r.trigger = Trigger::AfterEdit { paths: "registry/*.csv".into() };
+            r.step = Step::Sequence { commands: vec!["make gen".into(), "make check".into()] };
+            r.slots.clear();
+            r.effect = Effect::Regenerate;
+            r.strength = Strength::Fire;
+            f(r);
+            io::validate(&t)
+        };
+        with(&|_| {}).unwrap();
+        // 2 to 3 plain commands, no slots, no inhibit, not above any command's ceiling.
+        assert!(with(&|r| r.step = Step::Sequence { commands: vec!["make gen".into()] }).is_err());
+        let four = vec!["make gen".into(), "make check".into(), "make lint".into(), "make docs".into()];
+        assert!(with(&|r| r.step = Step::Sequence { commands: four.clone() }).is_err());
+        assert!(
+            with(&|r| r.step = Step::Sequence { commands: vec!["make gen".into(), "make x;rm -rf /".into()] }).is_err()
+        );
+        assert!(with(&|r| r.step = Step::Sequence { commands: vec!["make gen".into(), "gh issue close 1".into()] })
+            .is_err());
+        assert!(with(&|r| r.step = Step::Sequence { commands: vec!["make gen".into(), "make {x}".into()] }).is_err());
+        assert!(with(&|r| r.strength = Strength::Inhibit).is_err());
+        assert!(
+            with(&|r| {
+                r.step = Step::Sequence { commands: vec!["npm install".into(), "make check".into()] };
+                r.effect = Effect::Environment;
+            })
+            .is_err(),
+            "an environment step caps a sequence at prime"
+        );
+        // A sequence follows an edit, a command, a failure or a context.
+        assert!(with(&|r| r.trigger = Trigger::SessionStart).is_err());
+        // Contexts: 2 or 3 safe items, a gap of 1 to 8, a fixed run or sequence.
+        let ctx = |items: Vec<CtxItem>, within: u8| Trigger::Context { items, within };
+        // (A regeneration is fire only after an edit: a context caps it at prime.)
+        assert!(with(&|r| r.trigger = ctx(
+            vec![CtxItem::Edit { glob: "registry/*.csv".into() }, CtxItem::Act { keys: vec!["exec make gen".into()] }],
+            8
+        ))
+        .is_err());
+        let with = |f: &dyn Fn(&mut Route)| {
+            with(&|r| {
+                r.strength = Strength::Prime;
+                f(r)
+            })
+        };
+        let act = || CtxItem::Act { keys: vec!["exec make gen".into()] };
+        let edit = || CtxItem::Edit { glob: "registry/*.csv".into() };
+        with(&|r| r.trigger = ctx(vec![edit(), act()], 8)).unwrap();
+        assert!(with(&|r| r.trigger = ctx(vec![act()], 8)).is_err());
+        assert!(with(&|r| r.trigger = ctx(vec![edit(), act(), act(), act()], 8)).is_err());
+        assert!(with(&|r| r.trigger = ctx(vec![edit(), act()], 9)).is_err());
+        assert!(with(&|r| r.trigger = ctx(vec![CtxItem::Edit { glob: "**/*.csv".into() }, act()], 8)).is_err());
+        assert!(with(&|r| r.trigger = ctx(vec![CtxItem::Act { keys: vec!["exec x;y".into()] }, act()], 8)).is_err());
+        let fail = CtxItem::Fail { keys: vec!["exec pytest".into()], signature: "`boom`".into() };
+        assert!(with(&|r| r.trigger = ctx(vec![fail.clone(), act()], 8)).is_err());
+    }
+
     #[test]
     fn index_is_deterministic() {
         let a = Index::compile(&[sample()]);
@@ -219,21 +285,21 @@ mod tests {
     }
 
     #[test]
-    fn a_retired_first_hand_route_shadows_imports_but_not_live_routes() {
+    fn a_extinguished_first_hand_route_shadows_imports_but_not_live_routes() {
         let mut imported = sample();
         imported.manifest.track.name = "acme-billing/zz-imported".into();
         imported.manifest.track.provenance = "imported:desire-path".into();
-        imported.routes[0].state = RouteState::Probation;
-        imported.routes[0].aspect = Aspect::Yellow;
-        let mut retired = sample();
-        retired.routes[0].state = RouteState::Retired;
-        assert!(Index::compile(&[retired.clone(), imported.clone()]).routes.is_empty());
-        // Without the retired route, the import is delivered.
+        imported.routes[0].state = RouteState::Forming;
+        imported.routes[0].strength = Strength::Prime;
+        let mut extinguished = sample();
+        extinguished.routes[0].state = RouteState::Extinguished;
+        assert!(Index::compile(&[extinguished.clone(), imported.clone()]).routes.is_empty());
+        // Without the extinguished route, the import is delivered.
         assert_eq!(Index::compile(&[imported.clone()]).routes.len(), 1);
-        // A live first-hand route in another track wins over the retired one.
+        // A live first-hand route in another track wins over the extinguished one.
         let mut live = sample();
         live.manifest.track.name = "acme-billing/a-live".into();
-        let idx = Index::compile(&[retired, imported, live]);
+        let idx = Index::compile(&[extinguished, imported, live]);
         assert_eq!(idx.routes.len(), 1);
         assert_eq!(idx.routes[0].track, "acme-billing/a-live");
     }

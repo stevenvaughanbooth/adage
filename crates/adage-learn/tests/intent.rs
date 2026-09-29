@@ -1,11 +1,11 @@
 //! Intent families end to end: synthetic Claude Code transcripts in the real on-disk format, a
-//! small fixture embedding model in the installed layout, `adage learn`, then the runtime.
+//! small fixture embedding model in the installed layout, `adage condition`, then the runtime.
 
 use adage_core::CommandTable;
 use adage_intent::model::{self, StaticModel};
 use adage_learn::{learn, Inputs, LearnConfig, Report};
 use adage_runtime::{decide, Ctx, Event, SessionState};
-use adage_tracks::{io, Aspect, Index, Step, Trigger};
+use adage_tracks::{io, Index, Step, Strength, Trigger};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -179,10 +179,10 @@ fn mines_intent_routes_and_the_runtime_matches_new_phrasings() {
         assert_eq!(family, &r.id);
         assert!(r.slots.is_empty());
         assert_eq!(r.evidence.support, 8);
-        assert_eq!(r.aspect, Aspect::Green, "8/8 sessions clears the demo green bar");
+        assert_eq!(r.strength, Strength::Fire, "8/8 sessions clears the demo fire bar");
     }
     // The track on disk validates as untrusted input.
-    io::read(&home.join("tracks/acme-docs/intents")).unwrap();
+    io::read(&home.join("tracks/acme-docs/learned")).unwrap();
 
     // Runtime: a phrasing never seen in training finds its family; chit-chat finds nothing.
     let m = StaticModel::open(&model::dir_in(&models)).unwrap();
@@ -191,7 +191,14 @@ fn mines_intent_routes_and_the_runtime_matches_new_phrasings() {
     };
     let root = tempfile::tempdir().unwrap();
     let table = CommandTable::load();
-    let ctx = Ctx { index: &index, repo: "acme-docs".into(), root: root.path(), table: &table, embed: Some(&embed) };
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme-docs".into(),
+        root: root.path(),
+        table: &table,
+        embed: Some(&embed),
+        params: Default::default(),
+    };
     let d1 = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: "Broken tests again! Fix?".into() });
     assert!(d1.directives.iter().any(|x| x.text.contains("make test")), "{:?}", d1.directives);
     let d2 =
@@ -222,7 +229,7 @@ fn intent_learning_is_deterministic_and_order_independent() {
 }
 
 #[test]
-fn without_a_model_learning_falls_back_and_keeps_existing_intent_tracks() {
+fn without_a_model_learning_falls_back_and_keeps_existing_intent_reflexes() {
     let d = tempfile::tempdir().unwrap();
     let files = corpus(d.path());
     // No model directory, and a damaged one: both mean no intent families, and nothing else changes.
@@ -230,13 +237,19 @@ fn without_a_model_learning_falls_back_and_keeps_existing_intent_tracks() {
     std::fs::create_dir_all(model::dir_in(&broken)).unwrap();
     std::fs::write(model::dir_in(&broken).join("manifest.json"), "{not json").unwrap();
     for models in [None, Some(broken)] {
-        let home = d.path().join(format!("home-{}", models.is_some()));
+        let dir = models.is_some();
+        let home = d.path().join(format!("home-{dir}"));
         let (rep, index) = run(&files, &home, models);
+        // A damaged install falls back to the model bundled in the binary, when the build has one
+        // (the `adage` binary does; `adage doctor` fails on the damaged install).
+        if dir && model::bundled_id().is_some() {
+            assert_eq!(rep.intent_model, model::bundled_id());
+            continue;
+        }
         assert!(rep.intent_model.is_none());
         assert!(intents(&index).is_empty());
-        assert!(!home.join("tracks/acme-docs/intents").exists());
     }
-    // Learned with a model, then relearned without one: the intent track is left as it was.
+    // Learned with a model, then relearned without one: the intent reflexes are left as they were.
     let models = d.path().join("models");
     install_fixture_model(&models);
     let home = d.path().join("home");

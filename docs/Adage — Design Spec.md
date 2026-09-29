@@ -2,8 +2,9 @@
 
 **Status:** Design phase, draft 7 — decisions closed except O9; architecture review changes applied · **Date:** 2026-09-22 · **Supersedes:** *Interaction Graph Compiler — Design v2*
 
-> **Adage** — *Agentic DAG Engine.* An adage is wisdom distilled from long experience; a track is
-> an adage for your agents. **Put your agent on rails.** Brand system in [§17](#17-naming-and-brand).
+> **Adage** — *Agentic DAG Engine.* **Agent traces become reflexes.** An adage is wisdom distilled
+> from long experience; a reflex is what your agents' traces distil into. Brand system in
+> [§17](#17-naming-and-brand).
 
 ---
 
@@ -37,10 +38,12 @@ a schema change, the affected package's tests — before CI has to tell them. Tr
 can read them, review them, commit them to a repo, and share them with a teammate. A team can give
 a new hire a set of starter tracks so their agent is on the right path from the first prompt.
 
-> *Put your agent on rails.*
+> *Agent traces become reflexes.*
 
-Adage never executes anything itself. Every command is run by the agent, through the agent's own
-tools, under the harness's own permissions, in plain view. Adage only decides what to say, and when.
+Adage never runs the commands it directs. Every command is run by the agent, through the agent's
+own tools, under the harness's own permissions, in plain view. Adage only decides what to say, and
+when. (Execution, when a person turns it on, is a separate binary, `adage-exec`, that runs only
+reflexes approved on that machine, inside an OS sandbox: [execution.md](execution.md).)
 
 ---
 
@@ -83,16 +86,23 @@ and noticed when it stopped working.
 
 ## 3. Principles
 
-1. **The agent is the only actor.** Adage never runs a command, reads a file on the agent's behalf,
-   or edits anything. It emits text. The harness's permission system sees every action, as it would
-   without Adage.
+1. **The agent is the only actor, unless you delegate.** The `adage` binary and its hooks never
+   run a command, never read a file on the agent's behalf, and never edit anything; they emit text.
+   A separate, optional component, `adage-exec`, installed only by a person at a terminal, may run
+   a route **only** when all of these hold: this machine holds an approval for that route's exact
+   argv, inputs, scripts (by hash), effect and level; an OS sandbox enforces the approved profile;
+   and the route's effect is at most regenerate. Output returns to the agent as typed, fenced data,
+   never as instructions. Actions with effects (E2) run only from the hooks Adage owns, for a
+   reflex a person approved explicitly on this machine, and are staged and verified before
+   anything in the worktree changes. Approvals never travel with a track. (Track C §5.1;
+   [execution](execution.md).)
 2. **Deterministic by construction.** The same situation with the same installed tracks produces
    the same directive. (The one exception, experiment assignment, is itself a deterministic hash of
    the session ID — [§14](#14-measurement).)
 3. **One block ahead.** Like railway block signalling, a directive authorises only the next step or
    the next parallel batch — never a multi-step plan the agent could anchor on.
 4. **Every route carries its evidence** — where it came from, how often it was right, on which
-   model and harness — and every route can be demoted.
+   model and harness — and every route can be weakened.
 5. **Tracks are code.** They are reviewable text, versioned, and signed. Adage builds your own
    tracks automatically; anyone else's are installed deliberately and treated with the same
    suspicion as a dependency.
@@ -114,17 +124,19 @@ and noticed when it stopped working.
 
 | # | Goal | Measured by |
 | --- | --- | --- |
-| G1 | Cut time to first useful edit on workflows a track covers | ≥20% reduction in triggered sessions against a randomised holdout |
+| G1 | Cut time to first useful edit on workflows a track covers | ≥20% reduction in triggered sessions against a randomised control |
 | G2 | Make agent behaviour predictable | Lower variance in turns-to-first-edit on covered workflows |
 | G3 | Never make outcomes worse | Non-inferiority on user corrections, CI failures, and rework |
 | G4 | Make good behaviour portable | A shared or starter track reaches its source's time savings within 2 weeks on the receiving machine |
-| G5 | Maintain itself | Routes that stop working are demoted automatically, with no human noticing first |
+| G5 | Maintain itself | Routes that stop working are weakened automatically, with no human noticing first |
 | G6 | Stay out of the way | No-match overhead ≤10 ms p95 per hook call; zero blocking on failure |
-| G7 | Catch the repo's routine checks before CI does | Lower first-push CI failure rate on sessions covered by finish-line routes, against holdout |
+| G7 | Catch the repo's routine checks before CI does | Lower first-push CI failure rate on sessions covered by finish-line routes, against control |
 
 ### Non-goals (v1)
 
-- **Executing anything** on the agent's behalf — including pre-fetching reads.
+- **Executing anything** the user has not approved on this machine, anything outside a sandbox,
+  or anything at author or publish effect (Track C §5.1; pre-fetching an approved, observe-only
+  lookup is E1, [execution](execution.md)).
 - **Directing authorship or publication.** Adage never tells the agent what code to write, and
   never directs commits, pushes, pull requests, deploys, deletions, or writes to shared systems.
 - Autonomous edits or multi-step plans.
@@ -138,33 +150,44 @@ and noticed when it stopped working.
 
 ## 5. Vocabulary
 
-The railway language is the brand, but every term maps to a plain meaning, and code and APIs use
-whichever is clearer.
+The theme is the nervous system: traces are experience, reflexes are conditioned responses, and
+instincts are innate ones. The canonical word list is [the lexicon](lexicon.md); every
+user-facing word follows it. Every term maps to a plain meaning, and code and APIs use whichever
+is clearer. Text the agent reads (directives) stays plain and factual: the theme is for people,
+not the model.
 
 | Term | Plain meaning |
 | --- | --- |
 | **Adage** | The system as a whole |
-| **Survey** | A read-only analysis of session history: what agents do, what repeats, what it costs. Installs nothing |
-| **Track** | A shareable package of routes, with a manifest, evidence, and a version |
-| **Route** | A conditional sequence of steps for one kind of situation — "when a prompt names a work item" |
+| **Trace** | A session transcript a coding agent left behind |
+| **Reflex** | A learned response: a stimulus, a response, typed inputs and evidence. Conditioned on real traces (`adage condition`) or grown from a skill (`adage train`). "Route" in code and on disk |
+| **Instinct** | A response that ships with Adage and works on day 0, bound from the repository's own files; never stronger than *prime* on its own, and a learned reflex always overrides it |
+| **Reflex arc** | Stimulus → response, in explanations |
+| **Stimulus** | What starts a reflex: a prompt that names a work item, a failed command, an edit to a path pattern ("trigger" in the CLI and on disk) |
+| **Response** | What the reflex tells the agent ("directive" in the CLI, where precision matters) |
 | **Step** | One action the agent should take: a command template, a set of reads, a batch |
-| **Switch** | A decision point inside a route where it branches, based on what the agent just observed |
-| **Signal** | A directive, and its **aspect** — its strength: **green** (take this step), **yellow** (known route, advisory), **red** (avoid this; do that instead) |
-| **Effect class** | What a step does to the world — observe, verify, regenerate, environment, author, publish — which caps the strongest aspect it may be given |
-| **Finish-line route** | A route triggered by edits rather than by the prompt: "after changing these files, this repo needs these checks" |
+| **Strength** | How strongly a reflex speaks: **fire** (do this: strong evidence; shown green), **prime** (consider this: a suggestion; yellow), **inhibit** (don't do this: a known dead end; red) |
+| **Lifecycle** | **nascent** (waits for a person's review), **forming** (delivered while evidence builds), **firm** (established), **dormant** (held: its evidence thinned because it was being followed, not because it was wrong), **extinguished** (retired, kept for history) |
+| **Judgements** | **followed**; **ignored** (the agent did not follow it: expected, allowed, and measured); **misfired** (followed, and the command failed) |
+| **Effect class** | What a step does to the world — observe, verify, regenerate, environment, author, publish — which caps the strongest strength it may be given |
+| **Finish-line reflex** | A reflex triggered by edits rather than by the prompt: "after changing these files, this repo needs these checks" |
 | **Directive** | The text Adage places in the agent's context |
 | **Compiled step** | Several predictable steps collapsed into one command or one parallel batch |
-| **Gauge** | What a track is compatible with: harness and version range, model family |
-| **Yard** | The local store of installed tracks and their evidence |
-| **Depot** | A shared source of tracks: a repository directory, a team git repo, later a registry |
-| **Desire path** | A route mined from organic behaviour in real sessions |
+| **Track** | Reflexes and instincts on disk, with a manifest, evidence, and a version |
+| **Pack** | The signed, closed form of a track that you review, commit, share and install |
 | **Intent family** | Prompts that mean the same thing and lead agents to do the same thing — discovered with embeddings, confirmed by behaviour |
 | **Failure family** | Error outputs that describe the same situation, however the exact text varies |
-| **Autonomy level** | How far Adage may build and promote tracks without a person: `off`, `suggest`, `auto` |
-| **Familiar command** | A command the repo's agents already ran successfully in many distinct sessions — the only kind that may turn green automatically |
-| **Proving ground** | The eval harness that trains and tests routes offline |
-| **Derail** | The agent leaving a route. Expected, allowed, and measured |
-| **Interlocking** | The rules that stop two installed tracks from issuing conflicting directives |
+| **Autonomy level** | How far Adage may condition and strengthen reflexes without a person: `off`, `suggest`, `auto` |
+| **Familiar command** | A command the repo's agents already ran successfully in many distinct traces — the only kind that may reach *fire* automatically |
+| **Control** | The comparison arm: sessions where Adage decides but says nothing, so every effect is measured against them |
+| **The map** | The web view of every reflex arc and its live counts (`adage map`) |
+| **Delegation** | A person letting approved reflexes act, per machine and inside an OS sandbox (`adage delegate`, `adage review delegate`) |
+| **Interlocking** | The rules that stop two installed reflexes from issuing conflicting directives |
+
+The verbs are `adage init`, `sense` (read-only: which reflexes your traces would form),
+`condition` (mine traces into reflexes and bind instincts), `train` (grow reflexes from a skill),
+`review strengthen` / `weaken` / `extinguish`, `delegate`, `map`, and the unchanged `watch`,
+`doctor`, `share`, `add` and `eval`.
 
 ---
 
@@ -172,18 +195,18 @@ whichever is clearer.
 
 ### J1 · First install — "what does my agent actually do?"
 
-1. `adage survey` imports existing session history and prints a report: the intent families that
+1. `adage sense` imports existing session history and prints a report: the intent families that
    recur, turns before the first edit for each, the exploration that repeats, the dead ends, the
    missed obligations, and the tracks Adage would build. Nothing is installed; nothing changes.
 2. `adage init` turns it on. From then on Adage **builds and maintains tracks automatically** from
    the developer's own sessions (§10.9). No adoption step is required for the safe cases.
-3. New routes start on **probation**: yellow only, until local evidence confirms them. Routes that
-   clear the bars promote themselves to green, within their effect ceilings. Anything that needs a
+3. New routes start on **forming**: prime only, until local evidence confirms them. Routes that
+   clear the bars strengthen themselves to fire, within their effect ceilings. Anything that needs a
    person's judgement — a command never approved before, a regenerate step, anything from outside —
    waits in `adage review`.
 4. `adage status` shows, per track and route: how often it fired, how often the agent followed it,
-   time saved against holdout, and any guardrail warnings. A weekly digest summarises what was
-   created, promoted, and demoted.
+   time saved against control, and any guardrail warnings. A weekly digest summarises what was
+   created, strengthened, and weakened.
 
 ### J2 · Sharing with a teammate
 
@@ -195,7 +218,7 @@ whichever is clearer.
    locally in `adage review`, and a teammate still reviews and merges it.
 3. The teammate runs `adage add` or simply pulls the repo. Install shows every command the track
    can direct and every script it depends on, with their content hashes.
-4. The track starts on probation on the teammate's machine: as yellow advice if it is signed by a
+4. The track starts forming on the teammate's machine: as prime advice if it is signed by a
    trusted team source, silently otherwise (O2). The author's evidence counts as a prior, not a
    pass. Local evidence decides.
 
@@ -208,7 +231,7 @@ problem: a new person or a new repo has no history to mine, but the team does.
 
 ### J4 · Proving a track
 
-A team lead runs `adage prove work-items --suite onboarding-tasks`. The proving ground runs the
+A team lead runs `adage prove work-items --suite onboarding-tasks`. The eval loop runs the
 agent on eval tasks with and without the track, keeps the successful runs, looks for the shortest
 successful route, and reports whether the track improves speed without hurting success. A track
 that passes carries `proving` evidence and can be published.
@@ -217,7 +240,7 @@ that passes carries `proving` evidence and can be published.
 
 The organisation moves to a new model. Adage detects the gauge change. Routes that encode the
 environment ("a work-item prompt needs the work-item lookup") stay active and re-validate quickly.
-Routes that encode the old model's habits drop back to probation. `adage status` shows which is
+Routes that encode the old model's habits drop back to forming. `adage status` shows which is
 which.
 
 ### J6 · Turning it off
@@ -233,8 +256,8 @@ which.
 flowchart LR
   subgraph Learn["Learn (offline)"]
     H[Session history] --> N[Normalise]
-    E[Eval runs<br/>proving ground] --> N
-    N --> M[Mine routes<br/>desire paths]
+    E[Eval runs<br/>offline and live] --> N
+    N --> M[Condition reflexes<br/>on real traces]
     M --> V[Validate<br/>offline replay]
   end
   subgraph Share["Package and share"]
@@ -248,7 +271,7 @@ flowchart LR
     R --> A[Agent context]
   end
   A --> G[Agent acts<br/>via its own tools]
-  G --> O[Observe:<br/>followed or derailed?]
+  G --> O[Observe:<br/>followed or ignored?]
   O --> Y
   O --> H
 ```
@@ -308,7 +331,7 @@ thing*. Families are discovered, never declared — there is no intent taxonomy 
 
 **Discovery (offline, as part of mining):**
 
-1. **Collect** every real user prompt from history, and from proving-ground tasks.
+1. **Collect** every real user prompt from history, and from eval tasks.
 2. **Normalise before embedding.** This step matters more than the choice of model:
    - Replace spans with typed placeholders, so the vector carries the intent rather than the
      identifier: *"pick up W-4821"* → *"pick up {work_item}"*.
@@ -324,7 +347,7 @@ thing*. Families are discovered, never declared — there is no intent taxonomy 
    route. Split families whose sessions behave differently; merge families whose sessions behave the
    same. Families below the purity bar never trigger routes. *Embeddings propose; behaviour decides.*
 6. **Name** each family with a short human label and 3–5 canonical phrasings, written offline by a
-   language model from the family's normalised prompts. These appear in the Survey, in `adage
+   language model from the family's normalised prompts. These appear in the Sense, in `adage
    status`, and in track files.
 7. **Calibrate** a similarity threshold *per family* on held-out prompts — the similarity at which
    matching reaches the family's precision target. No global cosine threshold.
@@ -359,7 +382,7 @@ The same machinery recognises *similar failures*. Error output is normalised —
 hashes, timestamps, and temporary names replaced with placeholders — embedded, and clustered into
 **failure families**: "pnpm workspace protocol error", "missing generated types", "port already in
 use". Failure families drive switches ("a compile error goes to build; an assertion goes to the
-test") and dead-end detection (red signals), where the exact error text varies but the situation
+test") and dead-end detection (inhibit signals), where the exact error text varies but the situation
 does not.
 
 #### 8.2.4 Intent across machines and harnesses
@@ -434,17 +457,17 @@ permissions, so the question is no longer "is it safe for Adage to run this?" bu
 strongly should Adage tell the agent to run this?"** The answer depends on what the step does to
 the world.
 
-Every step template declares an **effect class**, and the class caps the strongest aspect the step
+Every step template declares an **effect class**, and the class caps the strongest strength the step
 may ever be given:
 
-| Effect class | Examples | What it changes | Strongest aspect |
+| Effect class | Examples | What it changes | Strongest strength |
 | --- | --- | --- | --- |
-| **Observe** | Read, search, list, `git status/log/diff/show`, lookup scripts | Nothing | 🟢 Green |
-| **Verify** | Build, test, typecheck, lint in check mode | Build outputs and caches; never source | 🟢 Green |
-| **Regenerate** | Codegen, formatters, snapshot updates, lockfile sync | The working tree, deterministically; undoable with git | 🟢 Green *only* as a finish-line obligation triggered by an edit to the generator's inputs; otherwise 🟡 |
-| **Environment** | Install dependencies, start local services, local database migrations | Local machine state | 🟡 Yellow, and only on routes a person approved in `adage review` |
+| **Observe** | Read, search, list, `git status/log/diff/show`, lookup scripts | Nothing | 🟢 Fire |
+| **Verify** | Build, test, typecheck, lint in check mode | Build outputs and caches; never source | 🟢 Fire |
+| **Regenerate** | Codegen, formatters, snapshot updates, lockfile sync | The working tree, deterministically; undoable with git | 🟢 Fire *only* as a finish-line obligation triggered by an edit to the generator's inputs; otherwise 🟡 |
+| **Environment** | Install dependencies, start local services, local database migrations | Local machine state | 🟡 Prime, and only on routes a person approved in `adage review` |
 | **Author** | Source code edits | The work itself | Never directed. This is the agent's job |
-| **Publish** | Commit, push, pull request, deploy, deletes, writes to shared systems, anything touching production | Shared or irreversible state | Never directed. 🔴 Red only — "don't" |
+| **Publish** | Commit, push, pull request, deploy, deletes, writes to shared systems, anything touching production | Shared or irreversible state | Never directed. 🔴 Inhibit only — "don't" |
 
 Classification is data, per command template, the same way the normaliser classifies commands
 today. Unknown commands default to **Environment**. A track that declares a step as Observe or
@@ -474,11 +497,11 @@ trigger:
 steps:
   - id: regenerate
     effect: regenerate
-    aspect: green
+    strength: fire
     run: "make gen"
   - id: verify
     effect: verify
-    aspect: green
+    strength: fire
     run: "pnpm --filter {affected_package} typecheck"
 exit:
   - intent_changes: true              # rendered: "the user asks for something else"
@@ -499,7 +522,7 @@ Finish-line routes are mined from the post-edit part of sessions, which earlier 
 
 They are delivered at two points:
 
-1. **After an edit batch**, as the agent works — a green directive to run the obligation.
+1. **After an edit batch**, as the agent works — a fire directive to run the obligation.
 2. **At the finish line**, when the agent is about to stop, if an obligation from this session is
    still unmet. On Claude Code and Codex this uses the harness's stop hook, which can ask the agent to
    continue with a reason. It is the one place Adage delays anything, so it is tightly bounded:
@@ -521,23 +544,23 @@ interface, and it is specified as carefully as an API.
 
 | Signal | Meaning | When it may be used |
 | --- | --- | --- |
-| 🟢 **Green** | "Take this step." Precise, with resolved arguments | Route is `active`; probability clears the green bar; every slot bound and validated |
-| 🟡 **Yellow** | "This is the known route here." Advisory | Route on `probation`, or confidence below the green bar |
-| 🔴 **Red** | "Avoid this; do that instead." | A measured dead end — the avoided action failed repeatedly and the alternative succeeded |
+| 🟢 **Fire** | "Take this step." Precise, with resolved arguments | Route is `firm`; probability clears the fire bar; every slot bound and validated |
+| 🟡 **Prime** | "This is the known route here." Advisory | Route on `forming`, or confidence below the fire bar |
+| 🔴 **Inhibit** | "Avoid this; do that instead." | A measured dead end — the avoided action failed repeatedly and the alternative succeeded |
 
-Every aspect is also capped by the step's effect class ([§8.6](#86-effects)): no amount of evidence
-makes an Environment step green, and Author and Publish steps are never directed at all.
+Every strength is also capped by the step's effect class ([§8.6](#86-effects)): no amount of evidence
+makes an Environment step fire, and Author and Publish steps are never directed at all.
 
-Green is deliberately prescriptive. That is the point of rails, and it is a reversal of the v2
+Fire is deliberately prescriptive. That is the point of rails, and it is a reversal of the v2
 guidance to "never phrase it as an instruction". The v2 reviewers were right that instructions steer
-the agent — that is exactly why green is gated behind the strongest evidence, why it only ever
+the agent — that is exactly why fire is gated behind the strongest evidence, why it only ever
 authorises one block ahead, why it always carries an exit condition, and why the guardrails in §14
 measure outcomes rather than compliance.
 
 ### 9.2 Anatomy
 
 ```text
-<signal source="adage" track="acme/work-items@1.3.0" route="work-item-context" aspect="green">
+<signal source="adage" track="acme/work-items@1.3.0" route="work-item-context" strength="fire">
 Known route for work-item prompts in this repo. Not requested by the user.
 Next: run  ./scripts/wi-lookup W-4821 --json
 Leave this route if the item is Closed or the user wants something else.
@@ -547,7 +570,7 @@ Leave this route if the item is Closed or the user wants something else.
 After the agent runs it, the next directive arrives with the tool result:
 
 ```text
-<signal source="adage" track="acme/work-items@1.3.0" route="work-item-context" aspect="yellow">
+<signal source="adage" track="acme/work-items@1.3.0" route="work-item-context" strength="prime">
 The lookup lists these files. If you need them, read them together in one turn:
 auth/token.rs, auth/rotate.rs
 </signal>
@@ -556,7 +579,7 @@ auth/token.rs, auth/rotate.rs
 A dead end:
 
 ```text
-<signal source="adage" track="acme/payments-dev@2.0.1" aspect="red">
+<signal source="adage" track="acme/payments-dev@2.0.1" strength="inhibit">
 Avoid `npm test` in this repo — the workspace uses pnpm and it fails.
 Use: pnpm --filter auth test
 </signal>
@@ -575,8 +598,8 @@ Use: pnpm --filter auth test
 | W7 | **Identify the track and version** in the tag | Provenance for the agent, the user, and the audit log |
 | W8 | **Fit the harness cap** — 10,000 characters on Claude Code, about 2,500 tokens on Codex | Overflow is spilled to a file and the agent sees only a preview |
 
-Wording is itself an experimental variable. The proving ground compares variants offline
-([§12](#12-learning-proving-grounds)), and the live experiment can carry wording as a factor.
+Wording is itself an experimental variable. The eval loop compares variants offline
+([§12](#12-conditioning-on-purpose-evals-and-training)), and the live experiment can carry wording as a factor.
 
 ### 9.4 Where the savings come from
 
@@ -586,15 +609,15 @@ somewhere else, and every source must be measured separately:
 | Source | Mechanism | Example |
 | --- | --- | --- |
 | **Exploration removed** | The agent no longer searches for the right command, script, or file | No `ls scripts/`, no reading the README, no grepping for the test runner |
-| **Serial → parallel** | A yellow or green batch collapses several one-at-a-time calls into one turn | Three linked files read in one turn instead of three |
+| **Serial → parallel** | A prime or fire batch collapses several one-at-a-time calls into one turn | Three linked files read in one turn instead of three |
 | **Compiled steps** | One command replaces a multi-step discovery | A lookup script instead of four exploratory calls |
-| **Dead ends avoided** | Red signals prevent known failures and their recovery turns | `pnpm test` first, not after `npm test` fails |
+| **Dead ends avoided** | Inhibit signals prevent known failures and their recovery turns | `pnpm test` first, not after `npm test` fails |
 | **Deliberation** | Less reasoning about what to do next | Fewer output tokens per turn |
 | **Right scope** | The narrowest verify target that does the job | The affected package's tests instead of the whole suite |
 | **Obligations met** | Finish-line routes catch checks before CI does | Codegen run after a schema edit; no failed CI loop |
 
 A route whose only effect is to tell the agent what it would have done anyway saves almost nothing.
-The Survey and the credibility test must show that exploration, serial work, dead ends, and missed
+The Sense and the credibility test must show that exploration, serial work, dead ends, and missed
 obligations make up a meaningful share of session cost, or the premise fails
 ([§16](#16-credibility-test)).
 
@@ -661,13 +684,13 @@ slots:
 steps:
   - id: lookup
     effect: observe
-    aspect: green
+    strength: fire
     run: "./scripts/wi-lookup {item} --json"
     pin: "sha256:9f2c…"
     next: read-linked
   - id: read-linked
     effect: observe
-    aspect: yellow
+    strength: prime
     batch:
       read: "{lookup.files[*]}"
       contract: repo-path
@@ -688,28 +711,28 @@ Each route has a state; a track's state is summarised from its routes.
 
 ```mermaid
 stateDiagram-v2
-  [*] --> Draft: auto-built, authored, or imported
-  Draft --> Proving: offline replay / proving ground
-  Proving --> Probation: passes offline bars
-  Probation --> Active: local evidence confirms
-  Active --> Demoted: CUSUM regression, guardrail breach
-  Demoted --> Active: rollback to last good version
-  Demoted --> Probation: re-validated
-  Demoted --> Retired: 3 demotions, or 30 days
-  Probation --> Retired: never confirms
+  [*] --> Nascent: auto-built, authored, or imported
+  Nascent --> Proving: offline replay / evals
+  Proving --> Forming: passes offline bars
+  Forming --> Active: local evidence confirms
+  Active --> Weakened: CUSUM regression, guardrail breach
+  Weakened --> Active: rollback to last good version
+  Weakened --> Forming: re-validated
+  Weakened --> Extinguished: 3 weakenings, or 30 days
+  Forming --> Extinguished: never confirms
 ```
 
 | State | Delivered as | Leaves when |
 | --- | --- | --- |
-| Draft | Nothing | It is validated offline |
+| Nascent | Nothing | It is validated offline |
 | Proving | Nothing (offline only) | It clears the offline bars |
-| Probation | Yellow — or shadow only for imported tracks not signed by a trusted team source (O2) | Local evidence confirms it, counted in distinct sessions across distinct days |
-| Active | Green where the green bar is met | A regression or guardrail breach |
-| Demoted | Nothing | Rollback, re-validation, or retirement |
-| Retired | Nothing; kept for history | — |
+| Forming | Prime — or shadow only for imported tracks not signed by a trusted team source (O2) | Local evidence confirms it, counted in distinct sessions across distinct days |
+| Active | Fire where the fire bar is met | A regression or guardrail breach |
+| Weakened | Nothing | Rollback, re-validation, or extinction |
+| Extinguished | Nothing; kept for history | — |
 
-Promotion uses anytime-valid confidence sequences; demotion uses CUSUM on recent accuracy; a
-significant regression rolls back to the route's last good version; a context demoted three times
+Strengthening uses anytime-valid confidence sequences; weakening uses CUSUM on recent accuracy; a
+significant regression rolls back to the route's last good version; a context weakened three times
 is blacklisted until something structural changes. These carry over unchanged from v2.
 
 ### 10.5 Evidence that travels
@@ -720,7 +743,7 @@ arrives as a **prior with a capped weight**, and local evidence decides:
 ```text
 prior        Beta(α₀, β₀) with α₀ = m·p̂, β₀ = m·(1 − p̂),  m = min(n_author, 20)
 local        each distinct local session updates the posterior
-promotion    uses the posterior lower bound, like any route
+strengthening    uses the posterior lower bound, like any route
 ```
 
 A track proven by a thousand of the author's sessions counts, locally, as twenty. Three layers pool
@@ -731,8 +754,8 @@ their own.
 
 Several installed tracks can match the same decision point. The interlocking rules:
 
-1. At most **one green** directive per decision point.
-2. **Red beats green** when they concern the same action.
+1. At most **one fire** directive per decision point.
+2. **Inhibit beats fire** when they concern the same action.
 3. Otherwise precedence runs **personal → repository → team depot → starter**, then by expected
    value.
 4. Two tracks that repeatedly conflict at the same point are reported by `adage doctor`.
@@ -776,14 +799,14 @@ tracks, so each can be reviewed, versioned, and shared on its own:
 | --- | --- | --- |
 | One per repository × intent family | Discovery routes for that intent | `payments/work-item-start` |
 | One per repository | Finish-line obligations | `payments/finish-line` |
-| One per repository | Dead ends (red signals) | `payments/dead-ends` |
+| One per repository | Dead ends (inhibit signals) | `payments/dead-ends` |
 
 Each track is named and described from its intent labels; its changelog is written from the diff
-("added a route for flaky-test triage; demoted the lookup route after a regression on the new
+("added a route for flaky-test triage; weakened the lookup route after a regression on the new
 model"); and its version is bumped automatically:
 
 - **Patch** — evidence updated, nothing else changed.
-- **Minor** — a route added or promoted.
+- **Minor** — a route added or strengthened.
 - **Major** — a trigger, scope, or command changed, or a route removed.
 
 So a teammate who pins a version is never surprised by a change in behaviour.
@@ -796,29 +819,29 @@ So a teammate who pins a version is never surprised by a change in behaviour.
 | `suggest` | Automatically | Only after approval in `adage review` |
 | `auto` (default) | Automatically | Automatically, within the limits below |
 
-Under `auto`, what promotes itself and what waits for a person:
+Under `auto`, what strengthens itself and what waits for a person:
 
-| Step | Probation (yellow) | Green |
+| Step | Forming (prime) | Fire |
 | --- | --- | --- |
 | Observe | Automatic | Automatic, once evidence clears the bars |
 | Verify | Automatic | Automatic, once evidence clears the bars **and** the command is *familiar* |
 | Regenerate | Automatic | Waits for review |
-| Environment | Waits for review (O11) | Never — yellow at most |
-| Red (dead end) | Automatic | — |
+| Environment | Waits for review (O11) | Never — prime at most |
+| Inhibit (dead end) | Automatic | — |
 
 A command is **familiar** when the agent has already run it successfully in this repository in at
-least 20 distinct sessions across at least 5 days. Automatic green is limited to commands the repo's
+least 20 distinct sessions across at least 5 days. Automatic fire is limited to commands the repo's
 own agents — under their users' own permissions — already chose to run many times. Adage makes the
 familiar deterministic; it never introduces an unfamiliar command with full authority on its own.
 
 Three further limits keep automation honest:
 
-- **Losing authority is always automatic.** Demotion, rollback, and retirement never wait for a
+- **Losing authority is always automatic.** Weakening, rollback, and extinction never wait for a
   person.
-- **Change is paced.** At most a few routes per repository are promoted to green each week, so
-  behaviour changes gradually and the holdout can attribute each effect.
+- **Change is paced.** At most a few routes per repository are strengthened to fire each week, so
+  behaviour changes gradually and the control can attribute each effect.
 - **Human edits win.** A person can edit any auto-built track. An edited route is marked `authored`,
-  and the miner stops overwriting it — it proposes changes in `adage review` instead.
+  and the learner stops overwriting it — it proposes changes in `adage review` instead.
 
 **Tracks as pull requests.** In team mode, when a personal track has cleared its bars and is
 portable — its requirements are met by the repository and its scope isn't specific to one person's
@@ -830,7 +853,7 @@ directive, every command with its effect class, and the redaction review. Mergin
 starter tracks accumulate this way, reviewed through the same process as code. Later evidence from
 teammates arrives as further pull requests, usually patch bumps.
 
-Automatic building bypasses none of the safety model: new routes start on probation, the holdout
+Automatic building bypasses none of the safety model: new routes start forming, the control
 always applies, evidence is counted in distinct sessions across distinct days, effect ceilings hold,
 and nothing Adage steered counts as evidence that it was right.
 
@@ -847,8 +870,8 @@ already use, not invent new ones — and it should be clear about what a track a
 | **Who decides when it applies** | The model, from a description | Adage, deterministically, at a decision point |
 | **Where it comes from** | Written by a person | Learned from sessions and evals, or written by a person |
 | **What it carries** | Instructions | Instructions, plus the evidence that they help |
-| **State** | None — the same everywhere | Per machine: probation, active, demoted |
-| **When it stops working** | Nobody notices | It demotes itself |
+| **State** | None — the same everywhere | Per machine: forming, active, weakened |
+| **When it stops working** | Nobody notices | It weakens itself |
 | **Portable standard** | Agent Skills (`SKILL.md`), supported by 40+ tools | Adage's track format |
 
 In the language of the first draft of this design: **skills are the interpreted form; tracks are the
@@ -861,13 +884,13 @@ can tell which ones actually help. A track answers that question for itself.
 1. **Tracks can trigger skills.** A route step can be *"use the `db-migrations` skill now"*. The
    biggest weakness of skills — the model deciding whether and when to load them, and often getting
    it wrong — becomes a deterministic, well-timed directive. Loading a skill is already a canonical
-   action, so the miner learns *when* a skill helps, and skills gain the evidence they lack.
+   action, so the learner learns *when* a skill helps, and skills gain the evidence they lack.
 2. **Tracks can compile down to skills.** `adage share --as-skill` renders a stable track as a
    `SKILL.md`, for tools and teammates that don't run Adage. The result loses conditionality and
    evidence but gains reach. It is the "static guidance" arm of the experiment (§14.1), made
    shippable.
 3. **Skills can seed tracks.** A team's existing skills are hand-written hypotheses about good
-   routes. The proving ground can test them, and the ones that help become tracks with evidence.
+   routes. The eval loop can test them, and the ones that help become tracks with evidence.
 
 **Riding the plugin channel on Claude Code:**
 
@@ -879,7 +902,7 @@ can tell which ones actually help. A track answers that question for itself.
 - **Tracks ship as track packs.** A track pack is an ordinary plugin whose payload is a `tracks/`
   directory. Teams publish it through the plugin marketplace they already run, with its versioning,
   its commit pinning, and its access control. Adage discovers tracks in enabled plugins, and treats
-  them exactly like any other imported track: signed, reviewed at install, on probation locally.
+  them exactly like any other imported track: signed, reviewed at install, forming locally.
 - **The harness-neutral format stays Adage's own.** The plugin is only the envelope on Claude Code.
   Codex and OpenCode receive the same tracks through their own mechanisms, or plain git.
 
@@ -890,12 +913,12 @@ can tell which ones actually help. A track answers that question for itself.
 | Namespaced names (`plugin:skill`) | Tracks are always `owner/track` |
 | Marketplaces are git repositories with a manifest | A depot is the same shape — and on Claude Code, can literally be a marketplace |
 | Community catalogs pin each plugin to a commit and screen it automatically | Depots pin tracks by hash; every command template is screened at install |
-| `claude plugin eval` runs prompts with and without a plugin, several times, including when a new model ships | The proving ground (§12) does the same for tracks, and should reuse this where it fits |
+| `claude plugin eval` runs prompts with and without a plugin, several times, including when a new model ships | The eval loop (§12) does the same for tracks, and should reuse this where it fits |
 | Version bumps gate updates | Automatic semver (§10.9) gates behaviour changes |
 
 ---
 
-## 11. Learning: desire paths
+## 11. Conditioning on real traces
 
 Organic mining from real sessions. This carries over from v2 with one change: nothing Adage steered
 counts as evidence that it was right.
@@ -906,7 +929,7 @@ counts as evidence that it was right.
   grammars. Gate: ≥95% of calls normalise, against ≥300 golden fixtures per harness version.
 - **Templates.** Arguments are generalised into typed slots. In the early sample this doubled the
   repeat rate, from 37% to 73%.
-- **Training data hygiene.** Only sessions from before Adage was installed, holdout sessions, and
+- **Training data hygiene.** Only sessions from before Adage was installed, control sessions, and
   treated sessions *truncated at their first directive* (weighted by inverse propensity) are used
   for mining. Every directive is tagged, so the partition is exact.
 - **Outcome labels** are guardrails in randomised comparisons, not mining filters: final
@@ -917,21 +940,21 @@ counts as evidence that it was right.
   candidates; sessions that skipped it and then failed CI on the check it would have caught are
   the evidence that it matters ([§8.7](#87-finish-line-routes)).
 - **Dead-end mining** is new in v3: sequences where an action fails, the agent recovers with a
-  different action, and the same pattern recurs across sessions become red-signal candidates.
+  different action, and the same pattern recurs across sessions become inhibit-signal candidates.
 - **Model and harness churn.** Every statistic is keyed by model, harness version, and effort level.
-  Routes are classified as *environment* (survive model changes) or *habit* (return to probation on
+  Routes are classified as *environment* (survive model changes) or *habit* (return to forming on
   a change), and each route reports its half-life across model generations.
 
 ---
 
-## 12. Learning: proving grounds
+## 12. Conditioning on purpose: evals and training
 
-Desire paths learn what agents *do*. The proving ground learns what *works* — and finds the beaten
+Reflexes conditioned on real traces learn what agents *do*. The eval loop learns what *works* — and finds the beaten
 path by stomping it deliberately.
 
 ### 12.1 Why it exists
 
-| Problem with organic mining | How the proving ground helps |
+| Problem with organic mining | How the eval loop helps |
 | --- | --- |
 | Imitates the common route, not the best one | Chooses the shortest *successful* route among many runs |
 | Outcome labels are weak and confounded | Eval tasks have ground-truth success checks |
@@ -967,12 +990,12 @@ flowchart TD
    time to first edit improves. Vary route granularity and directive wording between rounds.
 5. **Hold out.** Final numbers come from tasks the loop never saw.
 6. **Publish** with `proving` evidence, which enters a receiving machine as a capped prior, like any
-   other imported evidence. The live holdout remains the final judge.
+   other imported evidence. The live control remains the final judge.
 
 ### 12.3 Guards
 
 - **Held-out tasks** for every published number; tasks rotate so the suite can't be memorised.
-- **Realism check:** eval tasks must resemble live work — compare their Survey profile to live
+- **Realism check:** eval tasks must resemble live work — compare their Sense profile to live
   sessions and flag drift.
 - **Gauge-scoped:** a track proven on one model family is proven only for that family.
 - **Sandboxed:** eval runs execute agents that execute code, so every run is isolated (a container
@@ -983,10 +1006,10 @@ flowchart TD
 ### 12.4 Prior art
 
 Agent Workflow Memory induces reusable workflows from successful trajectories; Agentic Plan Caching
-reuses plan templates; rejection-sampling methods keep only successful rollouts. The proving ground
+reuses plan templates; rejection-sampling methods keep only successful rollouts. The eval loop
 borrows the *selection* idea from all three. The difference is the artefact: they change prompts or
-weights inside a research harness; the proving ground produces a reviewable track that must then
-earn its place against a live holdout.
+weights inside a research harness; the eval loop produces a reviewable track that must then
+earn its place against a live control.
 
 ---
 
@@ -997,7 +1020,7 @@ earn its place against a live holdout.
 | Hook | Claude Code | Codex CLI | OpenCode V2 | Adage does |
 | --- | --- | --- | --- | --- |
 | Prompt | `UserPromptSubmit` | `UserPromptSubmit` | `session.hook("prompt")` | Match `prompt` routes; emit the first directive |
-| After a batch | `PostToolBatch`, `PostToolUse` | `PostToolUse` | `tool.hook("execute.after")` | Observe follow or derail; resolve switches; emit the next directive |
+| After a batch | `PostToolBatch`, `PostToolUse` | `PostToolUse` | `tool.hook("execute.after")` | Observe follow or ignore; resolve switches; emit the next directive |
 | Before a tool | `PreToolUse` | `PreToolUse` | `tool.hook("execute.before")` | Observe only — record what the agent is about to do |
 | Sub-agent start | `SubagentStart` | `SubagentStart` | Child session | Emit directives *into the child's* context |
 | After an edit | `PostToolUse` on edit tools | `PostToolUse` on patch | `tool.hook("execute.after")` | Match finish-line routes; direct the obligation |
@@ -1050,13 +1073,13 @@ Every claimed saving is a measured difference between randomised groups.
 
 - **Randomise per session** by a hash of the session ID, stratified by developer; cluster standard
   errors by developer.
-- **Log exposure in the holdout.** In untreated sessions, record the directive Adage *would* have
+- **Log exposure in the control.** In untreated sessions, record the directive Adage *would* have
   given, and analyse triggered sessions only.
 - **Knock out routes individually.** In treated sessions, each active route is independently
   withheld with ~20% probability, so each route's own effect can be estimated.
 - **A static-guidance arm.** The same knowledge written as unconditional `CLAUDE.md` lines. Adage has
   to beat the simplest thing that could work.
-- **Pilot at 50/50,** then a 5–10% global holdout plus knockouts at steady state.
+- **Pilot at 50/50,** then a 5–10% global control plus knockouts at steady state.
 
 All assignment is a deterministic function of the session ID and route, so behaviour is
 reproducible, and propensities are known exactly.
@@ -1066,12 +1089,12 @@ reproducible, and propensities are known exactly.
 In v2, "the agent followed the hint" was a risk signal. With rails, following is the intended
 mechanism. What matters is whether following *helped*:
 
-- **Follow rate:** share of directives the agent acted on. Expected to be high for green.
-- **Derail rate:** share it didn't.
-- **Derail correctness:** when the agent left the route, did the session turn out better or worse
+- **Follow rate:** share of directives the agent acted on. Expected to be high for fire.
+- **Ignore rate:** share it didn't.
+- **Ignore correctness:** when the agent left the route, did the session turn out better or worse
   than sessions that stayed on it? A route the agent keeps rightly leaving is a bad route.
 - **Steered outcomes:** comparing p₁ (follow rate, treated) with p₀ (the natural rate in the
-  holdout) identifies the sessions Adage actually changed; their outcomes are reported separately.
+  control) identifies the sessions Adage actually changed; their outcomes are reported separately.
 
 ### 14.3 Metrics
 
@@ -1080,7 +1103,7 @@ mechanism. What matters is whether following *helped*:
 | Wall-clock time to first useful edit | **Primary** | −20% in triggered sessions |
 | Variance of turns to first edit | Secondary (determinism) | Lower |
 | Exploration turns, serial turns, dead-end turns | Diagnostic (§9.4) | Each lower |
-| Follow rate, derail rate, derail correctness | Route health | Per route |
+| Follow rate, ignore rate, ignore correctness | Route health | Per route |
 | User-correction rate | Guardrail | Non-inferior, +1 point margin |
 | CI failure on first push | **Primary** for finish-line routes; guardrail for all others | Lower where finish-line routes fire; non-inferior (+1 point margin) elsewhere |
 | Rework within 14 days | Guardrail, lagging | Non-inferior |
@@ -1091,7 +1114,7 @@ mechanism. What matters is whether following *helped*:
 
 Assuming turns-to-first-edit has a standard deviation of about 6, α = 0.05 two-sided, power 0.8:
 
-| To detect | 10% holdout | 50/50 |
+| To detect | 10% control | 50/50 |
 | --- | --- | --- |
 | −2 turns to first edit | ~785 triggered sessions | ~285 |
 | −1 turn | ~3,100 | — |
@@ -1118,13 +1141,13 @@ code.
 
 | Threat | Control |
 | --- | --- |
-| **Malicious or compromised track** directs a harmful command | Signed tracks; unsigned or unknown-signer tracks refused by default; install shows every command template and script; Adage never adds entries to harness allowlists; team policy can restrict green directives to an allowlist of command templates |
-| **Referenced script changed after the track was proven** | Every referenced script is pinned by content hash; on mismatch the route drops to probation and is never green |
-| **Untrusted text reaches a directive** (ticket body, web page, tool output) | Only validated slot values appear; free text is never echoed; any slot bound from external content caps the route at yellow (taint tracking) |
+| **Malicious or compromised track** directs a harmful command | Signed tracks; unsigned or unknown-signer tracks refused by default; install shows every command template and script; Adage never adds entries to harness allowlists; team policy can restrict fire directives to an allowlist of command templates |
+| **Referenced script changed after the track was proven** | Every referenced script is pinned by content hash; on mismatch the route drops to forming and is never fire |
+| **Untrusted text reaches a directive** (ticket body, web page, tool output) | Only validated slot values appear; free text is never echoed; any slot bound from external content caps the route at prime (taint tracking) |
 | **Argument injection** through slots | Type contracts per slot; reject values starting with `-`; path slots must resolve inside the repo |
-| **Poisoned desire paths** (e.g. a README that tricks agents into repeating a command) | Evidence counted in distinct sessions across distinct days; new routes start on probation; automatic green only for familiar commands (§10.9) |
+| **Poisoned traces** (e.g. a README that tricks agents into repeating a command) | Evidence counted in distinct sessions across distinct days; new routes start forming; automatic fire only for familiar commands (§10.9) |
 | **Privacy leak on export** | Export review; templates and statistics only; secret scan; repo-specific paths flagged |
-| **A track mislabels a step's effect** (a deploy declared as "verify") | The normaliser classifies every command template independently; a declared class lower than the computed one rejects the track at install; unknown commands default to Environment (yellow at most) |
+| **A track mislabels a step's effect** (a deploy declared as "verify") | The normaliser classifies every command template independently; a declared class lower than the computed one rejects the track at install; unknown commands default to Environment (prime at most) |
 | **Directed verify steps that are expensive** (a 20-minute build) | Duration recorded in evidence and charged in the expected-value rule; narrowest target preferred |
 | **Finish-line loops** (the agent keeps being asked to continue) | Stop-hook requests only for unmet, triggered obligations; at most once per obligation per session; honours the harness's loop guard |
 | **Directive overload or prompt stuffing** | Per-decision and per-session directive caps; harness size caps respected |
@@ -1133,9 +1156,9 @@ code.
 ### 15.3 A note on auto-approval modes
 
 Several harnesses offer modes that auto-approve commands. Adage does not change those settings, but
-it does change what the agent is likely to ask to run. Two rules follow: a green directive may only
+it does change what the agent is likely to ask to run. Two rules follow: a fire directive may only
 name a familiar command, one a person approved, or one a signed track declared, and the team policy file can require that
-green directives never name commands outside an explicit allowlist, regardless of harness mode.
+fire directives never name commands outside an explicit allowlist, regardless of harness mode.
 
 ---
 
@@ -1153,7 +1176,7 @@ the v1 embedding design as an ablation.
 | --- | --- | --- |
 | 1 | **Addressable turns** — pre-first-edit turns that were exploration, serial reads that could have been batched, or dead-end recovery | ≥25% of pre-first-edit turns |
 | 2 | **Next-step coverage at precision** — steps predicted with template and arguments, within 3 actions | ≥15% at precision ≥0.90 (interval lower bound ≥10%) |
-| 3 | **Green-eligible coverage** — pre-first-edit turns a green directive could have covered | ≥8% |
+| 3 | **Fire-eligible coverage** — pre-first-edit turns a fire directive could have covered | ≥8% |
 | 4 | **Dead ends** — recurring fail-then-recover patterns with a consistent fix | ≥20 distinct patterns across ≥5 repos |
 | 5 | **Calibration** on fired predictions | ECE ≤0.03 overall, ≤0.05 per harness |
 | 6 | **Stability** across the four test weeks | Precision drop ≤3 points; no week below 0.85 |
@@ -1169,7 +1192,7 @@ the v1 embedding design as an ablation.
   0.90 precision.
 - *Finish-line routes* die if missed obligations (metric 9) are below 2% of sessions that pushed.
 
-If both fail, the Survey still ships — it is useful on its own. If only one fails, the product
+If both fail, the Sense still ships — it is useful on its own. If only one fails, the product
 narrows to the other.
 
 ---
@@ -1180,49 +1203,57 @@ narrows to the other.
 
 **Adage** — *Agentic DAG Engine.*
 
-An adage is a short piece of wisdom distilled from long experience. That is exactly what a track
-is: what an organisation's agents learned, the hard way, across thousands of sessions — compressed
-into something the next agent can act on at once. The backronym carries the rest: it is for
+An adage is a short piece of wisdom distilled from long experience. That is exactly what a reflex
+is: what an organisation's agents learned, the hard way, across thousands of sessions — compiled
+from their traces into something the next agent can act on at once. The backronym carries the rest: it is for
 *agents*, it models their work as a *decision graph*, and it is an *engine*, not a document.
 
 ### 17.2 The system
 
-Three layers, each with one job:
+Four layers, each with one job (revised 2026-09-28):
 
 | Layer | Word | Role |
 | --- | --- | --- |
 | **Product** | **Adage** | The name on the box |
-| **Artefact** | **Tracks** | What you install, share, review, and commit. The word people will use most |
-| **Idiom** | **On rails** | What it does for you: *"Put your agent on rails." "I run Claude on rails."* |
+| **Pitch** | **Agent traces become reflexes** | What it does, in one line. Traces go in (session transcripts); reflexes come out |
+| **Units** | **Reflexes** and **instincts** | A *reflex* is a response conditioned on traces — organic history or sessions `adage train` drove from a skill. An *instinct* is a response that ships with Adage and works on day 0 from the repository's own files. Both are compiled skills: typed, deterministic, reviewable |
+| **Artefact** | **Tracks** and **packs** | Tracks hold reflexes and instincts on disk; a pack is the signed, closed form you share and install (docs/packs.md) |
 
-The railway vocabulary — tracks, routes, switches, signals and their aspects, gauge, derail,
-interlocking, proving ground, desire paths — is the product's internal language (§5). It maps
-cleanly onto the system and should be used consistently in docs, CLI output, and the UI. Where a
-railway word is less clear than a plain one, the plain one wins.
+"On rails" (the previous idiom) is retired, and with it the railway vocabulary in user copy:
+routes, signals and their aspects, the signal box, derails, holdouts and proving grounds became
+reflexes, strengths, the map, *ignored*, the control arm and evals (the lexicon has the full
+mapping). *Tracks* and *packs* stay, as the nouns for artefacts on disk and in transit. Where a
+themed word is less clear than a plain one in a specific sentence, the plain one wins.
 
 ### 17.3 Voice
 
-- **Evidence over enthusiasm.** Every claim about a track comes with its numbers. "Saved 1.8 turns
-  per session against holdout, 412 sessions" — never "supercharges your agent".
-- **The agent drives.** Adage signals; it never takes the wheel. Copy should never imply Adage
-  acts on its own.
+- **Evidence over enthusiasm.** Every claim about a reflex comes with its numbers. "Fired in 412
+  traces, saved 1.8 turns against control" — never "supercharges your agent".
+- **The agent drives.** Adage responds; it acts only where a person delegated it, reflex by
+  reflex, on that machine (`adage delegate`, Track C). Copy should never imply Adage acts on its
+  own.
 - **Plain, short, calm.** It is infrastructure. It should sound like it.
+- **The theme is for people.** Directive text, which the agent reads, stays plain and factual:
+  what to run and why, with no themed words. Only the wrapper's markup carries the lexicon, as
+  technical labels: its tag name (`adage-reflex`) and its `strength` attribute (§17.4).
 
 **Example lines:**
 
-- *Put your agent on rails.*
-- *Your agents already know the way. Adage writes it down.*
+- *Agent traces become reflexes.*
+- *Your agents already know the way. Adage turns it into reflexes.*
+- *Skills cost inference every time. Reflexes are compiled once.*
 - *The beaten path, proven.*
-- *Tracks: what your best sessions learned, ready for everyone's next one.*
+- *Tracks: what your best traces taught, ready for everyone's next session.*
 
 ### 17.4 Names on disk and on the wire
 
 | Surface | Name |
 | --- | --- |
-| CLI | `adage` — `adage survey`, `adage init`, `adage review`, `adage share`, `adage add`, `adage prove`, `adage status` |
+| CLI | `adage` — `adage init`, `adage sense`, `adage condition`, `adage train`, `adage review`, `adage delegate`, `adage map`, `adage share`, `adage add`, `adage watch`, `adage doctor`, `adage eval` |
 | Repository directory | `.adage/` — `.adage/tracks/`, `.adage/tracks.lock`, `.adage/config.toml` |
 | Session command | `/adage off` |
-| Directive tag | `<signal source="adage" track="…" aspect="green">` |
+| Directive wrapper | `<adage-reflex track="…@…" route="…" strength="fire\|prime\|inhibit" kind="…">` … `</adage-reflex>` |
+| On-disk values | strength `fire` / `prime` / `inhibit`; state `nascent` / `forming` / `firm` / `dormant` / `extinguished`; judgements `followed` / `ignored` / `misfired` / `obligation_met`; arms `treated` / `control` |
 | Packages | `adage-ai` on npm and GitHub — both free as of 2026-09-22; the bare `adage` npm name is a small unrelated package |
 
 ### 17.5 Clearance and cautions
@@ -1230,7 +1261,8 @@ railway word is less clear than a plain one, the plain one wins.
 | Item | Finding | Action |
 | --- | --- | --- |
 | **"Adage" in developer tools** | No AI or developer tool using the name found | Commission a trademark search before public launch; "adage" is a common English word, so the mark may be narrow |
-| **"On rails" as an idiom** | "Claude on Rails" is an existing open-source framework (`obie/claude-on-rails`); "Rails" is a registered trademark of the Ruby on Rails project | Use "on rails" as a lowercase phrase in copy only. Never as a product, package, or command name, and never "Claude on Rails" as a title |
+| **"On rails" as an idiom** | "Claude on Rails" is an existing open-source framework (`obie/claude-on-rails`); "Rails" is a registered trademark of the Ruby on Rails project | Retired as the tagline (2026-09-28). Lowercase in running copy only; never a product, package, or command name, and never "Claude on Rails" as a title |
+| **"Reflex" / "instinct"** | Common words; no developer-tool mark found in a quick check | Use as common nouns for Adage's units; not as product names. Include in the pre-launch trademark search |
 | **Harness names** | Claude, Codex, and OpenCode are other companies' marks | Descriptive use only — "Adage for Claude Code" — never a combined product name |
 | **"Tracks"** | No conflict found | Keep. It is the most important word in the system |
 
@@ -1242,14 +1274,14 @@ Design-level ordering only; the implementation plan (phase 3) owns milestones an
 
 | Step | Delivers | Gate |
 | --- | --- | --- |
-| 0 | Importers, normaliser, **Survey** | ≥95% of historical calls normalise; the report is useful to a person on its own |
+| 0 | Importers, normaliser, **Sense** | ≥95% of historical calls normalise; the report is useful to a person on its own |
 | 1 | Route mining, dead-end mining, offline replay | Credibility test (§16) |
 | 2 | Hook client, exposure logging, randomisation — directives computed but not delivered | Triggered-session analysis works on live traffic |
-| 3 | Personal routes, yellow and red only, one harness | Follow rate and guardrails measurable |
-| 4 | Green directives, automatic within §10.9 limits | Pilot success criteria |
+| 3 | Personal routes, prime and inhibit only, one harness | Follow rate and guardrails measurable |
+| 4 | Fire directives, automatic within §10.9 limits | Pilot success criteria |
 | 5 | Tracks: automatic assembly, share and add, repository tracks, signing, interlocking | A shared track reaches its source's savings within two weeks (G4) |
-| 6 | Proving ground | Proven tracks beat desire-path tracks on held-out tasks |
-| 7 | Sub-agent acceleration, then pre-emption | Delegation savings against holdout |
+| 6 | Evals | Proven tracks beat tracks conditioned on organic traces on held-out tasks |
+| 7 | Sub-agent acceleration, then pre-emption | Delegation savings against control |
 | 8 | Team depots, then a registry | — |
 
 ### Pilot definition
@@ -1270,17 +1302,17 @@ design. Decided 2026-09-22.
 
 | # | Decision | Outcome | Why |
 | --- | --- | --- | --- |
-| O1 | Product name | **Adage** (*Agentic DAG Engine*); artefacts are tracks; "on rails" is the idiom | Catchy, carries agent + decision graph; no developer-tool collision found. Trademark search before public launch (§17.5) |
-| O2 | Imported-track default | **Yellow for tracks signed by a trusted team source; shadow for everything else** | Starter tracks help a newcomer from day one; untrusted text never reaches the agent until local evidence confirms it |
+| O1 | Product name | **Adage** (*Agentic DAG Engine*); pitch "agent traces become reflexes"; units are reflexes and instincts; artefacts are tracks and packs (revised 2026-09-28; "on rails" retired as the idiom) | Catchy, carries agent + decision graph; no developer-tool collision found. Trademark search before public launch (§17.5) |
+| O2 | Imported-track default | **Prime for tracks signed by a trusted team source; shadow for everything else** | Starter tracks help a newcomer from day one; untrusted text never reaches the agent until local evidence confirms it |
 | O3 | Track-bundled scripts | **Repo-committed tracks only** | Every script goes through the repository's own code review; portable tracks reference only commands the repo already has |
-| O4 | Declarative step runner (`adage run`) | **Later, only if the Survey shows chained discovery is common** | Avoids building a component that must be safe to run from any track before the data justifies it |
+| O4 | Declarative step runner (`adage run`) | **Later, only if the Sense shows chained discovery is common** | Avoids building a component that must be safe to run from any track before the data justifies it |
 | O5 | Signing | **Git SSH signing**, verified against a trusted-signers file in the repository or depot | Developers already have the keys; no new infrastructure |
 | O6 | Track file formats | **TOML manifest, YAML routes and intents** | Strict typing for trust-relevant manifest fields; readable, hand-editable routes. Exact schemas set in architecture |
-| O7 | First proving-ground tasks | **Reconstructed pull requests** — description, base commit, hidden check from touched tests or CI | Realistic, automatically checkable, plentiful |
+| O7 | First eval tasks | **Reconstructed pull requests** — description, base commit, hidden check from touched tests or CI | Realistic, automatically checkable, plentiful |
 | O8 | Pilot harness | **Claude Code first; OpenCode next.** The harness layer stays generic from the start | Richest hooks today; OpenCode is the first port and the test of the abstraction |
 | O9 | IP and data policy | **Open — waiting on the author's employer** | Adage reads session logs containing company code and prompts, and everything derived from them is likely company-confidential. Needs written clearance before it runs on a work machine or touches company sessions. Until then, personal and work data stay fully separate |
 | O10 | Finish-line enforcement at the stop hook | **Used, bounded as in §8.7** | It is where missed obligations are actually caught |
-| O11 | Environment-class steps in v1 | **In v1: yellow only, and only on routes a person approved in `adage review`** | Coverage for common setup steps ("install after pulling") while keeping them advisory and human-gated |
+| O11 | Environment-class steps in v1 | **In v1: prime only, and only on routes a person approved in `adage review`** | Coverage for common setup steps ("install after pulling") while keeping them advisory and human-gated |
 | O12 | Default autonomy | **`auto` for personal tracks; team tracks change only through reviewed pull requests** | Keeps the automation's value locally without changing teammates' behaviour unreviewed |
 | O13 | Behaviour-trained intent projection | **Later** — plain pinned embeddings plus purity checks first; projection only if it wins on metrics 10–11 | One less trained component to validate before the pilot |
 | O14 | Distribution | **Claude Code plugin for Adage and track packs; first-class install paths for OpenCode (npm plugin) and Codex (hook installer)** | Plugins already solve install, versioning, and team distribution on Claude Code; the other harnesses get equivalent paths |
@@ -1316,21 +1348,21 @@ Questions phase 2 must answer:
 
 | Area | v2 | v3 |
 | --- | --- | --- |
-| Runtime action | Pre-execute read-only steps; inject results; lossless MCP prefetch | **Nothing executes.** Directives only; the agent acts |
-| Injection classes | A result · B hint (shadow) · C plan (cut) | Green · yellow · red signals; one block ahead |
-| Wording | Never instruct | Green instructs, gated by evidence, with exit conditions |
+| Runtime action | Pre-execute read-only steps; inject results; lossless MCP prefetch | **Nothing executes.** Directives only; the agent acts (since Track C: opt-in execution of approved reflexes, in a separate binary, `adage-exec`, inside an OS sandbox) |
+| Injection classes | A result · B hint (shadow) · C plan (cut) | Fire · prime · inhibit signals; one block ahead |
+| Wording | Never instruct | Fire instructs, gated by evidence, with exit conditions |
 | Savings | Turns removed by pre-fetched results | Exploration, batching, compiled steps, dead ends, deliberation |
-| Anchoring metric | Compliance lift as a guardrail | Compliance is the mechanism; outcomes and derail correctness are the guardrail |
+| Anchoring metric | Compliance lift as a guardrail | Compliance is the mechanism; outcomes and ignore correctness are the guardrail |
 | Security focus | Sandboxing daemon execution | Tracks as an instruction supply chain |
 | Latency | Up to 2.5 s with execution | ≤25 ms p95 worst case |
 | Sharing | None | Tracks: versioned, signed, portable, with capped-prior evidence |
-| Cold start | Historical import | Starter tracks and the proving ground |
-| Learning | Organic mining | Organic (desire paths) plus eval-trained (proving ground) |
-| Hints | Shadow-only anti-edges | Red signals, mined as dead ends |
+| Cold start | Historical import | Starter tracks and the eval loop |
+| Learning | Organic mining | Organic (real traces) plus eval-trained (`adage train`) |
+| Hints | Shadow-only anti-edges | Inhibit signals, mined as dead ends |
 | Step scope | Read-only only | Effect classes — observe, verify, regenerate directable; environment advisory; author and publish never |
 | Session coverage | Discovery, before the first edit | Discovery plus finish-line obligations after edits |
 | Value | Speed | Speed and first-push quality |
-| Name | Interaction Graph Compiler (`icd`, `ic`) | **Adage** (`adage`), artefacts are tracks, idiom is "on rails" |
+| Name | Interaction Graph Compiler (`icd`, `ic`) | **Adage** (`adage`), artefacts are tracks, idiom is "directed" |
 
 The v2 review consensus (Appendix A of *Design v2*) still stands where it applies: discrete state,
 one rule for mining and serving, expected-value decisions, session-level randomisation, no learning

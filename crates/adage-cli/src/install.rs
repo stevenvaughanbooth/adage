@@ -192,7 +192,7 @@ fn require_person() -> Result<()> {
 }
 
 /// Is this hook entry one of Adage's own, for this harness?
-fn is_ours(entry: &Value, harness: &str) -> bool {
+pub(crate) fn is_ours(entry: &Value, harness: &str) -> bool {
     entry.get("hooks").and_then(|h| h.as_array()).is_some_and(|hs| {
         hs.iter().any(|h| {
             let args: Vec<&str> = h
@@ -253,4 +253,45 @@ fn write_atomic(target: &Path, body: &str) -> Result<()> {
     std::fs::write(&tmp, body)?;
     std::fs::rename(&tmp, target)?;
     Ok(())
+}
+
+/// The lines that differ between two texts, `-` removed and `+` added, in order (a longest
+/// common subsequence diff; the files involved are small).
+pub(crate) fn line_diff(before: &str, after: &str) -> String {
+    let a: Vec<&str> = before.lines().collect();
+    let b: Vec<&str> = after.lines().collect();
+    if a.len().saturating_mul(b.len()) > 4_000_000 {
+        return format!("({} lines before, {} after)\n", a.len(), b.len());
+    }
+    let mut l = vec![vec![0u32; b.len() + 1]; a.len() + 1];
+    for i in (0..a.len()).rev() {
+        for j in (0..b.len()).rev() {
+            l[i][j] = if a[i] == b[j] { l[i + 1][j + 1] + 1 } else { l[i + 1][j].max(l[i][j + 1]) };
+        }
+    }
+    let (mut i, mut j, mut out) = (0, 0, String::new());
+    while i < a.len() || j < b.len() {
+        if i < a.len() && j < b.len() && a[i] == b[j] {
+            i += 1;
+            j += 1;
+        } else if j < b.len() && (i == a.len() || l[i][j + 1] >= l[i + 1][j]) {
+            out.push_str(&format!("+ {}\n", b[j]));
+            j += 1;
+        } else {
+            out.push_str(&format!("- {}\n", a[i]));
+            i += 1;
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod diff_tests {
+    use super::*;
+
+    #[test]
+    fn diffs_show_only_changed_lines() {
+        assert_eq!(line_diff("a\nb\nc\n", "a\nc\nd\n"), "- b\n+ d\n");
+        assert_eq!(line_diff("", "x\n"), "+ x\n");
+    }
 }

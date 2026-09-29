@@ -1,0 +1,7 @@
+[package]
+name = "ledger-cli"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ledger = { path = "../ledger" }
