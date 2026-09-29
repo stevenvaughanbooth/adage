@@ -361,9 +361,8 @@ fn pretool(
             .flatten()
             .flatten()
             .any(|e| e.path().join("site-packages/pytest/__init__.py").is_file());
-        if !(root.join(&env.interpreter).is_file() && venv.join("pyvenv.cfg").is_file() && pytest)
-            || !env_of_checkout(&venv, root, Path::new(&binding.root))
-        {
+        let usable = root.join(&env.interpreter).is_file() && venv.join("pyvenv.cfg").is_file() && pytest;
+        if !(usable && env_of_checkout(&venv, root, Path::new(&binding.root))) {
             return Ok(None);
         }
         env.pytest = true;

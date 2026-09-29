@@ -301,22 +301,28 @@ works with no user action.
 2. **The card.** The files edited in at least half of the traces, in the order first edited;
    files edited in one trace each are grouped by shape and anti-unified (`flag_<x>.go`,
    `flag_<x>_test.go`, a test sibling apart from its file); a file a command wrote by redirection
-   (`go doc -all . > godoc-current.txt`) counts as edited. For each, the longest text the latest
-   passing trace added (to a file of the pattern's shape, for a pattern). The commands run in at
-   least half of the traces, kept when they mostly worked and listed to avoid when they mostly
-   failed, with the first line of the error; inline scripts (`python -c "…"`) are the task's own
-   code and never listed. The check the passing traces finished with, anti-unified. Exemplars
-   are clipped to 14, 10, 6, 3 lines, then dropped, until the card fits 800 tokens.
-3. **How many traces.** No passing trace, no card. One trace is enough only when the task edits
-   the same files every time (it created none); a task whose files are named after it needs a
-   second trace, since one cannot show which part of the name varies (the research's Go family:
-   a card from 1 trace saved 9%, CI including 0; from 4, 34%).
+   (`go doc -all . > godoc-current.txt`) counts as edited. For each, the longest hunk the latest
+   passing trace wrote, whole, as the agent wrote it (to a file of the pattern's shape, for a
+   pattern). The productive commands run in at least half of the traces (never `git status`,
+   `ls`, `cat`, `grep` or a commit; a family's test runs are one command, by runner), kept when
+   they mostly worked and listed to avoid when they mostly failed, with the first line of the
+   error; a test run to avoid comes with the test run that worked; inline scripts
+   (`python -c "…"`) are the task's own code and never listed. The check the passing traces
+   finished with, anti-unified. Exemplars are clipped to 14, 10, 6, 3 lines, then dropped, until
+   the card fits 800 tokens. **Never quoted:** a file that holds secrets by its kind (`.env*`,
+   keys, credential stores) or that the checkout's `.gitignore` ignores; a command that holds a
+   secret or names such a file; a line, command or error that looks like a secret (a secret-looking
+   exemplar line becomes `…`). The index and the tracks are written owner-only (0600).
+3. **How many traces.** No passing trace, no card, and no card from one trace: one trace is any
+   one-off bug fix, and cannot show which part of a file name varies (the research's Go family:
+   a card from 1 trace saved 9%, CI including 0; from 4, 34%). A repository keeps at most 16
+   cards, the best supported.
 4. **Delivery.** A family's card is a **reflex**: stimulus, a prompt whose best cosine to the
    family's prompts reaches `learn.card_threshold` (default **0.811**, the research's
-   pre-registered threshold; 0.753 for a family of one prompt); response, the card, said once per
-   session at UserPromptSubmit. A prompt within 0.10 below the threshold gets the card at the
-   session's first edit of one of its files (PostToolUse). It is prime and observe: it directs no
-   command, and `adage review strengthen` refuses it.
+   pre-registered threshold); response, the card, said once per session at UserPromptSubmit. A
+   prompt within 0.10 below the threshold gets the card at the first edit of one of its files
+   (PostToolUse) before the next prompt: a new prompt is a new task, and ends the wait. It is
+   prime and observe: it directs no command, and `adage review strengthen` refuses it.
 5. **Verification.** `adage train cards` replays each card's commands on a clean checkout in
    adage-exec's sandbox (as `adage train` does for a skill; `adage` itself runs nothing). Installs
    are not replayed, since the sandbox has no network. The next learn marks the commands that
@@ -344,8 +350,9 @@ counts both times:
 | go-flag (urfave/cli, 4 traces) | 6/6 at the prompt | 0/6 | 0/48 RepoBench prompts, 0/5 hard negatives (including at a card file's edit) | 0 |
 | mm-validator (marshmallow, 4 traces) | 6/6 at the prompt | – | 0/8 hand-written tasks | – |
 
-With one Go trace no card is made (its files were created); with one marshmallow trace a card is
-made, at 0.753. The Go card, as the hook delivers it:
+With one Go trace no card is made (its files were created); with one marshmallow trace a card was
+made then, at 0.753, and since the launch review none is (at least two traces). The Go card, as
+the hook delivered it then (its commands and exemplars now follow step 2's rules):
 
 ```text
 How changes of this kind were done here before: learned from 4 earlier sessions of the same kind of task in this repository (3 passed the project's checks). Use it as a checklist; the specifics of your task differ.

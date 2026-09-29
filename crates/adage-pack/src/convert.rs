@@ -299,7 +299,10 @@ impl Cx {
                     ..empty()
                 },
             ),
-            other => return Err(format!("step {other:?} has no v2 form")),
+            // Never the step's contents: a card quotes traces (review N1).
+            Step::Card { .. } => return Err("a procedure card is first-hand only".into()),
+            #[allow(unreachable_patterns)]
+            _ => return Err("this kind of step has no v2 form".into()),
         };
         #[allow(unreachable_patterns)]
         let exit = r

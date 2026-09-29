@@ -1027,8 +1027,13 @@ earn its place against a live control.
 | Agent about to stop | `Stop` | `Stop` | Idle event | If a triggered obligation is unmet, ask the agent to continue — once, with a reason ([§8.7](#87-finish-line-routes)) |
 | Session end | `SessionEnd` | `SessionEnd` | Event stream | Close the evidence record |
 
-Adage never blocks a tool call, never rewrites a tool's input, and never denies one. The stop
-hook is the single place it can delay anything, and only under the bounds in §8.7.
+Adage never blocks a tool call and never denies one. The stop hook is the single place it can
+delay anything, and only under the bounds in §8.7.
+
+> **Superseded in part (launch):** on Claude Code, `PreToolUse` is no longer observe-only for one
+> instinct: U11 rewrites the interpreter word of a Python test run to the project's verified
+> environment, or advises when a rewrite is not safe (docs/execution.md, "Rewrites to the
+> project's environment"). It never denies a call; `adage delegate rewrites off` turns it off.
 
 ### 13.2 Latency
 

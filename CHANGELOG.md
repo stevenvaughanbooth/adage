@@ -152,17 +152,24 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   family with a passing trace becomes a reflex whose response is a **card**: the files such a
   change touched in order (names that vary per task as patterns, `flag_<x>.go`, test siblings
   apart; files written by shell redirection included), what the latest passing trace added to
-  each (clipped to fit 800 tokens), the commands that worked and those that failed with their
-  error, and the check the traces finished with. One trace suffices only when it created no file.
+  each (whole hunks as the agent wrote them, clipped to fit 800 tokens), the productive commands
+  that worked (no `git status`, `ls`, `cat`, `grep` or commits; a family's test runs as one
+  command, and the test run that worked beside one to avoid) and those that failed with their
+  error, and the check the traces finished with. A family needs at least two traces (one is any
+  one-off bug fix), and a repository keeps at most 16 cards, the best supported. A card never
+  quotes a secret-holding file (`.env*`, keys, credential stores), a file the checkout's
+  `.gitignore` ignores, or a line, command or error that looks like a secret (the rules
+  `adage share` checks packs with); `index.json` and the tracks are written owner-only (0600).
   It is delivered once per session when a prompt's best cosine to the family's prompts reaches
-  `learn.card_threshold` (default 0.811, the research's pre-registered strict threshold; 0.753 for
-  one prompt), or, within 0.10 below it, at the session's first edit of a card file; prime and
-  observe only, and `adage review` refuses to strengthen it. The family's prompt library grows
+  `learn.card_threshold` (default 0.811, the research's pre-registered strict threshold), or,
+  within 0.10 below it, at the first edit of a card file before the next prompt (a new prompt
+  ends the wait); prime and observe only, and `adage review` refuses to strengthen it. The family's prompt library grows
   with every trace that joins it. Detection is precise but literal: through the hook, the Go
   family's card fired on 6/6 held-out tasks, 0/6 paraphrases and 0/53 same-repository negatives.
   `adage train cards` replays a card's commands on a clean checkout in adage-exec's sandbox
-  (installs are not replayed: the sandbox has no network) and the next learn marks the ones that
-  worked and stops listing the ones that did not. `adage sense` counts the families and cards,
+  (installs and commands with a placeholder are not replayed, and a failure that needed the
+  network or a package cache records no verdict) and the next learn marks the ones that worked
+  and stops listing the ones that did not. `adage sense` counts the families and cards,
   the status card counts cards among learned reflexes, and `learn.cards = false` turns them off.
 - Skill-steered sessions stay optional evidence: `adage train plan` estimates their cost and runs
   nothing, `adage train --plan` runs them, and `report` says, claim by claim, what they showed.
@@ -191,6 +198,20 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 - A control arm (`runtime.control`, `ADAGE_CONTROL`, default 10%) computes what Adage would have
   said and withholds it, so every effect is measured against a control. Kill switches:
   `ADAGE_DISABLE=1` and `.adage/disabled`.
+- **Rewrites to the project's environment** (Claude Code `PreToolUse`, instinct U11): a Python
+  test run or repro under the system Python is pointed at the project's verified `.venv`. The
+  command is read as the shell reads it: only the command word of a top-level simple command is
+  rewritten, never a heredoc body, a quoted string or a `-c` payload, and a command whose structure
+  is not followed, that activates an environment (or runs in a session with `VIRTUAL_ENV` or
+  `CONDA_PREFIX`), `cd`s outside the checkout, or pins another Python version is left alone. A
+  rewrite the person's `Bash(…)` allow rules would no longer match is advice instead. A
+  `pip install` of the project or its test dependencies into the system Python gets advice, never
+  a refusal. In another checkout before its rebind, only an environment of that checkout's own is
+  used. `adage delegate rewrites on|off` (`runtime.rewrite`) switches it, with no terminal and no
+  adage-exec needed; `adage delegate off` needs no terminal either.
+- The follow judge scores the simple command that runs the directed program, with its setup
+  (`cd`, `source …/activate`): `ls .venv/bin && python -m pytest` no longer counts as following
+  `.venv/bin/python -m pytest`, so it cannot misfire a correct instinct into extinction.
 
 ### Review, packs and sharing
 
