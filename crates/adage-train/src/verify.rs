@@ -81,6 +81,56 @@ pub fn signature_of(output: &str) -> Option<String> {
     None
 }
 
+/// What a replay prints when the sandbox, not the command, is the problem: no network (the
+/// sandbox has none) and so no package or module download (`go test` without a module cache,
+/// `cargo test` without a registry).
+const NETWORK_FAILURES: &[&str] = &[
+    "dial tcp",
+    "could not resolve",
+    "Could not resolve",
+    "Couldn't resolve host",
+    "Temporary failure in name resolution",
+    "Name or service not known",
+    "getaddrinfo",
+    "EAI_AGAIN",
+    "ENOTFOUND",
+    "network is unreachable",
+    "Network is unreachable",
+    "Connection refused",
+    "connection refused",
+    "i/o timeout",
+    "proxyconnect",
+    "failed to download",
+    "Failed to download",
+    "failed to fetch",
+    "failed to get `",
+    "failed to load source for dependency",
+    "no matching package named",
+    "unable to access",
+    "go: downloading",
+    "missing go.sum entry",
+];
+
+/// Why a failed replay says nothing about the command, if it does not (fresh-install B8, review
+/// S9): the network was needed, or a program from a lent environment (`.venv/bin/python`) could
+/// not import a module, as when an editable install points at a working tree the sandbox cannot
+/// read. Such a command is not verified, and never called stale.
+pub fn unverifiable(argv: &[String], output: &str, lent: &[String]) -> Option<String> {
+    if NETWORK_FAILURES.iter().any(|s| output.contains(s)) {
+        return Some("it needs the network or a package cache, which the sandbox does not have".into());
+    }
+    let first = argv.first().map(|a| a.trim_start_matches("./")).unwrap_or("");
+    let from_env = lent.iter().any(|d| first.split('/').next() == Some(d.as_str()));
+    let missing = ["No module named", "ModuleNotFoundError", "Cannot find module", "ERR_MODULE_NOT_FOUND"];
+    if from_env && missing.iter().any(|s| output.contains(s)) {
+        return Some(
+            "the project's environment is not usable in the sandbox (a module it imports lives outside the checkout, as an editable install of another working tree does)"
+                .into(),
+        );
+    }
+    None
+}
+
 /// The last non-empty line of an output, trimmed and bounded, for a report.
 fn last_line(output: &str) -> String {
     let l = output.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("").trim();
@@ -185,6 +235,12 @@ fn replay_one(c: Candidate, root: &Path, o: &Options, report: &mut Report) -> (V
                     }
                     Ran::Did(r) => {
                         let seen = signature_of(&r.output).unwrap_or_else(|| last_line(&r.output));
+                        if let Some(because) = unverifiable(&argv, &r.output, &report.lent) {
+                            let why = format!("`{cmd}` could not be verified ({}: {seen}): {because}", r.summary());
+                            c.replay.push(why.clone());
+                            not_replayed.get_or_insert(why);
+                            continue;
+                        }
                         let why = format!("`{cmd}` fails on a clean checkout ({}: {seen})", r.summary());
                         c.replay.push(why.clone());
                         stale.get_or_insert(why);
@@ -198,7 +254,7 @@ fn replay_one(c: Candidate, root: &Path, o: &Options, report: &mut Report) -> (V
                     // nothing is known about the command.
                     Ran::NotInCheckout(_) if unlent_env(&argv, root) => {
                         let why = format!(
-                            "`{cmd}`: the project's environment could not be lent to the sandbox (its user cannot read it)"
+                            "`{cmd}`: the project's environment could not be lent to the sandbox (its user cannot read it: `chmod o+x` on the checkout's parent directories, or train from a readable path, to replay it)"
                         );
                         c.replay.push(why.clone());
                         not_replayed.get_or_insert(why);
@@ -415,5 +471,22 @@ mod tests {
             Some("ERROR collecting tests/test_basic.py")
         );
         assert_eq!(signature_of("all good"), None);
+    }
+
+    /// Fresh-install B8 and review S9: an environment or network failure is unverified, not
+    /// stale.
+    #[test]
+    fn a_sandbox_failure_says_nothing_about_the_command() {
+        let argv = |c: &str| c.split_whitespace().map(str::to_string).collect::<Vec<_>>();
+        let lent = vec![".venv".to_string()];
+        let out = "E   ModuleNotFoundError: No module named 'click'\n";
+        assert!(unverifiable(&argv(".venv/bin/python -m pytest tests -q -x"), out, &lent).is_some());
+        assert!(unverifiable(&argv("python -m pytest tests"), out, &lent).is_none(), "not the lent environment");
+        assert!(unverifiable(&argv(".venv/bin/python -m pytest"), out, &[]).is_none(), "nothing lent");
+        let go = "go: github.com/x/y@v1.2.0: Get \"https://proxy.golang.org/…\": dial tcp: lookup proxy.golang.org: no such host";
+        assert!(unverifiable(&argv("go test ./..."), go, &[]).is_some());
+        let cargo = "error: failed to get `serde` as a dependency of package `x`";
+        assert!(unverifiable(&argv("cargo test"), cargo, &[]).is_some());
+        assert!(unverifiable(&argv("make check"), "FAILED tests/test_a.py::test_x", &lent).is_none(), "a real failure");
     }
 }
