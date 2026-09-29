@@ -292,15 +292,18 @@ decision compile all installed tracks into **one file**, `$ADAGE_HOME/index.json
   index or the new one.
 - **Fail open.** A missing or unreadable index loads as empty (`Index::load`).
 - **Scoped by repository key.** Every route carries the key of its repository, and the runtime
-  filters on it (`for_repo`). The key is the normalised `origin` URL, or, when there is no
+  filters on it (`for_repo`). The key is the normalised `origin` URL, read from the common git
+  directory, so a linked worktree shares its main checkout's key; or, when there is no
   `origin`, `<directory name>@<root commit>` (`crates/adage-core/src/repo.rs`). The root commit
   is read from the object store without running git (`gitobj.rs`: loose objects, v2 packs with
   deltas, packed refs, linked worktrees), and remembered per path under
   `$ADAGE_HOME/repo-keys` so a long history is walked once (by `adage learn`, usually). Where it
   cannot be read (no commits, SHA-256, shallow, alternates), the key is `<name>@path-<hash of
   the root's path>`. Clones and copies share routes; unrelated repositories with one name do
-  not. A bare directory-name key (from before) is still honoured until a repository of that name
-  is re-keyed (`repo::lookup_key`).
+  not. `adage learn`, and the hook at the end of each turn, remember each checkout's key under
+  `$ADAGE_HOME/repo-keys/<hash>.key` (`repo::remember_key`), so a session recorded in a checkout
+  that has since been deleted (a removed worktree) keeps its repository. A bare directory-name key (from before, and for a deleted checkout never seen) is
+  still honoured until a repository of that name is re-keyed (`repo::lookup_key`).
 - **Live routes only.** `active` and `probation` routes are compiled. When a learned route and an
   imported one share an id, the learned one wins. A learned route a person retired still
   suppresses an import of the same id.
@@ -794,6 +797,7 @@ $ADAGE_HOME        macOS ~/Library/Application Support/Adage · Windows %APPDATA
 ├── sessions/<id>.state        two-slot state
 ├── sessions/<id>.spool        decision log
 ├── repo-keys/<hash>           root commits found, per repository path (no-origin repository keys)
+├── repo-keys/<hash>.key       each checkout's key, from learning, for when the checkout is deleted
 ├── config.toml                the person's settings (optional; `adage config`)
 ├── learn.log                  one JSON line per repository per learn, manual or automatic, with its
 │                              route changes (rotated to learn.log.1 at 256 KiB)
@@ -1144,7 +1148,7 @@ These facts from the draft 2 review still hold, and the build follows them:
 | Codex | `AGENTS.md` fallback considered | Hooks only | [P§3a]: Codex hooks use Claude Code's contract, including `additionalContext` |
 | Proving ground (A10) | A batch orchestrator with containers | Offline replay eval and a live runner script | [P§3]: offline replay gates every change for free; the product waits for M5 |
 | Research harness (§11) | Python notebooks with Rust bindings | `adage eval` in Rust | The credibility test runs on the product's own code, with no bindings to keep in step |
-| Repository key | `realpath(git root)` plus a hash of the origin | The normalised origin URL, else `<directory name>@<root commit>` | Clones share routes; unrelated repositories without an origin no longer share a key by name ([§4.5](#45-the-index-a4)) |
+| Repository key | `realpath(git root)` plus a hash of the origin | The normalised origin URL, else `<directory name>@<root commit>` | Clones and worktrees share routes; unrelated repositories without an origin no longer share a key by name ([§4.5](#45-the-index-a4)) |
 | Scheduling | A nightly launchd/systemd timer | `adage learn` on demand, and live learning: a `Stop` hook starts a detached, debounced, single-flight learner for its repository ([§4.7.2](#472-live-learning)) | No service units exist to host a timer; learning seconds after a session beats learning overnight |
 | Platforms | macOS and Linux | Plus Windows, CI-verified | [P§4.4]: the Windows port found two path bugs that stopped finish-line routes from firing there |
 | Pipeline storage of raw text | 14 days of raw text for re-mining | No raw text; learning re-reads harness history, through an optional parse cache of the parsed sessions (owner-only, pruned with the transcripts) | Harness history is already on disk; the cache only saves re-parsing it, and `learn.parse_cache = false` turns it off |
