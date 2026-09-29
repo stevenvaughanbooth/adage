@@ -592,6 +592,7 @@ pub struct Scored {
     pub cost: f64,
 }
 
+/// Tokens of a directive as delivered (its wrapper included): 4 characters a token.
 fn tokens_of(text: &str) -> u32 {
     (text.chars().count() as u32).div_ceil(4)
 }
@@ -629,7 +630,14 @@ pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, sto
             let push = |d: adage_runtime::Decision, at: i64, pre: bool, name: &'static str, out: &mut Vec<Given>| {
                 if let Some(w) = d.would_have.into_iter().find(|w| !pre || failure_routes.contains(&w.route)) {
                     let class = instinct_of(index, repo, &w.route).unwrap_or(Class::Unscored);
-                    out.push(Given { tokens: tokens_of(&w.text), route: w.route, t: at, pre, event: name, class });
+                    out.push(Given {
+                        tokens: tokens_of(&adage_runtime::render::wrap_directive(&w)),
+                        route: w.route,
+                        t: at,
+                        pre,
+                        event: name,
+                        class,
+                    });
                 }
             };
             let next = |steps: &mut std::vec::IntoIter<transcript::Step>| steps.next().map(|s| s.event);
