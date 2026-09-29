@@ -149,7 +149,17 @@ fn cmd_cards(mut a: Args) -> Result<()> {
         adage_core::repo::repo_key(&root)
     );
     for c in &checked {
-        println!("  {:<18} {:<5} {}  ({})", c.card, if c.works { "works" } else { "fails" }, c.command, c.summary);
+        println!(
+            "  {:<18} {:<5} {}  ({})",
+            c.card,
+            match c.works {
+                Some(true) => "works",
+                Some(false) => "fails",
+                None => "-",
+            },
+            c.command,
+            c.summary
+        );
     }
     println!("recorded: the next learn (adage condition, or the automatic one) applies them to the cards");
     Ok(())

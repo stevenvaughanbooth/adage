@@ -274,6 +274,72 @@ than beating it. s4's 8/12 are the eight code-edit sessions: a schema-only chang
 (which runs the suite), not `make test`. Small n, one model, one purpose-built sandbox: read it as
 "no loss against the skill in context", not as a general rate.
 
+## Recurring tasks: procedure cards
+
+A skill is written down. Much recurring work is not: "add a validator", "add a parameter type",
+done a few times a month, the same files and checks each time, the specifics different. For that,
+Adage learns the procedure from the traces themselves, on the same pipeline
+(`crates/adage-learn/src/cards.rs`, a port of the research's `procedure.py`,
+[evals/lab/research/recurring-workflows](../evals/lab/research/recurring-workflows/README.md)).
+It needs the embedding model (`adage models fetch`); without it there are no cards.
+
+1. **Families.** `adage condition` (and the automatic learn) embeds each trace's first prompt with
+   the pinned model. Two traces are of one family when their prompts are similar (cosine ≥ 0.6)
+   **and** they edited overlapping files (Jaccard ≥ 0.25); families are the connected components.
+2. **A card per family, from its first passing trace.** A family with no passing trace makes
+   nothing. The card holds the files edited in at least half of the traces, in the order first
+   edited (a new file named differently each time is shown as its directory); for each, the lines
+   the latest passing trace added, clipped; the commands run in at least half of the traces, kept
+   when they mostly worked and listed to avoid when they mostly failed, with the first line of the
+   error; and the check the passing traces finished with. Inline scripts (`python -c "…"`) are the
+   task's own code and never listed.
+3. **Delivery.** A family's card is a **reflex**: stimulus, a prompt whose similarity to the
+   family's centroid reaches `learn.card_threshold` (default 0.8); response, the card, said once
+   per session (UserPromptSubmit). It is prime and observe: it directs no command, and
+   `adage review strengthen` refuses it. The threshold is a setting because it is not calibrated
+   yet: the research's confirming experiment will set it.
+4. **Verification.** `adage train cards` replays each card's commands on a clean checkout in
+   adage-exec's sandbox (as `adage train` does for a skill; `adage` itself runs nothing). Installs
+   are not replayed, since the sandbox has no network. The next learn marks the commands that
+   worked ("and on a clean checkout") and stops listing the ones that did not.
+5. **Seeing it.** `adage sense` reports `recurring tasks: N families, M with a procedure card` and
+   lists each card among the candidate reflexes; `adage review` shows the card's text; the status
+   card counts procedure cards among the learned reflexes. `learn.cards = false` turns them off.
+
+The card a hook delivers (marshmallow, learned from the research's 4 training traces):
+
+```text
+Earlier sessions in this repository did tasks like this one (4 sessions, 4 passed its checks). What they had in common, as a checklist; the specifics of your task differ.
+Files changed, in this order:
+  - src/marshmallow/validate.py (4 of 4)
+  - tests/test_validate.py (4 of 4)
+  - CHANGELOG.rst (4 of 4)
+What the change added last time, in another task (copy the format, not the content):
+  src/marshmallow/validate.py:
+    | class MultipleOf(Validator):
+    |     """Validator which succeeds if the ``value`` is an exact multiple of ``base``.
+    …
+Commands that worked:
+  ls -la (4 of 4 runs succeeded, and on a clean checkout)
+  wc -l tests/test_validate.py (4 of 4 runs succeeded, and on a clean checkout)
+  pip install -e . -q (3 of 3 runs succeeded)
+  …
+Commands that failed:
+  python -m pytest tests/test_validate.py -xvs (failed 5 of 6 runs: /usr/local/bin/python: No module named pytest)
+Ignore this if the user is asking for something else.
+```
+
+`grep -n __all__ src/marshmallow/validate.py` worked in 3 training traces but failed on a clean
+checkout of upstream `HEAD`, so after `adage train cards` it is no longer listed.
+
+**Does it fire on the wrong task?** Driving the hook with the 6 held-out tasks of the family and 8
+unrelated tasks in the same repository (fix a field bug, README, CI, a new field type, a refactor,
+a Python bump, type hints, a benchmark) at the default threshold: the card fired on all 6, once
+per session, and on none of the 8. That is one family on one repository, with the research's
+prompts. The research measured the card's value (19% of $ per task, CI 12–26%, no pass-rate loss)
+with the card in the prompt, not through this delivery; a false fire costs a card's tokens and an
+"ignore this if…" line.
+
 ## Skill-steered sessions (optional evidence)
 
 The compile needs no sessions. The claim pipeline below drives **your own agent harness**

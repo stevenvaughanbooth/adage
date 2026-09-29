@@ -139,6 +139,22 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   the reviewed strengths. On the skill lab's acme comparison (Haiku, 36 sessions, $2.25) the
   compiled pack matched the skill in context on pass rate (12/12) and captured 97 to 99% of its
   savings in cost, turns and tokens, with no session committing (docs/training.md, "Validation").
+- **Procedure cards for recurring tasks** (`crates/adage-learn/src/cards.rs`, from the
+  recurring-workflows research): with the embedding model installed, `adage condition` groups a
+  repository's traces into **families** of similar tasks (first prompts at cosine ≥ 0.6 *and*
+  edited files overlapping, Jaccard ≥ 0.25). A family with a passing trace becomes a reflex whose
+  response is a **card**: the files such a change touched in order, what the latest passing trace
+  added to each (clipped, "copy the format, not the content"), the commands that worked and those
+  that failed with their error, and the check the traces finished with. It is delivered once per
+  session at a prompt whose similarity to the family's centroid reaches `learn.card_threshold`
+  (default 0.8, a parameter until the research's confirming experiment calibrates it), prime and
+  observe only; `adage review` refuses to strengthen it. `adage train cards` replays a card's
+  commands on a clean checkout in adage-exec's sandbox (installs are not replayed: the sandbox has
+  no network) and the next learn marks the ones that worked and stops listing the ones that did
+  not. `adage sense` counts the families and cards, the status card counts cards among learned
+  reflexes, and `learn.cards = false` turns them off. On the marshmallow family's 4 training
+  traces the card fired on all 6 held-out tasks and on none of 8 unrelated prompts in the same
+  repository.
 - Skill-steered sessions stay optional evidence: `adage train plan` estimates their cost and runs
   nothing, `adage train --plan` runs them, and `report` says, claim by claim, what they showed.
 - **Packs** carry `procedure.json` (the procedure a trained pack was compiled from: every step and

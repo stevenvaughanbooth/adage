@@ -113,21 +113,61 @@ pub fn norm_cmd(cmd: &str) -> String {
     let segs = if kept.is_empty() { segs } else { kept };
     let joined = segs.iter().map(|s| s.split('|').next().unwrap_or("").trim()).collect::<Vec<_>>().join(" && ");
     let mut out: Vec<String> = Vec::new();
-    for t in joined.split_whitespace() {
+    for (t, quoted) in words(&joined) {
         if out.len() >= 6 {
             break;
         }
+        // An inline script (`python -c "..."`) is this task's code, not a command to repeat.
+        if quoted && t.chars().any(char::is_whitespace) {
+            return String::new();
+        }
         // Redirections (`2>&1`, `>/dev/null`, `> out.txt`) are not the command.
-        if t.contains('>') || t.contains('<') {
+        if !quoted && (t.contains('>') || t.contains('<')) {
             break;
         }
-        let t = t.trim_matches(|c| c == '"' || c == '\'');
-        let t = t.split("::").next().unwrap_or(t);
+        let t = t.split("::").next().unwrap_or(&t).to_string();
         if !t.is_empty() {
-            out.push(t.to_string());
+            out.push(t);
         }
     }
     out.join(" ")
+}
+
+/// Shell words, quotes removed, each with whether any of it was quoted. An unbalanced quote runs
+/// to the end and counts as whitespace in its word.
+fn words(s: &str) -> Vec<(String, bool)> {
+    let mut out = Vec::new();
+    let (mut cur, mut quoted, mut any) = (String::new(), None::<char>, false);
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        match (quoted, c) {
+            (None, '\'' | '"') => {
+                quoted = Some(c);
+                any = true;
+            }
+            (Some(q), _) if c == q => quoted = None,
+            (Some('"') | None, '\\') => {
+                if let Some(n) = chars.next() {
+                    cur.push(n);
+                }
+            }
+            (None, _) if c.is_whitespace() => {
+                if !cur.is_empty() || any {
+                    out.push((std::mem::take(&mut cur), any));
+                }
+                any = false;
+            }
+            _ => cur.push(c),
+        }
+    }
+    if quoted.is_some() {
+        // A quote left open on the first line: a multi-line inline script.
+        cur.push('\n');
+    }
+    if !cur.is_empty() || any {
+        out.push((cur, any));
+    }
+    out
 }
 
 fn view<'a>(s: &'a Session) -> View<'a> {
@@ -165,7 +205,10 @@ fn view<'a>(s: &'a Session) -> View<'a> {
             } else {
                 cmd.replace(&format!("{root}/"), "").replace(&root, ".")
             };
-            cmds.push(CmdView { k, norm: norm_cmd(&cmd), failed: c.failed, out: c.output.clone() });
+            let norm = norm_cmd(&cmd);
+            if !norm.is_empty() {
+                cmds.push(CmdView { k, norm, failed: c.failed, out: c.output.clone() });
+            }
         }
     }
     let passed = s.outcome.or_else(|| s.proxy_outcome()) == Some(true);
@@ -387,7 +430,9 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
             let m = toks.iter().map(|t| t.len()).min().unwrap_or(0);
             let common: Vec<&str> =
                 (0..m).take_while(|&i| toks.iter().all(|t| t[i] == toks[0][i])).map(|i| toks[0][i]).collect();
-            (common.len() >= 2).then(|| common.join(" "))
+            // A bare head (`python -m`) no trace ran as such says nothing.
+            let f = common.join(" ");
+            (common.len() >= 3 || (common.len() == 2 && cs.contains(&f))).then_some(f)
         })
         .filter(|f| plain(f) && verdict(f) != Some(false));
     // A command the replay found not to work on a clean checkout is not listed as working.
@@ -545,6 +590,13 @@ mod tests {
         );
         assert_eq!(norm_cmd("make test > out.txt"), "make test");
         assert_eq!(norm_cmd("cat <<EOF > x\nhello\nEOF"), "cat");
+        // Quotes are words: an inline script is no command to repeat, a quoted path is.
+        assert_eq!(norm_cmd("python -c \"import sys; print(1)\""), "");
+        assert_eq!(norm_cmd("python -c 'import sys'"), "");
+        assert_eq!(norm_cmd("python -c \"\nimport sys\nprint(1)\""), "");
+        assert_eq!(norm_cmd("grep -n 'class ' src/v.py"), "");
+        assert_eq!(norm_cmd("wc -l \"tests/test_v.py\""), "wc -l tests/test_v.py");
+        assert_eq!(norm_cmd("echo 'a>b'"), "echo a>b");
     }
 
     #[test]

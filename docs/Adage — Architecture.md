@@ -603,6 +603,14 @@ Raw prompts never enter a track, and families carry no labels: the agent sees on
 template. Draft 2's model-written labels are not built. Precision is measured only on synthetic
 data: 0.87 of directives correct after split/merge, from 0.57 before (S7; [P§4.3]).
 
+**Procedure cards** (`crates/adage-learn/src/cards.rs`) use the same model for recurring work:
+traces whose first prompts are similar (cosine ≥ 0.6) and whose edited files overlap (Jaccard ≥
+0.25) form a family, and a family with a passing trace compiles to an `intent` route whose step is
+`card` (`crates/adage-tracks/src/card.rs`: files, clipped exemplars, commands, commands to avoid,
+the finishing check; fixed headings, size-bounded, validated as untrusted input). The runtime
+matches cards apart from run intents, once per session, prime and observe only. See
+[training.md](training.md#recurring-tasks-procedure-cards).
+
 ### 4.9 Track toolchain (A7)
 
 **Format** (`crates/adage-tracks/src/model.rs`, `io.rs`) [O6]:

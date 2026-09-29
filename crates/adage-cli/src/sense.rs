@@ -248,7 +248,13 @@ fn compact(s: &mut Session) {
     // Candidate mining reads the first prompt only.
     s.prompts.clear();
     for st in &mut s.steps {
-        st.call.input = serde_json::Value::Null;
+        // A shell command's first line stays: a procedure card lists the commands of its family.
+        let cmd = st.call.input.get("command").and_then(|c| c.as_str()).and_then(|c| c.lines().next());
+        let cmd: Option<String> = cmd.map(|c| c.chars().take(1000).collect());
+        st.call.input = match cmd {
+            Some(c) => serde_json::json!({ "command": c }),
+            None => serde_json::Value::Null,
+        };
         trim_output(&mut st.call.output);
     }
 }

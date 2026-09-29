@@ -20,6 +20,8 @@ from them. Instincts are innate responses that ship with Adage.
 | Files on disk | **tracks** | (unchanged) |
 | Signed, shareable artefact | **pack** | shared track |
 | Holdout arm | **control** | holdout |
+| Traces of similar tasks | **family** (of similar tasks) | cluster |
+| What a family's traces had in common, said at the next such task | **procedure card**: a reflex, whose response is the card | recipe, playbook |
 | The web view (`graph --serve`) | **the map** | signal box |
 
 ## Strength (formerly aspects)
@@ -50,6 +52,7 @@ from them. Instincts are innate responses that ship with Adage.
 | `adage learn` | `adage condition` | Removed: `learn` is gone |
 | `adage-train run` | `adage train` | Compile a skill into reflexes (`adage train <SKILL.md>`); skill-steered sessions are `plan`, `--plan`, `report` |
 | | `adage train accept` | Install a compiled skill's pack, as reviewed (the person accepts the review) |
+| | `adage train cards` | Replay the commands of a repository's procedure cards on a clean checkout |
 | `adage review promote` / `demote` / `reject` | `adage review strengthen` / `weaken` / `extinguish` | |
 | `adage graph --serve` | `adage map` | |
 | `adage exec enable` / `review allow-exec` | `adage delegate` / `adage review delegate` | Reflexes that act |

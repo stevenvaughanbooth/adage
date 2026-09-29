@@ -158,8 +158,17 @@ fn by_edit(r: &Route) -> bool {
     matches!(r.trigger, Trigger::AfterEdit { .. })
 }
 
+/// A route's strength ceiling: its effect's, and prime at most for a procedure card (advice to
+/// read, never a command to run).
+fn route_ceiling(r: &Route) -> Option<Strength> {
+    if matches!(r.step, Step::Card { .. }) {
+        return Some(Strength::Prime);
+    }
+    ceiling(r.effect, by_edit(r))
+}
+
 pub(crate) fn ceiling_str(r: &Route) -> &'static str {
-    ceiling(r.effect, by_edit(r)).map(strength_str).unwrap_or("none")
+    route_ceiling(r).map(strength_str).unwrap_or("none")
 }
 
 fn lower(x: impl std::fmt::Debug) -> String {
@@ -566,11 +575,7 @@ fn verbs(r: &Route, proposed: bool) -> Vec<&'static str> {
         v.push("weaken");
     }
     // An instinct is prime at most, whatever anyone decides.
-    if live(r.state)
-        && r.strength == Strength::Prime
-        && ceiling(r.effect, by_edit(r)) == Some(Strength::Fire)
-        && !r.is_instinct()
-    {
+    if live(r.state) && r.strength == Strength::Prime && route_ceiling(r) == Some(Strength::Fire) && !r.is_instinct() {
         v.push("strengthen");
     }
     if !r.authored {
@@ -765,7 +770,10 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
             if r.is_instinct() {
                 bail!("refusing: {route_id} is an instinct (Adage's built-in default), which is prime at most; a reflex conditioned on this repository's traces can be fire");
             }
-            if ceiling(r.effect, by_edit(r)) != Some(Strength::Fire) {
+            if matches!(r.step, Step::Card { .. }) {
+                bail!("refusing: {route_id} is a procedure card, which is prime at most: it is advice to read, not a command to run");
+            }
+            if route_ceiling(r) != Some(Strength::Fire) {
                 bail!(
                     "refusing: {route_id} is a {} step{}, whose ceiling is {}; no one can raise a reflex above its effect ceiling",
                     r.effect.as_str(),

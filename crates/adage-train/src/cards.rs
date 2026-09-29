@@ -17,7 +17,8 @@ use std::path::Path;
 pub struct Checked {
     pub card: String,
     pub command: String,
-    pub works: bool,
+    /// Whether it worked; `None` when it was not replayed to an exit (no verdict recorded).
+    pub works: Option<bool>,
     pub summary: String,
 }
 
@@ -39,6 +40,17 @@ pub fn verify(home: &Path, root: &Path, wall_ms: u64) -> Result<Vec<Checked>> {
         }
         for cmd in cmds {
             let argv: Vec<String> = cmd.split_whitespace().map(str::to_string).collect();
+            // Installing packages needs the network, which the sandbox does not have: a failure
+            // there says nothing about the command, so it gets no verdict.
+            if adage_core::action::classify_argv(&argv).role == adage_core::action::Role::EnvSetup {
+                out.push(Checked {
+                    card: ir.route.id.clone(),
+                    command: cmd,
+                    works: None,
+                    summary: "not replayed: it installs packages, and the sandbox has no network".into(),
+                });
+                continue;
+            }
             let mut rp = Replay::new(root, ReplayLimits { wall_ms, ..Default::default() })
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
             for d in LEND {
@@ -48,10 +60,10 @@ pub fn verify(home: &Path, root: &Path, wall_ms: u64) -> Result<Vec<Checked>> {
             let (works, summary) = match rp.run(&argv) {
                 Ok(r) if !r.timed_out => {
                     verdicts.entry(ir.route.id.clone()).or_default().insert(cmd.clone(), r.ok());
-                    (r.ok(), r.summary())
+                    (Some(r.ok()), r.summary())
                 }
-                Ok(r) => (false, format!("{}: not recorded", r.summary())),
-                Err(e) => (false, format!("not replayed: {e}")),
+                Ok(r) => (None, format!("{}: not recorded", r.summary())),
+                Err(e) => (None, format!("not replayed: {e}")),
             };
             out.push(Checked { card: ir.route.id.clone(), command: cmd, works, summary });
         }

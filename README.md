@@ -354,6 +354,8 @@ adage config set learn.min_interval_secs 300  # learn each repository at most ev
 | `learn.codex_sessions` | `auto` | Codex rollouts: `auto` reads `$CODEX_HOME/sessions` (this repository's only) once Codex hooks are registered; a directory; or `""` for none |
 | `learn.opencode_exports` | `""` | A directory of `opencode export` files automatic learning reads |
 | `learn.parse_cache` | `true` | Keep parsed transcripts in `cache/sessions` (owner-only), so re-learning parses only what changed |
+| `learn.cards` | `true` | Procedure cards for recurring tasks, with the embedding model ([docs/training.md](docs/training.md#recurring-tasks-procedure-cards)) |
+| `learn.card_threshold` | `0.8` | A prompt's similarity to a family that delivers its card |
 | `instincts.enabled` | `true` | Bind Adage's instincts from each repository's files |
 | `ui.notices` | `daily` | One-line notices at session start (Claude Code), at most daily and only when new; `off` silences them |
 | `runtime.control` | `0.1` | Control share (`ADAGE_CONTROL` wins) |
