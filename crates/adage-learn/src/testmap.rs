@@ -1,0 +1,578 @@
+//! The tests of what was edited (evals/lab/abstraction/README.md §4.4; architecture review §3.3):
+//! after an edit of a source file, run the tests that go with it, with the runner that works in
+//! this repository.
+//!
+//! The reflex is built, not copied: agents rarely run the same test command twice (a different
+//! file and flags each time), but what they do is the same, the project's tests of the edited area
+//! (`test-run|narrow`, [`adage_core::action`]). So:
+//!
+//! - **The runner** is the project's own (`.venv/bin/python -m pytest` from the repository's
+//!   declared environment, else the project-environment spelling that ran tests in the traces:
+//!   `npm test --`, `npx vitest run`), never the system interpreter a dead end names.
+//! - **The targets** are bound at hook time from the edited file through a map (edited source path
+//!   → its test files, best first, [`TestsOf`]), learned statically from the repository (a test
+//!   file named for the source, `test_core.py` for `core.py`, `x.spec.ts` for `x.ts`; files the
+//!   history changed together) and confirmed by the traces (a test file run after the source was
+//!   edited, that ran tests). The slot is `edit_tests`: a file the map does not list gets nothing.
+//! - **Admission and strength** come from the value of the directive at the `after-edit:source`
+//!   situation ([`crate::value`]): calls from the first source edit to a test run that ran tests,
+//!   without a directive and when the agent's next run was in the project's environment. It is
+//!   also admitted when verified (the runner declared and seen running tests, and a trace that ran a
+//!   mapped test after editing its source). A check after an edit is suggested, never fired: prime
+//!   at most.
+
+use crate::import::Session;
+use crate::outcome::{self, Runner};
+use crate::value::{self, Priors, Statics};
+use adage_core::action::{self, EnvClass, Role, Target};
+use adage_core::Effect;
+use adage_graph::stats::{self, Advantage};
+use adage_tracks::why::Why;
+use adage_tracks::*;
+use serde::Serialize;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
+
+/// At most this many tests are bound for one edited file.
+pub const K: u8 = 3;
+/// Commits of the history read for co-change, at most, and the largest commit that counts (a
+/// sweeping change says nothing about which tests go with which file).
+const HISTORY: usize = 2_000;
+const MAX_COMMIT_FILES: usize = 40;
+/// Files of a repository read, at most.
+const MAX_FILES: usize = 60_000;
+
+/// Directories never read for the map.
+const SKIP_DIRS: &[&str] = &[
+    ".git",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".tox",
+    ".nox",
+    "dist",
+    "build",
+    "target",
+    ".next",
+    "coverage",
+    ".cache",
+    "site-packages",
+    "vendor",
+];
+
+/// The repository's files (relative paths), skipping environments and build output.
+pub fn files(root: &Path) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let mut entries: Vec<_> = rd.flatten().collect();
+        entries.sort_by_key(|e| e.file_name());
+        for e in entries {
+            let name = e.file_name().to_string_lossy().to_string();
+            let Ok(ft) = e.file_type() else { continue };
+            if ft.is_dir() {
+                if !SKIP_DIRS.contains(&name.as_str()) && !name.starts_with('.') {
+                    stack.push(e.path());
+                }
+            } else if ft.is_file() {
+                if let Ok(rel) = e.path().strip_prefix(root) {
+                    out.insert(rel.to_string_lossy().replace('\\', "/"));
+                }
+                if out.len() >= MAX_FILES {
+                    return out;
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Pairs of files the history changed together, with the commits that did (from `git log` at the
+/// root's HEAD; none when it is not a checkout or has no history).
+pub fn cochange(root: &Path) -> BTreeMap<(String, String), u32> {
+    let mut out = BTreeMap::new();
+    if !root.join(".git").exists() {
+        return out;
+    }
+    let Ok(o) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["log", "--no-merges", "--name-only", "--format=%x00", "-n"])
+        .arg(HISTORY.to_string())
+        .arg("HEAD")
+        .stderr(std::process::Stdio::null())
+        .output()
+    else {
+        return out;
+    };
+    if !o.status.success() {
+        return out;
+    }
+    let text = String::from_utf8_lossy(&o.stdout);
+    for commit in text.split('\0') {
+        let files: BTreeSet<&str> = commit.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+        if files.len() < 2 || files.len() > MAX_COMMIT_FILES {
+            continue;
+        }
+        let tests: Vec<&str> = files.iter().copied().filter(|f| outcome::is_test_path(f)).collect();
+        for s in files.iter().copied().filter(|f| source_path(f)) {
+            for t in &tests {
+                *out.entry((s.to_string(), t.to_string())).or_default() += 1;
+            }
+        }
+    }
+    out
+}
+
+/// A source file the map is for: code, inside a directory, not a test.
+pub fn source_path(p: &str) -> bool {
+    let name = p.rsplit('/').next().unwrap_or(p);
+    let ext = name.rsplit_once('.').map(|x| x.1).unwrap_or("");
+    p.contains('/')
+        && !outcome::is_test_path(p)
+        && matches!(ext, "py" | "ts" | "tsx" | "js" | "jsx" | "mjs" | "mts" | "vue" | "go" | "rs" | "rb")
+        && !name.starts_with("__init__")
+        && !name.ends_with(".d.ts")
+}
+
+/// A source file's name as a test names it: no directory, no extension, no leading underscore
+/// (`src/attr/_make.py` → `make`).
+fn source_stem(p: &str) -> &str {
+    let name = p.rsplit('/').next().unwrap_or(p);
+    let stem = name.split('.').next().unwrap_or(name);
+    stem.trim_start_matches('_')
+}
+
+/// The name a test file gives the source it tests (`tests/test_make.py` → `make`,
+/// `__tests__/effectScope.spec.ts` → `effectScope`, `flag_test.go` → `flag`).
+fn test_stem(p: &str) -> &str {
+    let name = p.rsplit('/').next().unwrap_or(p);
+    let stem = name.split('.').next().unwrap_or(name);
+    let stem = stem.strip_prefix("test_").unwrap_or(stem);
+    let stem = stem.strip_suffix("_test").unwrap_or(stem);
+    stem.trim_start_matches('_')
+}
+
+/// The package a path is in: its first two segments (`packages/runtime-core`, `src/click`).
+fn package(p: &str) -> String {
+    p.split('/').take(2).collect::<Vec<_>>().join("/")
+}
+
+/// The map from an edited source path to its tests, best first.
+pub type TestsOf = BTreeMap<String, Vec<String>>;
+
+/// Evidence for one (source, test) pair.
+#[derive(Debug, Clone, Default)]
+struct Pair {
+    named: bool,
+    same_package: bool,
+    cochange: u32,
+    traces: u32,
+}
+
+/// The file → tests map (see the module documentation): for every source file with evidence, its
+/// best `K` test files, each scored by a trace that ran it after editing the source (2 each, at
+/// most 4), a name that matches (1, and 0.5 more in the same package), and history: from two
+/// commits that changed both, 0.5 plus half its share of the source's co-changes with tests.
+/// Ties by path.
+pub fn tests_of(
+    files: &BTreeSet<String>,
+    cochange: &BTreeMap<(String, String), u32>,
+    confirmed: &BTreeMap<(String, String), u32>,
+) -> TestsOf {
+    let tests: Vec<&String> = files.iter().filter(|f| outcome::is_test_path(f)).collect();
+    let mut by_stem: BTreeMap<&str, Vec<&String>> = BTreeMap::new();
+    for t in &tests {
+        by_stem.entry(test_stem(t)).or_default().push(t);
+    }
+    let mut pairs: BTreeMap<String, BTreeMap<String, Pair>> = BTreeMap::new();
+    for s in files.iter().filter(|f| source_path(f)) {
+        let stem = source_stem(s);
+        if stem.len() < 2 {
+            continue;
+        }
+        for t in by_stem.get(stem).into_iter().flatten() {
+            let p = pairs.entry(s.clone()).or_default().entry((*t).clone()).or_default();
+            p.named = true;
+            p.same_package = package(s) == package(t);
+        }
+    }
+    for ((s, t), n) in cochange {
+        if files.contains(s) && files.contains(t) && *n >= 2 {
+            pairs.entry(s.clone()).or_default().entry(t.clone()).or_default().cochange = *n;
+        }
+    }
+    for ((s, t), n) in confirmed {
+        if files.contains(t) {
+            pairs.entry(s.clone()).or_default().entry(t.clone()).or_default().traces = *n;
+        }
+    }
+    let mut out = TestsOf::new();
+    for (s, ts) in pairs {
+        let most = ts.values().map(|p| p.cochange).max().unwrap_or(0).max(1) as f64;
+        let mut scored: Vec<(f64, String)> = ts
+            .into_iter()
+            .map(|(t, p)| {
+                let score = (2.0 * p.traces as f64).min(4.0)
+                    + if p.named { 1.0 + if p.same_package { 0.5 } else { 0.0 } } else { 0.0 }
+                    + if p.cochange >= 2 { 0.5 + 0.5 * p.cochange as f64 / most } else { 0.0 };
+                (score, t)
+            })
+            .filter(|(score, _)| *score >= 0.5)
+            .collect();
+        scored.sort_by(|a, b| b.0.total_cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+        let best: Vec<String> = scored.into_iter().take(K as usize).map(|(_, t)| t).collect();
+        if !best.is_empty() {
+            out.insert(s, best);
+        }
+    }
+    out
+}
+
+/// The test files a test run selected (a test id's file; directories are not files).
+fn run_files(a: &action::Action) -> Vec<String> {
+    a.targets
+        .iter()
+        .filter_map(|t| match t {
+            Target::File(p) | Target::TestId(p, _) => Some(p.trim_start_matches("./").to_string()),
+            Target::Dir(_) => None,
+        })
+        .collect()
+}
+
+/// (source, test) pairs the traces confirm: a test run that ran tests and selected the test file,
+/// after the source was the last source file edited, counted once per trace.
+pub fn confirmed(ss: &[&Session]) -> BTreeMap<(String, String), u32> {
+    let mut out: BTreeMap<(String, String), u32> = BTreeMap::new();
+    for s in ss {
+        let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
+        let mut last: Option<String> = None;
+        for st in &s.steps {
+            if let Some(p) = outcome::source_edit(st) {
+                last = Some(p.to_string());
+                continue;
+            }
+            let Some(src) = &last else { continue };
+            let Some(a) = outcome::action_of(st).filter(|a| a.role == Role::TestRun) else { continue };
+            if !outcome::executed_tests(&st.call.output) {
+                continue;
+            }
+            for t in run_files(&a) {
+                seen.insert((src.clone(), t));
+            }
+        }
+        for k in seen {
+            *out.entry(k).or_default() += 1;
+        }
+    }
+    out
+}
+
+/// The command prefix of a test run, up to its first target or selector: `.venv/bin/python -m
+/// pytest`, `npm test --`, `npx vitest run`. Options are dropped (`-xvs` is one run's choice).
+fn prefix(a: &action::Action) -> Option<String> {
+    let first_target = a.targets.first().map(|t| t.path().to_string());
+    let mut out: Vec<&str> = Vec::new();
+    let mut i = 0;
+    let av = &a.argv;
+    while i < av.len() {
+        let t = av[i].as_str();
+        if Some(t.trim_end_matches('/')) == first_target.as_deref()
+            || t.split("::").next() == first_target.as_deref()
+            || a.selectors.iter().any(|s| s == t)
+        {
+            break;
+        }
+        if t == "-m" {
+            out.push(t);
+            if let Some(m) = av.get(i + 1) {
+                out.push(m);
+            }
+            i += 2;
+            continue;
+        }
+        if t == "--" || !t.starts_with('-') {
+            if t.contains('=') && out.is_empty() {
+                // A leading environment assignment is one run's choice.
+                i += 1;
+                continue;
+            }
+            out.push(t);
+        }
+        i += 1;
+    }
+    let p = out.join(" ");
+    (!p.is_empty() && io::safe_command(&p)).then_some(p)
+}
+
+/// The test-map route, valued (see the module documentation).
+#[derive(Debug, Clone, Serialize)]
+pub struct Planned {
+    pub glob: String,
+    pub command: String,
+    pub runner: String,
+    pub map_files: usize,
+    pub advantage: Advantage,
+    pub n_null: u32,
+    pub n_sat: u32,
+    pub verified: bool,
+    pub strength: Option<Strength>,
+}
+
+/// Plan the tests-of-the-edit route for the repository's traces: `None` when the traces run no
+/// tests after source edits, or no file has mapped tests; the route only when it is admitted and
+/// has a strength, and the plan either way.
+pub fn plan(
+    ss: &[&Session],
+    statics: &Statics,
+    root: Option<&Path>,
+    priors: &Priors,
+    provenance: &str,
+) -> Option<(Option<(Route, Why)>, Planned)> {
+    // The situations: the first source edit before a test run that ran tests.
+    let mut at: Vec<(&Session, outcome::Situation)> = Vec::new();
+    for s in ss {
+        for x in outcome::situations(s, &statics.env_kind) {
+            if x.key.trigger == "after-edit:source" {
+                at.push((s, x));
+            }
+        }
+    }
+    // The family agents test with after an edit, and its project-environment spelling.
+    let mut families: BTreeMap<String, u32> = BTreeMap::new();
+    for (_, x) in &at {
+        if let Some(r) = &x.next {
+            *families.entry(r.family.clone()).or_default() += 1;
+        }
+    }
+    let family = families.iter().max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0))).map(|(f, _)| f.clone())?;
+    let mut spellings: BTreeMap<String, (u32, action::Env)> = BTreeMap::new();
+    let mut ran_tests = 0u32;
+    for s in ss {
+        let mut ran = false;
+        for st in &s.steps {
+            let Some(a) = outcome::action_of(st).filter(|a| a.role == Role::TestRun && a.runner == family) else {
+                continue;
+            };
+            if a.env.class() != EnvClass::Project || !outcome::executed_tests(&st.call.output) {
+                continue;
+            }
+            ran = true;
+            if let Some(p) = prefix(&a) {
+                spellings.entry(p).or_insert((0, a.env.clone())).0 += 1;
+            }
+        }
+        ran_tests += u32::from(ran);
+    }
+    let seen = spellings
+        .iter()
+        .max_by(|a, b| a.1 .0.cmp(&b.1 .0).then_with(|| b.0.cmp(a.0)))
+        .map(|(p, (_, e))| (p.clone(), e.clone()));
+    let declared = statics.declared.get(&family).map(|(e, c)| (c.clone(), e.clone()));
+    let (command, env) = declared.clone().or(seen)?;
+    let runner = Runner { env: env.clone(), family: family.clone() };
+    // The map, and the area it covers.
+    let files: BTreeSet<String> = match root.filter(|r| r.is_dir()) {
+        Some(r) => files(r),
+        None => BTreeSet::new(),
+    };
+    let confirmed = confirmed(ss);
+    let files: BTreeSet<String> = if files.is_empty() {
+        // No repository at hand: what the traces edited and ran.
+        confirmed.keys().flat_map(|(s, t)| [s.clone(), t.clone()]).collect()
+    } else {
+        files
+    };
+    let history = root.map(cochange).unwrap_or_default();
+    let map = tests_of(&files, &history, &confirmed);
+    // The area: the lattice over the source files the traces edited that have mapped tests.
+    let edited: BTreeSet<String> = ss
+        .iter()
+        .flat_map(|s| s.steps.iter().filter_map(|st| outcome::source_edit(st).map(str::to_string)))
+        .filter(|p| map.contains_key(p))
+        .collect();
+    if edited.is_empty() {
+        return None;
+    }
+    let keys: BTreeSet<String> = map.keys().cloned().collect();
+    let members: Vec<&str> = edited.iter().map(String::as_str).collect();
+    let globs = adage_graph::compile::glob::lattice(&members, &keys, &keys, 0.9);
+    // One glob: the least general one covering most of the edited files.
+    let glob = globs
+        .iter()
+        .filter(|g| !g.starts_with("**") && !g.starts_with('*'))
+        .max_by(|a, b| {
+            let n = |g: &str| edited.iter().filter(|p| adage_graph::select::glob_match(g, p)).count();
+            n(a).cmp(&n(b)).then_with(|| b.cmp(a))
+        })?
+        .clone();
+    let map: TestsOf = map.into_iter().filter(|(s, _)| adage_graph::select::glob_match(&glob, s)).collect();
+    if map.is_empty() || !glob.contains('*') {
+        return None;
+    }
+    // Value at the after-edit situation.
+    let key = at.first().map(|(_, x)| x.key.clone())?;
+    let role = env.kind().to_string();
+    let unexposed: Vec<&(&Session, outcome::Situation)> =
+        at.iter().filter(|(s, _)| !s.exposed_to(&[command.as_str()], false)).collect();
+    let null: Vec<f64> = unexposed.iter().map(|(_, x)| x.reward.calls as f64).collect();
+    let sat: Vec<&&(&Session, outcome::Situation)> = unexposed
+        .iter()
+        .filter(|(_, x)| {
+            x.next.as_ref().is_some_and(|r| r.family == runner.family && r.env.class() == EnvClass::Project)
+        })
+        .collect();
+    let (m0, k0, _, _) = priors.prior(&key, "null");
+    let (m1, k1, ma, mb) = priors.prior(&key, &role);
+    let q_null = stats::gamma_poisson(null.iter().sum(), null.len() as f64, m0, k0);
+    let q_sat = stats::gamma_poisson(sat.iter().map(|(_, x)| x.reward.calls as f64).sum(), sat.len() as f64, m1, k1);
+    let mis = sat.iter().filter(|(_, x)| x.next_misfired).count() as f64;
+    let adv = stats::advantage(
+        q_null,
+        q_sat,
+        value::FOLLOW_PRIOR,
+        (ma + mis, mb + sat.len() as f64 - mis),
+        value::DIRECTIVE_COST,
+        value::MISFIRE_COST,
+    );
+    let map_confirmed = confirmed.iter().any(|((s, t), _)| map.get(s).is_some_and(|ts| ts.contains(t)));
+    let verified = (declared.is_some() || ran_tests >= 1) && ran_tests >= 1 && map_confirmed;
+    let effective = sat.len() as f64 + k1;
+    let admitted = verified || (adv.lower > 0.0 && effective >= value::MIN_EFFECTIVE);
+    // A check after an edit is suggested, never fired.
+    let strength = admitted.then(|| value::strength_of(&adv, Effect::Verify, true)).flatten().map(|s| {
+        if s == Strength::Fire {
+            Strength::Prime
+        } else {
+            s
+        }
+    });
+    let planned = Planned {
+        glob: glob.clone(),
+        command: format!("{command} {{tests}}"),
+        runner: family.clone(),
+        map_files: map.len(),
+        advantage: adv,
+        n_null: null.len() as u32,
+        n_sat: sat.len() as u32,
+        verified,
+        strength,
+    };
+    let Some(strength) = strength.filter(|_| io::safe_command(&command)) else { return Some((None, planned)) };
+    let step = Step::Run { command: planned.command.clone() };
+    let trigger = Trigger::AfterEdit { paths: glob.clone() };
+    let slots = vec![Slot {
+        name: "tests".into(),
+        source: SlotSource::EditTests { glob: glob.clone(), k: K, map },
+        contract: Contract::RepoPath,
+    }];
+    let id = adage_graph::compile::ids::route_id("run", &trigger, &step, &slots);
+    let (support, opp) = (planned.n_sat, planned.n_null.max(planned.n_sat));
+    let route = Route {
+        id,
+        summary: "The tests of what was edited, run the way that works in this repository".into(),
+        trigger,
+        step,
+        slots,
+        effect: Effect::Verify,
+        strength,
+        state: initial_state(Effect::Verify),
+        exit: vec![Exit::ExploratoryChange],
+        evidence: Evidence {
+            opportunities: opp,
+            support,
+            rate: if opp > 0 { support as f64 / opp as f64 } else { 0.0 },
+            lower_bound: wilson_lower(support, opp),
+            turns_saved: (adv.mean * 100.0).round() / 100.0,
+            provenance: provenance.into(),
+            models: crate::evidence::models(ss),
+            origin: Some(Origin::Learned),
+            ..Default::default()
+        },
+        authored: false,
+    };
+    let why = Why {
+        shape: "run".into(),
+        pattern: format!(
+            "[edit {glob}] =tests_of=> [{} {{tests}}]: A {:.2} calls (sd {:.2}, P(A>0) {:.2}); Q(∅) {:.2}, Q(Sat) {:.2}; {} triggers, {} ran it; {} files mapped; {}",
+            command,
+            adv.mean,
+            adv.sd,
+            adv.p_positive,
+            adv.q_null,
+            adv.q_sat,
+            planned.n_null,
+            planned.n_sat,
+            planned.map_files,
+            if verified { "verified" } else { "valued" }
+        ),
+        backoff: 1,
+        gain: (adv.mean * 100.0).round() / 100.0,
+        lift: 0.0,
+        conf: (adv.p_positive * 1e4).round() / 1e4,
+        conf_lb: (adv.lower * 1e4).round() / 1e4,
+        support,
+        days: 0,
+        members: vec![],
+        examples: vec![],
+        prior: None,
+    };
+    Some((Some((route, why)), planned))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_map_names_tests_by_name_history_and_traces() {
+        let files: BTreeSet<String> = [
+            "src/click/core.py",
+            "src/click/shell_completion.py",
+            "src/attr/_make.py",
+            "tests/test_shell_completion.py",
+            "tests/test_options.py",
+            "tests/test_basic.py",
+            "tests/test_make.py",
+            "packages/rt/src/scheduler.ts",
+            "packages/rt/__tests__/scheduler.spec.ts",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        let mut cc = BTreeMap::new();
+        cc.insert(("src/click/core.py".to_string(), "tests/test_options.py".to_string()), 5);
+        cc.insert(("src/click/core.py".to_string(), "tests/test_basic.py".to_string()), 3);
+        cc.insert(("src/click/core.py".to_string(), "tests/test_make.py".to_string()), 1);
+        let m = tests_of(&files, &cc, &BTreeMap::new());
+        assert_eq!(m["src/click/shell_completion.py"], vec!["tests/test_shell_completion.py".to_string()]);
+        assert_eq!(m["src/attr/_make.py"], vec!["tests/test_make.py".to_string()]);
+        assert_eq!(m["packages/rt/src/scheduler.ts"], vec!["packages/rt/__tests__/scheduler.spec.ts".to_string()]);
+        // History alone: the most co-changed first; a single co-change is no evidence.
+        assert_eq!(
+            m["src/click/core.py"],
+            vec!["tests/test_options.py".to_string(), "tests/test_basic.py".to_string()]
+        );
+        // A trace confirms a pair over the name.
+        let mut conf = BTreeMap::new();
+        conf.insert(("src/click/shell_completion.py".to_string(), "tests/test_basic.py".to_string()), 2);
+        let m = tests_of(&files, &cc, &conf);
+        assert_eq!(m["src/click/shell_completion.py"][0], "tests/test_basic.py");
+    }
+
+    #[test]
+    fn prefixes_drop_targets_and_options() {
+        let p = |s: &str| prefix(&action::classify_argv(&s.split_whitespace().map(str::to_string).collect::<Vec<_>>()));
+        assert_eq!(
+            p(".venv/bin/python -m pytest tests/test_x.py::t -xvs").as_deref(),
+            Some(".venv/bin/python -m pytest")
+        );
+        assert_eq!(p("npm test -- packages/a/__tests__/x.spec.ts").as_deref(), Some("npm test --"));
+        assert_eq!(p("npx vitest run packages/a").as_deref(), Some("npx vitest run"));
+        assert_eq!(p("python -m pytest -xvs tests/x.py").as_deref(), Some("python -m pytest"));
+    }
+}

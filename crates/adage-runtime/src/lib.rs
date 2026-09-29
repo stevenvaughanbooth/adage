@@ -1054,15 +1054,36 @@ fn bind_output_route(r: &Route, output: &str, ctx: &Ctx) -> Option<(String, Stri
 fn bind_edit_slots(r: &Route, rel: &str, ctx: &Ctx) -> Option<Vec<(String, String)>> {
     let mut bound = Vec::new();
     for s in &r.slots {
-        let SlotSource::EditSegment { glob, depth } = &s.source else { return None };
-        if !glob::Pattern::new(glob).is_ok_and(|g| g.matches(rel)) {
-            return None;
+        match &s.source {
+            SlotSource::EditSegment { glob, depth } => {
+                if !glob::Pattern::new(glob).is_ok_and(|g| g.matches(rel)) {
+                    return None;
+                }
+                let seg = rel.split('/').filter(|x| !x.is_empty()).nth(*depth as usize)?;
+                if !contract_ok(&s.contract, seg, ctx.root) {
+                    return None;
+                }
+                bound.push((s.name.clone(), seg.to_string()));
+            }
+            // The edited file's tests from the learned map: each must exist in the repository.
+            SlotSource::EditTests { glob, k, map } => {
+                if !glob::Pattern::new(glob).is_ok_and(|g| g.matches(rel)) {
+                    return None;
+                }
+                let tests: Vec<&str> = map
+                    .get(rel)?
+                    .iter()
+                    .filter(|t| contract_ok(&s.contract, t, ctx.root))
+                    .take(*k as usize)
+                    .map(String::as_str)
+                    .collect();
+                if tests.is_empty() {
+                    return None;
+                }
+                bound.push((s.name.clone(), tests.join(" ")));
+            }
+            _ => return None,
         }
-        let seg = rel.split('/').filter(|x| !x.is_empty()).nth(*depth as usize)?;
-        if !contract_ok(&s.contract, seg, ctx.root) {
-            return None;
-        }
-        bound.push((s.name.clone(), seg.to_string()));
     }
     Some(bound)
 }

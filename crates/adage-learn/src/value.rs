@@ -165,10 +165,10 @@ impl Statics {
     }
 }
 
-/// The role a next test run plays: the environment kind of a candidate (`venv`, `managed`), or
-/// none (bare, the user site).
+/// The role a next test run plays: the kind of project environment it ran in (`venv`, `managed`,
+/// `script`, …), or none (the system, the user site).
 fn role_of(r: &Runner) -> Option<String> {
-    matches!(r.env, Env::Venv(_) | Env::Managed(_)).then(|| r.env.kind().to_string())
+    (r.env.class() == adage_core::action::EnvClass::Project).then(|| r.env.kind().to_string())
 }
 
 /// The value model's rows of one trace.
@@ -269,7 +269,7 @@ pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors) -> Ve
         }
         for s in ss {
             for st in &s.steps {
-                if let Some(r) = outcome::runner(st).filter(|r| r.family == family && role_of(r).is_some()) {
+                if let Some(r) = outcome::runner(st).filter(|r| r.family == family && spelled(r).is_some()) {
                     if outcome::executed_tests(&st.call.output) {
                         if let Some(c) = spelled(&r) {
                             cands.entry(c).or_insert((r.env.clone(), false));

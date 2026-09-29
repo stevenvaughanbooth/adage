@@ -17,6 +17,7 @@ pub mod ledger;
 pub mod opencode;
 pub mod outcome;
 pub mod scope;
+pub mod testmap;
 pub mod value;
 
 use adage_core::CommandTable;

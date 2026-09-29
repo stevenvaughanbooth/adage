@@ -73,6 +73,12 @@ pub enum SlotSource {
     /// Segment `depth` (0 = the first directory) of the path whose edit fired the route's
     /// after-edit trigger, which must match `glob`. Bound by an after-edit trigger.
     EditSegment { glob: String, depth: u8 },
+    /// The tests of the file whose edit fired the route's after-edit trigger (which must match
+    /// `glob`): at most `k` test files from a learned map (edited source path → its test files,
+    /// best first; from the repository's naming and co-change, confirmed by the traces). A file
+    /// the map does not list binds nothing; each bound file must exist (the slot's contract is a
+    /// repository path), and they are bound space-separated. Bound by an after-edit trigger.
+    EditTests { glob: String, k: u8, map: std::collections::BTreeMap<String, Vec<String>> },
 }
 
 impl SlotSource {

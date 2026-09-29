@@ -475,7 +475,11 @@ fn segment(av: &[String], activated: Option<&String>) -> Option<Action> {
         piped: false,
         argv: av.to_vec(),
     };
-    if let Some((runner, from)) = test_runner(av, at) {
+    if let Some((runner, mut from)) = test_runner(av, at) {
+        // vitest's own subcommands (`vitest run x`) are no target.
+        if runner == "vitest" && matches!(word(from), "run" | "watch" | "related" | "bench") {
+            from += 1;
+        }
         let (t, s) = targets(av, from);
         let scope = if t.iter().any(|x| matches!(x, Target::TestId(..))) || !s.is_empty() {
             Scope::TestId

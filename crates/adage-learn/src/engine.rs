@@ -56,6 +56,9 @@ pub struct EngineReport {
     /// Every safe candidate the value model weighed ([`crate::value`]), delivered or not.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub valued: Vec<crate::value::Valued>,
+    /// The tests-of-the-edit route as planned ([`crate::testmap`]), delivered or not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub testmap: Option<crate::testmap::Planned>,
 }
 
 /// One judged route, and why it exists.
@@ -958,6 +961,32 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
         routes.push(Judged { route, why });
     }
     report.valued = valued;
+    // The tests of what was edited (`crate::testmap`): the project's runner, the edited file's tests
+    // bound from a map. It explains a mined check after an edit that runs the same test tool
+    // (`python -m pytest tests/test_{part}`, `npm test -- packages/{part}`): one reflex, built.
+    let plan = crate::testmap::plan(ss, &statics, root.as_deref(), &cfg.priors, &cfg.provenance);
+    if let Some((Some((route, why)), planned)) = plan.clone() {
+        let family = planned.runner.clone();
+        routes.retain(|j| {
+            let (Trigger::AfterEdit { .. }, Step::Run { command }) = (&j.route.trigger, &j.route.step) else {
+                return true;
+            };
+            let a =
+                adage_core::action::classify_argv(&command.split_whitespace().map(str::to_string).collect::<Vec<_>>());
+            let same = a.role == adage_core::action::Role::TestRun && a.runner == family;
+            if same {
+                report.dropped.push(Dropped {
+                    pattern: j.why.pattern.clone(),
+                    reason: format!("{}: explained by {}, the tests of what was edited", j.route.id, route.id),
+                });
+            }
+            !same
+        });
+        routes.push(Judged { route, why });
+        report.testmap = Some(planned);
+    } else if let Some((None, planned)) = plan {
+        report.testmap = Some(planned);
+    }
     // A value-flow reflex MDL did not select on its own (a longer pattern holding it was chosen,
     // or none): its route is the value slot's, with the slot's own evidence.
     if !routes.iter().any(|j| j.route.id == compile::stable::LOOKUP_ID) {

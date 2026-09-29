@@ -385,7 +385,7 @@ pub fn trigger_binds(t: &Trigger, s: &SlotSource) -> bool {
         (t, s),
         (Trigger::Prompt { .. }, SlotSource::Prompt { .. } | SlotSource::PromptValue { .. })
             | (Trigger::AfterCommand { .. }, SlotSource::OutputValue { .. })
-            | (Trigger::AfterEdit { .. }, SlotSource::EditSegment { .. })
+            | (Trigger::AfterEdit { .. }, SlotSource::EditSegment { .. } | SlotSource::EditTests { .. })
     )
 }
 
@@ -458,8 +458,13 @@ fn validate_vtype(t: &ValueType, contract: &Contract) -> Result<()> {
     Ok(())
 }
 
+/// At most this many test files an `edit_tests` slot binds.
+pub const MAX_EDIT_TESTS: u8 = 5;
+/// At most this many edited files an `edit_tests` map lists.
+pub const MAX_TEST_MAP: usize = 4096;
+
 /// Checks on a slot's source beyond its contract: a learned value type agrees with its contract,
-/// and an edit segment names a safe glob.
+/// an edit segment names a safe glob, and an edit-tests map lists plain repository paths.
 fn validate_source(s: &Slot) -> Result<()> {
     match &s.source {
         SlotSource::PromptValue { vtype, mentions } => {
@@ -487,6 +492,25 @@ fn validate_source(s: &Slot) -> Result<()> {
             }
             if !matches!(s.contract, Contract::Pattern { .. }) {
                 bail!("an edit segment needs a pattern contract");
+            }
+            Ok(())
+        }
+        SlotSource::EditTests { glob, k, map } => {
+            if !safe_glob(glob) || !(1..=MAX_EDIT_TESTS).contains(k) || map.len() > MAX_TEST_MAP {
+                bail!("edit tests {glob:?} (k {k}, {} files) are not allowed", map.len());
+            }
+            if s.contract != Contract::RepoPath {
+                bail!("edit tests need a repository-path contract");
+            }
+            let path_ok = |p: &str| {
+                p.len() <= 200
+                    && adage_core::repo::is_safe_relative(p)
+                    && p.bytes().all(|c| c.is_ascii_alphanumeric() || b"_./-@+".contains(&c))
+            };
+            for (src, tests) in map {
+                if !path_ok(src) || tests.is_empty() || tests.len() > *k as usize || !tests.iter().all(|t| path_ok(t)) {
+                    bail!("edit tests map entry {src:?} → {tests:?} is not allowed");
+                }
             }
             Ok(())
         }
