@@ -246,7 +246,8 @@ struct Start<'a> {
 ///
 /// 1. In a repository with reflexes, the session is assigned its arm now and one `session_start`
 ///    record is spooled (`arm`, `propensity`, `repo`, `generation`): every exposed session is
-///    then counted by the savings estimate, including those where nothing ever matched.
+///    then counted by the savings estimate, including those where nothing ever matched, and the
+///    bootstrap session below, whose reflexes arrive while it runs.
 /// 2. **Bootstrap.** With `learn.auto` on, a repository with no reflexes whose learner has not
 ///    run since the index last changed, or a damaged index, starts a learner at once
 ///    (`condition --auto --bootstrap`): instincts and the index within about 100 ms, then the
@@ -284,6 +285,14 @@ fn session_start(
         }
     };
     let bootstrap = cfg.learn_auto && (damaged || (routed.is_none() && stale()));
+    // The bootstrap session is a session in this repository too: its reflexes arrive while it
+    // runs, so it is assigned its arm now and counted by the savings estimate like any other
+    // (without this record it never was, and the card's session count lagged one behind).
+    if bootstrap && routed.is_none() {
+        if let Err(f) = record_start(s, &key) {
+            failopen::record(&s.paths.root, s.harness, s.event, &f);
+        }
+    }
     if bootstrap {
         let asked = learner().and_then(|l| autolearn::on_turn_end(s.paths, s.root, s.adapter.name(), None, &l, true));
         if let Err(f) = asked {

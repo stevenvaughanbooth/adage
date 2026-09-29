@@ -222,6 +222,14 @@ fn zero_config_plugin() {
     assert!(took2 < Duration::from_millis(200), "a session start took {took2:?}");
     let spawned = w.spawned();
     assert!(spawned[0].contains(&"--bootstrap".to_string()), "{spawned:?}");
+    // Launch report, bug 11: the bootstrap session is assigned its arm and spools its
+    // `session_start` at once, so the savings estimate counts it (it never did: the repository had
+    // no reflexes yet when it started).
+    let start: Vec<Value> = adage_store::spool::read_all(&w.p("data/sessions/s-first.spool")).unwrap_or_default();
+    assert!(
+        start.iter().any(|r| r["kind"] == "session_start" && r["arm"].is_string() && r["repo"].is_string()),
+        "{start:?}"
+    );
 
     // The learner, as the hook started it; then the first prompt, through the plugin's binary.
     w.run_learner();
@@ -591,7 +599,15 @@ fn notice_throttle() {
     v["at"] = json!(v["at"].as_u64().unwrap() - 25 * 3_600_000);
     std::fs::write(&shown, v.to_string()).unwrap();
     let msg = system_message(&w.start(&repo, "s4")).expect("a new notice the next day");
-    assert!(msg.contains("for you: run adage review in a terminal"), "{msg}");
+    // Launch report, bug 12: no `adage` is on this PATH (a plugin-only user), so the notice names
+    // the binary that ran the learner, and that command works as written.
+    assert!(msg.contains("for you: run ") && msg.contains(" review in a terminal"), "{msg}");
+    let cmd = msg.split("run ").nth(1).and_then(|r| r.split(" review").next()).unwrap();
+    assert_ne!(cmd, "adage", "{msg}");
+    let home = w.p("home");
+    let exe = PathBuf::from(cmd.trim_matches('\'').replacen('~', &home.to_string_lossy(), 1));
+    let o = w.run(&exe, &["review"], "", &repo);
+    assert!(o.status.success() && text(&o).contains("pnpm"), "{cmd} review: {}", text(&o));
     assert_eq!(system_message(&w.start(&repo, "s5")), None, "once");
 
     // `ui.notices = off` silences them.
