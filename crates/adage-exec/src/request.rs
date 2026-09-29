@@ -80,7 +80,17 @@ pub enum FieldType {
     Bool,
     Enum,
     Pattern,
+    /// Bounded plain text (a work item's title, description, state): control and invisible
+    /// characters stripped, whitespace collapsed to single spaces, capped at `max` characters
+    /// ([`DEFAULT_TEXT`], never above [`MAX_TEXT`]), and withheld when the output scanner finds
+    /// instruction-shaped text, a secret or an Adage tag in it (`crate::scan`).
+    Text,
 }
+
+/// Default cap on a text field, in characters.
+pub const DEFAULT_TEXT: usize = 600;
+/// Hard cap on a text field, in characters.
+pub const MAX_TEXT: usize = 2000;
 
 /// Hard cap on a list field, whatever the spec says.
 pub const MAX_LIST: usize = 64;
@@ -100,7 +110,8 @@ pub struct FieldSpec {
     /// Dotted path of object keys in stdout's JSON; the field's own name when absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub json: Option<String>,
-    /// `repo-path-list`: at most this many entries are kept (default 20, never above 64).
+    /// `repo-path-list`: at most this many entries are kept (default 20, never above 64). `text`:
+    /// at most this many characters (default 600, never above 2000).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max: Option<usize>,
     /// `enum`: the allowed values (each a safe id, at most 32).
@@ -117,11 +128,13 @@ pub struct FieldSpec {
     /// When true, a missing field is left out instead of withholding the block.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub optional: bool,
-    /// `repo-path-list` only: read from line-oriented **text** output, not JSON: the repository
+    /// `repo-path-list`: read from line-oriented **text** output, not JSON: the repository
     /// paths its lines mention, in order, each validated as a `repo-path` (an existing file or
     /// directory inside the repository); nothing else of the text passes. So a plain-text lookup
     /// (`Linked files: acme/customers.py, tests/test_customers.py`) is approved typed, no raw
-    /// output needed.
+    /// output needed. `text` (the type): read from whichever shape the output has, the JSON
+    /// object's field, or else the text line labelled with the field's name (`Title: ...` for
+    /// `title`, `_` read as a space, any case).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub text: bool,
 }
@@ -308,8 +321,11 @@ impl OutputSpec {
             if !safe_id(name) {
                 bail!("field name {name:?} is not a safe id");
             }
-            if f.text && (f.ty != FieldType::RepoPathList || f.json.is_some()) {
+            if f.text && f.ty == FieldType::RepoPathList && f.json.is_some() {
                 bail!("field {name}: only a repo-path-list with no json path is read from text output");
+            }
+            if f.text && !matches!(f.ty, FieldType::RepoPathList | FieldType::Text) {
+                bail!("field {name}: only a repo-path-list or a text field is read from text output");
             }
             if let Some(j) = &f.json {
                 if j.is_empty() || !j.split('.').all(safe_id) {
@@ -334,6 +350,11 @@ impl OutputSpec {
                 FieldType::RepoPathList => {
                     if f.max.is_some_and(|m| m == 0 || m > MAX_LIST) {
                         bail!("field {name}: max must be 1 to {MAX_LIST}");
+                    }
+                }
+                FieldType::Text => {
+                    if f.max.is_some_and(|m| m == 0 || m > MAX_TEXT) {
+                        bail!("field {name}: max must be 1 to {MAX_TEXT} characters");
                     }
                 }
                 _ => {}

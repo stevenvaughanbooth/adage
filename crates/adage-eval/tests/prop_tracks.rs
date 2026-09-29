@@ -221,6 +221,12 @@ fn good_advice() -> impl Strategy<Value = (Trigger, Step)> {
                 }
             )
         ),
+        (mostly(vec!["exec python", "exec python3"]), mostly(vec![".venv/bin/python", "uv run python"])).prop_map(
+            move |(command, interpreter)| (
+                Trigger::AfterFailure { command, signature: "No module named 'click'".into() },
+                Step::Advise { template: "project-python".into(), slots: slots(vec![("interpreter", interpreter)]) }
+            )
+        ),
     ]
 }
 

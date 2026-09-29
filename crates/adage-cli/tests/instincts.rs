@@ -326,7 +326,8 @@ fn followed_and_failed_instincts_extinguish_at_the_next_learn() {
     let w = World::new();
     w.bind();
     let cwd = w.repo();
-    // Three sessions follow the instinct's `make test` after the unittest failure, and it fails.
+    // Three sessions follow the instinct's `make test` after the unittest failure, and it cannot
+    // run (the target is gone): misfires. A test run that fails its tests is followed, not misfired.
     for i in 0..3 {
         let base = |ev: &str, extra: Value| {
             let mut b = json!({ "session_id": format!("s-ff{i}"), "transcript_path": "/dev/null", "cwd": cwd, "hook_event_name": ev });
@@ -350,7 +351,7 @@ fn followed_and_failed_instincts_extinguish_at_the_next_learn() {
             "PostToolUseFailure",
             &base(
                 "PostToolUseFailure",
-                json!({ "tool_name": "Bash", "tool_input": { "command": "make test" }, "error": "make: *** [test] Error 1" }),
+                json!({ "tool_name": "Bash", "tool_input": { "command": "make test" }, "error": "make: *** No rule to make target 'test'.  Stop." }),
             ),
         );
     }

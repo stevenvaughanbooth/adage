@@ -40,7 +40,7 @@ on a bare non-zero exit, which includes every test that fails on its assertions.
 | U8 | P1 | CI runs checks the agent skipped | `after_edit` of files CI lints | "CI runs `…`; run it before finishing" | prime | CI `run:` steps that classify as verify | low | no |
 | U9 | P1 | Watch mode never exits | `after_failure` (timeout) of a watch command | "Run the one-shot form: `vitest run`" | prime | Table: `jest --watch`, `vitest`, `tsc -w` … | low | no |
 | U10 | P1 | Missing dependency is declared | `after_failure` with `ModuleNotFoundError` / `Cannot find module` | "It is declared; install the project's dependencies" | prime | Only if the module is in the manifest (rules out typosquatting); pack-level approval | low | no |
-| U11 | P0 | Use the project's environment | `after_failure` of `pytest`, `python -m pytest`, `python3 -m pytest`, `tox`, `nox` with `pytest: command not found` (bash and zsh), `No module named pytest`, `python: command not found`, or `No module named '<the project's own package>'` | "A known next step here is: `.venv/bin/python -m pytest`" (else `uv run pytest`) | prime | A `.venv` or `venv` with a `pyvenv.cfg` (made, not activated); else a uv project whose dependency groups have pytest (`uv run --group tests pytest` when only a non-default group has it); Python only, `node_modules/.bin` not yet | low | yes |
+| U11 | P0 | Use the project's environment | `after_failure` of `pytest`, `python -m pytest`, `python3 -m pytest`, `tox`, `nox` with `pytest: command not found` (bash and zsh), `No module named pytest`, `python: command not found`, or `No module named '<the project's own package>'`; and `after_failure` of any other `python`/`python3` run (`python -c "import click"`, `python repro.py`) with `No module named '<the project's own package or a declared test dependency>'` | "A known next step here is: `.venv/bin/python -m pytest`" (else `uv run pytest`); for another Python run, advice: "That Python is not this repository's environment, which has the project and its test dependencies installed: run Python here as `.venv/bin/python`." (said only when no run step answers the failure) | prime | A `.venv` or `venv` with a `pyvenv.cfg` (made, not activated); else a uv project whose dependency groups have pytest (`uv run --group tests pytest` when only a non-default group has it); Python only, `node_modules/.bin` not yet | low | yes |
 | N2 | P1 | Path-alias loader | `after_failure` with `ERR_MODULE_NOT_FOUND` on an alias | "Run through the declared loader" | prime | tsconfig `paths` plus an `--import` loader | low | no |
 | N3 | P1 | Monorepo scope | `after_failure` with "Missing script" at the root | "Run it in the package that declares it" | prime | package.json `workspaces` | medium | no |
 | R1 | P1 | Crate scope | `after_edit` in a workspace member | "Test that crate: `cargo test -p x`" | prime | Cargo workspace members | low | no |
@@ -202,6 +202,7 @@ fired on genuine vitest failures). The signatures each instinct uses:
 | The repository's own message names the command | the directed command (`make check`); never for a package-manager script, which echoes its body | U1, U3 |
 | The runner is not installed | `pytest: command not found`, `command not found: pytest` (zsh), `No module named pytest`, `python: command not found`, `tox: command not found` | U11, P1 (tox), U3 (managed environment) |
 | The project's own package is not importable | `No module named '<package>'` for the project's own packages, never a submodule or another name | U11, P1 (tox), U3 |
+| A declared test dependency is not importable | `No module named '<dependency>'` for pyproject's `test`, `tests`, `testing` and `dev` dependency groups and optional dependencies (at most 12), after a bare `python`/`python3` run | U11 (advice) |
 | npm cannot install this manifest | `Unsupported URL Type` (`workspace:`, `catalog:`, … dependencies) | N1 |
 | The repository refuses npm | only-allow's `for installation in this project`; `EBADDEVENGINES` (`devEngines.packageManager`) | N1 |
 | `npm ci` without an npm lockfile | `an existing package-lock.json` | N1 |
@@ -337,9 +338,17 @@ each part does, and where:
   `review.yaml` files. The routes go to the track `<repo>/instincts`, provenance
   `instinct:<pack>@<version>`, versioned by the usual semver rules, and appear in the report (`bound`,
   `advice`, `nascent reflexes`, `skipped`, `extinguished`, `confirmed`) and, as counts, in `learn.log`.
-- **The repository's root** is the working directory most of its sessions recorded that still
-  exists (`instincts::root_of`), or the root the caller names (`Config::roots`: automatic learning
-  names the hook's root). Unknown: nothing is bound, with the reason in the report.
+- **The repository's root** is the live checkout: the root the caller names (`Config::roots`:
+  automatic learning names the hook's root, the session's own checkout; `adage condition` names the
+  checkout it runs in), else the working directory most of its sessions recorded that still exists
+  (`instincts::root_of`). Old traces may name checkouts that have since lost their `.venv` or
+  `node_modules` (per-task worktrees, containers), which bound the wrong instincts (launch report,
+  bug 7). Unknown: nothing is bound, with the reason in the report.
+- **Rebinding.** Each binding is recorded beside the repository's tracks
+  (`.instincts-binding.json`: the checkout and a fingerprint of its declared files,
+  `adage_instincts::fingerprint`, a few dozen `stat`s). A session start whose checkout differs, or
+  whose declared files changed since (a `.venv` made, a Makefile edited), asks the learner to bind
+  again, by the bootstrap's fast first phase.
 - **Day 0.** `adage condition --instincts-only [--repo-path <dir>]` binds a repository with no sessions
   (`instincts::learn_only`), and an automatic learn for a repository with no usable session yet
   binds its instincts once from the root the hook named.
@@ -352,11 +361,16 @@ each part does, and where:
   track. Environment steps stay nascent reflexes until approved; approving one approves every environment
   step of its pack for the repository (`review.yaml`, `packs:`). Decisions never raise an instinct
   above prime or past forming.
-- **Auto-extinguish.** The spools' treated judgements are read at learn (as `adage review` reads them).
-  An instinct route with at least 3 `misfired`, or whose ignore rate has a Wilson lower bound
-  of at least 0.5 over at least 5 judgements, is extinguished and recorded as a person's `extinguish` would be in its
-  `review.yaml` (`by: "adage: misfired 3 times"`), so a re-bind does not bring it back;
-  `learn.log` records the extinction.
+- **Auto-extinguish, conservatively.** The spools' judgements are read at learn, by arm. An instinct
+  route with at least 3 `misfired` (followed, and the directed command failed for want of its
+  environment or target: `adage_core::outcome::misfired`, never a test run that reported failing
+  tests), and no fewer misfires than working follows, is extinguished. An ignore rate alone never
+  extinguishes: an "ignored" may be a follow the matcher missed (the launch report's 41 of 41). It
+  extinguishes (Wilson lower bound at least 0.5 over at least 5 judgements) only with a control-arm
+  comparison of at least 5 judgements that shows follows of the route are seen at all and that
+  delivering it made agents take the step no more often than withholding it. An extinction is
+  recorded as a person's `extinguish` would be in its `review.yaml` (`by: "adage: misfired 3
+  times"`), so a re-bind does not bring it back; `learn.log` records it.
 
 ### adage-runtime
 

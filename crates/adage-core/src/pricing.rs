@@ -15,7 +15,10 @@ const TABLE: &str = include_str!("pricing.toml");
 pub struct Rates {
     pub input: f64,
     pub output: f64,
+    /// Cache writes with the 5-minute TTL (1.25x input).
     pub cache_write: f64,
+    /// Cache writes with the 1-hour TTL (2x input), which Claude Code also writes.
+    pub cache_write_1h: f64,
     pub cache_read: f64,
 }
 
@@ -25,6 +28,9 @@ struct Entry {
     input: f64,
     output: f64,
     cache_write: f64,
+    /// Defaults to 2x input, Anthropic's 1-hour cache write multiplier.
+    #[serde(default)]
+    cache_write_1h: Option<f64>,
     cache_read: f64,
 }
 
@@ -42,8 +48,17 @@ pub struct Table {
 pub struct Tokens {
     pub input: u64,
     pub output: u64,
+    /// Every cache write, whatever its TTL.
     pub cache_write: u64,
     pub cache_read: u64,
+    /// Of `cache_write`, the tokens written with the 1-hour TTL (Claude Code's
+    /// `usage.cache_creation.ephemeral_1h_input_tokens`), priced at their own rate.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub cache_write_1h: u64,
+}
+
+fn is_zero(n: &u64) -> bool {
+    *n == 0
 }
 
 impl Tokens {
@@ -52,6 +67,7 @@ impl Tokens {
         self.output += o.output;
         self.cache_write += o.cache_write;
         self.cache_read += o.cache_read;
+        self.cache_write_1h += o.cache_write_1h;
     }
     pub fn total(&self) -> u64 {
         self.input + self.output + self.cache_write + self.cache_read
@@ -76,6 +92,7 @@ impl Table {
             input: e.input,
             output: e.output,
             cache_write: e.cache_write,
+            cache_write_1h: e.cache_write_1h.unwrap_or(2.0 * e.input),
             cache_read: e.cache_read,
         })
     }
@@ -86,7 +103,8 @@ impl Table {
         Some(
             (t.input as f64 * r.input
                 + t.output as f64 * r.output
-                + t.cache_write as f64 * r.cache_write
+                + t.cache_write.saturating_sub(t.cache_write_1h) as f64 * r.cache_write
+                + t.cache_write_1h.min(t.cache_write) as f64 * r.cache_write_1h
                 + t.cache_read as f64 * r.cache_read)
                 / 1e6,
         )
@@ -110,8 +128,13 @@ mod tests {
         assert!(t.rates("gpt-5-codex").is_none());
         assert!(t.rates("claude-test").is_none());
         assert!(t.rates("").is_none());
-        let tok = Tokens { input: 1_000_000, output: 1_000_000, cache_write: 0, cache_read: 1_000_000 };
+        let tok = Tokens { input: 1_000_000, output: 1_000_000, cache_read: 1_000_000, ..Default::default() };
         assert!((t.cost("claude-sonnet-4-6", &tok).unwrap() - 18.3).abs() < 1e-9);
         assert!(t.cost("mystery", &tok).is_none());
+        // Cache writes by TTL: 5 minutes at 1.25x input, 1 hour at 2x (Haiku 4.5: $1.25, $2).
+        let w = |cache_write, cache_write_1h| Tokens { cache_write, cache_write_1h, ..Default::default() };
+        assert!((t.cost("claude-haiku-4-5", &w(1_000_000, 0)).unwrap() - 1.25).abs() < 1e-9);
+        assert!((t.cost("claude-haiku-4-5", &w(1_000_000, 1_000_000)).unwrap() - 2.0).abs() < 1e-9);
+        assert!((t.cost("claude-haiku-4-5", &w(2_000_000, 1_000_000)).unwrap() - 3.25).abs() < 1e-9);
     }
 }

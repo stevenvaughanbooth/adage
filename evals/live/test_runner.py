@@ -144,6 +144,37 @@ class DryRun(unittest.TestCase):
         m2 = runner.run_metrics(cfg, events[:4], {}, {"passed": False, "stale_generated": True}, wd, 1.0, "sid", [])
         self.assertEqual((m2["obligation_applies"], m2["obligation_met"]), (True, False))
 
+    def test_an_applied_e2_action_meets_the_obligation(self):
+        # Launch report, bug 8: the gen E2 check. The agent edited registry/wards.csv and never ran
+        # the generator; the approved E2 action (`make gen`) ran from the hook and applied, and the
+        # generated code was fresh. obligation_met read False because only the agent's own
+        # regeneration counted.
+        cfg = runner.load_config(HARBOR, {})
+        wd = "/w/harbor-dispatch"
+        t0 = 1_800_000_000.0
+        ev = lambda turn, tool, cat, cmd: {"t": turn * 2.0, "turn": turn, "tool": tool, "id": str(turn), "cat": cat, "cmd": cmd}
+        events = [ev(1, "Read", "explore", f"{wd}/registry/wards.csv"), ev(2, "Edit", "edit", f"{wd}/registry/wards.csv"),
+                  ev(3, "Bash", "verify", "npm run check")]
+        home = Path(self.tmp.name) / "adage-home"
+        (home / "sessions").mkdir(parents=True)
+        rec = {"ts": int((t0 + 4.5) * 1000), "event": "PostToolUse", "kind": "batch", "arm": "treated",
+               "decision": {"directives": [], "judgements": [{"kind": "obligation_met", "route": "finish-line-1"}]},
+               "exec": [{"route": "gen/finish-line-1", "level": "e2", "outcome": "applied", "exit": 0}]}
+        body = json.dumps(rec).encode()
+        frame = runner.SPOOL_MAGIC + len(body).to_bytes(4, "little") + bytes(4) + body
+        (home / "sessions" / "sid.spool").write_bytes(frame)
+        spool = runner.spool_directives(home, "sid")
+        self.assertIn({"ts": rec["ts"], "event": "PostToolUse", "kind": "e2_applied", "route": "gen/finish-line-1"}, spool)
+        m = runner.run_metrics(cfg, events, {}, {"passed": True}, wd, 9.0, "sid", spool, t0)
+        self.assertEqual((m["obligation_applies"], m["obligation_met"]), (True, True))
+        # Applied before the last covered edit: that edit is still not regenerated.
+        late = events + [ev(4, "Edit", "edit", f"{wd}/registry/ports.csv")]
+        m = runner.run_metrics(cfg, late, {}, {"passed": True}, wd, 9.0, "sid", spool, t0)
+        self.assertEqual(m["obligation_met"], False)
+        # Stale generated code is never met, whoever regenerated.
+        m = runner.run_metrics(cfg, events, {}, {"passed": True, "stale_generated": True}, wd, 9.0, "sid", spool, t0)
+        self.assertEqual(m["obligation_met"], False)
+
     def test_regeneration_inside_the_editing_command_counts(self):
         # Found in the Sonnet 5 run: `sed … registry/ports.csv && npm run codegen && npm run check` is one
         # event classified "edit"; the regeneration after the edit must still count.

@@ -169,6 +169,16 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
         let _ = std::fs::remove_file(&m);
         println!("Execution: off. Hooks call adage again (approvals are kept; revoke them with review revoke).");
     }
+    // Rewrites to the project's environment (docs/execution.md): on by default, off with
+    // `delegate off`, back on with `delegate on`.
+    let off = adage_hook::rewrite_off(paths);
+    if on {
+        let _ = std::fs::remove_file(&off);
+    } else {
+        std::fs::create_dir_all(off.parent().context("no directory")?)?;
+        std::fs::write(&off, "")?;
+        println!("Rewrites to the project's environment: off (Python test runs keep the interpreter the agent chose).");
+    }
     if changed == 0 {
         println!("No hook registration written by `adage install` needed changing.");
     }

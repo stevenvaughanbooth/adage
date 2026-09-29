@@ -11,13 +11,16 @@
 //!   Environment-effect instincts (`pnpm install`) are nascent until a person approves one: that
 //!   approves the pack's environment steps for the repository (`Reviews::packs`).
 //! - **Auto-extinguish.** The runtime judges every instinct directive ([`adage_runtime::Judgement`]).
-//!   From the treated arm's spools, an instinct route with at least [`EXTINGUISH_MISFIRED`]
-//!   `misfired` judgements (the agent ran the directed command and it failed), or whose value is
-//!   positive with probability under [`EXTINGUISH_P_POSITIVE`] over at least
-//!   [`EXTINGUISH_MIN_JUDGEMENTS`] judgements ([`crate::value::judged`]: an ignore only lowers
-//!   `p_follow`, a misfire is a direct cost), is extinguished, recorded as a person's `extinguish`
-//!   is (so a re-bind does not bring it back), and the change appears in `learn.log`. Losing
-//!   authority is always automatic.
+//!   From the spools, an instinct route is extinguished ([`should_extinguish`]) when it
+//!   misfired at least [`EXTINGUISH_MISFIRED`] times (the agent ran the directed command and it
+//!   failed for want of its environment or target), no fewer than its working follows; or when,
+//!   over at least [`EXTINGUISH_MIN_JUDGEMENTS`] judgements, a control-arm comparison shows
+//!   delivering it changes nothing (its ignore rate's Wilson lower bound reaches
+//!   [`EXTINGUISH_IGNORE_LOWER_BOUND`] and it is followed no more often than when withheld); or
+//!   when it misfired and its value ([`crate::value::judged`]) is positive with probability under
+//!   [`EXTINGUISH_P_POSITIVE`]. Never on ignores alone: an ignore may be a follow the matcher
+//!   missed. It is recorded as a person's `extinguish` is (so a re-bind does not bring it back),
+//!   and the change appears in `learn.log`. Losing authority is always automatic.
 //! - **Capped.** Prime, forming at most (never firm), never an obligation or a Stop request
 //!   (the runtime's part).
 
@@ -34,7 +37,11 @@ use std::path::{Path, PathBuf};
 pub const TRACK: &str = "instincts";
 /// misfired judgements that extinguish an instinct route.
 pub const EXTINGUISH_MISFIRED: u32 = 3;
-/// A route whose value is positive with less than this probability is extinguished...
+/// With a control-arm comparison, an ignore rate whose Wilson lower bound reaches this
+/// extinguishes an instinct route that delivering changes nothing for.
+pub const EXTINGUISH_IGNORE_LOWER_BOUND: f64 = 0.5;
+/// A route that misfired and whose value is positive with less than this probability is
+/// extinguished...
 pub const EXTINGUISH_P_POSITIVE: f64 = 0.1;
 /// ...over at least this many judgements.
 pub const EXTINGUISH_MIN_JUDGEMENTS: u32 = 5;
@@ -92,24 +99,79 @@ pub struct InstinctReport {
     /// Why nothing was bound, if nothing was.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub not_bound: Option<String>,
+    /// The checkout the instincts were bound against (recorded with [`record_binding`] once the
+    /// track is written).
+    #[serde(skip)]
+    pub root: Option<PathBuf>,
 }
 
-/// Runtime judgements of one route, from the treated arm's spools.
+/// Where the checkout a repository's instincts were bound against is recorded, beside its tracks
+/// (a hidden file: never a track).
+pub fn binding_path(tracks_root: &Path, repo: &str) -> PathBuf {
+    tracks_root.join(slug(repo)).join(".instincts-binding.json")
+}
+
+/// What a binding was made from: the checkout and its declared files' fingerprint
+/// (`adage_instincts::fingerprint`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct Binding {
+    pub root: String,
+    pub declared: String,
+    /// The checkout's project environment, verified from its files at bind time
+    /// (`adage_instincts::verify_env`): what a `PreToolUse` interpreter rewrite may use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env: Option<adage_instincts::VerifiedEnv>,
+}
+
+/// Record that the repository's instincts are bound against `root` as its files are now.
+pub fn record_binding(tracks_root: &Path, repo: &str, root: &Path) {
+    let b = Binding {
+        root: root.to_string_lossy().into(),
+        declared: adage_instincts::fingerprint(root),
+        env: adage_instincts::verify_env(root),
+    };
+    let p = binding_path(tracks_root, repo);
+    if let (Some(dir), Ok(body)) = (p.parent(), serde_json::to_vec(&b)) {
+        let _ = std::fs::create_dir_all(dir);
+        let _ = adage_store::config::write_atomic(&p, &body);
+    }
+}
+
+/// The recorded binding of a repository's instincts, if any.
+pub fn binding(tracks_root: &Path, repo: &str) -> Option<Binding> {
+    std::fs::read(binding_path(tracks_root, repo)).ok().and_then(|b| serde_json::from_slice(&b).ok())
+}
+
+/// Whether the repository's instincts should be bound again against the live checkout `root` (the
+/// session's): never bound, bound against another checkout (paths named in old traces, another
+/// worktree), or its declared files changed since (a `.venv` made, a Makefile edited).
+pub fn stale_binding(tracks_root: &Path, repo: &str, root: &Path) -> bool {
+    binding(tracks_root, repo)
+        .is_none_or(|b| b.root != root.to_string_lossy() || b.declared != adage_instincts::fingerprint(root))
+}
+
+/// Runtime judgements of one route: the treated arm's (the directive was delivered), and the
+/// control arm's (withheld: a "followed" there is the agent taking the step unaided).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Judged {
     pub followed: u32,
     pub misfired: u32,
     pub ignored: u32,
+    /// Control sessions: the agent took the step without being told.
+    pub control_followed: u32,
+    /// Control sessions: judged in all (followed, misfired or ignored).
+    pub control_total: u32,
 }
 
 impl Judged {
+    /// Treated judgements.
     pub fn total(&self) -> u32 {
         self.followed + self.misfired + self.ignored
     }
 }
 
-/// Judgements per (repository, route) from the spools in `dir` (the treated arm only: in the
-/// control nothing was delivered), as `adage review` and `adage graph` count them.
+/// Judgements per (repository, route) from the spools in `dir`, by arm, as `adage review` and
+/// `adage graph` count them.
 pub fn judgements(dir: &Path) -> BTreeMap<(String, String), Judged> {
     let mut out: BTreeMap<(String, String), Judged> = BTreeMap::new();
     let Ok(rd) = std::fs::read_dir(dir) else { return out };
@@ -118,15 +180,25 @@ pub fn judgements(dir: &Path) -> BTreeMap<(String, String), Judged> {
     spools.sort();
     for p in spools {
         let recs: Vec<Value> = adage_store::spool::read_all(&p).unwrap_or_default();
-        for r in recs.iter().filter(|r| r["arm"] == "treated") {
+        for r in recs.iter() {
+            let control = match r["arm"].as_str() {
+                Some("treated") => false,
+                Some("control") => true,
+                _ => continue,
+            };
             let Some(repo) = r["repo"].as_str() else { continue };
             for j in r["decision"]["judgements"].as_array().into_iter().flatten() {
                 let Some(route) = j["route"].as_str() else { continue };
                 let e = out.entry((repo.to_string(), route.to_string())).or_default();
-                match j["kind"].as_str() {
-                    Some("followed") => e.followed += 1,
-                    Some("misfired") => e.misfired += 1,
-                    Some("ignored") => e.ignored += 1,
+                match (control, j["kind"].as_str()) {
+                    (false, Some("followed")) => e.followed += 1,
+                    (false, Some("misfired")) => e.misfired += 1,
+                    (false, Some("ignored")) => e.ignored += 1,
+                    (true, Some("followed")) => {
+                        e.control_followed += 1;
+                        e.control_total += 1;
+                    }
+                    (true, Some("misfired" | "ignored")) => e.control_total += 1,
                     _ => {}
                 }
             }
@@ -135,12 +207,41 @@ pub fn judgements(dir: &Path) -> BTreeMap<(String, String), Judged> {
     out
 }
 
-/// Why an instinct route with these judgements is extinguished, if it is.
+/// Why an instinct route with these judgements is extinguished, if it is. Conservative: losing a
+/// route that works costs more than keeping one that does not.
+///
+/// - **Misfires**: at least [`EXTINGUISH_MISFIRED`] (agents followed it and the directed command
+///   failed without running), and at least as many as the follows that worked.
+/// - **Never on ignores alone**: an "ignored" may be a follow the matcher did not recognise
+///   (RepoBench v2 judged 41 of 41 real follows "ignored" that way). An ignore rate whose Wilson
+///   lower bound reaches [`EXTINGUISH_IGNORE_LOWER_BOUND`] over at least
+///   [`EXTINGUISH_MIN_JUDGEMENTS`] extinguishes only with a control-arm comparison (at least as
+///   many control judgements) that shows the matcher sees follows of this route at all (a follow
+///   in either arm) and that delivering it made agents take the step no more often than
+///   withholding it did.
 pub fn should_extinguish(j: &Judged) -> Option<String> {
-    if j.misfired >= EXTINGUISH_MISFIRED {
+    if j.misfired >= EXTINGUISH_MISFIRED && j.misfired >= j.followed {
         return Some(format!("misfired {} times", j.misfired));
     }
-    if j.total() < EXTINGUISH_MIN_JUDGEMENTS {
+    let n = j.total();
+    if n < EXTINGUISH_MIN_JUDGEMENTS {
+        return None;
+    }
+    let ignored = adage_tracks::wilson_lower(j.ignored, n) >= EXTINGUISH_IGNORE_LOWER_BOUND;
+    let compared = j.control_total >= EXTINGUISH_MIN_JUDGEMENTS;
+    let seen = j.followed + j.misfired + j.control_followed > 0;
+    // The treated follow rate is at most the control's: f_t / n_t <= f_c / n_c.
+    let no_better =
+        u64::from(j.followed + j.misfired) * u64::from(j.control_total) <= u64::from(j.control_followed) * u64::from(n);
+    if ignored && compared && seen && no_better {
+        return Some(format!(
+            "ignored {} of {n} times; unaided {} of {}",
+            j.ignored, j.control_followed, j.control_total
+        ));
+    }
+    // The value model reads ignores as lowering p_follow: with no misfire, many ignores may be a
+    // matching gap, not a worthless route, so it decides only when the route has misfired.
+    if j.misfired == 0 {
         return None;
     }
     let a = crate::value::judged(j.followed, j.ignored, j.misfired);
@@ -224,6 +325,7 @@ pub fn plan_repo(
             rep.not_bound = Some("the repository's directory is not known here, so its files cannot be read".into());
             return Ok((rep, None));
         };
+        rep.root = Some(root.to_path_buf());
         // Auto-extinguish what agents followed and saw fail.
         for p in prev.iter().flat_map(|t| &t.routes).filter(|r| r.state.is_live()) {
             let j = judged.get(&(repo.to_string(), p.id.clone()));
@@ -390,6 +492,9 @@ pub fn learn_only(
         p.write()?;
         rr.tracks.push(tr);
     }
+    if let Some(r) = &ir.root {
+        record_binding(tracks_root, repo, r);
+    }
     rr.instincts = Some(ir);
     report.repos.insert(repo.to_string(), rr);
     let all = io::read_all(tracks_root)?;
@@ -441,15 +546,56 @@ mod tests {
         assert!(rep.not_bound.is_some() && plan.is_none());
     }
 
+    /// Launch report, bug 7: bound against another checkout (the one old traces name), or before
+    /// the checkout's declared files changed, the binding is stale.
+    #[test]
+    fn a_binding_is_stale_for_another_checkout_or_changed_files() {
+        let d = tempfile::tempdir().unwrap();
+        let tracks = d.path().join("tracks");
+        let (live, old) = (d.path().join("live"), d.path().join("old"));
+        for r in [&live, &old] {
+            std::fs::create_dir_all(r).unwrap();
+            std::fs::write(r.join("pyproject.toml"), "[project]\nname = 'click'\n").unwrap();
+        }
+        assert!(stale_binding(&tracks, "click", &live), "never bound");
+        record_binding(&tracks, "click", &old);
+        assert!(stale_binding(&tracks, "click", &live), "bound against another checkout");
+        record_binding(&tracks, "click", &live);
+        assert!(!stale_binding(&tracks, "click", &live));
+        std::fs::create_dir_all(live.join(".venv/bin")).unwrap();
+        std::fs::write(live.join(".venv/pyvenv.cfg"), "home = /usr/bin\n").unwrap();
+        assert!(stale_binding(&tracks, "click", &live), "a .venv made since");
+        // The record is a hidden file beside the tracks, never a track.
+        assert!(io::read_all(&tracks).unwrap().is_empty());
+    }
+
     #[test]
     fn extinction_rules() {
-        assert!(should_extinguish(&Judged { misfired: 2, ..Default::default() }).is_none());
-        assert!(should_extinguish(&Judged { misfired: 3, ..Default::default() }).is_some());
-        assert!(should_extinguish(&Judged { ignored: 4, ..Default::default() }).is_none(), "too few");
-        // An ignore only lowers p_follow: five ignores are no evidence the route is worthless (a
-        // broken follow judge reads every follow as one), two hundred are.
-        assert!(should_extinguish(&Judged { ignored: 5, followed: 0, ..Default::default() }).is_none());
-        assert!(should_extinguish(&Judged { ignored: 200, followed: 0, ..Default::default() }).is_some());
-        assert!(should_extinguish(&Judged { ignored: 5, followed: 5, ..Default::default() }).is_none());
+        let j = |followed, misfired, ignored, control_followed, control_total| Judged {
+            followed,
+            misfired,
+            ignored,
+            control_followed,
+            control_total,
+        };
+        assert!(should_extinguish(&j(0, 2, 0, 0, 0)).is_none());
+        assert!(should_extinguish(&j(0, 3, 0, 0, 0)).is_some());
+        assert!(should_extinguish(&j(10, 3, 0, 0, 0)).is_none(), "most follows worked");
+        // The launch report's reproduction, "ignored 10 of 10 times", came from follows the
+        // matcher missed: ignores alone never extinguish.
+        assert!(should_extinguish(&j(0, 0, 10, 0, 0)).is_none());
+        assert!(should_extinguish(&j(0, 0, 40, 0, 0)).is_none());
+        // Nor with a control arm where nothing is ever seen followed (a matching gap looks so).
+        assert!(should_extinguish(&j(0, 0, 10, 0, 10)).is_none());
+        // With a control arm: agents took the step as often unaided, and ignored it when told.
+        assert!(should_extinguish(&j(1, 0, 9, 2, 10)).is_some());
+        assert!(should_extinguish(&j(1, 0, 9, 2, 4)).is_none(), "too few control judgements");
+        // Delivering it made a difference: kept.
+        assert!(should_extinguish(&j(4, 0, 6, 1, 10)).is_none());
+        assert!(should_extinguish(&j(5, 0, 5, 0, 0)).is_none());
+        // The value model decides only for a route that misfired: two hundred ignores alone are
+        // no evidence against it (a broken follow judge reads every follow as one).
+        assert!(should_extinguish(&j(0, 0, 200, 0, 0)).is_none());
+        assert!(should_extinguish(&j(0, 1, 200, 0, 0)).is_some());
     }
 }

@@ -206,6 +206,9 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
         return Ok(None);
     }
     let paths = Paths::from_env();
+    if event == "PreToolUse" {
+        return pretool(adapter, &p, &session, &cwd, &root, &paths);
+    }
     // A damaged index (a truncated write, a disk error) is served as empty and rebuilt: the
     // session start asks the learner to recompile it (docs/zero-config.md §5).
     let loaded = Index::try_load(&paths.index());
@@ -231,6 +234,125 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
     out
 }
 
+/// The marker `adage delegate off` writes: no `PreToolUse` rewrite on this machine
+/// (docs/execution.md, "Rewrites to the project's environment").
+pub fn rewrite_off(paths: &Paths) -> PathBuf {
+    paths.root.join("exec").join("rewrite-off")
+}
+
+/// `PreToolUse` (Claude Code only; other harnesses keep the post-hoc directive): a Python test run
+/// or scratch repro under the system Python runs with the project's verified environment instead
+/// (only the interpreter prefix changes), and a `pip install` into the system Python is refused
+/// ([`adage_runtime::pretool`]). On by default for a repository whose U11 instinct is in service
+/// and whose environment was verified when it was bound; off with `adage delegate off`; never in
+/// the control arm.
+fn pretool(
+    adapter: &dyn harness::Adapter,
+    p: &Value,
+    session: &str,
+    cwd: &Path,
+    root: &Path,
+    paths: &Paths,
+) -> Result<Option<String>, Failure> {
+    use adage_runtime::pretool::{self, Pre};
+    if adapter.name() != "claude" || p.get("tool_name").and_then(Value::as_str) != Some("Bash") {
+        return Ok(None);
+    }
+    let input = p.get("tool_input").cloned().unwrap_or(Value::Null);
+    let Some(command) = input.get("command").and_then(Value::as_str) else { return Ok(None) };
+    // The cheap no-match path: no Python here at all.
+    if !(command.contains("python") || command.contains("pytest") || command.contains("pip")) {
+        return Ok(None);
+    }
+    if rewrite_off(paths).exists() {
+        return Ok(None);
+    }
+    let key = repo::repo_key_cached(root, &paths.repo_keys());
+    let Some(binding) = adage_learn::instincts::binding(&paths.tracks(), &key) else { return Ok(None) };
+    let Some(mut env) = binding.env else { return Ok(None) };
+    if Path::new(&binding.root) != root {
+        // Another checkout of the repository (a per-task worktree, a fresh clone) until the
+        // rebind this session start asked for lands: its own environment, by the presence of its
+        // interpreter, `pyvenv.cfg` and pytest (a few `stat`s). Only test runs: a repro needs the
+        // bind-time check that the project imports from this checkout.
+        let dir = env.interpreter.strip_suffix("/bin/python").unwrap_or(".venv").to_string();
+        let pytest = std::fs::read_dir(root.join(&dir).join("lib"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|e| e.path().join("site-packages/pytest/__init__.py").is_file());
+        if !(root.join(&env.interpreter).is_file() && root.join(&dir).join("pyvenv.cfg").is_file() && pytest) {
+            return Ok(None);
+        }
+        env.pytest = true;
+        env.modules.clear();
+    }
+    // U11 in service here (not extinguished, rejected or turned off).
+    let index = Index::try_load(&paths.index()).unwrap_or_default();
+    let u11 = index.for_repo(&key).any(|r| {
+        matches!(&r.route.evidence.origin, Some(adage_tracks::Origin::Instinct { instinct, .. }) if instinct == "U11")
+    });
+    if !u11 {
+        return Ok(None);
+    }
+    let abs = root.join(&env.interpreter);
+    let e = pretool::Env {
+        interpreter: pretool::shell_word(&abs.to_string_lossy()),
+        shown: env.interpreter.clone(),
+        pytest: env.pytest,
+        modules: env.modules.clone(),
+    };
+    let read = |script: &str| {
+        let p = cwd.join(script);
+        let small = std::fs::metadata(&p).is_ok_and(|m| m.is_file() && m.len() <= 256 << 10);
+        small.then(|| std::fs::read_to_string(&p).ok()).flatten()
+    };
+    let Some(pre) = pretool::plan(command, &e, read) else { return Ok(None) };
+    // The arm: assigned now if the session has none yet; the control arm is left as it is.
+    let arm_env = std::env::var("ADAGE_ARM").ok();
+    let share: f64 = adage_store::config::load(paths).config.runtime_control;
+    let (arm, propensity) = state::update::<SessionState, _>(&paths.state(session), |st| {
+        if st.arm.is_none() {
+            let (arm, pr) = assign(session, share, arm_env.as_deref());
+            st.arm = Some(arm);
+            st.propensity = Some(pr);
+            st.repo = Some(key.clone());
+        }
+        (st.arm, st.propensity)
+    })
+    .map_err(|e| Failure::io("state", "assigning the session's arm", &e))?;
+    let control = arm == Some(Arm::Control);
+    let (what, out) = match &pre {
+        Pre::Rewrite { command: new, kind } => {
+            let mut updated = input.clone();
+            updated["command"] = Value::String(new.clone());
+            let notice = format!(
+                "adage: ran this {} with {} (the project's environment).",
+                if *kind == "test" { "test run" } else { "Python run" },
+                env.interpreter
+            );
+            (
+                json!({ "rewrite": kind, "interpreter": env.interpreter }),
+                Output::Rewrite { input: updated, context: pretool::rewrite_note(&e, kind), notice },
+            )
+        }
+        Pre::Deny { reason } => {
+            (json!({ "deny": "pip-install", "interpreter": env.interpreter }), Output::Deny(reason.clone()))
+        }
+    };
+    let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let mut rec = json!({ "ts": ts, "event": "PreToolUse", "kind": "pretool", "arm": arm, "propensity": propensity, "repo": key, "pretool": what });
+    if control {
+        rec["withheld"] = json!(true);
+    }
+    spool::append(&paths.spool(session), &rec)
+        .map_err(|e| Failure::io("spool", "appending to the session spool", &e))?;
+    if control {
+        return Ok(None);
+    }
+    Ok(adapter.render("PreToolUse", out))
+}
+
 /// What a session start is about.
 struct Start<'a> {
     adapter: &'a dyn harness::Adapter,
@@ -246,7 +368,8 @@ struct Start<'a> {
 ///
 /// 1. In a repository with reflexes, the session is assigned its arm now and one `session_start`
 ///    record is spooled (`arm`, `propensity`, `repo`, `generation`): every exposed session is
-///    then counted by the savings estimate, including those where nothing ever matched.
+///    then counted by the savings estimate, including those where nothing ever matched, and the
+///    bootstrap session below, whose reflexes arrive while it runs.
 /// 2. **Bootstrap.** With `learn.auto` on, a repository with no reflexes whose learner has not
 ///    run since the index last changed, or a damaged index, starts a learner at once
 ///    (`condition --auto --bootstrap`): instincts and the index within about 100 ms, then the
@@ -284,7 +407,24 @@ fn session_start(
         }
     };
     let bootstrap = cfg.learn_auto && (damaged || (routed.is_none() && stale()));
-    if bootstrap {
+    // The bootstrap session is a session in this repository too: its reflexes arrive while it
+    // runs, so it is assigned its arm now and counted by the savings estimate like any other
+    // (without this record it never was, and the card's session count lagged one behind).
+    if bootstrap && routed.is_none() {
+        if let Err(f) = record_start(s, &key) {
+            failopen::record(&s.paths.root, s.harness, s.event, &f);
+        }
+    }
+    // Instincts bind against the live checkout, this session's (docs/instincts.md): bound against
+    // another one (a per-task worktree, a clone the traces name), or before its declared files
+    // changed (a `.venv` made since), they are bound again, by the same fast first phase as a
+    // bootstrap. A few dozen `stat`s decide it (`adage_instincts::fingerprint`).
+    let rebind = !bootstrap
+        && !damaged
+        && cfg.learn_auto
+        && cfg.instincts_enabled
+        && adage_learn::instincts::stale_binding(&s.paths.tracks(), &key, s.root);
+    if bootstrap || rebind {
         let asked = learner().and_then(|l| autolearn::on_turn_end(s.paths, s.root, s.adapter.name(), None, &l, true));
         if let Err(f) = asked {
             failopen::record(&s.paths.root, s.harness, s.event, &f);
@@ -393,6 +533,8 @@ fn respond(
         }
         _ => Vec::new(),
     };
+    // The learned follow judge's weights for this repository (fitted at learn time), if any.
+    let weights = adage_learn::read_follow_weights(&paths.tracks(), &repo_key);
     // A state that can no longer be read is rebuilt from the session's spool, if it is small
     // enough to replay quickly (it is read under the state lock).
     let rebuild = || {
@@ -417,7 +559,9 @@ fn respond(
             });
             let before: Vec<(String, bool)> =
                 st.obligations.iter().map(|o| (o.route.clone(), o.stop_requested)).collect();
-            let d = adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev));
+            let d = adage_runtime::with_follow_weights(weights.clone(), || {
+                adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev))
+            });
             let stims = stimuli(&before, &st.obligations, matches!(ev, Event::Batch { .. }));
             (d, st.arm, propensity, stims)
         })

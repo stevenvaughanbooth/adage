@@ -230,6 +230,49 @@ sessions, default thresholds, **$0.84** ([data/train-report.json](data/train-rep
 editable click into the container's system Python mid-run. The affected RepoBench runs were discarded
 and rerun, and the E2E driver now has `--confine`. `evals/repobench/rerun.py` is new.)
 
+## After the fixes (2026-09-29, later)
+
+Bugs 1–12 are fixed on this branch (each with a regression test), and U11 is now also delivered
+before the call (`PreToolUse`: the interpreter prefix of a system-Python test run swapped for the
+verified `.venv/bin/python`, a system `pip install` refused; docs/execution.md). Checked offline
+on the transcripts above, and in one micro slice.
+
+**Offline, on the RepoBench v2 transcripts** (`/tmp/adage-rb2`, replayed through the new runtime):
+
+| Check | Before | After |
+| --- | --- | --- |
+| Delivered U11 directives judged followed (Haiku) | 0 of 41 | **41 of 41** (and the Sonnet 5 one) |
+| Adage-arm sessions whose dead end went only through a pipe that now fire U11 | 0 | 22 (Haiku), 5 (Sonnet 5) |
+| `condition --instincts-only` over click's real v2 spools | extinguishes dead-end-0cdcfb | keeps it |
+| Ledger cost vs Claude Code's `total_cost_usd` | about −10% | equal (1-hour cache writes priced at 2x input) |
+
+`adage eval replay-savings --arm control` (calls per session, 95% CI; no harmful directive
+anywhere):
+
+| Repository | U11 post-hoc | U11 pre-emptive | learned + instincts, post-hoc | learned + instincts, pre-emptive |
+| --- | --- | --- | --- | --- |
+| click (Haiku) | +0.69 [0.40, 0.98] | **+1.65** [1.36, 1.98] | +1.48 [1.09, 1.91] | +1.81 [1.49, 2.15] |
+| attrs (Haiku) | +2.47 [1.44, 3.46] | **+3.31** [2.11, 4.43] | +3.61 [2.04, 5.19] | +3.74 [2.21, 5.24] |
+| marshmallow (Haiku) | +2.21 [1.16, 3.20] | **+2.99** [1.71, 4.15] | +2.18 [1.14, 3.16] | +2.96 [1.69, 4.11] |
+| click (Sonnet 5) | +0.61 [0.24, 1.11] | **+1.36** [0.74, 1.99] | +1.72 [0.73, 2.85] | +1.72 [0.73, 2.85] |
+
+**Micro slice, live** (click, the six held-out tasks of the learner's slice, control vs adage,
+Haiku 4.5, 1 repeat, confined, host auth; $3.60 of held-out sessions;
+`evals/repobench/configs/v2/click-a3slice.json`, root `/tmp/adage-a3slice/click-a3slice`):
+
+| | adage | control |
+| --- | ---: | ---: |
+| Sessions that hit `No module named pytest`/`'click'` | **0 of 6** | 5 of 6 (6 failures) |
+| System `pip install`s run by the agent | **0** | 5 |
+| Commands rewritten to `.venv/bin/python` (PreToolUse) | 28, in 5 sessions | (14 would have been, withheld) |
+| Pass rate, median turns, mean cost | 0.50, 37.5, $0.294 | 0.50, 40, $0.306 |
+
+Six tasks cannot show a difference in outcome (half the sessions in each arm hit the 40-turn cap);
+the slice confirms the mechanism: the dead end no longer happens where the rewrite is on, the
+control arm's would-have follow judgements are recorded (1 followed, 4 ignored: those agents
+installed pytest into the system Python instead), and `condition --instincts-only` over the slice's
+spools extinguishes nothing.
+
 ## Known limitations
 
 1. **Learning from real traces yields nothing on ordinary repositories.** 0 reflexes in 4 of 4

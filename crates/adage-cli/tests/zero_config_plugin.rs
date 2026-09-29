@@ -222,6 +222,14 @@ fn zero_config_plugin() {
     assert!(took2 < Duration::from_millis(200), "a session start took {took2:?}");
     let spawned = w.spawned();
     assert!(spawned[0].contains(&"--bootstrap".to_string()), "{spawned:?}");
+    // Launch report, bug 11: the bootstrap session is assigned its arm and spools its
+    // `session_start` at once, so the savings estimate counts it (it never did: the repository had
+    // no reflexes yet when it started).
+    let start: Vec<Value> = adage_store::spool::read_all(&w.p("data/sessions/s-first.spool")).unwrap_or_default();
+    assert!(
+        start.iter().any(|r| r["kind"] == "session_start" && r["arm"].is_string() && r["repo"].is_string()),
+        "{start:?}"
+    );
 
     // The learner, as the hook started it; then the first prompt, through the plugin's binary.
     w.run_learner();
@@ -360,6 +368,125 @@ fn no_history_instincts() {
     let card = w.card(&repo);
     assert!(card.contains("learning: 0 of ~5 sessions needed"), "{card}");
     assert!(card.contains("instincts active meanwhile"), "{card}");
+}
+
+/// Launch report, bug 7: instincts bound against a checkout without its `.venv` (RepoBench's
+/// training checkouts; a per-task worktree) directed nothing useful there. They bind against the
+/// session's own checkout and again when its declared files change: here a `.venv` made after the
+/// first binding brings U11's `.venv/bin/python -m pytest` at the next session start.
+#[cfg(unix)]
+#[test]
+fn instincts_rebind_when_the_checkout_changes() {
+    let w = World::new();
+    let repo = w.p("work/click");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    std::fs::create_dir_all(repo.join("src/click")).unwrap();
+    std::fs::write(repo.join("src/click/__init__.py"), "").unwrap();
+    std::fs::write(repo.join("pyproject.toml"), "[project]\nname = 'click'\n[tool.pytest.ini_options]\n").unwrap();
+    let pytest_failed = || {
+        let out = w.hook(
+            "PostToolUseFailure",
+            &repo,
+            "s-fail",
+            json!({ "tool_name": "Bash", "tool_input": { "command": "python -m pytest tests -x" }, "error": "/usr/bin/python: No module named pytest" }),
+        );
+        context(&out)
+    };
+    w.start(&repo, "s1");
+    w.run_learner();
+    assert!(!pytest_failed().contains(".venv/bin/python"), "no .venv yet");
+    let before = w.spawned().len();
+    // The same checkout again, unchanged: nothing to rebind.
+    w.start(&repo, "s2");
+    assert_eq!(w.spawned().len(), before, "{:?}", w.spawned());
+    // A .venv appears (`uv venv`, `python -m venv .venv`): the next session start rebinds.
+    std::fs::create_dir_all(repo.join(".venv/bin")).unwrap();
+    std::fs::write(repo.join(".venv/pyvenv.cfg"), "home = /usr/bin\n").unwrap();
+    w.start(&repo, "s3");
+    let spawned = w.spawned();
+    assert_eq!(spawned.len(), before + 1, "{spawned:?}");
+    assert!(spawned.last().unwrap().contains(&"--bootstrap".to_string()), "{spawned:?}");
+    w.run_learner();
+    assert!(pytest_failed().contains(".venv/bin/python -m pytest"), "U11 bound against the live checkout");
+    w.start(&repo, "s4");
+    assert_eq!(w.spawned().len(), before + 1, "bound as the files are now: no second rebind");
+}
+
+/// PreToolUse delivery of U11: with the project's environment verified at bind time, a test run
+/// under the system Python runs with `.venv/bin/python` instead (only the interpreter prefix
+/// changes, through Claude Code's `updatedInput`), a `pip install` into the system Python is
+/// refused, and the card says how many commands were rewritten. Golden hook output.
+#[cfg(unix)]
+#[test]
+fn pretool_rewrites_to_the_verified_environment() {
+    let w = World::new();
+    let repo = w.p("work/click");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    std::fs::create_dir_all(repo.join("src/click")).unwrap();
+    std::fs::write(repo.join("src/click/__init__.py"), "").unwrap();
+    std::fs::write(repo.join("pyproject.toml"), "[project]\nname = 'click'\n[tool.pytest.ini_options]\n").unwrap();
+    // A uv-made environment: its interpreter, pytest, and click installed editable from `src`.
+    let site = repo.join(".venv/lib/python3.12/site-packages");
+    std::fs::create_dir_all(site.join("pytest")).unwrap();
+    std::fs::write(site.join("pytest/__init__.py"), "").unwrap();
+    std::fs::write(site.join("click.pth"), format!("{}\n", repo.join("src").display())).unwrap();
+    std::fs::create_dir_all(repo.join(".venv/bin")).unwrap();
+    std::fs::write(repo.join(".venv/bin/python"), "").unwrap();
+    std::fs::write(repo.join(".venv/pyvenv.cfg"), "home = /usr/bin\n").unwrap();
+    w.start(&repo, "s1");
+    w.run_learner();
+    let pre = |cmd: &str| {
+        w.hook(
+            "PreToolUse",
+            &repo,
+            "s1",
+            json!({ "tool_name": "Bash", "tool_input": { "command": cmd, "description": "Run the tests" } }),
+        )
+    };
+    // RepoBench v2, click, a control session's dead end, verbatim.
+    let out = pre("python -m pytest tests/test_formatting.py -xvs 2>&1 | head -50");
+    let py = repo.join(".venv/bin/python");
+    let want = json!({
+        "systemMessage": "adage: ran this test run with .venv/bin/python (the project's environment).",
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "updatedInput": {
+                "command": format!("{} -m pytest tests/test_formatting.py -xvs 2>&1 | head -50", py.display()),
+                "description": "Run the tests"
+            },
+            "additionalContext": "Adage ran this test run with the project's environment (.venv/bin/python): the system Python lacks the project and its test dependencies. Nothing else in the command changed."
+        }
+    });
+    assert_eq!(serde_json::from_str::<Value>(out.trim()).unwrap(), want, "{out}");
+    // A pip install into the system Python is refused, naming the command that reaches the project.
+    let out = pre("pip install pytest");
+    let v: Value = serde_json::from_str(out.trim()).unwrap();
+    assert_eq!(v["hookSpecificOutput"]["permissionDecision"], "deny", "{out}");
+    assert!(v["hookSpecificOutput"]["permissionDecisionReason"]
+        .as_str()
+        .unwrap()
+        .contains(".venv/bin/python -m pip install"));
+    // The project's own interpreter, and anything else, pass untouched.
+    assert_eq!(pre(".venv/bin/python -m pytest tests").trim(), "");
+    assert_eq!(pre("ls -la").trim(), "");
+    // `adage delegate off` turns it off.
+    std::fs::create_dir_all(w.p("data/exec")).unwrap();
+    std::fs::write(w.p("data/exec/rewrite-off"), "").unwrap();
+    assert_eq!(pre("python -m pytest tests").trim(), "");
+    std::fs::remove_file(w.p("data/exec/rewrite-off")).unwrap();
+    // Recorded (never the command itself), and visible on the card.
+    let recs: Vec<Value> = adage_store::spool::read_all(&w.p("data/sessions/s1.spool")).unwrap();
+    let pre: Vec<&Value> = recs.iter().filter(|r| r["kind"] == "pretool").collect();
+    assert_eq!(pre.len(), 2, "{recs:?}");
+    assert_eq!(pre[0]["pretool"], json!({ "rewrite": "test", "interpreter": ".venv/bin/python" }));
+    assert!(!serde_json::to_string(&recs).unwrap().contains("test_formatting"), "no command text in the spool");
+    let key = pre[0]["repo"].as_str().unwrap();
+    let slug: String =
+        key.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect();
+    std::fs::create_dir_all(w.p("data/ledger")).unwrap();
+    std::fs::write(w.p("data/ledger").join(format!("{slug}.jsonl")), "").unwrap();
+    let card = w.card(&repo);
+    assert!(card.contains("rewrote 2 commands to use the project's environment"), "{card}");
 }
 
 /// Spools and a ledger for a synthetic population of `n_t` treated and `n_c` control sessions of
@@ -591,7 +718,15 @@ fn notice_throttle() {
     v["at"] = json!(v["at"].as_u64().unwrap() - 25 * 3_600_000);
     std::fs::write(&shown, v.to_string()).unwrap();
     let msg = system_message(&w.start(&repo, "s4")).expect("a new notice the next day");
-    assert!(msg.contains("for you: run adage review in a terminal"), "{msg}");
+    // Launch report, bug 12: no `adage` is on this PATH (a plugin-only user), so the notice names
+    // the binary that ran the learner, and that command works as written.
+    assert!(msg.contains("for you: run ") && msg.contains(" review in a terminal"), "{msg}");
+    let cmd = msg.split("run ").nth(1).and_then(|r| r.split(" review").next()).unwrap();
+    assert_ne!(cmd, "adage", "{msg}");
+    let home = w.p("home");
+    let exe = PathBuf::from(cmd.trim_matches('\'').replacen('~', &home.to_string_lossy(), 1));
+    let o = w.run(&exe, &["review"], "", &repo);
+    assert!(o.status.success() && text(&o).contains("pnpm"), "{cmd} review: {}", text(&o));
     assert_eq!(system_message(&w.start(&repo, "s5")), None, "once");
 
     // `ui.notices = off` silences them.

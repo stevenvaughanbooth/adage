@@ -446,7 +446,13 @@ pub fn check_advisory(r: &Route, cat: &Catalogue, table: &CommandTable) -> Resul
     match &r.trigger {
         Trigger::AfterEdit { paths } if safe_glob(paths) => {}
         Trigger::AfterCommand { command } if command.starts_with("exec ") && plain_command(&command[5..]) => {}
-        _ => return Err("advisory trigger is not an edit glob or a plain command key".into()),
+        // After a failure with this signature (never any failure: see `check_route`).
+        Trigger::AfterFailure { command, signature }
+            if command.starts_with("exec ")
+                && plain_command(&command[5..])
+                && !signature.trim().is_empty()
+                && adage_tracks::io::safe_text(signature) => {}
+        _ => return Err("advisory trigger is not an edit glob, a plain command key or a signed failure".into()),
     }
     if !r.evidence.provenance.starts_with("instinct:") {
         return Err("provenance must name the instinct pack".into());

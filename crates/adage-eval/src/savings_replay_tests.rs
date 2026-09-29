@@ -221,11 +221,11 @@ fn pre_emptive_also_saves_the_intercepted_call_and_sees_piped_dead_ends() {
     assert_eq!((r.scored[0].given.t, r.scored[0].given.pre), (1, true));
     assert_eq!(r.net, 3.0, "2 friction calls + the intercepted dead end");
 
-    // Piped: exit 0, so today's hooks never see the failure (launch bug 2); a PreToolUse
-    // interception would.
+    // Piped: exit 0. The runtime now reads a piped run's output for the dead end's signature
+    // (launch bug 2), so post-hoc delivery sees it too; PreToolUse still saves the intercepted call.
     let m = meta(&f, "s2", "t1", &dead_end_session(true), true);
     let post = session(&runtime(&ix, &f.root, &table), &m, Mode::PostHoc, SatRule::Goal).unwrap();
-    assert!(post.scored.is_empty() && post.net == 0.0);
+    assert_eq!((post.scored.len(), post.net), (1, 2.0), "{:#?}", post.scored);
     let pre = session(&runtime(&ix, &f.root, &table), &m, Mode::PreEmptive, SatRule::Goal).unwrap();
     assert_eq!(pre.net, 3.0);
 }
