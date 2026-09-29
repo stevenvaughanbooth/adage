@@ -1,0 +1,219 @@
+{
+ "home": "/tmp/gv-dry-lc7y2pdt/adage-home",
+ "adage": "/tmp/adage-go-target/release/adage",
+ "cards": [
+  {
+   "id": "card-11e594f481",
+   "bytes": 8937
+  }
+ ],
+ "held_out": [
+  {
+   "task": "ufo-util--without-auth",
+   "session": "71b695db-6455-497f-9aea-077687826b72",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--same-origin",
+   "session": "36b2f28f-14d7-4593-9104-c982a8771544",
+   "at_prompt": false,
+   "at_edit": "src/utils.ts",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--sort-query",
+   "session": "e1b0e057-ca1e-4ad8-9f93-167bb8e9c952",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--lowercase-host",
+   "session": "838bc9e5-39e1-40c3-99d0-3c7cd006a30a",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--get-extension",
+   "session": "b647c756-99d8-41d4-9780-983560c927f4",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--dot-segments",
+   "session": "ec295f34-b3e2-4eeb-abbf-0444e1814dd3",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--query-param",
+   "session": "86c985c3-79ab-4542-936b-007a46c4cdc4",
+   "at_prompt": false,
+   "at_edit": "src/utils.ts",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "ufo-util--is-http",
+   "session": "be1ecf85-1ca6-4157-bc23-c3adff2cda4d",
+   "at_prompt": false,
+   "at_edit": "src/utils.ts",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  }
+ ],
+ "negatives": [
+  {
+   "id": "ufo-0e060c7f",
+   "source": "repobench",
+   "session": "7b6029f0-0b45-4337-8ed9-b4c6d121bc63",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "ufo-f437a3b4",
+   "source": "repobench",
+   "session": "7f471dc2-207c-4291-84ba-422f0b4da46a",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "ufo-f4c0400d",
+   "source": "repobench",
+   "session": "e3d69e72-4b46-44a2-b24c-f80e7fdde138",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "ufo-62199a0c",
+   "source": "repobench",
+   "session": "9beebdbd-a339-4795-a03e-499848859f52",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "ufo-eb299454",
+   "source": "repobench",
+   "session": "0ca242be-7990-479d-8ab6-f4b551c4bc69",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-docs-parse-filename",
+   "source": "handwritten",
+   "session": "a371af73-a8f2-40cf-8914-6661c619cd04",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-bug-clean-double-slashes",
+   "source": "handwritten",
+   "session": "849686ea-2858-44e1-989f-a8068217b26b",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-option-with-query",
+   "source": "handwritten",
+   "session": "d05910f3-20c9-4dc3-bd95-093d9ea81244",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  }
+ ],
+ "hook_events": [
+  "PostToolBatch",
+  "PostToolUseFailure",
+  "PreToolUse",
+  "SessionEnd",
+  "SessionStart",
+  "Stop",
+  "UserPromptSubmit"
+ ],
+ "file_signal_probed_via": "PostToolBatch",
+ "summary": {
+  "cards": 1,
+  "held_out_delivered": [
+   8,
+   8
+  ],
+  "held_out_at_prompt": 5,
+  "held_out_at_edit": 3,
+  "delivered_tasks": [
+   "ufo-util--without-auth",
+   "ufo-util--same-origin",
+   "ufo-util--sort-query",
+   "ufo-util--lowercase-host",
+   "ufo-util--get-extension",
+   "ufo-util--dot-segments",
+   "ufo-util--query-param",
+   "ufo-util--is-http"
+  ],
+  "false_fires": [
+   0,
+   8
+  ],
+  "false_fire_rate_wilson90_upper": 0.2527,
+  "gate_R2_card_formed": true,
+  "gate_R3_detection": true,
+  "proceed_to_eval": true
+ }
+}
