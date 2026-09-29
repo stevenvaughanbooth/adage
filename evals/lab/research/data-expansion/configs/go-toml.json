@@ -1,0 +1,115 @@
+{
+ "name": "dx-go-toml",
+ "repo_key": "github.com/pelletier/go-toml",
+ "workdir": "repo",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/repobench/sandbox.py",
+  "go-toml",
+  "{task}",
+  "{dir}",
+  "--arm",
+  "{arm}",
+  "--context",
+  "{repo}/evals/repobench/context/go-toml.md"
+ ],
+ "score": [
+  "python3",
+  "{repo}/evals/repobench/score.py",
+  "go-toml",
+  "{task}",
+  "{dir}"
+ ],
+ "prompts": [
+  "Fix {id}."
+ ],
+ "task_prompts": {
+  "go-toml-3175efb3": "When marshaling a struct where a nested struct field is tagged `,commented` and also has a `comment` tag on the field itself, the output for the commented table section is malformed. Reproduction:\n```go\ntype TLS struct {\n    Cipher  string `toml:\"cipher\"`\n    Version string `toml:\"version\"`\n}\ntype Config struct {\n    Host string `toml:\"host\" comment:\"Host IP to connect to.\"`\n    Port int    `toml:\"port\" comment:\"Port of the remote server.\"`\n    Tls  TLS    `toml:\"TLS,commented\" comment:\"Encryption parameters (optional)\"`\n}\ntoml.Marshal(Config{Host:\"127.0.0.1\", Port:4242, Tls: TLS{\"AEAD-AES128-GCM-SHA256\",\"TLS 1.3\"}})\n```\nThe expected output should have the field's own comment, then a blank line, then the table's comment, then the commented-out `# [TLS]` header and its commented-out key/value lines \u2014 but the actual output doesn't match this. Please fix the marshaling of commented tables that also carry a comment.",
+  "go-toml-18a21487": "Unmarshaling TOML into a struct where an array-of-tables header appears nested under a field whose parent slice/element doesn't exist yet causes incorrect results or a panic. For example:\n\ndoc := `\n[[rules.allowlists]]\n  description = \"policies\"\n  regexes = ['''abc''']\n`\nvar cfg GitleaksConfig // GitleaksConfig has Rules []Rule, and Rule has Allowlists []AllowList\nerr := toml.Unmarshal([]byte(doc), &cfg)\n\nThis should populate cfg.Rules with one element whose Allowlists contains the parsed entry, but instead it fails to create the intermediate Rules element correctly. The same issue shows up when unmarshaling into a generic `[]interface{}` field. Please fix handling of array-of-tables headers that target an empty/non-existent slice element.",
+  "go-toml-692b9856": "The `omitzero` struct tag only checks reflect.Value.IsZero() and ignores a type's own custom IsZero() method, so fields of types that define their own zero-ness logic aren't omitted/included correctly when marshaling. For example:\n\ntype customZeroType struct { Value int }\nfunc (c customZeroType) IsZero() bool { return c.Value < 10 }\n\ntype doc struct { Custom customZeroType `toml:\",omitzero\"` }\ntoml.Marshal(doc{Custom: customZeroType{Value: 5}})\n\nSince Value=5 makes the custom IsZero() return true, the Custom field should be omitted from the output, but it currently isn't (similarly, a pointer-receiver IsZero() method should also be respected). Please make omitzero honor a type's custom IsZero() method when present, similar to how encoding/json handles this.",
+  "go-toml-2edc61f1": "Unmarshaling a TOML datetime value (offset datetime, local datetime, local date, or local time) into a Go field whose type is incompatible with datetimes causes a panic instead of returning a decode error. For example:\n\ntype Config struct {\n  Items map[string]struct{ Name string `toml:\"name\"` } `toml:\"items\"`\n}\nvar c Config\ntoml.Unmarshal([]byte(`items = 2023-01-01T10:20:30Z`), &c)\n\nThis should return an error such as \"cannot decode TOML datetime into ... of type map[string]Item\", but instead it panics. The same happens for local datetime, local date, and local time values. Since this makes the decoder unsafe for untrusted input, please fix it so a type-mismatch error is returned instead of panicking.",
+  "go-toml-bf5d4240": "When decoding a document with a duplicate key or a redefined table/array table, the resulting error is a bare string like \"toml: key b is already defined\" with no location information \u2014 it doesn't implement/wrap into a DecodeError, so callers can't get the offending key path or a position/highlight pointing at the duplicate. For example, `Unmarshal([]byte(\"a = 1\\nb = 2\\nb = 3\\n\"), &map[string]interface{}{})` returns an error that can't be type-asserted via `errors.As` to `*toml.DecodeError`, and the same is true for redefined tables like `[a]\\n...\\n[a]`. Please make these errors carry proper position and key context (usable through the DecodeError API), consistent with other decode errors in the library, and also double-check the wording of the \"already exists as a ... but should be an array table\" message, which looks like it has a formatting glitch.",
+  "go-toml-35f78d59": "When marshaling a struct field tagged `commented` whose value renders across multiple lines \u2014 e.g. a multiline string, or a multiline array produced via the `multiline` tag or `SetArraysMultiline` \u2014 only the first line of the output gets the `#` comment prefix. The remaining lines are emitted as live TOML, so the result is invalid and fails to re-parse, for example something like:\n```\n# s = \"\"\"\nline1\nline2\"\"\"\n```\nwhere `line1` and `line2` should also have been commented out. Please fix the encoder so every physical line of a `commented` value is properly prefixed with `#`, while leaving the output for non-commented fields unchanged.",
+  "go-toml-21f82865": "When the root decode target itself implements the unstable Unmarshaler interface (with EnableUnmarshalerInterface), the whole point is to hand it the raw document bytes so it can re-parse them itself (e.g. to preserve key ordering). But right now, top-level key-values that appear before a table header get delivered to UnmarshalTOML one at a time as disconnected fragments instead of as a single self-contained document, so a document like `title = \"t\"\\n[owner]\\nname = \"Tom\"\\n` doesn't get handed over as one coherent blob. Please fix the decoder so that when the root target implements the Unmarshaler interface, UnmarshalTOML is called exactly once with the entire document (top-level keys and any following tables/array tables included) in a form that re-parses to the same structure as the original input.",
+  "go-toml-82b792e6": "When decoding a `[table]` or `[[array table]]` header into a Go value that can't hold it (e.g. a string or scalar field), the resulting error is either a bare string or a DecodeError whose position/highlight incorrectly points at the very start of the document instead of at the offending table header. For example, unmarshaling `\"x = 1\\n[[A]]\\n\"` into `struct{ X int; A string }` produces \"toml: cannot store an array table in a string\" but the error's position and key don't point at `A`. Please fix these errors so that when a table or array table can't be placed into the target, the resulting error (still available as a `*toml.DecodeError`) reports the correct row/column and key path of the offending table header, not the start of the file.",
+  "go-toml-79f82e3c": "Unmarshaling into a struct that promotes a field through a nil embedded pointer of an unexported type panics instead of returning an error. For example:\n```go\ntype inner struct{ Z int }\ntype outer struct{ *inner }\n\nvar v outer\ntoml.Unmarshal([]byte(\"Z = 1\"), &v) // panics\n```\nThe panic message is something like \"reflect: reflect.Value.Set using value obtained using unexported field\", because reflection can't allocate/set a pointer reached through an unexported embedded field. Please make this case return a normal error instead of panicking (similar to how encoding/json handles it), while a non-nil embedded pointer of the same shape should continue to decode successfully without needing allocation.",
+  "go-toml-071a36c2": "Decoding a TOML document containing a very deeply nested array or inline table, such as one with tens of thousands of nested `[`...`]` or `{k=`...`}` pairs, crashes the process with a stack overflow instead of returning an error. For example:\n```go\ninput := \"a=\" + strings.Repeat(\"[\", 100000) + strings.Repeat(\"]\", 100000)\nvar v interface{}\ntoml.Unmarshal([]byte(input), &v)\n```\nBecause a stack overflow is a fatal, unrecoverable error in Go, this lets a malicious or malformed input take down the whole program, which is a denial-of-service risk when decoding untrusted TOML. Please add a bound on array/inline-table nesting depth so pathologically deep input is rejected with a normal error, while documents with reasonable nesting depth continue to decode successfully."
+ },
+ "train": {
+  "tasks": [
+   "go-toml-3175efb3",
+   "go-toml-18a21487",
+   "go-toml-692b9856",
+   "go-toml-2edc61f1",
+   "go-toml-bf5d4240"
+  ],
+  "repeats": 1
+ },
+ "eval": {
+  "tasks": [
+   "go-toml-35f78d59",
+   "go-toml-21f82865",
+   "go-toml-82b792e6",
+   "go-toml-79f82e3c",
+   "go-toml-071a36c2"
+  ],
+  "repeats": 1,
+  "arms": [
+   "control"
+  ]
+ },
+ "seed": 20260928,
+ "model": "claude-haiku-4-5-20251001",
+ "max_turns": 60,
+ "concurrency": 2,
+ "budget_usd": 4.5,
+ "host_auth": true,
+ "confine": true,
+ "learn_args": [
+  "--demo"
+ ],
+ "classify": {
+  "lookup": [],
+  "regen": [
+   "make generate",
+   "go generate",
+   "vitest -u",
+   "--update-snapshots"
+  ],
+  "verify": [
+   "pytest",
+   "vitest",
+   "go test",
+   "make test",
+   "npm test",
+   "npm run test",
+   "pnpm test",
+   "pnpm run test",
+   "pnpm vitest",
+   "tox",
+   "nox",
+   "node --test",
+   "unittest",
+   "go vet"
+  ],
+  "bash_edit": [
+   "sed -i",
+   "cat >",
+   "cat <<",
+   "tee ",
+   "write_text(",
+   "patch -p",
+   "git apply",
+   "perl -pi"
+  ],
+  "check_flags": []
+ },
+ "obligation": {
+  "paths": null
+ },
+ "labels": {
+  "lookup": "lookup",
+  "regen": "regenerate"
+ },
+ "split_digest": "47f181df1c954df66191b79cb0c14ae96ac835e4eb7108d65e0b7fc7db96d9cd"
+}

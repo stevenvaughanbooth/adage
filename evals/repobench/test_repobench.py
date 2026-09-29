@@ -385,8 +385,9 @@ class RealTaskFilesTest(unittest.TestCase):
                 ids = {t["id"] for t in data["tasks"]}
                 self.assertTrue(set(split["train"]) | set(split["test"]) <= ids)
                 self.assertFalse(set(split["train"]) & set(split["test"]))
-                self.assertLess(max(split["dates"][x] for x in split["train"]),
-                                min(split["dates"][x] for x in split["test"]) + "~")
+                if split["train"]:  # all-held-out splits (too few tasks to split) have no train part
+                    self.assertLess(max(split["dates"][x] for x in split["train"]),
+                                    min(split["dates"][x] for x in split["test"]) + "~")
 
 
 if __name__ == "__main__":

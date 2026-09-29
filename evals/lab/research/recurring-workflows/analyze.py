@@ -358,12 +358,12 @@ def decompose(sessions) -> dict:
 def realistic(s, card) -> list:
     """Calls a checklist card makes unnecessary: searches/listings before the last first-touch of a
     card file (discovery of where things go), and failed commands the card lists as avoid."""
-    files = {p for p, _, _ in card["files"] if "<new>" not in p}
-    dirs = {p.split("/<new>")[0] for p, _, _ in card["files"] if "<new>" in p}
+    files = {p for p, _, _ in card["files"] if "<x>" not in p}
+    pats = [p for p, _, _ in card["files"] if "<x>" in p]
     first = {}
     for k, c in enumerate(s.calls):
         p = rel((c.input or {}).get("file_path", ""), s.cwd)
-        if c.tool in ("Read", *EDIT_TOOLS) and (p in files or any(p.startswith(d + "/") for d in dirs)):
+        if c.tool in ("Read", *EDIT_TOOLS) and (p in files or any(procedure.matches_pattern(p, q) for q in pats)):
             first.setdefault(p, k)
     horizon = max(first.values()) if first else -1
     avoid = {c[0] for c in card["avoid"]}
@@ -398,7 +398,7 @@ def curve(sessions, max_n=9, draws=8) -> dict:
                 card = procedure.learn([views[o.sid] for o in prior], {o.sid: o.passed for o in prior})
                 idx = realistic(s, card)
                 vals.append(usd_share(s, idx) / CM.of(s).total)
-                cf = {p for p, _, _ in card["files"] if "<new>" not in p}
+                cf = {p for p, _, _ in card["files"] if "<x>" not in p}
                 fin = {e["path"] for e in views[s.sid]["edits"] if not e["failed"]}
                 rec.append(len(cf & fin) / len(fin) if fin else 0.0)
                 prec.append(len(cf & fin) / len(cf) if cf else 0.0)

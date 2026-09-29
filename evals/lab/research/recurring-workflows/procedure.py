@@ -103,15 +103,37 @@ def session_view(path: str) -> dict | None:
             cmd = inp["command"].replace(cwd + "/", "").replace(cwd, ".")
             cmds.append({"k": k, "cmd": cmd, "norm": norm_cmd(cmd), "failed": c.is_error,
                          "out": (c.output or "").strip()})
+            # files a shell command wrote by redirection (`go doc -all . > godoc-current.txt`)
+            first = cmd.strip().splitlines()[0] if cmd.strip() else ""
+            for tgt in re.findall(r"(?<![<>&0-9])>{1,2}\s*([^\s;&|<>]+)", first):
+                if tgt.startswith(("/dev/", "&")) or os.path.isabs(tgt):
+                    continue
+                edits.append({"k": k, "path": os.path.normpath(tgt), "tool": "Shell", "text": first,
+                              "failed": c.is_error})
     return {"sid": s.sid, "n": len(s.calls), "edits": edits, "cmds": cmds, "cwd": cwd, "path": path}
 
 
+def name_tokens(name: str) -> list[str]:
+    return re.split(r"([_.\-])", name)
+
+
 def anti_unify(paths: list[str]) -> str:
-    """Different new files of the same role: their common directory and extension."""
-    dirs = {str(Path(p).parent) for p in paths}
-    exts = {Path(p).suffix for p in paths}
-    d = dirs.pop() if len(dirs) == 1 else os.path.commonpath(paths) if paths else ""
-    return f"{d}/<new>{exts.pop() if len(exts) == 1 else ''}"
+    """Files of the same role whose names vary by session (`flag_url.go`, `flag_port.go`): names in
+    one directory with the same number of tokens (split on _ . -) are aligned; positions that agree
+    are kept, the others become <x> (`flag_<x>.go`)."""
+    d = str(Path(paths[0]).parent)
+    toks = [name_tokens(Path(p).name) for p in paths]
+    name = "".join(t if all(x[i] == t for x in toks) else "<x>" for i, t in enumerate(toks[0]))
+    return name if d in (".", "") else f"{d}/{name}"
+
+
+def pattern_glob(p: str) -> str:
+    return p.replace("<x>", "*")
+
+
+def matches_pattern(path: str, pattern: str) -> bool:
+    import fnmatch
+    return "<x>" in pattern and str(Path(path).parent) == str(Path(pattern).parent) and fnmatch.fnmatch(path, pattern_glob(pattern))
 
 
 def learn(views: list[dict], passed: dict | None = None) -> dict:
@@ -129,16 +151,20 @@ def learn(views: list[dict], passed: dict | None = None) -> dict:
         for i, p in enumerate(seen):
             per_file.setdefault(p, set()).add(v["sid"])
             first_pos.setdefault(p, []).append(i / max(1, len(seen)))
-        for e in v["edits"]:
-            if e["tool"] == "Write" and not e["failed"] and len(per_file.get(e["path"], ())) == 1:
-                new_files.setdefault(str(Path(e["path"]).parent), {})[v["sid"]] = e["path"]
     files = [(p, len(s), statistics.median(first_pos[p])) for p, s in per_file.items() if len(s) >= need]
-    # new files whose exact name differs per session, but whose directory recurs
-    for d, by_sid in new_files.items():
-        if len(by_sid) >= need and n > 1 and all(len(per_file[p]) == 1 for p in by_sid.values()):
-            ps = list(by_sid.values())
-            files.append((anti_unify(ps), len(by_sid), statistics.median(
-                [first_pos[p][0] for p in ps])))
+    # files whose exact name differs per session (edited in one session only), grouped by directory
+    # and name shape, then anti-unified (`flag_<x>.go`, `flag_<x>_test.go`)
+    if n > 1:
+        groups = {}
+        for p, sids in per_file.items():
+            if len(sids) == 1:
+                t = name_tokens(Path(p).name)  # same role: same directory, token count, first token, extension
+                groups.setdefault((str(Path(p).parent), len(t), t[0], t[-1]), []).append(p)
+        for _key, ps in groups.items():
+            sids = {next(iter(per_file[p])) for p in ps}
+            pat = anti_unify(ps)
+            if len(sids) >= need and "<x>" in pat:
+                files.append((pat, len(sids), statistics.median([first_pos[p][0] for p in ps])))
     files.sort(key=lambda x: x[2])
     # 2. exemplars: most recent passing session (views are in chronological order)
     order = [v for v in views if passed.get(v["sid"], True)][::-1] + [v for v in views if not passed.get(v["sid"], True)][::-1]
@@ -146,8 +172,7 @@ def learn(views: list[dict], passed: dict | None = None) -> dict:
     for p, _, _ in files:
         for v in order:
             hunks = [e["text"] for e in v["edits"] if not e["failed"] and (
-                e["path"] == p or (p.endswith(("<new>.py", "<new>")) and str(Path(e["path"]).parent) == p.split("/<new>")[0]
-                                   and e["tool"] == "Write"))]
+                e["path"] == p or matches_pattern(e["path"], p))]
             if hunks:
                 lines = max(hunks, key=lambda h: len(h.splitlines())).strip("\n").splitlines()
                 exemplars[p] = "\n".join(lines[:HUNK_LINES]) + ("\n…" if len(lines) > HUNK_LINES else "")
@@ -192,7 +217,21 @@ def learn(views: list[dict], passed: dict | None = None) -> dict:
             "passed": sum(1 for v in views if passed.get(v["sid"], True))}
 
 
-def render(card: dict) -> str:
+def render(card: dict, max_tokens: int | None = None) -> str:
+    """The card as Markdown. With `max_tokens` (4 characters a token), exemplars are clipped to
+    fewer lines (14, 10, 6, 3, then dropped) until the card fits."""
+    if max_tokens:
+        for k in (HUNK_LINES, 10, 6, 3, 0):
+            clipped = {p: "\n".join(t.splitlines()[:k]) + ("\n…" if len(t.splitlines()) > k else "")
+                       for p, t in card["exemplars"].items()} if k else {}
+            text = _render({**card, "exemplars": clipped})
+            if len(text) <= max_tokens * 4:
+                return text
+        return text[: max_tokens * 4]
+    return _render(card)
+
+
+def _render(card: dict) -> str:
     n = card["n"]
     out = [f"# How changes of this kind were done here before\n",
            f"Learned from {n} earlier session(s) of the same kind of task in this repository "

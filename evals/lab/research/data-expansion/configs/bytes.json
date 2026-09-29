@@ -1,0 +1,119 @@
+{
+ "name": "dx-bytes",
+ "repo_key": "github.com/tokio-rs/bytes",
+ "workdir": "repo",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/repobench/sandbox.py",
+  "bytes",
+  "{task}",
+  "{dir}",
+  "--arm",
+  "{arm}",
+  "--context",
+  "{repo}/evals/repobench/context/bytes.md"
+ ],
+ "score": [
+  "python3",
+  "{repo}/evals/repobench/score.py",
+  "bytes",
+  "{task}",
+  "{dir}"
+ ],
+ "prompts": [
+  "Fix {id}."
+ ],
+ "task_prompts": {
+  "bytes-0a2c43af": "After splitting a BytesMut that shares its underlying buffer, calling reserve() on the remaining piece can corrupt its contents or capacity. For example:\n```rust\nlet mut bytes = BytesMut::with_capacity(1000);\nbytes.put_slice(b\"Hello, World!\");\ndrop(bytes.split());\n\nbytes.put_slice(b\"!123ex123,sadchELLO,_wORLD!\");\ndrop(bytes.split_off(9)); // now capacity offset differs from buffer offset\nassert_eq!(&*bytes, b\"!123ex123\");\n\nbytes.reserve(2000);\nassert_eq!(&*bytes, b\"!123ex123\"); // fails\n```\nAfter reserve(2000), the contents should still be `!123ex123` with the expected new capacity, but they get mangled. Please investigate and fix this.",
+  "bytes-3536017c": "Chaining two growing buffers together with `chain_mut` and then calling `put_slice` on the chain overflows/panics or writes incorrectly instead of correctly writing into both buffers in sequence. For example:\n```rust\nlet mut buff = [b' '; 10];\nlet mut vec = b\"wassup\".to_vec();\nlet mut chained = (&mut buff[..]).chain_mut(&mut vec).chain_mut(Vec::new());\nchained.put_slice(b\"hey there123123\");\n```\nThis should fill `buff` with `hey there1` and append `23123` onto `vec` (resulting in `wassup23123`), and `remaining_mut()` on a chain of growable buffers should report `usize::MAX` without overflowing even after writes. Please fix the chain buffer's remaining_mut/put_slice behavior so growing buffers can be chained correctly.",
+  "bytes-d6e1999d": "Calling `reserve` on a `BytesMut` that was produced via `split_off` sometimes allocates a much larger buffer than necessary, even though the existing shared buffer is already big enough to hold the requested additional capacity. For example:\n```rust\nlet mut bytes = BytesMut::from(LONG);\nlet orig_capacity = bytes.capacity();\ndrop(bytes.split_off(LONG.len() / 2));\n\nlet new_capacity = bytes.capacity();\nbytes.reserve(orig_capacity - new_capacity);\nassert_eq!(bytes.capacity(), orig_capacity);\n```\nInstead of reusing the existing allocation, `reserve` allocates a new, larger buffer, and repeating this pattern in a loop keeps growing capacity unnecessarily, which could eventually exhaust memory. Please fix `reserve` so it does not over-allocate when the underlying buffer already has enough room.",
+  "bytes-05e9d5ca": "When a `Vec<u8>` with spare capacity (capacity greater than length) is converted into `Bytes` and then converted back into a `Vec<u8>`, the original capacity should be preserved rather than being shrunk down to the length. For example:\n```rust\nlet mut vec = Vec::with_capacity(10);\nvec.extend(b\"abcdefg\");\nlet b = Bytes::from(vec);\nlet v = Vec::from(b);\nassert_eq!(v.len(), 7);\nassert_eq!(v.capacity(), 10); // currently becomes 7\n```\nThe same should hold when converting a `BytesMut` built with extra capacity into `Bytes` and back into a `Vec`, and when advancing the `Bytes` before converting back. Please fix the conversion so it avoids reallocating to a smaller capacity and correctly preserves the buffer's original capacity.",
+  "bytes-79fb8532": "`Buf::get_int` and `Buf::get_int_le` don't sign-extend negative values correctly when reading fewer than 8 bytes. For example:\n```rust\nlet mut buf = &b\"\\xd6zomg\"[..];\nassert_eq!(-42, buf.get_int(1)); // should be -42 but isn't\n\nlet mut buf = &b\"\\xfe\\x1d\\xc0zomg\"[..];\nassert_eq!(0xfffffffffffe1dc0u64 as i64, buf.get_int(3));\n```\nA single high-bit-set byte like `0xd6` should decode to the negative value `-42` when read via `get_int`/`get_int_le` with `nbytes` less than the full integer width, but the result comes out as an unsigned/positive value instead. Please fix the sign extension logic for these methods.",
+  "bytes-36675436": "Converting a `Bytes` created via `Bytes::from_owner` into a `Vec<u8>` using `.into()` appears to leak the wrapped owner instead of dropping it exactly once. For example:\n```rust\nlet buf: [u8; 10] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];\nlet owner = OwnedTester::new(buf, drop_counter.clone());\nlet b1 = Bytes::from_owner(owner);\n\nlet v1: Vec<u8> = b1.into();\nassert_eq!(&v1[..], &buf[..]);\nassert_eq!(drop_counter.get(), 1); // owner's drop counter doesn't reach 1\n```\nConverting the owned `Bytes` into a `Vec` should copy the data out and drop the owner exactly once, but the owner is not being dropped as expected. Please investigate and fix this memory leak.",
+  "bytes-16132ad2": "Running `cargo clippy` on the repository reports warnings that should be cleaned up, including a lint about writing `' ' as u8` instead of the more idiomatic `b' '` byte literal. Please run clippy, review the warnings it raises, and fix them so the crate builds clean without clippy warnings.",
+  "bytes-60cbb776": "Calling `put` with an empty slice on a zero-capacity `BytesMut` causes infinite recursion (leading to a stack overflow) instead of simply doing nothing. For example:\n```rust\nlet mut buf = BytesMut::new();\nbuf.put(&[] as &[u8]);\n```\nThis should complete without issue, just like putting a non-empty slice into a fresh zero-capacity `BytesMut` does. Please fix the buffer reuse logic so it doesn't recurse infinitely when there's no remaining data to copy.",
+  "bytes-7930d93d": "`Buf::try_get_int` and `Buf::try_get_int_le` don't sign-extend negative values the way the panicking `get_int`/`get_int_le` do when reading fewer than 8 bytes. For example:\n```rust\nlet mut a = &[0xff, 0xff, 0xff][..];\nassert_eq!(a.try_get_int(3), Ok(-1)); // currently returns Ok(16777215) instead\n\nlet mut ctrl = &[0xff, 0xff, 0xff][..];\nassert_eq!(ctrl.get_int(3), -1); // get_int behaves correctly\n```\nThe 3-byte big-endian value `0xffffff` should decode to `-1` via `try_get_int`/`try_get_int_le` (and the native-endian variant that delegates to them), matching `get_int`'s behavior, while error cases for insufficient data and full 8-byte reads should remain unaffected. Please fix the sign extension in these fallible getters."
+ },
+ "train": {
+  "tasks": [
+   "bytes-0a2c43af",
+   "bytes-3536017c",
+   "bytes-d6e1999d",
+   "bytes-05e9d5ca"
+  ],
+  "repeats": 2
+ },
+ "eval": {
+  "tasks": [
+   "bytes-79fb8532",
+   "bytes-36675436",
+   "bytes-16132ad2",
+   "bytes-60cbb776",
+   "bytes-7930d93d"
+  ],
+  "repeats": 2,
+  "arms": [
+   "control"
+  ]
+ },
+ "seed": 20260928,
+ "model": "claude-haiku-4-5-20251001",
+ "max_turns": 60,
+ "concurrency": 2,
+ "budget_usd": 7.0,
+ "host_auth": true,
+ "confine": true,
+ "learn_args": [
+  "--demo"
+ ],
+ "classify": {
+  "lookup": [],
+  "regen": [
+   "make generate",
+   "go generate",
+   "vitest -u",
+   "--update-snapshots"
+  ],
+  "verify": [
+   "pytest",
+   "vitest",
+   "go test",
+   "make test",
+   "npm test",
+   "npm run test",
+   "pnpm test",
+   "pnpm run test",
+   "pnpm vitest",
+   "tox",
+   "nox",
+   "node --test",
+   "unittest",
+   "go vet"
+  ],
+  "bash_edit": [
+   "sed -i",
+   "cat >",
+   "cat <<",
+   "tee ",
+   "write_text(",
+   "patch -p",
+   "git apply",
+   "perl -pi"
+  ],
+  "check_flags": []
+ },
+ "obligation": {
+  "paths": null
+ },
+ "labels": {
+  "lookup": "lookup",
+  "regen": "regenerate"
+ },
+ "split_digest": "65e43903133608fbfaa62dc66b44f04c66d973279a4c111443a1ba594c6dfeea",
+ "forward_env": [
+  "RUSTUP_HOME"
+ ],
+ "confine_expose": [
+  "/root/.rustup"
+ ]
+}

@@ -1,0 +1,638 @@
+{
+ "repo": "packaging",
+ "url": "https://github.com/pypa/packaging",
+ "repo_key": "github.com/pypa/packaging",
+ "tasks": [
+  {
+   "id": "packaging-c4fb81ff",
+   "sha": "c4fb81ff6eba16fdd24d50e9d9d002fdbece6dd4",
+   "base": "2af7404a8fc03b74e778d0a4d8aa90cb9fafdbf3",
+   "date": "2026-07-02T15:44:24-04:00",
+   "subject": "fix(ranges): require matching pre-release policy in difference (#1306)",
+   "src_files": [
+    "src/packaging/ranges.py"
+   ],
+   "test_files": [
+    "tests/test_ranges.py"
+   ],
+   "gold_files": [
+    "src/packaging/ranges.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_ranges.py",
+   "base_exit": 1,
+   "base_tail": "\n    def test_literal_range_subset(self) -> None:\n        # is_subset is ``self - other``, so a literal only ``self`` admits keeps\n        # it from being a subset. ``self & ~other`` would miss this, since\n        # complement is one-way for ``===`` literals.\n        a = vr(\"===a\")\n        ab = vr(\"===a\") | vr(\"===b\")\n    \n        assert a.is_subset(ab)\n>       assert not ab.is_subset(a)\nE       AssertionError: assert not True\nE        +  where True = is_subset(<VersionRange '{a}'>)\nE        +    where is_subset = <VersionRange '{a, b}'>.is_subset\n\na          = <VersionRange '{a}'>\nab         = <VersionRange '{a, b}'>\nself       = <tests.test_ranges.TestSetRelations object at 0x7f8f3c4f6f60>\n\ntests/test_ranges.py:418: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_ranges.py::TestSetAlgebra::test_difference_requires_matching_policy - Failed: DID NOT RAISE ValueError\nFAILED tests/test_ranges.py::TestSetRelations::test_literal_range_subset - AssertionError: assert not True\n +  where True = is_subset(<VersionRange '{a}'>)\n +    where is_subset = <VersionRange '{a, b}'>.is_subset\n2 failed, 176 passed in 10.77s",
+   "fixed_seconds": 5.4,
+   "n_tests": 178,
+   "prompt": "The difference operator on VersionRange doesn't enforce the pre-release policy consistency check that intersection and union do. For example, `vr(\">=1.0\") - vr(\">=2.0\", prereleases=True)` succeeds silently even though the two ranges have mismatched configured pre-release policies, whereas `vr(\">=1.0\") & ~vr(\">=2.0\", prereleases=True)` raises a ValueError mentioning the mismatch. Since difference is defined as equivalent to intersecting with the complement, it should raise the same ValueError when the operands' pre-release policies differ, instead of silently dropping pre-releases the other operand's policy excludes. Separately, `is_subset`/`is_superset` give wrong answers for `===` (arbitrary equality) literal ranges: for `a = vr(\"===a\")` and `ab = vr(\"===a\") | vr(\"===b\")`, `a.is_subset(ab)` should be True and `ab.is_subset(a)` should be False, but the complement-based fallback used for these relations doesn't handle `===` literals correctly since complement is one-way for them. Please fix both issues.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-0a85b41e",
+   "sha": "0a85b41e24c9b55b83f05ae696d73e8294a5b094",
+   "base": "c4fb81ff6eba16fdd24d50e9d9d002fdbece6dd4",
+   "date": "2026-07-06T08:42:47-04:00",
+   "subject": "fix(markers): keep parentheses of a nested group when serializing (#1316)",
+   "src_files": [
+    "src/packaging/markers.py"
+   ],
+   "test_files": [
+    "tests/test_markers.py"
+   ],
+   "gold_files": [
+    "src/packaging/markers.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_markers.py",
+   "base_exit": 1,
+   "base_tail": ",\n        ):\n>           assert reparsed.evaluate(env) == m.evaluate(env)\nE           assert True == False\nE            +  where True = evaluate({'python_version': '3.12', 'sys_platform': 'darwin'})\nE            +    where evaluate = <Marker('python_version < \"3.10\" and sys_platform == \"linux\" or sys_platform == \"darwin\"')>.evaluate\nE            +  and   False = evaluate({'python_version': '3.12', 'sys_platform': 'darwin'})\nE            +    where evaluate = <Marker('python_version < \"3.10\" and sys_platform == \"linux\" or sys_platform == \"darwin\"')>.evaluate\n\nenv        = {'python_version': '3.12', 'sys_platform': 'darwin'}\nm          = <Marker('python_version < \"3.10\" and sys_platform == \"linux\" or sys_platform == \"darwin\"')>\nreparsed   = <Marker('python_version < \"3.10\" and sys_platform == \"linux\" or sys_platform == \"darwin\"')>\n\ntests/test_markers.py:620: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_markers.py::test_str_preserves_nested_group_precedence - assert True == False\n +  where True = evaluate({'python_version': '3.12', 'sys_platform': 'darwin'})\n +    where evaluate = <Marker('python_version < \"3.10\" and sys_platform == \"linux\" or sys_platform == \"darwin\"')>.evaluate\n +  and   False = evaluate({'python_version': '3.12', 'sys_platform': 'darwin'})\n +    where evaluate = <Marker('python_version < \"3.10\" and sys_platform == \"linux\" or sys_platform == \"darwin\"')>.evaluate\n1 failed, 2280 passed in 9.93s",
+   "fixed_seconds": 7.09,
+   "n_tests": 2281,
+   "prompt": "When a Marker contains a doubly-nested parenthesized group, converting it back to a string with `str()` drops the inner parentheses, which changes the logical grouping and can change evaluation results after round-tripping. For example:\n```python\nfrom packaging.markers import Marker\nm = Marker('python_version < \"3.10\" and ((sys_platform == \"linux\" or sys_platform == \"darwin\"))')\nprint(str(m))\nreparsed = Marker(str(m))\n# reparsed.evaluate(...) should match m.evaluate(...) for all environments\n```\nThe reparsed marker should evaluate identically to the original for any environment. Please fix the string serialization so nested groups preserve their precedence.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-391a25e6",
+   "sha": "391a25e6c39a7e43f13f25ac805279104430f3e7",
+   "base": "0a85b41e24c9b55b83f05ae696d73e8294a5b094",
+   "date": "2026-07-07T00:39:17-04:00",
+   "subject": "fix(tags): raise SystemError for malformed cpython EXT_SUFFIX in _generic_abi (#1301)",
+   "src_files": [
+    "src/packaging/tags.py"
+   ],
+   "test_files": [
+    "tests/test_tags.py"
+   ],
+   "gold_files": [
+    "src/packaging/tags.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_tags.py",
+   "base_exit": 1,
+   "base_tail": "\nself = <tests.test_tags.TestGenericTags object at 0x7ff4fe304380>\next_suffix = '.cpython-.so'\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ff4fe3136b0>\n\n    @pytest.mark.parametrize(\"ext_suffix\", [\".cpython.so\", \".cpython-.so\"])\n    def test__generic_abi_cpython_missing_version(\n        self, ext_suffix: str, monkeypatch: pytest.MonkeyPatch\n    ) -> None:\n        config = {\"EXT_SUFFIX\": ext_suffix}\n        monkeypatch.setattr(sysconfig, \"get_config_var\", config.__getitem__)\n>       with pytest.raises(SystemError) as e:\nE       Failed: DID NOT RAISE SystemError\n\nconfig     = {'EXT_SUFFIX': '.cpython-.so'}\ne          = <ExceptionInfo for raises contextmanager>\next_suffix = '.cpython-.so'\nmonkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ff4fe3136b0>\nself       = <tests.test_tags.TestGenericTags object at 0x7ff4fe304380>\n\ntests/test_tags.py:1393: Failed\n=========================== short test summary info ============================\nFAILED tests/test_tags.py::TestGenericTags::test__generic_abi_cpython_missing_version[.cpython.so] - IndexError: list index out of range\nFAILED tests/test_tags.py::TestGenericTags::test__generic_abi_cpython_missing_version[.cpython-.so] - Failed: DID NOT RAISE SystemError\n2 failed, 218 passed in 8.63s",
+   "fixed_seconds": 3.36,
+   "n_tests": 220,
+   "prompt": "Calling into `packaging.tags` (e.g. via `generic_tags()` or `sys_tags()`) on an interpreter with a malformed cpython `EXT_SUFFIX` sysconfig value that has no version component, such as `\".cpython.so\"` or `\".cpython-.so\"`, crashes with an opaque `IndexError` instead of a clear error. Other malformed `EXT_SUFFIX` cases already raise a documented `SystemError` mentioning `EXT_SUFFIX`, so this cpython-specific case should do the same instead of leaking an internal IndexError. Please fix this so any malformed cpython `EXT_SUFFIX` value raises `SystemError` with a message containing `EXT_SUFFIX`.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-1b00eeff",
+   "sha": "1b00eeffc6bec070c10e7e6ecf03c03f9789eed2",
+   "base": "e808c8aa0ed5d471f524d648904322ccd1c420e4",
+   "date": "2026-07-07T01:12:45-04:00",
+   "subject": "fix(metadata): route multipart payloads to unparsed instead of asserting (#1247)",
+   "src_files": [
+    "src/packaging/metadata.py"
+   ],
+   "test_files": [
+    "tests/test_metadata.py"
+   ],
+   "gold_files": [
+    "src/packaging/metadata.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_metadata.py",
+   "base_exit": 1,
+   "base_tail": "    def _get_payload(msg: email.message.Message, source: bytes | str) -> str:\n        \"\"\"Get the body of the message.\"\"\"\n        # If our source is a str, then our caller has managed encodings for us,\n        # and we don't need to deal with it.\n        if isinstance(source, str):\n            payload = msg.get_payload()\n            assert isinstance(payload, str)\n            return payload\n        # If our source is a bytes, then we're managing the encoding and we need\n        # to deal with it.\n        else:\n            bpayload = msg.get_payload(decode=True)\n>           assert isinstance(bpayload, bytes)\n                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE           AssertionError\n\nbpayload   = None\nmsg        = <email.message.Message object at 0x7fbb1a9bbaa0>\nsource     = b'Metadata-Version: 2.1\\nName: example\\nContent-Type: multipart/mixed; boundary=\"BOUND\"\\n\\n--BOUND\\nContent-Type: text/plain\\n\\nthe description\\n--BOUND--\\n'\n\nsrc/packaging/metadata.py:237: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_metadata.py::TestRawMetadata::test_description_multipart_payload[False] - AssertionError\nFAILED tests/test_metadata.py::TestRawMetadata::test_description_multipart_payload[True] - AssertionError\n2 failed, 304 passed in 9.67s",
+   "fixed_seconds": 5.23,
+   "n_tests": 306,
+   "prompt": "Parsing a METADATA file whose body is a multipart/mixed payload crashes `packaging.metadata.parse_email` with an `AssertionError` (and if Python is run with `-O`, the assertion is stripped entirely and a list or None gets silently stored as the description instead of raising anything). For example, parsing metadata with `Content-Type: multipart/mixed; boundary=\"BOUND\"` and a multipart body should not crash; instead, like other unparsable description content, it should end up in the `unparsed` dict rather than `raw[\"description\"]`. This should work whether the input is given as `str` or `bytes`. Please fix `parse_email` to raise a catchable error (already handled by the caller) and route such payloads to `unparsed` instead of asserting.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-2c688aa1",
+   "sha": "2c688aa15f65da80defa27e8c91d3bb82a4b5dd6",
+   "base": "1b00eeffc6bec070c10e7e6ecf03c03f9789eed2",
+   "date": "2026-07-07T02:01:16-04:00",
+   "subject": "fix(markers): raise UndefinedComparison for set-valued variables used outside the membership form (#1265)",
+   "src_files": [
+    "src/packaging/markers.py"
+   ],
+   "test_files": [
+    "tests/test_markers.py"
+   ],
+   "gold_files": [
+    "src/packaging/markers.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_markers.py",
+   "base_exit": 1,
+   "base_tail": "p('<=')>, <Value('foo')>)]\nop         = <Op('<=')>\nrhs        = <Value('foo')>\nrhs_value  = 'foo'\n\nsrc/packaging/markers.py:291: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_markers.py::TestMarker::test_set_valued_marker_on_lhs_raises_undefined_comparison[==-extras] - AssertionError: lhs must be a string\nFAILED tests/test_markers.py::TestMarker::test_set_valued_marker_on_lhs_raises_undefined_comparison[==-dependency_groups] - AssertionError: lhs must be a string\nFAILED tests/test_markers.py::TestMarker::test_set_valued_marker_on_lhs_raises_undefined_comparison[!=-extras] - AssertionError: lhs must be a string\nFAILED tests/test_markers.py::TestMarker::test_set_valued_marker_on_lhs_raises_undefined_comparison[!=-dependency_groups] - AssertionError: lhs must be a string\nFAILED tests/test_markers.py::TestMarker::test_set_valued_marker_on_lhs_raises_undefined_comparison[>=-extras] - AssertionError: lhs must be a string\nFAILED tests/test_markers.py::TestMarker::test_set_valued_marker_on_lhs_raises_undefined_comparison[>=-dependency_groups] - AssertionError: lhs must be a string\nFAILED tests/test_markers.py::TestMarker::test_set_valued_marker_on_lhs_raises_undefined_comparison[<=-extras] - AssertionError: lhs must be a string\nFAILED tests/test_markers.py::TestMarker::test_set_valued_marker_on_lhs_raises_undefined_comparison[<=-dependency_groups] - AssertionError: lhs must be a string\n8 failed, 2281 passed in 15.48s",
+   "fixed_seconds": 16.61,
+   "n_tests": 2289,
+   "prompt": "Marker evaluation doesn't correctly reject set-valued variables (`extras`, `dependency_groups`) when they're used on the left-hand side of a comparison operator instead of in the required membership form (`\"x\" in extras`). For example:\n```python\nfrom packaging.markers import Marker\nMarker(\"extras == 'foo'\").evaluate(context=\"lock_file\")\nMarker(\"dependency_groups >= 'foo'\").evaluate(context=\"lock_file\")\n```\nSince these variables are only well-defined in membership form, evaluating them with `==`, `!=`, `>=`, or `<=` should raise `UndefinedComparison`, but currently it doesn't. Please fix this validation.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-9a11fba3",
+   "sha": "9a11fba3d53215dc2ff08d8e9d0d5780c08fbe8f",
+   "base": "c34f81d244cbbc679d2b5a238f485afa214385ae",
+   "date": "2026-07-07T09:00:07-04:00",
+   "subject": "fix(pylock): reject bools where TOML integers are expected (#1244)",
+   "src_files": [
+    "src/packaging/pylock.py"
+   ],
+   "test_files": [
+    "tests/test_pylock.py"
+   ],
+   "gold_files": [
+    "src/packaging/pylock.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_pylock.py",
+   "base_exit": 1,
+   "base_tail": "            \"created-by\": \"pip\",\n            \"packages\": [\n                {\n                    \"name\": \"example\",\n                    \"wheels\": [\n                        {\n                            \"name\": \"example-1.0-py3-none-any.whl\",\n                            \"path\": \"./example-1.0-py3-none-any.whl\",\n                            \"hashes\": {\"sha256\": \"f\" * 40},\n                            \"size\": True,\n                        }\n                    ],\n                }\n            ],\n        }\n>       with pytest.raises(PylockValidationError) as exc_info:\nE       Failed: DID NOT RAISE PylockValidationError\n\ndata       = {'lock-version': '1.0', 'created-by': 'pip', 'packages': [{'name': 'example', 'wheels': [{'name': 'example-1.0-py3-non...: './example-1.0-py3-none-any.whl', 'hashes': {'sha256': 'ffffffffffffffffffffffffffffffffffffffff'}, 'size': True}]}]}\nexc_info   = <ExceptionInfo for raises contextmanager>\n\ntests/test_pylock.py:122: Failed\n=========================== short test summary info ============================\nFAILED tests/test_pylock.py::test_pylock_bool_rejected_for_int - Failed: DID NOT RAISE PylockValidationError\n1 failed, 63 passed in 6.54s",
+   "fixed_seconds": 3.58,
+   "n_tests": 64,
+   "prompt": "Pylock validation incorrectly accepts booleans in fields typed as integers, because `bool` is a subclass of `int` in Python. For example:\n```python\nfrom packaging.pylock import Pylock\ndata = {\n    \"lock-version\": \"1.0\",\n    \"created-by\": \"pip\",\n    \"packages\": [{\n        \"name\": \"example\",\n        \"wheels\": [{\n            \"name\": \"example-1.0-py3-none-any.whl\",\n            \"path\": \"./example-1.0-py3-none-any.whl\",\n            \"hashes\": {\"sha256\": \"f\" * 40},\n            \"size\": True,\n        }],\n    }],\n}\nPylock.from_dict(data)  # sets PackageWheel.size to True instead of raising\n```\nSince TOML distinguishes booleans from integers, this should instead raise `PylockValidationError` with a message like \"Unexpected type bool (expected int) in 'packages[0].wheels[0].size'\", the same way other type mismatches are reported. Please fix this validation gap.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-a0661b5f",
+   "sha": "a0661b5f5c8838af81c5098b2a564e62852decb4",
+   "base": "d3e7f5d96da0c27103324cb9fb349b54e753a877",
+   "date": "2026-07-07T12:19:29-04:00",
+   "subject": "fix(direct_url): require absolute file URLs for local directories (#1297)",
+   "src_files": [
+    "src/packaging/direct_url.py"
+   ],
+   "test_files": [
+    "tests/test_direct_url.py"
+   ],
+   "gold_files": [
+    "src/packaging/direct_url.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_direct_url.py",
+   "base_exit": 1,
+   "base_tail": "        [\n            \"file:relative\",\n            \"file:./relative\",\n            \"file:\",\n            \"file://relative\",\n            \"file://localhost\",\n        ],\n    )\n    def test_dir_info_url_requires_absolute_file_url(url: str) -> None:\n>       with pytest.raises(\n            DirectUrlValidationError,\n            match=r\"File URL must be absolute when dir_info is present\",\n        ):\nE       Failed: DID NOT RAISE DirectUrlValidationError\n\nurl        = 'file://localhost'\n\ntests/test_direct_url.py:248: Failed\n=========================== short test summary info ============================\nFAILED tests/test_direct_url.py::test_dir_info_url_requires_absolute_file_url[file:relative] - Failed: DID NOT RAISE DirectUrlValidationError\nFAILED tests/test_direct_url.py::test_dir_info_url_requires_absolute_file_url[file:./relative] - Failed: DID NOT RAISE DirectUrlValidationError\nFAILED tests/test_direct_url.py::test_dir_info_url_requires_absolute_file_url[file:] - Failed: DID NOT RAISE DirectUrlValidationError\nFAILED tests/test_direct_url.py::test_dir_info_url_requires_absolute_file_url[file://relative] - Failed: DID NOT RAISE DirectUrlValidationError\nFAILED tests/test_direct_url.py::test_dir_info_url_requires_absolute_file_url[file://localhost] - Failed: DID NOT RAISE DirectUrlValidationError\n5 failed, 41 passed in 5.59s",
+   "fixed_seconds": 3.14,
+   "n_tests": 46,
+   "prompt": "`DirectUrl.from_dict` accepts `dir_info` entries with relative or ambiguous `file:` URLs (e.g. `\"file:relative\"`, `\"file:./relative\"`, `\"file:\"`, `\"file://relative\"`, `\"file://localhost\"`), which shouldn't be valid for local directory info since a directory install requires an absolute path. For example:\n```python\nfrom packaging.direct_url import DirectUrl\nDirectUrl.from_dict({\"url\": \"file:relative\", \"dir_info\": {}})  # should raise\n```\nThis should raise `DirectUrlValidationError` with a message like \"File URL must be absolute when dir_info is present\", while legitimate absolute file URLs (including `file://localhost/...` forms) should continue to be accepted regardless of case. Please fix this validation.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-f0620a99",
+   "sha": "f0620a997147fefd6844af9745c7bf28b43cce29",
+   "base": "a33b2941bf334823ab48b059611158d37da5846e",
+   "date": "2026-07-07T21:22:38-04:00",
+   "subject": "fix(tags): raise InvalidTag for malformed tag field counts (#1238)",
+   "src_files": [
+    "src/packaging/tags.py"
+   ],
+   "test_files": [
+    "tests/test_tags.py"
+   ],
+   "gold_files": [
+    "src/packaging/tags.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_tags.py",
+   "base_exit": 1,
+   "base_tail": "        for parts in component_parts:\n            tag_count *= len(parts)\n    \n        if limit is not None and tag_count > limit:\n            raise TooManyTagsError(\n                f\"Compressed tag set would generate {tag_count} tags, exceeding \"\n                f\"limit {limit}\"\n            )\n    \n>       interpreters, abis, platforms = component_parts\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE       ValueError: too many values to unpack (expected 3)\n\ncomponent_parts = [['py3'], ['none'], ['any'], ['extra']]\nlimit      = None\nparts      = ['extra']\ntag        = 'py3-none-any-extra'\ntag_count  = 1\nvalidate_order = False\n\nsrc/packaging/tags.py:289: ValueError\n=========================== short test summary info ============================\nFAILED tests/test_tags.py::TestParseTag::test_invalid_component_count_raises[py3-none] - ValueError: not enough values to unpack (expected 3, got 2)\nFAILED tests/test_tags.py::TestParseTag::test_invalid_component_count_raises[py3-none-any-extra] - ValueError: too many values to unpack (expected 3)\n2 failed, 220 passed in 8.69s",
+   "fixed_seconds": 3.89,
+   "n_tests": 222,
+   "prompt": "`packaging.tags.parse_tag` doesn't validate the number of dash-separated components in a tag string, so malformed tags like `\"py3-none\"` (too few components) or `\"py3-none-any-extra\"` (too many) are not rejected properly. Valid tags must have exactly three components (interpreter-abi-platform); tags with a different count should raise `tags.InvalidTag` with a message mentioning that tags must have exactly three components. Please fix `parse_tag` to validate this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-4c663c9e",
+   "sha": "4c663c9ef5e1ec4f64b01ea9a61c981890a56407",
+   "base": "c411a96fea8dd0091db7044c52d26bfb2e70cfa8",
+   "date": "2026-07-09T10:51:58-07:00",
+   "subject": "fix(markers): normalize extras/dependency_groups membership values at parse time (#1310)",
+   "src_files": [
+    "src/packaging/markers.py"
+   ],
+   "test_files": [
+    "tests/test_markers.py"
+   ],
+   "gold_files": [
+    "src/packaging/markers.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_markers.py",
+   "base_exit": 1,
+   "base_tail": "tests/test_markers.py:484: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_markers.py::TestMarker::test_membership_value_str_normalization[extras] - assert '\"S_P__A_M\" in extras' == '\"s-p-a-m\" in extras'\n  \n  - \"s-p-a-m\" in extras\n  + \"S_P__A_M\" in extras\nFAILED tests/test_markers.py::TestMarker::test_membership_value_str_normalization[dependency_groups] - assert '\"S_P__A_M\" i...ndency_groups' == '\"s-p-a-m\" in...ndency_groups'\n  \n  - \"s-p-a-m\" in dependency_groups\n  ?  ^^^^^^^\n  + \"S_P__A_M\" in dependency_groups\n  ?  ^^^^^^^^\nFAILED tests/test_markers.py::TestMarker::test_membership_value_str_normalization_negated[extras] - assert '\"Foo_Bar\" not in extras' == '\"foo-bar\" not in extras'\n  \n  - \"foo-bar\" not in extras\n  ?  ^  ^^\n  + \"Foo_Bar\" not in extras\n  ?  ^  ^^\nFAILED tests/test_markers.py::TestMarker::test_membership_value_str_normalization_negated[dependency_groups] - assert '\"Foo_Bar\" no...ndency_groups' == '\"foo-bar\" no...ndency_groups'\n  \n  - \"foo-bar\" not in dependency_groups\n  ?  ^  ^^\n  + \"Foo_Bar\" not in dependency_groups\n  ?  ^  ^^\n4 failed, 2289 passed in 9.33s",
+   "fixed_seconds": 7.37,
+   "n_tests": 2293,
+   "prompt": "Marker parsing normalizes the value in `extra == \"X\"` comparisons at parse time (per PEP 503), but doesn't do the same for the set-membership forms `\"X\" in extras` and `\"X\" in dependency_groups` (PEP 685 / PEP 735), even though `evaluate()` already normalizes both sides for these keys. This causes `str()`, `==`, and `hash()` to be inconsistent with evaluation. For example:\n```python\nfrom packaging.markers import Marker\nraw = Marker('\"S_P__A_M\" in extras')\nnormalized = Marker('\"s-p-a-m\" in extras')\nstr(raw)  # currently keeps \"S_P__A_M\" instead of becoming \"s-p-a-m\"\nraw == normalized  # should be True\n```\nThe same issue applies to `dependency_groups` and to the negated `not in` form. Please fix the parser to normalize these membership literals so `str`/`__eq__`/`__hash__` stay consistent.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-30824d9e",
+   "sha": "30824d9e3b33372a81af5e7a1d7e2ceb95e348c6",
+   "base": "cf100d20e09c270cb6e19e72edbd0d40728de501",
+   "date": "2026-07-10T09:06:14-04:00",
+   "subject": "fix(dependency_groups): collect InvalidRequirement instead of leaking it (#1302)",
+   "src_files": [
+    "src/packaging/dependency_groups.py"
+   ],
+   "test_files": [
+    "tests/test_dependency_groups.py"
+   ],
+   "gold_files": [
+    "src/packaging/dependency_groups.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_dependency_groups.py",
+   "base_exit": 1,
+   "base_tail": "        raw_group  = [{}, 'this is not a valid requirement!!!']\n        self       = <packaging.dependency_groups.DependencyGroupResolver object at 0x7f00c1409af0>\n_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ \n\nself = <[AttributeError(\"'Requirement' object has no attribute 'name'\") raised in repr()] Requirement object at 0x7f00c13f7060>\nrequirement_string = 'this is not a valid requirement!!!'\n\n    def __init__(self, requirement_string: str) -> None:\n        try:\n            parsed = _parse_requirement(requirement_string)\n        except ParserSyntaxError as e:\n>           raise InvalidRequirement(str(e)) from e\nE           packaging.requirements.InvalidRequirement: Expected semicolon (after name with no version specifier) or end\nE               this is not a valid requirement!!!\nE                    ^\n\nrequirement_string = 'this is not a valid requirement!!!'\nself       = <[AttributeError(\"'Requirement' object has no attribute 'name'\") raised in repr()] Requirement object at 0x7f00c13f7060>\n\nsrc/packaging/requirements.py:80: InvalidRequirement\n=========================== short test summary info ============================\nFAILED tests/test_dependency_groups.py::test_resolution_collects_invalid_requirement_with_sibling_errors - packaging.requirements.InvalidRequirement: Expected semicolon (after name with no version specifier) or end\n    this is not a valid requirement!!!\n         ^\n1 failed, 37 passed in 7.46s",
+   "fixed_seconds": 2.73,
+   "n_tests": 38,
+   "prompt": "When resolving dependency groups, a malformed PEP 508 requirement string inside a group causes `InvalidRequirement` to be raised directly instead of being collected into the aggregated error group. This means the raw `InvalidRequirement` escapes the expected `[dependency-groups] data for '<name>' was malformed` `ExceptionGroup`, and any other errors already collected from the same group (like an invalid object type appearing earlier in the list) get silently dropped. For example, resolving a group `\"all\": [{}, \"this is not a valid requirement!!!\"]` should raise a single `ExceptionGroup` containing both an `InvalidDependencyGroupObject` error (for the `{}`) and an `InvalidRequirement` error (for the bad string), not just raise `InvalidRequirement` alone. Please fix `resolve_dependency_groups` so invalid requirement strings are collected alongside other errors rather than raised raw.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-458b0ae5",
+   "sha": "458b0ae53e5a4261df851657d147e590b4546eb2",
+   "base": "30824d9e3b33372a81af5e7a1d7e2ceb95e348c6",
+   "date": "2026-07-10T23:43:33-04:00",
+   "subject": "fix(metadata): don't rewrite user values containing '{field}' in errors (#1327)",
+   "src_files": [
+    "src/packaging/metadata.py"
+   ],
+   "test_files": [
+    "tests/test_metadata.py"
+   ],
+   "gold_files": [
+    "src/packaging/metadata.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_metadata.py",
+   "base_exit": 1,
+   "base_tail": "self = <tests.test_metadata.TestMetadata object at 0x7f350a43fdd0>\n\n    def test_invalid_version_with_placeholder_text(self) -> None:\n        # A user value containing the literal text \"{field}\" must survive\n        # unchanged in the error message.\n        meta = metadata.Metadata.from_raw({\"version\": \"{field}\"}, validate=False)\n        with pytest.raises(metadata.InvalidMetadata) as exc_info:\n            meta.version  # noqa: B018\n>       assert str(exc_info.value) == \"'{field}' is invalid for 'version'\"\nE       assert \"''version'' ...for 'version'\" == \"'{field}' is...for 'version'\"\nE         \nE         - '{field}' is invalid for 'version'\nE         + ''version'' is invalid for 'version'\n\nexc_info   = <ExceptionInfo InvalidMetadata(\"''version'' is invalid for 'version'\") tblen=3>\nmeta       = <packaging.metadata.Metadata object at 0x7f350a4246e0>\nself       = <tests.test_metadata.TestMetadata object at 0x7f350a43fdd0>\n\ntests/test_metadata.py:507: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_metadata.py::TestMetadata::test_invalid_version_with_placeholder_text - assert \"''version'' ...for 'version'\" == \"'{field}' is...for 'version'\"\n  \n  - '{field}' is invalid for 'version'\n  + ''version'' is invalid for 'version'\n1 failed, 306 passed in 7.94s",
+   "fixed_seconds": 4.96,
+   "n_tests": 307,
+   "prompt": "When a metadata field's raw value happens to contain literal curly braces like the text \"{field}\", `packaging.metadata` either crashes or mangles the error message instead of reporting the bad value unchanged. For example:\n\n```python\nfrom packaging import metadata\nmeta = metadata.Metadata.from_raw({\"version\": \"{field}\"}, validate=False)\nmeta.version\n```\n\nThis should raise `InvalidMetadata` with a message like `\"'{field}' is invalid for 'version'\"`, preserving the user's original value verbatim, but instead the value gets corrupted or the call raises the wrong kind of error. Please fix this so arbitrary user-supplied values (including ones containing brace characters) always appear unchanged in the resulting error message.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-1a9c4cb6",
+   "sha": "1a9c4cb6b6aac7fb6137fcdc4f440af912d8d87f",
+   "base": "458b0ae53e5a4261df851657d147e590b4546eb2",
+   "date": "2026-07-11T00:38:50-04:00",
+   "subject": "fix: make InvalidMetadata and CyclicDependencyGroup picklable (#1328)",
+   "src_files": [
+    "src/packaging/dependency_groups.py",
+    "src/packaging/metadata.py"
+   ],
+   "test_files": [
+    "tests/test_dependency_groups.py",
+    "tests/test_metadata.py"
+   ],
+   "gold_files": [
+    "src/packaging/dependency_groups.py",
+    "src/packaging/metadata.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_dependency_groups.py tests/test_metadata.py",
+   "base_exit": 1,
+   "base_tail": ">       copy = pickle.loads(pickle.dumps(exc))\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE       TypeError: CyclicDependencyGroup.__init__() missing 2 required positional arguments: 'group' and 'include_group'\n\nexc        = CyclicDependencyGroup('Cyclic dependency group include while resolving group1: group1 -> group2, group2 -> group1')\n\ntests/test_dependency_groups.py:328: TypeError\n__________________ TestInvalidMetadata.test_pickle_roundtrip ___________________\n\nself = <tests.test_metadata.TestInvalidMetadata object at 0x7f15e65075f0>\n\n    def test_pickle_roundtrip(self) -> None:\n        exc = metadata.InvalidMetadata(\"version\", \"'1.0.a' is invalid\")\n>       copy = pickle.loads(pickle.dumps(exc))\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE       TypeError: InvalidMetadata.__init__() missing 1 required positional argument: 'message'\n\nexc        = InvalidMetadata(\"'1.0.a' is invalid\")\nself       = <tests.test_metadata.TestInvalidMetadata object at 0x7f15e65075f0>\n\ntests/test_metadata.py:288: TypeError\n=========================== short test summary info ============================\nFAILED tests/test_dependency_groups.py::test_cyclic_include_pickle_roundtrip - TypeError: CyclicDependencyGroup.__init__() missing 2 required positional arguments: 'group' and 'include_group'\nFAILED tests/test_metadata.py::TestInvalidMetadata::test_pickle_roundtrip - TypeError: InvalidMetadata.__init__() missing 1 required positional argument: 'message'\n2 failed, 345 passed in 12.58s",
+   "fixed_seconds": 6.24,
+   "n_tests": 347,
+   "prompt": "`InvalidMetadata` and `CyclicDependencyGroup` exceptions can't survive a pickle round-trip. For example:\n\n```python\nimport pickle\nfrom packaging.metadata import InvalidMetadata\n\nexc = InvalidMetadata(\"version\", \"'1.0.a' is invalid\")\npickle.loads(pickle.dumps(exc))\n```\n\nand similarly for `CyclicDependencyGroup(\"group1\", \"group2\", \"group1\")` from the dependency groups module. Both raise a `TypeError` when unpickling because their constructors don't match the default exception argument reconstruction. Please fix these exceptions so they pickle and unpickle correctly, preserving all their attributes and string representation.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-9d0ec47b",
+   "sha": "9d0ec47b36a1bcdf705b397b84cd89272410a00d",
+   "base": "1a9c4cb6b6aac7fb6137fcdc4f440af912d8d87f",
+   "date": "2026-07-11T08:58:59-04:00",
+   "subject": "fix(metadata): reject malformed Description-Content-Type values (#1329)",
+   "src_files": [
+    "src/packaging/metadata.py"
+   ],
+   "test_files": [
+    "tests/test_metadata.py"
+   ],
+   "gold_files": [
+    "src/packaging/metadata.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_metadata.py",
+   "base_exit": 1,
+   "base_tail": "ED tests/test_metadata.py::TestMetadata::test_from_email_wraps_description_content_type_parse_errors[text/plain; charset=\"unterminated] - assert '\\'text/plain; charset=\"unterminated\\'' in \"'description-content-type' can only specify the UTF-8 charset, not 'unterminated'\"\n +  where '\\'text/plain; charset=\"unterminated\\'' = repr('text/plain; charset=\"unterminated')\n +  and   \"'description-content-type' can only specify the UTF-8 charset, not 'unterminated'\" = str(InvalidMetadata(\"'description-content-type' can only specify the UTF-8 charset, not 'unterminated'\"))\nFAILED tests/test_metadata.py::TestMetadata::test_from_email_wraps_description_content_type_parse_errors[text/plain; {b}] - Failed: DID NOT RAISE ExceptionGroup\nFAILED tests/test_metadata.py::TestMetadata::test_from_email_wraps_description_content_type_parse_errors[text/plain; a}b] - Failed: DID NOT RAISE ExceptionGroup\nFAILED tests/test_metadata.py::TestMetadata::test_from_email_wraps_description_content_type_parse_errors[text/plain; x*] - IndexError: string index out of range\nFAILED tests/test_metadata.py::TestMetadata::test_invalid_description_content_type[text/plain; {b}] - Failed: DID NOT RAISE InvalidMetadata\nFAILED tests/test_metadata.py::TestMetadata::test_invalid_description_content_type[text/plain; a}b] - Failed: DID NOT RAISE InvalidMetadata\nFAILED tests/test_metadata.py::TestMetadata::test_invalid_description_content_type[text/plain; x*] - IndexError: string index out of range\n8 failed, 309 passed in 14.94s",
+   "fixed_seconds": 9.29,
+   "n_tests": 317,
+   "prompt": "Parsing metadata with a malformed `Description-Content-Type` header can crash with an unrelated `IndexError` instead of a clean validation error, and some genuinely invalid values are silently accepted. For example:\n\n```python\nfrom packaging import metadata\nmetadata.Metadata.from_email(\n    \"Metadata-Version: 2.6\\nName: packaging\\nVersion: 1.0\\n\"\n    \"Description-Content-Type: text/plain; x*\\n\"\n)\n```\n\nThis should raise a validation error (an `ExceptionGroup` containing an `InvalidMetadata` for the `description-content-type` field, explaining the value is not a valid content type) rather than an `IndexError`. The same should hold for other malformed values such as unterminated quoted parameters or unbalanced braces in parameters, and for content types that parse but carry header defects (e.g. plain `application/octet-stream` used where a content type is expected but no charset/variant makes sense). Please fix the Description-Content-Type validation so all of these malformed inputs raise a proper `InvalidMetadata` error with an accurate message instead of crashing or being silently accepted.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-abf00054",
+   "sha": "abf000549c2ec5b31357046498d6e4f0f9d7d743",
+   "base": "58c6cd700bdfd33cb3ebfbb9ad5d8cfde4e82f08",
+   "date": "2026-07-20T00:24:22-04:00",
+   "subject": "fix(metadata): accept UTF-8 charset case-insensitively (#1330)",
+   "src_files": [
+    "src/packaging/metadata.py"
+   ],
+   "test_files": [
+    "tests/test_metadata.py"
+   ],
+   "gold_files": [
+    "src/packaging/metadata.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_metadata.py",
+   "base_exit": 1,
+   "base_tail": "          )\nE           packaging.metadata.InvalidMetadata: 'description-content-type' can only specify the UTF-8 charset, not 'Utf-8'\n\ncharset    = 'Utf-8'\ncontent_type = 'text/plain'\ncontent_type_header = 'text/plain; charset=\"Utf-8\"'\ncontent_types = {'text/markdown', 'text/plain', 'text/x-rst'}\ninvalid_msg = \"'description-content-type' must be one of ['text/markdown', 'text/x-rst', 'text/plain'], not 'text/plain; charset=Utf-8'\"\nmessage    = <email.message.EmailMessage object at 0x7fa02cd0bcb0>\nparameters = mappingproxy({'charset': 'Utf-8'})\nself       = <packaging.metadata._Validator object at 0x7fa02d368bf0>\nvalue      = 'text/plain; charset=Utf-8'\n\nsrc/packaging/metadata.py:672: InvalidMetadata\n=========================== short test summary info ============================\nFAILED tests/test_metadata.py::TestMetadata::test_from_email_description_content_type_lowercase_charset - InvalidMetadata(\"'description-content-type' can only specify the UTF-8 charset, not 'utf-8'\") [single exception in ExceptionGroup]\nFAILED tests/test_metadata.py::TestMetadata::test_valid_description_content_type[text/plain; charset=utf-8] - packaging.metadata.InvalidMetadata: 'description-content-type' can only specify the UTF-8 charset, not 'utf-8'\nFAILED tests/test_metadata.py::TestMetadata::test_valid_description_content_type[text/plain; charset=Utf-8] - packaging.metadata.InvalidMetadata: 'description-content-type' can only specify the UTF-8 charset, not 'Utf-8'\n3 failed, 316 passed in 12.65s",
+   "fixed_seconds": 6.07,
+   "n_tests": 319,
+   "prompt": "`Description-Content-Type` validation rejects a lowercase `charset=utf-8` parameter even though `charset=UTF-8` is accepted. For example:\n\n```python\nfrom packaging import metadata\nmeta = metadata.Metadata.from_raw(\n    {\"description_content_type\": \"text/plain; charset=utf-8\"}, validate=False\n)\nmeta.description_content_type\n```\n\nThis currently raises `InvalidMetadata`, but charset values should be compared case-insensitively (so `utf-8`, `UTF-8`, and `Utf-8` are all treated as valid UTF-8). Please fix the charset comparison to be case-insensitive.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-5b583e30",
+   "sha": "5b583e309996a085ad3b5b045f3bf50a09c11b58",
+   "base": "2497782b2bb03812d2a12ae882a4390c61ec5061",
+   "date": "2026-07-20T00:50:46-04:00",
+   "subject": "fix: preserve marker quote semantics when serializing values (#1213)",
+   "src_files": [
+    "src/packaging/_parser.py"
+   ],
+   "test_files": [
+    "tests/test_markers.py",
+    "tests/test_requirements.py"
+   ],
+   "gold_files": [
+    "src/packaging/_parser.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_markers.py tests/test_requirements.py",
+   "base_exit": 1,
+   "base_tail": "rement('demo; \"a\" == os_name or python_version >= \"0\" or \"b\" == os_name')>\nreq_string = 'demo; \\'a\" == os_name or python_version >= \"0\" or \"b\\' == os_name'\n\ntests/test_requirements.py:186: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_markers.py::TestNode::test_value_serialize_chooses_quote_delimiter[a\"b-'a\"b'] - assert '\"a\"b\"' == '\\'a\"b\\''\n  \n  - 'a\"b'\n  + \"a\"b\"\nFAILED tests/test_markers.py::TestNode::test_value_serialize_rejects_both_quote_delimiters - Failed: DID NOT RAISE ValueError\nFAILED tests/test_markers.py::TestMarker::test_str_repr_eq_hash['a\" == os_name or python_version >= \"0\" or \"b' == os_name-'a\" == os_name or python_version >= \"0\" or \"b' == os_name] - assert '\"a\" == os_na...b\" == os_name' == '\\'a\" == os_n...\\' == os_name'\n  \n  - 'a\" == os_name or python_version >= \"0\" or \"b' == os_name\n  ? ^                                            ^\n  + \"a\" == os_name or python_version >= \"0\" or \"b\" == os_name\n  ? ^                                            ^\nFAILED tests/test_requirements.py::test_requirement_marker_with_embedded_double_quote_round_trips - assert 'demo; \"a\" ==...b\" == os_name' == 'demo; \\'a\" =...\\' == os_name'\n  \n  - demo; 'a\" == os_name or python_version >= \"0\" or \"b' == os_name\n  ?       ^                                            ^\n  + demo; \"a\" == os_name or python_version >= \"0\" or \"b\" == os_name\n  ?       ^                                            ^\n4 failed, 7616 passed in 49.64s",
+   "fixed_seconds": 53.34,
+   "n_tests": 7620,
+   "prompt": "Serializing a marker `Value` that contains a quote character doesn't always pick a delimiter that preserves the original meaning, and values containing both `\"` and `'` aren't handled safely. For example, round-tripping a requirement whose marker embeds a quote can change its semantics:\n\n```python\nfrom packaging.requirements import Requirement\n\nreq = Requirement('demo; \\'a\" == os_name or python_version >= \"0\" or \"b\\' == os_name')\nassert str(Requirement(str(req))) == str(req)\n```\n\nA `Value` should serialize using whichever quote character (`\"` or `'`) doesn't appear in the value, and if the value contains both quote characters it should raise a clear `ValueError` rather than producing a string that can't be parsed back correctly. Please fix the marker value serialization so quoting is chosen correctly and round-trips preserve semantics.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-20683402",
+   "sha": "206834025040aca6f8a2fdfc4039dbfa2a9861a6",
+   "base": "5b583e309996a085ad3b5b045f3bf50a09c11b58",
+   "date": "2026-07-20T00:54:14-04:00",
+   "subject": "fix(metadata): aggregate from_email validation errors (#1268)",
+   "src_files": [
+    "src/packaging/metadata.py"
+   ],
+   "test_files": [
+    "tests/test_metadata.py"
+   ],
+   "gold_files": [
+    "src/packaging/metadata.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_metadata.py",
+   "base_exit": 1,
+   "base_tail": "aging\\n\"\n                \"Unknown-Field: value\\n\"\n                \"Version: invalid version\\n\"\n            )\n    \n        exceptions = exc_info.value.exceptions\n>       assert len(exceptions) == 2\nE       assert 1 == 2\nE        +  where 1 = len((InvalidMetadata(\"unrecognized field: 'unknown-field'\"),))\n\nexc_info   = <ExceptionInfo ExceptionGroup('unparsed', [InvalidMetadata(\"unrecognized field: 'unknown-field'\")]) tblen=5>\nexceptions = (InvalidMetadata(\"unrecognized field: 'unknown-field'\"),)\nself       = <tests.test_metadata.TestMetadata object at 0x7f95ed8c6690>\n\ntests/test_metadata.py:468: AssertionError\n=========================== short test summary info ============================\nFAILED tests/test_metadata.py::TestMetadata::test_from_email_unparsed - assert 1 == 4\n +  where 1 = len((InvalidMetadata(\"unrecognized field: 'hello'\"),))\nFAILED tests/test_metadata.py::TestMetadata::test_from_email_collects_unparsed_and_invalid_fields - assert 1 == 2\n +  where 1 = len((InvalidMetadata(\"'name' has invalid data\"),))\nFAILED tests/test_metadata.py::TestMetadata::test_from_email_collects_required_fields_after_unparsed_known_header - assert 2 == 4\n +  where 2 = len((InvalidMetadata(\"'name' has invalid data\"), InvalidMetadata(\"unrecognized field: 'unknown-field'\")))\nFAILED tests/test_metadata.py::TestMetadata::test_from_email_collects_unknown_and_invalid_fields - assert 1 == 2\n +  where 1 = len((InvalidMetadata(\"unrecognized field: 'unknown-field'\"),))\n4 failed, 325 passed in 12.26s",
+   "fixed_seconds": 8.18,
+   "n_tests": 329,
+   "prompt": "`Metadata.from_email` stops after the first problem it finds instead of reporting all the validation issues in the input at once. For example:\n\n```python\nfrom packaging import metadata\nmetadata.Metadata.from_email(\"Hello: PyPA\")\n```\n\nThis raises an `ExceptionGroup`, but it only contains a single error even though the input is missing several required fields (`Metadata-Version`, `Name`, `Version`) in addition to the unknown `Hello` field. All of these problems should be collected and reported together as `InvalidMetadata` instances in one `ExceptionGroup`, so a caller can see everything wrong with the input in one pass instead of fixing issues one at a time. Please fix `from_email` to aggregate all validation errors instead of stopping at the first one.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-8af75907",
+   "sha": "8af75907bf1140071a6a706874fcf1d73cc39c71",
+   "base": "9c6f09ba6b313a561d6a64d988647ff3115e82ae",
+   "date": "2026-07-20T11:44:57-04:00",
+   "subject": "fix: wheel filename regex for \\n at end of string (#1341)",
+   "src_files": [
+    "src/packaging/utils.py"
+   ],
+   "test_files": [
+    "tests/test_utils.py"
+   ],
+   "gold_files": [
+    "src/packaging/utils.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_utils.py",
+   "base_exit": 1,
+   "base_tail": "            (\"foo-1.0-py3-none-any.wheel\"),  # Incorrect file extension (`.wheel`)\n            (\"foo__bar-1.0-py3-none-any.whl\"),  # Invalid name (`__`)\n            (\"foo\\n-1.0-py3-none-any.whl\"),  # Invalid name (`\\n`)\n            (\"foo#bar-1.0-py3-none-any.whl\"),  # Invalid name (`#`)\n            (\"-1.0-py3-none-any.whl\"),  # Empty project name\n            (\"-1.0-200-py3-none-any.whl\"),  # Empty project name (with build number)\n            (\"foobar-1.x-py3-none-any.whl\"),  # Invalid version (`1.x`)\n            # Build number doesn't start with a digit (`abc`)\n            (\"foo-1.0-abc-py3-none-any.whl\"),\n            (\"foo-1.0-200-py3-none-any-junk.whl\"),  # Too many dashes (`-junk`)\n            (\"foo-1.0--none-any.whl\"),  # Empty interpreter component\n            (\"foo-1.0-py3-none-.whl\"),  # Empty platform component\n            (\"foo-1.0-py3.-none-any.whl\"),  # Empty member in a compressed tag set\n        ],\n    )\n    def test_parse_wheel_invalid_filename(filename: str) -> None:\n>       with pytest.raises(InvalidWheelFilename):\nE       Failed: DID NOT RAISE InvalidWheelFilename\n\nfilename   = 'foo\\n-1.0-py3-none-any.whl'\n\ntests/test_utils.py:194: Failed\n=========================== short test summary info ============================\nFAILED tests/test_utils.py::test_parse_wheel_invalid_filename[foo\\n-1.0-py3-none-any.whl] - Failed: DID NOT RAISE InvalidWheelFilename\n1 failed, 74 passed in 8.36s",
+   "fixed_seconds": 5.66,
+   "n_tests": 75,
+   "prompt": "`parse_wheel_filename` from `packaging.utils` incorrectly accepts a wheel filename that has a trailing newline in the project name, when it should reject it as invalid. For example:\n\n```python\nfrom packaging.utils import parse_wheel_filename\nparse_wheel_filename(\"foo\\n-1.0-py3-none-any.whl\")\n```\n\nThis should raise `InvalidWheelFilename` (as it does for other invalid characters like `#` or `__` in the name), but instead the trailing `\\n` slips through, likely because of how `$` is handled at the end of the matching regex. Please fix the wheel filename validation so a name containing a newline is correctly rejected.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-9c652e4b",
+   "sha": "9c652e4b4ced3c94f133a1b91c726023f0950b4f",
+   "base": "8af75907bf1140071a6a706874fcf1d73cc39c71",
+   "date": "2026-07-20T11:58:36-04:00",
+   "subject": "feat(pylock): allow select() to prefer source distributions (#1334)",
+   "src_files": [
+    "src/packaging/pylock.py"
+   ],
+   "test_files": [
+    "tests/test_pylock_select.py"
+   ],
+   "gold_files": [
+    "src/packaging/pylock.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_pylock_select.py",
+   "base_exit": 1,
+   "base_tail": "x.environment,\n                prefer_sdist_predicate=predicate,\n            )\n        )\nE       TypeError: Pylock.select() got an unexpected keyword argument 'prefer_sdist_predicate'\n\ncalled     = True\nexpected_type = <class 'packaging.pylock.PackageSdist'>\ninclude_sdist = True\nnames      = []\npredicate  = <function test_prefer_sdist_predicate.<locals>.predicate at 0x7f0b2875e8e0>\nprefer_sdist = False\nwheel_python_tag = None\n\ntests/test_pylock_select.py:378: TypeError\n=========================== short test summary info ============================\nFAILED tests/test_pylock_select.py::test_prefer_sdist_predicate[compatible-wheel-predicate-false] - TypeError: Pylock.select() got an unexpected keyword argument 'prefer_sdist_predicate'\nFAILED tests/test_pylock_select.py::test_prefer_sdist_predicate[sdist-predicate-true] - TypeError: Pylock.select() got an unexpected keyword argument 'prefer_sdist_predicate'\nFAILED tests/test_pylock_select.py::test_prefer_sdist_predicate[sdist-predicate-true-incompatible-wheel] - TypeError: Pylock.select() got an unexpected keyword argument 'prefer_sdist_predicate'\nFAILED tests/test_pylock_select.py::test_prefer_sdist_predicate[compatible-wheel-no-sdist] - TypeError: Pylock.select() got an unexpected keyword argument 'prefer_sdist_predicate'\nFAILED tests/test_pylock_select.py::test_prefer_sdist_predicate[sdist-only-predicate-false] - TypeError: Pylock.select() got an unexpected keyword argument 'prefer_sdist_predicate'\n5 failed, 20 passed in 7.53s",
+   "fixed_seconds": 5.42,
+   "n_tests": 25,
+   "prompt": "`Pylock.select()` always prefers a wheel over a source distribution when both are available and the wheel is compatible, with no way to override that for specific packages. Please add a way to pass a predicate (taking the normalized package name and returning a bool) to `select()` that lets a caller indicate that the source distribution should be preferred over an otherwise-compatible wheel for a given package. When the predicate returns true for a package that has both a compatible wheel and an sdist, `select()` should choose the sdist; when it's false, or when only a wheel is available, the existing wheel-preferring behavior should be unchanged. It should also work correctly when no sdist exists at all (the predicate may still be called, but selection should fall back to the wheel).",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-fe18f139",
+   "sha": "fe18f139c5b3d73cd9fdd9b25f1eda1b6fd7ba15",
+   "base": "9c652e4b4ced3c94f133a1b91c726023f0950b4f",
+   "date": "2026-07-20T12:53:21-04:00",
+   "subject": "fix(requirements): normalize invalid specifier errors (#1332)",
+   "src_files": [
+    "src/packaging/requirements.py"
+   ],
+   "test_files": [
+    "tests/test_requirements.py"
+   ],
+   "gold_files": [
+    "src/packaging/requirements.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_requirements.py",
+   "base_exit": 1,
+   "base_tail": "        \"\"\"Initialize a Specifier instance.\n    \n        :param spec:\n            The string representation of a specifier which will be parsed and\n            normalized before use.\n        :param prereleases:\n            This tells the specifier if it should accept prerelease versions if\n            applicable or not. The default of ``None`` will autodetect it from the\n            given specifiers.\n        :raises InvalidSpecifier:\n            If the given specifier is invalid (i.e. bad syntax).\n        \"\"\"\n        if not self._regex.fullmatch(spec):\n>           raise InvalidSpecifier(f\"Invalid specifier: {spec!r}\")\nE           packaging.specifiers.InvalidSpecifier: Invalid specifier: 'y'\n\nprereleases = None\nself       = <[AttributeError(\"'Specifier' object has no attribute '_prereleases'\") raised in repr()] Specifier object at 0x7f2ab93a5e00>\nspec       = 'y'\n\nsrc/packaging/specifiers.py:369: InvalidSpecifier\n=========================== short test summary info ============================\nFAILED tests/test_requirements.py::TestRequirementParsing::test_error_when_specifier_set_rejects_parsed_specifier - packaging.specifiers.InvalidSpecifier: Invalid specifier: 'y'\nFAILED tests/test_requirements.py::test_pickle_requirement_setstate_rejects_invalid_string[demo===x,y] - packaging.specifiers.InvalidSpecifier: Invalid specifier: 'y'\n2 failed, 5321 passed in 65.30s (0:01:05)",
+   "fixed_seconds": 41.0,
+   "n_tests": 5323,
+   "prompt": "When a `Requirement` string contains an arbitrary-equality specifier list where one of the comma-separated values is itself invalid, the resulting error message is confusing/unhelpful instead of clearly pointing at the bad specifier. For example:\n\n```python\nfrom packaging.requirements import Requirement\nRequirement(\"demo===x,y\")\n```\n\nThis should raise `InvalidRequirement` with a message like `\"Invalid specifier: 'y'\"`, but currently the underlying specifier error isn't surfaced clearly through `Requirement`. This also affects `Requirement.__setstate__` when restoring from a string that has this kind of invalid specifier \u2014 it should raise `TypeError` with a message indicating the requirement can't be restored, same as for any other invalid requirement string. Please fix requirement parsing/unpickling so invalid specifier errors are reported clearly and consistently.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-189a76d5",
+   "sha": "189a76d54d64899adbca907c2a3efa5b6befdb28",
+   "base": "0bfc3cea4f9fe1b1b0c80ce06f02bd2433500c81",
+   "date": "2026-07-21T07:43:19-04:00",
+   "subject": "fix(parser): require true end of input (#1345)",
+   "src_files": [
+    "src/packaging/_tokenizer.py"
+   ],
+   "test_files": [
+    "tests/test_markers.py",
+    "tests/test_requirements.py"
+   ],
+   "gold_files": [
+    "src/packaging/_tokenizer.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_markers.py tests/test_requirements.py",
+   "base_exit": 1,
+   "base_tail": "\n    @pytest.mark.parametrize(\"line_break\", [\"\\n\", \"\\r\", \"\\r\\n\"])\n    @pytest.mark.parametrize(\n        \"requirement\",\n        [\n            \"name>=1\",\n            'name; python_version >= \"3\"',\n        ],\n    )\n    def test_error_when_suffixed_with_line_break(\n        self, requirement: str, line_break: str\n    ) -> None:\n>       with pytest.raises(InvalidRequirement):\nE       Failed: DID NOT RAISE InvalidRequirement\n\nline_break = '\\n'\nrequirement = 'name; python_version >= \"3\"'\nself       = <tests.test_requirements.TestRequirementParsing object at 0x7fa74b243560>\n\ntests/test_requirements.py:243: Failed\n=========================== short test summary info ============================\nFAILED tests/test_markers.py::TestMarker::test_parses_invalid_trailing_line_break[\\n] - Failed: DID NOT RAISE InvalidMarker\nFAILED tests/test_requirements.py::TestRequirementParsing::test_error_when_suffixed_with_line_break[name>=1-\\n] - Failed: DID NOT RAISE InvalidRequirement\nFAILED tests/test_requirements.py::TestRequirementParsing::test_error_when_suffixed_with_line_break[name; python_version >= \"3\"-\\n] - Failed: DID NOT RAISE InvalidRequirement\n3 failed, 7635 passed in 62.63s (0:01:02)",
+   "fixed_seconds": 58.14,
+   "n_tests": 7638,
+   "prompt": "Marker and Requirement parsing silently accepts trailing garbage at the end of the string instead of treating it as a syntax error, as long as it's a line break. For example:\n\n```python\nfrom packaging.markers import Marker\nMarker('python_version >= \"3\"\\n')\n```\n\nThis should raise `InvalidMarker` (a trailing `\\n`, `\\r`, or `\\r\\n` is not valid syntax), and the same applies to `Requirement` strings like `\"name>=1\\n\"` or `'name; python_version >= \"3\"\\r\\n'`, which should raise `InvalidRequirement`. Meanwhile, trailing horizontal whitespace (plain spaces or tabs) at the end of a marker or requirement string should continue to be accepted and ignored, e.g. `Marker('python_version >= \"3\" ')` should still equal `Marker('python_version >= \"3\"')`. Please fix the parser so it correctly requires true end of input and rejects trailing line breaks while still tolerating trailing horizontal whitespace.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-826426fc",
+   "sha": "826426fc88773515fab149a5f6bde85761e57fbb",
+   "base": "b62954b62d04f58a939d2856c67ebe4de32cdb5d",
+   "date": "2026-07-25T08:13:13-04:00",
+   "subject": "fix(pylock): respect an explicitly empty tag sequence in select() (#1349)",
+   "src_files": [
+    "src/packaging/pylock.py"
+   ],
+   "test_files": [
+    "tests/test_pylock_select.py"
+   ],
+   "gold_files": [
+    "src/packaging/pylock.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_pylock_select.py",
+   "base_exit": 1,
+   "base_tail": "ckage(name='foo', version=None, marker=None, requires_python=None, dependencies=None, vcs=None, directory=None, ar...eel(name=None, upload_time=None, url=None, path='./foo-1.0-py3-none-any.whl', size=None, hashes={'sha256': 'abc123'}))]\n\ntests/test_pylock_select.py:321: AssertionError\n___________________ test_empty_tags_rejects_wheel_only_lock ____________________\n\n    def test_empty_tags_rejects_wheel_only_lock() -> None:\n        pylock = _pylock_with_wheel_and_sdist(include_sdist=False)\n    \n>       with pytest.raises(\n            PylockSelectError, match=r\"No wheel found matching .* and no sdist available\"\n        ):\nE       Failed: DID NOT RAISE PylockSelectError\n\npylock     = Pylock(lock_version=<Version('1.0')>, environments=None, requires_python=None, extras=None, dependency_groups=None, de...o-1.0-py3-none-any.whl', size=None, hashes={'sha256': 'abc123'})], attestation_identities=None, tool=None)], tool=None)\n\ntests/test_pylock_select.py:327: Failed\n=========================== short test summary info ============================\nFAILED tests/test_pylock_select.py::test_empty_tags_selects_sdist_instead_of_host_compatible_wheel - AssertionError: assert False\n +  where False = isinstance(PackageWheel(name=None, upload_time=None, url=None, path='./foo-1.0-py3-none-any.whl', size=None, hashes={'sha256': 'abc123'}), PackageSdist)\nFAILED tests/test_pylock_select.py::test_empty_tags_rejects_wheel_only_lock - Failed: DID NOT RAISE PylockSelectError\n2 failed, 25 passed in 9.49s",
+   "fixed_seconds": 5.38,
+   "n_tests": 27,
+   "prompt": "When calling `Pylock.select()` with an explicitly empty `tags` list (`tags=[]`), it seems to be treated the same as \"no tag filter\" instead of \"no wheel tags are acceptable\". For example, building a Pylock that contains both a wheel and an sdist for a package and calling `pylock.select(tags=[], environment=...)` currently returns the host-compatible wheel, but since an empty tag sequence should mean no wheel can match, it should instead fall back to the sdist, and if only a wheel is available (no sdist) it should raise a `PylockSelectError` saying no wheel matched and no sdist is available. Please fix `select()` to respect an explicitly empty tag sequence rather than treating it as unset.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-26fa1d42",
+   "sha": "26fa1d42ccd98010d5fcf701dd10069e761b034c",
+   "base": "826426fc88773515fab149a5f6bde85761e57fbb",
+   "date": "2026-07-27T23:40:28-04:00",
+   "subject": "fix: reject invalid interpreter tags (#1351)",
+   "src_files": [
+    "src/packaging/tags.py",
+    "src/packaging/utils.py"
+   ],
+   "test_files": [
+    "tests/test_tags.py",
+    "tests/test_utils.py"
+   ],
+   "gold_files": [
+    "CHANGELOG.rst",
+    "src/packaging/tags.py",
+    "src/packaging/utils.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_tags.py tests/test_utils.py",
+   "base_exit": 1,
+   "base_tail": "        # Build number doesn't start with a digit (`abc`)\n            (\"foo-1.0-abc-py3-none-any.whl\"),\n            (\"foo-1.0-200-py3-none-any-junk.whl\"),  # Too many dashes (`-junk`)\n            (\"foo-1.0--none-any.whl\"),  # Empty interpreter component\n            (\"foo-1.0-py3-none-.whl\"),  # Empty platform component\n            (\"foo-1.0-py3.-none-any.whl\"),  # Empty member in a compressed tag set\n            (\"playlyfe-0.1.1-2.7.6-none-any.whl\"),  # Invalid interpreter components\n        ],\n    )\n    def test_parse_wheel_invalid_filename(filename: str) -> None:\n>       with pytest.raises(InvalidWheelFilename):\nE       Failed: DID NOT RAISE InvalidWheelFilename\n\nfilename   = 'playlyfe-0.1.1-2.7.6-none-any.whl'\n\ntests/test_utils.py:207: Failed\n=========================== short test summary info ============================\nFAILED tests/test_tags.py::TestParseTag::test_invalid_interpreter_raises[2-none-any] - Failed: DID NOT RAISE InvalidTag\nFAILED tests/test_tags.py::TestParseTag::test_invalid_interpreter_raises[2.7.6-none-any] - Failed: DID NOT RAISE InvalidTag\nFAILED tests/test_tags.py::TestParseTag::test_invalid_interpreter_raises[py3.2-none-any] - Failed: DID NOT RAISE InvalidTag\nFAILED tests/test_tags.py::TestParseTag::test_invalid_interpreter_raises[py+3-none-any] - Failed: DID NOT RAISE InvalidTag\nFAILED tests/test_utils.py::test_parse_wheel_invalid_filename[playlyfe-0.1.1-2.7.6-none-any.whl] - Failed: DID NOT RAISE InvalidWheelFilename\n5 failed, 301 passed in 15.11s",
+   "fixed_seconds": 6.98,
+   "n_tests": 306,
+   "prompt": "`packaging.tags.parse_tag()` (and by extension wheel filename parsing) accepts interpreter components that are not valid identifiers, letting malformed values through. For example, `tags.parse_tag(\"2.7.6-none-any\")` or parsing a wheel filename like `playlyfe-0.1.1-2.7.6-none-any.whl` succeeds and expands into tags with a numeric-looking interpreter instead of being rejected, while things like `py3.2-none-any` or `py+3-none-any` also slip through. Valid interpreter tags should be identifiers (e.g. `cp311`, `sillywalk`, `_custom`), so anything else should raise `InvalidTag` with a message indicating an invalid interpreter. Please add proper validation for the interpreter component of a tag.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-2d873eb6",
+   "sha": "2d873eb6002021a8c007c933fbdab58b37a5079b",
+   "base": "413d006fadf5b9b14d78ad444201d8189bff8c64",
+   "date": "2026-07-31T21:14:18-04:00",
+   "subject": "fix(metadata): fold every line boundary when writing headers (#1356)",
+   "src_files": [
+    "src/packaging/metadata.py"
+   ],
+   "test_files": [
+    "tests/test_metadata.py"
+   ],
+   "gold_files": [
+    "CHANGELOG.rst",
+    "src/packaging/metadata.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_metadata.py",
+   "base_exit": 1,
+   "base_tail": ": ValueA\\nRequires-Dist: injected\\n'\nFAILED tests/test_metadata.py::TestMetadataWriting::test_headers_fold_every_line_boundary[\\x0c] - email.errors.HeaderWriteError: folded header contains newline: 'ItemA: ValueA\\nRequires-Dist: injected\\n'\nFAILED tests/test_metadata.py::TestMetadataWriting::test_headers_fold_every_line_boundary[\\x1c] - email.errors.HeaderWriteError: folded header contains newline: 'ItemA: ValueA\\nRequires-Dist: injected\\n'\nFAILED tests/test_metadata.py::TestMetadataWriting::test_headers_fold_every_line_boundary[\\x1d] - email.errors.HeaderWriteError: folded header contains newline: 'ItemA: ValueA\\nRequires-Dist: injected\\n'\nFAILED tests/test_metadata.py::TestMetadataWriting::test_headers_fold_every_line_boundary[\\x1e] - email.errors.HeaderWriteError: folded header contains newline: 'ItemA: ValueA\\nRequires-Dist: injected\\n'\nFAILED tests/test_metadata.py::TestMetadataWriting::test_headers_fold_every_line_boundary[\\x85] - email.errors.HeaderWriteError: folded header contains newline: 'ItemA: ValueA\\nRequires-Dist: injected\\n'\nFAILED tests/test_metadata.py::TestMetadataWriting::test_headers_fold_every_line_boundary[\\u2028] - email.errors.HeaderWriteError: folded header contains newline: 'ItemA: ValueA\\nRequires-Dist: injected\\n'\nFAILED tests/test_metadata.py::TestMetadataWriting::test_headers_fold_every_line_boundary[\\u2029] - email.errors.HeaderWriteError: folded header contains newline: 'ItemA: ValueA\\nRequires-Dist: injected\\n'\n12 failed, 330 passed in 19.73s",
+   "fixed_seconds": 8.94,
+   "n_tests": 342,
+   "prompt": "When writing RFC822 metadata headers via `Metadata.as_rfc822()`, only `\\n` line boundaries in header values get folded/escaped; other line-boundary characters such as `\\r`, `\\v`, `\\f`, `\\x1c`-`\\x1e`, `\\x85`, `\\u2028`, and `\\u2029` are passed through unfolded. Depending on the Python version this either lets a value like `\"Hello\\rWorld\"` inject what looks like an extra header line into the generated metadata, or causes `email` to raise `HeaderWriteError` when writing it. For example:\n```python\nfrom packaging.metadata import Metadata\nmeta = Metadata.from_raw({\"version\": \"1.2.3\", \"name\": \"packaging\", \"author\": \"Hello\\rWorld\", \"metadata_version\": \"2.3\"})\nmeta.as_rfc822().as_string()\n```\nAll of these line-boundary characters should be folded consistently like `\\n` is, and similarly `Summary` validation should reject values containing any of them, not just `\\n`. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-b80e6eb0",
+   "sha": "b80e6eb0a6c0f61dcaa9b1587f3aab370263dc65",
+   "base": "3db4261366eebeb802574458dd037b3e13515e2e",
+   "date": "2026-08-05T17:51:27-04:00",
+   "subject": "fix(pylock): respect explicitly empty environments in select() (#1362)",
+   "src_files": [
+    "src/packaging/pylock.py"
+   ],
+   "test_files": [
+    "tests/test_pylock_select.py"
+   ],
+   "gold_files": [
+    "src/packaging/pylock.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_pylock_select.py",
+   "base_exit": 1,
+   "base_tail": "    )\n    def test_lock_no_matching_env(environments: list[Marker]) -> None:\n        pylock = Pylock(\n            lock_version=Version(\"1.0\"),\n            created_by=\"some_tool\",\n            environments=environments,\n            packages=[],\n        )\n        pylock.validate()\n>       with pytest.raises(\n            PylockSelectError,\n            match=(\n                \"Provided environment does not satisfy any of the \"\n                \"environments specified in the lock file\"\n            ),\n        ):\nE       Failed: DID NOT RAISE PylockSelectError\n\nenvironments = []\npylock     = Pylock(lock_version=<Version('1.0')>, environments=[], requires_python=None, extras=None, dependency_groups=None, default_groups=None, created_by='some_tool', packages=[], tool=None)\n\ntests/test_pylock_select.py:85: Failed\n=========================== short test summary info ============================\nFAILED tests/test_pylock_select.py::test_lock_no_matching_env[environments0] - Failed: DID NOT RAISE PylockSelectError\n1 failed, 28 passed in 9.28s",
+   "fixed_seconds": 5.9,
+   "n_tests": 29,
+   "prompt": "`Pylock.select()` doesn't correctly handle an explicitly empty `environments` list. If `environments=[]` is set on a `Pylock` (as opposed to `environments=None`, meaning no restriction was declared), calling `select()` should behave as if no environment in the lock is compatible with the current one \u2014 i.e. it should raise the same \"no matching environment\" error as when a real marker fails to match \u2014 but instead it currently doesn't. Reproduction:\n```python\npylock = Pylock(lock_version=Version(\"1.0\"), created_by=\"some_tool\", environments=[], packages=[])\nlist(pylock.select(tags=..., environment=...))\n```\nThis should raise the same error as passing `environments=[Marker('python_version == \"3.14\"')]` against a non-matching environment, while `environments=None` should still mean no filtering is applied. Please fix `select()` to distinguish these cases correctly.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-4e79787a",
+   "sha": "4e79787a31c99348649bb0dafee2a5078d3595be",
+   "base": "b097450461523502ada842f98274449ad74ff1ff",
+   "date": "2026-08-07T21:39:53-04:00",
+   "subject": "fix(tags): preserve explicitly empty platform iterables (#1360)",
+   "src_files": [
+    "src/packaging/tags.py"
+   ],
+   "test_files": [
+    "tests/test_tags.py"
+   ],
+   "gold_files": [
+    "src/packaging/tags.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_tags.py",
+   "base_exit": 1,
+   "base_tail": "  +     <py3-none-manylinux2014_x86_64 @ 140083877757568>,\n  +     <py3-none-manylinux_2_16_x86_64 @ 140083877757312>,\n  +     <py3-none-manylinux_2_15_x86_64 @ 140083877758208>,\n  +     <py3-none-manylinux_2_14_x86_64 @ 140083877758592>,\n  +     <py3-none-manylinux_2_13_x86_64 @ 140083877758784>,\n  +     <py3-none-manylinux_2_12_x86_64 @ 140083877757888>,\n  +     <py3-none-manylinux2010_x86_64 @ 140083877757952>,\n  +     <py3-none-manylinux_2_11_x86_64 @ 140083877758464>,\n  +     <py3-none-manylinux_2_10_x86_64 @ 140083877758528>,\n  +     <py3-none-manylinux_2_9_x86_64 @ 140083877758848>,\n  +     <py3-none-manylinux_2_8_x86_64 @ 140083877758016>,\n  +     <py3-none-manylinux_2_7_x86_64 @ 140083877766080>,\n  +     <py3-none-manylinux_2_6_x86_64 @ 140083877765696>,\n  +     <py3-none-manylinux_2_5_x86_64 @ 140083877761600>,\n  +     <py3-none-manylinux1_x86_64 @ 140083877760448>,\n  -     <cp3-none-any @ 140083877765184>,\n  ?                                ^^^\n  +     <cp3-none-any @ 140083877767040>,\n  ?                                ^^ +\n  -     <py3-none-any @ 140083877767808>,\n  ?                               ^^^^^\n  +     <py3-none-any @ 140083877759424>,\n  ?                               ^^^^^\n    ]\n3 failed, 234 passed in 15.45s",
+   "fixed_seconds": 8.96,
+   "n_tests": 237,
+   "prompt": "`packaging.tags.cpython_tags()`, `generic_tags()`, and `compatible_tags()` don't respect an explicitly empty `platforms` argument. Passing `platforms=[]` should mean no platform tags apply and the wheel/pure-python-platform-specific tags should be skipped, but currently it seems to fall back to auto-detecting the platform instead of yielding nothing for that part. For example:\n```python\nfrom packaging import tags\nlist(tags.cpython_tags((3, 11), abis=[\"whatever\"], platforms=[]))  # should be []\nlist(tags.generic_tags(\"sillywalk\", [\"abi\"], []))  # should be []\n```\nPlease fix these functions to treat an explicitly empty platforms iterable as \"no platform-specific tags\" rather than \"use the default platform\".",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-f14a0933",
+   "sha": "f14a0933259121eb9b986bc1b7924910755d535d",
+   "base": "de6580e6f077a82b2b10161fd2e80e57b8d52854",
+   "date": "2026-08-12T23:20:07-04:00",
+   "subject": "fix(specifiers): scope ~= groups with (?a:...) (#1384)",
+   "src_files": [
+    "src/packaging/specifiers.py"
+   ],
+   "test_files": [
+    "tests/test_specifiers.py"
+   ],
+   "gold_files": [
+    "src/packaging/specifiers.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_specifiers.py",
+   "base_exit": 1,
+   "base_tail": "            \"~=1\",\n            # Cannot use a prefix matching after a .devN version\n            \"==1.0.dev1.*\",\n            \"!=1.0.dev1.*\",\n            # Local segment with a non-ASCII letter that matches regex '[a-z]'\n            # when re.IGNORECASE is in force and re.ASCII is not (issue #469)\n            \"==1.2+\\u0130\",\n            \"==1.2+\\u0130\\u0131\\u017fK\",\n            # Same for the pre/post-release words on the compatible operator\n            \"~=1.2.3prev\\u0131ew1\",\n            \"~=1.2.3po\\u017ft1\",\n        ],\n    )\n    def test_specifiers_invalid(self, specifier: str) -> None:\n>       with pytest.raises(InvalidSpecifier):\nE       Failed: DID NOT RAISE InvalidSpecifier\n\nself       = <tests.test_specifiers.TestSpecifier object at 0x7f7ad3d4ae10>\nspecifier  = '~=1.2.3po\u017ft1'\n\ntests/test_specifiers.py:107: Failed\n=========================== short test summary info ============================\nFAILED tests/test_specifiers.py::TestSpecifier::test_specifiers_invalid[~=1.2.3prev\\u0131ew1] - Failed: DID NOT RAISE InvalidSpecifier\nFAILED tests/test_specifiers.py::TestSpecifier::test_specifiers_invalid[~=1.2.3po\\u017ft1] - Failed: DID NOT RAISE InvalidSpecifier\n2 failed, 2031 passed in 28.08s",
+   "fixed_seconds": 33.47,
+   "n_tests": 2033,
+   "prompt": "The `~=` (compatible release) operator in `Specifier` can incorrectly accept invalid version strings due to unscoped case-insensitive matching of the pre/post-release words in the regex, similar to a previously fixed issue with the `==` operator's local version suffix. For example, `Specifier(\"~=1.2.3prev\\u0131ew1\")` and `Specifier(\"~=1.2.3po\\u017ft1\")` (using Turkish dotless-i and long-s, which fold to ASCII letters under Unicode case-insensitive matching) are currently accepted as valid specifiers when they should raise `InvalidSpecifier`. Please scope the relevant regex groups so this Unicode case-folding no longer causes invalid specifiers to be accepted for `~=`.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "packaging-55cbf1b9",
+   "sha": "55cbf1b9426f44455fa1a9e0836f1fc082cc8452",
+   "base": "4840c3a6817fbd0831f7e520c9a55367472a4a08",
+   "date": "2026-08-18T00:07:11-04:00",
+   "subject": "fix(ranges): stop unbounded bounds sorting above each other (#1392)",
+   "src_files": [
+    "src/packaging/_ranges.py"
+   ],
+   "test_files": [
+    "tests/test_ranges.py"
+   ],
+   "gold_files": [
+    "src/packaging/_ranges.py"
+   ],
+   "hidden_command": ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_ranges.py",
+   "base_exit": 1,
+   "base_tail": "FAILED tests/test_ranges.py::TestUnboundedEnds::test_lower_ends_order_as_one_value - assert (False, True, False, True) == (False, False, True, True)\n  \n  At index 1 diff: True != False\n  \n  Full diff:\n    (\n        False,\n  +     True,\n        False,\n        True,\n  -     True,\n    )\nFAILED tests/test_ranges.py::TestUnboundedEnds::test_upper_ends_order_as_one_value - assert (False, True, False, True) == (False, False, True, True)\n  \n  At index 1 diff: True != False\n  \n  Full diff:\n    (\n        False,\n  +     True,\n        False,\n        True,\n  -     True,\n    )\n4 failed, 330 passed in 23.47s",
+   "fixed_seconds": 8.62,
+   "n_tests": 334,
+   "prompt": "In `packaging._ranges`, unbounded lower/upper bounds don't consistently compare or hash as equal depending on how they were constructed, which lets them sort inconsistently relative to each other. For instance, `LowerBound(None, True)` and `LowerBound(None, False)` both represent \"negative infinity\" and should be treated as the exact same value (equal to `NEG_INF`, same hash, ordering comparisons all treating them as equal), but currently `LowerBound(None, True).inclusive` doesn't normalize and equality/hash/ordering between these two spellings is inconsistent \u2014 the same problem applies to `UpperBound`/`POS_INF`. This can cause version ranges with unbounded ends to sort or deduplicate incorrectly. Please fix bound handling so unbounded lower and upper bounds each have a single canonical representation for equality, hashing, and ordering.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  }
+ ]
+}
