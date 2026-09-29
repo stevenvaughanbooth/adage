@@ -102,8 +102,23 @@ fn connected(paths: &Paths, root: Option<&Path>) -> bool {
         || std::fs::read_dir(paths.learn_queue()).into_iter().flatten().flatten().next().is_some()
 }
 
+/// The repository's traces so far: those the learner has read (its ledger), or, before it has
+/// run, the Claude Code traces recorded in its checkouts (counted by name: nothing is opened).
+fn traces_so_far(paths: &Paths, repo: &str, root: &Path) -> usize {
+    let own = adage_learn::ledger::Ledger::new(&paths.ledger(), repo).read().len();
+    let cfg = adage_store::config::load(paths).config;
+    let projects = cfg
+        .learn_claude_projects
+        .clone()
+        .or_else(|| adage_store::home_dir().map(|h| h.join(".claude").join("projects")));
+    let found = projects
+        .map(|p| adage_learn::scope::count_claude_sessions(&p, &adage_learn::scope::checkouts(root)))
+        .unwrap_or(0);
+    own.max(found)
+}
+
 /// The lines for one repository (after the header).
-fn repo_lines(paths: &Paths, repo: &str, index: &Index, now: u64) -> Vec<String> {
+fn repo_lines(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -> Vec<String> {
     let mut out = Vec::new();
     let r = reflexes(index, repo);
     let mut parts = Vec::new();
@@ -131,8 +146,7 @@ fn repo_lines(paths: &Paths, repo: &str, index: &Index, now: u64) -> Vec<String>
     let cfg = adage_store::config::load(paths);
     let q = Queue::new(paths, repo);
     let run: Option<RunState> = read_json(&q.state());
-    let ledger = adage_learn::ledger::Ledger::new(&paths.ledger(), repo).read();
-    let own = ledger.len();
+    let own = traces_so_far(paths, repo, root);
     if !cfg.config.learn_auto {
         let (_, source) = &cfg.values["learn.auto"];
         out.push(format!("learning is off ({source}) → adage config set learn.auto true"));
@@ -160,7 +174,7 @@ fn repo_lines(paths: &Paths, repo: &str, index: &Index, now: u64) -> Vec<String>
                 format!("last: {}, {}", ago(now, l["ts"].as_u64().unwrap_or(0)), plural(n, "change", "changes"))
             }
             (None, Some(s)) if s.finished_at.is_some() => format!("last: {}", ago(now, s.finished_at.unwrap_or(0))),
-            _ => "not yet run".into(),
+            _ => "first run at your next agent session here".into(),
         };
         out.push(format!("learning after each session · {when}"));
     }
@@ -261,7 +275,7 @@ pub fn card(paths: &Paths, cwd: Option<&Path>) -> String {
             let repo = crate::ui::health::repo_key(paths, root, &index);
             let head = format!("adage {version} · {repo}");
             s.push_str(&format!("{head:<62} {dot}{grey}\n"));
-            for l in repo_lines(paths, &repo, &index, now) {
+            for l in repo_lines(paths, &repo, root, &index, now) {
                 s.push_str(&format!("  {l}\n"));
             }
         }

@@ -8,15 +8,15 @@
 //! direct, and how agents responded. Every count comes from the installed tracks and the session
 //! spools under `$ADAGE_HOME`; nothing is estimated. Read-only, so agents may run it.
 //!
-//! The JSON is what the map (`crates/adage-cli/assets/brain.html`) draws; `adage graph
-//! --serve` serves both from the binary (see `serve.rs`).
+//! The JSON is what the map (`crates/adage-cli/assets/brain.html`) draws; `adage map` serves both
+//! from the binary (see `serve.rs`). Any other option is refused: `--serve` is gone (no aliases).
 
 use crate::review::{ceiling_str, discover, preview};
 use adage_core::{pattern, CommandTable};
 use adage_runtime::{command_key, span_kind_label, SessionState};
 use adage_store::{spool, state, Paths};
 use adage_tracks::{Index, Route, Step, Trigger};
-use anyhow::Result;
+use anyhow::{bail, Result};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
@@ -223,6 +223,17 @@ fn dump_learned(args: &[String], paths: &Paths) -> Result<()> {
 pub fn graph(args: &[String], paths: &Paths) -> Result<()> {
     if args.iter().any(|a| a == "--learned") && args.iter().any(|a| a == "--dump") {
         return dump_learned(args, paths);
+    }
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--json" => i += 1,
+            "--events" if args.get(i + 1).is_some_and(|n| n.parse::<usize>().is_ok()) => i += 2,
+            "--events" => bail!("--events takes a number of events"),
+            other => bail!(
+                "unknown option `{other}` for `adage graph` (it takes --json and --events <n>; the map is `adage map`)"
+            ),
+        }
     }
     let max_events: usize = crate::flag(args, "--events").and_then(|n| n.parse().ok()).unwrap_or(80).min(1000);
     let out = build(paths, max_events)?;

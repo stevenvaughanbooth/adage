@@ -84,11 +84,10 @@ fn data_dir(paths: &Paths) -> Check {
     if !root.exists() {
         let ancestor = root.ancestors().skip(1).find(|a| a.is_dir());
         return match ancestor {
-            Some(a) if probe(a) => warn(
-                name,
-                format!("{} does not exist yet", detect::tilde(root)),
-                "`adage condition` creates it; nothing to do",
-            ),
+            // A fresh install: the first session (or `adage condition`) creates it.
+            Some(a) if probe(a) => {
+                pass(name, format!("{} does not exist yet; your first agent session creates it", detect::tilde(root)))
+            }
             _ => fail(
                 name,
                 format!("{} does not exist and cannot be created", detect::tilde(root)),
@@ -169,10 +168,11 @@ fn tracks_check(scan: &TrackScan) -> Check {
         );
     }
     if scan.valid.is_empty() {
-        return warn(
+        // Nothing learned yet is the state of every fresh install, not a problem: the first agent
+        // session in a repository binds its instincts and learns from its traces.
+        return pass(
             "tracks",
-            "no tracks installed",
-            "`adage sense` shows which reflexes would form; `adage condition` forms them",
+            "none yet: your first agent session in a repository starts learning (`adage sense` previews what would form)",
         );
     }
     pass(
@@ -185,9 +185,17 @@ fn index_check(paths: &Paths, scan: &TrackScan) -> (Check, Index) {
     let p = paths.index();
     let bytes = match std::fs::read(&p) {
         Ok(b) => b,
+        // Nothing installed yet (a fresh install): the first session compiles it.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound && scan.valid.is_empty() => {
+            return (pass("index", "none yet: your first agent session in a repository compiles it"), Index::default())
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return (
-                warn("index", "no index yet: hooks have nothing to direct", "run `adage condition`"),
+                warn(
+                    "index",
+                    "no index yet, although tracks are installed: hooks have nothing to direct",
+                    "run `adage condition`",
+                ),
                 Index::default(),
             )
         }
@@ -427,6 +435,22 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
             });
             continue;
         }
+        // The Claude Code plugin registers its own hooks: settings entries as well run every hook
+        // twice, so each notice the person sees appears twice.
+        if plugin {
+            let at: Vec<String> = mine.iter().map(|r| detect::tilde(&r.location)).collect();
+            out.push(warn(
+                &format!("{name} (twice)"),
+                format!(
+                    "registered by the Adage plugin and in {}: every hook runs twice, and each notice appears twice",
+                    at.join(" and ")
+                ),
+                format!(
+                    "keep one: remove Adage's hook entries from {} (the plugin keeps working), or uninstall the plugin",
+                    at.join(" and ")
+                ),
+            ));
+        }
         for r in mine {
             let at = detect::tilde(&r.location);
             match &r.binary {
@@ -620,6 +644,12 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
     for slug in &slugs {
         let file = |suffix: &str| dir.join(format!("{slug}{suffix}"));
         let Some(req) = read_json::<Request>(&file(".json")) else { continue };
+        // A request for a directory that is not (or no longer) a repository — a session opened in
+        // `~` or `/` by an older Adage, a checkout since deleted — can never be conditioned: it is
+        // not a problem to fix.
+        if !Path::new(&req.root).join(".git").exists() {
+            continue;
+        }
         let state: Option<RunState> = read_json(&file(".state.json"));
         let spawned: Spawned = read_json(&file(".spawn.json")).unwrap_or_default();
         let held = adage_store::lock::is_held(&file(".lock")).unwrap_or(false);

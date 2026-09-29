@@ -160,6 +160,8 @@ pub fn write_json<T: Serialize>(p: &Path, v: &T) -> std::io::Result<()> {
 pub enum Triggered {
     /// `learn.auto` is off.
     Off,
+    /// The directory is not a repository (no `.git`): there is nothing to learn there.
+    NotARepository,
     /// Recorded; a learner is running (it re-checks the queue before it exits).
     Running,
     /// Recorded; a learner has already been started to learn at a later time.
@@ -182,6 +184,9 @@ pub fn on_turn_end(
     let cfg = config::load(paths).config;
     if !cfg.learn_auto {
         return Ok(Triggered::Off);
+    }
+    if !root.join(".git").exists() {
+        return Ok(Triggered::NotARepository);
     }
     let repo = adage_core::repo::repo_key_cached(root, &paths.repo_keys());
     // The checkout can be gone before its learner runs (a worktree removed as its task ends).

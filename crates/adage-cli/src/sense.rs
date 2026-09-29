@@ -695,7 +695,7 @@ pub fn print_text(s: &Sense) {
             println!("  candidate reflexes        what `adage condition` would form — candidates only, nothing is written{sampled}:");
             for c in &r.candidates {
                 println!(
-                    "    {:<8} {:<9} {}/{}: {} → {}   {}/{} traces, lower bound {:.2}, {}{}",
+                    "    {:<8} {:<9} {}/{}: {} → {}   {}/{} traces, lower bound {}, {}{}",
                     format!("[{}]", c.strength),
                     c.status,
                     c.track,
@@ -704,7 +704,7 @@ pub fn print_text(s: &Sense) {
                     c.step,
                     c.support,
                     c.opportunities,
-                    c.lower_bound,
+                    crate::evidence::num(c.lower_bound),
                     c.effect,
                     c.uplift.as_ref().map(|u| format!(", uplift {:+.2}", u.mean)).unwrap_or_default()
                 );

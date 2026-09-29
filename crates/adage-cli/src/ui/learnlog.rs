@@ -96,13 +96,13 @@ fn run(v: &Value, ts: u64, repo: Option<String>) -> Vec<Tick> {
         for t in rr["tracks"].as_array().into_iter().flatten() {
             let name = t["name"].as_str().unwrap_or("?");
             let change = t["change"].as_str().unwrap_or("written");
-            let routes = t["routes"].as_u64().map(|n| format!(", {n} routes")).unwrap_or_default();
+            let routes = t["routes"].as_u64().map(|n| format!(", {n} reflexes")).unwrap_or_default();
             tracks.push((r.clone(), format!("{name} @ {} ({change}{routes})", t["version"].as_str().unwrap_or("?"))));
         }
     }
     if v["changes"].is_array() {
         parts.push(match changes.len() {
-            0 => "no route changed".to_string(),
+            0 => "no reflex changed".to_string(),
             1 => "1 change".to_string(),
             n => format!("{n} changes"),
         });
@@ -132,7 +132,7 @@ fn run(v: &Value, ts: u64, repo: Option<String>) -> Vec<Tick> {
 }
 
 fn change(c: &Value, ts: u64, repo: Option<String>) -> Tick {
-    let route = s(c, "route").unwrap_or("a route");
+    let route = s(c, "route").unwrap_or("a reflex");
     let track = s(c, "track").map(|t| format!("{t}: ")).unwrap_or_default();
     let short_track = s(c, "track").map(|t| format!("{}: ", t.rsplit('/').next().unwrap_or(t))).unwrap_or_default();
     let (from, to) = (s(c, "from"), s(c, "to"));

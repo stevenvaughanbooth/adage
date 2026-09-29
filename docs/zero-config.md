@@ -122,7 +122,12 @@ In `adage-hook/src/lib.rs::run`, treat `SessionStart` as a learn point when **ei
 - the repo has no routes in the index, and its learn-queue `state.json` is absent or older than the index; **or**
 - the index failed to load (self-heal).
 
-In that case, call `on_turn_end(..)` with a new `Request.bootstrap = true`. The spawned learner:
+Only inside a repository (a directory with `.git`, or below one): a session opened in `~`, `/` or
+a directory since deleted has nothing to learn, so it gets no notice, no learner and no learn
+request, and turn ends there start none either (doctor ignores requests an older version queued for
+such a directory).
+
+When a bootstrap applies, call `on_turn_end(..)` with a new `Request.bootstrap = true`. The spawned learner:
 
 1. runs `instincts::learn_only` first and compiles the index (the index is live within about 100 ms);
 2. then runs the normal `learn_once`.

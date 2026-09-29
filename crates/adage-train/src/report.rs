@@ -54,7 +54,7 @@ pub enum Verdict {
 impl Verdict {
     pub fn line(&self) -> String {
         match self {
-            Verdict::Compiled { route } => format!("compiled → route {route}"),
+            Verdict::Compiled { route } => format!("compiled → reflex {route}"),
             Verdict::Contradicted { route, instead, failed_sessions, ran_sessions } => format!(
                 "contradicted: failed in {failed_sessions}/{ran_sessions} sessions; learned dead end {route} → `{instead}` (your skill is stale)"
             ),
@@ -402,7 +402,7 @@ pub fn render(r: &Report) -> String {
     let _ = writeln!(s, "cost       ${:.2} of a ${:.2} cap (as reported by the harness)", r.cost_usd, r.budget_usd);
     let _ = writeln!(
         s,
-        "staged     {} ({} routes; provenance {}); nothing is delivered until reviewed",
+        "staged     {} ({} reflexes; provenance {}); nothing is delivered until reviewed",
         r.staged,
         r.staged_routes.len(),
         r.provenance

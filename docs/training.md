@@ -19,7 +19,7 @@ Terminology:
 | | Where it comes from | Evidence |
 | --- | --- | --- |
 | **Reflex** | Conditioned on traces (`adage condition`), or compiled from a skill (`adage train`) | Distinct sessions, Wilson lower bound; a compiled reflex: its replay |
-| **Instinct** | Prebuilt route bound from the repository's declared files ([instincts.md](instincts.md)) | None: a capped default |
+| **Instinct** | Prebuilt reflex bound from the repository's declared files ([instincts.md](instincts.md)) | None: a capped default |
 | **Skill** | Text a person wrote | None until `adage train` compiles and replays it |
 
 **Principle.** The `adage` binary, which hooks run, starts no process on the agent's behalf (Design
@@ -109,7 +109,7 @@ output shows. Blocks that direct no command are advice. The parsing rules:
   the slot `{id}` its example and the pattern `^W-\d{4}$`); a quoted literal in an example command
   (`grep -rn "prompt_suffix" src/click`) is the agent's choice.
 
-Each step then compiles (`adage_train::compile`) to pack routes ([packs.md](packs.md)):
+Each step then compiles (`adage_train::compile`) to pack reflexes ([packs.md](packs.md)):
 
 | Step | Reflex | Shape |
 | --- | --- | --- |
@@ -145,7 +145,7 @@ never pinned: the pack binds it where the checkout has it.
 
 Every compiled command is replayed (`adage_train::verify`, through `adage_exec::replay`):
 
-- **A clean checkout.** Each route gets a fresh shallow clone of `HEAD`, git hardened (no hooks),
+- **A clean checkout.** Each reflex gets a fresh shallow clone of `HEAD`, git hardened (no hooks),
   in a scratch directory. Your working tree, index and uncommitted changes are never touched.
 - **The sandbox.** The one adage-exec runs E1 and E2 in: the scratch directory (the checkout in it)
   is the only writable place, the toolchain is read-only, the network is off, the environment is
@@ -154,15 +154,15 @@ Every compiled command is replayed (`adage_train::verify`, through `adage_exec::
   read-only from your repository, and then the repository is readable too (an editable install
   imports from it); the review says what was lent. Without a sandbox nothing runs.
 - **What must hold.** A directed command (a lookup with the skill's example value, a finish line,
-  a regenerate step, each step of a sequence, the first mapped test file of an edited-file route)
+  a regenerate step, each step of a sequence, the first mapped test file of an edited-file reflex)
   must exit 0 and show what the step says it shows (`Expect OK`). One that fails on a clean
-  checkout is **stale**: its route is dropped and the review says so. A regenerate step also says
+  checkout is **stale**: its reflex is dropped and the review says so. A regenerate step also says
   whether it changed a clean checkout (the committed output is out of date).
-- **Forbidden commands** must fail. With the skill's signature, the route stands; with another,
-  that runner gets a route of its own with the signature observed (`pytest`: `command not found`,
+- **Forbidden commands** must fail. With the skill's signature, the reflex stands; with another,
+  that runner gets a reflex of its own with the signature observed (`pytest`: `command not found`,
   not the skill's `ACME_ENV is not set`); one that works on a clean checkout makes the prohibition
   stale, and it is dropped.
-- **Not replayed** (no sandbox here, `--no-replay`, a tool missing, no example value): the route
+- **Not replayed** (no sandbox here, `--no-replay`, a tool missing, no example value): the reflex
   is kept and says so, at prime at most.
 
 Session counts are not the check. Skill-steered sessions stay optional evidence (below).
@@ -196,7 +196,7 @@ review (`adage train accept`). Anything short of that is prime at most:
 | --- | --- |
 | verified by replay, pack accepted here | its shape's, within the effect ceiling: fire for a lookup, a finish line, a regenerate step, a sequence; inhibit for an avoid step |
 | not replayed (no sandbox, `--no-replay`, a missing tool, no example) | prime at most |
-| read and advice routes | prime (as every read and advice route) |
+| read and advice reflexes | prime (as every read and advice reflex) |
 | the edited file's tests | prime (a check after an edit is suggested, as the learner's is) |
 | the same pack received from someone else (`adage add`) | an import: forming, prime at most (O2) |
 | the pack changed after its review | an import (the acceptance names the digest) |
@@ -222,7 +222,7 @@ One pack per skill, `<repository name>/skill-<skill name>`, origin `trained`, ap
 
 - `routes/`: the compiled reflexes, each with evidence `origin: authored`, `provenance:
   skill:<12 hex>`;
-- `procedure.json`: every step of the skill and what became of it (compiled to which routes, left
+- `procedure.json`: every step of the skill and what became of it (compiled to which reflexes, left
   as text and why, or stale), with the replay lines, and every advice block; for people only;
 - `[provenance] skill = "sha256:<hex>"`: the skill file's hash, equal to `procedure.json`'s.
 
@@ -391,18 +391,18 @@ prime at most, never installed by it.
 
 ### How the modes relate
 
-- **Skill → reflex.** A skill is a hand-written hypothesis about good routes (Design §10.10,
+- **Skill → reflex.** A skill is a hand-written hypothesis about good reflexes (Design §10.10,
   bridge 3). `adage train <skill>` compiles its procedure and replays it; the sessions below
   exercise its claims and keep what the agents' behaviour supports.
 - **Declared facts → instincts** ([instincts.md](instincts.md)). The same facts (`Makefile` targets
   and prerequisites, `package.json` scripts, CI `run:` steps, generator links) bind instincts on
   day 0 with no sessions at all. `adage train plan --from Makefile` reads them through the same
   extractor (`adage_instincts::extract`), so a declared step can be *tested* rather than assumed.
-- **Ids line up.** A learned route takes the id the learner derives (`finish-line-<glob, command>`,
+- **Ids line up.** A learned reflex takes the id the learner derives (`finish-line-<glob, command>`,
   `dead-end-<working command>`), which is also the id an instinct binds for the same behaviour.
   On the acme fixture training stages `finish-line-e7e809` and `dead-end-d41b1e`, the ids the demo
   learned and instinct U5/U1 bind. Once installed, a trained reflex therefore overrides the
-  instinct with its id, as a learned route does.
+  instinct with its id, as a learned reflex does.
 
 ### The pipeline
 
@@ -456,8 +456,8 @@ With `--execute`:
 2. **Mining.** The exploration transcripts go through `adage_learn::learn` with the repository key
    forced to yours (`repo_override`, what `adage condition --repo` does) into a *separate* staging
    directory, `staged/tracks`, with provenance `synthetic:skill:<sha256 of the source>@<run>` on
-   every track and route, and a sidecar `staged/provenance.json`. Then the synthetic cap is applied:
-   no route is fire and none is beyond forming. **Staged reflexes are not activated**: nothing
+   every track and reflex, and a sidecar `staged/provenance.json`. Then the synthetic cap is applied:
+   no reflex is fire and none is beyond forming. **Staged reflexes are not activated**: nothing
    is written to `$ADAGE_HOME/tracks` or `$ADAGE_HOME/index.json`.
 3. **Validation** (`--validate N`). N held-out tasks from another seed (no prompt of the
    exploration set), each in three arms, in a seeded order:
@@ -474,14 +474,14 @@ Per claim, one of:
 
 | Verdict | Meaning |
 | --- | --- |
-| `compiled → route <id>` | a staged reflex does what the claim says (same glob and command; same working command; same lookup tool) |
+| `compiled → reflex <id>` | a staged reflex does what the claim says (same glob and command; same working command; same lookup tool) |
 | `contradicted` | the skill says X; X failed in at least 9 in 10 of the exploration sessions that ran it, and a dead end X → Y was learned: **your skill is stale** |
 | `never exercised` | nothing could trigger it (no matching file, no example id, no session gave it a chance) |
 | `not compiled` | exercised, but no reflex met the learning thresholds (e.g. a `verify` claim that sessions ran, but not after their last edit, or as often without editing anything). A plain verify claim ("run `make check` before finishing") compiles to a check owed after any edit when the exploration sessions ran it after their last edit (`adage_learn::mine::claimed_verify_route`) |
 | `unsafe` | above regenerate, or not one plain command; never exercised |
 
 Plus sessions by arm, skipped (budget) and failed sessions, reported cost against the cap, the
-staged routes, and with validation the **acceptance table**, per claim and arm: sessions,
+staged reflexes, and with validation the **acceptance table**, per claim and arm: sessions,
 applicable sessions, followed share, mean turns, mean cost. A reflex is **accepted** when, on the
 trajectory oracle, the reflex arm follows it in at least 70% of applicable held-out sessions, is
 within 10 points of the skill arm, and its mean turns and cost are no more than 10% worse than the
@@ -507,14 +507,14 @@ first verification is the working command and passed; `lookup` when the tool ran
 | Transcripts | Copied out of each session's own config directory into `$ADAGE_HOME/train/<run>/transcripts/`, never into `~/.claude/projects` or any directory `adage condition` or live learning reads. `run` refuses an `ADAGE_HOME` inside the Claude Code projects directory. |
 | No influence on live learning | Exploration, baseline and skill sessions run with `ADAGE_DISABLE=1`; the reflex arm with `ADAGE_AUTO_LEARN=0` and its own `ADAGE_HOME`. |
 | No activation | Staged reflexes live under `staged/`; the reflex arm reads a copy in `reflex-home/`. Nothing is installed. |
-| Untrusted input | The source file is read-only input (at most 1 MiB); repository reads go through `adage_instincts::files::RepoFiles` (bounded, no symlinks out). Mined routes pass `adage_tracks::io::validate` like any learned route. |
+| Untrusted input | The source file is read-only input (at most 1 MiB); repository reads go through `adage_instincts::files::RepoFiles` (bounded, no symlinks out). Mined reflexes pass `adage_tracks::io::validate` like any learned reflex. |
 
 The repository's own committed project settings (`.claude/settings.json`, including any hooks it
 declares) still load (`--setting-sources project,local`), as they would for your own agent.
 
 ### Evidence-origin policy
 
-Where a route's evidence comes from caps how strongly Adage may direct it. The cap for *synthetic*
+Where a reflex's evidence comes from caps how strongly Adage may direct it. The cap for *synthetic*
 is enforced in staging today; the others describe the policy the model changes below make
 enforceable in the index.
 
@@ -581,8 +581,8 @@ On the committed fixture (the acme sandbox, a `SKILL.md` that says "run the test
 ```text
 c1  verify: `python3 -m unittest`                contradicted: failed in 12/12 sessions; learned dead end
                                                  dead-end-d41b1e → `make test` (your skill is stale)
-c2  regenerate_after(schema/*.json): `make gen`  compiled → route finish-line-e7e809
-c3  lookup: `python3 scripts/wi-lookup`          compiled → route lookup-work-item
+c2  regenerate_after(schema/*.json): `make gen`  compiled → reflex finish-line-e7e809
+c3  lookup: `python3 scripts/wi-lookup`          compiled → reflex lookup-work-item
 c4  regenerate_after(proto/*.proto): `make gen`  never exercised (no file matches `proto/*.proto`)
 c5  environment: `pip install -r requirements.txt`  unsafe
 acceptance: c1, c2, c3 accepted (c1: skill arm 0%, reflex arm 100%, 2.0 vs 3.0 turns)
@@ -597,7 +597,7 @@ an agent session and without a terminal (library and CLI); the environment allow
 isolation, budget stop, transcript collection from the session's config directory; mining into
 staging under the forced repository key with the synthetic provenance and cap; the reflex home's
 re-keying (the fixture repository has an origin, clones do not); the report verdicts and the
-acceptance table; the same plan staging the same routes on a second run.
+acceptance table; the same plan staging the same reflexes on a second run.
 
 Not verified (no real agent was run; no money was spent):
 
@@ -622,10 +622,10 @@ Not verified (no real agent was run; no money was spent):
 1. **`Evidence.by_origin`** (roadmap E1; also [instincts.md](instincts.md), adage-tracks item 5):
    counts per origin (`organic`, `synthetic`, `declared`, `instinct`, `imported`, `demonstrated`),
    with `support`/`opportunities` organic only. Until then synthetic evidence is marked only by the
-   `provenance` string (`synthetic:skill:<sha>@<run>`, on the track and on every route) and the
+   `provenance` string (`synthetic:skill:<sha>@<run>`, on the track and on every reflex) and the
    sidecar `staged/provenance.json`.
 2. **`TrackInfo.origin`** (or treating a `synthetic:` provenance like `imported` in
-   `Index::compile`): first-hand organic routes must rank before synthetic ones with the same id,
+   `Index::compile`): first-hand organic reflexes must rank before synthetic ones with the same id,
    and the strength cap above must be enforced at compile time, not only in staging.
 3. **Strengthening from staging**: an `adage review`-style step that installs accepted staged reflexes
    into `$ADAGE_HOME/tracks/<repo>/…` forming, keeping the provenance, and records the

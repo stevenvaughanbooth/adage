@@ -201,7 +201,12 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
     let Some(harness::Envelope { session, cwd }) = adapter.envelope(&p) else {
         return Err(Failure::new("payload", "no session id or working directory"));
     };
-    let root = repo::find_root(&cwd).unwrap_or_else(|| cwd.clone());
+    // Outside a repository (a session opened in `~`, `/`, or a directory since deleted) there is
+    // nothing to learn: no notice, no learner (docs/zero-config.md §3.2). Reflexes a person keyed
+    // to such a directory by hand are still delivered.
+    let found = repo::find_root(&cwd);
+    let in_repo = found.is_some();
+    let root = found.unwrap_or_else(|| cwd.clone());
     if root.join(".adage/disabled").exists() {
         return Ok(None);
     }
@@ -219,11 +224,12 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
         None => std::env::current_exe().map_err(|e| Failure::io("condition", "finding the adage binary", &e)),
     };
     if matches!(adapter.translate(event, &p, &cwd.to_string_lossy()), Some(Event::SessionStart)) {
-        let start = Start { adapter, harness, event, session: &session, root: &root, paths: &paths, index: &index };
+        let start =
+            Start { adapter, harness, event, session: &session, root: &root, in_repo, paths: &paths, index: &index };
         return session_start(&start, damaged, &learner);
     }
     let out = respond(adapter, harness, event, &p, &session, &cwd, &root, &paths, opts, &index);
-    if adapter.is_learn_point(event) {
+    if in_repo && adapter.is_learn_point(event) {
         let transcript = p.get("transcript_path").and_then(|v| v.as_str());
         let learned = learner()
             .and_then(|l| autolearn::on_turn_end(&paths, &root, adapter.name(), transcript, &l, false).map(drop));
@@ -455,6 +461,8 @@ struct Start<'a> {
     event: &'a str,
     session: &'a str,
     root: &'a Path,
+    /// `root` is a repository (it has `.git`), not merely the session's working directory.
+    in_repo: bool,
     paths: &'a Paths,
     index: &'a Index,
 }
@@ -483,6 +491,11 @@ fn session_start(
         if let Err(f) = record_start(s, repo_key) {
             failopen::record(&s.paths.root, s.harness, s.event, &f);
         }
+    }
+    // Outside a repository: nothing to learn, so no learner and nothing to say. (Not even a
+    // damaged index is rebuilt from here: the next session in a repository does that.)
+    if !s.in_repo {
+        return Ok(None);
     }
     let cfg = adage_store::config::load(s.paths).config;
     let key = routed.clone().unwrap_or_else(|| repo::repo_key_cached(s.root, &s.paths.repo_keys()));
@@ -530,8 +543,13 @@ fn session_start(
     }
     let text = if bootstrap && first {
         let now = autolearn::now_ms();
-        let _ = autolearn::write_json(&q.shown(), &autolearn::Shown { id: "bootstrap".into(), at: now });
-        Some(first_notice(s.root, &cfg))
+        match autolearn::write_json(&q.shown(), &autolearn::Shown { id: "bootstrap".into(), at: now }) {
+            Ok(()) => Some(first_notice(s.root, &cfg)),
+            // The data directory cannot be written: nothing can be learned, and a notice shown now
+            // could not be remembered, so it would repeat at every session start. Say what is
+            // wrong instead, once.
+            Err(e) => unwritable_notice(s.paths, &e),
+        }
     } else {
         autolearn::take_notice(s.paths, &key)
     };
@@ -553,6 +571,20 @@ fn first_notice(root: &Path, cfg: &adage_store::config::Config) -> String {
         1 => "adage: learning from 1 past session in this repo; reflexes arrive within a minute. Nothing runs without you.".into(),
         n => format!("adage: learning from {n} past sessions in this repo; reflexes arrive within a minute. Nothing runs without you."),
     }
+}
+
+/// The one line said when the data directory cannot be written (at most once per data
+/// directory: a marker in the system's temporary directory remembers it; if that cannot be
+/// written either, nothing is said rather than the same line at every session start).
+fn unwritable_notice(paths: &Paths, e: &std::io::Error) -> Option<String> {
+    let dir = paths.root.to_string_lossy();
+    let marker = std::env::temp_dir().join(format!("adage-unwritable-{}", repo::short_hash(&dir)));
+    std::fs::OpenOptions::new().write(true).create_new(true).open(marker).ok()?;
+    let why = e.to_string();
+    let why = why.split(" (os error").next().unwrap_or(&why).to_lowercase();
+    Some(format!(
+        "adage: can't write its data directory {dir} ({why}), so it cannot learn here. Set ADAGE_HOME to a writable directory; `adage doctor` checks it."
+    ))
 }
 
 /// Assign the session's arm (if it has none yet) and spool one `session_start` record.

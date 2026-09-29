@@ -23,7 +23,7 @@ live learning and the UI). `adage` links the adage-exec library only to write ap
 
 ## E1 prefetch (`adage-exec hook`)
 
-At the trigger, Adage runs an approved, observe-only route in the sandbox and places its typed
+At the trigger, Adage runs an approved, observe-only reflex in the sandbox and places its typed
 output beside the directive, which adapts:
 
 ```text
@@ -57,7 +57,7 @@ adage review revoke acme-billing/learned lookup-work-item
 the classifier's view), the sandbox profile in one line, the script closure (an L-ref repository
 script with its SHA-256, re-read and checked before every run), the output fields, the exit
 predicates and the evidence, then writes the approval through adage-exec's API
-(`$ADAGE_HOME/approvals.json`). Output fields default to what later routes read from the command's
+(`$ADAGE_HOME/approvals.json`). Output fields default to what later reflexes read from the command's
 output (the `lookup → read-linked` edge: the linked files); for a lookup nothing else reads, to the
 repository paths its output names (`files`) and the work item's text fields when its output has them
 (`title`, `description`, `state`, `status`, `acceptance`: read from a JSON object's field or a
@@ -69,7 +69,7 @@ don't need to run it again." (with paths only, "That lookup has been run; its re
 `--fields` declares the fields explicitly. The prompt value a learned lookup binds (`{item}`, a
 learned value type) is E1's input as a typed prompt span is: the runtime binds it
 (`adage_core::vtype`), and the contract checks it again before it runs.
-A pack route's fields, exits and timeout come from its pack. `--raw` asks for raw mode (policy
+A pack reflex's fields, exits and timeout come from its pack. `--raw` asks for raw mode (policy
 must allow it); `--timeout-ms` raises the wall timeout up to 3,000 ms.
 
 **Scripts the traces show only reading.** The executor's classifier calls any script or
@@ -91,7 +91,7 @@ plugin answers, so hooks never fire twice. Changes take effect in new sessions.
 
 **What `adage-exec hook` does.** The pipeline is `adage hook`'s, shared as the `adage-hook` library
 (adapters, the no-match fast path, the state lock, `decide()`, spool, render). After `decide()`,
-for each directive to deliver whose route has an E1 approval for this repository, it derives the
+for each directive to deliver whose reflex has an E1 approval for this repository, it derives the
 request from the index entry (`adage_exec::route`: argv from the command template, inputs from
 prompt slots with their pattern contracts, L-ref scripts hashed **now**, so a changed script no
 longer matches the approval key), reads the bound values back from the directive, and runs it
@@ -106,7 +106,7 @@ still works.
 past the capture cap, a field that fails its type, an oracle violation, text past the harness's
 cap, a panic) the output is exactly the E0 output. With nothing approved, the output equals
 `adage hook`'s byte for byte: `crates/adage-exec/tests/parity.rs` runs adage-cli's golden hook
-tests against `adage-exec`. The spool record gains `exec`: per attempted route `{route, level,
+tests against `adage-exec`. The spool record gains `exec`: per attempted reflex `{route, level,
 exit, bytes, sha256, truncated, duration_ms, auto}`, or `{route, level, withheld: <stage>}`; never
 the output.
 
@@ -332,7 +332,7 @@ terminal requirement, for CI). `run` may be called from an agent's shell: approv
 
 C1/C3 build requests from packs through the library type `adage_exec::ExecRequest` (repository
 root, argv template, bound inputs and contracts, effect, level, output spec, scripts with SHA-256,
-sandbox profile, labels, origin, and the pack's route exec digest when there is one).
+sandbox profile, labels, origin, and the pack's reflex exec digest when there is one).
 
 ## The gates, in order
 
@@ -372,7 +372,7 @@ classified locally; every program `inert` in `commands.toml` (`cat`, `head`, `ta
 `rg`, `grep`, `jq`, and `git status|log|diff|show|rev-parse` as `argv[1]`), with no
 program-running flags (`rg --pre`, `rg -z`, `git --ext-diff`, `--textconv`, `--output`, …); for
 git, a repository whose config sets none of the hazardous keys; no scripts; strict contracts for
-every slot; typed output; an enforced sandbox; a local route, or a pack from a trusted signer past
+every slot; typed output; an enforced sandbox; a local reflex, or a pack from a trusted signer past
 forming; and policy `auto_approve = "inert-observe"`. It is **off by default** until gate G3.
 
 ## Policy
@@ -388,7 +388,7 @@ allow_vendor_scripts = false # a managed false wins
 allow_raw_output = false     # a managed false wins
 require_sandbox = true       # only the managed file may lower it
 allow_environment_actions = false  # E2 actions with the environment effect; managed file only
-env = ["JAVA_HOME"]          # variables routes may receive; secrets are refused regardless
+env = ["JAVA_HOME"]          # variables reflexes may receive; secrets are refused regardless
 [publishers]
 allow = ["SHA256:…"]
 deny = ["SHA256:…"]          # union of both files; a denied fingerprint is never allowed
@@ -487,7 +487,7 @@ role markers, “you must now”, tool-call JSON, `<adage-reflex`/`<adage-data`,
 tokens); any hit withholds; remaining `<adage-` openers and closers are defanged to `&lt;adage-`.
 
 `adage_eval::safety::check_data_block` is the independent oracle for delivered blocks: the fixed
-template, the route, the byte count, no tag or control character in the payload, typed fields
+template, the reflex, the byte count, no tag or control character in the payload, typed fields
 declared and valid (or, without a field list, no free text), no instruction-shaped raw text, and no
 canaries.
 

@@ -484,8 +484,8 @@ pub fn run(ctx: Ctx) -> Result<()> {
                 w.health = Some(health::gather(&ctx.paths, ctx.root.as_deref()));
                 None
             }
-            Cmd::Install(p) => match crate::install::apply(&p) {
-                Ok(()) => {
+            Cmd::Install(p) => match crate::install::apply_backed_up(&p) {
+                Ok(_) => {
                     w.registrations = detect::registrations(ctx.root.as_deref());
                     w.advance(StepStatus::Done(format!("wrote {}", detect::tilde(&p.target))))
                 }

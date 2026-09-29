@@ -221,7 +221,7 @@ fn fake_end_to_end_compiles_the_right_claim_and_flags_the_stale_one() {
     assert!(c1.arms["reflex"].mean_turns < c1.arms["skill"].mean_turns);
     assert!((rep.cost_usd - state.spent_usd).abs() < 1e-9 && rep.cost_usd > 0.0);
     let text = report::render(&rep);
-    assert!(text.contains("your skill is stale") && text.contains("compiled → route finish-line-"), "{text}");
+    assert!(text.contains("your skill is stale") && text.contains("compiled → reflex finish-line-"), "{text}");
     eprintln!("{text}");
 
     // Deterministic: another run of the same plan stages the same routes.

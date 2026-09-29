@@ -28,7 +28,7 @@ Design context: Design Spec §13.1 and decisions O8 and O14; Architecture §4.2,
 | Prompt directives | `additionalContext` | Context-only synthetic message (`session.prompt`, `noReply: true`) | `additionalContext` (developer context) |
 | After-tool directives | `PostToolBatch` `additionalContext` | Appended to the tool result (`tool.execute.after`) | `PostToolUse` `additionalContext` |
 | Dead ends learned from history | Announced at the first prompt | Announced at the first prompt | Announced at the first prompt |
-| After-failure routes (authored or imported) | `PostToolUseFailure` | Shell `metadata.exit` ≠ 0, or a tool part in state `error` | **Not possible today**: no failure signal |
+| After-failure reflexes (authored or imported) | `PostToolUseFailure` | Shell `metadata.exit` ≠ 0, or a tool part in state `error` | **Not possible today**: no failure signal |
 | Finish line at stop | Stop `decision: block` | `session.idle` → a synthetic follow-up prompt | Stop `decision: block` (becomes a user prompt) |
 | Batches | Yes (`PostToolBatch`) | No (per call) | No (per call) |
 | Learning from history | `~/.claude/projects/*.jsonl` | `opencode export <id>` JSON files | `~/.codex/sessions` rollouts (`--codex-sessions`; format from source) |
@@ -89,7 +89,7 @@ The response is `{"context": text}` or `{"continue": reason}`.
   directives as a separate **context-only, synthetic** message (`noReply: true`), never by
   editing what the user wrote (Architecture §15.1: prompt edits persist as user input).
 - at `tool.execute.after`, appends directives to the tool result the model reads next.
-- on `message.part.updated` with a tool part in state `error`, asks for failure routes and holds
+- on `message.part.updated` with a tool part in state `error`, asks for failure reflexes and holds
   the directive for the next tool result (there is no mutable output on an event).
 - at `session.idle`, asks the finish-line question with `stop_hook_active` set if Adage already
   asked this session to continue since the user last spoke, and if Adage asks to continue, sends
@@ -174,14 +174,14 @@ Codex's hook contract mirrors Claude Code's, so the adapter
 (`crates/adage-hook/src/harness/codex.rs`) is Claude Code's with three differences:
 
 - `apply_patch` is split into one `Edit`/`Write` call per file named in the patch, so finish-line
-  routes trigger on Codex edits (`adage_core::tools::from_codex`, `patch_files`).
+  reflexes trigger on Codex edits (`adage_core::tools::from_codex`, `patch_files`).
 - Each `PostToolUse` is a batch of one call. A failure is recognised only from a structured
   `exit_code` in `tool_response` — not supplied today (inferred to be how a fix would look).
   Dead ends *learned from history* do not need it: they are announced once, at the first prompt,
   in every harness.
 - Stop `block` is used, as Architecture F3 allows, because the reason is a fixed template that
   says plainly it is from Adage, not the user. When that reason comes back as a
-  `UserPromptSubmit` prompt, the adapter ignores it rather than matching prompt routes on it.
+  `UserPromptSubmit` prompt, the adapter ignores it rather than matching prompt reflexes on it.
 
 **Learning** — `adage condition --codex-sessions ~/.codex/sessions` reads every rollout under the
 `YYYY/MM/DD` layout; `--transcripts` also accepts rollout files, recognised by their first line
@@ -202,8 +202,8 @@ is idempotent. Codex then asks you to review the hooks in `/hooks`.
 
 ### Not possible, or not done
 
-- **After-failure routes on Codex.** Learned dead ends work (announced at the first prompt), but a
-  route that reacts to a failed command — authored or imported with an `after_failure` trigger —
+- **After-failure reflexes on Codex.** Learned dead ends work (announced at the first prompt), but a
+  reflex that reacts to a failed command — authored or imported with an `after_failure` trigger —
   cannot fire: Codex reports no failures to hooks (#34289, and still so at rust-v0.156.1). It
   starts working if Codex adds an exit code or fires `PostToolUseFailure`, both of which the
   adapter already accepts. A possible workaround, not built: the *next* hook call could read the
@@ -235,9 +235,9 @@ against *our reading* of each harness, not the harness itself:
 | The importer reads that harness's history and learns the scenario's reflexes (lookup, linked files, dead end, finish line) | simulated (and real, in the demo) | simulated (export shape from source) | simulated (rollout shapes from source, current and older) |
 | Each directive arrives at its moment, in the harness's output shape: lookup and dead end at the prompt, linked files after the lookup, finish line after the schema edit, continue at the first stop, nothing at the second | simulated (and real, in the demo) | simulated | simulated |
 | The control arm is silent throughout; `adage graph` counts both sessions, split by arm | simulated | simulated | simulated |
-| Adage's own continuation, coming back as a prompt, matches no prompt route | simulated | simulated | simulated |
+| Adage's own continuation, coming back as a prompt, matches no prompt reflex | simulated | simulated | simulated |
 | The plugin places text as designed (context message, appended tool output, idle continuation) | — | simulated in node with a fake client, against the real binary | — |
-| Routes learned in one harness deliver in another | simulated (all three histories at once) | simulated (from Codex history) | simulated (all three) |
+| Reflexes learned in one harness deliver in another | simulated (all three histories at once) | simulated (from Codex history) | simulated (all three) |
 | The harness really sends these payloads, in this order | real (demo) | **needs a live install** | **needs a live install** |
 | The model really sees the text (OpenCode: `synthetic` accepted on `session.prompt` parts, the `noReply` message lands before the user's, the `tool.execute.after` mutation reaches the model; Codex: context as a developer message) | real (demo) | **needs a live install** | **needs a live install** |
 | Real history files parse (a real `opencode export`; rollouts from the installed Codex version) | real (demo) | **needs a real export** | **needs real rollouts** |

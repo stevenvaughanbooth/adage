@@ -67,6 +67,11 @@ pub fn read(dir: &Path) -> Result<Track> {
 
 /// Read every track under `root` (one directory per track, possibly nested as `owner/name`).
 pub fn read_all(root: &Path) -> Result<Vec<Track>> {
+    Ok(read_all_dirs(root)?.into_iter().map(|(_, t)| t).collect())
+}
+
+/// Every valid track under `root`, with the directory it was read from, sorted by name.
+pub fn read_all_dirs(root: &Path) -> Result<Vec<(std::path::PathBuf, Track)>> {
     let mut out = Vec::new();
     if !root.exists() {
         return Ok(out);
@@ -76,7 +81,7 @@ pub fn read_all(root: &Path) -> Result<Vec<Track>> {
         if d.join("track.toml").exists() {
             // One invalid track must not take down every other track.
             match read(&d) {
-                Ok(t) => out.push(t),
+                Ok(t) => out.push((d, t)),
                 Err(e) => eprintln!("adage: skipping invalid track {}: {e:#}", d.display()),
             }
             continue;
@@ -90,7 +95,7 @@ pub fn read_all(root: &Path) -> Result<Vec<Track>> {
             }
         }
     }
-    out.sort_by(|a, b| a.manifest.track.name.cmp(&b.manifest.track.name));
+    out.sort_by(|a, b| a.1.manifest.track.name.cmp(&b.1.manifest.track.name));
     Ok(out)
 }
 

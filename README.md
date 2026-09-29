@@ -60,8 +60,10 @@ something is new, tells you in one line (`adage: 3 new reflexes active.`, or `1 
 for you: run adage review in a terminal.`; with no `adage` on your `PATH`, as with the plugin alone,
 the line names the plugin's own binary instead, so the command works as written).
 
-From a terminal, `brew install stevenvaughanbooth/tap/adage` or `npm install -g @adage/cli`, then
-connect your agent once (`adage` tells you how: `adage install claude-code --write --scope user`,
+From a terminal, `brew install stevenvaughanbooth/tap/adage` or `npm install -g @adage/cli`
+(**not published yet:** until the first release is out, the tap and the npm package do not exist;
+build from source with `cargo install --locked --git https://github.com/stevenvaughanbooth/adage
+adage-cli`), then connect your agent once (`adage` tells you how: `adage install claude-code --write --scope user`,
 or `codex`, `opencode`) and start a session. Plain `adage`, anywhere (a terminal, a pipe, or
 `!adage` inside Claude Code), prints where things stand. An illustrative card (the numbers are made
 up to show every line; measured numbers are in [Benchmarks](#benchmarks)):
@@ -89,7 +91,8 @@ the table is shown as tokens and turns only. `adage savings --json` has the whol
 **What never happens without you:** nothing is ever run on the agent's behalf unless you turn on
 delegation at a terminal; install steps (environment changes) wait for `adage review`; no hook or
 learner touches the network; settings files change only when you install the plugin or run
-`adage install … --write` (which shows the diff).
+`adage install … --write` (which shows the diff, asks before writing and keeps the previous file
+as `<file>.adage-bak`).
 
 **The one change Adage makes by default** (Claude Code): when a Python repository's own `.venv` was
 verified to have pytest and the project, a test run or scratch repro the agent starts under the
@@ -121,7 +124,7 @@ on real and generated repositories include:
 | **Check the part you edited** | A command naming the directory an edit touched | 🟢/🟡 after an edit under `packages/ledger/`: `make -C packages/ledger check` |
 | **Run the repository's checks** | The checks agents run after editing a kind of file, in the repo-wide form some of them ran (their `cargo test -p <crate>` and `cargo test --workspace --locked -j4` runs are one `cargo test --workspace --locked`) | 🟡 after an edit to `crates/**/*.rs`: `cargo clippy --workspace --all-targets --locked -- -D warnings`, and `cargo fmt --all` owed as a finish line |
 | **Sync the environment** | A dependency step after a dependency file changes | 🟡 after review, once `requirements.txt` changes: `make deps then make check` |
-| **Start like others did** | Prompts that mean the same thing whose sessions ran the same command first | 🟢/🟡 "Requests like this one usually start by running: `make test`" (optional; needs `adage models fetch`) |
+| **Start like others did** | Prompts that mean the same thing whose sessions ran the same command first | 🟢/🟡 "Requests like this one usually start by running: `make test`" (the embedding model is bundled) |
 
 Every reflex carries its evidence (distinct traces, Wilson lower bound), an effect class that caps
 how strongly it may be directed, and typed slot contracts: a value from the prompt reaches a directive
@@ -287,8 +290,8 @@ From a tagged release, for macOS (arm64, x64), Linux (x64, arm64; static) and Wi
 ```bash
 curl --proto '=https' --tlsv1.2 -LsSf https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.sh | sh
 powershell -ExecutionPolicy Bypass -c "irm https://github.com/stevenvaughanbooth/adage/releases/latest/download/adage-cli-installer.ps1 | iex"
-brew install stevenvaughanbooth/tap/adage
-npm install -g @adage/cli   # once the scope is claimed (npm/config.mjs)
+brew install stevenvaughanbooth/tap/adage   # not published yet: once the first release is out
+npm install -g @adage/cli                  # not published yet: once the scope is claimed (npm/config.mjs)
 cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli
 ```
 

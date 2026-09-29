@@ -41,11 +41,12 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
             if !matches!(which.as_str(), "auto" | "hashed") && model::spec(&which).is_none() {
                 bail!("unknown model {which:?}; use auto, hashed, or one of: {}", keys());
             }
+            let before = embedder_id(paths);
             std::fs::create_dir_all(paths.models())?;
             adage_store::config::write_atomic(&paths.models().join(model::ACTIVE_FILE), which.as_bytes())?;
             let r = model::resolve(&paths.models(), false);
             println!("embedding with {}", r.describe());
-            println!("run `adage condition` so what was learned with another model is learned again with this one.");
+            print!("{}", switched(paths, &before));
             Ok(())
         }
         Some("status") | None => {
@@ -115,14 +116,17 @@ fn install(dir: &Path, key: Option<&str>, paths: &Paths) -> Result<()> {
             .find(|s| model::verify(s, dir).is_ok())
             .with_context(|| format!("{} holds none of the pinned models ({})", dir.display(), keys()))?,
     };
+    let before = embedder_id(paths);
     let m = model::install_spec(spec, dir, &paths.models())?;
     let _ = std::fs::remove_file(paths.models().join(FETCH_FAILED));
     println!("installed {} into {}", m.id, paths.models().join(spec.key).display());
+    print!("{}", switched(paths, &before));
     Ok(())
 }
 
 fn fetch(key: Option<&str>, paths: &Paths) -> Result<()> {
     let spec = spec_arg(key)?;
+    let before = embedder_id(paths);
     let m = fetch_spec(spec, paths, &mut |p| {
         if p.file_done == 0 {
             println!("fetching {} ({} bytes)", p.url, p.file_bytes);
@@ -132,7 +136,80 @@ fn fetch(key: Option<&str>, paths: &Paths) -> Result<()> {
     if spec.key != model::BUNDLED_SPEC.key && model::selection(&paths.models()) != spec.key {
         println!("`adage models use {}` makes hooks and the learner embed with it.", spec.key);
     }
+    print!("{}", switched(paths, &before));
     Ok(())
+}
+
+/// The id of the model hooks embed prompts with now.
+fn embedder_id(paths: &Paths) -> String {
+    model::resolve(&paths.models(), false).embedder.id()
+}
+
+/// After a command that may have changed the model hooks embed with (`fetch`, `install`, `use`):
+/// an intent reflex (a procedure card included) matches only prompts embedded by the model it
+/// was learned with, so reflexes learned with the previous model stop firing until their
+/// repository is conditioned again. Say so, and ask each such repository's learner to condition
+/// it again now (in the background, as a session end would), where its checkout is known.
+fn switched(paths: &Paths, before: &str) -> String {
+    let now = embedder_id(paths);
+    if now == before {
+        return String::new();
+    }
+    let index = adage_tracks::Index::load(&paths.index());
+    let mut stranded: std::collections::BTreeMap<&str, (usize, usize)> = Default::default();
+    for r in &index.routes {
+        if let adage_tracks::Trigger::Intent { model, .. } = &r.route.trigger {
+            if *model != now {
+                let e = stranded.entry(r.repo.as_str()).or_default();
+                e.0 += 1;
+                e.1 += usize::from(matches!(r.route.step, adage_tracks::Step::Card { .. }));
+            }
+        }
+    }
+    if stranded.is_empty() {
+        return String::new();
+    }
+    // Each repository's checkout, from the learn queue (the latest session there).
+    let mut roots: std::collections::BTreeMap<String, crate::autolearn::Request> = Default::default();
+    for e in std::fs::read_dir(paths.learn_queue()).into_iter().flatten().flatten() {
+        let name = e.file_name().to_string_lossy().to_string();
+        if name.ends_with(".json") && name.matches('.').count() == 1 {
+            if let Some(req) = crate::autolearn::read_json::<crate::autolearn::Request>(&e.path()) {
+                roots.insert(req.repo.clone(), req);
+            }
+        }
+    }
+    let exe = std::env::current_exe().ok();
+    let mut out = String::new();
+    for (repo, (n, cards)) in stranded {
+        let mut what = if n == 1 {
+            "1 reflex that matches prompts".to_string()
+        } else {
+            format!("{n} reflexes that match prompts")
+        };
+        if cards > 0 {
+            what.push_str(&format!(" ({cards} procedure card{})", if cards == 1 { "" } else { "s" }));
+        }
+        let requeued = match (roots.get(repo), &exe) {
+            (Some(req), Some(exe)) if Path::new(&req.root).join(".git").exists() => matches!(
+                crate::autolearn::on_turn_end(paths, Path::new(&req.root), &req.harness, None, exe, false),
+                Ok(crate::autolearn::Triggered::Started(_)
+                    | crate::autolearn::Triggered::Running
+                    | crate::autolearn::Triggered::Scheduled)
+            ),
+            _ => false,
+        };
+        out.push_str(&format!(
+            "{repo}: {what} learned with {before} {} not fire with {now} until the repository is conditioned again; {}\n",
+            if n == 1 { "does" } else { "do" },
+            if requeued {
+                "Adage is conditioning it again in the background now (`adage condition` there does it at once)"
+            } else {
+                "run `adage condition` in that repository"
+            }
+        ));
+    }
+    out
 }
 
 /// Written under `$ADAGE_HOME/models` when a download fails; removed when one succeeds.

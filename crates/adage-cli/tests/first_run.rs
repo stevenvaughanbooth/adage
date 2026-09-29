@@ -180,14 +180,16 @@ fn init_scopes_the_sense_to_a_repository() {
 }
 
 #[test]
-fn doctor_on_a_fresh_machine_warns_but_does_not_fail() {
+fn doctor_on_a_fresh_machine_passes() {
+    // A fresh install is healthy (launch pass B10): nothing learned yet is not a problem to fix.
     let w = World::new();
     let (v, ok) = doctor(&w);
     assert!(ok, "{v:#}");
     assert_eq!(check(&v, "binary")["status"], "pass");
-    assert_eq!(check(&v, "data directory")["status"], "warn");
-    assert_eq!(check(&v, "index")["status"], "warn");
-    assert_eq!(check(&v, "tracks")["status"], "warn");
+    assert_eq!(check(&v, "data directory")["status"], "pass");
+    assert_eq!(check(&v, "index")["status"], "pass");
+    assert_eq!(check(&v, "tracks")["status"], "pass");
+    assert!(check(&v, "index")["detail"].as_str().unwrap().contains("your first agent session"), "{v:#}");
     assert_eq!(check(&v, "embedding model")["status"], "pass");
     assert_eq!(check(&v, "hooks: claude-code")["detail"], "harness not installed; nothing to check");
     assert_eq!(check(&v, "kill switches")["status"], "pass");

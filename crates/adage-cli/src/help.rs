@@ -28,7 +28,7 @@ const GROUPS: &[(&str, &[Cmd])] = &[
             Cmd {
                 name: "install",
                 about: "print or write a harness's hook registration",
-                usage: &["adage install <claude-code|opencode|codex> [--print | --write] [--scope project|user] [--bin <path>] [--repo <dir>]"],
+                usage: &["adage install <claude-code|opencode|codex> [--print | --write [--yes]] [--scope project|user] [--bin <path>] [--repo <dir>]"],
             },
             Cmd {
                 name: "doctor",

@@ -49,7 +49,7 @@ const MIN_JUDGED: u32 = 5;
 /// A route is flagged when the Wilson lower bound of its ignore share reaches this.
 const IGNORE_BAR: f64 = 0.5;
 
-const USAGE: &str = "usage: adage review [--json]\n       adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <route> [--by <name>]\n       adage review delegate <track> <route> --level e1|e2 [...]\n       adage review revoke <track> <route>";
+const USAGE: &str = "usage: adage review [--json]\n       adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <reflex> [--by <name>]\n       adage review delegate <track> <reflex> --level e1|e2 [...]\n       adage review revoke <track> <reflex>";
 
 pub(crate) struct Installed {
     pub(crate) dir: PathBuf,
@@ -249,7 +249,7 @@ pub(crate) fn preview(t: &Track, r: &Route) -> (String, BTreeMap<String, String>
     }
     let pairs: Vec<(String, String)> = bound.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
     let body = render::route_text(r, &pairs)
-        .unwrap_or_else(|| "(this route cannot be rendered safely; Adage would say nothing)".into());
+        .unwrap_or_else(|| "(this reflex cannot be rendered safely; Adage would say nothing)".into());
     let m = &t.manifest.track;
     let origin = r.is_instinct().then(|| r.origin());
     let strength = if origin.is_some() { adage_tracks::delivered_strength(r) } else { r.strength };
@@ -450,7 +450,7 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     }
     println!("adage review: {} reflex(es) await a decision\n", items.len());
     for it in &items {
-        let (t, r, e) = (&it.inst.track, it.route, &it.route.evidence);
+        let (t, r) = (&it.inst.track, it.route);
         let origin = match origin_label(r) {
             Some(l) => format!("  ({l})"),
             None if it.inst.imported => "  (imported)".into(),
@@ -472,12 +472,13 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
             lower(r.state),
             if r.authored { " · authored" } else { "" }
         );
-        println!(
-            "  evidence   {}/{} traces over {} day(s) · rate {:.2} · Wilson lower bound {:.2}",
-            e.support, e.opportunities, e.days, e.rate, e.lower_bound
-        );
+        let whys = adage_tracks::why::load(&it.inst.dir);
+        println!("  evidence   {}", crate::evidence::describe(r, whys.get(&r.id)));
+        if let Some(o) = crate::evidence::obligation(r) {
+            println!("  enforced   {o}");
+        }
         println!("  runtime    followed {} · ignored {} (treated sessions)", it.followed, it.ignored);
-        if let Some(u) = &e.uplift {
+        if let Some(u) = &r.evidence.uplift {
             println!("  uplift     {}", u.line());
         }
         // The graph engine's reasons for a reflex (Track G §6.3): for people, never the agent.
@@ -567,7 +568,7 @@ fn print_inert(inert: &[crate::packs::InertRoute]) {
     if inert.is_empty() {
         return;
     }
-    println!("adage review: {} pack route(s) are inert here (not delivered):\n", inert.len());
+    println!("adage review: {} pack reflex(es) are inert here (not delivered):\n", inert.len());
     for i in inert {
         println!(
             "{} @ {}  {}   [{}]  (pack, sha256 {})",
@@ -711,7 +712,7 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         .routes
         .iter_mut()
         .find(|r| r.id == **route_id)
-        .with_context(|| format!("{} has no route {route_id:?}", inst.reference))?;
+        .with_context(|| format!("{} has no reflex {route_id:?}", inst.reference))?;
     let before = r.clone();
     let proposal = crate::proposal::current(props.routes.get(route_id.as_str()), r).cloned();
     if verb == "dismiss" {
@@ -722,7 +723,7 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
         proposals::save(&inst.dir, &props)?;
         out.push(format!("adage review: dismissed the proposed change to {} {route_id}", inst.reference));
         out.push(
-            "  kept       the pinned route as it is; learning proposes again only if its version changes materially"
+            "  kept       the pinned reflex as it is; learning proposes again only if its version changes materially"
                 .into(),
         );
         out.push(format!("  recorded   {}/{}", inst.reference, proposals::FILE));
