@@ -64,8 +64,7 @@ From a terminal, `brew install stevenvaughanbooth/tap/adage` or `npm install -g 
 connect your agent once (`adage` tells you how: `adage install claude-code --write --scope user`,
 or `codex`, `opencode`) and start a session. Plain `adage`, anywhere (a terminal, a pipe, or
 `!adage` inside Claude Code), prints where things stand. An illustrative card (the numbers are made
-up to show every line; no real repository has produced a savings figure yet, see
-[Results so far](#results-so-far)):
+up to show every line; measured numbers are in [Benchmarks](#benchmarks)):
 
 ```text
 adage 0.1.0 · github.com/acme/billing                          ● healthy
@@ -124,29 +123,84 @@ how strongly it may be directed, and typed slot contracts: a value from the prom
 only if it matches the contract learned from real values (`^W-\d{4}$`), and file paths only if they
 are safe, repository-relative, and exist.
 
-## Results so far
+## Benchmarks
 
-The launch evaluation ([evals/launch/README.md](evals/launch/README.md), 2026-09-29, about 295
-real Claude Code sessions) is the honest summary. In short:
+Real Claude Code sessions (Claude Haiku 4.5 unless noted), headless, on real open-source
+repositories, scored by hidden tests. Each Adage session is paired with a control session on the
+same task: same repository, same model, hooks installed, directives withheld. Intervals are 90%,
+clustered by task. Every number links to its data and code. Where a result comes from a prototype
+rather than the shipped binary, the table says so.
 
-- **Real repositories: no measurable saving yet.** On four open-source repositories (click, attrs,
-  marshmallow, vuejs/core) and 30 real bug-fix tasks with Claude Haiku 4.5, the resolve rate was
-  0.62 with Adage and 0.65 without, and the cost per resolved task $0.47 either way. Learning from
-  those repositories' real traces produced no learned reflex: on an ordinary repository, Adage today
-  is its instincts.
-- **One instinct works, and it is small.** "Run the tests in the project's `.venv`" fired in 41 of 66
-  Python sessions; agents followed it every time (41 of 41, re-checked on the transcripts) and
-  reached a working test run about two tool calls sooner (about $0.01).
-- **No harm measured**: no resolve-rate or cost penalty in 196 real-repository sessions, and no
-  false learned route on 15 datasets at default thresholds.
-- **Large effects only on generated sandboxes** whose conventions are undiscoverable (below); with
-  the conventions written in a `CLAUDE.md` they shrink to about one turn.
-- The evaluation found bugs that hid or switched off what did work: follows judged as ignored (and
-  the instinct then switched off), failures through a pipe unseen, E1 prefetch refused for learned
-  lookups. They are fixed on this branch; the real-repository benchmark has not been re-run since.
-  A six-task micro slice on click with the fixes and the new pre-call rewrite confirms the
-  mechanism (no adage session hit the `.venv` dead end, against 5 of 6 without Adage) but is far
-  too small to measure a saving ([details](evals/launch/README.md#after-the-fixes-2026-09-29-later)).
+### Recurring work: the procedure a repository repeats
+
+Most work in a repository is a variation of something done before: add a CLI option, add a
+validator, add a flag. Adage groups those sessions into a **family** and compiles what worked into
+a **procedure card**: a 350–700-token reflex listing the files edited, in order, with the lines
+added last time, the test command that works, and the commands that kept failing. When a new prompt
+matches the family (by local embedding similarity), the card is delivered once, at the prompt.
+
+| Family (repository) | Card learned from | Cost per task | Tool calls | Hidden tests passed |
+| --- | --- | ---: | ---: | --- |
+| New parameter type (click) + new validator (marshmallow) | 4 earlier sessions | **−18.8%** [−25.8, −11.6] | −16% | 20/24 vs 19/24 |
+| New flag type (urfave/cli, Go); card detected from the prompt, delivered by the hook | 4 earlier sessions | **−33.8%** [−44.3, −23.6] | −31.5% | 2/12 vs 2/12 |
+| The same click and marshmallow pairs, Adage's instincts only | – | −8.8% [−14.6, −1.9] | −10.7% | 21/24 vs 19/24 |
+
+- **Detection:** 0 wrong deliveries on 53 unrelated prompts in the same repository (upper bound 4.9%).
+- **How much history:** one earlier session is enough when a family edits the same files every time
+  (click, marshmallow). Families whose file names vary per task (`flag_url.go`, `flag_port.go`)
+  need two or more.
+- **What it is:** the card was a prototype in these runs, and is being built into `adage condition`.
+- **Data:** [evals/lab/research/recurring-workflows](evals/lab/research/recurring-workflows/README.md).
+
+### Compiled skills: a skill's effect without its text in context
+
+`adage train <SKILL.md>` compiles a skill's procedural steps into verified reflexes. It checks every
+command by replaying it in a sandbox on a clean checkout, drops stale ones and keeps judgment as
+text. The skill tested here is a repository workflow skill (look up the work item, regenerate after
+schema edits, `make test`, `make ci` before finishing), run with the shipped `adage train`, 12
+sessions per arm:
+
+| | Neither | Skill in context | **Compiled by `adage train`** |
+| --- | ---: | ---: | ---: |
+| Hidden tests passed | 9/12 | 12/12 | **12/12** |
+| Cost per session | $0.122 | $0.032 | **$0.034** |
+| Turns | 27.3 | 7.3 | **7.9** |
+| Input tokens | 564k | 103k | **109k** |
+
+- **What it captures:** the compiled reflexes capture 100% of the skill's effect on pass rate and
+  98% of its cost saving.
+- **Why compile at all:** the compiled steps are verified, delivered only when they apply, and
+  work across Claude Code, Codex and OpenCode.
+- **The compiler catches stale instructions:** on a second skill, replay found that one of its
+  instructions fails on a clean checkout and dropped it. With the skill in context, agents
+  followed that instruction 8 times out of 8.
+- **Limits:** the workflow repository here is a sandbox built for the lab, and a skill that is
+  mostly judgment stays text.
+- **Data:** [evals/lab/skills](evals/lab/skills/README.md).
+
+### One-off bug fixes on real repositories
+
+On novel bug fixes (RepoBench: click, attrs, marshmallow and vuejs/core, plus 9 more repositories
+in Go, Rust, TypeScript and C), each task is new, so there is less to learn from past traces.
+
+- **Instincts: the dead end.** Agents run tests under the system Python, where the project isn't
+  installed. Adage rewrites the interpreter to the project's `.venv` before the call runs.
+  - **Live micro slice** (6 click tasks): 0 of 6 Adage sessions hit that dead end, against 5 of 6
+    without Adage.
+  - **Held-out replay:** about 3.9% of cost per task.
+  - **Learned, not written:** the same reflex is rediscovered from other repositories' traces with
+    no hand-written rule.
+- **Ceiling:** we measured every lever a hook can pull on these tasks: advice, memory of similar
+  situations, file hints, output trimming and hook-run steps. Each is worth 0–4% of cost. The
+  expensive part of a novel fix is reading and reasoning about new code, which past traces cannot
+  shortcut ([research sprint](evals/lab/research/BRIEF.md), 19 studies, negative results included).
+- **Pass rate:** Adage does not change it on these tasks; failed sessions are wrong fixes, not
+  process. No harm was measured in 196 real-repository sessions.
+- **Stronger models gain less:** Sonnet-class agents already avoid most procedural waste.
+
+**What this means for you:** savings scale with how much of your work repeats. On recurring
+work, expect a noticeable cut; on one-off tasks, a few percent from instincts. The status card
+measures it on your own sessions, with a control, before it shows a dollar figure.
 
 ## Results on generated sandboxes
 
