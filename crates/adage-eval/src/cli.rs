@@ -11,6 +11,7 @@
 //! adage eval types <gen-dir | dataset-dir> [--end-to-end] [--json]   (learned value types: `crate::value_types`)
 //! adage eval mine <dataset-dir | gen-dir> [--split <split>] [--top <n>] [--json]   (`crate::graph_mine`)
 //! adage eval generate <synthetic|adversarial> <out-dir>
+//! adage eval replay-savings <manifest.json> …   (the §5.2 savings metric: `crate::savings_replay`)
 //!
 //! <split>: <name> | hash:<share>[:<seed>] | group:task:<k>:<fold> | temporal[:<share>] | all
 //! ```
@@ -62,6 +63,7 @@ pub fn run(args: &[String]) -> Result<()> {
             Ok(())
         }
         Some("bench") => crate::bench::cli::run(&args[1..]),
+        Some("replay-savings") => crate::savings_replay::cli(&args[1..]),
         Some("routes") => {
             let dir = args.get(1).filter(|d| !d.starts_with("--")).context(USAGE)?;
             let opts = crate::Options {

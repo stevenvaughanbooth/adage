@@ -1,0 +1,61 @@
+{
+ "name": "skill-lab-acme",
+ "description": "Skill lab: acme-work-item SKILL.md in context vs compiled into reflexes vs neither",
+ "repo_key": "acme-billing",
+ "workdir": "acme-billing",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/lab/skills/sandbox.py",
+  "acme",
+  "{repo}/evals/lab/skills/skills/acme-work-item/SKILL.md",
+  "{dir}",
+  "{task}",
+  "{arm}"
+ ],
+ "score": [
+  "python3",
+  "{repo}/demo/sandbox/score.py",
+  "{dir}",
+  "{task}"
+ ],
+ "prompts": [
+  "Pick up {id} and get it done.",
+  "Please work on {id}.",
+  "Can you take care of {id}?"
+ ],
+ "train": {
+  "tasks": [
+   "W-1041",
+   "W-1042",
+   "W-1043",
+   "W-1044",
+   "W-1045",
+   "W-1046"
+  ],
+  "repeats": 1
+ },
+ "eval": {
+  "tasks": [
+   "W-2041",
+   "W-2042",
+   "W-2043",
+   "W-2044",
+   "W-2045",
+   "W-2046"
+  ],
+  "repeats": 2,
+  "arms": [
+   "off",
+   "agents-md",
+   "adage"
+  ]
+ },
+ "model": "claude-haiku-4-5-20251001",
+ "max_turns": 30,
+ "concurrency": 3,
+ "learn_args": [],
+ "budget_usd": 5.0,
+ "host_auth": true,
+ "confine": true,
+ "seed": 20260929
+}

@@ -1,0 +1,49 @@
+{
+ "id": "skill-s1-lookup",
+ "summary": "Read the work item",
+ "trigger": {
+  "on": "prompt",
+  "span": "ticket"
+ },
+ "step": {
+  "do": "run",
+  "command": "scripts/wi-lookup {id}"
+ },
+ "slots": [
+  {
+   "name": "id",
+   "source": {
+    "from": "prompt",
+    "span": "ticket"
+   },
+   "contract": {
+    "kind": "pattern",
+    "regex": "^W-\\d{4}$"
+   }
+  }
+ ],
+ "effect": "observe",
+ "strength": "fire",
+ "state": "firm",
+ "exit": [
+  {
+   "when": "intent_changes"
+  }
+ ],
+ "evidence": {
+  "opportunities": 6,
+  "support": 6,
+  "days": 1,
+  "successes": 0,
+  "deviations_failed": 0,
+  "rate": 1.0,
+  "lower_bound": 0.6097,
+  "median_position": 0.0,
+  "turns_saved": 0.0,
+  "provenance": "authored",
+  "models": [
+   "claude-haiku-4-5-20251001"
+  ]
+ },
+ "authored": true
+}

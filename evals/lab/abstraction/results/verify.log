@@ -1,0 +1,102 @@
+click click-0cd28d65 OK  .venv/bin/python -m pytest tests/test_options.py tests/test_testing.py
+click click-19fd4d6e OK  .venv/bin/python -m pytest tests/test_shell_completion.py tests/test_imports.py
+click click-2468b709 OK  .venv/bin/python -m pytest tests/test_termui.py tests/test_utils.py
+click click-3bb230dc OK  .venv/bin/python -m pytest tests/test_formatting.py tests/test_arguments.py
+click click-b67832c2 OK  .venv/bin/python -m pytest tests/test_options.py tests/test_commands.py
+click click-c3535905 OK  .venv/bin/python -m pytest tests/test_shell_completion.py tests/test_imports.py
+click click-c943271a OK  .venv/bin/python -m pytest tests/test_termui.py tests/test_utils.py
+click click-fc5c7f45 OK  .venv/bin/python -m pytest tests/test_termui.py tests/test_imports.py
+click click-0cd28d65 OK  .venv/bin/python -m pytest tests/test_formatting.py tests/test_options.py tests/test_testing.py
+click click-19fd4d6e OK  .venv/bin/python -m pytest tests/test_shell_completion.py
+click click-2468b709 OK  .venv/bin/python -m pytest tests/test_utils.py tests/test_termui.py
+click click-b67832c2 OK  .venv/bin/python -m pytest tests/test_commands.py tests/test_options.py
+click click-fc5c7f45 OK  .venv/bin/python -m pytest tests/test_utils/test_echo_via_pager.py tests/test_termui.py tests/test_imports.py
+click click-0cd28d65 OK  .venv/bin/python -m pytest tests/test_formatting.py
+click click-2468b709 OK  .venv/bin/python -m pytest tests/test_testing.py tests/test_options.py tests/test_termui.py
+click click-0cd28d65 OK  .venv/bin/python -m pytest tests/test_options.py tests/test_testing.py tests/test_commands.py
+click click-0cd28d65 OK  .venv/bin/python -m pytest tests/test_commands.py tests/test_options.py tests/test_testing.py
+attrs attrs-48b8611c OK  .venv/bin/python -m pytest tests/test_make.py tests/test_dunders.py
+attrs attrs-5aa76a44 OK  .venv/bin/python -m pytest tests/test_validators.py tests/test_make.py
+attrs attrs-5bab46de OK  .venv/bin/python -m pytest tests/test_validators.py tests/test_make.py
+attrs attrs-97f8d175 OK  .venv/bin/python -m pytest tests/test_make.py tests/test_dunders.py
+attrs attrs-af9c5109 OK  .venv/bin/python -m pytest tests/test_validators.py tests/test_make.py
+attrs attrs-cbaef3f8 OK  .venv/bin/python -m pytest tests/test_validators.py tests/test_make.py
+attrs attrs-ce358ed0 OK  .venv/bin/python -m pytest tests/test_make.py tests/test_dunders.py tests/test_annotations.py
+attrs attrs-ce89f5d1 OK  .venv/bin/python -m pytest tests/test_make.py tests/test_annotations.py
+attrs attrs-97f8d175 OK  .venv/bin/python -m pytest tests/test_annotations.py tests/test_make.py tests/test_dunders.py
+attrs attrs-af9c5109 OK  .venv/bin/python -m pytest tests/test_validators.py
+attrs attrs-ce89f5d1 OK  .venv/bin/python -m pytest tests/test_dunders.py tests/test_functional.py tests/test_make.py
+attrs attrs-ce89f5d1 OK  .venv/bin/python -m pytest tests/test_make.py tests/test_annotations.py tests/test_dunders.py
+marshmallow marshmallow-024b5d09 OK  .venv/bin/python -m pytest tests/test_fields.py tests/test_deserialization.py
+marshmallow marshmallow-252090c7 OK  .venv/bin/python -m pytest tests/mypy_test_cases/test_schema.py tests/test_schema.py
+marshmallow marshmallow-65374df0 OK  .venv/bin/python -m pytest tests/test_validate.py tests/test_deserialization.py
+marshmallow marshmallow-72ac4a04 OK  .venv/bin/python -m pytest tests/test_utils.py tests/test_serialization.py
+marshmallow marshmallow-902f99c4 OK  .venv/bin/python -m pytest tests/test_validate.py tests/test_deserialization.py
+marshmallow marshmallow-f07eadc8 OK  .venv/bin/python -m pytest tests/test_validate.py tests/test_deserialization.py
+marshmallow marshmallow-024b5d09 OK  .venv/bin/python -m pytest tests/test_deserialization.py tests/test_fields.py
+marshmallow marshmallow-252090c7 OK  .venv/bin/python -m pytest tests/test_deserialization.py tests/mypy_test_cases/test_schema.py tests/test_schema.py
+marshmallow marshmallow-72ac4a04 OK  .venv/bin/python -m pytest tests/test_deserialization.py tests/test_utils.py tests/test_serialization.py
+urfave-cli urfave-cli-19f06441 OK  go test .
+urfave-cli urfave-cli-58ec406e OK  go test .
+urfave-cli urfave-cli-7fc67828 OK  go test .
+urfave-cli urfave-cli-9b981a04 OK  go test .
+urfave-cli urfave-cli-ae1fde92 OK  go test .
+urfave-cli urfave-cli-b7cfd406 OK  go test .
+urfave-cli urfave-cli-d1d81084 OK  go test .
+urfave-cli urfave-cli-e3f7e35f OK  go test .
+vue-core vue-core-2cde6f75 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/hydration.spec.ts packages/runtime-core/__tests__/components/Suspense.spec.ts packages/vue/__tests__/e2e/Transition.spec.ts
+vue-core vue-core-38577161 OK  node_modules/.bin/vitest run packages/compiler-core/__tests__/transforms/vBind.spec.ts packages/compiler-core/__tests__/transforms/vFor.spec.ts
+vue-core vue-core-54097087 OK  node_modules/.bin/vitest run packages/compiler-sfc/__tests__/compileScript.spec.ts packages/compiler-sfc/__tests__/compileScript/defineProps.spec.ts
+vue-core vue-core-5dda1920 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/hydration.spec.ts packages/runtime-core/__tests__/components/Suspense.spec.ts
+vue-core vue-core-76d42dc1 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/hydration.spec.ts packages/runtime-core/__tests__/components/Suspense.spec.ts packages/vue/__tests__/e2e/Transition.spec.ts
+vue-core vue-core-bfcfe9e4 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/components/Suspense.spec.ts
+vue-core vue-core-ef82a267 OK  node_modules/.bin/vitest run packages/shared/__tests__/looseEqual.spec.ts
+vue-core vue-core-f8d42e1c OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/componentEmits.spec.ts packages/compiler-core/__tests__/transforms/vFor.spec.ts
+vue-core vue-core-2cde6f75 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/hydration.spec.ts
+vue-core vue-core-38577161 OK  node_modules/.bin/vitest run packages/compiler-core/__tests__/transforms/vBind.spec.ts
+vue-core vue-core-54097087 OK  node_modules/.bin/vitest run packages/compiler-sfc/__tests__/compileScript.spec.ts
+vue-core vue-core-5dda1920 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/components/Suspense.spec.ts packages/runtime-core/__tests__/hydration.spec.ts packages/compiler-dom/__tests__/transforms/stringifyStatic.spec.ts
+vue-core vue-core-76d42dc1 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/components/Suspense.spec.ts packages/vue/__tests__/e2e/Transition.spec.ts
+vue-core vue-core-bfcfe9e4 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/components/Suspense.spec.ts packages/vue/__tests__/e2e/Transition.spec.ts
+vue-core vue-core-ef82a267 OK  node_modules/.bin/vitest run packages/shared/__tests__/looseEqual.spec.ts packages/runtime-dom/__tests__/directives/vModel.spec.ts
+vue-core vue-core-f8d42e1c OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/componentEmits.spec.ts
+vue-core vue-core-2cde6f75 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/components/Suspense.spec.ts packages/vue/__tests__/e2e/Transition.spec.ts
+vue-core vue-core-5dda1920 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/hydration.spec.ts
+vue-core vue-core-76d42dc1 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/hydration.spec.ts
+vue-core vue-core-ef82a267 OK  node_modules/.bin/vitest run packages/shared/__tests__/looseEqual.spec.ts packages/runtime-dom/__tests__/directives/vModel.spec.ts packages/compiler-core/__tests__/transforms/vModel.spec.ts
+vue-core vue-core-f8d42e1c OK  node_modules/.bin/vitest run packages/runtime-dom/__tests__/directives/vModel.spec.ts packages/runtime-core/__tests__/componentEmits.spec.ts packages/compiler-core/__tests__/transforms/vFor.spec.ts
+vue-core vue-core-2cde6f75 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/components/Suspense.spec.ts
+vue-core vue-core-5dda1920 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/components/Suspense.spec.ts packages/runtime-core/__tests__/hydration.spec.ts
+vue-core vue-core-76d42dc1 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/components/Suspense.spec.ts
+vue-core vue-core-f8d42e1c OK  node_modules/.bin/vitest run packages/runtime-dom/__tests__/directives/vModel.spec.ts
+vue-core vue-core-5dda1920 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/hydration.spec.ts packages/runtime-core/__tests__/components/Suspense.spec.ts packages/vue/__tests__/e2e/Transition.spec.ts
+vue-core vue-core-f8d42e1c OK  node_modules/.bin/vitest run packages/runtime-dom/__tests__/directives/vModel.spec.ts packages/runtime-core/__tests__/componentEmits.spec.ts
+vue-core vue-core-5dda1920 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/components/Suspense.spec.ts packages/vue/__tests__/e2e/Transition.spec.ts
+vue-core vue-core-5dda1920 OK  node_modules/.bin/vitest run packages/runtime-core/__tests__/hydration.spec.ts packages/runtime-core/__tests__/components/BaseTransition.spec.ts packages/vue/__tests__/e2e/Transition.spec.ts
+{
+ "click": {
+  "checked": 17,
+  "ok": 17,
+  "rate": 1.0
+ },
+ "attrs": {
+  "checked": 12,
+  "ok": 12,
+  "rate": 1.0
+ },
+ "marshmallow": {
+  "checked": 9,
+  "ok": 9,
+  "rate": 1.0
+ },
+ "urfave-cli": {
+  "checked": 8,
+  "ok": 8,
+  "rate": 1.0
+ },
+ "vue-core": {
+  "checked": 29,
+  "ok": 29,
+  "rate": 1.0
+ }
+}
