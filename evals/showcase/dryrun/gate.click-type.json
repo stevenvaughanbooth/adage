@@ -1,6 +1,6 @@
 {
  "family": "click-type",
- "home": "/tmp/sc-dry-click-type-kw0b7zy3/adage-home",
+ "home": "/tmp/sc-dry-click-type-_ohplop9/adage-home",
  "adage": "/tmp/adage-showcase-target/release/adage",
  "cards": [
   {
@@ -11,7 +11,7 @@
  "held_out": [
   {
    "task": "click-type--semver",
-   "session": "03c9161a-58b2-4bd1-b85e-ac3d8e527fe4",
+   "session": "2f13204a-1fe8-4adb-9128-aa406e684d95",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -22,7 +22,7 @@
   },
   {
    "task": "click-type--percentage",
-   "session": "ca80a985-8085-4c01-8235-c47a25a821da",
+   "session": "e2ba41f1-723e-4651-a838-eac3e9df2969",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -33,7 +33,7 @@
   },
   {
    "task": "click-type--byte-size",
-   "session": "80c5854b-7093-4edc-913e-3db07b693e3f",
+   "session": "c976d4eb-94b5-4e88-b667-3068683cf0e9",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -44,7 +44,7 @@
   },
   {
    "task": "click-type--slug",
-   "session": "4defb626-1c1f-4d08-983b-60f85d7c5f66",
+   "session": "6a4b2af1-8781-4058-9178-2a38fef86792",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -55,7 +55,7 @@
   },
   {
    "task": "click-type--date",
-   "session": "416b96fb-add3-49ee-b00e-5d286ef50e11",
+   "session": "e45bd188-c533-4ec4-aefb-99a30b488402",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -66,7 +66,7 @@
   },
   {
    "task": "click-type--host-port",
-   "session": "c2af9b85-5035-411b-841d-275e173b0a57",
+   "session": "1baadf59-079c-41b9-88fd-caad8e2adc25",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -77,7 +77,7 @@
   },
   {
    "task": "click-type--time",
-   "session": "fc304e87-cbe3-4710-b206-5dbebd8433a1",
+   "session": "c7c0b4e8-3733-46d7-ba54-6dd13e2e7d15",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -88,7 +88,7 @@
   },
   {
    "task": "click-type--log-level",
-   "session": "1292570a-0fb8-4fcc-9542-cb73eac92580",
+   "session": "f56d8bea-cb78-4025-8ecf-aba0ea4fea86",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -102,7 +102,7 @@
   {
    "id": "click-d251cb0a",
    "source": "repobench",
-   "session": "a562565c-ddbb-4fd0-9882-d8e20bff5cb7",
+   "session": "ec068ff1-b078-433c-9df7-7c94ff688444",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -112,7 +112,7 @@
   {
    "id": "click-1a4d8c1b",
    "source": "repobench",
-   "session": "adfe261d-b51c-4c50-9a58-285c68926bac",
+   "session": "2068a2f6-32e8-4ed3-a7a8-064078bc2d1f",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -122,7 +122,7 @@
   {
    "id": "click-eaf33a95",
    "source": "repobench",
-   "session": "cbe2a9a4-bf0d-4edd-ad32-0a84bee7293e",
+   "session": "463ec88d-2c3f-4b01-ab69-a7b6c4ea1fc2",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -132,7 +132,7 @@
   {
    "id": "neg-click-choice-hidden",
    "source": "handwritten",
-   "session": "785e29ca-aeb9-497f-b355-43151b424cbc",
+   "session": "a762bccd-9c1e-46bd-8f61-8bdb4d8e5237",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -142,7 +142,7 @@
   {
    "id": "neg-click-doc-custom-type",
    "source": "handwritten",
-   "session": "62267a39-ec19-4b36-9be0-6f7671e31c63",
+   "session": "5f75c080-0306-4d7b-ba54-4f7a8f6bfd2a",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -152,7 +152,7 @@
   {
    "id": "neg-click-path-resolve",
    "source": "handwritten",
-   "session": "2cf7a61f-4a7a-4fb9-a2ec-9d28686b273b",
+   "session": "c7e475dc-767c-4473-aa16-d0249a9fad4a",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
