@@ -1,0 +1,196 @@
+{
+ "haiku": {
+  "n": 176,
+  "calls_per_session": 32.38636363636363,
+  "top_keys": [
+   [
+    "Read",
+    6.95,
+    0.718
+   ],
+   [
+    "Edit",
+    3.73,
+    0.012
+   ],
+   [
+    "Bash:grep",
+    2.56,
+    0.025
+   ],
+   [
+    "Bash:python -m pytest",
+    2.29,
+    0.055
+   ],
+   [
+    "Bash:python3 <<heredoc",
+    1.84,
+    0.01
+   ],
+   [
+    "Bash:find",
+    1.82,
+    0.03
+   ],
+   [
+    "Bash:npm test",
+    1.28,
+    0.016
+   ],
+   [
+    "Bash:pip install",
+    1.11,
+    0.017
+   ],
+   [
+    "Grep",
+    1.09,
+    0.008
+   ],
+   [
+    "Bash:ls",
+    0.77,
+    0.009
+   ],
+   [
+    "Bash:git log",
+    0.71,
+    0.004
+   ],
+   [
+    "Bash:git add",
+    0.68,
+    0.003
+   ],
+   [
+    "Bash:python3 -m pytest",
+    0.64,
+    0.015
+   ],
+   [
+    "Bash:cat",
+    0.61,
+    0.006
+   ],
+   [
+    "Bash:python",
+    0.61,
+    0.005
+   ]
+  ],
+  "phase_calls_per_session": {
+   "pre": 11.204545454545455,
+   "loop": 11.914772727272727,
+   "tail": 9.267045454545455
+  },
+  "pre_first_edit_calls": 11.204545454545455,
+  "loop_calls": 11.914772727272727,
+  "tail_calls": 9.267045454545455,
+  "test_named_calls": 5.596590909090909,
+  "tail_cost_share_after_last_edit_plus_one": {
+   "mean": 0.27683757517722585,
+   "ci90": [
+    0.25344375016587023,
+    0.2989409035079743
+   ]
+  }
+ },
+ "sonnet": {
+  "n": 32,
+  "calls_per_session": 28.375,
+  "top_keys": [
+   [
+    "Read",
+    6.31,
+    0.64
+   ],
+   [
+    "Edit",
+    4.0,
+    0.016
+   ],
+   [
+    "Bash:grep",
+    3.34,
+    0.06
+   ],
+   [
+    "Grep",
+    2.75,
+    0.027
+   ],
+   [
+    "Bash:npx vitest",
+    2.38,
+    0.064
+   ],
+   [
+    "Bash:sed",
+    1.31,
+    0.05
+   ],
+   [
+    "Bash:python -m pytest",
+    1.31,
+    0.024
+   ],
+   [
+    "Bash:cat",
+    1.16,
+    0.021
+   ],
+   [
+    "Bash:python -c",
+    0.66,
+    0.002
+   ],
+   [
+    "Bash:find",
+    0.56,
+    0.008
+   ],
+   [
+    "Bash:.venv/bin/python -m pytest",
+    0.44,
+    0.012
+   ],
+   [
+    "Bash:git diff",
+    0.34,
+    0.016
+   ],
+   [
+    "Bash:pip install",
+    0.31,
+    0.008
+   ],
+   [
+    "Bash:npx tsc",
+    0.31,
+    0.002
+   ],
+   [
+    "Bash:git log",
+    0.28,
+    0.001
+   ]
+  ],
+  "phase_calls_per_session": {
+   "pre": 10.8125,
+   "loop": 14.25,
+   "tail": 3.3125
+  },
+  "pre_first_edit_calls": 10.8125,
+  "loop_calls": 14.25,
+  "tail_calls": 3.3125,
+  "test_named_calls": 4.3125,
+  "tail_cost_share_after_last_edit_plus_one": {
+   "mean": 0.10118596991114595,
+   "ci90": [
+    0.07192661010146574,
+    0.1318410842490718
+   ]
+  }
+ }
+}

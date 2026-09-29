@@ -1,0 +1,31 @@
+H1 test run after the last edit (before finishing)      v2 P(¬X)=0.17 RD=+0.023 (uncens +0.000) U=+0.40pp [-0.95, +2.01]
+H1 test run after the last edit (before finishing)      v1 P(¬X)=0.20 RD=+0.023 (uncens +0.000) U=+0.45pp [-1.28, +1.84]
+H1b last test run after the last edit exited 0          v2 P(¬X)=0.17 RD=+0.028 (uncens +0.000) U=+0.48pp [-0.86, +2.11]
+H1b last test run after the last edit exited 0          v1 P(¬X)=0.23 RD=+0.028 (uncens +0.000) U=+0.63pp [-1.30, +2.42]
+H2b targeted test run after the last edit [gold instrum v2 P(¬X)=0.30 RD=+0.035 (uncens +0.035) U=+1.02pp [-0.80, +3.28]
+H2b targeted test run after the last edit [gold instrum v1 P(¬X)=0.47 RD=+0.035 (uncens +0.035) U=+1.61pp [-1.48, +4.73]
+H3b ad-hoc script after the last edit                   v2 P(¬X)=0.46 RD=-0.039 (uncens +0.004) U=-1.80pp [-4.90, +1.49]
+H3b ad-hoc script after the last edit                   v1 P(¬X)=0.58 RD=-0.039 (uncens +0.004) U=-2.26pp [-6.17, +1.88]
+H4 kept going after the first green test run            v2 P(¬X)=0.12 RD=+0.031 (uncens +0.000) U=+0.38pp [-0.25, +1.21]
+H4 kept going after the first green test run            v1 P(¬X)=0.16 RD=+0.031 (uncens +0.000) U=+0.50pp [-0.34, +1.50]
+H5b broad suite after the last edit [hand instrument]   v2 P(¬X)=0.50 RD=+0.005 (uncens -0.045) U=+0.24pp [-2.07, +2.49]
+H5b broad suite after the last edit [hand instrument]   v1 P(¬X)=0.71 RD=+0.005 (uncens -0.045) U=+0.34pp [-2.86, +3.46]
+E0 made at least one edit (learned cluster k12:c3 / k40 v2 P(¬X)=0.00 RD=+0.368 (uncens +nan) U=+0.00pp [+0.00, +0.00]
+E0 made at least one edit (learned cluster k12:c3 / k40 v1 P(¬X)=0.09 RD=+0.368 (uncens +nan) U=+3.20pp [+0.66, +5.84]
+v1 agents-md dPass -0.022 [-0.097, 0.046]
+    H1 test run after the last edit (before finishing) {'dX': -0.054, 'dX_ci90': [-0.163, 0.045]}
+    H1b last test run after the last edit exited 0 {'dX': -0.054, 'dX_ci90': [-0.152, 0.044]}
+    H4 kept going after the first green test run {'dX': 0.098, 'dX_ci90': [0.023, 0.165]}
+    H5b broad suite after the last edit [hand instrument] {'dX': -0.054, 'dX_ci90': [-0.144, 0.043]}
+v1 adage dPass -0.011 [-0.072, 0.043]
+v2 adage dPass -0.02 [-0.088, 0.04]
+    H3b ad-hoc script after the last edit {'dX': 0.082, 'dX_ci90': [0.0, 0.172]}
+    H4 kept going after the first green test run {'dX': 0.051, 'dX_ci90': [0.01, 0.1]}
+    H5b broad suite after the last edit [hand instrument] {'dX': -0.082, 'dX_ci90': [-0.196, 0.031]}
+    H2 ran the task's existing test module (targeted) [gold inst {'dX': -0.082, 'dX_ci90': [-0.141, -0.029]}
+attrs {'sessions': 96, 'strata': 16, 'mixed_strata': 3, 'sessions_in_mixed': 18, 'rd': {'H1 test run after the last edit (before finishing)': {'rd': -0.072, 'ci90': [-0.203, 0.0]}, 'H1b last test run after the last edit exited 0': {'rd': -0.079, 'ci90': [-0.203, 0.0]}}}
+click {'sessions': 136, 'strata': 32, 'mixed_strata': 9, 'sessions_in_mixed': 50, 'rd': {'H1 test run after the last edit (before finishing)': {'rd': 0.06, 'ci90': [-0.094, 0.193]}, 'H1b last test run after the last edit exited 0': {'rd': 0.045, 'ci90': [-0.1, 0.179]}}}
+marshmallow {'sessions': 72, 'strata': 12, 'mixed_strata': 0, 'sessions_in_mixed': 0, 'rd': {'H1 test run after the last edit (before finishing)': {'rd': 0.0, 'ci90': [0.0, 0.0]}, 'H1b last test run after the last edit exited 0': {'rd': 0.0, 'ci90': [0.0, 0.0]}}}
+urfave-cli {'sessions': 48, 'strata': 8, 'mixed_strata': 5, 'sessions_in_mixed': 30, 'rd': {'H1 test run after the last edit (before finishing)': {'rd': -0.038, 'ci90': [-0.283, 0.213]}, 'H1b last test run after the last edit exited 0': {'rd': 0.036, 'ci90': [-0.224, 0.308]}}}
+vue-core {'sessions': 120, 'strata': 32, 'mixed_strata': 7, 'sessions_in_mixed': 28, 'rd': {'H1 test run after the last edit (before finishing)': {'rd': 0.11, 'ci90': [0.0, 0.277]}, 'H1b last test run after the last edit exited 0': {'rd': 0.11, 'ci90': [0.0, 0.277]}}}
+{"p0_v2_control": 0.612, "sigma2_within": 0.0517, "table": [{"delta_pp": 2, "unstratified_per_arm": 9221, "task_stratified_per_arm": 2031}, {"delta_pp": 3, "unstratified_per_arm": 4075, "task_stratified_per_arm": 903}, {"delta_pp": 5, "unstratified_per_arm": 1448, "task_stratified_per_arm": 325}, {"delta_pp": 10, "unstratified_per_arm": 348, "task_stratified_per_arm": 82}, {"delta_pp": 15, "unstratified_per_arm": 147, "task_stratified_per_arm": 37}]}
