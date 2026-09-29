@@ -267,6 +267,84 @@ pub struct Evidence {
     /// name or the command table (`adage_learn::effects`); `None` for every other route.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effect_evidence: Option<String>,
+    /// What delivering the route changes (`adage_learn::value::uplift`): how much more often an
+    /// agent takes the directed step when told than it does unaided. `None` on a route written
+    /// before uplift was estimated.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub uplift: Option<Uplift>,
+}
+
+/// A route's uplift, `p_follow − p_self` (evals/lab/research/uptake-delivery): agents follow
+/// nearly every directive, so what a directive is worth is how often the agent would **not** have
+/// taken the step unaided. Each probability is a Beta posterior; the counts are what it rests on.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Uplift {
+    /// The kind whose prior the posteriors start from (`avoid`, `run-after-edit`, `read-batch`,
+    /// `lookup`, `obligation`, `sequence`, `advise`, `run`).
+    pub kind: String,
+    /// Posterior mean of `p_follow` (followed when delivered).
+    pub p_follow: f64,
+    /// Posterior mean of `p_self` (took the step unaided in the matching situation).
+    pub p_self: f64,
+    /// Posterior mean of the uplift, and its one-sided 90% lower bound.
+    pub mean: f64,
+    pub lower: f64,
+    /// `p_self`'s prior mean, and whether it was fitted across repositories (else the research
+    /// constant of its kind).
+    pub prior_self: f64,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub prior_fitted: bool,
+    /// Training traces in the matching situation, and those whose agent took the step unaided.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub traces: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub traces_took: u32,
+    /// Control-arm `would_have` situations judged, and those whose agent took the step unaided.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub control: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub control_took: u32,
+    /// Treated judgements: delivered, and followed.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub delivered: u32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub followed: u32,
+    /// Below the bar: delivering it changes too little, so it is not delivered (nascent) until a
+    /// person approves it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub gated: bool,
+}
+
+impl Uplift {
+    /// One line for people: why a reflex speaks or is quiet.
+    pub fn line(&self) -> String {
+        let mut from = Vec::new();
+        if self.traces > 0 {
+            from.push(format!("{} of {} traces did it unaided", self.traces_took, self.traces));
+        }
+        if self.control > 0 {
+            from.push(format!("{} of {} control situations did it unaided", self.control_took, self.control));
+        }
+        if self.delivered > 0 {
+            from.push(format!("followed {} of {} deliveries", self.followed, self.delivered));
+        }
+        if from.is_empty() {
+            from.push(format!(
+                "no evidence yet: the {} prior{}",
+                self.kind,
+                if self.prior_fitted { ", fitted across repositories" } else { "" }
+            ));
+        }
+        format!(
+            "uplift {:+.2} (lower bound {:+.2}): followed {:.2} when told, {:.2} unaided; {}{}",
+            self.mean,
+            self.lower,
+            self.p_follow,
+            self.p_self,
+            from.join("; "),
+            if self.gated { ". Quiet: agents already do this, so delivering it changes little" } else { "" }
+        )
+    }
 }
 
 /// Where a route came from.

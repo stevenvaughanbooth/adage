@@ -599,6 +599,8 @@ fn to_v1(r: &RouteV2, pack: &Pack, table: &CommandTable) -> Result<Route, String
         by_origin: e.by_origin,
         outcome_lift: None,
         effect_evidence: None,
+        // Uplift is the installing repository's own (re-estimated when it learns).
+        uplift: None,
     };
     Ok(Route {
         id: r.id.clone(),

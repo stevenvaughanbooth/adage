@@ -96,6 +96,10 @@ pub struct InstinctReport {
     pub extinguished: Vec<String>,
     /// Instinct routes a learned route with the same id took over this run.
     pub confirmed: Vec<String>,
+    /// Routes kept quiet (nascent) because agents already take their step unaided: delivering them
+    /// changes too little (`value::assess`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub quiet: Vec<String>,
     /// Why nothing was bound, if nothing was.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub not_bound: Option<String>,
@@ -287,6 +291,24 @@ fn record(r: &mut Route, j: Option<&Judged>) {
     }
 }
 
+/// What is known of how agents take a repository's instinct routes: the runtime's judgements (by
+/// arm) and the training traces, for their uplift ([`crate::value::assess`]).
+#[derive(Clone, Copy)]
+pub struct Seen<'a> {
+    pub judged: &'a BTreeMap<(String, String), Judged>,
+    pub sessions: &'a [&'a crate::import::Session],
+    pub priors: &'a crate::value::Priors,
+}
+
+static NO_PRIORS: std::sync::LazyLock<crate::value::Priors> = std::sync::LazyLock::new(Default::default);
+
+impl<'a> Seen<'a> {
+    /// Judgements alone: no traces (day 0), the built-in priors.
+    pub fn of(judged: &'a BTreeMap<(String, String), Judged>) -> Seen<'a> {
+        Seen { judged, sessions: &[], priors: &NO_PRIORS }
+    }
+}
+
 /// Plan the instinct track of one repository: bind, apply review decisions and auto-extinction,
 /// and version it like any learned track. `root` is the repository on disk; `learned` its routes
 /// from every other source. Nothing is written; the returned [`Planned`] carries the track and,
@@ -297,9 +319,10 @@ pub fn plan_repo(
     tracks_root: &Path,
     learned: &[Route],
     cfg: &Config,
-    judged: &BTreeMap<(String, String), Judged>,
+    seen: &Seen,
     today: &str,
 ) -> Result<(InstinctReport, Option<(TrackReport, Planned)>)> {
+    let judged = seen.judged;
     let mut rep = InstinctReport::default();
     let repo_dir = tracks_root.join(slug(repo));
     let dir = repo_dir.join(TRACK);
@@ -376,6 +399,11 @@ pub fn plan_repo(
                 routes.push(r);
             }
         }
+        // What delivering each changes (uplift, `value::assess`): one agents already take unaided
+        // waits, nascent, until a person approves the route itself (approving the pack does not).
+        let gated: BTreeSet<String> =
+            crate::value::assess(&mut routes, seen.sessions, repo, judged, seen.priors).into_iter().collect();
+        rep.quiet = gated.iter().cloned().collect();
         routes = review::reconcile(prev.as_ref(), &reviews, routes);
         let pack_approved = reviews.packs.contains_key(&cat.pack.name);
         for r in routes.iter_mut() {
@@ -383,7 +411,7 @@ pub fn plan_repo(
             r.strength = Strength::Prime;
             match r.state {
                 RouteState::Firm => r.state = RouteState::Forming,
-                RouteState::Nascent if pack_approved => r.state = RouteState::Forming,
+                RouteState::Nascent if pack_approved && !gated.contains(&r.id) => r.state = RouteState::Forming,
                 _ => {}
             }
         }
@@ -406,7 +434,7 @@ pub fn plan_repo(
             rep.bound += 1;
         }
     }
-    rep.nascent = routes.iter().filter(|r| r.state == RouteState::Nascent).count();
+    rep.nascent = routes.iter().filter(|r| r.state == RouteState::Nascent && !rep.quiet.contains(&r.id)).count();
     rep.extinguished = extinguished_now.keys().cloned().collect();
     let (version, change) = bump(prev.as_ref(), &routes);
     let t = track(&name, repo, &version, &cat.provenance(), routes);
@@ -419,7 +447,11 @@ pub fn plan_repo(
                 adage_tracks::Origin::Instinct { instinct, .. } if !instinct.is_empty() => format!(" {instinct}"),
                 _ => String::new(),
             };
-            format!("{} [{:?}, instinct{instinct}, {:?}]", r.id, r.strength, r.state).to_lowercase()
+            let line = format!("{} [{:?}, instinct{instinct}, {:?}]", r.id, r.strength, r.state).to_lowercase();
+            match r.evidence.uplift.as_ref().filter(|u| u.gated && r.state == RouteState::Nascent) {
+                Some(u) => format!("{line} ({})", u.line()),
+                None => line,
+            }
         })
         .collect();
     lines.extend(extinguished_now.iter().map(|(id, why)| format!("{id}: extinguished automatically ({why})")));
@@ -485,7 +517,7 @@ pub fn learn_only(
 ) -> Result<crate::Report> {
     let judged = cfg.spools.as_deref().map(judgements).unwrap_or_default();
     let others = other_routes(tracks_root, repo);
-    let (ir, plan) = plan_repo(repo, Some(root), tracks_root, &others, cfg, &judged, &review::today())?;
+    let (ir, plan) = plan_repo(repo, Some(root), tracks_root, &others, cfg, &Seen::of(&judged), &review::today())?;
     let mut report = crate::Report::default();
     let mut rr = crate::RepoReport::default();
     if let Some((tr, p)) = plan {
@@ -519,7 +551,7 @@ mod tests {
         let tracks = home.path().join("tracks");
         let cfg = Config::default();
         let none = BTreeMap::new();
-        let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &none, "2026-09-27").unwrap();
+        let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
         let (tr, p) = plan.expect("a track");
         assert_eq!((tr.name.as_str(), tr.version.as_str(), tr.change.as_str()), ("acme/instincts", "0.1.0", "created"));
         // One route per failure signature (docs/instincts.md, Failure signatures).
@@ -528,21 +560,21 @@ mod tests {
         assert!(p.track.routes.iter().all(|r| r.is_instinct() && r.strength == Strength::Prime));
         p.write().unwrap();
         // Unchanged files: unchanged track.
-        let (_, again) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &none, "2026-09-27").unwrap();
+        let (_, again) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
         assert_eq!(again.unwrap().0.change, "unchanged");
         // The learner learns the same dead end: the instinct route leaves, confirmed by sessions.
         let learned = Route {
             evidence: adage_tracks::Evidence { provenance: "desire-path".into(), support: 5, ..Default::default() },
             ..p.track.routes.iter().find(|r| r.id == "dead-end-d41b1e").unwrap().clone()
         };
-        let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[learned], &cfg, &none, "2026-09-27").unwrap();
+        let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[learned], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
         assert_eq!(rep.confirmed, vec!["dead-end-d41b1e".to_string()]);
         assert!(!plan.unwrap().1.track.routes.iter().any(|r| r.id == "dead-end-d41b1e"));
         // Turned off: the track empties; the root unknown: nothing is planned.
         let off = Config { enabled: false, ..Config::default() };
-        let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &off, &none, "2026-09-27").unwrap();
+        let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &off, &Seen::of(&none), "2026-09-27").unwrap();
         assert!(rep.not_bound.is_some() && plan.unwrap().1.track.routes.is_empty());
-        let (rep, plan) = plan_repo("acme", None, &tracks, &[], &cfg, &none, "2026-09-27").unwrap();
+        let (rep, plan) = plan_repo("acme", None, &tracks, &[], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
         assert!(rep.not_bound.is_some() && plan.is_none());
     }
 
