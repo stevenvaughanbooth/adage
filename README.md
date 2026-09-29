@@ -55,12 +55,15 @@ In the background, Adage binds its instincts from the repository's own files (Ma
 repository's: other repositories' transcripts are never opened. From the next prompt on, the agent
 gets its reflexes. Adage keeps learning after every session, and at most once a day, only when
 something is new, tells you in one line (`adage: 3 new reflexes active.`, or `1 install step waits
-for you: run adage review in a terminal.`).
+for you: run adage review in a terminal.`; with no `adage` on your `PATH`, as with the plugin alone,
+the line names the plugin's own binary instead, so the command works as written).
 
 From a terminal, `brew install stevenvaughanbooth/tap/adage` or `npm install -g @adage/cli`, then
 connect your agent once (`adage` tells you how: `adage install claude-code --write --scope user`,
 or `codex`, `opencode`) and start a session. Plain `adage`, anywhere (a terminal, a pipe, or
-`!adage` inside Claude Code), prints where things stand:
+`!adage` inside Claude Code), prints where things stand. An illustrative card (the numbers are made
+up to show every line; no real repository has produced a savings figure yet, see
+[Results so far](#results-so-far)):
 
 ```text
 adage 0.1.0 · github.com/acme/billing                          ● healthy
@@ -112,7 +115,28 @@ how strongly it may be directed, and typed slot contracts: a value from the prom
 only if it matches the contract learned from real values (`^W-\d{4}$`), and file paths only if they
 are safe, repository-relative, and exist.
 
-## Results
+## Results so far
+
+The launch evaluation ([evals/launch/README.md](evals/launch/README.md), 2026-09-29, about 295
+real Claude Code sessions) is the honest summary. In short:
+
+- **Real repositories: no measurable saving yet.** On four open-source repositories (click, attrs,
+  marshmallow, vuejs/core) and 30 real bug-fix tasks with Claude Haiku 4.5, the resolve rate was
+  0.62 with Adage and 0.65 without, and the cost per resolved task $0.47 either way. Learning from
+  those repositories' real traces produced no learned reflex: on an ordinary repository, Adage today
+  is its instincts.
+- **One instinct works, and it is small.** "Run the tests in the project's `.venv`" fired in 41 of 66
+  Python sessions; agents followed it every time (41 of 41, re-checked on the transcripts) and
+  reached a working test run about two tool calls sooner (about $0.01).
+- **No harm measured**: no resolve-rate or cost penalty in 196 real-repository sessions, and no
+  false learned route on 15 datasets at default thresholds.
+- **Large effects only on generated sandboxes** whose conventions are undiscoverable (below); with
+  the conventions written in a `CLAUDE.md` they shrink to about one turn.
+- The evaluation found bugs that hid or switched off what did work: follows judged as ignored (and
+  the instinct then switched off), failures through a pipe unseen, E1 prefetch refused for learned
+  lookups. They are fixed on this branch; the real-repository benchmark has not been re-run since.
+
+## Results on generated sandboxes
 
 Real **Claude Haiku 4.5** agents, headless, each in a fresh copy of a sandbox repository whose
 conventions they cannot guess. Adage learned from 18 training sessions, then two learning-loop rounds

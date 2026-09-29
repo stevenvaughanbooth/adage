@@ -57,7 +57,17 @@ the classifier's view), the sandbox profile in one line, the script closure (an 
 script with its SHA-256, re-read and checked before every run), the output fields, the exit
 predicates and the evidence, then writes the approval through adage-exec's API
 (`$ADAGE_HOME/approvals.json`). Output fields default to what later routes read from the command's
-output (the `lookup → read-linked` edge: the linked files); `--fields` declares them explicitly.
+output (the `lookup → read-linked` edge: the linked files); for a lookup nothing else reads, to the
+repository paths its output names (`files`) and the work item's text fields when its output has them
+(`title`, `description`, `state`, `status`, `acceptance`: read from a JSON object's field or a
+`Title: …` line, whichever shape the output has). A `text` field is bounded plain text: control and
+invisible characters stripped, whitespace collapsed, at most 600 characters (`max`, up to 2,000),
+and withheld when the output scanner finds instruction-shaped text, a secret or an Adage tag in it.
+When the block carries such text, the directive says "The lookup was run; its result is below; you
+don't need to run it again." (with paths only, "That lookup has been run; its result is below.").
+`--fields` declares the fields explicitly. The prompt value a learned lookup binds (`{item}`, a
+learned value type) is E1's input as a typed prompt span is: the runtime binds it
+(`adage_core::vtype`), and the contract checks it again before it runs.
 A pack route's fields, exits and timeout come from its pack. `--raw` asks for raw mode (policy
 must allow it); `--timeout-ms` raises the wall timeout up to 3,000 ms.
 

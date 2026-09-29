@@ -338,9 +338,17 @@ each part does, and where:
   `review.yaml` files. The routes go to the track `<repo>/instincts`, provenance
   `instinct:<pack>@<version>`, versioned by the usual semver rules, and appear in the report (`bound`,
   `advice`, `nascent reflexes`, `skipped`, `extinguished`, `confirmed`) and, as counts, in `learn.log`.
-- **The repository's root** is the working directory most of its sessions recorded that still
-  exists (`instincts::root_of`), or the root the caller names (`Config::roots`: automatic learning
-  names the hook's root). Unknown: nothing is bound, with the reason in the report.
+- **The repository's root** is the live checkout: the root the caller names (`Config::roots`:
+  automatic learning names the hook's root, the session's own checkout; `adage condition` names the
+  checkout it runs in), else the working directory most of its sessions recorded that still exists
+  (`instincts::root_of`). Old traces may name checkouts that have since lost their `.venv` or
+  `node_modules` (per-task worktrees, containers), which bound the wrong instincts (launch report,
+  bug 7). Unknown: nothing is bound, with the reason in the report.
+- **Rebinding.** Each binding is recorded beside the repository's tracks
+  (`.instincts-binding.json`: the checkout and a fingerprint of its declared files,
+  `adage_instincts::fingerprint`, a few dozen `stat`s). A session start whose checkout differs, or
+  whose declared files changed since (a `.venv` made, a Makefile edited), asks the learner to bind
+  again, by the bootstrap's fast first phase.
 - **Day 0.** `adage condition --instincts-only [--repo-path <dir>]` binds a repository with no sessions
   (`instincts::learn_only`), and an automatic learn for a repository with no usable session yet
   binds its instincts once from the root the hook named.
@@ -353,11 +361,16 @@ each part does, and where:
   track. Environment steps stay nascent reflexes until approved; approving one approves every environment
   step of its pack for the repository (`review.yaml`, `packs:`). Decisions never raise an instinct
   above prime or past forming.
-- **Auto-extinguish.** The spools' treated judgements are read at learn (as `adage review` reads them).
-  An instinct route with at least 3 `misfired`, or whose ignore rate has a Wilson lower bound
-  of at least 0.5 over at least 5 judgements, is extinguished and recorded as a person's `extinguish` would be in its
-  `review.yaml` (`by: "adage: misfired 3 times"`), so a re-bind does not bring it back;
-  `learn.log` records the extinction.
+- **Auto-extinguish, conservatively.** The spools' judgements are read at learn, by arm. An instinct
+  route with at least 3 `misfired` (followed, and the directed command failed for want of its
+  environment or target: `adage_core::outcome::misfired`, never a test run that reported failing
+  tests), and no fewer misfires than working follows, is extinguished. An ignore rate alone never
+  extinguishes: an "ignored" may be a follow the matcher missed (the launch report's 41 of 41). It
+  extinguishes (Wilson lower bound at least 0.5 over at least 5 judgements) only with a control-arm
+  comparison of at least 5 judgements that shows follows of the route are seen at all and that
+  delivering it made agents take the step no more often than withholding it. An extinction is
+  recorded as a person's `extinguish` would be in its `review.yaml` (`by: "adage: misfired 3
+  times"`), so a re-bind does not bring it back; `learn.log` records it.
 
 ### adage-runtime
 
