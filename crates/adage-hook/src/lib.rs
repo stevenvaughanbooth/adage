@@ -533,6 +533,8 @@ fn respond(
         }
         _ => Vec::new(),
     };
+    // The learned follow judge's weights for this repository (fitted at learn time), if any.
+    let weights = adage_learn::read_follow_weights(&paths.tracks(), &repo_key);
     // A state that can no longer be read is rebuilt from the session's spool, if it is small
     // enough to replay quickly (it is read under the state lock).
     let rebuild = || {
@@ -557,7 +559,9 @@ fn respond(
             });
             let before: Vec<(String, bool)> =
                 st.obligations.iter().map(|o| (o.route.clone(), o.stop_requested)).collect();
-            let d = adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev));
+            let d = adage_runtime::with_follow_weights(weights.clone(), || {
+                adage_runtime::with_exec_only(exec_only.clone(), || decide(&ctx, st, &ev))
+            });
             let stims = stimuli(&before, &st.obligations, matches!(ev, Event::Batch { .. }));
             (d, st.arm, propensity, stims)
         })

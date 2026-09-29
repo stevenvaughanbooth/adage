@@ -1734,6 +1734,46 @@ fn a_directed_runner_narrowed_to_the_task_is_followed() {
     assert_eq!(all, ["ignored"]);
 }
 
+/// The learned follow judge (adage_core::judge, evals/lab/research/uptake-delivery): with the
+/// repository's weights, a follow no hand-written rule reads (the runner behind a wrapper the
+/// multiplexer table does not know) is judged followed; the system Python still is not.
+#[test]
+fn the_learned_judge_reads_follows_by_the_repository_s_tokens() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let index = Index::compile(&[track("github-com-pallets-click/instincts", "instinct:core@1.0.0", u11_routes())]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let pairs: Vec<(String, String)> = (0..8)
+        .flat_map(|i| {
+            [
+                (format!("s{i}"), format!(".venv/bin/python -m pytest tests/test_{i}.py -x")),
+                (format!("s{i}"), "python -m pytest tests".to_string()),
+            ]
+        })
+        .collect();
+    let w = adage_core::judge::Weights::fit(pairs.iter().map(|(a, b)| (a.as_str(), b.as_str())));
+    let first = "python -m pytest tests/test_basic.py -x";
+    let missing = "/usr/bin/python: No module named pytest";
+    let wrapped = "xvfb-run -a .venv/bin/python -m pytest tests/test_basic.py -x";
+    let judge = |weights: Option<adage_core::judge::Weights>, then: &str| {
+        let mut st = SessionState::default();
+        with_follow_weights(weights, || {
+            decide(&ctx, &mut st, &Event::Failure { call: failed(first, missing) });
+            kinds(&decide(&ctx, &mut st, &Event::Batch { calls: vec![bash(then, "==== 1 passed in 0.1s ====")] }))
+        })
+    };
+    assert!(judge(None, wrapped).is_empty(), "no hand-written rule reads it");
+    assert_eq!(judge(Some(w.clone()), wrapped), ["followed"]);
+    assert!(judge(Some(w), "python -m pytest tests/test_basic.py -x").is_empty());
+}
+
 /// Bug 5 (launch report): in the zero-config E2E, 4 of 6 sessions began with `python -c "import
 /// click"` or `python repro.py`, which failed with `No module named 'click'` and got nothing. U11's
 /// advice names the project's interpreter; a pytest run failing so gets U11's run step alone.

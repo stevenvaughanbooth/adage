@@ -247,6 +247,7 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
         };
         return Ok(report);
     }
+    let weights = follow_weights(&sessions);
     let (mut report, planned) = plan(sessions, inputs.models.as_deref(), tracks_root, cfg)?;
     report.sessions_read = read;
     report.sessions_steered = steered;
@@ -259,12 +260,48 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
             instincts::record_binding(tracks_root, repo, root);
         }
     }
+    for (repo, w) in &weights {
+        write_follow_weights(tracks_root, repo, w);
+    }
     let all = io::read_all(tracks_root)?;
     let (index, conflicts) = Index::compile_root(tracks_root, &all);
     index.write_atomic(index_path)?;
     report.index_generation = index.generation.clone();
     report.conflicts = conflicts;
     Ok(report)
+}
+
+/// Where a repository's learned follow-judge weights are kept (`adage_core::judge`), beside its
+/// tracks (a hidden file: never a track). The hook hands them to the runtime.
+pub fn follow_weights_path(tracks_root: &Path, repo: &str) -> PathBuf {
+    tracks_root.join(slug(repo)).join(".follow-weights.json")
+}
+
+/// The learned follow judge's weights per repository, from its sessions' shell commands: in how
+/// many sessions each token appears (`adage_core::judge::Weights::fit`).
+fn follow_weights(sessions: &[Session]) -> BTreeMap<String, adage_core::judge::Weights> {
+    let mut by: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
+    for s in sessions {
+        for st in &s.steps {
+            if let Some(c) = st.call.input.get("command").and_then(|c| c.as_str()) {
+                by.entry(s.repo.as_str()).or_default().push((s.id.as_str(), c));
+            }
+        }
+    }
+    by.into_iter().map(|(r, pairs)| (r.to_string(), adage_core::judge::Weights::fit(pairs))).collect()
+}
+
+fn write_follow_weights(tracks_root: &Path, repo: &str, w: &adage_core::judge::Weights) {
+    let p = follow_weights_path(tracks_root, repo);
+    if let (Some(dir), Ok(body)) = (p.parent(), serde_json::to_vec(w)) {
+        let _ = std::fs::create_dir_all(dir);
+        let _ = adage_store::config::write_atomic(&p, &body);
+    }
+}
+
+/// A repository's learned follow-judge weights, if it has any.
+pub fn read_follow_weights(tracks_root: &Path, repo: &str) -> Option<adage_core::judge::Weights> {
+    std::fs::read(follow_weights_path(tracks_root, repo)).ok().and_then(|b| serde_json::from_slice(&b).ok())
 }
 
 fn thresholds(cfg: &LearnConfig) -> String {

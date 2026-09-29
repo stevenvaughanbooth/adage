@@ -3,6 +3,7 @@
 
 pub mod action;
 pub mod gitobj;
+pub mod judge;
 pub mod keys;
 pub mod outcome;
 pub mod pattern;

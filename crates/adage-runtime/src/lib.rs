@@ -248,6 +248,32 @@ pub struct Ctx<'a> {
 thread_local! {
     static EXACT_KEYS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static EXEC_ONLY: std::cell::RefCell<Vec<(String, String)>> = const { std::cell::RefCell::new(Vec::new()) };
+    static FOLLOW_WEIGHTS: std::cell::RefCell<Option<adage_core::judge::Weights>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Run `f` with the repository's learned follow-judge weights (`adage_core::judge`, fitted at
+/// learn time from its sessions): a follow is then also judged by the learned judge, on the raw
+/// command the agent ran. The hook passes them; without them only the structural and action
+/// judges apply.
+pub fn with_follow_weights<T>(w: Option<adage_core::judge::Weights>, f: impl FnOnce() -> T) -> T {
+    struct Reset(Option<adage_core::judge::Weights>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            let prev = self.0.take();
+            FOLLOW_WEIGHTS.with(|c| *c.borrow_mut() = prev);
+        }
+    }
+    let _reset = Reset(FOLLOW_WEIGHTS.with(|c| c.replace(w)));
+    f()
+}
+
+/// The learned follow judge ([`with_follow_weights`]) over a call's raw command line.
+fn follows_learned(directed_key: &str, call: &Call) -> bool {
+    if EXACT_KEYS.get() {
+        return false;
+    }
+    let (Some(d), Some(o)) = (directed_key.strip_prefix("exec "), call_command(call)) else { return false };
+    FOLLOW_WEIGHTS.with(|c| c.borrow().as_ref().is_some_and(|w| w.follows(d, o)))
 }
 
 /// Run `f` deciding with these exec-only routes (`(track, route id)`: reflexes that run a vendored
@@ -531,7 +557,10 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     // added to narrow it ([`follows`]). Followed and failed without the runner
                     // reporting tests (or, piped, printing an environment failure) is a misfire.
                     st.pending.retain(|p| {
-                        if follows(&p.expect_key, &key) || follows_call(&p.expect_key, &segs) {
+                        if follows(&p.expect_key, &key)
+                            || follows_call(&p.expect_key, &segs)
+                            || follows_learned(&p.expect_key, call)
+                        {
                             let route = p.route.clone();
                             d.judgements.push(if misfire {
                                 Judgement::Misfired { route }
@@ -798,7 +827,10 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 // it is a test run that ran and reported failing tests (followed; the tests
                 // failing is the task, not the directive).
                 st.pending.retain(|p| {
-                    if follows(&p.expect_key, &key) || follows_call(&p.expect_key, &segs) {
+                    if follows(&p.expect_key, &key)
+                        || follows_call(&p.expect_key, &segs)
+                        || follows_learned(&p.expect_key, call)
+                    {
                         let route = p.route.clone();
                         d.judgements.push(if outcome::misfired(&call.output) {
                             Judgement::Misfired { route }
