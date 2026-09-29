@@ -262,11 +262,13 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         // Bind against the checkout this runs in, not whatever checkouts the traces name (per-task
         // worktrees, containers, a clone since removed or without its `.venv`): the live one is
         // the one the next session works in.
+        // Only when the checkout is the repository being learned: `--repo <key>` names another
+        // repository's traces from anywhere (an eval harness's working directory).
         if let Some(root) = std::env::current_dir().ok().and_then(|d| adage_core::repo::find_root(&d)) {
-            let key = adage_core::repo::key_with(flag(args, "--repo").as_deref(), || {
-                adage_core::repo::repo_key_cached(&root, &paths.repo_keys())
-            });
-            ic.roots.insert(key, root);
+            let own = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
+            if flag(args, "--repo").as_deref().is_none_or(|k| k.trim() == own) {
+                ic.roots.insert(own, root);
+            }
         }
         cfg.instincts = Some(ic);
     }

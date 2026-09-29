@@ -269,7 +269,24 @@ fn pretool(
     }
     let key = repo::repo_key_cached(root, &paths.repo_keys());
     let Some(binding) = adage_learn::instincts::binding(&paths.tracks(), &key) else { return Ok(None) };
-    let Some(env) = binding.env.filter(|_| Path::new(&binding.root) == root) else { return Ok(None) };
+    let Some(mut env) = binding.env else { return Ok(None) };
+    if Path::new(&binding.root) != root {
+        // Another checkout of the repository (a per-task worktree, a fresh clone) until the
+        // rebind this session start asked for lands: its own environment, by the presence of its
+        // interpreter, `pyvenv.cfg` and pytest (a few `stat`s). Only test runs: a repro needs the
+        // bind-time check that the project imports from this checkout.
+        let dir = env.interpreter.strip_suffix("/bin/python").unwrap_or(".venv").to_string();
+        let pytest = std::fs::read_dir(root.join(&dir).join("lib"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|e| e.path().join("site-packages/pytest/__init__.py").is_file());
+        if !(root.join(&env.interpreter).is_file() && root.join(&dir).join("pyvenv.cfg").is_file() && pytest) {
+            return Ok(None);
+        }
+        env.pytest = true;
+        env.modules.clear();
+    }
     // U11 in service here (not extinguished, rejected or turned off).
     let index = Index::try_load(&paths.index()).unwrap_or_default();
     let u11 = index.for_repo(&key).any(|r| {
