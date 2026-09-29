@@ -1,0 +1,1972 @@
+{
+ "n_units": 375,
+ "uptake_by_family_hook": [
+  {
+   "pool": "primary",
+   "family": "dead-end",
+   "kind": "avoid",
+   "hook": "PostToolUseFailure",
+   "n_delivered": 46,
+   "p_follow": 0.978,
+   "p_follow_ci": [
+    0.908,
+    0.995
+   ],
+   "n_withheld": 41,
+   "p_self": 0.293,
+   "p_self_ci": [
+    0.192,
+    0.419
+   ],
+   "uplift": 0.686,
+   "uplift_ci": [
+    0.524,
+    0.842
+   ],
+   "literal_p_follow": 0.022
+  },
+  {
+   "pool": "primary",
+   "family": "finish",
+   "kind": "obligation",
+   "hook": "PostToolBatch",
+   "n_delivered": 4,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.596,
+    1.0
+   ],
+   "n_withheld": 4,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.596,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "pool": "primary",
+   "family": "lookup",
+   "kind": "run",
+   "hook": "UserPromptSubmit",
+   "n_delivered": 12,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.816,
+    1.0
+   ],
+   "n_withheld": 12,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.816,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "pool": "primary",
+   "family": "read",
+   "kind": "read-batch",
+   "hook": "PostToolBatch",
+   "n_delivered": 12,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.816,
+    1.0
+   ],
+   "n_withheld": 8,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.747,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 0.0
+  },
+  {
+   "pool": "primary",
+   "family": "run",
+   "kind": "run",
+   "hook": "PostToolBatch",
+   "n_delivered": 5,
+   "p_follow": 0.8,
+   "p_follow_ci": [
+    0.435,
+    0.954
+   ],
+   "n_withheld": 5,
+   "p_self": 0.4,
+   "p_self_ci": [
+    0.143,
+    0.728
+   ],
+   "uplift": 0.4,
+   "uplift_ci": [
+    0.0,
+    0.8
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "pool": "secondary",
+   "family": "dead-end",
+   "kind": "avoid",
+   "hook": "PostToolUseFailure",
+   "n_delivered": 5,
+   "p_follow": 0.6,
+   "p_follow_ci": [
+    0.272,
+    0.857
+   ],
+   "n_withheld": 1,
+   "p_self": 0.0,
+   "p_self_ci": [
+    0.0,
+    0.73
+   ],
+   "uplift": 0.6,
+   "uplift_ci": [
+    0.2,
+    1.0
+   ],
+   "literal_p_follow": 0.6
+  },
+  {
+   "pool": "secondary",
+   "family": "dead-end",
+   "kind": "dead-end",
+   "hook": "PostToolBatch",
+   "n_delivered": 0,
+   "p_follow": null,
+   "p_follow_ci": [
+    null,
+    null
+   ],
+   "n_withheld": 1,
+   "p_self": 0.0,
+   "p_self_ci": [
+    0.0,
+    0.73
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": null
+  },
+  {
+   "pool": "secondary",
+   "family": "dead-end",
+   "kind": "dead-end",
+   "hook": "PostToolUseFailure",
+   "n_delivered": 0,
+   "p_follow": null,
+   "p_follow_ci": [
+    null,
+    null
+   ],
+   "n_withheld": 3,
+   "p_self": 0.333,
+   "p_self_ci": [
+    0.078,
+    0.746
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": null
+  },
+  {
+   "pool": "secondary",
+   "family": "lookup",
+   "kind": "run",
+   "hook": "UserPromptSubmit",
+   "n_delivered": 3,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.526,
+    1.0
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "pool": "secondary",
+   "family": "run",
+   "kind": "run",
+   "hook": "PostToolBatch",
+   "n_delivered": 5,
+   "p_follow": 0.8,
+   "p_follow_ci": [
+    0.435,
+    0.954
+   ],
+   "n_withheld": 5,
+   "p_self": 0.2,
+   "p_self_ci": [
+    0.046,
+    0.565
+   ],
+   "uplift": 0.6,
+   "uplift_ci": [
+    0.2,
+    1.0
+   ],
+   "literal_p_follow": 0.6
+  },
+  {
+   "pool": "secondary",
+   "family": "skill",
+   "kind": "avoid",
+   "hook": "UserPromptSubmit",
+   "n_delivered": 40,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.937,
+    1.0
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 0.0
+  },
+  {
+   "pool": "secondary",
+   "family": "skill",
+   "kind": "obligation",
+   "hook": "PostToolBatch",
+   "n_delivered": 4,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.596,
+    1.0
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "pool": "secondary",
+   "family": "skill",
+   "kind": "read-batch",
+   "hook": "PostToolBatch",
+   "n_delivered": 12,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.816,
+    1.0
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 0.0
+  },
+  {
+   "pool": "secondary",
+   "family": "skill",
+   "kind": "run",
+   "hook": "PostToolBatch",
+   "n_delivered": 16,
+   "p_follow": 0.875,
+   "p_follow_ci": [
+    0.684,
+    0.958
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 0.875
+  },
+  {
+   "pool": "secondary",
+   "family": "skill",
+   "kind": "run",
+   "hook": "UserPromptSubmit",
+   "n_delivered": 12,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.816,
+    1.0
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "pool": "secondary",
+   "family": "skill",
+   "kind": "sequence",
+   "hook": "PostToolBatch",
+   "n_delivered": 8,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.747,
+    1.0
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "pool": "secondary",
+   "family": "stop",
+   "kind": "stop",
+   "hook": "Stop",
+   "n_delivered": 7,
+   "p_follow": 0.857,
+   "p_follow_ci": [
+    0.548,
+    0.967
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 0.0
+  }
+ ],
+ "uptake_by_kind": [
+  {
+   "kind": "avoid",
+   "n_delivered": 91,
+   "p_follow": 0.967,
+   "p_follow_ci": [
+    0.92,
+    0.987
+   ],
+   "n_withheld": 42,
+   "p_self": 0.286,
+   "p_self_ci": [
+    0.187,
+    0.411
+   ],
+   "uplift": 0.681,
+   "uplift_ci": [
+    0.529,
+    0.827
+   ],
+   "literal_p_follow": 0.044
+  },
+  {
+   "kind": "dead-end",
+   "n_delivered": 0,
+   "p_follow": null,
+   "p_follow_ci": [
+    null,
+    null
+   ],
+   "n_withheld": 4,
+   "p_self": 0.25,
+   "p_self_ci": [
+    0.058,
+    0.644
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": null
+  },
+  {
+   "kind": "obligation",
+   "n_delivered": 8,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.747,
+    1.0
+   ],
+   "n_withheld": 4,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.596,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "kind": "read-batch",
+   "n_delivered": 24,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.899,
+    1.0
+   ],
+   "n_withheld": 8,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.747,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 0.0
+  },
+  {
+   "kind": "run",
+   "n_delivered": 53,
+   "p_follow": 0.925,
+   "p_follow_ci": [
+    0.842,
+    0.966
+   ],
+   "n_withheld": 22,
+   "p_self": 0.682,
+   "p_self_ci": [
+    0.506,
+    0.817
+   ],
+   "uplift": 0.243,
+   "uplift_ci": [
+    0.075,
+    0.431
+   ],
+   "literal_p_follow": 0.925
+  },
+  {
+   "kind": "sequence",
+   "n_delivered": 8,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.747,
+    1.0
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "kind": "stop",
+   "n_delivered": 7,
+   "p_follow": 0.857,
+   "p_follow_ci": [
+    0.548,
+    0.967
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 0.0
+  }
+ ],
+ "uptake_by_hook": [
+  {
+   "hook": "PostToolBatch",
+   "n_delivered": 66,
+   "p_follow": 0.939,
+   "p_follow_ci": [
+    0.872,
+    0.973
+   ],
+   "n_withheld": 23,
+   "p_self": 0.652,
+   "p_self_ci": [
+    0.481,
+    0.792
+   ],
+   "uplift": 0.287,
+   "uplift_ci": [
+    0.094,
+    0.514
+   ],
+   "literal_p_follow": 0.576
+  },
+  {
+   "hook": "PostToolUseFailure",
+   "n_delivered": 51,
+   "p_follow": 0.941,
+   "p_follow_ci": [
+    0.862,
+    0.976
+   ],
+   "n_withheld": 45,
+   "p_self": 0.289,
+   "p_self_ci": [
+    0.192,
+    0.409
+   ],
+   "uplift": 0.652,
+   "uplift_ci": [
+    0.508,
+    0.794
+   ],
+   "literal_p_follow": 0.078
+  },
+  {
+   "hook": "Stop",
+   "n_delivered": 7,
+   "p_follow": 0.857,
+   "p_follow_ci": [
+    0.548,
+    0.967
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 0.0
+  },
+  {
+   "hook": "UserPromptSubmit",
+   "n_delivered": 67,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.961,
+    1.0
+   ],
+   "n_withheld": 12,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.816,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 0.403
+  }
+ ],
+ "uptake_by_model": [
+  {
+   "model": "haiku",
+   "family": "dead-end",
+   "n_delivered": 50,
+   "p_follow": 0.94,
+   "p_follow_ci": [
+    0.859,
+    0.976
+   ],
+   "n_withheld": 46,
+   "p_self": 0.283,
+   "p_self_ci": [
+    0.188,
+    0.402
+   ],
+   "uplift": 0.657,
+   "uplift_ci": [
+    0.515,
+    0.8
+   ],
+   "literal_p_follow": 0.06
+  },
+  {
+   "model": "haiku",
+   "family": "finish",
+   "n_delivered": 4,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.596,
+    1.0
+   ],
+   "n_withheld": 4,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.596,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "model": "haiku",
+   "family": "lookup",
+   "n_delivered": 15,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.847,
+    1.0
+   ],
+   "n_withheld": 12,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.816,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "model": "haiku",
+   "family": "read",
+   "n_delivered": 12,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.816,
+    1.0
+   ],
+   "n_withheld": 8,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.747,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 0.0
+  },
+  {
+   "model": "haiku",
+   "family": "run",
+   "n_delivered": 10,
+   "p_follow": 0.8,
+   "p_follow_ci": [
+    0.541,
+    0.931
+   ],
+   "n_withheld": 10,
+   "p_self": 0.3,
+   "p_self_ci": [
+    0.127,
+    0.558
+   ],
+   "uplift": 0.5,
+   "uplift_ci": [
+    0.3,
+    0.7
+   ],
+   "literal_p_follow": 0.8
+  },
+  {
+   "model": "haiku",
+   "family": "skill",
+   "n_delivered": 92,
+   "p_follow": 0.978,
+   "p_follow_ci": [
+    0.936,
+    0.993
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 0.413
+  },
+  {
+   "model": "haiku",
+   "family": "stop",
+   "n_delivered": 7,
+   "p_follow": 0.857,
+   "p_follow_ci": [
+    0.548,
+    0.967
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 0.0
+  },
+  {
+   "model": "sonnet",
+   "family": "dead-end",
+   "n_delivered": 1,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.27,
+    1.0
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 1.0
+  }
+ ],
+ "uptake_by_timing": [
+  {
+   "timing": "post-hoc",
+   "n_delivered": 124,
+   "p_follow": 0.935,
+   "p_follow_ci": [
+    0.889,
+    0.963
+   ],
+   "n_withheld": 68,
+   "p_self": 0.412,
+   "p_self_ci": [
+    0.319,
+    0.511
+   ],
+   "uplift": 0.524,
+   "uplift_ci": [
+    0.4,
+    0.656
+   ],
+   "literal_p_follow": 0.339
+  },
+  {
+   "timing": "pre-emptive",
+   "n_delivered": 67,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.961,
+    1.0
+   ],
+   "n_withheld": 12,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.816,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 0.403
+  }
+ ],
+ "uptake_by_wording": [
+  {
+   "explains": 0,
+   "must": 0,
+   "n_delivered": 110,
+   "p_follow": 0.973,
+   "p_follow_ci": [
+    0.934,
+    0.989
+   ],
+   "n_withheld": 66,
+   "p_self": 0.5,
+   "p_self_ci": [
+    0.401,
+    0.599
+   ],
+   "uplift": 0.473,
+   "uplift_ci": [
+    0.331,
+    0.635
+   ],
+   "literal_p_follow": 0.355
+  },
+  {
+   "explains": 1,
+   "must": 0,
+   "n_delivered": 47,
+   "p_follow": 0.979,
+   "p_follow_ci": [
+    0.91,
+    0.995
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 0.0
+  },
+  {
+   "explains": 1,
+   "must": 1,
+   "n_delivered": 34,
+   "p_follow": 0.882,
+   "p_follow_ci": [
+    0.762,
+    0.946
+   ],
+   "n_withheld": 14,
+   "p_self": 0.5,
+   "p_self_ci": [
+    0.299,
+    0.701
+   ],
+   "uplift": 0.382,
+   "uplift_ci": [
+    0.147,
+    0.631
+   ],
+   "literal_p_follow": 0.882
+  }
+ ],
+ "uptake_vs_agentsmd": [
+  {
+   "family": "dead-end",
+   "kind": "avoid",
+   "hook": "PostToolUseFailure",
+   "n_delivered": 51,
+   "p_follow": 0.941,
+   "p_follow_ci": [
+    0.862,
+    0.976
+   ],
+   "n_withheld": 1,
+   "p_self": 0.0,
+   "p_self_ci": [
+    0.0,
+    0.73
+   ],
+   "uplift": 0.941,
+   "uplift_ci": [
+    0.857,
+    0.981
+   ],
+   "literal_p_follow": 0.078
+  },
+  {
+   "family": "finish",
+   "kind": "obligation",
+   "hook": "PostToolBatch",
+   "n_delivered": 4,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.596,
+    1.0
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "family": "lookup",
+   "kind": "run",
+   "hook": "UserPromptSubmit",
+   "n_delivered": 15,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.847,
+    1.0
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "family": "read",
+   "kind": "read-batch",
+   "hook": "PostToolBatch",
+   "n_delivered": 12,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.816,
+    1.0
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 0.0
+  },
+  {
+   "family": "run",
+   "kind": "run",
+   "hook": "PostToolBatch",
+   "n_delivered": 10,
+   "p_follow": 0.8,
+   "p_follow_ci": [
+    0.541,
+    0.931
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 0.8
+  },
+  {
+   "family": "skill",
+   "kind": "avoid",
+   "hook": "UserPromptSubmit",
+   "n_delivered": 40,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.937,
+    1.0
+   ],
+   "n_withheld": 40,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.937,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 0.0
+  },
+  {
+   "family": "skill",
+   "kind": "obligation",
+   "hook": "PostToolBatch",
+   "n_delivered": 4,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.596,
+    1.0
+   ],
+   "n_withheld": 4,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.596,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "family": "skill",
+   "kind": "read-batch",
+   "hook": "PostToolBatch",
+   "n_delivered": 12,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.816,
+    1.0
+   ],
+   "n_withheld": 12,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.816,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 0.0
+  },
+  {
+   "family": "skill",
+   "kind": "run",
+   "hook": "PostToolBatch",
+   "n_delivered": 16,
+   "p_follow": 0.875,
+   "p_follow_ci": [
+    0.684,
+    0.958
+   ],
+   "n_withheld": 16,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.855,
+    1.0
+   ],
+   "uplift": -0.125,
+   "uplift_ci": [
+    -0.25,
+    0.0
+   ],
+   "literal_p_follow": 0.875
+  },
+  {
+   "family": "skill",
+   "kind": "run",
+   "hook": "UserPromptSubmit",
+   "n_delivered": 12,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.816,
+    1.0
+   ],
+   "n_withheld": 12,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.816,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "family": "skill",
+   "kind": "sequence",
+   "hook": "PostToolBatch",
+   "n_delivered": 8,
+   "p_follow": 1.0,
+   "p_follow_ci": [
+    0.747,
+    1.0
+   ],
+   "n_withheld": 8,
+   "p_self": 1.0,
+   "p_self_ci": [
+    0.747,
+    1.0
+   ],
+   "uplift": 0.0,
+   "uplift_ci": [
+    0.0,
+    0.0
+   ],
+   "literal_p_follow": 1.0
+  },
+  {
+   "family": "stop",
+   "kind": "stop",
+   "hook": "Stop",
+   "n_delivered": 7,
+   "p_follow": 0.857,
+   "p_follow_ci": [
+    0.548,
+    0.967
+   ],
+   "n_withheld": 0,
+   "p_self": null,
+   "p_self_ci": [
+    null,
+    null
+   ],
+   "uplift": null,
+   "uplift_ci": [
+    null,
+    null
+   ],
+   "literal_p_follow": 0.0
+  }
+ ],
+ "pooled": {
+  "p_follow": 0.958,
+  "n_delivered": 191,
+  "p_follow_ci": [
+   0.927,
+   0.976
+  ],
+  "p_self": 0.5,
+  "n_withheld": 80,
+  "p_self_ci": [
+   0.41,
+   0.59
+  ],
+  "uplift": 0.458,
+  "uplift_ci": [
+   0.323,
+   0.609
+  ],
+  "deliveries_that_changed_behaviour": 0.207
+ },
+ "judge_error": {
+  "delivered_units": 202,
+  "literal_misjudged": 118,
+  "literal_misjudged_rate": 0.584,
+  "literal_misjudged_ci": [
+   0.526,
+   0.64
+  ],
+  "learned_misjudged": 0,
+  "learned_misjudged_rate": 0.0,
+  "learned_misjudged_ci": [
+   0.0,
+   0.013
+  ],
+  "literal_p_follow": 0.376,
+  "learned_p_follow": 0.95,
+  "instrument_p_follow": 0.95,
+  "by_family": {
+   "dead-end": {
+    "n": 53,
+    "literal": 0.113,
+    "learned": 0.943,
+    "instrument": 0.943,
+    "literal_logged": 1.0
+   },
+   "finish": {
+    "n": 6,
+    "literal": 0.667,
+    "learned": 0.667,
+    "instrument": 0.667,
+    "literal_logged": 0.667
+   },
+   "lookup": {
+    "n": 20,
+    "literal": 1.0,
+    "learned": 1.0,
+    "instrument": 1.0,
+    "literal_logged": 1.0
+   },
+   "read": {
+    "n": 14,
+    "literal": 0.0,
+    "learned": 1.0,
+    "instrument": 1.0,
+    "literal_logged": 0.0
+   },
+   "run": {
+    "n": 10,
+    "literal": 0.8,
+    "learned": 0.8,
+    "instrument": 0.8,
+    "literal_logged": 0.8
+   },
+   "skill": {
+    "n": 92,
+    "literal": 0.413,
+    "learned": 0.978,
+    "instrument": 0.978,
+    "literal_logged": 0.413
+   },
+   "stop": {
+    "n": 7,
+    "literal": 0.0,
+    "learned": 0.857,
+    "instrument": 0.857,
+    "literal_logged": 0.0
+   }
+  },
+  "confusion_literal_learned_instr": {
+   "(0, 1, 1)": 117,
+   "(1, 1, 1)": 75,
+   "(0, 0, 0)": 9,
+   "(1, 0, 0)": 1
+  }
+ },
+ "local_dead_end_vue_core": [
+  {
+   "treated": true,
+   "calls": 16.0,
+   "follow": 0,
+   "lag_learned": 9
+  },
+  {
+   "treated": false,
+   "calls": 2.0,
+   "follow": 0,
+   "lag_learned": null
+  },
+  {
+   "treated": true,
+   "calls": 14.0,
+   "follow": 1,
+   "lag_learned": 2
+  },
+  {
+   "treated": false,
+   "calls": 1.0,
+   "follow": 0,
+   "lag_learned": null
+  }
+ ],
+ "local_dead_end": {
+  "calls": {
+   "treated_mean": 1.2727,
+   "control_mean": 3.359,
+   "diff": -2.086,
+   "diff_ci90": [
+    -2.641,
+    -1.542
+   ],
+   "n_treated": 44,
+   "n_control": 39
+  },
+  "usd": {
+   "treated_mean": 0.0076,
+   "control_mean": 0.0169,
+   "diff": -0.009,
+   "diff_ci90": [
+    -0.012,
+    -0.007
+   ],
+   "n_treated": 44,
+   "n_control": 39
+  },
+  "calls_learned_goal": {
+   "treated_mean": 2.6136,
+   "control_mean": 2.8974,
+   "diff": -0.284,
+   "diff_ci90": [
+    -1.527,
+    1.048
+   ],
+   "n_treated": 44,
+   "n_control": 39
+  },
+  "calls_from_first_need": {
+   "treated_mean": 2.5455,
+   "control_mean": 4.359,
+   "diff": -1.814,
+   "diff_ci90": [
+    -2.525,
+    -1.131
+   ],
+   "n_treated": 44,
+   "n_control": 39
+  },
+  "usd_from_first_need": {
+   "treated_mean": 0.0149,
+   "control_mean": 0.0232,
+   "diff": -0.008,
+   "diff_ci90": [
+    -0.012,
+    -0.004
+   ],
+   "n_treated": 44,
+   "n_control": 39
+  }
+ },
+ "gap": {
+  "Q_null_calls": 3.359,
+  "Q_delivered_calls": 1.273,
+  "Q_followed_immediately_calls": 1.256,
+  "Q_oracle_calls": 1.0,
+  "Q_control_self_followed_calls": null,
+  "realised_calls_per_trigger": 2.086,
+  "offered_calls_per_trigger_posthoc": 2.103,
+  "oracle_calls_per_trigger_posthoc": 2.359,
+  "offered_calls_per_trigger_preemptive": 3.359,
+  "offered_calls_per_trigger_preemptive_ci90": [
+   2.838,
+   3.9
+  ],
+  "offered_usd_per_trigger_preemptive": 0.0176,
+  "offered_usd_per_trigger_preemptive_ci90": [
+   0.015,
+   0.02
+  ],
+  "realised_usd_per_trigger": 0.0094,
+  "n_followed_immediately": 43,
+  "n_treated": 44,
+  "realised_over_offered_posthoc": 0.992,
+  "realised_over_preemptive_ceiling": 0.621
+ },
+ "unseen_need": {
+  "haiku|adage|hit|no-trigger": 24,
+  "haiku|adage|hit|trigger": 43,
+  "haiku|adage|no-hit|no-trigger": 5,
+  "haiku|control|hit|no-trigger": 23,
+  "haiku|control|hit|trigger": 39,
+  "haiku|control|no-hit|no-trigger": 10,
+  "sonnet|adage|hit|no-trigger": 5,
+  "sonnet|adage|hit|trigger": 1,
+  "sonnet|adage|no-hit|no-trigger": 2,
+  "sonnet|control|hit|no-trigger": 7,
+  "sonnet|control|no-hit|no-trigger": 1,
+  "haiku_hit_sessions": 129,
+  "haiku_sessions": 144,
+  "haiku_share_hit_without_trigger": 0.364,
+  "haiku_share_hit_without_trigger_ci": [
+   0.298,
+   0.436
+  ],
+  "sonnet_hit_sessions": 13,
+  "sonnet_sessions": 16,
+  "sonnet_share_hit_without_trigger": 0.923,
+  "sonnet_share_hit_without_trigger_ci": [
+   0.718,
+   0.983
+  ],
+  "share_of_hit_sessions_without_trigger": 0.415,
+  "n_hit_sessions": 142,
+  "n_sessions": 160,
+  "learned_hit_detector_agreement_with_instrument": 1.0
+ },
+ "policies": {
+  "dead_end_local_calls": {
+   "deliver": {
+    "IPS": 1.3494,
+    "SNIPS": 1.2727,
+    "DR": 1.3306,
+    "DR_ci90": [
+     1.0806,
+     1.4997
+    ],
+    "n": 83,
+    "n_matched": 44
+   },
+   "withhold": {
+    "IPS": 3.1566,
+    "SNIPS": 3.359,
+    "DR": 3.4008,
+    "DR_ci90": [
+     2.8979,
+     3.9723
+    ],
+    "n": 83,
+    "n_matched": 39
+   }
+  },
+  "dead_end_local_usd": {
+   "deliver": {
+    "IPS": 0.008,
+    "SNIPS": 0.0076,
+    "DR": 0.0077,
+    "DR_ci90": [
+     0.0061,
+     0.0089
+    ],
+    "n": 83,
+    "n_matched": 44
+   },
+   "withhold": {
+    "IPS": 0.0159,
+    "SNIPS": 0.0169,
+    "DR": 0.017,
+    "DR_ci90": [
+     0.0147,
+     0.0195
+    ],
+    "n": 83,
+    "n_matched": 39
+   }
+  },
+  "session_calls": {
+   "deliver_all (logged adage arm)": {
+    "IPS": 30.0513,
+    "SNIPS": 28.3548,
+    "DR": 28.3449,
+    "DR_ci90": [
+     23.7587,
+     32.496
+    ],
+    "n": 117,
+    "n_matched": 62
+   },
+   "withhold_all (logged control arm)": {
+    "IPS": 25.3504,
+    "SNIPS": 26.9636,
+    "DR": 27.7824,
+    "DR_ci90": [
+     23.4116,
+     31.8894
+    ],
+    "n": 117,
+    "n_matched": 55
+   },
+   "deliver_only_if_uplift>0 (dead-end avoid only)": {
+    "IPS": 29.1795,
+    "SNIPS": 28.45,
+    "DR": 28.7471,
+    "DR_ci90": [
+     24.5208,
+     32.8315
+    ],
+    "n": 117,
+    "n_matched": 60
+   }
+  },
+  "session_calls_DR_diff_vs_withhold": {
+   "deliver_all (logged adage arm)": {
+    "diff": 0.5625,
+    "ci90": [
+     -0.8541,
+     2.0626
+    ]
+   },
+   "deliver_only_if_uplift>0 (dead-end avoid only)": {
+    "diff": 0.9647,
+    "ci90": [
+     -0.419,
+     2.2358
+    ]
+   }
+  },
+  "session_usd": {
+   "deliver_all (logged adage arm)": {
+    "IPS": 0.2328,
+    "SNIPS": 0.2196,
+    "DR": 0.2164,
+    "DR_ci90": [
+     0.1737,
+     0.2521
+    ],
+    "n": 117,
+    "n_matched": 62
+   },
+   "withhold_all (logged control arm)": {
+    "IPS": 0.1892,
+    "SNIPS": 0.2013,
+    "DR": 0.2097,
+    "DR_ci90": [
+     0.1708,
+     0.2432
+    ],
+    "n": 117,
+    "n_matched": 55
+   },
+   "deliver_only_if_uplift>0 (dead-end avoid only)": {
+    "IPS": 0.2236,
+    "SNIPS": 0.218,
+    "DR": 0.219,
+    "DR_ci90": [
+     0.1771,
+     0.2554
+    ],
+    "n": 117,
+    "n_matched": 60
+   }
+  },
+  "session_usd_DR_diff_vs_withhold": {
+   "deliver_all (logged adage arm)": {
+    "diff": 0.0067,
+    "ci90": [
+     -0.0037,
+     0.0166
+    ]
+   },
+   "deliver_only_if_uplift>0 (dead-end avoid only)": {
+    "diff": 0.0093,
+    "ci90": [
+     -0.0036,
+     0.0194
+    ]
+   }
+  },
+  "session_passed": {
+   "deliver_all (logged adage arm)": {
+    "IPS": 0.7179,
+    "SNIPS": 0.6774,
+    "DR": 0.6749,
+    "DR_ci90": [
+     0.53,
+     0.8248
+    ],
+    "n": 117,
+    "n_matched": 62
+   },
+   "withhold_all (logged control arm)": {
+    "IPS": 0.7009,
+    "SNIPS": 0.7455,
+    "DR": 0.7572,
+    "DR_ci90": [
+     0.6247,
+     0.8818
+    ],
+    "n": 117,
+    "n_matched": 55
+   },
+   "deliver_only_if_uplift>0 (dead-end avoid only)": {
+    "IPS": 0.735,
+    "SNIPS": 0.7167,
+    "DR": 0.7028,
+    "DR_ci90": [
+     0.566,
+     0.8305
+    ],
+    "n": 117,
+    "n_matched": 60
+   }
+  },
+  "session_passed_DR_diff_vs_withhold": {
+   "deliver_all (logged adage arm)": {
+    "diff": -0.0822,
+    "ci90": [
+     -0.16,
+     -0.0061
+    ]
+   },
+   "deliver_only_if_uplift>0 (dead-end avoid only)": {
+    "diff": -0.0543,
+    "ci90": [
+     -0.1155,
+     -0.0072
+    ]
+   }
+  },
+  "session_n": 117,
+  "direct_method": {
+   "note": "calls saved per session that hits the dead end, vs no directive; DM = model-based",
+   "post_hoc_once (logged, realised)": {
+    "calls": 1.327,
+    "why": "realised per trigger x share of hit sessions where the trigger fires"
+   },
+   "post_hoc_once + exit-0 signature scan (bug 2 fixed)": {
+    "calls": 2.086
+   },
+   "pre-emptive advice at UserPromptSubmit (DM)": {
+    "calls": 3.359,
+    "calls_lower": 2.509,
+    "usd": 0.0176,
+    "p_follow_first_attempt": 1.0,
+    "p_self_first_attempt": 0.083,
+    "cost_from_first_need_control": 3.359
+   },
+   "pre-emptive PreToolUse rewrite (DM, p_follow=1 by construction)": {
+    "calls": 3.359,
+    "usd": 0.0176
+   },
+   "every_time vs once (DM)": {
+    "treated_sessions": 46,
+    "relapses": 0,
+    "relapse_rate_per_session": 0.0,
+    "mean_relapse_cost_calls": 0.0,
+    "calls_saved_per_session_DM": 0.0
+   }
+  },
+  "preemptive_evidence": {
+   "preemptive (skl-click adage, UPS advice)": {
+    "n_sessions": 8,
+    "n_with_test_attempt": 8,
+    "first_attempt_directed": 8,
+    "friction_calls_mean": 0.0,
+    "rate": 1.0,
+    "ci": [
+     0.747,
+     1.0
+    ],
+    "mean_calls": 46.38,
+    "mean_usd": 0.4379,
+    "pass_rate": 0.75
+   },
+   "agents-md (skl-click, AGENTS.md)": {
+    "n_sessions": 8,
+    "n_with_test_attempt": 8,
+    "first_attempt_directed": 8,
+    "friction_calls_mean": 0.0,
+    "rate": 1.0,
+    "ci": [
+     0.747,
+     1.0
+    ],
+    "mean_calls": 40.88,
+    "mean_usd": 0.3571,
+    "pass_rate": 0.5
+   },
+   "post-hoc (RepoBench click adage, same tasks)": {
+    "n_sessions": 20,
+    "n_with_test_attempt": 19,
+    "first_attempt_directed": 3,
+    "friction_calls_mean": 1.42,
+    "rate": 0.158,
+    "ci": [
+     0.065,
+     0.336
+    ],
+    "mean_calls": 33.6,
+    "mean_usd": 0.2794,
+    "pass_rate": 0.6
+   },
+   "control (RepoBench click control, same tasks)": {
+    "n_sessions": 20,
+    "n_with_test_attempt": 18,
+    "first_attempt_directed": 0,
+    "friction_calls_mean": 1.94,
+    "rate": 0.0,
+    "ci": [
+     -0.0,
+     0.131
+    ],
+    "mean_calls": 33.9,
+    "mean_usd": 0.2833,
+    "pass_rate": 0.65
+   },
+   "control (RepoBench click control, all tasks)": {
+    "n_sessions": 40,
+    "n_with_test_attempt": 36,
+    "first_attempt_directed": 3,
+    "friction_calls_mean": 1.67,
+    "rate": 0.083,
+    "ci": [
+     0.034,
+     0.191
+    ],
+    "mean_calls": 34.85,
+    "mean_usd": 0.2845,
+    "pass_rate": 0.45
+   },
+   "p_first_attempt_directed_preemptive": 1.0,
+   "p_first_attempt_directed_control": 0.083,
+   "acme": {
+    "agents-md": {
+     "n": 12,
+     "mean_calls": 6.0,
+     "mean_usd": 0.0334,
+     "pass_rate": 1.0
+    },
+    "adage": {
+     "n": 12,
+     "mean_calls": 9.58,
+     "mean_usd": 0.046,
+     "pass_rate": 1.0
+    },
+    "off": {
+     "n": 12,
+     "mean_calls": 23.33,
+     "mean_usd": 0.0926,
+     "pass_rate": 0.583
+    }
+   }
+  }
+ },
+ "p_follow_model": {
+  "p_follow": {
+   "global": 0.958,
+   "kappa": 11.78,
+   "cells": {
+    "avoid@PostToolUseFailure": {
+     "n": 51,
+     "raw": 0.941,
+     "posterior_mean": 0.944,
+     "beta": [
+      59.29,
+      3.49
+     ]
+    },
+    "avoid@UserPromptSubmit": {
+     "n": 40,
+     "raw": 1.0,
+     "posterior_mean": 0.99,
+     "beta": [
+      51.29,
+      0.49
+     ]
+    },
+    "obligation@PostToolBatch": {
+     "n": 8,
+     "raw": 1.0,
+     "posterior_mean": 0.975,
+     "beta": [
+      19.29,
+      0.49
+     ]
+    },
+    "read-batch@PostToolBatch": {
+     "n": 24,
+     "raw": 1.0,
+     "posterior_mean": 0.986,
+     "beta": [
+      35.29,
+      0.49
+     ]
+    },
+    "run@PostToolBatch": {
+     "n": 26,
+     "raw": 0.846,
+     "posterior_mean": 0.881,
+     "beta": [
+      33.29,
+      4.49
+     ]
+    },
+    "run@UserPromptSubmit": {
+     "n": 27,
+     "raw": 1.0,
+     "posterior_mean": 0.987,
+     "beta": [
+      38.29,
+      0.49
+     ]
+    },
+    "sequence@PostToolBatch": {
+     "n": 8,
+     "raw": 1.0,
+     "posterior_mean": 0.975,
+     "beta": [
+      19.29,
+      0.49
+     ]
+    },
+    "stop@Stop": {
+     "n": 7,
+     "raw": 0.857,
+     "posterior_mean": 0.92,
+     "beta": [
+      17.29,
+      1.49
+     ]
+    }
+   }
+  },
+  "p_self": {
+   "global": 0.5,
+   "kappa": 1.31,
+   "cells": {
+    "avoid@PostToolUseFailure": {
+     "n": 42,
+     "raw": 0.286,
+     "posterior_mean": 0.292,
+     "beta": [
+      12.65,
+      30.65
+     ]
+    },
+    "dead-end@PostToolBatch": {
+     "n": 1,
+     "raw": 0.0,
+     "posterior_mean": 0.283,
+     "beta": [
+      0.65,
+      1.65
+     ]
+    },
+    "dead-end@PostToolUseFailure": {
+     "n": 3,
+     "raw": 0.333,
+     "posterior_mean": 0.384,
+     "beta": [
+      1.65,
+      2.65
+     ]
+    },
+    "obligation@PostToolBatch": {
+     "n": 4,
+     "raw": 1.0,
+     "posterior_mean": 0.877,
+     "beta": [
+      4.65,
+      0.65
+     ]
+    },
+    "read-batch@PostToolBatch": {
+     "n": 8,
+     "raw": 1.0,
+     "posterior_mean": 0.93,
+     "beta": [
+      8.65,
+      0.65
+     ]
+    },
+    "run@PostToolBatch": {
+     "n": 10,
+     "raw": 0.3,
+     "posterior_mean": 0.323,
+     "beta": [
+      3.65,
+      7.65
+     ]
+    },
+    "run@UserPromptSubmit": {
+     "n": 12,
+     "raw": 1.0,
+     "posterior_mean": 0.951,
+     "beta": [
+      12.65,
+      0.65
+     ]
+    }
+   }
+  },
+  "uplift_posterior": {
+   "avoid@PostToolUseFailure": 0.652,
+   "avoid@UserPromptSubmit": null,
+   "obligation@PostToolBatch": 0.098,
+   "read-batch@PostToolBatch": 0.056,
+   "run@PostToolBatch": 0.558,
+   "run@UserPromptSubmit": 0.036,
+   "sequence@PostToolBatch": null,
+   "stop@Stop": null
+  },
+  "logistic_delivered": {
+   "features": [
+    "explains",
+    "hook=PostToolBatch",
+    "hook=PostToolUseFailure",
+    "hook=Stop",
+    "hook=UserPromptSubmit",
+    "kind=avoid",
+    "kind=obligation",
+    "kind=read-batch",
+    "kind=run",
+    "kind=sequence",
+    "kind=stop",
+    "must",
+    "sonnet",
+    "words"
+   ],
+   "coef": [
+    -0.422,
+    -0.009,
+    -0.608,
+    -0.404,
+    1.021,
+    -0.023,
+    0.388,
+    0.417,
+    -0.553,
+    0.176,
+    -0.404,
+    -0.602,
+    0.046,
+    -0.081
+   ],
+   "n": 191,
+   "positives": 183
+  }
+ }
+}

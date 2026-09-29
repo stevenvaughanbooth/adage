@@ -1,0 +1,581 @@
+{
+ "haiku": {
+  "ALL|H1|1h|split": {
+   "label": "split",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    0.03604769931450486,
+    0.027779727400514154,
+    0.04488503387304769
+   ],
+   "pct_of_cost": [
+    0.13843610442612084,
+    0.109988532779583,
+    0.16896522303609054
+   ],
+   "gross_pct": [
+    0.23191538737781087,
+    0.19948902492530596,
+    0.26649694439752986
+   ],
+   "shaped_per_session": 4.151898734177215,
+   "misses_per_session": 2.9936708860759493,
+   "miss_rate_per_shaped": 0.7210365853658537,
+   "sessions_with_miss": 0.9683544303797469,
+   "baseline_usd": 0.26039232658227845
+  },
+  "ALL|H1|5m|split": {
+   "label": "split",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    0.02910657256500731,
+    0.022077107593553656,
+    0.03660185095824879
+   ],
+   "pct_of_cost": [
+    0.12651221527066625,
+    0.09906143630190631,
+    0.1555949283361544
+   ],
+   "gross_pct": [
+    0.2193402708110168,
+    0.18814717518902208,
+    0.2526482857477465
+   ],
+   "shaped_per_session": 4.151898734177215,
+   "misses_per_session": 2.9936708860759493,
+   "miss_rate_per_shaped": 0.7210365853658537,
+   "sessions_with_miss": 0.9683544303797469,
+   "baseline_usd": 0.23006926645569614
+  },
+  "ALL|H1|1h|loro": {
+   "label": "leave-one-repo-out",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    0.036093550227322795,
+    0.02682161716735402,
+    0.045926393778926954
+   ],
+   "pct_of_cost": [
+    0.138612188389192,
+    0.10531242124782983,
+    0.1737461967398523
+   ],
+   "gross_pct": [
+    0.22884309564222735,
+    0.1966308361324651,
+    0.2627668831443898
+   ],
+   "shaped_per_session": 3.9050632911392404,
+   "misses_per_session": 2.8987341772151898,
+   "miss_rate_per_shaped": 0.7423014586709886,
+   "sessions_with_miss": 0.9810126582278481,
+   "baseline_usd": 0.26039232658227845
+  },
+  "ALL|H2|1h|split": {
+   "label": "split",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    -0.0018450428941507327,
+    -0.003769568720819155,
+    9.911760834832304e-05
+   ],
+   "pct_of_cost": [
+    -0.007085626978211811,
+    -0.014344328323141281,
+    0.0003791550754889421
+   ],
+   "gross_pct": [
+    0.12956123689674295,
+    0.09303800378532212,
+    0.16835886943801628
+   ],
+   "shaped_per_session": 3.170886075949367,
+   "misses_per_session": 1.7721518987341771,
+   "miss_rate_per_shaped": 0.5588822355289421,
+   "sessions_with_miss": 0.7658227848101266,
+   "baseline_usd": 0.26039232658227845
+  },
+  "ALL|H2|5m|split": {
+   "label": "split",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    -0.0030131236398128636,
+    -0.004699471510667,
+    -0.001340266039270832
+   ],
+   "pct_of_cost": [
+    -0.013096593413936463,
+    -0.0202570117917179,
+    -0.005978550587141318
+   ],
+   "gross_pct": [
+    0.12148240542036172,
+    0.08660987277157939,
+    0.1583638728789802
+   ],
+   "shaped_per_session": 3.170886075949367,
+   "misses_per_session": 1.7721518987341771,
+   "miss_rate_per_shaped": 0.5588822355289421,
+   "sessions_with_miss": 0.7658227848101266,
+   "baseline_usd": 0.23006926645569614
+  },
+  "ALL|H2|1h|loro": {
+   "label": "leave-one-repo-out",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    -0.004225145500170531,
+    -0.00634162311444327,
+    -0.0024047826097216406
+   ],
+   "pct_of_cost": [
+    -0.01622607530577701,
+    -0.023384492099491113,
+    -0.009575849481727234
+   ],
+   "gross_pct": [
+    0.052067416551888214,
+    0.040223585584651396,
+    0.06433372465675118
+   ],
+   "shaped_per_session": 2.4177215189873418,
+   "misses_per_session": 1.4177215189873418,
+   "miss_rate_per_shaped": 0.5863874345549738,
+   "sessions_with_miss": 0.6772151898734177,
+   "baseline_usd": 0.26039232658227845
+  },
+  "ALL|H3|1h|split": {
+   "label": "split",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    -0.005443804665887373,
+    -0.0073383001149962285,
+    -0.003639543292160009
+   ],
+   "pct_of_cost": [
+    -0.020906163930937673,
+    -0.02807861566855721,
+    -0.014290860373237122
+   ],
+   "gross_pct": [
+    0.020628572015887695,
+    0.015422263684211445,
+    0.02643089229783739
+   ],
+   "shaped_per_session": 1.8164556962025316,
+   "misses_per_session": 0.759493670886076,
+   "miss_rate_per_shaped": 0.4181184668989547,
+   "sessions_with_miss": 0.43037974683544306,
+   "baseline_usd": 0.26039232658227845
+  },
+  "ALL|H3|5m|split": {
+   "label": "split",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    -0.005895774803089915,
+    -0.00770871228487454,
+    -0.0041867923514051835
+   ],
+   "pct_of_cost": [
+    -0.025626085978003713,
+    -0.033399163729859835,
+    -0.018541921078449715
+   ],
+   "gross_pct": [
+    0.018325808504893328,
+    0.013633325994179402,
+    0.02359403795834172
+   ],
+   "shaped_per_session": 1.8164556962025316,
+   "misses_per_session": 0.759493670886076,
+   "miss_rate_per_shaped": 0.4181184668989547,
+   "sessions_with_miss": 0.43037974683544306,
+   "baseline_usd": 0.23006926645569614
+  },
+  "ALL|H3|1h|loro": {
+   "label": "leave-one-repo-out",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    -0.004256215530558236,
+    -0.006731603669633673,
+    -0.0022615402267821254
+   ],
+   "pct_of_cost": [
+    -0.016345395374826308,
+    -0.02527714928575697,
+    -0.00881542070181646
+   ],
+   "gross_pct": [
+    0.010645079585540038,
+    0.008462998117168039,
+    0.013040155974319605
+   ],
+   "shaped_per_session": 1.5063291139240507,
+   "misses_per_session": 0.620253164556962,
+   "miss_rate_per_shaped": 0.4117647058823529,
+   "sessions_with_miss": 0.3924050632911392,
+   "baseline_usd": 0.26039232658227845
+  },
+  "ALL|ceiling_class|1h": {
+   "label": "hindsight best action per output",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    0.011662034667907247,
+    0.009748296101170586,
+    0.013799767532022408
+   ],
+   "pct_of_cost": [
+    0.044786399126943134,
+    0.038995017278183865,
+    0.050909565201525134
+   ],
+   "gross_pct": [
+    0.044786399126943134,
+    0.038995017278183865,
+    0.050909565201525134
+   ],
+   "shaped_per_session": 0.0,
+   "misses_per_session": 0.0,
+   "miss_rate_per_shaped": null,
+   "sessions_with_miss": 0.0,
+   "baseline_usd": 0.26039232658227845
+  },
+  "ALL|ceiling_class|5m": {
+   "label": "hindsight best action per output",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    0.008951693023582143,
+    0.007438984487383585,
+    0.010608716956424851
+   ],
+   "pct_of_cost": [
+    0.0389086867684952,
+    0.03380417535134763,
+    0.044165141634089404
+   ],
+   "gross_pct": [
+    0.0389086867684952,
+    0.03380417535134763,
+    0.044165141634089404
+   ],
+   "shaped_per_session": 0.0,
+   "misses_per_session": 0.0,
+   "miss_rate_per_shaped": null,
+   "sessions_with_miss": 0.0,
+   "baseline_usd": 0.23006926645569614
+  },
+  "ceiling_drop_all_unreferenced|1h": {
+   "label": "drop every unreferenced line, free",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    0.0763790687963881,
+    0.06652979732196518,
+    0.08698623249612662
+   ],
+   "pct_of_cost": [
+    0.29332303988709874,
+    0.26933217157003875,
+    0.3175941602304206
+   ],
+   "gross_pct": [
+    0.29332303988709874,
+    0.26933217157003875,
+    0.3175941602304206
+   ],
+   "shaped_per_session": 0.0,
+   "misses_per_session": 0.0,
+   "miss_rate_per_shaped": null,
+   "sessions_with_miss": 0.0,
+   "baseline_usd": 0.26039232658227845
+  },
+  "ceiling_drop_all_unreferenced|5m": {
+   "label": "drop every unreferenced line, free",
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "usd_per_session": [
+    0.06284572114096129,
+    0.054513725292280865,
+    0.07193774120837151
+   ],
+   "pct_of_cost": [
+    0.27316000137316615,
+    0.24989948533341014,
+    0.2967275853349747
+   ],
+   "gross_pct": [
+    0.27316000137316615,
+    0.24989948533341014,
+    0.2967275853349747
+   ],
+   "shaped_per_session": 0.0,
+   "misses_per_session": 0.0,
+   "miss_rate_per_shaped": null,
+   "sessions_with_miss": 0.0,
+   "baseline_usd": 0.23006926645569614
+  }
+ },
+ "sonnet": {
+  "ALL|H1|1h|split": {
+   "label": "split",
+   "n_sessions": 32,
+   "n_tasks": 16,
+   "usd_per_session": [
+    0.008223807386232962,
+    -0.0087118531991815,
+    0.025242632586554188
+   ],
+   "pct_of_cost": [
+    0.014478660627792829,
+    -0.016611056815037353,
+    0.043704714220208885
+   ],
+   "gross_pct": [
+    0.09850772720220013,
+    0.06181485922421047,
+    0.12880448543403894
+   ],
+   "shaped_per_session": 2.375,
+   "misses_per_session": 2.0625,
+   "miss_rate_per_shaped": 0.868421052631579,
+   "sessions_with_miss": 0.8125,
+   "baseline_usd": 0.5679950375
+  },
+  "ALL|H1|5m|split": {
+   "label": "split",
+   "n_sessions": 32,
+   "n_tasks": 16,
+   "usd_per_session": [
+    0.004445002459967672,
+    -0.010323354407686352,
+    0.01919775968941611
+   ],
+   "pct_of_cost": [
+    0.008782442938076087,
+    -0.021586455051242927,
+    0.037632742768796246
+   ],
+   "gross_pct": [
+    0.0925135120940506,
+    0.05699948736526433,
+    0.12180064325307104
+   ],
+   "shaped_per_session": 2.375,
+   "misses_per_session": 2.0625,
+   "miss_rate_per_shaped": 0.868421052631579,
+   "sessions_with_miss": 0.8125,
+   "baseline_usd": 0.50612369375
+  },
+  "ALL|H2|1h|split": {
+   "label": "split",
+   "n_sessions": 32,
+   "n_tasks": 16,
+   "usd_per_session": [
+    -0.012954341624664297,
+    -0.019714605731255108,
+    -0.0077001778663189115
+   ],
+   "pct_of_cost": [
+    -0.02280713874135616,
+    -0.03538001031598673,
+    -0.013944052224390336
+   ],
+   "gross_pct": [
+    0.024286808651010423,
+    0.00983910125237535,
+    0.044132259423419806
+   ],
+   "shaped_per_session": 1.59375,
+   "misses_per_session": 1.21875,
+   "miss_rate_per_shaped": 0.7647058823529411,
+   "sessions_with_miss": 0.625,
+   "baseline_usd": 0.5679950375
+  },
+  "ALL|H2|5m|split": {
+   "label": "split",
+   "n_sessions": 32,
+   "n_tasks": 16,
+   "usd_per_session": [
+    -0.012761817787112788,
+    -0.019314106574397735,
+    -0.007655528719396525
+   ],
+   "pct_of_cost": [
+    -0.02521481990411714,
+    -0.03898229099954261,
+    -0.015499266500592726
+   ],
+   "gross_pct": [
+    0.022123560935957565,
+    0.00881501014932586,
+    0.040328438946690214
+   ],
+   "shaped_per_session": 1.59375,
+   "misses_per_session": 1.21875,
+   "miss_rate_per_shaped": 0.7647058823529411,
+   "sessions_with_miss": 0.625,
+   "baseline_usd": 0.50612369375
+  },
+  "ALL|H3|1h|split": {
+   "label": "split",
+   "n_sessions": 32,
+   "n_tasks": 16,
+   "usd_per_session": [
+    -0.009664504633956097,
+    -0.014553384539579276,
+    -0.00537008533569871
+   ],
+   "pct_of_cost": [
+    -0.017015121604748346,
+    -0.021674020436673203,
+    -0.011795204071797813
+   ],
+   "gross_pct": [
+    0.006334715455351439,
+    0.003916814433662919,
+    0.00863762787371282
+   ],
+   "shaped_per_session": 0.71875,
+   "misses_per_session": 0.4375,
+   "miss_rate_per_shaped": 0.6086956521739131,
+   "sessions_with_miss": 0.375,
+   "baseline_usd": 0.5679950375
+  },
+  "ALL|H3|5m|split": {
+   "label": "split",
+   "n_sessions": 32,
+   "n_tasks": 16,
+   "usd_per_session": [
+    -0.009585092811542927,
+    -0.014356852355166335,
+    -0.005386042318487975
+   ],
+   "pct_of_cost": [
+    -0.018938241639162395,
+    -0.02399195225788203,
+    -0.01331727821698526
+   ],
+   "gross_pct": [
+    0.005781271405323216,
+    0.003435298417203743,
+    0.007994808255136284
+   ],
+   "shaped_per_session": 0.71875,
+   "misses_per_session": 0.4375,
+   "miss_rate_per_shaped": 0.6086956521739131,
+   "sessions_with_miss": 0.375,
+   "baseline_usd": 0.50612369375
+  },
+  "ALL|ceiling_class|1h": {
+   "label": "hindsight best action per output",
+   "n_sessions": 32,
+   "n_tasks": 16,
+   "usd_per_session": [
+    0.013006416782482627,
+    0.009680897144638973,
+    0.016668633831255802
+   ],
+   "pct_of_cost": [
+    0.022898821158244057,
+    0.017949316354954906,
+    0.029199193150680598
+   ],
+   "gross_pct": [
+    0.022898821158244057,
+    0.017949316354954906,
+    0.029199193150680598
+   ],
+   "shaped_per_session": 0.0,
+   "misses_per_session": 0.0,
+   "miss_rate_per_shaped": null,
+   "sessions_with_miss": 0.0,
+   "baseline_usd": 0.5679950375
+  },
+  "ALL|ceiling_class|5m": {
+   "label": "hindsight best action per output",
+   "n_sessions": 32,
+   "n_tasks": 16,
+   "usd_per_session": [
+    0.00990867349375836,
+    0.007233981532272379,
+    0.012882436477865763
+   ],
+   "pct_of_cost": [
+    0.019577572866313495,
+    0.015265634781008586,
+    0.024748040866061447
+   ],
+   "gross_pct": [
+    0.019577572866313495,
+    0.015265634781008586,
+    0.024748040866061447
+   ],
+   "shaped_per_session": 0.0,
+   "misses_per_session": 0.0,
+   "miss_rate_per_shaped": null,
+   "sessions_with_miss": 0.0,
+   "baseline_usd": 0.50612369375
+  },
+  "ceiling_drop_all_unreferenced|1h": {
+   "label": "drop every unreferenced line, free",
+   "n_sessions": 32,
+   "n_tasks": 16,
+   "usd_per_session": [
+    0.1052146181752399,
+    0.07137582185238762,
+    0.14554846915599845
+   ],
+   "pct_of_cost": [
+    0.18523862222165963,
+    0.15752494942874298,
+    0.21179877098442962
+   ],
+   "gross_pct": [
+    0.18523862222165963,
+    0.15752494942874298,
+    0.21179877098442962
+   ],
+   "shaped_per_session": 0.0,
+   "misses_per_session": 0.0,
+   "miss_rate_per_shaped": null,
+   "sessions_with_miss": 0.0,
+   "baseline_usd": 0.5679950375
+  },
+  "ceiling_drop_all_unreferenced|5m": {
+   "label": "drop every unreferenced line, free",
+   "n_sessions": 32,
+   "n_tasks": 16,
+   "usd_per_session": [
+    0.08608420648025358,
+    0.057392691795025756,
+    0.12059897318436208
+   ],
+   "pct_of_cost": [
+    0.1700853122335247,
+    0.14235480835686648,
+    0.19635858001617346
+   ],
+   "gross_pct": [
+    0.1700853122335247,
+    0.14235480835686648,
+    0.19635858001617346
+   ],
+   "shaped_per_session": 0.0,
+   "misses_per_session": 0.0,
+   "miss_rate_per_shaped": null,
+   "sessions_with_miss": 0.0,
+   "baseline_usd": 0.50612369375
+  }
+ }
+}

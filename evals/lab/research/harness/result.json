@@ -1,0 +1,305 @@
+{
+ "slug": "harness",
+ "headline": "A common replay harness that scores any policy in $ and calls per task (cumulative-context cost model, 90% task-clustered CIs); exact parity with `adage eval replay-savings`, calibrated on the live U11 mechanism (1.40 predicted vs 1.85 live, inside CI), $ model reproduces billed cost on 519/519 sessions; whole-session effects remain unvalidated, so levers need a <=$6 live micro-slice.",
+ "metric_name": "$ saved per task (API-list, cumulative-context model) and tool calls saved per task, held-out control sessions; pass rate as a worst-case non-inferiority bound",
+ "held_out": {
+  "example_policy": "U11 post-hoc (as live), 82 Haiku v2 held-out control sessions, 30 tasks",
+  "usd_per_task": 0.005797609756097563,
+  "usd_ci90": [
+   0.0037052670588235306,
+   0.008072394186046513
+  ],
+  "usd_share": 0.019289273975405218,
+  "usd_share_ci90": [
+   0.011561841316617786,
+   0.028705817673232527
+  ],
+  "calls_per_task": 1.0020907446018734,
+  "calls_ci90": [
+   0.651895622472415,
+   1.3851823751588996
+  ],
+  "n_sessions": 82,
+  "n_tasks": 30,
+  "baseline_usd_per_task": 0.3005613256097561,
+  "baseline_calls_per_task": 36.02439024390244,
+  "pre_emptive_predictive": {
+   "usd_per_task": 0.011608489430894311,
+   "usd_ci90": [
+    0.008355087083333334,
+    0.014766777510040161
+   ],
+   "usd_share": 0.03862269840387443,
+   "calls_per_task": 2.031888934002128,
+   "calls_ci90": [
+    1.4848438124332195,
+    2.549472603418465
+   ]
+  },
+  "pre_emptive_hindsight": {
+   "usd_per_task": 0.011805801626016259,
+   "usd_share": 0.03927917739271858,
+   "calls_per_task": 2.080790918643004,
+   "calls_ci90": [
+    1.545514441921974,
+    2.5976069584217805
+   ]
+  }
+ },
+ "leave_one_repo_out": {
+  "policy": "U11 predictive learner, Haiku v1+v2 (158 sessions, 38 tasks)",
+  "calls_per_task": 0.8771773971863286,
+  "calls_ci90": [
+   0.5812504660568998,
+   1.1881448235483871
+  ],
+  "usd_share": 0.018698613708525193,
+  "split_calls_per_task": 1.6322714300629688
+ },
+ "calibration": {
+  "mechanism_live": {
+   "tasks": 21,
+   "saving": 1.8492063492063493,
+   "ci95": [
+    1.1666666666666667,
+    2.5634920634920637
+   ]
+  },
+  "mechanism_replay_post_hoc": {
+   "tasks": 21,
+   "predicted": 1.3968253968253967,
+   "ci95": [
+    0.873015873015873,
+    1.9761904761904763
+   ],
+   "inside_live_ci": true
+  },
+  "delivery_match": {
+   "sessions": 66,
+   "live_deliveries": 41,
+   "python_directives": 41,
+   "same_route_and_call": 41
+  },
+  "residual_adage_arm": {
+   "sessions": 66,
+   "directives": 41,
+   "useful": 41,
+   "s_hat_rust": 0.06057128769255783,
+   "ci95": [
+    0.004092606701110493,
+    0.12353060224398903
+   ]
+  },
+  "cost_model": {
+   "sessions": 519,
+   "model_over_billed_median": 1.0,
+   "p05": 0.9999999999999999,
+   "p95": 1.0000000000000002,
+   "marginal_usd_per_removed_call_model": 0.010414370901794303,
+   "marginal_usd_per_call_within_task_slope": 0.010736712209318511,
+   "note": "the slope includes the extra output and reasoning longer sessions carry; the model's removal value is the carried context only, so it should be at or below the slope"
+  },
+  "whole_session_pooled_v2_haiku_python": {
+   "calls": {
+    "live_diff": 1.545454545454546,
+    "live_ci": [
+     0.1515151515151518,
+     2.893939393939394
+    ],
+    "replay_pred": -1.2450218342023274,
+    "pred_inside_live_ci": false
+   },
+   "usd": {
+    "live_diff": 0.005702333333333338,
+    "live_ci": [
+     -0.003223507575757585,
+     0.015031581818181828
+    ],
+    "replay_pred": -0.00720309090909091,
+    "pred_inside_live_ci": false
+   },
+   "pass": {
+    "live_diff": -0.015151515151515155,
+    "live_ci": [
+     -0.0606060606060606,
+     0.0303030303030303
+    ],
+    "replay_pred": 0.0,
+    "pred_inside_live_ci": true
+   }
+  },
+  "did": {
+   "sessions": {
+    "adage_delivered": 41,
+    "adage_not": 25,
+    "control_would": 35,
+    "control_would_not": 31
+   },
+   "calls": {
+    "did": -0.19678543329212417,
+    "ci": [
+     -6.427472527472524,
+     5.309010429299054
+    ],
+    "replay_pred_per_firing_session": -2.3477554587815317,
+    "pred_inside": true
+   },
+   "usd": {
+    "did": 0.016930157777228283,
+    "ci": [
+     -0.041536662597079804,
+     0.07996834904617312
+    ],
+    "replay_pred_per_firing_session": -0.013582971428571431,
+    "pred_inside": true
+   }
+  },
+  "aa_coverage_v1": {
+   "tests": 18,
+   "excluding_0": 3,
+   "rate": 0.16666666666666666,
+   "which": [
+    "v1:attrs usd",
+    "v1:click-sonnet5 calls",
+    "v1:vue-core calls"
+   ]
+  },
+  "micro_slice_power": {
+   "sd_control": 1.7969487870584007,
+   "sd_adage": 0.8992259262476734,
+   "sd_pair": 2.009386028055994,
+   "mde_calls": {
+    "5": 2.23440785080097,
+    "8": 1.7664545075731874,
+    "10": 1.5799649432378255,
+    "12": 1.4423040657978776,
+    "20": 1.117203925400485
+   },
+   "note": "local outcome (recovery calls), one-sided alpha 0.05, power 80%"
+  }
+ },
+ "parity_with_rust": {
+  "click post-hoc": {
+   "rust": 0.4904,
+   "python": 0.4904,
+   "mismatched_sessions": 0
+  },
+  "attrs post-hoc": {
+   "rust": 2.0227,
+   "python": 2.0227,
+   "mismatched_sessions": 0
+  },
+  "marshmallow post-hoc": {
+   "rust": 1.2144,
+   "python": 1.2144,
+   "mismatched_sessions": 0
+  },
+  "vue-core post-hoc": {
+   "rust": 0.0,
+   "python": 0.0,
+   "mismatched_sessions": 0
+  },
+  "click-sonnet5 post-hoc": {
+   "rust": 0.0,
+   "python": 0.0,
+   "mismatched_sessions": 0
+  },
+  "vue-core-sonnet5 post-hoc": {
+   "rust": 0.0,
+   "python": 0.0,
+   "mismatched_sessions": 0
+  },
+  "click pre-emptive": {
+   "rust": 1.6458,
+   "python": 1.6458,
+   "mismatched_sessions": 0
+  },
+  "attrs pre-emptive": {
+   "rust": 3.3078,
+   "python": 3.3078,
+   "mismatched_sessions": 0
+  },
+  "marshmallow pre-emptive": {
+   "rust": 2.9855,
+   "python": 2.9855,
+   "mismatched_sessions": 0
+  },
+  "vue-core pre-emptive": {
+   "rust": 0.0,
+   "python": 0.0,
+   "mismatched_sessions": 0
+  },
+  "click-sonnet5 pre-emptive": {
+   "rust": 1.3626,
+   "python": 1.3626,
+   "mismatched_sessions": 0
+  },
+  "vue-core-sonnet5 pre-emptive": {
+   "rust": 0.0,
+   "python": 0.0,
+   "mismatched_sessions": 0
+  }
+ },
+ "leakage": {
+  "clean": true,
+  "duplicate_copies_dropped": 57,
+  "excluded_transcripts": {
+   "not the session state.json names (discarded or retried run)": 35
+  }
+ },
+ "vs_baseline": "Reproduces the current state exactly: U11 post-hoc +1.00 calls/session (Rust +1.00), pre-emptive +2.08 (hindsight; Rust +2.11 incl. no misfire charge) / +2.03 predictive. In the target metrics that is +1.9% of $ post-hoc and +3.9% pre-emptive per task.",
+ "hard_coded_parts": [
+  "features.py: line-for-line port of the Rust replay's hand-written Sat/W taxonomy (runner spellings, env-signature/probe/discovery regexes, tool names) - a measurement instrument only",
+  "policies/u11.py: the U11 instinct's triggers read from the live bound index plus a hand-written runner-spelling parser (baseline to beat)",
+  "replay.py 'read_files' class (search tools and commands) - uncalibrated instrument",
+  "oracle.py class predicates (instrument)",
+  "defaults p_follow=1.0 (live U11 41/41) and misfire=2 calls (the learner's prior)"
+ ],
+ "ceiling": {
+  "note": "oracle: delete a whole class of calls, perfect follow, no cost, 82 Haiku v2 held-out sessions",
+  "classes": {
+   "failed calls (is_error or env signature)": {
+    "usd_share": 0.10262005010162142,
+    "usd_share_ci90": [
+     0.08685031535828835,
+     0.11960880652038954
+    ],
+    "calls_per_task": 3.548780487804878
+   },
+   "environment friction (U11's W)": {
+    "usd_share": 0.08355820830477244,
+    "usd_share_ci90": [
+     0.06641842612231544,
+     0.10369817822868348
+    ],
+    "calls_per_task": 3.8292682926829267
+   },
+   "test-discovery searches": {
+    "usd_share": 0.06905328727463503,
+    "usd_share_ci90": [
+     0.05701881971856397,
+     0.08169763506147354
+    ],
+    "calls_per_task": 2.682926829268293
+   },
+   "failed test-runner calls": {
+    "usd_share": 0.033878135506674956,
+    "usd_share_ci90": [
+     0.02661387776294317,
+     0.041648503545912534
+    ],
+    "calls_per_task": 1.5975609756097562
+   },
+   "every search/listing (Grep, Glob, find, grep, ls)": {
+    "usd_share": 0.15524413878492316,
+    "usd_share_ci90": [
+     0.13557276090737452,
+     0.17404100769954506
+    ],
+    "calls_per_task": 6.317073170731708
+   }
+  }
+ },
+ "build_recommendation": "(1) Price 1-hour cache writes at 2x input in pricing.toml/ledger (Claude Code writes them; every Adage $ figure is ~12% low today). (2) Report replay-savings $ under the cumulative-context model (costmodel.py, ~60 lines) instead of a flat $/call. (3) Ship U11 as a predictive PreToolUse rewrite: +2.03 calls, +3.9% of $ per task vs +1.00/+1.9% post-hoc, no hindsight needed. (4) Gate every lever on the <=$6 live micro-slice protocol (10 task pairs; MDE 1.6 local calls) before Rust work: replay is calibrated only for local runner-class effects.",
+ "so_what": "The harness predicts a runner-class directive's local effect within live CI; it cannot see pass-rate gains or compensation, and whole-session live A/Bs at n~66 pairs cannot resolve effects under ~3 calls. Levers skipping a class of wasted calls are capped at ~10-15% of $ even as oracles, below the North star's 15-20%."
+}

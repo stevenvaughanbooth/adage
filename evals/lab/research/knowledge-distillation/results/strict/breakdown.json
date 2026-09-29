@@ -1,0 +1,27 @@
+{
+ "card|(0, 3000)": {
+  "Bash-ok": 1.006,
+  "failed": 0.481,
+  "Grep/Glob": 0.114
+ },
+ "card|(1, 400)": {
+  "Bash-ok": 0.196,
+  "failed": 0.304,
+  "Grep/Glob": 0.051
+ },
+ "agents-md|()": {
+  "failed": 0.31,
+  "Bash-ok": 0.133,
+  "Grep/Glob": 0.051
+ },
+ "oracle-train|()": {
+  "Bash-ok": 1.006,
+  "failed": 0.449,
+  "Grep/Glob": 0.114
+ },
+ "ctx-pre|(0, 0.7)": {
+  "Bash-ok": 0.835,
+  "failed": 0.405,
+  "Grep/Glob": 0.095
+ }
+}

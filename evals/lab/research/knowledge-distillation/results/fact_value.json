@@ -1,0 +1,4254 @@
+{
+ "attrs": [
+  {
+   "fact": "- `Bash: pip install hypothesis -q && python3 -m pytest tests/ -xvs -k \"pre_init\" 2>&1 | head -150` shows: test_make.py, tests/test_make.py",
+   "kind": "locator",
+   "train_tasks": 3,
+   "train_gain": 1.1,
+   "heldout_calls": 0.55,
+   "ci90": [
+    0.324,
+    0.8
+   ],
+   "sessions_helped": [
+    20,
+    40
+   ],
+   "wilson90": [
+    0.5,
+    0.374,
+    0.626
+   ],
+   "tokens": 37
+  },
+  {
+   "fact": "- `Bash: find . -type f -name \"*.py\" | head -20` shows: filters.py, src/attr, src/attr/filters.py, src/attr/validators.py, src/attrs, src/attrs/validators.py, test_validators.py, tests/test_validators.py, validators.py",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.425,
+   "ci90": [
+    0.175,
+    0.725
+   ],
+   "sessions_helped": [
+    17,
+    40
+   ],
+   "wilson90": [
+    0.425,
+    0.305,
+    0.554
+   ],
+   "tokens": 56
+  },
+  {
+   "fact": "- `Read: src/attr/_compat.py` shows: PYPY, PY_3_10_PLUS, PY_3_12_PLUS, PY_3_13_PLUS, PY_3_8_PLUS, PyPy, annotation, platform.python_implementation, sys.version_info",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.4,
+   "heldout_calls": 0.15,
+   "ci90": [
+    0.025,
+    0.275
+   ],
+   "sessions_helped": [
+    5,
+    40
+   ],
+   "wilson90": [
+    0.125,
+    0.062,
+    0.235
+   ],
+   "tokens": 43
+  },
+  {
+   "fact": "- `Bash: PYTHONPATH=src python3 << 'EOF'\nimport attr\n\n# Check the structure of an attrib\nib = attr.ib(t` shows: _CountingAttr",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.3,
+   "heldout_calls": 0.125,
+   "ci90": [
+    0.05,
+    0.2
+   ],
+   "sessions_helped": [
+    5,
+    40
+   ],
+   "wilson90": [
+    0.125,
+    0.062,
+    0.235
+   ],
+   "tokens": 33
+  },
+  {
+   "fact": "- `Read: src/attr/validators.py` shows: @attrs, _InValidator, attr.name, attrib, hash, in_options, inst, self.options, slots, validators",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.3,
+   "heldout_calls": 0.05,
+   "ci90": [
+    0.0,
+    0.15
+   ],
+   "sessions_helped": [
+    2,
+    40
+   ],
+   "wilson90": [
+    0.05,
+    0.017,
+    0.14
+   ],
+   "tokens": 36
+  },
+  {
+   "fact": "- `Bash: grep -n \"_is_class_var\" src/attr/_make.py` shows: annot",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.05,
+   "ci90": [
+    0.0,
+    0.15
+   ],
+   "sessions_helped": [
+    2,
+    40
+   ],
+   "wilson90": [
+    0.05,
+    0.017,
+    0.14
+   ],
+   "tokens": 18
+  },
+  {
+   "fact": "- `Bash: python3 << 'EOF'\nimport functools\nimport attr\n\n@attr.s(slots=True)\nclass A:\n    x = attr.ib()\n` shows: __getattr__, getattr, original_error",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.05,
+   "ci90": [
+    0.0,
+    0.15
+   ],
+   "sessions_helped": [
+    2,
+    40
+   ],
+   "wilson90": [
+    0.05,
+    0.017,
+    0.14
+   ],
+   "tokens": 39
+  },
+  {
+   "fact": "- `Bash: python -m pytest tests/ -x -k \"frozen\" --tb=short 2>&1 | tail -50` shows: mypy",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.025,
+   "ci90": [
+    0.0,
+    0.075
+   ],
+   "sessions_helped": [
+    1,
+    40
+   ],
+   "wilson90": [
+    0.025,
+    0.006,
+    0.105
+   ],
+   "tokens": 24
+  },
+  {
+   "fact": "- `Read: src/attr/_make.py` shows: Attribute, NOTHING, a.name, base_attrs, factory, kw_only",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.025,
+   "ci90": [
+    0.0,
+    0.075
+   ],
+   "sessions_helped": [
+    1,
+    40
+   ],
+   "wilson90": [
+    0.025,
+    0.006,
+    0.105
+   ],
+   "tokens": 25
+  },
+  {
+   "fact": "- `Read: src/attr/_make.py` shows: slot",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.5,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 12
+  },
+  {
+   "fact": "- `Read: src/attr/_funcs.py` shows: PY_3_9_PLUS",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 14
+  },
+  {
+   "fact": "- `Read: tests/test_converters.py limit=100` shows: pickle, pickle.dumps, pickle.loads, pickled",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.3,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 26
+  },
+  {
+   "fact": "- `Read: src/attr/converters.py` shows: _AnnotationExtractor, pipe",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 18
+  },
+  {
+   "fact": "- `Bash: ls tests/` shows: test_annotations.py",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 14
+  },
+  {
+   "fact": "- `Read: src/attr/filters.py` shows: frozenset",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 14
+  },
+  {
+   "fact": "- `Bash: .venv/bin/pytest tests/test_make.py::TestMakeClass -xvs 2>&1 | head -200` shows: test_attr_args",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 28
+  },
+  {
+   "fact": "- `Grep: repr_ns output_mode=content type=py` shows: namespace",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 18
+  },
+  {
+   "fact": "- `Read: src/attr/_funcs.py offset=397 limit=50` shows: getattr",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 18
+  },
+  {
+   "fact": "- `Read: src/attr/_make.py offset=1017 limit=40` shows: _make_repr",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 18
+  },
+  {
+   "fact": "- `Read: src/attr/_make.py offset=535 limit=50` shows: BaseException",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 19
+  },
+  {
+   "fact": "- `Read: src/attr/_make.py offset=287 limit=30` shows: _CLASSVAR_PREFIXES",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 20
+  },
+  {
+   "fact": "- `Read: src/attr/_make.py offset=1300 limit=100` shows: attr.ib, on_setattr",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 21
+  },
+  {
+   "fact": "- `Bash: grep -B 5 \"def test_in\" tests/test_validators.py | head -30` shows: TestIn_",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 23
+  },
+  {
+   "fact": "- `Bash: grep -n \"__attrs_pre_init__\" src/attr/_make.py` shows: pre_init, pre_init_args",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 24
+  },
+  {
+   "fact": "- `Read: src/attr/_make.py offset=370 limit=150` shows: _get_annotations, _is_class_var",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 24
+  },
+  {
+   "fact": "- `Bash: grep -B5 -A10 \"repr_ns\" tests/test_make.py` shows: C.D, test_repr_fake_qualname",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 24
+  },
+  {
+   "fact": "- `Read: src/attr/_make.py limit=100` shows: automatically, contextlib, linecache, setters.pipe",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 26
+  },
+  {
+   "fact": "- `Bash: grep -r \"cached_property\" tests/ --include=\"*.py\"` shows: test_slots.py, tests/test_slots.py",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 27
+  },
+  {
+   "fact": "- `Read: src/attr/_make.py offset=2180 limit=100` shows: kw_arg, kw_only_args, pre_init_kw_only_args, regular",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 29
+  },
+  {
+   "fact": "- `Read: src/attr/converters.py` shows: _AnnotationExtractor, xtr, xtr.get_first_param_type, xtr.get_return_type",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 30
+  },
+  {
+   "fact": "- `Bash: python -m pytest tests/ -x --tb=short 2>&1 | tail -80` shows: test_packaging.py, tests/test_packaging.py",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 30
+  },
+  {
+   "fact": "- `Bash: pip install -e . -q && python -c \"\nimport attr\n\ndef hook(cls, attribs):\n    return sorted(attr` shows: question",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Bash: python3 -c \"\nimport attr\n\n@attr.s\nclass C:\n    x: int = attr.ib(validator=attr.validators.in_(` shows: __hash__",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Bash: pip install -e . -q && python3 << 'EOF'\nimport attr\n\n@attr.define\nclass C:\n    x: int = attr.f` shows: attr_dict",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Bash: grep -n \"takes_self\\|takes_field\" src/attr/_make.py | head -30` shows: c.takes_field, c.takes_self, pipe_converter",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 33
+  },
+  {
+   "fact": "- `Bash: python3 << 'EOF'\nimport functools\nimport attr\n\n# Test 1: Original issue - property raising Att` shows: nonexistent",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 33
+  },
+  {
+   "fact": "- `Bash: grep -n \"__setattr__\\|__delattr__\" src/attr/_make.py` shows: Attached, BaseException.__setattr__, _frozen_delattrs, _frozen_setattrs",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 37
+  },
+  {
+   "fact": "- `Read: src/attr/_make.py offset=445 limit=50` shows: Mandatory, a.default, a.init, a.kw_only, anyway, had_default, matters, moved, non-mandatory, own_attrs, signature",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 44
+  },
+  {
+   "fact": "- `Read: src/attr/_make.py offset=2670 limit=100` shows: .get_first_param_type, self.__call__, self._first_param_type, self._takes_both, self._takes_field, self._takes_instance, self._takes_only_value, self.converter, self.takes_field, self.takes_self",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 65
+  },
+  {
+   "fact": "- `Bash: python -c \"\nimport warnings\nwarnings.simplefilter('always', DeprecationWarning)\n\nimport attr\n\n@attr.s\nclass C:\n    @attr.s(repr_ns='C'` failed here; what worked: `Bash: python -m pip install -e . -q 2>&1 | tail -20 ; Bash: python -W all::DeprecationWarning -c \"\nimport warnings\nwarnings.simplefilter('always', DeprecationWarning)\n\nimport attr\n\n@attr.s\nclass C:\n  `",
+   "kind": "chain",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 95
+  }
+ ],
+ "click": [
+  {
+   "fact": "- `Bash: find src -type f -name \"*.py\" | head -20` shows: core.py, decorators.py, src/click, src/click/core.py, src/click/decorators.py, src/click/termui.py, termui.py",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.375,
+   "ci90": [
+    0.125,
+    0.65
+   ],
+   "sessions_helped": [
+    14,
+    40
+   ],
+   "wilson90": [
+    0.35,
+    0.239,
+    0.48
+   ],
+   "tokens": 44
+  },
+  {
+   "fact": "- `Read: tests/test_termui.py` shows: @click.command, cli, click.echo, result.output, runner, runner.invoke",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.325,
+   "ci90": [
+    0.1,
+    0.575
+   ],
+   "sessions_helped": [
+    13,
+    40
+   ],
+   "wilson90": [
+    0.325,
+    0.218,
+    0.455
+   ],
+   "tokens": 29
+  },
+  {
+   "fact": "- `Bash: source .venv/bin/activate && python -m pytest tests/ -xvs 2>&1 | head -100` shows: test_boolean_conversion",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.3,
+   "heldout_calls": 0.225,
+   "ci90": [
+    0.0,
+    0.525
+   ],
+   "sessions_helped": [
+    5,
+    40
+   ],
+   "wilson90": [
+    0.125,
+    0.062,
+    0.235
+   ],
+   "tokens": 31
+  },
+  {
+   "fact": "- `Read: src/click/exceptions.py` shows: Context",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.175,
+   "ci90": [
+    0.0,
+    0.375
+   ],
+   "sessions_helped": [
+    7,
+    40
+   ],
+   "wilson90": [
+    0.175,
+    0.098,
+    0.293
+   ],
+   "tokens": 14
+  },
+  {
+   "fact": "- `Bash: find . -name \"*test*.py\" -o -name \"test_*\" | head -20` shows: test_basic.py, test_options.py, tests/test_basic.py, tests/test_options.py",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.175,
+   "ci90": [
+    0.05,
+    0.3
+   ],
+   "sessions_helped": [
+    7,
+    40
+   ],
+   "wilson90": [
+    0.175,
+    0.098,
+    0.293
+   ],
+   "tokens": 38
+  },
+  {
+   "fact": "- `Read: tests/test_shell_completion.py offset=340 limit=30` shows: bee, nbee, tbee, test_full_complete",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.125,
+   "ci90": [
+    0.0,
+    0.375
+   ],
+   "sessions_helped": [
+    4,
+    40
+   ],
+   "wilson90": [
+    0.1,
+    0.046,
+    0.205
+   ],
+   "tokens": 28
+  },
+  {
+   "fact": "- `Read: src/click/types.py offset=377 limit=25` shows: Complete, c.lower, c.startswith, click.shell_completion, incomplete.lower, str_choices",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.1,
+   "ci90": [
+    0.0,
+    0.3
+   ],
+   "sessions_helped": [
+    4,
+    40
+   ],
+   "wilson90": [
+    0.1,
+    0.046,
+    0.205
+   ],
+   "tokens": 38
+  },
+  {
+   "fact": "- `Bash: python -m pytest tests/test_shell_completion.py::test_option_nargs -xvs` failed here; what worked: `Bash: ls -la ; Bash: .venv/bin/python -m pytest tests/test_shell_completion.py::test_option_nargs -xvs`",
+   "kind": "chain",
+   "train_tasks": 2,
+   "train_gain": 0.2,
+   "heldout_calls": 0.075,
+   "ci90": [
+    0.025,
+    0.125
+   ],
+   "sessions_helped": [
+    3,
+    40
+   ],
+   "wilson90": [
+    0.075,
+    0.03,
+    0.173
+   ],
+   "tokens": 55
+  },
+  {
+   "fact": "- `Bash: find . -type f -name \"*.py\" | grep -E \"(core|argument|option)\" | head -20` shows: core.py, src/click, src/click/core.py, test_arguments.py, test_options.py, tests/test_arguments.py, tests/test_options.py",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.075,
+   "ci90": [
+    0.0,
+    0.225
+   ],
+   "sessions_helped": [
+    2,
+    40
+   ],
+   "wilson90": [
+    0.05,
+    0.017,
+    0.14
+   ],
+   "tokens": 55
+  },
+  {
+   "fact": "- `Read: tests/test_shell_completion.py offset=359 limit=30` shows: _CLI_COMPLETE",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.05,
+   "ci90": [
+    0.0,
+    0.15
+   ],
+   "sessions_helped": [
+    2,
+    40
+   ],
+   "wilson90": [
+    0.05,
+    0.017,
+    0.14
+   ],
+   "tokens": 22
+  },
+  {
+   "fact": "- `Read: tests/test_shell_completion.py limit=500` shows: @pytest.mark.usefixtures, _patch_for_completion, fish, nplain, result.output, runner, runner.invoke, zsh",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.05,
+   "ci90": [
+    0.0,
+    0.15
+   ],
+   "sessions_helped": [
+    2,
+    40
+   ],
+   "wilson90": [
+    0.05,
+    0.017,
+    0.14
+   ],
+   "tokens": 42
+  },
+  {
+   "fact": "- `Bash: python /tmp/test_default_order.py` failed here; what worked: `Bash: PYTHONPATH=src python /tmp/test_default_order.py`",
+   "kind": "chain",
+   "train_tasks": 2,
+   "train_gain": 0.3,
+   "heldout_calls": 0.025,
+   "ci90": [
+    0.0,
+    0.075
+   ],
+   "sessions_helped": [
+    1,
+    40
+   ],
+   "wilson90": [
+    0.025,
+    0.006,
+    0.105
+   ],
+   "tokens": 34
+  },
+  {
+   "fact": "- `Bash: python -m pip install pytest -q && python -m pytest tests/test_options.py -v` failed here; what worked: `Bash: pip install -e . -q && python -m pytest tests/test_options.py -v --tb=short 2>&1 | head -100`",
+   "kind": "chain",
+   "train_tasks": 3,
+   "train_gain": 0.2,
+   "heldout_calls": 0.025,
+   "ci90": [
+    0.0,
+    0.075
+   ],
+   "sessions_helped": [
+    1,
+    40
+   ],
+   "wilson90": [
+    0.025,
+    0.006,
+    0.105
+   ],
+   "tokens": 55
+  },
+  {
+   "fact": "- `Bash: grep -r \"Choice\\|choice\" tests --include=\"*.py\" -l | head -10` shows: test_types.py, tests/test_types.py",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.025,
+   "ci90": [
+    0.0,
+    0.075
+   ],
+   "sessions_helped": [
+    1,
+    40
+   ],
+   "wilson90": [
+    0.025,
+    0.006,
+    0.105
+   ],
+   "tokens": 30
+  },
+  {
+   "fact": "- `Read: src/click/shell_completion.py` shows: CLI, Command, Completion, Group, ShellComplete, comp, incomplete, shell_complete, words",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.025,
+   "ci90": [
+    0.0,
+    0.075
+   ],
+   "sessions_helped": [
+    1,
+    40
+   ],
+   "wilson90": [
+    0.025,
+    0.006,
+    0.105
+   ],
+   "tokens": 36
+  },
+  {
+   "fact": "- `Read: tests/test_shell_completion.py` shows: Choice, click.shell_completion, click.types, fish",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.5,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 26
+  },
+  {
+   "fact": "- `Read: src/click/shell_completion.py` shows: Context, Determine, Parameter, complete, incomplete",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.5,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 26
+  },
+  {
+   "fact": "- `Bash: python -m pip install -e . -q && python -m pip install pytest -q && python -m pytest tests/tes` shows: test_add_different_name",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.5,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 36
+  },
+  {
+   "fact": "- `Read: src/click/core.py limit=100` shows: Command",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 15
+  },
+  {
+   "fact": "- `Read: src/click/parser.py offset=261 limit=100` shows: _Option",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.3,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 18
+  },
+  {
+   "fact": "- `Bash: python test_flag_bug.py` shows: Option",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 14
+  },
+  {
+   "fact": "- `Bash: python test_empty_suffix.py` shows: NameAlice",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 16
+  },
+  {
+   "fact": "- `Read: tests/test_shell_completion.py limit=100` shows: _CLICK_COMPLETE, _get_completions, _get_words, cli.name, comp.get_completions",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 36
+  },
+  {
+   "fact": "- `Read: src/click/core.py limit=100` shows: FLAG_NEEDS_VALUE, UNSET",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 19
+  },
+  {
+   "fact": "- `Read: src/click/core.py offset=3183 limit=150` shows: add_to_parser",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 20
+  },
+  {
+   "fact": "- `Read: tests/test_shell_completion.py offset=250 limit=50` shows: renamed",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 21
+  },
+  {
+   "fact": "- `Read: src/click/parser.py offset=400 limit=150` shows: Long, omitting, opt",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 21
+  },
+  {
+   "fact": "- `Read: tests/test_options.py offset=665 limit=20` shows: test_missing_envvar",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 22
+  },
+  {
+   "fact": "- `Bash: grep -n \"show_envvar\\|get_error_hint\" tests/*.py` shows: test_show_envvar",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 22
+  },
+  {
+   "fact": "- `Read: src/click/core.py offset=1891 limit=50` shows: _complete_visible_commands",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 22
+  },
+  {
+   "fact": "- `Read: src/click/core.py offset=2400 limit=40` shows: Process, cast, process_value",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 23
+  },
+  {
+   "fact": "- `Bash: find . -name \"test_*.py\" -o -name \"*_test.py\" | head -20` shows: test_defaults.py, test_options.py, test_parser.py, tests/test_defaults.py, tests/test_options.py, tests/test_parser.py",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 50
+  },
+  {
+   "fact": "- `Grep: def type_cast_value path=src/click/core.py output_mode=content` shows: Context, t.Any",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 26
+  },
+  {
+   "fact": "- `Read: src/click/core.py offset=873 limit=200` shows: iter_params_for_processing, make_context",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 26
+  },
+  {
+   "fact": "- `Grep: type_cast_value\\( path=src/click/core.py output_mode=content` shows: self.type_cast_value",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 26
+  },
+  {
+   "fact": "- `Read: src/click/core.py offset=2680 limit=30` shows: .get_error_hint, self.envvar, self.show_envvar",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 28
+  },
+  {
+   "fact": "- `Bash: grep -n \"nargs\" tests/test_shell_completion.py` shows: test_argument_nargs, test_option_nargs",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 28
+  },
+  {
+   "fact": "- `Grep: show_default|default path=src/click/core.py output_mode=content head_limit=50` shows: self.show_default",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 30
+  },
+  {
+   "fact": "- `Read: src/click/core.py offset=2640 limit=400` shows: _flag_needs_value, nargs, self._flag_needs_value, self.default, self.nargs",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 35
+  },
+  {
+   "fact": "- `Read: src/click/core.py offset=2415 limit=30` shows: Legacy, MissingParameter, exc, exposed, introduction, legacy, receive, self.callback, self.required, self.value_is_missing, value_is_missing",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 51
+  },
+  {
+   "fact": "- `Read: src/click/core.py offset=2783 limit=200` shows: True/False, _split_opt, default_string, default_value, distinct, inspect.isfunction, opt, self.is_bool_flag, self.opts, self.secondary_opts, show_default_is_str",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 56
+  },
+  {
+   "fact": "- `Read: src/click/shell_completion.py offset=539 limit=60` shows: allow_extra_args, allow_interspersed_args, cmd.make_context, ctx._protected_args, ctx.args, resilient_parsing, sub_ctx, sub_ctx._protected_args, sub_ctx.args, sub_sub_ctx",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    40
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.063
+   ],
+   "tokens": 61
+  }
+ ],
+ "marshmallow": [
+  {
+   "fact": "- `Bash: pip install pytest -q && python3 -m pytest tests/test_deserialization.py::TestDeserialization:` shows: simplejson",
+   "kind": "locator",
+   "train_tasks": 4,
+   "train_gain": 1.0,
+   "heldout_calls": 0.567,
+   "ci90": [
+    0.4,
+    0.733
+   ],
+   "sessions_helped": [
+    16,
+    30
+   ],
+   "wilson90": [
+    0.533,
+    0.387,
+    0.674
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Read: src/marshmallow/validate.py` shows: //localhost, Fill, Hostname, URLS, absent, ftp, localhost, regex.search, value.replace, value.startswith",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.286,
+   "heldout_calls": 0.533,
+   "ci90": [
+    0.167,
+    0.9
+   ],
+   "sessions_helped": [
+    15,
+    30
+   ],
+   "wilson90": [
+    0.5,
+    0.356,
+    0.644
+   ],
+   "tokens": 39
+  },
+  {
+   "fact": "- `Bash: find . -type f -name \"*.py\" | grep -E \"(field|datetime)\" | head -20` shows: fields.py, src/marshmallow, src/marshmallow/fields.py, test_fields.py, tests/test_fields.py",
+   "kind": "locator",
+   "train_tasks": 2,
+   "train_gain": 0.429,
+   "heldout_calls": 0.333,
+   "ci90": [
+    0.067,
+    0.633
+   ],
+   "sessions_helped": [
+    10,
+    30
+   ],
+   "wilson90": [
+    0.333,
+    0.211,
+    0.483
+   ],
+   "tokens": 46
+  },
+  {
+   "fact": "- `Read: src/marshmallow/schema.py` shows: Nested, base.FieldABC, field_name",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.067,
+   "ci90": [
+    0.0,
+    0.2
+   ],
+   "sessions_helped": [
+    2,
+    30
+   ],
+   "wilson90": [
+    0.067,
+    0.022,
+    0.183
+   ],
+   "tokens": 21
+  },
+  {
+   "fact": "- `Read: tests/test_validate.py offset=208 limit=50` shows: //example.com, HTTP, test_url_accepts_valid_file_urls, test_url_rejects_invalid_file_urls, test_url_relative_and_custom_schemes, url",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.067,
+   "ci90": [
+    0.0,
+    0.2
+   ],
+   "sessions_helped": [
+    2,
+    30
+   ],
+   "wilson90": [
+    0.067,
+    0.022,
+    0.183
+   ],
+   "tokens": 50
+  },
+  {
+   "fact": "- `Bash: grep -r \"timestamp\" tests/ --include=\"*.py\" | grep -i \"def test\\|assert\"` shows: fmt, test_deserialization.py, test_serialization.py, test_timestamp_field_deserialization, tests/test_deserialization.py, tests/test_serialization.py",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.571,
+   "heldout_calls": 0.033,
+   "ci90": [
+    0.0,
+    0.1
+   ],
+   "sessions_helped": [
+    1,
+    30
+   ],
+   "wilson90": [
+    0.033,
+    0.007,
+    0.136
+   ],
+   "tokens": 62
+  },
+  {
+   "fact": "- `Bash: python -m pytest tests/test_schema.py::test_fields_must_be_declared_as_instances -xvs` shows: UserSchema, pytz",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.286,
+   "heldout_calls": 0.033,
+   "ci90": [
+    0.0,
+    0.1
+   ],
+   "sessions_helped": [
+    1,
+    30
+   ],
+   "wilson90": [
+    0.033,
+    0.007,
+    0.136
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Grep: from_timestamp|from_timestamp_ms path=src/marshmallow/utils.py output_mode=content` shows: dt.datetime",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.033,
+   "ci90": [
+    0.0,
+    0.1
+   ],
+   "sessions_helped": [
+    1,
+    30
+   ],
+   "wilson90": [
+    0.033,
+    0.007,
+    0.136
+   ],
+   "tokens": 30
+  },
+  {
+   "fact": "- `Bash: python3 -c \"\nfrom marshmallow import Schema, fields\n\nclass MySchema(Schema):\n    foo = fields.Constant(None)\n\ntry:\n    result = MySche` failed here; what worked: `Bash: ls -la | grep -E \"setup|requirements|pyproject\" ; Bash: pip install -e . -q ; Bash: python3 -c \"\nfrom marshmallow import Schema, fields\n\nclass MySchema(Schema):\n    foo = fields.Constant(None)\n\n`",
+   "kind": "chain",
+   "train_tasks": 1,
+   "train_gain": 0.429,
+   "heldout_calls": 0.033,
+   "ci90": [
+    0.0,
+    0.1
+   ],
+   "sessions_helped": [
+    1,
+    30
+   ],
+   "wilson90": [
+    0.033,
+    0.007,
+    0.136
+   ],
+   "tokens": 95
+  },
+  {
+   "fact": "- `Read: src/marshmallow/fields.py limit=100` shows: marshmallow",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.571,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 18
+  },
+  {
+   "fact": "- `Read: src/marshmallow/schema.py offset=650 limit=15` shows: getter",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.429,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 19
+  },
+  {
+   "fact": "- `Read: src/marshmallow/utils.py` shows: issubclass",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.429,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 15
+  },
+  {
+   "fact": "- `Read: tests/test_schema.py limit=600 offset=540` shows: .dump, BadSchema, age",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.429,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 22
+  },
+  {
+   "fact": "- `Grep: def test.*constant path=tests output_mode=content context=3` shows: test_constant_field_deserialization",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.429,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 30
+  },
+  {
+   "fact": "- `Read: pyproject.toml` shows: Too",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 11
+  },
+  {
+   "fact": "- `Grep: def deserialize path=src/marshmallow/fields.py output_mode=content context=20` shows: ValidationError",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.286,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 30
+  },
+  {
+   "fact": "- `Read: src/marshmallow/schema.py offset=795 limit=25` shows: _do_load",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 20
+  },
+  {
+   "fact": "- `Read: src/marshmallow/utils.py offset=180 limit=30` shows: dt.timezone.utc",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 21
+  },
+  {
+   "fact": "- `Read: src/marshmallow/fields.py offset=1996 limit=100` shows: self.load_default",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 22
+  },
+  {
+   "fact": "- `Read: tests/test_validate.py limit=100` shows: example.com, invalid_url, valid_url",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 23
+  },
+  {
+   "fact": "- `Read: src/marshmallow/fields.py offset=488 limit=200` shows: Same, copy.copy, nested_field",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 25
+  },
+  {
+   "fact": "- `Read: src/marshmallow/fields.py offset=115 limit=120` shows: allow_none, dump, dump_default, load_default",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 29
+  },
+  {
+   "fact": "- `Read: src/marshmallow/fields.py` shows: AwareDateTime, NaiveDateTime, deserialized, marshmallow.exceptions",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 29
+  },
+  {
+   "fact": "- `Read: tests/test_deserialization.py offset=540 limit=50` shows: default_timezone, fields.AwareDateTime, fields.NaiveDateTime",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 34
+  },
+  {
+   "fact": "- `Read: src/marshmallow/fields.py limit=100` shows: Schema, ValidationError, _InternalT, load_default, missing_, typing.Any, typing.Mapping",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 37
+  },
+  {
+   "fact": "- `Read: src/marshmallow/schema.py offset=1031 limit=30` shows: Did, Ignore, checker, dead, field_obj, field_obj.__name__, issubclass, mean, perspective, unsupported",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 43
+  },
+  {
+   "fact": "- `Bash: grep -A 20 \"class.*Function.*Test\\|def test.*function\" tests/test_deserialization.py | head -5` shows: test_function_field_deserialization_is_noop_by_default",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 44
+  },
+  {
+   "fact": "- `Bash: grep -B 5 -A 5 \"must be declared as a Field instance\" tests/test_schema.py` shows: test_bind_field_does_not_swallow_typeerror, test_fields_must_be_declared_as_instances",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 46
+  },
+  {
+   "fact": "- `Grep: file://|FILE://|case|insensitive path=tests/test_validate.py output_mode=content` shows: ///home/user/documents/test.pdf, ///tmp/test, 20file.txt, home, home/user, home/user/documents, localhost/tmp, test.pdf",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 56
+  },
+  {
+   "fact": "- `Grep: class Constant path=src/marshmallow/fields.py output_mode=content context=30` shows: .__init__, Field, Unpack, _BaseFieldKwargs, _ContantT, deserialize, dump_only, load_only, self.constant, self.dump_default, self.load_default",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 61
+  },
+  {
+   "fact": "- `Read: src/marshmallow/fields.py offset=332 limit=150` shows: Deserialize, Field-specific, Schema.load, _miss, attribute/key, fields.Str, marshmallow.Schema.load, schema, self._deserialize, self._validate, self._validate_missing, self.allow_none",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.143,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    30
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.083
+   ],
+   "tokens": 64
+  }
+ ],
+ "urfave-cli": [
+  {
+   "fact": "- `Read: completion_test.go` shows: Flag, Flags, lastArg, strings.HasPrefix",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.188,
+   "ci90": [
+    0.062,
+    0.312
+   ],
+   "sessions_helped": [
+    3,
+    16
+   ],
+   "wilson90": [
+    0.188,
+    0.078,
+    0.388
+   ],
+   "tokens": 21
+  },
+  {
+   "fact": "- `Read: help_test.go` shows: BoolFlag, buf, buf.String, byte, bytes.Buffer, bytes.Contains, context.Background, err.Error, github.com/stretchr, github.com/stretchr/testify, github.com/stretchr/testify/require, r.NotContains",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.188,
+   "ci90": [
+    0.062,
+    0.312
+   ],
+   "sessions_helped": [
+    3,
+    16
+   ],
+   "wilson90": [
+    0.188,
+    0.078,
+    0.388
+   ],
+   "tokens": 58
+  },
+  {
+   "fact": "- `Read: completion_test.go` shows: EnableShellCompletion, TestCompletionShell, Writer, buildTestContext, bytes.Buffer, cmd.Run, github.com/urfave, github.com/urfave/cli, non-empty, out.String, r.NoError, r.NotEmpty",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.125,
+   "ci90": [
+    0.0,
+    0.25
+   ],
+   "sessions_helped": [
+    2,
+    16
+   ],
+   "wilson90": [
+    0.125,
+    0.042,
+    0.316
+   ],
+   "tokens": 56
+  },
+  {
+   "fact": "- `Grep: Hidden type=go head_limit=30` shows: flag_impl.go, help.go",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.6,
+   "heldout_calls": 0.062,
+   "ci90": [
+    0.0,
+    0.188
+   ],
+   "sessions_helped": [
+    1,
+    16
+   ],
+   "wilson90": [
+    0.062,
+    0.014,
+    0.238
+   ],
+   "tokens": 19
+  },
+  {
+   "fact": "- `Read: completion.go` shows: Command, bash, cli, cmd, completionFlag, fmt.Sprintf, generate, shell",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.062,
+   "ci90": [
+    0.0,
+    0.188
+   ],
+   "sessions_helped": [
+    1,
+    16
+   ],
+   "wilson90": [
+    0.062,
+    0.014,
+    0.238
+   ],
+   "tokens": 27
+  },
+  {
+   "fact": "- `Bash: grep -n \"VisiblePersistentFlags\" command.go | head -20` shows: Hidden, LocalFlag, Persistent, slice",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.062,
+   "ci90": [
+    0.0,
+    0.188
+   ],
+   "sessions_helped": [
+    1,
+    16
+   ],
+   "wilson90": [
+    0.062,
+    0.014,
+    0.238
+   ],
+   "tokens": 29
+  },
+  {
+   "fact": "- `Read: flag_bool_with_inverse_test.go` shows: flag.String, require.New, t.Run, tc.testName, tcs, testName, testing.T",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.062,
+   "ci90": [
+    0.0,
+    0.188
+   ],
+   "sessions_helped": [
+    1,
+    16
+   ],
+   "wilson90": [
+    0.062,
+    0.014,
+    0.238
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Read: help_test.go limit=1500 offset=1300` shows: Commands, Int64Flag, SHELL, argv, everybody-jump-on, flag-suggestion-double-dash-shows-all-flags, happiness, hat-shape, putz, typical-flag-suggestion-hidden-bool",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.062,
+   "ci90": [
+    0.0,
+    0.188
+   ],
+   "sessions_helped": [
+    1,
+    16
+   ],
+   "wilson90": [
+    0.062,
+    0.014,
+    0.238
+   ],
+   "tokens": 56
+  },
+  {
+   "fact": "- `Read: command.go` shows: cli, fmt",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.5,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 11
+  },
+  {
+   "fact": "- `Read: flag.go limit=100` shows: interface",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.3,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 13
+  },
+  {
+   "fact": "- `Read: template.go` shows: .Flags, GLOBAL, OPTIONS",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 15
+  },
+  {
+   "fact": "- `Read: flag_generic.go` shows: FlagBase, cli, tracef",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 16
+  },
+  {
+   "fact": "- `Bash: cd /tmp && go run test_empty.go` shows: go.mod",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 16
+  },
+  {
+   "fact": "- `Bash: go test -run TestBoolWithInverse ./... -v` shows: github.com/urfave, github.com/urfave/cli, github.com/urfave/cli/v3",
+   "kind": "locator",
+   "train_tasks": 4,
+   "train_gain": 0.4,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 33
+  },
+  {
+   "fact": "- `Read: value_source.go limit=150` shows: EnvVar, NewValueSourceChain",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 20
+  },
+  {
+   "fact": "- `Bash: find . -type f -name \"*.go\" | head -20` shows: command_setup.go, help_test.go",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 24
+  },
+  {
+   "fact": "- `Bash: find . -type f -name \"*.go\" | grep -E \"(command|app)\" | head -20` shows: command.go, command_parse.go, command_run.go, command_test.go",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.3,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 38
+  },
+  {
+   "fact": "- `Read: errors.go` shows: flag1Name, flag2Name",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 14
+  },
+  {
+   "fact": "- `Read: flag_bool.go limit=50` shows: FlagBase",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 14
+  },
+  {
+   "fact": "- `Read: command_test.go limit=100` shows: testing",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 14
+  },
+  {
+   "fact": "- `Read: flag.go offset=195 limit=30` shows: IsLocal",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 15
+  },
+  {
+   "fact": "- `Bash: mv test_version_clash.go command_version_test.go && go test -run TestVersionFlagWithVerboseCla` shows: Incorrect",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Read: command.go` shows: cli, cmd.Command, cmd.Name, tracef",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 18
+  },
+  {
+   "fact": "- `Bash: find . -type f -name \"*.go\" | head -20` shows: completion.go, completion_test.go, flag.go, help_test.go, suggestions_test.go",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 35
+  },
+  {
+   "fact": "- `Bash: find . -type f -name \"*.go\" | head -20` shows: args.go",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 18
+  },
+  {
+   "fact": "- `Bash: go run /tmp/test_completion_order.go 2>&1` shows: COMMANDS",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 19
+  },
+  {
+   "fact": "- `Grep: BoolFlag.*Hidden|Hidden.*BoolFlag type=go output_mode=content` shows: bflag, bflag.Hidden",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 26
+  },
+  {
+   "fact": "- `Read: flag.go limit=200 offset=100` shows: IsVisible, VisibleFlag, vf.IsVisible",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 22
+  },
+  {
+   "fact": "- `Bash: go test ./... -v -run TestRunWithEmptyArgs 2>&1` shows: example-hello-world",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 23
+  },
+  {
+   "fact": "- `Read: command.go` shows: Usage, Writer, cli, cmd.Name, cmd.allFlags, struct, tracef",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 24
+  },
+  {
+   "fact": "- `Read: command_parse.go` shows: cmd.lFlag, firstArg, flagName, strings.Index, strings.TrimPrefix",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 26
+  },
+  {
+   "fact": "- `Read: help.go` shows: CommandHelpTemplate, SubcommandHelpTemplate, UsageCommandHelp, app, cmd.Root, nil",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 28
+  },
+  {
+   "fact": "- `Read: flag_bool_with_inverse_test.go offset=545 limit=30` shows: panic, strings.Contains, t.Errorf, verbose",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 30
+  },
+  {
+   "fact": "- `Read: flag_bool_with_inverse.go` shows: .ToString, Required, Usage, bif, bif.DefaultText, bif.Required, bif.Value, boolValue, cli, fmt, fmt.Sprintf, struct",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 42
+  },
+  {
+   "fact": "- `Read: command.go offset=307 limit=50` shows: append, cmd.isCompletionCommand, pfl, pfl.IsLocal, visibleFlags",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 30
+  },
+  {
+   "fact": "- `Bash: grep -A 50 \"TestCommand_RunDefaultCommandWithFlags\" command_test.go | head -100` shows: defaultCommandFlagTests",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Bash: git add help.go help_test.go && git commit -m \"$(cat <<'EOF'\nFix shell completion to exclude a` shows: 8c0bc39",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Read: flag.go` shows: JSON, PostParse, Schema, SchemaItemsType, SchemaItemsTyper, SchemaType, SchemaTyper, fmt, slice",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Grep: hideHelpCommand|HideHelpCommand type=go output_mode=content context=3` shows: TestHideHelpCommand_WithSubcommands",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Grep: mutually|MutuallyExclusive type=go output_mode=files_with_matches` shows: errors.go, flag_mutex.go, flag_mutex_test.go",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 34
+  },
+  {
+   "fact": "- `Read: help_test.go` shows: assert.Contains, buildTestContext, bytes.Buffer, cmd.Writer, out.String, output.String, testing.T",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 34
+  },
+  {
+   "fact": "- `Bash: find . -type f -name \"*.go\" | grep -E \"(flag|generic)\" | head -20` shows: flag.go, flag_generic.go, flag_schema_type_test.go",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 35
+  },
+  {
+   "fact": "- `Read: command_run.go` shows: cmd.DefaultCommand, cmd.SkipFlagParsing, cmd.argsWithDefaultCommand, cmd.parseFlags, cmd.parsedArgs, skipping",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 37
+  },
+  {
+   "fact": "- `Bash: go test -v ./... -run TestCompletion` shows: TestCompletionShellRenderError, TestCompletionShellWriteError, github.com/urfave/cli/v3, junky-sheell, mock-shell, writer",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 46
+  },
+  {
+   "fact": "- `Read: command_setup.go` shows: VersionFlag, appending, cmd.HideVersion, cmd.appendFlag, cmd.globaVersionFlagAdded, cmd.versionFlag, flagNamesInUse, globalVersionFlag, isRoot, localVersionFlag, localVersionFlag.Names",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 56
+  },
+  {
+   "fact": "- `Bash: find . -type f -name \"*.go\" | head -20` shows: args.go, command_setup.go, flag.go, flag_bool.go, flag_bool_with_inverse.go, flag_duration.go, flag_ext.go, flag_int_slice.go, flag_string_map.go, flag_string_slice.go, value_source.go",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    16
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.145
+   ],
+   "tokens": 62
+  }
+ ],
+ "vue-core": [
+  {
+   "fact": "- `Read: packages/runtime-dom/src/modules/props.ts` shows: compare, el.getAttribute, newValue, patching",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.125,
+   "ci90": [
+    0.031,
+    0.219
+   ],
+   "sessions_helped": [
+    4,
+    32
+   ],
+   "wilson90": [
+    0.125,
+    0.057,
+    0.251
+   ],
+   "tokens": 28
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/__tests__/components/BaseTransition.spec.ts` shows: .not.toHaveBeenCalled, .toHaveBeenCalledTimes, /div, @vue/runtime-test, App, async, await, cbs, cbs.doneEnter, cbs.doneLeave, div, mockProps",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.125,
+   "ci90": [
+    0.062,
+    0.188
+   ],
+   "sessions_helped": [
+    4,
+    32
+   ],
+   "wilson90": [
+    0.125,
+    0.057,
+    0.251
+   ],
+   "tokens": 58
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/src/hydration.ts limit=100` shows: invokeDirectiveHook, invokeVNodeHook",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.3,
+   "heldout_calls": 0.094,
+   "ci90": [
+    0.0,
+    0.188
+   ],
+   "sessions_helped": [
+    3,
+    32
+   ],
+   "wilson90": [
+    0.094,
+    0.038,
+    0.213
+   ],
+   "tokens": 28
+  },
+  {
+   "fact": "- `Bash: grep -n \"transition\" packages/runtime-core/src/renderer.ts | head -30` shows: shapeFlag",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.094,
+   "ci90": [
+    0.0,
+    0.188
+   ],
+   "sessions_helped": [
+    3,
+    32
+   ],
+   "wilson90": [
+    0.094,
+    0.038,
+    0.213
+   ],
+   "tokens": 26
+  },
+  {
+   "fact": "- `Bash: npm test -- packages/runtime-core/__tests__/scheduler.spec.ts 2>&1 | head -100` shows: Files",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.094,
+   "ci90": [
+    0.031,
+    0.156
+   ],
+   "sessions_helped": [
+    3,
+    32
+   ],
+   "wilson90": [
+    0.094,
+    0.038,
+    0.213
+   ],
+   "tokens": 27
+  },
+  {
+   "fact": "- `Grep: hydrateOnVisible output_mode=files_with_matches` shows: hydration-strat-visible.html, hydrationStrategies.ts, packages/runtime-core, packages/runtime-core/src, packages/runtime-core/src/hydrationStrategies.ts, packages/vue, packages/vue/__tests__, packages/vue/__tests__/e2e, packages/vue/__tests__/e2e/hydration-strat-visible.html",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.094,
+   "ci90": [
+    0.0,
+    0.281
+   ],
+   "sessions_helped": [
+    3,
+    32
+   ],
+   "wilson90": [
+    0.094,
+    0.038,
+    0.213
+   ],
+   "tokens": 87
+  },
+  {
+   "fact": "- `Read: packages/compiler-core/src/transforms/transformSlotOutlet.ts` shows: buildProps",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.062,
+   "ci90": [
+    0.0,
+    0.188
+   ],
+   "sessions_helped": [
+    2,
+    32
+   ],
+   "wilson90": [
+    0.062,
+    0.021,
+    0.172
+   ],
+   "tokens": 24
+  },
+  {
+   "fact": "- `Bash: find packages/runtime-dom/__tests__ -name \"*vModel*\"` shows: packages/runtime-dom/__tests__/directives, packages/runtime-dom/__tests__/directives/vModel.spec.ts, vModel.spec.ts",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.062,
+   "ci90": [
+    0.0,
+    0.125
+   ],
+   "sessions_helped": [
+    2,
+    32
+   ],
+   "wilson90": [
+    0.062,
+    0.021,
+    0.172
+   ],
+   "tokens": 48
+  },
+  {
+   "fact": "- `Bash: tail -50 packages/runtime-core/__tests__/hydration.spec.ts` shows: Object.defineProperty, PatchFlags.PROPS, configurable, data-allow-mismatch, patches",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.062,
+   "ci90": [
+    0.0,
+    0.125
+   ],
+   "sessions_helped": [
+    2,
+    32
+   ],
+   "wilson90": [
+    0.062,
+    0.021,
+    0.172
+   ],
+   "tokens": 42
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/__tests__/hydration.spec.ts limit=40 offset=2788` shows: .toContain, el.namespaceURI",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.062,
+   "ci90": [
+    0.0,
+    0.125
+   ],
+   "sessions_helped": [
+    2,
+    32
+   ],
+   "wilson90": [
+    0.062,
+    0.021,
+    0.172
+   ],
+   "tokens": 31
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/__tests__/apiAsyncComponent.spec.ts limit=100` shows: .mount, .toBe, await, div, nextTick",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.031,
+   "ci90": [
+    0.0,
+    0.094
+   ],
+   "sessions_helped": [
+    1,
+    32
+   ],
+   "wilson90": [
+    0.031,
+    0.007,
+    0.129
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/src/components/BaseTransition.ts` shows: @vue, TransitionHooks, VNode, VNodeArrayChildren, children, enter, enter/leave, export, findNonCommentChild, getInnerChild, isFunction, isKeepAlive",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.031,
+   "ci90": [
+    0.0,
+    0.094
+   ],
+   "sessions_helped": [
+    1,
+    32
+   ],
+   "wilson90": [
+    0.031,
+    0.007,
+    0.129
+   ],
+   "tokens": 57
+  },
+  {
+   "fact": "- `Bash: ls -la packages/` shows: shared",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 12
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/src/components/Teleport.ts limit=100` shows: mounted",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.3,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 23
+  },
+  {
+   "fact": "- `Bash: grep -n \"test.*prop\" packages/runtime-core/__tests__/hydration.spec.ts | tail -10` shows: .prop, modifier",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.4,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 30
+  },
+  {
+   "fact": "- `Bash: ls -la packages/runtime-dom/src/directives/` shows: vModel.ts",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 20
+  },
+  {
+   "fact": "- `Read: packages/runtime-dom/src/patchProp.ts` shows: el.tagName.includes, isSVG",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 22
+  },
+  {
+   "fact": "- `Bash: ls -la packages/` shows: runtime-dom",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 13
+  },
+  {
+   "fact": "- `Read: packages/shared/src/patchFlags.ts` shows: dynamicProps, force, iterated, listeners, style, v-bind",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 28
+  },
+  {
+   "fact": "- `Bash: ls -la packages/runtime-dom/src/modules/` shows: attrs.ts, props.ts",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 21
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/src/hydrationStrategies.ts` shows: elements, fragment",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 23
+  },
+  {
+   "fact": "- `Read: packages/reactivity/__tests__/effectScope.spec.ts limit=300` shows: .toBe, watch",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 24
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/__tests__/hydration.spec.ts offset=1610 limit=50` shows: indeterminate",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 27
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/__tests__/hydration.spec.ts offset=1617 limit=100` shows: camel-case, svg",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 28
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/src/apiAsyncComponent.ts` shows: .catch, Promise, __asyncHydrate, loader, throw",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 30
+  },
+  {
+   "fact": "- `Grep: svg|SVG path=packages/runtime-core/__tests__/hydration.spec.ts output_mode=content` shows: /svg, SVGElement",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 31
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/__tests__/hydration.spec.ts offset=1514 limit=100` shows: /div, root.innerHTML, show.value",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 32
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/__tests__/hydration.spec.ts limit=100` shows: .toBe, /div, createElementVNode, mountWithHydration",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 34
+  },
+  {
+   "fact": "- `Bash: grep -r \"v-bind\" packages/compiler-core/__tests__/transforms/transformSlotOutlet.spec.ts | hea` shows: dynamically, outlet",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 35
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/__tests__/hydration.spec.ts limit=100` shows: .not.toHaveBeenWarned, .toBe, /div, mountWithHydration",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 35
+  },
+  {
+   "fact": "- `Bash: find . -type f -name \"*.ts\" -o -name \"*.js\" | grep -E \"(hydrate|svg)\" | head -20` shows: packages/vue, packages/vue/__tests__, packages/vue/__tests__/e2e, packages/vue/__tests__/e2e/svg.spec.ts, packages/vue/__tests__/svgNamespace.spec.ts, svg.spec.ts, svgNamespace.spec.ts",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.2,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 72
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/__tests__/scheduler.spec.ts` shows: .toBe, .toEqual, async, await, calls.length, calls.push, cb1, cb2, cb2.id",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 37
+  },
+  {
+   "fact": "- `Grep: isSSRSafeAttrName head_limit=20` shows: domAttrConfig.ts, packages/shared, packages/shared/src, packages/shared/src/domAttrConfig.ts",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 37
+  },
+  {
+   "fact": "- `Bash: npm test -- packages/server-renderer/__tests__/ssrRenderAttrs.spec.ts 2>&1 | head -100` shows: scripts/setup-vitest.ts, setup-vitest.ts",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 38
+  },
+  {
+   "fact": "- `Read: packages/server-renderer/__tests__/ssrRenderAttrs.spec.ts` shows: .toBe, describe, htmlFor, initial, readOnly, readonly, renderAttr, ssr, title",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 40
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/__tests__/helpers/renderSlot.spec.ts` shows: .toBe, .toEqual, Slot, comments, createCommentVNode, describe, div, receivedProps, vnode.children, vnode.patchFlag",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 50
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/src/scheduler.ts` shows: ...cb, ...deduped, SchedulerJob, activePostFlushCbs, activePostFlushCbs.push, component, deduped, flushPostFlushCbs, hook, improve, job, lifecycle",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 52
+  },
+  {
+   "fact": "- `Bash: find . -type f -name \"*.ts\" -o -name \"*.js\" | grep -E \"(hydrate|model|input|ssr)\" | head -20` shows: packages/server-renderer, packages/server-renderer/__tests__, packages/server-renderer/__tests__/ssrRender.spec.ts, ssrRender.spec.ts",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 63
+  },
+  {
+   "fact": "- `Grep: enum PatchFlags|PatchFlags\\. path=packages/shared output_mode=content head_limit=50` shows: PatchFlags.FULL_PROPS, PatchFlags.NEED_HYDRATION, PatchFlags.PROPS, PatchFlags.STYLE, packages/shared/src, packages/shared/src/patchFlags.ts, patchFlags.ts",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 66
+  },
+  {
+   "fact": "- `Bash: find packages/server-renderer -type f -name \"*.ts\" | xargs grep -l \"slot\" | head -10` shows: packages/server-renderer/__tests__, packages/server-renderer/__tests__/ssrSlot.spec.ts, packages/server-renderer/src/helpers/ssrRenderSlot.ts, ssrRenderSlot.ts, ssrSlot.spec.ts",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 72
+  },
+  {
+   "fact": "- `Read: packages/runtime-core/src/helpers/renderSlot.ts` shows: ._c, ._d, .ce, .key, .length, .parent, .parent.ce, ContextualRenderFn, Data, Fragment, Object.keys, PatchFlags.BAIL",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 47
+  },
+  {
+   "fact": "- `Grep: ssrRenderAttrs head_limit=20` shows: packages/compiler-ssr, packages/compiler-ssr/__tests__, packages/server-renderer, packages/server-renderer/__tests__, packages/server-renderer/__tests__/ssrRenderAttrs.spec.ts, packages/server-renderer/src, packages/server-renderer/src/helpers, packages/server-renderer/src/helpers/ssrRenderAttrs.ts, ssrRenderAttrs.spec.ts, ssrRenderAttrs.ts",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 99
+  },
+  {
+   "fact": "- `Bash: find . -type f -name \"*.ts\" -o -name \"*.js\" | grep -E \"(scope|effect)\" | head -20` shows: effect.spec.ts, effect.ts, effectScope.spec.ts, effectScope.ts, index.js, packages/reactivity, packages/reactivity/__tests__, packages/reactivity/__tests__/effect.spec.ts, packages/reactivity/__tests__/effectScope.spec.ts, packages/reactivity/src, packages/reactivity/src/effect.ts, packages/reactivity/src/effectScope.ts",
+   "kind": "locator",
+   "train_tasks": 1,
+   "train_gain": 0.1,
+   "heldout_calls": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "sessions_helped": [
+    0,
+    32
+   ],
+   "wilson90": [
+    0.0,
+    0.0,
+    0.078
+   ],
+   "tokens": 107
+  }
+ ]
+}

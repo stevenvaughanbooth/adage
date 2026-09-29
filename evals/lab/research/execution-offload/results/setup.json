@@ -1,0 +1,316 @@
+{
+ "haiku": {
+  "split": {
+   "conservative": {
+    "sessions": 158,
+    "tasks": 38,
+    "baseline_usd": 0.26039232658227857,
+    "baseline_calls": 32.34177215189873,
+    "usd_saved": 0.0002515075949367091,
+    "usd_ci": [
+     -5.415189873417721e-05,
+     0.0007800556250000001
+    ],
+    "usd_share": 0.0009658794413714712,
+    "usd_share_ci": [
+     -0.0002066665704147103,
+     0.0030333797637518145
+    ],
+    "calls_saved": 0.08227848101265822,
+    "calls_ci": [
+     0.006578947368421052,
+     0.20512820512820512
+    ],
+    "calls_share": 0.002544031311154599,
+    "calls_share_ci": [
+     0.00020185708518368994,
+     0.006365951255001819
+    ],
+    "hits_per_session": 0.08227848101265822,
+    "misses_per_session": 0.0,
+    "gross_usd_share": 0.001628664629707875,
+    "inj_usd_share": 0.0006627851883364035
+   },
+   "upper (all friction)": {
+    "sessions": 158,
+    "tasks": 38,
+    "baseline_usd": 0.26039232658227857,
+    "baseline_calls": 32.34177215189873,
+    "usd_saved": 0.006564346835443038,
+    "usd_ci": [
+     0.0028134870129870133,
+     0.010736153503184714
+    ],
+    "usd_share": 0.025209448072460165,
+    "usd_share_ci": [
+     0.010613116070743799,
+     0.04245716196398523
+    ],
+    "calls_saved": 0.9936708860759493,
+    "calls_ci": [
+     0.42857142857142855,
+     1.620253164556962
+    ],
+    "calls_share": 0.030724070450097847,
+    "calls_share_ci": [
+     0.013001281816517121,
+     0.051697825257535295
+    ],
+    "hits_per_session": 0.9936708860759493,
+    "misses_per_session": 0.0,
+    "gross_usd_share": 0.025872233260796556,
+    "inj_usd_share": 0.0006627851883364035
+   },
+   "learned_setup": {
+    "attrs": [],
+    "click": [],
+    "marshmallow": [
+     "{\"command\": \"ls -la | grep -E \\\"setup|requirements|pyproject\\\"\"}",
+     "{\"command\": \"pip install pytest -q\"}"
+    ],
+    "urfave-cli": [],
+    "vue-core": []
+   }
+  },
+  "loro": {
+   "conservative": {
+    "sessions": 158,
+    "tasks": 38,
+    "baseline_usd": 0.26039232658227857,
+    "baseline_calls": 32.34177215189873,
+    "usd_saved": -0.00014997594936708823,
+    "usd_ci": [
+     -0.0007826229813664595,
+     0.0005663126582278484
+    ],
+    "usd_share": -0.0005759614783414106,
+    "usd_share_ci": [
+     -0.0029391570855719995,
+     0.0021948720279939397
+    ],
+    "calls_saved": 0.31645569620253167,
+    "calls_ci": [
+     0.19631901840490798,
+     0.4457831325301205
+    ],
+    "calls_share": 0.009784735812133072,
+    "calls_share_ci": [
+     0.005970809376382132,
+     0.01389176860874974
+    ],
+    "hits_per_session": 0.31645569620253167,
+    "misses_per_session": 0.0,
+    "gross_usd_share": 0.006836801438343728,
+    "inj_usd_share": 0.0074127629166851495
+   },
+   "upper (all friction)": {
+    "sessions": 158,
+    "tasks": 38,
+    "baseline_usd": 0.26039232658227857,
+    "baseline_calls": 32.34177215189873,
+    "usd_saved": 0.018596382911392415,
+    "usd_ci": [
+     0.01517890733333334,
+     0.022120089403973513
+    ],
+    "usd_share": 0.07141678541558845,
+    "usd_share_ci": [
+     0.05659545779098056,
+     0.08782026669868251
+    ],
+    "calls_saved": 3.2468354430379747,
+    "calls_ci": [
+     2.676258992805755,
+     3.8051948051948052
+    ],
+    "calls_share": 0.10039138943248532,
+    "calls_share_ci": [
+     0.08105000958037939,
+     0.12004405286343613
+    ],
+    "hits_per_session": 3.2468354430379747,
+    "misses_per_session": 0.0,
+    "gross_usd_share": 0.07882954833227353,
+    "inj_usd_share": 0.0074127629166851495
+   },
+   "learned_setup": {
+    "attrs": [
+     "{\"command\": \"ls -la | grep -E \\\"(setup|requirements|tox|pyproject)\\\"\"}",
+     "{\"command\": \"ls -la | grep -E \\\"setup|pyproject\\\"\"}",
+     "{\"command\": \"ls -la | grep -E \\\"setup|pyproject|requirements\\\"\"}",
+     "{\"command\": \"ls -la | head -20\"}",
+     "{\"command\": \"pip install pytest -q\"}"
+    ],
+    "click": [
+     "{\"command\": \"ls -la | grep -E \\\"setup|pyproject\\\"\"}",
+     "{\"command\": \"ls -la | head -20\"}",
+     "{\"command\": \"pip install pytest -q\"}"
+    ],
+    "marshmallow": [
+     "{\"command\": \"ls -la | grep -E \\\"(setup|requirements|pyproject)\\\"\"}",
+     "{\"command\": \"ls -la | grep -E \\\"setup|pyproject\\\"\"}",
+     "{\"command\": \"pip install pytest -q\"}"
+    ],
+    "urfave-cli": [
+     "{\"command\": \"ls -la | grep -E \\\"(setup|requirements|pyproject)\\\"\"}",
+     "{\"command\": \"ls -la | grep -E \\\"(setup|requirements|tox|pyproject)\\\"\"}",
+     "{\"command\": \"ls -la | grep -E \\\"setup|pyproject\\\"\"}",
+     "{\"command\": \"ls -la | grep -E \\\"setup|pyproject|requirements\\\"\"}",
+     "{\"command\": \"ls -la | head -20\"}",
+     "{\"command\": \"pip install pytest -q\"}"
+    ],
+    "vue-core": [
+     "{\"command\": \"ls -la | grep -E \\\"(setup|requirements|pyproject)\\\"\"}",
+     "{\"command\": \"ls -la | grep -E \\\"(setup|requirements|tox|pyproject)\\\"\"}",
+     "{\"command\": \"ls -la | grep -E \\\"setup|pyproject\\\"\"}",
+     "{\"command\": \"ls -la | grep -E \\\"setup|pyproject|requirements\\\"\"}",
+     "{\"command\": \"pip install pytest -q\"}"
+    ]
+   }
+  }
+ },
+ "sonnet": {
+  "split": {
+   "conservative": {
+    "sessions": 32,
+    "tasks": 16,
+    "baseline_usd": 0.5679950375,
+    "baseline_calls": 28.375,
+    "usd_saved": 0.0,
+    "usd_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_share": 0.0,
+    "usd_share_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_saved": 0.0,
+    "calls_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_share": 0.0,
+    "calls_share_ci": [
+     0.0,
+     0.0
+    ],
+    "hits_per_session": 0.0,
+    "misses_per_session": 0.0,
+    "gross_usd_share": 0.0,
+    "inj_usd_share": 0.0
+   },
+   "upper (all friction)": {
+    "sessions": 32,
+    "tasks": 16,
+    "baseline_usd": 0.5679950375,
+    "baseline_calls": 28.375,
+    "usd_saved": 0.0,
+    "usd_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_share": 0.0,
+    "usd_share_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_saved": 0.0,
+    "calls_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_share": 0.0,
+    "calls_share_ci": [
+     0.0,
+     0.0
+    ],
+    "hits_per_session": 0.0,
+    "misses_per_session": 0.0,
+    "gross_usd_share": 0.0,
+    "inj_usd_share": 0.0
+   },
+   "learned_setup": {
+    "click": [],
+    "vue-core": []
+   }
+  },
+  "loro": {
+   "conservative": {
+    "sessions": 32,
+    "tasks": 16,
+    "baseline_usd": 0.5679950375,
+    "baseline_calls": 28.375,
+    "usd_saved": -0.002706375,
+    "usd_ci": [
+     -0.0031136874999999997,
+     -0.0022995
+    ],
+    "usd_share": -0.004764786347275085,
+    "usd_share_ci": [
+     -0.005786527242602143,
+     -0.004105120009089018
+    ],
+    "calls_saved": 0.0,
+    "calls_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_share": 0.0,
+    "calls_share_ci": [
+     0.0,
+     0.0
+    ],
+    "hits_per_session": 0.0,
+    "misses_per_session": 0.0,
+    "gross_usd_share": 0.0,
+    "inj_usd_share": 0.004764786347275085
+   },
+   "upper (all friction)": {
+    "sessions": 32,
+    "tasks": 16,
+    "baseline_usd": 0.5679950375,
+    "baseline_calls": 28.375,
+    "usd_saved": 0.018865595878099176,
+    "usd_ci": [
+     0.009179981384297521,
+     0.030218139628099168
+    ],
+    "usd_share": 0.03321436743731968,
+    "usd_share_ci": [
+     0.015293710620472654,
+     0.058628397147039345
+    ],
+    "calls_saved": 1.59375,
+    "calls_ci": [
+     1.03125,
+     2.21875
+    ],
+    "calls_share": 0.05616740088105727,
+    "calls_share_ci": [
+     0.036036036036036036,
+     0.08030803080308031
+    ],
+    "hits_per_session": 1.59375,
+    "misses_per_session": 0.0,
+    "gross_usd_share": 0.03797915378459476,
+    "inj_usd_share": 0.004764786347275085
+   },
+   "learned_setup": {
+    "click": [
+     "{\"command\": \"ls -la | grep -E \\\"setup|pyproject\\\"\"}",
+     "{\"command\": \"ls -la | head -20\"}",
+     "{\"command\": \"pip install pytest -q\"}"
+    ],
+    "vue-core": [
+     "{\"command\": \"ls -la | grep -E \\\"(setup|requirements|pyproject)\\\"\"}",
+     "{\"command\": \"ls -la | grep -E \\\"(setup|requirements|tox|pyproject)\\\"\"}",
+     "{\"command\": \"ls -la | grep -E \\\"setup|pyproject\\\"\"}",
+     "{\"command\": \"ls -la | grep -E \\\"setup|pyproject|requirements\\\"\"}",
+     "{\"command\": \"pip install pytest -q\"}"
+    ]
+   }
+  }
+ }
+}

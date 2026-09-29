@@ -1,0 +1,69 @@
+{
+ "slug": "model-economics",
+ "headline": "On the 16 click and vue-core tasks that both models attempted, Haiku 4.5 is already cheaper per resolved task than Sonnet 5 ($1.04 vs $1.45; Sonnet/Haiku 1.40x [0.98, 2.04]) at a pass rate that is not measurably lower (40% vs 44%, gap +4 pts [-10, +17]). Adage-style levers add 1.5-15% on top (Sonnet/Haiku becomes 1.43-1.65x), about a fifth of what the model choice itself is worth. Two thirds of Haiku's failures are wrong fixes in the right file, which hooks cannot close, so 'make the cheap model good enough' is not a pass-rate story: Haiku is already good enough per dollar here, and Adage's lever is simply worth about twice as much on Haiku as on Sonnet.",
+ "metric_name": "$ per resolved task (API-list $ under the cumulative-context cost model / hidden-test pass rate), task-balanced, paired over the same tasks; also $/task, calls/task and pass rate",
+ "data": "harness.load().held_out(repo=['click','vue-core'], source='v2'), control arm, 60-turn cap: Haiku 4.5 40 sessions / 16 tasks (2-3 per task), Sonnet 5 16 sessions / 16 tasks (1 per task). The same 16 tasks for both models. Robustness: v1 control (30-turn cap; 32 Haiku / 16 Sonnet sessions), and v2 with all eval arms pooled (80 / 32).",
+ "prices_usd_per_mtok": {
+  "claude-haiku-4-5": {"input": 1.0, "output": 5.0, "cache_read": 0.10, "cache_write_5m": 1.25, "cache_write_1h": 2.0},
+  "claude-sonnet-5": {"input": 2.0, "output": 10.0, "cache_read": 0.20, "cache_write_5m": 2.50, "cache_write_1h": 4.0},
+  "check": "Matches the claude-api reference (cached 2026-09-25) and crates/adage-core/src/pricing.toml (as_of 2026-06-24). Sonnet 5.5, the current Sonnet, has the same price as Sonnet 5. 100% of cache-write tokens in these sessions are 1-hour writes; the harness model reproduces the billed total_cost_usd to a ratio of 1.000 for both models. pricing.toml carries only the 5-minute write rate, so the Rust ledger under-prices these runs."
+ },
+ "held_out": {
+  "test_set": "v2 control, click+vue-core, 16 paired tasks; 90% task-clustered paired bootstrap (5000 draws, numpy seed 20260929)",
+  "haiku": {"usd_per_task": [0.410, 0.343, 0.479], "usd_per_task_5m_ttl": 0.369, "calls_per_task": [43.9, 38.4, 49.3], "pass_rate": [0.396, 0.208, 0.583], "usd_per_resolved": [1.04, 0.65, 2.05], "usd_per_resolved_5m_ttl": [0.93, 0.58, 1.85], "sessions": 40},
+  "sonnet": {"usd_per_task": [0.636, 0.448, 0.841], "usd_per_task_5m_ttl": 0.571, "calls_per_task": [31.6, 24.4, 39.1], "pass_rate": [0.4375, 0.25, 0.625], "usd_per_resolved": [1.45, 0.78, 3.14], "usd_per_resolved_5m_ttl": [1.31, 0.70, 2.84], "sessions": 16},
+  "sonnet_over_haiku_usd_per_task": [1.55, 1.24, 1.85],
+  "pass_gap_pts_sonnet_minus_haiku": [4.2, -10.4, 16.7],
+  "sonnet_over_haiku_usd_per_resolved": [1.40, 0.98, 2.04],
+  "haiku_saving_per_resolved_usd": [0.42, -0.03, 1.39],
+  "breakeven_haiku_pass_rate": [0.28, 0.14, 0.46],
+  "robustness": {
+   "v1_cap30": {"pass_gap_pts": [15.6, 3.1, 28.1], "sonnet_over_haiku_usd_per_resolved": [1.47, 1.02, 1.95], "haiku_usd_per_resolved": 0.68, "sonnet_usd_per_resolved": 1.00},
+   "v2_all_arms": {"pass_gap_pts": [6.8, -2.1, 15.6], "sonnet_over_haiku_usd_per_resolved": [1.22, 0.94, 1.57]}
+  }
+ },
+ "q2_procedural_waste": {
+  "oracle_failed_or_friction_calls_usd_share": {"haiku": [0.122, 0.096, 0.147], "sonnet": [0.058, 0.028, 0.095]},
+  "oracle_failed_or_friction_calls_per_task": {"haiku": 4.9, "sonnet": 2.0},
+  "share_of_haiku_minus_sonnet_calls_gap_that_is_procedural": 0.24,
+  "u11_predictive_measured_here": {"haiku": {"usd_share": [0.013, 0.007, 0.020], "calls": 0.86, "test_set_id": "b871bcbd310f"}, "sonnet": {"usd_share": [0.005, -0.004, 0.014], "calls": 0.43, "test_set_id": "6383e51aa75d"}},
+  "u11_posthoc_measured_here": {"haiku": {"usd_share": [0.005, 0.002, 0.009], "calls": 0.29}, "sonnet": {"usd_share": 0.0, "calls": 0.0}},
+  "note": "U11 is small here: vue-core has no .venv, and click friction is light. The 3.9% figure in the brief is the Python-only 82-session set."
+ },
+ "q3_haiku_failures": {
+  "v2_control": {"failed": 24, "wrong_fix_finished": 16, "turn_cap_with_edit": 6, "breaks_build_or_import": 2, "no_source_change": 0, "touched_gold_file": 23, "median_hidden_test_fail_fraction": 0.044},
+  "v2_all_arms": {"failed": 50, "wrong_fix_finished": 34, "turn_cap_with_edit": 12, "breaks_build_or_import": 4},
+  "v1_cap30": {"failed": 21, "turn_cap_with_edit": 10, "no_source_change": 7, "wrong_fix_finished": 4},
+  "sonnet_v2_control": {"failed": 9, "wrong_fix_finished": 7, "breaks_build_or_import": 1, "no_source_change": 1},
+  "not_closable_by_hooks_share": [0.67, 0.75],
+  "task_structure": "8 of 16 tasks are failed by every v2 session of both models (7 of them also in v1). On the other 8, Sonnet beats Haiku on 3 tasks (1/1 against 1/3, 1/3 and 2/3) and Haiku beats Sonnet on 1 (2/2 against 0/1).",
+  "turn_cap_natural_experiment": "Haiku 30 to 60 turns: pass rate 34% to 40% (+6 pts, not significant) for +14 calls. The ~3-5 calls a procedural lever frees imply roughly +1 pt at best."
+ },
+ "q4_routing_haiku_plus_adage_vs_sonnet": {
+  "ttl_1h_actual": {
+   "plain_haiku": {"haiku_usd_per_resolved": 1.04, "sonnet_over_haiku": [1.40, 0.98, 2.04]},
+   "conservative_1.5pct": {"haiku_usd_per_resolved": 1.02, "sonnet_over_haiku": [1.43, 0.99, 2.07], "saving_per_resolved_usd": [0.43, -0.01, 1.41]},
+   "central_8.1pct": {"haiku_usd_per_resolved": 0.95, "sonnet_over_haiku": [1.53, 1.07, 2.22], "saving_per_resolved_usd": [0.50, 0.07, 1.52]},
+   "optimistic_15pct": {"haiku_usd_per_resolved": 0.88, "sonnet_over_haiku": [1.65, 1.16, 2.39], "saving_per_resolved_usd": [0.57, 0.14, 1.62]},
+   "procedural_oracle_11.5pct": {"haiku_usd_per_resolved": 0.92, "sonnet_over_haiku": [1.59, 1.12, 2.30]},
+   "optimistic_plus_3.3_pass_pts": {"haiku_usd_per_resolved": 0.81, "sonnet_over_haiku": [1.79, 1.28, 2.62]}
+  },
+  "ttl_5m": {
+   "plain_haiku": {"haiku_usd_per_resolved": 0.93, "sonnet_usd_per_resolved": 1.31, "sonnet_over_haiku": [1.40, 0.97, 2.04]},
+   "central_8.1pct": {"haiku_usd_per_resolved": 0.86, "sonnet_over_haiku": [1.53, 1.07, 2.21]},
+   "optimistic_15pct": {"haiku_usd_per_resolved": 0.79, "sonnet_over_haiku": [1.65, 1.15, 2.39]}
+  },
+  "adage_increment_vs_model_choice": "Choosing Haiku saves $0.42 per resolved task; Adage (central) adds $0.08 on top. The 5-minute TTL cuts about 10% for both models and leaves the ratio unchanged."
+ },
+ "leave_one_repo_out": "not applicable (no learner). The per-repository trimming shares used in the stack are waste-anatomy's leave-one-repo-out values (click 10%, vue-core 6.3%).",
+ "vs_baseline": "The current state (U11 plus learned reflexes: about +1.0 calls post-hoc, +2.11 pre-emptive, on Python) is worth 0.5% (post-hoc) / 1.3% (predictive) of Haiku $ on these two repositories, and 0-0.5% on Sonnet. The routing conclusion does not depend on it.",
+ "hard_coded_parts": [
+  "Failure taxonomy (classify()): reads the scorer's state.json (changed files, excluding CHANGES/.md/.rst/.txt; result_subtype == error_max_turns; touched_gold; regexes on the hidden-test tail for collection or import errors). Measurement instrument only.",
+  "Procedural-waste oracle: the harness's hand-written Sat/W features (a.failed, a.env_friction). Instrument.",
+  "U11 routes: the hand-written instinct, as in the harness.",
+  "Lever shares for trimming, file-pointer hints and the commit habit are imported from other agents' results (waste-anatomy, context-prefetch, token-cost), not re-measured here."
+ ],
+ "ceiling": "If Adage deleted every failed or friction call on Haiku (oracle), Haiku's $ falls 12.2% [9.6, 14.7] and Sonnet/Haiku $/resolved goes from 1.40x to 1.59x. For pass rate, closing every non-wrong-fix Haiku failure (turn cap plus build breaks, 8 of 40 sessions) would be +20 pts. That is an upper bound nobody reaches: those sessions need more than the ~5 calls procedural waste frees.",
+ "build_recommendation": "Don't pitch or build Adage as the thing that makes Haiku viable: on these tasks Haiku is already about 30% cheaper per resolved task, and its failures are mostly wrong fixes. Build model-conditional levers instead. Turn on the Haiku-heavy cost levers (the learned output cap, pre-emptive friction) only for weaker models, where waste is 2x Sonnet's (12% vs 6% of $), and skip them on Sonnet, where they net about 0. Put Adage's routing message in the product as a measured statement ('on this repo, Haiku resolves at X% for $Y per resolved task'). The ledger already has the data to compute it. Separately, fix pricing.toml or the ledger to bill 1-hour writes at 2x (the rate these runs actually pay), and consider recommending the 5-minute TTL (about -10% $ for both models, no behaviour change). Expected value: 8% (central) to 15% (optimistic) of Haiku $, 0-1 pass-rate points, and a routing ratio shift from 1.40x to 1.5-1.65x.",
+ "so_what": "If shipped, Haiku + Adage (central) costs $0.95 per resolved task against Sonnet's $1.45: 1.53x [1.07, 2.22] cheaper. Most of that comes from choosing Haiku (1.40x without Adage); Adage adds -8% of Haiku $ [range -1.5% to -15% across scenarios], +0 to +1 pass-rate points and about -1 to -2 calls net. Confidence that 'Haiku is at least as cheap per resolved task as Sonnet on these repositories' survives a live A/B: moderate. The Sonnet side is only 16 sessions, one per task; the ratio CI lower bound is 0.98 without Adage and 1.07 with it; and the 30-turn v1 data show a larger pass gap (+16 pts) but the same cost ratio (1.47x). Confidence that Adage closes any quality gap: low. 67-75% of Haiku failures are wrong fixes in the right file. The micro-slice that would confirm it: 8 tasks x 3 Sonnet repeats on click and vue-core ($15), to tighten the Sonnet pass rate."
+}
