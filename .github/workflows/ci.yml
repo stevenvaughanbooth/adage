@@ -199,3 +199,29 @@ jobs:
       - name: map e2e and axe (builds and starts the adage binary itself)
         run: pnpm test:e2e
         working-directory: web/map
+
+  site:
+    # The public website (web/site): types, the build, and Playwright with axe in both themes.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/site/package.json
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/site/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: web/site
+      - run: pnpm typecheck
+        working-directory: web/site
+      - name: browser for the e2e suite
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: web/site
+      - name: site e2e and axe (builds and serves the site itself)
+        run: pnpm test:e2e
+        working-directory: web/site

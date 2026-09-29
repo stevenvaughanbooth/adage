@@ -1,0 +1,7 @@
+dist/
+test-results/
+playwright-report/
+.vercel/
+# The films are not kept in git: `pnpm media` encodes them here for local work, and production
+# serves them from VITE_MEDIA_BASE (see README.md). The posters are small and are committed.
+public/media/*.mp4
