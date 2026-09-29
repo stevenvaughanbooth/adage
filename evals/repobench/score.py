@@ -35,7 +35,8 @@ def hidden_command(r: dict, t: dict) -> str:
     tests = [p for p in t["test_files"] if runnable(r["lang"], p)]
     pkgs = sorted({("./" + str(Path(p).parent)) if str(Path(p).parent) != "." else "./" for p in t["test_files"]
                    if p.endswith(".go")})
-    return r["hidden"].format(tests=" ".join(tests), pkgs=" ".join(pkgs) or "./")
+    names = " ".join(f"--test {Path(p).stem}" for p in tests if p.endswith(".rs"))
+    return r["hidden"].format(tests=" ".join(tests), pkgs=" ".join(pkgs) or "./", testnames=names)
 
 
 def runnable(lang: str, path: str) -> bool:
@@ -46,6 +47,12 @@ def runnable(lang: str, path: str) -> bool:
         return name.endswith(".py") and (name.startswith("test_") or name.endswith("_test.py"))
     if lang in ("typescript", "javascript"):
         return bool(re.search(r"\.(spec|test)\.[cm]?[jt]sx?$", name))
+    if lang == "rust":  # integration test targets (tests/<name>.rs); the hidden command takes {testnames}
+        return name.endswith(".rs") and path.count("/") == 1 and path.startswith("tests/")
+    if lang == "c":  # janet-style script suites run by the built binary
+        return name.endswith(".janet") and name.startswith("suite")
+    if lang == "make":  # the hidden command is a fixed `make`-driven suite; any hidden file feeds it
+        return True
     return name.endswith("_test.go")
 
 
@@ -62,6 +69,11 @@ def count_tests(lang: str, out: str) -> int | None:
         return int(m.group(1)) if m else None
     if lang == "go":
         return len(re.findall(r"^(ok|FAIL|---)\s", out, re.M)) or None
+    if lang == "rust":
+        return sum(int(a) + int(b) for a, b in re.findall(r"test result: \w+\. (\d+) passed; (\d+) failed", out))
+    if lang in ("c", "make"):
+        found = re.findall(r"(\d+) of (\d+) tests passed", out)
+        return sum(int(b) for _, b in found) if found else None
     return None
 
 
@@ -140,16 +152,18 @@ def score(rid: str, tid: str, d: Path) -> dict:
     return res
 
 
-PRUNE_HOME = ("go", ".cache", ".npm", "tmp", ".local/share/pnpm", ".local/lib")
+PRUNE_HOME = ("go", ".cache", ".npm", "tmp", ".local/share/pnpm", ".local/lib", ".cargo/registry", ".cargo/git")
 
 
-def prune(d: Path) -> None:
+def prune(d: Path, extra=()) -> None:
     """After scoring, drop what can be rebuilt and is large: the sandbox's environment (.venv,
     node_modules) and, for a runner run, the session home's package caches (a Go module cache is
     ~100 MB a session). The transcript (home/.claude), the stream and the source stay."""
     import shutil
     d = Path(d)
     shutil.rmtree(d / ".venv", ignore_errors=True)
+    for rel in extra:  # the repository's build output (repos.json `prune`: a Cargo target/, a make build/)
+        shutil.rmtree(d / rel, ignore_errors=True)
     for nm in sorted(d.glob("**/node_modules"), key=lambda p: len(p.parts)):
         if nm.exists():
             shutil.rmtree(nm, ignore_errors=True)
@@ -170,7 +184,7 @@ def main(argv=None) -> int:
         raise SystemExit("usage: score.py <repo-id> <task-id> <dir> [--keep-env]")
     print(json.dumps(score(*argv[:2], Path(argv[2]))))
     if not keep:
-        prune(Path(argv[2]))
+        prune(Path(argv[2]), common.repo(argv[0]).get("prune", ()))
     return 0
 
 
