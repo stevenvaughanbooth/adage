@@ -1,0 +1,21 @@
+{
+ "method": "a2v",
+ "tau": 0.3,
+ "vocab": 2373,
+ "dim": 64,
+ "prototypes": 19,
+ "W_bytes_f32": 607488,
+ "prototypes_bytes_f32": 4864,
+ "bpe_vocab": 2000,
+ "features_per_cmd_mean": 17.4205,
+ "python_us": {
+  "lex+features": 574.5485909974377,
+  "project": 202.69914199889172,
+  "nearest_prototype": 1.3244144975033123
+ },
+ "ops_per_cmd": {
+  "feature_lookups": 17.4205,
+  "mults_project": 1114.912,
+  "mults_nearest": 1216
+ }
+}
