@@ -1,0 +1,226 @@
+{
+ "schema": "adage-procedure/0",
+ "skill": {
+  "name": "acme-work-item",
+  "source": "skills/acme-work-item/SKILL.md",
+  "sha256": "87c0e73b3cbeb4ec41f44ec5d2f67ccab6fe4d7b757335b34d79ec5437a627fd",
+  "bytes": 1479,
+  "approx_tokens": 370
+ },
+ "trigger": {
+  "description": "Work a ticket (W-NNNN) in the acme-billing repository end to end. Use when a prompt names a work item or asks to change billing, customer or schema code.",
+  "keywords": [
+   "acme-billing",
+   "acme-work-item",
+   "asks",
+   "billing",
+   "change",
+   "customer",
+   "item",
+   "names",
+   "prompt",
+   "repository",
+   "schema",
+   "ticket",
+   "w-nnnn"
+  ],
+  "spans": [
+   "ticket"
+  ]
+ },
+ "slots": {
+  "id": {
+   "name": "id",
+   "type": "work-item-id",
+   "pattern": "^W-\\d{4}$",
+   "source": "prompt",
+   "example": "W-2042"
+  }
+ },
+ "steps": [
+  {
+   "id": "s1",
+   "order": 1,
+   "title": "Read the work item",
+   "role": "lookup",
+   "text": "**Read the work item.** Run `scripts/wi-lookup <ID>` (for example `scripts/wi-lookup W-2042`). It prints the title, description, linked files and acceptance criteria. Read the linked files first; you rarely need to explore beyond them.",
+   "commands": [
+    {
+     "template": "scripts/wi-lookup {id}",
+     "role": "lookup",
+     "env": "repo-script",
+     "scope": "item",
+     "slots": [
+      "id"
+     ]
+    }
+   ],
+   "avoid": [],
+   "precondition": {
+    "kind": "always",
+    "glob": "",
+    "text": ""
+   },
+   "expect": {
+    "exit": "",
+    "contains": [],
+    "text": ""
+   },
+   "compilable": true,
+   "why_not": ""
+  },
+  {
+   "id": "s2",
+   "order": 2,
+   "title": "If the item adds or changes a record field",
+   "role": "regenerate",
+   "text": "**If the item adds or changes a record field**, edit the schema in `schema/<record>.json`, never `acme/generated/models.py` (it is generated). After editing `schema/*.json`, run `make gen` to regenerate `acme/generated/models.py`.",
+   "commands": [
+    {
+     "template": "make gen",
+     "role": "regenerate",
+     "env": "make",
+     "scope": "repo",
+     "slots": []
+    }
+   ],
+   "avoid": [],
+   "precondition": {
+    "kind": "after_edit",
+    "glob": "schema/*.json",
+    "text": ""
+   },
+   "expect": {
+    "exit": "",
+    "contains": [],
+    "text": ""
+   },
+   "compilable": true,
+   "why_not": ""
+  },
+  {
+   "id": "s3",
+   "order": 3,
+   "title": "Make the code change",
+   "role": "edit",
+   "text": "**Make the code change** in the linked files under `acme/`.",
+   "commands": [],
+   "avoid": [],
+   "precondition": {
+    "kind": "always",
+    "glob": "",
+    "text": ""
+   },
+   "expect": {
+    "exit": "",
+    "contains": [],
+    "text": ""
+   },
+   "compilable": false,
+   "why_not": "no command: the step is the agent's judgment (an edit or a decision)"
+  },
+  {
+   "id": "s4",
+   "order": 4,
+   "title": "Run the tests with `make test`",
+   "role": "verify",
+   "text": "**Run the tests with `make test`.** Never run `python3 -m unittest` or `pytest` directly instead of `make test`: `tests/__init__.py` refuses to run without `ACME_ENV` and fails with `RuntimeError: ACME_ENV is not set`, and pytest is not installed. Expect `OK` at the end.",
+   "commands": [
+    {
+     "template": "make test",
+     "role": "verify",
+     "env": "make",
+     "scope": "suite",
+     "slots": []
+    }
+   ],
+   "avoid": [
+    {
+     "command": "python3 -m unittest",
+     "instead": "make test",
+     "signature": "RuntimeError: ACME_ENV is not set"
+    },
+    {
+     "command": "pytest",
+     "instead": "make test",
+     "signature": "RuntimeError: ACME_ENV is not set"
+    }
+   ],
+   "precondition": {
+    "kind": "always",
+    "glob": "",
+    "text": ""
+   },
+   "expect": {
+    "exit": "zero",
+    "contains": [
+     "OK"
+    ],
+    "text": ""
+   },
+   "compilable": true,
+   "why_not": ""
+  },
+  {
+   "id": "s5",
+   "order": 5,
+   "title": "Before you finish, run `make ci`",
+   "role": "verify",
+   "text": "**Before you finish, run `make ci`.** It checks that the generated models are fresh and runs the whole suite. It fails with `generated models are stale` if you skipped `make gen`.",
+   "commands": [
+    {
+     "template": "make ci",
+     "role": "verify",
+     "env": "make",
+     "scope": "repo",
+     "slots": []
+    }
+   ],
+   "avoid": [],
+   "precondition": {
+    "kind": "before_finish",
+    "glob": "",
+    "text": "Before you finish"
+   },
+   "expect": {
+    "exit": "",
+    "contains": [],
+    "text": ""
+   },
+   "compilable": true,
+   "why_not": ""
+  }
+ ],
+ "edges": [
+  {
+   "from": "s1",
+   "to": "s2",
+   "kind": "next"
+  },
+  {
+   "from": "s1",
+   "to": "s3",
+   "kind": "skip-if-not",
+   "when": "after_edit"
+  },
+  {
+   "from": "s2",
+   "to": "s3",
+   "kind": "next"
+  },
+  {
+   "from": "s3",
+   "to": "s4",
+   "kind": "next"
+  },
+  {
+   "from": "s4",
+   "to": "s5",
+   "kind": "next"
+  }
+ ],
+ "advice": [
+  "Work items live only in the internal tracker; a prompt usually names just the id, such as W-2042.",
+  "- Keep changes minimal and inside the linked files. - Do not commit; leave the working tree for review."
+ ]
+}

@@ -1,6 +1,6 @@
 {
   "run": "skill-lab",
-  "source": "/tmp/claude-0/-home-user-adage/d6ae021f-492b-5125-b4ff-8e8a0676a66b/scratchpad/skl/acme0/.claude/skills/acme-work-item/SKILL.md",
+  "source": "<lab-root>/acme0/.claude/skills/acme-work-item/SKILL.md",
   "source_sha256": "87c0e73b3cbeb4ec41f44ec5d2f67ccab6fe4d7b757335b34d79ec5437a627fd",
   "provenance": "synthetic:skill:87c0e73b3cbeb4ec41f44ec5d2f67ccab6fe4d7b757335b34d79ec5437a627fd@skill-lab",
   "harness": "claude-code",
@@ -62,5 +62,5 @@
   ],
   "staged_routes": [],
   "acceptance": [],
-  "staged": "/tmp/claude-0/-home-user-adage/d6ae021f-492b-5125-b4ff-8e8a0676a66b/scratchpad/skl/trainhome/train/skill-lab/staged"
+  "staged": "<lab-root>/trainhome/train/skill-lab/staged"
 }

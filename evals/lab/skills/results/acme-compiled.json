@@ -388,6 +388,7 @@
    }
   }
  ],
+ "proposed": [],
  "gaps": [
   {
    "step": "s3",
@@ -624,58 +625,5 @@
  ],
  "refined": [
   "skill-s4-avoid: `pytest` fails with `pytest: not found`, not the skill's signature: own route"
- ],
- "index": {
-  "routes": [
-   [
-    "acme-billing/skill-acme-work-item",
-    "skill-s1-lookup",
-    "firm",
-    "fire"
-   ],
-   [
-    "acme-billing/skill-acme-work-item",
-    "skill-s1-read",
-    "firm",
-    "prime"
-   ],
-   [
-    "acme-billing/skill-acme-work-item",
-    "skill-s2-regenerate",
-    "firm",
-    "fire"
-   ],
-   [
-    "acme-billing/skill-acme-work-item",
-    "skill-s4-avoid",
-    "firm",
-    "inhibit"
-   ],
-   [
-    "acme-billing/skill-acme-work-item",
-    "skill-s4-avoid-pytest",
-    "firm",
-    "inhibit"
-   ],
-   [
-    "acme-billing/skill-acme-work-item",
-    "skill-s4-s5-seq",
-    "firm",
-    "fire"
-   ],
-   [
-    "acme-billing/skill-acme-work-item",
-    "skill-s4-verify",
-    "firm",
-    "fire"
-   ],
-   [
-    "acme-billing/skill-acme-work-item",
-    "skill-s5-verify",
-    "firm",
-    "prime"
-   ]
-  ],
-  "log": ""
- }
+ ]
 }

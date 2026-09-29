@@ -1,0 +1,26 @@
+skill click-bugfix  (1452 bytes, ~363 tokens)
+trigger: spans=[] keywords=behaviour, click, click-bugfix, completion, help, options, output, pallets
+slots: symbol:symbol<-judgment, module:module<-edit
+s1 [run       ] always                       Reproduce the bug first
+      run   .venv/bin/python repro.py   (project-venv, path)
+      expect it to show the wrong behaviour
+      compilable
+s2 [search    ] always                       Find the code
+      run   grep -rn {symbol} src/click   (tool, path)
+      not compilable: slot {symbol} is chosen by the agent (no stimulus binds it)
+s3 [verify    ] always                       Run the tests for that module
+      run   .venv/bin/python -m pytest tests/test_{module}.py -q   (project-venv, file)
+      avoid python -m pytest -> .venv/bin/python -m pytest  [No module named pytest]
+      avoid python3 -m pytest -> .venv/bin/python -m pytest  [No module named pytest]
+      avoid pytest -> .venv/bin/python -m pytest  [No module named pytest]
+      compilable
+s4 [edit      ] always                       Fix the code
+      not compilable: no command: the step is the agent's judgment (an edit or a decision)
+s5 [verify    ] after_edit(src/click/*.py)   After editing `src/click/*.py`, run `.venv/bin/python -m pytest tests -q -x` to check the whole suite
+      run   .venv/bin/python -m pytest tests -q -x   (project-venv, suite)
+      expect ['passed']
+      compilable
+s6 [run       ] before_finish                Before you finish
+      run   .venv/bin/python repro.py   (project-venv, path)
+      compilable
+advice (not compiled): 1 block(s)

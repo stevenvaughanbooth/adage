@@ -1,0 +1,98 @@
+{
+ "schema": "adage-compiled-skill/0",
+ "skill": {
+  "name": "webapp-testing",
+  "source": "skills/webapp-testing/SKILL.md",
+  "sha256": "51b7349e77ec63b7744a6f63647e7566a0b4d2e301121cc10e8c2113af6556a2",
+  "bytes": 3913,
+  "approx_tokens": 965
+ },
+ "trigger": {
+  "description": "Toolkit for interacting with and testing local web applications using Playwright. Supports verifying frontend functionality, debugging UI behavior, capturing browser screenshots, and viewing browser logs.",
+  "keywords": [
+   "applications",
+   "behavior",
+   "browser",
+   "capturing",
+   "debugging",
+   "frontend",
+   "functionality",
+   "interacting",
+   "logs",
+   "playwright",
+   "screenshots",
+   "testing",
+   "toolkit",
+   "verifying",
+   "viewing",
+   "webapp-testing"
+  ],
+  "spans": []
+ },
+ "slots": {},
+ "reflexes": [],
+ "proposed": [
+  {
+   "from_step": "s1",
+   "route": {
+    "id": "skill-s1-intent",
+    "summary": "Decision Tree: Choosing Your Approach",
+    "trigger": {
+     "on": "intent",
+     "family": "webapp-testing",
+     "model": "potion-base-8m@<pinned>",
+     "centroid": "<at install>",
+     "threshold": 0.6
+    },
+    "step": {
+     "do": "run",
+     "command": "python scripts/with_server.py --help"
+    },
+    "slots": [],
+    "effect": "observe",
+    "strength": "prime",
+    "state": "firm",
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "evidence": {
+     "opportunities": 0,
+     "support": 0,
+     "days": 0,
+     "successes": 0,
+     "deviations_failed": 0,
+     "rate": 0.0,
+     "lower_bound": 0.0,
+     "median_position": 0.0,
+     "turns_saved": 0.0,
+     "provenance": "authored",
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ]
+    },
+    "authored": true
+   }
+  }
+ ],
+ "gaps": [
+  {
+   "step": "s2",
+   "title": "Example: Using with_server.py",
+   "why": "not one plain command (quoted shell in its arguments)"
+  },
+  {
+   "step": "s3",
+   "title": "Example: Using with_server.py",
+   "why": "not one plain command (quoted shell in its arguments)"
+  }
+ ],
+ "coverage": {
+  "steps": 3,
+  "compilable": 1,
+  "compiled": 1,
+  "advice_blocks": 14
+ },
+ "alignment": {}
+}

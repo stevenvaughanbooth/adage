@@ -1,0 +1,49 @@
+{
+ "id": "skill-s1-read",
+ "summary": "Read the files the lookup lists, together",
+ "trigger": {
+  "on": "after_command",
+  "command": "exec scripts/wi-lookup {id}"
+ },
+ "step": {
+  "do": "read_batch",
+  "slot": "files",
+  "max": 5
+ },
+ "slots": [
+  {
+   "name": "files",
+   "source": {
+    "from": "result_field",
+    "field": "*paths"
+   },
+   "contract": {
+    "kind": "repo_path"
+   }
+  }
+ ],
+ "effect": "observe",
+ "strength": "prime",
+ "state": "firm",
+ "exit": [
+  {
+   "when": "intent_changes"
+  }
+ ],
+ "evidence": {
+  "opportunities": 6,
+  "support": 6,
+  "days": 1,
+  "successes": 0,
+  "deviations_failed": 0,
+  "rate": 1.0,
+  "lower_bound": 0.6097,
+  "median_position": 0.0,
+  "turns_saved": 0.0,
+  "provenance": "authored",
+  "models": [
+   "claude-haiku-4-5-20251001"
+  ]
+ },
+ "authored": true
+}

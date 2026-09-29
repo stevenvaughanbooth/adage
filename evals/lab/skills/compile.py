@@ -86,7 +86,7 @@ def code_glob(graph: dict) -> str | None:
 def build(graph: dict, analysis: dict | None) -> dict:
     stats = {s["id"]: s for s in (analysis or {}).get("steps", [])}
     name = graph["skill"]["name"]
-    reflexes, gaps = [], []
+    reflexes, gaps, proposed = [], [], []
     code = code_glob(graph)
     steps = graph["steps"]
     for i, s in enumerate(steps):
@@ -145,6 +145,15 @@ def build(graph: dict, analysis: dict | None) -> dict:
                 glob_ = code
             else:
                 glob_ = None
+            if glob_ is None and effect == "observe":
+                # A fixed observe command with no stimulus but the task itself: an intent route
+                # (Adage's `intent` trigger: a local-embedding centroid of the skill's prompts, no slots).
+                # Its centroid needs the embedding model at install, so it is proposed, not written.
+                proposed.append({"from_step": s["id"], "route": route(
+                    f"skill-{s['id']}-intent", s["title"],
+                    {"on": "intent", "family": name, "model": "potion-base-8m@<pinned>", "centroid": "<at install>",
+                     "threshold": 0.6}, {"do": "run", "command": t}, "observe", "prime", ev=evidence(st))})
+                continue
             if glob_ is None:
                 gaps.append({"step": s["id"], "title": s["title"],
                              "why": f"`{t}` has no stimulus: it follows the agent's own writing of a file"
@@ -166,9 +175,9 @@ def build(graph: dict, analysis: dict | None) -> dict:
         for r in made:
             reflexes.append({"from_step": s["id"], "route": r})
     compilable = [s for s in steps if s["compilable"]]
-    covered = {r["from_step"] for r in reflexes}
+    covered = {r["from_step"] for r in reflexes + proposed}
     return {"schema": SCHEMA, "skill": graph["skill"], "trigger": graph["trigger"], "slots": graph["slots"],
-            "reflexes": reflexes, "gaps": gaps,
+            "reflexes": reflexes, "proposed": proposed, "gaps": gaps,
             "coverage": {"steps": len(steps), "compilable": len(compilable), "compiled": len(covered),
                          "advice_blocks": len(graph["advice"])},
             "alignment": {k: v for k, v in (analysis or {}).items() if k != "alignments"}}
@@ -347,6 +356,8 @@ def main(argv):
               f"{ev['support']}/{ev['opportunities']}  {what}")
     for g in compiled["gaps"]:
         print(f"{g['step']:<4} GAP {g['title'][:40]}: {g['why']}")
+    for r in compiled["proposed"]:
+        print(f"{r['from_step']:<4} PROPOSED {r['route']['id']} (intent trigger; centroid at install): {r['route']['step']['command']}")
     print("coverage", compiled["coverage"])
     for v in compiled.get("verification", []):
         print("verify", v["route"], "ok" if v["ok"] else "FAILED", [(c["cmd"], c.get("exit")) for c in v["checks"]])

@@ -169,6 +169,7 @@
    }
   }
  ],
+ "proposed": [],
  "gaps": [
   {
    "step": "s1",
@@ -474,28 +475,5 @@
   "skill-s3-avoid: `pytest` fails with `pytest: not found`, not the skill's signature: own route",
   "skill-s3-avoid: the instead command `.venv/bin/python -m pytest` alone exits 2 on a clean checkout (kept: the skill's instead is scoped)",
   "skill-s5-verify: dropped (replay `.venv/bin/python -m pytest tests -q -x` exited 1)"
- ],
- "index": {
-  "routes": [
-   [
-    "click/skill-click-bugfix",
-    "skill-s3-avoid",
-    "firm",
-    "inhibit"
-   ],
-   [
-    "click/skill-click-bugfix",
-    "skill-s3-avoid-pytest",
-    "firm",
-    "inhibit"
-   ],
-   [
-    "click/skill-click-bugfix",
-    "skill-s6-run",
-    "firm",
-    "prime"
-   ]
-  ],
-  "log": ""
- }
+ ]
 }
