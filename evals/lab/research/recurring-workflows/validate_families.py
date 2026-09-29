@@ -28,6 +28,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--family", action="append")
     ap.add_argument("--only")
+    ap.add_argument("--out")
     ap.add_argument("--work", default="/tmp/adage-research/recurring-workflows/validate")
     a = ap.parse_args(argv)
     work = Path(a.work)
@@ -54,7 +55,7 @@ def main(argv=None) -> int:
             out.append(row)
             print(json.dumps(row), flush=True)
             shutil.rmtree(d, ignore_errors=True)
-    (HERE / "validation.json").write_text(json.dumps(out, indent=1) + "\n")
+    (Path(a.out) if a.out else HERE / "validation.json").write_text(json.dumps(out, indent=1) + "\n")
     print(f"{sum(r['ok'] for r in out)} of {len(out)} variants valid")
     return 0
 

@@ -50,8 +50,15 @@ def score(tid: str, d: Path) -> dict:
         code, text = out.returncode, out.stdout + "\n" + out.stderr
     except subprocess.TimeoutExpired:
         code, text = -9, "TIMEOUT"
-    n = rb_score.count_tests("python", text)
-    failed = sorted(set(re.findall(r"^(?:FAILED|ERROR) (\S+)", text, re.M)))
+    lang = f.get("lang", "python")
+    n = rb_score.count_tests(lang, text)
+    if lang == "go":  # `--- FAIL: TestX`; hidden tests are named TestRWHidden*; a build failure fails all
+        failed = sorted(set(re.findall(r"--- FAIL: (\S+)", text)))
+        failed = [(f["hidden_path"] + "::" + x) if x.startswith("TestRWHidden") else x for x in failed]
+        if code != 0 and not failed:
+            failed = ["(build or setup failure)"]
+    else:
+        failed = sorted(set(re.findall(r"^(?:FAILED|ERROR) (\S+)", text, re.M)))
     hidden = Path(f["hidden_path"]).name
     return {"passed": code == 0 and bool(n), "hidden_passed": code == 0 and bool(n), "ci_passed": code == 0 and bool(n),
             "exit_code": code, "n_tests": n, "elapsed_s": round(time.time() - t0, 2),

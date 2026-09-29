@@ -1,0 +1,707 @@
+{
+ "potion-8M": {
+  "n4": {
+   "train": {
+    "click-type": {
+     "pos_min": 0.39,
+     "pos_mean": 0.6931,
+     "neg_max": 0.7629,
+     "neg_mean": 0.6364,
+     "hard_neg_max": 0.6508
+    },
+    "mm-validator": {
+     "pos_min": 0.5388,
+     "pos_mean": 0.7586,
+     "neg_max": 0.8008,
+     "neg_mean": 0.707,
+     "hard_neg_max": 0.7657
+    }
+   },
+   "tau": 0.8108,
+   "tau_low": 0.7108,
+   "train_separable": false,
+   "eval": {
+    "family": "go-flag",
+    "library_prompts": 4,
+    "recall_templated": [
+     6,
+     6
+    ],
+    "recall_paraphrased": [
+     0,
+     6
+    ],
+    "recall": 0.5,
+    "recall_wilson90": [
+     0.286,
+     0.714
+    ],
+    "false_fires_repobench": [
+     0,
+     48
+    ],
+    "false_fires_hard": [
+     0,
+     5
+    ],
+    "false_fire_rate": 0.0,
+    "false_fire_wilson90": [
+     0.0,
+     0.049
+    ],
+    "precision": 1.0,
+    "negatives_in_grey_zone": 5,
+    "auc_templated": 1.0,
+    "auc_paraphrased": 0.075,
+    "scores": {
+     "templated": [
+      0.883,
+      0.847,
+      0.844,
+      0.846,
+      0.949,
+      0.901
+     ],
+     "paraphrased": [
+      0.434,
+      0.535,
+      0.411,
+      0.413,
+      0.563,
+      0.547
+     ],
+     "repobench_max": 0.759,
+     "hard": [
+      0.596,
+      0.513,
+      0.559,
+      0.315,
+      0.539
+     ]
+    }
+   }
+  },
+  "n1": {
+   "train": {
+    "click-type": {
+     "pos_min": 0.3692,
+     "pos_mean": 0.6588,
+     "neg_max": 0.7425,
+     "neg_mean": 0.6257,
+     "hard_neg_max": 0.624
+    },
+    "mm-validator": {
+     "pos_min": 0.4178,
+     "pos_mean": 0.7179,
+     "neg_max": 0.733,
+     "neg_mean": 0.6636,
+     "hard_neg_max": 0.733
+    }
+   },
+   "tau": 0.7525,
+   "tau_low": 0.6525,
+   "train_separable": false,
+   "eval": {
+    "family": "go-flag",
+    "library_prompts": 1,
+    "recall_templated": [
+     5,
+     6
+    ],
+    "recall_paraphrased": [
+     0,
+     6
+    ],
+    "recall": 0.417,
+    "recall_wilson90": [
+     0.22,
+     0.644
+    ],
+    "false_fires_repobench": [
+     0,
+     48
+    ],
+    "false_fires_hard": [
+     0,
+     5
+    ],
+    "false_fire_rate": 0.0,
+    "false_fire_wilson90": [
+     0.0,
+     0.049
+    ],
+    "precision": 1.0,
+    "negatives_in_grey_zone": 17,
+    "auc_templated": 1.0,
+    "auc_paraphrased": 0.057,
+    "scores": {
+     "templated": [
+      0.809,
+      0.739,
+      0.786,
+      0.794,
+      0.784,
+      0.853
+     ],
+     "paraphrased": [
+      0.434,
+      0.461,
+      0.411,
+      0.349,
+      0.447,
+      0.508
+     ],
+     "repobench_max": 0.734,
+     "hard": [
+      0.547,
+      0.478,
+      0.517,
+      0.249,
+      0.51
+     ]
+    }
+   }
+  },
+  "posthoc_weighted_n4": {
+   "method": "POST-HOC contrastive token weighting (see Weighted)",
+   "train": {
+    "click-type": {
+     "pos_min": 0.2568,
+     "neg_max": 0.7501
+    },
+    "mm-validator": {
+     "pos_min": 0.4187,
+     "neg_max": 0.7013
+    }
+   },
+   "tau": 0.7601,
+   "train_separable": false,
+   "self_calibrated": {
+    "tau": 0.4451,
+    "recall_templated": [
+     6,
+     6
+    ],
+    "recall_paraphrased": [
+     5,
+     6
+    ],
+    "false_fires": [
+     10,
+     43
+    ],
+    "false_fire_wilson90": [
+     0.144,
+     0.352
+    ]
+   },
+   "eval": {
+    "library_prompts": 4,
+    "other_prior_prompts": 10,
+    "recall_templated": [
+     6,
+     6
+    ],
+    "recall_paraphrased": [
+     0,
+     6
+    ],
+    "recall_wilson90": [
+     0.286,
+     0.714
+    ],
+    "false_fires_repobench": [
+     0,
+     38
+    ],
+    "false_fires_hard": [
+     0,
+     5
+    ],
+    "false_fire_wilson90": [
+     0.0,
+     0.059
+    ],
+    "precision": 1.0,
+    "auc_templated": 1.0,
+    "auc_paraphrased": 0.919,
+    "scores": {
+     "templated": [
+      0.933,
+      0.938,
+      0.935,
+      0.932,
+      0.947,
+      0.931
+     ],
+     "paraphrased": [
+      0.599,
+      0.588,
+      0.489,
+      0.494,
+      0.648,
+      0.429
+     ],
+     "neg_max": 0.516,
+     "hard": [
+      0.425,
+      0.447,
+      0.49,
+      0.148,
+      0.455
+     ]
+    }
+   }
+  },
+  "posthoc_weighted_n1": {
+   "method": "POST-HOC contrastive token weighting (see Weighted)",
+   "train": {
+    "click-type": {
+     "pos_min": 0.2587,
+     "neg_max": 0.6167
+    },
+    "mm-validator": {
+     "pos_min": 0.3407,
+     "neg_max": 0.5847
+    }
+   },
+   "tau": 0.6267,
+   "train_separable": false,
+   "self_calibrated": {
+    "tau": 0.3062,
+    "recall_templated": [
+     6,
+     6
+    ],
+    "recall_paraphrased": [
+     6,
+     6
+    ],
+    "false_fires": [
+     13,
+     43
+    ],
+    "false_fire_wilson90": [
+     0.202,
+     0.426
+    ]
+   },
+   "eval": {
+    "library_prompts": 1,
+    "other_prior_prompts": 10,
+    "recall_templated": [
+     6,
+     6
+    ],
+    "recall_paraphrased": [
+     1,
+     6
+    ],
+    "recall_wilson90": [
+     0.356,
+     0.78
+    ],
+    "false_fires_repobench": [
+     0,
+     38
+    ],
+    "false_fires_hard": [
+     0,
+     5
+    ],
+    "false_fire_wilson90": [
+     0.0,
+     0.059
+    ],
+    "precision": 1.0,
+    "auc_templated": 1.0,
+    "auc_paraphrased": 0.942,
+    "scores": {
+     "templated": [
+      0.761,
+      0.761,
+      0.769,
+      0.762,
+      0.771,
+      0.763
+     ],
+     "paraphrased": [
+      0.681,
+      0.47,
+      0.393,
+      0.371,
+      0.529,
+      0.328
+     ],
+     "neg_max": 0.432,
+     "hard": [
+      0.337,
+      0.368,
+      0.345,
+      0.062,
+      0.334
+     ]
+    }
+   }
+  }
+ },
+ "potion-code-16M": {
+  "n4": {
+   "train": {
+    "click-type": {
+     "pos_min": 0.1492,
+     "pos_mean": 0.5212,
+     "neg_max": 0.435,
+     "neg_mean": 0.299,
+     "hard_neg_max": 0.4289
+    },
+    "mm-validator": {
+     "pos_min": 0.3398,
+     "pos_mean": 0.6253,
+     "neg_max": 0.5547,
+     "neg_mean": 0.4215,
+     "hard_neg_max": 0.5067
+    }
+   },
+   "tau": 0.5647,
+   "tau_low": 0.4647,
+   "train_separable": false,
+   "eval": {
+    "family": "go-flag",
+    "library_prompts": 4,
+    "recall_templated": [
+     6,
+     6
+    ],
+    "recall_paraphrased": [
+     0,
+     6
+    ],
+    "recall": 0.5,
+    "recall_wilson90": [
+     0.286,
+     0.714
+    ],
+    "false_fires_repobench": [
+     0,
+     48
+    ],
+    "false_fires_hard": [
+     0,
+     5
+    ],
+    "false_fire_rate": 0.0,
+    "false_fire_wilson90": [
+     0.0,
+     0.049
+    ],
+    "precision": 1.0,
+    "negatives_in_grey_zone": 13,
+    "auc_templated": 1.0,
+    "auc_paraphrased": 0.318,
+    "scores": {
+     "templated": [
+      0.74,
+      0.684,
+      0.683,
+      0.739,
+      0.881,
+      0.788
+     ],
+     "paraphrased": [
+      0.321,
+      0.358,
+      0.307,
+      0.332,
+      0.511,
+      0.291
+     ],
+     "repobench_max": 0.541,
+     "hard": [
+      0.408,
+      0.329,
+      0.471,
+      0.205,
+      0.399
+     ]
+    }
+   }
+  },
+  "n1": {
+   "train": {
+    "click-type": {
+     "pos_min": 0.0675,
+     "pos_mean": 0.4493,
+     "neg_max": 0.415,
+     "neg_mean": 0.2754,
+     "hard_neg_max": 0.3681
+    },
+    "mm-validator": {
+     "pos_min": 0.2705,
+     "pos_mean": 0.5684,
+     "neg_max": 0.523,
+     "neg_mean": 0.3738,
+     "hard_neg_max": 0.4612
+    }
+   },
+   "tau": 0.533,
+   "tau_low": 0.433,
+   "train_separable": false,
+   "eval": {
+    "family": "go-flag",
+    "library_prompts": 1,
+    "recall_templated": [
+     5,
+     6
+    ],
+    "recall_paraphrased": [
+     0,
+     6
+    ],
+    "recall": 0.417,
+    "recall_wilson90": [
+     0.22,
+     0.644
+    ],
+    "false_fires_repobench": [
+     0,
+     48
+    ],
+    "false_fires_hard": [
+     0,
+     5
+    ],
+    "false_fire_rate": 0.0,
+    "false_fire_wilson90": [
+     0.0,
+     0.049
+    ],
+    "precision": 1.0,
+    "negatives_in_grey_zone": 9,
+    "auc_templated": 0.981,
+    "auc_paraphrased": 0.261,
+    "scores": {
+     "templated": [
+      0.645,
+      0.454,
+      0.624,
+      0.674,
+      0.646,
+      0.651
+     ],
+     "paraphrased": [
+      0.302,
+      0.163,
+      0.294,
+      0.319,
+      0.352,
+      0.171
+     ],
+     "repobench_max": 0.478,
+     "hard": [
+      0.356,
+      0.304,
+      0.471,
+      0.138,
+      0.399
+     ]
+    }
+   }
+  },
+  "posthoc_weighted_n4": {
+   "method": "POST-HOC contrastive token weighting (see Weighted)",
+   "train": {
+    "click-type": {
+     "pos_min": 0.0656,
+     "neg_max": 0.6566
+    },
+    "mm-validator": {
+     "pos_min": 0.3428,
+     "neg_max": 0.5811
+    }
+   },
+   "tau": 0.6666,
+   "train_separable": false,
+   "self_calibrated": {
+    "tau": 0.2894,
+    "recall_templated": [
+     6,
+     6
+    ],
+    "recall_paraphrased": [
+     4,
+     6
+    ],
+    "false_fires": [
+     20,
+     43
+    ],
+    "false_fire_wilson90": [
+     0.346,
+     0.589
+    ]
+   },
+   "eval": {
+    "library_prompts": 4,
+    "other_prior_prompts": 10,
+    "recall_templated": [
+     6,
+     6
+    ],
+    "recall_paraphrased": [
+     0,
+     6
+    ],
+    "recall_wilson90": [
+     0.286,
+     0.714
+    ],
+    "false_fires_repobench": [
+     0,
+     38
+    ],
+    "false_fires_hard": [
+     0,
+     5
+    ],
+    "false_fire_wilson90": [
+     0.0,
+     0.059
+    ],
+    "precision": 1.0,
+    "auc_templated": 1.0,
+    "auc_paraphrased": 0.783,
+    "scores": {
+     "templated": [
+      0.941,
+      0.935,
+      0.938,
+      0.938,
+      0.945,
+      0.922
+     ],
+     "paraphrased": [
+      0.462,
+      0.374,
+      0.453,
+      0.274,
+      0.43,
+      0.259
+     ],
+     "neg_max": 0.463,
+     "hard": [
+      0.259,
+      0.334,
+      0.412,
+      0.089,
+      0.458
+     ]
+    }
+   }
+  },
+  "posthoc_weighted_n1": {
+   "method": "POST-HOC contrastive token weighting (see Weighted)",
+   "train": {
+    "click-type": {
+     "pos_min": 0.165,
+     "neg_max": 0.5036
+    },
+    "mm-validator": {
+     "pos_min": 0.2551,
+     "neg_max": 0.4449
+    }
+   },
+   "tau": 0.5136,
+   "train_separable": false,
+   "self_calibrated": {
+    "tau": 0.2016,
+    "recall_templated": [
+     6,
+     6
+    ],
+    "recall_paraphrased": [
+     6,
+     6
+    ],
+    "false_fires": [
+     20,
+     43
+    ],
+    "false_fire_wilson90": [
+     0.346,
+     0.589
+    ]
+   },
+   "eval": {
+    "library_prompts": 1,
+    "other_prior_prompts": 10,
+    "recall_templated": [
+     6,
+     6
+    ],
+    "recall_paraphrased": [
+     0,
+     6
+    ],
+    "recall_wilson90": [
+     0.286,
+     0.714
+    ],
+    "false_fires_repobench": [
+     0,
+     38
+    ],
+    "false_fires_hard": [
+     0,
+     5
+    ],
+    "false_fire_wilson90": [
+     0.0,
+     0.059
+    ],
+    "precision": 1.0,
+    "auc_templated": 1.0,
+    "auc_paraphrased": 0.872,
+    "scores": {
+     "templated": [
+      0.72,
+      0.719,
+      0.718,
+      0.721,
+      0.72,
+      0.721
+     ],
+     "paraphrased": [
+      0.416,
+      0.296,
+      0.395,
+      0.217,
+      0.33,
+      0.293
+     ],
+     "neg_max": 0.347,
+     "hard": [
+      0.219,
+      0.269,
+      0.312,
+      -0.001,
+      0.353
+     ]
+    }
+   }
+  }
+ },
+ "file_signal_potion-8M": {
+  "go-flag": {
+   "sessions": 58,
+   "prompt_fires": 0,
+   "in_grey_zone": 7,
+   "file_signal_fires": 0,
+   "sessions_editing_a_card_file": 16,
+   "false_fire_wilson90": [
+    0.0,
+    0.045
+   ]
+  }
+ }
+}

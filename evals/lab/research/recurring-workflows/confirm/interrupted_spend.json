@@ -1,0 +1,1 @@
+{"interrupted_by_container_restart": {"eval-go-flag--semver-r2-control": 0.124, "eval-go-flag--semver-r2-agents-md": 0.0}, "note": "partial spend of sessions killed by the restart (recorded cost / stream estimate); they were rerun"}
