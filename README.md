@@ -127,9 +127,10 @@ are safe, repository-relative, and exist.
 
 Real Claude Code sessions (Claude Haiku 4.5 unless noted), headless, on real open-source
 repositories, scored by hidden tests. Each Adage session is paired with a control session on the
-same task: same repository, same model, hooks installed, directives withheld. Intervals are 90%,
-clustered by task. Every number links to its data and code. Where a result comes from a prototype
-rather than the shipped binary, the table says so.
+same task: same repository, same model, hooks installed, directives withheld. Intervals are 90%
+bootstrap intervals clustered by task. With 6–12 tasks per comparison, read them as closer to
+80%. Every number links to its data and code. Where a result comes from a prototype rather than
+the shipped binary, the text says so.
 
 ### Recurring work: the procedure a repository repeats
 
@@ -143,15 +144,21 @@ matches the family (by local embedding similarity), the card is delivered once, 
 | --- | --- | ---: | ---: | --- |
 | New parameter type (click) + new validator (marshmallow) | 4 earlier sessions | **−18.8%** [−25.8, −11.6] | −16% | 20/24 vs 19/24 |
 | New flag type (urfave/cli, Go); card detected from the prompt, delivered by the hook | 4 earlier sessions | **−33.8%** [−44.3, −23.6] | −31.5% | 2/12 vs 2/12 |
-| The same click and marshmallow pairs, Adage's instincts only | – | −8.8% [−14.6, −1.9] | −10.7% | 21/24 vs 19/24 |
+| The same click and marshmallow pairs, Adage without cards (its instinct and a learned test reflex) | – | −8.8% [−14.6, −1.9] | −10.7% | 21/24 vs 19/24 |
 
-- **Detection:** 0 wrong deliveries on 53 unrelated prompts in the same repository (upper bound 4.9%).
-- **How much history:** one earlier session is enough when a family edits the same files every time
-  (click, marshmallow). Families whose file names vary per task (`flag_url.go`, `flag_port.go`)
-  need two or more.
+- **Read the Go row with care:** half the control sessions hit the 60-turn cap, so part of the
+  saving is Adage sessions not running out of turns. Both arms passed only 2 of 12. The failures
+  were a docs-snapshot step no training session had done, so no card could contain it.
+- **Detection:** 0 wrong deliveries on 53 unrelated prompts in the same repository (upper bound
+  4.9%). The strict threshold misses rephrasings: 0 of 6 informally reworded tasks were recognised.
+  A family's prompt examples grow from your own matched sessions.
+- **How much history:** the shipped learner forms a card after one passing session when that
+  session created no new files. Otherwise it needs two, which is the usual case: a new test file,
+  or file names that vary per task (`flag_url.go`, `flag_port.go`).
 - **What it is:** the card was a Python prototype in these runs. It is now built into
-  `adage condition` and the hooks, and on by default (`learn.cards`). The shipped version is
-  validated separately below.
+  `adage condition` and the hooks, and on by default (`learn.cards`). A live validation of the
+  shipped card is pre-registered in [evals/launch/go-validation](evals/launch/go-validation/README.md).
+  This section will be updated with its result.
 - **Data:** [evals/lab/research/recurring-workflows](evals/lab/research/recurring-workflows/README.md).
 
 ### Compiled skills: a skill's effect without its text in context
@@ -197,7 +204,8 @@ in Go, Rust, TypeScript and C), each task is new, so there is less to learn from
   expensive part of a novel fix is reading and reasoning about new code, which past traces cannot
   shortcut ([research sprint](evals/lab/research/BRIEF.md), 19 studies, negative results included).
 - **Pass rate:** Adage does not change it on these tasks; failed sessions are wrong fixes, not
-  process. No harm was measured in 196 real-repository sessions.
+  process. No harm was measured in 196 real-repository sessions. Those sessions predate the
+  pre-call rewrite and default-on cards, which the live validation re-checks.
 - **Stronger models gain less:** Sonnet-class agents already avoid most procedural waste.
 
 **What this means for you:** savings scale with how much of your work repeats. On recurring
