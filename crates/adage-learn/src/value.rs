@@ -574,7 +574,13 @@ pub fn kind_of(r: &Route) -> &'static str {
         "read-batch" => "read-batch",
         "obligation" => "obligation",
         "sequence" => "sequence",
-        "advise" => "advise",
+        // Advice is kinded by when it comes: after a failure it is the dead end's (use the
+        // project's interpreter), after an edit an obligation's (regenerate, do not hand-edit).
+        "advise" => match r.trigger {
+            Trigger::AfterFailure { .. } => "avoid",
+            Trigger::AfterEdit { .. } => "obligation",
+            _ => "advise",
+        },
         _ => match r.trigger {
             Trigger::AfterEdit { .. } => "run-after-edit",
             Trigger::Prompt { .. } | Trigger::Intent { .. } => "prompt",
@@ -698,7 +704,7 @@ pub fn advantage_uplift(
 /// command, or the command a session-start advice names.
 fn directed_command(r: &Route) -> Option<String> {
     let c = match &r.step {
-        Step::Advise { slots, .. } => slots.get("command").cloned(),
+        Step::Advise { slots, .. } => ["command", "interpreter", "manager"].iter().find_map(|k| slots.get(*k).cloned()),
         s => adage_graph::compile::commands(s).first().map(|c| c.to_string()),
     }?;
     let c: Vec<&str> = c.split_whitespace().filter(|t| !t.contains('{')).collect();
@@ -714,6 +720,14 @@ fn took(directed: &str, st: &crate::import::StepObs, weights: &adage_core::judge
     }
     let raw = st.call.input.get("command").and_then(|c| c.as_str());
     raw.is_some_and(|o| weights.follows(directed, o)) || adage_core::pattern::follows(&format!("exec {directed}"), &st.key)
+}
+
+/// Whether a failed call (canonical key) fires an after-failure trigger on `command`, as the
+/// runtime reads it for an instinct or a bare runner: the command with options added, or any run
+/// of the same runner.
+fn failure_matches(command: &str, observed: &str) -> bool {
+    adage_core::pattern::meets(command, observed)
+        || command.strip_prefix("exec ").is_some_and(|runner| adage_core::pattern::runs_avoided(runner, observed))
 }
 
 /// The unaided rate of a route over the training traces, judged at its trigger: each unexposed
@@ -735,7 +749,9 @@ pub fn unaided_in_traces(r: &Route, ss: &[&Session]) -> Option<(u32, u32)> {
             Trigger::AfterFailure { command, signature } => s
                 .steps
                 .iter()
-                .position(|x| x.key == *command && x.call.failed && x.call.output.contains(signature.as_str()))
+                .position(|x| {
+                    x.call.failed && x.call.output.contains(signature.as_str()) && failure_matches(command, &x.key)
+                })
                 .map(|i| (i + 1, (i + 1 + AFTER_FAILURE_WINDOW).min(s.steps.len()))),
             Trigger::AfterEdit { paths } => s
                 .steps
