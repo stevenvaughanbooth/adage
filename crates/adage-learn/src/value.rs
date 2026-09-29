@@ -270,7 +270,7 @@ fn failing_spelling(s: &Session, at: usize) -> Option<String> {
 
 /// Value every safe candidate at the repository's failure situations (`no-module:*`,
 /// `cmd-not-found:*` of a test runner), and decide admission and strength.
-pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors) -> Vec<Valued> {
+pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors, bar: f64) -> Vec<Valued> {
     // The situations, per key and failing spelling.
     struct At<'a> {
         s: &'a Session,
@@ -343,7 +343,7 @@ pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors) -> Ve
             // are `p_self`'s evidence (the research's prior for a dead end: 0.29).
             let unaided =
                 Unaided { traces: unexposed.len() as u32, traces_took: sat.len() as u32, ..Default::default() };
-            let up = uplift("avoid", &unaided, priors);
+            let up = uplift("avoid", &unaided, priors, bar);
             let adv = advantage_uplift(q_other, q_sat, &up, misfire, DIRECTIVE_COST, MISFIRE_COST);
             let ran_tests = ss
                 .iter()
@@ -535,8 +535,8 @@ pub fn failure_routes(valued: &[Valued], ss: &[&Session], provenance: &str) -> V
 
 /// A route whose posterior uplift is below this is not delivered: agents already take its step
 /// unaided nearly as often as they follow it (the research's bar: 79% of deliveries lie under it,
-/// with no measurable loss).
-pub const UPLIFT_MIN: f64 = 0.1;
+/// with no measurable loss). The default of `learn.uplift_min` ([`crate::LearnConfig`]).
+pub use adage_tracks::params::UPLIFT_MIN;
 /// A prior alone never silences a route: the gate needs at least this many situations of the
 /// repository's own evidence (training traces plus control-arm judgements).
 pub const UPLIFT_MIN_EVIDENCE: u32 = 3;
@@ -643,13 +643,13 @@ pub struct UpliftPosterior {
 }
 
 /// The uplift of a directive of `kind` on this evidence: `p_follow − p_self`, each a Beta
-/// posterior from its kind's prior, the two independent. Gated below [`UPLIFT_MIN`] when at least
+/// posterior from its kind's prior, the two independent. Gated below `bar` (0: never) when at least
 /// [`UPLIFT_MIN_EVIDENCE`] situations of the repository's own say so.
 ///
 /// The training traces and the control arm both count toward `p_self`. They can overlap (a
 /// control session is also a training trace once learned from), which overstates the certainty
 /// but not the rate: the control's judgement is the runtime's own at the exact trigger.
-pub fn uplift(kind: &str, u: &Unaided, priors: &Priors) -> UpliftPosterior {
+pub fn uplift(kind: &str, u: &Unaided, priors: &Priors, bar: f64) -> UpliftPosterior {
     let (m, k, fitted) = priors.self_prior(kind);
     let took = (u.traces_took.min(u.traces) + u.control_took.min(u.control)) as f64;
     let n = (u.traces + u.control) as f64;
@@ -662,7 +662,7 @@ pub fn uplift(kind: &str, u: &Unaided, priors: &Priors) -> UpliftPosterior {
     let mean = pf - ps;
     let lower = mean - stats::ADVANTAGE_Z * (vf + vs).sqrt();
     let r = |x: f64| (x * 1e4).round() / 1e4;
-    let gated = mean < UPLIFT_MIN && u.traces + u.control >= UPLIFT_MIN_EVIDENCE;
+    let gated = bar > 0.0 && mean < bar && u.traces + u.control >= UPLIFT_MIN_EVIDENCE;
     UpliftPosterior {
         follow,
         unaided,
@@ -835,6 +835,7 @@ pub fn assess(
     repo: &str,
     judged: &BTreeMap<(String, String), crate::instincts::Judged>,
     priors: &Priors,
+    bar: f64,
 ) -> Vec<String> {
     let mut gated = Vec::new();
     for r in routes.iter_mut() {
@@ -851,7 +852,7 @@ pub fn assess(
             delivered: j.total(),
             followed: j.followed + j.misfired,
         };
-        let up = uplift(kind_of(r), &u, priors).summary;
+        let up = uplift(kind_of(r), &u, priors, bar).summary;
         if up.gated && r.state.is_live() {
             r.state = RouteState::Nascent;
             gated.push(r.id.clone());
@@ -967,20 +968,20 @@ mod tests {
     fn uplift_is_follow_minus_unaided() {
         let p = Priors::default();
         // The dead end (research: +0.69): agents rarely recover to the project's environment.
-        let u = uplift("avoid", &traces(1, 8), &p).summary;
+        let u = uplift("avoid", &traces(1, 8), &p, UPLIFT_MIN).summary;
         assert!(u.mean > 0.6 && !u.gated, "{u:?}");
         // A read batch agents already read (research: p_self 0.93, uplift ≈ 0).
-        let u = uplift("read-batch", &traces(9, 10), &p).summary;
+        let u = uplift("read-batch", &traces(9, 10), &p, UPLIFT_MIN).summary;
         assert!(u.mean < UPLIFT_MIN && u.gated, "{u:?}");
         // A lookup every agent already runs.
-        assert!(uplift("prompt", &traces(12, 12), &p).summary.gated);
+        assert!(uplift("prompt", &traces(12, 12), &p, UPLIFT_MIN).summary.gated);
         // A prior alone never silences a route: an obligation's research prior is below the bar,
         // but with no situation of this repository's it is delivered.
-        let u = uplift("obligation", &Unaided::default(), &p).summary;
+        let u = uplift("obligation", &Unaided::default(), &p, UPLIFT_MIN).summary;
         assert!(u.mean < UPLIFT_MIN && !u.gated, "{u:?}");
         // The repository's own evidence outweighs the kind's prior: a read batch agents here
         // mostly miss has uplift.
-        assert!(uplift("read-batch", &traces(3, 12), &p).summary.mean > 0.3);
+        assert!(uplift("read-batch", &traces(3, 12), &p, UPLIFT_MIN).summary.mean > 0.3);
     }
 
     #[test]
@@ -988,11 +989,11 @@ mod tests {
         let p = Priors::default();
         // The control arm's would-have judgements: agents did it unaided 19 of 20 times.
         let u = Unaided { control: 20, control_took: 19, ..Default::default() };
-        assert!(uplift("run-after-edit", &u, &p).summary.gated);
+        assert!(uplift("run-after-edit", &u, &p, UPLIFT_MIN).summary.gated);
         // Treated judgements move p_follow: a route agents ignore has little uplift.
         let told = Unaided { delivered: 20, followed: 6, ..traces(2, 10) };
-        let base = uplift("avoid", &traces(2, 10), &p).summary;
-        let ignored = uplift("avoid", &told, &p).summary;
+        let base = uplift("avoid", &traces(2, 10), &p, UPLIFT_MIN).summary;
+        let ignored = uplift("avoid", &told, &p, UPLIFT_MIN).summary;
         assert!(ignored.p_follow < base.p_follow - 0.3 && ignored.mean < base.mean, "{ignored:?}");
     }
 
@@ -1002,7 +1003,7 @@ mod tests {
         assert_eq!(p.self_prior("read-batch"), (0.93, SELF_KAPPA, false));
         p.uptake.insert("read-batch".into(), SelfCell { n: 40.0, took: 10.0, kappa: Some(6.0) });
         assert_eq!(p.self_prior("read-batch"), (0.25, 6.0, true));
-        let u = uplift("read-batch", &Unaided::default(), &p).summary;
+        let u = uplift("read-batch", &Unaided::default(), &p, UPLIFT_MIN).summary;
         assert!(u.prior_fitted && u.mean > 0.5, "{u:?}");
     }
 
@@ -1011,7 +1012,8 @@ mod tests {
         let q_other = stats::gamma_poisson(40.0, 10.0, DEFAULT_CALLS, DEFAULT_KAPPA);
         let q_sat = stats::gamma_poisson(10.0, 10.0, DEFAULT_CALLS, DEFAULT_KAPPA);
         let p = Priors::default();
-        let a = |u: &Unaided| advantage_uplift(q_other, q_sat, &uplift("avoid", u, &p), (0.5, 20.0), 0.1, 2.0);
+        let a =
+            |u: &Unaided| advantage_uplift(q_other, q_sat, &uplift("avoid", u, &p, UPLIFT_MIN), (0.5, 20.0), 0.1, 2.0);
         let rare = a(&traces(1, 20));
         let usual = a(&traces(19, 20));
         assert!(rare.mean > 2.0, "{rare:?}");
@@ -1073,7 +1075,7 @@ mod tests {
             )
         };
         let mut routes = vec![rb, fix, card];
-        let gated = assess(&mut routes, &[], "repo", &BTreeMap::new(), &Priors::default());
+        let gated = assess(&mut routes, &[], "repo", &BTreeMap::new(), &Priors::default(), UPLIFT_MIN);
         assert_eq!(gated, vec!["r".to_string()]);
         assert_eq!(routes[0].state, RouteState::Nascent);
         let u = routes[0].evidence.uplift.as_ref().unwrap();
@@ -1091,7 +1093,7 @@ mod tests {
         );
         let mut routes = vec![routes[1].clone()];
         routes[0].evidence.uplift = None;
-        assert_eq!(assess(&mut routes, &[], "repo", &judged, &Priors::default()), vec!["d".to_string()]);
+        assert_eq!(assess(&mut routes, &[], "repo", &judged, &Priors::default(), UPLIFT_MIN), vec!["d".to_string()]);
     }
 
     #[test]

@@ -302,6 +302,8 @@ pub struct Seen<'a> {
     pub judged: &'a BTreeMap<(String, String), Judged>,
     pub sessions: &'a [&'a crate::import::Session],
     pub priors: &'a crate::value::Priors,
+    /// Uplift gating's bar (`learn.uplift_min`).
+    pub uplift_min: f64,
 }
 
 static NO_PRIORS: std::sync::LazyLock<crate::value::Priors> = std::sync::LazyLock::new(Default::default);
@@ -309,7 +311,7 @@ static NO_PRIORS: std::sync::LazyLock<crate::value::Priors> = std::sync::LazyLoc
 impl<'a> Seen<'a> {
     /// Judgements alone: no traces (day 0), the built-in priors.
     pub fn of(judged: &'a BTreeMap<(String, String), Judged>) -> Seen<'a> {
-        Seen { judged, sessions: &[], priors: &NO_PRIORS }
+        Seen { judged, sessions: &[], priors: &NO_PRIORS, uplift_min: crate::value::UPLIFT_MIN }
     }
 }
 
@@ -406,7 +408,9 @@ pub fn plan_repo(
         // What delivering each changes (uplift, `value::assess`): one agents already take unaided
         // waits, nascent, until a person approves the route itself (approving the pack does not).
         let gated: BTreeSet<String> =
-            crate::value::assess(&mut routes, seen.sessions, repo, judged, seen.priors).into_iter().collect();
+            crate::value::assess(&mut routes, seen.sessions, repo, judged, seen.priors, seen.uplift_min)
+                .into_iter()
+                .collect();
         rep.quiet = gated.iter().cloned().collect();
         routes = review::reconcile(prev.as_ref(), &reviews, routes);
         let pack_approved = reviews.packs.contains_key(&cat.pack.name);

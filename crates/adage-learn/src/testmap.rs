@@ -437,6 +437,7 @@ pub fn plan(
     statics: &Statics,
     root: Option<&Path>,
     priors: &Priors,
+    uplift_min: f64,
     provenance: &str,
 ) -> Option<(Option<(Route, Why)>, Planned)> {
     // The situations: the first source edit before a test run that ran tests.
@@ -545,7 +546,7 @@ pub fn plan(
     // environment are `p_self`'s evidence (the research's prior for an after-edit run: 0.32).
     let unaided =
         value::Unaided { traces: unexposed.len() as u32, traces_took: sat.len() as u32, ..Default::default() };
-    let up = value::uplift("run-after-edit", &unaided, priors);
+    let up = value::uplift("run-after-edit", &unaided, priors, uplift_min);
     let adv = value::advantage_uplift(
         q_other,
         q_sat,
