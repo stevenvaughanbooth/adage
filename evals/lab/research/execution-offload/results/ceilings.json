@@ -1,0 +1,786 @@
+{
+ "haiku": {
+  "every call that authors nothing (not Edit/Write, not an inline script)": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.12388595063291136,
+   "usd_ci": [
+    0.1072126685185185,
+    0.14131640181818186
+   ],
+   "usd_share": 0.4757665183876532,
+   "usd_share_ci": [
+    0.4485951645660169,
+    0.500962200922649
+   ],
+   "calls_saved": 23.550632911392405,
+   "calls_ci": [
+    21.60135135135135,
+    25.53548387096774
+   ],
+   "calls_share": 0.7281800391389432,
+   "calls_share_ci": [
+    0.7025703794369645,
+    0.7527910685805422
+   ],
+   "hits_per_session": 23.550632911392405,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.8876048467818795,
+   "inj_usd_share": 0.4118383283942263
+  },
+  "test runs (runner invocations)": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.034141410759493666,
+   "usd_ci": [
+    0.029767321118012426,
+    0.03877380933333334
+   ],
+   "usd_share": 0.13111527212652216,
+   "usd_share_ci": [
+    0.1210974092489206,
+    0.14067460803678794
+   ],
+   "calls_saved": 6.1645569620253164,
+   "calls_ci": [
+    5.582781456953643,
+    6.743421052631579
+   ],
+   "calls_share": 0.19060665362035226,
+   "calls_share_ci": [
+    0.17534821598931502,
+    0.20600951145698226
+   ],
+   "hits_per_session": 6.1645569620253164,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.17513496115097743,
+   "inj_usd_share": 0.04401968902445538
+  },
+  "test runs (runner invocations) [compact passing output]": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.04214262784810124,
+   "usd_ci": [
+    0.0371135967948718,
+    0.04752818535031847
+   ],
+   "usd_share": 0.16184281772521855,
+   "usd_share_ci": [
+    0.14971478608215602,
+    0.17282115597962788
+   ],
+   "calls_saved": 6.1645569620253164,
+   "calls_ci": [
+    5.582781456953643,
+    6.743421052631579
+   ],
+   "calls_share": 0.19060665362035226,
+   "calls_share_ci": [
+    0.17534821598931502,
+    0.20600951145698226
+   ],
+   "hits_per_session": 6.1645569620253164,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.17513496115097743,
+   "inj_usd_share": 0.01329214342575904
+  },
+  "test runs that executed tests": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.027588958227848095,
+   "usd_ci": [
+    0.02359044779874214,
+    0.03194984082840237
+   ],
+   "usd_share": 0.10595150245001778,
+   "usd_share_ci": [
+    0.09649608640566053,
+    0.11537174880727144
+   ],
+   "calls_saved": 4.867088607594937,
+   "calls_ci": [
+    4.3293413173652695,
+    5.437086092715232
+   ],
+   "calls_share": 0.15048923679060666,
+   "calls_share_ci": [
+    0.13594003241491087,
+    0.16512992455993294
+   ],
+   "hits_per_session": 4.867088607594937,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.1451606703610012,
+   "inj_usd_share": 0.03920916791098344
+  },
+  "test runs that executed tests [compact passing output]": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.03512569493670885,
+   "usd_ci": [
+    0.030434969230769236,
+    0.04010907105263158
+   ],
+   "usd_share": 0.13489527666864595,
+   "usd_share_ci": [
+    0.12371869085990202,
+    0.1454161648768052
+   ],
+   "calls_saved": 4.867088607594937,
+   "calls_ci": [
+    4.3293413173652695,
+    5.437086092715232
+   ],
+   "calls_share": 0.15048923679060666,
+   "calls_share_ci": [
+    0.13594003241491087,
+    0.16512992455993294
+   ],
+   "hits_per_session": 4.867088607594937,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.1451606703610012,
+   "inj_usd_share": 0.010265393692355296
+  },
+  "git commands": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.017021991139240508,
+   "usd_ci": [
+    0.015029171686746995,
+    0.01891720903225807
+   ],
+   "usd_share": 0.06537055589409588,
+   "usd_share_ci": [
+    0.055050651158039636,
+    0.07531500634870876
+   ],
+   "calls_saved": 2.930379746835443,
+   "calls_ci": [
+    2.56875,
+    3.260355029585799
+   ],
+   "calls_share": 0.09060665362035225,
+   "calls_share_ci": [
+    0.0764975200305227,
+    0.105
+   ],
+   "hits_per_session": 2.930379746835443,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.07365687164807762,
+   "inj_usd_share": 0.0082863157539817
+  },
+  "env probes / installs (U11 instrument)": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.006279489240506332,
+   "usd_ci": [
+    0.004986257236842107,
+    0.007578436645962733
+   ],
+   "usd_share": 0.024115492660349746,
+   "usd_share_ci": [
+    0.018222650301374602,
+    0.03053084222532079
+   ],
+   "calls_saved": 1.5316455696202531,
+   "calls_ci": [
+    1.2317880794701987,
+    1.8278145695364238
+   ],
+   "calls_share": 0.04735812133072407,
+   "calls_share_ci": [
+    0.037563072322930297,
+    0.05774327906096176
+   ],
+   "hits_per_session": 1.5316455696202531,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.035470155554662604,
+   "inj_usd_share": 0.011354662894312863
+  },
+  "lint / format / type-check": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.00013853417721518987,
+   "usd_ci": [
+    3.789006211180124e-05,
+    0.00025793087248322154
+   ],
+   "usd_share": 0.0005320209663375622,
+   "usd_share_ci": [
+    0.00014482604256327783,
+    0.0009998038273171213
+   ],
+   "calls_saved": 0.02531645569620253,
+   "calls_ci": [
+    0.00625,
+    0.0457516339869281
+   ],
+   "calls_share": 0.0007827788649706458,
+   "calls_share_ci": [
+    0.00019252984212552945,
+    0.001447178002894356
+   ],
+   "hits_per_session": 0.02531645569620253,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.0005936222682639668,
+   "inj_usd_share": 6.160130192640472e-05
+  },
+  "searches and listings": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.03101207151898734,
+   "usd_ci": [
+    0.025836554938271607,
+    0.036305552287581706
+   ],
+   "usd_share": 0.11909748618951024,
+   "usd_share_ci": [
+    0.10434336367347714,
+    0.1327632563407011
+   ],
+   "calls_saved": 6.2974683544303796,
+   "calls_ci": [
+    5.405405405405405,
+    7.189873417721519
+   ],
+   "calls_share": 0.19471624266144813,
+   "calls_share_ci": [
+    0.17317760773258156,
+    0.2149936925572175
+   ],
+   "hits_per_session": 6.2974683544303796,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.16803269611602323,
+   "inj_usd_share": 0.0489352099265131
+  },
+  "Reads": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.03756078417721519,
+   "usd_ci": [
+    0.028500397402597407,
+    0.048095550694444454
+   ],
+   "usd_share": 0.14424689340969035,
+   "usd_share_ci": [
+    0.11774815617414146,
+    0.17380507410308466
+   ],
+   "calls_saved": 6.955696202531645,
+   "calls_ci": [
+    5.914110429447852,
+    8.054878048780488
+   ],
+   "calls_share": 0.21506849315068494,
+   "calls_share_ci": [
+    0.1907057462398766,
+    0.23990903922683343
+   ],
+   "hits_per_session": 6.955696202531645,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.4475292559759556,
+   "inj_usd_share": 0.30328236256626545
+  },
+  "REACHABLE: exact repeat of an earlier call in the session": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.007546368354430383,
+   "usd_ci": [
+    0.005750158227848102,
+    0.009612952229299363
+   ],
+   "usd_share": 0.028980763194824365,
+   "usd_share_ci": [
+    0.0232310632333178,
+    0.03502972522199053
+   ],
+   "calls_saved": 1.3354430379746836,
+   "calls_ci": [
+    1.0612244897959184,
+    1.6470588235294117
+   ],
+   "calls_share": 0.04129158512720157,
+   "calls_share_ci": [
+    0.034009156311314584,
+    0.04942463686096963
+   ],
+   "hits_per_session": 1.3354430379746836,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.03646194040464879,
+   "inj_usd_share": 0.007481177209824444
+  },
+  "REACHABLE: key seen in >=2 training sessions of the repo": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.0060937531645569604,
+   "usd_ci": [
+    0.00488349880952381,
+    0.007465792024539877
+   ],
+   "usd_share": 0.023402199460096085,
+   "usd_share_ci": [
+    0.018865246851890914,
+    0.02853508036148311
+   ],
+   "calls_saved": 1.518987341772152,
+   "calls_ci": [
+    1.20125786163522,
+    1.870748299319728
+   ],
+   "calls_share": 0.046966731898238745,
+   "calls_share_ci": [
+    0.03745959307853204,
+    0.05762782900251467
+   ],
+   "hits_per_session": 1.518987341772152,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.0853369296139693,
+   "inj_usd_share": 0.06193473015387323
+  },
+  "REACHABLE: any of repeat / repo key / path printed by the previous call": {
+   "sessions": 158,
+   "tasks": 38,
+   "baseline_usd": 0.26039232658227857,
+   "baseline_calls": 32.34177215189873,
+   "usd_saved": 0.016281058251305693,
+   "usd_ci": [
+    0.013993398884694886,
+    0.018922771627816668
+   ],
+   "usd_share": 0.06252510765197691,
+   "usd_share_ci": [
+    0.055446342348404086,
+    0.07058925960590792
+   ],
+   "calls_saved": 3.8797468354430378,
+   "calls_ci": [
+    3.4615384615384617,
+    4.353658536585366
+   ],
+   "calls_share": 0.11996086105675147,
+   "calls_share_ci": [
+    0.10835509138381201,
+    0.13341429562803608
+   ],
+   "hits_per_session": 3.8797468354430378,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.25706693625337396,
+   "inj_usd_share": 0.1945418286013969
+  }
+ },
+ "sonnet": {
+  "every call that authors nothing (not Edit/Write, not an inline script)": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.34835355,
+   "usd_ci": [
+    0.23807721250000005,
+    0.46448928749999996
+   ],
+   "usd_share": 0.6133038618317154,
+   "usd_share_ci": [
+    0.5555556352763728,
+    0.6556416444504388
+   ],
+   "calls_saved": 21.875,
+   "calls_ci": [
+    17.84375,
+    25.8125
+   ],
+   "calls_share": 0.7709251101321586,
+   "calls_share_ci": [
+    0.7350157728706624,
+    0.801829268292683
+   ],
+   "hits_per_session": 21.875,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.9052726208897555,
+   "inj_usd_share": 0.29196875905804026
+  },
+  "test runs (runner invocations)": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.07823009375,
+   "usd_ci": [
+    0.05235094375,
+    0.10563524375000002
+   ],
+   "usd_share": 0.1377302416132465,
+   "usd_share_ci": [
+    0.1071503550794131,
+    0.17547406854645134
+   ],
+   "calls_saved": 5.4375,
+   "calls_ci": [
+    4.25,
+    6.71875
+   ],
+   "calls_share": 0.19162995594713655,
+   "calls_share_ci": [
+    0.16020408163265307,
+    0.22756410256410256
+   ],
+   "hits_per_session": 5.4375,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.17920608813417674,
+   "inj_usd_share": 0.041475846520930205
+  },
+  "test runs (runner invocations) [compact passing output]": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.09601033750000001,
+   "usd_ci": [
+    0.06422188125,
+    0.12942776875
+   ],
+   "usd_share": 0.16903376114443605,
+   "usd_share_ci": [
+    0.1331636304114215,
+    0.21339344120102902
+   ],
+   "calls_saved": 5.4375,
+   "calls_ci": [
+    4.25,
+    6.71875
+   ],
+   "calls_share": 0.19162995594713655,
+   "calls_share_ci": [
+    0.16020408163265307,
+    0.22756410256410256
+   ],
+   "hits_per_session": 5.4375,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.17920608813417674,
+   "inj_usd_share": 0.010172326989740646
+  },
+  "test runs that executed tests": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.05969541875000002,
+   "usd_ci": [
+    0.037603825,
+    0.08292312500000001
+   ],
+   "usd_share": 0.10509848644584328,
+   "usd_share_ci": [
+    0.07772591995892673,
+    0.1381022013828826
+   ],
+   "calls_saved": 3.9375,
+   "calls_ci": [
+    2.90625,
+    5.03125
+   ],
+   "calls_share": 0.13876651982378854,
+   "calls_share_ci": [
+    0.10952902519167579,
+    0.17094017094017094
+   ],
+   "hits_per_session": 3.9375,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.13834534381825475,
+   "inj_usd_share": 0.033246857372411454
+  },
+  "test runs that executed tests [compact passing output]": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.07422451250000002,
+   "usd_ci": [
+    0.046837375,
+    0.10178615
+   ],
+   "usd_share": 0.13067810033463545,
+   "usd_share_ci": [
+    0.09832166316904195,
+    0.16921123740231545
+   ],
+   "calls_saved": 3.9375,
+   "calls_ci": [
+    2.90625,
+    5.03125
+   ],
+   "calls_share": 0.13876651982378854,
+   "calls_share_ci": [
+    0.10952902519167579,
+    0.17094017094017094
+   ],
+   "hits_per_session": 3.9375,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.13834534381825475,
+   "inj_usd_share": 0.007667243483619344
+  },
+  "git commands": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.015742139130434783,
+   "usd_ci": [
+    0.00709413125,
+    0.0258790125
+   ],
+   "usd_share": 0.02771527582304763,
+   "usd_share_ci": [
+    0.01422832425240163,
+    0.04232143909349667
+   ],
+   "calls_saved": 0.75,
+   "calls_ci": [
+    0.46875,
+    1.0625
+   ],
+   "calls_share": 0.02643171806167401,
+   "calls_share_ci": [
+    0.017321016166281754,
+    0.036057692307692304
+   ],
+   "hits_per_session": 0.75,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.03227615413881989,
+   "inj_usd_share": 0.004560878315772257
+  },
+  "env probes / installs (U11 instrument)": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.009878914628099174,
+   "usd_ci": [
+    0.0033381730061983472,
+    0.019045587500000002
+   ],
+   "usd_share": 0.017392607286818372,
+   "usd_share_ci": [
+    0.005615279685467525,
+    0.034308266941218586
+   ],
+   "calls_saved": 0.71875,
+   "calls_ci": [
+    0.40625,
+    1.09375
+   ],
+   "calls_share": 0.025330396475770924,
+   "calls_share_ci": [
+    0.014285714285714285,
+    0.03670634920634921
+   ],
+   "hits_per_session": 0.71875,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.020014956342112714,
+   "inj_usd_share": 0.002622349055294343
+  },
+  "lint / format / type-check": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.00820891875,
+   "usd_ci": [
+    0.004334562500000001,
+    0.012190118750000003
+   ],
+   "usd_share": 0.014452448011044464,
+   "usd_share_ci": [
+    0.0074816098176662005,
+    0.022489848231942364
+   ],
+   "calls_saved": 0.625,
+   "calls_ci": [
+    0.3125,
+    0.96875
+   ],
+   "calls_share": 0.022026431718061675,
+   "calls_share_ci": [
+    0.01098901098901099,
+    0.035110533159947985
+   ],
+   "hits_per_session": 0.625,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.015401047848063287,
+   "inj_usd_share": 0.0009485998370188225
+  },
+  "searches and listings": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.1241019610449185,
+   "usd_ci": [
+    0.0796623375,
+    0.1740263331347555
+   ],
+   "usd_share": 0.21849127695049358,
+   "usd_share_ci": [
+    0.18197275734594837,
+    0.25381206007350476
+   ],
+   "calls_saved": 6.78125,
+   "calls_ci": [
+    5.3125,
+    8.375
+   ],
+   "calls_share": 0.23898678414096916,
+   "calls_share_ci": [
+    0.20722635494155153,
+    0.27102803738317754
+   ],
+   "hits_per_session": 6.78125,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.26183120225749945,
+   "inj_usd_share": 0.04333992530700588
+  },
+  "Reads": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.09920544375000001,
+   "usd_ci": [
+    0.05609676250000001,
+    0.14621708125
+   ],
+   "usd_share": 0.17465899735083515,
+   "usd_share_ci": [
+    0.12322875406478018,
+    0.2181516149689779
+   ],
+   "calls_saved": 6.3125,
+   "calls_ci": [
+    4.84375,
+    7.875
+   ],
+   "calls_share": 0.22246696035242292,
+   "calls_share_ci": [
+    0.18932655654383734,
+    0.25649717514124293
+   ],
+   "hits_per_session": 6.3125,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.3613503731535682,
+   "inj_usd_share": 0.18669137580273312
+  },
+  "REACHABLE: exact repeat of an earlier call in the session": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.00680016875,
+   "usd_ci": [
+    0.00403369375,
+    0.009600350000000002
+   ],
+   "usd_share": 0.011972232679937808,
+   "usd_share_ci": [
+    0.007630720785553239,
+    0.01696992865433255
+   ],
+   "calls_saved": 0.5625,
+   "calls_ci": [
+    0.34375,
+    0.8125
+   ],
+   "calls_share": 0.019823788546255508,
+   "calls_share_ci": [
+    0.011616650532429816,
+    0.029157667386609073
+   ],
+   "hits_per_session": 0.5625,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.01638478223500324,
+   "inj_usd_share": 0.004412549555065435
+  },
+  "REACHABLE: key seen in >=2 training sessions of the repo": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.0001951374999999999,
+   "usd_ci": [
+    0.0,
+    0.0005854124999999997
+   ],
+   "usd_share": 0.00034355493818905047,
+   "usd_share_ci": [
+    0.0,
+    0.001014801864502596
+   ],
+   "calls_saved": 0.0625,
+   "calls_ci": [
+    0.0,
+    0.1875
+   ],
+   "calls_share": 0.0022026431718061676,
+   "calls_share_ci": [
+    0.0,
+    0.006528835690968444
+   ],
+   "hits_per_session": 0.0625,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.008870257955378703,
+   "inj_usd_share": 0.008526703017189653
+  },
+  "REACHABLE: any of repeat / repo key / path printed by the previous call": {
+   "sessions": 32,
+   "tasks": 16,
+   "baseline_usd": 0.5679950375,
+   "baseline_calls": 28.375,
+   "usd_saved": 0.009618562500000002,
+   "usd_ci": [
+    0.006199781250000001,
+    0.012940681249999999
+   ],
+   "usd_share": 0.016934236859419746,
+   "usd_share_ci": [
+    0.011464542466158304,
+    0.02374211749526217
+   ],
+   "calls_saved": 1.1875,
+   "calls_ci": [
+    0.78125,
+    1.625
+   ],
+   "calls_share": 0.04185022026431718,
+   "calls_share_ci": [
+    0.027312775330396475,
+    0.05795454545454545
+   ],
+   "hits_per_session": 1.1875,
+   "misses_per_session": 0.0,
+   "gross_usd_share": 0.09190758114678069,
+   "inj_usd_share": 0.07497334428736097
+  }
+ }
+}

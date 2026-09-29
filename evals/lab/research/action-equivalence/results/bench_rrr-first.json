@@ -1,0 +1,21 @@
+{
+ "method": "rrr-first",
+ "tau": 0.4,
+ "vocab": 2371,
+ "dim": 32,
+ "prototypes": 23,
+ "W_bytes_f32": 303488,
+ "prototypes_bytes_f32": 2944,
+ "bpe_vocab": 2000,
+ "features_per_cmd_mean": 16.744,
+ "python_us": {
+  "lex+features": 343.3460619999096,
+  "project": 138.91135649828357,
+  "nearest_prototype": 1.3655865004693624
+ },
+ "ops_per_cmd": {
+  "feature_lookups": 16.744,
+  "mults_project": 535.808,
+  "mults_nearest": 736
+ }
+}

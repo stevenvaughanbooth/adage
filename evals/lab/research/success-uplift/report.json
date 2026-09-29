@@ -1,0 +1,572 @@
+{
+ "mapping": {
+  "mapping": {
+   "test_run_clusters_k40": [
+    4,
+    10,
+    21,
+    24,
+    26,
+    29,
+    32
+   ],
+   "edit_clusters_k12": [
+    0,
+    3
+   ],
+   "adhoc_script_clusters_k40": [
+    5,
+    6,
+    17
+   ]
+  },
+  "edit_clusters_k40": [
+   2
+  ]
+ },
+ "obligation": {
+  "H1 test run after the last edit (before finishing)": {
+   "rd_within": 0.023,
+   "rd_within_uncensored": 0.0,
+   "v2_control_60turns": {
+    "p_not_x": 0.173,
+    "uplift_pp": 0.4,
+    "uplift_ci90_pp": [
+     -0.95,
+     2.01
+    ],
+    "sessions_per_arm_point": 234664,
+    "sessions_per_arm_upper": 9105,
+    "stratified_sessions_per_arm_upper": 2005
+   },
+   "v1_control_30turns": {
+    "p_not_x": 0.196,
+    "uplift_pp": 0.45,
+    "uplift_ci90_pp": [
+     -1.28,
+     1.84
+    ],
+    "sessions_per_arm_point": 184423,
+    "sessions_per_arm_upper": 10909,
+    "stratified_sessions_per_arm_upper": 2400
+   }
+  },
+  "H1b last test run after the last edit exited 0": {
+   "rd_within": 0.028,
+   "rd_within_uncensored": 0.0,
+   "v2_control_60turns": {
+    "p_not_x": 0.173,
+    "uplift_pp": 0.48,
+    "uplift_ci90_pp": [
+     -0.86,
+     2.11
+    ],
+    "sessions_per_arm_point": 163111,
+    "sessions_per_arm_upper": 8268,
+    "stratified_sessions_per_arm_upper": 1822
+   },
+   "v1_control_30turns": {
+    "p_not_x": 0.228,
+    "uplift_pp": 0.63,
+    "uplift_ci90_pp": [
+     -1.3,
+     2.42
+    ],
+    "sessions_per_arm_point": 94133,
+    "sessions_per_arm_upper": 6305,
+    "stratified_sessions_per_arm_upper": 1392
+   }
+  },
+  "H2b targeted test run after the last edit [gold instrument]": {
+   "rd_within": 0.035,
+   "rd_within_uncensored": 0.035,
+   "v2_control_60turns": {
+    "p_not_x": 0.296,
+    "uplift_pp": 1.02,
+    "uplift_ci90_pp": [
+     -0.8,
+     3.28
+    ],
+    "sessions_per_arm_point": 35499,
+    "sessions_per_arm_upper": 3396,
+    "stratified_sessions_per_arm_upper": 754
+   },
+   "v1_control_30turns": {
+    "p_not_x": 0.467,
+    "uplift_pp": 1.61,
+    "uplift_ci90_pp": [
+     -1.48,
+     4.73
+    ],
+    "sessions_per_arm_point": 14185,
+    "sessions_per_arm_upper": 1623,
+    "stratified_sessions_per_arm_upper": 364
+   }
+  },
+  "H3b ad-hoc script after the last edit": {
+   "rd_within": -0.039,
+   "rd_within_uncensored": 0.004,
+   "v2_control_60turns": {
+    "p_not_x": 0.459,
+    "uplift_pp": -1.8,
+    "uplift_ci90_pp": [
+     -4.9,
+     1.49
+    ],
+    "sessions_per_arm_point": null,
+    "sessions_per_arm_upper": 16569,
+    "stratified_sessions_per_arm_upper": 3638
+   },
+   "v1_control_30turns": {
+    "p_not_x": 0.576,
+    "uplift_pp": -2.26,
+    "uplift_ci90_pp": [
+     -6.17,
+     1.88
+    ],
+    "sessions_per_arm_point": null,
+    "sessions_per_arm_upper": 10429,
+    "stratified_sessions_per_arm_upper": 2295
+   }
+  },
+  "H4 kept going after the first green test run": {
+   "rd_within": 0.031,
+   "rd_within_uncensored": 0.0,
+   "v2_control_60turns": {
+    "p_not_x": 0.122,
+    "uplift_pp": 0.38,
+    "uplift_ci90_pp": [
+     -0.25,
+     1.21
+    ],
+    "sessions_per_arm_point": 260442,
+    "sessions_per_arm_upper": 25341,
+    "stratified_sessions_per_arm_upper": 5556
+   },
+   "v1_control_30turns": {
+    "p_not_x": 0.163,
+    "uplift_pp": 0.5,
+    "uplift_ci90_pp": [
+     -0.34,
+     1.5
+    ],
+    "sessions_per_arm_point": 146807,
+    "sessions_per_arm_upper": 16473,
+    "stratified_sessions_per_arm_upper": 3617
+   }
+  },
+  "H5b broad suite after the last edit [hand instrument]": {
+   "rd_within": 0.005,
+   "rd_within_uncensored": -0.045,
+   "v2_control_60turns": {
+    "p_not_x": 0.5,
+    "uplift_pp": 0.24,
+    "uplift_ci90_pp": [
+     -2.07,
+     2.49
+    ],
+    "sessions_per_arm_point": 648838,
+    "sessions_per_arm_upper": 5913,
+    "stratified_sessions_per_arm_upper": 1306
+   },
+   "v1_control_30turns": {
+    "p_not_x": 0.707,
+    "uplift_pp": 0.34,
+    "uplift_ci90_pp": [
+     -2.86,
+     3.46
+    ],
+    "sessions_per_arm_point": 324801,
+    "sessions_per_arm_upper": 3053,
+    "stratified_sessions_per_arm_upper": 678
+   }
+  },
+  "E0 made at least one edit (learned cluster k12:c3 / k40:c2)": {
+   "rd_within": 0.368,
+   "rd_within_uncensored": NaN,
+   "v2_control_60turns": {
+    "p_not_x": 0.0,
+    "uplift_pp": 0.0,
+    "uplift_ci90_pp": [
+     0.0,
+     0.0
+    ],
+    "sessions_per_arm_point": null,
+    "sessions_per_arm_upper": null,
+    "stratified_sessions_per_arm_upper": null
+   },
+   "v1_control_30turns": {
+    "p_not_x": 0.087,
+    "uplift_pp": 3.2,
+    "uplift_ci90_pp": [
+     0.66,
+     5.84
+    ],
+    "sessions_per_arm_point": 3569,
+    "sessions_per_arm_upper": 1054,
+    "stratified_sessions_per_arm_upper": 238
+   }
+  }
+ },
+ "iv": {
+  "v1:agents-md": {
+   "dPass": -0.022,
+   "dPass_ci90": [
+    -0.097,
+    0.046
+   ],
+   "dX": {
+    "H1 test run after the last edit (before finishing)": {
+     "dX": -0.054,
+     "dX_ci90": [
+      -0.163,
+      0.045
+     ]
+    },
+    "H1b last test run after the last edit exited 0": {
+     "dX": -0.054,
+     "dX_ci90": [
+      -0.152,
+      0.044
+     ]
+    },
+    "H2b targeted test run after the last edit [gold instrument]": {
+     "dX": 0.0,
+     "dX_ci90": [
+      -0.091,
+      0.092
+     ]
+    },
+    "H3b ad-hoc script after the last edit": {
+     "dX": -0.022,
+     "dX_ci90": [
+      -0.129,
+      0.078
+     ]
+    },
+    "H4 kept going after the first green test run": {
+     "dX": 0.098,
+     "dX_ci90": [
+      0.023,
+      0.165
+     ]
+    },
+    "H5b broad suite after the last edit [hand instrument]": {
+     "dX": -0.054,
+     "dX_ci90": [
+      -0.144,
+      0.043
+     ]
+    },
+    "E0 made at least one edit (learned cluster k12:c3 / k40:c2)": {
+     "dX": 0.033,
+     "dX_ci90": [
+      -0.022,
+      0.104
+     ]
+    },
+    "H2 ran the task's existing test module (targeted) [gold instrument]": {
+     "dX": 0.0,
+     "dX_ci90": [
+      -0.082,
+      0.081
+     ]
+    },
+    "H3 ad-hoc reproduction script (python -c / heredoc / script) ": {
+     "dX": 0.0,
+     "dX_ci90": [
+      -0.096,
+      0.091
+     ]
+    }
+   }
+  },
+  "v1:adage": {
+   "dPass": -0.011,
+   "dPass_ci90": [
+    -0.072,
+    0.043
+   ],
+   "dX": {
+    "H1 test run after the last edit (before finishing)": {
+     "dX": -0.043,
+     "dX_ci90": [
+      -0.11,
+      0.033
+     ]
+    },
+    "H1b last test run after the last edit exited 0": {
+     "dX": -0.043,
+     "dX_ci90": [
+      -0.126,
+      0.044
+     ]
+    },
+    "H2b targeted test run after the last edit [gold instrument]": {
+     "dX": 0.022,
+     "dX_ci90": [
+      -0.056,
+      0.101
+     ]
+    },
+    "H3b ad-hoc script after the last edit": {
+     "dX": -0.022,
+     "dX_ci90": [
+      -0.091,
+      0.045
+     ]
+    },
+    "H4 kept going after the first green test run": {
+     "dX": -0.033,
+     "dX_ci90": [
+      -0.102,
+      0.033
+     ]
+    },
+    "H5b broad suite after the last edit [hand instrument]": {
+     "dX": -0.011,
+     "dX_ci90": [
+      -0.12,
+      0.097
+     ]
+    },
+    "E0 made at least one edit (learned cluster k12:c3 / k40:c2)": {
+     "dX": 0.011,
+     "dX_ci90": [
+      -0.056,
+      0.076
+     ]
+    },
+    "H2 ran the task's existing test module (targeted) [gold instrument]": {
+     "dX": 0.0,
+     "dX_ci90": [
+      -0.066,
+      0.054
+     ]
+    },
+    "H3 ad-hoc reproduction script (python -c / heredoc / script) ": {
+     "dX": -0.011,
+     "dX_ci90": [
+      -0.105,
+      0.072
+     ]
+    }
+   }
+  },
+  "v2:adage": {
+   "dPass": -0.02,
+   "dPass_ci90": [
+    -0.088,
+    0.04
+   ],
+   "dX": {
+    "H1 test run after the last edit (before finishing)": {
+     "dX": 0.041,
+     "dX_ci90": [
+      -0.021,
+      0.103
+     ]
+    },
+    "H1b last test run after the last edit exited 0": {
+     "dX": 0.02,
+     "dX_ci90": [
+      -0.042,
+      0.082
+     ]
+    },
+    "H2b targeted test run after the last edit [gold instrument]": {
+     "dX": 0.02,
+     "dX_ci90": [
+      -0.052,
+      0.09
+     ]
+    },
+    "H3b ad-hoc script after the last edit": {
+     "dX": 0.082,
+     "dX_ci90": [
+      0.0,
+      0.172
+     ]
+    },
+    "H4 kept going after the first green test run": {
+     "dX": 0.051,
+     "dX_ci90": [
+      0.01,
+      0.1
+     ]
+    },
+    "H5b broad suite after the last edit [hand instrument]": {
+     "dX": -0.082,
+     "dX_ci90": [
+      -0.196,
+      0.031
+     ]
+    },
+    "E0 made at least one edit (learned cluster k12:c3 / k40:c2)": {
+     "dX": 0.0,
+     "dX_ci90": [
+      0.0,
+      0.0
+     ]
+    },
+    "H2 ran the task's existing test module (targeted) [gold instrument]": {
+     "dX": -0.082,
+     "dX_ci90": [
+      -0.141,
+      -0.029
+     ]
+    },
+    "H3 ad-hoc reproduction script (python -c / heredoc / script) ": {
+     "dX": 0.031,
+     "dX_ci90": [
+      -0.032,
+      0.095
+     ]
+    }
+   }
+  }
+ },
+ "per_repo": {
+  "attrs": {
+   "sessions": 96,
+   "strata": 16,
+   "mixed_strata": 3,
+   "sessions_in_mixed": 18,
+   "rd": {
+    "H1 test run after the last edit (before finishing)": {
+     "rd": -0.072,
+     "ci90": [
+      -0.203,
+      0.0
+     ]
+    },
+    "H1b last test run after the last edit exited 0": {
+     "rd": -0.079,
+     "ci90": [
+      -0.203,
+      0.0
+     ]
+    }
+   }
+  },
+  "click": {
+   "sessions": 136,
+   "strata": 32,
+   "mixed_strata": 9,
+   "sessions_in_mixed": 50,
+   "rd": {
+    "H1 test run after the last edit (before finishing)": {
+     "rd": 0.06,
+     "ci90": [
+      -0.094,
+      0.193
+     ]
+    },
+    "H1b last test run after the last edit exited 0": {
+     "rd": 0.045,
+     "ci90": [
+      -0.1,
+      0.179
+     ]
+    }
+   }
+  },
+  "marshmallow": {
+   "sessions": 72,
+   "strata": 12,
+   "mixed_strata": 0,
+   "sessions_in_mixed": 0,
+   "rd": {
+    "H1 test run after the last edit (before finishing)": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ]
+    },
+    "H1b last test run after the last edit exited 0": {
+     "rd": 0.0,
+     "ci90": [
+      0.0,
+      0.0
+     ]
+    }
+   }
+  },
+  "urfave-cli": {
+   "sessions": 48,
+   "strata": 8,
+   "mixed_strata": 5,
+   "sessions_in_mixed": 30,
+   "rd": {
+    "H1 test run after the last edit (before finishing)": {
+     "rd": -0.038,
+     "ci90": [
+      -0.283,
+      0.213
+     ]
+    },
+    "H1b last test run after the last edit exited 0": {
+     "rd": 0.036,
+     "ci90": [
+      -0.224,
+      0.308
+     ]
+    }
+   }
+  },
+  "vue-core": {
+   "sessions": 120,
+   "strata": 32,
+   "mixed_strata": 7,
+   "sessions_in_mixed": 28,
+   "rd": {
+    "H1 test run after the last edit (before finishing)": {
+     "rd": 0.11,
+     "ci90": [
+      0.0,
+      0.277
+     ]
+    },
+    "H1b last test run after the last edit exited 0": {
+     "rd": 0.11,
+     "ci90": [
+      0.0,
+      0.277
+     ]
+    }
+   }
+  }
+ },
+ "power": {
+  "p0_v2_control": 0.612,
+  "sigma2_within": 0.0517,
+  "table": [
+   {
+    "delta_pp": 2,
+    "unstratified_per_arm": 9221,
+    "task_stratified_per_arm": 2031
+   },
+   {
+    "delta_pp": 3,
+    "unstratified_per_arm": 4075,
+    "task_stratified_per_arm": 903
+   },
+   {
+    "delta_pp": 5,
+    "unstratified_per_arm": 1448,
+    "task_stratified_per_arm": 325
+   },
+   {
+    "delta_pp": 10,
+    "unstratified_per_arm": 348,
+    "task_stratified_per_arm": 82
+   },
+   {
+    "delta_pp": 15,
+    "unstratified_per_arm": 147,
+    "task_stratified_per_arm": 37
+   }
+  ]
+ }
+}

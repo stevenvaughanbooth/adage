@@ -1,0 +1,524 @@
+{
+ "all": {
+  "cov": {
+   "control": 0.658,
+   "agents_md": 0.368,
+   "diff": -0.289,
+   "diff_ci90": [
+    -0.487,
+    -0.079
+   ],
+   "uptake": 0.44,
+   "uptake_ci90": [
+    0.166,
+    0.648
+   ]
+  },
+  "cov_loc": {
+   "control": 0.421,
+   "agents_md": 0.158,
+   "diff": -0.263,
+   "diff_ci90": [
+    -0.395,
+    -0.132
+   ],
+   "uptake": 0.625,
+   "uptake_ci90": [
+    0.375,
+    0.8
+   ]
+  },
+  "cov_chain": {
+   "control": 0.25,
+   "agents_md": 0.211,
+   "diff": -0.039,
+   "diff_ci90": [
+    -0.171,
+    0.105
+   ],
+   "uptake": 0.158,
+   "uptake_ci90": [
+    -0.583,
+    0.576
+   ]
+  },
+  "uncov": {
+   "control": 8.5,
+   "agents_md": 7.789,
+   "diff": -0.711,
+   "diff_ci90": [
+    -1.25,
+    -0.158
+   ],
+   "uptake": 0.084,
+   "uptake_ci90": [
+    0.019,
+    0.144
+   ]
+  },
+  "calls": {
+   "control": 28.368,
+   "agents_md": 28.618,
+   "diff": 0.25,
+   "diff_ci90": [
+    -0.606,
+    1.145
+   ],
+   "uptake": -0.009,
+   "uptake_ci90": [
+    -0.041,
+    0.021
+   ]
+  },
+  "fail": {
+   "control": 2.408,
+   "agents_md": 1.895,
+   "diff": -0.513,
+   "diff_ci90": [
+    -0.908,
+    -0.132
+   ],
+   "uptake": 0.213,
+   "uptake_ci90": [
+    0.061,
+    0.342
+   ]
+  },
+  "n_pairs": 76
+ },
+ "attrs": {
+  "cov": {
+   "control": 0.875,
+   "agents_md": 1.125,
+   "diff": 0.25,
+   "diff_ci90": [
+    -0.188,
+    0.688
+   ],
+   "uptake": -0.286,
+   "uptake_ci90": [
+    -1.252,
+    0.158
+   ]
+  },
+  "cov_loc": {
+   "control": 0.5,
+   "agents_md": 0.375,
+   "diff": -0.125,
+   "diff_ci90": [
+    -0.438,
+    0.25
+   ],
+   "uptake": 0.25,
+   "uptake_ci90": [
+    -0.75,
+    0.714
+   ]
+  },
+  "cov_chain": {
+   "control": 0.375,
+   "agents_md": 0.75,
+   "diff": 0.375,
+   "diff_ci90": [
+    0.125,
+    0.688
+   ],
+   "uptake": -1.0,
+   "uptake_ci90": [
+    -3.5,
+    -0.25
+   ]
+  },
+  "uncov": {
+   "control": 7.25,
+   "agents_md": 6.188,
+   "diff": -1.062,
+   "diff_ci90": [
+    -2.062,
+    -0.125
+   ],
+   "uptake": 0.147,
+   "uptake_ci90": [
+    0.019,
+    0.282
+   ]
+  },
+  "calls": {
+   "control": 27.25,
+   "agents_md": 27.125,
+   "diff": -0.125,
+   "diff_ci90": [
+    -2.75,
+    2.438
+   ],
+   "uptake": 0.005,
+   "uptake_ci90": [
+    -0.096,
+    0.097
+   ]
+  },
+  "fail": {
+   "control": 2.688,
+   "agents_md": 2.75,
+   "diff": 0.062,
+   "diff_ci90": [
+    -0.438,
+    0.5
+   ],
+   "uptake": -0.023,
+   "uptake_ci90": [
+    -0.205,
+    0.159
+   ]
+  },
+  "n_pairs": 16
+ },
+ "click": {
+  "cov": {
+   "control": 0.812,
+   "agents_md": 0.312,
+   "diff": -0.5,
+   "diff_ci90": [
+    -0.938,
+    -0.062
+   ],
+   "uptake": 0.615,
+   "uptake_ci90": [
+    0.111,
+    0.923
+   ]
+  },
+  "cov_loc": {
+   "control": 0.625,
+   "agents_md": 0.125,
+   "diff": -0.5,
+   "diff_ci90": [
+    -0.812,
+    -0.25
+   ],
+   "uptake": 0.8,
+   "uptake_ci90": [
+    0.6,
+    1.0
+   ]
+  },
+  "cov_chain": {
+   "control": 0.188,
+   "agents_md": 0.188,
+   "diff": 0.0,
+   "diff_ci90": [
+    -0.25,
+    0.312
+   ],
+   "uptake": 0.0,
+   "uptake_ci90": [
+    -5.0,
+    1.0
+   ]
+  },
+  "uncov": {
+   "control": 8.062,
+   "agents_md": 7.5,
+   "diff": -0.562,
+   "diff_ci90": [
+    -1.938,
+    0.688
+   ],
+   "uptake": 0.07,
+   "uptake_ci90": [
+    -0.091,
+    0.224
+   ]
+  },
+  "calls": {
+   "control": 29.0,
+   "agents_md": 29.812,
+   "diff": 0.812,
+   "diff_ci90": [
+    -0.062,
+    1.938
+   ],
+   "uptake": -0.028,
+   "uptake_ci90": [
+    -0.069,
+    0.002
+   ]
+  },
+  "fail": {
+   "control": 2.812,
+   "agents_md": 2.0,
+   "diff": -0.812,
+   "diff_ci90": [
+    -1.75,
+    -0.062
+   ],
+   "uptake": 0.289,
+   "uptake_ci90": [
+    0.026,
+    0.476
+   ]
+  },
+  "n_pairs": 16
+ },
+ "marshmallow": {
+  "cov": {
+   "control": 1.333,
+   "agents_md": 0.0,
+   "diff": -1.333,
+   "diff_ci90": [
+    -1.667,
+    -1.0
+   ],
+   "uptake": 1.0,
+   "uptake_ci90": [
+    1.0,
+    1.0
+   ]
+  },
+  "cov_loc": {
+   "control": 0.583,
+   "agents_md": 0.0,
+   "diff": -0.583,
+   "diff_ci90": [
+    -0.833,
+    -0.25
+   ],
+   "uptake": 1.0,
+   "uptake_ci90": [
+    1.0,
+    1.0
+   ]
+  },
+  "cov_chain": {
+   "control": 0.833,
+   "agents_md": 0.0,
+   "diff": -0.833,
+   "diff_ci90": [
+    -1.083,
+    -0.583
+   ],
+   "uptake": 1.0,
+   "uptake_ci90": [
+    1.0,
+    1.0
+   ]
+  },
+  "uncov": {
+   "control": 6.5,
+   "agents_md": 5.167,
+   "diff": -1.333,
+   "diff_ci90": [
+    -2.417,
+    -0.167
+   ],
+   "uptake": 0.205,
+   "uptake_ci90": [
+    0.026,
+    0.347
+   ]
+  },
+  "calls": {
+   "control": 27.917,
+   "agents_md": 25.167,
+   "diff": -2.75,
+   "diff_ci90": [
+    -3.917,
+    -1.583
+   ],
+   "uptake": 0.099,
+   "uptake_ci90": [
+    0.056,
+    0.138
+   ]
+  },
+  "fail": {
+   "control": 2.583,
+   "agents_md": 0.75,
+   "diff": -1.833,
+   "diff_ci90": [
+    -2.583,
+    -1.0
+   ],
+   "uptake": 0.71,
+   "uptake_ci90": [
+    0.5,
+    0.857
+   ]
+  },
+  "n_pairs": 12
+ },
+ "urfave-cli": {
+  "cov": {
+   "control": 0.312,
+   "agents_md": 0.188,
+   "diff": -0.125,
+   "diff_ci90": [
+    -0.375,
+    0.125
+   ],
+   "uptake": 0.4,
+   "uptake_ci90": [
+    -1.0,
+    1.0
+   ]
+  },
+  "cov_loc": {
+   "control": 0.312,
+   "agents_md": 0.125,
+   "diff": -0.188,
+   "diff_ci90": [
+    -0.438,
+    0.062
+   ],
+   "uptake": 0.6,
+   "uptake_ci90": [
+    -0.5,
+    1.0
+   ]
+  },
+  "cov_chain": {
+   "control": 0.0,
+   "agents_md": 0.062,
+   "diff": 0.062,
+   "diff_ci90": [
+    0.0,
+    0.188
+   ],
+   "uptake": -999999999.0,
+   "uptake_ci90": [
+    -2999999999.0,
+    1.0
+   ]
+  },
+  "uncov": {
+   "control": 10.562,
+   "agents_md": 10.062,
+   "diff": -0.5,
+   "diff_ci90": [
+    -1.5,
+    0.5
+   ],
+   "uptake": 0.047,
+   "uptake_ci90": [
+    -0.056,
+    0.133
+   ]
+  },
+  "calls": {
+   "control": 29.188,
+   "agents_md": 29.938,
+   "diff": 0.75,
+   "diff_ci90": [
+    -0.062,
+    1.688
+   ],
+   "uptake": -0.026,
+   "uptake_ci90": [
+    -0.06,
+    0.002
+   ]
+  },
+  "fail": {
+   "control": 2.688,
+   "agents_md": 2.625,
+   "diff": -0.062,
+   "diff_ci90": [
+    -1.25,
+    1.062
+   ],
+   "uptake": 0.023,
+   "uptake_ci90": [
+    -0.529,
+    0.36
+   ]
+  },
+  "n_pairs": 16
+ },
+ "vue-core": {
+  "cov": {
+   "control": 0.125,
+   "agents_md": 0.125,
+   "diff": 0.0,
+   "diff_ci90": [
+    -0.188,
+    0.188
+   ],
+   "uptake": 0.0,
+   "uptake_ci90": [
+    -2999999999.0,
+    1.0
+   ]
+  },
+  "cov_loc": {
+   "control": 0.125,
+   "agents_md": 0.125,
+   "diff": 0.0,
+   "diff_ci90": [
+    -0.188,
+    0.188
+   ],
+   "uptake": 0.0,
+   "uptake_ci90": [
+    -2999999999.0,
+    1.0
+   ]
+  },
+  "cov_chain": {
+   "control": 0.0,
+   "agents_md": 0.0,
+   "diff": 0.0,
+   "diff_ci90": [
+    0.0,
+    0.0
+   ],
+   "uptake": 1.0,
+   "uptake_ci90": [
+    1.0,
+    1.0
+   ]
+  },
+  "uncov": {
+   "control": 9.625,
+   "agents_md": 9.375,
+   "diff": -0.25,
+   "diff_ci90": [
+    -1.5,
+    1.25
+   ],
+   "uptake": 0.026,
+   "uptake_ci90": [
+    -0.149,
+    0.142
+   ]
+  },
+  "calls": {
+   "control": 28.375,
+   "agents_md": 30.188,
+   "diff": 1.812,
+   "diff_ci90": [
+    0.188,
+    4.625
+   ],
+   "uptake": -0.064,
+   "uptake_ci90": [
+    -0.18,
+    -0.006
+   ]
+  },
+  "fail": {
+   "control": 1.312,
+   "agents_md": 1.062,
+   "diff": -0.25,
+   "diff_ci90": [
+    -0.688,
+    0.188
+   ],
+   "uptake": 0.19,
+   "uptake_ci90": [
+    -0.2,
+    0.5
+   ]
+  },
+  "n_pairs": 16
+ }
+}
