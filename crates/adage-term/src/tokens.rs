@@ -90,6 +90,8 @@ pub mod glyph {
     pub const ACTIVE: (&str, &str) = ("◆", "*");
     /// Directs to.
     pub const ARROW: (&str, &str) = ("→", "->");
+    /// A procedure card: the steps and files of a recurring task.
+    pub const CARD: (&str, &str) = ("▤", "[=]");
     /// A finished step.
     pub const DONE: (&str, &str) = ("◇", "+");
     /// Failed.
@@ -98,18 +100,26 @@ pub mod glyph {
     pub const INSTINCT: (&str, &str) = ("◉", "(o)");
     /// A strength lamp.
     pub const LAMP: (&str, &str) = ("●", "*");
+    /// A notice: the one line shown at session start.
+    pub const NOTICE: (&str, &str) = ("»", ">>");
     /// Nascent, not configured, or withheld.
     pub const OFF: (&str, &str) = ("○", "o");
     /// Done, followed, met.
     pub const OK: (&str, &str) = ("✓", "+");
     /// The selected choice.
     pub const POINTER: (&str, &str) = ("›", ">");
+    /// Quiet: uplift below the bar; waits for a person.
+    pub const QUIET: (&str, &str) = ("◌", "(.)");
     /// The flow rail.
     pub const RAIL: (&str, &str) = ("│", "|");
     /// A reflex: the learned arc.
     pub const REFLEX: (&str, &str) = ("◠", "~");
+    /// A rewrite: the command was changed before it ran.
+    pub const REWRITE: (&str, &str) = ("↪", "=>");
     /// Separator between facts.
     pub const SEP: (&str, &str) = ("·", "-");
+    /// From a skill (`adage train`).
+    pub const SKILL: (&str, &str) = ("◈", "<>");
 }
 
 /// Web font stacks (the terminal keeps the user's own font).

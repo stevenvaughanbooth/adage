@@ -184,6 +184,9 @@ pub struct AppState {
     /// Problems `adage_store::config` found in the file.
     pub settings_problems: Vec<String>,
     pub config_path: PathBuf,
+    /// `exec/rewrite-off`: the marker an older `adage delegate off` wrote, which turns rewrites
+    /// off whatever `runtime.rewrite` says. Settings shows the effective state.
+    pub rewrite_marker: Option<PathBuf>,
     pub modal: Option<Modal>,
     pub palette: Option<Palette>,
     pub toasts: Vec<Toast>,
@@ -204,6 +207,7 @@ impl AppState {
             settings: vec![],
             settings_problems: vec![],
             config_path,
+            rewrite_marker: None,
             modal: None,
             palette: None,
             toasts: vec![],
@@ -221,6 +225,13 @@ impl AppState {
                 SettingRow { key: k.name, value, source: source.to_string(), doc: k.doc, default: k.default }
             })
             .collect();
+        // Rewrites are off while the older marker exists, whatever the file says.
+        if self.rewrite_marker.as_ref().is_some_and(|m| m.exists()) {
+            if let Some(r) = self.settings.iter_mut().find(|r| r.key == "runtime.rewrite") {
+                r.value = "false".into();
+                r.source = "exec/rewrite-off marker".into();
+            }
+        }
         self.settings_problems = loaded.problems.clone();
         self.setting_sel = self.setting_sel.min(self.settings.len().saturating_sub(1));
     }
@@ -899,6 +910,10 @@ fn execute(cmd: Cmd, s: &mut AppState, ctx: &Ctx, loader: &Loader, job: &mut Opt
                 // `adage config set`'s own guard and validation.
                 let set = crate::share::require_person("config set")
                     .and_then(|()| config::set(&ctx.paths, key, &value).map_err(|e| anyhow::anyhow!(e)));
+                // Turning rewrites on clears the older marker too, as `adage delegate rewrites on`.
+                if key == "runtime.rewrite" && value == "true" && set.is_ok() {
+                    let _ = std::fs::remove_file(adage_hook::rewrite_off(&ctx.paths));
+                }
                 let loaded = config::load(&ctx.paths);
                 s.load_settings(&loaded);
                 match set {
@@ -958,6 +973,7 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
     loader.want(Want::Routes);
     let mut sources = Sources::new(&ctx);
     let mut s = AppState::new(ctx.paths.config());
+    s.rewrite_marker = Some(adage_hook::rewrite_off(&ctx.paths));
     s.load_settings(&config::load(&ctx.paths));
     let mut job: Option<Job> = None;
     let mut ctx = ctx;
@@ -978,6 +994,7 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                 Loaded::Routes(r) => {
                     if let Ok(rs) = &r {
                         s.live.waiting = Some(rs.waiting());
+                        s.live.quiet = rs.quiet();
                     }
                     s.routes = Some(r);
                 }

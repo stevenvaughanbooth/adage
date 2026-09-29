@@ -34,6 +34,24 @@ fn valued(why: Option<&Why>) -> Option<(&Why, &'static str)> {
     }
 }
 
+/// [`describe`]'s line when the strength was decided on value (a follow count would mislead),
+/// else `None`: the caller shows its own counts.
+pub fn value_line(r: &Route, why: Option<&Why>) -> Option<String> {
+    (!r.is_instinct() && valued(why).is_some()).then(|| describe(r, why))
+}
+
+/// Why a reflex is quiet, in one line, when it is: `quiet: uplift +0.04 < 0.10 · approve to
+/// deliver`. Quiet means its uplift is below the bar, so it waits for a person rather than being
+/// delivered; it is not an install step.
+pub fn quiet_line(r: &Route) -> Option<String> {
+    let u = r.evidence.uplift.as_ref().filter(|u| u.gated)?;
+    Some(format!(
+        "quiet: uplift {:+.2} < {:.2} · approve to deliver",
+        if u.mean.abs() < 0.005 { 0.0 } else { u.mean },
+        adage_tracks::params::UPLIFT_MIN
+    ))
+}
+
 /// The evidence behind a reflex's strength, in one line.
 pub fn describe(r: &Route, why: Option<&Why>) -> String {
     let e = &r.evidence;
@@ -138,5 +156,18 @@ mod tests {
         // A learned finish line says it is enforced at Stop.
         assert!(obligation(&r).is_some_and(|o| o.contains("asks it once")));
         assert!(obligation(&route(Trigger::SessionStart, 1, 1)).is_none());
+        // Only a valued reflex replaces its counts.
+        assert!(value_line(&r, Some(&w)).is_some_and(|l| l.starts_with("value: saves ~1.25")));
+        assert!(value_line(&r, None).is_none());
+    }
+
+    #[test]
+    fn a_quiet_reflex_says_its_uplift_and_the_bar() {
+        let mut r = route(Trigger::SessionStart, 5, 6);
+        assert!(quiet_line(&r).is_none());
+        r.evidence.uplift = Some(adage_tracks::Uplift { mean: 0.04, gated: true, ..Default::default() });
+        assert_eq!(quiet_line(&r).unwrap(), "quiet: uplift +0.04 < 0.10 · approve to deliver");
+        r.evidence.uplift.as_mut().unwrap().gated = false;
+        assert!(quiet_line(&r).is_none(), "above the bar it speaks");
     }
 }

@@ -1,0 +1,39 @@
+---
+source: crates/adage-cli/src/ui/tests.rs
+expression: text
+---
+ adage    1 Live   2 Reflexes (2)  3 Map   4 Health (2)  5 Settings                                                            harbor-dispatch · LIVE
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 5 passed · 2 warnings · 0 failures   same checks as adage doctor
+ savings saved ~$0.029 per trace, API-list equivalent (95% CI $0.028–$0.030) · 40 vs 12 control traces
+ » today adage: 2 new reflexes active.
+
+  + binary               adage 0.1.0 at ~/bin/adage
+  + index                generation 8216e29f00, 4 route(s) in 1 repository
+  ! embedding model    ⏎ no embedding model, so the hashed fallback is in use; intent reflexes cannot fire
+  + hooks: claude-co…    ~/work/harbor-dispatch/.claude/settings.local.json runs ~/bin/adage (this binary)
+  ! hooks: codex       ⏎ codex is installed, but Adage's hooks are not registered with it
+  + fail-open errors     none in the last 7 days
+▌ + rewrites             python tests → .venv (on)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+─ check ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ rewrites  python tests → .venv (on)
+ fix  adage delegate rewrites off
+
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ? keys · : palette · enter fix · R recheck                                                                                                    q quit

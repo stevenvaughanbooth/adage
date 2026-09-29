@@ -1,8 +1,10 @@
-//! The Reflexes tab: a tree of every reflex by track, then the nascent ones waiting for review,
-//! the instincts and the extinguished; filter chips for strength and lifecycle; a fuzzy `/`
-//! filter; and a detail pane: what the agent sees, the evidence, with-vs-control when there are
-//! control traces, the lifecycle, and the review actions with the `adage review` command each
-//! one equals.
+//! The Reflexes tab: a tree of every reflex by track, then the nascent ones waiting for review
+//! (install steps), the quiet ones (uplift below the bar: agents already do this, so they wait for
+//! a person), the instincts and the extinguished; filter chips for strength and lifecycle; a
+//! fuzzy `/` filter; and a detail pane: what the agent sees, the evidence (a value estimate when
+//! that is what the strength rests on, the uplift, a finish line's obligation), a procedure
+//! card's contents, with-vs-control when there are control traces, the lifecycle, and the review
+//! actions with the `adage review` command each one equals.
 
 use super::{empty, head};
 use crate::ui::app::{Action, AppState, Cmd, Modal, WantKind};
@@ -23,7 +25,7 @@ use ratatui::Frame;
 use std::collections::BTreeSet;
 
 /// The lifecycle filter's choices, in the order `S` cycles them.
-pub const STATES: [&str; 6] = ["all states", "firm", "forming", "nascent", "dormant", "extinguished"];
+pub const STATES: [&str; 7] = ["all states", "firm", "forming", "nascent", "quiet", "dormant", "extinguished"];
 
 #[derive(Debug, Default)]
 pub struct State {
@@ -60,6 +62,8 @@ fn reflex_key(r: &RouteRow) -> String {
 fn group_of(r: &RouteRow) -> String {
     if r.extinguished() {
         "extinguished".into()
+    } else if r.quiet() {
+        "quiet".into()
     } else if r.nascent() {
         "nascent".into()
     } else if r.instinct {
@@ -84,7 +88,7 @@ fn strength_index(a: Strength) -> usize {
 /// Whether a row passes the chips and the filter.
 fn passes(st: &State, r: &RouteRow) -> bool {
     !st.hidden[strength_index(r.strength)]
-        && (st.states == 0 || r.lifecycle() == STATES[st.states])
+        && (st.states == 0 || r.stage() == STATES[st.states])
         && matches_filter(&st.filter, &r.id, &r.haystack())
 }
 
@@ -110,8 +114,9 @@ pub fn tree(s: &AppState) -> Vec<Node> {
     }
     let rank = |g: &str| match g {
         "nascent" => 1,
-        "instincts" => 2,
-        "extinguished" => 3,
+        "quiet" => 2,
+        "instincts" => 3,
+        "extinguished" => 4,
         _ => 0,
     };
     order.sort_by_key(|g| rank(g));
@@ -125,6 +130,7 @@ pub fn tree(s: &AppState) -> Vec<Node> {
         let first = &rows[members[0]];
         let (title, sub) = match g.as_str() {
             "nascent" => ("nascent".to_string(), " · waits for review".to_string()),
+            "quiet" => ("quiet".to_string(), " · agents already do this; approve to deliver".to_string()),
             "instincts" => {
                 let tracks: BTreeSet<String> =
                     members.iter().map(|&i| format!("{}@{}", rows[i].track, rows[i].version)).collect();
@@ -386,9 +392,35 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
 // ---------------------------------------------------------------------------------------------
 // Drawing
 
+/// What kind of reflex a row is, as a glyph: a procedure card, one compiled from a skill, an
+/// instinct, or a learned reflex.
+pub fn kind_glyph(r: &RouteRow) -> Glyph {
+    if r.is_card() {
+        Glyph::Card
+    } else if r.more.skill {
+        Glyph::Skill
+    } else if r.instinct {
+        Glyph::Instinct
+    } else {
+        Glyph::Reflex
+    }
+}
+
+/// The evidence column of a row: `23/33`; `value` when the strength rests on a value estimate
+/// (a follow count would mislead); a card's traces.
+fn evidence_cell(r: &RouteRow) -> String {
+    match &r.more.card {
+        Some(c) => format!("{} trace{}", c.sessions, if c.sessions == 1 { "" } else { "s" }),
+        None if r.more.value.is_some() => "value".into(),
+        None => r.count(),
+    }
+}
+
 fn lamp_spans(r: &RouteRow, t: &Theme) -> Vec<Span<'static>> {
-    let glyph = if r.instinct { Glyph::Instinct } else { Glyph::Reflex };
-    let lamp = if r.nascent() || r.extinguished() {
+    let glyph = kind_glyph(r);
+    let lamp = if r.quiet() {
+        Span::styled(format!("{} ", t.glyph(Glyph::Quiet)), t.dim())
+    } else if r.nascent() || r.extinguished() {
         Span::styled(format!("{} ", t.glyph(Glyph::Off)), t.dim())
     } else if t.color {
         Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.strength(r.strength))
@@ -413,6 +445,11 @@ fn chips(s: &AppState, t: &Theme, width: usize) -> Line<'static> {
             let w = if on { word.to_ascii_uppercase() } else { format!("({word})") };
             spans.push(Span::styled(format!("{w} {n}  "), if on { t.bold() } else { t.dim() }));
         }
+    }
+    let quiet = rows.iter().filter(|r| r.quiet()).count();
+    if quiet > 0 {
+        spans.push(Span::styled(format!("{} ", t.glyph(Glyph::Quiet)), t.dim()));
+        spans.push(Span::styled(format!("quiet {quiet}  "), t.ink2()));
     }
     let states = format!("{} {}", STATES[s.reflexes.states], t.ch("▾", "v"));
     spans.push(Span::styled(states, if s.reflexes.states == 0 { t.dim() } else { t.accent() }));
@@ -464,8 +501,8 @@ fn tree_lines(s: &AppState, nodes: &[Node], sel: usize, t: &Theme, width: usize)
                 let mut spans = vec![bar, Span::raw("  ")];
                 spans.extend(lamp_spans(r, t));
                 spans.push(Span::styled(t.pad(&r.id, id_w), if chosen { t.bold() } else { Style::default() }));
-                spans.push(Span::styled(t.pad(r.lifecycle(), 9), t.ink2()));
-                spans.push(Span::styled(t.text(&r.count()), t.dim()));
+                spans.push(Span::styled(t.pad(r.stage(), 9), t.ink2()));
+                spans.push(Span::styled(t.text(&evidence_cell(r)), t.dim()));
                 out.push(Line::from(spans));
             }
         }
@@ -488,13 +525,17 @@ fn bar(took: u64, applied: u64, style: Style, t: &Theme) -> Span<'static> {
 pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
     let t = &ctx.theme;
     let mut v = Vec::new();
-    let glyph = if r.instinct { Glyph::Instinct } else { Glyph::Reflex };
     v.push(Line::from(vec![
-        Span::styled(format!("{} ", t.glyph(glyph)), t.accent()),
+        Span::styled(format!("{} ", t.glyph(kind_glyph(r))), t.accent()),
         Span::styled(r.id.clone(), t.bold()),
     ]));
-    let mut facts = vec![r.lifecycle().to_string(), format!("{}@{}", r.track, r.version)];
-    if r.imported {
+    let mut facts = vec![r.stage().to_string(), format!("{}@{}", r.track, r.version)];
+    if r.is_card() {
+        facts.push("procedure card".into());
+    }
+    if r.more.skill {
+        facts.push("from a skill".into());
+    } else if r.imported {
         facts.push("from a pack".into());
     }
     if let Some(ts) = last_fired(s, &r.id) {
@@ -509,7 +550,14 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
     }
     line.push(Span::styled(format!("{}{}", t.sep(), facts.join(&t.sep())), t.ink2()));
     v.push(Line::from(line));
-    for (k, d) in &r.reasons {
+    // Quiet is not an install step: its own mark, and why, in one line.
+    if let Some(q) = r.more.quiet_line.as_ref().filter(|_| r.quiet()) {
+        v.push(Line::from(vec![
+            Span::styled(format!("{} ", t.glyph(Glyph::Quiet)), t.dim()),
+            Span::styled(t.text(q), t.ink2()),
+        ]));
+    }
+    for (k, d) in r.reasons.iter().filter(|(k, _)| !(k == "quiet" && r.more.quiet_line.is_some())) {
         v.push(Line::from(vec![
             Span::styled(format!("{} waits for review: ", t.glyph(Glyph::Off)), t.yellow()),
             Span::styled(format!("{k}{}", t.sep()), t.yellow().patch(t.bold())),
@@ -527,7 +575,21 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
     // Two sources, each named: the traces conditioning read (history), and what the hooks have
     // recorded since the reflex was installed (live).
     v.push(head("EVIDENCE", t));
-    if r.opportunities == 0 {
+    if let Some(value) = &r.more.value {
+        // Decided on the calls it saves, not on how often traces took it.
+        v.push(sourced("from conditioning", value.clone(), t));
+    } else if let Some(c) = &r.more.card {
+        v.push(sourced(
+            "from conditioning",
+            format!(
+                "a family of {} similar trace{}, {} passed the project's checks",
+                c.sessions,
+                if c.sessions == 1 { "" } else { "s" },
+                c.passed
+            ),
+            t,
+        ));
+    } else if r.opportunities == 0 {
         v.push(sourced(
             "from conditioning",
             if r.instinct {
@@ -560,6 +622,16 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
         ),
         t,
     ));
+    if let Some(u) = &r.more.uplift {
+        v.push(sourced("uplift", u.trim_start_matches("uplift ").to_string(), t));
+    }
+    if let Some(o) = &r.more.obligation {
+        v.push(sourced("enforced", o.trim_start_matches("finish line: ").to_string(), t));
+    }
+    if let Some(c) = &r.more.card {
+        v.push(Line::raw(""));
+        v.extend(card_lines(c, r.more.card_threshold, t));
+    }
     if r.control.applied > 0 && r.with.applied > 0 {
         v.push(Line::raw(""));
         v.push(head("WITH THE REFLEX vs CONTROL", t));
@@ -635,7 +707,13 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
         Span::styled("o", t.key()),
         Span::styled(" open in map", t.ink2()),
     ]));
-    if let Some(verb) = ["weaken", "strengthen", "extinguish", "approve"].into_iter().find(|v| r.verbs.contains(v)) {
+    // A nascent reflex (an install step, or a quiet one) waits to be approved: that command first.
+    let order = if r.nascent() {
+        ["approve", "weaken", "strengthen", "extinguish"]
+    } else {
+        ["weaken", "strengthen", "extinguish", "approve"]
+    };
+    if let Some(verb) = order.into_iter().find(|v| r.verbs.contains(v)) {
         v.push(Line::from(vec![
             Span::styled("  same as ", t.dim()),
             Span::styled(words::review_command(verb, &r.reference, &r.id), t.command()),
@@ -645,10 +723,82 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
     v
 }
 
+/// A procedure card's contents: its files in order, the commands with their replay verdicts,
+/// what to avoid, the finish check, when a prompt gets it, and what it never does.
+fn card_lines(c: &adage_tracks::card::Card, threshold: Option<f32>, t: &Theme) -> Vec<Line<'static>> {
+    let mut v = vec![head("PROCEDURE CARD", t)];
+    let of = |n: u32| format!("{n}/{}", c.sessions);
+    let path_w = c
+        .files
+        .iter()
+        .map(|f| f.path.chars().count())
+        .chain(c.commands.iter().chain(c.avoid.iter()).map(|x| x.command.chars().count()))
+        .max()
+        .unwrap_or(10)
+        .clamp(10, 36);
+    if !c.files.is_empty() {
+        v.push(Line::from(Span::styled("  files, in the order they were first edited", t.dim())));
+        for (k, f) in c.files.iter().enumerate() {
+            v.push(Line::from(vec![
+                Span::styled(format!("   {:>2} ", k + 1), t.dim()),
+                Span::raw(t.pad(&t.text(&f.path), path_w + 2)),
+                Span::styled(format!("{} traces", of(f.sessions)), t.ink2()),
+            ]));
+        }
+    }
+    if !c.commands.is_empty() {
+        v.push(Line::from(Span::styled("  commands", t.dim())));
+        for x in &c.commands {
+            // `adage train cards` replays them on a clean checkout: verified, failed there, or not
+            // replayed (never run, or it needed the network or a cache: unverifiable is not stale).
+            let (mark, style, verdict) = match x.verified {
+                Some(true) => (t.glyph(Glyph::Ok), t.green(), "verified on a clean checkout"),
+                Some(false) => (t.glyph(Glyph::Fail), t.red(), "failed on a clean checkout"),
+                None => (t.glyph(Glyph::Off), t.dim(), "not replayed"),
+            };
+            v.push(Line::from(vec![
+                Span::styled(format!("    {mark} "), style),
+                Span::styled(t.pad(&t.text(&x.command), path_w + 2), t.command()),
+                Span::styled(format!("{} traces{}{verdict}", of(x.sessions), t.sep()), t.ink2()),
+            ]));
+        }
+    }
+    if !c.avoid.is_empty() {
+        v.push(Line::from(Span::styled("  avoid", t.dim())));
+        for x in &c.avoid {
+            v.push(Line::from(vec![
+                Span::styled(format!("    {} ", t.glyph(Glyph::Fail)), t.red()),
+                Span::raw(t.pad(&t.text(&x.command), path_w + 2)),
+                Span::styled(t.text(&x.error), t.ink2()),
+            ]));
+        }
+    }
+    if let Some(f) = &c.finish {
+        v.push(Line::from(vec![Span::styled("  finish with  ", t.dim()), Span::styled(t.text(f), t.command())]));
+    }
+    if let Some(th) = threshold {
+        let grey = (th - adage_tracks::card::GREY_MARGIN).max(0.0);
+        v.push(Line::from(vec![
+            Span::styled("  match  ", t.dim()),
+            Span::raw(format!("a prompt at similarity {} {th:.2} gets it once", t.ch("≥", ">="))),
+        ]));
+        v.push(Line::from(vec![
+            Span::styled("  grey zone  ", t.dim()),
+            Span::raw(format!("{grey:.2}{}{th:.2}: at the first edit of one of these files instead", t.ch("–", "-"))),
+        ]));
+    }
+    v.push(Line::from(Span::styled(
+        format!("  prime at most, never strengthened{}first-hand only, never shared", t.sep()),
+        t.dim(),
+    )));
+    v
+}
+
 fn group_detail(n: &Node, t: &Theme) -> Vec<Line<'static>> {
     let Node::Group { key, title, sub, count, .. } = n else { return vec![] };
     let what = match key.as_str() {
         "nascent" => "Reflexes conditioning formed that wait for a person. Approve one to put it into service.",
+        "quiet" => "Quiet reflexes: telling the agent changes little (uplift below +0.10), because agents already take these steps unaided. They are not install steps; approve one to deliver it anyway.",
         "instincts" => "Instincts ship with Adage: defaults for repositories like this one, never learned.",
         "extinguished" => "Reflexes extinguished by review or by conditioning; kept so they stay extinguished.",
         _ => "A track: the reflexes conditioned for one repository.",
@@ -661,7 +811,7 @@ fn group_detail(n: &Node, t: &Theme) -> Vec<Line<'static>> {
         Line::raw(""),
         Line::from(vec![Span::styled("enter", t.key()), Span::styled(" opens or closes the group", t.dim())]),
     ];
-    if key == "nascent" {
+    if key == "nascent" || key == "quiet" {
         v.push(Line::from(vec![
             Span::styled("same as ", t.dim()),
             Span::styled("adage review", t.command()),

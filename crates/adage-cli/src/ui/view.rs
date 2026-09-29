@@ -162,6 +162,8 @@ pub struct Live {
     pub popup_scroll: u16,
     /// Reflexes waiting for review (nascent, or flagged), once known.
     pub waiting: Option<usize>,
+    /// Of those: quiet ones (uplift below the bar), which are not install steps.
+    pub quiet: usize,
     pub pulse: Pulse,
     next_seq: u64,
     primed: bool,
@@ -359,7 +361,13 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
     let off = t.glyph(Glyph::Off);
     let mut spans = match a {
         Act::Directed { route, strength, detail, instinct } => {
-            let glyph = if *instinct { Glyph::Instinct } else { Glyph::Reflex };
+            let glyph = if detail == "card" || detail.starts_with("card · ") {
+                Glyph::Card
+            } else if *instinct {
+                Glyph::Instinct
+            } else {
+                Glyph::Reflex
+            };
             let id_w = match fit_ {
                 Fit::Wide => 25,
                 Fit::Mid => 22,
@@ -429,8 +437,10 @@ fn act_spans(a: &Act, t: &Theme, fit_: Fit, room: usize, hot: u8) -> Vec<Span<'s
             if *withheld {
                 vec![Span::styled(format!("{off} would have {what} (withheld)"), t.control())]
             } else {
+                // A rewrite changed the command before it ran: its own mark, always shown.
+                let mark = if *rewrite { Glyph::Rewrite } else { Glyph::Arrow };
                 vec![
-                    Span::styled(format!("{} ", t.glyph(Glyph::Arrow)), t.accent()),
+                    Span::styled(format!("{} ", t.glyph(mark)), t.accent()),
                     Span::styled(what, if *rewrite { t.accent().patch(t.bold()) } else { t.ink2() }),
                 ]
             }
@@ -651,6 +661,25 @@ pub fn lights_lines(h: Option<&Health>, t: &Theme, width: u16) -> Vec<Line<'stat
     out
 }
 
+/// The savings estimate in one line (`crate::savings::brief`): the verdict's mark (none without
+/// colour: the words alone), then the figure in the default ink. Dollars only past the gate.
+pub fn savings_line(s: &crate::savings::Summary, t: &Theme, width: u16) -> Line<'static> {
+    use crate::savings::Verdict;
+    let mut spans = vec![Span::raw(" ")];
+    if t.color {
+        let (g, style) = match s.verdict {
+            Verdict::Saved => (Glyph::Ok, t.green()),
+            Verdict::AddsCost => (Glyph::Fail, t.red()),
+            Verdict::Measuring | Verdict::NoDifference => (Glyph::Off, t.dim()),
+        };
+        spans.push(Span::styled(format!("{} ", t.glyph(g)), style));
+    }
+    spans.push(Span::styled("savings ", t.ink2()));
+    let used: usize = spans.iter().map(|s| s.width()).sum();
+    spans.push(Span::raw(t.fit(&t.text(&crate::savings::brief(s)), (width as usize).saturating_sub(used + 1))));
+    Line::from(spans)
+}
+
 /// Word-wrap `lines` to `width` columns. Unlike ratatui's own wrapping, a continuation keeps its
 /// line's indent (its leading spaces), so wrapped text stays aligned under the text it continues.
 /// A word longer than the room is broken at the edge.
@@ -806,6 +835,14 @@ pub fn legend(t: &Theme) -> Vec<Line<'static>> {
             Span::raw("ignored   "),
             Span::styled(format!("{} ", t.glyph(Glyph::Off)), t.dim()),
             Span::styled("control arm: reflexes withheld on purpose", t.dim()),
+        ]),
+        Line::from(vec![
+            Span::styled(format!("  {} ", t.glyph(Glyph::Rewrite)), t.accent()),
+            Span::raw("a command rewritten before it ran   "),
+            Span::styled(format!("{} ", t.glyph(Glyph::Card)), t.accent()),
+            Span::raw("a procedure card   "),
+            Span::styled(format!("{} ", t.glyph(Glyph::Quiet)), t.dim()),
+            Span::raw("quiet: waits for a person"),
         ]),
     ]
 }
@@ -1038,8 +1075,13 @@ fn draw_ticker(f: &mut Frame, area: Rect, live: &Live, key: Option<&str>, ctx: &
                 Span::styled("adage review", t.command()),
             ])
         };
+        let quiet = if live.quiet > 0 { format!(" ({} quiet)", live.quiet) } else { String::new() };
         let full = line(
-            format!("{n} reflex{} wait{} for review", if n == 1 { "" } else { "es" }, if n == 1 { "s" } else { "" }),
+            format!(
+                "{n} reflex{} wait{} for review{quiet}",
+                if n == 1 { "" } else { "es" },
+                if n == 1 { "s" } else { "" }
+            ),
             "   ",
         );
         // Narrow panes keep the command whole.
@@ -1087,9 +1129,13 @@ pub fn draw_live(f: &mut Frame, area: Rect, live: &Live, health: Option<&Health>
         return;
     }
     let key = health.and_then(|h| h.repo_key.as_deref());
-    let lights = lights_lines(health, t, area.width);
+    let mut lights = lights_lines(health, t, area.width);
+    // The savings estimate sits under the lamps: what Adage has measured here.
+    if let Some(s) = health.and_then(|h| h.savings.as_ref()) {
+        lights.push(savings_line(s, t, area.width));
+    }
     let waiting = u16::from(live.waiting.is_some_and(|n| n > 0));
-    let mut lights_h = (lights.len() as u16).clamp(1, 3);
+    let mut lights_h = (lights.len() as u16).clamp(1, 4);
     let mut ticker_h = match area.height {
         0..=17 => 2,
         18..=26 => 3,

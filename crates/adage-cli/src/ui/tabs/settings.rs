@@ -77,10 +77,21 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
             Span::styled(format!("({})", row.source), source_style),
         ]));
         lines.push(Line::from(Span::styled(format!("   {}", row.doc), t.dim())));
+        if row.key == "runtime.rewrite" {
+            let (to, what) = if row.value == "true" { ("off", "on") } else { ("on", "off") };
+            lines.push(Line::from(vec![
+                Span::styled(
+                    format!("   {} rewrites {what}{}same as ", t.glyph(adage_term::Glyph::Rewrite), t.sep()),
+                    t.dim(),
+                ),
+                Span::styled(format!("adage delegate rewrites {to}"), t.command()),
+                Span::styled(" to switch", t.dim()),
+            ]));
+        }
     }
     lines.push(Line::raw(""));
     lines.push(Line::from(Span::styled(
-        " enter edits (space toggles on/off and switches thresholds); every value is validated before it is saved.",
+        " enter edits (space toggles on/off, switches thresholds, and notices daily or off); every value is validated before it is saved.",
         t.dim(),
     )));
     // Wrapped here, each continuation under its own text, so the scroll counts screen rows.

@@ -316,8 +316,11 @@ pub mod notice {
     pub struct Basis {
         /// Reflexes delivered for the repository (the index).
         pub active: BTreeSet<String>,
-        /// Reflexes that wait for a person (`adage review`).
+        /// Install steps that wait for a person (`adage review`): nascent, and not merely quiet.
         pub nascent: BTreeSet<String>,
+        /// Quiet reflexes: formed, but their uplift is under the bar, so they wait for approval.
+        #[serde(default)]
+        pub quiet: BTreeSet<String>,
         /// The savings verdict (`measuring`, `saved`, `no_difference`, `adds_cost`).
         pub verdict: String,
         /// Failed runs in a row.
@@ -329,17 +332,17 @@ pub mod notice {
         let index = adage_tracks::Index::load(&paths.index());
         let active = index.for_repo(repo).map(|r| r.route.id.clone()).collect();
         let dir = paths.tracks().join(adage_learn::slug(repo));
-        let nascent = adage_tracks::io::read_all(&dir)
-            .unwrap_or_default()
-            .iter()
-            .flat_map(|t| t.routes.iter())
-            .filter(|r| r.state == adage_tracks::RouteState::Nascent)
-            .map(|r| r.id.clone())
-            .collect();
+        let (mut nascent, mut quiet) = (BTreeSet::new(), BTreeSet::new());
+        for t in adage_tracks::io::read_all(&dir).unwrap_or_default() {
+            for r in t.routes.iter().filter(|r| r.state == adage_tracks::RouteState::Nascent) {
+                // A quiet reflex is not an install step: it waits only because agents already do it.
+                if crate::evidence::quiet_line(r).is_some() { &mut quiet } else { &mut nascent }.insert(r.id.clone());
+            }
+        }
         let verdict = summary
             .and_then(|s| serde_json::to_value(s.verdict).ok().and_then(|v| v.as_str().map(str::to_string)))
             .unwrap_or_else(|| "measuring".into());
-        Basis { active, nascent, verdict, errors }
+        Basis { active, nascent, quiet, verdict, errors }
     }
 
     fn plural(n: usize, one: &str, many: &str) -> String {
@@ -364,7 +367,7 @@ pub mod notice {
         let mut kind = "";
         if now.errors >= 3 {
             parts.push(format!(
-                "learning failed {}× here ({}); run {adage} doctor",
+                "conditioning failed {}× here ({}); run {adage} doctor",
                 now.errors,
                 failed.unwrap_or("error")
             ));
@@ -376,6 +379,18 @@ pub mod notice {
             parts.push(format!(
                 "{} for you: run {adage} review in a terminal",
                 if n == 1 { "1 install step waits".to_string() } else { format!("{n} install steps wait") }
+            ));
+            if kind.is_empty() {
+                kind = "waiting";
+            }
+        }
+        if now.quiet.difference(&was.quiet).count() > 0 {
+            let n = now.quiet.len();
+            parts.push(format!(
+                "{} (agents already do {}); approve with {adage} review to deliver {}",
+                plural(n, "quiet reflex waits", "quiet reflexes wait"),
+                if n == 1 { "it" } else { "them" },
+                if n == 1 { "it" } else { "them" }
             ));
             if kind.is_empty() {
                 kind = "waiting";
@@ -448,9 +463,21 @@ pub mod notice {
             Basis {
                 active: active.iter().map(|s| s.to_string()).collect(),
                 nascent: nascent.iter().map(|s| s.to_string()).collect(),
+                quiet: BTreeSet::new(),
                 verdict: "measuring".into(),
                 errors: 0,
             }
+        }
+
+        #[test]
+        fn a_quiet_reflex_is_not_counted_as_an_install_step() {
+            let was = b(&[], &[]);
+            let mut now = b(&[], &[]);
+            now.quiet.insert("lookup".into());
+            let (t, kind) = compose(&was, &now, None, None, "adage").unwrap();
+            assert_eq!(t, "adage: 1 quiet reflex waits (agents already do it); approve with adage review to deliver it.");
+            assert_eq!(kind, "waiting");
+            assert!(!t.contains("install step"));
         }
 
         #[test]
@@ -471,7 +498,7 @@ pub mod notice {
             let (t, k) = compose(&b(&["a"], &[]), &failing, None, Some("lock"), "adage").unwrap();
             assert_eq!(
                 (t.as_str(), k.as_str()),
-                ("adage: learning failed 3× here (lock); run adage doctor.", "health")
+                ("adage: conditioning failed 3× here (lock); run adage doctor.", "health")
             );
         }
     }

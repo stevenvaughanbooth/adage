@@ -207,6 +207,8 @@ fn health() -> Health {
         harnesses: vec!["claude".into()],
         generation: Some("8216e29f00".into()),
         repo_key: Some("harbor-dispatch".into()),
+        savings: None,
+        notice: None,
     }
 }
 
@@ -445,6 +447,27 @@ fn pretool_records_and_cards_are_shown() {
         "{:?}",
         c.acts
     );
+    // The grey zone: a card delivered at an edit, not at the prompt, says so.
+    let grey = feed::from_record(
+        "s",
+        &rec(
+            0,
+            "treated",
+            "PostToolBatch",
+            "batch",
+            decision(
+                vec![json!({ "route": "card-1", "strength": "prime", "kind": "card", "text": card })],
+                vec![],
+                vec![],
+                None,
+            ),
+        ),
+    );
+    assert!(
+        matches!(&grey.acts[0], Act::Directed { detail, .. } if detail == "card · 2 files · 3 traces · at the first edit"),
+        "{:?}",
+        grey.acts
+    );
     // Drawn: the rewrite, the card, the misfire.
     let paths = Paths::at(Path::new("/nonexistent"));
     let cx = ctx(paths, false);
@@ -465,7 +488,8 @@ fn pretool_records_and_cards_are_shown() {
         .map(|(_, l)| l.spans.iter().map(|s| s.content.to_string()).collect::<String>().trim_end().to_string())
         .collect();
     let text = lines.join("\n");
-    assert!(text.contains("pointed the test run at .venv/bin/python"), "{text}");
+    assert!(text.contains("↪ pointed the test run at .venv/bin/python"), "a rewrite has its own mark: {text}");
+    assert!(text.contains("→ ▤ card-1"), "a card delivery has the card's mark: {text}");
     assert!(text.contains("would have pointed the test run at x (withheld)"), "{text}");
     assert!(text.contains("card · 2 files · 3 traces"), "{text}");
     assert!(text.contains("misfired run-tests"), "{text}");
@@ -1052,6 +1076,7 @@ fn route_row(
         directive: String::new(),
         verbs,
         reasons: vec![],
+        more: Default::default(),
     }
 }
 
@@ -1809,4 +1834,336 @@ fn narrow_screens_keep_indents_answers_and_the_current_tab() {
     assert!(s.key(KeyCode::Enter, NONE).is_none());
     assert!(s.modal.is_none());
     assert_eq!(s.toasts.len(), 1, "enter on a check with no fix says why");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Main's newer concepts: quiet reflexes, procedure cards, value-based evidence, skills, savings,
+// rewrites and notices.
+
+/// The fixture reflexes plus one of each newer kind: a quiet reflex (its uplift is below the
+/// bar), a procedure card, a reflex whose strength rests on a value estimate (and is a finish
+/// line), and one compiled from a skill.
+fn feature_routes() -> Routes {
+    use adage_tracks::card::{Card, CardCommand, CardFile};
+    let mut r = routes();
+    let t = "harbor-dispatch/learned";
+    let mut quiet = route_row(
+        t,
+        "read-before-edit-9a1c",
+        Strength::Prime,
+        "nascent",
+        (21, 23),
+        ("after_command", "`bin/fetch-incident {item}` succeeds"),
+        ("read_batch", "read ≤5 listed files at once"),
+        vec!["approve", "extinguish", "pin"],
+    );
+    quiet.reasons = vec![("quiet".into(), "uplift +0.04 (lower bound -0.02); `approve` delivers it anyway".into())];
+    quiet.more.quiet = true;
+    quiet.more.quiet_line = Some("quiet: uplift +0.04 < 0.10 · approve to deliver".into());
+    quiet.more.uplift = Some("uplift +0.04 (lower bound -0.02): followed 0.95 when told, 0.91 unaided; 20 of 22 traces did it unaided. Quiet: agents already do this, so delivering it changes little".into());
+    let mut card = route_row(
+        t,
+        "card-carrier-rules",
+        Strength::Prime,
+        "forming",
+        (0, 0),
+        ("intent", "a prompt means: add a carrier rule"),
+        ("card", "procedure card: 3 file(s), from 4 session(s)"),
+        vec!["approve", "extinguish", "weaken", "pin"],
+    );
+    card.ceiling = "prime".into();
+    card.more.card = Some(Box::new(Card {
+        sessions: 4,
+        passed: 3,
+        files: vec![
+            CardFile { path: "registry/carriers.csv".into(), sessions: 4 },
+            CardFile { path: "src/dispatch/rules_<x>.ts".into(), sessions: 4 },
+            CardFile { path: "test/rules.test.ts".into(), sessions: 3 },
+        ],
+        exemplars: vec![],
+        commands: vec![
+            CardCommand {
+                command: "npm run codegen".into(),
+                sessions: 4,
+                runs: 4,
+                failed: 0,
+                error: String::new(),
+                verified: Some(true),
+            },
+            CardCommand {
+                command: "npm run check".into(),
+                sessions: 3,
+                runs: 5,
+                failed: 1,
+                error: String::new(),
+                verified: None,
+            },
+        ],
+        avoid: vec![CardCommand {
+            command: "npm test".into(),
+            sessions: 2,
+            runs: 2,
+            failed: 2,
+            error: "HARBOR_ENV is not set".into(),
+            verified: None,
+        }],
+        finish: Some("npm run check".into()),
+        prompts: vec![],
+    }));
+    card.more.card_threshold = Some(0.811);
+    let mut valued = route_row(
+        t,
+        "tests-after-rules-edit",
+        Strength::Prime,
+        "firm",
+        (0, 7),
+        ("after_edit", "an edit touches src/dispatch/rules_*.ts"),
+        ("run", "npm run check -- {tests}"),
+        vec!["approve", "extinguish", "strengthen", "pin"],
+    );
+    valued.more.value = Some("value: saves ~1.25 calls when followed (P(saves) 0.93, 90% lower bound 0.40); 7 triggers, 0 ran it — a desire path: no trace took the step yet, so its strength rests on the value estimate".into());
+    valued.more.obligation = Some("finish line: after an edit to src/dispatch/rules_*.ts the agent is told to run `npm run check -- {tests}`; if it then stops without running it, Adage asks it once to run it before finishing (at most 2 such requests a session)".into());
+    let mut skill = route_row(
+        "@imported/@bound/harbor-skills",
+        "release-notes-s2-changelog",
+        Strength::Fire,
+        "firm",
+        (0, 0),
+        ("after_edit", "an edit touches CHANGELOG.md"),
+        ("run", "npm run changelog:check"),
+        vec!["approve", "extinguish", "weaken", "pin"],
+    );
+    skill.imported = true;
+    skill.more.skill = true;
+    r.rows.extend([quiet, card, valued, skill]);
+    r
+}
+
+fn feature_state() -> AppState {
+    let mut s = app_state();
+    s.routes = Some(Ok(feature_routes()));
+    s.tab = Tab::Reflexes;
+    s
+}
+
+#[test]
+fn reflexes_tab_tells_quiet_from_install_steps() {
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let mut s = feature_state();
+    let rows = s.route_rows().to_vec();
+    let quiet = rows.iter().find(|r| r.id == "read-before-edit-9a1c").unwrap();
+    assert!(quiet.quiet() && quiet.stage() == "quiet");
+    let install = rows.iter().find(|r| r.id == "regen-openapi-client").unwrap();
+    assert!(!install.quiet() && install.stage() == "nascent");
+    tabs::reflexes::select(&mut s, "harbor-dispatch/learned", "read-before-edit-9a1c");
+    let text = app_frame(&s, &c, 150, 40);
+    for want in [
+        "▾ nascent · waits for review",
+        "▾ quiet · agents already do this; approve to deliver",
+        "◌ ◠ read-before-edit-9a1c",
+        "◌ quiet 1",
+        "◌ quiet: uplift +0.04 < 0.10 · approve to deliver",
+        "uplift: +0.04 (lower bound -0.02): followed 0.95 when told",
+        "same as adage review approve harbor-dispatch/learned read-before-edit-9a1c",
+    ] {
+        assert!(text.contains(want), "lacks {want:?}:\n{text}");
+    }
+    assert!(!text.contains("waits for review: quiet"), "quiet is said once, in its own words:\n{text}");
+    snap("app-reflexes-quiet", &text);
+    // The lifecycle filter has its own `quiet` choice; `nascent` then means install steps.
+    s.reflexes.states = tabs::reflexes::STATES.iter().position(|x| *x == "quiet").unwrap();
+    let shown: Vec<String> = tabs::reflexes::tree(&s)
+        .iter()
+        .filter_map(|n| match n {
+            tabs::reflexes::Node::Reflex(i) => Some(s.route_rows()[*i].id.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(shown, ["read-before-edit-9a1c"]);
+    s.reflexes.states = tabs::reflexes::STATES.iter().position(|x| *x == "nascent").unwrap();
+    let text = app_frame(&s, &c, 150, 40);
+    assert!(text.contains("regen-openapi-client") && !text.contains("read-before-edit-9a1c"), "{text}");
+    // The group says what quiet means.
+    s.reflexes.states = 0;
+    s.reflexes.sel = Some("group:quiet".into());
+    let text = app_frame(&s, &c, 150, 40);
+    assert!(text.contains("They are not install steps"), "{text}");
+    // The watch pane's review line counts them apart.
+    let mut live = Live::default();
+    (live.waiting, live.quiet, live.all_repos) = (Some(3), 1, true);
+    let (text, _) = render(100, 30, |f| view::draw_live(f, f.area(), &live, Some(&health()), &c, true));
+    assert!(text.contains("3 reflexes wait for review (1 quiet)"), "{text}");
+}
+
+#[test]
+fn reflexes_tab_shows_a_procedure_card() {
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let mut s = feature_state();
+    tabs::reflexes::select(&mut s, "harbor-dispatch/learned", "card-carrier-rules");
+    let text = app_frame(&s, &c, 150, 45);
+    for want in [
+        "▤ card-carrier-rules",
+        "forming  4 traces",
+        "procedure card",
+        "PROCEDURE CARD",
+        "  1 registry/carriers.csv",
+        "4/4 traces",
+        "✓ npm run codegen",
+        "verified on a clean checkout",
+        "○ npm run check",
+        "not replayed",
+        "✗ npm test",
+        "HARBOR_ENV is not set",
+        "finish with  npm run check",
+        "a prompt at similarity ≥ 0.81 gets it once",
+        "0.71–0.81: at the first edit of one of these files instead",
+        "prime at most, never strengthened · first-hand only, never shared",
+        "a family of 4 similar traces, 3 passed the project's checks",
+    ] {
+        assert!(text.contains(want), "lacks {want:?}:\n{text}");
+    }
+    snap("app-reflexes-card", &text);
+    // ASCII: the card's glyph falls back.
+    let mut a = ctx(Paths::at(d.path()), false);
+    a.theme = a.theme.ascii();
+    let text = app_frame(&s, &a, 150, 45);
+    assert!(text.contains("[=] card-carrier-rules") && !text.contains('▤'), "{text}");
+}
+
+#[test]
+fn reflexes_tab_shows_value_evidence_obligations_and_skills() {
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let mut s = feature_state();
+    tabs::reflexes::select(&mut s, "harbor-dispatch/learned", "tests-after-rules-edit");
+    let text = app_frame(&s, &c, 150, 40);
+    for want in [
+        "tests-after-rules-edit  firm     value",
+        "from conditioning: value: saves ~1.25 calls when followed",
+        "enforced: after an edit to src/dispatch/rules_*.ts",
+    ] {
+        assert!(text.contains(want), "lacks {want:?}:\n{text}");
+    }
+    assert!(!text.contains("0/7 traces took it"), "a desire path's follow count says nothing:\n{text}");
+    snap("app-reflexes-value", &text);
+    tabs::reflexes::select(&mut s, "@imported/@bound/harbor-skills", "release-notes-s2-changelog");
+    let text = app_frame(&s, &c, 150, 40);
+    assert!(text.contains("◈ release-notes-s2-changelog") && text.contains("from a skill"), "{text}");
+}
+
+fn savings_summary(saved: bool) -> crate::savings::Summary {
+    let unit = |i: usize, control: bool, cost: f64| crate::savings::Unit {
+        id: format!("s{i:03}"),
+        control,
+        propensity: if control { 0.1 } else { 0.9 },
+        cost: Some(cost),
+        turns: cost * 100.0,
+        first_edit: None,
+        asked_for_help: false,
+    };
+    let units: Vec<crate::savings::Unit> = if saved {
+        (0..52)
+            .map(|i| {
+                unit(i, i >= 40, if i >= 40 { 0.06 + (i % 3) as f64 * 0.001 } else { 0.03 + (i % 5) as f64 * 0.001 })
+            })
+            .collect()
+    } else {
+        (0..29).map(|i| unit(i, i < 4, 0.1)).collect()
+    };
+    let mut s = crate::savings::summarise("harbor-dispatch", &units, Default::default(), 0);
+    s.pricing_as_of = "2026-06-24".into();
+    s
+}
+
+#[test]
+fn savings_rewrites_and_notices_on_the_live_and_health_screens() {
+    let d = tempfile::tempdir().unwrap();
+    let paths = fixture(d.path());
+    let c = ctx(paths.clone(), false);
+    let mut h = health();
+    // Below the gate: what is being counted, never dollars.
+    h.savings = Some(savings_summary(false));
+    let live = live_from(&paths);
+    let (text, _) = render(100, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
+    assert!(text.contains(" savings measuring: 4 control / 25 treated traces"), "{text}");
+    assert!(!text.contains('$'), "{text}");
+    snap("watch-100x30-savings-measuring", &text);
+    // Past it: the figure with its interval; in colour the verdict's mark, a ✓ in green.
+    h.savings = Some(savings_summary(true));
+    let colour = ctx(paths.clone(), true);
+    let (text, buf) = render(110, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &colour, true));
+    assert!(text.contains("✓ savings saved ~$0.029 per trace, API-list equivalent (95% CI $"), "{text}");
+    let (x, y) = find(&buf, "✓ savings").unwrap();
+    assert_eq!(buf[(x, y)].fg, Color::Green);
+    snap("watch-110x30-savings-saved-colour", &styled(&buf));
+    // Without colour the verdict is the words alone.
+    let (text, _) = render(110, 30, |f| view::draw_live(f, f.area(), &live, Some(&h), &c, true));
+    assert!(text.contains(" savings saved ~$0.029") && !text.contains("✓ savings"), "{text}");
+
+    // The Health tab: the estimate, today's notice, and the rewrites check with its switch.
+    let mut s = app_state();
+    h.notice = Some("adage: 2 new reflexes active.".into());
+    h.checks.push(Check {
+        check: "rewrites".into(),
+        label: "rewrites".into(),
+        status: Status::Pass,
+        detail: "python tests → .venv (on)".into(),
+        fix: Some("adage delegate rewrites off".into()),
+    });
+    h.fixes.push(None);
+    s.health = Some(h);
+    s.tab = Tab::Health;
+    s.check_sel = 6;
+    let text = app_frame(&s, &c, 150, 35);
+    for want in [
+        " savings saved ~$0.029 per trace",
+        " » today adage: 2 new reflexes active.",
+        "rewrites",
+        "python tests → .venv (on)",
+        "fix  adage delegate rewrites off",
+    ] {
+        assert!(text.contains(want), "lacks {want:?}:\n{text}");
+    }
+    snap("app-health-savings", &text);
+}
+
+#[test]
+fn settings_show_rewrites_off_by_the_older_marker_and_notices() {
+    let d = tempfile::tempdir().unwrap();
+    let paths = Paths::at(d.path());
+    let marker = adage_hook::rewrite_off(&paths);
+    let mut s = AppState::new(paths.config());
+    s.rewrite_marker = Some(marker.clone());
+    s.load_settings(&adage_store::config::load(&paths));
+    let row = |s: &AppState, k: &str| {
+        let r = s.settings.iter().find(|r| r.key == k).unwrap();
+        (r.value.clone(), r.source.clone())
+    };
+    assert_eq!(row(&s, "runtime.rewrite"), ("true".into(), "default".into()));
+    assert_eq!(row(&s, "ui.notices"), ("daily".into(), "default".into()));
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, "").unwrap();
+    s.load_settings(&adage_store::config::load(&paths));
+    assert_eq!(row(&s, "runtime.rewrite"), ("false".into(), "exec/rewrite-off marker".into()));
+    // Shown with the switch that turns them back on; space turns them on (and clears the marker).
+    s.tab = Tab::Settings;
+    s.config_path = "/home/me/.local/share/adage/config.toml".into();
+    s.setting_sel = s.settings.iter().position(|r| r.key == "runtime.rewrite").unwrap();
+    let c = ctx(paths.clone(), false);
+    let text = app_frame(&s, &c, 150, 40);
+    assert!(text.contains("(exec/rewrite-off marker)"), "{text}");
+    assert!(text.contains("↪ rewrites off · same as adage delegate rewrites on to switch"), "{text}");
+    snap("app-settings-rewrite-marker", &text);
+    assert!(matches!(
+        s.key(KeyCode::Char(' '), NONE),
+        Some(Cmd::Do(app::Action::SetConfig { key: "runtime.rewrite", ref value })) if value == "true"
+    ));
+    // Notices toggle daily ⇄ off with space.
+    s.setting_sel = s.settings.iter().position(|r| r.key == "ui.notices").unwrap();
+    assert!(matches!(
+        s.key(KeyCode::Char(' '), NONE),
+        Some(Cmd::Do(app::Action::SetConfig { key: "ui.notices", ref value })) if value == "off"
+    ));
 }

@@ -10,6 +10,7 @@
 //! what `adage` does for packs ([`crate::packs`]), and it runs nothing.
 
 use crate::packs;
+use adage_term::{Glyph, Line, Out, Role};
 use adage_pack::Pack;
 use adage_store::Paths;
 use anyhow::{bail, Context, Result};
@@ -66,6 +67,15 @@ struct Review {
     digest: String,
     root: String,
     text: String,
+    /// Route id → whether its command was verified by a replay on a clean checkout.
+    #[serde(default)]
+    routes: std::collections::BTreeMap<String, Reviewed>,
+}
+
+#[derive(serde::Deserialize)]
+struct Reviewed {
+    #[serde(default)]
+    verified: bool,
 }
 
 /// `adage train accept <name>`: install the pack `adage train <skill>` staged under
@@ -158,34 +168,78 @@ fn accept(args: &[String], paths: &Paths) -> Result<()> {
     index.write_atomic(&paths.index())?;
 
     let m = &pack.manifest;
-    println!("adage train accept: {} {}  (sha256 {})", m.pack.name, m.pack.version, &digest[..16]);
-    println!("  installed  {}", dest.display());
+    let mut o = Out::stdout();
+    let short = format!("sha256 {}", &digest[..16]);
+    o.header("train accept", &[&format!("{} {}", m.pack.name, m.pack.version), &short])?;
+    o.blank()?;
+    o.kv("installed", Line::new().text(dest.display().to_string()))?;
     match &signed {
-        Some(fp) => println!("  signed     {fp}, namespace {}", adage_sign::PACK_NAMESPACE),
-        None => println!("  signed     no (no ssh-agent key and no --key); `adage share` signs it when you share it"),
+        Some(fp) => o.kv("signed", Line::new().text(fp.clone()).sep().quiet(format!("namespace {}", adage_sign::PACK_NAMESPACE)))?,
+        None => o.kv(
+            "signed",
+            Line::new().text("no").sep().quiet("no ssh-agent key and no --key; `adage share` signs it when you share it"),
+        )?,
     }
+    let mut nascent = 0;
     for b in &bound {
         if let adage_pack::bind::Applies::No(why) = &b.binding.applies {
-            println!("  repo       {}: not applicable ({why})", b.binding.repo);
+            o.kv("repo", Line::new().text(b.binding.repo.clone()).sep().quiet(format!("not applicable ({why})")))?;
             continue;
         }
         let routes = b.track.as_ref().map(|t| t.routes.as_slice()).unwrap_or_default();
-        println!(
-            "  repo       {}: {} reflexes live, {} inert",
-            b.binding.repo,
-            b.binding.live().count(),
-            b.binding.inert().count()
-        );
+        o.kv(
+            "repo",
+            Line::new()
+                .text(b.binding.repo.clone())
+                .sep()
+                .text(format!("{} live", crate::words::count(b.binding.live().count(), "reflex")))
+                .sep()
+                .quiet(format!("{} inert", b.binding.inert().count())),
+        )?;
         for r in routes {
-            let strength = format!("{:?}", r.strength).to_lowercase();
-            let nascent = if r.state == adage_tracks::RouteState::Nascent { " (nascent until approved)" } else { "" };
-            println!("    {:<8} {}  {}{nascent}", strength, r.id, crate::share::describe_step(&r.step));
+            // A skill's step is verified when its command worked on a clean checkout; one that
+            // needed the network or a package cache is unverifiable, which is not stale.
+            let verified = review.routes.get(&r.id).is_some_and(|x| x.verified);
+            let mut row = Line::new()
+                .text("  ")
+                .glyph(Role::Accent, Glyph::Skill)
+                .text(" ")
+                .strength(crate::words::strength(r.strength))
+                .pad_to(24)
+                .text(r.id.clone())
+                .sep()
+                .quiet(crate::share::describe_step(&r.step));
+            row = if verified { row.sep().push(Role::Fire, "verified") } else { row.sep().faint("not verified") };
+            if r.state == adage_tracks::RouteState::Nascent {
+                nascent += 1;
+                row = row.sep().faint("nascent until approved");
+            }
+            o.line(&Line::new().pad_to(adage_term::out::KEY_WIDTH).extend(row))?;
         }
         for r in b.binding.inert() {
-            println!("    inert    {}: {}", r.id, r.status.reason().unwrap_or(""));
+            o.line(
+                &Line::new()
+                    .pad_to(adage_term::out::KEY_WIDTH)
+                    .text("  ")
+                    .glyph(Role::Ink3, Glyph::Off)
+                    .text(" inert")
+                    .pad_to(adage_term::out::KEY_WIDTH + 12)
+                    .text(r.id.clone())
+                    .sep()
+                    .quiet(r.status.reason().unwrap_or("").to_string()),
+            )?;
         }
     }
-    println!("index generation {}, {} reflexes", index.generation, index.routes.len());
+    o.kv(
+        "index",
+        Line::new().text(format!("generation {}", index.generation)).sep().quiet(crate::words::count(index.routes.len(), "reflex")),
+    )?;
+    o.blank()?;
+    if nascent > 0 {
+        o.next("adage review", "approve the nascent ones to put them into service")?;
+    } else {
+        o.next("adage status", "the reflexes in effect")?;
+    }
     let _ = review.text;
     Ok(())
 }

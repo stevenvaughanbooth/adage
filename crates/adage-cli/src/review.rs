@@ -444,7 +444,10 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     } else {
         format!("{} reflexes wait for a decision", items.len())
     };
-    o.header("review", &[&waiting])?;
+    // Quiet reflexes wait too, but they are not install steps: agents already take their step.
+    let quiet_n = items.iter().filter(|it| it.reasons.iter().any(|(k, _)| *k == "quiet")).count();
+    let quiet_fact = if quiet_n > 0 { format!("{quiet_n} quiet") } else { String::new() };
+    o.header("review", &[&waiting, &quiet_fact])?;
     print_inert(&mut o, &inert)?;
     print_revoked(&mut o, &revoked)?;
     print_attested(&mut o, &attested)?;
@@ -460,7 +463,14 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     for it in &items {
         let (t, r) = (&it.inst.track, it.route);
         o.blank()?;
-        let mut head = Line::new()
+        let quiet = it.reasons.iter().any(|(k, _)| *k == "quiet");
+        let mut head = Line::new();
+        if quiet {
+            head = head.glyph(Role::Ink3, Glyph::Quiet).text(" ");
+        } else if matches!(r.step, Step::Card { .. }) {
+            head = head.glyph(Role::Accent, Glyph::Card).text(" ");
+        }
+        head = head
             .bold(Role::Ink, it.inst.reference.clone())
             .faint(format!("@{}", t.manifest.track.version))
             .sep()
@@ -474,7 +484,12 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
         }
         o.line(&head)?;
         for (kind, detail) in &it.reasons {
-            o.line(&row("why", Line::new().text(format!("{kind}: {}", words::prose(detail)))))?;
+            // Quiet: the one-line reason; the uplift row below says the rest.
+            let line = match crate::evidence::quiet_line(r).filter(|_| *kind == "quiet") {
+                Some(q) => q,
+                None => format!("{kind}: {}", words::prose(detail)),
+            };
+            o.line(&row("why", Line::new().text(line)))?;
         }
         let mut strength = Line::new().strength(words::strength(r.strength));
         if r.strength != Strength::Inhibit {
@@ -536,10 +551,12 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     }
     let first = &items[0];
     o.blank()?;
-    o.next(
-        &format!("adage review approve {} {}", first.inst.reference, first.route.id),
-        "or another decision listed above",
-    )?;
+    let why = if first.reasons.iter().any(|(k, _)| *k == "quiet") {
+        "delivers this quiet reflex anyway; or another decision listed above"
+    } else {
+        "or another decision listed above"
+    };
+    o.next(&format!("adage review approve {} {}", first.inst.reference, first.route.id), why)?;
     Ok(())
 }
 

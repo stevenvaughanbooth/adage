@@ -135,7 +135,10 @@ pub fn run(ctx: Ctx, mut before_tick: Option<Box<dyn FnMut()>>) -> Result<()> {
                     health = Some(*h);
                     ctx.tz = view::local_offset();
                 }
-                Loaded::Routes(Ok(r)) => live.waiting = Some(r.waiting()),
+                Loaded::Routes(Ok(r)) => {
+                    live.waiting = Some(r.waiting());
+                    live.quiet = r.quiet();
+                }
                 Loaded::Routes(Err(_)) => {}
             }
         }
@@ -175,7 +178,10 @@ pub fn snapshot(ctx: &Ctx, size: Option<(u16, u16)>) -> String {
     let mut live = Live::default();
     let health = health::gather(&ctx.paths, ctx.root.as_deref());
     Sources::new(ctx).poll(&mut live, health.repo_key.as_deref());
-    live.waiting = super::routes::load(&ctx.paths).ok().map(|r| r.waiting());
+    if let Ok(r) = super::routes::load(&ctx.paths) {
+        live.waiting = Some(r.waiting());
+        live.quiet = r.quiet();
+    }
     let mut term = match Terminal::new(TestBackend::new(w, h)) {
         Ok(t) => t,
         Err(e) => return format!("adage watch: {e}\n"),

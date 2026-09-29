@@ -757,6 +757,26 @@ fn live_learning(paths: &Paths) -> Vec<Check> {
     out
 }
 
+/// Whether `PreToolUse` rewrites are on: `runtime.rewrite`, and the `exec/rewrite-off` marker an
+/// older `adage delegate off` wrote (either one turns them off). It passes either way; its fix is
+/// the switch the other way.
+pub fn rewrites_check(paths: &Paths) -> Check {
+    let on = adage_store::config::load(paths).config.runtime_rewrite;
+    let marker = adage_hook::rewrite_off(paths).exists();
+    let (detail, fix) = match (on, marker) {
+        (true, false) => ("python tests → .venv (on)".to_string(), "adage delegate rewrites off"),
+        (false, _) => (
+            "off (runtime.rewrite = false): commands run as the agent wrote them".to_string(),
+            "adage delegate rewrites on",
+        ),
+        (true, true) => (
+            "off (the exec/rewrite-off marker): commands run as the agent wrote them".to_string(),
+            "adage delegate rewrites on",
+        ),
+    };
+    Check { fix: Some(fix.into()), ..pass("rewrites", detail) }
+}
+
 /// Every check, in display order, for the repository at `repo_root` (if any). `adage watch` and
 /// `adage ui` re-run these every few seconds.
 pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
@@ -775,6 +795,7 @@ pub fn checks(paths: &Paths, repo_root: Option<&Path>) -> Vec<Check> {
     checks.extend(hooks_checks(repo_root, exe.as_deref()));
     checks.extend(plugin_check(repo_root, exe.as_deref()));
     checks.push(kill_switches(repo_root));
+    checks.push(rewrites_check(paths));
     checks.push(spools(paths));
     checks.push(fail_open(paths));
     checks.extend(live_learning(paths));
@@ -852,4 +873,28 @@ pub fn doctor(args: &[String], paths: &Paths) -> Result<()> {
         bail!("{f} check(s) failed");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rewrites_say_their_state_and_the_switch_the_other_way() {
+        let d = tempfile::tempdir().unwrap();
+        let paths = Paths::at(d.path());
+        let c = rewrites_check(&paths);
+        assert_eq!((c.status, c.detail.as_str()), (Status::Pass, "python tests → .venv (on)"));
+        assert_eq!(c.fix.as_deref(), Some("adage delegate rewrites off"));
+        // The older marker turns them off whatever the setting says.
+        let marker = adage_hook::rewrite_off(&paths);
+        std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+        std::fs::write(&marker, "").unwrap();
+        let c = rewrites_check(&paths);
+        assert!(c.detail.starts_with("off (the exec/rewrite-off marker)"), "{}", c.detail);
+        assert_eq!(c.fix.as_deref(), Some("adage delegate rewrites on"));
+        std::fs::remove_file(&marker).unwrap();
+        std::fs::write(paths.config(), "[runtime]\nrewrite = false\n").unwrap();
+        assert!(rewrites_check(&paths).detail.starts_with("off (runtime.rewrite = false)"));
+    }
 }

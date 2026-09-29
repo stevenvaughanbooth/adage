@@ -98,7 +98,7 @@ fn an_accepted_pack_is_installed_as_reviewed() {
     let o = accept(&home, &root, "widget-work");
     let text = String::from_utf8_lossy(&o.stdout).to_string();
     assert!(o.status.success(), "{o:?}");
-    assert!(text.contains("signed     no"), "{text}");
+    assert!(text.contains("signed      no"), "{text}");
     let bound = home.join("tracks/@imported/@bound").join(&out.pack_name);
     let track_dir = std::fs::read_dir(&bound).unwrap().next().unwrap().unwrap().path();
     let track = adage_tracks::io::read(&track_dir).unwrap();

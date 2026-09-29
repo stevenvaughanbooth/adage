@@ -254,8 +254,15 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
             withheld: control || rec["withheld"] == true,
         });
     }
+    let event = event_label(rec["kind"].as_str(), rec["event"].as_str().unwrap_or("?"));
     for s in directives(d, "directives") {
-        let detail = if s.card { card_detail(&s.text) } else { detail_of(&s.text) };
+        let detail = match (s.card, event.as_str()) {
+            (true, "prompt") => card_detail(&s.text),
+            // The grey zone: a prompt just under the card's threshold gets it at the first edit
+            // of one of its files instead.
+            (true, _) => format!("{} · at the first edit", card_detail(&s.text)),
+            (false, _) => detail_of(&s.text),
+        };
         acts.push(Act::Directed { route: s.route.clone(), strength: s.strength, detail, instinct: s.instinct });
         texts.push((s.route, s.text));
     }
@@ -290,7 +297,7 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
         ts: rec["ts"].as_u64().unwrap_or(0),
         session: session.to_string(),
         harness: rec["harness"].as_str().unwrap_or("claude").to_string(),
-        event: event_label(rec["kind"].as_str(), rec["event"].as_str().unwrap_or("?")),
+        event,
         repo: rec["repo"].as_str().unwrap_or("").to_string(),
         control,
         acts,

@@ -70,6 +70,10 @@ pub struct Health {
     pub harnesses: Vec<String>,
     pub generation: Option<String>,
     pub repo_key: Option<String>,
+    /// The repository's savings estimate (`crate::savings`), once it has a ledger.
+    pub savings: Option<crate::savings::Summary>,
+    /// The notice shown at session start today, if one was (`ui.notices`).
+    pub notice: Option<String>,
 }
 
 impl Health {
@@ -245,5 +249,7 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
                 .hint("adage doctor"),
         );
     }
-    Health { checks, fixes, lights, harnesses: names, generation, repo_key: key }
+    let savings = key.as_deref().and_then(|k| crate::savings::read(paths, k));
+    let notice = key.as_deref().and_then(|k| crate::status_card::notice_today(paths, k, now_ms()));
+    Health { checks, fixes, lights, harnesses: names, generation, repo_key: key, savings, notice }
 }

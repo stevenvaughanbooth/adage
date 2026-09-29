@@ -103,6 +103,16 @@ pub enum Glyph {
     Rail,
     Pointer,
     Sep,
+    /// A procedure card.
+    Card,
+    /// A rewrite: the command was changed before it ran.
+    Rewrite,
+    /// Quiet: uplift below the bar; waits for a person.
+    Quiet,
+    /// From a skill (`adage train`).
+    Skill,
+    /// A notice shown at session start.
+    Notice,
 }
 
 impl Glyph {
@@ -121,6 +131,11 @@ impl Glyph {
             Glyph::Rail => g::RAIL,
             Glyph::Pointer => g::POINTER,
             Glyph::Sep => g::SEP,
+            Glyph::Card => g::CARD,
+            Glyph::Rewrite => g::REWRITE,
+            Glyph::Quiet => g::QUIET,
+            Glyph::Skill => g::SKILL,
+            Glyph::Notice => g::NOTICE,
         }
     }
 }
@@ -347,5 +362,22 @@ mod tests {
         assert_eq!(t.glyph(Glyph::Instinct), "(o)");
         assert_eq!(t.glyph(Glyph::Arrow), "->");
         assert_eq!(Theme::plain().glyph(Glyph::Reflex), "◠");
+    }
+
+    #[test]
+    fn newer_concepts_have_one_column_glyphs_and_ascii_fallbacks() {
+        let ascii = Theme::new(Caps { unicode: false, ..Caps::plain() });
+        let want = [
+            (Glyph::Card, "▤", "[=]"),
+            (Glyph::Rewrite, "↪", "=>"),
+            (Glyph::Quiet, "◌", "(.)"),
+            (Glyph::Skill, "◈", "<>"),
+            (Glyph::Notice, "»", ">>"),
+        ];
+        for (g, utf8, fallback) in want {
+            assert_eq!(Theme::plain().glyph(g), utf8);
+            assert_eq!(ascii.glyph(g), fallback);
+            assert_eq!(unicode_width::UnicodeWidthStr::width(utf8), 1, "{utf8} is one column");
+        }
     }
 }

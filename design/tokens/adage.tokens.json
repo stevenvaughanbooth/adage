@@ -787,6 +787,41 @@
       "$extensions": {
         "adage.ascii": "-"
       }
+    },
+    "card": {
+      "$value": "▤",
+      "$description": "A procedure card: the steps and files of a recurring task.",
+      "$extensions": {
+        "adage.ascii": "[=]"
+      }
+    },
+    "rewrite": {
+      "$value": "↪",
+      "$description": "A rewrite: the command was changed before it ran.",
+      "$extensions": {
+        "adage.ascii": "=>"
+      }
+    },
+    "quiet": {
+      "$value": "◌",
+      "$description": "Quiet: uplift below the bar; waits for a person.",
+      "$extensions": {
+        "adage.ascii": "(.)"
+      }
+    },
+    "skill": {
+      "$value": "◈",
+      "$description": "From a skill (`adage train`).",
+      "$extensions": {
+        "adage.ascii": "<>"
+      }
+    },
+    "notice": {
+      "$value": "»",
+      "$description": "A notice: the one line shown at session start.",
+      "$extensions": {
+        "adage.ascii": ">>"
+      }
     }
   }
 }

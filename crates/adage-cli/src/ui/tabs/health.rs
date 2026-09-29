@@ -62,27 +62,42 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         f.render_widget(Paragraph::new(Span::styled(format!(" running checks{}", t.more()), t.dim())), area);
         return;
     };
-    let [summary, list, _, detail] =
-        Layout::vertical([Constraint::Length(2), Constraint::Min(3), Constraint::Length(1), Constraint::Length(5)])
-            .areas(area);
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(format!(" {} passed", h.count(Status::Pass)), t.ink2()),
-            Span::styled(t.sep(), t.dim()),
-            Span::styled(
-                format!("{} warnings", h.count(Status::Warn)),
-                if h.count(Status::Warn) > 0 { t.yellow() } else { t.ink2() },
-            ),
-            Span::styled(t.sep(), t.dim()),
-            Span::styled(
-                format!("{} failures", h.count(Status::Fail)),
-                if h.count(Status::Fail) > 0 { t.red() } else { t.ink2() },
-            ),
-            Span::styled("   same checks as ", t.dim()),
-            Span::styled("adage doctor", t.command()),
-        ])),
-        summary,
-    );
+    // Under the counts: what Adage has measured here, and today's notice, when there are.
+    let mut extra: Vec<Line> = Vec::new();
+    if let Some(sv) = &h.savings {
+        extra.push(view::savings_line(sv, t, area.width));
+    }
+    if let Some(n) = &h.notice {
+        extra.push(Line::from(vec![
+            Span::styled(format!(" {} ", t.glyph(adage_term::Glyph::Notice)), t.accent()),
+            Span::styled("today ", t.ink2()),
+            Span::raw(t.fit(&t.text(n), (area.width as usize).saturating_sub(10))),
+        ]));
+    }
+    let [summary, list, _, detail] = Layout::vertical([
+        Constraint::Length(2 + extra.len() as u16),
+        Constraint::Min(3),
+        Constraint::Length(1),
+        Constraint::Length(5),
+    ])
+    .areas(area);
+    let mut head = vec![Line::from(vec![
+        Span::styled(format!(" {} passed", h.count(Status::Pass)), t.ink2()),
+        Span::styled(t.sep(), t.dim()),
+        Span::styled(
+            format!("{} warnings", h.count(Status::Warn)),
+            if h.count(Status::Warn) > 0 { t.yellow() } else { t.ink2() },
+        ),
+        Span::styled(t.sep(), t.dim()),
+        Span::styled(
+            format!("{} failures", h.count(Status::Fail)),
+            if h.count(Status::Fail) > 0 { t.red() } else { t.ink2() },
+        ),
+        Span::styled("   same checks as ", t.dim()),
+        Span::styled("adage doctor", t.command()),
+    ])];
+    head.extend(extra);
+    f.render_widget(Paragraph::new(head), summary);
     let name_w = h.checks.iter().map(|c| c.label.chars().count()).max().unwrap_or(10).min(28);
     let mut lines: Vec<Line> = Vec::new();
     for (i, c) in h.checks.iter().enumerate() {
