@@ -154,6 +154,11 @@ fn live(s: RouteState) -> bool {
     matches!(s, RouteState::Firm | RouteState::Forming | RouteState::Dormant)
 }
 
+/// Kept quiet by its uplift: agents already take its step unaided (`adage_learn::value::assess`).
+fn quiet(r: &Route) -> bool {
+    r.evidence.uplift.as_ref().is_some_and(|u| u.gated)
+}
+
 fn by_edit(r: &Route) -> bool {
     matches!(r.trigger, Trigger::AfterEdit { .. })
 }
@@ -288,6 +293,15 @@ fn queue<'a>(all: &'a [Installed], judged: &BTreeMap<(String, String), (u32, u32
             let mut reasons: Vec<(&'static str, String)> = Vec::new();
             let instinct = origin_label(r);
             match rv {
+                // Quiet on its uplift (`adage_learn::value::assess`): agents already take its step
+                // unaided, so it waits for a person rather than being delivered.
+                None if r.state == RouteState::Nascent && !r.authored && quiet(r) => reasons.push((
+                    "quiet",
+                    format!(
+                        "{}; `approve` delivers it anyway",
+                        r.evidence.uplift.as_ref().map(|u| u.line()).unwrap_or_default()
+                    ),
+                )),
                 None if r.state == RouteState::Nascent && !r.authored && instinct.is_some() => reasons.push((
                     "approval",
                     "an environment step Adage would suggest by default: delivered only after a person approves it; approving it approves this pack's environment steps for the repository".into(),
@@ -463,6 +477,9 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
             e.support, e.opportunities, e.days, e.rate, e.lower_bound
         );
         println!("  runtime    followed {} · ignored {} (treated sessions)", it.followed, it.ignored);
+        if let Some(u) = &e.uplift {
+            println!("  uplift     {}", u.line());
+        }
         // The graph engine's reasons for a reflex (Track G §6.3): for people, never the agent.
         if let Some(w) = adage_tracks::why::load(&it.inst.dir).get(&r.id) {
             for (i, line) in w.lines().iter().enumerate() {
@@ -805,11 +822,13 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
     // Pack-level approval: approving one environment-effect instinct approves the pack's
     // environment steps for this repository, now and when learning binds them again.
     let mut pack_approved: Vec<String> = Vec::new();
-    if verb == "approve" && before.state == RouteState::Nascent && after.is_instinct() {
+    if verb == "approve" && before.state == RouteState::Nascent && after.is_instinct() && !quiet(&before) {
         if let adage_tracks::Origin::Instinct { pack, .. } = after.origin() {
             if !pack.is_empty() {
                 reviews.packs.insert(pack.clone(), review::PackApproval { on: review::today(), by: by.clone() });
-                for other in track.routes.iter_mut().filter(|x| x.state == RouteState::Nascent && x.is_instinct()) {
+                for other in
+                    track.routes.iter_mut().filter(|x| x.state == RouteState::Nascent && x.is_instinct() && !quiet(x))
+                {
                     other.state = RouteState::Forming;
                     pack_approved.push(other.id.clone());
                 }

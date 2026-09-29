@@ -655,6 +655,8 @@ fn runtime_route(r: &RouteV2, trigger: Trigger, slots: Vec<Slot>, step: Step, ef
         by_origin: e.by_origin,
         outcome_lift: None,
         effect_evidence: None,
+        // Uplift is the installing repository's own (re-estimated when it learns).
+        uplift: None,
     };
     Route {
         id: r.id.clone(),

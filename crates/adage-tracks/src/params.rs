@@ -119,6 +119,12 @@ pub struct LearnParams {
     /// (the default, omitted from the canonical JSON) is the learner's built-in weak prior.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome_priors: Option<Value>,
+    /// Uplift gating (`adage_learn::value::assess`): a route whose posterior uplift
+    /// (`p_follow − p_self`) is below this is kept quiet (nascent) until a person approves it.
+    /// 0 turns the gate off (uplift is still estimated and shown). Omitted from the canonical JSON
+    /// at its default ([`UPLIFT_MIN`]), so the default preset's hash is unchanged.
+    #[serde(skip_serializing_if = "is_default_uplift")]
+    pub uplift_min: f64,
 }
 
 /// The default `outcome_lift_lower_bound`.
@@ -126,6 +132,14 @@ pub const OUTCOME_LIFT_LOWER_BOUND: f64 = 0.2;
 
 fn is_default_lift(x: &f64) -> bool {
     *x == OUTCOME_LIFT_LOWER_BOUND
+}
+
+/// The default `uplift_min` (evals/lab/research/uptake-delivery: the bar under which 79% of
+/// deliveries lay, with no measurable loss).
+pub const UPLIFT_MIN: f64 = 0.1;
+
+fn is_default_uplift(x: &f64) -> bool {
+    *x == UPLIFT_MIN
 }
 
 impl Default for LearnParams {
@@ -145,14 +159,17 @@ impl Default for LearnParams {
             outcome_lift_lower_bound: OUTCOME_LIFT_LOWER_BOUND,
             outcome_min_support: None,
             outcome_priors: None,
+            uplift_min: UPLIFT_MIN,
         }
     }
 }
 
 impl LearnParams {
-    /// The `--demo` thresholds: lower evidence bars for demonstrations and small histories.
+    /// The `--demo` thresholds: lower evidence bars for demonstrations and small histories, and no
+    /// uplift gate: a scripted demonstration's agents take their steps every time, so every
+    /// reflex it shows would otherwise be quiet (its uplift is still estimated and shown).
     pub fn demo() -> Self {
-        LearnParams { min_support: 3, fire_lower_bound: 0.5, ..Default::default() }
+        LearnParams { min_support: 3, fire_lower_bound: 0.5, uplift_min: 0.0, ..Default::default() }
     }
 }
 

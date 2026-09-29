@@ -12,10 +12,27 @@
 //!
 //! each as a posterior whose prior is supplied from the level above (global → ecosystem →
 //! environment kind → situation → this repository: [`Priors`], fitted across repositories by
-//! `examples/outcome_priors.rs`, κ by the method of moments). `p_follow` has a fixed prior until
-//! follow judgements exist. The value is `A = p_follow · (Q(∅) − Q(Sat d)) − C(d) − p_misfire · m`
-//! ([`adage_graph::stats::advantage_mix`], with `Q(∅)` the mixture of the agents who already take
-//! `Sat(d)` and those who do something else).
+//! `examples/outcome_priors.rs`, κ by the method of moments). The value is
+//! `A = (p_follow − p_self) · (Q(other) − Q(Sat d)) − C(d) − p_misfire · m` ([`advantage_uplift`]).
+//!
+//! **Uplift** (evals/lab/research/uptake-delivery): agents follow about 96% of directives, but
+//! half the time they would have taken the step anyway, so a directive is worth its uplift,
+//! `p_follow − p_self`, not its follow rate. Both are Beta posteriors ([`uplift`]):
+//!
+//! - `p_self` starts from its kind's prior ([`kind_of`]): a cross-repository cell when one is fitted
+//!   ([`Priors::uptake`], `examples/outcome_priors.rs`), else the research's measured constant
+//!   ([`SELF_PRIORS`], κ = [`SELF_KAPPA`]). It is updated by the repository's unexposed training
+//!   traces in the matching situation (the route's own count where that is the unaided rate, else
+//!   judged with the learned follow judge, [`unaided_in_traces`]) and by the control arm's
+//!   `would_have` judgements from the spools.
+//! - `p_follow` starts from its kind's research prior ([`FOLLOW_PRIORS`]) and is updated by the
+//!   treated arm's judgements.
+//!
+//! [`assess`] records every route's uplift and puts a route below [`UPLIFT_MIN`] (with at least
+//! [`UPLIFT_MIN_EVIDENCE`] situations of evidence) out of service as nascent: `adage review`
+//! and `adage sense` say why it is quiet, and a person's approval delivers it anyway. The value
+//! model's own candidates (the dead end, the tests of the edit) are gated the same way at
+//! admission.
 //!
 //! **Candidates** are safe by construction: the project's own environment running the tool that
 //! failed (declared by the repository, [`Statics`], or seen running tests in a trace). An install
@@ -52,6 +69,21 @@ pub struct Cell {
 pub struct Priors {
     #[serde(default)]
     pub cells: BTreeMap<String, Cell>,
+    /// Cross-repository `p_self` per directive kind ([`kind_of`]): how often agents take the
+    /// directed step unaided, pooled over other repositories' routes of the kind (fitted by
+    /// `examples/outcome_priors.rs`). A kind with no cell has the research prior ([`SELF_PRIORS`]).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub uptake: BTreeMap<String, SelfCell>,
+}
+
+/// One kind's pooled unaided rate: `took` of `n` situations, and the concentration a route of the
+/// kind gets as its prior (fitted by the method of moments across repositories).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SelfCell {
+    pub n: f64,
+    pub took: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kappa: Option<f64>,
 }
 
 /// The prior of a cell no data reaches: a weak prior at this many calls.
@@ -214,6 +246,8 @@ pub struct Valued {
     pub declared: bool,
     pub effective: f64,
     pub harm_in_window: u32,
+    /// What delivering it changes ([`uplift`]): gated, it is not delivered.
+    pub uplift: Uplift,
     pub strength: Option<Strength>,
 }
 
@@ -236,7 +270,7 @@ fn failing_spelling(s: &Session, at: usize) -> Option<String> {
 
 /// Value every safe candidate at the repository's failure situations (`no-module:*`,
 /// `cmd-not-found:*` of a test runner), and decide admission and strength.
-pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors) -> Vec<Valued> {
+pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors, bar: f64) -> Vec<Valued> {
     // The situations, per key and failing spelling.
     struct At<'a> {
         s: &'a Session,
@@ -305,8 +339,12 @@ pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors) -> Ve
                 stats::gamma_poisson(sat.iter().map(|a| a.x.reward.calls as f64).sum(), sat.len() as f64, m1, k1);
             let mis = sat.iter().filter(|a| a.x.next_misfired).count() as f64;
             let misfire = (ma + mis, mb + sat.len() as f64 - mis);
-            let share = (1.0 + sat.len() as f64, 1.0 + other.len() as f64);
-            let adv = stats::advantage_mix(q_other, q_sat, share, FOLLOW_PRIOR, misfire, DIRECTIVE_COST, MISFIRE_COST);
+            // What delivering changes: the unexposed triggers whose agent reached `Sat(d)` unaided
+            // are `p_self`'s evidence (the research's prior for a dead end: 0.29).
+            let unaided =
+                Unaided { traces: unexposed.len() as u32, traces_took: sat.len() as u32, ..Default::default() };
+            let up = uplift("avoid", &unaided, priors, bar);
+            let adv = advantage_uplift(q_other, q_sat, &up, misfire, DIRECTIVE_COST, MISFIRE_COST);
             let ran_tests = ss
                 .iter()
                 .filter(|s| {
@@ -318,7 +356,9 @@ pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors) -> Ve
                 .count() as u32;
             let effective = sat.len() as f64 + k1;
             let verified = declared && ran_tests >= 1;
-            let admitted = verified || (adv.lower > 0.0 && effective >= MIN_EFFECTIVE);
+            // Verified or valued, and worth delivering: agents who already recover to it unaided
+            // gain nothing from being told.
+            let admitted = (verified || (adv.lower > 0.0 && effective >= MIN_EFFECTIVE)) && !up.summary.gated;
             let strength = admitted.then(|| strength_of(&adv, Effect::Verify, false)).flatten();
             out.push(Valued {
                 key: key.clone(),
@@ -333,6 +373,7 @@ pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors) -> Ve
                 declared,
                 effective,
                 harm_in_window: unexposed.iter().filter(|a| a.x.reward.harm).count() as u32,
+                uplift: up.summary,
                 strength,
             });
         }
@@ -450,6 +491,7 @@ pub fn failure_routes(valued: &[Valued], ss: &[&Session], provenance: &str) -> V
                 provenance: provenance.into(),
                 models: crate::evidence::models(ss),
                 origin: Some(Origin::Learned),
+                uplift: Some(v.uplift.clone()),
                 ..Default::default()
             },
             authored: false,
@@ -457,7 +499,7 @@ pub fn failure_routes(valued: &[Valued], ss: &[&Session], provenance: &str) -> V
         let why = Why {
             shape: "avoid".into(),
             pattern: format!(
-                "[{} ✗ {}] =value=> [{}]: A {:.2} calls (sd {:.2}, P(A>0) {:.2}); Q(∅) {:.2}, Q(Sat) {:.2}; {} triggers, {} took it; {}",
+                "[{} ✗ {}] =value=> [{}]: A {:.2} calls (sd {:.2}, P(A>0) {:.2}); Q(∅) {:.2}, Q(Sat) {:.2}; {} triggers, {} took it unaided; uplift {:+.2}; {}",
                 failed,
                 v.key.trigger,
                 v.command,
@@ -468,6 +510,7 @@ pub fn failure_routes(valued: &[Valued], ss: &[&Session], provenance: &str) -> V
                 a.q_sat,
                 v.n_null,
                 v.n_sat,
+                v.uplift.mean,
                 if v.declared { "declared by the repository" } else { "seen in the traces" }
             ),
             backoff: 1,
@@ -484,6 +527,376 @@ pub fn failure_routes(valued: &[Valued], ss: &[&Session], provenance: &str) -> V
         out.push((route, why));
     }
     out
+}
+
+// ---------------------------------------------------------------------------------------------
+// Uplift (evals/lab/research/uptake-delivery): A(s, d) = (p_follow − p_self)·ΔQ − C(d) − λ·p_misfire.
+// ---------------------------------------------------------------------------------------------
+
+/// A route whose posterior uplift is below this is not delivered: agents already take its step
+/// unaided nearly as often as they follow it (the research's bar: 79% of deliveries lie under it,
+/// with no measurable loss). The default of `learn.uplift_min` ([`crate::LearnConfig`]).
+pub use adage_tracks::params::UPLIFT_MIN;
+/// A prior alone never silences a route: the gate needs at least this many situations of the
+/// repository's own evidence (training traces plus control-arm judgements).
+pub const UPLIFT_MIN_EVIDENCE: u32 = 3;
+/// The concentration of a kind's research prior on `p_self` (pseudo-situations): a handful of the
+/// repository's own situations outweighs it.
+pub const SELF_KAPPA: f64 = 4.0;
+/// `p_self` of a kind the research did not measure: the pooled rate over every directive kind
+/// (0.50 [0.41, 0.59], 80 withheld units).
+pub const SELF_POOLED: f64 = 0.5;
+/// `p_self` per directive kind, measured against the randomised control's `would_have`
+/// situations (uptake-delivery, "Model of p_follow", learned judge). **Priors**: a kind with a
+/// cross-repository cell ([`Priors::uptake`]) uses that instead, and every route's own evidence
+/// updates it.
+pub const SELF_PRIORS: [(&str, f64); 7] = [
+    // The environment dead end (U11 `.venv`): 12 of 41 withheld agents recovered to it unaided.
+    ("avoid", 0.29),
+    // The after-edit test run.
+    ("run-after-edit", 0.32),
+    ("read-batch", 0.93),
+    // A step at prompt time (the work-item lookup; prompt-time advice measured the same).
+    ("prompt", 0.95),
+    ("obligation", 0.88),
+    // The finish sequence behaved as the obligation (uplift 0).
+    ("sequence", 0.88),
+    // Session-start advice: no clean control; the pooled rate.
+    ("advise", SELF_POOLED),
+];
+/// `p_follow`'s empirical-Bayes concentration across kinds (κ by the method of moments).
+pub const FOLLOW_KAPPA: f64 = 11.8;
+/// `p_follow` of a kind the research did not measure: the pooled rate (183 of 191 delivered).
+pub const FOLLOW_POOLED: f64 = 0.958;
+/// `p_follow` per directive kind (the research's hierarchical Beta, learned follow judge). Model
+/// and wording add nothing identifiable, so the kind is the only key. Treated judgements update it.
+pub const FOLLOW_PRIORS: [(&str, f64); 7] = [
+    ("avoid", 0.944),
+    ("run-after-edit", 0.881),
+    ("read-batch", 0.986),
+    ("prompt", 0.987),
+    ("obligation", 0.975),
+    ("sequence", 0.975),
+    ("advise", 0.99),
+];
+/// The calls after a post-failure trigger in which an unaided agent's recovery counts (the
+/// research's window for a post-failure avoid). Other triggers look to the end of the trace.
+pub const AFTER_FAILURE_WINDOW: usize = 5;
+
+/// The directive kind of a route, which keys its priors: the delivery shape, with a plain `run`
+/// split by when it is delivered (after an edit, at the prompt, or otherwise).
+pub fn kind_of(r: &Route) -> &'static str {
+    match adage_tracks::shape(r) {
+        "avoid" => "avoid",
+        "read-batch" => "read-batch",
+        "obligation" => "obligation",
+        "sequence" => "sequence",
+        // Advice is kinded by when it comes: after a failure it is the dead end's (use the
+        // project's interpreter), after an edit an obligation's (regenerate, do not hand-edit).
+        "card" => "card",
+        "advise" => match r.trigger {
+            Trigger::AfterFailure { .. } => "avoid",
+            Trigger::AfterEdit { .. } => "obligation",
+            _ => "advise",
+        },
+        _ => match r.trigger {
+            Trigger::AfterEdit { .. } => "run-after-edit",
+            Trigger::Prompt { .. } | Trigger::Intent { .. } => "prompt",
+            _ => "run",
+        },
+    }
+}
+
+fn prior_of(table: &[(&str, f64)], kind: &str, pooled: f64) -> f64 {
+    table.iter().find(|(k, _)| *k == kind).map_or(pooled, |(_, p)| *p)
+}
+
+impl Priors {
+    /// `p_self`'s prior for a kind: (mean, κ, fitted across repositories).
+    pub fn self_prior(&self, kind: &str) -> (f64, f64, bool) {
+        match self.uptake.get(kind).filter(|c| c.n > 0.0) {
+            Some(c) => ((c.took / c.n).clamp(0.01, 0.99), c.kappa.unwrap_or(SELF_KAPPA), true),
+            None => (prior_of(&SELF_PRIORS, kind, SELF_POOLED), SELF_KAPPA, false),
+        }
+    }
+}
+
+/// What a route's `p_self` and `p_follow` rest on.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Unaided {
+    /// Unexposed training traces in the matching situation, and those that took the step.
+    pub traces: u32,
+    pub traces_took: u32,
+    /// Control-arm situations the runtime judged (`would_have`), and those that took the step.
+    pub control: u32,
+    pub control_took: u32,
+    /// Treated judgements, and the follows among them (a misfire is a follow that failed).
+    pub delivered: u32,
+    pub followed: u32,
+}
+
+/// The posteriors of one route's uplift: `p_follow` and `p_self` as Betas, and the summary.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UpliftPosterior {
+    pub follow: (f64, f64),
+    pub unaided: (f64, f64),
+    pub summary: Uplift,
+}
+
+/// The uplift of a directive of `kind` on this evidence: `p_follow − p_self`, each a Beta
+/// posterior from its kind's prior, the two independent. Gated below `bar` (0: never) when at least
+/// [`UPLIFT_MIN_EVIDENCE`] situations of the repository's own say so.
+///
+/// The training traces and the control arm both count toward `p_self`. They can overlap (a
+/// control session is also a training trace once learned from), which overstates the certainty
+/// but not the rate: the control's judgement is the runtime's own at the exact trigger.
+pub fn uplift(kind: &str, u: &Unaided, priors: &Priors, bar: f64) -> UpliftPosterior {
+    let (m, k, fitted) = priors.self_prior(kind);
+    let took = (u.traces_took.min(u.traces) + u.control_took.min(u.control)) as f64;
+    let n = (u.traces + u.control) as f64;
+    let unaided = (m * k + took, (1.0 - m) * k + n - took);
+    let f = prior_of(&FOLLOW_PRIORS, kind, FOLLOW_POOLED);
+    let followed = u.followed.min(u.delivered) as f64;
+    let follow = (f * FOLLOW_KAPPA + followed, (1.0 - f) * FOLLOW_KAPPA + u.delivered as f64 - followed);
+    let (pf, vf) = stats::beta_moments(follow.0, follow.1);
+    let (ps, vs) = stats::beta_moments(unaided.0, unaided.1);
+    let mean = pf - ps;
+    let lower = mean - stats::ADVANTAGE_Z * (vf + vs).sqrt();
+    let r = |x: f64| (x * 1e4).round() / 1e4;
+    let gated = bar > 0.0 && mean < bar && u.traces + u.control >= UPLIFT_MIN_EVIDENCE;
+    UpliftPosterior {
+        follow,
+        unaided,
+        summary: Uplift {
+            kind: kind.to_string(),
+            p_follow: r(pf),
+            p_self: r(ps),
+            mean: r(mean),
+            lower: r(lower),
+            prior_self: r(m),
+            prior_fitted: fitted,
+            traces: u.traces,
+            traces_took: u.traces_took,
+            control: u.control,
+            control_took: u.control_took,
+            delivered: u.delivered,
+            followed: u.followed,
+            gated,
+        },
+    }
+}
+
+/// [`stats::advantage_mix`] with the research's uplift in place of `p_follow · (1 − p_sat)`:
+/// `A = (p_follow − p_self) · (Q(other) − Q(Sat d)) − C − p_misfire · m`, where `p_follow` is
+/// the unconditional rate of taking `Sat(d)` once told and `p_self` the rate unaided.
+pub fn advantage_uplift(
+    q_other: (f64, f64),
+    q_sat: (f64, f64),
+    up: &UpliftPosterior,
+    misfire: (f64, f64),
+    cost: f64,
+    misfire_cost: f64,
+) -> Advantage {
+    let (m0, s0) = stats::gamma_moments(q_other);
+    let (m1, s1) = stats::gamma_moments(q_sat);
+    let (pf, vf) = stats::beta_moments(up.follow.0, up.follow.1);
+    let (ps, vs) = stats::beta_moments(up.unaided.0, up.unaided.1);
+    let (pm, vm) = stats::beta_moments(misfire.0, misfire.1);
+    let (u, vu) = (pf - ps, vf + vs);
+    let d = m0 - m1;
+    let vd = s0 * s0 + s1 * s1;
+    let mean = u * d - cost - pm * misfire_cost;
+    let var = u * u * vd + vu * d * d + vu * vd + misfire_cost * misfire_cost * vm;
+    let sd = var.max(0.0).sqrt();
+    let p_positive = if sd > 0.0 {
+        stats::normal_cdf(mean / sd)
+    } else if mean > 0.0 {
+        1.0
+    } else {
+        0.0
+    };
+    Advantage {
+        mean,
+        sd,
+        p_positive,
+        lower: mean - stats::ADVANTAGE_Z * sd,
+        q_null: ps * m1 + (1.0 - ps) * m0,
+        q_sat: m1,
+    }
+}
+
+/// The command a route directs, as a follow judgement reads it (slots dropped): its first step
+/// command, or the command a session-start advice names.
+fn directed_command(r: &Route) -> Option<String> {
+    let c = match &r.step {
+        Step::Advise { slots, .. } => ["command", "interpreter", "manager"].iter().find_map(|k| slots.get(*k).cloned()),
+        s => adage_graph::compile::commands(s).first().map(|c| c.to_string()),
+    }?;
+    let c: Vec<&str> = c.split_whitespace().filter(|t| !t.contains('{')).collect();
+    (!c.is_empty()).then(|| c.join(" "))
+}
+
+/// Whether a trace's step took the directed command: the learned follow judge where the
+/// repository's weights are fitted, else the structural and action judges
+/// ([`adage_core::pattern::follows`], which reads a test run by [`adage_core::action::satisfies`]).
+fn took(directed: &str, st: &crate::import::StepObs, weights: &adage_core::judge::Weights) -> bool {
+    if st.call.failed {
+        return false;
+    }
+    let raw = st.call.input.get("command").and_then(|c| c.as_str());
+    raw.is_some_and(|o| weights.follows(directed, o))
+        || adage_core::pattern::follows(&format!("exec {directed}"), &st.key)
+}
+
+/// Whether a failed call (canonical key) fires an after-failure trigger on `command`, as the
+/// runtime reads it for an instinct or a bare runner: the command with options added, or any run
+/// of the same runner.
+fn failure_matches(command: &str, observed: &str) -> bool {
+    adage_core::pattern::meets(command, observed)
+        || command.strip_prefix("exec ").is_some_and(|runner| adage_core::pattern::runs_avoided(runner, observed))
+}
+
+/// The unaided rate of a route over the training traces, judged at its trigger: each unexposed
+/// trace where the trigger occurs is one situation, and it took the step when a later call (within
+/// [`AFTER_FAILURE_WINDOW`] after a failure) follows the directed command. `None` for a trigger
+/// read only at hook time (a context, an intent) or a step with no command.
+pub fn unaided_in_traces(r: &Route, ss: &[&Session]) -> Option<(u32, u32)> {
+    let directed = directed_command(r)?;
+    let pairs: Vec<(&str, &str)> = ss
+        .iter()
+        .flat_map(|s| {
+            s.steps
+                .iter()
+                .filter_map(|st| st.call.input.get("command").and_then(|c| c.as_str()).map(|c| (s.id.as_str(), c)))
+        })
+        .collect();
+    let weights = adage_core::judge::Weights::fit(pairs);
+    let (mut took_n, mut n) = (0u32, 0u32);
+    for s in ss.iter().filter(|s| !crate::engine::exposed(s, r)) {
+        let at: Option<(usize, usize)> = match &r.trigger {
+            Trigger::AfterFailure { command, signature } => s
+                .steps
+                .iter()
+                .position(|x| {
+                    x.call.failed && x.call.output.contains(signature.as_str()) && failure_matches(command, &x.key)
+                })
+                .map(|i| (i + 1, (i + 1 + AFTER_FAILURE_WINDOW).min(s.steps.len()))),
+            Trigger::AfterEdit { paths } => s
+                .steps
+                .iter()
+                .position(|x| {
+                    adage_core::keys::is_author(&x.norm.action)
+                        && x.rel_path.as_deref().is_some_and(|p| crate::engine::glob_hit(paths, p))
+                })
+                .map(|i| (i + 1, s.steps.len())),
+            Trigger::AfterCommand { command } => {
+                s.steps.iter().position(|x| x.key == *command && !x.call.failed).map(|i| (i + 1, s.steps.len()))
+            }
+            Trigger::SessionStart => Some((0, s.steps.len())),
+            Trigger::Prompt { .. } => {
+                let mut emb = crate::dormant::Embeddings::new(None);
+                crate::dormant::occurs(r, s, &mut emb).then_some((0, s.steps.len()))
+            }
+            Trigger::Intent { .. } | Trigger::Context { .. } => return None,
+        };
+        let Some((from, to)) = at else { continue };
+        n += 1;
+        took_n += u32::from(s.steps[from..to].iter().any(|st| took(&directed, st, &weights)));
+    }
+    Some((took_n, n))
+}
+
+/// The training traces' unaided counts of a route, `(took, situations)`: what its own judgement
+/// counted where that is the unaided rate (a mined route's support among the unexposed traces
+/// where its trigger occurred; a valued route's traces whose next run was in `Sat(d)`), else
+/// judged on the traces ([`unaided_in_traces`]). The session-start test card counts the sessions
+/// it would have helped, so its unaided count is the rest.
+pub fn trace_counts(r: &Route, ss: &[&Session]) -> Option<(u32, u32)> {
+    if let Some(u) = &r.evidence.uplift {
+        return Some((u.traces_took, u.traces));
+    }
+    let e = &r.evidence;
+    if r.is_instinct() || e.opportunities == 0 {
+        return unaided_in_traces(r, ss);
+    }
+    let (k, n) = (e.support.min(e.opportunities), e.opportunities);
+    Some(match &r.step {
+        Step::Advise { template, .. } if template == "test-command" => (n - k, n),
+        _ => (k, n),
+    })
+}
+
+/// Estimate every route's uplift ([`uplift`]) from the training traces and the runtime's
+/// judgements of it (`judged`, keyed by repository and route), record it on the route, and put a
+/// gated route in service no longer: a live route becomes nascent, so it waits for a person's
+/// approval and shows in `adage review` with why. Returns the gated ids.
+pub fn assess(
+    routes: &mut [Route],
+    ss: &[&Session],
+    repo: &str,
+    judged: &BTreeMap<(String, String), crate::instincts::Judged>,
+    priors: &Priors,
+    bar: f64,
+) -> Vec<String> {
+    let mut gated = Vec::new();
+    for r in routes.iter_mut() {
+        // A person's route is theirs; a procedure card is valued on its own (recurring-workflows:
+        // its value is the whole task's, measured separately), prime and said once, so neither is
+        // estimated or gated here.
+        if r.authored || matches!(r.step, Step::Card { .. }) {
+            continue;
+        }
+        let (traces_took, traces) = trace_counts(r, ss).unwrap_or_default();
+        let j = judged.get(&(repo.to_string(), r.id.clone())).copied().unwrap_or_default();
+        let u = Unaided {
+            traces,
+            traces_took,
+            control: j.control_total,
+            control_took: j.control_followed,
+            delivered: j.total(),
+            followed: j.followed + j.misfired,
+        };
+        let up = uplift(kind_of(r), &u, priors, bar).summary;
+        if up.gated && r.state.is_live() {
+            r.state = RouteState::Nascent;
+            gated.push(r.id.clone());
+        }
+        r.evidence.uplift = Some(up);
+    }
+    gated
+}
+
+/// Per kind, the unaided counts of these routes (for fitting [`Priors::uptake`] across
+/// repositories): `(kind, took, situations)`.
+pub fn uptake_units(routes: &[Route], ss: &[&Session]) -> Vec<(String, f64, f64)> {
+    routes
+        .iter()
+        .filter_map(|r| {
+            let (k, n) = trace_counts(r, ss)?;
+            (n > 0).then(|| (kind_of(r).to_string(), k as f64, n as f64))
+        })
+        .collect()
+}
+
+/// A Beta prior's concentration fitted by the method of moments across units `(took, n)` (one per
+/// repository, say): the between-unit variance of the rates beyond binomial sampling, τ², gives
+/// κ = p(1 − p)/τ² − 1. `max_kappa` when the units vary no more than sampling explains; `None`
+/// with fewer than two units that have data.
+pub fn fit_beta_kappa(units: &[(f64, f64)], max_kappa: f64) -> Option<f64> {
+    let units: Vec<(f64, f64)> = units.iter().copied().filter(|&(_, n)| n > 0.0).collect();
+    if units.len() < 2 {
+        return None;
+    }
+    let (t, n): (f64, f64) = units.iter().fold((0.0, 0.0), |(a, b), &(x, y)| (a + x, b + y));
+    let p = t / n;
+    let k = units.len() as f64;
+    let between = units.iter().map(|&(x, y)| (x / y - p).powi(2)).sum::<f64>() / (k - 1.0);
+    let sampling = units.iter().map(|&(_, y)| p * (1.0 - p) / y).sum::<f64>() / k;
+    let tau2 = between - sampling;
+    if tau2 <= 0.0 || p <= 0.0 || p >= 1.0 {
+        return Some(max_kappa);
+    }
+    Some((p * (1.0 - p) / tau2 - 1.0).clamp(0.5, max_kappa))
 }
 
 #[cfg(test)]
@@ -533,5 +946,191 @@ mod tests {
         assert_eq!(strength_of(&a(0.2, 1.0), Effect::Verify, false), None);
         assert_eq!(strength_of(&a(2.0, 0.5), Effect::Environment, false), Some(Strength::Prime));
         assert_eq!(strength_of(&a(2.0, 0.5), Effect::Author, false), None);
+    }
+
+    fn route(trigger: Trigger, step: Step, effect: Effect, support: u32, opportunities: u32) -> Route {
+        Route {
+            id: "r".into(),
+            summary: String::new(),
+            trigger,
+            step,
+            slots: vec![],
+            effect,
+            strength: Strength::Prime,
+            state: RouteState::Firm,
+            exit: vec![],
+            evidence: Evidence { support, opportunities, provenance: "desire-path".into(), ..Default::default() },
+            authored: false,
+        }
+    }
+
+    fn traces(took: u32, of: u32) -> Unaided {
+        Unaided { traces: of, traces_took: took, ..Default::default() }
+    }
+
+    #[test]
+    fn uplift_is_follow_minus_unaided() {
+        let p = Priors::default();
+        // The dead end (research: +0.69): agents rarely recover to the project's environment.
+        let u = uplift("avoid", &traces(1, 8), &p, UPLIFT_MIN).summary;
+        assert!(u.mean > 0.6 && !u.gated, "{u:?}");
+        // A read batch agents already read (research: p_self 0.93, uplift ≈ 0).
+        let u = uplift("read-batch", &traces(9, 10), &p, UPLIFT_MIN).summary;
+        assert!(u.mean < UPLIFT_MIN && u.gated, "{u:?}");
+        // A lookup every agent already runs.
+        assert!(uplift("prompt", &traces(12, 12), &p, UPLIFT_MIN).summary.gated);
+        // A prior alone never silences a route: an obligation's research prior is below the bar,
+        // but with no situation of this repository's it is delivered.
+        let u = uplift("obligation", &Unaided::default(), &p, UPLIFT_MIN).summary;
+        assert!(u.mean < UPLIFT_MIN && !u.gated, "{u:?}");
+        // The repository's own evidence outweighs the kind's prior: a read batch agents here
+        // mostly miss has uplift.
+        assert!(uplift("read-batch", &traces(3, 12), &p, UPLIFT_MIN).summary.mean > 0.3);
+    }
+
+    #[test]
+    fn control_judgements_and_follows_count() {
+        let p = Priors::default();
+        // The control arm's would-have judgements: agents did it unaided 19 of 20 times.
+        let u = Unaided { control: 20, control_took: 19, ..Default::default() };
+        assert!(uplift("run-after-edit", &u, &p, UPLIFT_MIN).summary.gated);
+        // Treated judgements move p_follow: a route agents ignore has little uplift.
+        let told = Unaided { delivered: 20, followed: 6, ..traces(2, 10) };
+        let base = uplift("avoid", &traces(2, 10), &p, UPLIFT_MIN).summary;
+        let ignored = uplift("avoid", &told, &p, UPLIFT_MIN).summary;
+        assert!(ignored.p_follow < base.p_follow - 0.3 && ignored.mean < base.mean, "{ignored:?}");
+    }
+
+    #[test]
+    fn a_fitted_cell_replaces_the_research_constant() {
+        let mut p = Priors::default();
+        assert_eq!(p.self_prior("read-batch"), (0.93, SELF_KAPPA, false));
+        p.uptake.insert("read-batch".into(), SelfCell { n: 40.0, took: 10.0, kappa: Some(6.0) });
+        assert_eq!(p.self_prior("read-batch"), (0.25, 6.0, true));
+        let u = uplift("read-batch", &Unaided::default(), &p, UPLIFT_MIN).summary;
+        assert!(u.prior_fitted && u.mean > 0.5, "{u:?}");
+    }
+
+    #[test]
+    fn value_scales_with_uplift() {
+        let q_other = stats::gamma_poisson(40.0, 10.0, DEFAULT_CALLS, DEFAULT_KAPPA);
+        let q_sat = stats::gamma_poisson(10.0, 10.0, DEFAULT_CALLS, DEFAULT_KAPPA);
+        let p = Priors::default();
+        let a =
+            |u: &Unaided| advantage_uplift(q_other, q_sat, &uplift("avoid", u, &p, UPLIFT_MIN), (0.5, 20.0), 0.1, 2.0);
+        let rare = a(&traces(1, 20));
+        let usual = a(&traces(19, 20));
+        assert!(rare.mean > 2.0, "{rare:?}");
+        // What agents already do is worth (about) nothing to tell them.
+        assert!(usual.mean < 0.3 && usual.lower < 0.0, "{usual:?}");
+    }
+
+    #[test]
+    fn kinds_follow_the_shape_and_the_moment() {
+        let run = |t: Trigger| route(t, Step::Run { command: "make test".into() }, Effect::Verify, 0, 0);
+        assert_eq!(kind_of(&run(Trigger::AfterEdit { paths: "src/**".into() })), "run-after-edit");
+        assert_eq!(kind_of(&run(Trigger::Prompt { span: adage_core::spans::SpanKind::Path })), "prompt");
+        assert_eq!(
+            kind_of(&run(Trigger::AfterFailure { command: "exec pytest".into(), signature: "x".into() })),
+            "avoid"
+        );
+        assert_eq!(kind_of(&run(Trigger::AfterCommand { command: "exec make".into() })), "run");
+        let rb = route(
+            Trigger::AfterCommand { command: "exec x".into() },
+            Step::ReadBatch { slot: "files".into(), max: 5 },
+            Effect::Observe,
+            0,
+            0,
+        );
+        assert_eq!(kind_of(&rb), "read-batch");
+    }
+
+    #[test]
+    fn assess_quiets_what_agents_already_do() {
+        let rb = route(
+            Trigger::AfterCommand { command: "exec x".into() },
+            Step::ReadBatch { slot: "files".into(), max: 5 },
+            Effect::Observe,
+            9,
+            10,
+        );
+        let fix = Route {
+            id: "d".into(),
+            ..route(
+                Trigger::AfterFailure { command: "exec pytest".into(), signature: "No module".into() },
+                Step::Run { command: ".venv/bin/python -m pytest".into() },
+                Effect::Verify,
+                1,
+                8,
+            )
+        };
+        let mut card_slots = BTreeMap::new();
+        card_slots.insert("command".to_string(), ".venv/bin/python -m pytest".to_string());
+        // The session-start card counts the sessions it would have helped: 8 of 10 here, so 2 ran
+        // tests the right way unaided.
+        let card = Route {
+            id: "c".into(),
+            ..route(
+                Trigger::SessionStart,
+                Step::Advise { template: "test-command".into(), slots: card_slots },
+                Effect::Observe,
+                8,
+                10,
+            )
+        };
+        let mut routes = vec![rb, fix, card];
+        let gated = assess(&mut routes, &[], "repo", &BTreeMap::new(), &Priors::default(), UPLIFT_MIN);
+        assert_eq!(gated, vec!["r".to_string()]);
+        assert_eq!(routes[0].state, RouteState::Nascent);
+        let u = routes[0].evidence.uplift.as_ref().unwrap();
+        assert!(u.gated && (u.traces, u.traces_took) == (10, 9), "{u:?}");
+        assert!(u.line().contains("9 of 10 traces did it unaided") && u.line().contains("Quiet"), "{}", u.line());
+        assert_eq!(routes[1].state, RouteState::Firm);
+        assert!(routes[1].evidence.uplift.as_ref().unwrap().mean > 0.6);
+        let c = routes[2].evidence.uplift.as_ref().unwrap();
+        assert_eq!((c.traces, c.traces_took, c.gated), (10, 2, false));
+        // Control-arm judgements from the spools quiet a route the traces could not.
+        let mut judged = BTreeMap::new();
+        judged.insert(
+            ("repo".to_string(), "d".to_string()),
+            crate::instincts::Judged { control_followed: 60, control_total: 60, ..Default::default() },
+        );
+        let mut routes = vec![routes[1].clone()];
+        routes[0].evidence.uplift = None;
+        assert_eq!(assess(&mut routes, &[], "repo", &judged, &Priors::default(), UPLIFT_MIN), vec!["d".to_string()]);
+    }
+
+    #[test]
+    fn a_procedure_card_is_never_gated() {
+        let card = adage_tracks::card::Card {
+            sessions: 10,
+            passed: 10,
+            files: vec![],
+            exemplars: vec![],
+            commands: vec![],
+            avoid: vec![],
+            finish: None,
+            prompts: vec![],
+        };
+        let mut routes = vec![route(
+            Trigger::Intent { family: "f".into(), model: "m".into(), centroid: vec![], threshold: 0.9 },
+            Step::Card { card },
+            Effect::Observe,
+            10,
+            10,
+        )];
+        assert!(assess(&mut routes, &[], "repo", &BTreeMap::new(), &Priors::default(), UPLIFT_MIN).is_empty());
+        assert_eq!(routes[0].state, RouteState::Firm);
+        assert!(routes[0].evidence.uplift.is_none());
+    }
+
+    #[test]
+    fn beta_kappa_by_moments() {
+        // Units that agree beyond sampling: full pooling.
+        assert_eq!(fit_beta_kappa(&[(5.0, 10.0), (5.0, 10.0), (6.0, 10.0)], 20.0), Some(20.0));
+        // Units that disagree: a weak prior.
+        let k = fit_beta_kappa(&[(1.0, 20.0), (19.0, 20.0), (10.0, 20.0)], 20.0).unwrap();
+        assert!(k < 3.0, "{k}");
+        assert_eq!(fit_beta_kappa(&[(1.0, 2.0)], 20.0), None);
     }
 }

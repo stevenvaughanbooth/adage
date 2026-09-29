@@ -50,6 +50,8 @@ pub struct LearnConfig {
     pub instincts: Option<crate::instincts::Config>,
     /// Cross-repository priors of the directive-value model ([`crate::value::Priors`]).
     pub priors: crate::value::Priors,
+    /// Uplift gating's bar (`learn.uplift_min`, [`crate::value::assess`]); 0 turns it off.
+    pub uplift_min: f64,
     /// Repository key → its root on disk, for the static scan the value model reads
     /// ([`crate::value::Statics`]); a repository not named here is read at its sessions' working
     /// directory (the instinct configuration's roots take precedence).
@@ -66,6 +68,17 @@ impl Default for LearnConfig {
 }
 
 impl LearnConfig {
+    /// Uplift gating's bar for this run: `uplift_min`, except for traces made by agents that were
+    /// given the steps (`adage train`'s exploration sessions, provenance `synthetic:…`), which say
+    /// nothing of what agents do unaided (0: estimated and shown, never gated).
+    pub fn uplift_bar(&self) -> f64 {
+        if self.provenance.starts_with("synthetic") {
+            0.0
+        } else {
+            self.uplift_min
+        }
+    }
+
     /// The rate bar for a route id: `retain_rate` if it already exists, else `prime_rate`.
     pub fn bar(&self, id: &str) -> f64 {
         if self.existing.contains(id) {
@@ -101,6 +114,7 @@ impl LearnConfig {
             instincts: None,
             priors: p.outcome_priors.as_ref().and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
             roots: BTreeMap::new(),
+            uplift_min: p.uplift_min,
             cards: None,
         }
     }

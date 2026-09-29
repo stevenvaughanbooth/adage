@@ -928,7 +928,7 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
         .cloned()
         .or_else(|| crate::instincts::root_of(ss.iter().map(|s| s.root.as_path())));
     let statics = crate::value::Statics::of(root.as_deref());
-    let valued = crate::value::value_failures(ss, &statics, &cfg.priors);
+    let valued = crate::value::value_failures(ss, &statics, &cfg.priors, cfg.uplift_bar());
     let valued_routes = crate::value::failure_routes(&valued, ss, &cfg.provenance);
     // A learned step that runs a runner the value model shows failing here for the environment is
     // spelled with the environment that works (`python -m pytest tests/test_{part}` becomes
@@ -972,7 +972,7 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
     // The tests of what was edited (`crate::testmap`): the project's runner, the edited file's tests
     // bound from a map. It explains a mined check after an edit that runs the same test tool
     // (`python -m pytest tests/test_{part}`, `npm test -- packages/{part}`): one reflex, built.
-    let plan = crate::testmap::plan(ss, &statics, root.as_deref(), &cfg.priors, &cfg.provenance);
+    let plan = crate::testmap::plan(ss, &statics, root.as_deref(), &cfg.priors, cfg.uplift_bar(), &cfg.provenance);
     if let Some((Some((route, why)), planned)) = plan.clone() {
         let family = planned.runner.clone();
         routes.retain(|j| {
