@@ -600,11 +600,22 @@ SKILL:
 
 def llm_structure(path: str, model: str = "claude-haiku-4-5-20251001") -> dict:
     """One tool-less compile-time call; the caller validates and reviews the result."""
+    import os
     import subprocess
+    import tempfile
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "live"))
+    import runner  # the live runner's isolation: fresh HOME and CLAUDE_CONFIG_DIR, host-auth allowlist
 
     prompt = LLM_PROMPT.format(roles=", ".join(sorted(ROLES)), skill=Path(path).read_text())
-    out = subprocess.run(["claude", "-p", prompt, "--model", model, "--tools", "", "--output-format", "json"],
-                         capture_output=True, text=True, timeout=300)
+    with tempfile.TemporaryDirectory() as home:
+        for d in runner.home_dirs(home).values():
+            Path(d).mkdir(parents=True, exist_ok=True)
+        env = runner.isolation_env(home, os.environ, runner.HOST_AUTH_ENV)
+        assert not any(k == "CLAUDECODE" or "SESSION_ID" in k for k in env)
+        out = subprocess.run(["claude", "-p", prompt, "--model", model, "--tools", "", "--strict-mcp-config",
+                              "--output-format", "json"], capture_output=True, text=True, timeout=300, env=env,
+                             cwd=home)
     res = json.loads(out.stdout)
     text = res.get("result", "")
     m = re.search(r"\{.*\}", text, re.S)
