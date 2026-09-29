@@ -97,7 +97,7 @@ research's live sessions and on the data-expansion corpus.
 
 ```bash
 cd evals/showcase
-BIN=/tmp/adage-go-target/release/adage   # the dry-run binary; with another binary, re-run dryrun.py first (prereg product.binary_rule)
+BIN=/abs/path/to/release/adage   # a build of 7db8b22+ (with adage-exec beside it) whose dryrun.py result is recorded in prereg.json
 R=/tmp/adage-showcase/runs
 RUN="env -u CLAUDECODE -u CLAUDE_CODE_SESSION_ID python3 sc_run.py"
 FAMS="click-type mm-validator go-flag http-header chi-middleware"
@@ -136,12 +136,16 @@ python3 render.py                                       # RESULTS.md + results.j
   - The scorer trims its Go build cache above 250 MB and prunes each sandbox's `.venv` and `target/`.
   - Transcripts add about 1-2 MB per session.
 
-## Dry run (`dryrun.json`, $0)
+## Dry run ($0)
 
-It ran against the release binary `/tmp/adage-go-target/release/adage` (`adage 0.1.0`, sha256
-`1918e9b4…195e`).
+It ran twice, both times before any session.
 
-**What passed:**
+1. **`dryrun.json`:** the GO validation's release binary (`/tmp/adage-go-target/release/adage`,
+   sha256 `1918e9b4…195e`).
+2. **`dryrun-7db8b22.json`:** a release build of 7db8b22, which groups the files a task names after
+   itself by role (sha256 `009a4ce7…3da11`). `dryrun/gate.<family>.json` holds this run.
+
+**What passed both times:**
 
 - **Validation:** 60/60 variants.
 - **Configs:** all 7 plan through `sc_run.py` -> `gv_run.py` -> the runner. That gives 36 sessions
@@ -156,38 +160,34 @@ It ran against the release binary `/tmp/adage-go-target/release/adage` (`adage 0
   - `dryrun/RESULTS.synthetic.md` and `dryrun/results.synthetic.json` show the published format on
     synthetic numbers.
 
-**What the product did with synthetic training history** (built from the gold patches;
-`dryrun/gate.<family>.json`):
+**What the product did with synthetic training history** (built from the gold patches):
 
-| family | card formed | held out delivered | negatives with a card |
+| family | card formed (first binary / 7db8b22) | held out delivered (7db8b22) | negatives with a card (both) |
 | --- | --- | --- | --- |
-| click-type | yes | 8/8 at the prompt | 0/6 |
-| mm-validator | yes | 8/8 | **2/6**, both at the first edit of `validate.py` (two RepoBench fixes of existing validators) |
-| go-flag | yes | 8/8 | 0/6 |
-| http-header | yes | 8/8 | **1/6**, at the first edit of `name.rs` (a doc edit of an existing constant) |
-| chi-middleware | **no** | 0/8 | 0/6 |
+| click-type | yes / yes | 8/8 at the prompt | 0/6 |
+| mm-validator | yes / yes | 8/8 at the prompt | **2/6**, both at the first edit of `validate.py` |
+| go-flag | yes / yes | 8/8 at the prompt | 0/6 |
+| http-header | yes / yes | 8/8 at the prompt | **1/6**, at the first edit of `name.rs` |
+| chi-middleware | **no** / **yes** | 8/8 (7 at the prompt, 1 at the first edit) | 0/6 |
 
-**Findings that shape the run:**
+**Findings:**
 
-1. **chi-middleware forms no card with this binary.**
-   - **The rule:** the learner joins two traces only if their edited files' *shapes* overlap
-     (Jaccard >= 0.25). A shape is directory, name-token count, first token and extension.
-   - **Why chi misses:** chi names each middleware's files after it (`no_sniff.go`,
-     `allow_methods.go`, `hsts.go`), so only `README.md` is shared (Jaccard 0.2). Each training
-     session stays a family of one.
-   - **Why go-flag works:** its files share a first token (`flag_url.go`, `flag_port.go`).
-   - **Decision:** the family is kept unchanged. Dropping or renaming it would select families to
-     suit the product. It is predicted to contribute about 0 to the pooled ITT, at a cost of about
-     $8.
-   - **If the rule is fixed before the live run:** the new binary is used only after `dryrun.py` has
-     been re-run and its result recorded (`prereg.json` `product.binary_rule`).
-2. **The grey-zone file signal works in this binary and is imprecise on same-file fixes.**
-   - It was broken in the GO validation's card-branch build.
-   - It delivered the card at the first edit of a card file for 3 of the 12 negatives whose fix
-     edits the family's own file.
-   - False fires count both routes, and the prompt/edit split is reported.
-3. **Prediction:** pooled ITT between -8% and -16%. Detail per family is in `prereg.json`
-   `predictions`.
+1. **chi-middleware, first binary:** no card.
+   - The learner joined traces only if the shapes of their edited files overlapped: directory,
+     name-token count, first token and extension.
+   - chi names each middleware's files after it (`no_sniff.go`, `hsts.go`), so the shapes did not
+     overlap.
+2. **chi-middleware, 7db8b22:** the fix groups the files a task created by role, and the card is
+   `README.md`, `middleware/<x>.go`, `middleware/<x>_test.go` plus `go test -count=1 ./middleware/`.
+   The family was not changed between the two runs.
+3. **False fires, both binaries:** 3 of 30 negatives got the card, all at the first edit of a card
+   file on same-file fixes or a doc edit, and none at the prompt. They count, and the split is
+   reported.
+4. **Binary for the live run:** a build of 7db8b22 or later whose dry run is recorded in `prereg.json`
+   (`product.binary_rule`). The live run also needs `adage-exec`: build
+   `-p adage-cli -p adage-exec -p adage-train`, re-run `dryrun.py`, and record the sha256 first. The
+   7db8b22 target was deleted after the dry run.
+5. **Prediction:** pooled ITT between -10% and -20%.
 
 ## Files
 
@@ -201,4 +201,4 @@ It ran against the release binary `/tmp/adage-go-target/release/adage` (`adage 0
 | `analyze.py`, `calibration.json`, `power.json`, `synthetic.json` | the pre-registered analysis; `--interim` (R4), `--power`, `--synthetic` |
 | `render.py` | `RESULTS.md` and `results.json` (schema `adage-showcase-results/1`) from `analysis.json` |
 | `prereg.json` | question, families, design, metrics, analysis, power, budget, stopping rules, reporting rules, predictions, dry-run findings |
-| `dryrun.py`, `dryrun.json`, `dryrun/` | the no-spend dry run, its probe results per family and the synthetic rendering |
+| `dryrun.py`, `dryrun.json`, `dryrun-7db8b22.json`, `dryrun/` | the no-spend dry runs (first binary, 7db8b22 build), the latest probe results per family and the synthetic rendering |

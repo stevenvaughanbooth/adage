@@ -1,79 +1,100 @@
 {
  "family": "chi-middleware",
- "home": "/tmp/sc-dry-chi-middleware-ly8lkh3w/adage-home",
- "adage": "/tmp/adage-go-target/release/adage",
- "cards": [],
+ "home": "/tmp/sc-dry-chi-middleware-941ge20v/adage-home",
+ "adage": "/tmp/adage-showcase-target/release/adage",
+ "cards": [
+  {
+   "id": "card-11e594f481",
+   "bytes": 9503
+  }
+ ],
  "held_out": [
   {
    "task": "chi-middleware--method-override",
-   "session": "b0a0d97c-ec2d-4a01-a3b1-bcb5de1390ba",
-   "at_prompt": false,
+   "session": "85ca0e40-30fd-44e5-b401-5c46ff2c2115",
+   "at_prompt": true,
    "at_edit": null,
-   "card_routes_in_spool": [],
-   "delivered": false,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
    "other_directives": []
   },
   {
    "task": "chi-middleware--allow-hosts",
-   "session": "7d948a0d-d7e3-41d2-8b9a-f4f4dbfa021e",
-   "at_prompt": false,
+   "session": "5d2e0443-3e71-43e7-9131-71a66138a763",
+   "at_prompt": true,
    "at_edit": null,
-   "card_routes_in_spool": [],
-   "delivered": false,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
    "other_directives": []
   },
   {
    "task": "chi-middleware--lowercase-path",
-   "session": "9b441c53-99e6-454f-b926-cb9bfa13c919",
+   "session": "160d89e4-1e06-48e4-94b7-98e33efe69f6",
    "at_prompt": false,
-   "at_edit": null,
-   "card_routes_in_spool": [],
-   "delivered": false,
+   "at_edit": "middleware/lowercase_path.go",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
    "other_directives": []
   },
   {
    "task": "chi-middleware--block-user-agents",
-   "session": "f364edc3-7b6e-497d-82e7-078124ba14a8",
-   "at_prompt": false,
+   "session": "f26453b8-6991-4002-bc05-40f2e814e863",
+   "at_prompt": true,
    "at_edit": null,
-   "card_routes_in_spool": [],
-   "delivered": false,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
    "other_directives": []
   },
   {
    "task": "chi-middleware--api-key",
-   "session": "ff1c8538-e9d4-4d04-8878-995343ae5653",
-   "at_prompt": false,
+   "session": "bd77eedc-9954-44bb-b474-91f2da125d46",
+   "at_prompt": true,
    "at_edit": null,
-   "card_routes_in_spool": [],
-   "delivered": false,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
    "other_directives": []
   },
   {
    "task": "chi-middleware--vary",
-   "session": "e12c7865-5e94-4eea-acb8-985b16e9ae1c",
-   "at_prompt": false,
+   "session": "a594314f-e74b-4d80-878a-7749703a72aa",
+   "at_prompt": true,
    "at_edit": null,
-   "card_routes_in_spool": [],
-   "delivered": false,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
    "other_directives": []
   },
   {
    "task": "chi-middleware--content-length-required",
-   "session": "8869b0ca-9c0c-43da-9fa2-a445597cf889",
-   "at_prompt": false,
+   "session": "19dddb50-9a0f-4c75-a5c4-fd4e5b1dad02",
+   "at_prompt": true,
    "at_edit": null,
-   "card_routes_in_spool": [],
-   "delivered": false,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
    "other_directives": []
   },
   {
    "task": "chi-middleware--max-header-count",
-   "session": "6f9ae2c5-0490-40de-92da-4dd5da3580e4",
-   "at_prompt": false,
+   "session": "d27dcdb7-a862-43c8-9277-04e3912f7e27",
+   "at_prompt": true,
    "at_edit": null,
-   "card_routes_in_spool": [],
-   "delivered": false,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
    "other_directives": []
   }
  ],
@@ -81,7 +102,7 @@
   {
    "id": "chi-1f927a8e",
    "source": "repobench",
-   "session": "8080bce8-817d-4fae-87a8-2ab2c1c7acbc",
+   "session": "7cf9fd51-a2d9-4c4d-81b4-071e656d57d0",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -91,7 +112,7 @@
   {
    "id": "chi-87c34a24",
    "source": "repobench",
-   "session": "632faaae-293b-43a0-8830-138af6817d3c",
+   "session": "824239c3-bbcd-45d5-9ac4-46cf765b963e",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -101,7 +122,7 @@
   {
    "id": "chi-05f1ef7b",
    "source": "repobench",
-   "session": "a6c8b60e-2202-48e5-ad6a-168ede683324",
+   "session": "51e5b01f-f456-47cc-aaee-89c012532f48",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -111,7 +132,7 @@
   {
    "id": "neg-chi-throttle-retry-after",
    "source": "handwritten",
-   "session": "8b5f7c35-6c60-4f9b-bc2d-39a46b68a5b1",
+   "session": "06e7ba14-dd46-43e5-95a9-d0ad5f583914",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -121,7 +142,7 @@
   {
    "id": "neg-chi-readme-clientip",
    "source": "handwritten",
-   "session": "75f1c89d-7b81-4b69-9e17-56c5372fc134",
+   "session": "fd011e59-a9ec-492f-917d-6974ed7e48a5",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -131,7 +152,7 @@
   {
    "id": "neg-chi-nocache-bug",
    "source": "handwritten",
-   "session": "c943e9b1-98aa-450e-9fb1-bd0251a0ca1c",
+   "session": "6930b6f3-6bca-4b54-879e-12e759ff9a01",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -149,15 +170,24 @@
   "UserPromptSubmit"
  ],
  "summary": {
-  "cards": 0,
-  "card_formed": false,
+  "cards": 1,
+  "card_formed": true,
   "held_out_delivered": [
-   0,
+   8,
    8
   ],
-  "held_out_at_prompt": 0,
-  "held_out_at_edit": 0,
-  "delivered_tasks": [],
+  "held_out_at_prompt": 7,
+  "held_out_at_edit": 1,
+  "delivered_tasks": [
+   "chi-middleware--method-override",
+   "chi-middleware--allow-hosts",
+   "chi-middleware--lowercase-path",
+   "chi-middleware--block-user-agents",
+   "chi-middleware--api-key",
+   "chi-middleware--vary",
+   "chi-middleware--content-length-required",
+   "chi-middleware--max-header-count"
+  ],
   "false_fires": [
    0,
    6

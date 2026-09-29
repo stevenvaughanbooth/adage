@@ -1,7 +1,7 @@
 {
  "family": "mm-validator",
- "home": "/tmp/sc-dry-mm-validator-n1dd9hrr/adage-home",
- "adage": "/tmp/adage-go-target/release/adage",
+ "home": "/tmp/sc-dry-mm-validator-wefop_e4/adage-home",
+ "adage": "/tmp/adage-showcase-target/release/adage",
  "cards": [
   {
    "id": "card-11e594f481",
@@ -11,7 +11,7 @@
  "held_out": [
   {
    "task": "mm-validator--ends-with",
-   "session": "b354761b-b9be-4415-b836-ecc12d75cbef",
+   "session": "048719de-b00d-4fb0-8d50-ad9d6a219b77",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -22,7 +22,7 @@
   },
   {
    "task": "mm-validator--ip-address",
-   "session": "ddae6564-b225-405e-8b8e-1fcfd84443a8",
+   "session": "cd220696-2be5-497c-86bf-1120b363ae31",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -33,7 +33,7 @@
   },
   {
    "task": "mm-validator--not-blank",
-   "session": "d972d597-ab0a-48c6-8a57-60b3a301c1f8",
+   "session": "56132449-ab7d-4e75-836f-cfd7de4fa056",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -44,7 +44,7 @@
   },
   {
    "task": "mm-validator--ascii",
-   "session": "e4b949eb-c15c-4c82-ae4c-0ecf6d47cc71",
+   "session": "f97f59ed-a5dc-468d-b030-ca44c3ed5fce",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -55,7 +55,7 @@
   },
   {
    "task": "mm-validator--contains",
-   "session": "26f21128-1897-46a0-9ecd-4dd0b708fbcc",
+   "session": "b62fd4eb-8b71-4a4f-8cbc-92a92acd1c09",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -66,7 +66,7 @@
   },
   {
    "task": "mm-validator--lowercase",
-   "session": "2e06b56a-2553-4efc-a2c9-06f9bf8fc34e",
+   "session": "9516b9fb-712d-4b37-993c-3ac44f0163ab",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -77,7 +77,7 @@
   },
   {
    "task": "mm-validator--alphanumeric",
-   "session": "a936d796-630d-4176-bce0-ba5cccdc82fd",
+   "session": "cb766243-383f-4fcd-b692-55ff32229911",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -88,7 +88,7 @@
   },
   {
    "task": "mm-validator--max-words",
-   "session": "a39a172d-58ce-43a4-a32a-14515caac021",
+   "session": "3c8275f1-f406-4b33-94f0-2eece930fcd1",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -102,7 +102,7 @@
   {
    "id": "marshmallow-39e7c833",
    "source": "repobench",
-   "session": "c26dc503-ce10-4972-810d-e23c9a565237",
+   "session": "8dd58af9-8d11-4f49-a16e-27fde0744ed8",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -112,7 +112,7 @@
   {
    "id": "marshmallow-65374df0",
    "source": "repobench",
-   "session": "cbce7519-f7a1-4f37-a33b-4c31ee8aa9fe",
+   "session": "7b883cbd-02ca-46b2-94c9-9c1a113b49ff",
    "at_prompt": false,
    "at_edit": "src/marshmallow/validate.py",
    "card_routes_in_spool": [
@@ -124,7 +124,7 @@
   {
    "id": "marshmallow-f07eadc8",
    "source": "repobench",
-   "session": "2f353f13-3c67-4290-aacd-e4b3afc2f555",
+   "session": "90f9d7f8-4aeb-4085-9501-ace916ac1542",
    "at_prompt": false,
    "at_edit": "src/marshmallow/validate.py",
    "card_routes_in_spool": [
@@ -136,7 +136,7 @@
   {
    "id": "neg-mm-email-plus",
    "source": "handwritten",
-   "session": "ae2e09f1-8124-4ef7-b3db-9c642f792926",
+   "session": "929ef2a0-c834-4a9b-9381-c6f4c01fe71a",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -146,7 +146,7 @@
   {
    "id": "neg-mm-range-bounds",
    "source": "handwritten",
-   "session": "f78b3381-26af-427e-9bf6-3fad853aac7d",
+   "session": "fa7a2f87-66b3-43fc-83fc-c74df14be919",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -156,7 +156,7 @@
   {
    "id": "neg-mm-hex-field",
    "source": "handwritten",
-   "session": "d7b86eee-6b9b-45ea-8da8-dfe6e3f4f4b0",
+   "session": "57fc1040-6746-44ea-b7b0-b64d4353db86",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],

@@ -10,7 +10,15 @@
    "sha256": "1918e9b4cd3684b06bf7fa37a71194ed32327f01132bf475d8bf87bb11f5195e",
    "built": "2026-09-29 21:35 UTC, release profile, from this branch (the GO validation's build)"
   },
-  "binary_rule": "The live run uses a binary whose dry run (dryrun.py) is recorded here: run it with the dry-run binary above, or re-run dryrun.py with the new binary first and add its conditioning results to dry_run_findings (before any session). The binary's sha256 and version are recorded with the runs."
+  "binary_rule": "The live run uses a binary whose dry run (dryrun.py) is recorded here: run it with the dry-run binary above, or re-run dryrun.py with the new binary first and add its conditioning results to dry_run_findings (before any session). The binary's sha256 and version are recorded with the runs.",
+  "binary_7db8b22": {
+   "source": "claude/repo-maturity-roadmap-l95ohs @ 7db8b22 (Cards: group files each task names whole after itself by role)",
+   "build": "CARGO_PROFILE_DEV_DEBUG=0 CARGO_TARGET_DIR=/tmp/adage-showcase-target cargo build --release --locked -p adage-cli (2026-09-29 22:52 UTC; the target was deleted afterwards)",
+   "version": "adage 0.1.0",
+   "sha256": "009a4ce7263738f1533fea775ec51bdebfc037d9bb0fcc5b89000588bc03da11",
+   "dry_run": "dryrun-7db8b22.json"
+  },
+  "binary_for_live_run": "a release build of 7db8b22 or a later commit whose dry run is recorded here (product.binary_rule). The live run needs adage-exec too (runner.py's adage_exec, next to adage): build -p adage-cli -p adage-exec -p adage-train, re-run dryrun.py on that build, and record its sha256 before any session"
  },
  "families": {
   "click-type": {
@@ -491,13 +499,13 @@
   ]
  },
  "predictions": {
-  "usd": "pooled ITT -10% to -20% (research: -18.8% CLAUDE.md card on click+marshmallow, -33.8% hook card on Go; the release binary delivered the GO family's card for 8/8 held-out prompts in its dry run); with chi-middleware at ~0 (no card), the pooled ITT prediction is -8% to -16%",
+  "usd": "pooled ITT -10% to -20% with a build of 7db8b22 or later (every family carded in the dry run); research: -18.8% CLAUDE.md card on click+marshmallow, -33.8% hook card on Go; with the first dry-run binary (chi-middleware uncarded) it would be -8% to -16%",
   "calls": "-10% to -25%",
   "wall_time": "-5% to -20%",
   "pass_rate": "unchanged within +/-1 pass per family",
-  "card_delivery": ">= 75% of adage held-out sessions in the 4 carded families; 0 in chi-middleware; so >= 60% pooled",
+  "card_delivery": ">= 75% of adage held-out sessions in every family (dry run: 8/8 held-out prompts per family through the hook)",
   "false_fires": "about 3 of 30, all at the first edit of a card file on same-file fixes (dry run); 0 at the prompt",
-  "by_family": "with this binary: no card and ~0 effect on chi-middleware (dry-run finding); the largest savings on go-flag; the smallest of the carded families on http-header (the compile loop dominates and repeats in both arms)",
+  "by_family": "the largest savings on go-flag and chi-middleware (per-task file names, more search to save); the smallest on http-header (the compile loop dominates and repeats in both arms)",
   "sonnet": "a smaller relative saving than Haiku (stronger models waste less on procedure)"
  },
  "roots": {
@@ -541,9 +549,27 @@
    "chi-middleware is kept, unchanged: the family was fixed before the dry run, and dropping or renaming it because the product misses it would select families to suit the product. With this binary it is predicted to contribute ~0 to the pooled ITT (about 1/6 of the pooled cost weight) and to cost ~$8.4 for that. A product fix to the file-shape rule, if it lands before the live run, is used only under product.binary_rule (a new dry run recorded here first)",
    "the grey-zone file signal (card at the first edit of a card file) works in this binary (it was broken in the GO validation's card-branch build) and fired on 3 of the 12 same-file negatives: false fires are defined to include it, and the prompt/edit split is reported"
   ],
-  "analysis": "synthetic.json: every pre-registered check holds (false stop 0.01 under a true null, two-sided error 0.075 at nominal 0.10); power.json as in `power`; dryrun/RESULTS.synthetic.md and dryrun/results.synthetic.json show the published format on SYNTHETIC numbers"
+  "analysis": "synthetic.json: every pre-registered check holds (false stop 0.01 under a true null, two-sided error 0.075 at nominal 0.10); power.json as in `power`; dryrun/RESULTS.synthetic.md and dryrun/results.synthetic.json show the published format on SYNTHETIC numbers",
+  "rerun_7db8b22": {
+   "when": "2026-09-29, before any showcase session; $0",
+   "binary": "release build of 7db8b22 (sha256 009a4ce7…3da11)",
+   "result_file": "dryrun-7db8b22.json; dryrun/gate.<family>.json now hold this run",
+   "validation": "60/60 (unchanged)",
+   "configs": "all 7 plan as before",
+   "analysis": "every synthetic check holds",
+   "cards": {
+    "click-type": "card formed; held out 8/8 at the prompt; negatives 0/6",
+    "mm-validator": "card formed; held out 8/8 at the prompt; negatives 2/6, both at the first edit of src/marshmallow/validate.py (marshmallow-65374df0, marshmallow-f07eadc8), 0 at the prompt",
+    "go-flag": "card formed; held out 8/8 at the prompt; negatives 0/6",
+    "http-header": "card formed; held out 8/8 at the prompt; negatives 1/6, at the first edit of src/header/name.rs (neg-http-doc-accept-ranges), 0 at the prompt",
+    "chi-middleware": "CARD FORMED (README.md, middleware/<x>.go, middleware/<x>_test.go; go test -count=1 ./middleware/); held out 8/8: 7 at the prompt, 1 at the first edit (lowercase-path, at middleware/lowercase_path.go); negatives 0/6"
+   },
+   "false_fires_total": "3/30, all at the first edit of a card file, 0 at the prompt (unchanged from the first dry run)",
+   "implication": "with this binary every family forms a card on synthetic history; the chi-middleware 'no card' prediction is withdrawn for builds of 7db8b22 or later"
+  }
  },
  "revisions": [
-  "2026-09-29, before any session: dry-run findings added (chi-middleware forms no card with this binary; false fires include the at-edit signal and the split is reported); interim rule R4 set on synthetic operating characteristics (net pass loss >= 5 alone; the paired-CI condition was dropped because it made the rule too weak against pass harm with no gain in false stops); Rao-Wu bootstrap chosen over the naive percentile bootstrap on known-truth coverage"
+  "2026-09-29, before any session: dry-run findings added (chi-middleware forms no card with this binary; false fires include the at-edit signal and the split is reported); interim rule R4 set on synthetic operating characteristics (net pass loss >= 5 alone; the paired-CI condition was dropped because it made the rule too weak against pass harm with no gain in false stops); Rao-Wu bootstrap chosen over the naive percentile bootstrap on known-truth coverage",
+  "2026-09-29, before any session: dry run re-run on a release build of 7db8b22 (card-family grouping by file role); chi-middleware now forms a card and the probe delivers it for 8/8 held-out prompts; false fires unchanged (3/30, all at the first edit); predictions updated; the live run uses a build of 7db8b22 or later whose dry run is recorded here"
  ]
 }

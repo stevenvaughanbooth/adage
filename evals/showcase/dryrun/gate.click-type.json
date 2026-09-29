@@ -1,17 +1,17 @@
 {
  "family": "click-type",
- "home": "/tmp/sc-dry-click-type-hta57bcu/adage-home",
- "adage": "/tmp/adage-go-target/release/adage",
+ "home": "/tmp/sc-dry-click-type-kw0b7zy3/adage-home",
+ "adage": "/tmp/adage-showcase-target/release/adage",
  "cards": [
   {
    "id": "card-11e594f481",
-   "bytes": 9921
+   "bytes": 9929
   }
  ],
  "held_out": [
   {
    "task": "click-type--semver",
-   "session": "701208b6-814d-49b1-b9fa-c1e90291c947",
+   "session": "03c9161a-58b2-4bd1-b85e-ac3d8e527fe4",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -22,7 +22,7 @@
   },
   {
    "task": "click-type--percentage",
-   "session": "81813d99-052c-46e8-a192-c8d8e68059f1",
+   "session": "ca80a985-8085-4c01-8235-c47a25a821da",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -33,7 +33,7 @@
   },
   {
    "task": "click-type--byte-size",
-   "session": "fd98c387-6710-430d-bcf0-a4185fe60a4d",
+   "session": "80c5854b-7093-4edc-913e-3db07b693e3f",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -44,7 +44,7 @@
   },
   {
    "task": "click-type--slug",
-   "session": "fe8d8124-8b5a-4b2c-9ec3-61c834255fd0",
+   "session": "4defb626-1c1f-4d08-983b-60f85d7c5f66",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -55,7 +55,7 @@
   },
   {
    "task": "click-type--date",
-   "session": "8a1c07d7-435b-4e2a-85cc-09fe1ad785a6",
+   "session": "416b96fb-add3-49ee-b00e-5d286ef50e11",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -66,7 +66,7 @@
   },
   {
    "task": "click-type--host-port",
-   "session": "c3ddc65c-31a6-46f9-9a14-23943a0e74d1",
+   "session": "c2af9b85-5035-411b-841d-275e173b0a57",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -77,7 +77,7 @@
   },
   {
    "task": "click-type--time",
-   "session": "7f6e421e-8972-4e2c-a153-ac2aadd9721b",
+   "session": "fc304e87-cbe3-4710-b206-5dbebd8433a1",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -88,7 +88,7 @@
   },
   {
    "task": "click-type--log-level",
-   "session": "cda58a01-7e95-425b-a2d5-47482804439b",
+   "session": "1292570a-0fb8-4fcc-9542-cb73eac92580",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -102,7 +102,7 @@
   {
    "id": "click-d251cb0a",
    "source": "repobench",
-   "session": "e11bfd67-1db6-483e-985c-341e42af2747",
+   "session": "a562565c-ddbb-4fd0-9882-d8e20bff5cb7",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -112,7 +112,7 @@
   {
    "id": "click-1a4d8c1b",
    "source": "repobench",
-   "session": "1d5096c9-54b5-431a-8da0-af2a5d9e01af",
+   "session": "adfe261d-b51c-4c50-9a58-285c68926bac",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -122,7 +122,7 @@
   {
    "id": "click-eaf33a95",
    "source": "repobench",
-   "session": "376ed03b-8284-41bf-8cc7-a2526612dddd",
+   "session": "cbe2a9a4-bf0d-4edd-ad32-0a84bee7293e",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -132,7 +132,7 @@
   {
    "id": "neg-click-choice-hidden",
    "source": "handwritten",
-   "session": "a7bc6f6e-873c-4a2a-9075-112e87b2ae09",
+   "session": "785e29ca-aeb9-497f-b355-43151b424cbc",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -142,7 +142,7 @@
   {
    "id": "neg-click-doc-custom-type",
    "source": "handwritten",
-   "session": "fa966b2b-bf74-4c99-8290-901763d37994",
+   "session": "62267a39-ec19-4b36-9be0-6f7671e31c63",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -152,7 +152,7 @@
   {
    "id": "neg-click-path-resolve",
    "source": "handwritten",
-   "session": "91419e5a-73a3-4443-b13b-a0f572f3d157",
+   "session": "2cf7a61f-4a7a-4fb9-a2ec-9d28686b273b",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],

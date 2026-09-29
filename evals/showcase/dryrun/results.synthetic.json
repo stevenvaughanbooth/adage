@@ -1,7 +1,7 @@
 {
  "schema": "adage-showcase-results/1",
  "status": "synthetic",
- "generated": "2026-09-29T22:13:46Z",
+ "generated": "2026-09-29T22:53:17Z",
  "prereg": {
   "path": "evals/showcase/prereg.json",
   "sha256": "61c640b49d9c76a39eb872e1d0044ed2454dd02b03bace511f23f6e5143062ac",
