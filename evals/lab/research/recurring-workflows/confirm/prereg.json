@@ -1,0 +1,24 @@
+{
+ "written": "2026-09-29, before any detection score was computed and before any live session of this stage ran",
+ "question": "Does the procedure-card lever survive (1) automatic family detection and (2) hook delivery (UserPromptSubmit additionalContext, no committed file), on a third family in a different ecosystem (Go)?",
+ "family": "go-flag on urfave/cli 58ec406e: add cli.<Name>Flag + cmd.<Name>() accessor, tests, flags doc list, regenerated godoc-current.txt and testdata/godoc-v3.x.txt. Variants fixed in family_urfave.py: training URL, Port, Regexp, IP; held-out Percent, ByteSize, Date, HexColor, CIDR, Semver.",
+ "live_design": {
+  "train": "4 sessions, no hooks, 1 repeat",
+  "held_out": "6 variants x 2 repeats x {control, card-hook}; paired by (variant, repeat); arm order seeded",
+  "control": "adage hooks (directives withheld) + the card hook in LOG mode (decides, never injects)",
+  "card-hook": "same hooks, card hook in DELIVER mode: card as UserPromptSubmit additionalContext when the family match >= tau; grey zone [tau-0.10, tau): delivered at PostToolUse after the agent edits one of the family's card files",
+  "card": "procedure.py from the 4 training transcripts (+ outcomes), unchanged algorithm, token budget 800",
+  "optional": "card-from-1-session arm (first training session only), 6 held-out variants x 1 repeat, if budget allows",
+  "model": "claude-haiku-4-5-20251001, 60 turns, confined, host auth",
+  "budget_usd": "12 hard cap for this stage"
+ },
+ "detection": {
+  "embedder": "potion-base-8M (model2vec mean of token vectors, L2-normalised); potion-code-16m-v2 reported as a secondary",
+  "score": "max cosine between the new prompt and the prompts of the family's prior sessions in the same repository (repo key from `origin`); other repositories' families are never candidates",
+  "threshold": "chosen on the two TRAINING families only (click-type, mm-validator): positives = their 6 held-out variants' prompts and paraphrases (library = the 4 training prompts), negatives = all RepoBench prompts of click and marshmallow + the hard negatives of those repos. tau = midpoint of (max negative, min positive) if separable, else max negative + 0.01. tau_low = tau - 0.10.",
+  "evaluation": "go-flag (never used for the threshold): positives = 6 held-out prompts (templated, as run live) and 6 paraphrases; negatives = all 48 urfave-cli RepoBench prompts + 5 hard negatives. Report recall, precision, false-fire rate (Wilson 90%), with libraries of 4 and of 1 training prompt(s). Secondary signal: false fires of the file signal on RepoBench urfave-cli / click / marshmallow transcripts whose prompt lands in the grey zone and that edit a card file.",
+  "must_hold": "false-fire rate on same-repo negatives: 0 observed (upper 90% Wilson bound reported)"
+ },
+ "primary_metric": "billed $ per session, card-hook/control - 1, paired, 90% bootstrap over variants (6 clusters); secondary calls, pass rate",
+ "prediction": "card-hook saves 15-20% of $ (the n=4 CLAUDE.md card saved 18.8% [11.6, 25.8] on click and marshmallow); pass rate non-inferior (<= 1 net loss in 6 pairs)"
+}

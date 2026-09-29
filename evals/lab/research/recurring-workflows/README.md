@@ -5,6 +5,20 @@
 **$24.22 of $25** over 86 sessions (`spend.json`). The design was pre-registered in `prereg.json`
 before any session ran.
 
+> **Confirmation (stage 2, `confirm/`, $10.35).** On a third family in another ecosystem (urfave/cli,
+> Go), the card was **detected automatically** (potion-8M prompt match; τ chosen on click and
+> marshmallow) and **delivered by a `UserPromptSubmit` hook**, with no committed file. It saved
+> **33.8% of $ (CI 23.6–44.3%) and 31.5% of calls**, with pass rate unchanged.
+>
+> - **Detection is precise:** 0 false fires on 53 same-repository negative prompts and on 58 real
+>   non-family sessions.
+> - **Detection misses paraphrases:** it recognised 0 of 6 informal paraphrases.
+> - **Correction to the learning curve below:** on Go a card from **1** session saved only 9.4%
+>   (CI −24.7% to +8.2%). File names that vary by task need at least 2 sessions to anti-unify, so
+>   "saturated after one session" holds only for families with fixed file names.
+>
+> See `confirm/README.md`, which also has the card-compiler spec for the Rust port.
+
 ## Question
 
 Wave 1 found only small levers (under 5%) on RepoBench. RepoBench tasks are one-off bug fixes, so
@@ -167,7 +181,7 @@ Call shares by role (pooled) are: reads 25%, runs 24%, searches 18%, edits 16%, 
 
 The offline curve uses random prior sets of other variants, 8 draws per held-out session and n.
 
-**Learning does not compound; it steps.**
+**Learning does not compound; it steps.** (Stage 2 qualifies this: see the correction at the top.)
 
 - **The first session gives almost all of it.** One earlier session already gives the card its
   file list (recall 0.91), its exemplars and its test command.
@@ -200,7 +214,7 @@ The offline curve uses random prior sets of other variants, 8 draws per held-out
 1. **`adage` workflow families plus a compiled procedure card** (Rust, `adage-train`/`adage-core`).
    - **Clustering.** Cluster a repository's sessions into families by prompt similarity
      (potion-base-8M, the existing `intent` trigger) together with a shared edited-file set.
-   - **Compiling.** After the **first passing session** of a family, compile a card (this
+   - **Compiling.** After the **second** session of a family (the first when its file names are fixed; stage 2 showed a one-session card fails when names vary), compile a card (this
      `procedure.py`: frequent files in order, added-line exemplars, working command, avoid list),
      and verify its commands in a sandbox, as the skill compiler does.
    - **Delivery.** Deliver it at `UserPromptSubmit` when a new prompt matches the family. It costs
@@ -220,7 +234,7 @@ The offline curve uses random prior sets of other variants, 8 draws per held-out
 Shipping a learned procedure card for recurring families is expected to save **18.8% of $ per
 task (90% CI 11.6–25.8%) and 16% of calls** on tasks that match a family, with pass rate unchanged
 (20/24 vs 19/24). That is **+10.9% of $ beyond today's Adage** on the same pairs. The value is
-available after **one** earlier session of the family and does not grow after that.
+available after one earlier session of the family on click and marshmallow, but it needs at least two on Go, where the file names vary per task (stage 2).
 
 **Confidence that it survives a live A/B: moderate.** Against it:
 

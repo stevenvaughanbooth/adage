@@ -512,6 +512,17 @@ FAMILIES = {
 }
 
 
+# The confirming experiment's third family (Go), kept under confirm/.
+try:
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parent / "confirm"))
+    import family_urfave as _fu  # noqa: E402
+
+    FAMILIES["go-flag"] = _fu.FAMILY
+except ImportError:  # pragma: no cover
+    pass
+
+
 def task_id(family: str, vid: str) -> str:
     return f"{family}--{vid}"
 
@@ -528,7 +539,7 @@ def order(family: str) -> list[str]:
 
 
 def names(family: str) -> list[str]:
-    key = "name" if family == "click-type" else "cls"
+    key = {"click-type": "name", "mm-validator": "cls", "go-flag": "flag"}[family]
     return [v[key] for v in FAMILIES[family]["variants"]]
 
 
