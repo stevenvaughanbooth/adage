@@ -132,7 +132,9 @@ fn a_skill_compiles_replays_and_stages_one_reviewed_pack() {
         assert!(text.contains("STALE"), "{text}");
         assert!(matches!(&proc_.steps[4].outcome, adage_pack::procedure::Outcome::Stale { .. }));
         let lookup = c.candidates.iter().find(|x| x.route.id == "widget-work-s1-lookup").unwrap();
-        assert_eq!(lookup.route.strength, adage_pack::Strength::Fire);
+        // `scripts/ticket` is an unlisted script whose name says nothing of what it changes, so
+        // its effect is environment: prime at most, verified or not.
+        assert_eq!(lookup.route.strength, adage_pack::Strength::Prime);
         // The same skill and repository give the same pack.
         let again = run(r.path(), home.path(), true);
         assert_eq!(again.digest, out.digest);

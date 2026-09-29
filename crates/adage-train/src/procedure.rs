@@ -654,8 +654,18 @@ fn parse_step(n: usize, text: &str, fences: &[Fence], table: &CommandTable) -> P
     // A command that is a prefix of a more specific one of the step is the generic form.
     let specific = templates.clone();
     templates.retain(|t| !specific.iter().any(|o| o != t && o.starts_with(&format!("{t} "))));
-    let commands: Vec<Command> =
-        templates.iter().map(|t| Command { template: t.clone(), role: role_of(t), slots: slot_names(t) }).collect();
+    let commands: Vec<Command> = templates
+        .iter()
+        .map(|t| {
+            let slots = slot_names(t);
+            // A command that takes the work item's id (`scripts/ticket {id}`) looks it up.
+            let role = match role_of(t) {
+                Role::Run if slots.iter().any(|s| s == "id") => Role::Lookup,
+                r => r,
+            };
+            Command { template: t.clone(), role, slots }
+        })
+        .collect();
 
     let pre = if let Some(c) = AFTER_EDIT.captures(&plain) {
         Pre::AfterEdit(c[3].to_string())
