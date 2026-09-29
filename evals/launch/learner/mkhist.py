@@ -16,7 +16,7 @@ for repo, mirror in REPOS.items():
     base = tasks[last]["base"]
     dst = os.path.join(D, repo)
     shutil.rmtree(dst, ignore_errors=True)
-    subprocess.run([G, "clone", "--quiet", "--shared", "--no-checkout", os.path.join(MIRRORS, mirror), dst], check=True)
+    subprocess.run([G, "clone", "--quiet", "--local", "--no-checkout", os.path.join(MIRRORS, mirror), dst], check=True)
     subprocess.run([G, "-C", dst, "checkout", "--quiet", base], check=True)
     if repo in PY:
         os.makedirs(os.path.join(dst, ".venv", "bin"), exist_ok=True)

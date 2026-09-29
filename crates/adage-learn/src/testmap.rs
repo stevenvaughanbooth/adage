@@ -25,6 +25,7 @@ use crate::import::Session;
 use crate::outcome::{self, Runner};
 use crate::value::{self, Priors, Statics};
 use adage_core::action::{self, EnvClass, Role, Target};
+use adage_core::gitobj::{parse_hex, Oid, Repo};
 use adage_core::Effect;
 use adage_graph::stats::{self, Advantage};
 use adage_tracks::why::Why;
@@ -35,7 +36,7 @@ use std::path::Path;
 
 /// At most this many tests are bound for one edited file.
 pub const K: u8 = 3;
-/// Commits of the history read for co-change, at most, and the largest commit that counts (a
+/// Commits (merges aside) of the history read for co-change, at most, and the largest commit that counts (a
 /// sweeping change says nothing about which tests go with which file).
 const HISTORY: usize = 2_000;
 const MAX_COMMIT_FILES: usize = 40;
@@ -91,41 +92,144 @@ pub fn files(root: &Path) -> BTreeSet<String> {
     out
 }
 
-/// Pairs of files the history changed together, with the commits that did (from `git log` at the
-/// root's HEAD; none when it is not a checkout or has no history).
+/// Pairs of files the history changed together, with the commits that did: the newest commits
+/// reachable from `HEAD` (all parents, newest committer time first, merges skipped: what
+/// `git log --no-merges` lists), read from the object store with [`adage_core::gitobj`] (the
+/// learner spawns nothing). None when the root is not a checkout the reader can see (no history,
+/// shallow, alternates).
 pub fn cochange(root: &Path) -> BTreeMap<(String, String), u32> {
     let mut out = BTreeMap::new();
-    if !root.join(".git").exists() {
-        return out;
-    }
-    let Ok(o) = std::process::Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["log", "--no-merges", "--name-only", "--format=%x00", "-n"])
-        .arg(HISTORY.to_string())
-        .arg("HEAD")
-        .stderr(std::process::Stdio::null())
-        .output()
-    else {
-        return out;
-    };
-    if !o.status.success() {
-        return out;
-    }
-    let text = String::from_utf8_lossy(&o.stdout);
-    for commit in text.split('\0') {
-        let files: BTreeSet<&str> = commit.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
-        if files.len() < 2 || files.len() > MAX_COMMIT_FILES {
+    let Some(mut repo) = Repo::open(root) else { return out };
+    let Some(head) = repo.head() else { return out };
+    let Some((COMMIT, body)) = repo.object(&head, MAX_OBJECT) else { return out };
+    let mut queue = std::collections::BinaryHeap::from([(commit_links(&body).2, head, body)]);
+    let mut seen = BTreeSet::from([head]);
+    let mut read = 0;
+    for _ in 0..adage_core::gitobj::MAX_WALK {
+        if read >= HISTORY {
+            break;
+        }
+        let Some((_, _, body)) = queue.pop() else { break };
+        let (Some(tree), parents, _) = commit_links(&body) else { continue };
+        let mut parent_tree = None;
+        for p in &parents {
+            let Some((COMMIT, pb)) = repo.object(p, MAX_OBJECT) else { continue };
+            let links = commit_links(&pb);
+            parent_tree = links.0;
+            if seen.insert(*p) {
+                queue.push((links.2, *p, pb));
+            }
+        }
+        // Merges are skipped, as `git log --no-merges` skips them.
+        if parents.len() >= 2 {
             continue;
         }
-        let tests: Vec<&str> = files.iter().copied().filter(|f| outcome::is_test_path(f)).collect();
-        for s in files.iter().copied().filter(|f| source_path(f)) {
-            for t in &tests {
-                *out.entry((s.to_string(), t.to_string())).or_default() += 1;
+        read += 1;
+        let mut files = BTreeSet::new();
+        let complete = changed(&mut repo, Some(tree), parent_tree, "", &mut files, 0);
+        if complete && files.len() >= 2 && files.len() <= MAX_COMMIT_FILES {
+            let tests: Vec<&String> = files.iter().filter(|f| outcome::is_test_path(f)).collect();
+            for s in files.iter().filter(|f| source_path(f)) {
+                for t in &tests {
+                    *out.entry((s.clone(), (*t).clone())).or_default() += 1;
+                }
             }
         }
     }
     out
+}
+
+const COMMIT: u8 = 1;
+const TREE: u8 = 2;
+/// The largest commit or tree object the walk reads.
+const MAX_OBJECT: usize = 4 << 20;
+/// How deep a tree comparison descends.
+const MAX_DEPTH: usize = 32;
+
+/// A tree entry: whether it is a directory, and its object.
+type Entry = (bool, Oid);
+
+/// A commit's tree, parents and committer time (headers end at the first blank line).
+fn commit_links(body: &[u8]) -> (Option<Oid>, Vec<Oid>, i64) {
+    let (mut tree, mut parents, mut time) = (None, Vec::new(), 0);
+    let hex = |l: &[u8]| std::str::from_utf8(l).ok().and_then(parse_hex);
+    for line in body.split(|&b| b == b'\n') {
+        if line.is_empty() {
+            break;
+        }
+        if let Some(t) = line.strip_prefix(b"tree ") {
+            tree = hex(t);
+        } else if let Some(p) = line.strip_prefix(b"parent ") {
+            parents.extend(hex(p));
+        } else if let Some(c) = line.strip_prefix(b"committer ") {
+            // `Name <email> <seconds> <zone>`
+            time = String::from_utf8_lossy(c).rsplit(' ').nth(1).and_then(|t| t.parse().ok()).unwrap_or(0);
+        }
+    }
+    (tree, parents, time)
+}
+
+/// A tree's entries by name (submodules left out); empty for no tree.
+fn entries(repo: &mut Repo, id: Option<Oid>) -> Option<BTreeMap<String, Entry>> {
+    let mut out = BTreeMap::new();
+    let Some(id) = id else { return Some(out) };
+    let (TREE, body) = repo.object(&id, MAX_OBJECT)? else { return None };
+    let mut rest = body.as_slice();
+    while !rest.is_empty() {
+        let sp = rest.iter().position(|&b| b == b' ')?;
+        let nul = rest.iter().position(|&b| b == 0)?;
+        if nul < sp || rest.len() < nul + 21 {
+            return None;
+        }
+        let mode = &rest[..sp];
+        let name = String::from_utf8_lossy(&rest[sp + 1..nul]).into_owned();
+        let oid: Oid = rest[nul + 1..nul + 21].try_into().ok()?;
+        rest = &rest[nul + 21..];
+        if mode != b"160000" {
+            out.insert(name, (mode == b"40000", oid));
+        }
+    }
+    Some(out)
+}
+
+/// The files that differ between two trees, into `files`; false when a tree could not be read or
+/// the commit changed more files than the map uses.
+fn changed(
+    repo: &mut Repo,
+    new: Option<Oid>,
+    old: Option<Oid>,
+    prefix: &str,
+    files: &mut BTreeSet<String>,
+    depth: usize,
+) -> bool {
+    if new == old {
+        return true;
+    }
+    if depth > MAX_DEPTH {
+        return false;
+    }
+    let (Some(n), Some(o)) = (entries(repo, new), entries(repo, old)) else { return false };
+    let names: BTreeSet<&String> = n.keys().chain(o.keys()).collect();
+    let dir = |e: Option<&Entry>| e.filter(|e| e.0).map(|e| e.1);
+    let blob = |e: Option<&Entry>| e.is_some_and(|e| !e.0);
+    for name in names {
+        let (a, b) = (n.get(name), o.get(name));
+        if a == b {
+            continue;
+        }
+        let path = format!("{prefix}{name}");
+        if blob(a) || blob(b) {
+            files.insert(path.clone());
+        }
+        let (da, db) = (dir(a), dir(b));
+        if (da.is_some() || db.is_some()) && !changed(repo, da, db, &format!("{path}/"), files, depth + 1) {
+            return false;
+        }
+        if files.len() > MAX_COMMIT_FILES {
+            return false;
+        }
+    }
+    true
 }
 
 /// A source file the map is for: code, inside a directory, not a test.

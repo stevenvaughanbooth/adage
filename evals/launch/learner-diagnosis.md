@@ -164,7 +164,7 @@ install).
 
 | Repository | Before | After |
 |---|---|---|
-| click | none | `dead-end-95d94b` **fire**: after `python -m pytest` fails with `No module named pytest`, `.venv/bin/python -m pytest` (A 2.49 calls, P(A>0) 0.98, verified); `dead-end-0cdcfb` **fire**: the same after `No module named 'click'`; `run-3e72af` **prime**: after editing `src/click/*.py`, `.venv/bin/python -m pytest {tests}` (16 files mapped; A 4.41, verified) |
+| click | none | `dead-end-586db0` **fire**: after `python -m pytest` fails with `No module named pytest`, `.venv/bin/python -m pytest` (A 2.49 calls, P(A>0) 0.98, verified); `dead-end-c44607` **fire**: the same after `No module named 'click'`; `run-3e72af` **prime**: after editing `src/click/*.py`, `.venv/bin/python -m pytest {tests}` (16 files mapped; A 4.41, verified) |
 | attrs | none | four dead ends at **fire** (`python` and `python3 -m pytest`; `No module named pytest` and `'hypothesis'`), all to `.venv/bin/python -m pytest`; `run-7f0aa3` **prime**: after editing `src/attr/*.py`, `.venv/bin/python -m pytest {tests}` (11 files; `_make.py` → `tests/test_make.py`) |
 | marshmallow | none | five dead ends at **fire** (`pytest`, `simplejson`, `pytz`; `python` and `python3`), to `.venv/bin/python -m pytest`, **from the priors alone**: no training session used the `.venv`; `run-d0b5a9` **prime**: after editing `src/marshmallow/*.py`, `.venv/bin/python -m pytest {tests}` (10 files; A 4.82, valued, not verified) |
 | vue-core | none | `run-b62702` **prime**: after editing `packages/**/*.ts`, `npm test -- packages/{part}` (habit path, 6 of 9 traces). The tests-of-the-edit route (`npm test -- {tests}`, 170 files mapped) is weighed and not admitted: A 0.31, P(A>0) 0.75 (agents already run it) |
@@ -189,6 +189,7 @@ three Python repositories (110 held-out sessions), instincts off, leave-one-repo
 | 4 | Respell steps that run a failing runner; `edit_tests` map | 186 | 2.37 (1.87) | 0 | Pre-emptive test reflex in all three Python repositories |
 | 5 | Priors: a role without data borrows the null chain at every level | 152 | 2.00 (1.57) | 0 | Regression: the test reflex lost its prior in click and attrs |
 | 6 | Pass over role-less levels; value as the `p_sat` mixture | 186 | **2.37 (1.87)** | **0** | Final. vue-core's test map no longer admitted on a cross-ecosystem prior |
+| 7 | Co-change read from the object store (no `git log` process); dead-end ids include command and signature | 186 | 2.37 (1.87) | 0 | Same routes and replay as 6. A first-parent-only walk mapped fewer click files (11 vs 16) and dropped click to 1.14 (0.85); the date-ordered walk over all parents restores `git log`'s commit set. History roots are now plain local clones (`--shared` clones use alternates, which the reader does not follow) |
 | live | click slice, 6 tasks × {control, adage}, $4.04 | 6 of 6 sessions got a learned directive | – | – | see below |
 
 **Live slice** (evals/repobench/configs/v2/click-slice.json: 6 held-out tasks, 1 repeat, Haiku
@@ -198,7 +199,7 @@ transcripts, instincts bound as usual):
 | | adage | control |
 |---|---|---|
 | Learned test reflex (`run-3e72af`) | delivered in 5 of 6; the agent ran it in **5 of 5** (`obligation_met`) | would have fired in 6 of 6; agents ran it unprompted in 2 of 6 |
-| Learned dead end (`dead-end-95d94b`) | delivered in 2; judged "ignored" 2 of 2 (the literal follow judge, bug 1) | would have fired in 4 |
+| Learned dead end (`dead-end-95d94b` in the slice build; now `dead-end-586db0`, as dead-end ids include the failing command and signature) | delivered in 2; judged "ignored" 2 of 2 (the literal follow judge, bug 1) | would have fired in 4 |
 | Runtime follow rate | 0.75 | 0.17 (coincidence) |
 | Environment dead-end hits per session | 1.33 | 1.33 |
 | Turns to first edit (median) | 8 | 10.5 |
@@ -250,11 +251,11 @@ architecture review's waste table (0 of urfave-cli's runs hit an environment dea
 | `cargo test -p adage-eval --test gates` (fidelity, false routes 0 on every committed dataset and generated bundle, adversarial unsafe 0, determinism) | pass (15/15) |
 | `--test parity` | pass |
 | `--test g4` | pass |
-| `--test bench` (J ≥ 0.6307, committed baseline reproduced) | GATES_BENCH |
-| `crates/adage-learn/tests/rust_workspace.rs` (dogfood fixture) | GATES_DOGFOOD |
-| `cargo fmt --all --check`; `cargo clippy --workspace --all-targets --locked -- -D warnings` | GATES_LINT |
-| `cargo test --workspace --locked` (in parts) | GATES_WS |
-| `python3 -m unittest discover evals/gen` | GATES_GEN |
+| `--test bench` (J ≥ 0.6307, committed baseline reproduced) | pass (4/4) |
+| `crates/adage-learn/tests/rust_workspace.rs` (dogfood fixture) | pass |
+| `cargo fmt --all --check`; `cargo clippy --workspace --all-targets --locked -- -D warnings` | pass |
+| `cargo test --workspace --locked` (in parts) | pass, every crate. `adage-cli --test live_learn` fails 4 tests when run in the release profile only, because its spawn recorder is `#[cfg(debug_assertions)]`; in the debug profile 7/7 pass. `adage-exec --test no_spawn` passes: the co-change map reads the git object store with `adage_core::gitobj` and spawns nothing |
+| `python3 -m unittest discover evals/gen` | pass (22 tests) |
 
 ## 10. What changed, where
 
@@ -263,7 +264,7 @@ architecture review's waste table (0 of urfave-cli's runs hit an environment dea
 | `adage-core/src/action.rs` (new) | Typed action classifier: role, environment and class, runner, targets, selectors, piped; `satisfies()` as the follow equivalence (for the runtime's follow judge, bug 1) |
 | `adage-learn/src/outcome.rs` (new) | Goal detectors (G_test from output, exit code ignored), environment signatures, harm, local reward, situation keys |
 | `adage-learn/src/value.rs` (new) | Directive value, priors, failure routes; `judged()` for instincts |
-| `adage-learn/src/testmap.rs` (new) | The file → tests map (naming, co-change at HEAD, traces), the tests-of-the-edit route, the session-start line |
+| `adage-learn/src/testmap.rs` (new) | The file → tests map (naming; co-change over the last 2,000 non-merge commits reachable from HEAD, read from the object store without spawning, pair counts identical to `git log --no-merges` on 4 of 5 repositories and within one commit on 2 marshmallow pairs; traces), the tests-of-the-edit route, the session-start line |
 | `adage-learn/src/engine.rs` | Value routes replace mined routes on the same trigger; respelling of steps that run a failing runner; the test route explains mined checks of the same tool |
 | `adage-learn/src/instincts.rs` | Extinguish by value (L6) |
 | `adage-graph/src/stats.rs` | Gamma–Poisson posteriors with a supplied prior, κ by moments, `advantage`, `advantage_mix` |
