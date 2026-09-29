@@ -54,6 +54,21 @@ def live_tasks(deadends: Path) -> set[tuple[str, str]]:
     return {k for k, v in arms.items() if {"adage", "control"} <= v}
 
 
+def live_by_task(deadends: Path) -> dict:
+    """mechanism.py's per-task live saving: control mean − adage mean of the calls from the dead end
+    to a test run that ran, over tasks with dead-end sessions in both arms."""
+    by = defaultdict(lambda: {"adage": [], "control": []})
+    for line in deadends.read_text().splitlines():
+        if not line.strip():
+            continue
+        r = json.loads(line)
+        repo = r["root"].split("/")[-1]
+        if repo in ROOTS and r["arm"] in ("adage", "control") and r["u11_hits"] and r["recovery_calls"] is not None:
+            by[(repo, r["task"])][r["arm"]].append(float(r["recovery_calls"]))
+    return {k: statistics.mean(v["control"]) - statistics.mean(v["adage"]) for k, v in by.items()
+            if v["adage"] and v["control"]}
+
+
 def task_means(reports: dict[str, dict], keep: set | None, field: str = "saved") -> dict:
     by = defaultdict(list)
     for repo, rep in reports.items():
@@ -95,7 +110,21 @@ def main(argv=None) -> int:
             print(f"| {sat} | {arm} | {mode} | {n} | {d} | {u} | {m:.2f} | [{lo:.2f}, {hi:.2f}] | {flag} |")
             rows.append({"sat": sat, "arm": arm, "mode": mode, "tasks": n, "directives": d, "useful": u,
                          "predicted": round(m, 3), "ci": [round(lo, 3), round(hi, 3)], "inside_live_ci": inside})
+    # Per repository: the live saving and the replay's prediction over the same tasks.
+    live = live_by_task(a.deadends)
+    reps = {r: replay(a.adage, a.manifests / f"{r}.json", "control", "--sat", "goal") for r in ROOTS}
+    pred = task_means(reps, keep)
+    print("\n| Repository | tasks | live saving [95% CI] | replay prediction (goal, post-hoc) [95% CI] |")
+    print("| --- | ---: | --- | --- |")
+    per_repo = {}
+    for r in ROOTS + ("all",):
+        ks = [k for k in live if r == "all" or k[0] == r]
+        lm, llo, lhi, n = clustered({k: live[k] for k in ks})
+        pm, plo, phi, _ = clustered({k: pred.get(k, 0.0) for k in ks})
+        print(f"| {r} | {n} | {lm:.2f} [{llo:.2f}, {lhi:.2f}] | {pm:.2f} [{plo:.2f}, {phi:.2f}] |")
+        per_repo[r] = {"tasks": n, "live": [lm, llo, lhi], "replay": [pm, plo, phi]}
     if a.json:
+        rows.append({"per_repo": per_repo})
         a.json.write_text(json.dumps({"live": LIVE, "rows": rows}, indent=1) + "\n")
     return 0
 
