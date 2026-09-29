@@ -1,0 +1,115 @@
+{
+ "name": "dx-ufo",
+ "repo_key": "github.com/unjs/ufo",
+ "workdir": "repo",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/repobench/sandbox.py",
+  "ufo",
+  "{task}",
+  "{dir}",
+  "--arm",
+  "{arm}",
+  "--context",
+  "{repo}/evals/repobench/context/ufo.md"
+ ],
+ "score": [
+  "python3",
+  "{repo}/evals/repobench/score.py",
+  "ufo",
+  "{task}",
+  "{dir}"
+ ],
+ "prompts": [
+  "Fix {id}."
+ ],
+ "task_prompts": {
+  "ufo-504378c6": "When parsing or building query strings, keys that contain an encoded space aren't decoded/encoded correctly. For example, `decodeQueryKey('key+with+space')` currently returns `\"key+with+space\"` instead of `\"key with space\"`, and `withQuery('/', { 'key with space': 'spaced value' })` should produce `/?key+with+space=spaced+value` but doesn't encode the space in the key properly. Please fix query key decoding/encoding so spaces in keys round-trip correctly.",
+  "ufo-0e060c7f": "`joinURL` doesn't handle path segments that start with `./`. For example:\n```js\njoinURL('/', './')      // expected '/'\njoinURL('/', './foo')  // expected '/foo'\njoinURL('/', './foo', 'bar') // expected '/foo/bar'\n```\nCurrently the leading `./` isn't stripped properly and the joined result comes out wrong. Please fix `joinURL` to handle leading dot segments correctly.",
+  "ufo-3bfbf5ac": "`parseURL` produces wrong results for `data:` and `blob:` URLs, apparently because it tries to split off a host using `//` even though these protocols don't have an authority component. For example:\n```js\nparseURL('data:image/png;base64,aaa//bbbbbb/ccc')\n// expected protocol: 'data:', host: '', pathname: 'image/png;base64,aaa//bbbbbb/ccc'\n\nparseURL('blob:https://video_url')\n// expected protocol: 'blob:', host: '', pathname: 'https://video_url'\n```\nInstead the presence of `//` in the data/pathname seems to be misinterpreted as a host separator. Please fix `parseURL` to handle `data:` and `blob:` URLs correctly.",
+  "ufo-c9e385ec": "URLs that have a leading control character (e.g. a NUL byte) or leading whitespace before the protocol aren't recognized as having a protocol, even though browsers still treat them as such \u2014 this is a known way to sneak a `javascript:` URL past naive checks. For example, `hasProtocol('\\0javascript:alert(true)')` currently returns `false` instead of `true`, and `parseURL('\\0https://invalid.com')` doesn't parse out the host correctly. There should also be a way to determine whether a given protocol string is one that can execute script/data content (`javascript:`, `data:`, `vbscript:`, `blob:`), e.g. `isScriptProtocol('blob:')` should return `true`. Please fix protocol detection to ignore leading whitespace/control characters and add proper script-protocol detection.",
+  "ufo-768210a3": "`parseURL` doesn't normalize the protocol's letter case, so URLs with a mixed-case scheme produce an inconsistent `protocol` value. For example:\n```js\nparseURL('Https://domain.test:3000#owo').protocol // currently 'Https:', expected 'https:'\nparseURL(\"javascrIpt:alert('hello')\").protocol // currently 'javascrIpt:', expected 'javascript:'\n```\nPlease make `parseURL` parse and return the protocol case-insensitively (normalized to lowercase).",
+  "ufo-f4c0400d": "`withTrailingSlash` and `withoutTrailingSlash` mishandle URLs that include a `#fragment` \u2014 the trailing slash ends up added/removed relative to the wrong part of the URL, or the fragment interacts incorrectly with the slash logic. For example:\n```js\nwithTrailingSlash('bar#abc') // expected 'bar#abc/'\nwithTrailingSlash('foo?123#abc', true) // expected 'foo/?123#abc'\nwithoutTrailingSlash('bar/#abc', true) // expected 'bar#abc'\nwithoutTrailingSlash('/a/#abc', true) // expected '/a#abc'\n```\nPlease fix these functions so they respect the fragment correctly, with and without the query-params option enabled.",
+  "ufo-229e83e6": "parseURL incorrectly treats a colon appearing in the pathname of a regular http(s) URL as if it were a Windows drive letter, corrupting the parsed pathname. For example:\n\nparseURL(\"https://test.com/t:est\")\n\nshould produce pathname \"/t:est\", but the drive-letter normalization logic seems to kick in even though the protocol isn't \"file://\". Please fix parseURL so that drive-letter normalization only applies for the file:// protocol.",
+  "ufo-4d024df0": "getQuery/parseQuery returns a plain object for parsed query parameters, which means query keys that collide with Object.prototype properties behave unexpectedly. For example:\n\ngetQuery(\"http://foo.com/?toString=foo\")\n\nshould return `{ toString: \"foo\" }` as an own property, but instead `toString` resolves to the inherited Object.prototype method rather than the parsed value. Please fix parseQuery so query keys can't collide with inherited Object.prototype properties.",
+  "ufo-7959de5b": "parseFilename throws when called without an options argument. For example:\n\nparseFilename(\"/path/to/filename.ext\")\n\nshould return \"filename.ext\", but calling it without passing an options object currently errors because it tries to access a property on the missing options argument. Please fix parseFilename so it works correctly when called with no options.",
+  "ufo-eb299454": "withBase and withoutBase incorrectly treat paths that merely share a text prefix with the base as already containing the base, rather than requiring a proper path-segment match. For example:\n\nwithBase(\"/admin-dashboard\", \"/admin/\") // expected: \"/admin/admin-dashboard\"\nwithoutBase(\"/admin-dashboard\", \"/admin/\") // expected: \"/admin-dashboard\"\n\nCurrently \"/admin-dashboard\" is being mistaken for something already under \"/admin\" (or vice versa) just because the strings share the \"/admin\" prefix, even though \"/admin-dashboard\" is a different path segment than \"/admin\". Please fix withBase and withoutBase so prefix matching respects path segment boundaries regardless of whether the base has a trailing slash."
+ },
+ "train": {
+  "tasks": [
+   "ufo-504378c6",
+   "ufo-0e060c7f",
+   "ufo-3bfbf5ac",
+   "ufo-c9e385ec",
+   "ufo-768210a3"
+  ],
+  "repeats": 2
+ },
+ "eval": {
+  "tasks": [
+   "ufo-f4c0400d",
+   "ufo-229e83e6",
+   "ufo-4d024df0",
+   "ufo-7959de5b",
+   "ufo-eb299454"
+  ],
+  "repeats": 2,
+  "arms": [
+   "control"
+  ]
+ },
+ "seed": 20260928,
+ "model": "claude-haiku-4-5-20251001",
+ "max_turns": 60,
+ "concurrency": 2,
+ "budget_usd": 3.0,
+ "host_auth": true,
+ "confine": true,
+ "learn_args": [
+  "--demo"
+ ],
+ "classify": {
+  "lookup": [],
+  "regen": [
+   "make generate",
+   "go generate",
+   "vitest -u",
+   "--update-snapshots"
+  ],
+  "verify": [
+   "pytest",
+   "vitest",
+   "go test",
+   "make test",
+   "npm test",
+   "npm run test",
+   "pnpm test",
+   "pnpm run test",
+   "pnpm vitest",
+   "tox",
+   "nox",
+   "node --test",
+   "unittest",
+   "go vet"
+  ],
+  "bash_edit": [
+   "sed -i",
+   "cat >",
+   "cat <<",
+   "tee ",
+   "write_text(",
+   "patch -p",
+   "git apply",
+   "perl -pi"
+  ],
+  "check_flags": []
+ },
+ "obligation": {
+  "paths": null
+ },
+ "labels": {
+  "lookup": "lookup",
+  "regen": "regenerate"
+ },
+ "split_digest": "6bb4d9c9a86a81704bdb1b31a07f49a7a378926ef182447891e2567f3c9ffa8c"
+}

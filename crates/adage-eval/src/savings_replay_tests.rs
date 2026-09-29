@@ -109,7 +109,7 @@ fn dead_end_session(piped: bool) -> Vec<(&'static str, serde_json::Value, String
 }
 
 fn runtime<'a>(ix: &'a Index, root: &'a Path, table: &'a CommandTable) -> Policy<'a> {
-    Policy::Runtime { index: ix, repo: REPO, root, table, params: RuntimeParams::default() }
+    Policy::Runtime { index: ix, repo: REPO, root, table, params: RuntimeParams::default(), embed: None, cases: None }
 }
 
 #[test]
@@ -221,11 +221,11 @@ fn pre_emptive_also_saves_the_intercepted_call_and_sees_piped_dead_ends() {
     assert_eq!((r.scored[0].given.t, r.scored[0].given.pre), (1, true));
     assert_eq!(r.net, 3.0, "2 friction calls + the intercepted dead end");
 
-    // Piped: exit 0, so today's hooks never see the failure (launch bug 2); a PreToolUse
-    // interception would.
+    // Piped: exit 0. The runtime now reads a piped run's output for the dead end's signature
+    // (launch bug 2), so post-hoc delivery sees it too; PreToolUse still saves the intercepted call.
     let m = meta(&f, "s2", "t1", &dead_end_session(true), true);
     let post = session(&runtime(&ix, &f.root, &table), &m, Mode::PostHoc, SatRule::Goal).unwrap();
-    assert!(post.scored.is_empty() && post.net == 0.0);
+    assert_eq!((post.scored.len(), post.net), (1, 2.0), "{:#?}", post.scored);
     let pre = session(&runtime(&ix, &f.root, &table), &m, Mode::PreEmptive, SatRule::Goal).unwrap();
     assert_eq!(pre.net, 3.0);
 }
@@ -311,6 +311,32 @@ fn the_cochange_oracle_saves_test_discovery_after_a_source_edit() {
 }
 
 #[test]
+fn an_area_directive_is_satisfied_by_a_run_of_that_package_only() {
+    let c = |cmd: &str, out: &str| {
+        act(
+            &ToolCall {
+                tool: "Bash".into(),
+                input: json!({"command": cmd}),
+                output: out.into(),
+                hook_output: out.into(),
+                failed: false,
+            },
+            "/w/r",
+        )
+    };
+    let vitest = " Test Files  1 passed (1)\n      Tests  3 passed (3)";
+    let d = Class::Area { runner: "pkg-test", dir: "packages/runtime-core".into() };
+    assert!(d.sat(&c("npm test -- packages/runtime-core/__tests__/a.spec.ts", vitest), SatRule::Goal));
+    let other = c("npm test -- packages/reactivity/__tests__/b.spec.ts", vitest);
+    assert!(!d.sat(&other, SatRule::Goal) && d.contradicts(&other));
+    assert!(d.waste(&c("find packages -name '*test*'", "")));
+    assert!(
+        under("packages/runtime-core", "packages/runtime-core")
+            && !under("packages/runtime-core-x/a", "packages/runtime-core")
+    );
+}
+
+#[test]
 fn the_summary_is_a_task_clustered_mean_with_rates_and_gates() {
     let f = fixture();
     let (ix, table) = (u11_index(), CommandTable::load());
@@ -327,6 +353,7 @@ fn the_summary_is_a_task_clustered_mean_with_rates_and_gates() {
     assert_eq!((s.sessions, s.tasks, s.directives, s.useful, s.harmful), (4, 2, 2, 2, 0));
     assert_eq!(s.s_hat, 1.0);
     assert_eq!(s.s_hat_ci, [1.0, 1.0], "both tasks have the same mean: no bootstrap spread");
+    assert_eq!(s.s_hat_ci90, [1.0, 1.0]);
     assert_eq!(s.useful_rate, 1.0);
     assert_eq!(s.useful_lb90, r4(adage_graph::stats::wilson_lower(2.0, 2.0, 1.644_853_626_951_472_2)));
     assert_eq!(s.per_10_calls, r4(10.0 * 2.0 / 14.0));

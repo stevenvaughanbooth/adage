@@ -76,6 +76,10 @@ pub struct Counts {
     pub followed: usize,
     pub dead_ends_headed_off: usize,
     pub finish_lines_met: usize,
+    /// Commands run with the project's environment instead of the system Python (`PreToolUse`
+    /// rewrites), and `pip install`s into the system Python refused.
+    #[serde(default)]
+    pub rewritten: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -308,6 +312,7 @@ struct SpoolSession {
     followed: usize,
     headed_off: usize,
     finish_lines: usize,
+    rewritten: usize,
 }
 
 fn read_spool(path: &Path, repo: &str) -> Option<SpoolSession> {
@@ -330,6 +335,7 @@ fn read_spool(path: &Path, repo: &str) -> Option<SpoolSession> {
         }
         match r["kind"].as_str() {
             Some("session_start") => s.started = true,
+            Some("pretool") if r["withheld"] != true => s.rewritten += 1,
             Some("session_end") | Some("stop") => s.ended = true,
             _ => {}
         }
@@ -344,7 +350,13 @@ fn read_spool(path: &Path, repo: &str) -> Option<SpoolSession> {
             match j["kind"].as_str() {
                 Some("followed") => s.followed += 1,
                 Some("obligation_met") => s.finish_lines += 1,
-                Some("ignored") | Some("misfired") => ignored.push(j["route"].as_str().unwrap_or("").to_string()),
+                // Followed, and the directed command failed: followed all the same (the card
+                // counts what agents did), but no dead end was headed off.
+                Some("misfired") => {
+                    s.followed += 1;
+                    ignored.push(j["route"].as_str().unwrap_or("").to_string());
+                }
+                Some("ignored") => ignored.push(j["route"].as_str().unwrap_or("").to_string()),
                 _ => {}
             }
         }
@@ -376,6 +388,7 @@ pub fn gather(paths: &Paths, repo: &str, ledger: &BTreeMap<String, SessionSummar
             counts.followed += s.followed;
             counts.dead_ends_headed_off += s.headed_off;
             counts.finish_lines_met += s.finish_lines;
+            counts.rewritten += s.rewritten;
         }
         let stem = p.file_stem().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();
         let (Some(l), true, Some(control)) = (by_spool.get(&stem), s.started, s.arm_control) else { continue };

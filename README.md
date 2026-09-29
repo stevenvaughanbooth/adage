@@ -57,12 +57,15 @@ In the background, Adage binds its instincts from the repository's own files (Ma
 repository's: other repositories' transcripts are never opened. From the next prompt on, the agent
 gets its reflexes. Adage keeps learning after every session, and at most once a day, only when
 something is new, tells you in one line (`adage: 3 new reflexes active.`, or `1 install step waits
-for you: run adage review in a terminal.`).
+for you: run adage review in a terminal.`; with no `adage` on your `PATH`, as with the plugin alone,
+the line names the plugin's own binary instead, so the command works as written).
 
 From a terminal, `brew install stevenvaughanbooth/tap/adage` or `npm install -g @adage/cli`, then
 connect your agent once (`adage` tells you how: `adage install claude-code --write --scope user`,
 or `codex`, `opencode`) and start a session. Plain `adage`, anywhere (a terminal, a pipe, or
-`!adage` inside Claude Code), prints where things stand:
+`!adage` inside Claude Code), prints where things stand. An illustrative card (the numbers are made
+up to show every line; no real repository has produced a savings figure yet, see
+[Results so far](#results-so-far)):
 
 ```text
 adage 0.1.0 · github.com/acme/billing                          ● healthy
@@ -89,6 +92,13 @@ delegation at a terminal; install steps (environment changes) wait for `adage re
 learner touches the network; settings files change only when you install the plugin or run
 `adage install … --write` (which shows the diff).
 
+**The one change Adage makes by default** (Claude Code): when a Python repository's own `.venv` was
+verified to have pytest and the project, a test run or scratch repro the agent starts under the
+system Python runs with `.venv/bin/python` instead. Only the interpreter changes; the agent's
+permissions apply as before; you see each one, and the card counts them. A `pip install` into the
+system Python is refused with the command that reaches the project. `adage delegate off` turns
+this off ([docs/execution.md](docs/execution.md#rewrites-to-the-projects-environment-pretooluse-u11)).
+
 ## What it does, concretely
 
 From real traces in a repository, one learner, a graph engine
@@ -114,7 +124,31 @@ how strongly it may be directed, and typed slot contracts: a value from the prom
 only if it matches the contract learned from real values (`^W-\d{4}$`), and file paths only if they
 are safe, repository-relative, and exist.
 
-## Results
+## Results so far
+
+The launch evaluation ([evals/launch/README.md](evals/launch/README.md), 2026-09-29, about 295
+real Claude Code sessions) is the honest summary. In short:
+
+- **Real repositories: no measurable saving yet.** On four open-source repositories (click, attrs,
+  marshmallow, vuejs/core) and 30 real bug-fix tasks with Claude Haiku 4.5, the resolve rate was
+  0.62 with Adage and 0.65 without, and the cost per resolved task $0.47 either way. Learning from
+  those repositories' real traces produced no learned reflex: on an ordinary repository, Adage today
+  is its instincts.
+- **One instinct works, and it is small.** "Run the tests in the project's `.venv`" fired in 41 of 66
+  Python sessions; agents followed it every time (41 of 41, re-checked on the transcripts) and
+  reached a working test run about two tool calls sooner (about $0.01).
+- **No harm measured**: no resolve-rate or cost penalty in 196 real-repository sessions, and no
+  false learned route on 15 datasets at default thresholds.
+- **Large effects only on generated sandboxes** whose conventions are undiscoverable (below); with
+  the conventions written in a `CLAUDE.md` they shrink to about one turn.
+- The evaluation found bugs that hid or switched off what did work: follows judged as ignored (and
+  the instinct then switched off), failures through a pipe unseen, E1 prefetch refused for learned
+  lookups. They are fixed on this branch; the real-repository benchmark has not been re-run since.
+  A six-task micro slice on click with the fixes and the new pre-call rewrite confirms the
+  mechanism (no adage session hit the `.venv` dead end, against 5 of 6 without Adage) but is far
+  too small to measure a saving ([details](evals/launch/README.md#after-the-fixes-2026-09-29-later)).
+
+## Results on generated sandboxes
 
 Real **Claude Haiku 4.5** agents, headless, each in a fresh copy of a sandbox repository whose
 conventions they cannot guess. Adage learned from 18 training sessions, then two learning-loop rounds
@@ -365,15 +399,16 @@ three source directories, `instincts.packs`) are a person's decision: `config se
 terminal and refuses inside an agent session. Every other key only tunes Adage or turns something
 down, and can be set from a script, CI or a sandboxed session.
 
-**Intent families (optional):** `adage models fetch` downloads the pinned static embedding model
-(potion-base-8M, 31 MB, SHA-256 verified; `adage models install <dir>` for offline machines) into
-the data directory. `adage condition` then clusters each repository's prompts into intent families
-(exact kNN + deterministic Louvain, split and merged by what the sessions did next — spike S7) and
-forms an intent reflex per usable family. Without the model everything else works unchanged: learning
-skips intent families and hooks never load a model. Behind a proxy that blocks huggingface.co, the
-download is not retried by itself: `adage doctor` says why (`intent grouping off: huggingface.co
-blocked by proxy (403)`) and how to fix it. `ADAGE_MODEL_BASE_URL=<mirror>` downloads the same
-files from a mirror (still checked against the pinned SHA-256s).
+**Embeddings and intent families (nothing to do):** the `adage` binary bundles the static
+embedding model potion-base-8M, quantised to int8 (7.9 MB, SHA-256 pinned), so `adage condition`
+clusters each repository's prompts into intent families (exact kNN + deterministic Louvain, split
+and merged by what the sessions did next — spike S7) and forms an intent reflex per usable family,
+with no download. `adage models fetch [potion-base-8m | potion-code-16m-v2]` installs a model's
+pinned upstream files instead (from Hugging Face, else the byte-identical npm package; every file is
+checked against its SHA-256), `adage models use <key|auto|hashed>` chooses, and `adage models
+status`, `adage doctor` and the status card (`embeddings: …`) say what is in use. With no model at
+all the explicit hashed fallback is shown, intent reflexes cannot fire, and everything else works
+unchanged. What embeddings are and are not worth on replay: [evals/launch/embeddings.md](evals/launch/embeddings.md).
 
 **Sharing:** `adage share <track> --out <dir> [--key <path>]` converts a track to a **pack** (the
 only format that travels; [docs/packs.md](docs/packs.md)), checks every byte for absolute paths,

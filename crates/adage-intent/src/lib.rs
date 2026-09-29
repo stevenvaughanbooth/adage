@@ -6,6 +6,7 @@
 //!   runtime dependencies beyond std: a WordPiece tokenizer, a lookup table read from
 //!   safetensors, mean pooling, L2 normalisation. Rows are read on demand, so a hook process
 //!   touches a few kilobytes, not the 30 MB table.
+//! * [`npm`] — a model's files read out of its npm package tarball (the fetch fallback).
 //! * [`cluster`] — the method S7 recommends: exact cosine kNN, then deterministic Louvain on the
 //!   kNN graph thresholded at a similarity, then a minimum family size.
 //! * [`quantize`] / [`dequantize`] — centroids travel in tracks as integers (units of 1e-4), which
@@ -16,6 +17,7 @@
 pub mod cluster;
 pub mod model;
 pub mod normalize;
+pub mod npm;
 pub mod purity;
 pub mod tokenize;
 

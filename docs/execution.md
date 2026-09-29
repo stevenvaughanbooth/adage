@@ -57,7 +57,17 @@ the classifier's view), the sandbox profile in one line, the script closure (an 
 script with its SHA-256, re-read and checked before every run), the output fields, the exit
 predicates and the evidence, then writes the approval through adage-exec's API
 (`$ADAGE_HOME/approvals.json`). Output fields default to what later routes read from the command's
-output (the `lookup → read-linked` edge: the linked files); `--fields` declares them explicitly.
+output (the `lookup → read-linked` edge: the linked files); for a lookup nothing else reads, to the
+repository paths its output names (`files`) and the work item's text fields when its output has them
+(`title`, `description`, `state`, `status`, `acceptance`: read from a JSON object's field or a
+`Title: …` line, whichever shape the output has). A `text` field is bounded plain text: control and
+invisible characters stripped, whitespace collapsed, at most 600 characters (`max`, up to 2,000),
+and withheld when the output scanner finds instruction-shaped text, a secret or an Adage tag in it.
+When the block carries such text, the directive says "The lookup was run; its result is below; you
+don't need to run it again." (with paths only, "That lookup has been run; its result is below.").
+`--fields` declares the fields explicitly. The prompt value a learned lookup binds (`{item}`, a
+learned value type) is E1's input as a typed prompt span is: the runtime binds it
+(`adage_core::vtype`), and the contract checks it again before it runs.
 A pack route's fields, exits and timeout come from its pack. `--raw` asks for raw mode (policy
 must allow it); `--timeout-ms` raises the wall timeout up to 3,000 ms.
 
@@ -111,6 +121,56 @@ A delivered E1 lookup (`sh`, Landlock + seccomp) costs about 18 ms more than E0 
 agent's own lookup call and the turns that saves beyond E0 (the turn is saved when it held only
 the lookup): demo-haiku45, 15 of 24 scored sessions, 0.62 turns per triggered session; synthetic,
 14 of 18, 0.78. These are estimates for G3's 0.5-turn bar, not the L2 result.
+
+## Rewrites to the project's environment (`PreToolUse`, U11)
+
+Before a shell command runs, Adage may change **one thing** in it: the interpreter of a Python test
+run or scratch repro that would run under the system Python, when the repository's own environment
+has what it needs.
+
+```text
+python -m pytest tests/test_formatting.py -xvs 2>&1 | head -50
+→ /work/click/.venv/bin/python -m pytest tests/test_formatting.py -xvs 2>&1 | head -50
+```
+
+- **What is rewritten**: `pytest …`, `python -m pytest …`, and a `python`/`python3` run whose code
+  imports the project's own package or a declared test dependency (`-c`, a heredoc, `-m <pkg>`, or a
+  `.py` script it reads). Every argument, pipe and redirection is kept; only the interpreter word
+  changes (`adage_runtime::pretool`). An activated environment, `uv run`, an interpreter given by
+  path, or anything the reader cannot place is left alone.
+- **What is refused**: `pip install …` (and `python -m pip install …`) into the system Python, with
+  the command that reaches the project instead (`.venv/bin/python -m pip install …`, or
+  `uv pip install …`). Refusing it prevents a change to the machine's Python; it runs nothing.
+- **When**: only in a repository whose U11 instinct is in service (not extinguished, rejected or
+  turned off) and whose environment was **verified when the instincts were bound**, from its files
+  alone: a `.venv` (or `venv`) with its `pyvenv.cfg` and interpreter, pytest in its
+  `site-packages`, and the project imported from this checkout (an editable install or `.pth`
+  pointing inside it). The result is recorded with the binding and rechecked whenever the
+  checkout's declared files or the environment's `site-packages` change. Nothing is verified, and
+  nothing is run, in the hook.
+- **How**: Claude Code's `PreToolUse` `updatedInput`, with no permission decision, so Claude Code's
+  own permission checks apply to the new command exactly as to the original; the model is told in
+  `additionalContext`, the person in one `systemMessage` line. Codex and OpenCode cannot rewrite a
+  call: they keep the post-hoc directive after the failure.
+
+**Why this is on by default, and not an E1/E2 grant.** Delegation consent exists because Adage
+would run something the agent did not ask for. A rewrite runs nothing on its own: the agent's own
+command still runs, through the agent's own tool and permissions, with a strictly equivalent
+interpreter (the same Python program, the environment the repository itself declares, verified to
+contain what the command imports) instead of one that fails (`No module named pytest`). It adds no
+effect, touches no file, and cannot run code the command did not already run. The refusal of a
+system `pip install` only prevents a mutation. So it is on by default for instincts with a verified
+environment, like a directive, and three things keep it honest: it is never done in the control
+arm (so its effect is measured), `adage delegate off` turns it off on the machine (`delegate on`
+back on), and it is always visible: the person sees each rewrite as it happens, and the status card
+says `rewrote N commands to use the project's environment`. The spool records the kind of rewrite
+and the interpreter, never the command.
+
+**Its value, offline** (`adage eval replay-savings --mode pre-emptive --only U11`, RepoBench v2
+control traces, calls per session): click +1.65 (post-hoc +0.69), attrs +3.31 (+2.47),
+marshmallow +2.99 (+2.21), Sonnet 5 on click +1.36 (+0.61); no harmful directive. Over the same
+traces the planner rewrites a command in 63 of 66 Haiku control sessions and refuses 130 system
+`pip install`s, the calls that installed pytest and the project into the machine's Python.
 
 ## E2 actions from hooks
 

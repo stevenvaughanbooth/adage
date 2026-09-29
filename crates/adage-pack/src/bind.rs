@@ -317,7 +317,7 @@ pub fn known_template(t: &str) -> bool {
 
 /// The embedding models this build can run.
 pub fn known_model(m: &str) -> bool {
-    m == adage_intent::model::pinned_id()
+    adage_intent::model::known_id(m)
 }
 
 fn os_name(o: Os) -> &'static str {

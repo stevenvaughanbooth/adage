@@ -1772,3 +1772,242 @@ fn a_context_can_end_at_a_prompt() {
     let d = go(Event::Prompt { text: "Now OPS-77 please".into() });
     assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["prompt-ctx"]);
 }
+
+/// U11 as the core instinct pack binds it in click (RepoBench v2): after `python -m pytest` fails
+/// with `No module named pytest`, run `.venv/bin/python -m pytest`.
+fn u11_routes() -> Vec<Route> {
+    let table = CommandTable::load();
+    let mut r = route(
+        "dead-end-0cdcfb",
+        Trigger::AfterFailure {
+            command: command_key("python -m pytest", &table),
+            signature: "No module named pytest".into(),
+        },
+        Step::Run { command: ".venv/bin/python -m pytest".into() },
+        vec![],
+        Effect::Verify,
+        Strength::Prime,
+    );
+    r.state = RouteState::Forming;
+    r.evidence.provenance = "instinct:core@1.0.0".into();
+    vec![r]
+}
+
+fn failed(cmd: &str, out: &str) -> Call {
+    Call { failed: true, ..bash(cmd, out) }
+}
+
+fn kinds(d: &Decision) -> Vec<String> {
+    d.judgements.iter().map(|j| serde_json::to_value(j).unwrap()["kind"].as_str().unwrap().to_string()).collect()
+}
+
+/// Bug 1 (launch report): RepoBench v2 session `eval-click-0cd28d65-r2-adage`. The agent's next
+/// test command after the U11 directive ran `.venv/bin/python -m pytest` with its own test id and
+/// flags. `meets` judged all 41 such follows "ignored"; they are followed. A followed run whose
+/// tests fail is followed too (the tests failing is the task); only a run where the runner could
+/// not start is a misfire.
+#[test]
+fn a_directed_runner_narrowed_to_the_task_is_followed() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let index = Index::compile(&[track("github-com-pallets-click/instincts", "instinct:core@1.0.0", u11_routes())]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let first = "python -m pytest tests/test_formatting.py::test_formatting_usage_custom_help -xvs";
+    let missing = "Exit code 1\n/usr/bin/python: No module named pytest";
+    let followed = ".venv/bin/python -m pytest tests/test_formatting.py::test_formatting_usage_custom_help -xvs";
+    let piped = format!("{followed} 2>&1 | head -100");
+    for (outcome, want) in [
+        (bash(followed, "test_formatting_usage_custom_help PASSED\n==== 1 passed in 0.05s ===="), "followed"),
+        (failed(followed, "FAILED tests/test_formatting.py::test_x\n==== 1 failed in 0.09s ===="), "followed"),
+        (failed(followed, "bash: .venv/bin/python: No such file or directory"), "misfired"),
+        (bash(&piped, "==== 1 failed, 2 passed in 0.2s ===="), "followed"),
+        (bash(&piped, "bash: .venv/bin/python: No such file or directory"), "misfired"),
+        // The action classifier (adage_core::action): the environment activated, then its python.
+        (
+            bash(
+                "source .venv/bin/activate && python -m pytest tests/test_formatting.py -q 2>&1 | tail -20",
+                "==== 3 passed in 0.2s ====",
+            ),
+            "followed",
+        ),
+    ] {
+        let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
+        let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
+        let d = go(Event::Failure { call: failed(first, missing) });
+        assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["dead-end-0cdcfb"]);
+        // Claude Code lists the failed call again in the batch after it: not a judgement.
+        assert!(go(Event::Batch { calls: vec![failed(first, missing)] }).judgements.is_empty());
+        let d = if outcome.failed {
+            go(Event::Failure { call: outcome.clone() })
+        } else {
+            go(Event::Batch { calls: vec![outcome.clone()] })
+        };
+        assert_eq!(kinds(&d), [want], "{:?}", outcome.input);
+    }
+    // Another interpreter is not the directed one: the window runs out, ignored.
+    let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
+    let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
+    go(Event::Failure { call: failed(first, missing) });
+    let mut all = Vec::new();
+    for _ in 0..10 {
+        all.extend(kinds(&go(Event::Batch {
+            calls: vec![bash("python3 -m pytest tests -x", "no tests ran in 0.01s")],
+        })));
+    }
+    assert_eq!(all, ["ignored"]);
+}
+
+/// The learned follow judge (adage_core::judge, evals/lab/research/uptake-delivery): with the
+/// repository's weights, a follow no hand-written rule reads (the runner behind a wrapper the
+/// multiplexer table does not know) is judged followed; the system Python still is not.
+#[test]
+fn the_learned_judge_reads_follows_by_the_repository_s_tokens() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let index = Index::compile(&[track("github-com-pallets-click/instincts", "instinct:core@1.0.0", u11_routes())]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let pairs: Vec<(String, String)> = (0..8)
+        .flat_map(|i| {
+            [
+                (format!("s{i}"), format!(".venv/bin/python -m pytest tests/test_{i}.py -x")),
+                (format!("s{i}"), "python -m pytest tests".to_string()),
+            ]
+        })
+        .collect();
+    let w = adage_core::judge::Weights::fit(pairs.iter().map(|(a, b)| (a.as_str(), b.as_str())));
+    let first = "python -m pytest tests/test_basic.py -x";
+    let missing = "/usr/bin/python: No module named pytest";
+    let wrapped = "xvfb-run -a .venv/bin/python -m pytest tests/test_basic.py -x";
+    let judge = |weights: Option<adage_core::judge::Weights>, then: &str| {
+        let mut st = SessionState::default();
+        with_follow_weights(weights, || {
+            decide(&ctx, &mut st, &Event::Failure { call: failed(first, missing) });
+            kinds(&decide(&ctx, &mut st, &Event::Batch { calls: vec![bash(then, "==== 1 passed in 0.1s ====")] }))
+        })
+    };
+    assert!(judge(None, wrapped).is_empty(), "no hand-written rule reads it");
+    assert_eq!(judge(Some(w.clone()), wrapped), ["followed"]);
+    assert!(judge(Some(w), "python -m pytest tests/test_basic.py -x").is_empty());
+}
+
+/// Bug 5 (launch report): in the zero-config E2E, 4 of 6 sessions began with `python -c "import
+/// click"` or `python repro.py`, which failed with `No module named 'click'` and got nothing. U11's
+/// advice names the project's interpreter; a pytest run failing so gets U11's run step alone.
+#[test]
+fn a_python_run_outside_the_project_environment_is_answered() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let mut routes = u11_routes();
+    let mut click = u11_routes().remove(0);
+    click.id = "dead-end-click".into();
+    click.trigger = Trigger::AfterFailure {
+        command: command_key("python -m pytest", &table),
+        signature: "No module named 'click'".into(),
+    };
+    routes.push(click);
+    for probe in ["python", "python3"] {
+        let mut a = route(
+            &format!("instinct-u11-{probe}-click"),
+            Trigger::AfterFailure { command: command_key(probe, &table), signature: "No module named 'click'".into() },
+            Step::Advise {
+                template: "project-python".into(),
+                slots: [("interpreter".to_string(), ".venv/bin/python".to_string())].into(),
+            },
+            vec![],
+            Effect::Observe,
+            Strength::Prime,
+        );
+        a.state = RouteState::Forming;
+        a.exit = vec![];
+        a.evidence.provenance = "instinct:core@1.0.0".into();
+        routes.push(a);
+    }
+    let t = track("github-com-pallets-click/instincts", "instinct:core@1.0.0", routes);
+    adage_tracks::io::validate(&t).unwrap();
+    let index = Index::compile(&[t]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let first = |call: Call| {
+        let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
+        decide_both(&ctx, &mut st, &mut fast_st, &Event::Failure { call })
+    };
+    let missing = "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nModuleNotFoundError: No module named 'click'";
+    for cmd in ["python -c \"import click; print(click.__version__)\"", "python repro.py", "python3 repro_issue.py --x"]
+    {
+        let d = first(failed(cmd, missing));
+        assert_eq!(d.directives.len(), 1, "{cmd}: {:?}", d.directives);
+        assert_eq!(
+            d.directives[0].text,
+            "That Python is not this repository's environment, which has the project and its test dependencies installed: run Python here as .venv/bin/python."
+        );
+    }
+    // A pytest run that cannot import the project: the run step answers it, without the advice.
+    let d = first(failed("python -m pytest tests/test_basic.py -x", missing));
+    assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["dead-end-click"]);
+    // The project's own interpreter, or another module missing: nothing.
+    assert!(first(failed(".venv/bin/python repro.py", missing)).directives.is_empty());
+    assert!(first(failed("python repro.py", "ModuleNotFoundError: No module named 'requests'")).directives.is_empty());
+}
+
+/// Bug 2 (launch report): `python -m pytest … 2>&1 | head -100` exits 0 even when pytest could not
+/// start, so no failure event fired and U11 never saw the dead end (22 of 63 Haiku sessions that
+/// hit it; the zero-config E2E's only opportunity). A piped run of the monitored runner whose
+/// output holds the signature fires the instinct; a piped run that works, an unpiped exit 0, or
+/// the signature in the output of a command that is not the runner fires nothing.
+#[test]
+fn a_piped_failure_fires_its_dead_end() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let mut routes = u11_routes();
+    routes.push(route(
+        "gen",
+        Trigger::AfterEdit { paths: "schema/*.json".into() },
+        Step::Run { command: "make gen".into() },
+        vec![],
+        Effect::Regenerate,
+        Strength::Fire,
+    ));
+    let index = Index::compile(&[track("acme/t", "instinct:core@1.0.0", routes)]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let run = |call: Call| {
+        let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
+        let d = decide_both(&ctx, &mut st, &mut fast_st, &Event::Batch { calls: vec![call] });
+        d.directives.iter().map(|x| x.route.clone()).collect::<Vec<_>>()
+    };
+    // The zero-config E2E's confined session 2, as the agent ran it.
+    let piped = bash(
+        "cd /tmp/click && python -m pytest tests/test_basic.py -x 2>&1 | head -100",
+        "/usr/bin/python: No module named pytest\n",
+    );
+    assert_eq!(run(piped), ["dead-end-0cdcfb"]);
+    assert!(run(bash("python -m pytest tests -x 2>&1 | tail -5", "==== 12 passed in 0.4s ====")).is_empty());
+    assert!(run(bash("python -m pytest tests -x", "No module named pytest")).is_empty());
+    assert!(run(bash("cat notes.txt | head", "No module named pytest")).is_empty());
+}

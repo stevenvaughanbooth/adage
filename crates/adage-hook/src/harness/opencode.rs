@@ -72,7 +72,7 @@ impl Adapter for OpenCode {
         Some(match out {
             Output::Continue(reason) => json!({ "continue": reason }).to_string(),
             Output::Context(text) => json!({ "context": text }).to_string(),
-            Output::Notice(_) => return None,
+            Output::Notice(_) | Output::Rewrite { .. } | Output::Deny(_) => return None,
         })
     }
 }

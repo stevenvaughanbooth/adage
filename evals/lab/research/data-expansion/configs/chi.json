@@ -1,0 +1,115 @@
+{
+ "name": "dx-chi",
+ "repo_key": "github.com/go-chi/chi",
+ "workdir": "repo",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/repobench/sandbox.py",
+  "chi",
+  "{task}",
+  "{dir}",
+  "--arm",
+  "{arm}",
+  "--context",
+  "{repo}/evals/repobench/context/chi.md"
+ ],
+ "score": [
+  "python3",
+  "{repo}/evals/repobench/score.py",
+  "chi",
+  "{task}",
+  "{dir}"
+ ],
+ "prompts": [
+  "Fix {id}."
+ ],
+ "task_prompts": {
+  "chi-188a1675": "When running a chi app under Go 1.17 or newer, the Recoverer middleware panics instead of gracefully handling a panic in a handler. For example, registering a route that panics inside a request:\n\n```go\nr := chi.NewRouter()\nr.Use(middleware.Recoverer)\nr.Get(\"/\", func(w http.ResponseWriter, r *http.Request) { panic(\"foo\") })\n```\n\nand then issuing a GET request causes the server process itself to crash rather than returning a 500 Internal Server Error response as expected. It looks like something in how the debug stack trace is parsed assumes every line has a certain format, which isn't always true on newer Go versions, leading to an out-of-range slice operation. Please fix this so panics are always recovered cleanly and a 500 status is returned.",
+  "chi-df44563f": "There's still a problem with middleware.Recoverer on Go 1.17+: even after a previous attempt to fix crashes on panic, the error output it produces points to the wrong function/line. If you set up a router like this:\n\n```go\nr := chi.NewRouter()\nr.Use(middleware.Recoverer)\nr.Get(\"/\", func(w http.ResponseWriter, r *http.Request) { panic(\"foo\") })\n```\n\nand trigger the panic, the logged stack output's first call-site line should clearly reference the handler that actually panicked, but it currently doesn't (or the parsing logic is otherwise broken for stacks produced by current Go versions). Please investigate and fix the stack trace handling so it reliably reports the correct originating function.",
+  "chi-74469504": "Mux.Handle doesn't support specifying an HTTP method as part of the pattern string, even though it would be convenient to write something like `r.Handle(\"POST /products/{id}\", handler)` instead of always using `r.Post(...)`. Currently there's no validation or parsing of a leading HTTP method in the pattern passed to Handle, so patterns like `\"POST /products/{id}\"`, malformed method prefixes (e.g. `\"GET/user/{id}\"` with no space), or unsupported methods (e.g. `\"UNSUPPORTED /path\"`) aren't handled correctly\u2014valid method-prefixed patterns should register a method-specific route, and invalid ones should panic. Please add this method-parsing behavior to Handle.",
+  "chi-60b4f5f5": "Following up on Handle's support for method-prefixed patterns (e.g. `r.Handle(\"POST /products/{id}\", handler)`), Mux.HandleFunc doesn't have the same capability\u2014calling `r.HandleFunc(\"POST /products/{id}\", fn)` doesn't correctly register the route for just the POST method the way Handle does. Please make HandleFunc parse and validate an optional leading HTTP method in its pattern argument the same way Handle does, so both methods behave consistently.",
+  "chi-cbaac313": "The RealIP-style middleware only looks at a fixed, hardcoded set of headers (X-Forwarded-For, X-Real-IP) to determine the client's real IP address, with no way to configure additional or different headers such as `CF-Connecting-IP` used behind Cloudflare. There should be a way to specify custom headers to check for the real IP, for example something like `middleware.RealIPFromHeaders(\"CF-Connecting-IP\")`, and when using a custom header set, headers not in that list (like the default X-Real-IP) should no longer be trusted. Please add support for configuring which headers are used to determine the real IP.",
+  "chi-1f927a8e": "The Throttle middleware always responds with a fixed HTTP status code (503 Gateway Timeout style behavior) when a request is throttled, with no way to configure a different status code. For example, some users want throttled requests to instead receive `http.StatusServiceUnavailable` (503) via something like `ThrottleWithOpts(ThrottleOpts{Limit: 1, StatusCode: http.StatusServiceUnavailable})`, but there's currently no option in ThrottleOpts to set this. Please add support for specifying the status code returned when the throttle limit is exceeded.",
+  "chi-6ceb498b": "Mux.Find doesn't correctly resolve the matched route pattern for nested routers. For instance, given routes set up with nested r.Route calls like:\n\n```go\nr.Route(\"/api\", func(r chi.Router) {\n    r.Route(\"/groups\", func(r chi.Router) {\n        r.Route(\"/v2\", func(r chi.Router) {\n            r.Post(\"/{id}\", handler)\n        })\n    })\n})\n```\n\ncalling `r.Find(ctx, \"POST\", \"/api/groups/v2/1\")` should return `\"/api/groups/v2/{id}\"`, but it returns an incorrect or partial pattern (or fails to match) when routes are nested several levels deep, including cases that should not match at all (e.g. unregistered paths or methods) where it should return an empty string but doesn't. Please fix Mux.Find so it correctly resolves patterns for nested route trees and returns an empty string when there's no match.",
+  "chi-78591377": "chi's r.Handle (and related registration methods) let you define patterns like \"GET /my-route\", but only a single space between the method and the path is accepted. If I write a pattern like \"PATCH \\t /\" (multiple spaces or tabs between the method and path, e.g. to visually align a column of routes), it panics as an invalid pattern instead of being treated as a valid route registration for PATCH on \"/\". Go's stdlib http.ServeMux allows this kind of flexible whitespace between method and pattern. Please make chi accept one-or-more spaces/tabs between the method and pattern the same way.",
+  "chi-29164f02": "When a route is registered with Route() (or Mount()) at the same pattern as a separately registered handler for that exact path, the plain handler disappears from Routes()/Walk() output even though it's still fully routable and handles real requests. For example:\n```go\nr := chi.NewRouter()\nr.Route(\"/foo\", func(r chi.Router) {\n    r.Route(\"/bar\", func(r chi.Router) {\n        r.Get(\"/{id}\", handler)\n    })\n    r.Get(\"/bar\", handler)\n})\n```\nHere \"GET /foo/bar\" is a perfectly valid, reachable route, but it's missing from what Walk()/Routes() reports because it collides with the internal mount pattern used to connect the \"/bar\" subrouter. Please fix Routes()/Walk() so real handlers that share a pattern with a mounted subrouter are still reported.",
+  "chi-38939062": "middleware.NewCompressor silently accepts wildcard content types \"*/*\" and \"/*\" without erroring, but instead of compressing every response (a catch-all), it stores an internal key that never matches any real Content-Type, so nothing actually gets compressed with no warning to the caller. For example, `middleware.NewCompressor(5, \"/*\")` should either compress everything or fail loudly, but currently it just quietly does nothing. Since chi intentionally avoids compressing everything (to skip already-compressed types like zip/jpeg/png), please make NewCompressor reject \"*/*\" and \"/*\" outright (e.g. panic with a clear message) instead of accepting them as no-op wildcards."
+ },
+ "train": {
+  "tasks": [
+   "chi-188a1675",
+   "chi-df44563f",
+   "chi-74469504",
+   "chi-60b4f5f5",
+   "chi-cbaac313"
+  ],
+  "repeats": 1
+ },
+ "eval": {
+  "tasks": [
+   "chi-1f927a8e",
+   "chi-6ceb498b",
+   "chi-78591377",
+   "chi-29164f02",
+   "chi-38939062"
+  ],
+  "repeats": 1,
+  "arms": [
+   "control"
+  ]
+ },
+ "seed": 20260928,
+ "model": "claude-haiku-4-5-20251001",
+ "max_turns": 60,
+ "concurrency": 2,
+ "budget_usd": 4.0,
+ "host_auth": true,
+ "confine": true,
+ "learn_args": [
+  "--demo"
+ ],
+ "classify": {
+  "lookup": [],
+  "regen": [
+   "make generate",
+   "go generate",
+   "vitest -u",
+   "--update-snapshots"
+  ],
+  "verify": [
+   "pytest",
+   "vitest",
+   "go test",
+   "make test",
+   "npm test",
+   "npm run test",
+   "pnpm test",
+   "pnpm run test",
+   "pnpm vitest",
+   "tox",
+   "nox",
+   "node --test",
+   "unittest",
+   "go vet"
+  ],
+  "bash_edit": [
+   "sed -i",
+   "cat >",
+   "cat <<",
+   "tee ",
+   "write_text(",
+   "patch -p",
+   "git apply",
+   "perl -pi"
+  ],
+  "check_flags": []
+ },
+ "obligation": {
+  "paths": null
+ },
+ "labels": {
+  "lookup": "lookup",
+  "regen": "regenerate"
+ },
+ "split_digest": "a6dbc845777ee8792a2452f52ee0d96e73224f719f710ab0d302b54219d48e0d"
+}

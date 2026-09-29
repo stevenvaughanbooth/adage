@@ -556,8 +556,42 @@ fn u11(ctx: &Ctx) -> Detected {
             }
         }
     }
+    // Any other Python run (`python -c "import click"`, `python repro.py`) that cannot import the
+    // project's own package or a declared test dependency ran outside the project's environment
+    // too: say which interpreter has them. Advice, not a run step: running an interpreter is not
+    // a step Adage may direct (it classifies as environment). The pytest routes above answer a
+    // pytest run's failure first (`adage_runtime`: advice after a failure only when no run step
+    // answered it).
+    let interpreter = match command.strip_suffix(" -m pytest") {
+        Some(venv_python) => venv_python.to_string(),
+        None => format!("{}python", command.strip_suffix("pytest").unwrap_or("uv run ")),
+    };
+    if adage_tracks::advice::project_interpreter(&interpreter) {
+        let modules = dedup(py.packages.iter().chain(&py.test_deps).cloned().collect());
+        for probe in PYTHON_PROBES {
+            let Some(rkey) = command_key(probe, ctx.table) else { continue };
+            for m in &modules {
+                d.advisories.push(AdvisoryCandidate {
+                    instinct: "U11".into(),
+                    template_id: "project-python".into(),
+                    trigger: Trigger::AfterFailure {
+                        command: rkey.clone(),
+                        signature: format!("No module named '{m}'"),
+                    },
+                    slots: [("interpreter".to_string(), interpreter.clone())].into_iter().collect(),
+                    id_parts: vec![probe.to_string(), m.to_string()],
+                    ecosystem: Some("Python"),
+                    declared: Some(declared.clone()),
+                });
+            }
+        }
+    }
     d
 }
+
+/// Bare interpreters whose any run (`python repro.py`, `python3 -c ...`) U11 answers when it
+/// cannot import the project or its test dependencies.
+pub const PYTHON_PROBES: [&str; 2] = ["python", "python3"];
 
 /// N1: package-manager discipline in a pnpm, yarn or bun repository.
 fn n1(ctx: &Ctx) -> Detected {

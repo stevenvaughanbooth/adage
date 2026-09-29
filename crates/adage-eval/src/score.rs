@@ -3,8 +3,8 @@
 //! Definitions (docs/evals.md has the long form):
 //!
 //! - A directive is **correct** if the agent later took its step unaided: ran the directed
-//!   command (the runtime's follow judgement, `adage_core::pattern::meets`: the same command, or
-//!   it with options added), read
+//!   command (the runtime's follow judgement, `adage_core::pattern::follows`: the same command,
+//!   with whatever the agent added to narrow it, not misfired), read
 //!   at least half of the files a linked-files directive listed, or ran a finish-line route's
 //!   command after the edit that triggered it. For a dead-end warning the step is the command
 //!   it recommends instead.
@@ -314,9 +314,13 @@ impl Expect {
     pub(crate) fn same(&self, other: &Expect) -> bool {
         !self.key.is_empty() && (pattern::meets(&self.key, &other.key) || pattern::meets(&other.key, &self.key))
     }
-    /// The runtime's own judgement: the directed command, or it with options added.
+    /// The runtime's own follow judgement ([`pattern::follows`]): the directed command, with
+    /// whatever the agent added to narrow it, that did not misfire (a test run that ran and
+    /// reported failing tests was followed; one whose runner could not start was not).
     fn matches(&self, a: &Action) -> bool {
-        a.argv.is_some() && !a.failed && pattern::meets(&self.key, &a.key)
+        a.argv.is_some()
+            && !(a.failed && adage_core::outcome::misfired(&a.output))
+            && pattern::follows(&self.key, &a.key)
     }
 }
 

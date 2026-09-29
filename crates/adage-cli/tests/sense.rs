@@ -141,7 +141,7 @@ fn senses_history_per_repository_and_writes_nothing() {
         "new       learned/lookup-work-item",
         "learned/finish-line-",
         "learned/dead-end-",
-        "prompt intents            skipped",
+        "prompt intents            0 usable (potion-base-8m-i8@b9c0e329a2ce)",
     ] {
         assert!(out.contains(s), "report lacks {s:?}:\n{out}");
     }

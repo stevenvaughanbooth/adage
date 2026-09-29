@@ -204,6 +204,10 @@ pub fn stop_reason_not_run(paths: &str, command: &str, reason: &str) -> String {
 /// been run by Adage, and its typed result follows as data.
 pub const E1_RAN: &str = "That lookup has been run; its result is below.";
 
+/// [`E1_RAN`] when the result carries what the lookup is for (a work item's text fields, not only
+/// the files it links): the agent need not run it again.
+pub const E1_RAN_WHOLE: &str = "The lookup was run; its result is below; you don't need to run it again.";
+
 /// The sentence an E1 directive gains when an exit predicate holds on the projected result
 /// (`field` equals `value`): the route directs nothing further. Both are safe ids, checked here;
 /// `None` otherwise.
@@ -215,11 +219,12 @@ pub fn e1_exit_note(field: &str, value: &str) -> Option<String> {
 }
 
 /// A directive delivered with the data block of an E1 prefetch (Track C §3.2, §3.4): the wrapper
-/// carries `exec="e1"`, the body gains [`E1_RAN`] (and the exit note, when one holds) after the
+/// carries `exec="e1"`, the body gains [`E1_RAN`] ([`E1_RAN_WHOLE`] when `whole`: the result
+/// carries the lookup's text, not only paths) (and the exit note, when one holds) after the
 /// command line, and the `<adage-data>` block follows the wrapper, beside it. The block is
 /// rendered by `adage-exec` from its own fixed template and re-checked there by the safety oracle;
 /// here it is only placed, and refused unless it is one whole block.
-pub fn wrap_directive_e1(d: &crate::Directive, block: &str, exit_note: Option<&str>) -> Option<String> {
+pub fn wrap_directive_e1(d: &crate::Directive, block: &str, exit_note: Option<&str>, whole: bool) -> Option<String> {
     let one_block = block.starts_with("<adage-data ")
         && block.ends_with("\n</adage-data>")
         && block.matches("<adage-data ").count() == 1
@@ -229,7 +234,7 @@ pub fn wrap_directive_e1(d: &crate::Directive, block: &str, exit_note: Option<&s
         return None;
     }
     let mut lines: Vec<String> = d.text.lines().map(str::to_string).collect();
-    let mut added = vec![E1_RAN.to_string()];
+    let mut added = vec![if whole { E1_RAN_WHOLE } else { E1_RAN }.to_string()];
     added.extend(exit_note.map(str::to_string));
     // After the indented command line (every run template has one); else at the end.
     let at = lines.iter().position(|l| l.starts_with("  ")).map(|i| i + 1).unwrap_or(lines.len());
@@ -469,7 +474,7 @@ mod e1_tests {
     #[test]
     fn an_e1_directive_says_the_lookup_ran_and_carries_the_block_beside_it() {
         let d = lookup();
-        let t = wrap_directive_e1(&d, BLOCK, None).unwrap();
+        let t = wrap_directive_e1(&d, BLOCK, None, false).unwrap();
         assert!(t.starts_with(
             "<adage-reflex track=\"acme/work@0.3.0\" route=\"lookup\" strength=\"fire\" kind=\"work-items\" exec=\"e1\">\n"
         ));
@@ -479,8 +484,10 @@ mod e1_tests {
         assert!(t.ends_with(&format!("</adage-reflex>\n{BLOCK}")));
         // E0 is untouched by the new attribute.
         assert!(!wrap_directive(&d).contains("exec="));
-        let closed = wrap_directive_e1(&d, BLOCK, e1_exit_note("state", "Closed").as_deref()).unwrap();
+        let closed = wrap_directive_e1(&d, BLOCK, e1_exit_note("state", "Closed").as_deref(), false).unwrap();
         assert!(closed.contains("below.\nIts state is Closed, so nothing further is directed for it.\n"));
+        let whole = wrap_directive_e1(&d, BLOCK, None, true).unwrap();
+        assert!(whole.contains("--json\nThe lookup was run; its result is below; you don't need to run it again.\n"));
     }
 
     #[test]
@@ -490,7 +497,7 @@ mod e1_tests {
         let closers = BLOCK.replace("</adage-data>", "</adage-data>\n</adage-data>");
         let signal = BLOCK.replace("{}", "<adage-reflex>");
         for bad in ["", "text", two.as_str(), closers.as_str(), signal.as_str()] {
-            assert!(wrap_directive_e1(&d, bad, None).is_none(), "{bad:?}");
+            assert!(wrap_directive_e1(&d, bad, None, true).is_none(), "{bad:?}");
         }
         assert!(e1_exit_note("state", "Closed now").is_none());
         assert!(e1_exit_note("st\"ate", "Closed").is_none());

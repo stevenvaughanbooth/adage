@@ -40,6 +40,30 @@ pub fn on_path(name: &str) -> Option<PathBuf> {
     std::env::split_paths(&path).map(|d| d.join(name)).find(|p| executable(p))
 }
 
+/// How the person runs this adage from a terminal, for the notices a session shows: `adage` when
+/// it is on `PATH`; else, for a Claude Code plugin user (no `adage` on `PATH`), the plugin's
+/// stable binary `<plugin data>/bin/adage`, which the plugin keeps pointing at its verified copy
+/// (this process runs a digest-named copy beside it); else this binary's own path.
+pub fn adage_command() -> String {
+    if on_path("adage").is_some() {
+        return "adage".into();
+    }
+    let Ok(exe) = std::env::current_exe() else { return "adage".into() };
+    let dir = exe.parent().filter(|d| d.file_name().is_some_and(|n| n == "bin"));
+    let stable = dir.map(|d| d.join("adage")).filter(|l| l.symlink_metadata().is_ok());
+    command_for(&stable.unwrap_or(exe))
+}
+
+/// A binary's path as a person types it: `~` for the home directory, quoted if it has a space.
+pub fn command_for(p: &Path) -> String {
+    let t = tilde(p);
+    if t.contains(' ') {
+        format!("'{t}'")
+    } else {
+        t
+    }
+}
+
 pub fn executable(p: &Path) -> bool {
     let Ok(m) = std::fs::metadata(p) else { return false };
     #[cfg(unix)]

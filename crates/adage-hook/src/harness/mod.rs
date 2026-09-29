@@ -41,6 +41,13 @@ pub enum Output {
     /// `systemMessage` in its UI and never sends it to the model. Harnesses without such a channel
     /// render nothing; their notices reach the status card and `adage watch` only.
     Notice(String),
+    /// Before a tool call (`PreToolUse`): run it with this input instead (only the interpreter
+    /// prefix of its command changed), telling the model why (`context`) and the person
+    /// (`notice`). Harnesses that cannot rewrite a call render nothing (the post-hoc directive
+    /// still follows the failure).
+    Rewrite { input: Value, context: String, notice: String },
+    /// Before a tool call: refuse it, with the reason the model reads.
+    Deny(String),
 }
 
 /// Who is calling: the session and working directory every native payload must carry.

@@ -345,18 +345,21 @@ pub mod notice {
         }
     }
 
-    /// The line for `now` against `was` (what had been shown), or `None` if nothing is new.
+    /// The line for `now` against `was` (what had been shown), or `None` if nothing is new. `adage`
+    /// is how the person runs Adage in a terminal ([`crate::detect::adage_command`]): `adage`, or,
+    /// for a plugin-only user with no `adage` on `PATH`, the plugin's own binary.
     pub fn compose(
         was: &Basis,
         now: &Basis,
         summary: Option<&Summary>,
         failed: Option<&str>,
+        adage: &str,
     ) -> Option<(String, String)> {
         let mut parts: Vec<String> = Vec::new();
         let mut kind = "";
         if now.errors >= 3 {
             parts.push(format!(
-                "learning failed {}× here ({}); run adage doctor",
+                "learning failed {}× here ({}); run {adage} doctor",
                 now.errors,
                 failed.unwrap_or("error")
             ));
@@ -366,7 +369,7 @@ pub mod notice {
         if waiting > 0 {
             let n = now.nascent.len();
             parts.push(format!(
-                "{} for you: run adage review in a terminal",
+                "{} for you: run {adage} review in a terminal",
                 if n == 1 { "1 install step waits".to_string() } else { format!("{n} install steps wait") }
             ));
             if kind.is_empty() {
@@ -380,6 +383,7 @@ pub mod notice {
                     Verdict::AddsCost => line.replacen("Adage appears", "it appears", 1),
                     _ => line,
                 };
+                let line = line.replace("See adage review.", &format!("See {adage} review."));
                 parts.push(line);
                 if kind.is_empty() {
                     kind = "value";
@@ -414,7 +418,8 @@ pub mod notice {
             None => Basis::default(),
         };
         let now = basis(paths, repo, summary, errors);
-        let Some((text, kind)) = compose(&baseline, &now, summary, failed) else { return };
+        let adage = crate::detect::adage_command();
+        let Some((text, kind)) = compose(&baseline, &now, summary, failed, &adage) else { return };
         if prev.as_ref().is_some_and(|p| p.text == text) {
             return;
         }
@@ -445,8 +450,8 @@ pub mod notice {
 
         #[test]
         fn only_what_is_new_is_said_in_priority_order() {
-            assert_eq!(compose(&b(&["a"], &[]), &b(&["a"], &[]), None, None), None);
-            let (t, k) = compose(&b(&["a"], &[]), &b(&["a", "b", "c"], &["n"]), None, None).unwrap();
+            assert_eq!(compose(&b(&["a"], &[]), &b(&["a"], &[]), None, None, "adage"), None);
+            let (t, k) = compose(&b(&["a"], &[]), &b(&["a", "b", "c"], &["n"]), None, None, "adage").unwrap();
             assert_eq!(
                 t,
                 "adage: 1 install step waits for you: run adage review in a terminal; 2 new reflexes active."
@@ -454,7 +459,11 @@ pub mod notice {
             assert_eq!(k, "waiting");
             let mut failing = b(&["a"], &[]);
             failing.errors = 3;
-            let (t, k) = compose(&b(&["a"], &[]), &failing, None, Some("lock")).unwrap();
+            // A plugin-only user has no `adage` on PATH: the notice names the plugin's binary.
+            let plugin = "~/.claude/plugins/data/adage-adage/bin/adage";
+            let (t, _) = compose(&b(&["a"], &[]), &b(&["a"], &["n"]), None, None, plugin).unwrap();
+            assert_eq!(t, format!("adage: 1 install step waits for you: run {plugin} review in a terminal."));
+            let (t, k) = compose(&b(&["a"], &[]), &failing, None, Some("lock"), "adage").unwrap();
             assert_eq!(
                 (t.as_str(), k.as_str()),
                 ("adage: learning failed 3× here (lock); run adage doctor.", "health")

@@ -6,13 +6,14 @@
 
 pub mod context;
 pub mod fast;
+pub mod pretool;
 pub mod rebuild;
 pub mod render;
 
 use adage_core::keys::{self, template_key};
-use adage_core::pattern;
 use adage_core::spans::{self, SpanKind};
 use adage_core::tools::normalize_tool;
+use adage_core::{outcome, pattern};
 use adage_core::{repo, CommandTable};
 use adage_tracks::context::CtxNet;
 use adage_tracks::{interlock, Contract, Index, IndexedRoute, Route, SlotSource, Step, Strength, Trigger};
@@ -102,7 +103,7 @@ pub struct Pending {
     pub route: String,
     pub expect_key: String,
     /// The directed command's identity ([`pattern`]), for reading the state; following is judged
-    /// on `expect_key` with [`pattern::meets`] (added options and an interpreter prefix count).
+    /// on `expect_key` with [`pattern::follows`] (added options and operands count).
     #[serde(default)]
     pub expect_head: String,
     pub batches_left: u32,
@@ -251,6 +252,32 @@ pub struct Ctx<'a> {
 thread_local! {
     static EXACT_KEYS: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
     static EXEC_ONLY: std::cell::RefCell<Vec<(String, String)>> = const { std::cell::RefCell::new(Vec::new()) };
+    static FOLLOW_WEIGHTS: std::cell::RefCell<Option<adage_core::judge::Weights>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Run `f` with the repository's learned follow-judge weights (`adage_core::judge`, fitted at
+/// learn time from its sessions): a follow is then also judged by the learned judge, on the raw
+/// command the agent ran. The hook passes them; without them only the structural and action
+/// judges apply.
+pub fn with_follow_weights<T>(w: Option<adage_core::judge::Weights>, f: impl FnOnce() -> T) -> T {
+    struct Reset(Option<adage_core::judge::Weights>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            let prev = self.0.take();
+            FOLLOW_WEIGHTS.with(|c| *c.borrow_mut() = prev);
+        }
+    }
+    let _reset = Reset(FOLLOW_WEIGHTS.with(|c| c.replace(w)));
+    f()
+}
+
+/// The learned follow judge ([`with_follow_weights`]) over a call's raw command line.
+fn follows_learned(directed_key: &str, call: &Call) -> bool {
+    if EXACT_KEYS.get() {
+        return false;
+    }
+    let (Some(d), Some(o)) = (directed_key.strip_prefix("exec "), call_command(call)) else { return false };
+    FOLLOW_WEIGHTS.with(|c| c.borrow().as_ref().is_some_and(|w| w.follows(d, o)))
 }
 
 /// Run `f` deciding with these exec-only routes (`(track, route id)`: reflexes that run a vendored
@@ -286,6 +313,90 @@ pub fn with_exact_key_matching<R>(f: impl FnOnce() -> R) -> R {
     }
     let _reset = Reset(EXACT_KEYS.replace(true));
     f()
+}
+
+/// Whether an observed key follows a directed one ([`pattern::follows`]): the follow judgement.
+fn follows(directed: &str, observed: &str) -> bool {
+    if EXACT_KEYS.get() {
+        directed == observed
+    } else {
+        pattern::follows(directed, observed)
+    }
+}
+
+/// The argv of each command a call ran, in order (an activation, the run, a filter), for the
+/// action-level follow judgement ([`follows_call`]).
+fn exec_segments(keyed: &[(String, adage_core::Normalized)]) -> Vec<Vec<String>> {
+    keyed
+        .iter()
+        .filter_map(|(_, n)| match &n.action {
+            adage_core::CanonicalAction::Exec { argv, .. } => Some(argv.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Whether a call as a whole follows a directed test run ([`pattern::follows_action`]: the
+/// action classifier reads `source .venv/bin/activate && python -m pytest …` as one test run in
+/// the project's environment, which no single key shows).
+fn follows_call(directed: &str, segs: &[Vec<String>]) -> bool {
+    if EXACT_KEYS.get() || segs.is_empty() {
+        return false;
+    }
+    let r: Vec<&[String]> = segs.iter().map(Vec::as_slice).collect();
+    pattern::follows_action(directed, &r)
+}
+
+/// The command line of a shell tool call (Claude Code's `Bash`, Codex's `shell`), if it has one.
+fn call_command(call: &Call) -> Option<&str> {
+    match call.input.get("command")? {
+        Value::String(s) => Some(s.as_str()),
+        // Codex: an argv, `["bash", "-lc", "…"]`.
+        Value::Array(a) => a.last().and_then(Value::as_str),
+        _ => None,
+    }
+}
+
+/// Fire the after-failure triggers (dead ends and instincts) a failed run of `key` with this
+/// output meets: [`failure_matches`] and the route's signature in the output. A run step, or a
+/// sequence's first command, is then judged like any other directive.
+fn fire_after_failure(
+    ctx: &Ctx,
+    routes: &[&IndexedRoute],
+    st: &mut SessionState,
+    out: &mut Vec<Directive>,
+    key: &str,
+    output: &str,
+    emit_ok: &dyn Fn(&SessionState, &Vec<Directive>, &str) -> bool,
+) {
+    let hits = |ir: &&&IndexedRoute| match &ir.route.trigger {
+        Trigger::AfterFailure { command, signature } => {
+            failure_matches(&ir.route, command, key) && output.contains(signature.as_str())
+        }
+        _ => false,
+    };
+    let advice = |ir: &IndexedRoute| matches!(ir.route.step, Step::Advise { .. });
+    // A failure a step answers (`run this instead`) gets that step, not advice as well: advice
+    // after a failure (U11's "run Python here as .venv/bin/python") speaks only when no step
+    // matches it, whether or not that step was said before.
+    let answered = routes.iter().filter(hits).any(|ir| !advice(ir));
+    for ir in routes.iter().filter(hits) {
+        if (answered && advice(ir)) || !emit_ok(st, out, &ir.route.id) {
+            continue;
+        }
+        if let Some(t) = render::route_text(&ir.route, &[]) {
+            match &ir.route.step {
+                Step::Run { command } => st.pending.push(pending_for(ir, command, ctx)),
+                Step::Sequence { commands } => {
+                    if let Some(first) = commands.first() {
+                        st.pending.push(pending_for(ir, first, ctx));
+                    }
+                }
+                _ => {}
+            }
+            out.push(directive(ir, t));
+        }
+    }
 }
 
 /// Whether an observed key meets a directed one ([`pattern::meets`]).
@@ -450,15 +561,27 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             // A failed call the failure hook just reported, listed again in this batch.
             let mut open_failure = syms.as_ref().and_then(|_| st.ctx.open_failure(&net));
             for call in calls {
-                for (key, n) in call_keys(call, ctx) {
+                // A piped command exits with its last stage's status: `pytest … | head` exits 0
+                // when pytest could not even start. Its output still says so (`outcome`).
+                let piped = !call.failed && call_command(call).is_some_and(outcome::piped);
+                let piped_failed = piped && outcome::piped_failure(&call.output);
+                let misfire = (call.failed || piped) && outcome::misfired(&call.output);
+                let keyed = call_keys(call, ctx);
+                let segs = exec_segments(&keyed);
+                for (key, n) in keyed {
                     let key = cap(key);
                     d.observed.push(key.clone());
                     push_history_capped(st, key.clone(), ctx.params.history);
-                    // Follow / ignore judgement: the directed command, or it with options added.
+                    // Follow / ignore judgement: the directed command, with whatever the agent
+                    // added to narrow it ([`follows`]). Followed and failed without the runner
+                    // reporting tests (or, piped, printing an environment failure) is a misfire.
                     st.pending.retain(|p| {
-                        if meets(&p.expect_key, &key) {
+                        if follows(&p.expect_key, &key)
+                            || follows_call(&p.expect_key, &segs)
+                            || follows_learned(&p.expect_key, call)
+                        {
                             let route = p.route.clone();
-                            d.judgements.push(if call.failed {
+                            d.judgements.push(if misfire {
                                 Judgement::Misfired { route }
                             } else {
                                 Judgement::Followed { route }
@@ -468,6 +591,11 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                             true
                         }
                     });
+                    // Failure-triggered dead ends and instincts (never obligations) see a piped
+                    // failure too, by its output; each still needs its own signature there.
+                    if piped_failed {
+                        fire_after_failure(ctx, &routes, st, &mut out, &key, &call.output, &emit_ok);
+                    }
                     // Obligations met.
                     for o in st.obligations.iter_mut().filter(|o| !o.met && meets(&o.expect_key, &key)) {
                         o.met = true;
@@ -725,41 +853,31 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             st.pending.retain(|p| p.batches_left > 0);
         }
         Event::Failure { call } => {
-            for (key, _) in call_keys(call, ctx) {
+            let keyed = call_keys(call, ctx);
+            let segs = exec_segments(&keyed);
+            for (key, _) in keyed {
                 d.observed.push(format!("{key} !failed"));
                 push_history_capped(st, format!("{key} !failed"), ctx.params.history);
-                // The directed command, run within the follow window, failed.
+                // The directed command, run within the follow window, failed: a misfire, unless
+                // it is a test run that ran and reported failing tests (followed; the tests
+                // failing is the task, not the directive).
                 st.pending.retain(|p| {
-                    if meets(&p.expect_key, &key) {
-                        d.judgements.push(Judgement::Misfired { route: p.route.clone() });
+                    if follows(&p.expect_key, &key)
+                        || follows_call(&p.expect_key, &segs)
+                        || follows_learned(&p.expect_key, call)
+                    {
+                        let route = p.route.clone();
+                        d.judgements.push(if outcome::misfired(&call.output) {
+                            Judgement::Misfired { route }
+                        } else {
+                            Judgement::Followed { route }
+                        });
                         false
                     } else {
                         true
                     }
                 });
-                for ir in routes.iter() {
-                    if let Trigger::AfterFailure { command, signature } = &ir.route.trigger {
-                        if failure_matches(&ir.route, command, &key)
-                            && call.output.contains(signature.as_str())
-                            && emit_ok(st, &out, &ir.route.id)
-                        {
-                            if let Some(t) = render::route_text(&ir.route, &[]) {
-                                // A run step after a failure is followed, or not, like any other (a
-                                // sequence on its first command).
-                                match &ir.route.step {
-                                    Step::Run { command } => st.pending.push(pending_for(ir, command, ctx)),
-                                    Step::Sequence { commands } => {
-                                        if let Some(first) = commands.first() {
-                                            st.pending.push(pending_for(ir, first, ctx));
-                                        }
-                                    }
-                                    _ => {}
-                                }
-                                out.push(directive(ir, t));
-                            }
-                        }
-                    }
-                }
+                fire_after_failure(ctx, &routes, st, &mut out, &key, &call.output, &emit_ok);
                 // Context triggers: a failure item, and the record that keeps the batch after it
                 // from counting this call as a successful command.
                 if let Some(sy) = &syms {
