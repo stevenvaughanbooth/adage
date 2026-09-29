@@ -463,6 +463,16 @@ pub mod notice {
     }
 }
 
+/// Procedure cards for families of similar tasks (`learn.cards`, `learn.card_threshold`), with the
+/// verdicts `adage train cards` recorded; `None` when turned off.
+pub fn card_params(cfg: &adage_store::config::Config, paths: &Paths) -> Option<adage_learn::cards::CardParams> {
+    cfg.learn_cards.then(|| adage_learn::cards::CardParams {
+        threshold: cfg.learn_card_threshold as f32,
+        verdicts: adage_learn::cards::load_verdicts(&paths.root),
+        ..Default::default()
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -537,14 +547,4 @@ mod tests {
         assert_eq!(got.len(), 7);
         assert!(!got.contains(&all[3]) && got.contains(&named));
     }
-}
-
-/// Procedure cards for families of similar tasks (`learn.cards`, `learn.card_threshold`), with the
-/// verdicts `adage train cards` recorded; `None` when turned off.
-pub fn card_params(cfg: &adage_store::config::Config, paths: &Paths) -> Option<adage_learn::cards::CardParams> {
-    cfg.learn_cards.then(|| adage_learn::cards::CardParams {
-        threshold: cfg.learn_card_threshold as f32,
-        verdicts: adage_learn::cards::load_verdicts(&paths.root),
-        ..Default::default()
-    })
 }

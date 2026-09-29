@@ -264,7 +264,7 @@ fn write_bound(
     // (including the same pack received from someone else, or changed since its review) is an
     // import: forming, prime at most (O2).
     let mut track = if reviewed_here(paths, pack, digest) {
-        reviewed_track(track, &pack_origin(m.pack.origin).to_string())
+        reviewed_track(track, pack_origin(m.pack.origin))
     } else {
         at_forming(track).0
     };
