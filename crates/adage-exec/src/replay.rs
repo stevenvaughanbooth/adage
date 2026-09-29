@@ -279,7 +279,18 @@ impl Replay {
     }
 
     fn environment(&self) -> BTreeMap<String, String> {
-        let inherited = BTreeMap::from([("PATH".to_string(), self.inherited_path.clone())]);
+        // Root runs as nobody: a `PATH` entry nobody cannot reach (`/root/.local/bin`) would
+        // resolve a program the run then cannot start, so it is left out.
+        let path = if sandbox::is_root() {
+            self.inherited_path
+                .split(':')
+                .filter(|d| !d.is_empty() && sandbox::others_can_reach(Path::new(d)))
+                .collect::<Vec<_>>()
+                .join(":")
+        } else {
+            self.inherited_path.clone()
+        };
+        let inherited = BTreeMap::from([("PATH".to_string(), path)]);
         env::build(&inherited, &self.work, &self.scratch.path, &[])
     }
 

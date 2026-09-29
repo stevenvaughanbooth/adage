@@ -17,6 +17,7 @@
 //! binary. See docs/training.md.
 
 pub mod claims;
+pub mod compile;
 pub mod fake;
 pub mod harness;
 pub mod isolate;
@@ -25,4 +26,6 @@ pub mod plan;
 pub mod procedure;
 pub mod report;
 pub mod run;
+pub mod skill;
 pub mod tasks;
+pub mod verify;
