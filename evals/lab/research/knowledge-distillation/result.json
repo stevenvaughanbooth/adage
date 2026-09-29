@@ -1,0 +1,458 @@
+{
+ "slug": "knowledge-distillation",
+ "headline": "A repository card distilled automatically from traces (information-flow provenance plus failure->recovery chains, clustered with potion-8M, ranked by the calls it saved in other tasks' sessions) would save 8.1% of $ [6.1, 10.1] per held-out session if the agent used all of it, 3.7x the AGENTS.md baseline (2.2%). But the live agents-md arm shows agents act on only 26-44% of what a start-of-session card tells them: calibrated to that, it is +1.2% of $ [-3.5, +4.6]. Delivered at PreToolUse through the common harness, it scores -0.2% of $ [-1.9, +1.5]. The lever's ceiling is small: 13% of $ at perfect memory and uptake, and most of the card's value is a file map that needs no learning.",
+ "metric_name": "$ and tool calls saved per held-out session, net of carrying the delivered text, under the cumulative-context cost model. Offline scorer: a discovery is obviated when the delivered text contains every atom it needed ('strict': repository paths and failure fixes only). The harness headline uses the common harness's Sat/W classes.",
+ "held_out": {
+  "test_set": "RepoBench v1+v2 held-out control sessions, Haiku 4.5, 5 repositories (harness loader; 35 discarded-run transcripts excluded)",
+  "n_sessions": 158,
+  "n_tasks": 38,
+  "learned_card_strict_100pct_uptake": {
+   "usd_share": 0.0805,
+   "usd_share_ci90": [
+    0.0611,
+    0.1013
+   ],
+   "calls_net": 1.1819,
+   "calls_net_ci90": [
+    0.9403,
+    1.4232
+   ],
+   "calls_obviated": 1.6013,
+   "calls_obviated_ci90": [
+    1.3841,
+    1.8194
+   ],
+   "usd_net_per_session": 0.021,
+   "usd_net_ci90": [
+    0.0159,
+    0.0264
+   ]
+  },
+  "learned_card_strict_uptake_calibrated": {
+   "uptake": 0.258,
+   "uptake_ci90": [
+    -0.25,
+    0.6
+   ],
+   "usd_net": 0.003,
+   "usd_ci90": [
+    -0.0091,
+    0.0118
+   ],
+   "frac_usd": 0.0115,
+   "frac_ci90": [
+    -0.0353,
+    0.0457
+   ],
+   "calls_net": -0.006,
+   "calls_ci90": [
+    -0.8108,
+    0.5618
+   ]
+  },
+  "learned_card_lenient_100pct_uptake": {
+   "usd_share": 0.0944,
+   "usd_share_ci90": [
+    0.0733,
+    0.1168
+   ],
+   "calls_net": 1.3913,
+   "calls_net_ci90": [
+    1.0872,
+    1.7023
+   ]
+  },
+  "learned_card_lenient_uptake_calibrated": {
+   "uptake": 0.44,
+   "uptake_ci90": [
+    0.1463,
+    0.6607
+   ],
+   "usd_net": 0.007,
+   "usd_ci90": [
+    -0.0023,
+    0.0148
+   ],
+   "frac_usd": 0.0268,
+   "frac_ci90": [
+    -0.0088,
+    0.0569
+   ],
+   "calls_net": 0.112,
+   "calls_ci90": [
+    -0.568,
+    0.6533
+   ]
+  },
+  "contextual_same_facts_strict_100pct_uptake": {
+   "usd_share": 0.0667,
+   "usd_share_ci90": [
+    0.047,
+    0.0889
+   ],
+   "calls_net": 0.8947,
+   "calls_net_ci90": [
+    0.6366,
+    1.1543
+   ]
+  },
+  "harness_headline_contextual_pretooluse": {
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "usd_saved_per_task": -0.0006,
+   "usd_saved_ci90": [
+    -0.0049,
+    0.0038
+   ],
+   "usd_saved_share": -0.0022,
+   "usd_saved_share_ci90": [
+    -0.0189,
+    0.015
+   ],
+   "calls_saved_per_task": 0.229,
+   "calls_saved_ci90": [
+    -0.3129,
+    0.7655
+   ],
+   "p_follow_0.5": {
+    "usd_saved_share": -0.003728109585991083,
+    "usd_saved_share_ci": [
+     -0.012151793650718818,
+     0.004958726355526933
+    ],
+    "calls_saved_per_task": 0.05813225706602464,
+    "calls_saved_ci": [
+     -0.2159439089288756,
+     0.3306870465607447
+    ]
+   },
+   "params_chosen_leave_one_repo_out": {
+    "attrs": [
+     0.95,
+     3
+    ],
+    "click": [
+     0.8,
+     1
+    ],
+    "marshmallow": [
+     0.8,
+     1
+    ],
+    "urfave-cli": [
+     0.8,
+     1
+    ],
+    "vue-core": [
+     0.95,
+     3
+    ]
+   },
+   "classes": "read_files (UNCALIBRATED) and run",
+   "scan_memory": "[]",
+   "full_report": "results/harness.json"
+  }
+ },
+ "leave_one_repo_out": {
+  "protocol": "Every held-out number is leave-one-repo-out in its method: the prior (what counts as generic knowledge) is learned only from the other repositories, and the hyperparameters (support m, token budget, retrieval threshold) are chosen by the best mean on the other four repositories. The facts come from the repository's own train split, since facts do not transfer. The LORO choice was the same everywhere: m=0, 1000-token budget (strict).",
+  "per_repo_strict_card_usd_share_and_calls_net": {
+   "attrs": {
+    "card": [
+     0.0611,
+     0.877
+    ],
+    "agents_md": [
+     0.019,
+     0.194
+    ],
+    "filemap": [
+     0.0864,
+     0.962
+    ],
+    "oracle_train": 0.0735
+   },
+   "click": {
+    "card": [
+     0.0956,
+     1.582
+    ],
+    "agents_md": [
+     0.0448,
+     0.597
+    ],
+    "filemap": [
+     0.0979,
+     1.38
+    ],
+    "oracle_train": 0.1074
+   },
+   "marshmallow": {
+    "card": [
+     0.1658,
+     1.796
+    ],
+    "agents_md": [
+     0.046,
+     0.585
+    ],
+    "filemap": [
+     0.1119,
+     1.024
+    ],
+    "oracle_train": 0.1732
+   },
+   "urfave-cli": {
+    "card": [
+     0.1305,
+     1.801
+    ],
+    "agents_md": [
+     -0.0085,
+     -0.249
+    ],
+    "filemap": [
+     0.1404,
+     1.827
+    ],
+    "oracle_train": 0.1416
+   },
+   "vue-core": {
+    "card": [
+     0.0103,
+     0.177
+    ],
+    "agents_md": [
+     -0.0065,
+     -0.211
+    ],
+    "filemap": [
+     -0.0431,
+     -2.727
+    ],
+    "oracle_train": 0.0283
+   }
+  },
+  "harness_by_repo_usd_share": {
+   "attrs": 0.0177,
+   "click": 0.005,
+   "marshmallow": 0.0237,
+   "urfave-cli": 0.0498,
+   "vue-core": -0.0525
+  }
+ },
+ "vs_baseline": {
+  "agents_md_offline_same_scorer_strict": {
+   "usd_share": 0.022,
+   "ci90": [
+    0.0114,
+    0.034
+   ]
+  },
+  "card_minus_agents_md_strict_paired": {
+   "calls": {
+    "diff": 1.1076,
+    "ci90": [
+     0.9259,
+     1.2886
+    ]
+   },
+   "calls_net": {
+    "diff": 0.9383,
+    "ci90": [
+     0.743,
+     1.1312
+    ]
+   },
+   "usd": {
+    "diff": 0.0152,
+    "ci90": [
+     0.0114,
+     0.0195
+    ]
+   },
+   "frac_usd": {
+    "diff": 0.0638,
+    "ci90": [
+     0.0472,
+     0.0817
+    ]
+   }
+  },
+  "card_minus_filemap_strict_paired": {
+   "calls": {
+    "diff": -0.3924,
+    "ci90": [
+     -0.7107,
+     -0.0823
+    ]
+   },
+   "calls_net": {
+    "diff": 0.7618,
+    "ci90": [
+     0.4097,
+     1.1366
+    ]
+   },
+   "usd": {
+    "diff": 0.005,
+    "ci90": [
+     0.0009,
+     0.0092
+    ]
+   },
+   "frac_usd": {
+    "diff": 0.0131,
+    "ci90": [
+     -0.0031,
+     0.0281
+    ]
+   }
+  },
+  "card_minus_contextual_strict_paired": {
+   "calls": {
+    "diff": 0.2468,
+    "ci90": [
+     0.1524,
+     0.3478
+    ]
+   },
+   "calls_net": {
+    "diff": 0.2871,
+    "ci90": [
+     0.191,
+     0.3902
+    ]
+   },
+   "usd": {
+    "diff": 0.0036,
+    "ci90": [
+     0.0022,
+     0.005
+    ]
+   },
+   "frac_usd": {
+    "diff": 0.0137,
+    "ci90": [
+     0.0085,
+     0.0192
+    ]
+   }
+  },
+  "agents_md_live_v1_vs_control": {
+   "usd_rel": -0.0157,
+   "usd_diff_ci90": [
+    -0.015666962171052637,
+    0.008785372631578955
+   ],
+   "calls_diff": 0.25,
+   "calls_diff_ci90": [
+    -0.618421052631579,
+    1.144736842105263
+   ],
+   "pass_diff": 0.0,
+   "pass_diff_ci90": [
+    -0.09210526315789473,
+    0.07894736842105263
+   ],
+   "note": "38 tasks, 76 pairs; 57/76 control sessions censored at 30 turns"
+  },
+  "agents_md_live_uptake": {
+   "lenient": {
+    "uptake": 0.44,
+    "ci90": [
+     0.166,
+     0.648
+    ]
+   },
+   "strict": {
+    "uptake": 0.258,
+    "ci90": [
+     -0.227,
+     0.581
+    ]
+   },
+   "locator_facts_lenient": {
+    "uptake": 0.625,
+    "ci90": [
+     0.375,
+     0.8
+    ]
+   },
+   "failure_fixes": {
+    "uptake": 0.158,
+    "ci90": [
+     -0.583,
+     0.576
+    ]
+   }
+  },
+  "current_state": "U11 plus learned reflexes: +1.0 calls/session post-hoc, +2.11 pre-emptive (about +1.9% and +3.9% of $). Harness split for predictive U11 over the same 158 sessions: +1.63 calls, +3.5% of $. The distilled card does not beat that once uptake is accounted for; the harness contextual policy is at -0.2% of $."
+ },
+ "hard_coded_parts": [
+  "Atom tokenizer: a generic regex for identifier/path characters, with path prefixes and basenames (infrastructure, not a list).",
+  "Failure = the harness's is_error flag. There is no error-string list, so piped failures ('| head' exiting 0) are seen only through information flow.",
+  "The sandbox root is stripped with the transcript's own cwd.",
+  "Strict mode's 'repository path' test uses `git ls-files` of a checkout. That is a fact of the repository, not a hand list.",
+  "Card rendering templates ('`X` shows: ...', '`X` failed here; what worked: `Y`'): fixed strings around verbatim trace text. No LLM ($0).",
+  "Measurement instruments only: breakdown.py classifies obviated calls by tool name (Read, Grep/Glob, failed, other Bash), and the harness's Sat/W classes (read_files, run) score the harness headline.",
+  "Uptake calibration uses the AGENTS.md files in evals/repobench/context. Those were written by an LLM ($, not ours) from the same train traces."
+ ],
+ "ceiling": {
+  "all_information_flow_discoveries": {
+   "calls": 9.462025316455696,
+   "frac_calls": 0.2926,
+   "frac_usd": 0.5935,
+   "note": "mostly task-specific code reading; no card can replace it"
+  },
+  "durable_oracle_perfect_memory": {
+   "calls": 2.684,
+   "ci90": [
+    2.3584004326403076,
+    3.0397350993377485
+   ],
+   "frac_calls": 0.083,
+   "frac_usd": 0.1422,
+   "note": "atoms re-discovered in sessions of >=2 other tasks (train + held-out, lenient scorer)"
+  },
+  "train_learnable_oracle_lenient": {
+   "frac_usd": [
+    0.1298,
+    [
+     0.1073,
+     0.1526
+    ]
+   ],
+   "calls": {
+    "mean": 2.3544,
+    "ci90": [
+     2.0566,
+     2.6474
+    ],
+    "n": 158
+   }
+  },
+  "train_learnable_oracle_strict": {
+   "frac_usd": [
+    0.0919,
+    [
+     0.0728,
+     0.1126
+    ]
+   ],
+   "calls": {
+    "mean": 1.5696,
+    "ci90": [
+     1.3432,
+     1.7961
+    ],
+    "n": 158
+   }
+  },
+  "verdict": "about 9-14% of $ and 5-8% of calls at 100% uptake and perfect memory: below the 15-20% North star"
+ },
+ "build_recommendation": "Do not build a distilled knowledge card or a PreToolUse fact retriever as a lever. Net of uptake it is +1.2% of $ [-3.5, +4.6] (strict), and -0.2% [-1.9, +1.5] in the harness. The one reusable piece is the failure->recovery chain extractor (similarity-matched retry after an is_error, with the in-between actions as the fix). It is a learned, hand-rule-free way to find U11-like reflexes in any repository, and it should feed the existing reflex learner as candidates rather than a card. Expected value: at most the durable failure-chain ceiling, 0.67 calls/session (2.1% of calls, 2.8% of $), in the same class that U11 already partly covers. If a card ships anyway, a plain file map (git ls-files, no learning) gets about 75% of the card's gross value; learning only makes it more compact (+0.76 calls net [0.41, 1.14] vs the file map).",
+ "so_what": "Shipped as a start-of-session card, expect about +1% of $ per task [-3.5, +4.6] and about 0 calls [-0.8, +0.6]. Shipped as PreToolUse delivery, expect -0.2% of $ [-1.9, +1.5]. There is no measurable pass-rate effect: live agents-md was +0.0 pts [-9, +8]. Confidence it survives a live A/B: low; the offline 8% depends on an uptake the live AGENTS.md arm refutes."
+}

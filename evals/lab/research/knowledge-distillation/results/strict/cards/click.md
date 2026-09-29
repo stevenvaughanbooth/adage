@@ -1,0 +1,15 @@
+Repository notes learned from earlier sessions in this repo:
+- `Bash: python test_unset_issue.py` failed here; what worked: `Bash: ls -la | head -20 ; Bash: source .venv/bin/activate && pip install -e . ; Bash: source .venv/bin/activate && python test_unset_issue.py`
+- `Bash: find . -type f -name "*.py" | grep -E "(completion|shell)" | head -20` shows: shell_completion.py, src/click, src/click/shell_completion.py, test_shell_completion.py, tests/test_shell_completion.py
+- `Bash: find . -type f -name "*.py" | head -20` shows: core.py, parser.py, src/click, src/click/core.py, src/click/parser.py
+- `Bash: python /tmp/test_default_order.py` failed here; what worked: `Bash: PYTHONPATH=src python /tmp/test_default_order.py`
+- `Bash: python -m pip install pytest -q && python -m pytest tests/test_options.py -v` failed here; what worked: `Bash: pip install -e . -q && python -m pytest tests/test_options.py -v --tb=short 2>&1 | head -100`
+- `Bash: find . -name "test_*.py" -o -name "*_test.py" | head -20` shows: test_defaults.py, test_options.py, test_parser.py, tests/test_defaults.py, tests/test_options.py, tests/test_parser.py
+- `Bash: grep -r "Choice\|choice" tests --include="*.py" -l | head -10` shows: test_types.py, tests/test_types.py
+- `Bash: find src -name "*.py" -type f` shows: core.py, src/click, src/click/core.py, src/click/types.py, types.py
+- `Bash: find . -type f -name "*.py" | head -20` shows: core.py, src/click, src/click/core.py, src/click/exceptions.py
+- `Bash: find tests -name "*.py" -type f | xargs grep -l "prompt" | head -5` shows: test_termui.py, tests/test_termui.py
+- `Bash: find . -name "*test*.py" -o -name "test_*" | head -20` shows: test_basic.py, test_options.py, tests/test_basic.py, tests/test_options.py
+- `Bash: find src -type f -name "*.py" | head -20` shows: core.py, decorators.py, src/click, src/click/core.py, src/click/decorators.py, src/click/termui.py, termui.py
+- `Bash: find . -type f -name "*.py" | grep -E "(core|argument|option)" | head -20` shows: core.py, src/click, src/click/core.py, test_arguments.py, test_options.py, tests/test_arguments.py, tests/test_options.py
+- `Bash: python -m pytest tests/test_shell_completion.py::test_option_nargs -xvs` failed here; what worked: `Bash: ls -la ; Bash: .venv/bin/python -m pytest tests/test_shell_completion.py::test_option_nargs -xvs`
