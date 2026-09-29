@@ -18,7 +18,9 @@
 //! | `structured_routes_only` | a lookup | a prompt it does not match (the fast path) |
 //! | `structured_routes_ticket_prompt` | a lookup | a prompt naming a work item (it fires) |
 //! | `intent_routes_model_installed` (+ `_ticket_prompt`) | a lookup and an intent route | a prompt (the model embeds it) |
-//! | `intent_routes_model_missing` | the same, no model | a prompt |
+//! | `intent_routes_model_missing` | the same, nothing installed (the bundled model embeds; its id differs) | a prompt |
+//! | `intent_routes_bundled_model` | an intent route learned with the bundled model, nothing installed | a prompt (it fires) |
+//! | `intent_routes_no_model` | the same, the hashed fallback selected | a prompt |
 //! | `batch_no_match` | a lookup, a finish line and three context routes | a batch of `ls` (the fast path) |
 //! | `batch_context_fires` | the same | a batch editing `registry/a.csv` then running `make gen`: a context route fires |
 
@@ -220,10 +222,26 @@ fn main() {
         out.insert("intent_routes_model_installed_ticket_prompt".into(), r);
     }
 
+    // Nothing installed: the model bundled in the binary embeds (a different id from the
+    // installed f32 model's, so an index learned with that one does not match).
     index(&bare, "acme-bench", vec![lookup(), intent(centroid, &model_id)]);
+    let (r, last) = time(bin, &bare, &repo, "UserPromptSubmit", prompt.clone(), runs);
+    assert!(!last.contains("make test"), "another model's intent route does not fire");
+    out.insert("intent_routes_model_missing".into(), r);
+    // An index learned with the bundled model: it fires with nothing installed.
+    if let Some(b) = model::bundled() {
+        let v = b.embed(&adage_intent::normalize::normalize("the tests are failing, can you fix them")).unwrap();
+        index(&bare, "acme-bench", vec![lookup(), intent(adage_intent::quantize(&v), &b.id)]);
+        let (r, last) = time(bin, &bare, &repo, "UserPromptSubmit", prompt.clone(), runs);
+        out.insert("intent_routes_bundled_model".into(), r);
+        out.insert("intent_routes_bundled_model_fired".into(), last.contains("make test").into());
+    }
+    // No model at all (the hashed fallback selected): intent routes cannot fire.
+    std::fs::create_dir_all(bare.join("models")).unwrap();
+    std::fs::write(bare.join("models").join(model::ACTIVE_FILE), "hashed").unwrap();
     let (r, last) = time(bin, &bare, &repo, "UserPromptSubmit", prompt, runs);
     assert!(!last.contains("make test"), "no model, no intent directive");
-    out.insert("intent_routes_model_missing".into(), r);
+    out.insert("intent_routes_no_model".into(), r);
 
     // Tool batches with context routes in the index.
     index(&home, "acme-bench", with_contexts());

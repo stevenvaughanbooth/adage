@@ -830,10 +830,10 @@ mod bundled {
     pub const MAX_CHARS: usize = 100;
 }
 
-/// The bundled model's id: the upstream id marked `+i8` (its vectors differ from the f32 model's
+/// The bundled model's id, `potion-base-8m-i8@<its table's digest>` (its vectors differ from the f32 model's
 /// in the fourth decimal, so what one learned is not matched against the other).
 pub fn bundled_id() -> Option<String> {
-    cfg!(feature = "bundled").then(|| format!("{}+i8", BUNDLED_SPEC.id()))
+    cfg!(feature = "bundled").then(|| format!("{}-i8@{}", BUNDLED_SPEC.key, &BUNDLED_TABLE_SHA256[..12]))
 }
 
 /// The bundled bytes: (table, vocabulary), when this build has them.
@@ -1192,7 +1192,7 @@ pub(crate) mod tests {
     fn the_bundled_model_matches_its_pins() {
         bundled_verified().unwrap();
         let m = bundled().unwrap();
-        assert_eq!(m.id, format!("{}+i8", pinned_id()));
+        assert_eq!(m.id, "potion-base-8m-i8@b9c0e329a2ce");
         assert_eq!(m.vocab_size(), 29_528);
         assert_eq!(m.dim, 256);
         let a = m.embed("fix the failing tests in the parser").unwrap();

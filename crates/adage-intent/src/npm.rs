@@ -86,7 +86,12 @@ pub fn extract(spec: &Spec, tgz: &[u8], dir: &Path) -> Result<()> {
         let Some((_, body)) = files.iter().find(|(p, _)| p == path) else {
             bail!("{} {} has no {path}", spec.npm.package, spec.npm.version);
         };
-        ensure!(body.len() as u64 == pinned.bytes, "{path} is {} bytes; the pinned file is {}", body.len(), pinned.bytes);
+        ensure!(
+            body.len() as u64 == pinned.bytes,
+            "{path} is {} bytes; the pinned file is {}",
+            body.len(),
+            pinned.bytes
+        );
         std::fs::write(dir.join(name), body)?;
     }
     Ok(())

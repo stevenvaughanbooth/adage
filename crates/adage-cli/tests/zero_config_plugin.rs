@@ -497,7 +497,7 @@ fn model_blocked() {
     assert!(!o.status.success(), "{}", text(&o));
     assert!(text(&o).contains("huggingface.co blocked by proxy (403)"), "{}", text(&o));
     assert!(text(&o).contains("Fallback: registry.npmjs.org blocked by proxy (403)"), "{}", text(&o));
-    assert!(text(&o).contains("Still embedding with potion-base-8m@f65d0f325faa+i8 (bundled"), "{}", text(&o));
+    assert!(text(&o).contains("Still embedding with potion-base-8m-i8@b9c0e329a2ce (bundled"), "{}", text(&o));
     let f: Value =
         serde_json::from_str(&std::fs::read_to_string(w.p("data/models/.fetch-failed.json")).unwrap()).unwrap();
     assert_eq!((f["class"].as_str(), f["host"].as_str()), (Some("blocked"), Some("huggingface.co")), "{f}");
@@ -509,7 +509,9 @@ fn model_blocked() {
     let detail = m["detail"].as_str().unwrap();
     assert!(detail.contains("bundled in this binary (int8, SHA-256 verified)"), "{m}");
     assert!(
-        detail.contains("the last download failed: huggingface.co blocked by proxy (403). Use a mirror (ADAGE_MODEL_BASE_URL)"),
+        detail.contains(
+            "the last download failed: huggingface.co blocked by proxy (403). Use a mirror (ADAGE_MODEL_BASE_URL)"
+        ),
         "{m}"
     );
 
@@ -526,7 +528,7 @@ fn model_blocked() {
     assert!(context(&out).contains("make test"), "{out}");
     w.hook("Stop", &repo, "s1", json!({ "stop_hook_active": false }));
     let card = w.card(&repo);
-    assert!(card.contains("embeddings: potion-base-8m (bundled)"), "{card}");
+    assert!(card.contains("embeddings: potion-base-8m-i8 (bundled)"), "{card}");
     assert!(!card.contains("hashed fallback"), "{card}");
     assert_eq!(
         std::fs::read_to_string(&calls).unwrap().lines().count(),

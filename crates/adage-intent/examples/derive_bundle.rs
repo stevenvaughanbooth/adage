@@ -21,10 +21,8 @@ fn hex(b: &[u8]) -> String {
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let src = PathBuf::from(args.first().ok_or_else(|| anyhow::anyhow!("usage: derive_bundle <src> [out]"))?);
-    let out = args
-        .get(1)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bundled"));
+    let out =
+        args.get(1).map(PathBuf::from).unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bundled"));
     model::verify(BUNDLED_SPEC, &src)?;
     let tmp = tempfile::tempdir()?;
     let m = model::install_spec(BUNDLED_SPEC, &src, tmp.path())?;

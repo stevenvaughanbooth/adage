@@ -369,7 +369,9 @@ fn model_check(paths: &Paths, idx: &Index) -> Check {
         }
     }
     match &r.source {
-        Source::Installed { .. } => pass("embedding model", format!("{} installed; checksums verified", r.embedder.id())),
+        Source::Installed { .. } => {
+            pass("embedding model", format!("{} installed; checksums verified", r.embedder.id()))
+        }
         Source::Bundled => match model::bundled_verified() {
             Ok(()) => pass(
                 "embedding model",
@@ -377,10 +379,9 @@ fn model_check(paths: &Paths, idx: &Index) -> Check {
             ),
             Err(e) => fail("embedding model", format!("{e:#}"), "reinstall adage, or `adage models fetch`"),
         },
-        Source::Hashed { why } if r.selected == "hashed" => pass(
-            "embedding model",
-            format!("hashed fallback, as selected ({why}); intent reflexes cannot fire"),
-        ),
+        Source::Hashed { why } if r.selected == "hashed" => {
+            pass("embedding model", format!("hashed fallback, as selected ({why}); intent reflexes cannot fire"))
+        }
         Source::Hashed { why } => {
             let detail = format!("no embedding model, so the hashed fallback is in use: {why}{failed}");
             if wants {

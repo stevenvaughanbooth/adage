@@ -10,7 +10,7 @@
 //!   savings: ~$0.034 and 3.1 turns per session, API-list equivalent (95% CI $0.011–$0.058)
 //!            ≈ $1.87 over 55 sessions, vs 6 where Adage stayed quiet (priced as of 2026-06-24)
 //!   1 install step waits for you → adage review
-//!   embeddings: potion-base-8m (bundled) · adage ui · adage map · adage doctor
+//!   embeddings: potion-base-8m-i8 (bundled) · adage ui · adage map · adage doctor
 //! ```
 //!
 //! Outside a repository it lists every repository with reflexes, one line each. It only reads:

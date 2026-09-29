@@ -677,7 +677,8 @@ pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, sto
         Policy::Runtime { index, repo, root, table, params, embed, cases } => {
             let root_s = root.to_string_lossy().to_string();
             let ctx = Ctx { index, repo: repo.to_string(), root, table, embed: *embed, params: *params };
-            let mut cs = CaseState { steps: Vec::new(), prompt: String::new(), prompts: 0, turn: 0, given: BTreeSet::new() };
+            let mut cs =
+                CaseState { steps: Vec::new(), prompt: String::new(), prompts: 0, turn: 0, given: BTreeSet::new() };
             let cwd = PathBuf::from(&t.cwd);
             let mut st = SessionState { arm: Some(Arm::Control), repo: Some(repo.to_string()), ..Default::default() };
             let failure_routes: BTreeSet<String> = index
@@ -689,24 +690,31 @@ pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, sto
             let mut steps = steps.into_iter();
             let mut out = Vec::new();
             // At most one directive per hook event: the first the runtime would have given.
-            let push = |d: adage_runtime::Decision, at: i64, pre: bool, name: &'static str, out: &mut Vec<Given>| -> bool {
-                if let Some(w) = d.would_have.into_iter().find(|w| !pre || failure_routes.contains(&w.route)) {
-                    let class = instinct_of(index, repo, &w.route).unwrap_or(Class::Unscored);
-                    out.push(Given {
-                        tokens: tokens_of(&adage_runtime::render::wrap_directive(&w)),
-                        route: w.route,
-                        t: at,
-                        pre,
-                        event: name,
-                        class,
-                    });
-                    return true;
-                }
-                false
-            };
+            let push =
+                |d: adage_runtime::Decision, at: i64, pre: bool, name: &'static str, out: &mut Vec<Given>| -> bool {
+                    if let Some(w) = d.would_have.into_iter().find(|w| !pre || failure_routes.contains(&w.route)) {
+                        let class = instinct_of(index, repo, &w.route).unwrap_or(Class::Unscored);
+                        out.push(Given {
+                            tokens: tokens_of(&adage_runtime::render::wrap_directive(&w)),
+                            route: w.route,
+                            t: at,
+                            pre,
+                            event: name,
+                            class,
+                        });
+                        return true;
+                    }
+                    false
+                };
             // The case store, where the runtime gave nothing at this event.
             use adage_learn::cases::Kind;
-            let ask = |cs: &mut CaseState, kind: Kind, upto: usize, at: i64, pre: bool, name: &'static str, out: &mut Vec<Given>| {
+            let ask = |cs: &mut CaseState,
+                       kind: Kind,
+                       upto: usize,
+                       at: i64,
+                       pre: bool,
+                       name: &'static str,
+                       out: &mut Vec<Given>| {
                 if let Some(c) = cases {
                     if let Some((route, class, tokens)) = cs.ask(c, kind, upto) {
                         out.push(Given { route, t: at, pre, event: name, tokens, class });
@@ -758,7 +766,15 @@ pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, sto
                                     let ev = Event::Failure { call: call_of(c, &t.cwd, &root_s) };
                                     let d = decide(&ctx, &mut st, &ev);
                                     if !push(d, (k + j) as i64, true, "PreToolUse", &mut out) {
-                                        ask(&mut cs, Kind::Failure, end(j), (k + j) as i64, true, "PreToolUse", &mut out);
+                                        ask(
+                                            &mut cs,
+                                            Kind::Failure,
+                                            end(j),
+                                            (k + j) as i64,
+                                            true,
+                                            "PreToolUse",
+                                            &mut out,
+                                        );
                                     }
                                 }
                             }
@@ -768,7 +784,15 @@ pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, sto
                                 if let Some(ev) = next(&mut steps) {
                                     let d = decide(&ctx, &mut st, &ev);
                                     if !push(d, (k + j) as i64, false, "PostToolUseFailure", &mut out) {
-                                        ask(&mut cs, Kind::Failure, end(j), (k + j) as i64, false, "PostToolUseFailure", &mut out);
+                                        ask(
+                                            &mut cs,
+                                            Kind::Failure,
+                                            end(j),
+                                            (k + j) as i64,
+                                            false,
+                                            "PostToolUseFailure",
+                                            &mut out,
+                                        );
                                     }
                                 }
                             }
@@ -1285,13 +1309,14 @@ pub enum CasesMode {
 }
 
 /// A repository's case store, built from the manifest's training transcripts.
-pub fn case_store(m: &Manifest, e: &adage_intent::model::Embedder, thresholds: &str) -> Result<adage_learn::cases::CaseStore> {
+pub fn case_store(
+    m: &Manifest,
+    e: &adage_intent::model::Embedder,
+    thresholds: &str,
+) -> Result<adage_learn::cases::CaseStore> {
     let table = CommandTable::load();
-    let sessions: Vec<adage_learn::import::Session> = m
-        .train
-        .iter()
-        .filter_map(|p| adage_learn::import::parse_transcript(p, &table, Some(&m.repo_key)))
-        .collect();
+    let sessions: Vec<adage_learn::import::Session> =
+        m.train.iter().filter_map(|p| adage_learn::import::parse_transcript(p, &table, Some(&m.repo_key))).collect();
     let refs: Vec<&adage_learn::import::Session> = sessions.iter().collect();
     let cfg = crate::config(thresholds)?;
     let env_kind = adage_learn::value::Statics::of(Some(&m.root)).env_kind;
@@ -1405,7 +1430,12 @@ pub fn render_text(r: &Report) -> String {
     let _ = writeln!(o, "  {} sessions, {} tasks, {} calls; {} routes", s.sessions, s.tasks, s.calls, r.routes.len());
     if let Some(e) = &r.embedder {
         let admitted = r.proposals.iter().filter(|p| p.admitted).count();
-        let _ = writeln!(o, "  embedder {e}; case store {:?}: {} proposals, {admitted} admitted", r.cases, r.proposals.len());
+        let _ = writeln!(
+            o,
+            "  embedder {e}; case store {:?}: {} proposals, {admitted} admitted",
+            r.cases,
+            r.proposals.len()
+        );
     }
     let _ = writeln!(
         o,

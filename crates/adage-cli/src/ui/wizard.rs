@@ -285,7 +285,9 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
             }
         }
         Kind::Model => match &w.model {
-            Some(m) => out.push(Line::raw(format!("The embedding model is ready: {m} (installed, or bundled in adage)."))),
+            Some(m) => {
+                out.push(Line::raw(format!("The embedding model is ready: {m} (installed, or bundled in adage).")))
+            }
             None => {
                 out.push(Line::raw("Optional: the static embedding model (potion-base-8M, 31 MB, SHA-256 verified)."));
                 out.push(Line::raw("With it, `adage condition` groups prompts that mean the same thing into intent"));

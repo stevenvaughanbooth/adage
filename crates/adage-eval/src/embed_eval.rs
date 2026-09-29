@@ -54,7 +54,9 @@ fn list_files(root: &Path) -> Vec<String> {
         es.sort_by_key(|e| e.file_name());
         for e in es {
             let name = e.file_name().to_string_lossy().to_string();
-            if name.starts_with('.') || matches!(name.as_str(), "node_modules" | "dist" | "build" | "target" | "__pycache__") {
+            if name.starts_with('.')
+                || matches!(name.as_str(), "node_modules" | "dist" | "build" | "target" | "__pycache__")
+            {
                 continue;
             }
             let p = e.path();
@@ -286,7 +288,16 @@ pub fn repo_report(m: &Manifest, e: &Embedder) -> Result<RepoReport> {
     for s in &all {
         let task = by_id.get(&s.id).copied().unwrap_or("");
         truth.push(task.to_string());
-        texts.push(s.prompt.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase().chars().take(240).collect::<String>());
+        texts.push(
+            s.prompt
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_lowercase()
+                .chars()
+                .take(240)
+                .collect::<String>(),
+        );
         vecs.push(adage_learn::cases::vector(e, &adage_intent::normalize::normalize(&s.prompt)));
     }
     let exact: Vec<usize> = texts.iter().map(|t| texts.iter().position(|x| x == t).unwrap_or(0)).collect();
@@ -318,8 +329,7 @@ pub fn run(manifests: &[Manifest], models: &Path) -> Result<Report> {
     let pct = |q: f64| lat.get(((lat.len() as f64 - 1.0) * q).round() as usize).copied().unwrap_or(0.0);
     let int8_vs_f32 = match (model::bundled(), model::StaticModel::open(&model::dir_in(models))) {
         (Some(b), Ok(f)) => {
-            let mut c: Vec<f64> =
-                prompts.iter().filter_map(|p| Some(cos(&b.embed(p)?, &f.embed(p)?))).collect();
+            let mut c: Vec<f64> = prompts.iter().filter_map(|p| Some(cos(&b.embed(p)?, &f.embed(p)?))).collect();
             c.sort_by(|a, b| a.total_cmp(b));
             (!c.is_empty()).then(|| [c[0], c[c.len() / 2]])
         }
@@ -355,7 +365,11 @@ pub fn render(r: &Report) -> String {
     );
     let h = |x: &Hits| format!("{:.2}/{:.2}/{:.2}", x.hit[0], x.hit[1], x.hit[2]);
     for p in &r.repos {
-        let _ = writeln!(o, "  {} ({} areas, {} files; hit@1/3/5 over {} sessions)", p.name, p.areas, p.files, p.area_knn.n);
+        let _ = writeln!(
+            o,
+            "  {} ({} areas, {} files; hit@1/3/5 over {} sessions)",
+            p.name, p.areas, p.files, p.area_knn.n
+        );
         let _ = writeln!(
             o,
             "    area: kNN {}  retrieval {}  hybrid {}  frequency {}",
@@ -388,8 +402,7 @@ pub fn render(r: &Report) -> String {
 pub fn cli(args: &[String]) -> Result<()> {
     let flag = |n: &str| args.iter().position(|a| a == n).and_then(|i| args.get(i + 1).cloned());
     let models = flag("--models").context("usage: adage eval embeddings <manifest.json>… --models <dir> [--json]")?;
-    let skip: BTreeSet<usize> =
-        args.iter().enumerate().filter(|(_, a)| *a == "--models").map(|(i, _)| i + 1).collect();
+    let skip: BTreeSet<usize> = args.iter().enumerate().filter(|(_, a)| *a == "--models").map(|(i, _)| i + 1).collect();
     let mut ms = Vec::new();
     for (i, a) in args.iter().enumerate() {
         if a.starts_with("--") || skip.contains(&i) {

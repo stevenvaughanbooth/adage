@@ -35,7 +35,8 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
             install(Path::new(dir), args.get(2).map(String::as_str), paths)
         }
         Some("use") => {
-            let which = args.get(1).context("usage: adage models use <auto|hashed|potion-base-8m|potion-code-16m-v2>")?;
+            let which =
+                args.get(1).context("usage: adage models use <auto|hashed|potion-base-8m|potion-code-16m-v2>")?;
             let which = which.trim().to_lowercase();
             if !matches!(which.as_str(), "auto" | "hashed") && model::spec(&which).is_none() {
                 bail!("unknown model {which:?}; use auto, hashed, or one of: {}", keys());
@@ -51,7 +52,9 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
             print!("{}", status_text(paths));
             Ok(())
         }
-        Some(other) => bail!("unknown `adage models {other}`; use fetch [<key>], install <dir> [<key>], use <key>, or status"),
+        Some(other) => {
+            bail!("unknown `adage models {other}`; use fetch [<key>], install <dir> [<key>], use <key>, or status")
+        }
     }
 }
 
@@ -277,9 +280,15 @@ pub(crate) fn fetch_spec(spec: &Spec, paths: &Paths, progress: &mut dyn FnMut(&P
         match got {
             Ok(()) => {
                 let bytes = std::fs::read(&tgz)?;
-                let digest: String = <sha2::Sha256 as sha2::Digest>::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
+                let digest: String =
+                    <sha2::Sha256 as sha2::Digest>::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
                 if digest != npm.tarball_sha256 {
-                    bail!("{} {}: tarball sha256 {digest} does not match the pinned {}", npm.package, npm.version, npm.tarball_sha256);
+                    bail!(
+                        "{} {}: tarball sha256 {digest} does not match the pinned {}",
+                        npm.package,
+                        npm.version,
+                        npm.tarball_sha256
+                    );
                 }
                 let files = tmp.join("npm");
                 adage_intent::npm::extract(spec, &bytes, &files)?;

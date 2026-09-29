@@ -142,8 +142,7 @@ fn signature(output: &str) -> String {
 
 /// The situation text after `steps` (see the module documentation).
 pub fn situation(steps: &[StepObs]) -> String {
-    let edited: BTreeSet<String> =
-        steps.iter().filter_map(outcome::source_edit).map(|p| words(dir_of(p))).collect();
+    let edited: BTreeSet<String> = steps.iter().filter_map(outcome::source_edit).map(|p| words(dir_of(p))).collect();
     let tested = steps.iter().any(outcome::test_goal);
     let mut parts = vec![if tested {
         "tests ran".to_string()
@@ -175,9 +174,8 @@ pub fn tests_passed(output: &str) -> bool {
         Regex::new(r"(?m)\b[1-9]\d* (failed|errors?)\b|^FAIL\b|^--- FAIL|test result: FAILED|^FAILED|Tests:.*\b[1-9]\d* failed")
             .expect("valid")
     });
-    let pass = PASS.get_or_init(|| {
-        Regex::new(r"(?m)\b[1-9]\d* passed\b|^OK\b|^ok\s|test result: ok|^--- PASS").expect("valid")
-    });
+    let pass = PASS
+        .get_or_init(|| Regex::new(r"(?m)\b[1-9]\d* passed\b|^OK\b|^ok\s|test result: ok|^--- PASS").expect("valid"));
     pass.is_match(out) && !fail.is_match(out)
 }
 
@@ -247,7 +245,7 @@ impl Case {
 pub struct CaseStore {
     pub version: u32,
     pub repo: String,
-    /// The embedder's id (`potion-base-8m@…+i8`, `hashed-256@1`): a store is only queried with
+    /// The embedder's id (`potion-base-8m-i8@b9c0e329a2ce`, `hashed-256@1`): a store is only queried with
     /// the embedder it was built with.
     pub embedder: String,
     pub cases: Vec<Case>,
@@ -366,7 +364,9 @@ pub fn proposals_of(st: &StepObs, root: &str) -> Option<(Proposal, Option<Propos
     }
     let prefix = match (a.runner.as_str(), &a.env) {
         ("pytest" | "unittest", Env::Venv(d)) => format!("{d}/bin/python -m {}", a.runner),
-        ("pytest", Env::Managed(m)) if matches!(m.as_str(), "uv" | "poetry" | "pdm" | "hatch") => format!("{m} run pytest"),
+        ("pytest", Env::Managed(m)) if matches!(m.as_str(), "uv" | "poetry" | "pdm" | "hatch") => {
+            format!("{m} run pytest")
+        }
         ("pytest" | "unittest", _) => return None,
         _ => {
             // The argv up to its first option or target (`npm test`, `npx vitest run`, `go test`).
@@ -461,7 +461,15 @@ pub fn build(repo: &str, ss: &[&Session], e: &Embedder, priors: &Priors, env_kin
         for pt in points(s) {
             let prompt = s.prompts.get(pt.prompt).map(|p| p.text.as_str()).unwrap_or(&s.prompt);
             let (p, sv) = vectors(e, prompt, &s.steps[..pt.after]);
-            let mut case = Case { session: s.id.clone(), kind: pt.kind, after: pt.after as u32, p, s: sv, proposals: vec![], calls: 0 };
+            let mut case = Case {
+                session: s.id.clone(),
+                kind: pt.kind,
+                after: pt.after as u32,
+                p,
+                s: sv,
+                proposals: vec![],
+                calls: 0,
+            };
             if let Some((j, calls)) = good_outcome(s, pt.after) {
                 if let Some((runner, area)) = proposals_of(&s.steps[j], &root) {
                     case.proposals.push(add(runner, &mut store));
@@ -594,8 +602,11 @@ mod tests {
     fn areas_are_monorepo_packages() {
         let f = |p: &str| Target::File(p.to_string());
         assert_eq!(
-            area_of(&[f("packages/runtime-core/__tests__/a.spec.ts"), f("packages/runtime-core/__tests__/b.spec.ts")], "/r")
-                .as_deref(),
+            area_of(
+                &[f("packages/runtime-core/__tests__/a.spec.ts"), f("packages/runtime-core/__tests__/b.spec.ts")],
+                "/r"
+            )
+            .as_deref(),
             Some("packages/runtime-core")
         );
         assert_eq!(area_of(&[f("/r/packages/x/__tests__/a.spec.ts")], "/r").as_deref(), Some("packages/x"));
