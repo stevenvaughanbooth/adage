@@ -152,6 +152,8 @@ pub fn on_turn_end(
         return Ok(Triggered::Off);
     }
     let repo = adage_core::repo::repo_key_cached(root, &paths.repo_keys());
+    // The checkout can be gone before its learner runs (a worktree removed as its task ends).
+    adage_core::repo::remember_key_cached(root, &repo, &paths.repo_keys());
     let q = Queue::new(paths, &repo);
     let now = learnlog::now_ms();
     let transcript_path = transcript_path

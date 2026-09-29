@@ -70,6 +70,21 @@ version as the GitHub Release notes.
 
 ### Fixed
 
+- **Linked worktrees did not share their repository's routes.** A worktree made with
+  `git worktree add` (one per task in tools that run agents in parallel, such as Conductor) has a
+  `.git` file, not a directory, and its `origin` lives in the git directory it shares with the
+  main checkout. The key read only `<root>/.git/config`, so every worktree became its own
+  repository (`<worktree dir>@<root commit>`): routes learned in one never reached the next one or
+  the main checkout. `origin` is now read from the common git directory (submodules read their
+  own), so worktrees and the main checkout share one key. `adage learn`, and the hook at the end of
+  each turn (with automatic learning on), also remember each checkout's key in
+  `$ADAGE_HOME/repo-keys/<hash>.key`, so the sessions of a removed worktree keep their repository
+  at the next learn instead of falling back to the bare directory name, even when the worktree
+  was removed before its learner ran. Key lookups write nothing (`adage init` without `--yes`
+  still writes nothing). The next learn, manual or automatic, learns the routes of existing
+  worktrees again under the repository's key. Tracks learned before under a worktree key
+  (`tracks/<worktree dir>-<root commit>/`) stay as they are, with their review decisions; no hook
+  matches them any more, and they can be deleted.
 - **Over-broad dead-end warnings.** A dead end named every runner that failed before the working
   command, including `python3 -m unittest`, which passes once `ACME_ENV` is set. Dead ends are now
   keyed by failure signature: a runner is named only if its failures share the route's signature

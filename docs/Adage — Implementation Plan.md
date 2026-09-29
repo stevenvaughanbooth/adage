@@ -167,6 +167,15 @@ Closed since draft 2:
   of the path, which copies do not share. Bare-name keys from before still apply until a
   repository of that name is re-keyed. Hook p50/p95 unchanged within 0.1–0.2 ms; a cold cache
   costs one walk (38 ms for 5,000 packed commits, about 0.45 s for 50,000).
+- Linked worktrees share their repository's key: `origin` is read from the common git directory
+  (`gitobj::dirs`), not `<root>/.git/config`, which a worktree does not have, so a worktree is no
+  longer keyed `<worktree dir>@<root commit>` apart from its main checkout. `adage learn` and
+  the end-of-turn hook remember each checkout's key in `$ADAGE_HOME/repo-keys/<hash>.key`
+  (lookups write nothing), so the sessions of a removed worktree keep their repository at the
+  next learn, even one that runs after the removal. The next learn learns worktree routes again
+  under the repository's key; tracks from before under a worktree key stay, unmatched.
+  `origin_key` costs 8.6 µs in a main checkout (8.2 before) and
+  23.5 µs in a worktree, where it used to fail and fall back to the root commit.
 - A state file that can no longer be read (both slots fail their CRC, or the payload no longer
   parses) is rebuilt from the session's spool (at most 4 MiB, 10,000 records): arm, repository,
   counters, emitted routes, history, finish-line obligations and stop requests. Spool records now
@@ -212,7 +221,6 @@ Open:
 | The command table is parsed, and its 57 regexes compiled, at every decided event (about 1 ms of the 3 ms full path) | Every event the fast path cannot skip pays it | Compile pattern regexes lazily, or once per build |
 | Events the no-match fast path skips leave no spool record | `adage graph` and the signal box list only recorded commands, so fewer off-route ones; route metrics are unaffected | If the off-route view matters, record a light entry for skipped calls (needs the cheaper table above to carry keys) |
 | A failing runner whose error output has no renderable line (quotes, shell syntax, invisible characters) has no signature, so no dead end names it | Adversarial dead-end recall 3/30; overall recall 0.57 | Cut an unrenderable line at its first unrenderable character, with a minimum length, if that keeps the safety oracle at 0 |
-| A linked worktree does not see its repository's `origin` (the config lives in the common git directory; `repo_key` reads `<root>/.git/config`) | A worktree is keyed `<worktree dir>@<root commit>`, so it does not share the main checkout's routes | Read `origin` from the common directory (`gitobj::Repo` already finds it); re-keys existing worktree routes |
 | Per-session nonce (review finding F12) and arm assignment by root session lineage (F7) were accepted but not built | `/clear` starts a new arm | Build both |
 | Automatic learning reads only configured sources; `adage learn` can be given others (`--transcripts`, `--codex-sessions`) | A route learned by hand from an unconfigured source can lose that evidence at the next automatic learn | Set `learn.codex_sessions` / `learn.opencode_exports` for sources you learn from; or remember manual sources |
 | The first automatic learn with an empty parse cache parses the whole Claude Code history (every repository), as `adage learn` does | One slow background learn (about 1 s per 4,000 sessions of the simulator's size), after which each learn reads only what changed | Pre-filter by project directory before parsing, if histories get large |

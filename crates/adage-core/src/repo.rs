@@ -22,7 +22,8 @@ pub fn find_root(start: &Path) -> Option<PathBuf> {
 /// A stable repository key.
 ///
 /// - With an `origin` remote: the normalised `origin` URL. Clones of the same repository in
-///   different directories share a key.
+///   different directories share a key, and so do its linked worktrees, which read `origin` from
+///   the git directory they share with the main checkout ([`origin_key`]).
 /// - Without one: `<directory name>@<root commit>`, the first 12 hex digits of the root of
 ///   `HEAD`'s first-parent history, read from the object store without running git
 ///   ([`crate::gitobj`]). Unrelated repositories that happen to share a directory name get
@@ -31,15 +32,17 @@ pub fn find_root(start: &Path) -> Option<PathBuf> {
 ///   alternates, a history longer than [`gitobj::MAX_WALK`]), or the directory is not a git
 ///   repository: `<directory name>@path-<12 hex digits of SHA-256 of the root's path>`. Such a
 ///   key is not shared with any copy.
-/// - A directory that no longer exists (history of a deleted checkout, read by `adage learn`):
+/// - A directory that no longer exists (history of a deleted checkout, such as a removed worktree,
+///   read by `adage learn`): the key remembered for it while it existed ([`remember_key`]), else
 ///   the directory name alone, the key every repository without `origin` had before. Hooks accept
 ///   such a *legacy* key only while no repository of that name has a new key ([`lookup_key`]).
 pub fn repo_key(root: &Path) -> String {
-    origin_key(root).unwrap_or_else(|| no_origin_key(root, CACHE.get().map(PathBuf::as_path)))
+    key(root, CACHE.get().map(PathBuf::as_path))
 }
 
-/// Where [`repo_key`] remembers root commits for the rest of this process. The CLI sets
-/// `$ADAGE_HOME/repo-keys`, so the history `adage learn` walks is not walked again by a hook.
+/// Where [`repo_key`] remembers root commits, and [`remember_key`] keys, for the rest of this
+/// process. The CLI sets `$ADAGE_HOME/repo-keys`, so the history `adage learn` walks is not walked
+/// again by a hook.
 static CACHE: OnceLock<PathBuf> = OnceLock::new();
 
 /// Remember root commits under `dir` for the rest of this process (first call wins).
@@ -51,7 +54,50 @@ pub fn use_cache(dir: PathBuf) {
 /// history is walked once, not at every hook. A remembered root commit is used only while the
 /// repository's object store still holds it.
 pub fn repo_key_cached(root: &Path, cache: &Path) -> String {
-    origin_key(root).unwrap_or_else(|| no_origin_key(root, Some(cache)))
+    key(root, Some(cache))
+}
+
+fn key(root: &Path, cache: Option<&Path>) -> String {
+    if !root.is_dir() {
+        return cache.and_then(|c| recall(c, &root.to_string_lossy())).unwrap_or_else(|| dir_name(root));
+    }
+    origin_key(root).unwrap_or_else(|| no_origin_key(root, cache))
+}
+
+/// Remember `key` as the key of the checkout at `root`, in the cache directory of [`use_cache`], so
+/// that its sessions keep their repository once the directory is gone (a removed worktree). Called
+/// where Adage learns (`adage learn`, and the hook at the end of a turn), never by a key lookup.
+pub fn remember_key(root: &Path, key: &str) {
+    if let Some(cache) = CACHE.get() {
+        remember_key_cached(root, key, cache);
+    }
+}
+
+/// [`remember_key`] in `cache`. Best effort: a key that cannot be written is only not remembered.
+pub fn remember_key_cached(root: &Path, key: &str, cache: &Path) {
+    let path = root.to_string_lossy();
+    if !root.is_dir() || recall(cache, &path).as_deref() == Some(key) {
+        return;
+    }
+    let _ = std::fs::create_dir_all(cache);
+    let tmp = cache.join(format!("{}.key.tmp{}", short_hash(&path), std::process::id()));
+    if std::fs::write(&tmp, format!("{path}\n{key}\n")).is_ok() {
+        let _ = std::fs::rename(&tmp, key_file(cache, &path));
+    }
+}
+
+/// One file per repository path, beside its root commit: the path, then the key.
+fn key_file(cache: &Path, path: &str) -> PathBuf {
+    cache.join(format!("{}.key", short_hash(path)))
+}
+
+fn recall(cache: &Path, path: &str) -> Option<String> {
+    let text = std::fs::read_to_string(key_file(cache, path)).ok()?;
+    let mut lines = text.lines();
+    match (lines.next(), lines.next()) {
+        (Some(p), Some(k)) if p == path && !k.is_empty() => Some(k.to_string()),
+        _ => None,
+    }
 }
 
 /// The key under which a hook looks up routes for `root`, given the repository keys the index
@@ -79,9 +125,12 @@ pub fn lookup_key(root: &Path, cache: Option<&Path>, keys: &BTreeSet<&str>) -> O
     keys.contains(name.as_str()).then_some(name)
 }
 
-/// The `origin` remote's normalised URL, from the repository's config.
+/// The `origin` remote's normalised URL, from the repository's config. The config is in the common
+/// git directory ([`gitobj::dirs`]): a linked worktree's `.git` is a file, and its remotes are the
+/// main checkout's.
 pub fn origin_key(root: &Path) -> Option<String> {
-    let cfg = std::fs::read_to_string(root.join(".git/config")).ok()?;
+    let (_, common) = gitobj::dirs(root)?;
+    let cfg = std::fs::read_to_string(common.join("config")).ok()?;
     let mut in_origin = false;
     for line in cfg.lines() {
         let l = line.trim();
@@ -278,5 +327,73 @@ mod tests {
     fn origin_normalisation() {
         assert_eq!(normalise_origin("git@github.com:Acme/Billing.git"), "github.com/acme/billing");
         assert_eq!(normalise_origin("https://github.com/acme/billing"), "github.com/acme/billing");
+    }
+
+    fn write(path: &Path, text: &str) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
+
+    #[test]
+    fn worktrees_and_submodules_read_origin_from_their_common_directory() {
+        let d = tempfile::tempdir().unwrap();
+        let main = d.path().join("app");
+        write(
+            &main.join(".git/config"),
+            "[core]\n\tbare = false\n[remote \"origin\"]\n\turl = git@github.com:Acme/App.git\n",
+        );
+        // What `git worktree add` writes: a `gitdir:` file (absolute, or relative with
+        // `worktree.useRelativePaths`), and a git directory naming the common one in `commondir`.
+        write(&main.join(".git/worktrees/wt/commondir"), "../..\n");
+        let (abs, rel) = (d.path().join("istanbul"), d.path().join("paris"));
+        write(&abs.join(".git"), &format!("gitdir: {}\n", main.join(".git/worktrees/wt").display()));
+        write(&rel.join(".git"), "gitdir: ../app/.git/worktrees/wt\n");
+        // A submodule: its `gitdir:` names its own git directory, which has no `commondir`.
+        let sub = main.join("vendor/lib");
+        write(&main.join(".git/modules/lib/config"), "[remote \"origin\"]\n\turl = https://github.com/acme/lib\n");
+        write(&sub.join(".git"), "gitdir: ../../.git/modules/lib\n");
+
+        let cache = d.path().join("repo-keys");
+        assert_eq!(repo_key_cached(&main, &cache), "github.com/acme/app");
+        assert_eq!(repo_key_cached(&abs, &cache), "github.com/acme/app", "absolute gitdir");
+        assert_eq!(repo_key_cached(&rel, &cache), "github.com/acme/app", "relative gitdir");
+        assert_eq!(repo_key_cached(&sub, &cache), "github.com/acme/lib", "a submodule is its own repository");
+        let keys = BTreeSet::from(["github.com/acme/app"]);
+        assert_eq!(lookup_key(&rel, Some(&cache), &keys).as_deref(), Some("github.com/acme/app"), "hooks");
+    }
+
+    #[test]
+    fn a_removed_checkout_keeps_the_key_it_had() {
+        let d = tempfile::tempdir().unwrap();
+        let cache = d.path().join("repo-keys");
+        let wt = d.path().join("istanbul");
+        let origin = |url: &str| write(&wt.join(".git/config"), &format!("[remote \"origin\"]\n\turl = {url}\n"));
+        let learn = || {
+            let key = repo_key_cached(&wt, &cache);
+            remember_key_cached(&wt, &key, &cache);
+            key
+        };
+        origin("https://github.com/acme/app.git");
+        assert_eq!(repo_key_cached(&wt, &cache), "github.com/acme/app");
+        assert!(!cache.exists(), "a lookup writes no key");
+        assert_eq!(learn(), "github.com/acme/app");
+        std::fs::remove_dir_all(&wt).unwrap();
+        assert_eq!(repo_key_cached(&wt, &cache), "github.com/acme/app", "remembered");
+        remember_key_cached(&wt, "istanbul", &cache);
+        assert_eq!(repo_key_cached(&wt, &cache), "github.com/acme/app", "nothing is remembered for a deleted path");
+        assert_eq!(repo_key_cached(&d.path().join("paris"), &cache), "paris", "never seen: the bare name, as before");
+
+        // The path is reused by another repository: its key replaces the remembered one.
+        origin("https://github.com/acme/other");
+        assert_eq!(learn(), "github.com/acme/other");
+        std::fs::remove_dir_all(&wt).unwrap();
+        assert_eq!(repo_key_cached(&wt, &cache), "github.com/acme/other");
+
+        // A file that is not this path's (a hash collision, or damage) is not believed.
+        let file = key_file(&cache, &wt.to_string_lossy());
+        std::fs::write(&file, "/somewhere/else\ngithub.com/acme/app\n").unwrap();
+        assert_eq!(repo_key_cached(&wt, &cache), "istanbul");
+        std::fs::write(&file, format!("{}\n", wt.display())).unwrap();
+        assert_eq!(repo_key_cached(&wt, &cache), "istanbul");
     }
 }

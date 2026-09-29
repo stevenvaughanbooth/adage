@@ -162,6 +162,14 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
             }
         }
     }
+    // Which repository each checkout is, for when it is deleted (a removed worktree). Not under an
+    // override, which is not the checkout's own key.
+    if over.is_none() {
+        let checkouts: BTreeMap<&Path, &str> = sessions.iter().map(|s| (s.root.as_path(), s.repo.as_str())).collect();
+        for (root, repo) in checkouts {
+            adage_core::repo::remember_key(root, repo);
+        }
+    }
     let (hits, misses) = cache.as_ref().map(|c| (c.hits, c.misses)).unwrap_or((0, 0));
     if let Some(c) = cache {
         c.save();
