@@ -27,6 +27,7 @@ pub mod person;
 pub mod policy;
 pub mod project;
 pub mod render;
+pub mod replay;
 pub mod request;
 pub mod route;
 pub mod run;

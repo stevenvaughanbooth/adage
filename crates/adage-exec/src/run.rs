@@ -219,6 +219,20 @@ pub fn spawn_sandboxed(
     res: &Resolved,
     cap: &Capability,
 ) -> Result<Outcome, Refusal> {
+    spawn_sandboxed_with(program, args, env, res, cap, 8 * 1024)
+}
+
+/// [`spawn_sandboxed`], keeping at most `stderr_cap` bytes of stderr (the first ones). A replay
+/// ([`crate::replay`]) keeps more: a test runner's verdict is often on stderr.
+#[cfg(unix)]
+pub(crate) fn spawn_sandboxed_with(
+    program: &Path,
+    args: &[String],
+    env: &BTreeMap<String, String>,
+    res: &Resolved,
+    cap: &Capability,
+    stderr_cap: u64,
+) -> Result<Outcome, Refusal> {
     let limits = res.limits;
     let mut cmd = match &cap.backend {
         Backend::Unavailable { reason } => return refuse("sandbox", format!("no sandbox available: {reason}")),
@@ -269,7 +283,7 @@ pub fn spawn_sandboxed(
     if let Some(err) = child.stderr.take() {
         let tx = tx.clone();
         std::thread::spawn(move || {
-            let (b, n) = read_capped(err, 8 * 1024, Arc::new(AtomicBool::new(false)), false);
+            let (b, n) = read_capped(err, stderr_cap, Arc::new(AtomicBool::new(false)), false);
             let _ = tx.send((false, b, n));
         });
     }
@@ -324,6 +338,19 @@ pub fn spawn_sandboxed(
         }
     }
     Ok(o)
+}
+
+/// No sandbox exists on this OS: nothing runs (Windows: E0 only).
+#[cfg(not(unix))]
+pub(crate) fn spawn_sandboxed_with(
+    _program: &Path,
+    _args: &[String],
+    _env: &BTreeMap<String, String>,
+    _res: &Resolved,
+    _cap: &Capability,
+    _stderr_cap: u64,
+) -> Result<Outcome, Refusal> {
+    refuse("sandbox", "no sandbox is available on this OS (E0 only)")
 }
 
 /// No sandbox exists on this OS: nothing runs (Windows: E0 only).
