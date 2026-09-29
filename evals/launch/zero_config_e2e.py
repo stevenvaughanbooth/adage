@@ -10,9 +10,11 @@ real earlier sessions (rewritten to the clone's path, as a user's own history wo
 Nothing Adage-specific is configured: no ADAGE_* variable, no `adage` command before the first
 session, no `adage condition`. Claude Code loads the plugin with `--plugin-dir` (the staged
 marketplace layout from scripts/stage-plugin.mjs, binary bundled under dist/). Sessions are
-isolated like the live runner's (fresh environment, host-auth allowlist, --tools pinned) but not
-confined: bubblewrap's PID namespace would kill the detached learners the hooks start, which is
-exactly what this checks. Each run records the stream (hook events included), the Adage data
+isolated like the live runner's (fresh environment, host-auth allowlist, --tools pinned). With
+`--confine` they run under the runner's bubblewrap mounts but without its PID namespace (which
+would kill the detached learners the hooks start, exactly what this checks). Without it an agent's
+`pip install` reaches the machine's Python and changes the next session's environment (it did, in
+the first run). ZC_ROOT (default /tmp/adage-zc) holds everything. Each run records the stream (hook events included), the Adage data
 directory's learn.log, spool and ledger, and `adage` (bare) before and after.
 """
 
@@ -125,6 +127,13 @@ def run(a) -> int:
            "--tools", ",".join(runner.DEFAULTS["allowed_tools"]),
            "--allowedTools", *runner.DEFAULTS["allowed_tools"],
            "--disallowedTools", *runner.DEFAULTS["disallowed_tools"]]
+    if a.confine:
+        # The runner's confinement (the filesystem read-only, /tmp, /home, /root hidden, this
+        # experiment's directory mounted back), minus its PID namespace and --die-with-parent: the
+        # learners the hooks start are detached and must outlive the session, as on a laptop.
+        argv = runner.confine_argv({}, BASE, env())
+        argv = [x for x in argv if x not in ("--die-with-parent", "--unshare-pid")]
+        cmd = argv + cmd
     t0 = time.time()
     with open(OUT / f"{tag}.stream.jsonl", "w") as f:
         subprocess.run(cmd, cwd=CLONE, env=env(), stdout=f, stderr=subprocess.DEVNULL, timeout=3600)
@@ -171,6 +180,9 @@ def main(argv=None) -> int:
     ap.add_argument("--model", default="claude-haiku-4-5-20251001")
     ap.add_argument("--max-turns", type=int, default=40)
     ap.add_argument("--execute", action="store_true")
+    ap.add_argument("--confine", action="store_true",
+                    help="run each session under bubblewrap (read-only system, hidden /tmp and homes), so an agent's "
+                         "`pip install` cannot change the machine for the next session")
     a = ap.parse_args(argv)
     return setup(a) if a.cmd == "setup" else run(a)
 
