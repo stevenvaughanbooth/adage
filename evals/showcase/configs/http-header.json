@@ -1,0 +1,129 @@
+{
+ "repo_key": "github.com/hyperium/http",
+ "workdir": "repo",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/showcase/sc_sandbox.py",
+  "{task}",
+  "{dir}",
+  "--arm",
+  "{arm}"
+ ],
+ "score": [
+  "python3",
+  "{repo}/evals/showcase/sc_score.py",
+  "{task}",
+  "{dir}"
+ ],
+ "prompts": [
+  "{id}"
+ ],
+ "task_prompts": {
+  "http-header--priority": "Add a constant for the `Priority` header to the http crate: `http::header::PRIORITY`. It carries the client's priority signals for a response (urgency and incremental delivery).\n\nIt must be a standard header name like the crate's other header constants: parsing the name in any letter case gives the constant, for example `HeaderName::from_bytes(b\"Priority\")` equals `header::PRIORITY`, and `header::PRIORITY.as_str()` is `\"priority\"`.\n\nInclude tests, and document the constant, as the project does for its other standard headers.",
+  "http-header--accept-patch": "Add a constant for the `Accept-Patch` header to the http crate: `http::header::ACCEPT_PATCH`. It advertises which media types the server accepts in a PATCH request.\n\nIt must be a standard header name like the crate's other header constants: parsing the name in any letter case gives the constant, for example `HeaderName::from_bytes(b\"Accept-Patch\")` equals `header::ACCEPT_PATCH`, and `header::ACCEPT_PATCH.as_str()` is `\"accept-patch\"`.\n\nInclude tests, and document the constant, as the project does for its other standard headers.",
+  "http-header--content-digest": "Add a constant for the `Content-Digest` header to the http crate: `http::header::CONTENT_DIGEST`. It carries a digest of the message content, computed over the actual content bytes.\n\nIt must be a standard header name like the crate's other header constants: parsing the name in any letter case gives the constant, for example `HeaderName::from_bytes(b\"Content-Digest\")` equals `header::CONTENT_DIGEST`, and `header::CONTENT_DIGEST.as_str()` is `\"content-digest\"`.\n\nInclude tests, and document the constant, as the project does for its other standard headers.",
+  "http-header--server-timing": "Add a constant for the `Server-Timing` header to the http crate: `http::header::SERVER_TIMING`. It communicates one or more performance metrics of the request-response cycle to the client.\n\nIt must be a standard header name like the crate's other header constants: parsing the name in any letter case gives the constant, for example `HeaderName::from_bytes(b\"Server-Timing\")` equals `header::SERVER_TIMING`, and `header::SERVER_TIMING.as_str()` is `\"server-timing\"`.\n\nInclude tests, and document the constant, as the project does for its other standard headers.",
+  "http-header--coop": "Add a constant for the `Cross-Origin-Opener-Policy` header to the http crate: `http::header::CROSS_ORIGIN_OPENER_POLICY`. It lets a document isolate its browsing context group from cross-origin documents.\n\nIt must be a standard header name like the crate's other header constants: parsing the name in any letter case gives the constant, for example `HeaderName::from_bytes(b\"Cross-Origin-Opener-Policy\")` equals `header::CROSS_ORIGIN_OPENER_POLICY`, and `header::CROSS_ORIGIN_OPENER_POLICY.as_str()` is `\"cross-origin-opener-policy\"`.\n\nInclude tests, and document the constant, as the project does for its other standard headers.",
+  "http-header--sec-fetch-dest": "Add a constant for the `Sec-Fetch-Dest` header to the http crate: `http::header::SEC_FETCH_DEST`. It is a fetch metadata request header indicating the request's destination (for example `image` or `document`).\n\nIt must be a standard header name like the crate's other header constants: parsing the name in any letter case gives the constant, for example `HeaderName::from_bytes(b\"Sec-Fetch-Dest\")` equals `header::SEC_FETCH_DEST`, and `header::SEC_FETCH_DEST.as_str()` is `\"sec-fetch-dest\"`.\n\nInclude tests, and document the constant, as the project does for its other standard headers.",
+  "http-header--permissions-policy": "Add a constant for the `Permissions-Policy` header to the http crate: `http::header::PERMISSIONS_POLICY`. It lets a site allow or deny the use of browser features in a document and its frames.\n\nIt must be a standard header name like the crate's other header constants: parsing the name in any letter case gives the constant, for example `HeaderName::from_bytes(b\"Permissions-Policy\")` equals `header::PERMISSIONS_POLICY`, and `header::PERMISSIONS_POLICY.as_str()` is `\"permissions-policy\"`.\n\nInclude tests, and document the constant, as the project does for its other standard headers.",
+  "http-header--x-forwarded-for": "Add a constant for the `X-Forwarded-For` header to the http crate: `http::header::X_FORWARDED_FOR`. It is the de-facto standard header identifying the originating IP addresses of a client connecting through proxies.\n\nIt must be a standard header name like the crate's other header constants: parsing the name in any letter case gives the constant, for example `HeaderName::from_bytes(b\"X-Forwarded-For\")` equals `header::X_FORWARDED_FOR`, and `header::X_FORWARDED_FOR.as_str()` is `\"x-forwarded-for\"`.\n\nInclude tests, and document the constant, as the project does for its other standard headers.",
+  "http-header--clear-site-data": "Add a constant for the `Clear-Site-Data` header to the http crate: `http::header::CLEAR_SITE_DATA`. It asks the browser to clear browsing data (cookies, storage, cache) for the requesting origin.\n\nIt must be a standard header name like the crate's other header constants: parsing the name in any letter case gives the constant, for example `HeaderName::from_bytes(b\"Clear-Site-Data\")` equals `header::CLEAR_SITE_DATA`, and `header::CLEAR_SITE_DATA.as_str()` is `\"clear-site-data\"`.\n\nInclude tests, and document the constant, as the project does for its other standard headers.",
+  "http-header--timing-allow-origin": "Add a constant for the `Timing-Allow-Origin` header to the http crate: `http::header::TIMING_ALLOW_ORIGIN`. It lists the origins allowed to see timing values retrieved via the Resource Timing API.\n\nIt must be a standard header name like the crate's other header constants: parsing the name in any letter case gives the constant, for example `HeaderName::from_bytes(b\"Timing-Allow-Origin\")` equals `header::TIMING_ALLOW_ORIGIN`, and `header::TIMING_ALLOW_ORIGIN.as_str()` is `\"timing-allow-origin\"`.\n\nInclude tests, and document the constant, as the project does for its other standard headers.",
+  "http-header--repr-digest": "Add a constant for the `Repr-Digest` header to the http crate: `http::header::REPR_DIGEST`. It carries a digest of the selected representation of the target resource.\n\nIt must be a standard header name like the crate's other header constants: parsing the name in any letter case gives the constant, for example `HeaderName::from_bytes(b\"Repr-Digest\")` equals `header::REPR_DIGEST`, and `header::REPR_DIGEST.as_str()` is `\"repr-digest\"`.\n\nInclude tests, and document the constant, as the project does for its other standard headers.",
+  "http-header--early-data": "Add a constant for the `Early-Data` header to the http crate: `http::header::EARLY_DATA`. It indicates that the request was conveyed in TLS early data (0-RTT).\n\nIt must be a standard header name like the crate's other header constants: parsing the name in any letter case gives the constant, for example `HeaderName::from_bytes(b\"Early-Data\")` equals `header::EARLY_DATA`, and `header::EARLY_DATA.as_str()` is `\"early-data\"`.\n\nInclude tests, and document the constant, as the project does for its other standard headers."
+ },
+ "train": {
+  "tasks": [
+   "http-header--priority",
+   "http-header--accept-patch",
+   "http-header--content-digest",
+   "http-header--server-timing"
+  ],
+  "repeats": 1
+ },
+ "seed": 20260929,
+ "max_turns": 60,
+ "concurrency": 2,
+ "host_auth": true,
+ "confine": true,
+ "learn_args": [],
+ "forward_env": [
+  "RUSTUP_HOME"
+ ],
+ "confine_expose": [
+  "/root/.rustup"
+ ],
+ "classify": {
+  "lookup": [],
+  "regen": [],
+  "verify": [
+   "pytest",
+   "go test",
+   "cargo test",
+   "cargo build",
+   "cargo check",
+   "make test",
+   "tox",
+   "nox",
+   "unittest",
+   "go vet",
+   "go build",
+   "gofmt",
+   "cargo clippy",
+   "cargo fmt"
+  ],
+  "bash_edit": [
+   "sed -i",
+   "cat >",
+   "cat <<",
+   "tee ",
+   "write_text(",
+   "patch -p",
+   "git apply",
+   "perl -pi"
+  ],
+  "check_flags": []
+ },
+ "obligation": {
+  "paths": null
+ },
+ "labels": {
+  "lookup": "lookup",
+  "regen": "regenerate"
+ },
+ "name": "showcase-http-header",
+ "description": "Adage showcase, family http-header (Claude Haiku 4.5, primary). Training = the user's history with the product installed and learning by itself; held out = control (hooks, directives withheld) vs adage (the full product), paired. See evals/showcase/prereg.json.",
+ "eval": {
+  "tasks": [
+   "http-header--coop",
+   "http-header--sec-fetch-dest",
+   "http-header--permissions-policy",
+   "http-header--x-forwarded-for",
+   "http-header--clear-site-data",
+   "http-header--timing-allow-origin",
+   "http-header--repr-digest",
+   "http-header--early-data"
+  ],
+  "repeats": 2,
+  "arms": [
+   "control",
+   "adage"
+  ]
+ },
+ "model": "claude-haiku-4-5-20251001",
+ "budget_usd": 14.2,
+ "go_validation": {
+  "train_as_user": true,
+  "learner_wait_s": 900,
+  "global_cap_usd": 60.0,
+  "spend_roots": [
+   "/tmp/adage-showcase/runs/click-type",
+   "/tmp/adage-showcase/runs/mm-validator",
+   "/tmp/adage-showcase/runs/go-flag",
+   "/tmp/adage-showcase/runs/http-header",
+   "/tmp/adage-showcase/runs/chi-middleware",
+   "/tmp/adage-showcase/runs/mm-validator-sonnet",
+   "/tmp/adage-showcase/runs/chi-middleware-sonnet"
+  ]
+ }
+}

@@ -1,0 +1,170 @@
+{
+ "family": "chi-middleware",
+ "home": "/tmp/sc-dry-chi-middleware-ly8lkh3w/adage-home",
+ "adage": "/tmp/adage-go-target/release/adage",
+ "cards": [],
+ "held_out": [
+  {
+   "task": "chi-middleware--method-override",
+   "session": "b0a0d97c-ec2d-4a01-a3b1-bcb5de1390ba",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--allow-hosts",
+   "session": "7d948a0d-d7e3-41d2-8b9a-f4f4dbfa021e",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--lowercase-path",
+   "session": "9b441c53-99e6-454f-b926-cb9bfa13c919",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--block-user-agents",
+   "session": "f364edc3-7b6e-497d-82e7-078124ba14a8",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--api-key",
+   "session": "ff1c8538-e9d4-4d04-8878-995343ae5653",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--vary",
+   "session": "e12c7865-5e94-4eea-acb8-985b16e9ae1c",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--content-length-required",
+   "session": "8869b0ca-9c0c-43da-9fa2-a445597cf889",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "task": "chi-middleware--max-header-count",
+   "session": "6f9ae2c5-0490-40de-92da-4dd5da3580e4",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  }
+ ],
+ "negatives": [
+  {
+   "id": "chi-1f927a8e",
+   "source": "repobench",
+   "session": "8080bce8-817d-4fae-87a8-2ab2c1c7acbc",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "chi-87c34a24",
+   "source": "repobench",
+   "session": "632faaae-293b-43a0-8830-138af6817d3c",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "chi-05f1ef7b",
+   "source": "repobench",
+   "session": "a6c8b60e-2202-48e5-ad6a-168ede683324",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-chi-throttle-retry-after",
+   "source": "handwritten",
+   "session": "8b5f7c35-6c60-4f9b-bc2d-39a46b68a5b1",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-chi-readme-clientip",
+   "source": "handwritten",
+   "session": "75f1c89d-7b81-4b69-9e17-56c5372fc134",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-chi-nocache-bug",
+   "source": "handwritten",
+   "session": "c943e9b1-98aa-450e-9fb1-bd0251a0ca1c",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  }
+ ],
+ "hook_events": [
+  "PostToolBatch",
+  "PostToolUseFailure",
+  "PreToolUse",
+  "SessionEnd",
+  "SessionStart",
+  "Stop",
+  "UserPromptSubmit"
+ ],
+ "summary": {
+  "cards": 0,
+  "card_formed": false,
+  "held_out_delivered": [
+   0,
+   8
+  ],
+  "held_out_at_prompt": 0,
+  "held_out_at_edit": 0,
+  "delivered_tasks": [],
+  "false_fires": [
+   0,
+   6
+  ],
+  "false_fire_ids": [],
+  "false_fires_at_prompt": 0,
+  "false_fires_at_edit_only": 0,
+  "false_fire_rate_wilson90_upper": 0.3108
+ }
+}

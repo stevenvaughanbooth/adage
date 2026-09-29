@@ -1,0 +1,1240 @@
+{
+ "schema": "adage-showcase-results/1",
+ "status": "synthetic",
+ "generated": "2026-09-29T22:13:46Z",
+ "prereg": {
+  "path": "evals/showcase/prereg.json",
+  "sha256": "61c640b49d9c76a39eb872e1d0044ed2454dd02b03bace511f23f6e5143062ac",
+  "written": "2026-09-29, before any showcase session, any card learned on these families, or any detection score on their prompts"
+ },
+ "question": "What does the SHIPPED product (hooks installed as `adage init` installs them, the background learner `adage condition --auto`, procedure cards delivered by hook, uplift gating) do to the cost, speed and pass rate of recurring developer tasks, across 5 families on 5 repositories, when it learns each family from 4 ordinary sessions of the user's history with no harness intervention? Publishable numbers for the website: pooled and per family, with intervals, n, spend and caveats.",
+ "design": {
+  "families": 5,
+  "held_out_variants_per_family": 8,
+  "repeats": 2,
+  "training_sessions_per_family": 4,
+  "arms": {
+   "control": "hooks installed, directives (cards included) computed and logged, not delivered (ADAGE_ARM=control)",
+   "adage": "the full product (ADAGE_ARM=treated)"
+  },
+  "primary_model": "Claude Haiku 4.5",
+  "secondary_model": "Claude Sonnet 5 (2 families, 6 variants, 1 repeat)",
+  "interval": "90%, Rao-Wu bootstrap stratified by family, clustered by variant"
+ },
+ "primary": {
+  "metric": "usd_per_task_change",
+  "model": "claude-haiku-4-5",
+  "change": -0.1471,
+  "ci90": [
+   -0.1978,
+   -0.0957
+  ],
+  "verdict": "cut",
+  "adage_mean": 0.2997,
+  "control_mean": 0.3514,
+  "pairs": 80,
+  "variants": 40,
+  "families": 5,
+  "sentence": "Adage cut the cost per task by 14.7% (90% CI 9.6-19.8%)"
+ },
+ "secondary": {
+  "tool_calls": {
+   "change": -0.1587,
+   "ci90": [
+    -0.205,
+    -0.1107
+   ],
+   "verdict": "cut",
+   "adage_mean": 39.825,
+   "control_mean": 47.3375,
+   "pairs": 80,
+   "variants": 40
+  },
+  "wall_time": {
+   "change": -0.1281,
+   "ci90": [
+    -0.1644,
+    -0.0908
+   ],
+   "verdict": "cut",
+   "adage_mean": 172.2025,
+   "control_mean": 197.4958,
+   "pairs": 80,
+   "variants": 40
+  },
+  "pass_rate": {
+   "adage": {
+    "k": 41,
+    "n": 80,
+    "rate": 0.5125,
+    "wilson90": [
+     0.4217,
+     0.6025
+    ]
+   },
+   "control": {
+    "k": 44,
+    "n": 80,
+    "rate": 0.55,
+    "wilson90": [
+     0.4584,
+     0.6384
+    ]
+   },
+   "paired_diff": {
+    "diff": -0.0375,
+    "ci90": [
+     -0.1,
+     0.0286
+    ],
+    "pairs": 80,
+    "variants": 40
+   },
+   "net": -3,
+   "verdict": "no detectable change"
+  },
+  "card_delivery": {
+   "k": 70,
+   "n": 80,
+   "rate": 0.875,
+   "wilson90": [
+    0.8017,
+    0.9238
+   ]
+  },
+  "false_fires": {
+   "k": 0,
+   "n": 30,
+   "rate": 0.0,
+   "wilson90": [
+    0.0,
+    0.0827
+   ]
+  },
+  "false_fires_at_prompt": {
+   "k": 0,
+   "n": 30,
+   "rate": 0.0,
+   "wilson90": [
+    0.0,
+    0.0827
+   ]
+  },
+  "false_fires_per_family": {
+   "click-type": {
+    "false_fires": 0,
+    "negatives": 6,
+    "ids": [],
+    "at_prompt": 0,
+    "at_edit_only": 0
+   },
+   "mm-validator": {
+    "false_fires": 0,
+    "negatives": 6,
+    "ids": [],
+    "at_prompt": 0,
+    "at_edit_only": 0
+   },
+   "go-flag": {
+    "false_fires": 0,
+    "negatives": 6,
+    "ids": [],
+    "at_prompt": 0,
+    "at_edit_only": 0
+   },
+   "http-header": {
+    "false_fires": 0,
+    "negatives": 6,
+    "ids": [],
+    "at_prompt": 0,
+    "at_edit_only": 0
+   },
+   "chi-middleware": {
+    "false_fires": 0,
+    "negatives": 6,
+    "ids": [],
+    "at_prompt": 0,
+    "at_edit_only": 0
+   }
+  }
+ },
+ "diagnostic": {
+  "sensitivity_uncensored_usd": {
+   "change": -0.0877,
+   "ci90": [
+    -0.131,
+    -0.0448
+   ],
+   "verdict": "cut",
+   "adage_mean": 0.3114,
+   "control_mean": 0.3414,
+   "pairs": 63,
+   "variants": 39
+  },
+  "probe_delivered_subset_usd": {
+   "change": -0.1752,
+   "ci90": [
+    -0.2227,
+    -0.1268
+   ],
+   "verdict": "cut",
+   "adage_mean": 0.2897,
+   "control_mean": 0.3512,
+   "pairs": 70,
+   "variants": 35
+  },
+  "usd_per_resolved_task": {
+   "adage": 0.5849,
+   "control": 0.639
+  },
+  "censored_sessions": 17
+ },
+ "families": [
+  {
+   "id": "click-type",
+   "repository": "pallets/click @ 06b2a67 (8.6.0 unreleased)",
+   "ecosystem": "Python: uv venv, pytest",
+   "task": "add `click.<NAME>`: ParamType class + instance in src/click/types.py, export in __init__.py, docs/api.md autodata, a docs/parameter-types.md bullet, a CHANGES.md entry, a test; Click's light-imports CI test stays green",
+   "held_out_variants": 8,
+   "card_formed": true,
+   "probe_delivered": [
+    5,
+    8
+   ],
+   "false_fires": [
+    0,
+    6
+   ],
+   "results": {
+    "usd_per_task": {
+     "change": -0.1734,
+     "ci90": [
+      -0.2975,
+      -0.0315
+     ],
+     "verdict": "cut",
+     "adage_mean": 0.383,
+     "control_mean": 0.4633,
+     "pairs": 16,
+     "variants": 8
+    },
+    "tool_calls": {
+     "change": -0.1881,
+     "ci90": [
+      -0.3224,
+      -0.0206
+     ],
+     "verdict": "cut",
+     "adage_mean": 39.375,
+     "control_mean": 48.5,
+     "pairs": 16,
+     "variants": 8
+    },
+    "wall_time": {
+     "change": -0.1509,
+     "ci90": [
+      -0.2568,
+      -0.0277
+     ],
+     "verdict": "cut",
+     "adage_mean": 145.0971,
+     "control_mean": 170.8856,
+     "pairs": 16,
+     "variants": 8
+    },
+    "pass_rate": {
+     "adage": {
+      "k": 13,
+      "n": 16,
+      "rate": 0.8125,
+      "wilson90": [
+       0.6121,
+       0.9225
+      ]
+     },
+     "control": {
+      "k": 12,
+      "n": 16,
+      "rate": 0.75,
+      "wilson90": [
+       0.5452,
+       0.8824
+      ]
+     },
+     "paired_diff": {
+      "diff": 0.0625,
+      "ci90": [
+       0.0,
+       0.1429
+      ],
+      "pairs": 16,
+      "variants": 8
+     },
+     "net": 1,
+     "verdict": "no detectable change"
+    },
+    "card_delivery": {
+     "k": 10,
+     "n": 16,
+     "rate": 0.625,
+     "wilson90": [
+      0.4219,
+      0.7919
+     ]
+    },
+    "censored_sessions": {
+     "adage": 0,
+     "control": 2
+    },
+    "usd_per_resolved_task": {
+     "adage": 0.4714,
+     "control": 0.6178
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.1047,
+     "ci90": [
+      -0.2031,
+      -0.0122
+     ],
+     "verdict": "cut",
+     "adage_mean": 0.3912,
+     "control_mean": 0.4369,
+     "pairs": 14,
+     "variants": 8
+    }
+   },
+   "delivered_subset_usd": {
+    "change": -0.2886,
+    "ci90": [
+     -0.3873,
+     -0.1444
+    ],
+    "verdict": "cut",
+    "adage_mean": 0.3532,
+    "control_mean": 0.4964,
+    "pairs": 10,
+    "variants": 5
+   },
+   "harness": {
+    "model": "claude-haiku-4-5-20251001",
+    "claude_code": "synthetic",
+    "max_turns": 60
+   }
+  },
+  {
+   "id": "mm-validator",
+   "repository": "marshmallow-code/marshmallow @ 7f0792bd (4.4.0 unreleased)",
+   "ecosystem": "Python: uv venv, pytest",
+   "task": "add `marshmallow.validate.<Name>` with the validators' error/_repr_args/_format_error conventions, a docstring, a CHANGELOG.rst entry and tests",
+   "held_out_variants": 8,
+   "card_formed": true,
+   "probe_delivered": [
+    6,
+    8
+   ],
+   "false_fires": [
+    0,
+    6
+   ],
+   "results": {
+    "usd_per_task": {
+     "change": -0.1394,
+     "ci90": [
+      -0.2665,
+      -0.0077
+     ],
+     "verdict": "cut",
+     "adage_mean": 0.2578,
+     "control_mean": 0.2996,
+     "pairs": 16,
+     "variants": 8
+    },
+    "tool_calls": {
+     "change": -0.1354,
+     "ci90": [
+      -0.2391,
+      -0.0242
+     ],
+     "verdict": "cut",
+     "adage_mean": 43.5,
+     "control_mean": 50.3125,
+     "pairs": 16,
+     "variants": 8
+    },
+    "wall_time": {
+     "change": -0.0988,
+     "ci90": [
+      -0.1758,
+      -0.0217
+     ],
+     "verdict": "cut",
+     "adage_mean": 224.735,
+     "control_mean": 249.3769,
+     "pairs": 16,
+     "variants": 8
+    },
+    "pass_rate": {
+     "adage": {
+      "k": 0,
+      "n": 16,
+      "rate": 0.0,
+      "wilson90": [
+       0.0,
+       0.1446
+      ]
+     },
+     "control": {
+      "k": 1,
+      "n": 16,
+      "rate": 0.0625,
+      "wilson90": [
+       0.0141,
+       0.2375
+      ]
+     },
+     "paired_diff": {
+      "diff": -0.0625,
+      "ci90": [
+       -0.1429,
+       0.0
+      ],
+      "pairs": 16,
+      "variants": 8
+     },
+     "net": -1,
+     "verdict": "no detectable change"
+    },
+    "card_delivery": {
+     "k": 12,
+     "n": 16,
+     "rate": 0.75,
+     "wilson90": [
+      0.5452,
+      0.8824
+     ]
+    },
+    "censored_sessions": {
+     "adage": 0,
+     "control": 6
+    },
+    "usd_per_resolved_task": {
+     "adage": null,
+     "control": 4.7933
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.0218,
+     "ci90": [
+      -0.1617,
+      0.0973
+     ],
+     "verdict": "no detectable change",
+     "adage_mean": 0.2612,
+     "control_mean": 0.267,
+     "pairs": 10,
+     "variants": 8
+    }
+   },
+   "delivered_subset_usd": {
+    "change": -0.1864,
+    "ci90": [
+     -0.3402,
+     -0.0206
+    ],
+    "verdict": "cut",
+    "adage_mean": 0.2518,
+    "control_mean": 0.3095,
+    "pairs": 12,
+    "variants": 6
+   },
+   "harness": {
+    "model": "claude-haiku-4-5-20251001",
+    "claude_code": "synthetic",
+    "max_turns": 60
+   }
+  },
+  {
+   "id": "go-flag",
+   "repository": "urfave/cli v3 @ 58ec406e",
+   "ecosystem": "Go",
+   "task": "add `cli.<Name>Flag` + `cmd.<Name>(name)`: flag_<x>.go (FlagBase alias, value type, accessor), tests, docs/v3/examples/flags/basics.md, generated API docs godoc-current.txt AND the approved copy testdata/godoc-v3.x.txt (CI's v3diff)",
+   "held_out_variants": 8,
+   "card_formed": true,
+   "probe_delivered": [
+    8,
+    8
+   ],
+   "false_fires": [
+    0,
+    6
+   ],
+   "results": {
+    "usd_per_task": {
+     "change": -0.1158,
+     "ci90": [
+      -0.2001,
+      -0.0174
+     ],
+     "verdict": "cut",
+     "adage_mean": 0.2146,
+     "control_mean": 0.2427,
+     "pairs": 16,
+     "variants": 8
+    },
+    "tool_calls": {
+     "change": -0.1237,
+     "ci90": [
+      -0.2185,
+      -0.0063
+     ],
+     "verdict": "cut",
+     "adage_mean": 31.4375,
+     "control_mean": 35.875,
+     "pairs": 16,
+     "variants": 8
+    },
+    "wall_time": {
+     "change": -0.1104,
+     "ci90": [
+      -0.1918,
+      -0.0222
+     ],
+     "verdict": "cut",
+     "adage_mean": 112.4968,
+     "control_mean": 126.46,
+     "pairs": 16,
+     "variants": 8
+    },
+    "pass_rate": {
+     "adage": {
+      "k": 14,
+      "n": 16,
+      "rate": 0.875,
+      "wilson90": [
+       0.6838,
+       0.9577
+      ]
+     },
+     "control": {
+      "k": 16,
+      "n": 16,
+      "rate": 1.0,
+      "wilson90": [
+       0.8554,
+       1.0
+      ]
+     },
+     "paired_diff": {
+      "diff": -0.125,
+      "ci90": [
+       -0.2857,
+       0.0
+      ],
+      "pairs": 16,
+      "variants": 8
+     },
+     "net": -2,
+     "verdict": "no detectable change"
+    },
+    "card_delivery": {
+     "k": 16,
+     "n": 16,
+     "rate": 1.0,
+     "wilson90": [
+      0.8554,
+      1.0
+     ]
+    },
+    "censored_sessions": {
+     "adage": 0,
+     "control": 0
+    },
+    "usd_per_resolved_task": {
+     "adage": 0.2452,
+     "control": 0.2427
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.1158,
+     "ci90": [
+      -0.2001,
+      -0.0174
+     ],
+     "verdict": "cut",
+     "adage_mean": 0.2146,
+     "control_mean": 0.2427,
+     "pairs": 16,
+     "variants": 8
+    }
+   },
+   "delivered_subset_usd": {
+    "change": -0.1158,
+    "ci90": [
+     -0.2001,
+     -0.0174
+    ],
+    "verdict": "cut",
+    "adage_mean": 0.2146,
+    "control_mean": 0.2427,
+    "pairs": 16,
+    "variants": 8
+   },
+   "harness": {
+    "model": "claude-haiku-4-5-20251001",
+    "claude_code": "synthetic",
+    "max_turns": 60
+   }
+  },
+  {
+   "id": "http-header",
+   "repository": "hyperium/http @ fdc6ab8 (1.5.0+)",
+   "ecosystem": "Rust: cargo",
+   "task": "add `http::header::<CONST>`: a documented entry in the standard_headers! table (src/header/name.rs), the re-export in src/header/mod.rs, tests (upstream #583 also extends the all-standard-headers lists in tests/)",
+   "held_out_variants": 8,
+   "card_formed": true,
+   "probe_delivered": [
+    8,
+    8
+   ],
+   "false_fires": [
+    0,
+    6
+   ],
+   "results": {
+    "usd_per_task": {
+     "change": -0.1225,
+     "ci90": [
+      -0.201,
+      -0.0561
+     ],
+     "verdict": "cut",
+     "adage_mean": 0.375,
+     "control_mean": 0.4274,
+     "pairs": 16,
+     "variants": 8
+    },
+    "tool_calls": {
+     "change": -0.1809,
+     "ci90": [
+      -0.2418,
+      -0.0952
+     ],
+     "verdict": "cut",
+     "adage_mean": 39.0625,
+     "control_mean": 47.6875,
+     "pairs": 16,
+     "variants": 8
+    },
+    "wall_time": {
+     "change": -0.1478,
+     "ci90": [
+      -0.1861,
+      -0.1052
+     ],
+     "verdict": "cut",
+     "adage_mean": 151.7972,
+     "control_mean": 178.1287,
+     "pairs": 16,
+     "variants": 8
+    },
+    "pass_rate": {
+     "adage": {
+      "k": 13,
+      "n": 16,
+      "rate": 0.8125,
+      "wilson90": [
+       0.6121,
+       0.9225
+      ]
+     },
+     "control": {
+      "k": 11,
+      "n": 16,
+      "rate": 0.6875,
+      "wilson90": [
+       0.482,
+       0.8387
+      ]
+     },
+     "paired_diff": {
+      "diff": 0.125,
+      "ci90": [
+       0.0,
+       0.2857
+      ],
+      "pairs": 16,
+      "variants": 8
+     },
+     "net": 2,
+     "verdict": "no detectable change"
+    },
+    "card_delivery": {
+     "k": 16,
+     "n": 16,
+     "rate": 1.0,
+     "wilson90": [
+      0.8554,
+      1.0
+     ]
+    },
+    "censored_sessions": {
+     "adage": 0,
+     "control": 0
+    },
+    "usd_per_resolved_task": {
+     "adage": 0.4615,
+     "control": 0.6216
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.1225,
+     "ci90": [
+      -0.201,
+      -0.0561
+     ],
+     "verdict": "cut",
+     "adage_mean": 0.375,
+     "control_mean": 0.4274,
+     "pairs": 16,
+     "variants": 8
+    }
+   },
+   "delivered_subset_usd": {
+    "change": -0.1225,
+    "ci90": [
+     -0.201,
+     -0.0561
+    ],
+    "verdict": "cut",
+    "adage_mean": 0.375,
+    "control_mean": 0.4274,
+    "pairs": 16,
+    "variants": 8
+   },
+   "harness": {
+    "model": "claude-haiku-4-5-20251001",
+    "claude_code": "synthetic",
+    "max_turns": 60
+   }
+  },
+  {
+   "id": "chi-middleware",
+   "repository": "go-chi/chi v5 @ 3d1777a",
+   "ecosystem": "Go",
+   "task": "add `middleware.<Name>`: middleware/<name>.go with a Go doc comment, middleware/<name>_test.go, a README 'Core middlewares' row and its pkg.go.dev link",
+   "held_out_variants": 8,
+   "card_formed": true,
+   "probe_delivered": [
+    8,
+    8
+   ],
+   "false_fires": [
+    0,
+    6
+   ],
+   "results": {
+    "usd_per_task": {
+     "change": -0.1725,
+     "ci90": [
+      -0.2732,
+      -0.0641
+     ],
+     "verdict": "cut",
+     "adage_mean": 0.2683,
+     "control_mean": 0.3242,
+     "pairs": 16,
+     "variants": 8
+    },
+    "tool_calls": {
+     "change": -0.1577,
+     "ci90": [
+      -0.2308,
+      -0.0791
+     ],
+     "verdict": "cut",
+     "adage_mean": 45.75,
+     "control_mean": 54.3125,
+     "pairs": 16,
+     "variants": 8
+    },
+    "wall_time": {
+     "change": -0.1361,
+     "ci90": [
+      -0.2066,
+      -0.0537
+     ],
+     "verdict": "cut",
+     "adage_mean": 226.8866,
+     "control_mean": 262.6275,
+     "pairs": 16,
+     "variants": 8
+    },
+    "pass_rate": {
+     "adage": {
+      "k": 1,
+      "n": 16,
+      "rate": 0.0625,
+      "wilson90": [
+       0.0141,
+       0.2375
+      ]
+     },
+     "control": {
+      "k": 4,
+      "n": 16,
+      "rate": 0.25,
+      "wilson90": [
+       0.1176,
+       0.4548
+      ]
+     },
+     "paired_diff": {
+      "diff": -0.1875,
+      "ci90": [
+       -0.3571,
+       -0.0714
+      ],
+      "pairs": 16,
+      "variants": 8
+     },
+     "net": -3,
+     "verdict": "lower"
+    },
+    "card_delivery": {
+     "k": 16,
+     "n": 16,
+     "rate": 1.0,
+     "wilson90": [
+      0.8554,
+      1.0
+     ]
+    },
+    "censored_sessions": {
+     "adage": 0,
+     "control": 9
+    },
+    "usd_per_resolved_task": {
+     "adage": 4.2928,
+     "control": 1.297
+    },
+    "sensitivity_uncensored_usd": {
+     "change": 0.0498,
+     "ci90": [
+      -0.0895,
+      0.1516
+     ],
+     "verdict": "no detectable change",
+     "adage_mean": 0.2998,
+     "control_mean": 0.2855,
+     "pairs": 7,
+     "variants": 7
+    }
+   },
+   "delivered_subset_usd": {
+    "change": -0.1725,
+    "ci90": [
+     -0.2732,
+     -0.0641
+    ],
+    "verdict": "cut",
+    "adage_mean": 0.2683,
+    "control_mean": 0.3242,
+    "pairs": 16,
+    "variants": 8
+   },
+   "harness": {
+    "model": "claude-haiku-4-5-20251001",
+    "claude_code": "synthetic",
+    "max_turns": 60
+   }
+  }
+ ],
+ "sonnet": {
+  "note": "the Sonnet arm is reported as directional (12 pairs, about +/-12 points), with the note that it used the Haiku-learned index",
+  "pooled": {
+   "usd_per_task": {
+    "change": -0.168,
+    "ci90": [
+     -0.3112,
+     -0.0156
+    ],
+    "verdict": "cut",
+    "adage_mean": 0.3181,
+    "control_mean": 0.3823,
+    "pairs": 12,
+    "variants": 12
+   },
+   "tool_calls": {
+    "change": -0.1315,
+    "ci90": [
+     -0.2795,
+     0.0229
+    ],
+    "verdict": "no detectable change",
+    "adage_mean": 39.0833,
+    "control_mean": 45.0,
+    "pairs": 12,
+    "variants": 12
+   },
+   "wall_time": {
+    "change": -0.1438,
+    "ci90": [
+     -0.2664,
+     -0.0096
+    ],
+    "verdict": "cut",
+    "adage_mean": 171.2197,
+    "control_mean": 199.98,
+    "pairs": 12,
+    "variants": 12
+   },
+   "pass_rate": {
+    "adage": {
+     "k": 7,
+     "n": 12,
+     "rate": 0.5833,
+     "wilson90": [
+      0.356,
+      0.78
+     ]
+    },
+    "control": {
+     "k": 9,
+     "n": 12,
+     "rate": 0.75,
+     "wilson90": [
+      0.5127,
+      0.8953
+     ]
+    },
+    "paired_diff": {
+     "diff": -0.1667,
+     "ci90": [
+      -0.3,
+      0.0
+     ],
+     "pairs": 12,
+     "variants": 12
+    },
+    "net": -2,
+    "verdict": "no detectable change"
+   },
+   "card_delivery": {
+    "k": 9,
+    "n": 12,
+    "rate": 0.75,
+    "wilson90": [
+     0.5127,
+     0.8953
+    ]
+   },
+   "censored_sessions": {
+    "adage": 0,
+    "control": 4
+   },
+   "usd_per_resolved_task": {
+    "adage": 0.5452,
+    "control": 0.5097
+   },
+   "sensitivity_uncensored_usd": {
+    "change": -0.0557,
+    "ci90": [
+     -0.2154,
+     0.1261
+    ],
+    "verdict": "no detectable change",
+    "adage_mean": 0.3083,
+    "control_mean": 0.3265,
+    "pairs": 8,
+    "variants": 8
+   }
+  },
+  "families": {
+   "mm-validator": {
+    "usd_per_task": {
+     "change": -0.2434,
+     "ci90": [
+      -0.4428,
+      -0.0161
+     ],
+     "verdict": "cut",
+     "adage_mean": 0.3553,
+     "control_mean": 0.4695,
+     "pairs": 6,
+     "variants": 6
+    },
+    "tool_calls": {
+     "change": -0.2315,
+     "ci90": [
+      -0.4161,
+      -0.0315
+     ],
+     "verdict": "cut",
+     "adage_mean": 43.1667,
+     "control_mean": 56.1667,
+     "pairs": 6,
+     "variants": 6
+    },
+    "wall_time": {
+     "change": -0.1954,
+     "ci90": [
+      -0.3373,
+      -0.0082
+     ],
+     "verdict": "cut",
+     "adage_mean": 224.5789,
+     "control_mean": 279.1233,
+     "pairs": 6,
+     "variants": 6
+    },
+    "pass_rate": {
+     "adage": {
+      "k": 1,
+      "n": 6,
+      "rate": 0.1667,
+      "wilson90": [
+       0.0381,
+       0.5024
+      ]
+     },
+     "control": {
+      "k": 3,
+      "n": 6,
+      "rate": 0.5,
+      "wilson90": [
+       0.2213,
+       0.7787
+      ]
+     },
+     "paired_diff": {
+      "diff": -0.3333,
+      "ci90": [
+       -0.6,
+       0.0
+      ],
+      "pairs": 6,
+      "variants": 6
+     },
+     "net": -2,
+     "verdict": "no detectable change"
+    },
+    "card_delivery": {
+     "k": 4,
+     "n": 6,
+     "rate": 0.6667,
+     "wilson90": [
+      0.347,
+      0.8827
+     ]
+    },
+    "censored_sessions": {
+     "adage": 0,
+     "control": 4
+    },
+    "usd_per_resolved_task": {
+     "adage": 2.1315,
+     "control": 0.939
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.0716,
+     "ci90": [
+      -0.3037,
+      0.2019
+     ],
+     "verdict": "no detectable change",
+     "adage_mean": 0.3905,
+     "control_mean": 0.4206,
+     "pairs": 2,
+     "variants": 2
+    }
+   },
+   "chi-middleware": {
+    "usd_per_task": {
+     "change": -0.0482,
+     "ci90": [
+      -0.2232,
+      0.1449
+     ],
+     "verdict": "no detectable change",
+     "adage_mean": 0.2809,
+     "control_mean": 0.2951,
+     "pairs": 6,
+     "variants": 6
+    },
+    "tool_calls": {
+     "change": 0.0345,
+     "ci90": [
+      -0.2108,
+      0.2987
+     ],
+     "verdict": "no detectable change",
+     "adage_mean": 35.0,
+     "control_mean": 33.8333,
+     "pairs": 6,
+     "variants": 6
+    },
+    "wall_time": {
+     "change": -0.0246,
+     "ci90": [
+      -0.191,
+      0.1372
+     ],
+     "verdict": "no detectable change",
+     "adage_mean": 117.8606,
+     "control_mean": 120.8367,
+     "pairs": 6,
+     "variants": 6
+    },
+    "pass_rate": {
+     "adage": {
+      "k": 6,
+      "n": 6,
+      "rate": 1.0,
+      "wilson90": [
+       0.6892,
+       1.0
+      ]
+     },
+     "control": {
+      "k": 6,
+      "n": 6,
+      "rate": 1.0,
+      "wilson90": [
+       0.6892,
+       1.0
+      ]
+     },
+     "paired_diff": {
+      "diff": 0.0,
+      "ci90": [
+       0.0,
+       0.0
+      ],
+      "pairs": 6,
+      "variants": 6
+     },
+     "net": 0,
+     "verdict": "no detectable change"
+    },
+    "card_delivery": {
+     "k": 5,
+     "n": 6,
+     "rate": 0.8333,
+     "wilson90": [
+      0.4976,
+      0.9619
+     ]
+    },
+    "censored_sessions": {
+     "adage": 0,
+     "control": 0
+    },
+    "usd_per_resolved_task": {
+     "adage": 0.2809,
+     "control": 0.2951
+    },
+    "sensitivity_uncensored_usd": {
+     "change": -0.0482,
+     "ci90": [
+      -0.2232,
+      0.1449
+     ],
+     "verdict": "no detectable change",
+     "adage_mean": 0.2809,
+     "control_mean": 0.2951,
+     "pairs": 6,
+     "variants": 6
+    }
+   }
+  }
+ },
+ "complete": {
+  "haiku_pairs": [
+   80,
+   80
+  ],
+  "sonnet_pairs": [
+   12,
+   12
+  ],
+  "haiku_complete": true,
+  "sonnet_complete": true
+ },
+ "spend": {
+  "total_usd": 60.5,
+  "by_root": {
+   "click-type": {
+    "usd": 13.5409,
+    "sessions": 32,
+    "by_phase": {
+     "train": 0,
+     "eval": 13.5409
+    }
+   },
+   "mm-validator": {
+    "usd": 8.9185,
+    "sessions": 32,
+    "by_phase": {
+     "train": 0,
+     "eval": 8.9185
+    }
+   },
+   "go-flag": {
+    "usd": 7.3167,
+    "sessions": 32,
+    "by_phase": {
+     "train": 0,
+     "eval": 7.3167
+    }
+   },
+   "http-header": {
+    "usd": 12.8377,
+    "sessions": 32,
+    "by_phase": {
+     "train": 0,
+     "eval": 12.8377
+    }
+   },
+   "chi-middleware": {
+    "usd": 9.4807,
+    "sessions": 32,
+    "by_phase": {
+     "train": 0,
+     "eval": 9.4807
+    }
+   },
+   "mm-validator-sonnet": {
+    "usd": 4.9486,
+    "sessions": 12,
+    "by_phase": {
+     "train": 0,
+     "eval": 4.9486
+    }
+   },
+   "chi-middleware-sonnet": {
+    "usd": 3.4557,
+    "sessions": 12,
+    "by_phase": {
+     "train": 0,
+     "eval": 3.4557
+    }
+   }
+  },
+  "budget_central_usd": 58.49,
+  "cap_usd": 60.0
+ },
+ "caveats": [
+  "SYNTHETIC DATA from the dry run: these numbers illustrate the pipeline, they are not results.",
+  "Families, prompts, hidden checks and gold patches were written by the Adage team; prompts follow one template per family, and the shipped detector recognises near-template prompts, not informal paraphrases (0/6 in the Go research family).",
+  "The Adage arm's saving is intention-to-treat: sessions whose prompt the detector missed count, at no saving.",
+  "Learning was frozen during held-out sessions; a user's index would keep learning from them.",
+  "Each family rests on 8 held-out variants; per-family intervals are about +/-10 points and cover about 88% of the time.",
+  "The pooled figure weights families by their cost; the interval is conditional on these 5 families.",
+  "Wall time was measured on a shared machine.",
+  "The Sonnet arm is small (12 pairs) and used cards learned from Haiku sessions.",
+  "The go-flag family's CI requires an approval step (testdata/godoc-v3.x.txt) that no research training session performed; a card only repeats what earlier sessions did.",
+  "17 held-out sessions hit the 60-turn cap and are counted at their cost so far (sensitivity without them is reported)."
+ ],
+ "data": {
+  "analysis": "evals/showcase/analysis.json",
+  "code": "evals/showcase/",
+  "raw_runs": "not committed (transcripts); roots listed in prereg.json"
+ }
+}
