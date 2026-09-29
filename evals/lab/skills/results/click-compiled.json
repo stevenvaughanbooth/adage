@@ -1,0 +1,501 @@
+{
+ "schema": "adage-compiled-skill/0",
+ "skill": {
+  "name": "click-bugfix",
+  "source": "skills/click-bugfix/SKILL.md",
+  "sha256": "2f762d469d1e47bcde684db0b89eb7b6ff27b26cd39404ebfbc8cb048b49c960",
+  "bytes": 1452,
+  "approx_tokens": 363
+ },
+ "trigger": {
+  "description": "How to reproduce, test and fix a reported bug in the pallets/click repository. Use when a prompt reports wrong behaviour in click (options, completion, prompts, help output).",
+  "keywords": [
+   "behaviour",
+   "click",
+   "click-bugfix",
+   "completion",
+   "help",
+   "options",
+   "output",
+   "pallets",
+   "prompt",
+   "prompts",
+   "reported",
+   "reports",
+   "repository",
+   "reproduce",
+   "test",
+   "wrong"
+  ],
+  "spans": []
+ },
+ "slots": {
+  "symbol": {
+   "name": "symbol",
+   "type": "symbol",
+   "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$",
+   "source": "judgment",
+   "example": ""
+  },
+  "module": {
+   "name": "module",
+   "type": "module",
+   "pattern": "^[a-z_][a-z0-9_]{0,63}$",
+   "source": "edit",
+   "example": ""
+  }
+ },
+ "reflexes": [
+  {
+   "from_step": "s3",
+   "route": {
+    "id": "skill-s3-avoid",
+    "summary": "A command the skill forbids here, and what to run instead",
+    "trigger": {
+     "on": "session_start"
+    },
+    "step": {
+     "do": "avoid",
+     "avoid": "python -m pytest / python3 -m pytest",
+     "instead": ".venv/bin/python -m pytest",
+     "signature": "No module named pytest"
+    },
+    "slots": [],
+    "effect": "verify",
+    "strength": "inhibit",
+    "state": "firm",
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "evidence": {
+     "opportunities": 3,
+     "support": 3,
+     "days": 1,
+     "successes": 0,
+     "deviations_failed": 0,
+     "rate": 1.0,
+     "lower_bound": 0.4385,
+     "median_position": 0.0,
+     "turns_saved": 0.0,
+     "provenance": "authored",
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ]
+    },
+    "authored": true
+   }
+  },
+  {
+   "from_step": "s3",
+   "route": {
+    "id": "skill-s3-avoid-pytest",
+    "summary": "A command the skill forbids here, and what to run instead",
+    "trigger": {
+     "on": "session_start"
+    },
+    "step": {
+     "do": "avoid",
+     "avoid": "pytest",
+     "instead": ".venv/bin/python -m pytest",
+     "signature": "pytest: not found"
+    },
+    "slots": [],
+    "effect": "verify",
+    "strength": "inhibit",
+    "state": "firm",
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "evidence": {
+     "opportunities": 3,
+     "support": 3,
+     "days": 1,
+     "successes": 0,
+     "deviations_failed": 0,
+     "rate": 1.0,
+     "lower_bound": 0.4385,
+     "median_position": 0.0,
+     "turns_saved": 0.0,
+     "provenance": "authored",
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ]
+    },
+    "authored": true
+   }
+  },
+  {
+   "from_step": "s6",
+   "route": {
+    "id": "skill-s6-run",
+    "summary": "Before you finish",
+    "trigger": {
+     "on": "after_edit",
+     "paths": "src/click/*.py"
+    },
+    "step": {
+     "do": "run",
+     "command": ".venv/bin/python repro.py"
+    },
+    "slots": [],
+    "effect": "environment",
+    "strength": "prime",
+    "state": "firm",
+    "exit": [
+     {
+      "when": "exploratory_change"
+     }
+    ],
+    "evidence": {
+     "opportunities": 3,
+     "support": 1,
+     "days": 1,
+     "successes": 0,
+     "deviations_failed": 0,
+     "rate": 0.3333,
+     "lower_bound": 0.0615,
+     "median_position": 0.0,
+     "turns_saved": 0.0,
+     "provenance": "authored",
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ]
+    },
+    "authored": true
+   }
+  }
+ ],
+ "gaps": [
+  {
+   "step": "s1",
+   "title": "Reproduce the bug first",
+   "why": "`.venv/bin/python repro.py` has no stimulus: it follows the agent's own writing of a file"
+  },
+  {
+   "step": "s2",
+   "title": "Find the code",
+   "why": "slot {symbol} is chosen by the agent (no stimulus binds it)"
+  },
+  {
+   "step": "s3",
+   "title": "Run the tests for that module",
+   "why": "slot {module} is bound from the edited file's name, and no Adage slot source binds an edited file's stem (EditSegment binds a directory segment)",
+   "command": ".venv/bin/python -m pytest tests/test_{module}.py -q"
+  },
+  {
+   "step": "s4",
+   "title": "Fix the code",
+   "why": "no command: the step is the agent's judgment (an edit or a decision)"
+  },
+  {
+   "step": "s5",
+   "title": "After editing `src/click/*.py`, run `.venv/bin/python -m pytest tests -q -x` to check the whole suite",
+   "why": "replay failed on a clean checkout: `.venv/bin/python -m pytest tests -q -x` exited 1 (the skill's instruction is stale here)"
+  }
+ ],
+ "coverage": {
+  "steps": 6,
+  "compilable": 4,
+  "compiled": 2,
+  "advice_blocks": 1
+ },
+ "alignment": {
+  "sessions": 3,
+  "steps": [
+   {
+    "id": "s1",
+    "title": "Reproduce the bug first",
+    "role": "run",
+    "precondition": "always",
+    "applicable": 3,
+    "aligned": 3,
+    "exact": 3,
+    "coverage": 1.0,
+    "timely": null,
+    "runs": 6,
+    "runs_failed": 1,
+    "deviations": [],
+    "avoided_hits": 0,
+    "avoided_failed": 0,
+    "median_first_position": 1,
+    "slots": {}
+   },
+   {
+    "id": "s2",
+    "title": "Find the code",
+    "role": "search",
+    "precondition": "always",
+    "applicable": 3,
+    "aligned": 3,
+    "exact": 0,
+    "coverage": 1.0,
+    "timely": null,
+    "runs": 28,
+    "runs_failed": 0,
+    "deviations": [
+     {
+      "what": "search/tool/suite  e.g. grep -rn \"show_envvar\" tests/",
+      "n": 1,
+      "failed": 0
+     },
+     {
+      "what": "search/tool/file  e.g. grep -n \"def test_\" tests/test_options.py",
+      "n": 1,
+      "failed": 0
+     },
+     {
+      "what": "search/tool/suite  e.g. find tests -name \"*.py\"",
+      "n": 1,
+      "failed": 0
+     },
+     {
+      "what": "search/tool/file  e.g. ls -la tests/test_*.py",
+      "n": 1,
+      "failed": 0
+     },
+     {
+      "what": "search/tool/file  e.g. grep -n \"def test.*flag\" tests/test_basic.py",
+      "n": 1,
+      "failed": 0
+     }
+    ],
+    "avoided_hits": 0,
+    "avoided_failed": 0,
+    "median_first_position": 5,
+    "slots": {
+     "grep -rn {symbol} src/click#symbol": {
+      "sources": {},
+      "values": {}
+     }
+    }
+   },
+   {
+    "id": "s3",
+    "title": "Run the tests for that module",
+    "role": "verify",
+    "precondition": "always",
+    "applicable": 3,
+    "aligned": 2,
+    "exact": 2,
+    "coverage": 0.667,
+    "timely": null,
+    "runs": 15,
+    "runs_failed": 4,
+    "deviations": [
+     {
+      "what": "verify/project-venv/test  e.g. .venv/bin/python -m pytest tests/test_termui.py::test_prompt",
+      "n": 3,
+      "failed": 1
+     },
+     {
+      "what": "verify/project-venv/test  e.g. .venv/bin/python -m pytest tests/test_basic.py::test_flag_va",
+      "n": 1,
+      "failed": 1
+     },
+     {
+      "what": "verify/project-venv/suite  e.g. .venv/bin/python -m pytest tests -q -x",
+      "n": 1,
+      "failed": 0
+     },
+     {
+      "what": "verify/project-venv/suite  e.g. .venv/bin/python -m pytest tests/ -q -x",
+      "n": 1,
+      "failed": 1
+     }
+    ],
+    "avoided_hits": 0,
+    "avoided_failed": 0,
+    "median_first_position": 52,
+    "slots": {
+     ".venv/bin/python -m pytest tests/test_{module}.py -q#module": {
+      "sources": {
+       "other": 4,
+       "read-stem": 1,
+       "edited-stem": 4
+      },
+      "values": {
+       "termui": 5,
+       "basic": 1,
+       "commands": 1,
+       "options": 1,
+       "context": 1
+      }
+     }
+    }
+   },
+   {
+    "id": "s4",
+    "title": "Fix the code",
+    "role": "edit",
+    "precondition": "always",
+    "applicable": 3,
+    "aligned": 1,
+    "exact": 1,
+    "coverage": 0.333,
+    "timely": null,
+    "runs": 2,
+    "runs_failed": 0,
+    "deviations": [],
+    "avoided_hits": 0,
+    "avoided_failed": 0,
+    "median_first_position": 19,
+    "slots": {}
+   },
+   {
+    "id": "s5",
+    "title": "After editing `src/click/*.py`, run `.venv/bin/python -m pytest tests -q -x` to check the whole suite",
+    "role": "verify",
+    "precondition": "after_edit",
+    "applicable": 3,
+    "aligned": 1,
+    "exact": 1,
+    "coverage": 0.333,
+    "timely": 1,
+    "runs": 4,
+    "runs_failed": 2,
+    "deviations": [
+     {
+      "what": "verify/project-venv/file  e.g. .venv/bin/python -m pytest tests/test_options.py -q",
+      "n": 1,
+      "failed": 0
+     },
+     {
+      "what": "verify/project-venv/file  e.g. .venv/bin/python -m pytest tests/test_options.py tests/test_",
+      "n": 1,
+      "failed": 1
+     },
+     {
+      "what": "verify/project-venv/file  e.g. .venv/bin/python -m pytest tests/test_options.py -q --tb=sho",
+      "n": 1,
+      "failed": 0
+     }
+    ],
+    "avoided_hits": 0,
+    "avoided_failed": 0,
+    "median_first_position": 23,
+    "slots": {}
+   },
+   {
+    "id": "s6",
+    "title": "Before you finish",
+    "role": "run",
+    "precondition": "before_finish",
+    "applicable": 3,
+    "aligned": 1,
+    "exact": 1,
+    "coverage": 0.333,
+    "timely": 1,
+    "runs": 1,
+    "runs_failed": 0,
+    "deviations": [],
+    "avoided_hits": 0,
+    "avoided_failed": 0,
+    "median_first_position": 27,
+    "slots": {}
+   }
+  ],
+  "insertions_common": [
+   {
+    "action": "run/project-venv/path",
+    "sessions": 3
+   },
+   {
+    "action": "edit/tool/file",
+    "sessions": 3
+   },
+   {
+    "action": "remove/tool/path",
+    "sessions": 2
+   }
+  ]
+ },
+ "verification": [
+  {
+   "route": "skill-s3-avoid",
+   "checks": [
+    {
+     "cmd": "python -m pytest",
+     "exit": 1,
+     "signature_seen": true,
+     "ok": true
+    },
+    {
+     "cmd": "python3 -m pytest",
+     "exit": 1,
+     "signature_seen": true,
+     "ok": true
+    },
+    {
+     "cmd": "pytest",
+     "exit": 127,
+     "signature_seen": false,
+     "ok": false
+    },
+    {
+     "cmd": ".venv/bin/python -m pytest",
+     "exit": 2,
+     "ok": false
+    }
+   ],
+   "ok": false
+  },
+  {
+   "route": "skill-s5-verify",
+   "checks": [
+    {
+     "cmd": ".venv/bin/python -m pytest tests -q -x",
+     "exit": 1,
+     "expect": [
+      "passed"
+     ],
+     "ok": false
+    }
+   ],
+   "ok": false
+  },
+  {
+   "route": "skill-s6-run",
+   "checks": [
+    {
+     "cmd": ".venv/bin/python repro.py",
+     "exit": 0,
+     "expect": [],
+     "ok": true
+    }
+   ],
+   "ok": true
+  }
+ ],
+ "refined": [
+  "skill-s3-avoid: `pytest` fails with `pytest: not found`, not the skill's signature: own route",
+  "skill-s3-avoid: the instead command `.venv/bin/python -m pytest` alone exits 2 on a clean checkout (kept: the skill's instead is scoped)",
+  "skill-s5-verify: dropped (replay `.venv/bin/python -m pytest tests -q -x` exited 1)"
+ ],
+ "index": {
+  "routes": [
+   [
+    "click/skill-click-bugfix",
+    "skill-s3-avoid",
+    "firm",
+    "inhibit"
+   ],
+   [
+    "click/skill-click-bugfix",
+    "skill-s3-avoid-pytest",
+    "firm",
+    "inhibit"
+   ],
+   [
+    "click/skill-click-bugfix",
+    "skill-s6-run",
+    "firm",
+    "prime"
+   ]
+  ],
+  "log": ""
+ }
+}

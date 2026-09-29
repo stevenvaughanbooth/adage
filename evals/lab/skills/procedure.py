@@ -141,11 +141,19 @@ def role_of(cmd: str) -> str:
     c = " " + cmd + " "
     a, _ = split_env(argv_of(cmd))
     p = a[0] if a else ""
+    if p in ("grep", "rg", "find", "ls"):
+        return "search"
+    if p in ("cat", "head", "tail") or (p == "sed" and "-n" in a):
+        return "read"
+    if p == "git":
+        return "vcs"
     if "lookup" in c or " --help" in c or re.search(r"\bgh (issue|pr) view\b", c):
         return "lookup"
-    if any(k in c for k in REGEN):
+    inline = p.startswith(("python", ".venv/bin/python")) and "-c" in a
+    if (p == "make" and len(a) > 1 and a[1].startswith("gen")) or "generate" in a or "codegen" in a \
+            or (not inline and any(re.search(r"(^|/)gen(erate)?\.py$", x) for x in a[1:2])):
         return "regenerate"
-    if any(k in c for k in VERIFY):
+    if not inline and any(k in c for k in VERIFY):
         return "verify"
     if p in ("pip", "pip3", "npm", "pnpm", "yarn") and "install" in a or (p == "uv" and "sync" in a):
         return "install"

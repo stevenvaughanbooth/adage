@@ -1,0 +1,681 @@
+{
+ "schema": "adage-compiled-skill/0",
+ "skill": {
+  "name": "acme-work-item",
+  "source": "skills/acme-work-item/SKILL.md",
+  "sha256": "87c0e73b3cbeb4ec41f44ec5d2f67ccab6fe4d7b757335b34d79ec5437a627fd",
+  "bytes": 1479,
+  "approx_tokens": 370
+ },
+ "trigger": {
+  "description": "Work a ticket (W-NNNN) in the acme-billing repository end to end. Use when a prompt names a work item or asks to change billing, customer or schema code.",
+  "keywords": [
+   "acme-billing",
+   "acme-work-item",
+   "asks",
+   "billing",
+   "change",
+   "customer",
+   "item",
+   "names",
+   "prompt",
+   "repository",
+   "schema",
+   "ticket",
+   "w-nnnn"
+  ],
+  "spans": [
+   "ticket"
+  ]
+ },
+ "slots": {
+  "id": {
+   "name": "id",
+   "type": "work-item-id",
+   "pattern": "^W-\\d{4}$",
+   "source": "prompt",
+   "example": "W-2042"
+  }
+ },
+ "reflexes": [
+  {
+   "from_step": "s1",
+   "route": {
+    "id": "skill-s1-lookup",
+    "summary": "Read the work item",
+    "trigger": {
+     "on": "prompt",
+     "span": "ticket"
+    },
+    "step": {
+     "do": "run",
+     "command": "scripts/wi-lookup {id}"
+    },
+    "slots": [
+     {
+      "name": "id",
+      "source": {
+       "from": "prompt",
+       "span": "ticket"
+      },
+      "contract": {
+       "kind": "pattern",
+       "regex": "^W-\\d{4}$"
+      }
+     }
+    ],
+    "effect": "observe",
+    "strength": "fire",
+    "state": "firm",
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "evidence": {
+     "opportunities": 6,
+     "support": 6,
+     "days": 1,
+     "successes": 0,
+     "deviations_failed": 0,
+     "rate": 1.0,
+     "lower_bound": 0.6097,
+     "median_position": 0.0,
+     "turns_saved": 0.0,
+     "provenance": "authored",
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ]
+    },
+    "authored": true
+   }
+  },
+  {
+   "from_step": "s1",
+   "route": {
+    "id": "skill-s1-read",
+    "summary": "Read the files the lookup lists, together",
+    "trigger": {
+     "on": "after_command",
+     "command": "exec scripts/wi-lookup {id}"
+    },
+    "step": {
+     "do": "read_batch",
+     "slot": "files",
+     "max": 5
+    },
+    "slots": [
+     {
+      "name": "files",
+      "source": {
+       "from": "result_field",
+       "field": "*paths"
+      },
+      "contract": {
+       "kind": "repo_path"
+      }
+     }
+    ],
+    "effect": "observe",
+    "strength": "prime",
+    "state": "firm",
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "evidence": {
+     "opportunities": 6,
+     "support": 6,
+     "days": 1,
+     "successes": 0,
+     "deviations_failed": 0,
+     "rate": 1.0,
+     "lower_bound": 0.6097,
+     "median_position": 0.0,
+     "turns_saved": 0.0,
+     "provenance": "authored",
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ]
+    },
+    "authored": true
+   }
+  },
+  {
+   "from_step": "s2",
+   "route": {
+    "id": "skill-s2-regenerate",
+    "summary": "If the item adds or changes a record field",
+    "trigger": {
+     "on": "after_edit",
+     "paths": "schema/*.json"
+    },
+    "step": {
+     "do": "run",
+     "command": "make gen"
+    },
+    "slots": [],
+    "effect": "regenerate",
+    "strength": "fire",
+    "state": "firm",
+    "exit": [
+     {
+      "when": "exploratory_change"
+     }
+    ],
+    "evidence": {
+     "opportunities": 2,
+     "support": 2,
+     "days": 1,
+     "successes": 0,
+     "deviations_failed": 0,
+     "rate": 1.0,
+     "lower_bound": 0.3424,
+     "median_position": 0.0,
+     "turns_saved": 0.0,
+     "provenance": "authored",
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ]
+    },
+    "authored": true
+   }
+  },
+  {
+   "from_step": "s4",
+   "route": {
+    "id": "skill-s4-avoid",
+    "summary": "A command the skill forbids here, and what to run instead",
+    "trigger": {
+     "on": "session_start"
+    },
+    "step": {
+     "do": "avoid",
+     "avoid": "python3 -m unittest",
+     "instead": "make test",
+     "signature": "RuntimeError: ACME_ENV is not set"
+    },
+    "slots": [],
+    "effect": "verify",
+    "strength": "inhibit",
+    "state": "firm",
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "evidence": {
+     "opportunities": 6,
+     "support": 6,
+     "days": 1,
+     "successes": 0,
+     "deviations_failed": 0,
+     "rate": 1.0,
+     "lower_bound": 0.6097,
+     "median_position": 0.0,
+     "turns_saved": 0.0,
+     "provenance": "authored",
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ]
+    },
+    "authored": true
+   }
+  },
+  {
+   "from_step": "s4",
+   "route": {
+    "id": "skill-s4-avoid-pytest",
+    "summary": "A command the skill forbids here, and what to run instead",
+    "trigger": {
+     "on": "session_start"
+    },
+    "step": {
+     "do": "avoid",
+     "avoid": "pytest",
+     "instead": "make test",
+     "signature": "pytest: not found"
+    },
+    "slots": [],
+    "effect": "verify",
+    "strength": "inhibit",
+    "state": "firm",
+    "exit": [
+     {
+      "when": "intent_changes"
+     }
+    ],
+    "evidence": {
+     "opportunities": 6,
+     "support": 6,
+     "days": 1,
+     "successes": 0,
+     "deviations_failed": 0,
+     "rate": 1.0,
+     "lower_bound": 0.6097,
+     "median_position": 0.0,
+     "turns_saved": 0.0,
+     "provenance": "authored",
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ]
+    },
+    "authored": true
+   }
+  },
+  {
+   "from_step": "s4",
+   "route": {
+    "id": "skill-s4-verify",
+    "summary": "Run the tests with `make test`",
+    "trigger": {
+     "on": "after_edit",
+     "paths": "acme/*.py"
+    },
+    "step": {
+     "do": "run",
+     "command": "make test"
+    },
+    "slots": [],
+    "effect": "verify",
+    "strength": "fire",
+    "state": "firm",
+    "exit": [
+     {
+      "when": "exploratory_change"
+     }
+    ],
+    "evidence": {
+     "opportunities": 6,
+     "support": 6,
+     "days": 1,
+     "successes": 0,
+     "deviations_failed": 0,
+     "rate": 1.0,
+     "lower_bound": 0.6097,
+     "median_position": 0.0,
+     "turns_saved": 0.0,
+     "provenance": "authored",
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ]
+    },
+    "authored": true
+   }
+  },
+  {
+   "from_step": "s4",
+   "route": {
+    "id": "skill-s4-s5-seq",
+    "summary": "Run the tests with `make test`, then Before you finish, run `make ci`",
+    "trigger": {
+     "on": "after_edit",
+     "paths": "acme/*.py"
+    },
+    "step": {
+     "do": "sequence",
+     "commands": [
+      "make test",
+      "make ci"
+     ]
+    },
+    "slots": [],
+    "effect": "verify",
+    "strength": "fire",
+    "state": "firm",
+    "exit": [
+     {
+      "when": "exploratory_change"
+     }
+    ],
+    "evidence": {
+     "opportunities": 6,
+     "support": 6,
+     "days": 1,
+     "successes": 0,
+     "deviations_failed": 0,
+     "rate": 1.0,
+     "lower_bound": 0.6097,
+     "median_position": 0.0,
+     "turns_saved": 0.0,
+     "provenance": "authored",
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ]
+    },
+    "authored": true
+   }
+  },
+  {
+   "from_step": "s5",
+   "route": {
+    "id": "skill-s5-verify",
+    "summary": "Before you finish, run `make ci`",
+    "trigger": {
+     "on": "after_edit",
+     "paths": "acme/*.py"
+    },
+    "step": {
+     "do": "run",
+     "command": "make ci"
+    },
+    "slots": [],
+    "effect": "verify",
+    "strength": "fire",
+    "state": "firm",
+    "exit": [
+     {
+      "when": "exploratory_change"
+     }
+    ],
+    "evidence": {
+     "opportunities": 6,
+     "support": 6,
+     "days": 1,
+     "successes": 0,
+     "deviations_failed": 0,
+     "rate": 1.0,
+     "lower_bound": 0.6097,
+     "median_position": 0.0,
+     "turns_saved": 0.0,
+     "provenance": "authored",
+     "models": [
+      "claude-haiku-4-5-20251001"
+     ]
+    },
+    "authored": true
+   }
+  }
+ ],
+ "gaps": [
+  {
+   "step": "s3",
+   "title": "Make the code change",
+   "why": "no command: the step is the agent's judgment (an edit or a decision)"
+  }
+ ],
+ "coverage": {
+  "steps": 5,
+  "compilable": 4,
+  "compiled": 4,
+  "advice_blocks": 2
+ },
+ "alignment": {
+  "sessions": 6,
+  "steps": [
+   {
+    "id": "s1",
+    "title": "Read the work item",
+    "role": "lookup",
+    "precondition": "always",
+    "applicable": 6,
+    "aligned": 6,
+    "exact": 6,
+    "coverage": 1.0,
+    "timely": null,
+    "runs": 6,
+    "runs_failed": 0,
+    "deviations": [],
+    "avoided_hits": 0,
+    "avoided_failed": 0,
+    "median_first_position": 0,
+    "slots": {
+     "scripts/wi-lookup {id}#id": {
+      "sources": {
+       "prompt": 6
+      },
+      "values": {
+       "W-1041": 1,
+       "W-1042": 1,
+       "W-1043": 1,
+       "W-1044": 1,
+       "W-1045": 1,
+       "W-1046": 1
+      }
+     }
+    }
+   },
+   {
+    "id": "s2",
+    "title": "If the item adds or changes a record field",
+    "role": "regenerate",
+    "precondition": "after_edit",
+    "applicable": 2,
+    "aligned": 2,
+    "exact": 2,
+    "coverage": 1.0,
+    "timely": 2,
+    "runs": 2,
+    "runs_failed": 0,
+    "deviations": [],
+    "avoided_hits": 0,
+    "avoided_failed": 0,
+    "median_first_position": 4,
+    "slots": {}
+   },
+   {
+    "id": "s3",
+    "title": "Make the code change",
+    "role": "edit",
+    "precondition": "always",
+    "applicable": 6,
+    "aligned": 5,
+    "exact": 5,
+    "coverage": 0.833,
+    "timely": null,
+    "runs": 5,
+    "runs_failed": 0,
+    "deviations": [],
+    "avoided_hits": 0,
+    "avoided_failed": 0,
+    "median_first_position": 2,
+    "slots": {}
+   },
+   {
+    "id": "s4",
+    "title": "Run the tests with `make test`",
+    "role": "verify",
+    "precondition": "always",
+    "applicable": 6,
+    "aligned": 6,
+    "exact": 6,
+    "coverage": 1.0,
+    "timely": null,
+    "runs": 6,
+    "runs_failed": 0,
+    "deviations": [],
+    "avoided_hits": 0,
+    "avoided_failed": 0,
+    "median_first_position": 3,
+    "slots": {}
+   },
+   {
+    "id": "s5",
+    "title": "Before you finish, run `make ci`",
+    "role": "verify",
+    "precondition": "before_finish",
+    "applicable": 6,
+    "aligned": 6,
+    "exact": 6,
+    "coverage": 1.0,
+    "timely": 6,
+    "runs": 6,
+    "runs_failed": 0,
+    "deviations": [],
+    "avoided_hits": 0,
+    "avoided_failed": 0,
+    "median_first_position": 4,
+    "slots": {}
+   }
+  ],
+  "insertions_common": []
+ },
+ "verification": [
+  {
+   "route": "skill-s1-lookup",
+   "checks": [
+    {
+     "cmd": "scripts/wi-lookup W-2042",
+     "exit": 0,
+     "expect": [],
+     "ok": true
+    }
+   ],
+   "ok": true
+  },
+  {
+   "route": "skill-s1-read",
+   "checks": [
+    {
+     "cmd": "(read_batch: nothing to replay)",
+     "ok": true
+    }
+   ],
+   "ok": true
+  },
+  {
+   "route": "skill-s2-regenerate",
+   "checks": [
+    {
+     "cmd": "make gen",
+     "exit": 0,
+     "expect": [],
+     "ok": true
+    },
+    {
+     "cmd": "git status (idempotent on a clean tree)",
+     "ok": true
+    }
+   ],
+   "ok": true
+  },
+  {
+   "route": "skill-s4-avoid",
+   "checks": [
+    {
+     "cmd": "python3 -m unittest",
+     "exit": 1,
+     "signature_seen": true,
+     "ok": true
+    },
+    {
+     "cmd": "pytest",
+     "exit": 127,
+     "signature_seen": false,
+     "ok": false
+    },
+    {
+     "cmd": "make test",
+     "exit": 0,
+     "ok": true
+    }
+   ],
+   "ok": false
+  },
+  {
+   "route": "skill-s4-verify",
+   "checks": [
+    {
+     "cmd": "make test",
+     "exit": 0,
+     "expect": [
+      "OK"
+     ],
+     "ok": true
+    }
+   ],
+   "ok": true
+  },
+  {
+   "route": "skill-s4-s5-seq",
+   "checks": [
+    {
+     "cmd": "make test",
+     "exit": 0,
+     "expect": [
+      "OK"
+     ],
+     "ok": true
+    },
+    {
+     "cmd": "make ci",
+     "exit": 0,
+     "expect": [
+      "OK"
+     ],
+     "ok": true
+    }
+   ],
+   "ok": true
+  },
+  {
+   "route": "skill-s5-verify",
+   "checks": [
+    {
+     "cmd": "make ci",
+     "exit": 0,
+     "expect": [],
+     "ok": true
+    }
+   ],
+   "ok": true
+  }
+ ],
+ "refined": [
+  "skill-s4-avoid: `pytest` fails with `pytest: not found`, not the skill's signature: own route"
+ ],
+ "index": {
+  "routes": [
+   [
+    "acme-billing/skill-acme-work-item",
+    "skill-s1-lookup",
+    "firm",
+    "fire"
+   ],
+   [
+    "acme-billing/skill-acme-work-item",
+    "skill-s1-read",
+    "firm",
+    "prime"
+   ],
+   [
+    "acme-billing/skill-acme-work-item",
+    "skill-s2-regenerate",
+    "firm",
+    "fire"
+   ],
+   [
+    "acme-billing/skill-acme-work-item",
+    "skill-s4-avoid",
+    "firm",
+    "inhibit"
+   ],
+   [
+    "acme-billing/skill-acme-work-item",
+    "skill-s4-avoid-pytest",
+    "firm",
+    "inhibit"
+   ],
+   [
+    "acme-billing/skill-acme-work-item",
+    "skill-s4-s5-seq",
+    "firm",
+    "fire"
+   ],
+   [
+    "acme-billing/skill-acme-work-item",
+    "skill-s4-verify",
+    "firm",
+    "fire"
+   ],
+   [
+    "acme-billing/skill-acme-work-item",
+    "skill-s5-verify",
+    "firm",
+    "prime"
+   ]
+  ],
+  "log": ""
+ }
+}
