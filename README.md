@@ -142,6 +142,9 @@ real Claude Code sessions) is the honest summary. In short:
 - The evaluation found bugs that hid or switched off what did work: follows judged as ignored (and
   the instinct then switched off), failures through a pipe unseen, E1 prefetch refused for learned
   lookups. They are fixed on this branch; the real-repository benchmark has not been re-run since.
+  A six-task micro slice on click with the fixes and the new pre-call rewrite confirms the
+  mechanism (no adage session hit the `.venv` dead end, against 5 of 6 without Adage) but is far
+  too small to measure a saving ([details](evals/launch/README.md#after-the-fixes-2026-09-29-later)).
 
 ## Results on generated sandboxes
 
