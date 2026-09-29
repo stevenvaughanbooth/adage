@@ -162,6 +162,12 @@ h1:focus { outline: none; }
 .film.awake .film-ui, .film-ui:focus-within, .film-ui:hover { opacity: 1; }
 .film-close { position: absolute; top: max(16px, env(safe-area-inset-top)); right: clamp(16px, 3vw, 32px); width: 40px; height: 40px; padding: 0 !important; display: grid; place-items: center; }
 .film-close svg { width: 14px; height: 14px; stroke: currentColor; stroke-width: 1.6; fill: none; }
+.film .iconbtn { width: 40px; height: 40px; padding: 0 !important; display: grid; place-items: center; flex: none; }
+.film .iconbtn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.film .iconbtn .spk { fill: currentColor; stroke: none; }
+.film .iconbtn .off { display: none; }
+.film .iconbtn.muted .on { display: none; }
+.film .iconbtn.muted .off { display: inline; }
 .film-bar { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 14px; padding: 18px clamp(16px, 4vw, 40px) max(18px, env(safe-area-inset-bottom)); }
 .film-track { flex: 1; height: 2px; background: var(--line); border-radius: 2px; overflow: hidden; }
 .film-track i { display: block; height: 100%; background: var(--memory); transform-origin: left; transform: scaleX(0); transition: transform 260ms linear; }

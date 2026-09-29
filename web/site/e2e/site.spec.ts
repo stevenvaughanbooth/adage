@@ -259,3 +259,18 @@ test("the hero tour plays by default and survives a hover and a teaser replay", 
   await page.getByRole("tab", { name: "Reflexes" }).click();
   await expect(page.getByRole("button", { name: "Play tour" })).toBeVisible();
 });
+
+test("the film's speaker mutes and unmutes; the skip icon skips", async ({ page }) => {
+  await films(page, "hang");
+  await page.goto("/");
+  await page.locator("#film").hover();
+  const speaker = page.getByRole("button", { name: "Unmute" });
+  await speaker.click();
+  await expect(page.locator("#film-video")).toHaveJSProperty("muted", false);
+  await page.getByRole("button", { name: "Mute" }).click();
+  await expect(page.locator("#film-video")).toHaveJSProperty("muted", true);
+  await expect(page.getByRole("button", { name: "Unmute" })).toBeVisible();
+  await page.locator("#film").screenshot({ path: "test-results/film-controls.png" });
+  await page.getByRole("button", { name: "Skip intro" }).click();
+  await expect(page.locator("#film")).toBeHidden();
+});

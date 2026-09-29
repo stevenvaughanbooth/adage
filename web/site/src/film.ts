@@ -32,7 +32,12 @@ export function createFilm(o: Opts) {
     if (keep && t) v.addEventListener("loadedmetadata", () => { v.currentTime = t; }, { once: true });
     if (playing) run();
   }
-  function syncSound() { snd.setAttribute("aria-pressed", String(!v.muted)); snd.textContent = v.muted ? "Sound on" : "Sound off"; }
+  // The speaker shows the current state (waves on, crossed out when muted); its name says what a press does.
+  function syncSound() {
+    const label = v.muted ? "Unmute" : "Mute";
+    snd.setAttribute("aria-label", label); snd.title = label;
+    snd.classList.toggle("muted", v.muted);
+  }
   function run() {
     play.hidden = true;
     v.play()?.catch(() => { if (open) play.hidden = false; });
