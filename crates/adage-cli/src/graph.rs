@@ -488,7 +488,8 @@ mod tests {
         assert!(!d("exec make test", "exec make gen"));
         assert!(!d("exec npm run check", "exec npm run build"));
         assert!(!d("exec make", "exec"));
-        assert!(!d("exec python3 -m pytest {path}", "exec python3 -m pytest"));
+        // The whole suite covers a narrowed run (the action classifier: `adage_core::action::satisfies`).
+        assert!(d("exec python3 -m pytest {path}", "exec python3 -m pytest"));
         // Followed: the directed runner narrowed to a path, as agents run it.
         assert!(d("exec .venv/bin/python -m pytest", "exec .venv/bin/python -m pytest {path} -xvs"));
         assert!(!d("exec .venv/bin/python -m pytest", "exec python -m pytest {path}"));
