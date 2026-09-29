@@ -1,0 +1,226 @@
+{
+ "post-hoc": {
+  "name": "U11 post-hoc on recurring-workflow controls",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 24,
+   "tasks": 12,
+   "calls": 995,
+   "test_set_id": "a933b2815c93",
+   "baseline": {
+    "usd_per_task": 0.3171771625000001,
+    "calls_per_task": 41.458333333333336
+   },
+   "calls_saved_per_task": 3.6372611646464565,
+   "calls_saved_ci": [
+    2.5951617779346723,
+    4.7190309980986695
+   ],
+   "calls_saved_share": 0.08773293261458788,
+   "calls_saved_share_ci": [
+    0.05921368369112547,
+    0.12096568326911501
+   ],
+   "usd_saved_per_task": 0.02421173333333333,
+   "usd_saved_ci": [
+    0.017817933333333334,
+    0.030589054166666668
+   ],
+   "usd_saved_share": 0.07633504613792405,
+   "usd_saved_share_ci": [
+    0.05183796167188855,
+    0.10611196249858038
+   ],
+   "tokens_saved_per_task": 181923.79166666666,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.10131018148894873,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 3.6372611646464565,
+   "s_hat_rust_ci95": [
+    2.429496528354056,
+    4.927075056722152
+   ],
+   "directives": 24,
+   "useful": 24,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 1.0,
+   "useful_lb90": 0.8986898185110512,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.24120603015075376,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": []
+  },
+  "by_route": {
+   "dead-end-0cdcfb": {
+    "directives": 24,
+    "useful": 24,
+    "harmful": 0,
+    "saved": 88.0,
+    "cost": 0.7057320484850632
+   }
+  },
+  "by_slice": {
+   "click-type": {
+    "sessions": 12,
+    "usd_saved_per_task": 0.015152174999999999,
+    "usd_saved_ci": [
+     0.007951241666666666,
+     0.02287775833333333
+    ],
+    "usd_saved_share": 0.037968716347537866,
+    "calls_saved_per_task": 1.8029115942180132,
+    "calls_saved_ci": [
+     1.05446546742562,
+     2.5546723617945815
+    ],
+    "s_hat_rust": 1.8029115942180132,
+    "directives": 12
+   },
+   "mm-validator": {
+    "sessions": 12,
+    "usd_saved_per_task": 0.03327129166666667,
+    "usd_saved_ci": [
+     0.02788863333333334,
+     0.03834705
+    ],
+    "usd_saved_share": 0.1414088648270651,
+    "calls_saved_per_task": 5.471610735074898,
+    "calls_saved_ci": [
+     4.641280540751164,
+     6.219808548341146
+    ],
+    "s_hat_rust": 5.471610735074898,
+    "directives": 12
+   }
+  }
+ },
+ "predictive": {
+  "name": "U11 predictive on recurring-workflow controls",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 24,
+   "tasks": 12,
+   "calls": 995,
+   "test_set_id": "a933b2815c93",
+   "baseline": {
+    "usd_per_task": 0.3171771625000001,
+    "calls_per_task": 41.458333333333336
+   },
+   "calls_saved_per_task": 3.6372611646464565,
+   "calls_saved_ci": [
+    2.5951617779346723,
+    4.7190309980986695
+   ],
+   "calls_saved_share": 0.08773293261458788,
+   "calls_saved_share_ci": [
+    0.05921368369112547,
+    0.12096568326911501
+   ],
+   "usd_saved_per_task": 0.02421173333333333,
+   "usd_saved_ci": [
+    0.017817933333333334,
+    0.030589054166666668
+   ],
+   "usd_saved_share": 0.07633504613792405,
+   "usd_saved_share_ci": [
+    0.05183796167188855,
+    0.10611196249858038
+   ],
+   "tokens_saved_per_task": 181923.79166666666,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.10131018148894873,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 3.6372611646464565,
+   "s_hat_rust_ci95": [
+    2.429496528354056,
+    4.927075056722152
+   ],
+   "directives": 24,
+   "useful": 24,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 1.0,
+   "useful_lb90": 0.8986898185110512,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.24120603015075376,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": []
+  },
+  "by_route": {
+   "dead-end-0cdcfb": {
+    "directives": 24,
+    "useful": 24,
+    "harmful": 0,
+    "saved": 88.0,
+    "cost": 0.7057320484850632
+   }
+  },
+  "by_slice": {
+   "click-type": {
+    "sessions": 12,
+    "usd_saved_per_task": 0.015152174999999999,
+    "usd_saved_ci": [
+     0.007951241666666666,
+     0.02287775833333333
+    ],
+    "usd_saved_share": 0.037968716347537866,
+    "calls_saved_per_task": 1.8029115942180132,
+    "calls_saved_ci": [
+     1.05446546742562,
+     2.5546723617945815
+    ],
+    "s_hat_rust": 1.8029115942180132,
+    "directives": 12
+   },
+   "mm-validator": {
+    "sessions": 12,
+    "usd_saved_per_task": 0.03327129166666667,
+    "usd_saved_ci": [
+     0.02788863333333334,
+     0.03834705
+    ],
+    "usd_saved_share": 0.1414088648270651,
+    "calls_saved_per_task": 5.471610735074898,
+    "calls_saved_ci": [
+     4.641280540751164,
+     6.219808548341146
+    ],
+    "s_hat_rust": 5.471610735074898,
+    "directives": 12
+   }
+  }
+ }
+}
