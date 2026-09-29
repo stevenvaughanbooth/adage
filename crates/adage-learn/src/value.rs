@@ -404,8 +404,7 @@ pub fn failure_routes(valued: &[Valued], ss: &[&Session], provenance: &str) -> V
             best.insert(k, v);
         }
     }
-    // The most common failure takes the first id (the one an instinct binds for the same working
-    // command), so the learned route and the instinct are one route.
+    // The most common failure first.
     let mut best: Vec<((String, String), &Valued)> = best.into_iter().collect();
     best.sort_by(|a, b| b.1.n_null.cmp(&a.1.n_null).then_with(|| a.0.cmp(&b.0)));
     let mut used: BTreeSet<String> = BTreeSet::new();
@@ -420,12 +419,14 @@ pub fn failure_routes(valued: &[Valued], ss: &[&Session], provenance: &str) -> V
         if rkey == wkey || !io::safe_command(&v.command) {
             continue;
         }
-        // The id a dead end with this working command has (and an instinct binds for it), so the
-        // learned route and the instinct are one route.
-        let stable = adage_instincts::safety::stable;
-        let ids = [stable(&[&wkey]), stable(&[&wkey, &rkey]), stable(&[&wkey, &rkey, &signature])];
-        let Some(id) = ids.iter().map(|h| format!("dead-end-{h}")).find(|id| !used.contains(id)) else { continue };
-        used.insert(id.clone());
+        // Named by all it says (working command, failing runner, signature): the dead-end ids an
+        // instinct takes first name less, and a learned route must never take the id of an
+        // instinct for another failure. The instinct for this very failure yields to it as the
+        // same step at the same point.
+        let id = format!("dead-end-{}", adage_instincts::safety::stable(&[&wkey, &rkey, &signature]));
+        if !used.insert(id.clone()) {
+            continue;
+        }
         let a = &v.advantage;
         let support = v.n_sat;
         let opp = v.n_null.max(support);
