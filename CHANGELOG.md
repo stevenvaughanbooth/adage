@@ -141,7 +141,7 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   savings in cost, turns and tokens, with no session committing (docs/training.md, "Validation").
 - **Procedure cards for recurring tasks** (`crates/adage-learn/src/cards.rs`, to the
   recurring-workflows research's card compiler spec, `confirm/README.md`): with the embedding
-  model installed, `adage condition` groups a repository's traces into **families** of similar
+  model (installed, or the one bundled in the binary), `adage condition` groups a repository's traces into **families** of similar
   tasks (first prompts at cosine ≥ 0.6 *and* edited file shapes overlapping, Jaccard ≥ 0.25). A
   family with a passing trace becomes a reflex whose response is a **card**: the files such a
   change touched in order (names that vary per task as patterns, `flag_<x>.go`, test siblings

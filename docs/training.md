@@ -281,8 +281,9 @@ few times a month, the same files and checks each time, the specifics different.
 learns the procedure from the traces themselves (`crates/adage-learn/src/cards.rs`), to the
 research's card compiler spec
 ([confirm/README.md](../evals/lab/research/recurring-workflows/confirm/README.md), "Card compiler
-spec"; the reference is `procedure.py`). It needs the embedding model (`adage models fetch`);
-without it there are no cards.
+spec"; the reference is `procedure.py`). It embeds prompts with the model adage-intent resolves,
+as the hook does: an installed potion-base-8M, else the int8 copy bundled in the binary, so it
+works with no user action.
 
 1. **Families.** `adage condition` (and the automatic learn) embeds each trace's first prompt with
    the pinned model. Two traces are of one family when their prompts are similar (cosine ≥ 0.6)
@@ -327,7 +328,9 @@ phrasing; a learned contrastive weighting lifted paraphrase AUC to 0.92 post hoc
 had both recall and no false fires from 4 examples, so it is not built.
 
 Reproduced through the hook (`adage hook claude UserPromptSubmit`, then `PostToolUse` edits, the
-control share set to 0), from the research's training traces:
+control share set to 0), from the research's training traces, with the bundled model
+(`potion-base-8m-i8`, nothing installed) and again with an installed potion-base-8M, the same
+counts both times:
 
 | family | held-out tasks | paraphrases | same-repository negatives | edits of non-card files |
 | --- | --- | --- | --- | --- |

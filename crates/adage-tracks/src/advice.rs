@@ -10,7 +10,7 @@ use adage_core::{CommandTable, Effect};
 use std::collections::BTreeMap;
 
 /// `(template id, required slots, optional slots)`.
-pub const TEMPLATES: [(&str, &[&str], &[&str]); 5] = [
+pub const TEMPLATES: [(&str, &[&str], &[&str]); 6] = [
     ("generated-file", &["path"], &["command"]),
     ("lockfile", &["path", "manager"], &[]),
     ("package-manager", &["manager", "lockfile"], &[]),
