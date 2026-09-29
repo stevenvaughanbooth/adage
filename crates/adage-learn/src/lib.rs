@@ -21,7 +21,6 @@ pub mod testmap;
 pub mod value;
 
 use adage_core::CommandTable;
-use adage_intent::model::StaticModel;
 use adage_tracks::proposals::Proposals;
 use adage_tracks::{io, Gauge, Index, Manifest, Route, Scope, Track, TrackInfo, Trigger};
 use anyhow::Result;
@@ -279,9 +278,10 @@ pub fn plan(
     let mut sessions: Vec<Session> = sessions.into_iter().filter(|s| !s.steps.is_empty()).collect();
     sessions.sort_by(|a, b| a.id.cmp(&b.id));
     report.sessions_used = sessions.len();
-    // Fail open: without a usable model, intent families are skipped and everything else is
+    // The installed model, else the one bundled in the binary (`model::resolve`, as the hook
+    // chooses). Fail open: without one, intent families are skipped and everything else is
     // learned exactly as before.
-    let model = models.and_then(|d| StaticModel::load(&adage_intent::model::dir_in(d)).ok());
+    let model = models.and_then(|d| adage_intent::model::resolve_static(d, true));
     report.intent_model = model.as_ref().map(|m| m.id.clone());
 
     let mut by_repo: BTreeMap<String, Vec<&Session>> = BTreeMap::new();

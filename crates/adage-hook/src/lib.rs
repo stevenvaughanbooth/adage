@@ -25,7 +25,7 @@ pub mod failopen;
 pub mod harness;
 
 use adage_core::{repo, CommandTable};
-use adage_intent::model::{self, StaticModel};
+use adage_intent::model;
 use adage_intent::normalize::normalize;
 use adage_runtime::{assign, decide, fast, rebuild, render, Arm, Ctx, Directive, Event, Obligation, SessionState};
 use adage_store::{spool, state, Paths};
@@ -372,10 +372,11 @@ fn respond(
     }
     let table = CommandTable::load();
     // The embedding model is opened only if the runtime asks, which it does only at a prompt in a
-    // repository with intent routes. Missing or damaged model: no vector, no intent directive.
+    // repository with intent routes: the installed model, else the one bundled in the binary
+    // (`model::resolve`, as the learner chose). No model: no vector, no intent directive.
     let models = paths.models();
     let embed = move |text: &str| -> Option<(String, Vec<f32>)> {
-        let m = StaticModel::open(&model::dir_in(&models)).ok()?;
+        let m = model::resolve_static(&models, false)?;
         let v = m.embed(&normalize(text))?;
         Some((m.id, v))
     };

@@ -128,18 +128,25 @@ pub fn init(args: &[String], paths: &Paths) -> Result<()> {
     }
 
     // 3. The embedding model.
-    println!("\n3. Embedding model (optional)");
-    match adage_intent::model::status(&paths.models()) {
-        Ok(m) => println!("  installed: {}", m.id),
-        Err(_) if yes => {
-            println!("  fetching (31 MB, SHA-256 verified)…");
-            if let Err(e) = crate::models::run(&["fetch".to_string()], paths) {
+    println!("\n3. Embedding model");
+    let r = adage_intent::model::resolve(&paths.models(), false);
+    match r.source {
+        adage_intent::model::Source::Hashed { .. } if yes && r.selected != "hashed" => {
+            // The selected model (`ADAGE_EMBED_MODEL`, `adage models use`), else the default.
+            let spec = adage_intent::model::spec(&r.selected).unwrap_or(&adage_intent::model::BASE_8M);
+            println!("  fetching {} ({:.0} MB, SHA-256 verified)…", spec.key, spec.bytes() as f64 / 1e6);
+            if let Err(e) = crate::models::run(&["fetch".to_string(), spec.key.to_string()], paths) {
                 println!("  could not fetch it: {e:#}");
                 println!("  Everything else works without it; retry with `adage models fetch`, or `adage models install <dir>` offline.");
             }
         }
-        Err(_) => println!(
-            "  not installed. `adage models fetch` downloads it (31 MB, SHA-256 verified) to enable intent families; `adage init --yes` does it for you. Everything else works without it."
+        adage_intent::model::Source::Hashed { .. } => println!(
+            "  {}. `adage models fetch` downloads potion-base-8M (31 MB, SHA-256 verified) for intent families; `adage init --yes` does it for you.",
+            r.describe()
+        ),
+        _ => println!(
+            "  {}. Nothing to do (`adage models fetch` installs it at full precision; `adage models fetch potion-code-16m-v2` adds the code model).",
+            r.describe()
         ),
     }
 

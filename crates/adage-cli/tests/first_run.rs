@@ -154,11 +154,17 @@ fn init_yes_fetches_the_model_and_survives_a_failed_download() {
     let w = World::new();
     // No network in tests: a `curl` that fails like an unreachable host.
     w.fake_bin("curl", "echo 'curl: (6) Could not resolve host' >&2; exit 6");
+    // The bundled model serves: nothing to download.
     let o = w.run(&["init", "--yes"]);
     let t = text(&o);
     assert!(o.status.success(), "{t}");
-    assert!(t.contains("fetching") && t.contains("could not fetch it") && t.contains("4. Sense"), "{t}");
-    assert!(!w.p("data/models/potion-base-8m").exists());
+    assert!(t.contains("bundled in this binary") && !t.contains("fetching") && t.contains("4. Sense"), "{t}");
+    // A model that is selected and missing is fetched, and a failed download is survived.
+    let o = w.cmd(&["init", "--yes"]).env("ADAGE_EMBED_MODEL", "potion-code-16m-v2").output().unwrap();
+    let t = text(&o);
+    assert!(o.status.success(), "{t}");
+    assert!(t.contains("fetching potion-code-16m-v2") && t.contains("could not fetch it") && t.contains("4. Sense"), "{t}");
+    assert!(!w.p("data/models/potion-code-16m-v2").exists());
 }
 
 #[test]
