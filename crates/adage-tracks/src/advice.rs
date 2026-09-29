@@ -10,11 +10,14 @@ use adage_core::{CommandTable, Effect};
 use std::collections::BTreeMap;
 
 /// `(template id, required slots, optional slots)`.
-pub const TEMPLATES: [(&str, &[&str], &[&str]); 4] = [
+pub const TEMPLATES: [(&str, &[&str], &[&str]); 5] = [
     ("generated-file", &["path"], &["command"]),
     ("lockfile", &["path", "manager"], &[]),
     ("package-manager", &["manager", "lockfile"], &[]),
     ("test-command", &["command"], &[]),
+    // A skill's prohibition on committing ("do not commit; leave the working tree for review"),
+    // compiled by `adage train`. No slots: the sentence is the whole advice.
+    ("uncommitted", &[], &[]),
 ];
 
 /// Root lockfiles and the tool that maintains each: the only values the `lockfile` and
@@ -52,6 +55,9 @@ pub fn template(id: &str, with_command: bool) -> Option<&'static str> {
             "This repository uses {manager} ({lockfile}), not npm: use {manager} for installs and scripts here."
         }
         ("test-command", _) => "In this repository, tests run with {command}, followed by the test files or names to run.",
+        ("uncommitted", _) => {
+            "In this repository, leave your changes uncommitted: do not commit them, the working tree is reviewed as it is."
+        }
         _ => return None,
     })
 }
@@ -159,6 +165,9 @@ mod tests {
             text("test-command", &s).unwrap(),
             "In this repository, tests run with .venv/bin/python -m pytest, followed by the test files or names to run."
         );
+        assert!(check("uncommitted", &slots(&[]), &t).is_ok());
+        assert!(check("uncommitted", &slots(&[("command", "git commit")]), &t).is_err());
+        assert!(text("uncommitted", &slots(&[])).unwrap().starts_with("In this repository, leave your changes uncommitted"));
         // Refused: unknown template, unknown slot, missing slot, hostile values.
         assert!(check("free-text", &slots(&[("path", "x")]), &t).is_err());
         assert!(check("lockfile", &slots(&[("path", "uv.lock")]), &t).is_err());

@@ -89,13 +89,14 @@ static T_STOP: Lazy<Regex> = Lazy::new(|| {
 });
 
 /// The advisory sentences (`Step::Advise`), each optionally followed by an exit clause.
-static T_ADVICE: Lazy<[Regex; 4]> = Lazy::new(|| {
+static T_ADVICE: Lazy<[Regex; 5]> = Lazy::new(|| {
     let tail = format!(r"(?: {EXIT})?$");
     [
         Regex::new(&format!(r"^In this repository, (?P<path>[A-Za-z0-9_./*-]+) is generated: change its inputs and run (?P<cmd>[A-Za-z0-9 _./:=@,+-]+) rather than editing it by hand\.{tail}")).unwrap(),
         Regex::new(&format!(r"^In this repository, (?P<path>[A-Za-z0-9_./*-]+) is generated: change its inputs and regenerate it rather than editing it by hand\.{tail}")).unwrap(),
         Regex::new(&format!(r"^In this repository, (?P<path>[A-Za-z0-9_./*-]+) is maintained by (?P<manager>[a-z]+): change the manifest and let (?P<manager2>[a-z]+) update it rather than editing it by hand\.{tail}")).unwrap(),
         Regex::new(&format!(r"^This repository uses (?P<manager>[a-z]+) \((?P<lockfile>[A-Za-z0-9_.-]+)\), not npm: use (?P<manager2>[a-z]+) for installs and scripts here\.{tail}")).unwrap(),
+        Regex::new(&format!(r"^In this repository, leave your changes uncommitted: do not commit them, the working tree is reviewed as it is\.{tail}")).unwrap(),
     ]
 });
 

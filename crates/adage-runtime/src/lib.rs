@@ -460,9 +460,11 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         if let Some(p) = keys::action_path(&n.action) {
                             let rel = repo::relativize(ctx.root, p);
                             let hits = |paths: &str| glob::Pattern::new(paths).is_ok_and(|g| g.matches(&rel));
-                            // One edit, one directive: a sequence after this edit whose first step
-                            // is a finish line's command subsumes that finish line. Returns the
-                            // sequence and the finish line's bound command.
+                            // One edit, one directive: a sequence after this edit with a step that
+                            // is a finish line's command subsumes that finish line (a compiled
+                            // skill's `make test`, `make ci` carries its "before you finish: make
+                            // ci", which holds after any edit). Returns the sequence and the
+                            // finish line's bound command.
                             let subsumer = |o: &IndexedRoute| -> Option<(String, String)> {
                                 let (Trigger::AfterEdit { paths }, Step::Run { command }) =
                                     (&o.route.trigger, &o.route.step)
@@ -478,7 +480,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                     .find(|s| match (&s.route.trigger, &s.route.step) {
                                         (Trigger::AfterEdit { paths }, Step::Sequence { commands }) => {
                                             hits(paths)
-                                                && commands.first().is_some_and(|f| pattern::same_command(f, &command))
+                                                && commands.iter().any(|f| pattern::same_command(f, &command))
                                         }
                                         _ => false,
                                     })

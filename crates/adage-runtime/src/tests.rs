@@ -1487,6 +1487,59 @@ fn a_sequence_subsumes_the_finish_line_it_begins_with() {
     assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["docs-line"]);
 }
 
+/// A compiled skill's "before you finish, run `make ci`" is a finish line after any edit (`*`). A
+/// code edit is told once, by the sequence `make test`, `make ci` that carries it; a schema edit,
+/// which no sequence covers, is told by the finish line itself, and Stop asks for it either way.
+#[test]
+fn a_finish_line_after_any_edit_rides_on_a_sequence_that_includes_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let routes = vec![
+        route(
+            "before-finish",
+            Trigger::AfterEdit { paths: "*".into() },
+            Step::Run { command: "make ci".into() },
+            vec![],
+            Effect::Verify,
+            Strength::Fire,
+        ),
+        route(
+            "test-then-ci",
+            Trigger::AfterEdit { paths: "acme/*.py".into() },
+            Step::Sequence { commands: vec!["make test".into(), "make ci".into()] },
+            vec![],
+            Effect::Verify,
+            Strength::Fire,
+        ),
+    ];
+    let index = Index::compile(&[track("acme/t", "desire-path", routes)]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
+    let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
+    let edit = |f: &str| Event::Batch { calls: vec![edit_call(&dir, f)] };
+    let stop = || Event::Stop { stop_hook_active: false };
+    let d = go(edit("acme/billing.py"));
+    assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["test-then-ci"]);
+    let s = go(stop());
+    assert!(s.continue_reason.as_deref().is_some_and(|r| r.contains("make ci")), "{s:?}");
+
+    let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
+    let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
+    let d = go(edit("schema/customer.json"));
+    assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["before-finish"]);
+    let s = go(stop());
+    assert!(s.continue_reason.as_deref().is_some_and(|r| r.contains("make ci")), "{s:?}");
+    go(Event::Batch { calls: vec![bash("make ci", "ok")] });
+    assert!(go(stop()).continue_reason.is_none(), "met");
+}
+
 #[test]
 fn a_context_needs_its_items_in_order_within_its_gap_of_alphabet_events() {
     let dir = tempfile::tempdir().unwrap();
