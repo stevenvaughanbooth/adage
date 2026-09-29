@@ -25,7 +25,10 @@ fn main() {
     let files: Vec<PathBuf> = args
         .iter()
         .enumerate()
-        .filter(|(i, a)| !a.starts_with("--") && !(*i > 0 && takes.contains(&args[i - 1].as_str())))
+        .filter(|(i, a)| {
+            let value_of_flag = *i > 0 && takes.contains(&args[i - 1].as_str());
+            !(a.starts_with("--") || value_of_flag)
+        })
         .map(|(_, a)| PathBuf::from(a))
         .collect();
     let table = CommandTable::load();

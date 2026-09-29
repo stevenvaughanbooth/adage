@@ -446,7 +446,10 @@ mod tests {
         assert!(should_extinguish(&Judged { misfired: 2, ..Default::default() }).is_none());
         assert!(should_extinguish(&Judged { misfired: 3, ..Default::default() }).is_some());
         assert!(should_extinguish(&Judged { ignored: 4, ..Default::default() }).is_none(), "too few");
-        assert!(should_extinguish(&Judged { ignored: 5, followed: 0, ..Default::default() }).is_some());
+        // An ignore only lowers p_follow: five ignores are no evidence the route is worthless (a
+        // broken follow judge reads every follow as one), two hundred are.
+        assert!(should_extinguish(&Judged { ignored: 5, followed: 0, ..Default::default() }).is_none());
+        assert!(should_extinguish(&Judged { ignored: 200, followed: 0, ..Default::default() }).is_some());
         assert!(should_extinguish(&Judged { ignored: 5, followed: 5, ..Default::default() }).is_none());
     }
 }

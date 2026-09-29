@@ -64,7 +64,7 @@ pub fn executed_tests(output: &str) -> bool {
     );
     let no = re(&NO, r"no tests ran|No module named|ModuleNotFoundError|command not found|Cannot find module");
     let out = adage_core::tokens::bounded(output, 64 * 1024);
-    yes.is_match(out) && !(no.is_match(out) && !re_count_passed(out))
+    yes.is_match(out) && (!no.is_match(out) || re_count_passed(out))
 }
 
 /// Whether an output reports tests that passed or failed (a run whose output also names a missing
@@ -205,7 +205,7 @@ pub fn harm(st: &StepObs) -> bool {
         if a.role != Role::EnvSetup {
             continue;
         }
-        let prog = av.iter().find(|t| !(t.contains('=') && !t.starts_with('-'))).map(String::as_str).unwrap_or("");
+        let prog = av.iter().find(|t| !t.contains('=') || t.starts_with('-')).map(String::as_str).unwrap_or("");
         let b = prog.rsplit('/').next().unwrap_or(prog);
         let pip = matches!(b, "pip" | "pip3")
             || b.starts_with("pip3.")

@@ -445,7 +445,8 @@ pub fn plan(
         value::MISFIRE_COST,
     );
     let map_confirmed = confirmed.iter().any(|((s, t), _)| map.get(s).is_some_and(|ts| ts.contains(t)));
-    let verified = (declared.is_some() || ran_tests >= 1) && ran_tests >= 1 && map_confirmed;
+    // The runner ran tests in a trace (declared or not), and a trace ran a mapped test after its source.
+    let verified = ran_tests >= 1 && map_confirmed;
     let effective = sat.len() as f64 + k1;
     let admitted = verified || (adv.lower > 0.0 && effective >= value::MIN_EFFECTIVE);
     // A check after an edit is suggested, never fired.

@@ -295,7 +295,7 @@ pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors) -> Ve
                 unexposed.iter().filter(|a| a.x.next.as_ref().is_some_and(|r| r.env == env)).collect();
             let other: Vec<f64> = unexposed
                 .iter()
-                .filter(|a| !a.x.next.as_ref().is_some_and(|r| r.env == env))
+                .filter(|a| a.x.next.as_ref().is_none_or(|r| r.env != env))
                 .map(|a| a.x.reward.calls as f64)
                 .collect();
             let (m0, k0, _, _) = priors.prior(&key, "null");
@@ -515,7 +515,7 @@ mod tests {
         // Ignored almost always, over many deliveries: not worth its tokens.
         assert!(judged(0, 200, 0).p_positive < 0.1, "{:?}", judged(0, 200, 0));
         // Misfires cost.
-        assert!(judged(2, 0, 8).mean < 0.0);
+        assert!(judged(1, 0, 20).mean < 0.0, "{:?}", judged(1, 0, 20));
     }
 
     #[test]
