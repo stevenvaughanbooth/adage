@@ -306,6 +306,33 @@ fn targets(args: &[String], cwd: &str) -> Vec<String> {
     out.into_iter().collect()
 }
 
+/// The packages a `go test` names, as `pkg:<dir>` (`pkg:` the root, `pkg:x/...` recursive):
+/// Go targets packages, not files.
+fn go_packages(args: &[String], cwd: &str) -> Vec<String> {
+    const VALUED: [&str; 10] =
+        ["-run", "-count", "-timeout", "-tags", "-p", "-parallel", "-coverprofile", "-bench", "-skip", "-cpu"];
+    let mut out = BTreeSet::new();
+    let mut skip = false;
+    for a in args {
+        if skip {
+            skip = false;
+            continue;
+        }
+        if a.starts_with('-') {
+            skip = VALUED.contains(&a.as_str());
+            continue;
+        }
+        let p = rel(a, cwd);
+        let p = p.trim_start_matches("./").trim_end_matches('/');
+        let p = if p == "." { "" } else { p };
+        out.insert(format!("pkg:{p}"));
+    }
+    if out.is_empty() {
+        out.insert("pkg:".to_string());
+    }
+    out.into_iter().collect()
+}
+
 fn str_field<'a>(v: &'a serde_json::Value, k: &str) -> &'a str {
     v.get(k).and_then(|x| x.as_str()).unwrap_or("")
 }
@@ -321,7 +348,7 @@ pub fn act(c: &ToolCall, cwd: &str) -> Act {
             a.env_sig = ENV_SIG.is_match(&c.output);
             if let Some((inv, args)) = invocation(&a.cmd) {
                 a.run = Some(inv);
-                a.targets = targets(&args, cwd);
+                a.targets = if inv.runner == "go-test" { go_packages(&args, cwd) } else { targets(&args, cwd) };
                 a.executed = EXECUTED.is_match(&c.output) && !a.env_sig;
             } else {
                 // A listing of the repository's root (`ls -la | head`): looking for the environment.
@@ -479,6 +506,16 @@ impl Class {
 /// A test-run target names a directed file: equal, or one a path suffix of the other (a run
 /// from a package directory), or a bare name filter (`vitest run foo`) inside the file name.
 fn same_file(target: &str, file: &str) -> bool {
+    if let Some(pkg) = target.strip_prefix("pkg:") {
+        let dir = file.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+        return match pkg.strip_suffix("...") {
+            Some(pre) => {
+                let pre = pre.trim_end_matches('/');
+                pre.is_empty() || dir == pre || dir.starts_with(&format!("{pre}/"))
+            }
+            None => dir == pkg,
+        };
+    }
     target == file
         || file.ends_with(&format!("/{target}"))
         || target.ends_with(&format!("/{file}"))
@@ -1231,3 +1268,7 @@ pub fn cli(args: &[String]) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "savings_replay_tests.rs"]
+mod tests;
