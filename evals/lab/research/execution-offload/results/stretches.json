@@ -1,0 +1,228 @@
+{
+ "haiku": {
+  "decision_points": 5110,
+  "sessions": 158,
+  "calibration": [
+   {
+    "bin": [
+     0.0,
+     0.1
+    ],
+    "points": 2844,
+    "share_of_turns": 0.5565557729941292,
+    "hit_rate": 0.022151898734177215
+   },
+   {
+    "bin": [
+     0.1,
+     0.3
+    ],
+    "points": 1176,
+    "share_of_turns": 0.23013698630136986,
+    "hit_rate": 0.041666666666666664
+   },
+   {
+    "bin": [
+     0.3,
+     0.5
+    ],
+    "points": 546,
+    "share_of_turns": 0.10684931506849316,
+    "hit_rate": 0.06776556776556776
+   },
+   {
+    "bin": [
+     0.5,
+     0.7
+    ],
+    "points": 327,
+    "share_of_turns": 0.0639921722113503,
+    "hit_rate": 0.21712538226299694
+   },
+   {
+    "bin": [
+     0.7,
+     0.8
+    ],
+    "points": 82,
+    "share_of_turns": 0.01604696673189824,
+    "hit_rate": 0.06097560975609756
+   },
+   {
+    "bin": [
+     0.8,
+     0.9
+    ],
+    "points": 73,
+    "share_of_turns": 0.014285714285714285,
+    "hit_rate": 0.3013698630136986
+   },
+   {
+    "bin": [
+     0.9,
+     1.0
+    ],
+    "points": 62,
+    "share_of_turns": 0.01213307240704501,
+    "hit_rate": 0.5483870967741935
+   }
+  ],
+  "by_theta": {
+   "0.5": {
+    "deliveries_per_session": 3.4430379746835444,
+    "precision": 0.2426470588235294,
+    "hits_per_session": 0.8354430379746836,
+    "share_of_turns_removed": 0.02583170254403131,
+    "hit_categories_per_session": {
+     "search/list": 0.3860759493670886,
+     "Read": 0.34810126582278483,
+     "env probe/install": 0.056962025316455694,
+     "git": 0.03164556962025317,
+     "test run": 0.012658227848101266
+    },
+    "chained_hits_per_session": 0.03164556962025317
+   },
+   "0.7": {
+    "deliveries_per_session": 1.3734177215189873,
+    "precision": 0.28110599078341014,
+    "hits_per_session": 0.3860759493670886,
+    "share_of_turns_removed": 0.011937377690802348,
+    "hit_categories_per_session": {
+     "Read": 0.2468354430379747,
+     "search/list": 0.10126582278481013,
+     "env probe/install": 0.03164556962025317,
+     "test run": 0.006329113924050633
+    },
+    "chained_hits_per_session": 0.006329113924050633
+   },
+   "0.8": {
+    "deliveries_per_session": 0.8544303797468354,
+    "precision": 0.4148148148148148,
+    "hits_per_session": 0.35443037974683544,
+    "share_of_turns_removed": 0.010958904109589041,
+    "hit_categories_per_session": {
+     "Read": 0.22784810126582278,
+     "search/list": 0.10126582278481013,
+     "env probe/install": 0.02531645569620253
+    },
+    "chained_hits_per_session": 0.006329113924050633
+   },
+   "0.9": {
+    "deliveries_per_session": 0.3924050632911392,
+    "precision": 0.5483870967741935,
+    "hits_per_session": 0.21518987341772153,
+    "share_of_turns_removed": 0.006653620352250489,
+    "hit_categories_per_session": {
+     "Read": 0.20253164556962025,
+     "env probe/install": 0.012658227848101266
+    },
+    "chained_hits_per_session": 0.0
+   }
+  },
+  "any_hit_possible_share": 0.05499021526418787
+ },
+ "sonnet": {
+  "decision_points": 908,
+  "sessions": 32,
+  "calibration": [
+   {
+    "bin": [
+     0.0,
+     0.1
+    ],
+    "points": 461,
+    "share_of_turns": 0.5077092511013216,
+    "hit_rate": 0.0
+   },
+   {
+    "bin": [
+     0.1,
+     0.3
+    ],
+    "points": 268,
+    "share_of_turns": 0.29515418502202645,
+    "hit_rate": 0.0
+   },
+   {
+    "bin": [
+     0.3,
+     0.5
+    ],
+    "points": 101,
+    "share_of_turns": 0.11123348017621146,
+    "hit_rate": 0.019801980198019802
+   },
+   {
+    "bin": [
+     0.5,
+     0.7
+    ],
+    "points": 47,
+    "share_of_turns": 0.051762114537444934,
+    "hit_rate": 0.0
+   },
+   {
+    "bin": [
+     0.7,
+     0.8
+    ],
+    "points": 15,
+    "share_of_turns": 0.016519823788546256,
+    "hit_rate": 0.0
+   },
+   {
+    "bin": [
+     0.8,
+     0.9
+    ],
+    "points": 12,
+    "share_of_turns": 0.013215859030837005,
+    "hit_rate": 0.0
+   },
+   {
+    "bin": [
+     0.9,
+     1.0
+    ],
+    "points": 4,
+    "share_of_turns": 0.004405286343612335,
+    "hit_rate": 0.0
+   }
+  ],
+  "by_theta": {
+   "0.5": {
+    "deliveries_per_session": 2.4375,
+    "precision": 0.0,
+    "hits_per_session": 0.0,
+    "share_of_turns_removed": 0.0,
+    "hit_categories_per_session": {},
+    "chained_hits_per_session": 0.0
+   },
+   "0.7": {
+    "deliveries_per_session": 0.96875,
+    "precision": 0.0,
+    "hits_per_session": 0.0,
+    "share_of_turns_removed": 0.0,
+    "hit_categories_per_session": {},
+    "chained_hits_per_session": 0.0
+   },
+   "0.8": {
+    "deliveries_per_session": 0.5,
+    "precision": 0.0,
+    "hits_per_session": 0.0,
+    "share_of_turns_removed": 0.0,
+    "hit_categories_per_session": {},
+    "chained_hits_per_session": 0.0
+   },
+   "0.9": {
+    "deliveries_per_session": 0.125,
+    "precision": 0.0,
+    "hits_per_session": 0.0,
+    "share_of_turns_removed": 0.0,
+    "hit_categories_per_session": {},
+    "chained_hits_per_session": 0.0
+   }
+  },
+  "any_hit_possible_share": 0.0022026431718061676
+ }
+}

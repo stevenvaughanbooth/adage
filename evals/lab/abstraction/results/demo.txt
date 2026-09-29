@@ -1,0 +1,19 @@
+== click (edited: src/click/core.py) ==
+  .venv/bin/python -m pytest tests/test_commands.py::test_x -xvs | head -50    -> test-run|project|test-id|src-test      intent test-run|narrow|edited-area  [venv]
+  uv run pytest -k parser                                                      -> test-run|project|test-id|by-name       intent test-run|narrow|by-name      [uv]
+  python -m pytest tests/                                                      -> test-run|system|repo|all               intent test-run|all|all             [system]
+  source .venv/bin/activate && python -m pytest tests/test_options.py -q 2>&   -> test-run|project|file|src-test         intent test-run|narrow|edited-area  [venv]
+  python3 -m pytest tests/test_basic.py::test_group -xvs                       -> test-run|system|test-id|src-test       intent test-run|narrow|edited-area  [system]
+  python3 -c "import click; print(click.__file__)"                             -> lookup|system|inline|project           intent lookup|system                [system]
+  cat > /tmp/repro.py << 'EOF'                                                 -> repro|system|scratch-file|project      intent repro|scratch|project        [system]
+  .venv/bin/python << 'EOF'                                                    -> repro|project|inline|project           intent repro|scratch|project        [venv]
+  pip install -e . -q                                                          -> env-setup|system|-|-                   intent env-setup|system             [system]
+  compile(test-run|project|file|src-test) -> .venv/bin/python -m pytest tests/test_options.py tests/test_commands.py   safe=True
+
+== vue-core (edited: packages/runtime-core/src/renderer.ts) ==
+  npx vitest run packages/runtime-core                                         -> test-run|project|package|src-test      intent test-run|narrow|edited-area  [npx]
+  npm test -- packages/runtime-core/__tests__/rendererChildren.spec.ts --run   -> test-run|project|file|src-test         intent test-run|narrow|edited-area  [npm-script]
+  pnpm vitest run -t 'keyed children'                                          -> test-run|project|test-id|by-name       intent test-run|narrow|by-name      [pnpm]
+  node /tmp/repro.js                                                           -> repro|system|scratch-file|stdlib       intent repro|scratch|stdlib         [system]
+  compile(test-run|project|file|src-test) -> node_modules/.bin/vitest run packages/runtime-core/__tests__/components/Suspense.spec.ts packages/runtime-core/__tests__/hydration.spec.ts   safe=True
+

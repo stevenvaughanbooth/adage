@@ -1,0 +1,22 @@
+[package]
+name = "adage-hook"
+description = "The hook pipeline shared by `adage hook` and `adage-exec hook`: harness adapters, fast path, state, decide, spool, render"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+adage-core = { path = "../adage-core" }
+adage-store = { path = "../adage-store" }
+adage-tracks = { path = "../adage-tracks" }
+adage-intent = { path = "../adage-intent" }
+adage-runtime = { path = "../adage-runtime" }
+adage-learn = { path = "../adage-learn" }
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile = "3"

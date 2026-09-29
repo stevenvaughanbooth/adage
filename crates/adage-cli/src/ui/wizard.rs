@@ -4,7 +4,7 @@
 //! 2. Hooks, per harness found: the exact file and diff for this repository (Tab: user scope);
 //!    written only on `y`, through `adage install --write`'s own code.
 //! 3. The embedding model (optional): fetched with progress.
-//! 4. A first `adage learn`.
+//! 4. A first `adage condition`.
 //! 5. Auto-learn: `learn.auto = true` in `config.toml` (`adage config set`), if it is off.
 //! 6. The doctor's summary, and where to go next (`adage watch` in a split pane).
 //!
@@ -56,7 +56,7 @@ impl Step {
             Kind::Harnesses => "Harnesses".into(),
             Kind::Hooks(h) => format!("Hooks: {h}"),
             Kind::Model => "Embedding model".into(),
-            Kind::Learn => "First learn".into(),
+            Kind::Learn => "First conditioning".into(),
             Kind::AutoLearn => "Auto-learn".into(),
             Kind::Finish => "Summary".into(),
         }
@@ -178,7 +178,7 @@ impl Wizard {
             Kind::Hooks(_) if no => self.advance(StepStatus::Skipped),
             Kind::Model if yes && self.model.is_some() => {
                 let m = self.model.clone().unwrap_or_default();
-                self.advance(StepStatus::Done(format!("{m} already installed")))
+                self.advance(StepStatus::Done(format!("{m} ready")))
             }
             Kind::Model if yes => Some(Cmd::FetchModel),
             Kind::Learn if yes => Some(Cmd::Learn),
@@ -285,18 +285,20 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
             }
         }
         Kind::Model => match &w.model {
-            Some(m) => out.push(Line::raw(format!("The embedding model is installed: {m}."))),
+            Some(m) => {
+                out.push(Line::raw(format!("The embedding model is ready: {m} (installed, or bundled in adage).")))
+            }
             None => {
                 out.push(Line::raw("Optional: the static embedding model (potion-base-8M, 31 MB, SHA-256 verified)."));
-                out.push(Line::raw("With it, `adage learn` groups prompts that mean the same thing into intent"));
+                out.push(Line::raw("With it, `adage condition` groups prompts that mean the same thing into intent"));
                 out.push(Line::raw(
                     "families and learns what each usually starts with. Everything else works without it.",
                 ));
             }
         },
         Kind::Learn => {
-            out.push(Line::raw("Run a first `adage learn`: it reads your agents' session history (Claude Code"));
-            out.push(Line::raw("under ~/.claude/projects), mines routes, writes tracks, and compiles the index"));
+            out.push(Line::raw("Run a first `adage condition`: it reads your agents' traces (Claude Code history"));
+            out.push(Line::raw("under ~/.claude/projects), mines reflexes, writes tracks, and compiles the index"));
             out.push(Line::raw("hooks read. It reads transcripts; it never runs anything they contain."));
         }
         Kind::AutoLearn => {
@@ -305,7 +307,7 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
                 Some((false, src)) => format!("off ({src})"),
                 None => "unknown".to_string(),
             };
-            out.push(Line::raw("Learn automatically after agent sessions end, so routes keep up with how your"));
+            out.push(Line::raw("Condition automatically after agent sessions end, so reflexes keep up with how your"));
             out.push(Line::raw("agents work. This sets `learn.auto = true` in:"));
             out.push(Line::from(Span::styled(format!("  {}", w.config_path), t.bold())));
             out.push(dim(&format!("Now: {now}.")));
@@ -339,7 +341,7 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
                     Span::styled("adage watch", t.accent().patch(t.bold())),
                     Span::raw(" in a split pane to see Adage work live, and "),
                     Span::styled("adage ui", t.accent().patch(t.bold())),
-                    Span::raw(" for routes, review, health and settings."),
+                    Span::raw(" for reflexes, review, health and settings."),
                 ]));
             }
         },
@@ -364,7 +366,7 @@ fn hint(w: &Wizard) -> &'static str {
         Kind::Harnesses => "y continue · q stop",
         Kind::Hooks(_) => "y install · Tab this repository / user scope · n skip · ↑ ↓ scroll · q stop",
         Kind::Model => "y fetch · n skip · q stop",
-        Kind::Learn => "y learn now · n skip · q stop",
+        Kind::Learn => "y condition now · n skip · q stop",
         Kind::AutoLearn => "y turn it on · n skip · q stop",
         Kind::Finish => "Enter or q exits",
     }
@@ -429,7 +431,7 @@ pub fn draw(f: &mut Frame, w: &Wizard, ctx: &Ctx) {
 
 pub fn run(ctx: Ctx) -> Result<()> {
     let mut w = Wizard::new(detect::harnesses(), detect::registrations(ctx.root.as_deref()), ctx.root.is_some());
-    w.model = adage_intent::model::status(&ctx.paths.models()).ok().map(|m| m.id);
+    w.model = adage_intent::model::resolve_static(&ctx.paths.models(), false).map(|m| m.id);
     let loaded = config::load(&ctx.paths);
     w.auto_learn = loaded.get("learn.auto").map(|(_, src)| (loaded.config.learn_auto, src.to_string()));
     w.config_path = detect::tilde(&ctx.paths.config());
@@ -449,7 +451,7 @@ pub fn run(ctx: Ctx) -> Result<()> {
                     w.progress = None;
                     match (kind, done) {
                         (Kind::Model, Ok(lines)) => {
-                            w.model = adage_intent::model::status(&ctx.paths.models()).ok().map(|m| m.id);
+                            w.model = adage_intent::model::resolve_static(&ctx.paths.models(), false).map(|m| m.id);
                             let note = lines.first().cloned().unwrap_or_default();
                             w.advance(StepStatus::Done(note));
                         }
@@ -482,8 +484,8 @@ pub fn run(ctx: Ctx) -> Result<()> {
                 w.health = Some(health::gather(&ctx.paths, ctx.root.as_deref()));
                 None
             }
-            Cmd::Install(p) => match crate::install::apply(&p) {
-                Ok(()) => {
+            Cmd::Install(p) => match crate::install::apply_backed_up(&p) {
+                Ok(_) => {
                     w.registrations = detect::registrations(ctx.root.as_deref());
                     w.advance(StepStatus::Done(format!("wrote {}", detect::tilde(&p.target))))
                 }

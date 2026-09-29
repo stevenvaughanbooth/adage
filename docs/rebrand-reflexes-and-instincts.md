@@ -81,7 +81,7 @@ instincts are innate ones.
 | `adage condition` | Mine traces into reflexes and bind instincts |
 | `adage train` | Grow reflexes from a skill |
 | `adage review strengthen` / `weaken` / `extinguish` | A person's decisions about a reflex |
-| `adage delegate` | Let approved reflexes act (prefetch, MCP tools), sandboxed |
+| `adage delegate` | Let approved reflexes act (prefetch, actions from hooks), sandboxed |
 | `adage map` | The web view |
 | `adage watch`, `doctor`, `share`, `add`, `eval` | Unchanged |
 

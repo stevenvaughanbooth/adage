@@ -1,0 +1,416 @@
+{
+ "slug": "learned-outcomes",
+ "headline": "Success/failure CAN be learned from tool outputs with no hand-written strings (Drain templates taught by the exit status: failure AUC 0.96 held-out, 0.95 leave-one-repo-out, vs 0.92 for the hand-coded signatures), but it does not turn into savings: reflexes mined with it save 0.0-0.4 calls/task (<=0.9% of $) against U11's 0.9-1.6, and adding them to U11 lowers U11's value; TD/MC value over trace states is at chance.",
+ "metric_name": "primary: $ and calls saved per task (common harness, cumulative-context cost model, 90% task-clustered CI); instrument: failure AUC on 277 hand-labelled outputs",
+ "held_out": {
+  "detector_failure_auc": {
+   "value": 0.961,
+   "ci90": [
+    0.943,
+    0.978
+   ],
+   "n_labels": 277,
+   "n_sessions": 133,
+   "hand_coded_baseline": {
+    "auc": 0.917,
+    "ci90": [
+     0.888,
+     0.946
+    ]
+   },
+   "is_error_baseline": {
+    "auc": 0.905,
+    "ci90": [
+     0.874,
+     0.937
+    ]
+   }
+  },
+  "detector_on_failures_the_exit_status_hides_auc": {
+   "learned_drain_exit": 0.825,
+   "learned_potion_exit_clean_teacher": 0.902,
+   "hand_coded": 0.567,
+   "n_failures": 15
+  },
+  "success_auc": {
+   "learned": {
+    "auc": 0.825,
+    "ci90": [
+     0.786,
+     0.861
+    ]
+   },
+   "hand_coded": {
+    "auc": 0.761,
+    "ci90": [
+     0.724,
+     0.796
+    ]
+   }
+  },
+  "macro_f1_3class": {
+   "B1 hand-coded": 0.728,
+   "learned": 0.702
+  },
+  "td_lambda_advantage_failure_auc": {
+   "auc": 0.506,
+   "ci90": [
+    0.443,
+    0.572
+   ]
+  },
+  "mc_advantage_failure_auc": {
+   "auc": 0.482,
+   "ci90": [
+    0.41,
+    0.557
+   ]
+  },
+  "retry_self_supervision_failure_auc": {
+   "auc": 0.811,
+   "ci90": [
+    0.764,
+    0.862
+   ]
+  },
+  "downstream_learned_reflexes_split_post_hoc": {
+   "calls_saved_per_task": 0.183,
+   "calls_ci90": [
+    -0.066,
+    0.418
+   ],
+   "usd_saved_per_task": 0.0006,
+   "usd_ci90": [
+    -0.0008,
+    0.002
+   ],
+   "usd_share": 0.0024,
+   "usd_share_ci90": [
+    -0.0032,
+    0.0075
+   ],
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 92,
+   "useful_rate": 0.5978260869565217,
+   "useful_lb90": 0.5121073059484086,
+   "harmful": 0,
+   "s_hat_rust": 0.6516413391635266,
+   "s_hat_rust_ci95": [
+    0.3542844882636664,
+    0.9891236271766388
+   ]
+  },
+  "downstream_learned_reflexes_split_predictive": {
+   "calls_saved_per_task": 0.246,
+   "calls_ci90": [
+    -0.011,
+    0.496
+   ],
+   "usd_saved_per_task": 0.0009,
+   "usd_ci90": [
+    -0.0006,
+    0.0023
+   ],
+   "usd_share": 0.0034,
+   "usd_share_ci90": [
+    -0.0023,
+    0.0087
+   ],
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 94,
+   "useful_rate": 0.5957446808510638,
+   "useful_lb90": 0.5109381322216138,
+   "harmful": 0,
+   "s_hat_rust": 0.7272822612743423,
+   "s_hat_rust_ci95": [
+    0.40699436159893465,
+    1.093200447975302
+   ]
+  }
+ },
+ "leave_one_repo_out": {
+  "detector_failure_auc_pooled": {
+   "auc": 0.951,
+   "ci90": [
+    0.93,
+    0.97
+   ]
+  },
+  "detector_failure_auc_pooled_hand_coded": {
+   "auc": 0.917,
+   "ci90": [
+    0.888,
+    0.946
+   ]
+  },
+  "detector_by_repo": {
+   "attrs": {
+    "learned": 1.0,
+    "hand_coded": 1.0
+   },
+   "click": {
+    "learned": 0.934,
+    "hand_coded": 0.885
+   },
+   "marshmallow": {
+    "learned": 1.0,
+    "hand_coded": 1.0
+   },
+   "urfave-cli": {
+    "learned": 0.954,
+    "hand_coded": 0.844
+   },
+   "vue-core": {
+    "learned": 0.918,
+    "hand_coded": 0.923
+   }
+  },
+  "downstream_post_hoc_min_rate_0.7": {
+   "calls_saved_per_task": 0.42,
+   "calls_ci90": [
+    0.065,
+    0.765
+   ],
+   "usd_saved_per_task": 0.0011,
+   "usd_ci90": [
+    -0.0012,
+    0.0033
+   ],
+   "usd_share": 0.0043,
+   "usd_share_ci90": [
+    -0.0044,
+    0.0127
+   ],
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 223,
+   "useful_rate": 0.726457399103139,
+   "useful_lb90": 0.6748613555574929,
+   "harmful": 2,
+   "s_hat_rust": 1.1922248157638078,
+   "s_hat_rust_ci95": [
+    0.8010497823361697,
+    1.6136830286884654
+   ]
+  },
+  "downstream_post_hoc_min_rate_0.5": {
+   "calls_saved_per_task": -0.001,
+   "calls_ci90": [
+    -0.463,
+    0.432
+   ],
+   "usd_saved_per_task": -0.0023,
+   "usd_ci90": [
+    -0.0054,
+    0.0005
+   ],
+   "usd_share": -0.009,
+   "usd_share_ci90": [
+    -0.0203,
+    0.0019
+   ],
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 317,
+   "useful_rate": 0.694006309148265,
+   "useful_lb90": 0.6499401226825963,
+   "harmful": 3,
+   "s_hat_rust": 1.2263762995311223,
+   "s_hat_rust_ci95": [
+    0.8111147393955386,
+    1.6723418983410023
+   ]
+  }
+ },
+ "vs_baseline": {
+  "U11 post-hoc (harness, same test set)": {
+   "calls_saved_per_task": 0.877,
+   "calls_ci90": [
+    0.581,
+    1.188
+   ],
+   "usd_saved_per_task": 0.0049,
+   "usd_ci90": [
+    0.0033,
+    0.0065
+   ],
+   "usd_share": 0.0187,
+   "usd_share_ci90": [
+    0.0121,
+    0.0266
+   ],
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 62,
+   "useful_rate": 0.9838709677419355,
+   "useful_lb90": 0.930884108588354,
+   "harmful": 0,
+   "s_hat_rust": 0.8898356250344299,
+   "s_hat_rust_ci95": [
+    0.5488133909087355,
+    1.2908565444289442
+   ]
+  },
+  "U11 predictive (split)": {
+   "calls_saved_per_task": 1.632,
+   "calls_ci90": [
+    1.224,
+    2.042
+   ],
+   "usd_saved_per_task": 0.0091,
+   "usd_ci90": [
+    0.0068,
+    0.0114
+   ],
+   "usd_share": 0.0348,
+   "usd_share_ci90": [
+    0.0253,
+    0.0457
+   ],
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 98,
+   "useful_rate": 0.9489795918367347,
+   "useful_lb90": 0.8988874784740276,
+   "harmful": 0,
+   "s_hat_rust": 1.6955625693034753,
+   "s_hat_rust_ci95": [
+    1.178595938489406,
+    2.2088739746535264
+   ]
+  },
+  "U11 predictive + learned post-hoc (split)": {
+   "calls_saved_per_task": 1.095,
+   "calls_ci90": [
+    0.693,
+    1.488
+   ],
+   "usd_saved_per_task": 0.0058,
+   "usd_ci90": [
+    0.0035,
+    0.0081
+   ],
+   "usd_share": 0.0224,
+   "usd_share_ci90": [
+    0.0133,
+    0.0317
+   ],
+   "sessions": 158,
+   "tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 146,
+   "useful_rate": 0.7397260273972602,
+   "useful_lb90": 0.6760185810649776,
+   "harmful": 0,
+   "s_hat_rust": 1.5756747831162323,
+   "s_hat_rust_ci95": [
+    1.1158457739895282,
+    2.0401501331322307
+   ]
+  },
+  "reading": "The learned reflexes are worth less than U11 in every protocol and subtract from it when added (1.10 vs 1.63 calls/task): their extra directives misfire (useful 0.57-0.77 vs U11 0.95) and the dead ends they catch are mostly U11's."
+ },
+ "hard_coded_parts": [
+  "Training teacher: the harness's is_error flag (exit status) - data, not a rule.",
+  "Piped-command test for the clean teacher: one shell-grammar regex (an unquoted '|' that is not '||').",
+  "Tool name used as an opaque categorical feature (no taxonomy).",
+  "Constants: k=3 retry window, cos>=0.9 'same action', cos>=0.8 'same intent', 15-call horizon, 64 k-means clusters, reflex support>=2 sessions, recover rate>=0.5/0.7 (both reported), theta=0.5.",
+  "Measurement only (never read by the learner): the hand labels (277, labelled by this agent), and the replay instrument (instrument.py = port of savings_replay.rs ENV_SIG/EXECUTED/ENV_PROBE/invocation; harness.features) for Sat/W and the hand-coded baseline."
+ ],
+ "ceiling": {
+  "oracle_delete_every_hand_coded_failed_call": {
+   "sessions": 158,
+   "usd_per_task": 0.02488783291139241,
+   "usd_ci": [
+    0.021083029113924054,
+    0.029173296932515334
+   ],
+   "usd_share": 0.09557821168562115,
+   "usd_share_ci": [
+    0.0827847806497595,
+    0.10918028091975045
+   ],
+   "calls_per_task": 3.1139240506329116,
+   "calls_ci": [
+    2.7266666666666666,
+    3.529032258064516
+   ],
+   "calls_share": 0.09628180039138944,
+   "calls_share_ci": [
+    0.08475622299938285,
+    0.10781278455654708
+   ]
+  },
+  "oracle_delete_every_learned_failure": {
+   "sessions": 158,
+   "usd_per_task": 0.03418806962025315,
+   "usd_ci": [
+    0.028137766242038228,
+    0.04105778711656443
+   ],
+   "usd_share": 0.13129445889969593,
+   "usd_share_ci": [
+    0.11060788369298757,
+    0.15404668894876472
+   ],
+   "calls_per_task": 4.1075949367088604,
+   "calls_ci": [
+    3.476510067114094,
+    4.785276073619632
+   ],
+   "calls_share": 0.1270058708414873,
+   "calls_share_ci": [
+    0.1093719806763285,
+    0.14507772020725387
+   ]
+  },
+  "oracle_delete_learned_dead_end_windows (loose: includes productive edits between a failing and a passing run)": {
+   "sessions": 158,
+   "usd_per_task": 0.05037476835443037,
+   "usd_ci": [
+    0.042009706410256406,
+    0.05924489937106916
+   ],
+   "usd_share": 0.1934571921362399,
+   "usd_share_ci": [
+    0.16352135905764517,
+    0.22566295753550383
+   ],
+   "calls_per_task": 6.0886075949367084,
+   "calls_ci": [
+    5.1879194630872485,
+    7.012422360248447
+   ],
+   "calls_share": 0.18825831702544032,
+   "calls_share_ci": [
+    0.16135922330097088,
+    0.21595871377530765
+   ]
+  },
+  "reading": "~10-13% of $ for failed calls; the 19% window figure is a loose upper bound. Below the 15-20% goal."
+ },
+ "ship": {
+  "template_clusters": 13621,
+  "dictionary_bytes": 1341754,
+  "classifier_weights_tiny": 4917,
+  "latency_ms_tiny": {
+   "median": 12.004,
+   "p95": 75.262
+  },
+  "latency_ms_with_potion": {
+   "median": 15.568,
+   "p95": 84.652
+  },
+  "note": "single thread, shared 4-vCPU container under load ~30; Python; Rust would be faster"
+ },
+ "build_recommendation": "Do not build learned dead-end reflexes (negative: <=0.4 calls/task, subtracts from U11). Build the learned outcome detector only as a replacement for the hand-written signature lists where Adage labels outcomes (adage-learn outcome.rs env_signature/executed_tests, the replay's ENV_SIG): a Drain template dictionary (~14k templates, ~1.3 MB) + a logistic regression over hashed templates, taught by exit status on non-piped calls, ~12 ms/output in Python. Expected value: better labels (AUC 0.96 vs 0.92; 0.85 vs 0.57 on piped failures) for any learner, $0 direct saving; its value is only what a downstream lever built on it earns. Ship the pre-emptive U11 rewrite first (+1.6 calls, +3.5% of $).",
+ "so_what": "If shipped as reflexes: about +0.2 calls/task [-0.07, +0.42], +0.2% of $ [-0.3, +0.8] on Haiku held-out (split), <0.5% of $ in any protocol; confidence it survives a live A/B as a positive effect: low. As a labeller it is a better instrument, not a lever; ceiling for any dead-end lever is ~10-13% of $."
+}

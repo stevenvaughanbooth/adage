@@ -1,0 +1,41 @@
+{
+ "protocol": "adage-external/1",
+ "train_frac": 0.5,
+ "buffer": 0,
+ "min_test": 5,
+ "repos": {
+  "bytes": {
+   "train": [
+    "bytes-0a2c43af",
+    "bytes-3536017c",
+    "bytes-d6e1999d",
+    "bytes-05e9d5ca"
+   ],
+   "buffer": [],
+   "test": [
+    "bytes-79fb8532",
+    "bytes-36675436",
+    "bytes-16132ad2",
+    "bytes-60cbb776",
+    "bytes-7930d93d"
+   ],
+   "cutoff": "2023-01-31T19:04:22+00:00",
+   "first_test": "2024-08-30T12:20:29+00:00",
+   "dates": {
+    "bytes-0a2c43af": "2022-04-28T09:37:33+00:00",
+    "bytes-3536017c": "2022-06-11T04:12:53+00:00",
+    "bytes-d6e1999d": "2022-07-30T09:16:32+00:00",
+    "bytes-05e9d5ca": "2023-01-31T19:04:22+00:00",
+    "bytes-79fb8532": "2024-08-30T12:20:29+00:00",
+    "bytes-36675436": "2025-03-05T09:44:40+00:00",
+    "bytes-16132ad2": "2025-07-16T08:53:50+00:00",
+    "bytes-60cbb776": "2025-11-14T09:52:50+00:00",
+    "bytes-7930d93d": "2026-09-03T15:00:02+00:00"
+   }
+  }
+ },
+ "excluded": {},
+ "unassigned": [],
+ "digest": "65e43903133608fbfaa62dc66b44f04c66d973279a4c111443a1ba594c6dfeea",
+ "repo_key": "github.com/tokio-rs/bytes"
+}

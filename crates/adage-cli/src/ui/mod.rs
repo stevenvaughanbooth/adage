@@ -13,13 +13,13 @@
 //! * settings: `$ADAGE_HOME/config.toml`, through `adage_store::config` (as `adage config`).
 //!
 //! The terminal is restored on every exit path, including a panic ([`term`]). `NO_COLOR` is
-//! honoured: colour is dropped and aspects and lamps are spelled out.
+//! honoured: colour is dropped and strengths and lamps are spelled out.
 
 mod app;
 mod demo;
 mod diff;
 mod feed;
-mod health;
+pub(crate) mod health;
 mod jobs;
 mod learnlog;
 mod routes;

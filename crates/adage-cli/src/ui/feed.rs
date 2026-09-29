@@ -4,8 +4,8 @@
 //! records written by older versions may lack `kind`, `repo` or `harness`, which are then
 //! inferred or left blank.
 
-use super::theme::parse_aspect;
-use adage_tracks::Aspect;
+use super::theme::parse_strength;
+use adage_tracks::Strength;
 use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -13,22 +13,22 @@ pub enum Act {
     /// A directive delivered to the agent.
     Directed {
         route: String,
-        aspect: Aspect,
+        strength: Strength,
     },
-    /// Holdout: what would have been said, withheld.
+    /// Control: what would have been said, withheld.
     Withheld {
         route: String,
-        aspect: Aspect,
+        strength: Strength,
     },
     /// Treated: the agent took the directed step, or left it.
     Followed(String),
-    Derailed(String),
+    Ignored(String),
     /// A finish-line obligation was met.
     Met(String),
-    /// Holdout: the agent found the route's step unaided, or did not.
+    /// Control: the agent found the route's step unaided, or did not.
     Unaided(String),
     NotReached(String),
-    /// A stop-hook request to continue (finish line), or one withheld in the holdout.
+    /// A stop-hook request to continue (finish line), or one withheld in the control.
     StopRequest,
     StopWithheld,
 }
@@ -40,7 +40,7 @@ pub struct FeedItem {
     pub harness: String,
     pub event: String,
     pub repo: String,
-    pub holdout: bool,
+    pub control: bool,
     pub acts: Vec<Act>,
     /// Calls observed in this event (tool batches).
     pub observed: usize,
@@ -83,47 +83,47 @@ fn event_label(kind: Option<&str>, native: &str) -> String {
     .to_string()
 }
 
-fn directives(d: &Value, key: &str) -> Vec<(String, Aspect)> {
+fn directives(d: &Value, key: &str) -> Vec<(String, Strength)> {
     d[key]
         .as_array()
         .into_iter()
         .flatten()
         .filter_map(|x| {
             let route = x["route"].as_str()?.to_string();
-            let aspect = x["aspect"].as_str().and_then(parse_aspect).unwrap_or(Aspect::Yellow);
-            Some((route, aspect))
+            let strength = x["strength"].as_str().and_then(parse_strength).unwrap_or(Strength::Prime);
+            Some((route, strength))
         })
         .collect()
 }
 
 pub fn from_record(session: &str, rec: &Value) -> FeedItem {
     let d = &rec["decision"];
-    let holdout = rec["arm"] == "holdout";
+    let control = rec["arm"] == "control";
     let mut acts = Vec::new();
-    for (route, aspect) in directives(d, "directives") {
-        acts.push(Act::Directed { route, aspect });
+    for (route, strength) in directives(d, "directives") {
+        acts.push(Act::Directed { route, strength });
     }
     // Would-have directives are recorded in both arms; in the treated arm they duplicate what was
-    // delivered, so only a holdout's are shown (as withheld).
-    if holdout {
-        for (route, aspect) in directives(d, "would_have") {
-            acts.push(Act::Withheld { route, aspect });
+    // delivered, so only a control's are shown (as withheld).
+    if control {
+        for (route, strength) in directives(d, "would_have") {
+            acts.push(Act::Withheld { route, strength });
         }
     }
     for j in d["judgements"].as_array().into_iter().flatten() {
         let Some(route) = j["route"].as_str().map(String::from) else { continue };
-        acts.push(match (j["kind"].as_str(), holdout) {
+        acts.push(match (j["kind"].as_str(), control) {
             (Some("followed"), false) => Act::Followed(route),
-            (Some("derailed"), false) => Act::Derailed(route),
+            (Some("ignored"), false) => Act::Ignored(route),
             (Some("followed"), true) => Act::Unaided(route),
-            (Some("derailed"), true) => Act::NotReached(route),
+            (Some("ignored"), true) => Act::NotReached(route),
             (Some("obligation_met"), _) => Act::Met(route),
             _ => continue,
         });
     }
     if d["continue_reason"].is_string() {
         acts.push(Act::StopRequest);
-    } else if holdout && d["would_continue"].is_string() {
+    } else if control && d["would_continue"].is_string() {
         acts.push(Act::StopWithheld);
     }
     FeedItem {
@@ -132,7 +132,7 @@ pub fn from_record(session: &str, rec: &Value) -> FeedItem {
         harness: rec["harness"].as_str().unwrap_or("claude").to_string(),
         event: event_label(rec["kind"].as_str(), rec["event"].as_str().unwrap_or("?")),
         repo: rec["repo"].as_str().unwrap_or("").to_string(),
-        holdout,
+        control,
         acts,
         observed: d["observed"].as_array().map_or(0, |a| a.len()),
     }

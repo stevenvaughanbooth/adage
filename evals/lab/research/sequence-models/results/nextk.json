@@ -1,0 +1,14 @@
+{
+ "ppm3-next5-repo": {
+  "precision@5": 0.253,
+  "recall@5": 0.368
+ },
+ "prior-next5": {
+  "precision@5": 0.243,
+  "recall@5": 0.353
+ },
+ "ppm3-eventual-repo": {
+  "precision@5": 0.09,
+  "recall@5": 0.281
+ }
+}

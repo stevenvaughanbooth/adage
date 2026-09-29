@@ -1,0 +1,76 @@
+{
+ "repo": "http",
+ "url": "https://github.com/hyperium/http",
+ "repo_key": "github.com/hyperium/http",
+ "tasks": [
+  {
+   "id": "http-6e2dd42a",
+   "sha": "6e2dd42a15d4c1711baa2191bd1d15022e1e2e9c",
+   "base": "68e0abb052a243a5530ad4c404cb0b169a7ecb4a",
+   "date": "2026-05-13T14:46:20-04:00",
+   "subject": "fix: clamp Extend size hint so HeaderMap reserve cannot overflow (#833)",
+   "src_files": [
+    "src/header/map.rs"
+   ],
+   "test_files": [
+    "tests/header_map.rs"
+   ],
+   "gold_files": [
+    "src/header/map.rs"
+   ],
+   "hidden_command": "cargo test -q --test header_map",
+   "base_exit": 101,
+   "base_tail": "             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/result.rs:1185:23\n   4: http::header::map::HeaderMap<T>::reserve\n             at ./src/header/map.rs:719:14\n   5: <http::header::map::HeaderMap<T> as core::iter::traits::collect::Extend<(http::header::name::HeaderName,T)>>::extend\n             at ./src/header/map.rs:2198:14\n   6: <http::header::map::HeaderMap<T> as core::iter::traits::collect::FromIterator<(http::header::name::HeaderName,T)>>::from_iter\n             at ./src/header/map.rs:2050:13\n   7: header_map::extend_size_hint_above_capacity\n             at ./tests/header_map.rs:70:15\n   8: header_map::extend_size_hint_above_capacity::{{closure}}\n             at ./tests/header_map.rs:59:37\n   9: core::ops::function::FnOnce::call_once\n             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5\n  10: core::ops::function::FnOnce::call_once\n             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5\nnote: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.\n\n\nfailures:\n    extend_size_hint_above_capacity\n\ntest result: FAILED. 31 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s\n\n\nerror: test failed, to rerun pass `--test header_map`",
+   "fixed_seconds": 1.8,
+   "n_tests": 32,
+   "prompt": "Building a HeaderMap from an iterator with a very large number of repeated header names causes a panic instead of succeeding. For example:\n\n```rust\nlet name = HeaderName::from_static(\"h\");\nlet value = HeaderValue::from_static(\"0\");\nlet pairs: Vec<_> = std::iter::repeat((name, value)).take(24_577).collect();\nlet map = HeaderMap::from_iter(pairs);\n```\n\nThis panics (likely a capacity/overflow panic) even though inserting the same values one at a time works fine. Extending a HeaderMap should never panic just because the iterator's size hint exceeds what the map's internal table can index. Please fix this so building a HeaderMap from an iterator with many values under a single header name succeeds without panicking.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "http-bc3b0441",
+   "sha": "bc3b0441be3065fc2653e9b3b1392c0fed873482",
+   "base": "1b968dc519c49b1922bc546c95f33900e684f4ab",
+   "date": "2026-05-25T15:21:23-04:00",
+   "subject": "fix(header): use a set_len guard in IntoIter drop (#838)",
+   "src_files": [
+    "src/header/map.rs"
+   ],
+   "test_files": [
+    "tests/header_map.rs"
+   ],
+   "gold_files": [
+    "src/header/map.rs"
+   ],
+   "hidden_command": "cargo test -q --test header_map",
+   "base_exit": 101,
+   "base_tail": "running 35 tests\n............................\nfree(): double free detected in tcache 2\nerror: test failed, to rerun pass `--test header_map`\n\nCaused by:\n  process didn't exit successfully: `/tmp/adage-research/data-expansion/cache/validate/http-bc3b0441/repo/target/debug/deps/header_map-207b9b0f9977d16c --quiet` (signal: 6, SIGABRT: process abort signal)",
+   "fixed_seconds": 2.31,
+   "n_tests": 35,
+   "prompt": "When a HeaderMap's IntoIter is being dropped and one of the values it drops during cleanup panics, previously-yielded values can end up getting dropped a second time (this shows up as a double-free under Miri, e.g. with a custom Drop impl that frees a raw pointer). Reproduction: create a HeaderMap where one name has multiple appended values and another has a single value whose Drop panics; get an into_iter(), manually consume a couple of items with iter.next(), then drop the remaining iterator (catching the panic). The value(s) already taken out via next() end up being dropped again during the iterator's own drop cleanup. Dropping IntoIter should never cause values that were already yielded to be dropped again, even if a later value's Drop panics. Please fix this.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  },
+  {
+   "id": "http-7767ff70",
+   "sha": "7767ff702b6c79624cfcc2d6c16caab573c31e45",
+   "base": "b6161d8f5ae49139bb3cb42072968b154ba92699",
+   "date": "2026-09-07T08:36:38-04:00",
+   "subject": "fix(header): map size_hint() could sometimes report 1 extra (#870)",
+   "src_files": [
+    "src/header/map.rs"
+   ],
+   "test_files": [
+    "tests/header_map.rs"
+   ],
+   "gold_files": [
+    "src/header/map.rs"
+   ],
+   "hidden_command": "cargo test -q --test header_map",
+   "base_exit": 101,
+   "base_tail": "stack backtrace:\n   0: __rustc::rust_begin_unwind\n             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/std/src/panicking.rs:689:5\n   1: core::panicking::panic_fmt\n             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/panicking.rs:80:14\n   2: header_map::iter_size_hint::check\n             at ./tests/header_map.rs:698:13\n   3: header_map::iter_size_hint\n             at ./tests/header_map.rs:717:9\n   4: header_map::iter_size_hint::{{closure}}\n             at ./tests/header_map.rs:694:20\n   5: core::ops::function::FnOnce::call_once\n             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5\n   6: core::ops::function::FnOnce::call_once\n             at /rustc/e408947bfd200af42db322daf0fadfe7e26d3bd1/library/core/src/ops/function.rs:250:5\nnote: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.\n\n\nfailures:\n    iter_size_hint\n\ntest result: FAILED. 35 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s\n\n\nerror: test failed, to rerun pass `--test header_map`",
+   "fixed_seconds": 1.76,
+   "n_tests": 36,
+   "prompt": "HeaderMap's iterators (iter, iter_mut, values, values_mut) can report an incorrect size_hint that overstates how many items remain by one, in maps where at least one header name has multiple appended values. For example, build a HeaderMap where header counts per name are like [3, 1, 2], then repeatedly call size_hint() and next() on headers.iter()/iter_mut()/values()/values_mut() while tracking how many items actually remain \u2014 the lower bound from size_hint() should never exceed the true remaining count, but it currently can be 1 too high in some states. Please fix size_hint() for these iterators so it always returns an accurate (non-overstated) bound as the iterator is consumed.",
+   "prompt_source": "claude-sonnet-5: commit message + test diff (never the source diff)"
+  }
+ ]
+}

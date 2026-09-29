@@ -40,8 +40,8 @@ fn route(id: &str, trigger: Trigger, command: &str, effect: Effect) -> Route {
         step: Step::Run { command: command.into() },
         slots: vec![],
         effect,
-        aspect: Aspect::Yellow,
-        state: RouteState::Active,
+        strength: Strength::Prime,
+        state: RouteState::Firm,
         exit: vec![Exit::IntentChanges],
         evidence: Evidence { support: 5, ..Default::default() },
         authored: false,
@@ -86,7 +86,7 @@ fn world() -> World {
     let mut track = track;
     track.routes[1].step =
         Step::Avoid { avoid: "pytest".into(), instead: "make test".into(), signature: "ACME_ENV is not set".into() };
-    track.routes[1].aspect = Aspect::Red;
+    track.routes[1].strength = Strength::Inhibit;
     io::validate(&track).unwrap();
     Index::compile(&[track]).write_atomic(&home.join("index.json")).unwrap();
     World { _d: d, home, repo }
@@ -141,4 +141,88 @@ fn hook_fails_open_with_a_damaged_model() {
     assert!(!out.contains("intent-tests") && out.contains("dead-end-x"), "{out}");
     std::fs::write(model::dir_in(&w.home.join("models")).join("vocab.txt"), "\u{0}garbage").unwrap();
     assert_eq!(hook(&w, "fix the failing tests").1, 0);
+}
+
+/// Any hook event, as the installed hook receives it.
+fn hook_event(w: &World, event: &str, payload: serde_json::Value) -> String {
+    let mut c = Command::new(env!("CARGO_BIN_EXE_adage"))
+        .args(["hook", "claude", event])
+        .env("ADAGE_HOME", &w.home)
+        .env("ADAGE_AUTO_LEARN", "0")
+        .env("ADAGE_ARM", "treated")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    c.stdin.take().unwrap().write_all(payload.to_string().as_bytes()).unwrap();
+    let out = c.wait_with_output().unwrap();
+    assert!(out.status.success() && out.stderr.is_empty(), "{out:?}");
+    String::from_utf8(out.stdout).unwrap()
+}
+
+/// A prompt just below a procedure card's threshold: the card is said at the session's first edit
+/// of one of its files, through the installed hook (whose no-match fast path must not skip that
+/// edit), and not at an edit of another file.
+#[test]
+fn a_card_waiting_for_an_edit_is_said_at_that_edit_through_the_hook() {
+    use adage_tracks::card::{Card, CardFile};
+    let w = world();
+    let m = model::StaticModel::open(&model::dir_in(&w.home.join("models"))).unwrap();
+    let library = m.embed("fix the failing tests").unwrap();
+    let grey = "write the fix";
+    let score = adage_intent::cosine(&m.embed(grey).unwrap(), &library);
+    let threshold = score + 0.05;
+    assert!(threshold < 0.99 && score >= threshold - adage_tracks::card::GREY_MARGIN, "{score}");
+    let q = adage_intent::quantize(&library);
+    let card = Card {
+        sessions: 2,
+        passed: 2,
+        files: vec![CardFile { path: "flag_<x>.go".into(), sessions: 2 }],
+        exemplars: vec![],
+        commands: vec![],
+        avoid: vec![],
+        finish: None,
+        prompts: vec![q.clone()],
+    };
+    let mut r = route(
+        "card-grey",
+        Trigger::Intent { family: "card-grey".into(), model: MODEL_ID.into(), centroid: q, threshold },
+        "make test",
+        Effect::Observe,
+    );
+    r.step = Step::Card { card };
+    let track = Track {
+        manifest: Manifest {
+            track: TrackInfo {
+                name: "acme-intent/learned".into(),
+                version: "0.1.0".into(),
+                description: String::new(),
+                provenance: "desire-path".into(),
+            },
+            scope: Scope { repo: "acme-intent".into() },
+            gauge: Gauge::default(),
+        },
+        routes: vec![r],
+    };
+    io::validate(&track).unwrap();
+    Index::compile(&[track]).write_atomic(&w.home.join("index.json")).unwrap();
+
+    let sid = "s-card-grey";
+    let edit = |file: &str| {
+        serde_json::json!({
+            "session_id": sid, "cwd": w.repo, "hook_event_name": "PostToolUse", "tool_name": "Edit",
+            "tool_use_id": format!("t-{file}"),
+            "tool_input": {"file_path": w.repo.join(file), "old_string": "a", "new_string": "b"},
+            "tool_response": {"filePath": w.repo.join(file)}
+        })
+    };
+    let prompt =
+        serde_json::json!({ "session_id": sid, "cwd": w.repo, "hook_event_name": "UserPromptSubmit", "prompt": grey });
+    let said = |out: &str| out.contains("route=\\\"card-grey\\\"");
+    assert!(!said(&hook_event(&w, "UserPromptSubmit", prompt)), "below the threshold: not at the prompt");
+    assert!(!said(&hook_event(&w, "PostToolUse", edit("main.go"))), "not one of the card's files");
+    let out = hook_event(&w, "PostToolUse", edit("flag_port.go"));
+    assert!(said(&out), "at the first edit of a card file: {out}");
+    assert!(!said(&hook_event(&w, "PostToolUse", edit("flag_url.go"))), "once");
 }

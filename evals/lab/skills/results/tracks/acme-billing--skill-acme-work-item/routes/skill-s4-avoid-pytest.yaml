@@ -1,0 +1,38 @@
+{
+ "id": "skill-s4-avoid-pytest",
+ "summary": "A command the skill forbids here, and what to run instead",
+ "trigger": {
+  "on": "session_start"
+ },
+ "step": {
+  "do": "avoid",
+  "avoid": "pytest",
+  "instead": "make test",
+  "signature": "pytest: not found"
+ },
+ "slots": [],
+ "effect": "verify",
+ "strength": "inhibit",
+ "state": "firm",
+ "exit": [
+  {
+   "when": "intent_changes"
+  }
+ ],
+ "evidence": {
+  "opportunities": 6,
+  "support": 6,
+  "days": 1,
+  "successes": 0,
+  "deviations_failed": 0,
+  "rate": 1.0,
+  "lower_bound": 0.6097,
+  "median_position": 0.0,
+  "turns_saved": 0.0,
+  "provenance": "authored",
+  "models": [
+   "claude-haiku-4-5-20251001"
+  ]
+ },
+ "authored": true
+}

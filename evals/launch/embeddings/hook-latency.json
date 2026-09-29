@@ -1,0 +1,86 @@
+{
+  "batch_context_fired": true,
+  "batch_context_fires": {
+    "max_ms": 57.397065999999995,
+    "mean_ms": 16.636708404999997,
+    "p50_ms": 14.789926,
+    "p95_ms": 33.215716,
+    "p99_ms": 44.092043,
+    "runs": 200
+  },
+  "batch_no_match": {
+    "max_ms": 23.417354000000003,
+    "mean_ms": 4.250025374999998,
+    "p50_ms": 2.764234,
+    "p95_ms": 10.631798,
+    "p99_ms": 14.766536,
+    "runs": 200
+  },
+  "in_process_embed_ms": 12.585650000000001,
+  "in_process_open_ms": 3.429003,
+  "intent_routes_bundled_model": {
+    "max_ms": 92.236044,
+    "mean_ms": 50.347296105,
+    "p50_ms": 51.450399,
+    "p95_ms": 81.138108,
+    "p99_ms": 87.455356,
+    "runs": 200
+  },
+  "intent_routes_bundled_model_fired": true,
+  "intent_routes_model_installed": {
+    "max_ms": 118.695491,
+    "mean_ms": 60.140401139999994,
+    "p50_ms": 63.355989,
+    "p95_ms": 94.62548899999999,
+    "p99_ms": 106.82211699999999,
+    "runs": 200
+  },
+  "intent_routes_model_installed_ticket_prompt": {
+    "max_ms": 107.388732,
+    "mean_ms": 50.00655533000001,
+    "p50_ms": 52.54333,
+    "p95_ms": 84.138258,
+    "p99_ms": 93.430133,
+    "runs": 200
+  },
+  "intent_routes_model_missing": {
+    "max_ms": 110.135395,
+    "mean_ms": 40.811039495,
+    "p50_ms": 41.565616,
+    "p95_ms": 76.28526600000001,
+    "p99_ms": 85.921251,
+    "runs": 200
+  },
+  "intent_routes_no_model": {
+    "max_ms": 69.444406,
+    "mean_ms": 13.775664489999999,
+    "p50_ms": 11.847737,
+    "p95_ms": 29.426199999999998,
+    "p99_ms": 43.60021,
+    "runs": 200
+  },
+  "no_routes_for_repo": {
+    "max_ms": 27.532310000000003,
+    "mean_ms": 6.136436064999997,
+    "p50_ms": 5.525316,
+    "p95_ms": 11.735726999999999,
+    "p99_ms": 16.903631999999998,
+    "runs": 200
+  },
+  "structured_routes_only": {
+    "max_ms": 48.485609,
+    "mean_ms": 20.211880430000004,
+    "p50_ms": 19.984214,
+    "p95_ms": 33.705828,
+    "p99_ms": 47.346865,
+    "runs": 200
+  },
+  "structured_routes_ticket_prompt": {
+    "max_ms": 51.391773,
+    "mean_ms": 18.666110390000007,
+    "p50_ms": 18.274915,
+    "p95_ms": 34.996811,
+    "p99_ms": 44.397366,
+    "runs": 200
+  }
+}

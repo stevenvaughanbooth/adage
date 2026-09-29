@@ -1,0 +1,879 @@
+{
+ "slug": "cross-repo-transfer",
+ "headline": "Leave-one-repo-out, with no hand rule, the learner rediscovers U11 ('python -m pytest' dead end -> 'source .venv/bin/activate && python -m pytest') in all 3 Python repos, including marshmallow, whose own traces never used .venv: day-0 +1.45 calls/task [1.08, 1.81] = +3.0% of $ [2.2, 3.9] (89% of hand-written U11 predictive, +0.57 over U11 post-hoc). One own session reaches U11 parity (+1.62). A repo-local learner gets 0 even at 10 sessions. Nothing transfers to Go or the pnpm monorepo (no neighbour repo), and the class ceiling is ~8-10% of $, so this replaces hand-written instincts rather than being the 15-20% lever.",
+ "metric_name": "$ and tool calls saved per task (harness: cumulative-context $, replay Sat/W instrument), Haiku held-out control sessions, 90% task-clustered CIs; pass rate is a worst-case non-inferiority bound",
+ "held_out": {
+  "policy": "learned cross-repo transfer, predictive PreToolUse rewrite, day 0 (leave-one-repo-out)",
+  "calls_per_task": 1.4471635893182682,
+  "calls_ci90": [
+   1.0835882643239672,
+   1.8051083223868216
+  ],
+  "usd_per_task": 0.007767073847596382,
+  "usd_ci90": [
+   0.005799207494952926,
+   0.009686677305015972
+  ],
+  "usd_share": 0.029828351509206815,
+  "usd_share_ci90": [
+   0.021515950613666575,
+   0.0387983270017599
+  ],
+  "calls_share": 0.04474595833899928,
+  "n_sessions": 158,
+  "n_tasks": 38,
+  "test_set_id": "6a795a362ccb",
+  "directives": 103,
+  "useful_lb90": 0.8792250782639858,
+  "harmful": 0,
+  "baseline_usd_per_task": 0.26039232658227857,
+  "baseline_calls_per_task": 32.34177215189873,
+  "pass_rate": "not estimable by replay; 0 harmful directives (worst case 0 pts)"
+ },
+ "leave_one_repo_out": {
+  "pre_day0": {
+   "calls_per_task": 1.4471635893182682,
+   "calls_ci90": [
+    1.0835882643239672,
+    1.8051083223868216
+   ],
+   "usd_per_task": 0.007767073847596382,
+   "usd_ci90": [
+    0.005799207494952926,
+    0.009686677305015972
+   ],
+   "usd_share": 0.029828351509206815,
+   "usd_share_ci90": [
+    0.021515950613666575,
+    0.0387983270017599
+   ],
+   "calls_share": 0.04474595833899928,
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 103,
+   "useful_lb90": 0.8792250782639858,
+   "harmful": 0,
+   "baseline_usd_per_task": 0.26039232658227857,
+   "baseline_calls_per_task": 32.34177215189873
+  },
+  "post_day0": {
+   "calls_per_task": 0.92955311870465,
+   "calls_ci90": [
+    0.6591015502894617,
+    1.2147295242375478
+   ],
+   "usd_per_task": 0.005083185872912836,
+   "usd_ci90": [
+    0.003619425375747628,
+    0.006615459499536608
+   ],
+   "usd_share": 0.019521258324433216,
+   "usd_share_ci90": [
+    0.01327338276559246,
+    0.026507975410773193
+   ],
+   "calls_share": 0.028741564139987217,
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 99,
+   "useful_lb90": 0.8745330560268626,
+   "harmful": 0,
+   "baseline_usd_per_task": 0.26039232658227857,
+   "baseline_calls_per_task": 32.34177215189873
+  },
+  "pre_day0_p_follow_0.5": {
+   "calls_per_task": 0.71615093109042,
+   "calls_ci90": [
+    0.5350393732446763,
+    0.8943736723209138
+   ],
+   "usd_per_task": 0.0037637017972159113,
+   "usd_ci90": [
+    0.0027972730382058593,
+    0.004702719059274061
+   ],
+   "usd_share": 0.014453965854583896,
+   "usd_share_ci90": [
+    0.010425664430798069,
+    0.018832209464392922
+   ],
+   "calls_share": 0.022143218612971884,
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 103,
+   "useful_lb90": 0.8792250782639858,
+   "harmful": 0,
+   "baseline_usd_per_task": 0.26039232658227857,
+   "baseline_calls_per_task": 32.34177215189873
+  },
+  "post_day0_p_follow_0.5": {
+   "calls_per_task": 0.45803413136287774,
+   "calls_ci90": [
+    0.3232632302790239,
+    0.5996141315464943
+   ],
+   "usd_per_task": 0.002430810025064012,
+   "usd_ci90": [
+    0.0017114870576468452,
+    0.0031778648287841193
+   ],
+   "usd_share": 0.009335183017752742,
+   "usd_share_ci90": [
+    0.0063146712403703625,
+    0.012774776765065481
+   ],
+   "calls_share": 0.01416230777990894,
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 99,
+   "useful_lb90": 0.8745330560268626,
+   "harmful": 0,
+   "baseline_usd_per_task": 0.26039232658227857,
+   "baseline_calls_per_task": 32.34177215189873
+  },
+  "pre_day0_haiku_and_sonnet": {
+   "calls_per_task": 1.3126017155676006,
+   "calls_ci90": [
+    0.9947692749061073,
+    1.6084761911340133
+   ],
+   "usd_per_task": 0.007476035202279204,
+   "usd_ci90": [
+    0.005705651911649605,
+    0.009158314057794058
+   ],
+   "usd_share": 0.023946370208901654,
+   "usd_share_ci90": [
+    0.017277399693659132,
+    0.03095127758944714
+   ],
+   "calls_share": 0.04144139680256632,
+   "n_sessions": 190,
+   "n_tasks": 54,
+   "test_set_id": "731472b94a1f",
+   "directives": 121,
+   "useful_lb90": 0.8764061735503333,
+   "harmful": 0,
+   "baseline_usd_per_task": 0.3121990989473684,
+   "baseline_calls_per_task": 31.673684210526314
+  },
+  "by_repo_pre": {
+   "attrs": {
+    "sessions": 40,
+    "calls_saved_per_task": 2.6784266263370005,
+    "calls_saved_ci": [
+     1.8301204601061811,
+     3.50060622420699
+    ],
+    "usd_saved_per_task": 0.013203219333333339,
+    "usd_saved_ci": [
+     0.009045717666666666,
+     0.017168700500000002
+    ],
+    "usd_saved_share": 0.06982000670787272,
+    "directives": 34,
+    "useful_rate": 0.8823529411764706
+   },
+   "click": {
+    "sessions": 40,
+    "calls_saved_per_task": 1.6461356752000829,
+    "calls_saved_ci": [
+     1.3509219441767153,
+     1.9209449422401668
+    ],
+    "usd_saved_per_task": 0.009899691923076926,
+    "usd_saved_ci": [
+     0.0077460157692307696,
+     0.012115685000000001
+    ],
+    "usd_saved_share": 0.03479305369535492,
+    "directives": 49,
+    "useful_rate": 0.9795918367346939
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "calls_saved_per_task": 1.8556451683601003,
+    "calls_saved_ci": [
+     1.3914916052717021,
+     2.32023710390296
+    ],
+    "usd_saved_per_task": 0.01010270725546059,
+    "usd_saved_ci": [
+     0.007188075716999052,
+     0.013071089230769233
+    ],
+    "usd_saved_share": 0.04455275554169971,
+    "directives": 20,
+    "useful_rate": 0.9
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "directives": 0,
+    "useful_rate": 0.0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "directives": 0,
+    "useful_rate": 0.0
+   }
+  },
+  "learning_curve_hierarchical_pre": {
+   "0": {
+    "calls_per_task": 1.4471635893182682,
+    "calls_ci90": [
+     1.0835882643239672,
+     1.8051083223868216
+    ],
+    "usd_per_task": 0.007767073847596382,
+    "usd_ci90": [
+     0.005799207494952926,
+     0.009686677305015972
+    ],
+    "usd_share": 0.029828351509206815,
+    "usd_share_ci90": [
+     0.021515950613666575,
+     0.0387983270017599
+    ],
+    "calls_share": 0.04474595833899928,
+    "n_sessions": 158,
+    "n_tasks": 38,
+    "test_set_id": "6a795a362ccb",
+    "directives": 103,
+    "useful_lb90": 0.8792250782639858,
+    "harmful": 0,
+    "baseline_usd_per_task": 0.26039232658227857,
+    "baseline_calls_per_task": 32.34177215189873
+   },
+   "1": {
+    "calls_per_task": 1.623483620793917,
+    "calls_ci90": [
+     1.224407126110155,
+     2.011025967677826
+    ],
+    "usd_per_task": 0.00889040794417397,
+    "usd_ci90": [
+     0.006706005569105692,
+     0.011063200344590369
+    ],
+    "usd_share": 0.03414235765263532,
+    "usd_share_ci90": [
+     0.024606343158274886,
+     0.04445111742954097
+    ],
+    "calls_share": 0.05019773230634813,
+    "n_sessions": 158,
+    "n_tasks": 38,
+    "test_set_id": "6a795a362ccb",
+    "directives": 109,
+    "useful_lb90": 0.8856404348596113,
+    "harmful": 0,
+    "baseline_usd_per_task": 0.26039232658227857,
+    "baseline_calls_per_task": 32.34177215189873
+   },
+   "3": {
+    "calls_per_task": 1.597994621372394,
+    "calls_ci90": [
+     1.205642969814835,
+     1.984628956991656
+    ],
+    "usd_per_task": 0.008629841450971907,
+    "usd_ci90": [
+     0.006484696694326524,
+     0.010733607774358975
+    ],
+    "usd_share": 0.033141688790299516,
+    "usd_share_ci90": [
+     0.023642234562776063,
+     0.04346898183241561
+    ],
+    "calls_share": 0.049409618429909624,
+    "n_sessions": 158,
+    "n_tasks": 38,
+    "test_set_id": "6a795a362ccb",
+    "directives": 113,
+    "useful_lb90": 0.8679731621096405,
+    "harmful": 0,
+    "baseline_usd_per_task": 0.26039232658227857,
+    "baseline_calls_per_task": 32.34177215189873
+   },
+   "10": {
+    "calls_per_task": 1.6114548267181785,
+    "calls_ci90": [
+     1.2194716030684922,
+     1.9932050987476773
+    ],
+    "usd_per_task": 0.008824896543330086,
+    "usd_ci90": [
+     0.006709084721944722,
+     0.010987325184526458
+    ],
+    "usd_share": 0.0338907703585559,
+    "usd_share_ci90": [
+     0.02434600461944066,
+     0.04422577901196559
+    ],
+    "calls_share": 0.049825804818292005,
+    "n_sessions": 158,
+    "n_tasks": 38,
+    "test_set_id": "6a795a362ccb",
+    "directives": 103,
+    "useful_lb90": 0.8673570689034292,
+    "harmful": 0,
+    "baseline_usd_per_task": 0.26039232658227857,
+    "baseline_calls_per_task": 32.34177215189873
+   }
+  },
+  "learning_curve_own_repo_only_pre": {
+   "1": {
+    "calls_per_task": 0.0,
+    "calls_ci90": [
+     0.0,
+     0.0
+    ],
+    "usd_per_task": 0.0,
+    "usd_ci90": [
+     0.0,
+     0.0
+    ],
+    "usd_share": 0.0,
+    "usd_share_ci90": [
+     0.0,
+     0.0
+    ],
+    "calls_share": 0.0,
+    "n_sessions": 158,
+    "n_tasks": 38,
+    "test_set_id": "6a795a362ccb",
+    "directives": 0,
+    "useful_lb90": 0.0,
+    "harmful": 0,
+    "baseline_usd_per_task": 0.26039232658227857,
+    "baseline_calls_per_task": 32.34177215189873
+   },
+   "3": {
+    "calls_per_task": 0.0,
+    "calls_ci90": [
+     0.0,
+     0.0
+    ],
+    "usd_per_task": 0.0,
+    "usd_ci90": [
+     0.0,
+     0.0
+    ],
+    "usd_share": 0.0,
+    "usd_share_ci90": [
+     0.0,
+     0.0
+    ],
+    "calls_share": 0.0,
+    "n_sessions": 158,
+    "n_tasks": 38,
+    "test_set_id": "6a795a362ccb",
+    "directives": 0,
+    "useful_lb90": 0.0,
+    "harmful": 0,
+    "baseline_usd_per_task": 0.26039232658227857,
+    "baseline_calls_per_task": 32.34177215189873
+   },
+   "10": {
+    "calls_per_task": 0.0,
+    "calls_ci90": [
+     0.0,
+     0.0
+    ],
+    "usd_per_task": 0.0,
+    "usd_ci90": [
+     0.0,
+     0.0
+    ],
+    "usd_share": 0.0,
+    "usd_share_ci90": [
+     0.0,
+     0.0
+    ],
+    "calls_share": 0.0,
+    "n_sessions": 158,
+    "n_tasks": 38,
+    "test_set_id": "6a795a362ccb",
+    "directives": 0,
+    "useful_lb90": 0.0,
+    "harmful": 0,
+    "baseline_usd_per_task": 0.26039232658227857,
+    "baseline_calls_per_task": 32.34177215189873
+   }
+  },
+  "pool_size_ablation_learned_instrument": [
+   {
+    "target": "attrs",
+    "pool": [
+     "click"
+    ],
+    "hier_pre": [
+     2.2567852541365863,
+     1.5261568486659036,
+     3.0278486518390686
+    ],
+    "hier_post": [
+     1.7057064279454976,
+     1.1204156281156552,
+     2.3148581079422876
+    ],
+    "oracle_pre": [
+     5.0,
+     3.75,
+     6.163265306122449
+    ],
+    "directives": 34
+   },
+   {
+    "target": "attrs",
+    "pool": [
+     "marshmallow"
+    ],
+    "hier_pre": [
+     -0.011619610262182493,
+     -0.015025582438313777,
+     -0.008001226705046056
+    ],
+    "hier_post": [
+     0.04940783640147434,
+     -0.014174602273483196,
+     0.17122972636468914
+    ],
+    "oracle_pre": [
+     4.8979591836734695,
+     3.448530612244898,
+     6.32687074829932
+    ],
+    "directives": 44
+   },
+   {
+    "target": "attrs",
+    "pool": [
+     "gen-py-clinic"
+    ],
+    "hier_pre": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "hier_post": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "oracle_pre": [
+     0.3673469387755102,
+     0.12,
+     0.7083333333333334
+    ],
+    "directives": 0
+   },
+   {
+    "target": "attrs",
+    "pool": [
+     "click",
+     "marshmallow"
+    ],
+    "hier_pre": [
+     2.9275252454156266,
+     2.1568214827920005,
+     3.6732090393966264
+    ],
+    "hier_post": [
+     2.314378440493951,
+     1.6618308436064697,
+     2.9647120266884386
+    ],
+    "oracle_pre": [
+     7.959183673469388,
+     5.5415833333333335,
+     10.898894557823128
+    ],
+    "directives": 39
+   },
+   {
+    "target": "click",
+    "pool": [
+     "attrs"
+    ],
+    "hier_pre": [
+     2.0221173891093844,
+     1.8346211855594141,
+     2.1939063876239513
+    ],
+    "hier_post": [
+     1.3385172304757218,
+     1.0228858266180958,
+     1.7708569494764024
+    ],
+    "oracle_pre": [
+     5.142857142857143,
+     4.079365079365079,
+     6.3125
+    ],
+    "directives": 60
+   },
+   {
+    "target": "click",
+    "pool": [
+     "marshmallow"
+    ],
+    "hier_pre": [
+     1.5001295092207036,
+     1.3100877548313574,
+     1.6969310195239828
+    ],
+    "hier_post": [
+     1.0544248437576238,
+     0.8505808710232079,
+     1.2916840738002182
+    ],
+    "oracle_pre": [
+     5.714285714285714,
+     4.412698412698413,
+     7.015885816692268
+    ],
+    "directives": 56
+   },
+   {
+    "target": "click",
+    "pool": [
+     "gen-py-clinic"
+    ],
+    "hier_pre": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "hier_post": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "oracle_pre": [
+     0.12698412698412698,
+     0.047619047619047616,
+     0.21875
+    ],
+    "directives": 0
+   },
+   {
+    "target": "click",
+    "pool": [
+     "attrs",
+     "marshmallow"
+    ],
+    "hier_pre": [
+     1.8477314032926409,
+     1.6592683423000936,
+     2.004529353296978
+    ],
+    "hier_post": [
+     1.0527168281525636,
+     0.9136165140607517,
+     1.1787147172730248
+    ],
+    "oracle_pre": [
+     5.444444444444445,
+     4.1875,
+     7.015637400793651
+    ],
+    "directives": 58
+   },
+   {
+    "target": "marshmallow",
+    "pool": [
+     "attrs"
+    ],
+    "hier_pre": [
+     3.7593982859708888,
+     2.993507808270327,
+     4.558990926673673
+    ],
+    "hier_post": [
+     2.959398285970889,
+     2.227757437148117,
+     3.72565759334034
+    ],
+    "oracle_pre": [
+     7.733333333333333,
+     6.8,
+     8.666666666666666
+    ],
+    "directives": 24
+   },
+   {
+    "target": "marshmallow",
+    "pool": [
+     "click"
+    ],
+    "hier_pre": [
+     2.428501963025977,
+     2.127467774899161,
+     2.7277992456221503
+    ],
+    "hier_post": [
+     1.86183529635931,
+     1.6284012580191871,
+     2.095409862686225
+    ],
+    "oracle_pre": [
+     5.433333333333334,
+     4.3,
+     6.533333333333333
+    ],
+    "directives": 21
+   },
+   {
+    "target": "marshmallow",
+    "pool": [
+     "gen-py-clinic"
+    ],
+    "hier_pre": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "hier_post": [
+     0.0,
+     0.0,
+     0.0
+    ],
+    "oracle_pre": [
+     0.03333333333333333,
+     0.0,
+     0.1
+    ],
+    "directives": 0
+   },
+   {
+    "target": "marshmallow",
+    "pool": [
+     "attrs",
+     "click"
+    ],
+    "hier_pre": [
+     3.7594373632864575,
+     2.993542712526938,
+     4.55903219409299
+    ],
+    "hier_post": [
+     2.9594373632864572,
+     2.227787415084597,
+     3.7256988607596564
+    ],
+    "oracle_pre": [
+     6.7,
+     5.466666666666667,
+     7.833333333333333
+    ],
+    "directives": 24
+   }
+  ],
+  "dead_end_detector_day0": {
+   "attrs": {
+    "auc_behaviour": 0.7883527355668118,
+    "signature_recall": 0.9433962264150944,
+    "signature_exit0_recall": 0.75,
+    "signature_calls": 106
+   },
+   "click": {
+    "auc_behaviour": 0.693331164606376,
+    "signature_recall": 0.9680851063829787,
+    "signature_exit0_recall": 0.9722222222222222,
+    "signature_calls": 94
+   },
+   "marshmallow": {
+    "auc_behaviour": 0.8358164206642066,
+    "signature_recall": 1.0,
+    "signature_exit0_recall": 1.0,
+    "signature_calls": 80
+   },
+   "urfave-cli": {
+    "auc_behaviour": 0.49501661129568103,
+    "signature_recall": null,
+    "signature_exit0_recall": null,
+    "signature_calls": 0
+   },
+   "vue-core": {
+    "auc_behaviour": 0.5399548532731377,
+    "signature_recall": 0.0,
+    "signature_exit0_recall": 0.0,
+    "signature_calls": 26
+   },
+   "gen-py-clinic": {
+    "auc_behaviour": null,
+    "signature_recall": null,
+    "signature_exit0_recall": null,
+    "signature_calls": 0
+   },
+   "gen-node-logistics": {
+    "auc_behaviour": 0.6111111111111112,
+    "signature_recall": null,
+    "signature_exit0_recall": null,
+    "signature_calls": 0
+   }
+  }
+ },
+ "vs_baseline": {
+  "baseline": "current state: U11 + learned reflexes (+1.0 calls/session post-hoc, +2.11 pre-emptive on 82 v2 sessions); here U11 on the same 158 Haiku sessions",
+  "u11_post_hoc": {
+   "calls_per_task": 0.8771773971863286,
+   "calls_ci90": [
+    0.5812504660568998,
+    1.1881448235483871
+   ],
+   "usd_per_task": 0.004868975527426161,
+   "usd_ci90": [
+    0.0032718250000000008,
+    0.006546410470085471
+   ],
+   "usd_share": 0.018698613708525193,
+   "usd_share_ci90": [
+    0.012125786294717389,
+    0.026575296257123324
+   ],
+   "calls_share": 0.027122119130223075,
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 62,
+   "useful_lb90": 0.930884108588354,
+   "harmful": 0,
+   "baseline_usd_per_task": 0.26039232658227857,
+   "baseline_calls_per_task": 32.34177215189873
+  },
+  "u11_predictive_own_training": {
+   "calls_per_task": 1.6322714300629688,
+   "calls_ci90": [
+    1.2239057403455271,
+    2.042047265580113
+   ],
+   "usd_per_task": 0.009066540482218206,
+   "usd_ci90": [
+    0.006796573245614034,
+    0.011386505643130816
+   ],
+   "usd_share": 0.03481876982021346,
+   "usd_share_ci90": [
+    0.025252852981327793,
+    0.045672629343276226
+   ],
+   "calls_share": 0.050469449305273785,
+   "n_sessions": 158,
+   "n_tasks": 38,
+   "test_set_id": "6a795a362ccb",
+   "directives": 98,
+   "useful_lb90": 0.8988874784740276,
+   "harmful": 0,
+   "baseline_usd_per_task": 0.26039232658227857,
+   "baseline_calls_per_task": 32.34177215189873
+  },
+  "paired_differences": {
+   "loro_pre - u11_predictive (net_calls)": {
+    "mean": -0.1851,
+    "ci90": [
+     -0.3643,
+     -0.0227
+    ],
+    "sessions": 158
+   },
+   "loro_pre - u11_predictive (net_usd)": {
+    "mean": -0.0013,
+    "ci90": [
+     -0.0026,
+     -0.0001
+    ],
+    "sessions": 158
+   },
+   "loro_post - u11_post (net_calls)": {
+    "mean": 0.0524,
+    "ci90": [
+     -0.0792,
+     0.174
+    ],
+    "sessions": 158
+   },
+   "loro_post - u11_post (net_usd)": {
+    "mean": 0.0002,
+    "ci90": [
+     -0.0006,
+     0.001
+    ],
+    "sessions": 158
+   },
+   "loro_pre - u11_post (net_calls)": {
+    "mean": 0.57,
+    "ci90": [
+     0.3872,
+     0.7408
+    ],
+    "sessions": 158
+   },
+   "loro_pre - u11_post (net_usd)": {
+    "mean": 0.0029,
+    "ci90": [
+     0.0018,
+     0.004
+    ],
+    "sessions": 158
+   }
+  },
+  "summary": "learned day-0 pre = U11 post-hoc +0.57 calls [0.39, 0.74]; = U11 predictive -0.19 [-0.36, -0.02]; after 1 own session 1.62 vs 1.63 (parity); post vs post +0.05 [-0.08, 0.17]"
+ },
+ "rediscovered": {
+  "U11": "all 3 Python repos at day 0: python -m pytest / python3 -m pytest / bin/pytest / .venv/bin/pytest -> source .venv/bin/activate && python -m pytest (prior P=1.00 over 4-12 pool first attempts; verified productive 17/19 attrs, 112/126 click, 11/11 marshmallow)",
+  "other": "repro via system python -> activated venv python3 (click, 36/36); nothing for Go, pnpm, or the synthetic repos; the bug-5 repro-script variant is not reliably transferred"
+ },
+ "hard_coded_parts": [
+  "shell grammar (shlex operators, heredoc, redirections): a parser",
+  "WRITE_TOOLS = {Edit, Write, MultiEdit, NotebookEdit}, only for the behavioural dead-end label ('no file changed between attempts')",
+  "the harness's leading 'Exit code N' line is stripped from outputs (is_error carries it)",
+  "candidate rules: a rewrite is not a granularity prefix of the original; same subject (basename of the head's last token, trailing version digits dropped)",
+  "thresholds: horizon 8, Jaccard 0.5, cluster tau 0.25, P>=0.7, 10% quantile>=0.5, gain>=0.2, >=3 trials, shared = seen in >=2 repositories",
+  "protocol: adage/agents-md arms excluded from learning; file tree = bind checkout, depth 3",
+  "measurement only: harness Sat/W (hand-written Rust taxonomy); diag.py signature regex; U11 baseline"
+ ],
+ "ceiling": {
+  "class": "environment dead ends",
+  "oracle_env_friction_usd_share": 0.084,
+  "oracle_env_friction_calls_per_task": 3.83,
+  "oracle_every_failed_call_usd_share": 0.103,
+  "source": "harness/results/oracle.json (82 v2 Haiku sessions)",
+  "learned_instrument_oracle_calls_per_session": 5.69,
+  "learned_instrument_oracle_calls_share": 0.174,
+  "reached": "day-0 transfer 3.0% of $ (about 1/3 of the class ceiling); 3.4% with 1 own session"
+ },
+ "data_needed": "Transfer needs >=1 pool repo in the same friction family (ecosystem x env layout) whose agents took the working action >=3 times; 1 source is enough (marshmallow<-attrs 3.76 calls), a source whose agents never did it teaches nothing (attrs<-marshmallow -0.01). With 5 repos only Python/.venv is covered (3/5). Zipf(1) over 20-30 families: 40-60 repos (~10 unsteered sessions each) for ~80% of new repos to have a source, 120-160 for 90%. Prioritise family diversity (npm/pnpm/yarn, go, cargo, uv/poetry/tox, make) at 2-3 repos each over more sessions in existing repos (own sessions add +0.17 calls once).",
+ "build_recommendation": "Replace hand-written instinct content with a shipped pack of cross-repo priors: per (learned intent, head) first-attempt sufficient statistics (s, n, kappa, intent rate) fitted offline over the corpus; bind candidates by path existence in the checkout (adage-instincts::bind); posterior = prior + the repo's own first attempts with a 10%-quantile gate (score.rs Beta backoff with a cross-repo parent and fitted kappa); deliver as a predictive PreToolUse rewrite when the running head's posterior < 0.5. Expected value: parity with U11 predictive on Python/.venv repos (+1.45 to +1.6 calls, ~3-3.4% of $ per task, CI 2.2-4.4%) with no hand rule; the upside is coverage of new friction families as the corpus grows, not extra savings per task.",
+ "so_what": "If shipped: +1.45 calls and +$0.0078 (3.0% of $) per task on day 0 [CI 2.2-3.9%], 3.4% after one own session, pass rate unchanged (0 harmful). Moderate-high confidence it survives a live A/B on Python/.venv (the same mechanism as live-validated U11, followed 41/41, -1.85 calls); low confidence elsewhere until the corpus has neighbour repos. Confirm with the harness micro-slice: 5 marshmallow/attrs tasks x 2 repeats, lever on vs control (~$5.4), predicted local saving ~2.9 calls per dead-end session.",
+ "leakage": "harness.leakage.assert_clean ran in every fold; scan_memory over the learner's stored heads (131, marshmallow fold) found nothing"
+}

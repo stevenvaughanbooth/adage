@@ -1,0 +1,559 @@
+{
+"*": [
+"POS",
+10,
+120
+],
+"*|Bash": [
+"REL",
+3,
+0,
+0
+],
+"*|Bash:cat|False": [
+"POS",
+0,
+0
+],
+"*|Bash:find {dir} {arg} {src_file}|False": null,
+"*|Bash:git add {src_file} {test_file}|False": null,
+"*|Bash:git add {src_file}|False": null,
+"*|Bash:git commit {arg}|False": null,
+"*|Bash:git diff {src_file}|False": [
+"POS",
+10,
+10
+],
+"*|Bash:git log|False": null,
+"*|Bash:git status|False": [
+"POS",
+0,
+0
+],
+"*|Bash:go test -run -v {arg}|False": [
+"POS",
+0,
+0
+],
+"*|Bash:go test -v|False": [
+"POS",
+0,
+0
+],
+"*|Bash:grep {arg} {dir}|False": [
+"POS",
+0,
+0
+],
+"*|Bash:grep {arg} {src_file}|False": [
+"POS",
+10,
+10
+],
+"*|Bash:grep {arg} {test_file}|False": null,
+"*|Bash:grep {arg}|False": [
+"POS",
+10,
+0
+],
+"*|Bash:grep {num} {arg} {test_file}|False": [
+"POS",
+30,
+10
+],
+"*|Bash:ls {dir}|False": [
+"POS",
+0,
+0
+],
+"*|Bash:ls|False": [
+"POS",
+0,
+0
+],
+"*|Bash:npm test {test_dir}|False": [
+"POS",
+0,
+0
+],
+"*|Bash:npm test {test_file}|False": [
+"REL",
+3,
+30,
+0
+],
+"*|Bash:pip install -q {arg}|False": [
+"POS",
+0,
+0
+],
+"*|Bash:pip install -q {dir}|False": [
+"POS",
+0,
+10
+],
+"*|Bash:python -c|False": [
+"POS",
+0,
+0
+],
+"*|Bash:python -m pytest -v {test_file}|False": [
+"POS",
+0,
+0
+],
+"*|Bash:python -m pytest -x {test_file}|False": [
+"POS",
+0,
+0
+],
+"*|Bash:python -m pytest {test_file} {arg}|False": [
+"POS",
+0,
+0
+],
+"*|Bash:python -m pytest {test_file}|False": [
+"POS",
+0,
+0
+],
+"*|Bash:python {test_file}|False": null,
+"*|Bash:python3 -c|False": null,
+"*|Bash:python3 -m pytest {test_file}|False": [
+"POS",
+0,
+0
+],
+"*|Bash:python3 <<heredoc|False": [
+"POS",
+10,
+0
+],
+"*|Edit": null,
+"*|Edit {src_file}|False": null,
+"*|Edit {test_file}|False": null,
+"*|Grep": [
+"POS",
+10,
+10
+],
+"*|Grep {pattern}|False": [
+"POS",
+10,
+10
+],
+"*|Read": [
+"POS",
+10,
+120
+],
+"*|Read {src_file}|False": [
+"POS",
+10,
+10
+],
+"*|Read {src_file}|True": [
+"POS",
+60,
+10
+],
+"*|Read {test_file}|False": null,
+"*|Read {test_file}|True": null,
+"*|Write": null,
+"*|Write {test_file}|False": null,
+"attrs|Bash": [
+"POS",
+10,
+10
+],
+"attrs|Bash:find": null,
+"attrs|Bash:find {dir} {arg} {src_file}|False": null,
+"attrs|Bash:grep": [
+"POS",
+10,
+10
+],
+"attrs|Bash:grep {arg} {src_file}|False": null,
+"attrs|Bash:grep {arg}|False": [
+"POS",
+0,
+0
+],
+"attrs|Bash:ls": [
+"POS",
+10,
+0
+],
+"attrs|Bash:pip install": [
+"POS",
+0,
+0
+],
+"attrs|Bash:pip install -q {arg}|False": [
+"POS",
+0,
+0
+],
+"attrs|Bash:pip install -q {dir}|False": [
+"POS",
+0,
+10
+],
+"attrs|Bash:python -m pytest": [
+"POS",
+0,
+0
+],
+"attrs|Bash:python3 <<heredoc": [
+"POS",
+10,
+0
+],
+"attrs|Bash:python3 <<heredoc|False": [
+"POS",
+10,
+0
+],
+"attrs|Edit": null,
+"attrs|Edit {src_file}|False": null,
+"attrs|Grep": [
+"POS",
+0,
+0
+],
+"attrs|Grep {pattern}|False": [
+"POS",
+0,
+0
+],
+"attrs|Read": [
+"POS",
+60,
+0
+],
+"attrs|Read {src_file}|False": [
+"POS",
+60,
+60
+],
+"attrs|Read {src_file}|True": [
+"POS",
+60,
+0
+],
+"attrs|Read {test_file}|True": [
+"POS",
+30,
+0
+],
+"click|Bash": [
+"POS",
+10,
+10
+],
+"click|Bash:find": null,
+"click|Bash:find {dir} {arg} {src_file}|False": [
+"POS",
+10,
+0
+],
+"click|Bash:git add": null,
+"click|Bash:grep": null,
+"click|Bash:grep {arg} {src_file}|False": null,
+"click|Bash:grep {arg}|False": null,
+"click|Bash:ls": [
+"POS",
+0,
+0
+],
+"click|Bash:pip install": [
+"POS",
+0,
+0
+],
+"click|Bash:python": null,
+"click|Bash:python -m pytest": [
+"POS",
+0,
+0
+],
+"click|Bash:python -m pytest -v {test_file}|False": [
+"POS",
+0,
+0
+],
+"click|Bash:python -m pytest {test_file}|False": [
+"POS",
+0,
+0
+],
+"click|Bash:python {test_file}|False": null,
+"click|Edit": [
+"POS",
+30,
+0
+],
+"click|Edit {src_file}|False": null,
+"click|Edit {test_file}|False": [
+"POS",
+30,
+0
+],
+"click|Grep": [
+"POS",
+0,
+0
+],
+"click|Grep {pattern}|False": [
+"POS",
+0,
+0
+],
+"click|Read": [
+"POS",
+60,
+0
+],
+"click|Read {src_file}|False": [
+"POS",
+10,
+10
+],
+"click|Read {src_file}|True": [
+"POS",
+30,
+10
+],
+"click|Read {test_file}|True": null,
+"click|Write": null,
+"click|Write {test_file}|False": null,
+"marshmallow|Bash": [
+"POS",
+30,
+0
+],
+"marshmallow|Bash:find": null,
+"marshmallow|Bash:find {dir} {arg} {src_file}|False": null,
+"marshmallow|Bash:git status": [
+"POS",
+0,
+0
+],
+"marshmallow|Bash:git status|False": [
+"POS",
+0,
+0
+],
+"marshmallow|Bash:grep": [
+"POS",
+30,
+0
+],
+"marshmallow|Bash:grep {arg} {test_file}|False": [
+"POS",
+0,
+0
+],
+"marshmallow|Bash:ls": [
+"POS",
+0,
+0
+],
+"marshmallow|Bash:pip install": [
+"POS",
+0,
+0
+],
+"marshmallow|Bash:pip install -q {arg}|False": [
+"POS",
+0,
+0
+],
+"marshmallow|Bash:pip install -q {dir}|False": null,
+"marshmallow|Bash:python -m pytest": [
+"POS",
+0,
+0
+],
+"marshmallow|Bash:python -m pytest {test_file}|False": [
+"POS",
+0,
+0
+],
+"marshmallow|Bash:python3 -c": null,
+"marshmallow|Bash:python3 -c|False": null,
+"marshmallow|Bash:python3 <<heredoc": null,
+"marshmallow|Bash:python3 <<heredoc|False": null,
+"marshmallow|Edit": null,
+"marshmallow|Edit {src_file}|False": null,
+"marshmallow|Grep": [
+"POS",
+0,
+0
+],
+"marshmallow|Grep {pattern}|False": [
+"POS",
+0,
+0
+],
+"marshmallow|Read": [
+"POS",
+30,
+0
+],
+"marshmallow|Read {src_file}|False": [
+"POS",
+10,
+0
+],
+"marshmallow|Read {src_file}|True": [
+"REL",
+10,
+30,
+30
+],
+"marshmallow|Read {test_file}|True": [
+"POS",
+250,
+120
+],
+"urfave-cli|Bash": [
+"REL",
+3,
+0,
+0
+],
+"urfave-cli|Bash:cat": [
+"POS",
+0,
+0
+],
+"urfave-cli|Bash:cat|False": [
+"POS",
+0,
+0
+],
+"urfave-cli|Bash:find": null,
+"urfave-cli|Bash:find {dir} {arg} {src_file}|False": null,
+"urfave-cli|Bash:go run": [
+"POS",
+0,
+10
+],
+"urfave-cli|Bash:go test": [
+"POS",
+0,
+0
+],
+"urfave-cli|Bash:go test -run -v {arg}|False": [
+"POS",
+0,
+0
+],
+"urfave-cli|Bash:go test -v|False": [
+"POS",
+0,
+0
+],
+"urfave-cli|Bash:grep": [
+"REL",
+3,
+0,
+0
+],
+"urfave-cli|Bash:grep {arg} {dir}|False": [
+"POS",
+0,
+0
+],
+"urfave-cli|Bash:grep {arg} {src_file}|False": null,
+"urfave-cli|Edit": null,
+"urfave-cli|Edit {src_file}|False": null,
+"urfave-cli|Edit {test_file}|False": null,
+"urfave-cli|Grep": [
+"POS",
+10,
+10
+],
+"urfave-cli|Grep {pattern}|False": [
+"POS",
+10,
+10
+],
+"urfave-cli|Read": null,
+"urfave-cli|Read {src_file}|False": [
+"GREP",
+150
+],
+"urfave-cli|Read {src_file}|True": [
+"POS",
+60,
+10
+],
+"urfave-cli|Read {test_file}|False": null,
+"urfave-cli|Read {test_file}|True": null,
+"urfave-cli|Write": null,
+"vue-core|Bash": [
+"POS",
+30,
+30
+],
+"vue-core|Bash:find": null,
+"vue-core|Bash:find {dir} {arg} {src_file}|False": null,
+"vue-core|Bash:git log": null,
+"vue-core|Bash:git log|False": null,
+"vue-core|Bash:grep": [
+"POS",
+0,
+0
+],
+"vue-core|Bash:grep {arg}|False": [
+"POS",
+0,
+0
+],
+"vue-core|Bash:ls": [
+"POS",
+0,
+0
+],
+"vue-core|Bash:ls {dir}|False": [
+"POS",
+0,
+0
+],
+"vue-core|Bash:npm test": [
+"POS",
+0,
+0
+],
+"vue-core|Bash:npm test {test_dir}|False": [
+"POS",
+0,
+0
+],
+"vue-core|Bash:npm test {test_file}|False": [
+"REL",
+3,
+30,
+0
+],
+"vue-core|Edit": null,
+"vue-core|Edit {src_file}|False": null,
+"vue-core|Edit {test_file}|False": null,
+"vue-core|Grep": null,
+"vue-core|Grep {pattern}|False": null,
+"vue-core|Read": null,
+"vue-core|Read {src_file}|False": null,
+"vue-core|Read {src_file}|True": [
+"POS",
+0,
+120
+],
+"vue-core|Read {test_file}|False": null,
+"vue-core|Read {test_file}|True": [
+"POS",
+250,
+30
+]
+}

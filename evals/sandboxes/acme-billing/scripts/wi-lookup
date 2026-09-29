@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+# Look up a work item in the internal tracker.
+import base64
+import json
+import sys
+import zlib
+from pathlib import Path
+
+_cache = Path(__file__).resolve().parent.parent / ".tracker" / "cache.bin"
+items = json.loads(zlib.decompress(base64.b64decode(_cache.read_bytes())))
+
+if len(sys.argv) < 2:
+    print("Usage: wi-lookup <ID> [--json]")
+    sys.exit(1)
+
+item_id = sys.argv[1]
+if item_id not in items:
+    print(f"Work item {item_id} not found")
+    sys.exit(1)
+
+item = items[item_id]
+if "--json" in sys.argv:
+    print(json.dumps(item, indent=2))
+else:
+    print(f"ID: {item['id']}")
+    print(f"Title: {item['title']}")
+    print(f"Description: {item['description']}")
+    print(f"Linked files: {', '.join(item['linked_files'])}")
+    print(f"Acceptance: {item['acceptance']}")

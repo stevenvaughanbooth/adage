@@ -11,7 +11,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync,
 import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
-import { PACKAGE_NAME, PLATFORMS } from "../config.mjs"
+import { COMPANIONS, PACKAGE_NAME, PLATFORMS } from "../config.mjs"
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.resolve(here, "../..")
@@ -28,6 +28,10 @@ try {
   const cargoVersion = readFileSync(path.join(repo, "Cargo.toml"), "utf8").match(/^version\s*=\s*"([^"]+)"/m)[1]
   mkdirSync(path.join(work, "bins", host.target), { recursive: true })
   cpSync(bin, path.join(work, "bins", host.target, host.exe))
+  // The companion binaries built beside it (adage-exec, adage-train), when they are.
+  const ext = process.platform === "win32" ? ".exe" : ""
+  const companions = COMPANIONS.map((c) => c.name + ext).filter((e) => existsSync(path.join(path.dirname(bin), e)))
+  for (const e of companions) cpSync(path.join(path.dirname(bin), e), path.join(work, "bins", host.target, e))
 
   for (const name of [PACKAGE_NAME, "adage-cli-launcher-test"]) {
     const out = path.join(work, "out")
@@ -53,6 +57,15 @@ try {
       readFileSync(path.join(out, "publish-order.txt"), "utf8").trim().split("\n"),
       [`${host.os}-${host.cpu}`, "cli"],
     )
+
+    // Third-party notices travel with the binary (review S13).
+    for (const d of ["cli", `${host.os}-${host.cpu}`]) {
+      for (const f of ["LICENSE", "NOTICE"]) assert.ok(existsSync(path.join(out, d, f)), `${d}/${f} staged`)
+    }
+    assert.ok(plat.files.includes("NOTICE") && main.files.includes("NOTICE"), "NOTICE is published")
+
+    // Companions sit beside adage in the platform package.
+    for (const e of companions) assert.ok(existsSync(path.join(out, `${host.os}-${host.cpu}`, "bin", e)), `${e} staged`)
 
     // Lay out node_modules as npm would, then run the launcher.
     const nm = path.join(work, "node_modules")
@@ -90,7 +103,7 @@ try {
     assert.equal(none.status, 1)
     assert.match(none.stderr, /no prebuilt binary for/)
   }
-  console.log("npm launcher ok")
+  console.log(`npm launcher ok (companions staged: ${companions.join(", ") || "none built"})`)
 } finally {
   rmSync(work, { recursive: true, force: true })
 }

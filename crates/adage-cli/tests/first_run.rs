@@ -35,7 +35,7 @@ impl World {
             .env("PATH", format!("{}:/usr/bin:/bin", self.p("bin").display()))
             .env_remove("CLAUDE_CONFIG_DIR")
             .env_remove("ADAGE_DISABLE")
-            .env_remove("ADAGE_HOLDOUT")
+            .env_remove("ADAGE_CONTROL")
             .env_remove("ADAGE_ARM")
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
             .stdin(Stdio::null());
@@ -110,19 +110,21 @@ fn init_detects_harnesses_prints_snippets_and_writes_nothing() {
     assert!(o.status.success(), "{t}");
     let claude_found = format!("claude-code  found: ~{}.claude exists", std::path::MAIN_SEPARATOR);
     #[cfg(unix)]
-    assert!(t.contains("codex        found: `codex` on PATH") && t.contains("hook codex"), "{t}");
+    assert!(
+        t.contains("codex        found: `codex` on PATH") && t.contains("`adage install codex` prints them"),
+        "{t}"
+    );
     assert!(!t.contains(r"\\?\"), "no verbatim Windows prefix in output:\n{t}");
     for s in [
         "1. Harnesses",
         claude_found.as_str(),
         "opencode     found:",
         "adage install claude-code --write",
-        "\"UserPromptSubmit\"",
         ".opencode/plugins/adage.js",
         "3. Embedding model",
         "`adage models fetch`",
-        "4. Survey",
-        "No sessions to survey",
+        "4. Sense",
+        "No traces to sense",
     ] {
         assert!(t.contains(s), "init output lacks {s:?}:\n{t}");
     }
@@ -152,31 +154,42 @@ fn init_yes_fetches_the_model_and_survives_a_failed_download() {
     let w = World::new();
     // No network in tests: a `curl` that fails like an unreachable host.
     w.fake_bin("curl", "echo 'curl: (6) Could not resolve host' >&2; exit 6");
+    // The bundled model serves: nothing to download.
     let o = w.run(&["init", "--yes"]);
     let t = text(&o);
     assert!(o.status.success(), "{t}");
-    assert!(t.contains("fetching") && t.contains("could not fetch it") && t.contains("4. Survey"), "{t}");
-    assert!(!w.p("data/models/potion-base-8m").exists());
+    assert!(t.contains("bundled in this binary") && !t.contains("fetching") && t.contains("4. Sense"), "{t}");
+    // A model that is selected and missing is fetched, and a failed download is survived.
+    let o = w.cmd(&["init", "--yes"]).env("ADAGE_EMBED_MODEL", "potion-code-16m-v2").output().unwrap();
+    let t = text(&o);
+    assert!(o.status.success(), "{t}");
+    assert!(
+        t.contains("fetching potion-code-16m-v2") && t.contains("could not fetch it") && t.contains("4. Sense"),
+        "{t}"
+    );
+    assert!(!w.p("data/models/potion-code-16m-v2").exists());
 }
 
 #[test]
-fn init_scopes_the_survey_to_a_repository() {
+fn init_scopes_the_sense_to_a_repository() {
     let w = World::new();
     let o = w.run(&["init", "--repo", w.p("work").to_str().unwrap()]);
-    assert!(o.status.success() && text(&o).contains("survey your existing agent history for work"), "{}", text(&o));
+    assert!(o.status.success() && text(&o).contains("sense your agents' existing traces for work"), "{}", text(&o));
     let o = w.run(&["init", "--repo", w.p("home").to_str().unwrap()]);
     assert!(!o.status.success() && text(&o).contains("not inside a git repository"), "{}", text(&o));
 }
 
 #[test]
-fn doctor_on_a_fresh_machine_warns_but_does_not_fail() {
+fn doctor_on_a_fresh_machine_passes() {
+    // A fresh install is healthy (launch pass B10): nothing learned yet is not a problem to fix.
     let w = World::new();
     let (v, ok) = doctor(&w);
     assert!(ok, "{v:#}");
     assert_eq!(check(&v, "binary")["status"], "pass");
-    assert_eq!(check(&v, "data directory")["status"], "warn");
-    assert_eq!(check(&v, "index")["status"], "warn");
-    assert_eq!(check(&v, "tracks")["status"], "warn");
+    assert_eq!(check(&v, "data directory")["status"], "pass");
+    assert_eq!(check(&v, "index")["status"], "pass");
+    assert_eq!(check(&v, "tracks")["status"], "pass");
+    assert!(check(&v, "index")["detail"].as_str().unwrap().contains("your first agent session"), "{v:#}");
     assert_eq!(check(&v, "embedding model")["status"], "pass");
     assert_eq!(check(&v, "hooks: claude-code")["detail"], "harness not installed; nothing to check");
     assert_eq!(check(&v, "kill switches")["status"], "pass");
@@ -223,9 +236,10 @@ fn doctor_checks_hooks_index_tracks_and_switches() {
     let cx = check(&v, "hooks: codex");
     assert_eq!(cx["status"], "fail", "{cx}");
     assert!(cx["detail"].as_str().unwrap().contains("does not exist"), "{cx}");
+    // Installed, but the user set Adage up with other harnesses only: not a problem to warn about.
     let oc = check(&v, "hooks: opencode");
-    assert_eq!(oc["status"], "warn", "{oc}");
-    assert!(oc["fix"].as_str().unwrap().contains("adage install opencode --write"), "{oc}");
+    assert_eq!(oc["status"], "pass", "{oc}");
+    assert!(oc["detail"].as_str().unwrap().contains("optional: `adage install opencode --write`"), "{oc}");
     assert_eq!(check(&v, "tracks")["status"], "fail");
     assert_eq!(check(&v, "data directory")["status"], "pass");
     assert_eq!(check(&v, "kill switches")["status"], "warn");
@@ -246,6 +260,31 @@ fn doctor_checks_hooks_index_tracks_and_switches() {
     assert!(check(&v, "kill switches")["detail"].as_str().unwrap().contains("ADAGE_DISABLE=1"));
 }
 
+/// Launch report, bug 9: a Claude Code plugin user with Codex installed saw a permanent
+/// `● check: hooks: codex … not registered` on the status card. Codex is not a harness they
+/// opted into; only a harness Adage is set up with can be broken.
+#[cfg(unix)]
+#[test]
+fn a_plugin_user_is_not_warned_about_a_harness_they_did_not_opt_into() {
+    let w = World::new();
+    // The plugin's staged binary (what `${CLAUDE_PLUGIN_DATA}` holds), and Codex on PATH.
+    let data = w.p("home/.claude/plugins/data/adage-adage/bin");
+    std::fs::create_dir_all(&data).unwrap();
+    std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_adage"), data.join("adage")).unwrap();
+    w.fake_bin("codex", "exit 0");
+    std::fs::create_dir_all(w.p("codex")).unwrap();
+    let (v, _) = doctor(&w);
+    assert_eq!(check(&v, "hooks: claude-code")["status"], "pass", "{v:#}");
+    let cx = check(&v, "hooks: codex");
+    assert_eq!(cx["status"], "pass", "{cx}");
+    let card = text(&w.run(&[]));
+    assert!(!card.contains("hooks: codex"), "{card}");
+    // With nothing set up anywhere, an installed harness is still worth the warning.
+    std::fs::remove_dir_all(w.p("home/.claude/plugins")).unwrap();
+    let (v, _) = doctor(&w);
+    assert_eq!(check(&v, "hooks: codex")["status"], "warn", "{v:#}");
+}
+
 #[test]
 fn doctor_verifies_the_index_against_the_tracks() {
     let w = World::new();
@@ -256,7 +295,7 @@ fn doctor_verifies_the_index_against_the_tracks() {
     assert_eq!(check(&v, "index")["status"], "pass", "{v:#}");
     assert_eq!(check(&v, "tracks")["status"], "pass", "{v:#}");
     // Editing a track without recompiling leaves the index stale.
-    let dir = w.p("data/tracks/acme-billing/finish-line");
+    let dir = w.p("data/tracks/acme-billing/learned");
     let mut t = adage_tracks::io::read(&dir).unwrap();
     t.routes[0].summary = "edited by hand".into();
     adage_tracks::io::write(&dir, &t).unwrap();
@@ -291,7 +330,7 @@ fn learn_fixture(w: &World) -> bool {
         std::fs::write(&p, lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n")).unwrap();
         files.push(p.display().to_string());
     }
-    let mut args = vec!["learn", "--demo", "--repo", "acme-billing", "--transcripts"];
+    let mut args = vec!["condition", "--demo", "--repo", "acme-billing", "--transcripts"];
     args.extend(files.iter().map(String::as_str));
     let o = w.run(&args);
     o.status.success() && Path::new(&w.p("data/index.json")).exists()

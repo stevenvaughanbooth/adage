@@ -32,7 +32,7 @@ impl Fix {
         match self {
             Fix::InstallHooks(h) => format!("install {h} hooks"),
             Fix::FetchModel => "fetch the embedding model".into(),
-            Fix::LearnNow => "learn this repository now".into(),
+            Fix::LearnNow => "condition this repository now".into(),
             Fix::OpenFailOpen => "open the fail-open log".into(),
             Fix::EnableAutoLearn => "turn auto-learn on".into(),
             Fix::OpenSettings => "open the settings".into(),
@@ -89,7 +89,7 @@ fn fail_open_recent(paths: &Paths) -> usize {
         .count()
 }
 
-/// The repository key hooks would use for `root`, given the index; else the key `adage learn`
+/// The repository key hooks would use for `root`, given the index; else the key `adage condition`
 /// would give it.
 pub fn repo_key(paths: &Paths, root: &Path, index: &Index) -> String {
     let keys: std::collections::BTreeSet<&str> = index.routes.iter().map(|r| r.repo.as_str()).collect();
@@ -180,7 +180,7 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
     });
     let n = routes_repo.unwrap_or(index.routes.len());
     lights.push(Light {
-        label: format!("{n} route{}", if n == 1 { "" } else { "s" }),
+        label: format!("{n} reflex{}", if n == 1 { "" } else { "es" }),
         lamp: by("index").map_or(Lamp::Off, |c| {
             if n == 0 && c.status == Status::Pass {
                 Lamp::Warn
@@ -203,13 +203,23 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
             _ => Lamp::Off,
         },
     });
+    // What hooks embed with: an installed model, the one bundled in the binary, or the hashed
+    // fallback (`status_card::embeddings`, as the card and doctor say it).
     let model = by("embedding model");
-    let model_installed = model.is_some_and(|c| c.status == Status::Pass && c.detail.contains("installed;"));
+    let (embedder, unchosen_fallback) = crate::status_card::embeddings(paths);
+    let hashed = embedder == "hashed fallback";
     lights.push(Light {
-        label: if model_installed { "model".into() } else { "no model".into() },
+        label: if hashed {
+            "no model".into()
+        } else if embedder.ends_with("(bundled)") {
+            "bundled model".into()
+        } else {
+            "model".into()
+        },
         lamp: match model.map(|c| c.status) {
-            Some(Status::Pass) if model_installed => Lamp::Ok,
+            Some(Status::Pass) if !hashed => Lamp::Ok,
             Some(Status::Pass) | None => Lamp::Off,
+            Some(_) if !hashed && !unchosen_fallback => Lamp::Warn,
             Some(s) => lamp(s),
         },
     });

@@ -32,17 +32,52 @@ pub fn find_root(start: &Path) -> Option<PathBuf> {
 ///   alternates, a history longer than [`gitobj::MAX_WALK`]), or the directory is not a git
 ///   repository: `<directory name>@path-<12 hex digits of SHA-256 of the root's path>`. Such a
 ///   key is not shared with any copy.
-/// - A directory that no longer exists (history of a deleted checkout, such as a removed worktree,
-///   read by `adage learn`): the key remembered for it while it existed ([`remember_key`]), else
-///   the directory name alone, the key every repository without `origin` had before. Hooks accept
-///   such a *legacy* key only while no repository of that name has a new key ([`lookup_key`]).
+/// - A directory that no longer exists (history of a deleted checkout, read by `adage condition`):
+///   for a removed Claude Code agent worktree, its repository's key ([`removed_worktree`]); else
+///   the key remembered for it while it existed ([`remember_key`]); else the directory name alone,
+///   the key every repository without `origin` had before. Hooks accept such a *legacy* key only
+///   while no repository of that name has a new key ([`lookup_key`]).
 pub fn repo_key(root: &Path) -> String {
     key(root, CACHE.get().map(PathBuf::as_path))
 }
 
+/// The repository a removed Claude Code agent worktree belonged to: for a directory that no
+/// longer exists at `<repo>/.claude/worktrees/<name>` (from `claude --worktree` or a sub-agent's
+/// isolation), `<repo>`, when it is still a repository. Traces recorded there keep their
+/// repository's key; a worktree that still exists is keyed through its common git directory
+/// ([`origin_key`]).
+pub fn removed_worktree(path: &Path) -> Option<PathBuf> {
+    if path.exists() {
+        return None;
+    }
+    let s = path.to_string_lossy();
+    let marker = "/.claude/worktrees/";
+    let i = s.find(marker)?;
+    s[i + marker.len()..].split('/').next().filter(|n| !n.is_empty())?;
+    let main = PathBuf::from(&s[..i]);
+    main.join(".git").exists().then_some(main)
+}
+
+/// The one derivation of the key a repository's tracks are stored under, used by every path that
+/// learns, binds or shares (`adage condition`, `adage condition --instincts-only`, `adage share`, the
+/// importers): the explicit key a person gave (`--repo <key>`) when there is one, used exactly as
+/// given, else [`repo_key`] of the root. `derive` computes the latter (so a caller can remember
+/// keys per root); [`key_for`] is the plain form.
+pub fn key_with(explicit: Option<&str>, derive: impl FnOnce() -> String) -> String {
+    match explicit.map(str::trim).filter(|k| !k.is_empty()) {
+        Some(k) => k.to_string(),
+        None => derive(),
+    }
+}
+
+/// [`key_with`] for a root: `explicit`, else [`repo_key`]`(root)`.
+pub fn key_for(root: &Path, explicit: Option<&str>) -> String {
+    key_with(explicit, || repo_key(root))
+}
+
 /// Where [`repo_key`] remembers root commits, and [`remember_key`] keys, for the rest of this
-/// process. The CLI sets `$ADAGE_HOME/repo-keys`, so the history `adage learn` walks is not walked
-/// again by a hook.
+/// process. The CLI sets `$ADAGE_HOME/repo-keys`, so the history `adage condition` walks is not
+/// walked again by a hook.
 static CACHE: OnceLock<PathBuf> = OnceLock::new();
 
 /// Remember root commits under `dir` for the rest of this process (first call wins).
@@ -58,6 +93,9 @@ pub fn repo_key_cached(root: &Path, cache: &Path) -> String {
 }
 
 fn key(root: &Path, cache: Option<&Path>) -> String {
+    if let Some(main) = removed_worktree(root) {
+        return key(&main, cache);
+    }
     if !root.is_dir() {
         return cache.and_then(|c| recall(c, &root.to_string_lossy())).unwrap_or_else(|| dir_name(root));
     }
@@ -105,14 +143,14 @@ fn recall(cache: &Path, path: &str) -> Option<String> {
 /// if the index holds routes for some repository of this directory name.
 ///
 /// A legacy key (the bare directory name, from before keys carried the root commit) is accepted
-/// only while the index holds no new-style key for that name. Once `adage learn` has re-keyed a
+/// only while the index holds no new-style key for that name. Once `adage condition` has re-keyed a
 /// repository of that name, a legacy key could belong to any repository of the name, so it is
 /// ignored: that is the collision the new keys exist to prevent.
 pub fn lookup_key(root: &Path, cache: Option<&Path>, keys: &BTreeSet<&str>) -> Option<String> {
     if let Some(o) = origin_key(root) {
         return keys.contains(o.as_str()).then_some(o);
     }
-    let name = dir_name(root);
+    let name = checkout_name(root);
     let prefix = format!("{name}@");
     let scoped = keys
         .range::<str, _>((Bound::Included(prefix.as_str()), Bound::Unbounded))
@@ -150,8 +188,25 @@ pub fn dir_name(root: &Path) -> String {
     root.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
 }
 
+/// The name a repository without `origin` is keyed by: its directory's name, or, for a linked
+/// worktree (`.git` a `gitdir:` file), the name of the main checkout whose `.git` is its common
+/// directory. So `app` and its worktree `.claude/worktrees/agent-1` share `app@<root commit>`.
+pub fn checkout_name(root: &Path) -> String {
+    if root.join(".git").is_file() {
+        if let Some((_, common)) = gitobj::dirs(root) {
+            let common = lexical_normalise(&common);
+            if common.file_name().is_some_and(|n| n == ".git") {
+                if let Some(main) = common.parent().filter(|m| m.file_name().is_some()) {
+                    return dir_name(main);
+                }
+            }
+        }
+    }
+    dir_name(root)
+}
+
 fn no_origin_key(root: &Path, cache: Option<&Path>) -> String {
-    let name = dir_name(root);
+    let name = checkout_name(root);
     if !root.is_dir() {
         return name;
     }
@@ -161,11 +216,11 @@ fn no_origin_key(root: &Path, cache: Option<&Path>) -> String {
     }
 }
 
-/// Root commits found in this process, by repository path: `adage learn` asks once per session.
+/// Root commits found in this process, by repository path: `adage condition` asks once per session.
 static FOUND: Mutex<BTreeMap<String, String>> = Mutex::new(BTreeMap::new());
 
 /// The root commit (40 hex digits): through the cache directory when one is given (hooks, one
-/// repository per process), else remembered in this process (`adage learn`, many sessions per
+/// repository per process), else remembered in this process (`adage condition`, many sessions per
 /// repository).
 fn root_commit(root: &Path, cache: Option<&Path>) -> Option<String> {
     let path = root.to_string_lossy().to_string();
@@ -321,6 +376,23 @@ mod tests {
         assert_eq!(relativize(Path::new("/r/repo"), "/r/other/x"), "/r/other/x");
         assert_eq!(relativize(Path::new("/r/repo"), "/r/repo/a/../b"), "b");
         assert_eq!(relativize(Path::new("/r/repo"), "/r/repository/x"), "/r/repository/x", "component boundary");
+    }
+
+    /// A linked worktree (`.git` a `gitdir:` file) has its repository's key: the shared config is
+    /// in the common directory.
+    #[test]
+    fn a_linked_worktree_has_its_repositorys_origin_key() {
+        let d = tempfile::tempdir().unwrap();
+        let main = d.path().join("repo");
+        std::fs::create_dir_all(main.join(".git/worktrees/wt")).unwrap();
+        std::fs::write(main.join(".git/config"), "[remote \"origin\"]\n\turl = https://github.com/Acme/Billing\n")
+            .unwrap();
+        std::fs::write(main.join(".git/worktrees/wt/commondir"), "../..\n").unwrap();
+        let wt = d.path().join("wt");
+        std::fs::create_dir_all(&wt).unwrap();
+        std::fs::write(wt.join(".git"), format!("gitdir: {}\n", main.join(".git/worktrees/wt").display())).unwrap();
+        assert_eq!(origin_key(&wt).as_deref(), Some("github.com/acme/billing"));
+        assert_eq!(origin_key(&wt), origin_key(&main));
     }
 
     #[test]

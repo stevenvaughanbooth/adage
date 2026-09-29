@@ -1,0 +1,49 @@
+{
+ "slug": "case-retrieval-scale",
+ "headline": "Negative: outcome-weighted case retrieval does not turn into the lever as memory grows. From 5 to ~130 same-repo sessions, and at 540 sessions with other repositories included, every kNN successor target nets -0.03 to +0.10 calls/session after harm (0-0.3% of calls). The trivial 'most-often-useful command' prior is 3x better (+0.36 [+0.21, +0.51]), and even this lever's hindsight ceiling is only 6% of calls and 4% of $.",
+ "metric_name": "net tool calls saved per held-out control session, harm-adjusted (failed commands removed in the skip window, minus carrying cost, minus 1 call per wrong/harmful directive), thresholds chosen leave-one-repo-out; 90% bootstrap over sessions",
+ "held_out": {
+  "best_knn_policy": "kNN skip-ahead + avoid-what-failed, same-repo memory of all other tasks (~99 sessions), leave-task-out",
+  "value": 0.03, "ci90": [-0.03, 0.09], "n_sessions": 208,
+  "pct_calls": 0.001,
+  "best_knn_any_memory": {"policy": "skip+avoid, same-50", "value": 0.10, "ci90": [0.04, 0.16], "n_sessions": 208},
+  "whole_session_summary_variant": {"same_all": {"value": -0.27, "ci90": [-0.36, -0.17]}, "same_all_commands_only": {"value": 0.15, "ci90": [0.05, 0.26], "precision": 0.73}, "same_all_plus_other_repos": {"value": 0.09, "ci90": [-0.07, 0.24]}},
+  "learning_curve_harm_adjusted_family_attrs_click_vue": {
+   "skip+avoid": {"5": -0.04, "10": -0.03, "20": 0.06, "50": 0.10, "100": 0.02, "all": 0.01},
+   "summary": {"5": -0.04, "10": -0.23, "20": -0.26, "50": -0.35, "100": 0.00, "all": -0.35},
+   "labprior_baseline": {"5": 0.07, "10": 0.15, "20": 0.22, "50": 0.32, "100": 0.20, "all": 0.29}
+  },
+  "slope_per_memory_doubling": {"skip+avoid": 0.014, "avoid": 0.017, "skip": -0.002, "next": -0.001, "summary": -0.022, "labprior": 0.039}
+ },
+ "leave_one_repo_out": {
+  "thresholds": "every number above uses thresholds chosen on the other repositories (leave-one-repo-out)",
+  "other_repos_only_memory_442_sessions": {"skip": -0.24, "avoid": 0.06, "summary": -0.32, "labprior": -0.32},
+  "note": "Memory from other repositories alone is harmful for the skip and summary targets and the prior, and near zero for avoid. Added to same-repo memory it helps the summary on the v2 Haiku subset (+0.31 [+0.06, +0.53] vs -0.07), but the effect is not significant over all 208 sessions (+0.09 [-0.07, +0.24])."
+ },
+ "vs_baseline": {
+  "baseline": "U11 + learned reflexes: +1.00 [+0.56, +1.46] Ŝ calls/session post-hoc, +2.11 pre-emptive (Rust replay, 82 v2 Haiku control sessions)",
+  "this_on_comparable_subset": "v2 Haiku control sessions (98): best kNN +0.17 [-0.02, +0.37] (skip+avoid, all memory incl. other repos), summary +0.31 [+0.06, +0.53]; the lab prior reaches +0.73 [+0.50, +0.97] with same-repo memory",
+  "crossing": "No kNN curve reaches +1.0. Fitted on log2(memory), avoid gains 0.017 calls per doubling and skip-ahead and summary are flat or falling, so the crossing is >10^6 sessions, which means never. Not even the no-harm upper numbers (≤ +0.64) reach +1.0.",
+  "additive_to_u11": "Unmeasured. The directives it finds (pytest / npm test / go test / pip install -e .) overlap U11 and the lab prior, so the additive value is at most the numbers above."
+ },
+ "hard_coded_parts": [
+  "Action identity: evals/lab/normalize.py directive_key (hand-written shlex rules, slot regexes, EXPLORE_BASH / DESTRUCTIVE lists). On top of it, a learned equivalence merges keys at potion cosine ≥ 0.95 within one tool.",
+  "Candidate safety filter: normalize.directive_eligible, which excludes exploratory and destructive shell. Avoid candidates are restricted to eligible shell commands (tool == Bash).",
+  "Measurement only: the lab's usefulness definition (failed call or ≥ 2 exploratory steps in the window), its discovery regex, and 'edit tool'. These are used for scoring and for the lab-prior baseline, never inside the kNN learner.",
+  "Drain-style masking of digits and hex runs in tool output before embedding (a generic tokeniser, not a list of errors).",
+  "Harm model: 1 call per followed wrong or harmful directive, with uptake assumed to be 1."
+ ],
+ "ceiling": {
+  "oracle_failed_commands": {"calls_per_session": 1.90, "pct_calls": 0.060, "pct_usd": 0.040},
+  "loose_every_exploratory_or_failed_step": {"calls_per_session": 16.3, "pct_calls": 0.51, "pct_usd": 0.56, "note": "Not reachable: this counts reads of code the agent needed anyway"},
+  "comment": "Measured by failed commands, the lever's hindsight ceiling is 6% of calls and 4% of $, below the 15-20% north-star bar even at 100% capture."
+ },
+ "latency_and_size": {
+  "same_repo_all_109_sessions": {"situations": 3085, "stored_MB_i16": 3.3, "query_ms_per_decision_point_python": 0.87},
+  "all_repos_540_sessions": {"situations": 16323, "stored_MB_i16": 17.3, "query_ms_per_decision_point_python": 4.36},
+  "potion_8M_embed_ms": 0.07
+ },
+ "pass_rate_effect": "Not estimable offline. The directives are command-discovery hints, and nothing here suggests any pass-rate effect.",
+ "build_recommendation": "Do not build a kNN / case-retrieval engine in Rust, at this or larger memory. Keep the lab's per-repository 'most-often-useful command' reflex (a counting pass, which grows from +0.07 to +0.29-0.36 calls/session with memory here, and re-estimate its rate as sessions accumulate). If anything from this is kept, it is the commands-only whole-session summary as a cheap SessionStart advise (+0.15 [+0.05, +0.26], precision 0.73): expected value about 0.5% of calls, so it is low priority. Spend sprint effort on levers with a larger ceiling than failed-command removal (≤ 6% of calls).",
+ "so_what": "Shipped, case-based retrieval would save about 0.0-0.1 calls per session (≤ 0.3% of calls and $, 90% CI including 0 at full memory), with no pass-rate effect we can see. We are highly confident it would not survive a live A/B as a meaningful win, and its ceiling (6% of calls) rules it out as the 15-20% lever."
+}

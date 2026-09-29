@@ -1,0 +1,120 @@
+{
+ "name": "repobench2-marshmallow",
+ "repo_key": "github.com/marshmallow-code/marshmallow",
+ "workdir": "repo",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/repobench/sandbox.py",
+  "marshmallow",
+  "{task}",
+  "{dir}",
+  "--arm",
+  "{arm}",
+  "--context",
+  "{repo}/evals/repobench/context/marshmallow.md"
+ ],
+ "score": [
+  "python3",
+  "{repo}/evals/repobench/score.py",
+  "marshmallow",
+  "{task}",
+  "{dir}"
+ ],
+ "prompts": [
+  "Fix {id}."
+ ],
+ "task_prompts": {
+  "marshmallow-5c2f7f99": "When deserializing a `DateTime` field with `format=\"timestamp\"` or `\"timestamp_ms\"`, values that are too large for the platform's C library to convert (or negative in some cases) crash with an unhandled `OSError`/`OverflowError`/`ValueError` instead of the expected `ValidationError`. For example:\n\n```python\nfrom marshmallow import fields\nfield = fields.DateTime(format=\"timestamp\")\nfield.deserialize(99999999999999999)\n```\n\nThis raises `OverflowError` instead of a `ValidationError` with message \"Not a valid datetime.\". Please fix this so out-of-range timestamp values consistently raise a `ValidationError`.",
+  "marshmallow-91147b2b": "When a `Nested` field wraps a `Schema` *instance* that was already constructed with its own `partial` argument, that partial configuration seems to get ignored during load. For example:\n\n```python\nclass SchemaA(Schema):\n    x = fields.Integer(required=True)\n    y = fields.Integer(required=True)\n\nclass SchemaB(Schema):\n    z = fields.Nested(SchemaA(partial=(\"x\",)))\n\nSchemaB().load({\"z\": {\"y\": 42}})\n```\n\nThis raises a `ValidationError` complaining that `x` is missing, even though the nested schema instance was explicitly created with `partial=(\"x\",)`. Please fix this so the nested schema instance's own partial settings are respected.",
+  "marshmallow-8f493e66": "When a schema field is mistakenly declared as a Field class instead of a Field instance (e.g. `name = fields.String` instead of `fields.String()`), marshmallow raises a `TypeError`, but the error message doesn't say which field caused the problem, making it hard to debug in schemas with many fields. For example:\n\n```python\nclass BadUserSchema(Schema):\n    name = fields.String\n\nBadUserSchema().dump(user)\n```\n\nExpected the error message to identify the offending field, e.g. something like `Field for \"name\" must be declared as a Field instance`. Please update the error message to include the field's name.",
+  "marshmallow-de5e842a": "Schemas only validate that fields are declared as instances (not classes) when you actually call `dump`/`load`, so a mistake like the one below isn't caught until the schema is used at runtime, which can happen far from where the schema was defined:\n\n```python\nclass BadUserSchema(Schema):\n    name = fields.String\n```\n\nThis should raise a `TypeError` (with a message identifying the field name) immediately when the class is declared, rather than waiting until an instance of the schema is used for serialization. Please fix this so the check happens at class declaration time.",
+  "marshmallow-2b84b56e": "A `Function` field whose `deserialize` callable can legitimately return the `missing` sentinel breaks when combined with a validator like `validate.Length`. For example:\n\n```python\nfrom marshmallow import fields, validate, missing\n\nfield = fields.Function(\n    deserialize=lambda value: value.get(\"some-key\", missing),\n    validate=validate.Length(min=0),\n)\nfield.deserialize({})\n```\n\nInstead of returning `missing` as expected, this fails because the validator is run against the `missing` sentinel. Please fix this so validators are skipped when the deserialized value is `missing`.",
+  "marshmallow-39e7c833": "The URL validator accepts lowercase `file://` URLs but rejects uppercase `FILE://` URLs, even though URL schemes should be treated case-insensitively per the URL spec. For example:\n\n```python\nfrom marshmallow import validate\n\nvalidate.URL(schemes={\"file\"})(\"FILE:///tmp/test.txt\")\n```\n\nThis raises a `ValidationError` even though `\"file:///tmp/test.txt\"` (lowercase) is accepted. Please fix the URL validator so scheme matching for `file` URLs (and generally) is case-insensitive.",
+  "marshmallow-19ca8dce": "A `Constant` field configured with a constant value of `None` incorrectly rejects `None` as a load value. For example:\n\n```python\nclass MySchema(Schema):\n    foo = fields.Constant(None)\n\nMySchema().load({\"foo\": None})\n```\n\nThis should succeed and return `{\"foo\": None}`, matching the behavior when other values are passed for a `Constant` field (they get replaced by the constant), but instead it currently fails/misbehaves for the `None` constant specifically. Please fix `Constant` so a `None` constant value is handled correctly during load.",
+  "marshmallow-65374df0": "`validate.OneOf.options()` produces phantom entries when the `labels` list passed in is longer than `choices`. For example:\n\n```python\nfrom marshmallow import validate\n\noneof = validate.OneOf([1, 2], [\"one\", \"two\", \"three\"])\nlist(oneof.options())\n# includes an extra (\"\", \"three\") entry that doesn't correspond to any real choice\n```\n\nThe number of options returned should never exceed the number of choices \u2014 extra labels beyond the choices should simply be ignored, and if `choices` is empty, `options()` should yield nothing at all even if `labels` is non-empty. Please fix this.",
+  "marshmallow-252090c7": "Using `partial` with a dotted path into a `Nested` field doesn't work when the nested field has a `data_key` set that differs from its attribute name. For example:\n\n```python\nfrom marshmallow import Schema, fields\n\nclass AddressSchema(Schema):\n    zip_code = fields.String(required=True)\n    city = fields.String(required=True)\n\nclass PersonSchema(Schema):\n    address = fields.Nested(AddressSchema, data_key=\"homeAddress\", required=True)\n\ndata = {\"homeAddress\": {\"city\": \"Springfield\"}}\nPersonSchema().load(data, partial=(\"address.zip_code\",))\n```\n\nThis raises a `ValidationError` about the missing `zip_code`, even though `partial=(\"address.zip_code\",)` should exempt it. The partial path should be matched using the field's attribute name (`address`), not its `data_key` (`homeAddress`), so the nested schema correctly receives the partial option. Please fix this.",
+  "marshmallow-024b5d09": "`fields.Enum`'s by-name deserialization incorrectly accepts non-member attribute names of the enum class. For example:\n\n```python\nfrom enum import Enum\nfrom marshmallow import fields\n\nclass GenderEnum(Enum):\n    male = 1\n    female = 2\n    non_binary = 3\n\nfield = fields.Enum(GenderEnum)\nfield.deserialize(\"mro\")  # or \"__class__\", \"__members__\"\n```\n\nInstead of raising a `ValidationError` (\"Must be one of: male, female, non_binary.\"), this returns whatever built-in attribute/method matches that name on the Enum class, since the lookup isn't restricted to actual enum members. Please fix this so only real enum members are matched by name.",
+  "marshmallow-72ac4a04": "`fields.DateTime(format=\"timestamp\")` correctly rejects boolean input, but `fields.DateTime(format=\"timestamp_ms\")` does not \u2014 it happily converts `True`/`False` into datetimes instead of raising a validation error. For example:\n\n```python\nfrom marshmallow import fields\n\nfields.DateTime(format=\"timestamp_ms\").deserialize(True)  # should raise ValidationError(\"Not a valid datetime.\")\n```\n\nThe two formats should behave consistently, and booleans should always be rejected as invalid timestamps regardless of which format is used. Please fix this.",
+  "marshmallow-f07eadc8": "`validate.Email` rejects valid email addresses that use internationalized domain names (IDNs). For example:\n\n```python\nfrom marshmallow import validate\n\nvalidate.Email()(\"user@m\u00fcnchen.de\")\n```\n\nThis raises a `ValidationError` even though this is a legitimate email address with a non-ASCII domain (similarly for domains like `\u4f8b\u3048.jp`, `\u0645\u062b\u0627\u0644.\u0625\u062e\u062a\u0628\u0627\u0631`, `\u043f\u0440\u0438\u043c\u0435\u0440.\u0438\u0441\u043f\u044b\u0442\u0430\u043d\u0438\u0435`, etc.). At the same time, domains with invalid label formatting (like leading/trailing hyphens, e.g. `user@-m\u00fcnchen.de`) should still correctly be rejected. Please fix the validator to properly support IDN domains while still rejecting malformed ones.",
+  "marshmallow-902f99c4": "`validate.URL` incorrectly rejects absolute URLs where a fragment follows an empty path, such as `https://example.com#fragment`. For example:\n\n```python\nfrom marshmallow import validate\n\nvalidate.URL()(\"https://example.org#fragment\")\n```\n\nThis raises a `ValidationError`, even though this is a valid URL per RFC 3986 and anchor links to a domain root are common in practice. In relative mode, a bare fragment like `\"#frag\"` should also be accepted, similar to how a bare `\"?query\"` is already accepted. Please fix the validator so fragments following an empty path are allowed."
+ },
+ "train": {
+  "tasks": [
+   "marshmallow-5c2f7f99",
+   "marshmallow-91147b2b",
+   "marshmallow-8f493e66",
+   "marshmallow-de5e842a",
+   "marshmallow-2b84b56e",
+   "marshmallow-39e7c833",
+   "marshmallow-19ca8dce"
+  ],
+  "repeats": 1
+ },
+ "eval": {
+  "tasks": [
+   "marshmallow-65374df0",
+   "marshmallow-252090c7",
+   "marshmallow-024b5d09",
+   "marshmallow-72ac4a04",
+   "marshmallow-f07eadc8",
+   "marshmallow-902f99c4"
+  ],
+  "repeats": 3,
+  "arms": [
+   "control",
+   "adage"
+  ]
+ },
+ "seed": 20260928,
+ "model": "claude-haiku-4-5-20251001",
+ "max_turns": 60,
+ "concurrency": 3,
+ "budget_usd": 17.38,
+ "host_auth": true,
+ "confine": true,
+ "learn_args": [],
+ "classify": {
+  "lookup": [],
+  "regen": [
+   "make generate",
+   "go generate",
+   "vitest -u",
+   "--update-snapshots"
+  ],
+  "verify": [
+   "pytest",
+   "vitest",
+   "go test",
+   "make test",
+   "npm test",
+   "npm run test",
+   "pnpm test",
+   "pnpm run test",
+   "pnpm vitest",
+   "tox",
+   "nox",
+   "node --test",
+   "unittest",
+   "go vet"
+  ],
+  "bash_edit": [
+   "sed -i",
+   "cat >",
+   "cat <<",
+   "tee ",
+   "write_text(",
+   "patch -p",
+   "git apply",
+   "perl -pi"
+  ],
+  "check_flags": []
+ },
+ "obligation": {
+  "paths": null
+ },
+ "labels": {
+  "lookup": "lookup",
+  "regen": "regenerate"
+ },
+ "split_digest": "9145453707f6dcbac1514076e6acb52ee4da1d50ab2dc109e3ff83d51df8c5fb"
+}

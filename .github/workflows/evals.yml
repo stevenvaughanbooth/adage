@@ -43,6 +43,28 @@ jobs:
       - name: gates
         run: cargo test --locked -p adage-eval --test gates
 
+      - name: L0 bench (the default parameters reproduce evals/baselines/l0-core.jsonl)
+        run: cargo test --locked -p adage-eval --test bench
+
+      - name: parity (every dataset keeps the conventions floor; no false route beyond it)
+        run: cargo test --locked -p adage-eval --test parity
+
+      # Context triggers at hook time over the generated newkinds suite (skips without python3).
+      - name: G4 context gates
+        run: cargo test --locked -p adage-eval --test g4 -- --nocapture
+
+      # Execution (adage-exec): E1 prefetch and E2 actions end to end. Runs that need a live
+      # sandbox or staging backend (Landlock, user namespaces, bubblewrap) say "skip" where the
+      # runner has none; everything else runs everywhere.
+      - name: sandbox backend on this runner
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap && cargo run --locked -q -p adage-exec -- doctor || true
+      - name: execution (E1, E2 actions, staging, the no-spawn guarantee)
+        run: cargo test --locked -p adage-exec -- --nocapture 2>&1 | tee exec-tests.log; test "${PIPESTATUS[0]}" = 0
+        shell: bash
+      - name: adage-train (the training pipeline, with the fake harness)
+        run: cargo test --locked -p adage-train
+
       - name: property tests (slow case counts)
         env:
           ADAGE_PROP_TRACE: ${{ runner.temp }}/prop_shell_last.json
@@ -69,10 +91,21 @@ jobs:
           $adage eval evals/datasets/synthetic --json > eval-reports/synthetic.json
           $adage eval evals/datasets/adversarial --json > eval-reports/adversarial.json
           $adage eval fidelity evals/datasets/demo-haiku45 --round round2 --json > eval-reports/fidelity-round2.json
+          # Against today's learned index: every recorded directive arrives at its event or earlier.
+          $adage eval fidelity evals/datasets/demo-haiku45 --round round1 --learned --json > eval-reports/fidelity-learned-round1.json
+          $adage eval fidelity evals/datasets/demo-haiku45 --round round2 --learned --json > eval-reports/fidelity-learned-round2.json
+          # Leak-free splits (held out by task) and learned routes scored against ground truth.
+          $adage eval evals/datasets/demo-haiku45 --split temporal --json > eval-reports/demo-temporal.json
+          for f in 0 1 2; do
+            $adage eval evals/datasets/demo-haiku45 --split group:task:3:$f --json > eval-reports/demo-group-$f.json
+          done
+          $adage eval routes evals/datasets/demo-haiku45 --split temporal --json > eval-reports/routes-demo-temporal.json
+          $adage eval routes evals/datasets/synthetic --json > eval-reports/routes-synthetic.json
           for d in demo-haiku45:round2 synthetic adversarial; do
             name=${d%%:*}; split=${d#*:}; [ "$split" = "$d" ] && split=""
             $adage eval evals/datasets/$name ${split:+--split $split}
           done
+          $adage eval bench run --suite core --deterministic --out eval-reports/bench-l0-core.jsonl
           # Same dataset, same bytes.
           $adage eval evals/datasets/demo-haiku45 --split round2 --json | cmp - eval-reports/demo-round2.json
 
@@ -83,3 +116,16 @@ jobs:
 
       - name: live runner dry run (no agents)
         run: python3 -m unittest evals/live/test_runner.py
+
+      # Generated sandboxes (evals/gen): determinism, schema, the self-check of the smoke suite, and
+      # the scripted rehearsal's `adage learn` check (uses target/debug/adage, built above). The
+      # node-npm bundles are checked with the runner's Node and skipped if it has none.
+      - name: procedural sandbox generator
+        run: python3 -m unittest discover evals/gen
+
+      - name: external benchmark protocol (no Harbor, no agents)
+        run: python3 -m unittest discover evals/external
+
+      # The replay savings metric's helpers (evals/replay); the end-to-end case uses target/debug/adage.
+      - name: replay savings helpers
+        run: python3 -m unittest discover evals/replay

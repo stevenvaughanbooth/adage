@@ -1,0 +1,98 @@
+{
+ "budget_usd": 6.0,
+ "classify": {
+  "bash_edit": [
+   "sed -i",
+   "perl -pi",
+   "cat >",
+   "cat <<",
+   "tee ",
+   "> src/",
+   ">src/",
+   "> registry/",
+   ">registry/",
+   ">> registry/",
+   "writeFileSync"
+  ],
+  "check_flags": [
+   "--verify"
+  ],
+  "lookup": [
+   "fetch-ticket"
+  ],
+  "regen": [
+   "npm run codegen",
+   "tools/codegen.mjs"
+  ],
+  "verify": [
+   "npm test",
+   "npm run test",
+   "npm run check",
+   "node --test",
+   "--test ",
+   "npm t "
+  ]
+ },
+ "concurrency": 3,
+ "description": "Generated sandbox portside-dispatch (node-npm, skin logistics, seed 21): tracker tasks -- conventions documented in a committed CLAUDE.md",
+ "eval": {
+  "arms": [
+   "control",
+   "adage"
+  ],
+  "repeats": 2,
+  "tasks": [
+   "OPS-90",
+   "OPS-453",
+   "OPS-959"
+  ]
+ },
+ "labels": {
+  "lookup": "the ops queue lookup",
+  "regen": "npm run codegen"
+ },
+ "learn_args": [
+  "--demo"
+ ],
+ "max_turns": 30,
+ "name": "node-logistics-s21-documented",
+ "obligation": {
+  "paths": "registry/*.csv"
+ },
+ "prompts": [
+  "{id} is assigned to you. Please resolve it.",
+  "Could you fix {id}?",
+  "Take {id} through to done, please."
+ ],
+ "repo_key": "portside-dispatch",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/repobench/gen_doc.py",
+  "sandbox",
+  "/tmp/adage-repobench/gen/smoke/node-logistics-s21",
+  "{dir}",
+  "{task}"
+ ],
+ "score": [
+  "python3",
+  "{repo}/evals/gen/score.py",
+  "--spec-json",
+  "{{\"conventions\":{{\"dead_end\":\"path_alias\",\"decoys\":[\"unused_target\",\"lookalike_regen\"],\"finish_line\":true,\"instinct_violation\":true,\"linked_files\":true,\"lookup\":true}},\"id_digits\":[2,3],\"name\":\"node-logistics\",\"skin\":\"logistics\",\"stack\":\"node-npm\",\"tasks\":{{\"bugfix\":4,\"control\":2,\"registry\":2}}}}",
+  "--seed",
+  "21",
+  "{dir}",
+  "{task}"
+ ],
+ "train": {
+  "repeats": 3,
+  "tasks": [
+   "OPS-53",
+   "OPS-861",
+   "OPS-74"
+  ]
+ },
+ "workdir": "portside-dispatch",
+ "host_auth": true,
+ "confine": true,
+ "seed": 20260928
+}

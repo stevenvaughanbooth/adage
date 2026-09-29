@@ -1,0 +1,25 @@
+{
+ "protocol": "all-held-out (data-expansion small repo)",
+ "repos": {
+  "jq": {
+   "train": [],
+   "buffer": [],
+   "test": [
+    "jq-16945732",
+    "jq-b29504b4",
+    "jq-0df54c88",
+    "jq-ed3c7f21",
+    "jq-fdf8ef0f",
+    "jq-fb59f149",
+    "jq-d1a12569",
+    "jq-532ccea6"
+   ],
+   "cutoff": "2025-09-29T17:15:43+02:00",
+   "first_test": "2025-09-29T17:15:43+02:00",
+   "note": "all held out: too few tasks for a chronological split"
+  }
+ },
+ "excluded": {},
+ "digest": "efec22d1ed0e4289d2cd9557faa5c2fa57611475eda602ebb586bf309cf9550b",
+ "repo_key": "github.com/jqlang/jq"
+}

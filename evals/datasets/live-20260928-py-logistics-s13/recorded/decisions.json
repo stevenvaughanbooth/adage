@@ -1,0 +1,341 @@
+{
+"eval-OPS-11-r1-adage": [
+{
+"arm": "treated",
+"event": "UserPromptSubmit",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "treated",
+"event": "PostToolUseFailure",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": [
+"dead-end-fbe967"
+]
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "88efc5b0c76beede",
+"judgements": [
+[
+"followed",
+"dead-end-fbe967"
+]
+],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-OPS-11-r1-holdout": [
+{
+"arm": "control",
+"event": "UserPromptSubmit",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolUseFailure",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": [
+"dead-end-fbe967"
+]
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolUseFailure",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": [
+"dead-end-60822e"
+]
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "88efc5b0c76beede",
+"judgements": [
+[
+"ignored",
+"dead-end-fbe967"
+]
+],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "88efc5b0c76beede",
+"judgements": [
+[
+"ignored",
+"dead-end-60822e"
+]
+],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-OPS-11-r2-adage": [
+{
+"arm": "treated",
+"event": "UserPromptSubmit",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-OPS-11-r2-holdout": [
+{
+"arm": "control",
+"event": "UserPromptSubmit",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-OPS-49-r1-adage": [
+{
+"arm": "treated",
+"event": "UserPromptSubmit",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-OPS-49-r1-holdout": [
+{
+"arm": "control",
+"event": "UserPromptSubmit",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": [
+"finish-line-c83ca5"
+]
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [
+[
+"followed",
+"finish-line-c83ca5"
+]
+],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-OPS-49-r2-adage": [
+{
+"arm": "treated",
+"event": "UserPromptSubmit",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": [
+"finish-line-c83ca5"
+]
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [
+[
+"followed",
+"finish-line-c83ca5"
+]
+],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "treated",
+"event": "PostToolBatch",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-OPS-49-r2-holdout": [
+{
+"arm": "control",
+"event": "UserPromptSubmit",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-OPS-74-r1-adage": [
+{
+"arm": "treated",
+"event": "UserPromptSubmit",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-OPS-74-r1-holdout": [
+{
+"arm": "control",
+"event": "UserPromptSubmit",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+},
+{
+"arm": "control",
+"event": "PostToolBatch",
+"generation": "88efc5b0c76beede",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-OPS-74-r2-adage": [
+{
+"arm": "treated",
+"event": "UserPromptSubmit",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+],
+"eval-OPS-74-r2-holdout": [
+{
+"arm": "control",
+"event": "UserPromptSubmit",
+"generation": "b751d2ca3e8f9bf2",
+"judgements": [],
+"would_continue": false,
+"would_have": []
+}
+]
+}

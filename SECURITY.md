@@ -24,8 +24,8 @@ under its harness's permissions. With that in mind, these are in scope:
   able to: make Adage execute anything; read or write outside its data directory and the repository;
   escape its directory through symlinks or `..`; get a directive rendered with text or slot values
   that its contracts do not allow; exceed the effect class Adage re-derives for a command (for
-  example, turn a destructive command green); or get past signature verification and the
-  probation rules of `adage add`.
+  example, turn a destructive command fire); or get past signature verification and the
+  forming rules of `adage add`.
 - **Hook payloads and transcripts are untrusted input.** Prompts, tool outputs and file contents must
   not reach a directive except through validated slots (typed contracts, safe repository-relative
   paths that exist).

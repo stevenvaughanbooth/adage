@@ -27,8 +27,8 @@ fn track(support: u32, opportunities: u32) -> Track {
             step: Step::Run { command: "make gen".into() },
             slots: vec![],
             effect: Effect::Regenerate,
-            aspect: Aspect::Green,
-            state: RouteState::Active,
+            strength: Strength::Fire,
+            state: RouteState::Firm,
             exit: vec![],
             evidence: Evidence {
                 support,

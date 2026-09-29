@@ -1,4 +1,5 @@
 {
+ "conventions": "conventions.json",
  "description": "Real Claude Code sessions (Claude Haiku 4.5) from the Adage demo on the acme-billing sandbox",
  "learn": "demo",
  "model": "claude-haiku-4-5-20251001",
@@ -24,7 +25,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.15895080000000003,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2041-r1-holdout.jsonl",
@@ -58,7 +59,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.10767350000000002,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2041-r2-holdout.jsonl",
@@ -92,7 +93,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.0177787,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2041-r3-holdout.jsonl",
@@ -126,7 +127,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.11962840000000002,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2042-r1-holdout.jsonl",
@@ -160,7 +161,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.12864129999999996,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2042-r2-holdout.jsonl",
@@ -194,7 +195,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.08565059999999998,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2042-r3-holdout.jsonl",
@@ -228,7 +229,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.10826809999999999,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2043-r1-holdout.jsonl",
@@ -262,7 +263,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.14958980000000002,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2043-r2-holdout.jsonl",
@@ -296,7 +297,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.10518240000000001,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2043-r3-holdout.jsonl",
@@ -330,7 +331,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.10651730000000004,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2044-r1-holdout.jsonl",
@@ -364,7 +365,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1594998,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2044-r2-holdout.jsonl",
@@ -398,7 +399,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.08486450000000001,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2044-r3-holdout.jsonl",
@@ -432,7 +433,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.123226,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2045-r1-holdout.jsonl",
@@ -466,7 +467,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.0176787,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2045-r2-holdout.jsonl",
@@ -500,7 +501,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.13172520000000001,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2045-r3-holdout.jsonl",
@@ -534,7 +535,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.017802699999999998,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2046-r1-holdout.jsonl",
@@ -568,7 +569,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1205055,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2046-r2-holdout.jsonl",
@@ -602,7 +603,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1184555,
    "dead_end_hits": 0,
    "file": "sessions/eval-W-2046-r3-holdout.jsonl",
@@ -636,7 +637,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1697398,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2041-r1-holdout.jsonl",
@@ -670,7 +671,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.18998850000000003,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2041-r2-holdout.jsonl",
@@ -704,7 +705,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.13486800000000002,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2041-r3-holdout.jsonl",
@@ -738,7 +739,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1244228,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2042-r1-holdout.jsonl",
@@ -772,7 +773,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.11340929999999999,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2042-r2-holdout.jsonl",
@@ -806,7 +807,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.11151060000000004,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2042-r3-holdout.jsonl",
@@ -840,7 +841,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.0216037,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2043-r1-holdout.jsonl",
@@ -874,7 +875,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.10319339999999999,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2043-r2-holdout.jsonl",
@@ -908,7 +909,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.14469739999999998,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2043-r3-holdout.jsonl",
@@ -942,7 +943,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.15199340000000006,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2044-r1-holdout.jsonl",
@@ -976,7 +977,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.08871770000000001,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2044-r2-holdout.jsonl",
@@ -1010,7 +1011,7 @@
    "turns_to_first_edit": 2
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.15468380000000004,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2044-r3-holdout.jsonl",
@@ -1044,7 +1045,7 @@
    "turns_to_first_edit": 6
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.08916719999999999,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2045-r1-holdout.jsonl",
@@ -1078,7 +1079,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.2803691,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2045-r2-holdout.jsonl",
@@ -1112,7 +1113,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.1845589,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2045-r3-holdout.jsonl",
@@ -1146,7 +1147,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.0925282,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2046-r1-holdout.jsonl",
@@ -1180,7 +1181,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.17019720000000005,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2046-r2-holdout.jsonl",
@@ -1214,7 +1215,7 @@
    "turns_to_first_edit": 3
   },
   {
-   "arm": "holdout",
+   "arm": "control",
    "cost_usd": 0.11136510000000001,
    "dead_end_hits": 0,
    "file": "sessions/eval2-W-2046-r3-holdout.jsonl",
@@ -1542,6 +1543,7 @@
  },
  "splits": {
   "round1": {
+   "note": "round 1 as run live: learn from the 18 training-task sessions (W-1041..W-1046), test on the round-1 holdout arm (W-2041..W-2046); no task on both sides",
    "test": [
     "1556ea80-3d8e-47b2-ae90-17a4e1c5cab8",
     "18e8f17b-44fc-499e-8762-17a35a913626",
@@ -1584,6 +1586,7 @@
    ]
   },
   "round2": {
+   "note": "round 2 as run live: learn from the training sessions and the round-1 eval sessions, which worked the same six tasks it tests (W-2041..W-2046). Leaky by task: it measures a learner that has seen these tasks, not held-out tasks; use group:task:<k>:<fold> or temporal for held-out-task numbers",
    "test": [
     "07e0b483-18c9-4634-b49b-d42d14b03025",
     "131b4a53-0889-4b5b-bb8a-0c78e7af1668",

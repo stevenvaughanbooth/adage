@@ -1,0 +1,79 @@
+{
+ "conventions": [
+  {
+   "command": "./bin/fetch-ticket {item}",
+   "counter_samples": [
+    "X-1",
+    "ABCDEFG-123456789",
+    "12",
+    "not-an-id"
+   ],
+   "id": "lookup",
+   "id_pattern": "^OPS-\\d{2,3}$",
+   "kind": "lookup",
+   "notes": "Task prompts name only an item ID. Items live in the ops queue: an opaque store (.ops/queue.pack) that only bin/fetch-ticket reads. The README mentions only the ops queue.",
+   "samples": [
+    "OPS-441",
+    "OPS-11",
+    "OPS-710",
+    "OPS-74",
+    "OPS-518",
+    "OPS-49"
+   ]
+  },
+  {
+   "command": "./bin/fetch-ticket {item}",
+   "id": "linked-files",
+   "kind": "linked_files",
+   "notes": "The lookup output lists the files to change under 'Files:' (the `files` field with --json). Registry items list the CSV and the module that reads it, never the generated file.",
+   "samples": [
+    "OPS-441"
+   ]
+  },
+  {
+   "avoided": [
+    "python3 -m unittest"
+   ],
+   "command": "make check",
+   "id": "dead-end",
+   "kind": "dead_end",
+   "mode": "env_guard",
+   "notes": "tests/__init__.py aborts unless PORTSIDE_ENV=test, which only `make check` sets. Plain unittest fails at once; `PORTSIDE_ENV=test python3 -m unittest` would work (an environment fix). The working command is declared in .ci/pipeline.yml.",
+   "signature": "RuntimeError: PORTSIDE_ENV is not set, run the suite with 'make check'"
+  },
+  {
+   "command": "make gen",
+   "glob": "registry/*.csv",
+   "id": "finish-line",
+   "kind": "finish_line",
+   "notes": "Lookups read portside/generated/registry.py, generated from registry/*.csv. Editing a CSV requires make gen; make check and the hidden checks fail on stale output.",
+   "signature": "error: portside/generated/registry.py is out of date with registry/*.csv, run 'make gen'"
+  }
+ ],
+ "decoys": [
+  {
+   "command": "make bench",
+   "id": "decoy-unused-target",
+   "kind": "decoy",
+   "mode": "unused_target",
+   "notes": "A plausible target nothing depends on. Running it changes nothing."
+  },
+  {
+   "command": "make proto",
+   "id": "decoy-lookalike-regen",
+   "kind": "decoy",
+   "mode": "lookalike_regen",
+   "notes": "Looks like a regeneration step but generates nothing tracked; it is never required after any edit."
+  },
+  {
+   "command": "make lint",
+   "id": "decoy-lookalike-verify",
+   "kind": "decoy",
+   "mode": "lookalike_verify",
+   "notes": "A lint step that always passes; it is not the test suite and not a dead end."
+  }
+ ],
+ "description": "The hidden conventions of the portside-dispatch sandbox (evals/gen, python-make, seed 13): what a learner should find. Decoys are planted commands no route may direct.",
+ "sandbox": "portside-dispatch",
+ "schema": "adage-conventions/1"
+}

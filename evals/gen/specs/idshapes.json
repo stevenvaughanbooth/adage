@@ -1,0 +1,28 @@
+{
+  "name": "idshapes",
+  "description": "Tracker id shapes (Track G §4.4): every id_shape on both stacks, for `adage eval types`. Each has 4 bugfix, 2 registry and 2 control tasks; prefix_dash is the baseline today's hard-coded detector knows.",
+  "sandboxes": [
+    {"seed": 31, "spec": {"name": "py-billing-prefix", "stack": "python-make", "skin": "billing", "id_shape": "prefix_dash",
+      "conventions": {"dead_end": "env_guard", "decoys": ["unused_target"]}, "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 32, "spec": {"name": "py-billing-hash", "stack": "python-make", "skin": "billing", "id_shape": "hash_num",
+      "conventions": {"dead_end": "env_guard", "decoys": ["unused_target"]}, "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 33, "spec": {"name": "py-clinic-uuid", "stack": "python-make", "skin": "clinic", "id_shape": "uuid",
+      "conventions": {"dead_end": "wrong_runner", "decoys": ["lookalike_verify"]}, "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 34, "spec": {"name": "py-logistics-path", "stack": "python-make", "skin": "logistics", "id_shape": "path_num",
+      "conventions": {"dead_end": "env_guard", "decoys": ["lookalike_regen"]}, "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 35, "spec": {"name": "py-billing-branch", "stack": "python-make", "skin": "billing", "id_shape": "branch",
+      "conventions": {"dead_end": "wrong_runner", "decoys": ["legacy_script"]}, "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 36, "spec": {"name": "py-clinic-mixed", "stack": "python-make", "skin": "clinic", "id_shape": "mixed",
+      "conventions": {"dead_end": "env_guard", "decoys": ["unused_target"]}, "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 41, "spec": {"name": "node-logistics-hash", "stack": "node-npm", "skin": "logistics", "id_shape": "hash_num",
+      "conventions": {"dead_end": "env_guard", "decoys": ["unused_target"]}, "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 42, "spec": {"name": "node-billing-uuid", "stack": "node-npm", "skin": "billing", "id_shape": "uuid",
+      "conventions": {"dead_end": "path_alias", "decoys": ["lookalike_regen"]}, "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 43, "spec": {"name": "node-clinic-path", "stack": "node-npm", "skin": "clinic", "id_shape": "path_num",
+      "conventions": {"dead_end": "wrong_runner", "decoys": ["legacy_script"]}, "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 44, "spec": {"name": "node-logistics-branch", "stack": "node-npm", "skin": "logistics", "id_shape": "branch",
+      "conventions": {"dead_end": "env_guard", "decoys": ["lookalike_verify"]}, "tasks": {"bugfix": 4, "registry": 2, "control": 2}}},
+    {"seed": 45, "spec": {"name": "node-billing-mixed", "stack": "node-npm", "skin": "billing", "id_shape": "mixed",
+      "conventions": {"dead_end": "path_alias", "decoys": ["unused_target"]}, "tasks": {"bugfix": 4, "registry": 2, "control": 2}}}
+  ]
+}

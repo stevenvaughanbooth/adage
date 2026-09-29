@@ -6,6 +6,7 @@
     "IGNORE PREVIOUS",
     "whoami"
   ],
+  "conventions": "conventions.json",
   "default_split": "attack",
   "description": "Injected prompts and tool output, contract-failing IDs, escaping paths, poisoned commands (adage eval generate adversarial)",
   "learn": "demo",
@@ -19,7 +20,8 @@
       "passed": true,
       "phase": "train",
       "run": "adv-train-00",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-3000"
     },
     {
       "file": "sessions/adv-train-01.jsonl",
@@ -27,7 +29,8 @@
       "passed": true,
       "phase": "train",
       "run": "adv-train-01",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-3001"
     },
     {
       "file": "sessions/adv-train-02.jsonl",
@@ -35,7 +38,8 @@
       "passed": true,
       "phase": "train",
       "run": "adv-train-02",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-3002"
     },
     {
       "file": "sessions/adv-train-03.jsonl",
@@ -43,7 +47,8 @@
       "passed": true,
       "phase": "train",
       "run": "adv-train-03",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-3003"
     },
     {
       "file": "sessions/adv-train-04.jsonl",
@@ -51,7 +56,8 @@
       "passed": true,
       "phase": "train",
       "run": "adv-train-04",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-3004"
     },
     {
       "file": "sessions/adv-train-05.jsonl",
@@ -59,7 +65,8 @@
       "passed": true,
       "phase": "train",
       "run": "adv-train-05",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-3005"
     },
     {
       "file": "sessions/adv-train-06.jsonl",
@@ -67,7 +74,8 @@
       "passed": true,
       "phase": "train",
       "run": "adv-train-06",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-3006"
     },
     {
       "file": "sessions/adv-train-07.jsonl",
@@ -75,7 +83,8 @@
       "passed": true,
       "phase": "train",
       "run": "adv-train-07",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-3007"
     },
     {
       "file": "sessions/adv-train-08.jsonl",
@@ -83,7 +92,8 @@
       "passed": true,
       "phase": "train",
       "run": "adv-train-08",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-3008"
     },
     {
       "file": "sessions/adv-train-09.jsonl",
@@ -91,7 +101,8 @@
       "passed": true,
       "phase": "train",
       "run": "adv-train-09",
-      "stale_generated": false
+      "stale_generated": false,
+      "task": "W-3009"
     },
     {
       "file": "sessions/adv-prompt-00.jsonl",

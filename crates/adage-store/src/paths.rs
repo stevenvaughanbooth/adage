@@ -77,11 +77,16 @@ impl Paths {
     pub fn learn_queue(&self) -> PathBuf {
         self.root.join("learn-queue")
     }
+    /// Per repository: one summary line per trace (`<slug>.jsonl`, no prompt, command or path)
+    /// and the savings estimate every surface reads (`<slug>.summary.json`).
+    pub fn ledger(&self) -> PathBuf {
+        self.root.join("ledger")
+    }
     /// Caches that can always be rebuilt (per-transcript parses under `cache/sessions`).
     pub fn cache(&self) -> PathBuf {
         self.root.join("cache")
     }
-    /// Held by whatever writes the tracks directory and the index (`adage learn`, automatic
+    /// Held by whatever writes the tracks directory and the index (`adage condition`, automatic
     /// learning, review decisions, `adage add`), so writers never interleave.
     pub fn tracks_lock(&self) -> PathBuf {
         self.root.join("tracks.lock")

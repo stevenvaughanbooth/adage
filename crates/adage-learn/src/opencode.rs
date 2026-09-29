@@ -11,18 +11,12 @@
 //! appended to tool output (after a tool); both are recorded in the export. Sub-agent sessions
 //! (`info.parentID` set) are skipped, like Claude Code sidechains.
 
-use crate::import::{Session, StepObs, OPENCODE};
-use adage_core::keys::{self, template_key};
+use crate::import::{Prompts, Session, Signals, OPENCODE};
 use adage_core::tools::{from_opencode, normalize_tool};
 use adage_core::{repo, CommandTable};
 use adage_runtime::Call;
-use once_cell::sync::Lazy;
-use regex::Regex;
 use serde_json::Value;
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-
-static ROUTE_ATTR: Lazy<Regex> = Lazy::new(|| Regex::new(r#"<adage-signal [^>]*route="([A-Za-z0-9_.-]+)""#).unwrap());
 
 /// Is this parsed file an OpenCode export?
 pub fn is_export(v: &Value) -> bool {
@@ -63,7 +57,7 @@ fn s<'a>(v: &'a Value, path: &[&str]) -> Option<&'a str> {
 
 fn own_text(t: &str) -> bool {
     let t = t.trim_start();
-    t.starts_with("<adage-signal ") || t.starts_with("Adage finish-line check:")
+    t.starts_with("<adage-reflex ") || t.starts_with("Adage finish-line check:")
 }
 
 /// Parse one export. `None` for sub-agent sessions and sessions without a usable prompt.
@@ -77,46 +71,36 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
     let day = info.pointer("/time/created").and_then(|t| t.as_i64()).map(day_of).unwrap_or_default();
     let mut model: Option<String> = None;
     let mut prompt: Option<String> = None;
-    let mut steered = false;
-    let mut directed: BTreeSet<String> = BTreeSet::new();
-    let mut note = |text: &str, steered: &mut bool| {
-        if text.contains("<adage-signal ") {
-            *steered = true;
-            for c in ROUTE_ATTR.captures_iter(text) {
-                directed.insert(c[1].to_string());
-            }
-        }
-        if text.contains("Adage finish-line check:") {
-            *steered = true;
-            directed.insert("finish-line-stop".to_string());
-        }
-    };
-    // (turn, tool, input, output, failed)
-    let mut uses: Vec<(u32, String, Value, String, bool)> = Vec::new();
+    let mut signals = Signals::default();
+    // (turn, prompt index, tool, input, output, failed)
+    let mut uses: Vec<(u32, u16, String, Value, String, bool)> = Vec::new();
     let mut turns = 0u32;
-    let mut prompts = 0u32;
+    let mut prompts = Prompts::default();
     for m in v.get("messages")?.as_array()? {
         let mi = m.get("info").unwrap_or(&Value::Null);
         let parts = m.get("parts").and_then(|p| p.as_array()).map(Vec::as_slice).unwrap_or(&[]);
         match s(mi, &["role"]) {
             Some("user") => {
-                let mut typed = false;
+                let mut typed: Option<&str> = None;
                 for p in parts.iter().filter(|p| s(p, &["type"]) == Some("text")) {
                     let text = s(p, &["text"]).unwrap_or("");
                     let synthetic = p.get("synthetic").and_then(|x| x.as_bool()) == Some(true);
                     if synthetic {
-                        note(text, &mut steered);
+                        signals.at(uses.len());
+                        signals.note(text);
                     } else if p.get("ignored").and_then(|x| x.as_bool()) != Some(true)
                         && !text.trim().is_empty()
                         && !own_text(text)
                     {
-                        typed = true;
+                        typed.get_or_insert(text);
                         if prompt.is_none() {
                             prompt = Some(text.to_string());
                         }
                     }
                 }
-                prompts += u32::from(typed);
+                if let Some(t) = typed {
+                    prompts.push(t);
+                }
             }
             Some("assistant") => {
                 if model.is_none() {
@@ -137,10 +121,13 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
                         Some("error") => (s(st, &["error"]).unwrap_or("").to_string(), true),
                         _ => continue, // pending or running: the call never finished
                     };
-                    note(&output, &mut steered);
+                    // Delivered with this call's result: it steers the calls after it.
+                    signals.at(uses.len() + 1);
+                    signals.note(&output);
                     any = true;
                     uses.push((
                         turns,
+                        prompts.current(),
                         s(p, &["tool"]).unwrap_or("").to_string(),
                         st.get("input").cloned().unwrap_or(Value::Null),
                         output,
@@ -159,10 +146,12 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
     let prompt = prompt?;
     let cwd_path = PathBuf::from(&cwd);
     let root = repo::find_root(&cwd_path).unwrap_or(cwd_path);
-    let repo_key = repo_override.map(str::to_string).unwrap_or_else(|| repo::repo_key(&root));
+    let repo_key = repo::key_for(&root, repo_override);
     let root_str = root.to_string_lossy().to_string();
     let mut steps = Vec::new();
-    for (turn, native, input, output, failed) in uses {
+    let mut first_step: Vec<u32> = Vec::with_capacity(uses.len());
+    for (turn, at, native, input, output, failed) in uses {
+        first_step.push(steps.len() as u32);
         for (tool, mut input) in from_opencode(&native, &input) {
             if let Some(p) = input.get("file_path").and_then(|v| v.as_str()) {
                 if !p.is_empty() && !p.starts_with('/') {
@@ -170,13 +159,17 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
                 }
             }
             let call = Call { tool: tool.clone(), input: input.clone(), output: output.clone(), failed };
-            for mut n in keys::flatten(&normalize_tool(&tool, &input, &root_str, table)) {
-                keys::canonicalise(&mut n, &root);
-                let rel_path = keys::action_path(&n.action).map(|p| repo::relativize(&root, p));
-                steps.push(StepObs { turn, key: template_key(&n.action), norm: n, call: call.clone(), rel_path });
-            }
+            steps.extend(crate::import::call_steps(
+                turn,
+                at,
+                &call,
+                normalize_tool(&tool, &input, &root_str, table),
+                &root,
+            ));
         }
     }
+    let prompts = prompts.anchor(&steps);
+    let influence = signals.anchor(&first_step, steps.len());
     Some(Session {
         id,
         root,
@@ -185,11 +178,13 @@ pub fn parse_export(v: &Value, table: &CommandTable, repo_override: Option<&str>
         day,
         prompt,
         steps,
-        steered,
-        directed,
+        steered: signals.steered,
+        directed: signals.directed,
+        influence,
         outcome: None,
         harness: OPENCODE.into(),
         prompts,
+        ending: Default::default(),
     })
 }
 

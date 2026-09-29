@@ -1,0 +1,115 @@
+{
+ "name": "dx-packaging",
+ "repo_key": "github.com/pypa/packaging",
+ "workdir": "repo",
+ "sandbox": [
+  "python3",
+  "{repo}/evals/repobench/sandbox.py",
+  "packaging",
+  "{task}",
+  "{dir}",
+  "--arm",
+  "{arm}",
+  "--context",
+  "{repo}/evals/repobench/context/packaging.md"
+ ],
+ "score": [
+  "python3",
+  "{repo}/evals/repobench/score.py",
+  "packaging",
+  "{task}",
+  "{dir}"
+ ],
+ "prompts": [
+  "Fix {id}."
+ ],
+ "task_prompts": {
+  "packaging-9c652e4b": "`Pylock.select()` always prefers a wheel over a source distribution when both are available and the wheel is compatible, with no way to override that for specific packages. Please add a way to pass a predicate (taking the normalized package name and returning a bool) to `select()` that lets a caller indicate that the source distribution should be preferred over an otherwise-compatible wheel for a given package. When the predicate returns true for a package that has both a compatible wheel and an sdist, `select()` should choose the sdist; when it's false, or when only a wheel is available, the existing wheel-preferring behavior should be unchanged. It should also work correctly when no sdist exists at all (the predicate may still be called, but selection should fall back to the wheel).",
+  "packaging-fe18f139": "When a `Requirement` string contains an arbitrary-equality specifier list where one of the comma-separated values is itself invalid, the resulting error message is confusing/unhelpful instead of clearly pointing at the bad specifier. For example:\n\n```python\nfrom packaging.requirements import Requirement\nRequirement(\"demo===x,y\")\n```\n\nThis should raise `InvalidRequirement` with a message like `\"Invalid specifier: 'y'\"`, but currently the underlying specifier error isn't surfaced clearly through `Requirement`. This also affects `Requirement.__setstate__` when restoring from a string that has this kind of invalid specifier \u2014 it should raise `TypeError` with a message indicating the requirement can't be restored, same as for any other invalid requirement string. Please fix requirement parsing/unpickling so invalid specifier errors are reported clearly and consistently.",
+  "packaging-189a76d5": "Marker and Requirement parsing silently accepts trailing garbage at the end of the string instead of treating it as a syntax error, as long as it's a line break. For example:\n\n```python\nfrom packaging.markers import Marker\nMarker('python_version >= \"3\"\\n')\n```\n\nThis should raise `InvalidMarker` (a trailing `\\n`, `\\r`, or `\\r\\n` is not valid syntax), and the same applies to `Requirement` strings like `\"name>=1\\n\"` or `'name; python_version >= \"3\"\\r\\n'`, which should raise `InvalidRequirement`. Meanwhile, trailing horizontal whitespace (plain spaces or tabs) at the end of a marker or requirement string should continue to be accepted and ignored, e.g. `Marker('python_version >= \"3\" ')` should still equal `Marker('python_version >= \"3\"')`. Please fix the parser so it correctly requires true end of input and rejects trailing line breaks while still tolerating trailing horizontal whitespace.",
+  "packaging-826426fc": "When calling `Pylock.select()` with an explicitly empty `tags` list (`tags=[]`), it seems to be treated the same as \"no tag filter\" instead of \"no wheel tags are acceptable\". For example, building a Pylock that contains both a wheel and an sdist for a package and calling `pylock.select(tags=[], environment=...)` currently returns the host-compatible wheel, but since an empty tag sequence should mean no wheel can match, it should instead fall back to the sdist, and if only a wheel is available (no sdist) it should raise a `PylockSelectError` saying no wheel matched and no sdist is available. Please fix `select()` to respect an explicitly empty tag sequence rather than treating it as unset.",
+  "packaging-26fa1d42": "`packaging.tags.parse_tag()` (and by extension wheel filename parsing) accepts interpreter components that are not valid identifiers, letting malformed values through. For example, `tags.parse_tag(\"2.7.6-none-any\")` or parsing a wheel filename like `playlyfe-0.1.1-2.7.6-none-any.whl` succeeds and expands into tags with a numeric-looking interpreter instead of being rejected, while things like `py3.2-none-any` or `py+3-none-any` also slip through. Valid interpreter tags should be identifiers (e.g. `cp311`, `sillywalk`, `_custom`), so anything else should raise `InvalidTag` with a message indicating an invalid interpreter. Please add proper validation for the interpreter component of a tag.",
+  "packaging-2d873eb6": "When writing RFC822 metadata headers via `Metadata.as_rfc822()`, only `\\n` line boundaries in header values get folded/escaped; other line-boundary characters such as `\\r`, `\\v`, `\\f`, `\\x1c`-`\\x1e`, `\\x85`, `\\u2028`, and `\\u2029` are passed through unfolded. Depending on the Python version this either lets a value like `\"Hello\\rWorld\"` inject what looks like an extra header line into the generated metadata, or causes `email` to raise `HeaderWriteError` when writing it. For example:\n```python\nfrom packaging.metadata import Metadata\nmeta = Metadata.from_raw({\"version\": \"1.2.3\", \"name\": \"packaging\", \"author\": \"Hello\\rWorld\", \"metadata_version\": \"2.3\"})\nmeta.as_rfc822().as_string()\n```\nAll of these line-boundary characters should be folded consistently like `\\n` is, and similarly `Summary` validation should reject values containing any of them, not just `\\n`. Please fix this.",
+  "packaging-b80e6eb0": "`Pylock.select()` doesn't correctly handle an explicitly empty `environments` list. If `environments=[]` is set on a `Pylock` (as opposed to `environments=None`, meaning no restriction was declared), calling `select()` should behave as if no environment in the lock is compatible with the current one \u2014 i.e. it should raise the same \"no matching environment\" error as when a real marker fails to match \u2014 but instead it currently doesn't. Reproduction:\n```python\npylock = Pylock(lock_version=Version(\"1.0\"), created_by=\"some_tool\", environments=[], packages=[])\nlist(pylock.select(tags=..., environment=...))\n```\nThis should raise the same error as passing `environments=[Marker('python_version == \"3.14\"')]` against a non-matching environment, while `environments=None` should still mean no filtering is applied. Please fix `select()` to distinguish these cases correctly.",
+  "packaging-4e79787a": "`packaging.tags.cpython_tags()`, `generic_tags()`, and `compatible_tags()` don't respect an explicitly empty `platforms` argument. Passing `platforms=[]` should mean no platform tags apply and the wheel/pure-python-platform-specific tags should be skipped, but currently it seems to fall back to auto-detecting the platform instead of yielding nothing for that part. For example:\n```python\nfrom packaging import tags\nlist(tags.cpython_tags((3, 11), abis=[\"whatever\"], platforms=[]))  # should be []\nlist(tags.generic_tags(\"sillywalk\", [\"abi\"], []))  # should be []\n```\nPlease fix these functions to treat an explicitly empty platforms iterable as \"no platform-specific tags\" rather than \"use the default platform\".",
+  "packaging-f14a0933": "The `~=` (compatible release) operator in `Specifier` can incorrectly accept invalid version strings due to unscoped case-insensitive matching of the pre/post-release words in the regex, similar to a previously fixed issue with the `==` operator's local version suffix. For example, `Specifier(\"~=1.2.3prev\\u0131ew1\")` and `Specifier(\"~=1.2.3po\\u017ft1\")` (using Turkish dotless-i and long-s, which fold to ASCII letters under Unicode case-insensitive matching) are currently accepted as valid specifiers when they should raise `InvalidSpecifier`. Please scope the relevant regex groups so this Unicode case-folding no longer causes invalid specifiers to be accepted for `~=`.",
+  "packaging-55cbf1b9": "In `packaging._ranges`, unbounded lower/upper bounds don't consistently compare or hash as equal depending on how they were constructed, which lets them sort inconsistently relative to each other. For instance, `LowerBound(None, True)` and `LowerBound(None, False)` both represent \"negative infinity\" and should be treated as the exact same value (equal to `NEG_INF`, same hash, ordering comparisons all treating them as equal), but currently `LowerBound(None, True).inclusive` doesn't normalize and equality/hash/ordering between these two spellings is inconsistent \u2014 the same problem applies to `UpperBound`/`POS_INF`. This can cause version ranges with unbounded ends to sort or deduplicate incorrectly. Please fix bound handling so unbounded lower and upper bounds each have a single canonical representation for equality, hashing, and ordering."
+ },
+ "train": {
+  "tasks": [
+   "packaging-9c652e4b",
+   "packaging-fe18f139",
+   "packaging-189a76d5",
+   "packaging-826426fc",
+   "packaging-26fa1d42"
+  ],
+  "repeats": 1
+ },
+ "eval": {
+  "tasks": [
+   "packaging-2d873eb6",
+   "packaging-b80e6eb0",
+   "packaging-4e79787a",
+   "packaging-f14a0933",
+   "packaging-55cbf1b9"
+  ],
+  "repeats": 1,
+  "arms": [
+   "control"
+  ]
+ },
+ "seed": 20260928,
+ "model": "claude-haiku-4-5-20251001",
+ "max_turns": 60,
+ "concurrency": 2,
+ "budget_usd": 4.5,
+ "host_auth": true,
+ "confine": true,
+ "learn_args": [
+  "--demo"
+ ],
+ "classify": {
+  "lookup": [],
+  "regen": [
+   "make generate",
+   "go generate",
+   "vitest -u",
+   "--update-snapshots"
+  ],
+  "verify": [
+   "pytest",
+   "vitest",
+   "go test",
+   "make test",
+   "npm test",
+   "npm run test",
+   "pnpm test",
+   "pnpm run test",
+   "pnpm vitest",
+   "tox",
+   "nox",
+   "node --test",
+   "unittest",
+   "go vet"
+  ],
+  "bash_edit": [
+   "sed -i",
+   "cat >",
+   "cat <<",
+   "tee ",
+   "write_text(",
+   "patch -p",
+   "git apply",
+   "perl -pi"
+  ],
+  "check_flags": []
+ },
+ "obligation": {
+  "paths": null
+ },
+ "labels": {
+  "lookup": "lookup",
+  "regen": "regenerate"
+ },
+ "split_digest": "7dbaa6d2a20b313ce0891a7a5fc67ba1b7c98004d5f967c0f098048e4a7a22ad"
+}

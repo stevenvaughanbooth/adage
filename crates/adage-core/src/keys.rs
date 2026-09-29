@@ -126,21 +126,12 @@ fn windows_slashed(s: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
-/// The identity of a command, independent of its arguments: tokens up to and including the first
-/// path-like token (the script), else the first two. `python3 scripts/wi-lookup W-1 --json`,
-/// `scripts/wi-lookup W-1` and `./scripts/wi-lookup W-1` share the head `scripts/wi-lookup` after
-/// dropping interpreters.
+/// The identity of a command, independent of its arguments: its program and the subcommand it
+/// multiplexes to ([`crate::pattern`]). `python3 scripts/wi-lookup W-1 --json`,
+/// `scripts/wi-lookup W-1` and `./scripts/wi-lookup W-1` share the head `scripts/wi-lookup`;
+/// `npm run build` and `npm run check` do not share one.
 pub fn command_head(argv: &[String]) -> String {
-    const INTERPRETERS: [&str; 9] = ["python", "python3", "node", "bash", "sh", "zsh", "ruby", "perl", "deno"];
-    let toks: Vec<&str> = argv
-        .iter()
-        .map(|t| t.strip_prefix("./").unwrap_or(t))
-        .filter(|t| !INTERPRETERS.contains(&t.rsplit('/').next().unwrap_or(t)))
-        .collect();
-    match toks.iter().position(|t| t.contains('/')) {
-        Some(i) => toks[i].to_string(),
-        None => toks.iter().take(2).copied().collect::<Vec<_>>().join(" "),
-    }
+    crate::pattern::Shape::of_argv(argv).map(|s| s.identity.join(" ")).unwrap_or_default()
 }
 
 /// Expand compound actions into their body actions, in order.
@@ -153,6 +144,27 @@ pub fn flatten(items: &[Normalized]) -> Vec<Normalized> {
         }
     }
     out
+}
+
+/// Whether sub-action `index` of `count` (from [`flatten`] of one tool call) failed, when the call
+/// as a whole did. A transcript records one result per call, not per sub-action: `make gen &&
+/// pytest` failing says nothing about which one failed.
+///
+/// - In an `&&` chain the last sub-action that ran is the one that failed, and the likeliest to
+///   have run last is the last one written; in a `;` chain which one failed is ambiguous. Either
+///   way the failure is attributed to the last sub-action only, and the earlier ones count as not
+///   failed. This can credit an earlier step that did fail (`make gen` failing stops `make gen &&
+///   pytest` before `pytest` runs), but never blames a step that succeeded for its successor's
+///   failure, which is what taught dead ends about commands that work.
+/// - A command with `||` (`or_chain`) keeps the failure on every sub-action: `a || b` fails only
+///   when `a` failed and `b` then ran and failed too.
+pub fn sub_action_failed(index: usize, count: usize, call_failed: bool, or_chain: bool) -> bool {
+    call_failed && (or_chain || index + 1 == count)
+}
+
+/// Whether a tool call's shell command has an `||` (see [`sub_action_failed`]).
+pub fn has_or_chain(input: &serde_json::Value) -> bool {
+    input.get("command").and_then(|c| c.as_str()).is_some_and(|c| c.contains("||"))
 }
 
 /// The path an action reads or writes, if any.
@@ -223,6 +235,20 @@ mod tests {
         assert_eq!(a, "scripts/wi-lookup");
         assert_eq!(command_head(&v(&["./scripts/wi-lookup", "W-2"])), a);
         assert_eq!(command_head(&v(&["make", "test"])), "make test");
+        assert_eq!(command_head(&v(&["python3", "-m", "pytest", "-q"])), "python3 -m pytest");
+        assert_ne!(command_head(&v(&["npm", "run", "build"])), command_head(&v(&["npm", "run", "check"])));
+    }
+
+    #[test]
+    fn a_failed_chain_is_attributed_to_its_last_sub_action() {
+        assert_eq!((0..3).map(|i| sub_action_failed(i, 3, true, false)).collect::<Vec<_>>(), [false, false, true]);
+        assert!((0..3).all(|i| !sub_action_failed(i, 3, false, false)));
+        assert!(sub_action_failed(0, 1, true, false));
+        assert!((0..3).all(|i| sub_action_failed(i, 3, true, true)), "a || b failed: both did");
+        assert!(
+            has_or_chain(&serde_json::json!({"command": "a || b"}))
+                && !has_or_chain(&serde_json::json!({"command": "a && b"}))
+        );
     }
 
     #[test]
