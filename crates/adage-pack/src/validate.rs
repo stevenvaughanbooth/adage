@@ -405,8 +405,13 @@ pub enum Program {
     /// A program in the command table, found on PATH (L-none).
     Tool(String),
     /// A repository or vendored script: its path (normalised, without `./`), and the
-    /// interpreter named before it, if any (which is itself a tool).
+    /// interpreter named before it, if any (a tool, or an environment program's path).
     Script { path: String, interpreter: Option<String> },
+    /// A program of the project's own environment (`.venv/bin/python`, `node_modules/.bin/vitest`):
+    /// its repository-relative path and the command-table program it is. The environment is the
+    /// project's, made by its setup, not content of the repository: it is never pinned or
+    /// vendored, never executed by adage-exec, and binds only where the checkout has it.
+    Env { path: String, tool: String },
 }
 
 fn looks_like_script(op: &str) -> bool {
@@ -420,17 +425,20 @@ pub fn program(argv: &[String], table: &CommandTable) -> Result<Program> {
     if a0.contains('{') {
         bail!("argv[0] {a0:?} is a placeholder; the program is never bound from input");
     }
-    if a0.contains('/') {
+    let env = env_program(a0, table);
+    if a0.contains('/') && env.is_none() {
         let p = a0.strip_prefix("./").unwrap_or(a0);
         if !safe_path(p) {
             bail!("argv[0] {a0:?} is not a repository-relative path");
         }
         return Ok(Program::Script { path: p.to_string(), interpreter: None });
     }
-    if table.get(a0).is_none() {
+    // The program as the command table names it (`python` for `.venv/bin/python`).
+    let name = env.as_ref().map(|(_, tool)| tool.clone()).unwrap_or_else(|| a0.clone());
+    if table.get(&name).is_none() {
         bail!("program {a0:?} is not in the command table, and no script covers it (dangling reference)");
     }
-    if INTERPRETERS.contains(&a0.as_str()) {
+    if INTERPRETERS.contains(&name.as_str()) {
         if let Some(f) = argv.iter().skip(1).find(|a| CODE_FLAGS.contains(&a.as_str())) {
             bail!("{a0} {f} runs inline code; a pack step is a plain argv");
         }
@@ -456,7 +464,24 @@ pub fn program(argv: &[String], table: &CommandTable) -> Result<Program> {
             break;
         }
     }
-    Ok(Program::Tool(a0.clone()))
+    Ok(match env {
+        Some((path, tool)) => Program::Env { path, tool },
+        None => Program::Tool(a0.clone()),
+    })
+}
+
+/// A program of the project's own environment: `<dir>/bin/<tool>` (a virtualenv: `.venv/bin/python`)
+/// or `node_modules/.bin/<tool>`, where `<dir>` is a repository-relative directory and `<tool>` is
+/// in the command table. Returns its path (without `./`) and the tool.
+pub fn env_program(a0: &str, table: &CommandTable) -> Option<(String, String)> {
+    let p = a0.strip_prefix("./").unwrap_or(a0);
+    if !safe_path(p) {
+        return None;
+    }
+    let (dir, tool) = p.rsplit_once('/')?;
+    let env_dir = dir.ends_with("/bin") || dir == "bin" || dir.ends_with("node_modules/.bin");
+    let in_env = adage_core::action::venv_of(p).is_some() || dir.ends_with("node_modules/.bin");
+    (env_dir && in_env && table.get(tool).is_some()).then(|| (p.to_string(), tool.to_string()))
 }
 
 /// Everything [`validate`] learns that the closure needs.
@@ -976,7 +1001,13 @@ fn validate_run(
     let prog = program(argv, table)?;
     match (&prog, &s.script) {
         (Program::Tool(_), Some(sc)) => bail!("script {:?} is declared, but argv does not run it", sc.path),
-        (Program::Tool(_), None) => {
+        (Program::Env { path, .. }, Some(_)) => {
+            bail!("{path} is the project's environment, not a script: it has no script entry")
+        }
+        (Program::Env { .. }, None) if r.exec.as_ref().is_some_and(|x| x.level > Level::E0) => {
+            bail!("a program of the project's environment is delivered at E0 only (never executed)")
+        }
+        (Program::Tool(_) | Program::Env { .. }, None) => {
             // Never trust a declared effect: classify the command ourselves.
             let actual = classify(&argv.join(" "), table);
             if rank(actual) > rank(s.effect) {

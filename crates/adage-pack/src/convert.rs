@@ -366,6 +366,8 @@ impl Cx {
                 self.tools.insert(t);
                 Ok(None)
             }
+            // The project's environment: nothing to require or pin (binding finds it).
+            Program::Env { .. } => Ok(None),
             Program::Script { path, interpreter } => {
                 let Some(root) = root else {
                     return Err(format!(
@@ -373,7 +375,7 @@ impl Cx {
                     ));
                 };
                 let sha = hash_repo_file(root, &path).map_err(|e| format!("cannot pin {path}: {e:#}"))?;
-                if let Some(i) = interpreter {
+                if let Some(i) = interpreter.filter(|i| !i.contains('/')) {
                     self.tools.insert(i);
                 }
                 let f = RepoFile { path: path.clone(), sha256: sha.clone(), deps: Vec::new() };

@@ -14,7 +14,8 @@
 //!   ([`crate::env::build`]); the run is bounded ([`ReplayLimits`]). Root runs as nobody.
 //! - **Environment directories** a clean checkout lacks (`.venv`, `node_modules`) may be lent
 //!   read-only from the repository ([`Replay::lend`]), so a skill that runs `.venv/bin/python`
-//!   can be replayed. What was lent is reported.
+//!   can be replayed; with one lent, the repository is readable too (an editable install imports
+//!   from it), never writable. What was lent is reported.
 //!
 //! Without a sandbox nothing runs: [`Replay::new`] refuses, and the caller reports every command
 //! as not replayed.
@@ -268,7 +269,11 @@ impl Replay {
         let home = std::env::var_os("HOME").map(PathBuf::from);
         let mut res = Resolved::new(&profile, &self.work, &self.scratch.path, &path_dirs, None, home.as_deref())
             .map_err(|e| refusal("sandbox", format!("resolving the profile: {e}")))?;
-        for l in &self.lent {
+        // A lent environment often points back into the repository (an editable install's
+        // path file names its source directory), so with one the repository itself is readable
+        // too: read-only, as E1 reads it. Nothing of it is writable.
+        let lent_repo = (!self.lent.is_empty()).then(|| self.repo.clone());
+        for l in self.lent.iter().chain(lent_repo.iter()) {
             if let Ok(c) = l.canonicalize() {
                 if !res.read.contains(&c) {
                     res.read.push(c);

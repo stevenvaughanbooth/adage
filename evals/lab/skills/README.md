@@ -2,6 +2,7 @@
 
 2026-09-29. An exploration, not a product: Python prototypes over the existing runtime, one live
 budget of $12 (spent **$9.89**), Claude Haiku 4.5 on Claude Code 2.1.284. No Rust was changed.
+Its recommendation has since been built as `adage train <skill>`: see §6 for the product's re-run.
 
 **Question.** A skill steers an agent, so it is already close to deterministic. Can we compile it
 once into typed, verified reflexes that Adage's hooks deliver just in time, and keep the skill's
@@ -303,6 +304,43 @@ since compiled avoid routes depend on it.
   third-party, and it was parsed, not run.
 - The compiled arm used reviewed strengths (fire), not the synthetic cap (prime).
 
+## 6. Productised: `adage train <skill>` (2026-09-29, $2.25)
+
+The recommendation above is now the product (docs/training.md): `adage train <SKILL.md>` parses
+the procedure graph (`adage_train::procedure`, this lab's `procedure.py` ported), compiles it to
+pack routes (`adage_train::compile`), replays every compiled command on a clean checkout in
+adage-exec's sandbox (`adage_exec::replay`, `adage_train::verify`), prints the review and stages one
+pack (origin `trained`, `procedure.json`, `[provenance] skill`); `adage train accept <name>`
+installs it as reviewed. The runtime and format gaps of §4: (a) "before you finish" is a finish
+line after any edit (`*`), carried by the `make test`, `make ci` sequence after code edits; (b)
+sequences bind live from packs; (c) `tests/test_{module}.py` compiles to an `edit_tests` input
+(the edited file's tests, from `adage_learn::testmap`); (d) "do not commit" compiles to the fixed
+advice `uncommitted`; (e) the procedure, its gaps and the skill's hash are in the pack.
+
+**acme, re-run** with the product's pack (`run_compiled.py`; the review is
+`results/acme-product-review.txt`, the numbers `results/acme-product-arms.json`): the sandbox's commit
+is now deterministic (`sandbox.py`), so every sandbox has the key the pack was compiled against.
+
+| | neither | skill in context | compiled (product) | compiled (lab, §2) |
+| --- | ---: | ---: | ---: | ---: |
+| Pass rate | 0.75 (9/12) | 1.00 (12/12) | **1.00** (12/12) | 1.00 |
+| Mean cost per session | $0.122 | $0.032 | **$0.034** | $0.046 |
+| Mean turns | 27.3 | 7.3 | **7.9** | 10.6 |
+| Mean input tokens | 564k | 103k | **109k** | 161k |
+| s5 `make ci` before finishing | 9/12 | 12/12 | **11/12** | 8/12 |
+| Git commands per session | 3.1 | 0 | **0** | 2.5 |
+
+Value captured (compiled − neither) / (skill − neither): pass 100%, cost 98%, turns 97%, input
+tokens 99% (the lab's track: 79%). The remaining gap to the skill in context is 6% of tokens.
+
+**click, compile only** (`results/click-product-review.txt`, against the RepoBench sandbox of
+`click-0cd28d65` with its `.venv`): the replay reproduces the lab's finding without a session:
+`.venv/bin/python -m pytest tests -q -x` fails on a clean checkout (`ERROR collecting
+tests/test_basic.py`) and is dropped as stale; the forbidden runners are verified (two with the
+skill's `No module named pytest`, `pytest` split off with `command not found`); and "run the tests
+for that module" compiles to the edited file's tests (verified with `tests/test_compat.py`, prime).
+Reproduction, search and the fix stay text. Not re-run live.
+
 ## Reproduce
 
 ```bash
@@ -319,6 +357,14 @@ python3 evals/lab/skills/report.py evals/lab/skills/skills/acme-work-item/SKILL.
 # and report.py ... --neither <RepoBench v2 click root>
 ```
 
+The product's acme comparison (§6), from a person's terminal:
+
+```bash
+cargo build -p adage-cli -p adage-train                     # CARGO_PROFILE_DEV_DEBUG=0
+python3 evals/lab/skills/run_compiled.py evals/lab/skills/configs/acme.json /tmp/skill-lab2/acme --execute
+python3 evals/lab/skills/report.py evals/lab/skills/skills/acme-work-item/SKILL.md /tmp/skill-lab2/acme
+```
+
 `--execute` spends money and refuses inside an agent session; the sessions get only the runner's
 allowlisted environment (never `CLAUDECODE` or a session id). Raw runs are not committed.
 
@@ -332,4 +378,5 @@ allowlisted environment (never `CLAUDECODE` or a session id). Raw runs are not c
 | click held-out, 2 arms | 16 | 6.36 |
 | `adage train` on the acme skill | 8 | 0.16 |
 | compile-time LLM structuring | 3 calls | 0.18 |
-| **Total** | | **9.89** |
+| **Total (§1–5)** | | **9.89** |
+| acme held-out, 3 arms, the product's pack (§6) | 36 | 2.25 |

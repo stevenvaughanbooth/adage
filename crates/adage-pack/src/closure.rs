@@ -8,7 +8,9 @@
 //! 2. `steps[*].script` → `scripts/sha256-<hex>` (vendor) or a `requires.repo_files` entry (ref).
 //! 3. `steps[*].run.argv[0]` → an L-none program (`requires.tools`), or the path `script` covers;
 //!    an argv naming a repository path without a `script` entry is refused
-//!    ([`crate::validate::program`]). An interpreter before a script is a tool too.
+//!    ([`crate::validate::program`]). An interpreter before a script is a tool too. A program of
+//!    the project's environment (`.venv/bin/python`) → `env:<path>`, which binding finds in the
+//!    checkout (it is not a requirement a pack can list or satisfy).
 //! 4. `links` → routes of the same pack.
 //! 5. Implicit: route B triggered `after_command C` with `pattern::meets(C, key(A.steps[0].run))`
 //!    gives A → B.
@@ -117,9 +119,15 @@ pub fn compute(p: &Parsed) -> Result<Closure> {
             let Some(run) = &s.run else { continue };
             match program(&run.argv, &table)? {
                 Program::Tool(t) => edge(&mut c, "tool", &me, format!("tool:{t}")),
+                // The project's environment: found in the checkout at bind, never in `requires`.
+                Program::Env { path, .. } => edge(&mut c, "env", &me, format!("env:{path}")),
                 Program::Script { interpreter, .. } => {
-                    if let Some(i) = interpreter {
-                        edge(&mut c, "tool", &me, format!("tool:{i}"));
+                    match interpreter {
+                        Some(i) if i.contains('/') => {
+                            edge(&mut c, "env", &me, format!("env:{}", i.trim_start_matches("./")))
+                        }
+                        Some(i) => edge(&mut c, "tool", &me, format!("tool:{i}")),
+                        None => {}
                     }
                     let Some(sc) = &s.script else {
                         bail!(
@@ -270,7 +278,7 @@ pub fn compute(p: &Parsed) -> Result<Closure> {
             Some(("repo-file", path)) => {
                 q.repo_files.iter().find(|f| f.path == path).map(|f| f.sha256.clone()).unwrap_or_default()
             }
-            Some(("builtin" | "tool" | "template" | "model", _)) => "-".to_string(),
+            Some(("builtin" | "tool" | "template" | "model" | "env", _)) => "-".to_string(),
             _ => continue,
         };
         c.nodes.insert(e.to.clone(), digest);

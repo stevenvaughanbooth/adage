@@ -404,6 +404,15 @@ pub fn render(o: &Outcome) -> String {
     if !o.report.lent.is_empty() {
         line(&mut s, format!("            lent read-only to each checkout: {}", o.report.lent.join(", ")));
     }
+    if !o.report.unlent.is_empty() {
+        line(
+            &mut s,
+            format!(
+                "            not lent: {} (the sandbox runs as nobody, who cannot read it: an ancestor directory is private)",
+                o.report.unlent.join(", ")
+            ),
+        );
+    }
     line(&mut s, String::new());
     for st in &g.steps {
         line(&mut s, format!("{:<3} {:<10} {}", st.id, st.role.as_str(), st.title));

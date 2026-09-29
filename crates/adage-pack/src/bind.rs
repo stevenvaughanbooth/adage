@@ -410,12 +410,26 @@ fn check_route(
         let prog = program(&run.argv, table).map_err(|e| e.to_string())?;
         let tool = match &prog {
             Program::Tool(t) => Some(t.clone()),
+            Program::Env { path, .. } => Some(path.clone()),
             Program::Script { interpreter, .. } => interpreter.clone(),
         };
-        if let Some(t) = tool {
-            if !on_path(&t, env.path.as_ref()) {
-                return Err(format!("the tool {t} is not on PATH"));
+        match tool {
+            // The project's environment: its program must be in this checkout (a virtualenv's
+            // `python` is a symlink out of it, so this follows links; nothing is run).
+            Some(t) if t.contains('/') => {
+                let Some(root) = &target.root else {
+                    return Err(format!(
+                        "runs {t} from the project's environment; there is no checkout of {} on this machine to find it in",
+                        target.repo
+                    ));
+                };
+                let p = t.trim_start_matches("./");
+                if !crate::validate::safe_path(p) || !executable(&root.join(p)) {
+                    return Err(format!("runs {p} from the project's environment, which this checkout does not have"));
+                }
             }
+            Some(t) if !on_path(&t, env.path.as_ref()) => return Err(format!("the tool {t} is not on PATH")),
+            _ => {}
         }
         let Some(sc) = &s.script else { continue };
         match sc.closure {

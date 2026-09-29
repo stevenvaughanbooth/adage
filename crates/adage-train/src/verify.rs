@@ -47,15 +47,21 @@ pub struct Report {
     pub sandbox: String,
     /// Environment directories lent to the checkouts.
     pub lent: Vec<String>,
+    /// Environment directories the repository has but the sandbox's user cannot read (running as
+    /// root, the replay runs as nobody), so they were not lent.
+    pub unlent: Vec<String>,
     /// Commands run.
     pub runs: usize,
 }
 
-static SIGNATURES: Lazy<[Regex; 5]> = Lazy::new(|| {
+static SIGNATURES: Lazy<[Regex; 7]> = Lazy::new(|| {
     [
         Regex::new(r"No module named [A-Za-z0-9_.]+").unwrap(),
         Regex::new(r"RuntimeError: [^\n]{1,80}").unwrap(),
         Regex::new(r"[A-Za-z0-9_.-]+: (?:command )?not found").unwrap(),
+        // pytest: a test file that does not even collect, or the first failing test.
+        Regex::new(r"ERROR collecting [A-Za-z0-9_./-]{1,100}").unwrap(),
+        Regex::new(r"(?m)^FAILED [A-Za-z0-9_./:\[\]-]{1,100}").unwrap(),
         Regex::new(r"[A-Za-z]+Error: [^\n]{1,80}").unwrap(),
         Regex::new(r"(?i)\berror: [^\n]{1,80}").unwrap(),
     ]
@@ -79,6 +85,14 @@ pub fn signature_of(output: &str) -> Option<String> {
 fn last_line(output: &str) -> String {
     let l = output.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("").trim();
     adage_pack::procedure::clean_text(&l.chars().take(120).collect::<String>())
+}
+
+/// Whether `argv` runs a program from an environment directory the repository has but the
+/// replay's checkout was not lent (its user cannot reach it).
+fn unlent_env(argv: &[String], root: &Path) -> bool {
+    let first = argv.first().map(|a| a.trim_start_matches("./")).unwrap_or("");
+    let dir = first.split('/').next().unwrap_or("");
+    LEND.contains(&dir) && root.join(dir).is_dir()
 }
 
 enum Ran {
@@ -121,8 +135,12 @@ fn replay_one(c: Candidate, root: &Path, o: &Options, report: &mut Report) -> (V
         }
     };
     for d in LEND {
-        if rp.lend(d) && !report.lent.iter().any(|x| x == d) {
-            report.lent.push(d.to_string());
+        if rp.lend(d) {
+            if !report.lent.iter().any(|x| x == d) {
+                report.lent.push(d.to_string());
+            }
+        } else if root.join(d).is_dir() && !report.unlent.iter().any(|x| x == d) {
+            report.unlent.push(d.to_string());
         }
     }
     let mut not_replayed: Option<String> = None;
@@ -171,6 +189,15 @@ fn replay_one(c: Candidate, root: &Path, o: &Options, report: &mut Report) -> (V
                     }
                     Ran::Missing(p) => {
                         let why = format!("`{cmd}`: {p} is not on the replay's PATH");
+                        c.replay.push(why.clone());
+                        not_replayed.get_or_insert(why);
+                    }
+                    // The project's environment exists here but could not be lent to the replay:
+                    // nothing is known about the command.
+                    Ran::NotInCheckout(_) if unlent_env(&argv, root) => {
+                        let why = format!(
+                            "`{cmd}`: the project's environment could not be lent to the sandbox (its user cannot read it)"
+                        );
                         c.replay.push(why.clone());
                         not_replayed.get_or_insert(why);
                     }
@@ -372,6 +399,10 @@ mod tests {
             Some("RuntimeError: ACME_ENV is not set")
         );
         assert_eq!(signature_of("sh: 1: pytest: not found").as_deref(), Some("pytest: not found"));
+        assert_eq!(
+            signature_of("==== ERRORS ====\n____ ERROR collecting tests/test_basic.py ____\n").as_deref(),
+            Some("ERROR collecting tests/test_basic.py")
+        );
         assert_eq!(signature_of("all good"), None);
     }
 }

@@ -14,7 +14,7 @@
 //! adage condition --auto --repo-root <path>   condition one repository quietly (what hooks start)
 //! adage condition --instincts-only [--repo-path <dir>] [--repo <key>]  bind Adage's instincts for
 //!                                    a repository from its files alone, with no traces (day 0)
-//! adage train <plan|--plan|report> …  grow reflexes from a skill (runs the adage-train binary)
+//! adage train <SKILL.md> | accept <name> | plan | --plan | report   compile a skill into reflexes
 //! adage config [get <key> | set <key> <value>] [--json]   settings in $ADAGE_HOME/config.toml
 //! adage status                       installed tracks, reflexes, strengths, and evidence
 //! adage report [--json]              directives emitted, followed, and ignored, from spools

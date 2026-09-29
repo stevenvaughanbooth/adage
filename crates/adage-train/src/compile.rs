@@ -226,14 +226,23 @@ impl Cx<'_> {
         let prog = program(&argv, self.table).map_err(|e| format!("`{template}`: {e:#}"))?;
         let script = match prog {
             Program::Tool(_) => None,
-            Program::Script { path, .. } => {
-                if adage_core::action::venv_of(&path).is_some() {
+            Program::Env { path, .. } => {
+                // The project's environment: bound where the checkout has it, never pinned.
+                if !self.root.join(&path).exists() {
                     return Err(format!(
-                        "`{template}` runs {path} from the project's environment, which a pack cannot pin yet (it pins repository scripts by their hash)"
+                        "`{template}` runs {path} from the project's environment, which this checkout does not have (set it up, then compile again)"
+                    ));
+                }
+                None
+            }
+            Program::Script { path, .. } => {
+                if std::fs::symlink_metadata(self.root.join(&path)).is_err() {
+                    return Err(format!(
+                        "`{template}` runs {path}, which is not in the repository: the agent writes it, so nothing can pin it"
                     ));
                 }
                 let sha = adage_pack::convert::hash_repo_file(self.root, &path)
-                    .map_err(|e| format!("`{template}` runs {path}, which is not a file of this repository ({e:#})"))?;
+                    .map_err(|e| format!("`{template}` runs {path}, which cannot be pinned ({e:#})"))?;
                 self.out.repo_files.insert(
                     path.clone(),
                     RepoFile { path: path.clone(), sha256: sha.clone(), deps: Vec::new() },
@@ -698,7 +707,7 @@ impl Compiled {
                         Ok(Program::Tool(t)) => {
                             out.insert(t);
                         }
-                        Ok(Program::Script { interpreter: Some(i), .. }) => {
+                        Ok(Program::Script { interpreter: Some(i), .. }) if !i.contains('/') => {
                             out.insert(i);
                         }
                         _ => {}
@@ -767,6 +776,6 @@ mod tests {
         let g = procedure::parse(ACME.as_bytes(), "SKILL.md", "x", &table);
         let c = compile(g, root.path(), &table);
         assert!(c.routes_of("s1").is_empty());
-        assert!(c.text["s1"][0].contains("not a file of this repository"), "{:?}", c.text["s1"]);
+        assert!(c.text["s1"][0].contains("which is not in the repository"), "{:?}", c.text["s1"]);
     }
 }
