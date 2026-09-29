@@ -1,0 +1,203 @@
+{
+ "acme_adage_vs_off": {
+  "calls": {
+   "diff": -13.75,
+   "ci90": [
+    -16.25,
+    -11.25
+   ],
+   "base": 23.3333
+  },
+  "usd": {
+   "diff": -0.0466,
+   "ci90": [
+    -0.056,
+    -0.039
+   ],
+   "base": 0.0926
+  },
+  "passed": {
+   "diff": 0.4167,
+   "ci90": [
+    0.167,
+    0.667
+   ],
+   "base": 0.5833
+  }
+ },
+ "acme_agents-md_vs_off": {
+  "calls": {
+   "diff": -17.3333,
+   "ci90": [
+    -20.0,
+    -14.833
+   ],
+   "base": 23.3333
+  },
+  "usd": {
+   "diff": -0.0592,
+   "ci90": [
+    -0.068,
+    -0.051
+   ],
+   "base": 0.0926
+  },
+  "passed": {
+   "diff": 0.4167,
+   "ci90": [
+    0.167,
+    0.667
+   ],
+   "base": 0.5833
+  }
+ },
+ "acme_adage_vs_agents-md": {
+  "calls": {
+   "diff": 3.5833,
+   "ci90": [
+    2.75,
+    4.583
+   ],
+   "base": 6.0
+  },
+  "usd": {
+   "diff": 0.0126,
+   "ci90": [
+    0.009,
+    0.017
+   ],
+   "base": 0.0334
+  },
+  "passed": {
+   "diff": 0.0,
+   "ci90": [
+    0.0,
+    0.0
+   ],
+   "base": 1.0
+  }
+ },
+ "lag_to_follow_by_hook_kind": {
+  "obligation@PostToolBatch": {
+   "n": 8,
+   "median": 0.0,
+   "p90": 0.0
+  },
+  "read-batch@PostToolBatch": {
+   "n": 26,
+   "median": 0.0,
+   "p90": 0.0
+  },
+  "run@PostToolBatch": {
+   "n": 22,
+   "median": 4.0,
+   "p90": 29.60000000000001
+  },
+  "sequence@PostToolBatch": {
+   "n": 8,
+   "median": 0.0,
+   "p90": 0.0
+  },
+  "avoid@PostToolUseFailure": {
+   "n": 52,
+   "median": 0.0,
+   "p90": 0.0
+  },
+  "stop@Stop": {
+   "n": 6,
+   "median": 0.0,
+   "p90": 4.0
+  },
+  "avoid@UserPromptSubmit": {
+   "n": 40,
+   "median": 5.0,
+   "p90": 18.1
+  },
+  "run@UserPromptSubmit": {
+   "n": 32,
+   "median": 0.0,
+   "p90": 0.0
+  }
+ },
+ "C_directive_usd_mean": 0.000203,
+ "C_directive_usd_p90": 0.000356,
+ "per_repo_dead_end": {
+  "attrs": {
+   "posthoc_realised_diff_calls": -3.125,
+   "ci90": [
+    -3.941,
+    -2.341
+   ],
+   "n_t": 16,
+   "n_c": 16,
+   "preemptive_offered_calls": 4.31,
+   "preemptive_offered_ci90": [
+    3.643,
+    5.062
+   ],
+   "p_follow": 1.0,
+   "p_self": 0.25
+  },
+  "click": {
+   "posthoc_realised_diff_calls": -1.019,
+   "ci90": [
+    -1.242,
+    -0.8
+   ],
+   "n_t": 14,
+   "n_c": 11,
+   "preemptive_offered_calls": 2.09,
+   "preemptive_offered_ci90": [
+    1.818,
+    2.333
+   ],
+   "p_follow": 1.0,
+   "p_self": 0.455
+  },
+  "click-slice": {
+   "posthoc_realised_diff_calls": -1.25,
+   "ci90": [
+    -1.5,
+    -1.0
+   ],
+   "n_t": 2,
+   "n_c": 4,
+   "preemptive_offered_calls": 2.25,
+   "preemptive_offered_ci90": [
+    2.0,
+    2.5
+   ],
+   "p_follow": 1.0,
+   "p_self": 0.75
+  },
+  "click-sonnet5": {
+   "posthoc_realised_diff_calls": null,
+   "ci90": [
+    null,
+    null
+   ],
+   "n_t": 1,
+   "n_c": 0,
+   "preemptive_offered_calls": null,
+   "preemptive_offered_ci90": null,
+   "p_follow": 1.0,
+   "p_self": null
+  },
+  "marshmallow": {
+   "posthoc_realised_diff_calls": -2.023,
+   "ci90": [
+    -2.769,
+    -1.023
+   ],
+   "n_t": 11,
+   "n_c": 8,
+   "preemptive_offered_calls": 3.75,
+   "preemptive_offered_ci90": [
+    3.0,
+    4.4
+   ],
+   "p_follow": 1.0,
+   "p_self": 0.0
+  }
+ }
+}
