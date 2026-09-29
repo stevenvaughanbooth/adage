@@ -243,3 +243,19 @@ test("/how does not play by itself with reduced motion", async ({ page }) => {
   await page.locator("#walk").scrollIntoViewIfNeeded();
   await expect(page.getByRole("button", { name: "Play" })).toBeVisible();
 });
+
+test("the hero tour plays by default and survives a hover and a teaser replay", async ({ page }) => {
+  await films(page, "hang");
+  await page.goto("/");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Pause tour" })).toBeVisible();
+  await page.locator("#panel").hover();
+  await page.mouse.move(5, 5);
+  await expect(page.getByRole("button", { name: "Pause tour" })).toBeVisible();
+  await page.getByRole("link", { name: "Watch the teaser" }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#film")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Pause tour" })).toBeVisible();
+  await page.getByRole("tab", { name: "Reflexes" }).click();
+  await expect(page.getByRole("button", { name: "Play tour" })).toBeVisible();
+});

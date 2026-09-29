@@ -22,7 +22,7 @@ let scene: Scene | null = null;
 
 /* ------------------------------------------------------------ the tabs and the tour */
 const DWELL = 12000;
-let tab = 0, auto = !reduced, timer = 0, heroOn = true, filmOn = false;
+let tab = 0, auto = !reduced, timer = 0, heroOn = true, filmOn = false, hovering = false;
 const tabsEl = $("tabs"), pauseBtn = $<HTMLButtonElement>("pause");
 TABS.forEach((t, i) => {
   const b = document.createElement("button");
@@ -41,7 +41,7 @@ TABS.forEach((t, i) => {
 });
 function schedule() {
   clearTimeout(timer);
-  if (auto && heroOn && !filmOn) timer = window.setTimeout(() => select((tab + 1) % TABS.length), DWELL);
+  if (auto && heroOn && !filmOn && !hovering) timer = window.setTimeout(() => select((tab + 1) % TABS.length), DWELL);
 }
 function select(i: number) {
   tab = i;
@@ -63,9 +63,11 @@ function syncPause() {
 }
 function stopAuto() { if (!auto) return; auto = false; syncPause(); select(tab); }
 pauseBtn.addEventListener("click", () => { auto = !auto; syncPause(); select(auto ? (tab + 1) % TABS.length : tab); });
-// Reading or using the panel stops the tour.
+// Using the tabs or the panel with the keyboard stops the tour; Play tour resumes it.
 document.querySelector(".copy")!.addEventListener("focusin", (e) => { const t = e.target as HTMLElement; if (t !== pauseBtn && t.id !== "h" && t.closest(".tabrow, .panel")) stopAuto(); });
-$("panel").addEventListener("pointerenter", stopAuto);
+// Reading the panel holds the tour on this part; it moves on when the pointer leaves.
+$("panel").addEventListener("pointerenter", () => { hovering = true; schedule(); });
+$("panel").addEventListener("pointerleave", () => { hovering = false; if (auto) select(tab); });
 mqReduce.addEventListener("change", () => { reduced = mqReduce.matches; if (reduced) stopAuto(); scene?.motion(reduced); });
 new IntersectionObserver((es) => { heroOn = !!es[0]?.isIntersecting; schedule(); }).observe(document.querySelector(".hero")!);
 
@@ -76,7 +78,7 @@ const film = createFilm({
   onOpen() { filmOn = true; clearTimeout(timer); scene?.hold(true); },
   onClose() { filmOn = false; scene?.hold(false); select(tab); },
 });
-$("teaser").addEventListener("click", (e) => { e.preventDefault(); stopAuto(); select(0); film.show({ sound: true }); });
+$("teaser").addEventListener("click", (e) => { e.preventDefault(); select(0); film.show({ sound: true }); });
 
 /* ------------------------------------------------------------ the scene, loaded after the words */
 function fallback() {
