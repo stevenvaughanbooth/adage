@@ -259,6 +259,20 @@ impl Shape {
             && options_include(&observed.options, &self.options)
     }
 
+    /// Whether the agent **followed** this command, directed, by running `observed`: the same
+    /// identity (program and subcommand or module), at least this command's options and its
+    /// positionals, and anything else it chose to add: the paths, test ids, filters and flags
+    /// that narrow a run to the task at hand. `.venv/bin/python -m pytest tests/x.py -xvs`
+    /// follows `.venv/bin/python -m pytest`; `python -m pytest tests/x.py` (another interpreter),
+    /// `npm run build` (another script) and `make test` (another target) do not follow what they
+    /// are not. Broader than [`Shape::met_by`], which an obligation needs.
+    pub fn followed_by(&self, observed: &Shape) -> bool {
+        seq_eq(&self.identity, &observed.identity)
+            && observed.positionals.len() >= self.positionals.len()
+            && self.positionals.iter().zip(&observed.positionals).all(|(a, b)| tok_eq(a, b))
+            && options_include(&observed.options, &self.options)
+    }
+
     pub fn same_identity(&self, other: &Shape) -> bool {
         seq_eq(&self.identity, &other.identity)
     }
@@ -310,6 +324,11 @@ fn read(toks: &[String], depth: usize) -> Option<Shape> {
     let rest = &toks[1..];
 
     if interpreter(name) {
+        // A project's own interpreter (`.venv/bin/python`, a relative path) is not the one on
+        // `PATH`: running the tests in the project's environment is not running them outside it.
+        // An absolute path is a system interpreter (paths inside the repository were made
+        // relative by `keys::canonicalise`), the same as its name.
+        let name = if prog.contains('/') && !prog.starts_with('/') { prog } else { name };
         let (opts, pos) = split(rest, &[]);
         // The first operand: a script, or the module after `-m`, or inline code after `-c`.
         let mut i = 0;
@@ -330,7 +349,7 @@ fn read(toks: &[String], depth: usize) -> Option<Shape> {
                 s.options = o;
                 return Some(s);
             }
-            if mode_flag(name, t) {
+            if mode_flag(basename(name), t) {
                 // A flag that switches the interpreter into a mode of its own: `node --test`
                 // (its test runner) is not `node tools/codegen.mjs`.
                 let (o2, p2) = split(&rest[i + 1..], &[]);
@@ -462,7 +481,8 @@ impl CommandPattern {
     /// and subcommand, whatever its operands. A bare interpreter (`python3`) is every run of it.
     pub fn runner(text: &str) -> Option<CommandPattern> {
         let shape = Shape::of_command(text)?;
-        let bare = shape.identity.len() == 1 && shape.identity[0] == shape.program && interpreter(&shape.program);
+        let bare =
+            shape.identity.len() == 1 && shape.identity[0] == shape.program && interpreter(basename(&shape.program));
         Some(CommandPattern { level: if bare { Level::Head } else { Level::HeadSub }, shape })
     }
 
@@ -513,6 +533,61 @@ pub fn meets(directed: &str, observed: &str) -> bool {
             (Some(d), Some(o)) => d.met_by(&o),
             _ => false,
         }
+}
+
+/// Whether an observed command (canonical key `observed`) **follows** a directed one
+/// (`directed`), as every follow judgement reads it (the runtime, the eval scorer, `adage graph`):
+/// equal keys, or the same program and subcommand with the directed flags and positionals, plus
+/// whatever the agent added ([`Shape::followed_by`]). An obligation is stricter ([`meets`]): `make
+/// gen test` follows `make gen` but does not meet it. Keys that are not commands follow only when
+/// equal.
+///
+/// This is the one follow relation: every judgement calls it, so an action classifier (role ×
+/// environment × scope: "a test run in the project's environment") can replace its body without
+/// touching a caller. Its equivalence class today: the same interpreter or environment prefix
+/// (`.venv/bin/python` is not `python`), the same runner (program and subcommand or module),
+/// the directed flags and operands, and any arguments added.
+pub fn follows(directed: &str, observed: &str) -> bool {
+    directed == observed
+        || match (Shape::of_key(directed), Shape::of_key(observed)) {
+            (Some(d), Some(o)) => d.followed_by(&o),
+            _ => false,
+        }
+}
+
+/// Programs an agent runs to look around or tidy up, whatever their arguments: never a step of
+/// the repository's to direct (the compiler's target filter,
+/// `adage_graph::compile::shapes::housekeeping`, calls [`is_housekeeping`]).
+pub const HOUSEKEEPING_PROGRAMS: &[&str] = &[
+    "cat", "cd", "clear", "date", "df", "du", "echo", "env", "false", "file", "find", "grep", "head", "less", "ls",
+    "mkdir", "more", "printenv", "printf", "pwd", "rg", "sleep", "stat", "tail", "touch", "tree", "true", "wc",
+    "which", "whoami",
+];
+
+/// Version-control subcommands that only look (`git log`, `git status`): housekeeping too.
+pub const HOUSEKEEPING_SUBCOMMANDS: &[&str] = &[
+    "git log",
+    "git status",
+    "git diff",
+    "git show",
+    "git branch",
+    "git remote",
+    "git rev-parse",
+    "git blame",
+    "git ls-files",
+];
+
+/// Whether a command (as a track stores it, or an argv joined) is housekeeping: a program that
+/// only looks around ([`HOUSEKEEPING_PROGRAMS`]) or a look-only version-control subcommand
+/// ([`HOUSEKEEPING_SUBCOMMANDS`]), after any environment assignments and whatever its options.
+/// `git log --oneline -5` is housekeeping; `git commit`, `make gen` and `pytest` are not.
+pub fn is_housekeeping(command: &str) -> bool {
+    let Some(s) = Shape::of_command(command) else { return false };
+    if HOUSEKEEPING_PROGRAMS.contains(&basename(&s.program)) {
+        return true;
+    }
+    let id = s.identity.join(" ");
+    HOUSEKEEPING_SUBCOMMANDS.contains(&id.as_str())
 }
 
 /// Whether an observed canonical key runs one of a dead end's avoided runners (`a / b`).
@@ -608,6 +683,87 @@ mod tests {
         assert!(meets("read {path}", "read {path}"));
         assert!(!meets("read {path}", "read {path} [range]"));
         assert!(!meets("exec make gen", "read {path}"));
+    }
+
+    #[test]
+    fn a_directed_runner_is_followed_by_a_run_narrowed_to_the_task() {
+        let f = |d: &str, o: &str| follows(&key(d), &key(o));
+        // RepoBench v2 (click): U11 directed `.venv/bin/python -m pytest`, and the agent's next
+        // test command ran it with its own test id and flags. All 41 of these were judged
+        // "ignored" by `meets`.
+        let directed = ".venv/bin/python -m pytest";
+        for o in [
+            ".venv/bin/python -m pytest tests/test_options.py::test_shadowed_help_option_error_hint -xvs",
+            ".venv/bin/python -m pytest tests/test_formatting.py -xvs",
+            ".venv/bin/python -m pytest tests/ -q --tb=short",
+            ".venv/bin/python -m pytest",
+            "./.venv/bin/python -m pytest -k billing tests",
+        ] {
+            assert!(f(directed, o), "{o:?} follows {directed:?}");
+        }
+        // An obligation stays strict: a narrowed run does not meet it.
+        assert!(!met(directed, ".venv/bin/python -m pytest tests/test_formatting.py -xvs"));
+        // Not the directed command: another interpreter (the dead end itself), module or program.
+        for o in [
+            "python -m pytest tests/test_options.py -xvs",
+            "python3 -m pytest tests",
+            "/usr/bin/python3 -m pytest",
+            ".venv/bin/python -m unittest tests",
+            ".venv/bin/python repro.py",
+            "uv run pytest tests",
+        ] {
+            assert!(!f(directed, o), "{o:?} must not follow {directed:?}");
+        }
+        // The same relation elsewhere: extra positionals and options are the agent's; the
+        // directed identity, flags and positionals are not optional.
+        for (d, o) in [
+            ("cargo test", "cargo test -p adage-core pattern::tests"),
+            ("go test", "go test ./pkg/... -run TestX"),
+            ("pytest", "pytest tests/a.py::t -x"),
+            ("npm test", "npm test -- src/a.test.ts"),
+            ("make gen", "make gen -j4"),
+            ("scripts/wi-lookup W-1 --json", "./scripts/wi-lookup W-2 --json --verbose"),
+        ] {
+            assert!(f(d, o), "{o:?} follows {d:?}");
+        }
+        for (d, o) in [
+            ("npm run check", "npm run build"),
+            ("make gen", "make test"),
+            ("cargo test --workspace", "cargo test -p x"),
+            ("scripts/wi-lookup W-1 --json", "scripts/wi-lookup W-1"),
+            ("gh issue view W-1", "gh issue close W-1"),
+        ] {
+            assert!(!f(d, o), "{o:?} must not follow {d:?}");
+        }
+        // The project's interpreter is not the one on PATH, for dead ends too.
+        assert!(!runs_avoided("python -m pytest", &key(".venv/bin/python -m pytest tests -x")));
+        assert!(runs_avoided("python -m pytest", &key("python -m pytest tests -x")));
+    }
+
+    #[test]
+    fn housekeeping_is_never_a_step() {
+        for c in [
+            "git log --oneline -5",
+            "git status --short",
+            "git -C sub diff HEAD~1",
+            "git show HEAD",
+            "ls -la src",
+            "cat README.md",
+            "wc -l a.py",
+            "head -n 20 x",
+            "tail -f log",
+            "find . -name '*.py'",
+            "grep -rn foo src",
+            "echo done",
+            "pwd",
+            "/usr/bin/ls",
+            "LC_ALL=C ls",
+        ] {
+            assert!(is_housekeeping(c), "{c:?} is housekeeping");
+        }
+        for c in ["git commit -m x", "git push", "make gen", "pytest", ".venv/bin/python -m pytest", "npm test"] {
+            assert!(!is_housekeeping(c), "{c:?} is not housekeeping");
+        }
     }
 
     #[test]

@@ -344,7 +344,13 @@ fn read_spool(path: &Path, repo: &str) -> Option<SpoolSession> {
             match j["kind"].as_str() {
                 Some("followed") => s.followed += 1,
                 Some("obligation_met") => s.finish_lines += 1,
-                Some("ignored") | Some("misfired") => ignored.push(j["route"].as_str().unwrap_or("").to_string()),
+                // Followed, and the directed command failed: followed all the same (the card
+                // counts what agents did), but no dead end was headed off.
+                Some("misfired") => {
+                    s.followed += 1;
+                    ignored.push(j["route"].as_str().unwrap_or("").to_string());
+                }
+                Some("ignored") => ignored.push(j["route"].as_str().unwrap_or("").to_string()),
                 _ => {}
             }
         }

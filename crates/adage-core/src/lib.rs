@@ -3,6 +3,7 @@
 
 pub mod gitobj;
 pub mod keys;
+pub mod outcome;
 pub mod pattern;
 pub mod pricing;
 pub mod repo;

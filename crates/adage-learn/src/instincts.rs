@@ -11,10 +11,11 @@
 //!   Environment-effect instincts (`pnpm install`) are nascent until a person approves one: that
 //!   approves the pack's environment steps for the repository (`Reviews::packs`).
 //! - **Auto-extinguish.** The runtime judges every instinct directive ([`adage_runtime::Judgement`]).
-//!   From the treated arm's spools, an instinct route with at least [`EXTINGUISH_MISFIRED`]
-//!   `misfired` judgements (the agent ran the directed command and it failed), or whose
-//!   ignore rate has a Wilson lower bound of at least [`EXTINGUISH_IGNORE_LOWER_BOUND`] over at least
-//!   [`EXTINGUISH_MIN_JUDGEMENTS`] judgements, is extinguished, recorded as a person's `extinguish` is (so a
+//!   From the spools, an instinct route with at least [`EXTINGUISH_MISFIRED`] `misfired`
+//!   judgements (the agent ran the directed command and it failed without running), no fewer
+//!   than its working follows, or, only with a control-arm comparison, an ignore rate whose
+//!   Wilson lower bound reaches [`EXTINGUISH_IGNORE_LOWER_BOUND`] over at least
+//!   [`EXTINGUISH_MIN_JUDGEMENTS`] judgements ([`should_extinguish`]), is extinguished, recorded as a person's `extinguish` is (so a
 //!   re-bind does not bring it back), and the change appears in `learn.log`. Losing authority is
 //!   always automatic.
 //! - **Capped.** Prime, forming at most (never firm), never an obligation or a Stop request
@@ -93,22 +94,28 @@ pub struct InstinctReport {
     pub not_bound: Option<String>,
 }
 
-/// Runtime judgements of one route, from the treated arm's spools.
+/// Runtime judgements of one route: the treated arm's (the directive was delivered), and the
+/// control arm's (withheld: a "followed" there is the agent taking the step unaided).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Judged {
     pub followed: u32,
     pub misfired: u32,
     pub ignored: u32,
+    /// Control sessions: the agent took the step without being told.
+    pub control_followed: u32,
+    /// Control sessions: judged in all (followed, misfired or ignored).
+    pub control_total: u32,
 }
 
 impl Judged {
+    /// Treated judgements.
     pub fn total(&self) -> u32 {
         self.followed + self.misfired + self.ignored
     }
 }
 
-/// Judgements per (repository, route) from the spools in `dir` (the treated arm only: in the
-/// control nothing was delivered), as `adage review` and `adage graph` count them.
+/// Judgements per (repository, route) from the spools in `dir`, by arm, as `adage review` and
+/// `adage graph` count them.
 pub fn judgements(dir: &Path) -> BTreeMap<(String, String), Judged> {
     let mut out: BTreeMap<(String, String), Judged> = BTreeMap::new();
     let Ok(rd) = std::fs::read_dir(dir) else { return out };
@@ -117,15 +124,25 @@ pub fn judgements(dir: &Path) -> BTreeMap<(String, String), Judged> {
     spools.sort();
     for p in spools {
         let recs: Vec<Value> = adage_store::spool::read_all(&p).unwrap_or_default();
-        for r in recs.iter().filter(|r| r["arm"] == "treated") {
+        for r in recs.iter() {
+            let control = match r["arm"].as_str() {
+                Some("treated") => false,
+                Some("control") => true,
+                _ => continue,
+            };
             let Some(repo) = r["repo"].as_str() else { continue };
             for j in r["decision"]["judgements"].as_array().into_iter().flatten() {
                 let Some(route) = j["route"].as_str() else { continue };
                 let e = out.entry((repo.to_string(), route.to_string())).or_default();
-                match j["kind"].as_str() {
-                    Some("followed") => e.followed += 1,
-                    Some("misfired") => e.misfired += 1,
-                    Some("ignored") => e.ignored += 1,
+                match (control, j["kind"].as_str()) {
+                    (false, Some("followed")) => e.followed += 1,
+                    (false, Some("misfired")) => e.misfired += 1,
+                    (false, Some("ignored")) => e.ignored += 1,
+                    (true, Some("followed")) => {
+                        e.control_followed += 1;
+                        e.control_total += 1;
+                    }
+                    (true, Some("misfired" | "ignored")) => e.control_total += 1,
                     _ => {}
                 }
             }
@@ -134,14 +151,35 @@ pub fn judgements(dir: &Path) -> BTreeMap<(String, String), Judged> {
     out
 }
 
-/// Why an instinct route with these judgements is extinguished, if it is.
+/// Why an instinct route with these judgements is extinguished, if it is. Conservative: losing a
+/// route that works costs more than keeping one that does not.
+///
+/// - **Misfires**: at least [`EXTINGUISH_MISFIRED`] (agents followed it and the directed command
+///   failed without running), and at least as many as the follows that worked.
+/// - **Never on ignores alone**: an "ignored" may be a follow the matcher did not recognise
+///   (RepoBench v2 judged 41 of 41 real follows "ignored" that way). An ignore rate whose Wilson
+///   lower bound reaches [`EXTINGUISH_IGNORE_LOWER_BOUND`] over at least
+///   [`EXTINGUISH_MIN_JUDGEMENTS`] extinguishes only with a control-arm comparison (at least as
+///   many control judgements) that shows the matcher sees follows of this route at all (a follow
+///   in either arm) and that delivering it made agents take the step no more often than
+///   withholding it did.
 pub fn should_extinguish(j: &Judged) -> Option<String> {
-    if j.misfired >= EXTINGUISH_MISFIRED {
+    if j.misfired >= EXTINGUISH_MISFIRED && j.misfired >= j.followed {
         return Some(format!("misfired {} times", j.misfired));
     }
     let n = j.total();
-    if n >= EXTINGUISH_MIN_JUDGEMENTS && adage_tracks::wilson_lower(j.ignored, n) >= EXTINGUISH_IGNORE_LOWER_BOUND {
-        return Some(format!("ignored {} of {n} times", j.ignored));
+    let ignored =
+        n >= EXTINGUISH_MIN_JUDGEMENTS && adage_tracks::wilson_lower(j.ignored, n) >= EXTINGUISH_IGNORE_LOWER_BOUND;
+    let compared = j.control_total >= EXTINGUISH_MIN_JUDGEMENTS;
+    let seen = j.followed + j.misfired + j.control_followed > 0;
+    // The treated follow rate is at most the control's: f_t / n_t <= f_c / n_c.
+    let no_better =
+        u64::from(j.followed + j.misfired) * u64::from(j.control_total) <= u64::from(j.control_followed) * u64::from(n);
+    if ignored && compared && seen && no_better {
+        return Some(format!(
+            "ignored {} of {n} times; unaided {} of {}",
+            j.ignored, j.control_followed, j.control_total
+        ));
     }
     None
 }
@@ -437,10 +475,27 @@ mod tests {
 
     #[test]
     fn extinction_rules() {
-        assert!(should_extinguish(&Judged { misfired: 2, ..Default::default() }).is_none());
-        assert!(should_extinguish(&Judged { misfired: 3, ..Default::default() }).is_some());
-        assert!(should_extinguish(&Judged { ignored: 4, ..Default::default() }).is_none(), "too few");
-        assert!(should_extinguish(&Judged { ignored: 5, followed: 0, ..Default::default() }).is_some());
-        assert!(should_extinguish(&Judged { ignored: 5, followed: 5, ..Default::default() }).is_none());
+        let j = |followed, misfired, ignored, control_followed, control_total| Judged {
+            followed,
+            misfired,
+            ignored,
+            control_followed,
+            control_total,
+        };
+        assert!(should_extinguish(&j(0, 2, 0, 0, 0)).is_none());
+        assert!(should_extinguish(&j(0, 3, 0, 0, 0)).is_some());
+        assert!(should_extinguish(&j(10, 3, 0, 0, 0)).is_none(), "most follows worked");
+        // The launch report's reproduction, "ignored 10 of 10 times", came from follows the
+        // matcher missed: ignores alone never extinguish.
+        assert!(should_extinguish(&j(0, 0, 10, 0, 0)).is_none());
+        assert!(should_extinguish(&j(0, 0, 40, 0, 0)).is_none());
+        // Nor with a control arm where nothing is ever seen followed (a matching gap looks so).
+        assert!(should_extinguish(&j(0, 0, 10, 0, 10)).is_none());
+        // With a control arm: agents took the step as often unaided, and ignored it when told.
+        assert!(should_extinguish(&j(1, 0, 9, 2, 10)).is_some());
+        assert!(should_extinguish(&j(1, 0, 9, 2, 4)).is_none(), "too few control judgements");
+        // Delivering it made a difference: kept.
+        assert!(should_extinguish(&j(4, 0, 6, 1, 10)).is_none());
+        assert!(should_extinguish(&j(5, 0, 5, 0, 0)).is_none());
     }
 }

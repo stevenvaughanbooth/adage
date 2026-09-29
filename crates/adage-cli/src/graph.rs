@@ -454,8 +454,9 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
 }
 
 /// Whether a route's command key covers an observed key, as the runtime judges it
-/// (`adage_core::pattern`): a directed command is met by the same command with options added
-/// (`wi-lookup {item}` covers `wi-lookup {id} --json`, slots matching slots); an avoided runner
+/// (`adage_core::pattern::follows`): a directed command is followed by the same command with
+/// options and operands added (`wi-lookup {item}` covers `wi-lookup {id} --json`, slots matching
+/// slots; `.venv/bin/python -m pytest` covers `.venv/bin/python -m pytest {path} -x`); an avoided runner
 /// covers any run of its program and subcommand (`python3 -m pytest` covers
 /// `python3 -m pytest {path} -v`).
 fn speaks_for(route_key: &str, how: &str, observed: &str) -> bool {
@@ -464,7 +465,7 @@ fn speaks_for(route_key: &str, how: &str, observed: &str) -> bool {
             .map(|p| p.at_least(pattern::Level::HeadSub))
             .is_some_and(|p| p.matches_key(observed))
     } else {
-        pattern::meets(route_key, observed)
+        pattern::follows(route_key, observed)
     }
 }
 
@@ -488,6 +489,8 @@ mod tests {
         assert!(!d("exec npm run check", "exec npm run build"));
         assert!(!d("exec make", "exec"));
         assert!(!d("exec python3 -m pytest {path}", "exec python3 -m pytest"));
-        assert!(!d("exec python3 -m pytest", "exec python3 -m pytest {path} -v"), "a directed command is not a runner");
+        // Followed: the directed runner narrowed to a path, as agents run it.
+        assert!(d("exec .venv/bin/python -m pytest", "exec .venv/bin/python -m pytest {path} -xvs"));
+        assert!(!d("exec .venv/bin/python -m pytest", "exec python -m pytest {path}"));
     }
 }
