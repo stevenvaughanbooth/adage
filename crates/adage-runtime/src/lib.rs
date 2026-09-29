@@ -315,12 +315,19 @@ fn fire_after_failure(
     output: &str,
     emit_ok: &dyn Fn(&SessionState, &Vec<Directive>, &str) -> bool,
 ) {
-    for ir in routes.iter() {
-        let Trigger::AfterFailure { command, signature } = &ir.route.trigger else { continue };
-        if !(failure_matches(&ir.route, command, key)
-            && output.contains(signature.as_str())
-            && emit_ok(st, out, &ir.route.id))
-        {
+    let hits = |ir: &&&IndexedRoute| match &ir.route.trigger {
+        Trigger::AfterFailure { command, signature } => {
+            failure_matches(&ir.route, command, key) && output.contains(signature.as_str())
+        }
+        _ => false,
+    };
+    let advice = |ir: &IndexedRoute| matches!(ir.route.step, Step::Advise { .. });
+    // A failure a step answers (`run this instead`) gets that step, not advice as well: advice
+    // after a failure (U11's "run Python here as .venv/bin/python") speaks only when no step
+    // matches it, whether or not that step was said before.
+    let answered = routes.iter().filter(hits).any(|ir| !advice(ir));
+    for ir in routes.iter().filter(hits) {
+        if (answered && advice(ir)) || !emit_ok(st, out, &ir.route.id) {
             continue;
         }
         if let Some(t) = render::route_text(&ir.route, &[]) {

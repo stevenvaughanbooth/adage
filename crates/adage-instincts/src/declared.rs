@@ -113,6 +113,44 @@ pub struct PythonFacts {
     /// Import packages the project itself provides (`src/click/__init__.py` → `click`): a
     /// `No module named '<package>'` names the environment, never the code under test.
     pub packages: Vec<String>,
+    /// Import names of the test dependencies pyproject.toml declares (the `test`, `tests`,
+    /// `testing` and `dev` dependency groups and optional dependencies, uv's legacy
+    /// dev-dependencies), at most [`MAX_TEST_DEPS`]: missing from an interpreter, they name the
+    /// environment too.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub test_deps: Vec<String>,
+}
+
+/// At most this many declared test dependencies are read.
+pub const MAX_TEST_DEPS: usize = 12;
+
+/// The import names of pyproject.toml's declared test dependencies ([`PythonFacts::test_deps`]).
+/// A requirement's distribution name (`pytest-xdist>=3`) becomes its usual import name
+/// (`pytest_xdist`); only names that are plain identifiers are kept.
+pub fn test_deps(pyproject: &toml::Value) -> Vec<String> {
+    const GROUPS: [&str; 4] = ["test", "tests", "testing", "dev"];
+    let mut lists: Vec<&toml::Value> = Vec::new();
+    for table in
+        [pyproject.get("dependency-groups"), pyproject.get("project").and_then(|p| p.get("optional-dependencies"))]
+            .into_iter()
+            .flatten()
+    {
+        lists.extend(GROUPS.iter().filter_map(|g| table.get(*g)));
+    }
+    lists.extend(pyproject.get("tool").and_then(|t| t.get("uv")).and_then(|u| u.get("dev-dependencies")));
+    let mut out: Vec<String> = Vec::new();
+    for req in lists.iter().filter_map(|l| l.as_array()).flatten().filter_map(|r| r.as_str()) {
+        let name: String = req.trim().chars().take_while(|c| c.is_ascii_alphanumeric() || "_.-".contains(*c)).collect();
+        let import = name.to_ascii_lowercase().replace(['-', '.'], "_");
+        let ok = !import.is_empty()
+            && import.len() <= 40
+            && import.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+            && import.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+        if ok && !out.contains(&import) && out.len() < MAX_TEST_DEPS {
+            out.push(import);
+        }
+    }
+    out
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -298,6 +336,7 @@ pub fn extract_from(files: &RepoFiles) -> DeclaredFacts {
     if f.python.uv {
         f.python.uv_pytest_group = pyproject.as_ref().and_then(uv_pytest_group);
     }
+    f.python.test_deps = pyproject.as_ref().map(test_deps).unwrap_or_default();
     if f.python.tox {
         f.entries.push(tox_entry(tox_ini.as_deref(), pyproject.as_ref(), files, generators, &table));
     }

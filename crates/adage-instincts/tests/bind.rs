@@ -285,6 +285,24 @@ fn the_project_environment_answers_a_runner_that_ran_outside_it() {
         let adage_tracks::Origin::Instinct { declared, .. } = x.origin() else { panic!("{:?}", x.origin()) };
         assert_eq!(declared.as_deref(), Some(".venv/pyvenv.cfg"));
     }
+    // Launch report, bug 5: `python -c "import click"` and `python repro.py` failing with `No
+    // module named 'click'` (4 of 6 zero-config sessions began so) got nothing. Any Python run
+    // that cannot import the project's package or a declared test dependency is answered: advice
+    // naming the project's interpreter.
+    let advice: Vec<(String, String, String)> = r
+        .advisories()
+        .iter()
+        .filter(|a| a.template_id == "project-python")
+        .map(|a| {
+            let Trigger::AfterFailure { command, signature } = a.trigger else { panic!("{:?}", a.trigger) };
+            (command.clone(), signature.clone(), a.slots["interpreter"].clone())
+        })
+        .collect();
+    for (probe, module) in [("python", "click"), ("python3", "click"), ("python", "pytest"), ("python3", "tox")] {
+        let want = (format!("exec {probe}"), format!("No module named '{module}'"), ".venv/bin/python".to_string());
+        assert!(advice.contains(&want), "{want:?} in {advice:#?}");
+    }
+    assert!(r.advisories().iter().all(|a| a.text().is_some()));
     // The key keeps the interpreter's path, so the learner's id for this working command matches.
     let key = adage_instincts::safety::command_key(".venv/bin/python -m pytest", &adage_core::CommandTable::load());
     assert_eq!(key.as_deref(), Some("exec .venv/bin/python -m pytest"));

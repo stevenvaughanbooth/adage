@@ -1726,6 +1726,71 @@ fn a_directed_runner_narrowed_to_the_task_is_followed() {
     assert_eq!(all, ["ignored"]);
 }
 
+/// Bug 5 (launch report): in the zero-config E2E, 4 of 6 sessions began with `python -c "import
+/// click"` or `python repro.py`, which failed with `No module named 'click'` and got nothing. U11's
+/// advice names the project's interpreter; a pytest run failing so gets U11's run step alone.
+#[test]
+fn a_python_run_outside_the_project_environment_is_answered() {
+    let dir = tempfile::tempdir().unwrap();
+    let table = CommandTable::load();
+    let mut routes = u11_routes();
+    let mut click = u11_routes().remove(0);
+    click.id = "dead-end-click".into();
+    click.trigger = Trigger::AfterFailure {
+        command: command_key("python -m pytest", &table),
+        signature: "No module named 'click'".into(),
+    };
+    routes.push(click);
+    for probe in ["python", "python3"] {
+        let mut a = route(
+            &format!("instinct-u11-{probe}-click"),
+            Trigger::AfterFailure { command: command_key(probe, &table), signature: "No module named 'click'".into() },
+            Step::Advise {
+                template: "project-python".into(),
+                slots: [("interpreter".to_string(), ".venv/bin/python".to_string())].into(),
+            },
+            vec![],
+            Effect::Observe,
+            Strength::Prime,
+        );
+        a.state = RouteState::Forming;
+        a.exit = vec![];
+        a.evidence.provenance = "instinct:core@1.0.0".into();
+        routes.push(a);
+    }
+    let t = track("github-com-pallets-click/instincts", "instinct:core@1.0.0", routes);
+    adage_tracks::io::validate(&t).unwrap();
+    let index = Index::compile(&[t]);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: None,
+        params: Default::default(),
+    };
+    let first = |call: Call| {
+        let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
+        decide_both(&ctx, &mut st, &mut fast_st, &Event::Failure { call })
+    };
+    let missing = "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nModuleNotFoundError: No module named 'click'";
+    for cmd in ["python -c \"import click; print(click.__version__)\"", "python repro.py", "python3 repro_issue.py --x"]
+    {
+        let d = first(failed(cmd, missing));
+        assert_eq!(d.directives.len(), 1, "{cmd}: {:?}", d.directives);
+        assert_eq!(
+            d.directives[0].text,
+            "That Python is not this repository's environment, which has the project and its test dependencies installed: run Python here as .venv/bin/python."
+        );
+    }
+    // A pytest run that cannot import the project: the run step answers it, without the advice.
+    let d = first(failed("python -m pytest tests/test_basic.py -x", missing));
+    assert_eq!(d.directives.iter().map(|x| x.route.as_str()).collect::<Vec<_>>(), ["dead-end-click"]);
+    // The project's own interpreter, or another module missing: nothing.
+    assert!(first(failed(".venv/bin/python repro.py", missing)).directives.is_empty());
+    assert!(first(failed("python repro.py", "ModuleNotFoundError: No module named 'requests'")).directives.is_empty());
+}
+
 /// Bug 2 (launch report): `python -m pytest … 2>&1 | head -100` exits 0 even when pytest could not
 /// start, so no failure event fired and U11 never saw the dead end (22 of 63 Haiku sessions that
 /// hit it; the zero-config E2E's only opportunity). A piped run of the monitored runner whose
