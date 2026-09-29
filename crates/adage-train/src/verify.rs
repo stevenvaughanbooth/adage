@@ -170,7 +170,7 @@ fn replay_one(c: Candidate, root: &Path, o: &Options, report: &mut Report) -> (V
                         stale.get_or_insert(why);
                     }
                     Ran::Missing(p) => {
-                        let why = format!("`{cmd}`: {p} is not installed on this machine");
+                        let why = format!("`{cmd}`: {p} is not on the replay's PATH");
                         c.replay.push(why.clone());
                         not_replayed.get_or_insert(why);
                     }
@@ -219,7 +219,7 @@ fn replay_one(c: Candidate, root: &Path, o: &Options, report: &mut Report) -> (V
                     }
                     Ran::Missing(p) => {
                         let seen = format!("{p}: command not found");
-                        c.replay.push(format!("`{cmd}`: {p} is not installed, so it fails with `{seen}`"));
+                        c.replay.push(format!("`{cmd}`: {p} is not on the replay's PATH, so it fails with `{seen}`"));
                         kept.push((argv, seen));
                     }
                     Ran::NotInCheckout(e) => {
@@ -240,7 +240,7 @@ fn replay_one(c: Candidate, root: &Path, o: &Options, report: &mut Report) -> (V
                 let cmd = argv.join(" ");
                 match run(&rp, &argv, report) {
                     Ran::Did(r) => c.replay.push(format!("instead, `{cmd}`: {}", r.summary())),
-                    Ran::Missing(p) => c.replay.push(format!("instead, `{cmd}`: {p} is not installed on this machine")),
+                    Ran::Missing(p) => c.replay.push(format!("instead, `{cmd}`: {p} is not on the replay's PATH")),
                     Ran::NotInCheckout(e) | Ran::Refused(e) => c.replay.push(format!("instead, `{cmd}`: {e}")),
                 }
             }

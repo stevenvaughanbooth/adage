@@ -53,7 +53,7 @@ static T_INTENT: Lazy<Regex> = Lazy::new(|| {
 });
 static T_FINISH: Lazy<Regex> = Lazy::new(|| {
     Regex::new(&format!(
-        r"^In this repository, changes to files matching (?P<glob>[^\n]*) must be followed by running:\n  (?P<cmd>[^\n]*)\n(?P<basis>CI fails if this is skipped|Agents in this repository run it after such changes|(?P<declared>[A-Za-z0-9_./-]+) declares this|This repository's build declares this step)\.(?: {EXIT})?$"
+        r"^In this repository, changes to files matching (?P<glob>[^\n]*) must be followed by running:\n  (?P<cmd>[^\n]*)\n(?P<basis>CI fails if this is skipped|Agents in this repository run it after such changes|(?P<declared>[A-Za-z0-9_./-]+) declares this|This repository's build declares this step|This repository's written instructions require it)\.(?: {EXIT})?$"
     ))
     .unwrap()
 });
@@ -116,6 +116,7 @@ static T_WRAPPER: Lazy<Regex> = Lazy::new(|| {
 });
 const LEARNED_FOOTER: &str =
     "Learned by Adage from this repository's earlier agent sessions; not requested by the user.";
+const AUTHORED_FOOTER: &str = "From this repository's written instructions; not requested by the user.";
 static T_INSTINCT_FOOTER: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^Adage default for (?:(?:Python|Node\.js|Rust|Go|Make) repositories|repositories like this one)(?: \(from this repository's (?P<declared>[A-Za-z0-9_./-]+)\))?; not requested by the user\.$").unwrap()
 });
@@ -295,7 +296,11 @@ pub fn check_directive(r: &Route, text: &str, root: Option<&Path>, canaries: &[S
     // declares it; a learned route, what sessions showed.
     if let Some(b) = c.name("basis") {
         let declared = b.as_str().ends_with("declares this") || b.as_str().ends_with("declares this step");
-        if declared != r.is_instinct() {
+        // A compiled skill's finish line claims the repository's written instructions, nothing
+        // else, and only it may.
+        let written = b.as_str().ends_with("written instructions require it");
+        let compiled = r.evidence.origin == Some(adage_tracks::Origin::Authored);
+        if declared != r.is_instinct() || written != compiled {
             bad(format!("finish line says {:?}, which its origin does not support", b.as_str()));
         }
         if let Some(e) = c.name("declared").and_then(|d| glob_ok(d.as_str())) {
@@ -371,8 +376,9 @@ pub fn check_wrapper(r: &Route, wrapped: &str, root: Option<&Path>, canaries: &[
         if c.name("origin").is_some() {
             bad("a learned route's wrapper claims to be an instinct".into());
         }
-        if footer != LEARNED_FOOTER {
-            bad(format!("a learned route's wrapper says {footer:?}"));
+        let want = if r.evidence.origin == Some(adage_tracks::Origin::Authored) { AUTHORED_FOOTER } else { LEARNED_FOOTER };
+        if footer != want {
+            bad(format!("a route's wrapper says {footer:?}, not {want:?}"));
         }
     }
     let body = c["body"].to_string();

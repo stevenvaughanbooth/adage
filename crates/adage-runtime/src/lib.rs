@@ -913,7 +913,9 @@ fn directive(ir: &IndexedRoute, text: String) -> Directive {
         strength: adage_tracks::delivered_strength(&ir.route),
         text,
         kind: adage_tracks::shape(&ir.route).to_string(),
-        origin: ir.route.is_instinct().then(|| ir.route.origin()),
+        // An instinct's and a compiled skill's wrapper say what they are based on (not sessions).
+        origin: (ir.route.is_instinct() || ir.route.evidence.origin == Some(adage_tracks::Origin::Authored))
+            .then(|| ir.route.origin()),
     }
 }
 
