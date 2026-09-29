@@ -536,6 +536,21 @@ mod tests {
         assert!((usd - 0.2402909).abs() < 0.0005, "{usd} vs Claude Code's 0.2402909");
     }
 
+    /// Both cache TTLs in one session: each part at its own rate (Haiku 4.5: 5-minute writes
+    /// $1.25/M, 1-hour writes $2/M); without the split, every write at the 5-minute rate.
+    #[test]
+    fn cache_writes_are_priced_by_their_ttl() {
+        let d = tempfile::tempdir().unwrap();
+        let rec = |mid: &str, u: Value| json!({"type":"assistant","sessionId":"s2","timestamp":"2026-09-14T19:06:07.000Z","message":{"id":mid,"model":"claude-haiku-4-5-20251001","content":[],"usage":u}});
+        let split = json!({"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 3_000_000,
+                           "cache_creation": {"ephemeral_5m_input_tokens": 1_000_000, "ephemeral_1h_input_tokens": 2_000_000}});
+        let plain = json!({"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 1_000_000});
+        let p = write(d.path(), "s2.jsonl", &[rec("m1", split), rec("m2", plain)]);
+        let s = claude(&p).unwrap();
+        assert_eq!((s.tokens.cache_write, s.tokens.cache_write_1h), (4_000_000, 2_000_000));
+        assert!((s.cost.usd.unwrap() - (1.25 + 2.0 * 2.0 + 1.25)).abs() < 1e-9, "{:?}", s.cost);
+    }
+
     #[test]
     fn an_unknown_model_is_tokens_only() {
         let d = tempfile::tempdir().unwrap();
