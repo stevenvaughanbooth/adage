@@ -1,0 +1,4416 @@
+{
+ "split": {
+  "name": "split",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 0.14847222238882754,
+   "calls_saved_ci": [
+    0.009048363237708705,
+    0.31325604695774195
+   ],
+   "calls_saved_share": 0.00459072624998723,
+   "calls_saved_share_ci": [
+    0.00027725675415870123,
+    0.009815064324674173
+   ],
+   "usd_saved_per_task": 0.0009803906546951757,
+   "usd_saved_ci": [
+    -8.755915622315204e-05,
+    0.0021224300784779674
+   ],
+   "usd_saved_share": 0.003765052018095445,
+   "usd_saved_share_ci": [
+    -0.0003159192950015415,
+    0.008403175793163206
+   ],
+   "tokens_saved_per_task": 9605.462025316456,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 0.23707981732553635,
+   "s_hat_rust_ci95": [
+    0.08262498845157326,
+    0.4362917626280555
+   ],
+   "directives": 78,
+   "useful": 29,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 0.3717948717948718,
+   "useful_lb90": 0.28750175633764674,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.15264187866927592,
+   "gates": {
+    "useful_lb90>=0.8": false,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "advice",
+    "command",
+    "read_files"
+   ]
+  },
+  "by_route": {
+   "hs-command-1": {
+    "directives": 39,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 1.1900742497223418
+   },
+   "hs-procedure-5": {
+    "directives": 7,
+    "useful": 6,
+    "harmful": 0,
+    "saved": 8.0,
+    "cost": 0.4634224305312971
+   },
+   "hs-file-0": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.013336656565789072
+   },
+   "hs-command-6": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 11.0,
+    "cost": 0.06754818405784505
+   },
+   "hs-procedure-9": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0830913697572737
+   },
+   "hs-procedure-1": {
+    "directives": 25,
+    "useful": 19,
+    "harmful": 0,
+    "saved": 21.0,
+    "cost": 0.6467615385780453
+   },
+   "hs-command-3": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0771544333526655
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0018537358333333333,
+    "usd_saved_ci": [
+     -0.00030210916666666664,
+     0.004534260000000001
+    ],
+    "usd_saved_share": 0.00980274924246688,
+    "calls_saved_per_task": 0.38268232601029006,
+    "calls_saved_ci": [
+     -0.030870443999311124,
+     0.9323478255665878
+    ],
+    "s_hat_rust": 0.43268232601028994,
+    "directives": 48
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": -3.197e-05,
+    "usd_saved_ci": [
+     -9.591000000000001e-05,
+     0.0
+    ],
+    "usd_saved_share": -0.00011236045881867929,
+    "calls_saved_per_task": -0.0031191482761536585,
+    "calls_saved_ci": [
+     -0.009357444828460976,
+     0.0
+    ],
+    "s_hat_rust": -0.0031191482761536585,
+    "directives": 2
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.00273436967028348,
+    "usd_saved_ci": [
+     -0.0017753065315995195,
+     0.006977817491638797
+    ],
+    "usd_saved_share": 0.012058520592579905,
+    "calls_saved_per_task": 0.2758694676023097,
+    "calls_saved_ci": [
+     -0.15386171180094876,
+     0.6728431009877095
+    ],
+    "s_hat_rust": 0.6758694676023097,
+    "directives": 28
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "split_pf0.5": {
+  "name": "split_pf0.5",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 0.5,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 0.06619374137616925,
+   "calls_saved_ci": [
+    -0.0021914635790758045,
+    0.14679215869450718
+   ],
+   "calls_saved_share": 0.002046694938832631,
+   "calls_saved_share_ci": [
+    -6.765123576115309e-05,
+    0.004609535694266707
+   ],
+   "usd_saved_per_task": 0.00040179501089189143,
+   "usd_saved_ci": [
+    -0.00012522887971952554,
+    0.0009532640416202158
+   ],
+   "usd_saved_share": 0.001543037063209821,
+   "usd_saved_share_ci": [
+    -0.0004713073167175606,
+    0.0037463046197495713
+   ],
+   "tokens_saved_per_task": 4267.762658227848,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.008417704193471817,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 0.23707981732553635,
+   "s_hat_rust_ci95": [
+    0.08262498845157326,
+    0.4362917626280555
+   ],
+   "directives": 78,
+   "useful": 29,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 0.3717948717948718,
+   "useful_lb90": 0.28750175633764674,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.15264187866927592,
+   "gates": {
+    "useful_lb90>=0.8": false,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "advice",
+    "command",
+    "read_files"
+   ]
+  },
+  "by_route": {
+   "hs-command-1": {
+    "directives": 39,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 1.1900742497223418
+   },
+   "hs-procedure-5": {
+    "directives": 7,
+    "useful": 6,
+    "harmful": 0,
+    "saved": 8.0,
+    "cost": 0.4634224305312971
+   },
+   "hs-file-0": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.013336656565789072
+   },
+   "hs-command-6": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 11.0,
+    "cost": 0.06754818405784505
+   },
+   "hs-procedure-9": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0830913697572737
+   },
+   "hs-procedure-1": {
+    "directives": 25,
+    "useful": 19,
+    "harmful": 0,
+    "saved": 21.0,
+    "cost": 0.6467615385780453
+   },
+   "hs-command-3": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0771544333526655
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0007232866666666666,
+    "usd_saved_ci": [
+     -0.00031517416666666657,
+     0.0020249024999999996
+    ],
+    "usd_saved_share": 0.003824815648626522,
+    "calls_saved_per_task": 0.17018232601028999,
+    "calls_saved_ci": [
+     -0.03087044399931113,
+     0.4439954911365797
+    ],
+    "s_hat_rust": 0.43268232601028994,
+    "directives": 48
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": -3.197e-05,
+    "usd_saved_ci": [
+     -9.591000000000001e-05,
+     0.0
+    ],
+    "usd_saved_share": -0.00011236045881867929,
+    "calls_saved_per_task": -0.0031191482761536585,
+    "calls_saved_ci": [
+     -0.009357444828460976,
+     0.0
+    ],
+    "s_hat_rust": -0.0031191482761536585,
+    "directives": 2
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.0011943648351417403,
+    "usd_saved_ci": [
+     -0.00102503326579976,
+     0.003311188745819399
+    ],
+    "usd_saved_share": 0.005267127234525259,
+    "calls_saved_per_task": 0.12586946760230966,
+    "calls_saved_ci": [
+     -0.0871950451342821,
+     0.3228431009877094
+    ],
+    "s_hat_rust": 0.6758694676023097,
+    "directives": 28
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "split_lam0": {
+  "name": "split_lam0",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": -0.17404817546188553,
+   "calls_saved_ci": [
+    -0.6679206804310777,
+    0.2999243642352309
+   ],
+   "calls_saved_share": -0.005381528712911539,
+   "calls_saved_share_ci": [
+    -0.021230024365608658,
+    0.0090295560048869
+   ],
+   "usd_saved_per_task": -0.0023435284865902135,
+   "usd_saved_ci": [
+    -0.005607316564003389,
+    0.0007875539213859823
+   ],
+   "usd_saved_share": -0.008999990580942517,
+   "usd_saved_share_ci": [
+    -0.02246699518276397,
+    0.0028586982866589555
+   ],
+   "tokens_saved_per_task": 37011.61392405063,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 0.927217647322924,
+   "s_hat_rust_ci95": [
+    0.5892623699787732,
+    1.2543400456797664
+   ],
+   "directives": 283,
+   "useful": 115,
+   "harmful": 0,
+   "superseded": 174,
+   "useful_rate": 0.40636042402826855,
+   "useful_lb90": 0.3594436526606171,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.5538160469667319,
+   "gates": {
+    "useful_lb90>=0.8": false,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "advice",
+    "command",
+    "read_files"
+   ]
+  },
+  "by_route": {
+   "hs-command-1": {
+    "directives": 75,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 2.344702892527626
+   },
+   "hs-file-0": {
+    "directives": 54,
+    "useful": 26,
+    "harmful": 0,
+    "saved": 37.0,
+    "cost": 1.6622150804818323
+   },
+   "hs-command-8": {
+    "directives": 27,
+    "useful": 15,
+    "harmful": 0,
+    "saved": 5.0,
+    "cost": 0.6706487346507588
+   },
+   "hs-procedure-5": {
+    "directives": 13,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 7.0,
+    "cost": 0.47998937719838286
+   },
+   "hs-command-6": {
+    "directives": 8,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 10.0,
+    "cost": 0.21524019247801154
+   },
+   "hs-command-5": {
+    "directives": 7,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 10.0,
+    "cost": 0.16675697852075244
+   },
+   "hs-procedure-9": {
+    "directives": 7,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.37426976761502406
+   },
+   "hs-command-18": {
+    "directives": 15,
+    "useful": 15,
+    "harmful": 0,
+    "saved": 38.0,
+    "cost": 0.35204529873450496
+   },
+   "hs-procedure-3": {
+    "directives": 21,
+    "useful": 10,
+    "harmful": 0,
+    "saved": 12.0,
+    "cost": 0.8009607229274319
+   },
+   "hs-procedure-11": {
+    "directives": 4,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.1207166382454479
+   },
+   "hs-command-10": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.060226451531056324
+   },
+   "hs-procedure-19": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03808477887508366
+   },
+   "hs-procedure-1": {
+    "directives": 30,
+    "useful": 24,
+    "harmful": 0,
+    "saved": 27.0,
+    "cost": 0.8650513333847338
+   },
+   "hs-command-3": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.04677698312689835
+   },
+   "hs-procedure-8": {
+    "directives": 6,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.1087229892142972
+   },
+   "hs-procedure-16": {
+    "directives": 7,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 6.0,
+    "cost": 0.17900275186110468
+   },
+   "hs-command-21": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 3.0,
+    "cost": 0.014200751605016323
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": -0.011180598624451438,
+    "usd_saved_ci": [
+     -0.01968775215441606,
+     -0.0028731279954750627
+    ],
+    "usd_saved_share": -0.05912417655491234,
+    "calls_saved_per_task": -1.3919417191706938,
+    "calls_saved_ci": [
+     -2.7807684629886116,
+     -0.03974680549881473
+    ],
+    "s_hat_rust": 0.9080582808293066,
+    "directives": 122
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0023995568107995874,
+    "usd_saved_ci": [
+     -0.0030140756744635724,
+     0.008208877065510399
+    ],
+    "usd_saved_share": 0.008433384554986812,
+    "calls_saved_per_task": 0.5638433131685499,
+    "calls_saved_ci": [
+     -0.3323880041128536,
+     1.4882396432055647
+    ],
+    "s_hat_rust": 1.7638433131685503,
+    "directives": 107
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": -0.0006345276111726598,
+    "usd_saved_ci": [
+     -0.007785869509888157,
+     0.005683300288698954
+    ],
+    "usd_saved_share": -0.002798255242895813,
+    "calls_saved_per_task": 0.18747748390359323,
+    "calls_saved_ci": [
+     -0.44416616986219554,
+     0.843848996080425
+    ],
+    "s_hat_rust": 1.3208108172369266,
+    "directives": 54
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "split_lam0_misfire0": {
+  "name": "split_lam0_misfire0",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 0.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 0.927217647322924,
+   "calls_saved_ci": [
+    0.6409229052746966,
+    1.2071966003080108
+   ],
+   "calls_saved_share": 0.028669351913311554,
+   "calls_saved_share_ci": [
+    0.019777090762669314,
+    0.03730899564856728
+   ],
+   "usd_saved_per_task": 0.005878667088607596,
+   "usd_saved_ci": [
+    0.004097516666666666,
+    0.007567188125000001
+   ],
+   "usd_saved_share": 0.022576191724874274,
+   "usd_saved_share_ci": [
+    0.015545579117973,
+    0.02956719977290309
+   ],
+   "tokens_saved_per_task": 37011.61392405063,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 0.927217647322924,
+   "s_hat_rust_ci95": [
+    0.5892623699787732,
+    1.2543400456797664
+   ],
+   "directives": 283,
+   "useful": 115,
+   "harmful": 0,
+   "superseded": 174,
+   "useful_rate": 0.40636042402826855,
+   "useful_lb90": 0.3594436526606171,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.5538160469667319,
+   "gates": {
+    "useful_lb90>=0.8": false,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "advice",
+    "command",
+    "read_files"
+   ]
+  },
+  "by_route": {
+   "hs-command-1": {
+    "directives": 75,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 2.344702892527626
+   },
+   "hs-file-0": {
+    "directives": 54,
+    "useful": 26,
+    "harmful": 0,
+    "saved": 37.0,
+    "cost": 1.6622150804818323
+   },
+   "hs-command-8": {
+    "directives": 27,
+    "useful": 15,
+    "harmful": 0,
+    "saved": 5.0,
+    "cost": 0.6706487346507588
+   },
+   "hs-procedure-5": {
+    "directives": 13,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 7.0,
+    "cost": 0.47998937719838286
+   },
+   "hs-command-6": {
+    "directives": 8,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 10.0,
+    "cost": 0.21524019247801154
+   },
+   "hs-command-5": {
+    "directives": 7,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 10.0,
+    "cost": 0.16675697852075244
+   },
+   "hs-procedure-9": {
+    "directives": 7,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.37426976761502406
+   },
+   "hs-command-18": {
+    "directives": 15,
+    "useful": 15,
+    "harmful": 0,
+    "saved": 38.0,
+    "cost": 0.35204529873450496
+   },
+   "hs-procedure-3": {
+    "directives": 21,
+    "useful": 10,
+    "harmful": 0,
+    "saved": 12.0,
+    "cost": 0.8009607229274319
+   },
+   "hs-procedure-11": {
+    "directives": 4,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.1207166382454479
+   },
+   "hs-command-10": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.060226451531056324
+   },
+   "hs-procedure-19": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03808477887508366
+   },
+   "hs-procedure-1": {
+    "directives": 30,
+    "useful": 24,
+    "harmful": 0,
+    "saved": 27.0,
+    "cost": 0.8650513333847338
+   },
+   "hs-command-3": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.04677698312689835
+   },
+   "hs-procedure-8": {
+    "directives": 6,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.1087229892142972
+   },
+   "hs-procedure-16": {
+    "directives": 7,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 6.0,
+    "cost": 0.17900275186110468
+   },
+   "hs-command-21": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 3.0,
+    "cost": 0.014200751605016323
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.00409138,
+    "usd_saved_ci": [
+     0.0017242700000000004,
+     0.006584425
+    ],
+    "usd_saved_share": 0.021635645961229175,
+    "calls_saved_per_task": 0.9080582808293064,
+    "calls_saved_ci": [
+     0.43306330809548255,
+     1.4323375143819237
+    ],
+    "s_hat_rust": 0.9080582808293066,
+    "directives": 122
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.011240847499999996,
+    "usd_saved_ci": [
+     0.007898187499999999,
+     0.014647977499999998
+    ],
+    "usd_saved_share": 0.039506624416978546,
+    "calls_saved_per_task": 1.7638433131685503,
+    "calls_saved_ci": [
+     1.1934501529415593,
+     2.3305830024416507
+    ],
+    "s_hat_rust": 1.7638433131685503,
+    "directives": 107
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.010518010000000001,
+    "usd_saved_ci": [
+     0.009279186666666665,
+     0.011860450000000002
+    ],
+    "usd_saved_share": 0.046384233103643355,
+    "calls_saved_per_task": 1.3208108172369266,
+    "calls_saved_ci": [
+     0.9637581202668561,
+     1.6796967818942894
+    ],
+    "s_hat_rust": 1.3208108172369266,
+    "directives": 54
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "split_v2": {
+  "name": "split-v2",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 82,
+   "tasks": 30,
+   "calls": 2954,
+   "test_set_id": "bbeaa02c4163",
+   "baseline": {
+    "usd_per_task": 0.3005613256097561,
+    "calls_per_task": 36.02439024390244
+   },
+   "calls_saved_per_task": 0.0654695214013507,
+   "calls_saved_ci": [
+    -0.10323178316027841,
+    0.22135919644784235
+   ],
+   "calls_saved_share": 0.0018173665385615295,
+   "calls_saved_share_ci": [
+    -0.002955942673402333,
+    0.006053939356960594
+   ],
+   "usd_saved_per_task": 0.0005792509362825744,
+   "usd_saved_ci": [
+    -0.0012447933508662494,
+    0.0021973293687290968
+   ],
+   "usd_saved_share": 0.0019272304415993424,
+   "usd_saved_share_ci": [
+    -0.004146941191674337,
+    0.007473718684979222
+   ],
+   "tokens_saved_per_task": 8649.329268292682,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.031940571345978455,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 0.18742074091354582,
+   "s_hat_rust_ci95": [
+    0.06307663159919792,
+    0.3294412348579674
+   ],
+   "directives": 46,
+   "useful": 16,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 0.34782608695652173,
+   "useful_lb90": 0.24370762154594616,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.15572105619498985,
+   "gates": {
+    "useful_lb90>=0.8": false,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "advice",
+    "command"
+   ]
+  },
+  "by_route": {
+   "hs-command-1": {
+    "directives": 24,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.786305486717839
+   },
+   "hs-procedure-5": {
+    "directives": 5,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 7.0,
+    "cost": 0.36604047084303837
+   },
+   "hs-procedure-9": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0830913697572737
+   },
+   "hs-procedure-1": {
+    "directives": 15,
+    "useful": 10,
+    "harmful": 0,
+    "saved": 10.0,
+    "cost": 0.36454310390455896
+   },
+   "hs-command-3": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03151881386653161
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 24,
+    "usd_saved_per_task": 0.0014868583333333338,
+    "usd_saved_ci": [
+     -7.177499999999998e-05,
+     0.0034293041666666664
+    ],
+    "usd_saved_share": 0.007434853927494933,
+    "calls_saved_per_task": 0.24538869182199977,
+    "calls_saved_ci": [
+     0.01804156675839569,
+     0.5150455860184723
+    ],
+    "s_hat_rust": 0.24538869182199977,
+    "directives": 28
+   },
+   "click": {
+    "sessions": 24,
+    "usd_saved_per_task": -5.328333333333334e-05,
+    "usd_saved_ci": [
+     -0.00015985,
+     0.0
+    ],
+    "usd_saved_share": -0.00016320647165475743,
+    "calls_saved_per_task": -0.0051985804602560975,
+    "calls_saved_ci": [
+     -0.015595741380768293,
+     0.0
+    ],
+    "s_hat_rust": -0.0051985804602560975,
+    "directives": 2
+   },
+   "marshmallow": {
+    "sessions": 18,
+    "usd_saved_per_task": 0.0007273764875095039,
+    "usd_saved_ci": [
+     -0.007754222238656205,
+     0.007411610869565218
+    ],
+    "usd_saved_share": 0.0031809654408490626,
+    "calls_saved_per_task": -0.022003439876171767,
+    "calls_saved_ci": [
+     -0.6898937766199129,
+     0.6411399341978975
+    ],
+    "s_hat_rust": 0.5335521156793839,
+    "directives": 16
+   },
+   "vue-core": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "u11_posthoc_v2": {
+  "name": "U11 post-hoc (v2)",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 82,
+   "tasks": 30,
+   "calls": 2954,
+   "test_set_id": "bbeaa02c4163",
+   "baseline": {
+    "usd_per_task": 0.3005613256097561,
+    "calls_per_task": 36.02439024390244
+   },
+   "calls_saved_per_task": 1.0020907446018734,
+   "calls_saved_ci": [
+    0.651895622472415,
+    1.3851823751588996
+   ],
+   "calls_saved_share": 0.027817007805468388,
+   "calls_saved_share_ci": [
+    0.017510613748288596,
+    0.03986215109175114
+   ],
+   "usd_saved_per_task": 0.005797609756097563,
+   "usd_saved_ci": [
+    0.0037052670588235306,
+    0.008072394186046513
+   ],
+   "usd_saved_share": 0.019289273975405218,
+   "usd_saved_share_ci": [
+    0.011561841316617786,
+    0.028705817673232527
+   ],
+   "tokens_saved_per_task": 42248.73170731707,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.031940571345978455,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 1.0020907446018734,
+   "s_hat_rust_ci95": [
+    0.586030827966854,
+    1.4635886591846434
+   ],
+   "directives": 35,
+   "useful": 35,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 1.0,
+   "useful_lb90": 0.9282454725154865,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.11848341232227488,
+   "gates": {
+    "useful_lb90>=0.8": true,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": []
+  },
+  "by_route": {
+   "dead-end-0cdcfb": {
+    "directives": 31,
+    "useful": 31,
+    "harmful": 0,
+    "saved": 76.0,
+    "cost": 0.7273013092639165
+   },
+   "dead-end-855e84": {
+    "directives": 4,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 7.0,
+    "cost": 0.10125763338247816
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 24,
+    "usd_saved_per_task": 0.011248633333333336,
+    "usd_saved_ci": [
+     0.006348941666666669,
+     0.01604900833333334
+    ],
+    "usd_saved_share": 0.05624742037783276,
+    "calls_saved_per_task": 2.022666299967167,
+    "calls_saved_ci": [
+     1.1947213950924511,
+     2.851853605329931
+    ],
+    "s_hat_rust": 2.022666299967167,
+    "directives": 16
+   },
+   "click": {
+    "sessions": 24,
+    "usd_saved_per_task": 0.0031000333333333335,
+    "usd_saved_ci": [
+     0.0016041000000000004,
+     0.0048034083333333335
+    ],
+    "usd_saved_share": 0.009495380087809882,
+    "calls_saved_per_task": 0.4903808631516991,
+    "calls_saved_ci": [
+     0.24560036903057259,
+     0.7380769434241686
+    ],
+    "s_hat_rust": 0.4903808631516991,
+    "directives": 11
+   },
+   "marshmallow": {
+    "sessions": 18,
+    "usd_saved_per_task": 0.007279777777777778,
+    "usd_saved_ci": [
+     0.003092972222222222,
+     0.01216532777777778
+    ],
+    "usd_saved_share": 0.0318359500558774,
+    "calls_saved_per_task": 1.2143505079167118,
+    "calls_saved_ci": [
+     0.4956210933606141,
+     2.0426924272456444
+    ],
+    "s_hat_rust": 1.2143505079167118,
+    "directives": 8
+   },
+   "vue-core": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "u11_plus_shortcuts_v2": {
+  "name": "U11 + shortcuts (v2)",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 82,
+   "tasks": 30,
+   "calls": 2954,
+   "test_set_id": "bbeaa02c4163",
+   "baseline": {
+    "usd_per_task": 0.3005613256097561,
+    "calls_per_task": 36.02439024390244
+   },
+   "calls_saved_per_task": 0.9710225802311544,
+   "calls_saved_ci": [
+    0.571178259539604,
+    1.3802010910072129
+   ],
+   "calls_saved_share": 0.026954587535191143,
+   "calls_saved_share_ci": [
+    0.015499886774187729,
+    0.03979731204246682
+   ],
+   "usd_saved_per_task": 0.005928866789941113,
+   "usd_saved_ci": [
+    0.002948945390460065,
+    0.008875036938403467
+   ],
+   "usd_saved_share": 0.019725980306724674,
+   "usd_saved_share_ci": [
+    0.009315877060225882,
+    0.03145923834228412
+   ],
+   "tokens_saved_per_task": 47394.73170731707,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.031940571345978455,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 1.0929737997433495,
+   "s_hat_rust_ci95": [
+    0.6733531732051797,
+    1.557992289078004
+   ],
+   "directives": 79,
+   "useful": 49,
+   "harmful": 0,
+   "superseded": 2,
+   "useful_rate": 0.620253164556962,
+   "useful_lb90": 0.5278667402949256,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.2674339878131347,
+   "gates": {
+    "useful_lb90>=0.8": false,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "advice",
+    "command"
+   ]
+  },
+  "by_route": {
+   "hs-command-1": {
+    "directives": 24,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.786305486717839
+   },
+   "hs-procedure-5": {
+    "directives": 5,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 7.0,
+    "cost": 0.36604047084303837
+   },
+   "dead-end-0cdcfb": {
+    "directives": 29,
+    "useful": 29,
+    "harmful": 0,
+    "saved": 68.0,
+    "cost": 0.6433915425736334
+   },
+   "dead-end-855e84": {
+    "directives": 4,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 7.0,
+    "cost": 0.10125763338247816
+   },
+   "hs-procedure-9": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0830913697572737
+   },
+   "hs-procedure-1": {
+    "directives": 15,
+    "useful": 10,
+    "harmful": 0,
+    "saved": 10.0,
+    "cost": 0.36454310390455896
+   },
+   "hs-command-3": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03151881386653161
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 24,
+    "usd_saved_per_task": 0.011204845833333336,
+    "usd_saved_ci": [
+     0.006391737500000001,
+     0.015816404166666666
+    ],
+    "usd_saved_share": 0.0560284663194321,
+    "calls_saved_per_task": 1.9382178987345953,
+    "calls_saved_ci": [
+     1.204661436935842,
+     2.726508669662182
+    ],
+    "s_hat_rust": 1.9382178987345953,
+    "directives": 42
+   },
+   "click": {
+    "sessions": 24,
+    "usd_saved_per_task": 0.0030467500000000004,
+    "usd_saved_ci": [
+     0.0014975333333333335,
+     0.004793895833333333
+    ],
+    "usd_saved_share": 0.009332173616155124,
+    "calls_saved_per_task": 0.4851822826914431,
+    "calls_saved_ci": [
+     0.24123982119056228,
+     0.7366016152970395
+    ],
+    "s_hat_rust": 0.4851822826914431,
+    "directives": 13
+   },
+   "marshmallow": {
+    "sessions": 18,
+    "usd_saved_per_task": 0.008007154265287284,
+    "usd_saved_ci": [
+     -0.0026997764192582124,
+     0.01768365427350428
+    ],
+    "usd_saved_share": 0.03501691549672646,
+    "calls_saved_per_task": 1.1923470680405401,
+    "calls_saved_ci": [
+     0.03042624229361736,
+     2.301132406410808
+    ],
+    "s_hat_rust": 1.7479026235960962,
+    "directives": 24
+   },
+   "vue-core": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   }
+  }
+ },
+ "loro": {
+  "name": "loro",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": -0.00013662876214768458,
+   "calls_saved_ci": [
+    -0.000407308385270456,
+    0.0
+   ],
+   "calls_saved_share": -4.2245292405742e-06,
+   "calls_saved_share_ci": [
+    -1.2281819316897877e-05,
+    0.0
+   ],
+   "usd_saved_per_task": -1.9037974683544306e-06,
+   "usd_saved_ci": [
+    -5.675471698113208e-06,
+    0.0
+   ],
+   "usd_saved_share": -7.311265632679351e-06,
+   "usd_saved_share_ci": [
+    -2.1261794131495547e-05,
+    0.0
+   ],
+   "tokens_saved_per_task": -11.341772151898734,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": -0.00013662876214768458,
+   "s_hat_rust_ci95": [
+    -0.0004317468883866834,
+    0.0
+   ],
+   "directives": 1,
+   "useful": 0,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 0.0,
+   "useful_lb90": 0.0,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.0019569471624266144,
+   "gates": {
+    "useful_lb90>=0.8": false,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "advice"
+   ]
+  },
+  "by_route": {
+   "hs-command-298": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.021587344419334166
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": -9.400000000000001e-06,
+    "usd_saved_ci": [
+     -2.8200000000000004e-05,
+     0.0
+    ],
+    "usd_saved_share": -2.54722584664647e-05,
+    "calls_saved_per_task": -0.0006746045131041927,
+    "calls_saved_ci": [
+     -0.0020238135393125783,
+     0.0
+    ],
+    "s_hat_rust": -0.0006746045131041927,
+    "directives": 1
+   }
+  }
+ },
+ "curve": {
+  "2": {
+   "name": "curve n=2",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_saved_share": 0.0,
+    "calls_saved_share_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "usd_saved_share_ci": [
+     0.0,
+     0.0
+    ],
+    "tokens_saved_per_task": 0.0,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.0,
+    "s_hat_rust_ci95": [
+     0.0,
+     0.0
+    ],
+    "directives": 0,
+    "useful": 0,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.0,
+    "useful_lb90": 0.0,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.0,
+    "gates": {
+     "useful_lb90>=0.8": null,
+     "harmful<=1%": null,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": []
+   },
+   "by_route": {},
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "5": {
+   "name": "curve n=5",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_saved_share": 0.0,
+    "calls_saved_share_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "usd_saved_share_ci": [
+     0.0,
+     0.0
+    ],
+    "tokens_saved_per_task": 0.0,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.0,
+    "s_hat_rust_ci95": [
+     0.0,
+     0.0
+    ],
+    "directives": 0,
+    "useful": 0,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.0,
+    "useful_lb90": 0.0,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.0,
+    "gates": {
+     "useful_lb90>=0.8": null,
+     "harmful<=1%": null,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": []
+   },
+   "by_route": {},
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  },
+  "10": {
+   "name": "curve n=10",
+   "assumptions": {
+    "sat": "goal",
+    "p_follow": 1.0,
+    "misfire_calls": 2.0,
+    "hindsight": false
+   },
+   "summary": {
+    "sessions": 158,
+    "tasks": 38,
+    "calls": 5110,
+    "test_set_id": "6a795a362ccb",
+    "baseline": {
+     "usd_per_task": 0.26039232658227857,
+     "calls_per_task": 32.34177215189873
+    },
+    "calls_saved_per_task": 0.14847222238882754,
+    "calls_saved_ci": [
+     0.009048363237708705,
+     0.31325604695774195
+    ],
+    "calls_saved_share": 0.00459072624998723,
+    "calls_saved_share_ci": [
+     0.00027725675415870123,
+     0.009815064324674173
+    ],
+    "usd_saved_per_task": 0.0009803906546951757,
+    "usd_saved_ci": [
+     -8.755915622315204e-05,
+     0.0021224300784779674
+    ],
+    "usd_saved_share": 0.003765052018095445,
+    "usd_saved_share_ci": [
+     -0.0003159192950015415,
+     0.008403175793163206
+    ],
+    "tokens_saved_per_task": 9605.462025316456,
+    "pass_rate_effect": {
+     "point": 0.0,
+     "worst_case": -0.0,
+     "worst_case_ci": [
+      -0.016835408386943633,
+      -0.0
+     ],
+     "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+    },
+    "s_hat_rust": 0.23707981732553635,
+    "s_hat_rust_ci95": [
+     0.08262498845157326,
+     0.4362917626280555
+    ],
+    "directives": 78,
+    "useful": 29,
+    "harmful": 0,
+    "superseded": 0,
+    "useful_rate": 0.3717948717948718,
+    "useful_lb90": 0.28750175633764674,
+    "harmful_rate": 0.0,
+    "per_10_calls": 0.15264187866927592,
+    "gates": {
+     "useful_lb90>=0.8": false,
+     "harmful<=1%": true,
+     "per_10_calls<=1": true
+    },
+    "custom_classes": 0,
+    "uncalibrated_classes": [
+     "advice",
+     "command",
+     "read_files"
+    ]
+   },
+   "by_route": {
+    "hs-command-1": {
+     "directives": 39,
+     "useful": 0,
+     "harmful": 0,
+     "saved": 0.0,
+     "cost": 1.1900742497223418
+    },
+    "hs-procedure-5": {
+     "directives": 7,
+     "useful": 6,
+     "harmful": 0,
+     "saved": 8.0,
+     "cost": 0.4634224305312971
+    },
+    "hs-file-0": {
+     "directives": 1,
+     "useful": 1,
+     "harmful": 0,
+     "saved": 0.0,
+     "cost": 0.013336656565789072
+    },
+    "hs-command-6": {
+     "directives": 2,
+     "useful": 2,
+     "harmful": 0,
+     "saved": 11.0,
+     "cost": 0.06754818405784505
+    },
+    "hs-procedure-9": {
+     "directives": 1,
+     "useful": 1,
+     "harmful": 0,
+     "saved": 0.0,
+     "cost": 0.0830913697572737
+    },
+    "hs-procedure-1": {
+     "directives": 25,
+     "useful": 19,
+     "harmful": 0,
+     "saved": 21.0,
+     "cost": 0.6467615385780453
+    },
+    "hs-command-3": {
+     "directives": 3,
+     "useful": 0,
+     "harmful": 0,
+     "saved": 0.0,
+     "cost": 0.0771544333526655
+    }
+   },
+   "by_slice": {
+    "attrs": {
+     "sessions": 40,
+     "usd_saved_per_task": 0.0018537358333333333,
+     "usd_saved_ci": [
+      -0.00030210916666666664,
+      0.004534260000000001
+     ],
+     "usd_saved_share": 0.00980274924246688,
+     "calls_saved_per_task": 0.38268232601029006,
+     "calls_saved_ci": [
+      -0.030870443999311124,
+      0.9323478255665878
+     ],
+     "s_hat_rust": 0.43268232601028994,
+     "directives": 48
+    },
+    "click": {
+     "sessions": 40,
+     "usd_saved_per_task": -3.197e-05,
+     "usd_saved_ci": [
+      -9.591000000000001e-05,
+      0.0
+     ],
+     "usd_saved_share": -0.00011236045881867929,
+     "calls_saved_per_task": -0.0031191482761536585,
+     "calls_saved_ci": [
+      -0.009357444828460976,
+      0.0
+     ],
+     "s_hat_rust": -0.0031191482761536585,
+     "directives": 2
+    },
+    "marshmallow": {
+     "sessions": 30,
+     "usd_saved_per_task": 0.00273436967028348,
+     "usd_saved_ci": [
+      -0.0017753065315995195,
+      0.006977817491638797
+     ],
+     "usd_saved_share": 0.012058520592579905,
+     "calls_saved_per_task": 0.2758694676023097,
+     "calls_saved_ci": [
+      -0.15386171180094876,
+      0.6728431009877095
+     ],
+     "s_hat_rust": 0.6758694676023097,
+     "directives": 28
+    },
+    "urfave-cli": {
+     "sessions": 16,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    },
+    "vue-core": {
+     "sessions": 32,
+     "usd_saved_per_task": 0.0,
+     "usd_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "usd_saved_share": 0.0,
+     "calls_saved_per_task": 0.0,
+     "calls_saved_ci": [
+      0.0,
+      0.0
+     ],
+     "s_hat_rust": 0.0,
+     "directives": 0
+    }
+   }
+  }
+ },
+ "leave_task_out_lam0.0": {
+  "name": "leave-task-out \u03bb=0.0",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": 0.05408736318014306,
+   "calls_saved_ci": [
+    -1.0857349353604429,
+    1.2067200165256333
+   ],
+   "calls_saved_share": 0.0016723685679966007,
+   "calls_saved_share_ci": [
+    -0.03325894242423902,
+    0.03781228836192325
+   ],
+   "usd_saved_per_task": -0.0014342310025695622,
+   "usd_saved_ci": [
+    -0.009973666775330934,
+    0.006883470858440868
+   ],
+   "usd_saved_share": -0.005507961856611677,
+   "usd_saved_share_ci": [
+    -0.03829157072636108,
+    0.026879951548423854
+   ],
+   "tokens_saved_per_task": 147024.5253164557,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.006329113924050633,
+    "worst_case_ci": [
+     -0.027867284999987814,
+     -0.0014132447997793167
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 3.3199101479902677,
+   "s_hat_rust_ci95": [
+    2.7225202779809083,
+    3.916548812790146
+   ],
+   "directives": 713,
+   "useful": 278,
+   "harmful": 1,
+   "superseded": 1169,
+   "useful_rate": 0.3899018232819074,
+   "useful_lb90": 0.36032781974313255,
+   "harmful_rate": 0.001402524544179523,
+   "per_10_calls": 1.3953033268101762,
+   "gates": {
+    "useful_lb90>=0.8": false,
+    "harmful<=1%": true,
+    "per_10_calls<=1": false
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "advice",
+    "command",
+    "read_files"
+   ]
+  },
+  "by_route": {
+   "hs-command-2": {
+    "directives": 28,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.9222767147467703
+   },
+   "hs-procedure-144": {
+    "directives": 5,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.2748203789094612
+   },
+   "hs-command-57": {
+    "directives": 6,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 10.0,
+    "cost": 0.1856439761264564
+   },
+   "hs-command-161": {
+    "directives": 3,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.04403394003492791
+   },
+   "hs-file-0": {
+    "directives": 11,
+    "useful": 8,
+    "harmful": 0,
+    "saved": 11.0,
+    "cost": 0.3753165130929675
+   },
+   "hs-command-16": {
+    "directives": 20,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.44660899500321666
+   },
+   "hs-procedure-25": {
+    "directives": 4,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 7.0,
+    "cost": 0.17215002779655875
+   },
+   "hs-file-155": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.04603317498695538
+   },
+   "hs-procedure-73": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.017503972711089208
+   },
+   "hs-command-146": {
+    "directives": 7,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.148787591361744
+   },
+   "hs-fact-151": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.07342399384998843
+   },
+   "hs-procedure-39": {
+    "directives": 3,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.099749324162494
+   },
+   "hs-command-265": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.05033862515475366
+   },
+   "hs-procedure-162": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.04630164751010733
+   },
+   "hs-command-243": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03844741848279545
+   },
+   "hs-file-101": {
+    "directives": 5,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 12.0,
+    "cost": 0.17179609186525896
+   },
+   "hs-command-115": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 13.0,
+    "cost": 0.0668792586786387
+   },
+   "hs-procedure-61": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 6.0,
+    "cost": 0.08254154531436494
+   },
+   "hs-procedure-40": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.022012711848860063
+   },
+   "hs-action-127": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.025612432422788024
+   },
+   "hs-command-82": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 7.0,
+    "cost": 0.02380145235248988
+   },
+   "hs-file-77": {
+    "directives": 5,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 15.0,
+    "cost": 0.16648473475888356
+   },
+   "hs-command-207": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 3.0,
+    "cost": 0.04549923371113409
+   },
+   "hs-command-110": {
+    "directives": 3,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.019651727878324882
+   },
+   "hs-command-101": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 4.0,
+    "cost": 0.046325230228252454
+   },
+   "hs-procedure-202": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.02438425656349679
+   },
+   "hs-command-78": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 4.0,
+    "cost": 0.04828201488389046
+   },
+   "hs-procedure-205": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.05404510533834996
+   },
+   "hs-command-97": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.02697960199215304
+   },
+   "hs-file-33": {
+    "directives": 7,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 5.0,
+    "cost": 0.2625972530295065
+   },
+   "hs-procedure-38": {
+    "directives": 4,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.18358392349792907
+   },
+   "hs-procedure-43": {
+    "directives": 4,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.17282132342383144
+   },
+   "hs-command-58": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 7.0,
+    "cost": 0.06544668259068719
+   },
+   "hs-command-53": {
+    "directives": 5,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.11991508778440434
+   },
+   "hs-action-35": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.04131704808039244
+   },
+   "hs-command-42": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 5.0,
+    "cost": 0.05058886690380571
+   },
+   "hs-procedure-59": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 4.0,
+    "cost": 0.07949820472030342
+   },
+   "hs-command-39": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.0477164836993844
+   },
+   "hs-file-85": {
+    "directives": 5,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 13.0,
+    "cost": 0.11030711131761398
+   },
+   "hs-command-131": {
+    "directives": 5,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 5.0,
+    "cost": 0.1277383163443569
+   },
+   "hs-command-87": {
+    "directives": 4,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.07365259504207655
+   },
+   "hs-procedure-125": {
+    "directives": 3,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.008754229331578305
+   },
+   "hs-command-256": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 3.0,
+    "cost": 0.011516149901437147
+   },
+   "hs-command-165": {
+    "directives": 4,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.09410916400172395
+   },
+   "hs-file-78": {
+    "directives": 5,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 8.0,
+    "cost": 0.11309920113905275
+   },
+   "hs-command-102": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 5.0,
+    "cost": 0.028469798222824194
+   },
+   "hs-command-124": {
+    "directives": 8,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 22.0,
+    "cost": 0.12620323473294634
+   },
+   "hs-command-109": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.013259077365321694
+   },
+   "hs-command-111": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.014128199271752096
+   },
+   "hs-procedure-45": {
+    "directives": 3,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 5.0,
+    "cost": 0.10292816164333299
+   },
+   "hs-file-37": {
+    "directives": 7,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.1473488518655353
+   },
+   "hs-procedure-197": {
+    "directives": 5,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.10340594486834714
+   },
+   "hs-procedure-30": {
+    "directives": 5,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 3.0,
+    "cost": 0.1114990897686984
+   },
+   "hs-command-65": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.022846105019503196
+   },
+   "hs-procedure-66": {
+    "directives": 5,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.12592381509730932
+   },
+   "hs-command-50": {
+    "directives": 3,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.020811849422676044
+   },
+   "hs-command-34": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.009454953843836307
+   },
+   "hs-command-19": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.01752833831020843
+   },
+   "hs-action-26": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.030441036805829404
+   },
+   "hs-command-48": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.05398091480893116
+   },
+   "hs-command-59": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.02772516981111118
+   },
+   "hs-command-44": {
+    "directives": 7,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.21779658764700374
+   },
+   "hs-procedure-49": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.048944544414483156
+   },
+   "hs-file-32": {
+    "directives": 13,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 17.0,
+    "cost": 0.35730321353357397
+   },
+   "hs-command-41": {
+    "directives": 6,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 16.0,
+    "cost": 0.12372093797807705
+   },
+   "hs-command-36": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.017390349405855772
+   },
+   "hs-command-43": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 5.0,
+    "cost": 0.029140142145716603
+   },
+   "hs-command-38": {
+    "directives": 4,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03933424652692699
+   },
+   "hs-procedure-183": {
+    "directives": 3,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.11900309535807038
+   },
+   "hs-command-199": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.009507111733218911
+   },
+   "hs-command-52": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03276901478239327
+   },
+   "hs-fact-189": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.02883043127489408
+   },
+   "hs-procedure-37": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.02881073835735658
+   },
+   "hs-procedure-42": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.028357801253994168
+   },
+   "hs-procedure-58": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.031469282224918536
+   },
+   "hs-file-26": {
+    "directives": 9,
+    "useful": 6,
+    "harmful": 0,
+    "saved": 13.0,
+    "cost": 0.23008437565948112
+   },
+   "hs-command-193": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.08684317704337906
+   },
+   "hs-file-82": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.045051038444136486
+   },
+   "hs-command-3": {
+    "directives": 8,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 3.0,
+    "cost": 0.10106421034176838
+   },
+   "hs-fact-178": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.04445857903214301
+   },
+   "hs-command-25": {
+    "directives": 7,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 4.0,
+    "cost": 0.17371807430611733
+   },
+   "hs-command-137": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.007336104386652002
+   },
+   "hs-procedure-53": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.016354346688145664
+   },
+   "hs-procedure-4": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.04724298207196644
+   },
+   "hs-command-10": {
+    "directives": 5,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.11976797083431849
+   },
+   "hs-command-17": {
+    "directives": 3,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 7.0,
+    "cost": 0.09199394672216593
+   },
+   "hs-command-352": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.038127083519863963
+   },
+   "hs-file-14": {
+    "directives": 3,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.048897090038295635
+   },
+   "hs-command-28": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.022027677749221593
+   },
+   "hs-command-9": {
+    "directives": 11,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.2704210703674704
+   },
+   "hs-procedure-2": {
+    "directives": 23,
+    "useful": 12,
+    "harmful": 0,
+    "saved": 15.0,
+    "cost": 0.8684106098418465
+   },
+   "hs-command-18": {
+    "directives": 8,
+    "useful": 8,
+    "harmful": 0,
+    "saved": 21.0,
+    "cost": 0.17971001303901774
+   },
+   "hs-command-26": {
+    "directives": 10,
+    "useful": 8,
+    "harmful": 0,
+    "saved": 12.0,
+    "cost": 0.20616314341745143
+   },
+   "hs-command-23": {
+    "directives": 12,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.16546062909871678
+   },
+   "hs-procedure-80": {
+    "directives": 5,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0541091674639856
+   },
+   "hs-action-97": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.006881164376420542
+   },
+   "hs-procedure-93": {
+    "directives": 4,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 3.0,
+    "cost": 0.04938163646785186
+   },
+   "hs-command-86": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.006538115125983154
+   },
+   "hs-command-258": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.04046356298177346
+   },
+   "hs-file-43": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.014693183660368984
+   },
+   "hs-file-13": {
+    "directives": 5,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 5.0,
+    "cost": 0.10951354617190251
+   },
+   "hs-command-11": {
+    "directives": 6,
+    "useful": 6,
+    "harmful": 0,
+    "saved": 6.0,
+    "cost": 0.09424467575131745
+   },
+   "hs-action-312": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.024907080697701398
+   },
+   "hs-procedure-94": {
+    "directives": 5,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.04117971615738142
+   },
+   "hs-command-254": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0023308765358811463
+   },
+   "hs-action-98": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.019662116768836224
+   },
+   "hs-command-122": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0009368043669953415
+   },
+   "hs-command-335": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.01894039543452153
+   },
+   "hs-procedure-10": {
+    "directives": 3,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.0635363521931758
+   },
+   "hs-command-315": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.009708942197527843
+   },
+   "hs-procedure-302": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.011864877201151761
+   },
+   "hs-file-123": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.030073287192411768
+   },
+   "hs-command-128": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.009762416842316213
+   },
+   "hs-command-45": {
+    "directives": 5,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 12.0,
+    "cost": 0.29792281849184693
+   },
+   "hs-file-120": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.07467414068758405
+   },
+   "hs-action-25": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.054120918800700135
+   },
+   "hs-file-23": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.031363906406272214
+   },
+   "hs-procedure-22": {
+    "directives": 7,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.20828162538092218
+   },
+   "hs-procedure-78": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.00799818292363709
+   },
+   "hs-procedure-46": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.04624602035248686
+   },
+   "hs-command-56": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.031219153869109114
+   },
+   "hs-command-135": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.02410302320776806
+   },
+   "hs-action-283": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.033549995673816356
+   },
+   "hs-command-22": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.058371403856607405
+   },
+   "hs-command-106": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.004497306558160221
+   },
+   "hs-command-168": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.020327810976974867
+   },
+   "hs-command-336": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.014697102772085116
+   },
+   "hs-command-20": {
+    "directives": 6,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.17069936886045692
+   },
+   "hs-command-126": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.04291932248132319
+   },
+   "hs-command-108": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.002588769283012223
+   },
+   "hs-file-44": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0609485021109451
+   },
+   "hs-command-138": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03054300862476139
+   },
+   "hs-file-17": {
+    "directives": 4,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.05923202319884938
+   },
+   "hs-command-349": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 3.0,
+    "cost": 0.05872418572006492
+   },
+   "hs-command-325": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.013107612934765289
+   },
+   "hs-command-123": {
+    "directives": 3,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.042665492505470554
+   },
+   "hs-file-356": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.016469351916555287
+   },
+   "hs-command-338": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.015757713253494253
+   },
+   "hs-command-60": {
+    "directives": 3,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 6.0,
+    "cost": 0.05874451547901076
+   },
+   "hs-procedure-81": {
+    "directives": 4,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06392149303529585
+   },
+   "hs-file-45": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.006637179983549785
+   },
+   "hs-command-125": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.007183141562841784
+   },
+   "hs-file-357": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.005138461922748221
+   },
+   "hs-command-49": {
+    "directives": 5,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 20.0,
+    "cost": 0.0861788091055085
+   },
+   "hs-procedure-119": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.004669439087167108
+   },
+   "hs-procedure-19": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.010431600967149221
+   },
+   "hs-procedure-193": {
+    "directives": 5,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 12.0,
+    "cost": 0.19931049196649356
+   },
+   "hs-procedure-47": {
+    "directives": 5,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06067340335443921
+   },
+   "hs-command-81": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.007220673722150878
+   },
+   "hs-action-0": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.018035378990018773
+   },
+   "hs-command-198": {
+    "directives": 5,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 21.0,
+    "cost": 0.10445558179910627
+   },
+   "hs-command-178": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.017284710663066388
+   },
+   "hs-command-163": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.006869772998805257
+   },
+   "hs-command-127": {
+    "directives": 5,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 27.0,
+    "cost": 0.10001093124310144
+   },
+   "hs-procedure-132": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.009905579576294801
+   },
+   "hs-command-14": {
+    "directives": 4,
+    "useful": 4,
+    "harmful": 0,
+    "saved": 26.0,
+    "cost": 0.08523146171671715
+   },
+   "hs-command-129": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 11.0,
+    "cost": 0.0444093751865819
+   },
+   "hs-file-98": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.006022980361680728
+   },
+   "hs-file-197": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.014644143738369898
+   },
+   "hs-command-195": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 7.0,
+    "cost": 0.02961773622140155
+   },
+   "hs-procedure-54": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03221689712310749
+   },
+   "hs-procedure-145": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0777331819699662
+   },
+   "hs-file-103": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.014541878673649556
+   },
+   "hs-command-80": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.030002141859832177
+   },
+   "hs-command-100": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.02918535411051199
+   },
+   "hs-command-6": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03853287092687625
+   },
+   "hs-command-75": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.05423466211381731
+   },
+   "hs-command-33": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.008922550631887977
+   },
+   "hs-command-7": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.02968130519726226
+   },
+   "hs-file-69": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.01709580364582025
+   },
+   "hs-procedure-153": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0433540791472372
+   },
+   "hs-command-1": {
+    "directives": 4,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.09710938338663551
+   },
+   "hs-file-62": {
+    "directives": 4,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.09662767020704187
+   },
+   "hs-command-8": {
+    "directives": 8,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.2211869072986756
+   },
+   "hs-procedure-48": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.08992588337540816
+   },
+   "hs-command-84": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03500366206823749
+   },
+   "hs-file-97": {
+    "directives": 4,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 8.0,
+    "cost": 0.12685994613201096
+   },
+   "hs-procedure-82": {
+    "directives": 2,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.08433330273573086
+   },
+   "hs-file-9": {
+    "directives": 5,
+    "useful": 5,
+    "harmful": 0,
+    "saved": 25.0,
+    "cost": 0.14869904571201661
+   },
+   "hs-command-91": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.023640636242888778
+   },
+   "hs-command-132": {
+    "directives": 4,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.1723917907740539
+   },
+   "hs-procedure-76": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.09138546752007055
+   },
+   "hs-procedure-133": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.18150394337783674
+   },
+   "hs-command-71": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.046756608197713656
+   },
+   "hs-action-151": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.056067122371657487
+   },
+   "hs-file-46": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.07474232849234973
+   },
+   "hs-file-47": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.08671369985835202
+   },
+   "hs-command-63": {
+    "directives": 5,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.1746758991941272
+   },
+   "hs-procedure-148": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.035934068795514314
+   },
+   "hs-command-61": {
+    "directives": 4,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.0872756748526919
+   },
+   "hs-command-0": {
+    "directives": 4,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.1568763354630251
+   },
+   "hs-action-6": {
+    "directives": 5,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.1636326362690795
+   },
+   "hs-command-62": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.11778475728156687
+   },
+   "hs-file-4": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0438712034559864
+   },
+   "hs-command-47": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.04313578261151976
+   },
+   "hs-file-141": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0487534385186769
+   },
+   "hs-command-158": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.025436808967762455
+   },
+   "hs-procedure-11": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.07423718127468225
+   },
+   "hs-command-159": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.02188389435485636
+   },
+   "hs-procedure-13": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03457944091817328
+   },
+   "hs-file-36": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.024383853183536627
+   },
+   "hs-action-43": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.01915789462056194
+   },
+   "hs-file-60": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.04107138226981617
+   },
+   "hs-command-66": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.014242998654048322
+   },
+   "hs-file-8": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 10.0,
+    "cost": 0.036795256908402636
+   },
+   "hs-procedure-152": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.012143804578160179
+   },
+   "hs-command-151": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.007676184164790213
+   },
+   "hs-command-27": {
+    "directives": 4,
+    "useful": 3,
+    "harmful": 0,
+    "saved": 11.0,
+    "cost": 0.10620542350683077
+   },
+   "hs-procedure-14": {
+    "directives": 5,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.1692590591953498
+   },
+   "hs-command-24": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.04868716993619625
+   },
+   "hs-file-10": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.020107335590124675
+   },
+   "hs-procedure-23": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.025737389555359588
+   },
+   "hs-procedure-117": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.01981592492939823
+   },
+   "hs-command-166": {
+    "directives": 4,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.07393929251087905
+   },
+   "hs-procedure-167": {
+    "directives": 4,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.08555687326284006
+   },
+   "hs-procedure-164": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0267066615478206
+   },
+   "hs-file-169": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.040347530370512405
+   },
+   "hs-file-147": {
+    "directives": 4,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.09977701585855347
+   },
+   "hs-command-4": {
+    "directives": 4,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.09706094621662203
+   },
+   "hs-action-9": {
+    "directives": 2,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03836641037445004
+   },
+   "hs-command-30": {
+    "directives": 1,
+    "useful": 1,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.010784008287883848
+   },
+   "hs-command-155": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.02036292753756513
+   },
+   "hs-command-145": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.06770929008023692
+   },
+   "hs-file-7": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.036838929514043536
+   },
+   "hs-file-48": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03457810736624312
+   },
+   "hs-procedure-98": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.019492716959036708
+   },
+   "hs-command-144": {
+    "directives": 3,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 1.0,
+    "cost": 0.04777569693752359
+   },
+   "hs-action-168": {
+    "directives": 1,
+    "useful": 0,
+    "harmful": 1,
+    "saved": 0.0,
+    "cost": 0.016072296216495575
+   },
+   "hs-file-12": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.020807958507036147
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.001559818838423851,
+    "usd_saved_ci": [
+     -0.016540309562106968,
+     0.015928213279966675
+    ],
+    "usd_saved_share": 0.008248485389231546,
+    "calls_saved_per_task": 0.7898406599033703,
+    "calls_saved_ci": [
+     -2.243780909622777,
+     3.295475230781149
+    ],
+    "s_hat_rust": 4.589840659903371,
+    "directives": 198
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": -0.008442226151885134,
+    "usd_saved_ci": [
+     -0.02056691579205471,
+     0.0046052944525407785
+    ],
+    "usd_saved_share": -0.029670703906064015,
+    "calls_saved_per_task": -1.1857167329198464,
+    "calls_saved_ci": [
+     -2.399807015866067,
+     0.13460559381833917
+    ],
+    "s_hat_rust": 2.814283267080154,
+    "directives": 207
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": 0.02330009885206721,
+    "usd_saved_ci": [
+     0.013677700804647785,
+     0.032325163911111114
+    ],
+    "usd_saved_share": 0.10275301283153547,
+    "calls_saved_per_task": 3.5897482343381335,
+    "calls_saved_ci": [
+     2.2791747949560337,
+     4.660907230214134
+    ],
+    "s_hat_rust": 4.5230815676714675,
+    "directives": 73
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": -0.00703284367466267,
+    "usd_saved_ci": [
+     -0.017809049432658673,
+     0.0028584447420039964
+    ],
+    "usd_saved_share": -0.03138840511028102,
+    "calls_saved_per_task": -0.6955557187578026,
+    "calls_saved_ci": [
+     -2.1807875699550534,
+     0.6637435527955735
+    ],
+    "s_hat_rust": 1.4294442812421975,
+    "directives": 47
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": -0.016805927269842286,
+    "usd_saved_ci": [
+     -0.043146233273630166,
+     0.005889088882624197
+    ],
+    "usd_saved_share": -0.04554094927510958,
+    "calls_saved_per_task": -2.255709663340547,
+    "calls_saved_ci": [
+     -5.316832508354204,
+     0.3885777581459951
+    ],
+    "s_hat_rust": 2.1817903366594527,
+    "directives": 188
+   }
+  }
+ },
+ "leave_task_out_lam2.0": {
+  "name": "leave-task-out \u03bb=2.0",
+  "assumptions": {
+   "sat": "goal",
+   "p_follow": 1.0,
+   "misfire_calls": 2.0,
+   "hindsight": false
+  },
+  "summary": {
+   "sessions": 158,
+   "tasks": 38,
+   "calls": 5110,
+   "test_set_id": "6a795a362ccb",
+   "baseline": {
+    "usd_per_task": 0.26039232658227857,
+    "calls_per_task": 32.34177215189873
+   },
+   "calls_saved_per_task": -0.013906758127304622,
+   "calls_saved_ci": [
+    -0.04096124696317705,
+    0.0
+   ],
+   "calls_saved_share": -0.0004299936955213562,
+   "calls_saved_share_ci": [
+    -0.0012544938311188389,
+    0.0
+   ],
+   "usd_saved_per_task": -0.00011498198312236286,
+   "usd_saved_ci": [
+    -0.0003386221794871794,
+    0.0
+   ],
+   "usd_saved_share": -0.00044157208713303223,
+   "usd_saved_share_ci": [
+    -0.0012337426972145607,
+    0.0
+   ],
+   "tokens_saved_per_task": 1072.9810126582279,
+   "pass_rate_effect": {
+    "point": 0.0,
+    "worst_case": -0.0,
+    "worst_case_ci": [
+     -0.016835408386943633,
+     -0.0
+    ],
+    "note": "replay cannot see pass-rate gains; the bound assumes every harmful directive, followed, flips a pass to a fail"
+   },
+   "s_hat_rust": 0.01140969756889791,
+   "s_hat_rust_ci95": [
+    -0.0014805492259143164,
+    0.03815116458692402
+   ],
+   "directives": 9,
+   "useful": 2,
+   "harmful": 0,
+   "superseded": 0,
+   "useful_rate": 0.2222222222222222,
+   "useful_lb90": 0.07649473755439642,
+   "harmful_rate": 0.0,
+   "per_10_calls": 0.01761252446183953,
+   "gates": {
+    "useful_lb90>=0.8": false,
+    "harmful<=1%": true,
+    "per_10_calls<=1": true
+   },
+   "custom_classes": 0,
+   "uncalibrated_classes": [
+    "advice",
+    "command"
+   ]
+  },
+  "by_route": {
+   "hs-command-4": {
+    "directives": 3,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.0809366910166493
+   },
+   "hs-command-2": {
+    "directives": 2,
+    "useful": 0,
+    "harmful": 0,
+    "saved": 0.0,
+    "cost": 0.03739674582921621
+   },
+   "hs-command-25": {
+    "directives": 4,
+    "useful": 2,
+    "harmful": 0,
+    "saved": 2.0,
+    "cost": 0.07893434726826491
+   }
+  },
+  "by_slice": {
+   "attrs": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "click": {
+    "sessions": 40,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "marshmallow": {
+    "sessions": 30,
+    "usd_saved_per_task": -2.7940000000000004e-05,
+    "usd_saved_ci": [
+     -8.382000000000002e-05,
+     0.0
+    ],
+    "usd_saved_share": -0.00012321489263803658,
+    "calls_saved_per_task": -0.0026978897005549766,
+    "calls_saved_ci": [
+     -0.00809366910166493,
+     0.0
+    ],
+    "s_hat_rust": -0.0026978897005549766,
+    "directives": 3
+   },
+   "urfave-cli": {
+    "sessions": 16,
+    "usd_saved_per_task": 0.0,
+    "usd_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_saved_share": 0.0,
+    "calls_saved_per_task": 0.0,
+    "calls_saved_ci": [
+     0.0,
+     0.0
+    ],
+    "s_hat_rust": 0.0,
+    "directives": 0
+   },
+   "vue-core": {
+    "sessions": 32,
+    "usd_saved_per_task": -0.0005415297916666666,
+    "usd_saved_ci": [
+     -0.0016245893749999999,
+     0.0
+    ],
+    "usd_saved_share": -0.0014674454064493732,
+    "calls_saved_per_task": -0.06613534665929628,
+    "calls_saved_ci": [
+     -0.19840603997788886,
+     0.0
+    ],
+    "s_hat_rust": 0.05886465334070371,
+    "directives": 6
+   }
+  }
+ },
+ "scan_memory": [],
+ "fits": [
+  {
+   "n_train": 10,
+   "repos": [
+    "attrs"
+   ],
+   "theta": 0.7,
+   "classes": 28,
+   "eligible": 6
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "click"
+   ],
+   "theta": 0.9,
+   "classes": 30,
+   "eligible": 9
+  },
+  {
+   "n_train": 7,
+   "repos": [
+    "marshmallow"
+   ],
+   "theta": 0.85,
+   "classes": 26,
+   "eligible": 8
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "urfave-cli"
+   ],
+   "theta": null,
+   "classes": 28,
+   "eligible": 1
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "vue-core"
+   ],
+   "theta": null,
+   "classes": 20,
+   "eligible": 3
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "attrs"
+   ],
+   "theta": 0.7,
+   "classes": 28,
+   "eligible": 6
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "click"
+   ],
+   "theta": 0.9,
+   "classes": 30,
+   "eligible": 9
+  },
+  {
+   "n_train": 7,
+   "repos": [
+    "marshmallow"
+   ],
+   "theta": 0.85,
+   "classes": 26,
+   "eligible": 8
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "urfave-cli"
+   ],
+   "theta": null,
+   "classes": 28,
+   "eligible": 1
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "vue-core"
+   ],
+   "theta": null,
+   "classes": 20,
+   "eligible": 3
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "attrs"
+   ],
+   "theta": 0.7,
+   "classes": 28,
+   "eligible": 6
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "click"
+   ],
+   "theta": 0.9,
+   "classes": 30,
+   "eligible": 9
+  },
+  {
+   "n_train": 7,
+   "repos": [
+    "marshmallow"
+   ],
+   "theta": 0.85,
+   "classes": 26,
+   "eligible": 8
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "vue-core"
+   ],
+   "theta": null,
+   "classes": 20,
+   "eligible": 3
+  },
+  {
+   "n_train": 413,
+   "repos": [
+    "click",
+    "marshmallow",
+    "urfave-cli",
+    "vue-core"
+   ],
+   "theta": null,
+   "classes": 931,
+   "eligible": 231
+  },
+  {
+   "n_train": 373,
+   "repos": [
+    "attrs",
+    "marshmallow",
+    "urfave-cli",
+    "vue-core"
+   ],
+   "theta": null,
+   "classes": 861,
+   "eligible": 201
+  },
+  {
+   "n_train": 440,
+   "repos": [
+    "attrs",
+    "click",
+    "urfave-cli",
+    "vue-core"
+   ],
+   "theta": 0.85,
+   "classes": 1015,
+   "eligible": 242
+  },
+  {
+   "n_train": 461,
+   "repos": [
+    "attrs",
+    "click",
+    "marshmallow",
+    "vue-core"
+   ],
+   "theta": null,
+   "classes": 1111,
+   "eligible": 260
+  },
+  {
+   "n_train": 389,
+   "repos": [
+    "attrs",
+    "click",
+    "marshmallow",
+    "urfave-cli"
+   ],
+   "theta": 0.9,
+   "classes": 1013,
+   "eligible": 214
+  },
+  {
+   "n_train": 2,
+   "repos": [
+    "attrs"
+   ],
+   "theta": null,
+   "classes": 11,
+   "eligible": 1
+  },
+  {
+   "n_train": 2,
+   "repos": [
+    "click"
+   ],
+   "theta": null,
+   "classes": 9,
+   "eligible": 1
+  },
+  {
+   "n_train": 2,
+   "repos": [
+    "marshmallow"
+   ],
+   "theta": null,
+   "classes": 10,
+   "eligible": 1
+  },
+  {
+   "n_train": 2,
+   "repos": [
+    "urfave-cli"
+   ],
+   "theta": null,
+   "classes": 7,
+   "eligible": 0
+  },
+  {
+   "n_train": 2,
+   "repos": [
+    "vue-core"
+   ],
+   "theta": null,
+   "classes": 3,
+   "eligible": 0
+  },
+  {
+   "n_train": 5,
+   "repos": [
+    "attrs"
+   ],
+   "theta": null,
+   "classes": 16,
+   "eligible": 2
+  },
+  {
+   "n_train": 5,
+   "repos": [
+    "click"
+   ],
+   "theta": 0.85,
+   "classes": 17,
+   "eligible": 2
+  },
+  {
+   "n_train": 5,
+   "repos": [
+    "marshmallow"
+   ],
+   "theta": null,
+   "classes": 19,
+   "eligible": 6
+  },
+  {
+   "n_train": 5,
+   "repos": [
+    "urfave-cli"
+   ],
+   "theta": null,
+   "classes": 12,
+   "eligible": 1
+  },
+  {
+   "n_train": 5,
+   "repos": [
+    "vue-core"
+   ],
+   "theta": null,
+   "classes": 5,
+   "eligible": 0
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "attrs"
+   ],
+   "theta": 0.7,
+   "classes": 28,
+   "eligible": 6
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "click"
+   ],
+   "theta": 0.9,
+   "classes": 30,
+   "eligible": 9
+  },
+  {
+   "n_train": 7,
+   "repos": [
+    "marshmallow"
+   ],
+   "theta": 0.85,
+   "classes": 26,
+   "eligible": 8
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "urfave-cli"
+   ],
+   "theta": null,
+   "classes": 28,
+   "eligible": 1
+  },
+  {
+   "n_train": 10,
+   "repos": [
+    "vue-core"
+   ],
+   "theta": null,
+   "classes": 20,
+   "eligible": 3
+  }
+ ]
+}
