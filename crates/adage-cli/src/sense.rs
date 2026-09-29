@@ -179,6 +179,9 @@ pub struct Candidate {
     pub support: u32,
     pub opportunities: u32,
     pub lower_bound: f64,
+    /// What delivering it changes (`adage_learn::value::assess`): why a quiet reflex is quiet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uplift: Option<adage_tracks::Uplift>,
 }
 
 /// A failing command: (sessions, runs, what worked next → sessions).
@@ -542,6 +545,7 @@ fn candidates(p: &adage_learn::Planned) -> Vec<Candidate> {
         support: r.evidence.support,
         opportunities: r.evidence.opportunities,
         lower_bound: (r.evidence.lower_bound * 100.0).round() / 100.0,
+        uplift: r.evidence.uplift.clone(),
     };
     let mut out = Vec::new();
     for r in p.track.routes.iter().filter(|r| {
@@ -552,6 +556,11 @@ fn candidates(p: &adage_learn::Planned) -> Vec<Candidate> {
     }) {
         if let Some(prop) = p.proposals.routes.get(&r.id) {
             out.push(row(&prop.route, "proposed"));
+            continue;
+        }
+        // Kept quiet by its uplift: agents already take its step unaided.
+        if r.state == adage_tracks::RouteState::Nascent && r.evidence.uplift.as_ref().is_some_and(|u| u.gated) {
+            out.push(row(r, "quiet"));
             continue;
         }
         // An environment step learn would build as nascent: never delivered until approved (O11).
@@ -674,7 +683,7 @@ pub fn print_text(s: &Sense) {
             println!("  candidate reflexes        what `adage condition` would form — candidates only, nothing is written{sampled}:");
             for c in &r.candidates {
                 println!(
-                    "    {:<8} {:<9} {}/{}: {} → {}   {}/{} traces, lower bound {:.2}, {}",
+                    "    {:<8} {:<9} {}/{}: {} → {}   {}/{} traces, lower bound {:.2}, {}{}",
                     format!("[{}]", c.strength),
                     c.status,
                     c.track,
@@ -684,8 +693,12 @@ pub fn print_text(s: &Sense) {
                     c.support,
                     c.opportunities,
                     c.lower_bound,
-                    c.effect
+                    c.effect,
+                    c.uplift.as_ref().map(|u| format!(", uplift {:+.2}", u.mean)).unwrap_or_default()
                 );
+                if let Some(u) = c.uplift.as_ref().filter(|u| u.gated) {
+                    println!("             {}", u.line());
+                }
             }
         }
         if s.intent_model.is_none() {

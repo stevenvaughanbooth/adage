@@ -12,10 +12,27 @@
 //!
 //! each as a posterior whose prior is supplied from the level above (global → ecosystem →
 //! environment kind → situation → this repository: [`Priors`], fitted across repositories by
-//! `examples/outcome_priors.rs`, κ by the method of moments). `p_follow` has a fixed prior until
-//! follow judgements exist. The value is `A = p_follow · (Q(∅) − Q(Sat d)) − C(d) − p_misfire · m`
-//! ([`adage_graph::stats::advantage_mix`], with `Q(∅)` the mixture of the agents who already take
-//! `Sat(d)` and those who do something else).
+//! `examples/outcome_priors.rs`, κ by the method of moments). The value is
+//! `A = (p_follow − p_self) · (Q(other) − Q(Sat d)) − C(d) − p_misfire · m` ([`advantage_uplift`]).
+//!
+//! **Uplift** (evals/lab/research/uptake-delivery): agents follow about 96% of directives, but
+//! half the time they would have taken the step anyway, so a directive is worth its uplift,
+//! `p_follow − p_self`, not its follow rate. Both are Beta posteriors ([`uplift`]):
+//!
+//! - `p_self` starts from its kind's prior ([`kind_of`]): a cross-repository cell when one is fitted
+//!   ([`Priors::uptake`], `examples/outcome_priors.rs`), else the research's measured constant
+//!   ([`SELF_PRIORS`], κ = [`SELF_KAPPA`]). It is updated by the repository's unexposed training
+//!   traces in the matching situation (the route's own count where that is the unaided rate, else
+//!   judged with the learned follow judge, [`unaided_in_traces`]) and by the control arm's
+//!   `would_have` judgements from the spools.
+//! - `p_follow` starts from its kind's research prior ([`FOLLOW_PRIORS`]) and is updated by the
+//!   treated arm's judgements.
+//!
+//! [`assess`] records every route's uplift and puts a route below [`UPLIFT_MIN`] (with at least
+//! [`UPLIFT_MIN_EVIDENCE`] situations of evidence) out of service as nascent: `adage review`
+//! and `adage sense` say why it is quiet, and a person's approval delivers it anyway. The value
+//! model's own candidates (the dead end, the tests of the edit) are gated the same way at
+//! admission.
 //!
 //! **Candidates** are safe by construction: the project's own environment running the tool that
 //! failed (declared by the repository, [`Statics`], or seen running tests in a trace). An install
@@ -697,7 +714,14 @@ pub fn advantage_uplift(
     } else {
         0.0
     };
-    Advantage { mean, sd, p_positive, lower: mean - stats::ADVANTAGE_Z * sd, q_null: ps * m1 + (1.0 - ps) * m0, q_sat: m1 }
+    Advantage {
+        mean,
+        sd,
+        p_positive,
+        lower: mean - stats::ADVANTAGE_Z * sd,
+        q_null: ps * m1 + (1.0 - ps) * m0,
+        q_sat: m1,
+    }
 }
 
 /// The command a route directs, as a follow judgement reads it (slots dropped): its first step
@@ -719,7 +743,8 @@ fn took(directed: &str, st: &crate::import::StepObs, weights: &adage_core::judge
         return false;
     }
     let raw = st.call.input.get("command").and_then(|c| c.as_str());
-    raw.is_some_and(|o| weights.follows(directed, o)) || adage_core::pattern::follows(&format!("exec {directed}"), &st.key)
+    raw.is_some_and(|o| weights.follows(directed, o))
+        || adage_core::pattern::follows(&format!("exec {directed}"), &st.key)
 }
 
 /// Whether a failed call (canonical key) fires an after-failure trigger on `command`, as the
@@ -739,7 +764,9 @@ pub fn unaided_in_traces(r: &Route, ss: &[&Session]) -> Option<(u32, u32)> {
     let pairs: Vec<(&str, &str)> = ss
         .iter()
         .flat_map(|s| {
-            s.steps.iter().filter_map(|st| st.call.input.get("command").and_then(|c| c.as_str()).map(|c| (s.id.as_str(), c)))
+            s.steps
+                .iter()
+                .filter_map(|st| st.call.input.get("command").and_then(|c| c.as_str()).map(|c| (s.id.as_str(), c)))
         })
         .collect();
     let weights = adage_core::judge::Weights::fit(pairs);
@@ -761,11 +788,9 @@ pub fn unaided_in_traces(r: &Route, ss: &[&Session]) -> Option<(u32, u32)> {
                         && x.rel_path.as_deref().is_some_and(|p| crate::engine::glob_hit(paths, p))
                 })
                 .map(|i| (i + 1, s.steps.len())),
-            Trigger::AfterCommand { command } => s
-                .steps
-                .iter()
-                .position(|x| x.key == *command && !x.call.failed)
-                .map(|i| (i + 1, s.steps.len())),
+            Trigger::AfterCommand { command } => {
+                s.steps.iter().position(|x| x.key == *command && !x.call.failed).map(|i| (i + 1, s.steps.len()))
+            }
             Trigger::SessionStart => Some((0, s.steps.len())),
             Trigger::Prompt { .. } => {
                 let mut emb = crate::dormant::Embeddings::new(None);
@@ -916,5 +941,166 @@ mod tests {
         assert_eq!(strength_of(&a(0.2, 1.0), Effect::Verify, false), None);
         assert_eq!(strength_of(&a(2.0, 0.5), Effect::Environment, false), Some(Strength::Prime));
         assert_eq!(strength_of(&a(2.0, 0.5), Effect::Author, false), None);
+    }
+
+    fn route(trigger: Trigger, step: Step, effect: Effect, support: u32, opportunities: u32) -> Route {
+        Route {
+            id: "r".into(),
+            summary: String::new(),
+            trigger,
+            step,
+            slots: vec![],
+            effect,
+            strength: Strength::Prime,
+            state: RouteState::Firm,
+            exit: vec![],
+            evidence: Evidence { support, opportunities, provenance: "desire-path".into(), ..Default::default() },
+            authored: false,
+        }
+    }
+
+    fn traces(took: u32, of: u32) -> Unaided {
+        Unaided { traces: of, traces_took: took, ..Default::default() }
+    }
+
+    #[test]
+    fn uplift_is_follow_minus_unaided() {
+        let p = Priors::default();
+        // The dead end (research: +0.69): agents rarely recover to the project's environment.
+        let u = uplift("avoid", &traces(1, 8), &p).summary;
+        assert!(u.mean > 0.6 && !u.gated, "{u:?}");
+        // A read batch agents already read (research: p_self 0.93, uplift ≈ 0).
+        let u = uplift("read-batch", &traces(9, 10), &p).summary;
+        assert!(u.mean < UPLIFT_MIN && u.gated, "{u:?}");
+        // A lookup every agent already runs.
+        assert!(uplift("prompt", &traces(12, 12), &p).summary.gated);
+        // A prior alone never silences a route: an obligation's research prior is below the bar,
+        // but with no situation of this repository's it is delivered.
+        let u = uplift("obligation", &Unaided::default(), &p).summary;
+        assert!(u.mean < UPLIFT_MIN && !u.gated, "{u:?}");
+        // The repository's own evidence outweighs the kind's prior: a read batch agents here
+        // mostly miss has uplift.
+        assert!(uplift("read-batch", &traces(3, 12), &p).summary.mean > 0.3);
+    }
+
+    #[test]
+    fn control_judgements_and_follows_count() {
+        let p = Priors::default();
+        // The control arm's would-have judgements: agents did it unaided 19 of 20 times.
+        let u = Unaided { control: 20, control_took: 19, ..Default::default() };
+        assert!(uplift("run-after-edit", &u, &p).summary.gated);
+        // Treated judgements move p_follow: a route agents ignore has little uplift.
+        let told = Unaided { delivered: 20, followed: 6, ..traces(2, 10) };
+        let base = uplift("avoid", &traces(2, 10), &p).summary;
+        let ignored = uplift("avoid", &told, &p).summary;
+        assert!(ignored.p_follow < base.p_follow - 0.3 && ignored.mean < base.mean, "{ignored:?}");
+    }
+
+    #[test]
+    fn a_fitted_cell_replaces_the_research_constant() {
+        let mut p = Priors::default();
+        assert_eq!(p.self_prior("read-batch"), (0.93, SELF_KAPPA, false));
+        p.uptake.insert("read-batch".into(), SelfCell { n: 40.0, took: 10.0, kappa: Some(6.0) });
+        assert_eq!(p.self_prior("read-batch"), (0.25, 6.0, true));
+        let u = uplift("read-batch", &Unaided::default(), &p).summary;
+        assert!(u.prior_fitted && u.mean > 0.5, "{u:?}");
+    }
+
+    #[test]
+    fn value_scales_with_uplift() {
+        let q_other = stats::gamma_poisson(40.0, 10.0, DEFAULT_CALLS, DEFAULT_KAPPA);
+        let q_sat = stats::gamma_poisson(10.0, 10.0, DEFAULT_CALLS, DEFAULT_KAPPA);
+        let p = Priors::default();
+        let a = |u: &Unaided| advantage_uplift(q_other, q_sat, &uplift("avoid", u, &p), (0.5, 20.0), 0.1, 2.0);
+        let rare = a(&traces(1, 20));
+        let usual = a(&traces(19, 20));
+        assert!(rare.mean > 2.0, "{rare:?}");
+        // What agents already do is worth (about) nothing to tell them.
+        assert!(usual.mean < 0.3 && usual.lower < 0.0, "{usual:?}");
+    }
+
+    #[test]
+    fn kinds_follow_the_shape_and_the_moment() {
+        let run = |t: Trigger| route(t, Step::Run { command: "make test".into() }, Effect::Verify, 0, 0);
+        assert_eq!(kind_of(&run(Trigger::AfterEdit { paths: "src/**".into() })), "run-after-edit");
+        assert_eq!(kind_of(&run(Trigger::Prompt { span: adage_core::spans::SpanKind::Path })), "prompt");
+        assert_eq!(
+            kind_of(&run(Trigger::AfterFailure { command: "exec pytest".into(), signature: "x".into() })),
+            "avoid"
+        );
+        assert_eq!(kind_of(&run(Trigger::AfterCommand { command: "exec make".into() })), "run");
+        let rb = route(
+            Trigger::AfterCommand { command: "exec x".into() },
+            Step::ReadBatch { slot: "files".into(), max: 5 },
+            Effect::Observe,
+            0,
+            0,
+        );
+        assert_eq!(kind_of(&rb), "read-batch");
+    }
+
+    #[test]
+    fn assess_quiets_what_agents_already_do() {
+        let rb = route(
+            Trigger::AfterCommand { command: "exec x".into() },
+            Step::ReadBatch { slot: "files".into(), max: 5 },
+            Effect::Observe,
+            9,
+            10,
+        );
+        let fix = Route {
+            id: "d".into(),
+            ..route(
+                Trigger::AfterFailure { command: "exec pytest".into(), signature: "No module".into() },
+                Step::Run { command: ".venv/bin/python -m pytest".into() },
+                Effect::Verify,
+                1,
+                8,
+            )
+        };
+        let mut card_slots = BTreeMap::new();
+        card_slots.insert("command".to_string(), ".venv/bin/python -m pytest".to_string());
+        // The session-start card counts the sessions it would have helped: 8 of 10 here, so 2 ran
+        // tests the right way unaided.
+        let card = Route {
+            id: "c".into(),
+            ..route(
+                Trigger::SessionStart,
+                Step::Advise { template: "test-command".into(), slots: card_slots },
+                Effect::Observe,
+                8,
+                10,
+            )
+        };
+        let mut routes = vec![rb, fix, card];
+        let gated = assess(&mut routes, &[], "repo", &BTreeMap::new(), &Priors::default());
+        assert_eq!(gated, vec!["r".to_string()]);
+        assert_eq!(routes[0].state, RouteState::Nascent);
+        let u = routes[0].evidence.uplift.as_ref().unwrap();
+        assert!(u.gated && (u.traces, u.traces_took) == (10, 9), "{u:?}");
+        assert!(u.line().contains("9 of 10 traces did it unaided") && u.line().contains("Quiet"), "{}", u.line());
+        assert_eq!(routes[1].state, RouteState::Firm);
+        assert!(routes[1].evidence.uplift.as_ref().unwrap().mean > 0.6);
+        let c = routes[2].evidence.uplift.as_ref().unwrap();
+        assert_eq!((c.traces, c.traces_took, c.gated), (10, 2, false));
+        // Control-arm judgements from the spools quiet a route the traces could not.
+        let mut judged = BTreeMap::new();
+        judged.insert(
+            ("repo".to_string(), "d".to_string()),
+            crate::instincts::Judged { control_followed: 60, control_total: 60, ..Default::default() },
+        );
+        let mut routes = vec![routes[1].clone()];
+        routes[0].evidence.uplift = None;
+        assert_eq!(assess(&mut routes, &[], "repo", &judged, &Priors::default()), vec!["d".to_string()]);
+    }
+
+    #[test]
+    fn beta_kappa_by_moments() {
+        // Units that agree beyond sampling: full pooling.
+        assert_eq!(fit_beta_kappa(&[(5.0, 10.0), (5.0, 10.0), (6.0, 10.0)], 20.0), Some(20.0));
+        // Units that disagree: a weak prior.
+        let k = fit_beta_kappa(&[(1.0, 20.0), (19.0, 20.0), (10.0, 20.0)], 20.0).unwrap();
+        assert!(k < 3.0, "{k}");
+        assert_eq!(fit_beta_kappa(&[(1.0, 2.0)], 20.0), None);
     }
 }

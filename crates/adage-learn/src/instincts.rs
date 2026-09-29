@@ -21,6 +21,10 @@
 //!   [`EXTINGUISH_P_POSITIVE`]. Never on ignores alone: an ignore may be a follow the matcher
 //!   missed. It is recorded as a person's `extinguish` is (so a re-bind does not bring it back),
 //!   and the change appears in `learn.log`. Losing authority is always automatic.
+//! - **Quiet on uplift.** A route agents already take unaided (training traces, control-arm
+//!   `would_have` judgements) is not extinguished, since it does no harm and the evidence can
+//!   change: [`crate::value::assess`] keeps it nascent each run, with why, until a person approves
+//!   it (approving the pack's environment steps does not).
 //! - **Capped.** Prime, forming at most (never firm), never an obligation or a Stop request
 //!   (the runtime's part).
 
@@ -551,7 +555,8 @@ mod tests {
         let tracks = home.path().join("tracks");
         let cfg = Config::default();
         let none = BTreeMap::new();
-        let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
+        let (rep, plan) =
+            plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
         let (tr, p) = plan.expect("a track");
         assert_eq!((tr.name.as_str(), tr.version.as_str(), tr.change.as_str()), ("acme/instincts", "0.1.0", "created"));
         // One route per failure signature (docs/instincts.md, Failure signatures).
@@ -560,19 +565,22 @@ mod tests {
         assert!(p.track.routes.iter().all(|r| r.is_instinct() && r.strength == Strength::Prime));
         p.write().unwrap();
         // Unchanged files: unchanged track.
-        let (_, again) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
+        let (_, again) =
+            plan_repo("acme", Some(&sandbox()), &tracks, &[], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
         assert_eq!(again.unwrap().0.change, "unchanged");
         // The learner learns the same dead end: the instinct route leaves, confirmed by sessions.
         let learned = Route {
             evidence: adage_tracks::Evidence { provenance: "desire-path".into(), support: 5, ..Default::default() },
             ..p.track.routes.iter().find(|r| r.id == "dead-end-d41b1e").unwrap().clone()
         };
-        let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[learned], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
+        let (rep, plan) =
+            plan_repo("acme", Some(&sandbox()), &tracks, &[learned], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
         assert_eq!(rep.confirmed, vec!["dead-end-d41b1e".to_string()]);
         assert!(!plan.unwrap().1.track.routes.iter().any(|r| r.id == "dead-end-d41b1e"));
         // Turned off: the track empties; the root unknown: nothing is planned.
         let off = Config { enabled: false, ..Config::default() };
-        let (rep, plan) = plan_repo("acme", Some(&sandbox()), &tracks, &[], &off, &Seen::of(&none), "2026-09-27").unwrap();
+        let (rep, plan) =
+            plan_repo("acme", Some(&sandbox()), &tracks, &[], &off, &Seen::of(&none), "2026-09-27").unwrap();
         assert!(rep.not_bound.is_some() && plan.unwrap().1.track.routes.is_empty());
         let (rep, plan) = plan_repo("acme", None, &tracks, &[], &cfg, &Seen::of(&none), "2026-09-27").unwrap();
         assert!(rep.not_bound.is_some() && plan.is_none());
