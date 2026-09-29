@@ -22,6 +22,7 @@ pub mod harness;
 pub mod isolate;
 pub mod oracle;
 pub mod plan;
+pub mod procedure;
 pub mod report;
 pub mod run;
 pub mod tasks;
