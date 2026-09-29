@@ -225,9 +225,10 @@ fn doctor_checks_hooks_index_tracks_and_switches() {
     let cx = check(&v, "hooks: codex");
     assert_eq!(cx["status"], "fail", "{cx}");
     assert!(cx["detail"].as_str().unwrap().contains("does not exist"), "{cx}");
+    // Installed, but the user set Adage up with other harnesses only: not a problem to warn about.
     let oc = check(&v, "hooks: opencode");
-    assert_eq!(oc["status"], "warn", "{oc}");
-    assert!(oc["fix"].as_str().unwrap().contains("adage install opencode --write"), "{oc}");
+    assert_eq!(oc["status"], "pass", "{oc}");
+    assert!(oc["detail"].as_str().unwrap().contains("optional: `adage install opencode --write`"), "{oc}");
     assert_eq!(check(&v, "tracks")["status"], "fail");
     assert_eq!(check(&v, "data directory")["status"], "pass");
     assert_eq!(check(&v, "kill switches")["status"], "warn");
@@ -246,6 +247,31 @@ fn doctor_checks_hooks_index_tracks_and_switches() {
     let o = w.cmd(&["doctor", "--json"]).env("ADAGE_DISABLE", "1").output().unwrap();
     let v: Value = serde_json::from_slice(&o.stdout).unwrap();
     assert!(check(&v, "kill switches")["detail"].as_str().unwrap().contains("ADAGE_DISABLE=1"));
+}
+
+/// Launch report, bug 9: a Claude Code plugin user with Codex installed saw a permanent
+/// `● check: hooks: codex … not registered` on the status card. Codex is not a harness they
+/// opted into; only a harness Adage is set up with can be broken.
+#[cfg(unix)]
+#[test]
+fn a_plugin_user_is_not_warned_about_a_harness_they_did_not_opt_into() {
+    let w = World::new();
+    // The plugin's staged binary (what `${CLAUDE_PLUGIN_DATA}` holds), and Codex on PATH.
+    let data = w.p("home/.claude/plugins/data/adage-adage/bin");
+    std::fs::create_dir_all(&data).unwrap();
+    std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_adage"), data.join("adage")).unwrap();
+    w.fake_bin("codex", "exit 0");
+    std::fs::create_dir_all(w.p("codex")).unwrap();
+    let (v, _) = doctor(&w);
+    assert_eq!(check(&v, "hooks: claude-code")["status"], "pass", "{v:#}");
+    let cx = check(&v, "hooks: codex");
+    assert_eq!(cx["status"], "pass", "{cx}");
+    let card = text(&w.run(&[]));
+    assert!(!card.contains("hooks: codex"), "{card}");
+    // With nothing set up anywhere, an installed harness is still worth the warning.
+    std::fs::remove_dir_all(w.p("home/.claude/plugins")).unwrap();
+    let (v, _) = doctor(&w);
+    assert_eq!(check(&v, "hooks: codex")["status"], "warn", "{v:#}");
 }
 
 #[test]

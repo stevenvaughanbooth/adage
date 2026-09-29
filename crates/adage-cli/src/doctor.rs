@@ -370,6 +370,12 @@ fn model_check(paths: &Paths, idx: &Index) -> Check {
 fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
     let found = detect::harnesses();
     let regs = detect::registrations(repo_root);
+    // A harness the user set Adage up with (a registration of any kind) is one they opted into.
+    // Once they have opted into one, another harness merely being installed is not a problem to
+    // warn about (a Claude Code plugin user with Codex installed): only a harness they opted into
+    // can be broken. With none set up at all, an installed harness is worth the warning.
+    let opted_in = |h: &str| regs.iter().any(|r| r.harness == h);
+    let any_opted_in = !regs.is_empty();
     let mut out = Vec::new();
     for d in &found {
         let name = format!("hooks: {}", d.harness);
@@ -379,6 +385,13 @@ fn hooks_checks(repo_root: Option<&Path>, exe: Option<&Path>) -> Vec<Check> {
         if mine.is_empty() {
             out.push(match (d.found(), plugin) {
                 (_, true) => pass(&name, "registered by the Adage plugin"),
+                (true, false) if any_opted_in && !opted_in(d.harness) => pass(
+                    &name,
+                    format!(
+                        "{} is installed; Adage is not set up with it (optional: `adage install {} --write`)",
+                        d.harness, d.harness
+                    ),
+                ),
                 (true, false) => warn(
                     &name,
                     format!("{} is installed, but Adage's hooks are not registered with it", d.harness),
