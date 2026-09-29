@@ -1,0 +1,2575 @@
+{
+ "live": {
+  "arms": {
+   "adage": {
+    "sessions": 24,
+    "usd": 0.2893,
+    "calls": 37.04,
+    "turns": 38.04,
+    "passed": 21,
+    "pass_rate": 0.875,
+    "pass_wilson90": [
+     0.725,
+     0.949
+    ],
+    "click-type": {
+     "sessions": 12,
+     "usd": 0.3709,
+     "calls": 44.42,
+     "pass_rate": 0.75
+    },
+    "mm-validator": {
+     "sessions": 12,
+     "usd": 0.2077,
+     "calls": 29.67,
+     "pass_rate": 1.0
+    }
+   },
+   "agents-md": {
+    "sessions": 24,
+    "usd": 0.2577,
+    "calls": 34.83,
+    "turns": 35.83,
+    "passed": 20,
+    "pass_rate": 0.833,
+    "pass_wilson90": [
+     0.676,
+     0.923
+    ],
+    "click-type": {
+     "sessions": 12,
+     "usd": 0.334,
+     "calls": 39.92,
+     "pass_rate": 0.75
+    },
+    "mm-validator": {
+     "sessions": 12,
+     "usd": 0.1814,
+     "calls": 29.75,
+     "pass_rate": 0.917
+    }
+   },
+   "control": {
+    "sessions": 24,
+    "usd": 0.3172,
+    "calls": 41.46,
+    "turns": 42.46,
+    "passed": 19,
+    "pass_rate": 0.792,
+    "pass_wilson90": [
+     0.63,
+     0.895
+    ],
+    "click-type": {
+     "sessions": 12,
+     "usd": 0.3991,
+     "calls": 47.67,
+     "pass_rate": 0.583
+    },
+    "mm-validator": {
+     "sessions": 12,
+     "usd": 0.2353,
+     "calls": 35.25,
+     "pass_rate": 1.0
+    }
+   }
+  },
+  "contrasts": {
+   "adage_vs_control": {
+    "pooled": {
+     "usd": {
+      "ratio_minus_1": -0.0879,
+      "ci90": [
+       -0.1464,
+       -0.0189
+      ],
+      "pairs": 24,
+      "clusters": 12,
+      "arm_mean": 0.2893,
+      "control_mean": 0.3172
+     },
+     "calls": {
+      "ratio_minus_1": -0.1065,
+      "ci90": [
+       -0.1791,
+       -0.027
+      ],
+      "pairs": 24,
+      "clusters": 12,
+      "arm_mean": 37.0417,
+      "control_mean": 41.4583
+     },
+     "turns": {
+      "ratio_minus_1": -0.104,
+      "ci90": [
+       -0.175,
+       -0.0263
+      ],
+      "pairs": 24,
+      "clusters": 12,
+      "arm_mean": 38.0417,
+      "control_mean": 42.4583
+     },
+     "pass_diff": {
+      "arm": 21,
+      "control": 19,
+      "pairs": 24,
+      "arm_only": 2,
+      "control_only": 0
+     }
+    },
+    "click-type": {
+     "usd": {
+      "ratio_minus_1": -0.0706,
+      "ci90": [
+       -0.141,
+       0.0239
+      ],
+      "pairs": 12,
+      "clusters": 6,
+      "arm_mean": 0.3709,
+      "control_mean": 0.3991
+     },
+     "calls": {
+      "ratio_minus_1": -0.0682,
+      "ci90": [
+       -0.1852,
+       0.0707
+      ],
+      "pairs": 12,
+      "clusters": 6,
+      "arm_mean": 44.4167,
+      "control_mean": 47.6667
+     },
+     "turns": {
+      "ratio_minus_1": -0.0668,
+      "ci90": [
+       -0.1817,
+       0.0692
+      ],
+      "pairs": 12,
+      "clusters": 6,
+      "arm_mean": 45.4167,
+      "control_mean": 48.6667
+     },
+     "pass_diff": {
+      "arm": 9,
+      "control": 7,
+      "pairs": 12,
+      "arm_only": 2,
+      "control_only": 0
+     }
+    },
+    "mm-validator": {
+     "usd": {
+      "ratio_minus_1": -0.1173,
+      "ci90": [
+       -0.1969,
+       -0.0263
+      ],
+      "pairs": 12,
+      "clusters": 6,
+      "arm_mean": 0.2077,
+      "control_mean": 0.2353
+     },
+     "calls": {
+      "ratio_minus_1": -0.1584,
+      "ci90": [
+       -0.2161,
+       -0.1065
+      ],
+      "pairs": 12,
+      "clusters": 6,
+      "arm_mean": 29.6667,
+      "control_mean": 35.25
+     },
+     "turns": {
+      "ratio_minus_1": -0.154,
+      "ci90": [
+       -0.2103,
+       -0.1035
+      ],
+      "pairs": 12,
+      "clusters": 6,
+      "arm_mean": 30.6667,
+      "control_mean": 36.25
+     },
+     "pass_diff": {
+      "arm": 12,
+      "control": 12,
+      "pairs": 12,
+      "arm_only": 0,
+      "control_only": 0
+     }
+    }
+   },
+   "agents-md_vs_control": {
+    "pooled": {
+     "usd": {
+      "ratio_minus_1": -0.1875,
+      "ci90": [
+       -0.2575,
+       -0.1155
+      ],
+      "pairs": 24,
+      "clusters": 12,
+      "arm_mean": 0.2577,
+      "control_mean": 0.3172
+     },
+     "calls": {
+      "ratio_minus_1": -0.1598,
+      "ci90": [
+       -0.2346,
+       -0.0779
+      ],
+      "pairs": 24,
+      "clusters": 12,
+      "arm_mean": 34.8333,
+      "control_mean": 41.4583
+     },
+     "turns": {
+      "ratio_minus_1": -0.156,
+      "ci90": [
+       -0.2293,
+       -0.0761
+      ],
+      "pairs": 24,
+      "clusters": 12,
+      "arm_mean": 35.8333,
+      "control_mean": 42.4583
+     },
+     "pass_diff": {
+      "arm": 20,
+      "control": 19,
+      "pairs": 24,
+      "arm_only": 3,
+      "control_only": 2
+     }
+    },
+    "click-type": {
+     "usd": {
+      "ratio_minus_1": -0.1631,
+      "ci90": [
+       -0.2648,
+       -0.0509
+      ],
+      "pairs": 12,
+      "clusters": 6,
+      "arm_mean": 0.334,
+      "control_mean": 0.3991
+     },
+     "calls": {
+      "ratio_minus_1": -0.1626,
+      "ci90": [
+       -0.2666,
+       -0.0304
+      ],
+      "pairs": 12,
+      "clusters": 6,
+      "arm_mean": 39.9167,
+      "control_mean": 47.6667
+     },
+     "turns": {
+      "ratio_minus_1": -0.1592,
+      "ci90": [
+       -0.2615,
+       -0.0297
+      ],
+      "pairs": 12,
+      "clusters": 6,
+      "arm_mean": 40.9167,
+      "control_mean": 48.6667
+     },
+     "pass_diff": {
+      "arm": 9,
+      "control": 7,
+      "pairs": 12,
+      "arm_only": 3,
+      "control_only": 1
+     }
+    },
+    "mm-validator": {
+     "usd": {
+      "ratio_minus_1": -0.2289,
+      "ci90": [
+       -0.2957,
+       -0.1498
+      ],
+      "pairs": 12,
+      "clusters": 6,
+      "arm_mean": 0.1814,
+      "control_mean": 0.2353
+     },
+     "calls": {
+      "ratio_minus_1": -0.156,
+      "ci90": [
+       -0.2418,
+       -0.0537
+      ],
+      "pairs": 12,
+      "clusters": 6,
+      "arm_mean": 29.75,
+      "control_mean": 35.25
+     },
+     "turns": {
+      "ratio_minus_1": -0.1517,
+      "ci90": [
+       -0.2352,
+       -0.0521
+      ],
+      "pairs": 12,
+      "clusters": 6,
+      "arm_mean": 30.75,
+      "control_mean": 36.25
+     },
+     "pass_diff": {
+      "arm": 11,
+      "control": 12,
+      "pairs": 12,
+      "arm_only": 0,
+      "control_only": 1
+     }
+    }
+   },
+   "card_vs_adage": {
+    "pooled": {
+     "usd": {
+      "ratio_minus_1": -0.1092,
+      "ci90": [
+       -0.1738,
+       -0.0386
+      ],
+      "pairs": 24,
+      "clusters": 12,
+      "arm_mean": 0.2577,
+      "control_mean": 0.2893
+     },
+     "calls": {
+      "ratio_minus_1": -0.0596,
+      "ci90": [
+       -0.1086,
+       -0.0022
+      ],
+      "pairs": 24,
+      "clusters": 12,
+      "arm_mean": 34.8333,
+      "control_mean": 37.0417
+     }
+    }
+   }
+  }
+ },
+ "uptake": {
+  "adage": {
+   "calls_before_first_edit": 12.38,
+   "search_calls": 6.0,
+   "read_calls": 9.62,
+   "edit_calls": 6.33,
+   "run_calls": 7.92,
+   "failed_calls": 2.75,
+   "vcs_calls": 4.42,
+   "directives_delivered": 4.25,
+   "hidden_failed": {
+    "test_changelog": 2,
+    "test_documented": 1
+   }
+  },
+  "agents-md": {
+   "calls_before_first_edit": 12.79,
+   "search_calls": 4.46,
+   "read_calls": 10.67,
+   "edit_calls": 5.92,
+   "run_calls": 6.96,
+   "failed_calls": 1.46,
+   "vcs_calls": 5.38,
+   "directives_delivered": null,
+   "hidden_failed": {
+    "test_documented": 1,
+    "test_has_tests": 1,
+    "test_changelog": 1,
+    "(other suite tests)": 1
+   }
+  },
+  "control": {
+   "calls_before_first_edit": 13.04,
+   "search_calls": 7.75,
+   "read_calls": 10.33,
+   "edit_calls": 6.58,
+   "run_calls": 10.12,
+   "failed_calls": 2.25,
+   "vcs_calls": 4.42,
+   "directives_delivered": null,
+   "hidden_failed": {
+    "test_changelog": 2,
+    "test_documented": 4,
+    "test_has_tests": 1
+   }
+  }
+ },
+ "live_curve": {
+  "n0_control": {
+   "usd": 0.2353
+  },
+  "n1_card": {
+   "usd": {
+    "ratio_minus_1": -0.1534,
+    "ci90": [
+     -0.3093,
+     0.004
+    ],
+    "pairs": 6,
+    "clusters": 6,
+    "arm_mean": 0.1992,
+    "control_mean": 0.2353
+   },
+   "calls": {
+    "ratio_minus_1": -0.078,
+    "ci90": [
+     -0.2584,
+     0.1222
+    ],
+    "pairs": 6,
+    "clusters": 6,
+    "arm_mean": 32.5,
+    "control_mean": 35.25
+   },
+   "sessions": 6,
+   "passed": 6
+  },
+  "n4_card": {
+   "usd": {
+    "ratio_minus_1": -0.2289,
+    "ci90": [
+     -0.2957,
+     -0.1498
+    ],
+    "pairs": 6,
+    "clusters": 6,
+    "arm_mean": 0.1814,
+    "control_mean": 0.2353
+   },
+   "calls": {
+    "ratio_minus_1": -0.156,
+    "ci90": [
+     -0.2418,
+     -0.0537
+    ],
+    "pairs": 6,
+    "clusters": 6,
+    "arm_mean": 29.75,
+    "control_mean": 35.25
+   },
+   "sessions": 12,
+   "passed": 11
+  },
+  "n4_adage": {
+   "usd": {
+    "ratio_minus_1": -0.1173,
+    "ci90": [
+     -0.1969,
+     -0.0263
+    ],
+    "pairs": 6,
+    "clusters": 6,
+    "arm_mean": 0.2077,
+    "control_mean": 0.2353
+   },
+   "calls": {
+    "ratio_minus_1": -0.1584,
+    "ci90": [
+     -0.2161,
+     -0.1065
+    ],
+    "pairs": 6,
+    "clusters": 6,
+    "arm_mean": 29.6667,
+    "control_mean": 35.25
+   },
+   "sessions": 12,
+   "passed": 12
+  }
+ },
+ "adage_delivered": {
+  "click-type:PostToolBatch:run-11168d": 12,
+  "mm-validator:PostToolUseFailure:dead-end-b6ee9b": 12,
+  "click-type:PostToolUseFailure:dead-end-b6ee9b": 10
+ },
+ "decomposition": {
+  "pooled": {
+   "sessions": 32,
+   "calls_per_session": 40.22,
+   "usd_per_session": 0.3093,
+   "procedural_call_share": {
+    "mean": 0.5036,
+    "ci90": [
+     0.476,
+     0.5286
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "procedural_usd_share": {
+    "mean": 0.7239,
+    "ci90": [
+     0.7112,
+     0.7365
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "oracle_perfect_procedure_usd_share": {
+    "mean": 0.7275,
+    "ci90": [
+     0.6955,
+     0.756
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "oracle_perfect_procedure_call_share": {
+    "mean": 0.7168,
+    "ci90": [
+     0.6841,
+     0.7461
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "oracle_hook_executed_usd_share": {
+    "mean": 0.7654,
+    "ci90": [
+     0.7393,
+     0.7888
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "oracle_hook_executed_call_share": {
+    "mean": 0.7627,
+    "ci90": [
+     0.7371,
+     0.7858
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "role_call_share": {
+    "read": 0.253,
+    "search": 0.181,
+    "edit": 0.162,
+    "run": 0.244,
+    "failed": 0.058,
+    "vcs": 0.103,
+    "other": 0.0
+   },
+   "role_usd_share": {
+    "read": 0.515,
+    "search": 0.236,
+    "edit": 0.219,
+    "run": 0.251,
+    "failed": 0.058,
+    "vcs": 0.094,
+    "other": 0.0
+   },
+   "templatable_files": [
+    "CHANGELOG.rst",
+    "docs/api.md",
+    "src/click/__init__.py"
+   ]
+  },
+  "click-type": {
+   "sessions": 16,
+   "calls_per_session": 45.12,
+   "usd_per_session": 0.3824,
+   "procedural_call_share": {
+    "mean": 0.457,
+    "ci90": [
+     0.4223,
+     0.4885
+    ],
+    "n": 16,
+    "clusters": 10
+   },
+   "procedural_usd_share": {
+    "mean": 0.7107,
+    "ci90": [
+     0.6912,
+     0.7294
+    ],
+    "n": 16,
+    "clusters": 10
+   },
+   "oracle_perfect_procedure_usd_share": {
+    "mean": 0.6612,
+    "ci90": [
+     0.6322,
+     0.6896
+    ],
+    "n": 16,
+    "clusters": 10
+   },
+   "oracle_perfect_procedure_call_share": {
+    "mean": 0.6408,
+    "ci90": [
+     0.6148,
+     0.6632
+    ],
+    "n": 16,
+    "clusters": 10
+   },
+   "oracle_hook_executed_usd_share": {
+    "mean": 0.7135,
+    "ci90": [
+     0.6882,
+     0.7384
+    ],
+    "n": 16,
+    "clusters": 10
+   },
+   "oracle_hook_executed_call_share": {
+    "mean": 0.7039,
+    "ci90": [
+     0.6835,
+     0.7222
+    ],
+    "n": 16,
+    "clusters": 10
+   },
+   "role_call_share": {
+    "read": 0.245,
+    "search": 0.177,
+    "edit": 0.216,
+    "run": 0.227,
+    "failed": 0.047,
+    "vcs": 0.087,
+    "other": 0.0
+   },
+   "role_usd_share": {
+    "read": 0.531,
+    "search": 0.211,
+    "edit": 0.267,
+    "run": 0.249,
+    "failed": 0.055,
+    "vcs": 0.085,
+    "other": 0.0
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ]
+  },
+  "mm-validator": {
+   "sessions": 16,
+   "calls_per_session": 35.31,
+   "usd_per_session": 0.2363,
+   "procedural_call_share": {
+    "mean": 0.5502,
+    "ci90": [
+     0.5294,
+     0.5749
+    ],
+    "n": 16,
+    "clusters": 10
+   },
+   "procedural_usd_share": {
+    "mean": 0.7372,
+    "ci90": [
+     0.7236,
+     0.7533
+    ],
+    "n": 16,
+    "clusters": 10
+   },
+   "oracle_perfect_procedure_usd_share": {
+    "mean": 0.7938,
+    "ci90": [
+     0.7742,
+     0.8132
+    ],
+    "n": 16,
+    "clusters": 10
+   },
+   "oracle_perfect_procedure_call_share": {
+    "mean": 0.7929,
+    "ci90": [
+     0.7846,
+     0.8013
+    ],
+    "n": 16,
+    "clusters": 10
+   },
+   "oracle_hook_executed_usd_share": {
+    "mean": 0.8173,
+    "ci90": [
+     0.7991,
+     0.8354
+    ],
+    "n": 16,
+    "clusters": 10
+   },
+   "oracle_hook_executed_call_share": {
+    "mean": 0.8215,
+    "ci90": [
+     0.8143,
+     0.8288
+    ],
+    "n": 16,
+    "clusters": 10
+   },
+   "role_call_share": {
+    "read": 0.262,
+    "search": 0.186,
+    "edit": 0.092,
+    "run": 0.265,
+    "failed": 0.073,
+    "vcs": 0.122,
+    "other": 0.0
+   },
+   "role_usd_share": {
+    "read": 0.489,
+    "search": 0.277,
+    "edit": 0.14,
+    "run": 0.253,
+    "failed": 0.062,
+    "vcs": 0.109,
+    "other": 0.0
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ]
+  }
+ },
+ "curve": {
+  "1": {
+   "realistic_usd_share": {
+    "mean": 0.2184,
+    "ci90": [
+     0.203,
+     0.2337
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "card_file_recall": 0.906,
+   "card_file_precision": 0.909,
+   "by_family": {
+    "click-type": 0.1904,
+    "mm-validator": 0.2463
+   }
+  },
+  "2": {
+   "realistic_usd_share": {
+    "mean": 0.2221,
+    "ci90": [
+     0.2066,
+     0.2371
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "card_file_recall": 0.906,
+   "card_file_precision": 0.844,
+   "by_family": {
+    "click-type": 0.1939,
+    "mm-validator": 0.2502
+   }
+  },
+  "3": {
+   "realistic_usd_share": {
+    "mean": 0.2217,
+    "ci90": [
+     0.2063,
+     0.2367
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "card_file_recall": 0.906,
+   "card_file_precision": 1.0,
+   "by_family": {
+    "click-type": 0.1939,
+    "mm-validator": 0.2495
+   }
+  },
+  "4": {
+   "realistic_usd_share": {
+    "mean": 0.2217,
+    "ci90": [
+     0.2063,
+     0.2367
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "card_file_recall": 0.906,
+   "card_file_precision": 1.0,
+   "by_family": {
+    "click-type": 0.1939,
+    "mm-validator": 0.2495
+   }
+  },
+  "5": {
+   "realistic_usd_share": {
+    "mean": 0.2217,
+    "ci90": [
+     0.2063,
+     0.2367
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "card_file_recall": 0.906,
+   "card_file_precision": 1.0,
+   "by_family": {
+    "click-type": 0.1939,
+    "mm-validator": 0.2495
+   }
+  },
+  "6": {
+   "realistic_usd_share": {
+    "mean": 0.2217,
+    "ci90": [
+     0.2063,
+     0.2367
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "card_file_recall": 0.906,
+   "card_file_precision": 1.0,
+   "by_family": {
+    "click-type": 0.1939,
+    "mm-validator": 0.2495
+   }
+  },
+  "7": {
+   "realistic_usd_share": {
+    "mean": 0.2217,
+    "ci90": [
+     0.2063,
+     0.2367
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "card_file_recall": 0.906,
+   "card_file_precision": 1.0,
+   "by_family": {
+    "click-type": 0.1939,
+    "mm-validator": 0.2495
+   }
+  },
+  "8": {
+   "realistic_usd_share": {
+    "mean": 0.2217,
+    "ci90": [
+     0.2063,
+     0.2367
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "card_file_recall": 0.906,
+   "card_file_precision": 1.0,
+   "by_family": {
+    "click-type": 0.1939,
+    "mm-validator": 0.2495
+   }
+  },
+  "9": {
+   "realistic_usd_share": {
+    "mean": 0.2217,
+    "ci90": [
+     0.2063,
+     0.2367
+    ],
+    "n": 32,
+    "clusters": 20
+   },
+   "card_file_recall": 0.906,
+   "card_file_precision": 1.0,
+   "by_family": {
+    "click-type": 0.1939,
+    "mm-validator": 0.2495
+   }
+  }
+ },
+ "decomposition_sessions": [
+  {
+   "sid": "53ed1df9-84f5-4b1c-8b6a-6519043c9037",
+   "family": "click-type",
+   "task": "click-type--hex-color",
+   "arm": "train",
+   "passed": true,
+   "calls": 38,
+   "usd": 0.33633340000000006,
+   "cost_usd": 0.3363334,
+   "proc_calls": 16,
+   "proc_usd": 0.2307984954657959,
+   "novel_calls": 22,
+   "oracle_calls": 23,
+   "oracle_usd": 0.21683573676369156,
+   "hook_calls": 26,
+   "hook_usd": 0.23998666962522722,
+   "by_role": {
+    "edit": {
+     "calls": 9,
+     "usd": 0.09032357810371783
+    },
+    "vcs": {
+     "calls": 5,
+     "usd": 0.0408408033978091
+    },
+    "search": {
+     "calls": 4,
+     "usd": 0.040977605724665134
+    },
+    "run": {
+     "calls": 8,
+     "usd": 0.07737180037852137
+    },
+    "read": {
+     "calls": 9,
+     "usd": 0.17484692146179787
+    },
+    "failed": {
+     "calls": 3,
+     "usd": 0.05069929672897405
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "49d2e483-cc97-44d7-b438-aca517a70d1d",
+   "family": "click-type",
+   "task": "click-type--port",
+   "arm": "train",
+   "passed": true,
+   "calls": 33,
+   "usd": 0.2824409,
+   "cost_usd": 0.2824409,
+   "proc_calls": 16,
+   "proc_usd": 0.20191889709389885,
+   "novel_calls": 17,
+   "oracle_calls": 18,
+   "oracle_usd": 0.17069180295842723,
+   "hook_calls": 21,
+   "hook_usd": 0.19013036347586243,
+   "by_role": {
+    "edit": {
+     "calls": 9,
+     "usd": 0.08158980585962361
+    },
+    "vcs": {
+     "calls": 4,
+     "usd": 0.029458533183301938
+    },
+    "search": {
+     "calls": 4,
+     "usd": 0.06962293656837254
+    },
+    "run": {
+     "calls": 7,
+     "usd": 0.05515478711246946
+    },
+    "read": {
+     "calls": 6,
+     "usd": 0.13899710233005322
+    },
+    "failed": {
+     "calls": 3,
+     "usd": 0.02652746304963194
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "29721ab1-9257-4dff-8bde-78af306dd796",
+   "family": "click-type",
+   "task": "click-type--duration",
+   "arm": "train",
+   "passed": true,
+   "calls": 42,
+   "usd": 0.3662617000000001,
+   "cost_usd": 0.3662617,
+   "proc_calls": 24,
+   "proc_usd": 0.29008192706177727,
+   "novel_calls": 18,
+   "oracle_calls": 26,
+   "oracle_usd": 0.22129315433535085,
+   "hook_calls": 29,
+   "hook_usd": 0.24009025889044663,
+   "by_role": {
+    "edit": {
+     "calls": 10,
+     "usd": 0.09521980129502239
+    },
+    "vcs": {
+     "calls": 2,
+     "usd": 0.01666528941615042
+    },
+    "search": {
+     "calls": 8,
+     "usd": 0.0802607604637321
+    },
+    "run": {
+     "calls": 8,
+     "usd": 0.0740149265867509
+    },
+    "read": {
+     "calls": 12,
+     "usd": 0.21522373372105807
+    },
+    "failed": {
+     "calls": 2,
+     "usd": 0.013177577481046088
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "121354bd-c8c0-4dda-91e7-1fd313a926ea",
+   "family": "click-type",
+   "task": "click-type--ip-address",
+   "arm": "train",
+   "passed": false,
+   "calls": 37,
+   "usd": 0.3444251000000001,
+   "cost_usd": 0.3444251000000001,
+   "proc_calls": 14,
+   "proc_usd": 0.2370656430092053,
+   "novel_calls": 23,
+   "oracle_calls": 23,
+   "oracle_usd": 0.20152179155920535,
+   "hook_calls": 25,
+   "hook_usd": 0.21845974309686786,
+   "by_role": {
+    "edit": {
+     "calls": 8,
+     "usd": 0.08735383511522588
+    },
+    "vcs": {
+     "calls": 4,
+     "usd": 0.03720057619516304
+    },
+    "search": {
+     "calls": 8,
+     "usd": 0.07738224261488685
+    },
+    "run": {
+     "calls": 10,
+     "usd": 0.096926774616888
+    },
+    "read": {
+     "calls": 6,
+     "usd": 0.17339731928538407
+    },
+    "failed": {
+     "calls": 1,
+     "usd": 0.008992952077491179
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "17955120-a41f-40a4-8379-863b94c5f636",
+   "family": "click-type",
+   "task": "click-type--semver",
+   "arm": "control",
+   "passed": true,
+   "calls": 56,
+   "usd": 0.3664725999999999,
+   "cost_usd": 0.3664725999999998,
+   "proc_calls": 28,
+   "proc_usd": 0.24294267579486217,
+   "novel_calls": 28,
+   "oracle_calls": 41,
+   "oracle_usd": 0.2828445782063738,
+   "hook_calls": 43,
+   "hook_usd": 0.2927550785345474,
+   "by_role": {
+    "edit": {
+     "calls": 9,
+     "usd": 0.0863215708998164
+    },
+    "vcs": {
+     "calls": 5,
+     "usd": 0.037028198927984646
+    },
+    "search": {
+     "calls": 11,
+     "usd": 0.09163547403424738
+    },
+    "run": {
+     "calls": 9,
+     "usd": 0.07730143594434902
+    },
+    "read": {
+     "calls": 20,
+     "usd": 0.17820042223326452
+    },
+    "failed": {
+     "calls": 2,
+     "usd": 0.01357756462048837
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "aeb9947a-c171-460b-95a4-2d05f413d06f",
+   "family": "click-type",
+   "task": "click-type--percentage",
+   "arm": "control",
+   "passed": true,
+   "calls": 35,
+   "usd": 0.33410490000000015,
+   "cost_usd": 0.33410490000000015,
+   "proc_calls": 18,
+   "proc_usd": 0.25707984434047465,
+   "novel_calls": 17,
+   "oracle_calls": 21,
+   "oracle_usd": 0.21586810160558478,
+   "hook_calls": 24,
+   "hook_usd": 0.23880793345384393,
+   "by_role": {
+    "edit": {
+     "calls": 8,
+     "usd": 0.0902532234239907
+    },
+    "vcs": {
+     "calls": 1,
+     "usd": 0.009649706711785944
+    },
+    "search": {
+     "calls": 7,
+     "usd": 0.058731866510036534
+    },
+    "run": {
+     "calls": 9,
+     "usd": 0.09264611324542782
+    },
+    "read": {
+     "calls": 9,
+     "usd": 0.19039949436087977
+    },
+    "failed": {
+     "calls": 1,
+     "usd": 0.007717741212488971
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "da599215-2b43-492b-8653-a61ce3b423b2",
+   "family": "click-type",
+   "task": "click-type--byte-size",
+   "arm": "control",
+   "passed": false,
+   "calls": 44,
+   "usd": 0.41158130000000004,
+   "cost_usd": 0.4115813000000001,
+   "proc_calls": 18,
+   "proc_usd": 0.29085794485297367,
+   "novel_calls": 26,
+   "oracle_calls": 30,
+   "oracle_usd": 0.2517812892510583,
+   "hook_calls": 32,
+   "hook_usd": 0.27044207725336744,
+   "by_role": {
+    "edit": {
+     "calls": 8,
+     "usd": 0.1115399085653897
+    },
+    "vcs": {
+     "calls": 6,
+     "usd": 0.05216018248502352
+    },
+    "search": {
+     "calls": 9,
+     "usd": 0.08188164255247093
+    },
+    "run": {
+     "calls": 12,
+     "usd": 0.11271541880582225
+    },
+    "read": {
+     "calls": 8,
+     "usd": 0.2092505651215216
+    },
+    "failed": {
+     "calls": 1,
+     "usd": 0.010288511667915612
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "80bdc3d3-d901-48c7-b5d7-dd45f63b2c0b",
+   "family": "click-type",
+   "task": "click-type--slug",
+   "arm": "control",
+   "passed": true,
+   "calls": 33,
+   "usd": 0.28107630000000006,
+   "cost_usd": 0.28107630000000006,
+   "proc_calls": 18,
+   "proc_usd": 0.2088425164114905,
+   "novel_calls": 15,
+   "oracle_calls": 19,
+   "oracle_usd": 0.17508766858959707,
+   "hook_calls": 21,
+   "hook_usd": 0.1935784073654691,
+   "by_role": {
+    "edit": {
+     "calls": 8,
+     "usd": 0.07784156261034966
+    },
+    "vcs": {
+     "calls": 3,
+     "usd": 0.023695094606793365
+    },
+    "search": {
+     "calls": 5,
+     "usd": 0.043060567630100244
+    },
+    "run": {
+     "calls": 6,
+     "usd": 0.05232335278561362
+    },
+    "read": {
+     "calls": 9,
+     "usd": 0.16098552440519015
+    },
+    "failed": {
+     "calls": 2,
+     "usd": 0.012190399727494972
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "46e5cba4-6231-4d8c-97fe-e0f07816e8e4",
+   "family": "click-type",
+   "task": "click-type--date",
+   "arm": "control",
+   "passed": false,
+   "calls": 52,
+   "usd": 0.43736840000000005,
+   "cost_usd": 0.43736840000000005,
+   "proc_calls": 20,
+   "proc_usd": 0.2909785955063826,
+   "novel_calls": 32,
+   "oracle_calls": 35,
+   "oracle_usd": 0.31323899630228225,
+   "hook_calls": 38,
+   "hook_usd": 0.33565646866811105,
+   "by_role": {
+    "edit": {
+     "calls": 11,
+     "usd": 0.11754492013382856
+    },
+    "vcs": {
+     "calls": 4,
+     "usd": 0.04147325694974857
+    },
+    "search": {
+     "calls": 9,
+     "usd": 0.11121727579500368
+    },
+    "run": {
+     "calls": 13,
+     "usd": 0.1188133224470993
+    },
+    "read": {
+     "calls": 11,
+     "usd": 0.22167887270066117
+    },
+    "failed": {
+     "calls": 4,
+     "usd": 0.031302350198383344
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "995d8241-f103-4b6c-a85d-2bd3d9e76875",
+   "family": "click-type",
+   "task": "click-type--host-port",
+   "arm": "control",
+   "passed": true,
+   "calls": 37,
+   "usd": 0.3221961,
+   "cost_usd": 0.32219609999999993,
+   "proc_calls": 19,
+   "proc_usd": 0.23298169766092458,
+   "novel_calls": 18,
+   "oracle_calls": 22,
+   "oracle_usd": 0.20241669752561806,
+   "hook_calls": 25,
+   "hook_usd": 0.2257930289112858,
+   "by_role": {
+    "edit": {
+     "calls": 9,
+     "usd": 0.0939992936125206
+    },
+    "vcs": {
+     "calls": 5,
+     "usd": 0.041333584985957794
+    },
+    "search": {
+     "calls": 5,
+     "usd": 0.048236126694978954
+    },
+    "run": {
+     "calls": 5,
+     "usd": 0.04740171512623176
+    },
+    "read": {
+     "calls": 10,
+     "usd": 0.16709071662835165
+    },
+    "failed": {
+     "calls": 3,
+     "usd": 0.051584677549002145
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "eaaefb9e-5fc3-4c66-aebc-a4d2c794473e",
+   "family": "click-type",
+   "task": "click-type--semver",
+   "arm": "control",
+   "passed": true,
+   "calls": 53,
+   "usd": 0.4076185,
+   "cost_usd": 0.4076185,
+   "proc_calls": 28,
+   "proc_usd": 0.2899471509726995,
+   "novel_calls": 25,
+   "oracle_calls": 36,
+   "oracle_usd": 0.31567708812018686,
+   "hook_calls": 40,
+   "hook_usd": 0.33605245185261323,
+   "by_role": {
+    "edit": {
+     "calls": 11,
+     "usd": 0.10167012612192516
+    },
+    "vcs": {
+     "calls": 6,
+     "usd": 0.04785543436320816
+    },
+    "search": {
+     "calls": 8,
+     "usd": 0.06970093715932874
+    },
+    "run": {
+     "calls": 10,
+     "usd": 0.10785741411827038
+    },
+    "read": {
+     "calls": 17,
+     "usd": 0.22149670297333776
+    },
+    "failed": {
+     "calls": 1,
+     "usd": 0.007087543015087294
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "13e6421a-9d6e-4483-a450-488a8c8317ac",
+   "family": "click-type",
+   "task": "click-type--percentage",
+   "arm": "control",
+   "passed": false,
+   "calls": 51,
+   "usd": 0.4472494,
+   "cost_usd": 0.44724939999999996,
+   "proc_calls": 21,
+   "proc_usd": 0.3241581497460001,
+   "novel_calls": 30,
+   "oracle_calls": 32,
+   "oracle_usd": 0.2699501739369353,
+   "hook_calls": 35,
+   "hook_usd": 0.29265609625904987,
+   "by_role": {
+    "edit": {
+     "calls": 13,
+     "usd": 0.13584941083909385
+    },
+    "vcs": {
+     "calls": 4,
+     "usd": 0.03472611573850354
+    },
+    "search": {
+     "calls": 11,
+     "usd": 0.10080255028603535
+    },
+    "run": {
+     "calls": 13,
+     "usd": 0.1204877996081613
+    },
+    "read": {
+     "calls": 9,
+     "usd": 0.23998888626664752
+    },
+    "failed": {
+     "calls": 1,
+     "usd": 0.007691386605586548
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "892ca69e-71dc-4326-8044-b44c0ace3435",
+   "family": "click-type",
+   "task": "click-type--byte-size",
+   "arm": "control",
+   "passed": true,
+   "calls": 53,
+   "usd": 0.40384390000000003,
+   "cost_usd": 0.40384390000000003,
+   "proc_calls": 26,
+   "proc_usd": 0.2879107487474858,
+   "novel_calls": 27,
+   "oracle_calls": 37,
+   "oracle_usd": 0.2983917842365061,
+   "hook_calls": 40,
+   "hook_usd": 0.315776815215918,
+   "by_role": {
+    "edit": {
+     "calls": 10,
+     "usd": 0.12322129247931424
+    },
+    "vcs": {
+     "calls": 5,
+     "usd": 0.037124588276247816
+    },
+    "search": {
+     "calls": 9,
+     "usd": 0.08433963512964876
+    },
+    "run": {
+     "calls": 10,
+     "usd": 0.08764453283024448
+    },
+    "read": {
+     "calls": 15,
+     "usd": 0.18718805864100221
+    },
+    "failed": {
+     "calls": 4,
+     "usd": 0.032820901795541646
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "2e564f55-4c32-42c7-92be-6c25943c22b2",
+   "family": "click-type",
+   "task": "click-type--slug",
+   "arm": "control",
+   "passed": true,
+   "calls": 42,
+   "usd": 0.3524011,
+   "cost_usd": 0.3524011,
+   "proc_calls": 21,
+   "proc_usd": 0.2576872050804957,
+   "novel_calls": 21,
+   "oracle_calls": 26,
+   "oracle_usd": 0.23433374711371405,
+   "hook_calls": 29,
+   "hook_usd": 0.2540497776813776,
+   "by_role": {
+    "edit": {
+     "calls": 10,
+     "usd": 0.09240470937967749
+    },
+    "vcs": {
+     "calls": 5,
+     "usd": 0.036552441144529324
+    },
+    "search": {
+     "calls": 8,
+     "usd": 0.09998667485827656
+    },
+    "run": {
+     "calls": 7,
+     "usd": 0.06258766963621565
+    },
+    "read": {
+     "calls": 11,
+     "usd": 0.19463566515488787
+    },
+    "failed": {
+     "calls": 1,
+     "usd": 0.008661051064075331
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "6b4f634c-fba4-4ae3-be07-9e6e1d0b537e",
+   "family": "click-type",
+   "task": "click-type--date",
+   "arm": "control",
+   "passed": false,
+   "calls": 60,
+   "usd": 0.5401922,
+   "cost_usd": 0.5401922,
+   "proc_calls": 17,
+   "proc_usd": 0.339815878543156,
+   "novel_calls": 43,
+   "oracle_calls": 41,
+   "oracle_usd": 0.37587676255273705,
+   "hook_calls": 44,
+   "hook_usd": 0.3976139137001027,
+   "by_role": {
+    "edit": {
+     "calls": 12,
+     "usd": 0.13391187850829234
+    },
+    "search": {
+     "calls": 12,
+     "usd": 0.13428708306108667
+    },
+    "run": {
+     "calls": 19,
+     "usd": 0.19018716138514696
+    },
+    "read": {
+     "calls": 13,
+     "usd": 0.2945237098614124
+    },
+    "failed": {
+     "calls": 4,
+     "usd": 0.04786356787876889
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "e66b9348-c055-4215-bc10-7c8bdee4f35d",
+   "family": "click-type",
+   "task": "click-type--host-port",
+   "arm": "control",
+   "passed": false,
+   "calls": 56,
+   "usd": 0.4847351000000001,
+   "cost_usd": 0.4847351000000001,
+   "proc_calls": 21,
+   "proc_usd": 0.3439973979398422,
+   "novel_calls": 35,
+   "oracle_calls": 39,
+   "oracle_usd": 0.3227690322803892,
+   "hook_calls": 41,
+   "hook_usd": 0.3368691065329048,
+   "by_role": {
+    "edit": {
+     "calls": 11,
+     "usd": 0.11630514299555189
+    },
+    "vcs": {
+     "calls": 4,
+     "usd": 0.03330670530612351
+    },
+    "search": {
+     "calls": 10,
+     "usd": 0.09773802049211333
+    },
+    "run": {
+     "calls": 18,
+     "usd": 0.15236144177498573
+    },
+    "read": {
+     "calls": 12,
+     "usd": 0.28169242998154215
+    },
+    "failed": {
+     "calls": 1,
+     "usd": 0.008662335945802402
+    }
+   },
+   "templatable_files": [
+    "docs/api.md",
+    "src/click/__init__.py"
+   ],
+   "common_files": [
+    "CHANGES.md",
+    "docs/api.md",
+    "docs/parameter-types.md",
+    "src/click/__init__.py",
+    "src/click/types.py"
+   ]
+  },
+  {
+   "sid": "74c09e30-cdb2-4e24-932b-8212810f4cf5",
+   "family": "mm-validator",
+   "task": "mm-validator--starts-with",
+   "arm": "train",
+   "passed": true,
+   "calls": 35,
+   "usd": 0.24754560000000003,
+   "cost_usd": 0.24754560000000003,
+   "proc_calls": 23,
+   "proc_usd": 0.1986032014126582,
+   "novel_calls": 12,
+   "oracle_calls": 27,
+   "oracle_usd": 0.19851537562101085,
+   "hook_calls": 28,
+   "hook_usd": 0.20418650188770532,
+   "by_role": {
+    "edit": {
+     "calls": 4,
+     "usd": 0.038760221654290716
+    },
+    "vcs": {
+     "calls": 4,
+     "usd": 0.023527434564430266
+    },
+    "search": {
+     "calls": 5,
+     "usd": 0.062142637282569
+    },
+    "run": {
+     "calls": 8,
+     "usd": 0.05257878772250324
+    },
+    "read": {
+     "calls": 10,
+     "usd": 0.13271179950476428
+    },
+    "failed": {
+     "calls": 4,
+     "usd": 0.02397036984118514
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "e753fc2a-33bb-4c30-b894-a3d13747bd68",
+   "family": "mm-validator",
+   "task": "mm-validator--multiple-of",
+   "arm": "train",
+   "passed": true,
+   "calls": 33,
+   "usd": 0.2400153,
+   "cost_usd": 0.24001529999999996,
+   "proc_calls": 20,
+   "proc_usd": 0.19341473536939327,
+   "novel_calls": 13,
+   "oracle_calls": 26,
+   "oracle_usd": 0.18219710473153802,
+   "hook_calls": 27,
+   "hook_usd": 0.18762814007865755,
+   "by_role": {
+    "edit": {
+     "calls": 3,
+     "usd": 0.03159941175353839
+    },
+    "vcs": {
+     "calls": 4,
+     "usd": 0.024668484482379016
+    },
+    "search": {
+     "calls": 5,
+     "usd": 0.053227367918180224
+    },
+    "run": {
+     "calls": 8,
+     "usd": 0.05487308173867955
+    },
+    "read": {
+     "calls": 11,
+     "usd": 0.1400303048053554
+    },
+    "failed": {
+     "calls": 2,
+     "usd": 0.011687876872397723
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "29bdaaaa-ece8-424c-8487-19f90b2b7197",
+   "family": "mm-validator",
+   "task": "mm-validator--unique",
+   "arm": "train",
+   "passed": true,
+   "calls": 43,
+   "usd": 0.27422570000000007,
+   "cost_usd": 0.27422570000000007,
+   "proc_calls": 22,
+   "proc_usd": 0.19466492324913331,
+   "novel_calls": 21,
+   "oracle_calls": 35,
+   "oracle_usd": 0.22630959447445606,
+   "hook_calls": 36,
+   "hook_usd": 0.23144780194947417,
+   "by_role": {
+    "edit": {
+     "calls": 4,
+     "usd": 0.040789433718917634
+    },
+    "vcs": {
+     "calls": 2,
+     "usd": 0.011941311501031171
+    },
+    "search": {
+     "calls": 7,
+     "usd": 0.0686387621623899
+    },
+    "run": {
+     "calls": 14,
+     "usd": 0.08838705909153632
+    },
+    "read": {
+     "calls": 13,
+     "usd": 0.13699403405366256
+    },
+    "failed": {
+     "calls": 3,
+     "usd": 0.017670229413641603
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "a79cc267-ec1c-4700-a9ea-6d99cc58d55e",
+   "family": "mm-validator",
+   "task": "mm-validator--hexadecimal",
+   "arm": "train",
+   "passed": true,
+   "calls": 31,
+   "usd": 0.19566099999999995,
+   "cost_usd": 0.19566100000000003,
+   "proc_calls": 19,
+   "proc_usd": 0.14552408511108508,
+   "novel_calls": 12,
+   "oracle_calls": 24,
+   "oracle_usd": 0.15147712195241003,
+   "hook_calls": 25,
+   "hook_usd": 0.15688993365196488,
+   "by_role": {
+    "edit": {
+     "calls": 3,
+     "usd": 0.02754821451069578
+    },
+    "vcs": {
+     "calls": 1,
+     "usd": 0.006175598114459918
+    },
+    "search": {
+     "calls": 6,
+     "usd": 0.06302016677695177
+    },
+    "run": {
+     "calls": 8,
+     "usd": 0.0492760541505545
+    },
+    "read": {
+     "calls": 10,
+     "usd": 0.0911867612773867
+    },
+    "failed": {
+     "calls": 3,
+     "usd": 0.016068187211573076
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "36087b09-e8b4-4354-8647-c563aa341524",
+   "family": "mm-validator",
+   "task": "mm-validator--ends-with",
+   "arm": "control",
+   "passed": true,
+   "calls": 37,
+   "usd": 0.23001660000000007,
+   "cost_usd": 0.23001660000000004,
+   "proc_calls": 18,
+   "proc_usd": 0.15502118494140893,
+   "novel_calls": 19,
+   "oracle_calls": 30,
+   "oracle_usd": 0.18804456019231838,
+   "hook_calls": 31,
+   "hook_usd": 0.19261357381498181,
+   "by_role": {
+    "edit": {
+     "calls": 3,
+     "usd": 0.023918352612787297
+    },
+    "vcs": {
+     "calls": 5,
+     "usd": 0.028521861637137463
+    },
+    "search": {
+     "calls": 7,
+     "usd": 0.06951901938811114
+    },
+    "run": {
+     "calls": 10,
+     "usd": 0.06127489904744407
+    },
+    "read": {
+     "calls": 10,
+     "usd": 0.10778944312659688
+    },
+    "failed": {
+     "calls": 2,
+     "usd": 0.01081491939155968
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "50050101-c213-45fc-92e5-4a1dcd6e3b3a",
+   "family": "mm-validator",
+   "task": "mm-validator--ip-address",
+   "arm": "control",
+   "passed": true,
+   "calls": 38,
+   "usd": 0.2799918,
+   "cost_usd": 0.2799918,
+   "proc_calls": 21,
+   "proc_usd": 0.20378347416659803,
+   "novel_calls": 17,
+   "oracle_calls": 30,
+   "oracle_usd": 0.22299818717521963,
+   "hook_calls": 31,
+   "hook_usd": 0.2299394994350169,
+   "by_role": {
+    "edit": {
+     "calls": 4,
+     "usd": 0.04794599842229602
+    },
+    "vcs": {
+     "calls": 7,
+     "usd": 0.046907637221059895
+    },
+    "search": {
+     "calls": 6,
+     "usd": 0.07062658139315206
+    },
+    "run": {
+     "calls": 10,
+     "usd": 0.07728986586755646
+    },
+    "read": {
+     "calls": 9,
+     "usd": 0.12665528349968663
+    },
+    "failed": {
+     "calls": 2,
+     "usd": 0.012151886456740757
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "7a011996-9309-402e-bd96-18f5dd572a1c",
+   "family": "mm-validator",
+   "task": "mm-validator--not-blank",
+   "arm": "control",
+   "passed": true,
+   "calls": 37,
+   "usd": 0.23108300000000004,
+   "cost_usd": 0.23108300000000004,
+   "proc_calls": 20,
+   "proc_usd": 0.16301382772007983,
+   "novel_calls": 17,
+   "oracle_calls": 30,
+   "oracle_usd": 0.19149430224089936,
+   "hook_calls": 31,
+   "hook_usd": 0.19591801181582225,
+   "by_role": {
+    "edit": {
+     "calls": 3,
+     "usd": 0.02575979330068459
+    },
+    "vcs": {
+     "calls": 3,
+     "usd": 0.01717713542537805
+    },
+    "search": {
+     "calls": 7,
+     "usd": 0.07101487426111552
+    },
+    "run": {
+     "calls": 11,
+     "usd": 0.06571496749360423
+    },
+    "read": {
+     "calls": 9,
+     "usd": 0.10431171721828575
+    },
+    "failed": {
+     "calls": 4,
+     "usd": 0.02265270096140609
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "f16f500e-9813-44f7-93da-3cf1c6a3e18c",
+   "family": "mm-validator",
+   "task": "mm-validator--ascii",
+   "arm": "control",
+   "passed": true,
+   "calls": 39,
+   "usd": 0.2721276000000001,
+   "cost_usd": 0.2721276000000001,
+   "proc_calls": 23,
+   "proc_usd": 0.20885028278065645,
+   "novel_calls": 16,
+   "oracle_calls": 32,
+   "oracle_usd": 0.23369557542479485,
+   "hook_calls": 33,
+   "hook_usd": 0.23854110242480855,
+   "by_role": {
+    "edit": {
+     "calls": 3,
+     "usd": 0.02899079495111459
+    },
+    "vcs": {
+     "calls": 7,
+     "usd": 0.04431888927945554
+    },
+    "search": {
+     "calls": 5,
+     "usd": 0.0702534735540927
+    },
+    "run": {
+     "calls": 12,
+     "usd": 0.07682010732839117
+    },
+    "read": {
+     "calls": 10,
+     "usd": 0.14409795535917105
+    },
+    "failed": {
+     "calls": 2,
+     "usd": 0.011762272083200631
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "b257a83c-7895-40b9-904d-9a5d78ae8774",
+   "family": "mm-validator",
+   "task": "mm-validator--contains",
+   "arm": "control",
+   "passed": true,
+   "calls": 35,
+   "usd": 0.23504470000000005,
+   "cost_usd": 0.23504470000000005,
+   "proc_calls": 18,
+   "proc_usd": 0.17802526614660677,
+   "novel_calls": 17,
+   "oracle_calls": 28,
+   "oracle_usd": 0.17253451689910598,
+   "hook_calls": 29,
+   "hook_usd": 0.17838572681859255,
+   "by_role": {
+    "edit": {
+     "calls": 3,
+     "usd": 0.038523365240327345
+    },
+    "vcs": {
+     "calls": 4,
+     "usd": 0.023710243180306595
+    },
+    "search": {
+     "calls": 8,
+     "usd": 0.0650276757472785
+    },
+    "run": {
+     "calls": 8,
+     "usd": 0.05018113736211938
+    },
+    "read": {
+     "calls": 9,
+     "usd": 0.11747107302810839
+    },
+    "failed": {
+     "calls": 3,
+     "usd": 0.016056399018059248
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "2118807d-04f2-46cb-9c6a-6c07105f9b16",
+   "family": "mm-validator",
+   "task": "mm-validator--lowercase",
+   "arm": "control",
+   "passed": true,
+   "calls": 33,
+   "usd": 0.204899,
+   "cost_usd": 0.204899,
+   "proc_calls": 18,
+   "proc_usd": 0.1446943275484204,
+   "novel_calls": 15,
+   "oracle_calls": 26,
+   "oracle_usd": 0.16720096582311061,
+   "hook_calls": 27,
+   "hook_usd": 0.17224866563132324,
+   "by_role": {
+    "edit": {
+     "calls": 3,
+     "usd": 0.022384462733093413
+    },
+    "vcs": {
+     "calls": 3,
+     "usd": 0.016224385092982185
+    },
+    "search": {
+     "calls": 7,
+     "usd": 0.07124703938940935
+    },
+    "run": {
+     "calls": 6,
+     "usd": 0.03787162133275815
+    },
+    "read": {
+     "calls": 11,
+     "usd": 0.10168623232562224
+    },
+    "failed": {
+     "calls": 3,
+     "usd": 0.016475774924877618
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "46e63994-3cba-41e9-a8ff-51aeb2b4ebad",
+   "family": "mm-validator",
+   "task": "mm-validator--ends-with",
+   "arm": "control",
+   "passed": true,
+   "calls": 29,
+   "usd": 0.18277499999999994,
+   "cost_usd": 0.18277499999999997,
+   "proc_calls": 15,
+   "proc_usd": 0.13269598610879274,
+   "novel_calls": 14,
+   "oracle_calls": 22,
+   "oracle_usd": 0.12534351872279215,
+   "hook_calls": 23,
+   "hook_usd": 0.13066922469721776,
+   "by_role": {
+    "edit": {
+     "calls": 3,
+     "usd": 0.026065197173287508
+    },
+    "vcs": {
+     "calls": 3,
+     "usd": 0.015496353432933763
+    },
+    "search": {
+     "calls": 7,
+     "usd": 0.049471196658026906
+    },
+    "run": {
+     "calls": 8,
+     "usd": 0.04686388318054013
+    },
+    "read": {
+     "calls": 6,
+     "usd": 0.08336591806206878
+    },
+    "failed": {
+     "calls": 2,
+     "usd": 0.01020593467357836
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "72c35a83-edb3-4e5e-928c-d503b7e30ec0",
+   "family": "mm-validator",
+   "task": "mm-validator--ip-address",
+   "arm": "control",
+   "passed": true,
+   "calls": 38,
+   "usd": 0.2708364,
+   "cost_usd": 0.2708364,
+   "proc_calls": 20,
+   "proc_usd": 0.19973200953492892,
+   "novel_calls": 18,
+   "oracle_calls": 30,
+   "oracle_usd": 0.21109756350317252,
+   "hook_calls": 31,
+   "hook_usd": 0.21779950096724787,
+   "by_role": {
+    "edit": {
+     "calls": 4,
+     "usd": 0.05123015584802665
+    },
+    "vcs": {
+     "calls": 6,
+     "usd": 0.037534011767617975
+    },
+    "search": {
+     "calls": 7,
+     "usd": 0.07128770751565741
+    },
+    "run": {
+     "calls": 10,
+     "usd": 0.06950978546861708
+    },
+    "read": {
+     "calls": 8,
+     "usd": 0.12211898357466089
+    },
+    "failed": {
+     "calls": 3,
+     "usd": 0.01681964365138533
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "f8425c27-5792-4abc-9ee6-e1fed83cd3cb",
+   "family": "mm-validator",
+   "task": "mm-validator--not-blank",
+   "arm": "control",
+   "passed": true,
+   "calls": 39,
+   "usd": 0.30184700000000003,
+   "cost_usd": 0.30184700000000003,
+   "proc_calls": 23,
+   "proc_usd": 0.24031504806204157,
+   "novel_calls": 16,
+   "oracle_calls": 32,
+   "oracle_usd": 0.2557766197265824,
+   "hook_calls": 33,
+   "hook_usd": 0.26095960952267916,
+   "by_role": {
+    "edit": {
+     "calls": 3,
+     "usd": 0.03968740375240393
+    },
+    "vcs": {
+     "calls": 5,
+     "usd": 0.03442996580936941
+    },
+    "search": {
+     "calls": 6,
+     "usd": 0.06592034001852876
+    },
+    "run": {
+     "calls": 11,
+     "usd": 0.07696562868973852
+    },
+    "read": {
+     "calls": 11,
+     "usd": 0.17437457361564357
+    },
+    "failed": {
+     "calls": 3,
+     "usd": 0.02121148390017974
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "ffd1b1ae-ebcb-4de2-ae43-8e0b7b96edda",
+   "family": "mm-validator",
+   "task": "mm-validator--ascii",
+   "arm": "control",
+   "passed": true,
+   "calls": 37,
+   "usd": 0.2260754,
+   "cost_usd": 0.2260754,
+   "proc_calls": 21,
+   "proc_usd": 0.1636988253098404,
+   "novel_calls": 16,
+   "oracle_calls": 30,
+   "oracle_usd": 0.18763353478177489,
+   "hook_calls": 31,
+   "hook_usd": 0.19294812262962732,
+   "by_role": {
+    "edit": {
+     "calls": 3,
+     "usd": 0.02403084277942183
+    },
+    "vcs": {
+     "calls": 6,
+     "usd": 0.03495323846922899
+    },
+    "search": {
+     "calls": 6,
+     "usd": 0.06553605200511745
+    },
+    "run": {
+     "calls": 11,
+     "usd": 0.06357154043147739
+    },
+    "read": {
+     "calls": 9,
+     "usd": 0.10148327779226682
+    },
+    "failed": {
+     "calls": 2,
+     "usd": 0.010240553097102756
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "b539c92a-111d-4fbb-b506-1150f3305fad",
+   "family": "mm-validator",
+   "task": "mm-validator--contains",
+   "arm": "control",
+   "passed": true,
+   "calls": 29,
+   "usd": 0.19363290000000002,
+   "cost_usd": 0.1936329,
+   "proc_calls": 15,
+   "proc_usd": 0.1353842352858201,
+   "novel_calls": 14,
+   "oracle_calls": 22,
+   "oracle_usd": 0.1478758672469666,
+   "hook_calls": 23,
+   "hook_usd": 0.15399568556971466,
+   "by_role": {
+    "edit": {
+     "calls": 3,
+     "usd": 0.032751110777872156
+    },
+    "vcs": {
+     "calls": 4,
+     "usd": 0.02176734082995288
+    },
+    "search": {
+     "calls": 7,
+     "usd": 0.06999516253686079
+    },
+    "run": {
+     "calls": 7,
+     "usd": 0.04074297837768473
+    },
+    "read": {
+     "calls": 6,
+     "usd": 0.07850448186419376
+    },
+    "failed": {
+     "calls": 2,
+     "usd": 0.010589455529160519
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  },
+  {
+   "sid": "00ec9f7f-9ada-455a-98fc-ac164e132de6",
+   "family": "mm-validator",
+   "task": "mm-validator--lowercase",
+   "arm": "control",
+   "passed": true,
+   "calls": 32,
+   "usd": 0.19508270000000003,
+   "cost_usd": 0.19508270000000003,
+   "proc_calls": 15,
+   "proc_usd": 0.13882116954590626,
+   "novel_calls": 17,
+   "oracle_calls": 25,
+   "oracle_usd": 0.1526397953044899,
+   "hook_calls": 26,
+   "hook_usd": 0.15798731320120574,
+   "by_role": {
+    "edit": {
+     "calls": 3,
+     "usd": 0.028302498026467948
+    },
+    "vcs": {
+     "calls": 5,
+     "usd": 0.02564660660986315
+    },
+    "search": {
+     "calls": 9,
+     "usd": 0.060039068411237795
+    },
+    "run": {
+     "calls": 8,
+     "usd": 0.045407469524274546
+    },
+    "read": {
+     "calls": 6,
+     "usd": 0.08637022926651881
+    },
+    "failed": {
+     "calls": 1,
+     "usd": 0.005040224365038981
+    }
+   },
+   "templatable_files": [
+    "CHANGELOG.rst"
+   ],
+   "common_files": [
+    "CHANGELOG.rst",
+    "src/marshmallow/validate.py",
+    "tests/test_validate.py"
+   ]
+  }
+ ]
+}
