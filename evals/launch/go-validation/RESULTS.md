@@ -2,7 +2,9 @@
 
 Run on 2026-09-29 against the shipped product: a release build of `main` at `acdb0a4`
 (`adage 0.1.0`, Claude Code 2.1.285, `claude-haiku-4-5-20251001`). The run followed
-`prereg.json` and `README.md` in order. The analysis is `analyze.py --out analysis.json`,
+`prereg.json` and `README.md` in order. The binary was built once, before any session. `main` has
+since gained `7db8b22`, which changes card file grouping and the learned judge; that change is not
+covered by this result. The analysis is `analyze.py --out analysis.json`,
 unchanged from the pre-registration.
 
 ## Verdict: **GO-WITH-CAVEATS**
