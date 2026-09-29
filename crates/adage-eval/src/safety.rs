@@ -439,12 +439,19 @@ pub fn check_stop(route: &str, text: &str, canaries: &[String]) -> Vec<Violation
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DataType {
     RepoPath,
-    RepoPathList { max: usize },
+    RepoPathList {
+        max: usize,
+    },
     GitRev,
     Int,
     Bool,
     Enum(Vec<String>),
     Pattern(String),
+    /// Bounded plain text: at most this many characters, one line, and nothing the instruction
+    /// check matches.
+    Text {
+        max: usize,
+    },
 }
 
 /// The execution data block (Track C §3.4), exactly: header attributes, the fixed second line,
@@ -509,6 +516,17 @@ fn typed_value_ok(name: &str, t: &DataType, v: &serde_json::Value, root: Option<
         (DataType::Pattern(re), Value::String(s)) => {
             let ok = s.len() <= 200 && Regex::new(re).map(|r| r.is_match(s)).unwrap_or(false);
             (!ok).then(|| format!("field {name}: {s:?} does not match {re}"))
+        }
+        (DataType::Text { max }, Value::String(s)) => {
+            if s.chars().count() > *max {
+                bad(&format!("text over its cap of {max} characters"))
+            } else if s.chars().any(|c| c.is_control() || is_invisible(c)) {
+                bad("text holds a control or invisible character")
+            } else if INSTRUCTION.is_match(s) {
+                bad("text is instruction-shaped")
+            } else {
+                None
+            }
         }
         _ => bad("value has the wrong JSON type"),
     }

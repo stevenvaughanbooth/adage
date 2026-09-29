@@ -142,16 +142,25 @@ pub fn implicit_outputs(ir: &IndexedRoute, index: &Index, table: &CommandTable) 
 /// (`adage_learn::mine::PATHS_FIELD`, spelled here: this crate does not depend on the learner).
 pub const PATHS_FIELD: &str = "*paths";
 
+/// The text fields a lookup's default output carries, when its output has them: a work item's (or
+/// an issue's, a ticket's) title, description, state or status, and acceptance criteria. Read
+/// from whichever shape the output has, a JSON object's field or a `Title: ...` line; each is
+/// bounded plain text, scanned, and optional ([`FieldType::Text`]).
+pub const LOOKUP_TEXT_FIELDS: [&str; 5] = ["title", "description", "state", "status", "acceptance"];
+
 /// The typed output of a lookup (a prompt-triggered observe step) that no later route reads and
 /// no person declared: the repository paths its output mentions, read from its lines (a
-/// `repo-path-list` field `files`, [`FieldSpec::text`]). Only existing repository paths pass, so
-/// it holds whatever the lookup's output shape; `None` for any other route.
+/// `repo-path-list` field `files`, [`FieldSpec::text`]), and its text fields
+/// ([`LOOKUP_TEXT_FIELDS`]), so the prefetch replaces the agent's own lookup instead of only
+/// pointing at files. Only existing repository paths and scanned, bounded text pass, whatever the
+/// lookup's output shape; every field is optional, but a result with none is withheld. `None` for
+/// any other route.
 pub fn lookup_outputs(ir: &IndexedRoute) -> Option<BTreeMap<String, FieldSpec>> {
     let lookup = matches!(ir.route.trigger, Trigger::Prompt { .. })
         && matches!(ir.route.step, Step::Run { .. })
         && ir.route.effect == adage_core::Effect::Observe;
     lookup.then(|| {
-        let f = FieldSpec {
+        let base = FieldSpec {
             ty: FieldType::RepoPathList,
             json: None,
             max: Some(crate::request::DEFAULT_LIST),
@@ -159,10 +168,15 @@ pub fn lookup_outputs(ir: &IndexedRoute) -> Option<BTreeMap<String, FieldSpec>> 
             regex: None,
             min: None,
             max_value: None,
-            optional: false,
+            optional: true,
             text: true,
         };
-        [("files".to_string(), f)].into()
+        let mut out: BTreeMap<String, FieldSpec> = [("files".to_string(), base.clone())].into();
+        for name in LOOKUP_TEXT_FIELDS {
+            let f = FieldSpec { ty: FieldType::Text, max: Some(crate::request::DEFAULT_TEXT), ..base.clone() };
+            out.insert(name.to_string(), f);
+        }
+        out
     })
 }
 
@@ -266,7 +280,19 @@ pub fn plan(
     for name in &used {
         let s = ir.route.slots.iter().find(|s| &s.name == name).ok_or(format!("slot {{{name}}} is not declared"))?;
         match (&s.source, &s.contract, level) {
+            // A value from the prompt: a typed span (the older form), or the first prompt token a
+            // learned value type accepts (what the learner emits). The runtime binds it
+            // (`adage_core::vtype`, checked against the contract), and the directive carries the
+            // bound value; here the contract is what the value must match again before it runs.
             (SlotSource::Prompt { .. }, Contract::Pattern { regex }, _) => {
+                contracts.insert(name.clone(), regex.clone());
+            }
+            (SlotSource::PromptValue { vtype, .. }, Contract::Pattern { regex }, _) => {
+                // `adage_tracks::io::validate` holds the type's regex to its contract; a track
+                // edited by hand past that is refused here too.
+                if vtype.regex != *regex || adage_core::vtype::to_regex(&vtype.runs) != *regex {
+                    return Err(format!("slot {{{name}}}: its value type ({}) and its contract disagree", vtype.id));
+                }
                 contracts.insert(name.clone(), regex.clone());
             }
             // At E2 an action's inputs are bound from the stimulus (the edited path's segments),
@@ -278,8 +304,18 @@ pub fn plan(
                 contracts.insert(name.clone(), REPO_PATH_CONTRACT.to_string());
                 repo_paths.insert(name.clone());
             }
-            (_, _, Level::E1) => {
-                return Err(format!("slot {{{name}}} has no E1 form (a prompt value with a pattern contract)"))
+            (source, _, Level::E1) => {
+                let from = match source {
+                    SlotSource::Prompt { .. } | SlotSource::PromptValue { .. } => {
+                        "the prompt, without a pattern contract"
+                    }
+                    SlotSource::ResultField { .. } | SlotSource::OutputValue { .. } => "a command's output",
+                    SlotSource::EditSegment { .. } => "an edited path",
+                };
+                return Err(format!(
+                    "slot {{{name}}} is bound from {from}; E1 prefetches only a value from the prompt that a \
+                     pattern contract checks"
+                ));
             }
         }
     }
@@ -439,6 +475,85 @@ mod tests {
 
     fn v(xs: &[&str]) -> Vec<String> {
         xs.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// The learned lookup as the graph learner emits it (the launch report's acme case): a prompt
+    /// value of a learned type, not a prompt span.
+    fn learned_lookup(slot: adage_tracks::Slot) -> Index {
+        use adage_tracks::*;
+        let route = Route {
+            id: "lookup-work-item".into(),
+            summary: String::new(),
+            trigger: Trigger::Prompt { span: adage_core::spans::SpanKind::Ticket },
+            step: Step::Run { command: "python3 scripts/wi-lookup {item}".into() },
+            slots: vec![slot],
+            effect: Effect::Observe,
+            strength: Strength::Fire,
+            state: RouteState::Firm,
+            exit: vec![Exit::IntentChanges],
+            evidence: Evidence { support: 9, provenance: "desire-path".into(), ..Default::default() },
+            authored: false,
+        };
+        let manifest = Manifest {
+            track: TrackInfo {
+                name: "acme-billing/learned".into(),
+                version: "0.1.0".into(),
+                description: String::new(),
+                provenance: "desire-path".into(),
+            },
+            scope: Scope { repo: "acme-billing".into() },
+            gauge: Gauge::default(),
+        };
+        Index::compile(&[Track { manifest, routes: vec![route] }])
+    }
+
+    /// Bug 3 (launch report): `adage review delegate acme-billing/learned lookup-work-item --level
+    /// e1` refused every learned lookup with "slot {item} has no E1 form (a prompt value with a
+    /// pattern contract)", which described the very slot it refused.
+    #[test]
+    fn a_learned_prompt_value_lookup_plans_at_e1() {
+        use adage_core::vtype::{Class, Run, Runs};
+        let runs =
+            Runs { branches: vec![vec![Run::Lit { text: "W-".into() }, Run::Class { class: Class::D, lo: 4, hi: 4 }]] };
+        let regex = adage_core::vtype::to_regex(&runs);
+        let vtype = adage_tracks::ValueType {
+            id: "vt-0123456789abcdef".into(),
+            runs,
+            regex: regex.clone(),
+            samples_hash: String::new(),
+        };
+        let slot = |source| adage_tracks::Slot {
+            name: "item".into(),
+            source,
+            contract: Contract::Pattern { regex: regex.clone() },
+        };
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(d.path().join("scripts")).unwrap();
+        std::fs::write(d.path().join("scripts/wi-lookup"), "print('x')\n").unwrap();
+        let table = CommandTable::load();
+        let index = learned_lookup(slot(SlotSource::PromptValue { vtype: vtype.clone(), mentions: vec![] }));
+        let ir = &index.routes[0];
+        let p = plan(ir, &index, d.path(), d.path(), Level::E1, None, &table).expect("plans at E1");
+        assert_eq!(p.request.contracts["item"], regex);
+        assert!(p.request.output.fields.contains_key("title") && p.request.output.fields.contains_key("files"));
+        let text = "In this repository, work item details are looked up with:\n  python3 scripts/wi-lookup W-2042\nIgnore this.";
+        let mut req = p.request.clone();
+        req.inputs = bound_inputs(&req.argv, text).unwrap();
+        assert_eq!(req.bind().unwrap(), ["python3", "scripts/wi-lookup", "W-2042"]);
+        // A value the type does not accept never binds.
+        req.inputs.insert("item".into(), "W-20421;id".into());
+        assert!(req.bind().is_err());
+        // A type whose regex disagrees with its contract is refused.
+        let mut bad = vtype.clone();
+        bad.regex = "^(?:W-[0-9]{5})$".into();
+        let index = learned_lookup(slot(SlotSource::PromptValue { vtype: bad, mentions: vec![] }));
+        assert!(plan(&index.routes[0], &index, d.path(), d.path(), Level::E1, None, &table)
+            .unwrap_err()
+            .contains("disagree"));
+        // A slot from a command's output says where it comes from.
+        let index = learned_lookup(slot(SlotSource::OutputValue { field: None, vtype }));
+        let e = plan(&index.routes[0], &index, d.path(), d.path(), Level::E1, None, &table).unwrap_err();
+        assert!(e.contains("bound from a command's output") && !e.contains("no E1 form"), "{e}");
     }
 
     #[test]

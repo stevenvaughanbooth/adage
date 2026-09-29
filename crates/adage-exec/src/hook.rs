@@ -39,7 +39,7 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use crate::approvals::{self, Approval, Store};
-use crate::request::{FieldSpec, FieldType, Level, OutputMode, DEFAULT_LIST, MAX_LIST};
+use crate::request::{FieldSpec, FieldType, Level, OutputMode, DEFAULT_LIST, DEFAULT_TEXT, MAX_LIST, MAX_TEXT};
 use crate::run::{self, Context};
 use crate::{limits, policy, route, sandbox};
 
@@ -297,6 +297,7 @@ pub fn data_type(f: &FieldSpec) -> DataType {
         FieldType::Bool => DataType::Bool,
         FieldType::Enum => DataType::Enum(f.values.clone()),
         FieldType::Pattern => DataType::Pattern(f.regex.clone().unwrap_or_default()),
+        FieldType::Text => DataType::Text { max: f.max.unwrap_or(DEFAULT_TEXT).min(MAX_TEXT) },
     }
 }
 
@@ -393,7 +394,14 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
             .iter()
             .find(|(f, v)| projected.get(f.as_str()).and_then(|x| x.as_str()) == Some(v.as_str()))
             .and_then(|(f, v)| render::e1_exit_note(f, v));
-        let Some(text) = render::wrap_directive_e1(d, &delivered.block, note.as_deref()) else {
+        // The lookup's own text came through (not only the paths it links): the agent need not
+        // run it again.
+        let whole = req
+            .output
+            .fields
+            .iter()
+            .any(|(k, f)| f.ty == FieldType::Text && projected.get(k).is_some_and(|v| v.is_string()));
+        let Some(text) = render::wrap_directive_e1(d, &delivered.block, note.as_deref(), whole) else {
             return Err(fail(records, "render", "the data block is not one whole <adage-data> block"));
         };
         texts.push(text);
