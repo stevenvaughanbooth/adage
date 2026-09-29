@@ -184,7 +184,7 @@ const HOUSEKEEPING: &[&str] = &[
 /// Whether `command` runs a housekeeping program ([`HOUSEKEEPING`]).
 pub fn housekeeping(command: &str) -> bool {
     let head = command.split_whitespace().next().unwrap_or("");
-    HOUSEKEEPING.contains(&head.rsplit('/').next().unwrap_or(head))
+    HOUSEKEEPING.contains(&head.rsplit('/').next().unwrap_or(head)) || adage_core::pattern::is_housekeeping(command)
 }
 
 /// Whether a literal may be directed as it is: no placeholder, nothing quoted, safe, and not
