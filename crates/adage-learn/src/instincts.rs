@@ -11,13 +11,16 @@
 //!   Environment-effect instincts (`pnpm install`) are nascent until a person approves one: that
 //!   approves the pack's environment steps for the repository (`Reviews::packs`).
 //! - **Auto-extinguish.** The runtime judges every instinct directive ([`adage_runtime::Judgement`]).
-//!   From the spools, an instinct route with at least [`EXTINGUISH_MISFIRED`] `misfired`
-//!   judgements (the agent ran the directed command and it failed without running), no fewer
-//!   than its working follows, or, only with a control-arm comparison, an ignore rate whose
-//!   Wilson lower bound reaches [`EXTINGUISH_IGNORE_LOWER_BOUND`] over at least
-//!   [`EXTINGUISH_MIN_JUDGEMENTS`] judgements ([`should_extinguish`]), is extinguished, recorded as a person's `extinguish` is (so a
-//!   re-bind does not bring it back), and the change appears in `learn.log`. Losing authority is
-//!   always automatic.
+//!   From the spools, an instinct route is extinguished ([`should_extinguish`]) when it
+//!   misfired at least [`EXTINGUISH_MISFIRED`] times (the agent ran the directed command and it
+//!   failed for want of its environment or target), no fewer than its working follows; or when,
+//!   over at least [`EXTINGUISH_MIN_JUDGEMENTS`] judgements, a control-arm comparison shows
+//!   delivering it changes nothing (its ignore rate's Wilson lower bound reaches
+//!   [`EXTINGUISH_IGNORE_LOWER_BOUND`] and it is followed no more often than when withheld); or
+//!   when it misfired and its value ([`crate::value::judged`]) is positive with probability under
+//!   [`EXTINGUISH_P_POSITIVE`]. Never on ignores alone: an ignore may be a follow the matcher
+//!   missed. It is recorded as a person's `extinguish` is (so a re-bind does not bring it back),
+//!   and the change appears in `learn.log`. Losing authority is always automatic.
 //! - **Capped.** Prime, forming at most (never firm), never an obligation or a Stop request
 //!   (the runtime's part).
 
@@ -34,8 +37,12 @@ use std::path::{Path, PathBuf};
 pub const TRACK: &str = "instincts";
 /// misfired judgements that extinguish an instinct route.
 pub const EXTINGUISH_MISFIRED: u32 = 3;
-/// An ignore rate whose Wilson lower bound reaches this extinguishes an instinct route...
+/// With a control-arm comparison, an ignore rate whose Wilson lower bound reaches this
+/// extinguishes an instinct route that delivering changes nothing for.
 pub const EXTINGUISH_IGNORE_LOWER_BOUND: f64 = 0.5;
+/// A route that misfired and whose value is positive with less than this probability is
+/// extinguished...
+pub const EXTINGUISH_P_POSITIVE: f64 = 0.1;
 /// ...over at least this many judgements.
 pub const EXTINGUISH_MIN_JUDGEMENTS: u32 = 5;
 
@@ -217,8 +224,10 @@ pub fn should_extinguish(j: &Judged) -> Option<String> {
         return Some(format!("misfired {} times", j.misfired));
     }
     let n = j.total();
-    let ignored =
-        n >= EXTINGUISH_MIN_JUDGEMENTS && adage_tracks::wilson_lower(j.ignored, n) >= EXTINGUISH_IGNORE_LOWER_BOUND;
+    if n < EXTINGUISH_MIN_JUDGEMENTS {
+        return None;
+    }
+    let ignored = adage_tracks::wilson_lower(j.ignored, n) >= EXTINGUISH_IGNORE_LOWER_BOUND;
     let compared = j.control_total >= EXTINGUISH_MIN_JUDGEMENTS;
     let seen = j.followed + j.misfired + j.control_followed > 0;
     // The treated follow rate is at most the control's: f_t / n_t <= f_c / n_c.
@@ -230,7 +239,18 @@ pub fn should_extinguish(j: &Judged) -> Option<String> {
             j.ignored, j.control_followed, j.control_total
         ));
     }
-    None
+    // The value model reads ignores as lowering p_follow: with no misfire, many ignores may be a
+    // matching gap, not a worthless route, so it decides only when the route has misfired.
+    if j.misfired == 0 {
+        return None;
+    }
+    let a = crate::value::judged(j.followed, j.ignored, j.misfired);
+    (a.p_positive < EXTINGUISH_P_POSITIVE).then(|| {
+        format!(
+            "worth {:.1} calls, with probability {:.2} of helping ({} followed, {} ignored, {} misfired)",
+            a.mean, a.p_positive, j.followed, j.ignored, j.misfired
+        )
+    })
 }
 
 /// The repository's root on disk: the working directory most of its sessions recorded that still
@@ -573,5 +593,9 @@ mod tests {
         // Delivering it made a difference: kept.
         assert!(should_extinguish(&j(4, 0, 6, 1, 10)).is_none());
         assert!(should_extinguish(&j(5, 0, 5, 0, 0)).is_none());
+        // The value model decides only for a route that misfired: two hundred ignores alone are
+        // no evidence against it (a broken follow judge reads every follow as one).
+        assert!(should_extinguish(&j(0, 0, 200, 0, 0)).is_none());
+        assert!(should_extinguish(&j(0, 1, 200, 0, 0)).is_some());
     }
 }

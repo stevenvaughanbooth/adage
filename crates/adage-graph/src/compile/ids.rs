@@ -55,6 +55,11 @@ fn step_parts(s: &Step, slots: &[Slot]) -> Vec<String> {
         if let SlotSource::EditSegment { glob, depth } = &sl.source {
             v.push(format!("{glob}@{depth}"));
         }
+        // An edit-tests slot by its glob and bound, never its map: more traces or a newer history
+        // change which tests a file maps to, not what the route is.
+        if let SlotSource::EditTests { glob, k, .. } = &sl.source {
+            v.push(format!("{glob}@tests{k}"));
+        }
     }
     v
 }

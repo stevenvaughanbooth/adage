@@ -310,7 +310,7 @@ pub fn plan(
                         "the prompt, without a pattern contract"
                     }
                     SlotSource::ResultField { .. } | SlotSource::OutputValue { .. } => "a command's output",
-                    SlotSource::EditSegment { .. } => "an edited path",
+                    SlotSource::EditSegment { .. } | SlotSource::EditTests { .. } => "an edited path",
                 };
                 return Err(format!(
                     "slot {{{name}}} is bound from {from}; E1 prefetches only a value from the prompt that a \

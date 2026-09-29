@@ -89,7 +89,7 @@ static T_STOP: Lazy<Regex> = Lazy::new(|| {
 });
 
 /// The advisory sentences (`Step::Advise`), each optionally followed by an exit clause.
-static T_ADVICE: Lazy<[Regex; 5]> = Lazy::new(|| {
+static T_ADVICE: Lazy<[Regex; 6]> = Lazy::new(|| {
     let tail = format!(r"(?: {EXIT})?$");
     [
         Regex::new(&format!(r"^In this repository, (?P<path>[A-Za-z0-9_./*-]+) is generated: change its inputs and run (?P<cmd>[A-Za-z0-9 _./:=@,+-]+) rather than editing it by hand\.{tail}")).unwrap(),
@@ -97,6 +97,7 @@ static T_ADVICE: Lazy<[Regex; 5]> = Lazy::new(|| {
         Regex::new(&format!(r"^In this repository, (?P<path>[A-Za-z0-9_./*-]+) is maintained by (?P<manager>[a-z]+): change the manifest and let (?P<manager2>[a-z]+) update it rather than editing it by hand\.{tail}")).unwrap(),
         Regex::new(&format!(r"^This repository uses (?P<manager>[a-z]+) \((?P<lockfile>[A-Za-z0-9_.-]+)\), not npm: use (?P<manager2>[a-z]+) for installs and scripts here\.{tail}")).unwrap(),
         Regex::new(&format!(r"^That Python is not this repository's environment, which has the project and its test dependencies installed: run Python here as (?P<interpreter>[A-Za-z0-9 _./-]+)\.{tail}")).unwrap(),
+        Regex::new(&format!(r"^In this repository, tests run with (?P<cmd>[A-Za-z0-9 _./:=@,+-]+), followed by the test files or names to run\.{tail}")).unwrap(),
     ]
 });
 

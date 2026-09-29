@@ -719,6 +719,11 @@ fn fit_calibration(
 /// Every scored candidate of a learn, with its canonical string, for inspection (`why` a pattern
 /// was or was not selected: `Scored::gate`).
 pub fn candidates(sessions: &[EventSession], p: &Params) -> Vec<(String, Scored)> {
+    candidates_shaped(sessions, p).into_iter().map(|(t, _, s)| (t, s)).collect()
+}
+
+/// [`candidates`], each with the delivery shape it would compile to ([`shape`]).
+pub fn candidates_shaped(sessions: &[EventSession], p: &Params) -> Vec<(String, &'static str, Scored)> {
     let p = p.resolved();
     let epoch = proto::build(sessions, &p.proto);
     let corpus = epoch.label(sessions);
@@ -730,7 +735,7 @@ pub fn candidates(sessions: &[EventSession], p: &Params) -> Vec<(String, Scored)
     closed.truncate(p.max_closed);
     score::score_all(&db, &closed, &mined.patterns, &p.score)
         .into_iter()
-        .map(|s| (s.pattern.render(&db.labels), s))
+        .map(|s| (s.pattern.render(&db.labels), shape(&db, &s.pattern), s))
         .collect()
 }
 
