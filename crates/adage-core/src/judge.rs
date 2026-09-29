@@ -37,6 +37,12 @@ pub fn tokens(command: &str) -> BTreeSet<String> {
 /// Programs that set up the commands after them rather than run anything of their own.
 const SETUP: &[&str] = &["cd", "pushd", "source", ".", "export", "set", "conda", "workon", "nvm"];
 
+/// Programs that print or read their arguments rather than run them: `echo .venv/bin/python` names
+/// the program without running it, where a wrapper (`xvfb-run -a .venv/bin/python …`) runs it.
+const INERT: &[&str] = &[
+    "echo", "printf", "cat", "ls", "grep", "rg", "head", "tail", "which", "type", "file", "stat", "wc", "less", "more",
+];
+
 /// A line's simple commands: split on `&&`, `||`, `;`, `|` and `&` outside quotes.
 fn segments(line: &str) -> Vec<&str> {
     let b = line.as_bytes();
@@ -132,7 +138,13 @@ impl Weights {
                 setup.push_str(seg);
                 continue;
             }
-            if want.is_some_and(|w| w != p) {
+            // The directed program must run in this simple command: as its program, or behind a
+            // wrapper that runs the rest (`xvfb-run -a .venv/bin/python -m pytest`). `ls .venv/bin`
+            // never names `python` as a word, so it is still not the run.
+            if want.is_some_and(|w| {
+                w != p
+                    && (INERT.contains(&p) || !seg.split_whitespace().skip(1).any(|x| x.rsplit('/').next() == Some(w)))
+            }) {
                 continue;
             }
             let o = tokens(&format!("{setup} {seg}"));
@@ -196,6 +208,9 @@ mod tests {
             assert!(!w.follows(d, o), "{o}: {}", w.score(d, o));
         }
         assert!(w.follows(d, "cd /w/click && source .venv/bin/activate && ls && python -m pytest tests -q"));
+        // A wrapper that runs the rest of the line is the run.
+        assert!(w.follows(d, "xvfb-run -a .venv/bin/python -m pytest tests/test_basic.py -x"), "a wrapper");
+        assert!(w.follows(d, "timeout 60 .venv/bin/python -m pytest tests -q"), "a wrapper");
         // No weights: no judgement.
         assert!(!Weights::default().follows(d, d));
     }

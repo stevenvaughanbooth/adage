@@ -1,0 +1,100 @@
+{
+ "method": "plasmode simulation (analyze.py --power, power.json): the 36 real card-vs-control pairs of the recurring-workflows research (calibration.json: click-type, mm-validator, go-flag; Haiku 4.5), each family's card effect removed, variants resampled with their repeats; a card effect applied to the variants the card reaches (75% of variants, as the GO dry run's 5/8-8/8 detection suggests), family effects varying with sd 6 points, no effect elsewhere; 200 datasets x 1,000 resamples per design",
+ "datasets": 200,
+ "n_boot": 1000,
+ "designs": {
+  "5x8x2": {
+   "families": 5,
+   "held_out": 8,
+   "repeats": 2,
+   "held_out_sessions": 160,
+   "half_width_median": 4.87,
+   "half_width_p90": 5.84,
+   "p_half_width_le_target": 0.935,
+   "p_ci_upper_below_0_at_true_-20pct": 0.995,
+   "p_ci_upper_below_0_at_true_-10pct": 0.775,
+   "mean_estimate_at_true_-20pct": -0.1481,
+   "ci90_coverage_of_mean_estimate": 0.77,
+   "per_family_half_width_median": 9.69
+  },
+  "5x8x1": {
+   "families": 5,
+   "held_out": 8,
+   "repeats": 1,
+   "held_out_sessions": 80,
+   "half_width_median": 6.65,
+   "half_width_p90": 8.15,
+   "p_half_width_le_target": 0.24,
+   "p_ci_upper_below_0_at_true_-20pct": 0.965,
+   "p_ci_upper_below_0_at_true_-10pct": 0.56,
+   "mean_estimate_at_true_-20pct": -0.1529,
+   "ci90_coverage_of_mean_estimate": 0.86,
+   "per_family_half_width_median": 12.61
+  },
+  "5x9x1": {
+   "families": 5,
+   "held_out": 9,
+   "repeats": 1,
+   "held_out_sessions": 90,
+   "half_width_median": 6.17,
+   "half_width_p90": 7.07,
+   "p_half_width_le_target": 0.445,
+   "p_ci_upper_below_0_at_true_-20pct": 0.945,
+   "p_ci_upper_below_0_at_true_-10pct": 0.515,
+   "mean_estimate_at_true_-20pct": -0.151,
+   "ci90_coverage_of_mean_estimate": 0.78,
+   "per_family_half_width_median": 10.92
+  },
+  "5x6x2": {
+   "families": 5,
+   "held_out": 6,
+   "repeats": 2,
+   "held_out_sessions": 120,
+   "half_width_median": 5.72,
+   "half_width_p90": 6.85,
+   "p_half_width_le_target": 0.65,
+   "p_ci_upper_below_0_at_true_-20pct": 0.99,
+   "p_ci_upper_below_0_at_true_-10pct": 0.61,
+   "mean_estimate_at_true_-20pct": -0.148,
+   "ci90_coverage_of_mean_estimate": 0.795,
+   "per_family_half_width_median": 12.3
+  },
+  "5x10x2": {
+   "families": 5,
+   "held_out": 10,
+   "repeats": 2,
+   "held_out_sessions": 200,
+   "half_width_median": 4.48,
+   "half_width_p90": 5.19,
+   "p_half_width_le_target": 0.99,
+   "p_ci_upper_below_0_at_true_-20pct": 0.995,
+   "p_ci_upper_below_0_at_true_-10pct": 0.83,
+   "mean_estimate_at_true_-20pct": -0.1487,
+   "ci90_coverage_of_mean_estimate": 0.805,
+   "per_family_half_width_median": 8.69
+  },
+  "4x8x2": {
+   "families": 4,
+   "held_out": 8,
+   "repeats": 2,
+   "held_out_sessions": 128,
+   "half_width_median": 5.42,
+   "half_width_p90": 6.53,
+   "p_half_width_le_target": 0.78,
+   "p_ci_upper_below_0_at_true_-20pct": 0.99,
+   "p_ci_upper_below_0_at_true_-10pct": 0.665,
+   "mean_estimate_at_true_-20pct": -0.1453,
+   "ci90_coverage_of_mean_estimate": 0.85,
+   "per_family_half_width_median": 10.06
+  }
+ },
+ "ci90_coverage_known_truth": {
+  "pooled": 0.89,
+  "per_family": 0.875,
+  "design": "5x8x2"
+ },
+ "sonnet_2x6x1": {
+  "half_width_median": 11.92,
+  "half_width_p90": 14.49
+ }
+}

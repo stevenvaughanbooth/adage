@@ -1,0 +1,200 @@
+{
+ "family": "go-flag",
+ "home": "/tmp/sc-dry-go-flag-0qclexfm/adage-home",
+ "adage": "/tmp/adage-showcase-target/release/adage",
+ "cards": [
+  {
+   "id": "card-11e594f481",
+   "bytes": 9419
+  }
+ ],
+ "held_out": [
+  {
+   "task": "go-flag--percent",
+   "session": "a7cfa2e5-14b6-4d2c-adc2-139e9e3fbcde",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "go-flag--bytesize",
+   "session": "c45a11f1-0aa2-4da7-b551-2e53d2596a01",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "go-flag--date",
+   "session": "4b36fbfa-3fa8-4ebb-bbb1-1c95ff10b677",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "go-flag--hexcolor",
+   "session": "8b7b2eb9-c769-4af6-8507-a0805c5671c7",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "go-flag--cidr",
+   "session": "f32b4e4a-7594-4684-b5da-3c6389a1f239",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "go-flag--semver",
+   "session": "8e28aa49-1eeb-478f-abee-e5b9a3084f37",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "go-flag--hostport",
+   "session": "390fb818-f89a-4c42-8a10-c8e8c3c199f4",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "go-flag--uuid",
+   "session": "a0b4817b-8f6a-4411-ba0a-24c0cb83642b",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  }
+ ],
+ "negatives": [
+  {
+   "id": "urfave-cli-7492c456",
+   "source": "repobench",
+   "session": "2ff0f4e6-7008-4093-b2df-c9ace1b3e247",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "urfave-cli-72ca6b88",
+   "source": "repobench",
+   "session": "86be48b5-318d-4c64-844c-d4a56d8c6da4",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "urfave-cli-db7d18f2",
+   "source": "repobench",
+   "session": "24977aae-ee89-484d-a475-f202e5049c4d",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-go-trimspace-env",
+   "source": "handwritten",
+   "session": "d51faae0-8528-476d-8908-07ffc81670ce",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-go-timestamp-local",
+   "source": "handwritten",
+   "session": "fccff7e6-5026-428a-96f3-90b3891cb594",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-go-yaml-docs",
+   "source": "handwritten",
+   "session": "1d51754b-3efb-4322-b13a-c26113551d43",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  }
+ ],
+ "hook_events": [
+  "PostToolBatch",
+  "PostToolUseFailure",
+  "PreToolUse",
+  "SessionEnd",
+  "SessionStart",
+  "Stop",
+  "UserPromptSubmit"
+ ],
+ "summary": {
+  "cards": 1,
+  "card_formed": true,
+  "held_out_delivered": [
+   8,
+   8
+  ],
+  "held_out_at_prompt": 8,
+  "held_out_at_edit": 0,
+  "delivered_tasks": [
+   "go-flag--percent",
+   "go-flag--bytesize",
+   "go-flag--date",
+   "go-flag--hexcolor",
+   "go-flag--cidr",
+   "go-flag--semver",
+   "go-flag--hostport",
+   "go-flag--uuid"
+  ],
+  "false_fires": [
+   0,
+   6
+  ],
+  "false_fire_ids": [],
+  "false_fires_at_prompt": 0,
+  "false_fires_at_edit_only": 0,
+  "false_fire_rate_wilson90_upper": 0.3108
+ }
+}

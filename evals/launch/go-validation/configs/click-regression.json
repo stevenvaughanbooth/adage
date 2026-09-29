@@ -129,10 +129,11 @@
   "learn_outcomes": false,
   "seed_train_from": "/tmp/adage-repobench/runs/click",
   "min_remaining_usd": 3.0,
-  "global_cap_usd": 15.0,
+  "global_cap_usd": 13.5,
   "spend_roots": [
    "/tmp/adage-launch/go-validation/runs/ufo-util",
-   "/tmp/adage-launch/go-validation/runs/click-regression"
+   "/tmp/adage-launch/go-validation/runs/click-regression",
+   "/tmp/adage-launch/go-validation/runs/ufo-util-void-train1"
   ]
  },
  "based_on": {

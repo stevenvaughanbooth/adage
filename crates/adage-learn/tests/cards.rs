@@ -417,3 +417,61 @@ fn names_that_vary_become_patterns_and_one_trace_that_created_files_is_not_enoug
     let (_, index) = run(&files[..1], &outcomes, &d.path().join("b"), &models);
     assert!(cards(&index).is_empty());
 }
+
+/// chi-like recurring work: each task creates a middleware file named whole after itself
+/// (`middleware/no_sniff.go`, `middleware/hsts.go`: no shared name shape), its test, and adds a
+/// line to the README. The showcase dry run formed no card for this family.
+#[test]
+fn files_named_whole_after_each_task_group_by_role() {
+    let d = tempfile::tempdir().unwrap();
+    let models = d.path().join("models");
+    install_fixture_model(&models);
+    let mut files = vec![];
+    let mut outcomes = BTreeMap::new();
+    for (i, (name, file)) in
+        [("NoSniff", "no_sniff"), ("Hsts", "hsts"), ("RealIPHeader", "real_ip_header")].iter().enumerate()
+    {
+        let sid = format!("c{i}");
+        let mut t = Tx::new(&sid, &format!("add a new check rule flag {name}"));
+        let write = |rel: String, content: String| json!({"file_path": format!("{CWD}/{rel}"), "content": content});
+        t.call(
+            "Write",
+            write(
+                format!("middleware/{file}.go"),
+                format!("package middleware\n\nfunc {name}(next http.Handler) http.Handler"),
+            ),
+            "File created",
+            false,
+        )
+        .call(
+            "Write",
+            write(
+                format!("middleware/{file}_test.go"),
+                format!("package middleware\n\nfunc Test{name}(t *testing.T) {{}}"),
+            ),
+            "File created",
+            false,
+        )
+        .edit("README.md", "", &format!("| {name} | …"))
+        .bash("go test ./...", "ok", false);
+        files.push(t.write(d.path()));
+        outcomes.insert(sid, true);
+    }
+    let (_, index) = run(&files, &outcomes, &d.path().join("a"), &models);
+    let found = cards(&index);
+    assert_eq!(found.len(), 1, "one family, one card");
+    let Step::Card { card } = &found[0].step else { unreachable!() };
+    let paths: Vec<&str> = card.files.iter().map(|f| f.path.as_str()).collect();
+    for p in ["middleware/<x>.go", "middleware/<x>_test.go", "README.md"] {
+        assert!(paths.contains(&p), "{p} in {paths:?}");
+    }
+    let ex = |p: &str| card.exemplars.iter().find(|e| e.path == p).map(|e| e.lines.join("\n")).unwrap_or_default();
+    assert!(
+        ex("middleware/<x>.go").contains("func RealIPHeader"),
+        "the latest trace's file: {}",
+        ex("middleware/<x>.go")
+    );
+    assert!(ex("middleware/<x>_test.go").contains("func TestRealIPHeader"));
+    assert!(adage_tracks::card::touches(card, "middleware/strip_slashes.go"));
+    assert!(!adage_tracks::card::touches(card, "other/strip_slashes.go"));
+}

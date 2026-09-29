@@ -139,6 +139,15 @@ pub fn matches_pattern(rel: &str, pattern: &str) -> bool {
     if pd != rd {
         return false;
     }
+    // A test sibling is its own role: `middleware/<x>.go` is not `middleware/hsts_test.go`
+    // (`middleware/<x>_test.go` is).
+    let test_name = |n: &str| {
+        let stem = n.rsplit_once('.').map_or(n, |x| x.0);
+        stem.ends_with("_test") || stem.starts_with("test_") || stem.ends_with(".test") || stem.ends_with(".spec")
+    };
+    if test_name(&rn) && !test_name(&pn.replace(VARYING, "x")) {
+        return false;
+    }
     let parts: Vec<&str> = pn.split(VARYING).collect();
     let mut rest = rn.as_str();
     for (i, part) in parts.iter().enumerate() {
@@ -395,6 +404,12 @@ mod tests {
         assert!(matches_pattern("tests/test_port.py", "tests/test_<x>.py"));
         assert!(!matches_pattern("tests/test_port.pyc", "tests/test_<x>.py"));
         assert!(matches_pattern("a_1_b_2.go", "a_<x>_b_<x>.go"));
+        // A whole name that varies (files each task names after itself), its test sibling apart.
+        assert!(matches_pattern("middleware/no_sniff.go", "middleware/<x>.go"));
+        assert!(!matches_pattern("middleware/no_sniff_test.go", "middleware/<x>.go"));
+        assert!(matches_pattern("middleware/no_sniff_test.go", "middleware/<x>_test.go"));
+        assert!(!matches_pattern("src/utils.test.ts", "src/<x>.ts"));
+        assert!(matches_pattern("src/utils.test.ts", "src/<x>.test.ts"));
         assert!(!matches_pattern("flag_url.go", "flag_url.go"), "a plain path is not a pattern");
         let c = sample();
         assert!(touches(&c, "src/v.py") && touches(&c, "tests/test_new.py") && !touches(&c, "README.md"));

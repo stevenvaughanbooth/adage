@@ -1,0 +1,204 @@
+{
+ "family": "http-header",
+ "home": "/tmp/sc-dry-http-header-56aw9ql_/adage-home",
+ "adage": "/tmp/adage-showcase-target/release/adage",
+ "cards": [
+  {
+   "id": "card-11e594f481",
+   "bytes": 8910
+  }
+ ],
+ "held_out": [
+  {
+   "task": "http-header--coop",
+   "session": "8734998e-84fb-41df-adf2-16ab8cc5f6c5",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "http-header--sec-fetch-dest",
+   "session": "98d87363-af93-418d-969a-920d5134ca9d",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "http-header--permissions-policy",
+   "session": "c235b178-111f-4591-9932-91a4cc0806ad",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "http-header--x-forwarded-for",
+   "session": "b3d40164-6a89-45d1-ad1f-29b265e65ddd",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "http-header--clear-site-data",
+   "session": "3ae2c2d0-bceb-4beb-8fbc-2bcf4d3e8511",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "http-header--timing-allow-origin",
+   "session": "26d9a024-65d3-402a-9d8d-c26c1fb7d98e",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "http-header--repr-digest",
+   "session": "576990a0-97f5-45c1-ab34-be480ba38b8a",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "http-header--early-data",
+   "session": "dae7c198-93dc-42b6-b557-20287bcc199b",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  }
+ ],
+ "negatives": [
+  {
+   "id": "http-6e2dd42a",
+   "source": "repobench",
+   "session": "7265744d-9641-4cfb-af3b-ae765e735733",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "http-bc3b0441",
+   "source": "repobench",
+   "session": "f7f3cd4b-ea2e-441d-b4bd-baecd2f302cd",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "http-7767ff70",
+   "source": "repobench",
+   "session": "70f4afb9-fb54-4ea5-9f11-1eae6d251bfc",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-http-doc-accept-ranges",
+   "source": "handwritten",
+   "session": "90287349-ab81-4a71-b9b5-ab9db117f112",
+   "at_prompt": false,
+   "at_edit": "src/header/name.rs",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "id": "neg-http-status-const",
+   "source": "handwritten",
+   "session": "f6981515-48d4-411e-bf7b-150c68e83874",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-http-headername-bug",
+   "source": "handwritten",
+   "session": "a6aedb27-31e9-484f-8dc3-12596a7c63c0",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  }
+ ],
+ "hook_events": [
+  "PostToolBatch",
+  "PostToolUseFailure",
+  "PreToolUse",
+  "SessionEnd",
+  "SessionStart",
+  "Stop",
+  "UserPromptSubmit"
+ ],
+ "summary": {
+  "cards": 1,
+  "card_formed": true,
+  "held_out_delivered": [
+   8,
+   8
+  ],
+  "held_out_at_prompt": 8,
+  "held_out_at_edit": 0,
+  "delivered_tasks": [
+   "http-header--coop",
+   "http-header--sec-fetch-dest",
+   "http-header--permissions-policy",
+   "http-header--x-forwarded-for",
+   "http-header--clear-site-data",
+   "http-header--timing-allow-origin",
+   "http-header--repr-digest",
+   "http-header--early-data"
+  ],
+  "false_fires": [
+   1,
+   6
+  ],
+  "false_fire_ids": [
+   "neg-http-doc-accept-ranges"
+  ],
+  "false_fires_at_prompt": 0,
+  "false_fires_at_edit_only": 1,
+  "false_fire_rate_wilson90_upper": 0.5024
+ }
+}
