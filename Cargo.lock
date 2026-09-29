@@ -56,6 +56,7 @@ version = "0.1.0"
 dependencies = [
  "adage-core",
  "adage-graph",
+ "adage-intent",
  "adage-learn",
  "adage-runtime",
  "adage-store",
@@ -146,6 +147,7 @@ name = "adage-intent"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "miniz_oxide",
  "once_cell",
  "regex",
  "serde",

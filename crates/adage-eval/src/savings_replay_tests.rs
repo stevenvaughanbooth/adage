@@ -109,7 +109,7 @@ fn dead_end_session(piped: bool) -> Vec<(&'static str, serde_json::Value, String
 }
 
 fn runtime<'a>(ix: &'a Index, root: &'a Path, table: &'a CommandTable) -> Policy<'a> {
-    Policy::Runtime { index: ix, repo: REPO, root, table, params: RuntimeParams::default() }
+    Policy::Runtime { index: ix, repo: REPO, root, table, params: RuntimeParams::default(), embed: None, cases: None }
 }
 
 #[test]

@@ -16,6 +16,7 @@ pub mod bench;
 pub mod cli;
 pub mod conventions;
 pub mod dataset;
+pub mod embed_eval;
 pub mod exec_e1;
 pub mod fidelity;
 pub mod generate;

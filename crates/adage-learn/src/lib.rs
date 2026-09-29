@@ -3,6 +3,7 @@
 
 pub mod bridge;
 pub mod cache;
+pub mod cases;
 pub mod claims;
 pub mod codex;
 pub mod diff;
