@@ -46,6 +46,8 @@ fn step_parts(s: &Step, slots: &[Slot]) -> Vec<String> {
             v.extend(commands.iter().cloned());
             v
         }
+        // A card's id comes from its family, never from its content (which grows).
+        Step::Card { .. } => vec!["card".into()],
     };
     for sl in slots {
         v.push(format!("slot:{}", sl.name));

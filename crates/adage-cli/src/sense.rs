@@ -123,6 +123,9 @@ pub struct RepoSense {
     pub sampled: bool,
     pub candidates: Vec<Candidate>,
     pub intent_families: usize,
+    /// Families of similar tasks, and the procedure cards (reflexes) they would form.
+    pub card_families: usize,
+    pub cards: usize,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -248,7 +251,13 @@ fn compact(s: &mut Session) {
     // Candidate mining reads the first prompt only.
     s.prompts.clear();
     for st in &mut s.steps {
-        st.call.input = serde_json::Value::Null;
+        // A shell command's first line stays: a procedure card lists the commands of its family.
+        let cmd = st.call.input.get("command").and_then(|c| c.as_str()).and_then(|c| c.lines().next());
+        let cmd: Option<String> = cmd.map(|c| c.chars().take(1000).collect());
+        st.call.input = match cmd {
+            Some(c) => serde_json::json!({ "command": c }),
+            None => serde_json::Value::Null,
+        };
         trim_output(&mut st.call.output);
     }
 }
@@ -446,7 +455,8 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
         a.keep_recent();
         mined.append(&mut a.mined);
     }
-    let cfg = if o.demo { LearnConfig::demo() } else { LearnConfig::default() };
+    let mut cfg = if o.demo { LearnConfig::demo() } else { LearnConfig::default() };
+    cfg.cards = crate::autolearn::card_params(&adage_store::config::load(paths).config, paths);
     let (report, planned) = adage_learn::plan(mined, Some(&paths.models()), &paths.tracks(), &cfg)?;
     sense.thresholds = report.thresholds.clone();
     sense.intent_model = report.intent_model.clone();
@@ -526,6 +536,8 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
             sampled: a.sampled,
             candidates,
             intent_families: report.repos.get(&repo).map_or(0, |r| r.intent_families),
+            card_families: report.repos.get(&repo).map_or(0, |r| r.engine.card_families),
+            cards: report.repos.get(&repo).map_or(0, |r| r.engine.cards),
         });
     }
     Ok(sense)
@@ -708,6 +720,14 @@ pub fn print_text(s: &Sense) {
                 "  prompt intents            {} usable ({})",
                 r.intent_families,
                 s.intent_model.as_deref().unwrap_or_default()
+            );
+        }
+        if s.intent_model.is_some() && r.card_families > 0 {
+            println!(
+                "  recurring tasks           {} famil{}, {} with a procedure card (a reflex said once at a matching prompt)",
+                r.card_families,
+                if r.card_families == 1 { "y" } else { "ies" },
+                r.cards
             );
         }
     }

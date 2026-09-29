@@ -152,6 +152,13 @@ pub fn describe_step(step: &Step) -> String {
         Step::Sequence { commands } => {
             format!("run in order: {}", commands.iter().map(|c| format!("`{c}`")).collect::<Vec<_>>().join(", "))
         }
+        Step::Card { card } => format!(
+            "procedure card: {} file(s), {} command(s), from {} earlier session(s) of this family ({} passed)",
+            card.files.len(),
+            card.commands.len() + card.avoid.len(),
+            card.sessions,
+            card.passed
+        ),
     }
 }
 

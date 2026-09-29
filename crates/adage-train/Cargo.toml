@@ -24,6 +24,10 @@ adage-tracks = { path = "../adage-tracks" }
 adage-learn = { path = "../adage-learn" }
 adage-instincts = { path = "../adage-instincts" }
 adage-store = { path = "../adage-store" }
+adage-pack = { path = "../adage-pack" }
+# Replays a compiled skill's commands in adage-exec's sandbox (the only crate that runs anything).
+adage-exec = { path = "../adage-exec" }
+adage-sign = { path = "../adage-sign" }
 serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true

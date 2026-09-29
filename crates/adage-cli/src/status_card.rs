@@ -34,11 +34,15 @@ pub struct Reflexes {
     pub instincts: usize,
     pub learned: usize,
     pub team: usize,
+    /// Compiled from a skill (`adage train`) and accepted here.
+    pub skills: usize,
+    /// Of the learned ones: procedure cards for families of similar tasks.
+    pub cards: usize,
 }
 
 impl Reflexes {
     pub fn total(&self) -> usize {
-        self.instincts + self.learned + self.team
+        self.instincts + self.learned + self.team + self.skills
     }
 }
 
@@ -49,6 +53,11 @@ pub fn reflexes(index: &Index, repo: &str) -> Reflexes {
             r.instincts += 1;
         } else if ir.track.ends_with(&format!("/{}", adage_learn::TRACK)) {
             r.learned += 1;
+            if matches!(ir.route.step, adage_tracks::Step::Card { .. }) {
+                r.cards += 1;
+            }
+        } else if ir.route.evidence.origin == Some(adage_tracks::Origin::Authored) {
+            r.skills += 1;
         } else {
             r.team += 1;
         }
@@ -101,8 +110,13 @@ fn repo_lines(paths: &Paths, repo: &str, index: &Index, now: u64) -> Vec<String>
     if r.instincts > 0 {
         parts.push(plural(r.instincts, "instinct", "instincts"));
     }
-    if r.learned > 0 {
+    if r.learned > 0 && r.cards > 0 {
+        parts.push(format!("{} learned ({})", r.learned, plural(r.cards, "procedure card", "procedure cards")));
+    } else if r.learned > 0 {
         parts.push(format!("{} learned", r.learned));
+    }
+    if r.skills > 0 {
+        parts.push(format!("{} from skills", r.skills));
     }
     if r.team > 0 {
         parts.push(format!("{} from your team", r.team));

@@ -21,6 +21,7 @@ acme-work-items/                 a directory; tar or zip is only transport
 ├── types/<id>.yaml              named contract types that are not built in
 ├── scripts/sha256-<hex>         L-vendor script bytes, named by their own SHA-256
 ├── evidence.json                aggregate evidence per route, by origin (optional)
+├── procedure.json               a trained pack's procedure: every step of the skill, and what became of it (optional)
 ├── attestations/<id>.json       optional bench/eval results (informational only)
 ├── CLOSURE                      canonical closure listing (generated; re-derived and compared)
 └── pack.sig                     sshsig over the pack digest, namespace "adage-pack"
@@ -30,6 +31,7 @@ Nothing else may be present. A pack is refused when it contains:
 
 - a symlink anywhere (including the pack directory itself), a special file, or a directory other
   than `routes/`, `types/`, `scripts/` and `attestations/` (and those hold no subdirectories);
+- a `procedure.json` in a pack whose origin is not `trained`;
 - a file outside the allowlist above (`review.yaml`, `notes.txt`, dotfiles, `routes/x.sh`, …);
 - more than 256 files, a file over 1 MiB, a script over 64 KiB, or more than 256 KiB of scripts;
 - a file that is not UTF-8, contains NUL, a control character other than tab, CR and LF, or an
@@ -84,6 +86,7 @@ requested = "E1"                      # E0..E2: the author's ceiling request; gr
 [provenance]
 tool = "adage 0.5.0"
 origins = { organic = 412, synthetic = 12, declared = 0, instinct = 0, imported = 0 }
+# skill = "sha256:87c0…"             # a trained pack: the skill file it was compiled from
 ```
 
 Rules:
@@ -146,9 +149,17 @@ list type an optional `max` (at most the type's own cap):
 - `from: { result: { field: files } }`: a field of the triggering command's JSON output (`a`,
   `a.b` up to four segments, or `*paths`, the repository paths plain-text output mentions); needs
   an `after_command` or `after_failure` trigger.
+- `from: { edit_tests: { k: 3, map: { "src/click/core.py": ["tests/test_core.py", …] } } }`: the
+  test files of the file whose edit triggered the route (at most `k`, 1..=5, those of them that
+  exist), from `map` (at most 512 repository-relative source paths, each with 1..=`k` test files,
+  best first; `adage train` builds it from the repository's test names and history,
+  `adage_learn::testmap`). A file the map does not list binds nothing, so the route says nothing.
+  Needs an `after_edit` trigger and a `repo-path-list` type; the input fills one whole argv token
+  (`{tests}` becomes the paths, space-separated) and is delivered at E0 only. At runtime it is
+  `SlotSource::EditTests`.
 
 Every input must be used, by an argv placeholder or a `read.from`. An argv placeholder takes a
-scalar prompt input.
+scalar prompt input, or an edited file's tests.
 
 ### Steps
 
@@ -164,6 +175,12 @@ Exactly one of `run`, `read`, `avoid`, `advise`, plus `effect`. Only a run step 
     script extension, as `python3 manage.py`): the step must declare a `script` for exactly that
     path. **An argv naming a repository path without a `script` entry is a dangling reference and
     is refused.** Interpreters never take inline code (`-c`, `-e`, `--eval`, `-p`, `--print`).
+  - a program of the project's own environment: `<dir>/bin/<tool>` inside a virtualenv
+    (`.venv/bin/python`) or `node_modules/.bin/<tool>`, where `<tool>` is in the command table. It
+    is not content of the repository (the project's setup makes it), so it has no `script`, is
+    never pinned, vendored or executed by adage-exec (E0 only), and is no requirement: the closure
+    records it as `env:<path>`, and binding finds it in the checkout. As an interpreter it may run
+    a script (`.venv/bin/python manage.py`), which needs its `script` as usual.
   - For a script step the declared effect is not compared with the classifier (which names a
     script `observe` from its name alone); for approval and ceilings a script step is
     **environment** unless a person approves it lower (C2).
@@ -219,6 +236,23 @@ not part of the route exec digest. `evidence.json` holds, per route id, the coun
 `{"<route>": {"organic": 9, "synthetic": 2, "declared": 0, "instinct": 0, "imported": 0}}`. Every
 key must be a route of the pack.
 
+## The procedure (`procedure.json`)
+
+A pack compiled from a skill (`adage train`, docs/training.md) carries the procedure it was compiled
+from, schema `adage-procedure/1` (`adage_pack::procedure`): the skill (`name`, `sha256`, `bytes`),
+every step (`id`, `title`, `role`, `when`: `always`, `after_edit <glob>`, `before_finish` or
+`judgment`, its `commands` and `avoid`ed commands, its `outcome` and one `replay` line per command
+replayed) and every advice block (`text`, and the `route` a fixed template made of it). An outcome
+is `compiled { routes }`, `text { reason }` (it stays text: needs judgment, no stimulus, …) or
+`stale { reason }` (its command failed on a clean checkout). So a reviewer sees, beside the
+routes, what stayed text and why.
+
+It is checked like the rest of the pack: strict schema (unknown fields refused), at most 64 steps
+and 64 advice blocks, printable text of at most 600 bytes a field, every route it names a route of
+the pack, only in a `trained` pack, and its `skill.sha256` equal to `[provenance] skill`
+(`sha256:<hex>`), which a pack of another origin may not set. It is for people only: nothing reads
+it to set a strength, an execution level or an approval, and nothing of it reaches an agent.
+
 ## Attestations
 
 `attestations/<id>.json` (at most 16, each at most 64 KiB, `id` a safe id) are bench result
@@ -273,11 +307,13 @@ Type ids may not shadow the built-ins.
 ## Closure and `CLOSURE`
 
 The closure (Track C §2.1) is computed from the pack and never trusted from it. Its nodes are
-routes, types, scripts, repository files, tools, templates and models. Edges:
+routes, types, scripts, repository files, tools, environment programs, templates and models. Edges:
 
 1. input and output types → a built-in or `types/<id>`; a list type → its item type;
 2. a step's `script` → `scripts/sha256-<hex>` (vendor) or its `requires.repo_files` entry (ref);
-3. a run step's program → its tool (an interpreter before a script is a tool too);
+3. a run step's program → its tool (an interpreter before a script is a tool too), or, for a
+   program of the project's environment, `env:<path>` (found in the checkout at bind, never listed
+   in `requires`);
 4. `links` → routes of the pack;
 5. **implicit**: route B triggered `after_command C` with `pattern::meets(C, key(A.steps[0].run))`
    gives A → B (the lookup → read-linked pair);
@@ -439,6 +475,15 @@ Run it inside the repository the pack is for. It refuses to run inside an agent 
 
 It creates no execution approvals.
 
+A pack `adage train` compiled on this machine is installed by `adage train accept <name>` instead
+(docs/training.md): the staged pack, refused unless its digest is the one its review recorded,
+signed when a key is at hand, installed and bound the same way. The acceptance is recorded
+(`$ADAGE_HOME/train/accepted.json`, name → digest), and a `trained` pack accepted here at exactly
+that digest is bound as **reviewed**: its routes keep the pack's strengths (a replay-verified
+reflex may fire, within its effect ceiling; an environment step still waits as nascent) and the
+bound track's provenance is `trained:reviewed`, first-hand, not `imported`. The same pack received
+from someone else, or changed since its review, is an import like any other: forming, prime.
+
 A track directory is refused with a pointer to `adage share`: packs are the only format `add`
 installs.
 
@@ -455,15 +500,18 @@ level it may be approved at, or **inert**, with a reason. It checks, in order:
 
    A pack that does not apply binds nothing. An unknown detector or catalogue makes every route
    inert.
-2. **`requires.os`**, then each route's **tools**, by PATH lookup only. Nothing is run.
+2. **`requires.os`**, then each route's **tools**, by PATH lookup only; a program of the project's
+   environment (`.venv/bin/python`) must be an executable in the checkout. Nothing is run.
 3. **Templates and models** must be known to this build.
 4. **L-ref scripts.** The SHA-256 of `root/<path>` must equal the pin. The file must be a regular
    file inside the root, with no symlink on the way, and at most 1 MiB. `deps` globs must match
    files, whose hashes join the binding.
 5. **L-vendor scripts** must be in the cas.
-6. **A runtime form.** E0 delivers today's route model. Several steps, a sequence, a read of a
-   step's output, or a type with no runtime contract gives the reason "shape not yet supported at
-   runtime". A vendored script's route is exec-only (above).
+6. **A runtime form.** E0 delivers today's route model. A `sequence` of two or three fixed run
+   steps (no inputs) is the runtime's numbered sequence, live. Several steps of another shape, a
+   sequence with inputs or of four steps, a read of a step's output, or a type with no runtime
+   contract gives the reason "shape not yet supported at runtime". A vendored script's route is
+   exec-only (above).
 
 Only signature, schema or closure failures refuse a whole pack.
 

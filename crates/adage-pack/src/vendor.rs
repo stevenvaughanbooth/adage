@@ -51,7 +51,7 @@ pub fn vendor(pack: &Pack, root: &Path) -> Result<Vendored> {
             }
             let interpreter = match program(&run.argv, &table)? {
                 Program::Script { interpreter, .. } => interpreter,
-                Program::Tool(_) => None,
+                Program::Tool(_) | Program::Env { .. } => None,
             };
             if !interpreter.as_deref().is_some_and(|i| VENDOR_INTERPRETERS.contains(&i)) {
                 bail!(

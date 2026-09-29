@@ -593,6 +593,7 @@ pub fn kind_of(r: &Route) -> &'static str {
         "sequence" => "sequence",
         // Advice is kinded by when it comes: after a failure it is the dead end's (use the
         // project's interpreter), after an edit an obligation's (regenerate, do not hand-edit).
+        "card" => "card",
         "advise" => match r.trigger {
             Trigger::AfterFailure { .. } => "avoid",
             Trigger::AfterEdit { .. } => "obligation",
@@ -839,7 +840,10 @@ pub fn assess(
 ) -> Vec<String> {
     let mut gated = Vec::new();
     for r in routes.iter_mut() {
-        if r.authored {
+        // A person's route is theirs; a procedure card is valued on its own (recurring-workflows:
+        // its value is the whole task's, measured separately), prime and said once, so neither is
+        // estimated or gated here.
+        if r.authored || matches!(r.step, Step::Card { .. }) {
             continue;
         }
         let (traces_took, traces) = trace_counts(r, ss).unwrap_or_default();
@@ -1094,6 +1098,30 @@ mod tests {
         let mut routes = vec![routes[1].clone()];
         routes[0].evidence.uplift = None;
         assert_eq!(assess(&mut routes, &[], "repo", &judged, &Priors::default(), UPLIFT_MIN), vec!["d".to_string()]);
+    }
+
+    #[test]
+    fn a_procedure_card_is_never_gated() {
+        let card = adage_tracks::card::Card {
+            sessions: 10,
+            passed: 10,
+            files: vec![],
+            exemplars: vec![],
+            commands: vec![],
+            avoid: vec![],
+            finish: None,
+            prompts: vec![],
+        };
+        let mut routes = vec![route(
+            Trigger::Intent { family: "f".into(), model: "m".into(), centroid: vec![], threshold: 0.9 },
+            Step::Card { card },
+            Effect::Observe,
+            10,
+            10,
+        )];
+        assert!(assess(&mut routes, &[], "repo", &BTreeMap::new(), &Priors::default(), UPLIFT_MIN).is_empty());
+        assert_eq!(routes[0].state, RouteState::Firm);
+        assert!(routes[0].evidence.uplift.is_none());
     }
 
     #[test]

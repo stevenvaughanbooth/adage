@@ -14,9 +14,11 @@ Reflexes come from three places:
 - **Instincts.** Reflexes that ship with Adage and work on day 0, read from the repository's own
   Makefile, `package.json`, CI and lockfiles, with no history needed. A learned reflex always
   overrides the matching instinct.
-- **Skills.** `adage train` runs your agent headlessly on a skill (a `SKILL.md`, `CONTRIBUTING.md`
-  or runbook), in a sandboxed clone, and compiles the sessions into reflexes. It also tells you
-  which claims in the skill are stale.
+- **Skills.** `adage train <SKILL.md>` compiles a skill's procedure (which command, after which
+  edit, in which order, never which runner) into one reviewed pack of reflexes, deterministically
+  and for free, and replays every compiled command on a clean checkout in a sandbox: a stale
+  instruction is dropped and reported, and the review says which steps stay text and why. `adage
+  train accept` installs it; the agent then follows the procedure without the skill in context.
 
 Reflexes live in **tracks** on disk, and travel as signed, closed **packs** you can review, commit
 and share. Adage never runs the commands its reflexes direct: the agent runs every command through
@@ -147,7 +149,9 @@ matches the family (by local embedding similarity), the card is delivered once, 
 - **How much history:** one earlier session is enough when a family edits the same files every time
   (click, marshmallow). Families whose file names vary per task (`flag_url.go`, `flag_port.go`)
   need two or more.
-- **What it is:** the card was a prototype in these runs, and is being built into `adage condition`.
+- **What it is:** the card was a Python prototype in these runs. It is now built into
+  `adage condition` and the hooks, and on by default (`learn.cards`). The shipped version is
+  validated separately below.
 - **Data:** [evals/lab/research/recurring-workflows](evals/lab/research/recurring-workflows/README.md).
 
 ### Compiled skills: a skill's effect without its text in context
@@ -276,7 +280,7 @@ cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-c
 ```
 
 Three binaries ship: `adage`; `adage-exec`, which runs the reflexes you let act (`adage delegate`;
-Linux and macOS); and `adage-train`, which grows reflexes from a skill (`adage train`). The npm
+Linux and macOS); and `adage-train`, which compiles a skill into reflexes (`adage train`). The npm
 package carries all three. The other channels install each on its own: `adage-exec-installer.sh`
 and `adage-train-installer.sh` beside `adage-cli-installer.sh`, `brew install
 stevenvaughanbooth/tap/adage-exec` (and `adage-train`), or `cargo install --locked --git … adage-exec`
@@ -309,7 +313,8 @@ Then, when you want to:
 adage share <track> --out <dir> --key ~/.ssh/id_ed25519   # a signed pack for your team
 adage add <dir> --trust                                    # a teammate's pack, bound here at forming
 adage delegate on                                          # let reflexes you approve act (adage-exec)
-adage train plan --from CONTRIBUTING.md                    # what training on a skill would cost; runs nothing
+adage train .claude/skills/x/SKILL.md                      # compile a skill into reflexes, replayed and reviewed; installs nothing
+adage train accept x                                       # install the reviewed pack
 ```
 
 At a terminal, `init` is a wizard: it detects your harnesses and, one step at a time, asks before
@@ -439,6 +444,8 @@ adage config set learn.min_interval_secs 300  # learn each repository at most ev
 | `learn.codex_sessions` | `auto` | Codex rollouts: `auto` reads `$CODEX_HOME/sessions` (this repository's only) once Codex hooks are registered; a directory; or `""` for none |
 | `learn.opencode_exports` | `""` | A directory of `opencode export` files automatic learning reads |
 | `learn.parse_cache` | `true` | Keep parsed transcripts in `cache/sessions` (owner-only), so re-learning parses only what changed |
+| `learn.cards` | `true` | Procedure cards for recurring tasks (embedded with the installed or bundled model) ([docs/training.md](docs/training.md#recurring-tasks-procedure-cards)) |
+| `learn.card_threshold` | `0.811` | A prompt's best similarity to a family's prompts that delivers its card (strict: it recognises phrasing close to earlier prompts, not paraphrases) |
 | `instincts.enabled` | `true` | Bind Adage's instincts from each repository's files |
 | `ui.notices` | `daily` | One-line notices at session start (Claude Code), at most daily and only when new; `off` silences them |
 | `runtime.control` | `0.1` | Control share (`ADAGE_CONTROL` wins) |
@@ -521,7 +528,7 @@ fails untouched and passes with its reference solution.
 | `crates/adage-pack` | Packs (format `adage-pack/1`): validation, closure, digest, binding; the `adage-pack` inspect/verify/digest tool |
 | `crates/adage-sign` | Native `sshsig` signing (ssh-agent or key file) and `allowed_signers` verification |
 | `crates/adage-exec` | The `adage-exec` binary: approvals, policy, the OS sandbox, E1 prefetch and E2 actions |
-| `crates/adage-train` | The `adage-train` binary: a skill → sandboxed agent sessions → reflexes |
+| `crates/adage-train` | The `adage-train` binary: a skill → procedure graph → replayed, reviewed pack of reflexes (and optional skill-steered sessions) |
 | `crates/adage-eval` | `adage eval`: offline replay of recorded sessions through the runtime, scored against what agents did; the L0 bench; safety oracle; property tests |
 | `crates/adage-cli` | The `adage` binary |
 | `crates/adage-sim` | Harness simulator: seeded mock histories (`sim/fixtures/`) and native hook payloads for Claude Code, OpenCode, and Codex |

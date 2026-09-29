@@ -200,6 +200,7 @@ fn learn_once(paths: &Paths, cfg: &Config, root: &Path, repo: &str, transcripts:
     let mut ic = instinct_config(cfg, paths);
     ic.roots.insert(repo.to_string(), root.to_path_buf());
     lc.instincts = Some(ic);
+    lc.cards = card_params(cfg, paths);
     let report = adage_learn::learn(&inputs, &paths.tracks(), &paths.index(), &lc)
         .map_err(|e| Failed("condition", learnlog::describe(&e)))?;
     let after = diff::snapshot(&paths.tracks(), repo);
@@ -469,6 +470,16 @@ pub mod notice {
             );
         }
     }
+}
+
+/// Procedure cards for families of similar tasks (`learn.cards`, `learn.card_threshold`), with the
+/// verdicts `adage train cards` recorded; `None` when turned off.
+pub fn card_params(cfg: &adage_store::config::Config, paths: &Paths) -> Option<adage_learn::cards::CardParams> {
+    cfg.learn_cards.then(|| adage_learn::cards::CardParams {
+        threshold: cfg.learn_card_threshold as f32,
+        verdicts: adage_learn::cards::load_verdicts(&paths.root),
+        ..Default::default()
+    })
 }
 
 #[cfg(test)]

@@ -200,6 +200,7 @@ fn command_of(r: &Route) -> String {
         Step::ReadBatch { slot, .. } => format!("read {{{slot}}}"),
         Step::Advise { template, .. } => format!("advise {template}"),
         Step::Sequence { commands } => commands.join(" then "),
+        Step::Card { .. } => format!("card {}", r.id),
     }
 }
 

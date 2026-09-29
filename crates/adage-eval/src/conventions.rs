@@ -420,6 +420,7 @@ fn matches(route: &Route, c: &Convention, cx: &Ctx) -> std::result::Result<Match
     #[allow(clippy::redundant_closure_call)]
     let res = (|| -> std::result::Result<(), String> {
         match (&route.trigger, &route.step) {
+            (_, Step::Card { .. }) => Err("a procedure card matches no convention".into()),
             (_, Step::Avoid { avoid, instead, .. }) => {
                 same(&Expect::of(instead, cx.table), "working command")?;
                 for runner in avoid.split(" / ") {

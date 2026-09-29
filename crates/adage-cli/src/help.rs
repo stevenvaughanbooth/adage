@@ -54,8 +54,10 @@ const GROUPS: &[(&str, &[Cmd])] = &[
             },
             Cmd {
                 name: "train",
-                about: "grow reflexes from a skill, runbook or Makefile (runs adage-train)",
+                about: "compile a skill into one reviewed pack of reflexes (runs adage-train)",
                 usage: &[
+                    "adage train <SKILL.md> [--repo <path>] [--no-replay] [--json]   compile, replay, review; installs nothing",
+                    "adage train accept <name>   install the reviewed pack",
                     "adage train plan --from <file> [--repo <path>] [--sessions N] [--json] [--out plan.json]",
                     "adage train --plan plan.json [--harness claude-code|fake] [--budget USD] …",
                     "adage train report <run-dir>",

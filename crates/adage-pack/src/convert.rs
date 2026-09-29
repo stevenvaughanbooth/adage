@@ -158,7 +158,7 @@ pub fn from_track(t: &Track, repo_root: Option<&Path>) -> Result<Converted> {
             repo_files: cx.repo_files.into_values().collect(),
         },
         exec: ExecCeiling::default(),
-        provenance: Provenance { tool: format!("adage {}", env!("CARGO_PKG_VERSION")), origins: total },
+        provenance: Provenance { tool: format!("adage {}", env!("CARGO_PKG_VERSION")), origins: total, skill: None },
     };
     let mut pack = Pack::new(manifest, routes, cx.types, BTreeMap::new())
         .with_context(|| format!("converting {}", m.track.name))?;
@@ -204,7 +204,7 @@ impl Cx {
         let mut inputs = BTreeMap::new();
         for s in &r.slots {
             #[allow(unreachable_patterns)]
-            let ty = match &s.contract {
+            let mut ty = match &s.contract {
                 Contract::Pattern { regex } => {
                     let id = format!("c-{}", &sha256_hex(regex.as_bytes())[..12]);
                     self.types.entry(id.clone()).or_insert_with(|| TypeDef::pattern(&id, regex));
@@ -218,7 +218,7 @@ impl Cx {
             let from = match &s.source {
                 SlotSource::Prompt { span } => InputFrom {
                     prompt: Some(PromptSource { span: *span, vtype: None, mentions: vec![] }),
-                    result: None,
+                    ..InputFrom::default()
                 },
                 // The samples' hash stays home: over a small id space it would give them away.
                 SlotSource::PromptValue { vtype, mentions } => InputFrom {
@@ -227,10 +227,14 @@ impl Cx {
                         vtype: Some(adage_tracks::ValueType { samples_hash: String::new(), ..vtype.clone() }),
                         mentions: mentions.clone(),
                     }),
-                    result: None,
+                    ..InputFrom::default()
                 },
                 SlotSource::ResultField { field } => {
-                    InputFrom { prompt: None, result: Some(ResultSource { field: field.clone() }) }
+                    InputFrom { result: Some(ResultSource { field: field.clone() }), ..InputFrom::default() }
+                }
+                SlotSource::EditTests { k, map, .. } => {
+                    ty = "repo-path-list".to_string();
+                    InputFrom { edit_tests: Some(EditTestsSource { k: *k, map: map.clone() }), ..InputFrom::default() }
                 }
                 other => return Err(format!("slot {} has source {other:?}, which has no v2 form", s.name)),
             };
@@ -246,6 +250,7 @@ impl Cx {
             script: None,
             outputs: BTreeMap::new(),
         };
+        let mut extra: Vec<StepV2> = Vec::new();
         #[allow(unreachable_patterns)]
         let (shape, step) = match &r.step {
             Step::Run { command } => {
@@ -257,6 +262,18 @@ impl Cx {
                     _ => Shape::Run,
                 };
                 (shape, StepV2 { id: "run".into(), run: Some(RunSpec { argv }), script, ..empty() })
+            }
+            Step::Sequence { commands } => {
+                // One run step per command, in order (`run-1`, `run-2`, …).
+                let mut steps = Vec::new();
+                for (i, c) in commands.iter().enumerate() {
+                    let argv = argv(c);
+                    let script = self.pin(&argv, root)?;
+                    steps.push(StepV2 { id: format!("run-{}", i + 1), run: Some(RunSpec { argv }), script, ..empty() });
+                }
+                let first = steps.remove(0);
+                extra = steps;
+                (Shape::Sequence, first)
             }
             Step::ReadBatch { slot, max } => (
                 Shape::Read,
@@ -333,7 +350,7 @@ impl Cx {
             trigger,
             entry: true,
             inputs,
-            steps: vec![step],
+            steps: std::iter::once(step).chain(extra).collect(),
             links: Vec::new(),
             strength: r.strength,
             exit,
@@ -349,6 +366,8 @@ impl Cx {
                 self.tools.insert(t);
                 Ok(None)
             }
+            // The project's environment: nothing to require or pin (binding finds it).
+            Program::Env { .. } => Ok(None),
             Program::Script { path, interpreter } => {
                 let Some(root) = root else {
                     return Err(format!(
@@ -356,7 +375,7 @@ impl Cx {
                     ));
                 };
                 let sha = hash_repo_file(root, &path).map_err(|e| format!("cannot pin {path}: {e:#}"))?;
-                if let Some(i) = interpreter {
+                if let Some(i) = interpreter.filter(|i| !i.contains('/')) {
                     self.tools.insert(i);
                 }
                 let f = RepoFile { path: path.clone(), sha256: sha.clone(), deps: Vec::new() };

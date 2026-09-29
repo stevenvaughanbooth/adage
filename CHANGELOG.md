@@ -124,10 +124,51 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
   script they run; `cargo nextest` verifies.
 - Declared `.go` files over 64 KiB (urfave/cli's `command_test.go`) are scanned for `go:generate`
   up to their first 64 KiB instead of skipped; whole-file parses keep the cap.
-- **Training:** `adage train` runs your agent headlessly on a skill, runbook or Makefile in a
-  sandboxed clone (the separate `adage-train` binary), compiles the sessions into reflexes, and
-  reports which of the skill's claims are stale; `adage train plan` estimates the cost and runs
-  nothing (docs/training.md).
+- **Compile your skill:** `adage train <SKILL.md>` (the separate `adage-train` binary) parses a
+  skill's procedure graph deterministically, with no model and no session, and compiles each step
+  into pack routes: the lookup a prompt's work item id triggers, finish lines after an edit, a
+  "before you finish" check after *any* edit, a sequence that carries both, forbidden runners, the
+  tests of the edited file (`edit_tests`, from the repository's test names and history), and the
+  fixed advice to leave changes uncommitted. Every compiled command is replayed on a clean
+  checkout of `HEAD` in adage-exec's sandbox (`adage_exec::replay`: network off, the working tree
+  untouched, `.venv` lent read-only): a command that fails there is dropped and reported as stale,
+  a forbidden runner that fails differently gets a route with the signature observed, and only
+  verified reflexes may fire. The review lists every step, compiled (to what, verified how) or
+  left as text (needs judgment, no stimulus, …); the pack (origin `trained`) is staged, and
+  `adage train accept <name>` installs exactly what was reviewed, signed when a key is at hand, at
+  the reviewed strengths. On the skill lab's acme comparison (Haiku, 36 sessions, $2.25) the
+  compiled pack matched the skill in context on pass rate (12/12) and captured 97 to 99% of its
+  savings in cost, turns and tokens, with no session committing (docs/training.md, "Validation").
+- **Procedure cards for recurring tasks** (`crates/adage-learn/src/cards.rs`, to the
+  recurring-workflows research's card compiler spec, `confirm/README.md`): with the embedding
+  model (installed, or the one bundled in the binary), `adage condition` groups a repository's traces into **families** of similar
+  tasks (first prompts at cosine ≥ 0.6 *and* edited file shapes overlapping, Jaccard ≥ 0.25). A
+  family with a passing trace becomes a reflex whose response is a **card**: the files such a
+  change touched in order (names that vary per task as patterns, `flag_<x>.go`, test siblings
+  apart; files written by shell redirection included), what the latest passing trace added to
+  each (clipped to fit 800 tokens), the commands that worked and those that failed with their
+  error, and the check the traces finished with. One trace suffices only when it created no file.
+  It is delivered once per session when a prompt's best cosine to the family's prompts reaches
+  `learn.card_threshold` (default 0.811, the research's pre-registered strict threshold; 0.753 for
+  one prompt), or, within 0.10 below it, at the session's first edit of a card file; prime and
+  observe only, and `adage review` refuses to strengthen it. The family's prompt library grows
+  with every trace that joins it. Detection is precise but literal: through the hook, the Go
+  family's card fired on 6/6 held-out tasks, 0/6 paraphrases and 0/53 same-repository negatives.
+  `adage train cards` replays a card's commands on a clean checkout in adage-exec's sandbox
+  (installs are not replayed: the sandbox has no network) and the next learn marks the ones that
+  worked and stops listing the ones that did not. `adage sense` counts the families and cards,
+  the status card counts cards among learned reflexes, and `learn.cards = false` turns them off.
+- Skill-steered sessions stay optional evidence: `adage train plan` estimates their cost and runs
+  nothing, `adage train --plan` runs them, and `report` says, claim by claim, what they showed.
+- **Packs** carry `procedure.json` (the procedure a trained pack was compiled from: every step and
+  what became of it) and `[provenance] skill`; a `sequence` of two or three fixed runs binds live
+  (it bound inert); an input may be the edited file's tests; a step may run a program of the
+  project's environment (`.venv/bin/python`), never pinned, bound where the checkout has it.
+- Directives from a compiled skill end with *From this repository's written instructions*, and
+  their finish lines say the instructions require the step, never that agents were seen doing it.
+- A sequence after an edit carries every finish line whose command is one of its steps (it
+  carried only the one that began it), so a compiled skill's `make test`, `make ci` sequence is one
+  directive for a code edit.
 - **Uplift gating.** A reflex is worth how much more often agents take its step when told than
   unaided (`p_follow − p_self`), not how often they follow it (evals/lab/research/uptake-delivery:
   96% followed, 21% changed behaviour). Conditioning estimates both as Beta posteriors per route,

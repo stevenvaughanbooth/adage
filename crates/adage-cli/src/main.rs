@@ -14,7 +14,7 @@
 //! adage condition --auto --repo-root <path>   condition one repository quietly (what hooks start)
 //! adage condition --instincts-only [--repo-path <dir>] [--repo <key>]  bind Adage's instincts for
 //!                                    a repository from its files alone, with no traces (day 0)
-//! adage train <plan|--plan|report> …  grow reflexes from a skill (runs the adage-train binary)
+//! adage train <SKILL.md> | accept <name> | plan | --plan | report   compile a skill into reflexes
 //! adage config [get <key> | set <key> <value>] [--json]   settings in $ADAGE_HOME/config.toml
 //! adage status                       installed tracks, reflexes, strengths, and evidence
 //! adage report [--json]              directives emitted, followed, and ignored, from spools
@@ -117,7 +117,7 @@ fn run(args: &[String]) -> Result<()> {
         Some("condition") if args.iter().any(|a| a == "--auto") => autolearn::run_auto(&args[1..], &paths),
         Some("condition") if args.iter().any(|a| a == "--instincts-only") => instincts_only(&args[1..], &paths),
         Some("condition") => condition(&args[1..], &paths),
-        Some("train") => train::train(&args[1..]),
+        Some("train") => train::train(&args[1..], &paths),
         Some("config") => config::run(&args[1..], &paths),
         Some("status") => status(&paths),
         Some("report") => report(&paths, args.iter().any(|a| a == "--json")),
@@ -272,6 +272,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         }
         cfg.instincts = Some(ic);
     }
+    cfg.cards = autolearn::card_params(&settings, paths);
     let cache =
         (settings.learn_parse_cache && !args.iter().any(|a| a == "--no-cache")).then(|| paths.cache().join("sessions"));
     transcripts.sort();

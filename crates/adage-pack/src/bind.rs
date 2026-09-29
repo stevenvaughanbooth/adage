@@ -16,10 +16,12 @@
 //! 4. **L-ref scripts**: the SHA-256 of `root/<path>` (a regular file, no symlink on the way,
 //!    inside the root, at most 1 MiB) must equal the pin; `deps` globs must resolve inside the
 //!    root, and their hashes join the binding. **L-vendor** scripts must be in the cas.
-//! 5. **A runtime form**: E0 delivers today's route model (`adage_tracks::Route`). A route whose
-//!    shape has no such form (several steps, a sequence, a read of a step's output) is inert:
-//!    "shape not yet supported at runtime". A route that runs a vendored script is live but
-//!    exec-only: only `adage-exec` runs it, and E0 never directs it.
+//! 5. **A runtime form**: E0 delivers today's route model (`adage_tracks::Route`). A sequence
+//!    of two or three fixed run steps becomes the runtime's numbered sequence (after an edit, a
+//!    command or a failure). A route whose shape has no such form (several steps of another
+//!    shape, a sequence with inputs or of four steps, a read of a step's output) is inert: "shape
+//!    not yet supported at runtime". A route that runs a vendored script is live but exec-only:
+//!    only `adage-exec` runs it, and E0 never directs it.
 //!
 //! The result is a pure function of the pack, the repository's files and the environment
 //! ([`BindEnv`]), so the same repository gives a byte-identical binding.
@@ -408,12 +410,26 @@ fn check_route(
         let prog = program(&run.argv, table).map_err(|e| e.to_string())?;
         let tool = match &prog {
             Program::Tool(t) => Some(t.clone()),
+            Program::Env { path, .. } => Some(path.clone()),
             Program::Script { interpreter, .. } => interpreter.clone(),
         };
-        if let Some(t) = tool {
-            if !on_path(&t, env.path.as_ref()) {
-                return Err(format!("the tool {t} is not on PATH"));
+        match tool {
+            // The project's environment: its program must be in this checkout (a virtualenv's
+            // `python` is a symlink out of it, so this follows links; nothing is run).
+            Some(t) if t.contains('/') => {
+                let Some(root) = &target.root else {
+                    return Err(format!(
+                        "runs {t} from the project's environment; there is no checkout of {} on this machine to find it in",
+                        target.repo
+                    ));
+                };
+                let p = t.trim_start_matches("./");
+                if !crate::validate::safe_path(p) || !executable(&root.join(p)) {
+                    return Err(format!("runs {p} from the project's environment, which this checkout does not have"));
+                }
             }
+            Some(t) if !on_path(&t, env.path.as_ref()) => return Err(format!("the tool {t} is not on PATH")),
+            _ => {}
         }
         let Some(sc) = &s.script else { continue };
         match sc.closure {
@@ -502,7 +518,8 @@ fn rank(e: Effect) -> u8 {
 
 /// Route v2 → the runtime route model. `Err` names why there is none.
 fn to_v1(r: &RouteV2, pack: &Pack, table: &CommandTable) -> Result<Route, String> {
-    if r.steps.len() != 1 || r.shape == Shape::Sequence {
+    let sequence = r.shape == Shape::Sequence;
+    if r.steps.len() != 1 && !sequence {
         return Err(SHAPE_NOT_SUPPORTED.into());
     }
     let s = &r.steps[0];
@@ -526,17 +543,51 @@ fn to_v1(r: &RouteV2, pack: &Pack, table: &CommandTable) -> Result<Route, String
         let contract = contract(&i.ty, &pack.types).ok_or_else(|| {
             format!("{SHAPE_NOT_SUPPORTED}: input {name} has type {}, which has no runtime contract", i.ty)
         })?;
-        let source = match (&i.from.prompt, &i.from.result) {
-            (Some(p), None) => match &p.vtype {
+        let source = match (&i.from.prompt, &i.from.result, &i.from.edit_tests) {
+            (Some(p), None, None) => match &p.vtype {
                 Some(vtype) => SlotSource::PromptValue { vtype: vtype.clone(), mentions: p.mentions.clone() },
                 None => SlotSource::Prompt { span: p.span },
             },
-            (None, Some(f)) => SlotSource::ResultField { field: f.field.clone() },
+            (None, Some(f), None) => SlotSource::ResultField { field: f.field.clone() },
+            (None, None, Some(e)) => match &r.trigger {
+                TriggerV2::AfterEdit { paths } => {
+                    SlotSource::EditTests { glob: paths.clone(), k: e.k, map: e.map.clone() }
+                }
+                _ => return Err(format!("input {name} comes from an edit, but the trigger is not one")),
+            },
             _ => return Err(format!("input {name} has no single source")),
         };
         slots.push(Slot { name: name.clone(), source, contract });
     }
     let mut effect = s.effect;
+    // A sequence: its run steps, in order, as the runtime's numbered sequence (Track G §6.1). Its
+    // commands are fixed (nothing binds a sequence's inputs), and its effect is the strongest of
+    // its steps, declared or classified.
+    if sequence {
+        if !r.inputs.is_empty() {
+            return Err(format!("{SHAPE_NOT_SUPPORTED}: a sequence with inputs"));
+        }
+        let mut commands = Vec::new();
+        for st in &r.steps {
+            let Some(StepKind::Run(run)) = st.kind() else {
+                return Err(format!("{SHAPE_NOT_SUPPORTED}: a sequence step that is not a run"));
+            };
+            let command = run.argv.join(" ");
+            for e in [st.effect, io::classify(&command, table)] {
+                if rank(e) > rank(effect) {
+                    effect = e;
+                }
+            }
+            commands.push(command);
+        }
+        if !(2..=adage_tracks::SEQUENCE_MAX_COMMANDS).contains(&commands.len()) {
+            return Err(format!(
+                "{SHAPE_NOT_SUPPORTED}: the runtime delivers sequences of 2 to {} commands",
+                adage_tracks::SEQUENCE_MAX_COMMANDS
+            ));
+        }
+        return Ok(runtime_route(r, trigger, slots, Step::Sequence { commands }, effect));
+    }
     let step = match s.kind().ok_or("a step has no single kind")? {
         StepKind::Run(run) => {
             // A vendored script runs only under adage-exec: the route is exec-only (the index
@@ -562,6 +613,11 @@ fn to_v1(r: &RouteV2, pack: &Pack, table: &CommandTable) -> Result<Route, String
         },
         StepKind::Advise(a) => Step::Advise { template: a.template.clone(), slots: a.slots.clone() },
     };
+    Ok(runtime_route(r, trigger, slots, step, effect))
+}
+
+/// The runtime route of a pack route, from its converted trigger, slots, step and effect.
+fn runtime_route(r: &RouteV2, trigger: Trigger, slots: Vec<Slot>, step: Step, effect: Effect) -> Route {
     let exit = r
         .exit
         .iter()
@@ -602,7 +658,7 @@ fn to_v1(r: &RouteV2, pack: &Pack, table: &CommandTable) -> Result<Route, String
         // Uplift is the installing repository's own (re-estimated when it learns).
         uplift: None,
     };
-    Ok(Route {
+    Route {
         id: r.id.clone(),
         summary: r.summary.clone(),
         trigger,
@@ -617,7 +673,7 @@ fn to_v1(r: &RouteV2, pack: &Pack, table: &CommandTable) -> Result<Route, String
         exit,
         evidence,
         authored: false,
-    })
+    }
 }
 
 /// Whether a route runs a vendored script (and so is exec-only).

@@ -60,6 +60,10 @@ pub fn wrap_directive(d: &crate::Directive) -> String {
 pub const LEARNED_FOOTER: &str =
     "Learned by Adage from this repository's earlier agent sessions; not requested by the user.";
 
+/// The last line of a route compiled from the repository's written instructions (a skill, by
+/// `adage train`): it claims no session evidence.
+pub const AUTHORED_FOOTER: &str = "From this repository's written instructions; not requested by the user.";
+
 /// The last line of the wrapper: what the directive is based on. A learned route (or one whose
 /// origin is unknown) says it was learned from sessions; an instinct says it is Adage's default
 /// for repositories of its ecosystem, from the file that declares it — never that sessions showed
@@ -80,6 +84,7 @@ pub fn footer(origin: Option<&Origin>) -> String {
                 .unwrap_or_default();
             format!("Adage default for {eco}{from}; not requested by the user.")
         }
+        Some(Origin::Authored) => AUTHORED_FOOTER.to_string(),
         _ => LEARNED_FOOTER.to_string(),
     }
 }
@@ -248,8 +253,14 @@ pub const FINISH_OBSERVED: &str = "Agents in this repository run it after such c
 /// (`<file> declares this.` when the declaring file is known).
 pub const FINISH_DECLARED: &str = "This repository's build declares this step.";
 
+/// A compiled skill's finish line claims the instructions, not sessions.
+pub const FINISH_WRITTEN: &str = "This repository's written instructions require it.";
+
 /// The evidence sentence of a finish-line directive.
 fn finish_basis(r: &Route) -> String {
+    if r.evidence.origin == Some(Origin::Authored) {
+        return FINISH_WRITTEN.to_string();
+    }
     if r.is_instinct() {
         return match r.origin() {
             Origin::Instinct { declared: Some(d), .. } if declared_ok(&d) => format!("{d} declares this."),
@@ -311,6 +322,17 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
                 shown.join(", "),
                 exit
             ))
+        }
+        // A procedure card: fixed headings, its values checked when the track was read
+        // (`adage_tracks::card::check`) and again here; exemplar lines are quoted data.
+        (Step::Card { card }, _) => {
+            adage_tracks::card::check(card).ok()?;
+            let mut text = adage_tracks::card::text(card);
+            if !exit.trim().is_empty() {
+                text.push('\n');
+                text.push_str(exit.trim_start());
+            }
+            Some(text)
         }
         (Step::Advise { template, slots }, _) => {
             // A fixed sentence; each slot value passed its contract when the track was read, and

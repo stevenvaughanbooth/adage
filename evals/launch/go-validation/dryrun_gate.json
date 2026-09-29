@@ -1,5 +1,5 @@
 {
- "home": "/tmp/gv-dry-x7rmq5_3/adage-home",
+ "home": "/tmp/gv-dry-q5jwkjuj/adage-home",
  "adage": "/home/user/adage/.claude/worktrees/agent-ae7d626216059442c/target/debug/adage",
  "cards": [
   {
@@ -10,7 +10,7 @@
  "held_out": [
   {
    "task": "ufo-util--without-auth",
-   "session": "4f6f9bd6-f1db-458c-8517-f94865be97e7",
+   "session": "9ca86990-0b44-4442-9140-41093ea1ba2d",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -21,16 +21,18 @@
   },
   {
    "task": "ufo-util--same-origin",
-   "session": "70d6c3a8-d970-4287-b0f9-81c2ecb3497e",
+   "session": "3d791a99-7cec-4861-9a32-d6c8cfec3ae8",
    "at_prompt": false,
-   "at_edit": null,
-   "card_routes_in_spool": [],
-   "delivered": false,
+   "at_edit": "src/utils.ts",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
    "other_directives": []
   },
   {
    "task": "ufo-util--sort-query",
-   "session": "150ffc08-df4e-40de-91eb-a0d1824060fb",
+   "session": "1d730706-1af4-4be5-b208-a8cb579ab2c5",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -41,7 +43,7 @@
   },
   {
    "task": "ufo-util--lowercase-host",
-   "session": "5245744b-c66b-439a-8c72-e2dd90149cc5",
+   "session": "624fba1e-5db4-4824-9763-8d84fd7fa7aa",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -52,7 +54,7 @@
   },
   {
    "task": "ufo-util--get-extension",
-   "session": "bb5ac8e5-9125-462f-906d-5373255dd2df",
+   "session": "7dbeb38e-6452-49a7-b3e4-0b31f9dcbaec",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -63,7 +65,7 @@
   },
   {
    "task": "ufo-util--dot-segments",
-   "session": "16c4c45c-44fc-4ccf-84e8-c4699528d239",
+   "session": "636316d5-6de6-43f9-a81e-12874e5bd510",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -74,20 +76,24 @@
   },
   {
    "task": "ufo-util--query-param",
-   "session": "fb5aee30-6c56-40b2-93f6-4a8013711dc0",
+   "session": "b3f5be07-71fb-4b07-b3f8-45acd3847ac1",
    "at_prompt": false,
-   "at_edit": null,
-   "card_routes_in_spool": [],
-   "delivered": false,
+   "at_edit": "src/utils.ts",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
    "other_directives": []
   },
   {
    "task": "ufo-util--is-http",
-   "session": "11442fbe-f7de-4d12-82af-31a49ca90b10",
+   "session": "9010040b-09d7-4337-b10d-0e0bc79be907",
    "at_prompt": false,
-   "at_edit": null,
-   "card_routes_in_spool": [],
-   "delivered": false,
+   "at_edit": "src/utils.ts",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
    "other_directives": []
   }
  ],
@@ -95,7 +101,7 @@
   {
    "id": "ufo-0e060c7f",
    "source": "repobench",
-   "session": "186713a5-d589-41b8-b374-1840638bcc02",
+   "session": "613dc1f3-2de5-4578-8463-81a4510544c8",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -105,7 +111,7 @@
   {
    "id": "ufo-f437a3b4",
    "source": "repobench",
-   "session": "4e7a36b5-a67a-4231-b978-fa900b66c0b3",
+   "session": "573be954-8860-4869-a473-5543d489256d",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -115,7 +121,7 @@
   {
    "id": "ufo-f4c0400d",
    "source": "repobench",
-   "session": "ef1aae05-a518-4a34-bf95-0e657de63d7a",
+   "session": "1fb43e64-cdfa-4d93-8a7f-f2b05639def6",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -125,7 +131,7 @@
   {
    "id": "ufo-62199a0c",
    "source": "repobench",
-   "session": "b5fc31a8-56e6-4561-aa9f-3ee33f4882f6",
+   "session": "85ab037e-b742-4acf-b7e2-7312aaa0d0df",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -135,7 +141,7 @@
   {
    "id": "ufo-eb299454",
    "source": "repobench",
-   "session": "e1d221c8-0abb-47f7-97ca-2d39bf58e11d",
+   "session": "2fdd4fb9-fa59-42ab-9f11-70faac523ce1",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -145,7 +151,7 @@
   {
    "id": "neg-docs-parse-filename",
    "source": "handwritten",
-   "session": "b507cefa-f7ac-4549-8d4e-2a75df8a10c8",
+   "session": "f777eac5-8f42-4b05-9f92-f69fc7cdfd81",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -155,7 +161,7 @@
   {
    "id": "neg-bug-clean-double-slashes",
    "source": "handwritten",
-   "session": "ea352ea2-e413-4872-9363-f4525375fb93",
+   "session": "bd0afc0c-9638-44ba-a13a-8b6197c53892",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -165,7 +171,7 @@
   {
    "id": "neg-option-with-query",
    "source": "handwritten",
-   "session": "53f4f962-9265-45e3-a161-9e6f38d5ecbd",
+   "session": "bfb5e867-89ee-4947-bb9d-81b512bb9dae",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -186,17 +192,20 @@
  "summary": {
   "cards": 1,
   "held_out_delivered": [
-   5,
+   8,
    8
   ],
   "held_out_at_prompt": 5,
-  "held_out_at_edit": 0,
+  "held_out_at_edit": 3,
   "delivered_tasks": [
    "ufo-util--without-auth",
+   "ufo-util--same-origin",
    "ufo-util--sort-query",
    "ufo-util--lowercase-host",
    "ufo-util--get-extension",
-   "ufo-util--dot-segments"
+   "ufo-util--dot-segments",
+   "ufo-util--query-param",
+   "ufo-util--is-http"
   ],
   "false_fires": [
    0,

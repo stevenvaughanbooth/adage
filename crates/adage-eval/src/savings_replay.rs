@@ -453,7 +453,7 @@ impl Class {
             Step::Run { command } => command_class(command),
             Step::Sequence { commands } => commands.first().map(|c| command_class(c)).unwrap_or(Class::Unscored),
             Step::Avoid { instead, .. } => command_class(instead),
-            Step::Advise { .. } | Step::ReadBatch { .. } => Class::Unscored,
+            Step::Advise { .. } | Step::ReadBatch { .. } | Step::Card { .. } => Class::Unscored,
         }
     }
 

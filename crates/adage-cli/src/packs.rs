@@ -259,7 +259,15 @@ fn write_bound(
         routes: binding.live().filter_map(|r| r.route.clone()).collect(),
     };
     let was: BTreeMap<String, Strength> = track.routes.iter().map(|r| (r.id.clone(), r.strength)).collect();
-    let (mut track, _) = at_forming(track);
+    // A skill compiled here and accepted by the person who reviewed it (`adage train accept`)
+    // keeps the strengths its replay earned: it is first-hand, not an import. Any other pack
+    // (including the same pack received from someone else, or changed since its review) is an
+    // import: forming, prime at most (O2).
+    let mut track = if reviewed_here(paths, pack, digest) {
+        reviewed_track(track, pack_origin(m.pack.origin))
+    } else {
+        at_forming(track).0
+    };
     // A reflex that runs a vendored script is exec-only (never directed at E0), so it does not
     // wait as nascent: running it always needs its own explicit approval (Track C §1.7).
     let exec_only: BTreeSet<&str> =
@@ -321,6 +329,45 @@ fn pack_origin(o: adage_pack::PackOrigin) -> &'static str {
         adage_pack::PackOrigin::Trained => "trained",
         adage_pack::PackOrigin::Authored => "authored",
     }
+}
+
+/// `$ADAGE_HOME/train/accepted.json`: trained packs a person accepted on this machine after
+/// reviewing them (`adage train accept`), by name, with the digest they reviewed.
+pub fn accepted_path(paths: &Paths) -> PathBuf {
+    paths.root.join("train").join("accepted.json")
+}
+
+pub fn accepted(paths: &Paths) -> BTreeMap<String, String> {
+    std::fs::read(accepted_path(paths)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+}
+
+pub fn record_accepted(paths: &Paths, name: &str, digest: &str) -> Result<()> {
+    let mut all = accepted(paths);
+    all.insert(name.to_string(), digest.to_string());
+    let p = accepted_path(paths);
+    std::fs::create_dir_all(p.parent().context("the accepted list has a parent directory")?)?;
+    let tmp = p.with_extension(format!("tmp{}", std::process::id()));
+    std::fs::write(&tmp, serde_json::to_vec_pretty(&all)?)?;
+    std::fs::rename(tmp, p)?;
+    Ok(())
+}
+
+/// Whether `pack` is a trained pack a person accepted here, at exactly this digest.
+pub fn reviewed_here(paths: &Paths, pack: &Pack, digest: &str) -> bool {
+    pack.manifest.pack.origin == adage_pack::PackOrigin::Trained
+        && accepted(paths).get(&pack.manifest.pack.name).is_some_and(|d| d == digest)
+}
+
+/// A reviewed trained pack's bound track: each route at the strength the pack gives it (the
+/// replay-verified ones may fire, within their effect ceilings, which validation enforces),
+/// forming, and an environment step still nascent until approved (O11). Its provenance is
+/// first-hand (`trained:reviewed`), not `imported`.
+pub fn reviewed_track(mut t: Track, origin: &str) -> Track {
+    for r in &mut t.routes {
+        r.state = adage_tracks::initial_state(r.effect);
+    }
+    t.manifest.track.provenance = format!("{origin}:reviewed");
+    t
 }
 
 /// The fingerprint of the key that signed an installed pack (re-verified from its `pack.sig`).
