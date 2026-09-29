@@ -165,6 +165,10 @@ pub struct Provenance {
     pub tool: String,
     #[serde(default)]
     pub origins: OriginCounts,
+    /// The skill a trained pack was compiled from: `sha256:<hex>` of the file's bytes. Required
+    /// with `procedure.json` ([`crate::procedure`]), and equal to its `skill.sha256`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill: Option<String>,
 }
 
 /// Counts by the origin of the evidence (roadmap E1).
@@ -310,7 +314,27 @@ pub struct InputFrom {
     /// A JSON field of the output of the command that triggered the route.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<ResultSource>,
+    /// The test files of the file whose edit triggered the route (an `after_edit` trigger), from
+    /// a map in the route.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edit_tests: Option<EditTestsSource>,
 }
+
+/// The tests of an edited file (`adage_tracks::SlotSource::EditTests`): the edited path is looked
+/// up in `map` (repository-relative source path → its test files, best first), and at most `k` of
+/// them that exist are bound, space-separated. A file the map does not list binds nothing, so the
+/// route says nothing for it. The map is the repository's (named tests, co-change, traces), made
+/// when the pack was compiled; it holds repository-relative paths only.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EditTestsSource {
+    pub k: u8,
+    pub map: BTreeMap<String, Vec<String>>,
+}
+
+/// Bounds on an [`EditTestsSource`].
+pub const EDIT_TESTS_MAX_K: u8 = 5;
+pub const EDIT_TESTS_MAX_ENTRIES: usize = 512;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

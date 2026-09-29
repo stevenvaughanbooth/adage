@@ -27,6 +27,7 @@ pub mod convert;
 pub mod digest;
 pub mod instincts;
 pub mod model;
+pub mod procedure;
 pub mod types;
 pub mod validate;
 pub mod vendor;
@@ -53,6 +54,8 @@ pub struct Pack {
     pub scripts: BTreeMap<String, Vec<u8>>,
     pub evidence: Option<PackEvidence>,
     pub attestations: BTreeMap<String, serde_json::Value>,
+    /// `procedure.json`: the procedure a trained pack was compiled from ([`procedure`]).
+    pub procedure: Option<procedure::Procedure>,
 }
 
 impl Pack {
@@ -84,7 +87,8 @@ impl Pack {
         types: BTreeMap<String, TypeDef>,
         scripts: BTreeMap<String, Vec<u8>>,
     ) -> Result<Pack> {
-        let mut p = Pack { manifest, routes, types, scripts, evidence: None, attestations: BTreeMap::new() };
+        let mut p =
+            Pack { manifest, routes, types, scripts, evidence: None, attestations: BTreeMap::new(), procedure: None };
         p.routes.sort_by(|a, b| a.id.cmp(&b.id));
         Pack::from_parsed(p.parsed())
     }
@@ -105,6 +109,7 @@ impl Pack {
             scripts: parsed.scripts,
             evidence: parsed.evidence,
             attestations: parsed.attestations,
+            procedure: parsed.procedure,
         })
     }
 
@@ -116,6 +121,7 @@ impl Pack {
             scripts: self.scripts.clone(),
             evidence: self.evidence.clone(),
             attestations: self.attestations.clone(),
+            procedure: self.procedure.clone(),
             closure: None,
         }
     }
@@ -148,6 +154,9 @@ impl Pack {
         }
         for (id, a) in &self.attestations {
             f.insert(format!("attestations/{id}.json"), json_file(a));
+        }
+        if let Some(p) = &self.procedure {
+            f.insert(procedure::PROCEDURE.to_string(), json_file(&serde_json::to_value(p)?));
         }
         f.insert(CLOSURE.to_string(), self.closure()?.render().into_bytes());
         Ok(f)
@@ -186,7 +195,7 @@ impl Pack {
                 }
             }
         }
-        for stale in [SIG, EVIDENCE] {
+        for stale in [SIG, EVIDENCE, procedure::PROCEDURE] {
             if !files.contains_key(stale) && dir.join(stale).is_file() {
                 std::fs::remove_file(dir.join(stale))?;
             }
