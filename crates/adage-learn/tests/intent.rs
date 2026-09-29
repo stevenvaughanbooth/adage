@@ -237,8 +237,15 @@ fn without_a_model_learning_falls_back_and_keeps_existing_intent_reflexes() {
     std::fs::create_dir_all(model::dir_in(&broken)).unwrap();
     std::fs::write(model::dir_in(&broken).join("manifest.json"), "{not json").unwrap();
     for models in [None, Some(broken)] {
-        let home = d.path().join(format!("home-{}", models.is_some()));
+        let dir = models.is_some();
+        let home = d.path().join(format!("home-{dir}"));
         let (rep, index) = run(&files, &home, models);
+        // A damaged install falls back to the model bundled in the binary, when the build has one
+        // (the `adage` binary does; `adage doctor` fails on the damaged install).
+        if dir && model::bundled_id().is_some() {
+            assert_eq!(rep.intent_model, model::bundled_id());
+            continue;
+        }
         assert!(rep.intent_model.is_none());
         assert!(intents(&index).is_empty());
     }

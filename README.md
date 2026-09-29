@@ -394,15 +394,16 @@ three source directories, `instincts.packs`) are a person's decision: `config se
 terminal and refuses inside an agent session. Every other key only tunes Adage or turns something
 down, and can be set from a script, CI or a sandboxed session.
 
-**Intent families (optional):** `adage models fetch` downloads the pinned static embedding model
-(potion-base-8M, 31 MB, SHA-256 verified; `adage models install <dir>` for offline machines) into
-the data directory. `adage condition` then clusters each repository's prompts into intent families
-(exact kNN + deterministic Louvain, split and merged by what the sessions did next — spike S7) and
-forms an intent reflex per usable family. Without the model everything else works unchanged: learning
-skips intent families and hooks never load a model. Behind a proxy that blocks huggingface.co, the
-download is not retried by itself: `adage doctor` says why (`intent grouping off: huggingface.co
-blocked by proxy (403)`) and how to fix it. `ADAGE_MODEL_BASE_URL=<mirror>` downloads the same
-files from a mirror (still checked against the pinned SHA-256s).
+**Embeddings and intent families (nothing to do):** the `adage` binary bundles the static
+embedding model potion-base-8M, quantised to int8 (7.9 MB, SHA-256 pinned), so `adage condition`
+clusters each repository's prompts into intent families (exact kNN + deterministic Louvain, split
+and merged by what the sessions did next — spike S7) and forms an intent reflex per usable family,
+with no download. `adage models fetch [potion-base-8m | potion-code-16m-v2]` installs a model's
+pinned upstream files instead (from Hugging Face, else the byte-identical npm package; every file is
+checked against its SHA-256), `adage models use <key|auto|hashed>` chooses, and `adage models
+status`, `adage doctor` and the status card (`embeddings: …`) say what is in use. With no model at
+all the explicit hashed fallback is shown, intent reflexes cannot fire, and everything else works
+unchanged. What embeddings are and are not worth on replay: [evals/launch/embeddings.md](evals/launch/embeddings.md).
 
 **Sharing:** `adage share <track> --out <dir> [--key <path>]` converts a track to a **pack** (the
 only format that travels; [docs/packs.md](docs/packs.md)), checks every byte for absolute paths,

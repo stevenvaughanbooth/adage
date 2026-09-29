@@ -690,8 +690,12 @@ pub fn print_text(s: &Sense) {
         }
         if s.intent_model.is_none() {
             println!("  prompt intents            skipped: no embedding model (`adage models fetch` enables them)");
-        } else if r.intent_families > 0 {
-            println!("  prompt intents            {} usable", r.intent_families);
+        } else {
+            println!(
+                "  prompt intents            {} usable ({})",
+                r.intent_families,
+                s.intent_model.as_deref().unwrap_or_default()
+            );
         }
     }
     if s.repos.iter().any(|r| !r.candidates.is_empty()) {

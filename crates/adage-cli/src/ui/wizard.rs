@@ -178,7 +178,7 @@ impl Wizard {
             Kind::Hooks(_) if no => self.advance(StepStatus::Skipped),
             Kind::Model if yes && self.model.is_some() => {
                 let m = self.model.clone().unwrap_or_default();
-                self.advance(StepStatus::Done(format!("{m} already installed")))
+                self.advance(StepStatus::Done(format!("{m} ready")))
             }
             Kind::Model if yes => Some(Cmd::FetchModel),
             Kind::Learn if yes => Some(Cmd::Learn),
@@ -285,7 +285,9 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
             }
         }
         Kind::Model => match &w.model {
-            Some(m) => out.push(Line::raw(format!("The embedding model is installed: {m}."))),
+            Some(m) => {
+                out.push(Line::raw(format!("The embedding model is ready: {m} (installed, or bundled in adage).")))
+            }
             None => {
                 out.push(Line::raw("Optional: the static embedding model (potion-base-8M, 31 MB, SHA-256 verified)."));
                 out.push(Line::raw("With it, `adage condition` groups prompts that mean the same thing into intent"));
@@ -429,7 +431,7 @@ pub fn draw(f: &mut Frame, w: &Wizard, ctx: &Ctx) {
 
 pub fn run(ctx: Ctx) -> Result<()> {
     let mut w = Wizard::new(detect::harnesses(), detect::registrations(ctx.root.as_deref()), ctx.root.is_some());
-    w.model = adage_intent::model::status(&ctx.paths.models()).ok().map(|m| m.id);
+    w.model = adage_intent::model::resolve_static(&ctx.paths.models(), false).map(|m| m.id);
     let loaded = config::load(&ctx.paths);
     w.auto_learn = loaded.get("learn.auto").map(|(_, src)| (loaded.config.learn_auto, src.to_string()));
     w.config_path = detect::tilde(&ctx.paths.config());
@@ -449,7 +451,7 @@ pub fn run(ctx: Ctx) -> Result<()> {
                     w.progress = None;
                     match (kind, done) {
                         (Kind::Model, Ok(lines)) => {
-                            w.model = adage_intent::model::status(&ctx.paths.models()).ok().map(|m| m.id);
+                            w.model = adage_intent::model::resolve_static(&ctx.paths.models(), false).map(|m| m.id);
                             let note = lines.first().cloned().unwrap_or_default();
                             w.advance(StepStatus::Done(note));
                         }

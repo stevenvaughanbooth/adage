@@ -428,6 +428,9 @@ pub enum Class {
     Command { head: String },
     /// Run these test files (a file→test directive).
     TestFiles { files: Vec<String> },
+    /// Run the tests of this area (a monorepo package, `packages/runtime-core`) with this runner:
+    /// the case store's prompt → area directive.
+    Area { runner: &'static str, dir: String },
     /// Advice or a read batch: nothing in a trace can show it satisfied.
     Unscored,
 }
@@ -465,6 +468,9 @@ impl Class {
             Class::TestFiles { files } => {
                 a.run.is_some() && a.executed && a.targets.iter().any(|t| files.iter().any(|f| same_file(t, f)))
             }
+            Class::Area { runner, dir } => {
+                a.run.is_some_and(|r| r.runner == *runner) && a.executed && a.targets.iter().any(|t| under(t, dir))
+            }
             Class::Unscored => false,
         }
     }
@@ -473,7 +479,7 @@ impl Class {
         match self {
             Class::Runner { .. } => a.env_friction(),
             Class::Command { .. } => a.failed(),
-            Class::TestFiles { .. } => a.discovery,
+            Class::TestFiles { .. } | Class::Area { .. } => a.discovery,
             Class::Unscored => false,
         }
     }
@@ -489,6 +495,12 @@ impl Class {
                     && !a.targets.is_empty()
                     && !a.targets.iter().any(|t| files.iter().any(|f| same_file(t, f)))
             }
+            Class::Area { runner, dir } => {
+                a.run.is_some_and(|r| r.runner == *runner)
+                    && a.executed
+                    && !a.targets.is_empty()
+                    && !a.targets.iter().any(|t| under(t, dir))
+            }
             _ => false,
         }
     }
@@ -497,10 +509,16 @@ impl Class {
     fn own(&self, a: &Act) -> bool {
         match self {
             Class::Runner { runner, .. } => a.run.is_some_and(|r| r.runner == *runner && a.executed),
-            Class::TestFiles { .. } => self.sat(a, SatRule::Strict),
+            Class::TestFiles { .. } | Class::Area { .. } => self.sat(a, SatRule::Strict),
             _ => false,
         }
     }
+}
+
+/// A test-run target inside an area directory.
+fn under(target: &str, dir: &str) -> bool {
+    let t = target.strip_prefix("pkg:").unwrap_or(target).trim_start_matches("./");
+    t == dir || t.starts_with(&format!("{dir}/"))
 }
 
 /// A test-run target names a directed file: equal, or one a path suffix of the other (a run
@@ -549,8 +567,50 @@ pub enum Policy<'a> {
         root: &'a Path,
         table: &'a CommandTable,
         params: RuntimeParams,
+        /// The prompt embedding intent routes match against (`None`: no model, as today's replay).
+        embed: Option<adage_runtime::Embed<'a>>,
+        /// The case store, asked where the runtime gives nothing.
+        cases: Option<CaseCtx<'a>>,
     },
     CoChange(&'a CoChange),
+}
+
+/// The case store in a replay (`adage_learn::cases`).
+#[derive(Clone, Copy)]
+pub struct CaseCtx<'a> {
+    pub store: &'a adage_learn::cases::CaseStore,
+    pub embedder: &'a adage_intent::model::Embedder,
+    /// Give proposals the value model did not admit too (a diagnostic: what the gate prevents).
+    pub ungated: bool,
+}
+
+/// What the case store would say at one decision point of a replayed session, once per proposal.
+struct CaseState {
+    steps: Vec<adage_learn::import::StepObs>,
+    prompt: String,
+    prompts: u16,
+    turn: u32,
+    given: BTreeSet<usize>,
+}
+
+impl CaseState {
+    fn ask(&mut self, c: &CaseCtx, kind: adage_learn::cases::Kind, upto: usize) -> Option<(String, Class, u32)> {
+        let (p, s) = adage_learn::cases::vectors(c.embedder, &self.prompt, &self.steps[..upto.min(self.steps.len())]);
+        let g = c.store.propose(kind, &p, &s, None, c.ungated)?;
+        if !self.given.insert(g.index) {
+            return None;
+        }
+        let pr = g.proposal;
+        let class = match (&pr.area, invocation(&pr.command)) {
+            (Some(dir), Some((inv, _))) => Class::Area { runner: inv.runner, dir: dir.clone() },
+            _ => command_class(&pr.command),
+        };
+        let text = format!(
+            "<adage-reflex route=\"case\" kind=\"prime\">Similar past sessions in this repository reached passing tests with: {}</adage-reflex>",
+            pr.command
+        );
+        Some((format!("case:{}", pr.key), class, tokens_of(&text)))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -614,9 +674,12 @@ fn instinct_of(ix: &Index, repo: &str, route: &str) -> Option<Class> {
 pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, stop: bool, mode: Mode) -> Vec<Given> {
     match policy {
         Policy::CoChange(oracle) => cochange_directives(oracle, t, acts, task),
-        Policy::Runtime { index, repo, root, table, params } => {
+        Policy::Runtime { index, repo, root, table, params, embed, cases } => {
             let root_s = root.to_string_lossy().to_string();
-            let ctx = Ctx { index, repo: repo.to_string(), root, table, embed: None, params: *params };
+            let ctx = Ctx { index, repo: repo.to_string(), root, table, embed: *embed, params: *params };
+            let mut cs =
+                CaseState { steps: Vec::new(), prompt: String::new(), prompts: 0, turn: 0, given: BTreeSet::new() };
+            let cwd = PathBuf::from(&t.cwd);
             let mut st = SessionState { arm: Some(Arm::Control), repo: Some(repo.to_string()), ..Default::default() };
             let failure_routes: BTreeSet<String> = index
                 .for_repo(repo)
@@ -627,17 +690,35 @@ pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, sto
             let mut steps = steps.into_iter();
             let mut out = Vec::new();
             // At most one directive per hook event: the first the runtime would have given.
-            let push = |d: adage_runtime::Decision, at: i64, pre: bool, name: &'static str, out: &mut Vec<Given>| {
-                if let Some(w) = d.would_have.into_iter().find(|w| !pre || failure_routes.contains(&w.route)) {
-                    let class = instinct_of(index, repo, &w.route).unwrap_or(Class::Unscored);
-                    out.push(Given {
-                        tokens: tokens_of(&adage_runtime::render::wrap_directive(&w)),
-                        route: w.route,
-                        t: at,
-                        pre,
-                        event: name,
-                        class,
-                    });
+            let push =
+                |d: adage_runtime::Decision, at: i64, pre: bool, name: &'static str, out: &mut Vec<Given>| -> bool {
+                    if let Some(w) = d.would_have.into_iter().find(|w| !pre || failure_routes.contains(&w.route)) {
+                        let class = instinct_of(index, repo, &w.route).unwrap_or(Class::Unscored);
+                        out.push(Given {
+                            tokens: tokens_of(&adage_runtime::render::wrap_directive(&w)),
+                            route: w.route,
+                            t: at,
+                            pre,
+                            event: name,
+                            class,
+                        });
+                        return true;
+                    }
+                    false
+                };
+            // The case store, where the runtime gave nothing at this event.
+            use adage_learn::cases::Kind;
+            let ask = |cs: &mut CaseState,
+                       kind: Kind,
+                       upto: usize,
+                       at: i64,
+                       pre: bool,
+                       name: &'static str,
+                       out: &mut Vec<Given>| {
+                if let Some(c) = cases {
+                    if let Some((route, class, tokens)) = cs.ask(c, kind, upto) {
+                        out.push(Given { route, t: at, pre, event: name, tokens, class });
+                    }
                 }
             };
             let next = |steps: &mut std::vec::IntoIter<transcript::Step>| steps.next().map(|s| s.event);
@@ -648,20 +729,53 @@ pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, sto
             let mut k = 0usize;
             for item in &t.items {
                 match item {
-                    Item::Prompt(_) => {
+                    Item::Prompt(p) => {
+                        cs.prompt = p.clone();
+                        cs.prompts += 1;
                         if let Some(ev) = next(&mut steps) {
                             let d = decide(&ctx, &mut st, &ev);
-                            push(d, k as i64 - 1, false, "UserPromptSubmit", &mut out);
+                            if !push(d, k as i64 - 1, false, "UserPromptSubmit", &mut out) {
+                                let n = cs.steps.len();
+                                ask(&mut cs, Kind::Prompt, n, k as i64 - 1, false, "UserPromptSubmit", &mut out);
+                            }
                         }
                     }
                     Item::Turn(calls) => {
+                        // Each call's steps, as the importer makes them; `ends[j]` is the step count
+                        // once call j is in.
+                        let mut ends = Vec::with_capacity(calls.len());
+                        if cases.is_some() {
+                            for c in calls {
+                                let call = adage_runtime::Call {
+                                    tool: c.tool.clone(),
+                                    input: c.input.clone(),
+                                    output: c.output.clone(),
+                                    failed: c.failed,
+                                };
+                                let prompt = cs.prompts.saturating_sub(1);
+                                cs.steps.extend(adage_learn::cases::steps_of_call(cs.turn, prompt, &call, &cwd, table));
+                                ends.push(cs.steps.len());
+                            }
+                            cs.turn += 1;
+                        }
+                        let end = |j: usize| ends.get(j).copied().unwrap_or(0);
                         if mode == Mode::PreEmptive {
                             for (j, c) in calls.iter().enumerate() {
                                 let rejected = c.output.trim_start().starts_with("<tool_use_error>");
                                 if acts[k + j].failed() && !rejected {
                                     let ev = Event::Failure { call: call_of(c, &t.cwd, &root_s) };
                                     let d = decide(&ctx, &mut st, &ev);
-                                    push(d, (k + j) as i64, true, "PreToolUse", &mut out);
+                                    if !push(d, (k + j) as i64, true, "PreToolUse", &mut out) {
+                                        ask(
+                                            &mut cs,
+                                            Kind::Failure,
+                                            end(j),
+                                            (k + j) as i64,
+                                            true,
+                                            "PreToolUse",
+                                            &mut out,
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -669,14 +783,27 @@ pub fn directives(policy: &Policy, t: &Transcript, acts: &[Act], task: &str, sto
                             if c.failed && !c.output.trim_start().starts_with("<tool_use_error>") {
                                 if let Some(ev) = next(&mut steps) {
                                     let d = decide(&ctx, &mut st, &ev);
-                                    push(d, (k + j) as i64, false, "PostToolUseFailure", &mut out);
+                                    if !push(d, (k + j) as i64, false, "PostToolUseFailure", &mut out) {
+                                        ask(
+                                            &mut cs,
+                                            Kind::Failure,
+                                            end(j),
+                                            (k + j) as i64,
+                                            false,
+                                            "PostToolUseFailure",
+                                            &mut out,
+                                        );
+                                    }
                                 }
                             }
                         }
                         k += calls.len();
                         if let Some(ev) = next(&mut steps) {
                             let d = decide(&ctx, &mut st, &ev);
-                            push(d, k as i64 - 1, false, "PostToolBatch", &mut out);
+                            if !push(d, k as i64 - 1, false, "PostToolBatch", &mut out) {
+                                let n = cs.steps.len();
+                                ask(&mut cs, Kind::Batch, n, k as i64 - 1, false, "PostToolBatch", &mut out);
+                            }
                         }
                     }
                 }
@@ -954,8 +1081,26 @@ fn r4(x: f64) -> f64 {
 /// The mean of `f` over sessions and its 95% percentile bootstrap CI, resampling tasks (every
 /// session of a drawn task comes with it). 2000 draws, seeded.
 pub fn clustered_mean(rows: &[SessionRow], f: impl Fn(&SessionRow) -> f64) -> (f64, [f64; 2]) {
+    let (mean, boots) = clustered_boots(rows, f);
+    if boots.is_empty() {
+        return (mean, [0.0, 0.0]);
+    }
+    (mean, [r4(boots[49]), r4(boots[1949])])
+}
+
+/// [`clustered_mean`] with the 90% interval (the same draws).
+pub fn clustered_mean90(rows: &[SessionRow], f: impl Fn(&SessionRow) -> f64) -> (f64, [f64; 2]) {
+    let (mean, boots) = clustered_boots(rows, f);
+    if boots.is_empty() {
+        return (mean, [0.0, 0.0]);
+    }
+    (mean, [r4(boots[99]), r4(boots[1899])])
+}
+
+/// The mean and the sorted bootstrap means (2000 draws, seeded; empty for no rows).
+fn clustered_boots(rows: &[SessionRow], f: impl Fn(&SessionRow) -> f64) -> (f64, Vec<f64>) {
     if rows.is_empty() {
-        return (0.0, [0.0, 0.0]);
+        return (0.0, Vec::new());
     }
     let mut by: BTreeMap<&str, Vec<f64>> = BTreeMap::new();
     for r in rows {
@@ -975,7 +1120,7 @@ pub fn clustered_mean(rows: &[SessionRow], f: impl Fn(&SessionRow) -> f64) -> (f
         boots.push(s / n.max(1) as f64);
     }
     boots.sort_by(|a, b| a.total_cmp(b));
-    (r4(mean), [r4(boots[49]), r4(boots[1949])])
+    (r4(mean), boots)
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -990,6 +1135,8 @@ pub struct Summary {
     /// Ŝ: mean over sessions of Σ_t [S − C], in calls, with its task-clustered 95% CI.
     pub s_hat: f64,
     pub s_hat_ci: [f64; 2],
+    /// The same draws' 90% interval.
+    pub s_hat_ci90: [f64; 2],
     /// Ŝ in dollars per session.
     pub s_hat_usd: f64,
     pub s_hat_usd_ci: [f64; 2],
@@ -1015,6 +1162,7 @@ pub fn summarise(rows: &[SessionRow]) -> Summary {
     let harmful: usize = rows.iter().map(|r| r.harmful).sum();
     let calls: usize = rows.iter().map(|r| r.calls).sum();
     let (s_hat, s_hat_ci) = clustered_mean(rows, |r| r.net);
+    let (_, s_hat_ci90) = clustered_mean90(rows, |r| r.net);
     let (s_hat_usd, s_hat_usd_ci) = clustered_mean(rows, |r| r.net_usd);
     let de: Vec<SessionRow> = rows.iter().filter(|r| r.dead_end).cloned().collect();
     let (s_de, s_de_ci) = clustered_mean(&de, |r| r.net);
@@ -1030,6 +1178,7 @@ pub fn summarise(rows: &[SessionRow]) -> Summary {
         superseded: rows.iter().map(|r| r.superseded).sum(),
         s_hat,
         s_hat_ci,
+        s_hat_ci90,
         s_hat_usd: r4(s_hat_usd * 100.0) / 100.0,
         s_hat_usd_ci: [r4(s_hat_usd_ci[0] * 100.0) / 100.0, r4(s_hat_usd_ci[1] * 100.0) / 100.0],
         saved: r4(rows.iter().map(|r| r.saved).sum::<f64>() / n),
@@ -1050,6 +1199,11 @@ pub struct Report {
     pub policy: String,
     pub mode: Mode,
     pub sat: SatRule,
+    /// What embedded (`--models`), if anything.
+    pub embedder: Option<String>,
+    pub cases: CasesMode,
+    /// The case store's proposals and the value model's verdicts.
+    pub proposals: Vec<adage_learn::cases::Proposal>,
     pub routes: Vec<String>,
     pub summary: Summary,
     pub by_route: BTreeMap<String, RouteStats>,
@@ -1090,6 +1244,18 @@ fn instincts_cfg(repo: &str, root: &Path) -> adage_learn::instincts::Config {
 
 /// Learn from the training transcripts at `thresholds`, then bind instincts against `root`.
 pub fn learned_index(repo: &str, root: &Path, train: &[PathBuf], thresholds: &str) -> Result<Index> {
+    learned_index_with(repo, root, train, thresholds, None)
+}
+
+/// [`learned_index`], learning intent families with the model `models` resolves to (installed,
+/// bundled, or none: `adage_intent::model::resolve`).
+pub fn learned_index_with(
+    repo: &str,
+    root: &Path,
+    train: &[PathBuf],
+    thresholds: &str,
+    models: Option<&Path>,
+) -> Result<Index> {
     let home = tempfile::tempdir()?;
     let mut cfg = crate::config(thresholds)?;
     cfg.instincts = Some(instincts_cfg(repo, root));
@@ -1097,7 +1263,7 @@ pub fn learned_index(repo: &str, root: &Path, train: &[PathBuf], thresholds: &st
         transcripts: train.to_vec(),
         outcomes: BTreeMap::new(),
         repo_override: Some(repo.to_string()),
-        models: None,
+        models: models.map(Path::to_path_buf),
         cache: None,
         only_repo: None,
     };
@@ -1123,6 +1289,38 @@ pub struct Options {
     pub only: Option<BTreeSet<String>>,
     pub arm: Option<String>,
     pub thresholds: String,
+    /// A models directory: intent families are learned and matched with the model it resolves to
+    /// (`ADAGE_EMBED_MODEL` selects), and the case store embeds with it. `None`: no embedding, as
+    /// the replay always did.
+    pub models: Option<PathBuf>,
+    pub cases: CasesMode,
+}
+
+/// Whether the case store takes part.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CasesMode {
+    #[default]
+    Off,
+    /// Proposals the value model admitted.
+    On,
+    /// Every proposal (a diagnostic).
+    Ungated,
+}
+
+/// A repository's case store, built from the manifest's training transcripts.
+pub fn case_store(
+    m: &Manifest,
+    e: &adage_intent::model::Embedder,
+    thresholds: &str,
+) -> Result<adage_learn::cases::CaseStore> {
+    let table = CommandTable::load();
+    let sessions: Vec<adage_learn::import::Session> =
+        m.train.iter().filter_map(|p| adage_learn::import::parse_transcript(p, &table, Some(&m.repo_key))).collect();
+    let refs: Vec<&adage_learn::import::Session> = sessions.iter().collect();
+    let cfg = crate::config(thresholds)?;
+    let env_kind = adage_learn::value::Statics::of(Some(&m.root)).env_kind;
+    Ok(adage_learn::cases::build(&m.repo_key, &refs, e, &cfg.priors, &env_kind))
 }
 
 pub fn run(m: &Manifest, o: &Options) -> Result<Report> {
@@ -1138,7 +1336,7 @@ pub fn run(m: &Manifest, o: &Options) -> Result<Report> {
             serde_json::from_slice::<Index>(&std::fs::read(&p).with_context(|| p.display().to_string())?)?
         }
         "instincts" => crate::instincts_index(&m.repo_key, &m.root)?,
-        "learned" => learned_index(&m.repo_key, &m.root, &m.train, &o.thresholds)?,
+        "learned" => learned_index_with(&m.repo_key, &m.root, &m.train, &o.thresholds, o.models.as_deref())?,
         other => bail!("unknown policy {other:?} (index, instincts, learned, cochange)"),
     };
     let index = match &o.only {
@@ -1146,6 +1344,18 @@ pub fn run(m: &Manifest, o: &Options) -> Result<Report> {
         None => index,
     };
     let empty = CoChange::default();
+    // The embedder (with a models directory): the model intent routes were learned with, and
+    // what the case store embeds with.
+    let resolved = o.models.as_deref().map(|d| adage_intent::model::resolve(d, true));
+    let embed_fn = |text: &str| -> Option<(String, Vec<f32>)> {
+        let m = resolved.as_ref()?.embedder.model()?;
+        Some((m.id.clone(), m.embed(&adage_intent::normalize::normalize(text))?))
+    };
+    let store = match (&resolved, o.cases) {
+        (Some(r), CasesMode::On | CasesMode::Ungated) => Some(case_store(m, &r.embedder, &o.thresholds)?),
+        (None, CasesMode::On | CasesMode::Ungated) => bail!("--cases needs --models <dir>"),
+        _ => None,
+    };
     let policy = if o.policy == "cochange" {
         Policy::CoChange(m.cochange.as_ref().unwrap_or(&empty))
     } else {
@@ -1155,6 +1365,13 @@ pub fn run(m: &Manifest, o: &Options) -> Result<Report> {
             root: &m.root,
             table: &table,
             params: adage_tracks::params::EngineParams::preset(&o.thresholds)?.runtime,
+            embed: resolved.as_ref().map(|_| &embed_fn as adage_runtime::Embed),
+            cases: match (&store, &resolved) {
+                (Some(st), Some(r)) => {
+                    Some(CaseCtx { store: st, embedder: &r.embedder, ungated: o.cases == CasesMode::Ungated })
+                }
+                _ => None,
+            },
         }
     };
     let routes = index
@@ -1182,6 +1399,9 @@ pub fn run(m: &Manifest, o: &Options) -> Result<Report> {
         policy: o.policy.clone(),
         mode: o.mode,
         sat: o.sat,
+        embedder: resolved.as_ref().map(|r| r.embedder.id()),
+        cases: o.cases,
+        proposals: store.map(|s| s.proposals).unwrap_or_default(),
         routes,
         summary: summarise(&rows),
         by_route: by_route(&rows),
@@ -1208,10 +1428,19 @@ pub fn render_text(r: &Report) -> String {
         }
     );
     let _ = writeln!(o, "  {} sessions, {} tasks, {} calls; {} routes", s.sessions, s.tasks, s.calls, r.routes.len());
+    if let Some(e) = &r.embedder {
+        let admitted = r.proposals.iter().filter(|p| p.admitted).count();
+        let _ = writeln!(
+            o,
+            "  embedder {e}; case store {:?}: {} proposals, {admitted} admitted",
+            r.cases,
+            r.proposals.len()
+        );
+    }
     let _ = writeln!(
         o,
-        "  Ŝ = {:+.3} calls/session [95% CI {:+.3}, {:+.3}] = ${:+.4}/session  (S {:.3}, C {:.4})",
-        s.s_hat, s.s_hat_ci[0], s.s_hat_ci[1], s.s_hat_usd, s.saved, s.cost
+        "  Ŝ = {:+.3} calls/session [95% CI {:+.3}, {:+.3}; 90% {:+.3}, {:+.3}] = ${:+.4}/session  (S {:.3}, C {:.4})",
+        s.s_hat, s.s_hat_ci[0], s.s_hat_ci[1], s.s_hat_ci90[0], s.s_hat_ci90[1], s.s_hat_usd, s.saved, s.cost
     );
     let _ = writeln!(
         o,
@@ -1240,7 +1469,7 @@ pub fn render_text(r: &Report) -> String {
     o
 }
 
-const USAGE: &str = "usage: adage eval replay-savings <manifest.json> [--policy index|instincts|learned|cochange] [--index <index.json>] [--only U11,…] [--mode post-hoc|pre-emptive] [--sat goal|strict] [--arm <arm>] [--thresholds default|demo] [--json]";
+const USAGE: &str = "usage: adage eval replay-savings <manifest.json> [--policy index|instincts|learned|cochange] [--index <index.json>] [--only U11,…] [--mode post-hoc|pre-emptive] [--sat goal|strict] [--arm <arm>] [--thresholds default|demo] [--models <dir>] [--cases off|on|ungated] [--json]";
 
 /// `adage eval replay-savings …`
 pub fn cli(args: &[String]) -> Result<()> {
@@ -1267,6 +1496,13 @@ pub fn cli(args: &[String]) -> Result<()> {
         only: flag("--only").map(|s| s.split(',').map(|x| x.trim().to_uppercase()).collect()),
         arm: flag("--arm"),
         thresholds: flag("--thresholds").unwrap_or_else(|| "default".into()),
+        models: flag("--models").map(PathBuf::from),
+        cases: match flag("--cases").as_deref() {
+            None | Some("off") => CasesMode::Off,
+            Some("on") => CasesMode::On,
+            Some("ungated") => CasesMode::Ungated,
+            Some(x) => bail!("--cases {x:?}: off, on or ungated"),
+        },
     };
     let r = run(&m, &o)?;
     if args.iter().any(|a| a == "--json") {

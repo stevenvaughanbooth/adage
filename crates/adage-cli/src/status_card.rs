@@ -10,7 +10,7 @@
 //!   savings: ~$0.034 and 3.1 turns per session, API-list equivalent (95% CI $0.011–$0.058)
 //!            ≈ $1.87 over 55 sessions, vs 6 where Adage stayed quiet (priced as of 2026-06-24)
 //!   1 install step waits for you → adage review
-//!   adage ui · adage map · adage doctor
+//!   embeddings: potion-base-8m-i8 (bundled) · adage ui · adage map · adage doctor
 //! ```
 //!
 //! Outside a repository it lists every repository with reflexes, one line each. It only reads:
@@ -195,9 +195,18 @@ fn repo_lines(paths: &Paths, repo: &str, index: &Index, now: u64) -> Vec<String>
     out
 }
 
-/// The model fetch failed earlier (never retried by itself): prompt grouping is off.
-fn prompt_grouping_off(paths: &Paths) -> bool {
-    paths.models().join(crate::models::FETCH_FAILED).exists() && adage_intent::model::status(&paths.models()).is_err()
+/// What hooks and the learner embed with, in a few words: `potion-base-8m (bundled)`, an
+/// installed model's key, or `hashed fallback`; and whether that is a fallback nobody chose
+/// (no model installed or bundled), which the card's header then says in grey.
+pub fn embeddings(paths: &Paths) -> (String, bool) {
+    let r = adage_intent::model::resolve(&paths.models(), false);
+    let id = r.embedder.id();
+    let key = id.split('@').next().unwrap_or(&id).to_string();
+    match r.source {
+        adage_intent::model::Source::Installed { .. } => (key, false),
+        adage_intent::model::Source::Bundled => (format!("{key} (bundled)"), false),
+        adage_intent::model::Source::Hashed { .. } => ("hashed fallback".into(), r.selected != "hashed"),
+    }
 }
 
 /// Bare `adage`.
@@ -231,7 +240,8 @@ pub fn card(paths: &Paths, cwd: Option<&Path>) -> String {
         return s;
     }
     let (dot, fix) = health(paths, root.as_deref());
-    let grey = if prompt_grouping_off(paths) { "  (prompt grouping off)" } else { "" };
+    let (embed, fallback) = embeddings(paths);
+    let grey = if fallback { "  (no embedding model: hashed fallback)" } else { "" };
     match &root {
         Some(root) => {
             let repo = crate::ui::health::repo_key(paths, root, &index);
@@ -260,6 +270,6 @@ pub fn card(paths: &Paths, cwd: Option<&Path>) -> String {
     if let Some(f) = fix {
         s.push_str(&format!("  {f}\n"));
     }
-    s.push_str("  adage ui · adage map · adage doctor\n");
+    s.push_str(&format!("  embeddings: {embed} · adage ui · adage map · adage doctor\n"));
     s
 }

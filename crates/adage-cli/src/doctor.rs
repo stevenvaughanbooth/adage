@@ -338,32 +338,58 @@ fn packs_check(paths: &Paths) -> Check {
 }
 
 fn model_check(paths: &Paths, idx: &Index) -> Check {
-    let dir = adage_intent::model::dir_in(&paths.models());
+    use adage_intent::model::{self, Source};
     let wants = idx.routes.iter().any(|r| matches!(r.route.trigger, Trigger::Intent { .. }));
-    match adage_intent::model::status(&paths.models()) {
-        Ok(m) => pass("embedding model", format!("{} installed; checksums verified", m.id)),
-        // A download that failed (never retried by itself): a pass, with the note that says why
-        // prompt grouping is off and how to fix it (docs/zero-config.md §5).
-        Err(_) if !dir.join("manifest.json").exists() && crate::models::fetch_failed(paths).is_some() => {
-            let f = crate::models::fetch_failed(paths).unwrap_or_default();
-            let (class, host, detail) = (
-                f["class"].as_str().unwrap_or("error"),
-                f["host"].as_str().unwrap_or("the model host"),
-                f["detail"].as_str().unwrap_or(""),
-            );
-            pass("embedding model", format!("intent grouping off: {}", crate::models::explain(class, host, detail)))
+    let r = model::resolve(&paths.models(), false);
+    // A download that failed (never retried by itself), said once, with its fix
+    // (docs/zero-config.md §5).
+    let failed = crate::models::fetch_failed(paths)
+        .map(|f| {
+            format!(
+                "; the last download failed: {}",
+                crate::models::explain(
+                    f["class"].as_str().unwrap_or("error"),
+                    f["host"].as_str().unwrap_or("the model host"),
+                    f["detail"].as_str().unwrap_or("")
+                )
+            )
+        })
+        .unwrap_or_default();
+    // An installed model that cannot be used is a failure even when another one serves.
+    for spec in model::SPECS {
+        let dir = paths.models().join(spec.key);
+        if dir.join("manifest.json").exists() {
+            if let Err(e) = model::status_of(&dir) {
+                return fail(
+                    "embedding model",
+                    format!("{} is installed but unusable: {e:#}", spec.key),
+                    format!("run `adage models fetch {}` to reinstall it", spec.key),
+                );
+            }
         }
-        Err(_) if !dir.join("manifest.json").exists() && wants => {
-            warn("embedding model", "not installed, so intent reflexes cannot fire", "run `adage models fetch`")
+    }
+    match &r.source {
+        Source::Installed { .. } => {
+            pass("embedding model", format!("{} installed; checksums verified", r.embedder.id()))
         }
-        Err(_) if !dir.join("manifest.json").exists() => {
-            pass("embedding model", "not installed (optional: `adage models fetch` enables intent families)")
+        Source::Bundled => match model::bundled_verified() {
+            Ok(()) => pass(
+                "embedding model",
+                format!("{} bundled in this binary (int8, SHA-256 verified){failed}", r.embedder.id()),
+            ),
+            Err(e) => fail("embedding model", format!("{e:#}"), "reinstall adage, or `adage models fetch`"),
+        },
+        Source::Hashed { why } if r.selected == "hashed" => {
+            pass("embedding model", format!("hashed fallback, as selected ({why}); intent reflexes cannot fire"))
         }
-        Err(e) => fail(
-            "embedding model",
-            format!("installed but unusable: {e:#}"),
-            "run `adage models fetch` to reinstall it",
-        ),
+        Source::Hashed { why } => {
+            let detail = format!("no embedding model, so the hashed fallback is in use: {why}{failed}");
+            if wants {
+                warn("embedding model", format!("{detail}; intent reflexes cannot fire"), "run `adage models fetch`")
+            } else {
+                warn("embedding model", detail, "run `adage models fetch` (or `adage models use hashed` to choose it)")
+            }
+        }
     }
 }
 

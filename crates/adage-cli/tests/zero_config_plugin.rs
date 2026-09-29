@@ -601,8 +601,9 @@ fn pricing_honesty() {
     assert!(!w.card(&repo).contains('$'));
 }
 
-/// 6. A proxy blocks the model download: classified, recorded, explained once in doctor, never
-///    retried by itself; hooks and learning go on.
+/// 6. A proxy blocks the model download (Hugging Face and the npm fallback): classified, recorded,
+///    explained once in doctor, never retried by itself; the bundled model serves meanwhile, and
+///    hooks and learning go on.
 #[test]
 #[cfg(unix)]
 fn model_blocked() {
@@ -622,6 +623,8 @@ fn model_blocked() {
     let o = w.adage(&["models", "fetch"], "");
     assert!(!o.status.success(), "{}", text(&o));
     assert!(text(&o).contains("huggingface.co blocked by proxy (403)"), "{}", text(&o));
+    assert!(text(&o).contains("Fallback: registry.npmjs.org blocked by proxy (403)"), "{}", text(&o));
+    assert!(text(&o).contains("Still embedding with potion-base-8m-i8@b9c0e329a2ce (bundled"), "{}", text(&o));
     let f: Value =
         serde_json::from_str(&std::fs::read_to_string(w.p("data/models/.fetch-failed.json")).unwrap()).unwrap();
     assert_eq!((f["class"].as_str(), f["host"].as_str()), (Some("blocked"), Some("huggingface.co")), "{f}");
@@ -630,9 +633,11 @@ fn model_blocked() {
     let v: Value = serde_json::from_slice(&o.stdout).unwrap();
     let m = v["checks"].as_array().unwrap().iter().find(|c| c["check"] == "embedding model").unwrap();
     assert_eq!(m["status"], "pass", "{m}");
+    let detail = m["detail"].as_str().unwrap();
+    assert!(detail.contains("bundled in this binary (int8, SHA-256 verified)"), "{m}");
     assert!(
-        m["detail"].as_str().unwrap().contains(
-            "intent grouping off: huggingface.co blocked by proxy (403). Use a mirror (ADAGE_MODEL_BASE_URL)"
+        detail.contains(
+            "the last download failed: huggingface.co blocked by proxy (403). Use a mirror (ADAGE_MODEL_BASE_URL)"
         ),
         "{m}"
     );
@@ -649,8 +654,14 @@ fn model_blocked() {
     );
     assert!(context(&out).contains("make test"), "{out}");
     w.hook("Stop", &repo, "s1", json!({ "stop_hook_active": false }));
-    assert!(w.card(&repo).contains("(prompt grouping off)"));
-    assert_eq!(std::fs::read_to_string(&calls).unwrap().lines().count(), 1, "one download attempt: the person's");
+    let card = w.card(&repo);
+    assert!(card.contains("embeddings: potion-base-8m-i8 (bundled)"), "{card}");
+    assert!(!card.contains("hashed fallback"), "{card}");
+    assert_eq!(
+        std::fs::read_to_string(&calls).unwrap().lines().count(),
+        2,
+        "one download attempt, the person's: Hugging Face, then the npm fallback"
+    );
 
     // A mirror is used when named (still checked against the pinned digests).
     let o = w.run(Path::new(env!("CARGO_BIN_EXE_adage")), &["models", "fetch"], "", &w.root);
