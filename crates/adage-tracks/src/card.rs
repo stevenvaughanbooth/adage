@@ -178,6 +178,20 @@ pub fn check(c: &Card) -> Result<(), String> {
         if !path_ok(&f.path) || f.sessions == 0 || f.sessions > c.sessions {
             return Err(format!("card file {:?} is not allowed", f.path));
         }
+        if adage_core::secrets::sensitive_path(&f.path) {
+            return Err(format!("card file {:?} holds secrets by its kind", f.path));
+        }
+    }
+    // Nothing secret-looking, anywhere a card quotes a trace (review B3): the learner drops such
+    // lines and commands; a card that still has one is refused whole.
+    let secret = c.exemplars.iter().flat_map(|e| &e.lines).any(|l| adage_core::secrets::has_secret(l))
+        || c.commands
+            .iter()
+            .chain(&c.avoid)
+            .any(|x| adage_core::secrets::has_secret(&x.command) || adage_core::secrets::has_secret(&x.error))
+        || c.finish.as_deref().is_some_and(adage_core::secrets::has_secret);
+    if secret {
+        return Err("the card quotes something that looks like a secret".into());
     }
     if c.exemplars.len() > MAX_FILES {
         return Err("too many exemplars".into());
@@ -343,6 +357,32 @@ mod tests {
         let mut bad = sample();
         bad.prompts.push(vec![1; 9]);
         assert!(check(&bad).is_err());
+    }
+
+    /// Review B3: a card that quotes a secret, or names a secret-holding file, is refused whole.
+    #[test]
+    fn a_card_with_a_secret_is_refused() {
+        let token = format!("ghp_{}", "A1b2C3d4E5".repeat(4));
+        let mut bad = sample();
+        bad.exemplars[0].lines.push(format!("GITHUB_TOKEN = \"{token}\""));
+        assert!(check(&bad).is_err());
+        let mut bad = sample();
+        bad.exemplars[0].lines.push(format!("OPENAI_API_KEY=sk-{}", "abcDEF123_".repeat(3)));
+        assert!(check(&bad).is_err());
+        let mut bad = sample();
+        bad.commands[0].command = format!("GITHUB_TOKEN={token} gh pr create");
+        assert!(check(&bad).is_err());
+        let mut bad = sample();
+        bad.avoid[0].error = format!("401 Unauthorized for token {token}");
+        assert!(check(&bad).is_err());
+        let mut bad = sample();
+        bad.files.push(CardFile { path: ".env".into(), sessions: 1 });
+        assert!(check(&bad).is_err());
+        let mut bad = sample();
+        bad.files[0].path = "config/secrets.yml".into();
+        bad.exemplars[0].path = "config/secrets.yml".into();
+        assert!(check(&bad).is_err());
+        check(&sample()).unwrap();
     }
 
     #[test]

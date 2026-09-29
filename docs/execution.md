@@ -48,7 +48,8 @@ adage review delegate acme-billing/learned lookup-work-item --level e1 \
   --exit-when state=Closed
 adage delegate on        # hooks call adage-exec hook instead of adage hook
 adage delegate status        # registrations, and grants per repository
-adage delegate off       # back to adage hook (grants are kept)
+adage delegate off       # back to adage hook (grants are kept; no terminal needed)
+adage delegate rewrites off   # the PreToolUse rewrite alone (runtime.rewrite); `on` back on
 adage review revoke acme-billing/learned lookup-work-item
 ```
 
@@ -179,9 +180,10 @@ repository itself declares, verified to contain what the command imports, instea
 interpreter that fails (`No module named pytest`). It adds no effect, touches no file, and cannot
 run code the command did not already run. So it is on by default for instincts with a verified
 environment, like a directive, and three things keep it honest: it is never done in the control
-arm (so its effect is measured), `adage delegate rewrites off` turns it off on the machine
-(`delegate rewrites on` back on; neither needs adage-exec, and `delegate off`/`on` switch it too),
-and it is always visible: the person sees each rewrite as it happens, and the status card says
+arm (so its effect is measured), `adage delegate rewrites off` (the setting `runtime.rewrite`)
+turns it off on the machine from the next command, and `delegate rewrites on` back on: neither
+needs adage-exec or a terminal, and execution's own `delegate on`/`off` leaves it as it is; and it
+is always visible: the person sees each rewrite as it happens, and the status card says
 `rewrote N commands to use the project's environment`. The spool records the kind of rewrite or
 advice and the interpreter, never the command.
 

@@ -459,14 +459,14 @@ fn pretool_rewrites_to_the_verified_environment() {
     let out = pre("python -m pytest tests/test_formatting.py -xvs 2>&1 | head -50");
     let py = repo.join(".venv/bin/python");
     let want = json!({
-        "systemMessage": "adage: ran this test run with .venv/bin/python (the project's environment).",
+        "systemMessage": "adage: pointed this test run at .venv/bin/python (the project's environment).",
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "updatedInput": {
                 "command": format!("{} -m pytest tests/test_formatting.py -xvs 2>&1 | head -50", py.display()),
                 "description": "Run the tests"
             },
-            "additionalContext": "Adage ran this test run with the project's environment (.venv/bin/python): the system Python lacks the project and its test dependencies. Nothing else in the command changed."
+            "additionalContext": "Adage pointed this test run at the project's environment (.venv/bin/python): the system Python lacks the project and its test dependencies. Nothing else in the command changed."
         }
     });
     assert_eq!(serde_json::from_str::<Value>(out.trim()).unwrap(), want, "{out}");
@@ -503,6 +503,10 @@ fn pretool_rewrites_to_the_verified_environment() {
     std::fs::write(w.p("data/exec/rewrite-off"), "").unwrap();
     assert_eq!(pre("python -m pytest tests").trim(), "");
     std::fs::remove_file(w.p("data/exec/rewrite-off")).unwrap();
+    // ... as does `runtime.rewrite = false` (`adage delegate rewrites off`), read at every call.
+    w.adage_in(&repo, &["delegate", "rewrites", "off"]);
+    assert_eq!(pre("python -m pytest tests").trim(), "");
+    w.adage_in(&repo, &["delegate", "rewrites", "on"]);
     // Review S4: the person allowed `pytest` as written; the rewritten command would lose that
     // rule, so the hook advises instead of rewriting.
     std::fs::create_dir_all(repo.join(".claude")).unwrap();

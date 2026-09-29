@@ -118,13 +118,10 @@ pub fn delegate(args: &[String], paths: &Paths) -> Result<()> {
     match args.first().map(String::as_str) {
         Some("on") => switch(true, &args[1..], paths),
         Some("off") => switch(false, &args[1..], paths),
+        // Like `adage config set runtime.rewrite`: it only turns an instinct's rewrite on or off
+        // (the default is on), so it runs from a script, and from `!` inside an agent session.
         Some("rewrites") => match args.get(1).map(String::as_str) {
-            Some(v @ ("on" | "off")) => {
-                require_person(&format!("delegate rewrites {v}"))?;
-                rewrites(v == "on", paths)?;
-                println!("This takes effect at the next command.");
-                Ok(())
-            }
+            Some(v @ ("on" | "off")) => rewrites(v == "on", paths),
             _ => bail!("{USAGE}"),
         },
         Some("status") => status(&args[1..], paths),
@@ -134,29 +131,37 @@ pub fn delegate(args: &[String], paths: &Paths) -> Result<()> {
     }
 }
 
-/// Rewrites to the project's environment (docs/execution.md), on their own switch: they need no
-/// adage-exec, so a plugin-only install can turn them off and on again (review S5).
+/// Rewrites to the project's environment (docs/execution.md), on their own switch
+/// (`runtime.rewrite`), apart from execution: they need no adage-exec, so a plugin-only install
+/// turns them off and on again (review S5, fresh-install B6). The hook reads the switch at every
+/// call.
 fn rewrites(on: bool, paths: &Paths) -> Result<()> {
-    let off = adage_hook::rewrite_off(paths);
+    adage_store::config::set(paths, "runtime.rewrite", if on { "true" } else { "false" })
+        .map_err(|e| anyhow::anyhow!(e))?;
+    // The marker `delegate off` wrote before the switch existed.
+    let old = adage_hook::rewrite_off(paths);
     if on {
-        match std::fs::remove_file(&off) {
+        match std::fs::remove_file(&old) {
             Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
             _ => {}
         }
-        println!("Rewrites to the project's environment: on (off: adage delegate rewrites off).");
-    } else {
-        std::fs::create_dir_all(off.parent().context("no directory")?)?;
-        std::fs::write(&off, "")?;
         println!(
-            "Rewrites to the project's environment: off (Python test runs keep the interpreter the agent chose; on: adage delegate rewrites on)."
+            "Rewrites to the project's environment: on, from the next command (off: adage delegate rewrites off)."
+        );
+    } else {
+        println!(
+            "Rewrites to the project's environment: off, from the next command: Python test runs keep the interpreter the agent chose (on: adage delegate rewrites on)."
         );
     }
     Ok(())
 }
 
 fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
-    let verb = if on { "delegate on" } else { "delegate off" };
-    require_person(verb)?;
+    // Turning execution on is a person's decision; turning it off only turns something down, so
+    // it also runs from a script or from `!` in an agent session (fresh-install B6).
+    if on {
+        require_person("delegate on")?;
+    }
     let here = std::env::current_exe().context("cannot locate the adage binary")?;
     let bin = if on {
         let b = match flag(args, "--bin") {
@@ -166,13 +171,7 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
             }
         };
         if !b.is_file() {
-            // `delegate off` turned rewrites off without adage-exec; `delegate on` turns them back
-            // on without it, before saying execution is unavailable.
-            rewrites(true, paths)?;
-            bail!(
-                "no adage-exec binary at {}; install it beside adage, or pass --bin (execution stays off)",
-                b.display()
-            );
+            bail!("no adage-exec binary at {}; install it beside adage, or pass --bin", b.display());
         }
         b
     } else {
@@ -207,13 +206,10 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
         let _ = std::fs::remove_file(&m);
         println!("Execution: off. Hooks call adage again (approvals are kept; revoke them with review revoke).");
     }
-    // Rewrites to the project's environment (docs/execution.md): on by default, off with
-    // `delegate off`, back on with `delegate on`; alone with `delegate rewrites on|off`.
-    rewrites(on, paths)?;
     if changed == 0 {
         println!("No hook registration written by `adage install` needed changing.");
     }
-    println!("This takes effect in new agent sessions.");
+    println!("This takes effect in new agent sessions. Rewrites to the project's environment have their own switch: adage delegate rewrites on|off.");
     Ok(())
 }
 

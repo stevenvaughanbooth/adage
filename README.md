@@ -93,10 +93,15 @@ learner touches the network; settings files change only when you install the plu
 
 **The one change Adage makes by default** (Claude Code): when a Python repository's own `.venv` was
 verified to have pytest and the project, a test run or scratch repro the agent starts under the
-system Python runs with `.venv/bin/python` instead. Only the interpreter changes; the agent's
-permissions apply as before; you see each one, and the card counts them. A `pip install` into the
-system Python is refused with the command that reaches the project. `adage delegate off` turns
-this off ([docs/execution.md](docs/execution.md#rewrites-to-the-projects-environment-pretooluse-u11)).
+system Python runs with `.venv/bin/python` instead. Only the interpreter word of a top-level
+command changes, never text in a heredoc, a quoted string or a `-c` payload; a command that
+activates an environment, `cd`s elsewhere, or pins another Python version is left alone. If your
+permission rules allow the command as written but not rewritten, Adage advises instead of
+rewriting. You see each rewrite, and the card counts them. A `pip install` of the project or its
+test dependencies into the system Python gets advice naming the command that reaches the project;
+nothing is refused. `adage delegate rewrites off` (or `adage config set runtime.rewrite false`)
+turns this off, from a script too, and `adage delegate rewrites on` back on
+([docs/execution.md](docs/execution.md#rewrites-to-the-projects-environment-pretooluse-u11)).
 
 ## What it does, concretely
 

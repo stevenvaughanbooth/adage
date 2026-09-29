@@ -341,7 +341,9 @@ fn pretool(
     if ["VIRTUAL_ENV", "CONDA_PREFIX"].iter().any(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty())) {
         return Ok(None);
     }
-    if rewrite_off(paths).exists() {
+    // Off with `runtime.rewrite = false` (`adage delegate rewrites off`), or the older marker.
+    let cfg = adage_store::config::load(paths).config;
+    if !cfg.runtime_rewrite || rewrite_off(paths).exists() {
         return Ok(None);
     }
     let key = repo::repo_key_cached(root, &paths.repo_keys());
@@ -402,7 +404,7 @@ fn pretool(
     }
     // The arm: assigned now if the session has none yet; the control arm is left as it is.
     let arm_env = std::env::var("ADAGE_ARM").ok();
-    let share: f64 = adage_store::config::load(paths).config.runtime_control;
+    let share: f64 = cfg.runtime_control;
     let (arm, propensity) = state::update::<SessionState, _>(&paths.state(session), |st| {
         if st.arm.is_none() {
             let (arm, pr) = assign(session, share, arm_env.as_deref());
@@ -419,7 +421,7 @@ fn pretool(
             let mut updated = input.clone();
             updated["command"] = Value::String(new.clone());
             let notice = format!(
-                "adage: ran this {} with {} (the project's environment).",
+                "adage: pointed this {} at {} (the project's environment).",
                 if *kind == "test" { "test run" } else { "Python run" },
                 env.interpreter
             );

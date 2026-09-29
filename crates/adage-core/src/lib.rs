@@ -2,6 +2,7 @@
 //! data-driven command table), effect classes, typed spans, and repository identity.
 
 pub mod action;
+pub mod gitignore;
 pub mod gitobj;
 pub mod judge;
 pub mod keys;
@@ -9,6 +10,7 @@ pub mod outcome;
 pub mod pattern;
 pub mod pricing;
 pub mod repo;
+pub mod secrets;
 pub mod shell;
 pub mod spans;
 pub mod table;

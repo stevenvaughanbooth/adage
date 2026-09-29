@@ -155,32 +155,43 @@ fn approving_execution_is_a_persons_decision_and_shows_what_would_run() {
     assert_eq!((code, out.contains("Revoked 1")), (0, true), "{out}");
 }
 
-/// Review S5: rewrites to the project's environment have their own switch, and a plugin-only
-/// install (no adage-exec) that turned them off with `delegate off` gets them back with
-/// `delegate on`, even though execution stays unavailable.
+/// Review S5 and fresh-install B6: rewrites to the project's environment have their own switch
+/// (`runtime.rewrite`), apart from execution: a plugin-only install (no adage-exec) turns them
+/// off and on again, from a script or from `!` in an agent session; `delegate off` needs no
+/// terminal, and neither `delegate on` nor `off` touches rewrites.
 #[test]
 fn rewrites_switch_on_and_off_without_adage_exec() {
     let w = World::new();
-    let marker = w.p("adage/exec/rewrite-off");
-    let (_, err, code) = w.run(&["delegate", "off"], &[]);
-    assert_eq!(code, 0, "{err}");
-    assert!(marker.is_file(), "delegate off turns rewrites off");
-    let (_, err, code) = w.run(&["delegate", "on", "--bin", "/nonexistent/adage-exec"], &[]);
-    assert_eq!(code, 1, "no adage-exec: execution stays off: {err}");
-    assert!(err.contains("no adage-exec binary"), "{err}");
-    assert!(!marker.exists(), "but rewrites are back on");
-
-    let (_, _, code) = w.run(&["delegate", "rewrites", "off"], &[("CLAUDECODE", "1")]);
-    assert_eq!(code, 1, "a person's decision");
-    assert!(!marker.exists());
-    let (out, err, code) = w.run(&["delegate", "rewrites", "off"], &[]);
-    assert_eq!(code, 0, "{err}");
-    assert!(marker.is_file() && out.contains("off"), "{out}");
-    let (out, err, code) = w.run(&["delegate", "rewrites", "on"], &[]);
-    assert_eq!(code, 0, "{err}");
-    assert!(!marker.exists() && out.contains("on"), "{out}");
+    let rewrite = || {
+        let (out, _, _) = w.run(&["config", "get", "runtime.rewrite"], &[]);
+        out.trim().to_string()
+    };
+    let scripted = [("ADAGE_ALLOW_NONINTERACTIVE", "0")];
+    assert_eq!(rewrite(), "true", "on by default");
+    let (out, err, code) = w.run(&["delegate", "rewrites", "off"], &scripted);
+    assert_eq!(code, 0, "no terminal needed to turn it off: {err}");
+    assert!(out.contains("off, from the next command"), "{out}");
+    assert_eq!(rewrite(), "false");
+    let (_, err, code) = w.run(&["delegate", "rewrites", "on"], &[("CLAUDECODE", "1")]);
+    assert_eq!(code, 0, "`!adage delegate rewrites on` inside a session: {err}");
+    assert_eq!(rewrite(), "true");
+    // The older marker is cleared by `rewrites on`.
+    std::fs::create_dir_all(w.p("adage/exec")).unwrap();
+    std::fs::write(w.p("adage/exec/rewrite-off"), "").unwrap();
+    w.run(&["delegate", "rewrites", "on"], &[]);
+    assert!(!w.p("adage/exec/rewrite-off").exists());
     let (_, _, code) = w.run(&["delegate", "rewrites", "maybe"], &[]);
     assert_eq!(code, 1);
+
+    // Execution off: no terminal needed, and rewrites are left as they are.
+    let (out, err, code) = w.run(&["delegate", "off"], &scripted);
+    assert_eq!(code, 0, "{err}");
+    assert!(out.contains("adage delegate rewrites on|off"), "{out}");
+    assert_eq!(rewrite(), "true");
+    let (_, _, code) = w.run(&["delegate", "on", "--bin", "/nonexistent/adage-exec"], &[]);
+    assert_eq!(code, 1);
+    let (_, _, code) = w.run(&["delegate", "on"], &scripted);
+    assert_eq!(code, 1, "turning execution on needs a person");
 }
 
 #[test]

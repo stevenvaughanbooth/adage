@@ -595,7 +595,7 @@ pub fn shell_word(p: &str) -> String {
 pub fn rewrite_note(env: &Env, kind: &str) -> String {
     let what = if kind == "test" { "test run" } else { "Python run" };
     format!(
-        "Adage ran this {what} with the project's environment ({}): the system Python lacks the project and its test dependencies. Nothing else in the command changed.",
+        "Adage pointed this {what} at the project's environment ({}): the system Python lacks the project and its test dependencies. Nothing else in the command changed.",
         env.shown
     )
 }

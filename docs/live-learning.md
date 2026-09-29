@@ -42,6 +42,7 @@ control = 0.1             # share of sessions held out as the control arm (0–1
 | `learn.parse_cache` | `true` | — (`adage condition --no-cache` skips it for one run) |
 | `ui.notices` | `daily` | — |
 | `runtime.control` | `0.1` | `ADAGE_CONTROL` (any number; 1 or more is shadow mode, as before) |
+| `runtime.rewrite` | `true` | — (`adage delegate rewrites on\|off`; see docs/execution.md) |
 
 Environment variables win over the file, and the file over the defaults. An unparseable file, an
 unknown key, or an invalid value is reported by `adage config` and `adage doctor`, and that key

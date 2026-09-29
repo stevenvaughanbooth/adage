@@ -72,6 +72,8 @@ pub struct Config {
     pub ui_notices: bool,
     /// The control share; as with `ADAGE_CONTROL`, 1 or more is shadow mode.
     pub runtime_control: f64,
+    /// `runtime.rewrite`: `PreToolUse` rewrites to the project's environment (on by default).
+    pub runtime_rewrite: bool,
     /// Bind instincts (prebuilt routes) from each repository's declared files when learning.
     /// Learn procedure cards for families of similar tasks (`learn.cards`), and how similar a
     /// prompt must be to a family for its card (`learn.card_threshold`).
@@ -247,6 +249,14 @@ pub const KEYS: &[Key] = &[
         default: "0.1",
         env: Some("ADAGE_CONTROL"),
         doc: "share of sessions held out as the control arm (Adage decides but says nothing)",
+        guarded: false,
+    },
+    Key {
+        name: "runtime.rewrite",
+        kind: Kind::Bool,
+        default: "true",
+        env: None,
+        doc: "point Python test runs under the system Python at the project's verified environment before they run (Claude Code PreToolUse); false: leave every command as the agent wrote it",
         guarded: false,
     },
 ];
@@ -432,6 +442,7 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
         learn_opencode_exports: home_relative(&text("learn.opencode_exports")),
         learn_parse_cache: parse_bool(&text("learn.parse_cache")).unwrap_or(true),
         runtime_control: text("runtime.control").parse().unwrap_or(0.1),
+        runtime_rewrite: parse_bool(&text("runtime.rewrite")).unwrap_or(true),
         learn_cards: parse_bool(&text("learn.cards")).unwrap_or(true),
         learn_card_threshold: text("learn.card_threshold").parse().unwrap_or(0.811),
         instincts_enabled: parse_bool(&text("instincts.enabled")).unwrap_or(true),
