@@ -10,20 +10,20 @@ s2  search     Find the code
 s3  verify     Run the tests for that module
     compiled  inhibit  from the session's start: not `python -m pytest` or `python3 -m pytest` (fails with `No module named pytest`): run `.venv/bin/python -m pytest`
               verified  [click-bugfix-s3-avoid]
-              replay: `python -m pytest`: exit 1 in 0.0 s, with `No module named pytest` as the skill says
-              replay: `python3 -m pytest`: exit 1 in 0.0 s, with `No module named pytest` as the skill says
-              replay: instead, `.venv/bin/python -m pytest`: exit 2 in 3.5 s
+              replay: `python -m pytest`: exit 1, with `No module named pytest` as the skill says
+              replay: `python3 -m pytest`: exit 1, with `No module named pytest` as the skill says
+              replay: instead, `.venv/bin/python -m pytest`: exit 2
     compiled  inhibit  from the session's start: not `pytest` (fails with `pytest: command not found`): run `.venv/bin/python -m pytest`
               verified  [click-bugfix-s3-avoid-2]
               replay: `pytest`: pytest is not on the replay's PATH, so it fails with `pytest: command not found`
-              replay: instead, `.venv/bin/python -m pytest`: exit 2 in 3.5 s
+              replay: instead, `.venv/bin/python -m pytest`: exit 2
     compiled  prime    after editing src/click/*.py: run `.venv/bin/python -m pytest {tests} -q`
               verified  [click-bugfix-s3-edited-tests]
-              replay: `.venv/bin/python -m pytest tests/test_compat.py -q`: exit 0 in 0.8 s
+              replay: `.venv/bin/python -m pytest tests/test_compat.py -q`: exit 0
 s4  edit       Fix the code
     text      needs judgment: the step is an edit the agent makes
 s5  verify     After editing `src/click/*.py`, run `.venv/bin/python -m pytest tests -q -x` to check the whole suite
-    STALE     `.venv/bin/python -m pytest tests -q -x` fails on a clean checkout (exit 1 in 1.2 s: ERROR collecting tests/test_basic.py): dropped (your skill is stale here)
+    STALE     `.venv/bin/python -m pytest tests -q -x` fails on a clean checkout (exit 1: ERROR collecting tests/test_basic.py): dropped (your skill is stale here)
 s6  run        Before you finish
     text      `.venv/bin/python repro.py` runs repro.py, which is not in the repository: the agent writes it, so nothing can pin it
 advice

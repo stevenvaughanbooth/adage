@@ -93,7 +93,8 @@ fn accept(args: &[String], paths: &Paths) -> Result<()> {
         bail!("nothing of {name} compiled, so there is no pack to accept");
     }
     // Exactly the files that were reviewed.
-    let files = adage_pack::validate::read_dir_files(&dir.join("pack")).map_err(|e| anyhow::anyhow!("refusing: {e:#}"))?;
+    let files =
+        adage_pack::validate::read_dir_files(&dir.join("pack")).map_err(|e| anyhow::anyhow!("refusing: {e:#}"))?;
     let digest = adage_pack::pack_digest(&files);
     if digest != review.digest {
         bail!("refusing: the staged pack changed after its review; compile the skill again and review it");

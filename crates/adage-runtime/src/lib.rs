@@ -479,8 +479,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                                     .iter()
                                     .find(|s| match (&s.route.trigger, &s.route.step) {
                                         (Trigger::AfterEdit { paths }, Step::Sequence { commands }) => {
-                                            hits(paths)
-                                                && commands.iter().any(|f| pattern::same_command(f, &command))
+                                            hits(paths) && commands.iter().any(|f| pattern::same_command(f, &command))
                                         }
                                         _ => false,
                                     })

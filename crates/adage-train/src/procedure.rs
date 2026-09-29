@@ -321,10 +321,8 @@ pub fn templatize(code: &str) -> (String, Vec<String>) {
 
 /// The names a template uses.
 pub fn slot_names(template: &str) -> Vec<String> {
-    let mut v: Vec<String> = PLACEHOLDER
-        .captures_iter(template)
-        .filter_map(|c| c.get(2).map(|m| m.as_str().to_string()))
-        .collect();
+    let mut v: Vec<String> =
+        PLACEHOLDER.captures_iter(template).filter_map(|c| c.get(2).map(|m| m.as_str().to_string())).collect();
     v.sort();
     v.dedup();
     v
@@ -465,18 +463,23 @@ fn tree_commands(fences: &[Fence], table: &CommandTable) -> Vec<String> {
 // Sentences
 
 static IMPERATIVE: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)\b(run|use|always|never|after|before|instead|install|invoke|execute|call|start|search|look up|check)\b")
-        .unwrap()
+    Regex::new(
+        r"(?i)\b(run|use|always|never|after|before|instead|install|invoke|execute|call|start|search|look up|check)\b",
+    )
+    .unwrap()
 });
-static MENTION: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\b(fails?|if you skipped|it prints|is generated)\b").unwrap());
+static MENTION: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)\b(fails?|if you skipped|it prints|is generated)\b").unwrap());
 static EXAMPLE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\b(for example|e\.g\.|such as)\b").unwrap());
 static FORBIDS: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\b(never|do not|don't|instead of|avoid)\b").unwrap());
 static INSTEAD: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\binstead of\b|\binstead\b").unwrap());
 static AFTER_EDIT: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"(?i)\b(after|whenever|when you)\s+(editing|changing|you edit|you change|modifying)\s+`([^`]+)`").unwrap()
+    Regex::new(r"(?i)\b(after|whenever|when you)\s+(editing|changing|you edit|you change|modifying)\s+`([^`]+)`")
+        .unwrap()
 });
-static FINISH: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?i)\bbefore (you )?(finish|finishing|commit|committing|are done|you are done)\b").unwrap());
+static FINISH: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)\bbefore (you )?(finish|finishing|commit|committing|are done|you are done)\b").unwrap()
+});
 static JUDGE: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)^\s*if\b|\bif the (item|report|task)\b").unwrap());
 static EXPECT: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\bexpects?\s+`([^`]+)`").unwrap());
 static FAILS_WITH: Lazy<Regex> = Lazy::new(|| Regex::new(r"(?i)\bfails? with\s+`([^`]+)`").unwrap());
@@ -532,7 +535,13 @@ fn commands_in(s: &str, table: &CommandTable) -> Vec<String> {
     }
     inline_commands(s, table)
         .into_iter()
-        .map(|c| if EXAMPLE.is_match(s) && QUOTED.is_match(&c) { QUOTED.replace_all(&c, "<symbol>").to_string() } else { c })
+        .map(|c| {
+            if EXAMPLE.is_match(s) && QUOTED.is_match(&c) {
+                QUOTED.replace_all(&c, "<symbol>").to_string()
+            } else {
+                c
+            }
+        })
         .collect()
 }
 
@@ -557,7 +566,15 @@ fn edit_globs(text: &str) -> Vec<String> {
     EDIT_GLOBS
         .captures_iter(text)
         .filter_map(|c| c.get(1).or_else(|| c.get(2)).or_else(|| c.get(3)).map(|m| m.as_str().to_string()))
-        .map(|g| if g.ends_with('/') { format!("{g}**") } else if !g.contains('*') { format!("{g}/**") } else { g })
+        .map(|g| {
+            if g.ends_with('/') {
+                format!("{g}**")
+            } else if !g.contains('*') {
+                format!("{g}/**")
+            } else {
+                g
+            }
+        })
         .collect()
 }
 
@@ -715,6 +732,8 @@ pub fn parse(bytes: &[u8], file: &str, fallback_name: &str, table: &CommandTable
     let mut advice: Vec<String> = Vec::new();
     let numbered = items.iter().any(|b| directs(&b.text, table) || !shell_lines(&b.fences, table).is_empty());
     let mut next = 1;
+    // A code block with no text of its own is titled by the text just before it.
+    let mut before = String::from("commands");
     for b in &bl {
         let is_step = match b.kind {
             Kind::Heading => false,
@@ -725,8 +744,15 @@ pub fn parse(bytes: &[u8], file: &str, fallback_name: &str, table: &CommandTable
                     || !tree_commands(&b.fences, table).is_empty()
             }
         };
+        if !b.text.is_empty() {
+            before = b.text.trim_end_matches(':').to_string();
+        }
         if is_step {
-            parsed.push(parse_step(next, if b.text.is_empty() { "commands" } else { &b.text }, &b.fences, table));
+            let mut p = parse_step(next, &b.text, &b.fences, table);
+            if b.text.is_empty() {
+                p.step.title = collapse(&format!("{} (code block)", title_of(&before)));
+            }
+            parsed.push(p);
             next += 1;
         } else if matches!(b.kind, Kind::Para | Kind::Item) && !b.text.is_empty() {
             advice.push(collapse(&b.text));
@@ -801,7 +827,10 @@ mod tests {
         assert_eq!(s(3).commands[0].template, "make test");
         let av: Vec<&str> = s(3).avoid.iter().map(|a| a.command.as_str()).collect();
         assert_eq!(av, ["python3 -m unittest", "pytest"]);
-        assert!(s(3).avoid.iter().all(|a| a.instead == "make test" && a.signature == "RuntimeError: ACME_ENV is not set"));
+        assert!(s(3)
+            .avoid
+            .iter()
+            .all(|a| a.instead == "make test" && a.signature == "RuntimeError: ACME_ENV is not set"));
         assert_eq!(s(3).expect, ["OK"]);
         assert_eq!(s(4).pre, Pre::BeforeFinish);
         assert_eq!(s(4).commands[0].template, "make ci");

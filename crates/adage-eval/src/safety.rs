@@ -376,7 +376,8 @@ pub fn check_wrapper(r: &Route, wrapped: &str, root: Option<&Path>, canaries: &[
         if c.name("origin").is_some() {
             bad("a learned route's wrapper claims to be an instinct".into());
         }
-        let want = if r.evidence.origin == Some(adage_tracks::Origin::Authored) { AUTHORED_FOOTER } else { LEARNED_FOOTER };
+        let want =
+            if r.evidence.origin == Some(adage_tracks::Origin::Authored) { AUTHORED_FOOTER } else { LEARNED_FOOTER };
         if footer != want {
             bad(format!("a route's wrapper says {footer:?}, not {want:?}"));
         }

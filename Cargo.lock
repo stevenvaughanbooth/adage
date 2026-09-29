@@ -20,6 +20,7 @@ dependencies = [
  "adage-sim",
  "adage-store",
  "adage-tracks",
+ "adage-train",
  "anyhow",
  "libc",
  "rand_core 0.6.4",
@@ -265,8 +266,11 @@ name = "adage-train"
 version = "0.1.0"
 dependencies = [
  "adage-core",
+ "adage-exec",
  "adage-instincts",
  "adage-learn",
+ "adage-pack",
+ "adage-sign",
  "adage-store",
  "adage-tracks",
  "anyhow",

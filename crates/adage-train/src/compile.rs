@@ -221,7 +221,9 @@ impl Cx<'_> {
     fn plain(&mut self, template: &str) -> Result<Plain, String> {
         let argv = argv_of(template);
         if argv.is_empty() || argv.len() > 32 || !argv.iter().all(|t| argv_token_ok(t)) {
-            return Err(format!("`{template}` is not one plain command (shell syntax, quoting or a path outside the repository)"));
+            return Err(format!(
+                "`{template}` is not one plain command (shell syntax, quoting or a path outside the repository)"
+            ));
         }
         let prog = program(&argv, self.table).map_err(|e| format!("`{template}`: {e:#}"))?;
         let script = match prog {
@@ -243,10 +245,9 @@ impl Cx<'_> {
                 }
                 let sha = adage_pack::convert::hash_repo_file(self.root, &path)
                     .map_err(|e| format!("`{template}` runs {path}, which cannot be pinned ({e:#})"))?;
-                self.out.repo_files.insert(
-                    path.clone(),
-                    RepoFile { path: path.clone(), sha256: sha.clone(), deps: Vec::new() },
-                );
+                self.out
+                    .repo_files
+                    .insert(path.clone(), RepoFile { path: path.clone(), sha256: sha.clone(), deps: Vec::new() });
                 Some(ScriptRef { path, closure: adage_pack::ClosureLevel::Ref, sha256: sha, deps: Vec::new() })
             }
         };
@@ -320,7 +321,13 @@ impl Cx<'_> {
     fn command(&mut self, s: &Step, c: &crate::procedure::Command) {
         let slots: Vec<&crate::procedure::SlotDef> = c.slots.iter().filter_map(|n| self.g.slots.get(n)).collect();
         if let Some(j) = slots.iter().find(|x| x.from == SlotFrom::Judgment) {
-            self.why(&s.id, format!("`{}`: slot {{{}}} is the agent's choice (needs judgment: no stimulus binds it)", c.template, j.name));
+            self.why(
+                &s.id,
+                format!(
+                    "`{}`: slot {{{}}} is the agent's choice (needs judgment: no stimulus binds it)",
+                    c.template, j.name
+                ),
+            );
             return;
         }
         if slots.iter().any(|x| x.from == SlotFrom::Edit) {
@@ -350,7 +357,10 @@ impl Cx<'_> {
         };
         let Some(glob) = glob.filter(|g| adage_pack::validate::safe_glob(g)) else {
             let why = if p.effect == Effect::Observe {
-                format!("`{}` has no stimulus Adage can see (an intent trigger could deliver it, with the embedding model)", c.template)
+                format!(
+                    "`{}` has no stimulus Adage can see (an intent trigger could deliver it, with the embedding model)",
+                    c.template
+                )
             } else {
                 format!("`{}` has no stimulus Adage can see: it follows the agent's own judgment", c.template)
             };
@@ -358,7 +368,10 @@ impl Cx<'_> {
             return;
         };
         let Some(ceiling) = strength_for(p.effect, true) else {
-            self.why(&s.id, format!("`{}` is {}: Adage never directs it (effect ceiling)", c.template, p.effect.as_str()));
+            self.why(
+                &s.id,
+                format!("`{}` is {}: Adage never directs it (effect ceiling)", c.template, p.effect.as_str()),
+            );
             return;
         };
         let kind = if s.pre == Pre::BeforeFinish { "before-finish".to_string() } else { s.role.as_str().to_string() };
@@ -383,9 +396,13 @@ impl Cx<'_> {
     /// A command whose slots the prompt carries (a work item id): a run on the prompt, and a read
     /// of the files its output lists when the step says to read them.
     fn prompt_run(&mut self, s: &Step, c: &crate::procedure::Command, p: Plain) {
-        let slots: Vec<crate::procedure::SlotDef> = c.slots.iter().filter_map(|n| self.g.slots.get(n).cloned()).collect();
+        let slots: Vec<crate::procedure::SlotDef> =
+            c.slots.iter().filter_map(|n| self.g.slots.get(n).cloned()).collect();
         let Some(ceiling) = strength_for(p.effect, false) else {
-            self.why(&s.id, format!("`{}` is {}: Adage never directs it (effect ceiling)", c.template, p.effect.as_str()));
+            self.why(
+                &s.id,
+                format!("`{}` is {}: Adage never directs it (effect ceiling)", c.template, p.effect.as_str()),
+            );
             return;
         };
         let mut inputs = BTreeMap::new();
@@ -401,7 +418,11 @@ impl Cx<'_> {
                 Input {
                     ty,
                     from: InputFrom {
-                        prompt: Some(PromptSource { span: adage_core::spans::SpanKind::Ticket, vtype: None, mentions: vec![] }),
+                        prompt: Some(PromptSource {
+                            span: adage_core::spans::SpanKind::Ticket,
+                            vtype: None,
+                            mentions: vec![],
+                        }),
                         ..InputFrom::default()
                     },
                     values: None,
@@ -455,7 +476,10 @@ impl Cx<'_> {
                     "files".to_string(),
                     Input {
                         ty: "repo-path-list".into(),
-                        from: InputFrom { result: Some(ResultSource { field: "*paths".into() }), ..InputFrom::default() },
+                        from: InputFrom {
+                            result: Some(ResultSource { field: "*paths".into() }),
+                            ..InputFrom::default()
+                        },
                         values: None,
                         max: Some(5),
                     },
@@ -519,7 +543,13 @@ impl Cx<'_> {
             .take(adage_pack::EDIT_TESTS_MAX_ENTRIES)
             .collect();
         if map.is_empty() {
-            self.why(&s.id, format!("`{}`: no file matching {glob} has tests the repository's names or history point to", c.template));
+            self.why(
+                &s.id,
+                format!(
+                    "`{}`: no file matching {glob} has tests the repository's names or history point to",
+                    c.template
+                ),
+            );
             return;
         }
         let Some(ceiling) = strength_for(p.effect, true) else {
@@ -557,7 +587,11 @@ impl Cx<'_> {
             evidence: Some(evidence(self.g)),
         };
         let _ = first_src;
-        self.push(&[&s.id], route, vec![Check::Works { argv: replay_argv, expect: s.expect.clone(), regenerate: false }]);
+        self.push(
+            &[&s.id],
+            route,
+            vec![Check::Works { argv: replay_argv, expect: s.expect.clone(), regenerate: false }],
+        );
     }
 
     /// A verify step followed by a "before you finish" verify step: one sequence after a code
@@ -765,7 +799,11 @@ mod tests {
         // The lookup is replayed with the skill's example id.
         assert_eq!(
             c.candidates[0].checks,
-            [Check::Works { argv: vec!["scripts/wi-lookup".into(), "W-2042".into()], expect: vec![], regenerate: false }]
+            [Check::Works {
+                argv: vec!["scripts/wi-lookup".into(), "W-2042".into()],
+                expect: vec![],
+                regenerate: false
+            }]
         );
     }
 

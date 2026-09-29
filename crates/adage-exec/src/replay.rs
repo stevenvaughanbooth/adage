@@ -64,12 +64,12 @@ impl Replayed {
         matches!(self.exit, Some(c) if c != 0) && !self.timed_out
     }
 
-    /// One line: `exit 0 in 1.2 s`, `exit 2`, `timed out`, `killed by signal 9`.
+    /// One line: `exit 0`, `exit 2`, `timed out`, `killed by signal 9`. No duration: the line is
+    /// recorded in a pack, which must be the same for the same skill and repository.
     pub fn summary(&self) -> String {
-        let secs = self.duration_ms as f64 / 1000.0;
         match (self.exit, self.signal, self.timed_out) {
-            (_, _, true) => format!("timed out after {secs:.0} s"),
-            (Some(c), _, _) => format!("exit {c} in {secs:.1} s"),
+            (_, _, true) => "timed out".into(),
+            (Some(c), _, _) => format!("exit {c}"),
             (None, Some(s), _) => format!("killed by signal {s}"),
             _ => "exit status unknown".into(),
         }
@@ -119,7 +119,10 @@ fn run_git(args: &[String], cwd: &Path, env: &BTreeMap<String, String>) -> Resul
         .map_err(|e| refusal("checkout", format!("running git: {e}")))?;
     if !out.status.success() {
         let err = String::from_utf8_lossy(&out.stderr);
-        return Err(refusal("checkout", format!("git {}: {}", args.first().map(String::as_str).unwrap_or(""), err.trim())));
+        return Err(refusal(
+            "checkout",
+            format!("git {}: {}", args.first().map(String::as_str).unwrap_or(""), err.trim()),
+        ));
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
@@ -262,8 +265,14 @@ impl Replay {
         };
         // The checkout lives in scratch, the one writable place; the repository itself is never
         // granted (only what `lend` lent, read-only).
-        let profile =
-            Profile { read: vec![Read::Toolchain], write: Write::Scratch, net: false, env: env::names(), cwd: None, limits };
+        let profile = Profile {
+            read: vec![Read::Toolchain],
+            write: Write::Scratch,
+            net: false,
+            env: env::names(),
+            cwd: None,
+            limits,
+        };
         let environment = self.environment();
         let path_dirs: Vec<PathBuf> = environment["PATH"].split(':').map(PathBuf::from).collect();
         let home = std::env::var_os("HOME").map(PathBuf::from);
@@ -360,11 +369,11 @@ mod tests {
     fn summaries_are_one_line() {
         let r = Replayed { exit: Some(0), duration_ms: 1200, ..Default::default() };
         assert!(r.ok() && !r.failed());
-        assert_eq!(r.summary(), "exit 0 in 1.2 s");
+        assert_eq!(r.summary(), "exit 0");
         let r = Replayed { exit: Some(2), ..Default::default() };
         assert!(r.failed());
         let r = Replayed { timed_out: true, duration_ms: 300_000, ..Default::default() };
         assert!(!r.ok() && !r.failed());
-        assert_eq!(r.summary(), "timed out after 300 s");
+        assert_eq!(r.summary(), "timed out");
     }
 }

@@ -150,7 +150,11 @@ fn procedure_of(c: &Compiled) -> Procedure {
                 .filter(|x| x.steps.contains(&s.id))
                 .flat_map(|x| x.replay.iter().map(|l| clean_text(l)))
                 .chain(stale.iter().map(|w| clean_text(&format!("dropped: {w}"))))
-                .chain(if routes.is_empty() { Vec::new() } else { text.iter().map(|t| clean_text(&format!("text: {t}"))).collect() })
+                .chain(if routes.is_empty() {
+                    Vec::new()
+                } else {
+                    text.iter().map(|t| clean_text(&format!("text: {t}"))).collect()
+                })
                 .take(adage_pack::procedure::MAX_ITEMS)
                 .collect();
             ProcedureStep {
@@ -188,10 +192,8 @@ pub fn pack(c: &Compiled, root: &Path, table: &CommandTable) -> Result<Option<Pa
         return Ok(None);
     }
     let key = adage_core::repo::repo_key(root);
-    let mut keys: Vec<String> = adage_pack::bind::local_keys(root)
-        .into_iter()
-        .filter(|k| adage_pack::validate::safe_repo_key(k))
-        .collect();
+    let mut keys: Vec<String> =
+        adage_pack::bind::local_keys(root).into_iter().filter(|k| adage_pack::validate::safe_repo_key(k)).collect();
     keys.sort();
     keys.truncate(16);
     if keys.is_empty() {
@@ -478,7 +480,8 @@ pub fn render(o: &Outcome) -> String {
             line(&mut s, format!("  adage train accept {}", c.prefix));
             line(
                 &mut s,
-                "Verified reflexes install at the strength shown; the rest at prime. Keep the skill's text only for".into(),
+                "Verified reflexes install at the strength shown; the rest at prime. Keep the skill's text only for"
+                    .into(),
             );
             line(&mut s, "what stayed text.".into());
         }

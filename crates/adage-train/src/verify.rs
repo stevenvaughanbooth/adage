@@ -155,7 +155,9 @@ fn replay_one(c: Candidate, root: &Path, o: &Options, report: &mut Report) -> (V
                     Ran::Did(r) if r.ok() => {
                         let missing: Vec<&String> = expect.iter().filter(|e| !r.output.contains(e.as_str())).collect();
                         if let Some(m) = missing.first() {
-                            let why = format!("`{cmd}` exits 0 on a clean checkout, but does not show `{m}` as the skill says");
+                            let why = format!(
+                                "`{cmd}` exits 0 on a clean checkout, but does not show `{m}` as the skill says"
+                            );
                             c.replay.push(why.clone());
                             stale.get_or_insert(why);
                             continue;
@@ -221,7 +223,8 @@ fn replay_one(c: Candidate, root: &Path, o: &Options, report: &mut Report) -> (V
                             c.replay.push(format!("`{cmd}`: {}, with `{signature}` as the skill says", r.summary()));
                             kept.push((argv, signature));
                         } else if let Some(seen) = signature_of(&r.output) {
-                            c.replay.push(format!("`{cmd}`: {}, with `{seen}` (not the skill's signature)", r.summary()));
+                            c.replay
+                                .push(format!("`{cmd}`: {}, with `{seen}` (not the skill's signature)", r.summary()));
                             kept.push((argv, seen));
                         } else {
                             c.replay.push(format!(
@@ -289,9 +292,14 @@ fn replay_one(c: Candidate, root: &Path, o: &Options, report: &mut Report) -> (V
 
 /// An avoid route after its replay: runners kept with the same signature stay together; each
 /// other signature gets a route of its own (`…-avoid-2`); none kept, and it is stale.
-fn split_avoid(c: Candidate, kept: Vec<(Vec<String>, String)>, not_replayed: Option<String>) -> (Vec<Candidate>, Option<String>) {
+fn split_avoid(
+    c: Candidate,
+    kept: Vec<(Vec<String>, String)>,
+    not_replayed: Option<String>,
+) -> (Vec<Candidate>, Option<String>) {
     if kept.is_empty() {
-        let why = "every command it forbids works, or fails with nothing Adage can name, on a clean checkout".to_string();
+        let why =
+            "every command it forbids works, or fails with nothing Adage can name, on a clean checkout".to_string();
         return (Vec::new(), Some(why));
     }
     let mut groups: Vec<(String, Vec<Vec<String>>)> = Vec::new();
@@ -393,7 +401,10 @@ mod tests {
 
     #[test]
     fn signatures_are_short_and_renderable() {
-        assert_eq!(signature_of("E   ModuleNotFoundError: No module named pytest\n").as_deref(), Some("No module named pytest"));
+        assert_eq!(
+            signature_of("E   ModuleNotFoundError: No module named pytest\n").as_deref(),
+            Some("No module named pytest")
+        );
         assert_eq!(
             signature_of("Traceback\nRuntimeError: ACME_ENV is not set\n").as_deref(),
             Some("RuntimeError: ACME_ENV is not set")

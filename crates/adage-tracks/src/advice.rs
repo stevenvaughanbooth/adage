@@ -167,7 +167,9 @@ mod tests {
         );
         assert!(check("uncommitted", &slots(&[]), &t).is_ok());
         assert!(check("uncommitted", &slots(&[("command", "git commit")]), &t).is_err());
-        assert!(text("uncommitted", &slots(&[])).unwrap().starts_with("In this repository, leave your changes uncommitted"));
+        assert!(text("uncommitted", &slots(&[]))
+            .unwrap()
+            .starts_with("In this repository, leave your changes uncommitted"));
         // Refused: unknown template, unknown slot, missing slot, hostile values.
         assert!(check("free-text", &slots(&[("path", "x")]), &t).is_err());
         assert!(check("lockfile", &slots(&[("path", "uv.lock")]), &t).is_err());
