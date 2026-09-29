@@ -364,6 +364,9 @@ pub fn plan(
         rr.intent_families = run.report.intent_families;
         rr.engine = run.report.clone();
         let mut routes: Vec<Route> = run.routes.iter().map(|j| j.route.clone()).collect();
+        // What delivering each route changes (uplift, `value::assess`): one agents already take
+        // unaided waits, nascent, for a person's approval.
+        value::assess(&mut routes, ss, repo, &judged, &cfg.priors, cfg.uplift_bar());
         // Without the embedding model, prompt intents cannot be learned or judged: the ones
         // already learned are kept as they are.
         if model.is_none() {
@@ -489,7 +492,9 @@ pub fn plan(
             // Installed tracks this run did not re-plan (imports).
             others.extend(instincts::other_routes_except(tracks_root, repo, &planned_names));
             let root = ic.roots.get(repo).cloned().or_else(|| instincts::root_of(ss.iter().map(|s| s.root.as_path())));
-            let (ir, plan) = instincts::plan_repo(repo, root.as_deref(), tracks_root, &others, ic, &judged, &today)?;
+            let seen =
+                instincts::Seen { judged: &judged, sessions: ss, priors: &cfg.priors, uplift_min: cfg.uplift_bar() };
+            let (ir, plan) = instincts::plan_repo(repo, root.as_deref(), tracks_root, &others, ic, &seen, &today)?;
             if let Some((tr, p)) = plan {
                 rr.tracks.push(tr);
                 planned.push(p);
@@ -519,6 +524,9 @@ pub fn route_line(track: &str, r: &Route) -> String {
     }
     if r.evidence.effect_evidence.is_some() {
         s.push_str(" (observe, from the traces)");
+    }
+    if let Some(u) = r.evidence.uplift.as_ref().filter(|u| u.gated) {
+        s.push_str(&format!(" ({})", u.line()));
     }
     if r.state == adage_tracks::RouteState::Nascent {
         s.push_str(&format!(

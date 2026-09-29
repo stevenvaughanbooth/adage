@@ -175,6 +175,15 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 - A sequence after an edit carries every finish line whose command is one of its steps (it
   carried only the one that began it), so a compiled skill's `make test`, `make ci` sequence is one
   directive for a code edit.
+- **Uplift gating.** A reflex is worth how much more often agents take its step when told than
+  unaided (`p_follow − p_self`), not how often they follow it (evals/lab/research/uptake-delivery:
+  96% followed, 21% changed behaviour). Conditioning estimates both as Beta posteriors per route,
+  from the kind's prior, the unexposed training traces in the matching situation (the learned
+  follow judge) and the control arm's `would_have` judgements; the value model uses the uplift in
+  `A(s, d)`. A reflex or instinct below +0.1 is kept quiet (nascent, never delivered) until a
+  person approves it; `adage review` and `adage sense` show each reflex's uplift and why a quiet
+  one is quiet. The bar is `learn.uplift_min` in the engine parameters (0.1; the `demo` preset and
+  `adage train`'s skill-directed sessions estimate uplift but do not gate).
 
 ### Runtime
 

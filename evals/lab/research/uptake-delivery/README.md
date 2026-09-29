@@ -406,6 +406,10 @@ A(s,d) = (p_follow(s,d) − p_self(s,d)) · ΔQ(s,d) − C(d) − λ·p_misfire(
      obligations and "how to run tests" advice, in these repositories. That is 79% of today's
      deliveries.
    - Expected value: about 0 calls, but less context and less misfire exposure.
+   - **Built** (`adage_learn::value::uplift` and `assess`): the p_self and p_follow tables above are
+     the kind priors (p_self κ = 4, the spread of the per-repository dead-end rates), updated by
+     each route's unexposed training traces and the control arm's `would_have` judgements. A route
+     below +0.1 with at least 3 situations of evidence is kept nascent.
 3. **Deliver the valuable routes pre-emptively, once per session.**
    - Use a PreToolUse rewrite or deny-with-reason at the first matching attempt, or the SessionStart
      line, instead of PostToolUseFailure. This also covers piped exit-0 failures and Sonnet.

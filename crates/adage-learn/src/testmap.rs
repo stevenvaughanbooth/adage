@@ -424,6 +424,8 @@ pub struct Planned {
     pub n_null: u32,
     pub n_sat: u32,
     pub verified: bool,
+    /// What delivering it changes (`value::uplift`): gated, it is not delivered.
+    pub uplift: Uplift,
     pub strength: Option<Strength>,
 }
 
@@ -435,6 +437,7 @@ pub fn plan(
     statics: &Statics,
     root: Option<&Path>,
     priors: &Priors,
+    uplift_min: f64,
     provenance: &str,
 ) -> Option<(Option<(Route, Why)>, Planned)> {
     // The situations: the first source edit before a test run that ran tests.
@@ -539,11 +542,15 @@ pub fn plan(
     let q_other = stats::gamma_poisson(other.iter().sum(), other.len() as f64, m0, k0);
     let q_sat = stats::gamma_poisson(sat.iter().map(|(_, x)| x.reward.calls as f64).sum(), sat.len() as f64, m1, k1);
     let mis = sat.iter().filter(|(_, x)| x.next_misfired).count() as f64;
-    let adv = stats::advantage_mix(
+    // What delivering changes: the edits after which agents already ran the tests in the project's
+    // environment are `p_self`'s evidence (the research's prior for an after-edit run: 0.32).
+    let unaided =
+        value::Unaided { traces: unexposed.len() as u32, traces_took: sat.len() as u32, ..Default::default() };
+    let up = value::uplift("run-after-edit", &unaided, priors, uplift_min);
+    let adv = value::advantage_uplift(
         q_other,
         q_sat,
-        (1.0 + sat.len() as f64, 1.0 + other.len() as f64),
-        value::FOLLOW_PRIOR,
+        &up,
         (ma + mis, mb + sat.len() as f64 - mis),
         value::DIRECTIVE_COST,
         value::MISFIRE_COST,
@@ -552,7 +559,9 @@ pub fn plan(
     // The runner ran tests in a trace (declared or not), and a trace ran a mapped test after its source.
     let verified = ran_tests >= 1 && map_confirmed;
     let effective = sat.len() as f64 + k1;
-    let admitted = verified || (adv.lower > 0.0 && effective >= value::MIN_EFFECTIVE);
+    // Verified or valued, and worth delivering: agents who already run the tests the way that works
+    // after such an edit gain nothing from being told.
+    let admitted = (verified || (adv.lower > 0.0 && effective >= value::MIN_EFFECTIVE)) && !up.summary.gated;
     // A check after an edit is suggested, never fired.
     let strength = admitted.then(|| value::strength_of(&adv, Effect::Verify, true)).flatten().map(|s| {
         if s == Strength::Fire {
@@ -570,6 +579,7 @@ pub fn plan(
         n_null: null.len() as u32,
         n_sat: sat.len() as u32,
         verified,
+        uplift: up.summary.clone(),
         strength,
     };
     let Some(strength) = strength.filter(|_| io::safe_command(&command)) else { return Some((None, planned)) };
@@ -601,6 +611,7 @@ pub fn plan(
             provenance: provenance.into(),
             models: crate::evidence::models(ss),
             origin: Some(Origin::Learned),
+            uplift: Some(up.summary),
             ..Default::default()
         },
         authored: false,
@@ -608,7 +619,7 @@ pub fn plan(
     let why = Why {
         shape: "run".into(),
         pattern: format!(
-            "[edit {glob}] =tests_of=> [{} {{tests}}]: A {:.2} calls (sd {:.2}, P(A>0) {:.2}); Q(∅) {:.2}, Q(Sat) {:.2}; {} triggers, {} ran it; {} files mapped; {}",
+            "[edit {glob}] =tests_of=> [{} {{tests}}]: A {:.2} calls (sd {:.2}, P(A>0) {:.2}); Q(∅) {:.2}, Q(Sat) {:.2}; {} triggers, {} ran it unaided; uplift {:+.2}; {} files mapped; {}",
             command,
             adv.mean,
             adv.sd,
@@ -617,6 +628,7 @@ pub fn plan(
             adv.q_sat,
             planned.n_null,
             planned.n_sat,
+            planned.uplift.mean,
             planned.map_files,
             if verified { "verified" } else { "valued" }
         ),

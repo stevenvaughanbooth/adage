@@ -553,6 +553,9 @@ fn status(paths: &Paths) -> Result<()> {
                 r.effect.as_str(),
                 evidence::describe(r, whys.get(&r.id))
             );
+            if let Some(u) = &r.evidence.uplift {
+                println!("            uplift: {}", u.line());
+            }
             if let Some(o) = evidence::obligation(r) {
                 println!("            {o}");
             }

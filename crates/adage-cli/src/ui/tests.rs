@@ -323,7 +323,7 @@ fn learn_log_reads_both_shapes_and_skips_the_rest() {
         r#"{"ts":1,"sessions_read":3,"sessions_used":2,"repos":{"acme":{"tracks":[{"name":"acme/work","version":"0.1.0","change":"new","routes":2}]}}}"#,
     );
     assert_eq!(old[0].text, "condition: 2/3 sessions used, 1 track(s)");
-    assert_eq!(old[1].text, "wrote acme/work @ 0.1.0 (new, 2 routes)");
+    assert_eq!(old[1].text, "wrote acme/work @ 0.1.0 (new, 2 reflexes)");
 }
 
 #[test]

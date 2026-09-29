@@ -237,7 +237,18 @@ fn zero_config_plugin() {
     let p = json!({ "session_id": "s-first", "cwd": repo_w, "hook_event_name": "UserPromptSubmit", "prompt": "fix W-2042" });
     let o = w.run(&bin, &["hook", "claude", "UserPromptSubmit"], &p.to_string(), &repo_w);
     let ctx = context(&String::from_utf8_lossy(&o.stdout));
-    assert!(ctx.contains("scripts/wi-lookup W-2042"), "the lookup directive: {ctx:?}");
+    // The lookup is learned, but 9 of the 10 traces it applied to already ran it unaided: telling the
+    // agent changes nothing, so it is kept quiet (nascent, with why) at the default thresholds.
+    assert!(!ctx.contains("scripts/wi-lookup W-2042"), "a quiet lookup was delivered: {ctx:?}");
+    let route = std::fs::read_dir(w.p("data/tracks"))
+        .unwrap()
+        .flatten()
+        .filter_map(|e| adage_tracks::io::read(&e.path().join("learned")).ok())
+        .flat_map(|t| t.routes)
+        .find(|r| r.id == "lookup-work-item")
+        .expect("the lookup is learned");
+    let up = route.evidence.uplift.as_ref().expect("its uplift");
+    assert!(route.state == adage_tracks::RouteState::Nascent && up.gated && up.traces_took >= 9, "{route:?}");
 
     // Repository X's traces were never opened: the parse cache has no entry for them.
     let manifest = std::fs::read_to_string(w.p("data/cache/sessions/manifest.json")).unwrap();
