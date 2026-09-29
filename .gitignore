@@ -18,3 +18,5 @@ plugin/claude-code/dist/
 plugin/claude-code-exec/dist/
 *.egg-info/
 demo/results/*/raw/
+# The bundled embedding model (MIT, SHA-256 pinned in adage-intent/src/model.rs) is source.
+!crates/adage-intent/bundled/*.safetensors
