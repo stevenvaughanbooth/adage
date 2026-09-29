@@ -163,10 +163,22 @@ matches the family (by local embedding similarity), the card is delivered once, 
 - **How much history:** the shipped learner forms a card after one passing session when that
   session created no new files. Otherwise it needs two, which is the usual case: a new test file,
   or file names that vary per task (`flag_url.go`, `flag_port.go`).
-- **What it is:** the card was a Python prototype in these runs. It is now built into
-  `adage condition` and the hooks, and on by default (`learn.cards`). A live validation of the
-  shipped card is pre-registered in [evals/launch/go-validation](evals/launch/go-validation/README.md).
-  This section will be updated with its result.
+- **What it is:** the card was a Python prototype in the rows above. It is now built into
+  `adage condition` and the hooks, and on by default (`learn.cards`).
+- **The shipped product, pre-registered:** a new family (add a URL utility to unjs/ufo,
+  TypeScript) that no card research had used. The product ran as a user installs it; its
+  background learner formed the card by itself from 4 sessions.
+  - **Cost per task:** **−10.3%**, 90% CI [−20.1%, +2.0%], over 8 held-out variants × 2 repeats
+    (16 pairs, 8 clusters).
+  - **Tool calls:** −8.3% [−19.2%, +5.3%].
+  - **Passes:** 16/16 vs 15/16.
+  - **Delivery:** the card reached 16/16 Adage sessions and 0 of 8 unrelated prompts.
+  - **One-off work:** on 6 click bug fixes, no false fires and no harm ($ +5.2%, passes 4/6 vs
+    2/6).
+  - **Verdict:** GO-WITH-CAVEATS under the pre-registered rules. The point estimate only just
+    clears the −10% threshold, and the interval includes zero, so the saving is plausible but not
+    demonstrated. The design had about 50% power at a true −20% effect. See
+    [RESULTS.md](evals/launch/go-validation/RESULTS.md).
 - **Data:** [evals/lab/research/recurring-workflows](evals/lab/research/recurring-workflows/README.md).
 
 ### Compiled skills: a skill's effect without its text in context

@@ -1,7 +1,7 @@
 {
  "family": "http-header",
- "home": "/tmp/sc-dry-http-header-v6oor9h2/adage-home",
- "adage": "/tmp/adage-go-target/release/adage",
+ "home": "/tmp/sc-dry-http-header-56aw9ql_/adage-home",
+ "adage": "/tmp/adage-showcase-target/release/adage",
  "cards": [
   {
    "id": "card-11e594f481",
@@ -11,7 +11,7 @@
  "held_out": [
   {
    "task": "http-header--coop",
-   "session": "9b212a8a-27bb-45ae-99eb-4e2411a40d54",
+   "session": "8734998e-84fb-41df-adf2-16ab8cc5f6c5",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -22,7 +22,7 @@
   },
   {
    "task": "http-header--sec-fetch-dest",
-   "session": "14dde184-fd1d-4556-83b3-b2c664629a80",
+   "session": "98d87363-af93-418d-969a-920d5134ca9d",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -33,7 +33,7 @@
   },
   {
    "task": "http-header--permissions-policy",
-   "session": "1a63e468-eeaa-4dca-a9c6-baafa4d8dda8",
+   "session": "c235b178-111f-4591-9932-91a4cc0806ad",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -44,7 +44,7 @@
   },
   {
    "task": "http-header--x-forwarded-for",
-   "session": "2059d35f-af77-4852-a01f-d251bbe9ceee",
+   "session": "b3d40164-6a89-45d1-ad1f-29b265e65ddd",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -55,7 +55,7 @@
   },
   {
    "task": "http-header--clear-site-data",
-   "session": "a8eef8fe-2a92-4993-bc41-ed45427bd12f",
+   "session": "3ae2c2d0-bceb-4beb-8fbc-2bcf4d3e8511",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -66,7 +66,7 @@
   },
   {
    "task": "http-header--timing-allow-origin",
-   "session": "46e57511-028f-421d-ad2f-53a3b06b7712",
+   "session": "26d9a024-65d3-402a-9d8d-c26c1fb7d98e",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -77,7 +77,7 @@
   },
   {
    "task": "http-header--repr-digest",
-   "session": "e5ecc69f-7989-47dd-b6a6-2680664302c8",
+   "session": "576990a0-97f5-45c1-ab34-be480ba38b8a",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -88,7 +88,7 @@
   },
   {
    "task": "http-header--early-data",
-   "session": "a7537f30-637f-4819-b80f-4c9fa9ca3ee5",
+   "session": "dae7c198-93dc-42b6-b557-20287bcc199b",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -102,7 +102,7 @@
   {
    "id": "http-6e2dd42a",
    "source": "repobench",
-   "session": "9e226e90-dd52-45a4-acc2-54f7afef8f50",
+   "session": "7265744d-9641-4cfb-af3b-ae765e735733",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -112,7 +112,7 @@
   {
    "id": "http-bc3b0441",
    "source": "repobench",
-   "session": "1c8431b3-0518-4498-b079-a62d027b74c0",
+   "session": "f7f3cd4b-ea2e-441d-b4bd-baecd2f302cd",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -122,7 +122,7 @@
   {
    "id": "http-7767ff70",
    "source": "repobench",
-   "session": "fbf9afcb-ffce-42e4-b97c-f76cc89d6ef7",
+   "session": "70f4afb9-fb54-4ea5-9f11-1eae6d251bfc",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -132,7 +132,7 @@
   {
    "id": "neg-http-doc-accept-ranges",
    "source": "handwritten",
-   "session": "0667e3de-e89f-4d67-99d6-f2772d57339a",
+   "session": "90287349-ab81-4a71-b9b5-ab9db117f112",
    "at_prompt": false,
    "at_edit": "src/header/name.rs",
    "card_routes_in_spool": [
@@ -144,7 +144,7 @@
   {
    "id": "neg-http-status-const",
    "source": "handwritten",
-   "session": "cba229e6-89d6-4bd3-9be0-24106154430e",
+   "session": "f6981515-48d4-411e-bf7b-150c68e83874",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -154,7 +154,7 @@
   {
    "id": "neg-http-headername-bug",
    "source": "handwritten",
-   "session": "73e4dfcc-a60c-4c85-9541-c1875fbf22d1",
+   "session": "a6aedb27-31e9-484f-8dc3-12596a7c63c0",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],

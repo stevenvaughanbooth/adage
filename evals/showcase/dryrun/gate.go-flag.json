@@ -1,7 +1,7 @@
 {
  "family": "go-flag",
- "home": "/tmp/sc-dry-go-flag-70nizlap/adage-home",
- "adage": "/tmp/adage-go-target/release/adage",
+ "home": "/tmp/sc-dry-go-flag-0qclexfm/adage-home",
+ "adage": "/tmp/adage-showcase-target/release/adage",
  "cards": [
   {
    "id": "card-11e594f481",
@@ -11,7 +11,7 @@
  "held_out": [
   {
    "task": "go-flag--percent",
-   "session": "71c3fa63-cc73-41d1-b818-78f910d97dd5",
+   "session": "a7cfa2e5-14b6-4d2c-adc2-139e9e3fbcde",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -22,7 +22,7 @@
   },
   {
    "task": "go-flag--bytesize",
-   "session": "afc0b1d8-2567-417e-b946-8589fd692500",
+   "session": "c45a11f1-0aa2-4da7-b551-2e53d2596a01",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -33,7 +33,7 @@
   },
   {
    "task": "go-flag--date",
-   "session": "63ff773b-33bc-43f1-9a78-d9ff170523d5",
+   "session": "4b36fbfa-3fa8-4ebb-bbb1-1c95ff10b677",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -44,7 +44,7 @@
   },
   {
    "task": "go-flag--hexcolor",
-   "session": "98eb59f7-10b9-4c72-971e-e4a016b9e8ad",
+   "session": "8b7b2eb9-c769-4af6-8507-a0805c5671c7",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -55,7 +55,7 @@
   },
   {
    "task": "go-flag--cidr",
-   "session": "fc975c23-431d-4548-b77c-68cc55911391",
+   "session": "f32b4e4a-7594-4684-b5da-3c6389a1f239",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -66,7 +66,7 @@
   },
   {
    "task": "go-flag--semver",
-   "session": "0efae571-8f7f-4d9b-94fa-cb33e9234150",
+   "session": "8e28aa49-1eeb-478f-abee-e5b9a3084f37",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -77,7 +77,7 @@
   },
   {
    "task": "go-flag--hostport",
-   "session": "29c1ad1b-9f8d-481a-83a7-65e3058d2d60",
+   "session": "390fb818-f89a-4c42-8a10-c8e8c3c199f4",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -88,7 +88,7 @@
   },
   {
    "task": "go-flag--uuid",
-   "session": "c30bf57d-f721-484f-9404-e0b649a421b7",
+   "session": "a0b4817b-8f6a-4411-ba0a-24c0cb83642b",
    "at_prompt": true,
    "at_edit": null,
    "card_routes_in_spool": [
@@ -102,7 +102,7 @@
   {
    "id": "urfave-cli-7492c456",
    "source": "repobench",
-   "session": "04884479-8439-4f84-b3ee-d2ba0c4511ba",
+   "session": "2ff0f4e6-7008-4093-b2df-c9ace1b3e247",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -112,7 +112,7 @@
   {
    "id": "urfave-cli-72ca6b88",
    "source": "repobench",
-   "session": "1110253c-8f8c-4e42-aa17-0d34fa716025",
+   "session": "86be48b5-318d-4c64-844c-d4a56d8c6da4",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -122,7 +122,7 @@
   {
    "id": "urfave-cli-db7d18f2",
    "source": "repobench",
-   "session": "9a0d1ea3-e388-4c3d-954e-ef11097ee4be",
+   "session": "24977aae-ee89-484d-a475-f202e5049c4d",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -132,7 +132,7 @@
   {
    "id": "neg-go-trimspace-env",
    "source": "handwritten",
-   "session": "06967b2e-60b8-46ad-823a-1a1695e906cb",
+   "session": "d51faae0-8528-476d-8908-07ffc81670ce",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -142,7 +142,7 @@
   {
    "id": "neg-go-timestamp-local",
    "source": "handwritten",
-   "session": "026f6acf-85ce-423a-896a-8a9b1e079046",
+   "session": "fccff7e6-5026-428a-96f3-90b3891cb594",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
@@ -152,7 +152,7 @@
   {
    "id": "neg-go-yaml-docs",
    "source": "handwritten",
-   "session": "08b0b1f5-60f4-4ff4-8856-3f5d74c8e091",
+   "session": "1d51754b-3efb-4322-b13a-c26113551d43",
    "at_prompt": false,
    "at_edit": null,
    "card_routes_in_spool": [],
