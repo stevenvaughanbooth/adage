@@ -441,6 +441,83 @@ fn intent_route_fires_on_a_matching_prompt_only() {
     assert!(st.intent.is_none());
 }
 
+/// A card whose family's one prompt points along the first axis, at `threshold`.
+fn card_fixture(threshold: f32) -> (tempfile::TempDir, Index, CommandTable) {
+    use adage_tracks::card::{Card, CardFile};
+    let (dir, index, table) = fixture();
+    let mut routes: Vec<Route> = index.routes.iter().map(|r| r.route.clone()).collect();
+    let axis = adage_intent::quantize(&adage_intent::unit(vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
+    let card = Card {
+        sessions: 2,
+        passed: 2,
+        files: vec![
+            CardFile { path: "flag_<x>.go".into(), sessions: 2 },
+            CardFile { path: "docs/flags.md".into(), sessions: 2 },
+        ],
+        exemplars: vec![],
+        commands: vec![],
+        avoid: vec![],
+        finish: Some("go test ./...".into()),
+        prompts: vec![axis.clone()],
+    };
+    routes.push(route(
+        "card-1",
+        Trigger::Intent { family: "card-1".into(), model: MODEL.into(), centroid: axis, threshold },
+        Step::Card { card },
+        vec![],
+        Effect::Observe,
+        Strength::Prime,
+    ));
+    let track = Track {
+        manifest: Manifest {
+            track: TrackInfo {
+                name: "acme/t".into(),
+                version: "0.1.0".into(),
+                description: String::new(),
+                provenance: "desire-path".into(),
+            },
+            scope: Scope { repo: "acme".into() },
+            gauge: Gauge::default(),
+        },
+        routes,
+    };
+    adage_tracks::io::validate(&track).unwrap();
+    (dir, Index::compile(&[track]), table)
+}
+
+#[test]
+fn a_card_is_said_once_at_a_close_prompt_or_at_the_first_edit_of_its_files_when_nearly_close() {
+    // "test" prompts score 0.97 against the family's prompt; "docs" prompts 0.
+    let said = |d: &Decision| d.directives.iter().any(|x| x.route == "card-1");
+    for (threshold, at_prompt) in [(0.9, true), (0.99, false)] {
+        let (dir, index, table) = card_fixture(threshold);
+        let ctx = Ctx {
+            index: &index,
+            repo: "acme".into(),
+            root: dir.path(),
+            table: &table,
+            embed: Some(&fake_embed),
+            params: Default::default(),
+        };
+        let mut st = SessionState::default();
+        let d = decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() });
+        assert_eq!(said(&d), at_prompt, "threshold {threshold}");
+        assert_eq!(st.card_waiting.is_some(), !at_prompt, "in the grey zone the card waits");
+        let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "src/main.go")] });
+        assert!(!said(&d), "not one of the card's files");
+        let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "flag_port.go")] });
+        assert_eq!(said(&d), !at_prompt, "a file of the card's pattern: said now, unless it was said");
+        let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "docs/flags.md")] });
+        assert!(!said(&d), "once per session");
+        // An unrelated prompt: nothing, and no edit brings the card.
+        let mut st = SessionState::default();
+        let d = decide(&ctx, &mut st, &Event::Prompt { text: "write the docs".into() });
+        assert!(!said(&d) && st.card_waiting.is_none());
+        let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "flag_port.go")] });
+        assert!(!said(&d));
+    }
+}
+
 #[test]
 fn intent_routes_fail_open_without_a_model() {
     let (dir, index, table) = intent_fixture(MODEL, 0.8);

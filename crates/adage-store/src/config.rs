@@ -204,7 +204,7 @@ pub const KEYS: &[Key] = &[
     Key {
         name: "learn.card_threshold",
         kind: Kind::Share,
-        default: "0.8",
+        default: "0.811",
         env: None,
         doc: "how similar a prompt must be to a family's prompts for its procedure card (0.5 to 0.99)",
         guarded: true,
@@ -433,7 +433,7 @@ fn load_from(file: &Path, env: &dyn Fn(&str) -> Option<String>) -> Loaded {
         learn_parse_cache: parse_bool(&text("learn.parse_cache")).unwrap_or(true),
         runtime_control: text("runtime.control").parse().unwrap_or(0.1),
         learn_cards: parse_bool(&text("learn.cards")).unwrap_or(true),
-        learn_card_threshold: text("learn.card_threshold").parse().unwrap_or(0.8),
+        learn_card_threshold: text("learn.card_threshold").parse().unwrap_or(0.811),
         instincts_enabled: parse_bool(&text("instincts.enabled")).unwrap_or(true),
         instincts_packs: split_ids(&text("instincts.packs")),
         instincts_disabled: split_ids(&text("instincts.disabled")),

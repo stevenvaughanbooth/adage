@@ -276,69 +276,93 @@ than beating it. s4's 8/12 are the eight code-edit sessions: a schema-only chang
 
 ## Recurring tasks: procedure cards
 
-A skill is written down. Much recurring work is not: "add a validator", "add a parameter type",
-done a few times a month, the same files and checks each time, the specifics different. For that,
-Adage learns the procedure from the traces themselves, on the same pipeline
-(`crates/adage-learn/src/cards.rs`, a port of the research's `procedure.py`,
-[evals/lab/research/recurring-workflows](../evals/lab/research/recurring-workflows/README.md)).
-It needs the embedding model (`adage models fetch`); without it there are no cards.
+A skill is written down. Much recurring work is not: "add a validator", "add a flag type", done a
+few times a month, the same files and checks each time, the specifics different. For that, Adage
+learns the procedure from the traces themselves (`crates/adage-learn/src/cards.rs`), to the
+research's card compiler spec
+([confirm/README.md](../evals/lab/research/recurring-workflows/confirm/README.md), "Card compiler
+spec"; the reference is `procedure.py`). It needs the embedding model (`adage models fetch`);
+without it there are no cards.
 
 1. **Families.** `adage condition` (and the automatic learn) embeds each trace's first prompt with
    the pinned model. Two traces are of one family when their prompts are similar (cosine ≥ 0.6)
-   **and** they edited overlapping files (Jaccard ≥ 0.25); families are the connected components.
-2. **A card per family, from its first passing trace.** A family with no passing trace makes
-   nothing. The card holds the files edited in at least half of the traces, in the order first
-   edited (a new file named differently each time is shown as its directory); for each, the lines
-   the latest passing trace added, clipped; the commands run in at least half of the traces, kept
-   when they mostly worked and listed to avoid when they mostly failed, with the first line of the
-   error; and the check the passing traces finished with. Inline scripts (`python -c "…"`) are the
-   task's own code and never listed.
-3. **Delivery.** A family's card is a **reflex**: stimulus, a prompt whose similarity to the
-   family's centroid reaches `learn.card_threshold` (default 0.8); response, the card, said once
-   per session (UserPromptSubmit). It is prime and observe: it directs no command, and
-   `adage review strengthen` refuses it. The threshold is a setting because it is not calibrated
-   yet: the research's confirming experiment will set it.
-4. **Verification.** `adage train cards` replays each card's commands on a clean checkout in
+   **and** the files they edited overlap by shape (Jaccard ≥ 0.25; a shape is directory, name
+   token count, first token and extension, so `flag_url.go` and `flag_port.go` agree). Families
+   are the connected components. Every later trace that matched joins its family, and its prompt
+   joins the family's prompt library, so the library grows in the user's own phrasing.
+2. **The card.** The files edited in at least half of the traces, in the order first edited;
+   files edited in one trace each are grouped by shape and anti-unified (`flag_<x>.go`,
+   `flag_<x>_test.go`, a test sibling apart from its file); a file a command wrote by redirection
+   (`go doc -all . > godoc-current.txt`) counts as edited. For each, the longest text the latest
+   passing trace added (to a file of the pattern's shape, for a pattern). The commands run in at
+   least half of the traces, kept when they mostly worked and listed to avoid when they mostly
+   failed, with the first line of the error; inline scripts (`python -c "…"`) are the task's own
+   code and never listed. The check the passing traces finished with, anti-unified. Exemplars
+   are clipped to 14, 10, 6, 3 lines, then dropped, until the card fits 800 tokens.
+3. **How many traces.** No passing trace, no card. One trace is enough only when the task edits
+   the same files every time (it created none); a task whose files are named after it needs a
+   second trace, since one cannot show which part of the name varies (the research's Go family:
+   a card from 1 trace saved 9%, CI including 0; from 4, 34%).
+4. **Delivery.** A family's card is a **reflex**: stimulus, a prompt whose best cosine to the
+   family's prompts reaches `learn.card_threshold` (default **0.811**, the research's
+   pre-registered threshold; 0.753 for a family of one prompt); response, the card, said once per
+   session at UserPromptSubmit. A prompt within 0.10 below the threshold gets the card at the
+   session's first edit of one of its files (PostToolUse). It is prime and observe: it directs no
+   command, and `adage review strengthen` refuses it.
+5. **Verification.** `adage train cards` replays each card's commands on a clean checkout in
    adage-exec's sandbox (as `adage train` does for a skill; `adage` itself runs nothing). Installs
    are not replayed, since the sandbox has no network. The next learn marks the commands that
    worked ("and on a clean checkout") and stops listing the ones that did not.
-5. **Seeing it.** `adage sense` reports `recurring tasks: N families, M with a procedure card` and
+6. **Seeing it.** `adage sense` reports `recurring tasks: N families, M with a procedure card` and
    lists each card among the candidate reflexes; `adage review` shows the card's text; the status
    card counts procedure cards among the learned reflexes. `learn.cards = false` turns them off.
 
-The card a hook delivers (marshmallow, learned from the research's 4 training traces):
+**Detection is strict, and literal.** The threshold is kept strict for launch: it is precise, but
+it recognises only phrasing close to the family's earlier prompts. In the research's held-out Go
+family it fired on 6 of 6 templated tasks, on **0 of 6 paraphrases** (AUC 0.075), and on none of
+53 same-repository negatives; the file signal fired on none of 58 real sessions. Whole-prompt
+cosine mostly measures style, so a terse paraphrase of a family task scores below some unrelated
+bug-fix prompts. The library growing with matched sessions is what lets it follow a user's own
+phrasing; a learned contrastive weighting lifted paraphrase AUC to 0.92 post hoc, but no threshold
+had both recall and no false fires from 4 examples, so it is not built.
+
+Reproduced through the hook (`adage hook claude UserPromptSubmit`, then `PostToolUse` edits, the
+control share set to 0), from the research's training traces:
+
+| family | held-out tasks | paraphrases | same-repository negatives | edits of non-card files |
+| --- | --- | --- | --- | --- |
+| go-flag (urfave/cli, 4 traces) | 6/6 at the prompt | 0/6 | 0/48 RepoBench prompts, 0/5 hard negatives (including at a card file's edit) | 0 |
+| mm-validator (marshmallow, 4 traces) | 6/6 at the prompt | – | 0/8 hand-written tasks | – |
+
+With one Go trace no card is made (its files were created); with one marshmallow trace a card is
+made, at 0.753. The Go card, as the hook delivers it:
 
 ```text
-Earlier sessions in this repository did tasks like this one (4 sessions, 4 passed its checks). What they had in common, as a checklist; the specifics of your task differ.
-Files changed, in this order:
-  - src/marshmallow/validate.py (4 of 4)
-  - tests/test_validate.py (4 of 4)
-  - CHANGELOG.rst (4 of 4)
-What the change added last time, in another task (copy the format, not the content):
-  src/marshmallow/validate.py:
-    | class MultipleOf(Validator):
-    |     """Validator which succeeds if the ``value`` is an exact multiple of ``base``.
+How changes of this kind were done here before: learned from 4 earlier sessions of the same kind of task in this repository (3 passed the project's checks). Use it as a checklist; the specifics of your task differ.
+Files such a change touched (in order):
+  - flag_<x>.go (its name differs each time) (4/4 sessions)
+  - flag_<x>_test.go (its name differs each time) (4/4 sessions)
+  - docs/v3/examples/flags/basics.md (4/4 sessions)
+What the edit looked like last time (another variant; copy the format, not the content):
+  flag_<x>.go:
+    | package cli
+    | …
+    | type RegexpFlag = FlagBase[*regexp.Regexp, NoConfig, regexpValue]
     …
-Commands that worked:
-  ls -la (4 of 4 runs succeeded, and on a clean checkout)
-  wc -l tests/test_validate.py (4 of 4 runs succeeded, and on a clean checkout)
-  pip install -e . -q (3 of 3 runs succeeded)
+Commands:
+  - cat (ran in 4/4 sessions, 33/34 succeeded)
+  - go test ./... (ran in 3/4 sessions, 6/6 succeeded)
   …
-Commands that failed:
-  python -m pytest tests/test_validate.py -xvs (failed 5 of 6 runs: /usr/local/bin/python: No module named pytest)
 Ignore this if the user is asking for something else.
 ```
 
-`grep -n __all__ src/marshmallow/validate.py` worked in 3 training traces but failed on a clean
-checkout of upstream `HEAD`, so after `adage train cards` it is no longer listed.
+"Passed" is the session's outcome when one is recorded (`--outcomes`), else Adage's proxy for it;
+the research's hidden check failed all four Go training sessions (none updated the approved docs
+copy), and the card, learned from traces, cannot contain a step no trace took.
 
-**Does it fire on the wrong task?** Driving the hook with the 6 held-out tasks of the family and 8
-unrelated tasks in the same repository (fix a field bug, README, CI, a new field type, a refactor,
-a Python bump, type hints, a benchmark) at the default threshold: the card fired on all 6, once
-per session, and on none of the 8. That is one family on one repository, with the research's
-prompts. The research measured the card's value (19% of $ per task, CI 12–26%, no pass-rate loss)
-with the card in the prompt, not through this delivery; a false fire costs a card's tokens and an
-"ignore this if…" line.
+The research measured the card's value with this detection and delivery: −33.8% of $ per task
+(90% CI −44.3 to −23.6) and −31.5% of calls on the Go family, with pass rate unchanged; −16% and
+−23% on click and marshmallow with the card in the prompt.
 
 ## Skill-steered sessions (optional evidence)
 

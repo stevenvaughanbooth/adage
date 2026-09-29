@@ -254,3 +254,70 @@ fn cards_are_deterministic_and_order_independent() {
     let bytes = |h: &Path| std::fs::read(h.join("index.json")).unwrap();
     assert_eq!(bytes(&a), bytes(&b));
 }
+
+/// Go-like recurring work: each task creates files named after it (`flag_port.go`), edits a
+/// shared doc, and regenerates a file by redirection.
+fn go_corpus(dir: &Path, names: &[&str]) -> (Vec<PathBuf>, BTreeMap<String, bool>) {
+    let mut files = vec![];
+    let mut outcomes = BTreeMap::new();
+    for (i, name) in names.iter().enumerate() {
+        let sid = format!("g{i}");
+        let mut t = Tx::new(&sid, &format!("add a new check rule flag {name}"));
+        let write = |rel: String, content: String| json!({"file_path": format!("{CWD}/{rel}"), "content": content});
+        t.bash("go test ./...", "FAIL", true)
+            .call(
+                "Write",
+                write(format!("flag_{}.go", name.to_lowercase()), format!("package cli\n\ntype {name}Flag = FlagBase")),
+                "File created",
+                false,
+            )
+            .call(
+                "Write",
+                write(
+                    format!("flag_{}_test.go", name.to_lowercase()),
+                    format!("package cli\n\nfunc Test{name}Flag(t *testing.T) {{}}"),
+                ),
+                "File created",
+                false,
+            )
+            .bash("go test ./...", "FAIL", true)
+            .edit("docs/basics.md", "", &format!("- {name}Flag"))
+            .bash(&format!("cd {CWD} && go doc -all . > godoc-current.txt"), "", false)
+            .bash("go test ./...", "ok", false);
+        files.push(t.write(dir));
+        outcomes.insert(sid, true);
+    }
+    (files, outcomes)
+}
+
+#[test]
+fn names_that_vary_become_patterns_and_one_trace_that_created_files_is_not_enough() {
+    let d = tempfile::tempdir().unwrap();
+    let models = d.path().join("models");
+    install_fixture_model(&models);
+    let (files, outcomes) = go_corpus(d.path(), &["Port", "Url", "Regexp"]);
+    let (_, index) = run(&files, &outcomes, &d.path().join("a"), &models);
+    let found = cards(&index);
+    assert_eq!(found.len(), 1);
+    let Step::Card { card } = &found[0].step else { unreachable!() };
+    let paths: Vec<&str> = card.files.iter().map(|f| f.path.as_str()).collect();
+    for p in ["flag_<x>.go", "flag_<x>_test.go", "docs/basics.md", "godoc-current.txt"] {
+        assert!(paths.contains(&p), "{p} in {paths:?}");
+    }
+    let ex = |p: &str| card.exemplars.iter().find(|e| e.path == p).map(|e| e.lines.join("\n")).unwrap_or_default();
+    assert!(
+        ex("flag_<x>.go").contains("type RegexpFlag"),
+        "the latest trace, not its test file: {}",
+        ex("flag_<x>.go")
+    );
+    assert!(ex("flag_<x>_test.go").contains("func TestRegexpFlag"));
+    assert!(ex("godoc-current.txt").contains("go doc -all ."), "a redirect's text is its command");
+    assert_eq!(card.finish.as_deref(), Some("go test ./..."));
+    assert!(!card.prompts.is_empty(), "the family's prompts (identical ones kept once), to score a new one against");
+    let Trigger::Intent { threshold, .. } = &found[0].trigger else { unreachable!() };
+    assert!((threshold - 0.8).abs() < 1e-6);
+
+    // One trace that created files: no card yet (which part of the name varies is unknown).
+    let (_, index) = run(&files[..1], &outcomes, &d.path().join("b"), &models);
+    assert!(cards(&index).is_empty());
+}

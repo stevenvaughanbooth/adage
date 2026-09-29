@@ -1,23 +1,32 @@
-//! Procedure cards for recurring work (evals/lab/research/recurring-workflows): a repository's
-//! traces grouped into **families** of similar tasks, and for each family with a passing trace a
-//! **card** of what its traces had in common, delivered once at the prompt of the next task of
-//! the family (an `intent` trigger, [`adage_tracks::Step::Card`]).
+//! Procedure cards for recurring work: a repository's traces grouped into **families** of similar
+//! tasks, and for each family with a passing trace a **card** of what its traces had in common,
+//! delivered once to the next task of the family (an `intent` trigger,
+//! [`adage_tracks::Step::Card`]). The spec is the research's (evals/lab/research/
+//! recurring-workflows, `confirm/README.md`, "Card compiler spec"; the reference is
+//! `procedure.py`).
 //!
 //! - **Families.** Two traces are of one family when their first prompts are similar (cosine of
 //!   the pinned static model's embeddings, the one the hook embeds with, at least
-//!   [`CardParams::family_similarity`]) *and* they edited overlapping files (Jaccard at least
-//!   [`CardParams::file_overlap`]). Families are the connected components, in canonical order.
-//! - **Cards** (a port of the research's `procedure.py`): every file edited in at least half of the
-//!   family's traces (all of them with one trace), in the median order of first edit, a file new in
-//!   each trace under a different name anti-unified to its directory; for each, the lines the most
-//!   recent passing trace added (clipped); the commands run in at least half of the traces
+//!   [`CardParams::family_similarity`]) *and* the shapes of the files they edited overlap
+//!   (Jaccard at least [`CardParams::file_overlap`]; a shape is directory, name token count, first
+//!   token and extension, so `flag_url.go` and `flag_port.go` agree). Families are the connected
+//!   components, in canonical order: every later trace that matched joins its family, and its
+//!   prompt joins the family's prompt library.
+//! - **Cards**: every file edited in at least half of the family's traces (all of them with one
+//!   trace), in the median order of first edit; files edited in one trace each, grouped by shape
+//!   and anti-unified (`flag_<x>.go`, `flag_<x>_test.go`); a file a command wrote by redirection
+//!   counts as edited. For each, the longest text the most recent passing trace added to it (or
+//!   to a file of the pattern's shape). The commands run in at least half of the traces
 //!   (normalised to their head), kept when they mostly worked and listed to avoid when they mostly
-//!   failed, with the first line of the error; and the check the passing traces finished with.
-//! - **A family with no passing trace makes no card**: most of a card's value is there after one
-//!   passing trace, and it does not grow much after that (the research's learning curve).
-//! - **Triggering.** The family's centroid, and a similarity threshold that is a parameter
-//!   ([`CardParams::threshold`], `learn.card_threshold`) until the confirming experiment calibrates
-//!   it. A card is prime, observe, and said once per session.
+//!   failed, with the first line of the error; and the check the passing traces finished with,
+//!   anti-unified. Exemplars are clipped (14, 10, 6, 3 lines, then none) to fit 800 tokens.
+//! - **Minimum traces.** No passing trace, no card. One trace is enough only when it created no
+//!   file: a task whose files are named after it needs a second trace to show which part varies.
+//! - **Triggering.** A new prompt's best cosine to the family's prompts, at the research's
+//!   pre-registered threshold ([`THRESHOLD`], `learn.card_threshold`; lower for a family of one
+//!   prompt). Within 0.10 below it, the card is said at the session's first edit of one of its
+//!   files. Precise (no false fire on 53 same-repository negatives) but literal: paraphrases were
+//!   not recognised (0 of 6). A card is prime, observe, and said once per session.
 //! - **Verification.** `adage train cards` (the adage-train binary: `adage` spawns nothing) replays
 //!   a card's commands on a clean checkout in adage-exec's sandbox and records the verdicts
 //!   ([`VERDICTS_FILE`]); the next learn marks those that worked and drops those that did not from
@@ -28,7 +37,9 @@
 use crate::import::Session;
 use adage_intent::model::StaticModel;
 use adage_intent::normalize::normalize;
-use adage_tracks::card::{Card, CardCommand, CardFile, Exemplar, MAX_EXEMPLAR_LINES, MAX_LINE};
+use adage_tracks::card::{
+    name_tokens, Card, CardCommand, CardFile, Exemplar, MAX_EXEMPLAR_LINES, MAX_LINE, MAX_PROMPTS, VARYING,
+};
 use adage_tracks::why::Why;
 use adage_tracks::*;
 use serde::{Deserialize, Serialize};
@@ -46,10 +57,19 @@ pub fn load_verdicts(home: &Path) -> Verdicts {
     std::fs::read(home.join(VERDICTS_FILE)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
 
+/// The research's pre-registered delivery threshold (confirm/README.md, "Detection"): a new
+/// prompt's best cosine to the family's prompts; chosen on two families, precise on a third (0 of
+/// 53 same-repository negatives), but it recognises only phrasing close to earlier prompts.
+pub const THRESHOLD: f32 = 0.811;
+/// ... and for a family of one prompt, how much lower its threshold is (0.753 at the default).
+pub const SINGLE_PROMPT_DROP: f32 = 0.058;
+
 /// How families form and when a card is delivered.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CardParams {
-    /// A new prompt's similarity to the family's centroid that delivers the card.
+    /// A new prompt's best similarity to the family's prompts that delivers the card (a family of
+    /// one prompt: [`SINGLE_PROMPT_DROP`] lower). Within `adage_tracks::card::GREY_MARGIN` below
+    /// it, the card waits for the session's first edit of one of its files.
     pub threshold: f32,
     /// Two traces' first prompts must be at least this similar to be of one family.
     pub family_similarity: f32,
@@ -61,7 +81,7 @@ pub struct CardParams {
 
 impl Default for CardParams {
     fn default() -> Self {
-        CardParams { threshold: 0.8, family_similarity: 0.6, file_overlap: 0.25, verdicts: Verdicts::new() }
+        CardParams { threshold: THRESHOLD, family_similarity: 0.6, file_overlap: 0.25, verdicts: Verdicts::new() }
     }
 }
 
@@ -70,7 +90,8 @@ const EDIT_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 struct EditView {
     k: usize,
     path: String,
-    write: bool,
+    /// A file the session created (a Write to a path it had not touched before).
+    new: bool,
     text: String,
 }
 
@@ -170,12 +191,93 @@ fn words(s: &str) -> Vec<(String, bool)> {
     out
 }
 
+/// The relative paths a command line writes by redirection (`> f`, `>> f`, not `2>&1`, not
+/// `/dev/null`, not an absolute path), normalised (`./a/b` → `a/b`).
+fn redirect_targets(line: &str) -> Vec<String> {
+    let b = line.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] != b'>' || (i > 0 && matches!(b[i - 1], b'<' | b'>' | b'&' | b'0'..=b'9')) {
+            i += 1;
+            continue;
+        }
+        let mut j = i + 1;
+        if j < b.len() && b[j] == b'>' {
+            j += 1;
+        }
+        while j < b.len() && b[j] == b' ' {
+            j += 1;
+        }
+        let start = j;
+        while j < b.len() && !b" \t;&|<>".contains(&b[j]) {
+            j += 1;
+        }
+        let t = &line[start..j];
+        let t = t.trim_start_matches("./");
+        if !t.is_empty()
+            && !t.starts_with('/')
+            && !t.starts_with('&')
+            && !t.starts_with('$')
+            && !t.split('/').any(|s| s.is_empty() || s == "..")
+            && !out.iter().any(|x: &String| x == t)
+        {
+            out.push(t.to_string());
+        }
+        i = j.max(i + 1);
+    }
+    out
+}
+
+/// A file's role for grouping names that vary: its directory, the number of tokens in its name,
+/// its first token and its extension (`flag_url.go` and `flag_port.go` share one; `flag_url_test.go`
+/// has another).
+fn shape(path: &str) -> (String, usize, String, String) {
+    let (dir, name) = path.rsplit_once('/').unwrap_or(("", path));
+    let t = name_tokens(name);
+    (dir.to_string(), t.len(), t.first().unwrap_or(&"").to_string(), t.last().unwrap_or(&"").to_string())
+}
+
+/// Names of one shape aligned token by token: tokens that agree are kept, the others become
+/// `<x>` (`flag_url.go`, `flag_port.go` → `flag_<x>.go`).
+fn anti_unify(paths: &[&str]) -> String {
+    let (dir, _) = paths[0].rsplit_once('/').unwrap_or(("", ""));
+    let toks: Vec<Vec<&str>> = paths.iter().map(|p| name_tokens(p.rsplit_once('/').map_or(*p, |x| x.1))).collect();
+    let name: String = toks[0]
+        .iter()
+        .enumerate()
+        .map(|(i, t)| if toks.iter().all(|x| x.get(i) == Some(t)) { *t } else { VARYING })
+        .collect();
+    if dir.is_empty() {
+        name
+    } else {
+        format!("{dir}/{name}")
+    }
+}
+
+/// A path is one a card file stands for: itself, or of a pattern's shape with its fixed tokens.
+fn stands_for(file: &str, path: &str) -> bool {
+    if file == path {
+        return true;
+    }
+    if !file.contains(VARYING) || shape(file).0 != shape(path).0 {
+        return false;
+    }
+    let (f, p) = (file.rsplit_once('/').map_or(file, |x| x.1), path.rsplit_once('/').map_or(path, |x| x.1));
+    // `<x>` is one token of the pattern (`flag`, `_`, `<x>`, `.`, `go`): the same shape, token for
+    // token, so `flag_<x>.go` does not stand for `flag_url_test.go`.
+    let (ft, pt) = (name_tokens(f), name_tokens(p));
+    ft.len() == pt.len() && ft.iter().zip(&pt).all(|(a, b)| *a == VARYING || a == b)
+}
+
 fn view<'a>(s: &'a Session) -> View<'a> {
     let root = s.root.to_string_lossy().to_string();
     let mut edits = Vec::new();
     let mut cmds = Vec::new();
+    let mut touched: BTreeSet<&str> = BTreeSet::new();
     for (k, st) in s.steps.iter().enumerate() {
         let c = &st.call;
+        let seen_before = st.rel_path.as_deref().is_some_and(|p| !touched.insert(p));
         if EDIT_TOOLS.contains(&c.tool.as_str()) {
             let Some(path) = st.rel_path.clone() else { continue };
             if c.failed {
@@ -197,7 +299,7 @@ fn view<'a>(s: &'a Session) -> View<'a> {
                 let new = if c.tool == "Write" { s_(i, "content") } else { s_(i, "new_string") };
                 added(&s_(i, "old_string"), &new)
             };
-            edits.push(EditView { k, path, write: c.tool == "Write", text });
+            edits.push(EditView { k, path, new: c.tool == "Write" && !seen_before, text });
         } else if c.tool == "Bash" {
             let Some(cmd) = c.input.get("command").and_then(|x| x.as_str()) else { continue };
             let cmd = if root.is_empty() {
@@ -209,17 +311,27 @@ fn view<'a>(s: &'a Session) -> View<'a> {
             if !norm.is_empty() {
                 cmds.push(CmdView { k, norm, failed: c.failed, out: c.output.clone() });
             }
+            // A file the command wrote by redirection (`go doc -all . > godoc-current.txt`) is
+            // an edit of it, with the command as its text.
+            if !c.failed {
+                let first = cmd.trim().lines().next().unwrap_or("");
+                for path in redirect_targets(first) {
+                    edits.push(EditView { k, path, new: false, text: first.to_string() });
+                }
+            }
         }
     }
     let passed = s.outcome.or_else(|| s.proxy_outcome()) == Some(true);
     View { s, edits, cmds, passed }
 }
 
-fn files_of(v: &View) -> BTreeSet<String> {
-    v.edits.iter().map(|e| e.path.clone()).collect()
+/// The shapes of the files a trace edited: traces of one family overlap here even when each names
+/// its new files after its own task (`flag_url.go`, `flag_port.go`).
+fn files_of(v: &View) -> BTreeSet<(String, usize, String, String)> {
+    v.edits.iter().map(|e| shape(&e.path)).collect()
 }
 
-fn jaccard(a: &BTreeSet<String>, b: &BTreeSet<String>) -> f64 {
+fn jaccard<T: Ord>(a: &BTreeSet<T>, b: &BTreeSet<T>) -> f64 {
     let u = a.union(b).count();
     if u == 0 {
         0.0
@@ -262,12 +374,17 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
     if passed == 0 {
         return None;
     }
+    // One trace is enough only when its task edits the same files every time: a trace that
+    // created files names them after its own task, and one trace cannot say which part of the
+    // name varies (the research's Go family: a one-trace card saved 9%, a four-trace one 34%).
+    if n == 1 && views[0].edits.iter().any(|e| e.new) {
+        return None;
+    }
     let need = if n == 1 { 1 } else { n.div_ceil(2) };
-    // 1. Files, in the median order of their first edit; new files named differently each time
-    //    are anti-unified to their directory.
+    // 1. Files, in the median order of their first edit; files named differently each time are
+    //    grouped by shape and anti-unified (`flag_<x>.go`).
     let mut per_file: BTreeMap<String, BTreeSet<usize>> = BTreeMap::new();
     let mut first_pos: BTreeMap<String, Vec<f64>> = BTreeMap::new();
-    let mut new_files: BTreeMap<String, BTreeMap<usize, String>> = BTreeMap::new();
     for (i, v) in views.iter().enumerate() {
         let mut seen: Vec<&str> = Vec::new();
         for e in &v.edits {
@@ -280,32 +397,24 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
             first_pos.entry(p.to_string()).or_default().push(j as f64 / seen.len().max(1) as f64);
         }
     }
-    for (i, v) in views.iter().enumerate() {
-        for e in v.edits.iter().filter(|e| e.write) {
-            if per_file.get(&e.path).is_some_and(|s| s.len() == 1) {
-                let dir = e.path.rsplit_once('/').map(|x| x.0).unwrap_or("").to_string();
-                new_files.entry(dir).or_default().insert(i, e.path.clone());
-            }
-        }
-    }
     let mut files: Vec<(String, usize, f64)> = per_file
         .iter()
         .filter(|(_, s)| s.len() >= need)
         .map(|(p, s)| (p.clone(), s.len(), median(&mut first_pos[p].clone())))
         .collect();
-    let mut anti: BTreeMap<String, Vec<String>> = BTreeMap::new();
     if n > 1 {
-        for (dir, by) in &new_files {
-            if by.len() >= need {
-                let ps: Vec<String> = by.values().cloned().collect();
-                let exts: BTreeSet<String> =
-                    ps.iter().map(|p| p.rsplit_once('.').map(|x| format!(".{}", x.1)).unwrap_or_default()).collect();
-                let ext = if exts.len() == 1 { exts.into_iter().next().unwrap_or_default() } else { String::new() };
-                let pat = if dir.is_empty() { format!("<new>{ext}") } else { format!("{dir}/<new>{ext}") };
-                let mut pos: Vec<f64> =
-                    ps.iter().filter_map(|p| first_pos.get(p).and_then(|v| v.first().copied())).collect();
-                files.push((pat.clone(), by.len(), median(&mut pos)));
-                anti.insert(pat, ps);
+        let mut groups: BTreeMap<(String, usize, String, String), Vec<&str>> = BTreeMap::new();
+        for (p, s) in &per_file {
+            if s.len() == 1 {
+                groups.entry(shape(p)).or_default().push(p);
+            }
+        }
+        for ps in groups.values() {
+            let sessions: BTreeSet<usize> = ps.iter().flat_map(|p| per_file[*p].iter().copied()).collect();
+            let pat = anti_unify(ps);
+            if sessions.len() >= need && pat.contains(VARYING) {
+                let mut pos: Vec<f64> = ps.iter().filter_map(|p| first_pos[*p].first().copied()).collect();
+                files.push((pat, sessions.len(), median(&mut pos)));
             }
         }
     }
@@ -314,21 +423,16 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
     if files.is_empty() {
         return None;
     }
-    // 2. Exemplars, from the most recent passing trace (then the rest, most recent first).
+    // 2. Exemplars, from the most recent passing trace (then the rest, most recent first): the
+    //    longest text it added to the file, or to a file of the pattern's shape.
     let order: Vec<&&View> =
         views.iter().rev().filter(|v| v.passed).chain(views.iter().rev().filter(|v| !v.passed)).collect();
     let mut exemplars = Vec::new();
     for (p, _, _) in &files {
-        let members = anti.get(p);
         for v in &order {
-            let hunks: Vec<&str> = v
-                .edits
-                .iter()
-                .filter(|e| &e.path == p || (e.write && members.is_some_and(|m| m.contains(&e.path))))
-                .map(|e| e.text.as_str())
-                .collect();
+            let hunks: Vec<&str> = v.edits.iter().filter(|e| stands_for(p, &e.path)).map(|e| e.text.as_str()).collect();
             let Some(h) = hunks.iter().max_by_key(|h| h.lines().count()) else { continue };
-            let mut lines: Vec<String> = h
+            let lines: Vec<String> = h
                 .trim_matches('\n')
                 .lines()
                 .map(|l| {
@@ -341,10 +445,6 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
                     }
                 })
                 .collect();
-            if lines.len() > MAX_EXEMPLAR_LINES {
-                lines.truncate(MAX_EXEMPLAR_LINES - 1);
-                lines.push("…".into());
-            }
             if !lines.is_empty() && !lines.iter().all(|l| l.trim().is_empty()) {
                 exemplars.push(Exemplar { path: p.clone(), lines });
             }
@@ -425,32 +525,47 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
         .iter()
         .max_by(|a, b| a.1.len().cmp(&b.1.len()).then_with(|| b.0.cmp(a.0)))
         .and_then(|(_, cs)| {
-            // The tokens every passing trace agreed on, up to the first that differed.
+            // Anti-unified token by token: tokens every passing trace agreed on, `<…>` for the
+            // others; nothing when half of it or more differs.
             let toks: Vec<Vec<&str>> = cs.iter().map(|c| c.split_whitespace().collect()).collect();
             let m = toks.iter().map(|t| t.len()).min().unwrap_or(0);
-            let common: Vec<&str> =
-                (0..m).take_while(|&i| toks.iter().all(|t| t[i] == toks[0][i])).map(|i| toks[0][i]).collect();
-            // A bare head (`python -m`) no trace ran as such says nothing.
-            let f = common.join(" ");
-            (common.len() >= 3 || (common.len() == 2 && cs.contains(&f))).then_some(f)
+            let f: Vec<&str> =
+                (0..m).map(|i| if toks.iter().all(|t| t[i] == toks[0][i]) { toks[0][i] } else { "<…>" }).collect();
+            let varying = f.iter().filter(|t| **t == "<…>").count();
+            (!f.is_empty() && varying * 2 < f.len()).then(|| f.join(" "))
         })
-        .filter(|f| plain(f) && verdict(f) != Some(false));
+        .filter(|f| plain(&f.replace("<…>", "x")) && verdict(f) != Some(false));
     // A command the replay found not to work on a clean checkout is not listed as working.
-    let card = Card {
+    let base = Card {
         sessions: n as u32,
         passed: passed as u32,
         files: files.iter().map(|(p, k, _)| CardFile { path: p.clone(), sessions: *k as u32 }).collect(),
-        exemplars,
+        exemplars: vec![],
         commands,
         avoid,
         finish,
+        prompts: vec![],
     };
-    let mut card = card;
-    // Keep within the size bound: drop exemplars from the end until it fits.
-    while adage_tracks::card::check(&card).is_err() && !card.exemplars.is_empty() {
-        card.exemplars.pop();
+    // The budget (800 tokens): exemplars clipped to 14 lines, then 10, 6, 3, then none.
+    for k in [MAX_EXEMPLAR_LINES, 10, 6, 3, 0] {
+        let clipped = exemplars
+            .iter()
+            .filter(|_| k > 0)
+            .map(|e| {
+                let mut lines = e.lines.clone();
+                if lines.len() > k {
+                    lines.truncate(k - 1);
+                    lines.push("…".into());
+                }
+                Exemplar { path: e.path.clone(), lines }
+            })
+            .collect();
+        let card = Card { exemplars: clipped, ..base.clone() };
+        if adage_tracks::card::check(&card).is_ok() {
+            return Some(card);
+        }
     }
-    adage_tracks::card::check(&card).is_ok().then_some(card)
+    None
 }
 
 /// A card's id: stable across relearns as the family grows (from its earliest trace).
@@ -476,7 +591,7 @@ pub fn compile(ss: &[&Session], model: &StaticModel, p: &CardParams, provenance:
     // Chronological, then by id: the order exemplars and ids are read in.
     items.sort_by(|a, b| (&a.0.s.day, &a.0.s.id).cmp(&(&b.0.s.day, &b.0.s.id)));
     let n = items.len();
-    let files: Vec<BTreeSet<String>> = items.iter().map(|(v, _)| files_of(v)).collect();
+    let files: Vec<_> = items.iter().map(|(v, _)| files_of(v)).collect();
     let mut parent: Vec<usize> = (0..n).collect();
     fn find(p: &mut [usize], i: usize) -> usize {
         let mut r = i;
@@ -507,12 +622,17 @@ pub fn compile(ss: &[&Session], model: &StaticModel, p: &CardParams, provenance:
         let r = find(&mut parent, i);
         groups.entry(r).or_default().push(i);
     }
-    let threshold = p.threshold.clamp(INTENT_MIN_THRESHOLD, INTENT_MAX_THRESHOLD);
     let mut out = Vec::new();
     for members in groups.values() {
         let views: Vec<&View> = members.iter().map(|&i| &items[i].0).collect();
         let id = card_id(&views[0].s.id);
-        let Some(card) = learn(&views, p.verdicts.get(&id)) else { continue };
+        let Some(mut card) = learn(&views, p.verdicts.get(&id)) else { continue };
+        // The family's prompts, most recent first: every trace that joined the family adds its
+        // own phrasing, so the library grows with the sessions that matched.
+        card.prompts = members.iter().rev().take(MAX_PROMPTS).map(|&i| adage_intent::quantize(&items[i].1)).collect();
+        card.prompts.dedup();
+        let t = if members.len() == 1 { p.threshold - SINGLE_PROMPT_DROP } else { p.threshold };
+        let threshold = t.clamp(INTENT_MIN_THRESHOLD, INTENT_MAX_THRESHOLD);
         let dim = items[members[0]].1.len();
         let mut mean = vec![0f32; dim];
         for &i in members {
@@ -597,6 +717,20 @@ mod tests {
         assert_eq!(norm_cmd("grep -n 'class ' src/v.py"), "");
         assert_eq!(norm_cmd("wc -l \"tests/test_v.py\""), "wc -l tests/test_v.py");
         assert_eq!(norm_cmd("echo 'a>b'"), "echo a>b");
+    }
+
+    #[test]
+    fn redirects_are_writes_and_names_anti_unify_by_shape() {
+        assert_eq!(redirect_targets("go doc -all . > godoc-current.txt"), ["godoc-current.txt"]);
+        assert_eq!(redirect_targets("make gen >> ./out/api.txt 2>&1"), ["out/api.txt"]);
+        assert!(redirect_targets("x 2>&1 >/dev/null").is_empty());
+        assert!(redirect_targets("x > /tmp/a && y > ../b && z > $F").is_empty());
+        assert!(redirect_targets("cat <<EOF").is_empty());
+        assert_eq!(anti_unify(&["flag_url.go", "flag_port.go"]), "flag_<x>.go");
+        assert_eq!(anti_unify(&["tests/test_hex.py", "tests/test_port.py"]), "tests/test_<x>.py");
+        assert_ne!(shape("flag_url.go"), shape("flag_url_test.go"), "a test sibling is its own role");
+        assert!(stands_for("flag_<x>.go", "flag_ip.go") && !stands_for("flag_<x>.go", "flag_ip_test.go"));
+        assert!(stands_for("a/b.py", "a/b.py") && !stands_for("a/b.py", "a/c.py"));
     }
 
     #[test]

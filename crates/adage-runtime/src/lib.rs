@@ -154,6 +154,10 @@ pub struct SessionState {
     /// The session's recent context symbols (Track G §7.1), what context triggers match on.
     #[serde(default, skip_serializing_if = "CtxState::is_empty")]
     pub ctx: CtxState,
+    /// A procedure card whose family a prompt came close to (within the grey margin below its
+    /// threshold): said at the session's first edit of one of the card's files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card_waiting: Option<String>,
 }
 
 /// At most this many stop-hook requests per session, across all obligations (the default of
@@ -392,12 +396,16 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             // said once, and directs no command of its own.
             let (cards, runs): (Vec<&IndexedRoute>, Vec<&IndexedRoute>) =
                 routes.iter().copied().partition(|r| matches!(r.route.step, Step::Card { .. }));
-            if let Some((_, ir)) = match_intent(ctx, &cards, text, &mut emb) {
-                if ok(st, &out, ir, inhibits_left) {
-                    if let Some(t) = render::route_text(&ir.route, &[]) {
-                        out.push(directive(ir, t));
+            match match_card(ctx, &cards, text, &mut emb) {
+                Some((ir, true)) => {
+                    if ok(st, &out, ir, inhibits_left) {
+                        if let Some(t) = render::route_text(&ir.route, &[]) {
+                            out.push(directive(ir, t));
+                        }
                     }
                 }
+                Some((ir, false)) if emit_ok(st, &out, &ir.route.id) => st.card_waiting = Some(ir.route.id.clone()),
+                _ => {}
             }
             if let Some((family, ir)) = match_intent(ctx, &runs, text, &mut emb) {
                 st.intent = Some(family);
@@ -470,6 +478,21 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                         st.first_edit_at_batch.get_or_insert(st.batches);
                         if let Some(p) = keys::action_path(&n.action) {
                             let rel = repo::relativize(ctx.root, p);
+                            // A procedure card a prompt came close to: said at the first edit of
+                            // one of its files.
+                            if let Some(id) = st.card_waiting.clone() {
+                                let hit = routes.iter().find(|r| r.route.id == id).filter(|r| {
+                                    matches!(&r.route.step, Step::Card { card } if adage_tracks::card::touches(card, &rel))
+                                });
+                                if let Some(ir) = hit {
+                                    st.card_waiting = None;
+                                    if emit_ok(st, &out, &ir.route.id) {
+                                        if let Some(t) = render::route_text(&ir.route, &[]) {
+                                            out.push(directive(ir, t));
+                                        }
+                                    }
+                                }
+                            }
                             let hits = |paths: &str| glob::Pattern::new(paths).is_ok_and(|g| g.matches(&rel));
                             // One edit, one directive: a sequence after this edit with a step that
                             // is a finish line's command subsumes that finish line (a compiled
@@ -835,6 +858,53 @@ fn match_intent<'a>(
         }
     }
     best.map(|(_, f, ir)| (f.clone(), ir))
+}
+
+/// The procedure card whose family the prompt is closest to: its best cosine to the family's
+/// prompts (the trigger's centroid when the card keeps none). `(card, true)` at or above the
+/// threshold; `(card, false)` within the grey margin below it, when the card waits for an edit of
+/// one of its files; nothing otherwise.
+fn match_card<'a>(
+    ctx: &Ctx,
+    cards: &[&'a IndexedRoute],
+    text: &str,
+    emb: &mut Option<Option<(String, Vec<f32>)>>,
+) -> Option<(&'a IndexedRoute, bool)> {
+    if cards.is_empty() {
+        return None;
+    }
+    let (model_id, v) = embedding(ctx, text, emb)?;
+    let mut best: Option<(f32, f32, &'a IndexedRoute)> = None;
+    for ir in cards.iter().copied() {
+        let (Trigger::Intent { model, centroid, threshold, .. }, Step::Card { card }) =
+            (&ir.route.trigger, &ir.route.step)
+        else {
+            continue;
+        };
+        if *model != model_id || centroid.len() != v.len() {
+            continue;
+        }
+        let score = if card.prompts.is_empty() {
+            adage_intent::cosine(&v, &adage_intent::dequantize(centroid))
+        } else {
+            card.prompts
+                .iter()
+                .filter(|p| p.len() == v.len())
+                .map(|p| adage_intent::cosine(&v, &adage_intent::dequantize(p)))
+                .fold(f32::NEG_INFINITY, f32::max)
+        };
+        if best.is_none_or(|b| score - *threshold > b.0 - b.1) {
+            best = Some((score, *threshold, ir));
+        }
+    }
+    let (score, threshold, ir) = best?;
+    if score >= threshold {
+        Some((ir, true))
+    } else if score >= threshold - adage_tracks::card::GREY_MARGIN {
+        Some((ir, false))
+    } else {
+        None
+    }
 }
 
 /// The prompt's embedding, computed at most once per decision (`cache`).

@@ -604,11 +604,14 @@ template. Draft 2's model-written labels are not built. Precision is measured on
 data: 0.87 of directives correct after split/merge, from 0.57 before (S7; [P§4.3]).
 
 **Procedure cards** (`crates/adage-learn/src/cards.rs`) use the same model for recurring work:
-traces whose first prompts are similar (cosine ≥ 0.6) and whose edited files overlap (Jaccard ≥
-0.25) form a family, and a family with a passing trace compiles to an `intent` route whose step is
-`card` (`crates/adage-tracks/src/card.rs`: files, clipped exemplars, commands, commands to avoid,
-the finishing check; fixed headings, size-bounded, validated as untrusted input). The runtime
-matches cards apart from run intents, once per session, prime and observe only. See
+traces whose first prompts are similar (cosine ≥ 0.6) and whose edited file shapes overlap
+(Jaccard ≥ 0.25) form a family, and a family with a passing trace compiles to an `intent` route
+whose step is `card` (`crates/adage-tracks/src/card.rs`: files and `<x>` name patterns, clipped
+exemplars, commands, commands to avoid, the finishing check, and the family's quantised prompt
+embeddings; fixed headings, 800 tokens at most, validated as untrusted input). The runtime scores
+a prompt by its best cosine to the family's prompts, apart from run intents: at the threshold the
+card is said; within 0.10 below it, the session remembers the card (`card_waiting`) and says it at
+the first edit of one of its files. Once per session, prime and observe only. See
 [training.md](training.md#recurring-tasks-procedure-cards).
 
 ### 4.9 Track toolchain (A7)

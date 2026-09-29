@@ -319,8 +319,11 @@ pub fn validate(t: &Track) -> Result<()> {
                 if r.strength != Strength::Prime || r.effect != Effect::Observe || !r.slots.is_empty() {
                     bail!("{}: a card is prime, observe, with no slots", ctx());
                 }
-                if !matches!(r.trigger, Trigger::Intent { .. }) {
+                let Trigger::Intent { centroid, .. } = &r.trigger else {
                     bail!("{}: a card follows the prompt of a task of its family (an intent)", ctx());
+                };
+                if card.prompts.iter().any(|p| p.len() != centroid.len()) {
+                    bail!("{}: the card's prompts and its trigger differ in dimension", ctx());
                 }
             }
             Step::Advise { template, slots } => {
