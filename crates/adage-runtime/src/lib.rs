@@ -6,6 +6,7 @@
 
 pub mod context;
 pub mod fast;
+pub mod pretool;
 pub mod rebuild;
 pub mod render;
 

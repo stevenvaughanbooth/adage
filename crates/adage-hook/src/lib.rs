@@ -206,6 +206,9 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
         return Ok(None);
     }
     let paths = Paths::from_env();
+    if event == "PreToolUse" {
+        return pretool(adapter, &p, &session, &cwd, &root, &paths);
+    }
     // A damaged index (a truncated write, a disk error) is served as empty and rebuilt: the
     // session start asks the learner to recompile it (docs/zero-config.md §5).
     let loaded = Index::try_load(&paths.index());
@@ -229,6 +232,108 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
         }
     }
     out
+}
+
+/// The marker `adage delegate off` writes: no `PreToolUse` rewrite on this machine
+/// (docs/execution.md, "Rewrites to the project's environment").
+pub fn rewrite_off(paths: &Paths) -> PathBuf {
+    paths.root.join("exec").join("rewrite-off")
+}
+
+/// `PreToolUse` (Claude Code only; other harnesses keep the post-hoc directive): a Python test run
+/// or scratch repro under the system Python runs with the project's verified environment instead
+/// (only the interpreter prefix changes), and a `pip install` into the system Python is refused
+/// ([`adage_runtime::pretool`]). On by default for a repository whose U11 instinct is in service
+/// and whose environment was verified when it was bound; off with `adage delegate off`; never in
+/// the control arm.
+fn pretool(
+    adapter: &dyn harness::Adapter,
+    p: &Value,
+    session: &str,
+    cwd: &Path,
+    root: &Path,
+    paths: &Paths,
+) -> Result<Option<String>, Failure> {
+    use adage_runtime::pretool::{self, Pre};
+    if adapter.name() != "claude" || p.get("tool_name").and_then(Value::as_str) != Some("Bash") {
+        return Ok(None);
+    }
+    let input = p.get("tool_input").cloned().unwrap_or(Value::Null);
+    let Some(command) = input.get("command").and_then(Value::as_str) else { return Ok(None) };
+    // The cheap no-match path: no Python here at all.
+    if !(command.contains("python") || command.contains("pytest") || command.contains("pip")) {
+        return Ok(None);
+    }
+    if rewrite_off(paths).exists() {
+        return Ok(None);
+    }
+    let key = repo::repo_key_cached(root, &paths.repo_keys());
+    let Some(binding) = adage_learn::instincts::binding(&paths.tracks(), &key) else { return Ok(None) };
+    let Some(env) = binding.env.filter(|_| Path::new(&binding.root) == root) else { return Ok(None) };
+    // U11 in service here (not extinguished, rejected or turned off).
+    let index = Index::try_load(&paths.index()).unwrap_or_default();
+    let u11 = index.for_repo(&key).any(|r| {
+        matches!(&r.route.evidence.origin, Some(adage_tracks::Origin::Instinct { instinct, .. }) if instinct == "U11")
+    });
+    if !u11 {
+        return Ok(None);
+    }
+    let abs = root.join(&env.interpreter);
+    let e = pretool::Env {
+        interpreter: pretool::shell_word(&abs.to_string_lossy()),
+        shown: env.interpreter.clone(),
+        pytest: env.pytest,
+        modules: env.modules.clone(),
+    };
+    let read = |script: &str| {
+        let p = cwd.join(script);
+        let small = std::fs::metadata(&p).is_ok_and(|m| m.is_file() && m.len() <= 256 << 10);
+        small.then(|| std::fs::read_to_string(&p).ok()).flatten()
+    };
+    let Some(pre) = pretool::plan(command, &e, read) else { return Ok(None) };
+    // The arm: assigned now if the session has none yet; the control arm is left as it is.
+    let arm_env = std::env::var("ADAGE_ARM").ok();
+    let share: f64 = adage_store::config::load(paths).config.runtime_control;
+    let (arm, propensity) = state::update::<SessionState, _>(&paths.state(session), |st| {
+        if st.arm.is_none() {
+            let (arm, pr) = assign(session, share, arm_env.as_deref());
+            st.arm = Some(arm);
+            st.propensity = Some(pr);
+            st.repo = Some(key.clone());
+        }
+        (st.arm, st.propensity)
+    })
+    .map_err(|e| Failure::io("state", "assigning the session's arm", &e))?;
+    let control = arm == Some(Arm::Control);
+    let (what, out) = match &pre {
+        Pre::Rewrite { command: new, kind } => {
+            let mut updated = input.clone();
+            updated["command"] = Value::String(new.clone());
+            let notice = format!(
+                "adage: ran this {} with {} (the project's environment).",
+                if *kind == "test" { "test run" } else { "Python run" },
+                env.interpreter
+            );
+            (
+                json!({ "rewrite": kind, "interpreter": env.interpreter }),
+                Output::Rewrite { input: updated, context: pretool::rewrite_note(&e, kind), notice },
+            )
+        }
+        Pre::Deny { reason } => {
+            (json!({ "deny": "pip-install", "interpreter": env.interpreter }), Output::Deny(reason.clone()))
+        }
+    };
+    let ts = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let mut rec = json!({ "ts": ts, "event": "PreToolUse", "kind": "pretool", "arm": arm, "propensity": propensity, "repo": key, "pretool": what });
+    if control {
+        rec["withheld"] = json!(true);
+    }
+    spool::append(&paths.spool(session), &rec)
+        .map_err(|e| Failure::io("spool", "appending to the session spool", &e))?;
+    if control {
+        return Ok(None);
+    }
+    Ok(adapter.render("PreToolUse", out))
 }
 
 /// What a session start is about.

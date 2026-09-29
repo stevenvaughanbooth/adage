@@ -165,6 +165,13 @@ fn repo_lines(paths: &Paths, repo: &str, index: &Index, now: u64) -> Vec<String>
                 plural(c.dead_ends_headed_off, "dead end", "dead ends"),
             ));
         }
+        // Adage acting, not advising: always visible (docs/execution.md, rewrites).
+        if c.rewritten > 0 {
+            out.push(format!(
+                "rewrote {} to use the project's environment (off: adage delegate off)",
+                plural(c.rewritten, "command", "commands")
+            ));
+        }
         out.extend(savings::lines(s));
         if let Some(g) = savings::guardrail(s) {
             out.push(g);

@@ -90,6 +90,13 @@ delegation at a terminal; install steps (environment changes) wait for `adage re
 learner touches the network; settings files change only when you install the plugin or run
 `adage install … --write` (which shows the diff).
 
+**The one change Adage makes by default** (Claude Code): when a Python repository's own `.venv` was
+verified to have pytest and the project, a test run or scratch repro the agent starts under the
+system Python runs with `.venv/bin/python` instead. Only the interpreter changes; the agent's
+permissions apply as before; you see each one, and the card counts them. A `pip install` into the
+system Python is refused with the command that reaches the project. `adage delegate off` turns
+this off ([docs/execution.md](docs/execution.md#rewrites-to-the-projects-environment-pretooluse-u11)).
+
 ## What it does, concretely
 
 From real traces in a repository, one learner, a graph engine

@@ -110,11 +110,19 @@ pub fn binding_path(tracks_root: &Path, repo: &str) -> PathBuf {
 pub struct Binding {
     pub root: String,
     pub declared: String,
+    /// The checkout's project environment, verified from its files at bind time
+    /// (`adage_instincts::verify_env`): what a `PreToolUse` interpreter rewrite may use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub env: Option<adage_instincts::VerifiedEnv>,
 }
 
 /// Record that the repository's instincts are bound against `root` as its files are now.
 pub fn record_binding(tracks_root: &Path, repo: &str, root: &Path) {
-    let b = Binding { root: root.to_string_lossy().into(), declared: adage_instincts::fingerprint(root) };
+    let b = Binding {
+        root: root.to_string_lossy().into(),
+        declared: adage_instincts::fingerprint(root),
+        env: adage_instincts::verify_env(root),
+    };
     let p = binding_path(tracks_root, repo);
     if let (Some(dir), Ok(body)) = (p.parent(), serde_json::to_vec(&b)) {
         let _ = std::fs::create_dir_all(dir);
@@ -122,13 +130,17 @@ pub fn record_binding(tracks_root: &Path, repo: &str, root: &Path) {
     }
 }
 
+/// The recorded binding of a repository's instincts, if any.
+pub fn binding(tracks_root: &Path, repo: &str) -> Option<Binding> {
+    std::fs::read(binding_path(tracks_root, repo)).ok().and_then(|b| serde_json::from_slice(&b).ok())
+}
+
 /// Whether the repository's instincts should be bound again against the live checkout `root` (the
 /// session's): never bound, bound against another checkout (paths named in old traces, another
 /// worktree), or its declared files changed since (a `.venv` made, a Makefile edited).
 pub fn stale_binding(tracks_root: &Path, repo: &str, root: &Path) -> bool {
-    let recorded: Option<Binding> =
-        std::fs::read(binding_path(tracks_root, repo)).ok().and_then(|b| serde_json::from_slice(&b).ok());
-    recorded.is_none_or(|b| b.root != root.to_string_lossy() || b.declared != adage_instincts::fingerprint(root))
+    binding(tracks_root, repo)
+        .is_none_or(|b| b.root != root.to_string_lossy() || b.declared != adage_instincts::fingerprint(root))
 }
 
 /// Runtime judgements of one route: the treated arm's (the directive was delivered), and the
