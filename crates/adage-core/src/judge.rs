@@ -34,6 +34,47 @@ pub fn tokens(command: &str) -> BTreeSet<String> {
         .collect()
 }
 
+/// Programs that set up the commands after them rather than run anything of their own.
+const SETUP: &[&str] = &["cd", "pushd", "source", ".", "export", "set", "conda", "workon", "nvm"];
+
+/// A line's simple commands: split on `&&`, `||`, `;`, `|` and `&` outside quotes.
+fn segments(line: &str) -> Vec<&str> {
+    let b = line.as_bytes();
+    let mut out = Vec::new();
+    let (mut start, mut quote) = (0, None::<u8>);
+    let mut i = 0;
+    while i < b.len() {
+        let c = b[i];
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => {}
+            None if c == b'\'' || c == b'"' => quote = Some(c),
+            None if c == b'\\' => i += 1,
+            None if matches!(c, b';' | b'|' | b'&') => {
+                out.push(line[start..i].trim());
+                while i + 1 < b.len() && matches!(b[i + 1], b'|' | b'&') {
+                    i += 1;
+                }
+                start = i + 1;
+            }
+            None => {}
+        }
+        i += 1;
+    }
+    out.push(line[start.min(line.len())..].trim());
+    out.retain(|s| !s.is_empty());
+    out
+}
+
+/// The program a simple command runs (its base name), after any environment assignments.
+fn program(seg: &str) -> Option<&str> {
+    let word = seg.split_whitespace().find(|w| {
+        !w.split_once('=')
+            .is_some_and(|(n, _)| !n.is_empty() && n.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_'))
+    })?;
+    word.rsplit('/').next()
+}
+
 /// Per repository: in how many distinct sessions each token appears (tokens seen in fewer than two
 /// are left out: they weigh the floor anyway).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,7 +96,12 @@ impl Weights {
         }
         Weights {
             sessions: sessions.len() as u32,
-            tokens: by.into_iter().map(|(t, s)| (t, s.len() as u32)).filter(|(_, n)| *n >= 2).collect(),
+            // Weights are stored beside the tracks: never a secret a command carried (review B3).
+            tokens: by
+                .into_iter()
+                .map(|(t, s)| (t, s.len() as u32))
+                .filter(|(t, n)| *n >= 2 && !crate::secrets::has_secret(t))
+                .collect(),
         }
     }
 
@@ -64,16 +110,36 @@ impl Weights {
         (f64::from(n)).ln_1p().max(std::f64::consts::LN_2)
     }
 
-    /// `s(directed, observed)` in [0, 1].
+    /// `s(directed, observed)` in [0, 1]: the best score of a simple command of `observed` that
+    /// runs the directed program (review S10), read with the setup before it (`cd`, `source
+    /// …/activate`, `export`). `ls .venv/bin && python -m pytest` does not follow `.venv/bin/python
+    /// -m pytest`: the `ls` is not the run, and the run lacks `.venv/bin`.
     pub fn score(&self, directed: &str, observed: &str) -> f64 {
         let d = tokens(directed);
         if d.is_empty() {
             return 0.0;
         }
-        let o = tokens(observed);
+        let first = |c: &'_ str| c.split('\n').next().unwrap_or("").to_string();
+        let dfirst = first(directed);
+        let want = segments(&dfirst).into_iter().rev().find_map(|s| program(s).filter(|p| !SETUP.contains(p)));
         let total: f64 = d.iter().map(|t| self.weight(t)).sum();
-        let hit: f64 = d.iter().filter(|t| o.contains(*t)).map(|t| self.weight(t)).sum();
-        hit / total
+        let mut setup = String::new();
+        let mut best: f64 = 0.0;
+        for seg in segments(&first(observed)) {
+            let Some(p) = program(seg) else { continue };
+            if SETUP.contains(&p) {
+                setup.push(' ');
+                setup.push_str(seg);
+                continue;
+            }
+            if want.is_some_and(|w| w != p) {
+                continue;
+            }
+            let o = tokens(&format!("{setup} {seg}"));
+            let hit: f64 = d.iter().filter(|t| o.contains(*t)).map(|t| self.weight(t)).sum();
+            best = best.max(hit / total);
+        }
+        best
     }
 
     /// Whether `observed` follows `directed` ([`THRESHOLD`]). Never with weights fitted on fewer
@@ -120,6 +186,16 @@ mod tests {
         }
         // A heredoc body is data.
         assert!(!w.follows(d, "cat <<EOF\n.venv/bin/python -m pytest\nEOF"));
+        // Review S10: every directed token is on the line, but the run is the system Python's.
+        for o in [
+            "ls .venv/bin && python -m pytest tests",
+            "ls .venv/bin; python -m pytest tests",
+            "echo .venv/bin/python -m pytest",
+            "cat .venv/bin/activate | grep python && pytest",
+        ] {
+            assert!(!w.follows(d, o), "{o}: {}", w.score(d, o));
+        }
+        assert!(w.follows(d, "cd /w/click && source .venv/bin/activate && ls && python -m pytest tests -q"));
         // No weights: no judgement.
         assert!(!Weights::default().follows(d, d));
     }

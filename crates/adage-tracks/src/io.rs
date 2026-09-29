@@ -6,6 +6,24 @@ use anyhow::{bail, Context, Result};
 use regex::Regex;
 use std::path::Path;
 
+/// Write a file readable by its owner only (0600 on Unix, whatever the umask): tracks and the
+/// index quote the person's traces (procedure cards' exemplars and commands; review B3).
+pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut o = std::fs::OpenOptions::new();
+    o.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut o, 0o600);
+    let mut f = o.open(path)?;
+    // A file that existed before keeps its mode through `open`: narrow it.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        f.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+    }
+    f.write_all(bytes)
+}
+
 pub fn write(dir: &Path, track: &Track) -> Result<()> {
     std::fs::create_dir_all(dir.join("routes"))?;
     // Remove routes that no longer exist so the directory mirrors the track exactly.
@@ -15,12 +33,12 @@ pub fn write(dir: &Path, track: &Track) -> Result<()> {
             std::fs::remove_file(p)?;
         }
     }
-    std::fs::write(dir.join("track.toml"), toml::to_string_pretty(&track.manifest)?)?;
+    write_private(&dir.join("track.toml"), toml::to_string_pretty(&track.manifest)?.as_bytes())?;
     for r in &track.routes {
         if !safe_id(&r.id) {
             bail!("refusing to write route with unsafe id {:?}", r.id);
         }
-        std::fs::write(dir.join("routes").join(format!("{}.yaml", r.id)), serde_yaml::to_string(r)?)?;
+        write_private(&dir.join("routes").join(format!("{}.yaml", r.id)), serde_yaml::to_string(r)?.as_bytes())?;
     }
     Ok(())
 }

@@ -259,7 +259,8 @@ impl Index {
             std::fs::create_dir_all(d)?;
         }
         let tmp = path.with_extension(format!("tmp{}", std::process::id()));
-        std::fs::write(&tmp, serde_json::to_vec_pretty(self)?)?;
+        // Owner-only: procedure cards quote the person's traces (review B3).
+        crate::io::write_private(&tmp, &serde_json::to_vec_pretty(self)?)?;
         std::fs::rename(tmp, path)?;
         Ok(())
     }

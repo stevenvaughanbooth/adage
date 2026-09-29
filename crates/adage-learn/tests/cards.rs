@@ -176,7 +176,7 @@ fn a_family_with_a_passing_trace_gets_a_card_delivered_once_on_its_own_kind_of_t
     let paths: Vec<&str> = card.files.iter().map(|f| f.path.as_str()).collect();
     assert_eq!(paths, ["src/validate.py", "tests/test_validate.py", "CHANGELOG.rst"], "in the order first edited");
     let cmds: Vec<&str> = card.commands.iter().map(|c| c.command.as_str()).collect();
-    assert!(cmds.contains(&"grep -n __all__ src/validate.py"), "{cmds:?}");
+    assert_eq!(cmds, ["make check"], "productive commands only: no `grep` (fresh-install B9)");
     assert!(!cmds.iter().any(|c| c.starts_with("python -c")), "an inline script is not a command: {cmds:?}");
     assert_eq!(card.avoid.len(), 1);
     assert_eq!(card.avoid[0].command, "python -m pytest tests/test_validate.py -q");
@@ -214,6 +214,102 @@ fn a_family_with_a_passing_trace_gets_a_card_delivered_once_on_its_own_kind_of_t
         let d = decide(&ctx, &mut SessionState::default(), &Event::Prompt { text: p.into() });
         assert!(!said(&d), "{p}: {:?}", d.directives);
     }
+}
+
+/// Review B3, the reviewer's scenario: the user pasted an API key and the agent wrote it into
+/// `.env` and into a settings file the family edits every time, and ran `gh` with a token. The card
+/// is learned, and nothing of it reaches the card, the track or the index. Fresh-install B9 too:
+/// `git status` and `ls -la` are not commands, the test run that worked is listed (as one command,
+/// though each trace named its own test), and exemplars are whole hunks.
+#[test]
+fn a_card_never_quotes_secrets_or_housekeeping() {
+    let d = tempfile::tempdir().unwrap();
+    let models = d.path().join("models");
+    install_fixture_model(&models);
+    let key = format!("sk-{}", "abcDEF123_".repeat(3));
+    let token = format!("ghp_{}", "A1b2C3d4E5".repeat(4));
+    let mut files = vec![];
+    let mut outcomes = BTreeMap::new();
+    for (i, (sid, p)) in VALIDATOR.iter().enumerate() {
+        let name = ["Even", "Odd", "Prime"][i];
+        let mut t = Tx::new(sid, p);
+        t.bash("git status", "clean", false)
+            .bash("ls -la", "total 0", false)
+            .bash("python -m pytest tests/test_validate.py -q", "No module named pytest", true)
+            .edit(".env", "", &format!("OPENAI_API_KEY={key}"))
+            .edit(
+                "src/validate.py",
+                "",
+                &format!(
+                    "OPENAI_API_KEY = \"{key}\"\nclass {name}(Validator):\n    if strict:\n        default_message = \"Must be {name}.\""
+                ),
+            )
+            .bash(&format!("echo \"OPENAI_API_KEY={key}\" > .env"), "", false)
+            .bash(&format!("GITHUB_TOKEN={token} gh pr create"), "", false)
+            .bash(&format!(".venv/bin/python -m pytest tests/test_{} -q", name.to_lowercase()), "1 passed in 0.1s", false)
+            .edit("tests/test_validate.py", "", &format!("def test_{name}():\n    assert {name}()(2)"));
+        files.push(t.write(d.path()));
+        outcomes.insert(sid.to_string(), true);
+    }
+    let home = d.path().join("home");
+    let (_, index) = run(&files, &outcomes, &home, &models);
+    let found = cards(&index);
+    assert_eq!(found.len(), 1);
+    let Step::Card { card } = &found[0].step else { unreachable!() };
+    let all = serde_json::to_string(card).unwrap();
+    assert!(!all.contains(&key) && !all.contains(&token), "no secret in the card: {all}");
+    assert!(!all.contains(".env"), "no secret-holding file: {all}");
+    for dir in ["tracks", ""] {
+        for e in walk(&home.join(dir)) {
+            let text = std::fs::read_to_string(&e).unwrap_or_default();
+            assert!(!text.contains(&key) && !text.contains(&token), "{}", e.display());
+        }
+    }
+    let cmds: Vec<&str> = card.commands.iter().map(|c| c.command.as_str()).collect();
+    assert_eq!(cmds, [".venv/bin/python -m pytest"], "{cmds:?}");
+    assert_eq!(card.avoid[0].command, "python -m pytest tests/test_validate.py -q");
+    let ex = card.exemplars.iter().find(|e| e.path == "src/validate.py").unwrap();
+    assert_eq!(
+        ex.lines,
+        ["…", "class Prime(Validator):", "    if strict:", "        default_message = \"Must be Prime.\""]
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(home.join("index.json")).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600, "the index is the owner's only");
+        for e in walk(&home.join("tracks")).into_iter().filter(|p| p.extension().is_some_and(|x| x == "yaml")) {
+            assert_eq!(std::fs::metadata(&e).unwrap().permissions().mode() & 0o777, 0o600, "{}", e.display());
+        }
+    }
+}
+
+/// Review S8: one passing trace is any one-off bug fix; it makes no card, even one that created
+/// no file (it did before, with a grey zone down to 0.653).
+#[test]
+fn one_trace_is_not_a_family() {
+    let d = tempfile::tempdir().unwrap();
+    let (files, outcomes) = corpus(d.path());
+    let models = d.path().join("models");
+    install_fixture_model(&models);
+    let (rep, index) = run(&files[..1], &outcomes, &d.path().join("one"), &models);
+    assert_eq!(rep.repos["acme-lib"].engine.cards, 0);
+    assert!(cards(&index).is_empty());
+    let (_, index) = run(&files[..2], &outcomes, &d.path().join("two"), &models);
+    assert_eq!(cards(&index).len(), 1, "two traces of the family are");
+}
+
+fn walk(dir: &Path) -> Vec<PathBuf> {
+    let mut out = vec![];
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            out.extend(walk(&p));
+        } else {
+            out.push(p);
+        }
+    }
+    out
 }
 
 #[test]

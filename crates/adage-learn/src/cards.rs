@@ -20,8 +20,16 @@
 //!   (normalised to their head), kept when they mostly worked and listed to avoid when they mostly
 //!   failed, with the first line of the error; and the check the passing traces finished with,
 //!   anti-unified. Exemplars are clipped (14, 10, 6, 3 lines, then none) to fit 800 tokens.
-//! - **Minimum traces.** No passing trace, no card. One trace is enough only when it created no
-//!   file: a task whose files are named after it needs a second trace to show which part varies.
+//! - **Minimum traces.** No passing trace, no card, and no card from fewer than [`MIN_TRACES`]
+//!   traces: one trace is any one-off bug fix. At most [`MAX_CARDS`] cards per repository, the
+//!   best supported.
+//! - **What a card never quotes** (the launch review, B3): a file that holds secrets by its kind
+//!   (`.env*`, keys, credential stores) or that git ignores; a command that holds a secret or names
+//!   such a file; a line, command or error that looks like a secret (`adage_core::secrets`, the
+//!   rules `adage share` checks packs with). A secret-looking exemplar line becomes `…`.
+//! - **What a card lists** (fresh-install B9): exemplars are whole hunks as the agent wrote them;
+//!   commands are productive ones (no `git status`, `ls`, `cat`, `grep`, commits); a family's test
+//!   runs are one command, by runner; a test run to avoid comes with the one that worked.
 //! - **Triggering.** A new prompt's best cosine to the family's prompts, at the research's
 //!   pre-registered threshold ([`THRESHOLD`], `learn.card_threshold`; lower for a family of one
 //!   prompt). Within 0.10 below it, the card is said at the session's first edit of one of its
@@ -35,6 +43,8 @@
 //! Nothing here names a repository's files, commands or errors.
 
 use crate::import::Session;
+use adage_core::gitignore::Ignore;
+use adage_core::secrets;
 use adage_intent::model::StaticModel;
 use adage_intent::normalize::normalize;
 use adage_tracks::card::{
@@ -63,6 +73,11 @@ pub fn load_verdicts(home: &Path) -> Verdicts {
 pub const THRESHOLD: f32 = 0.811;
 /// ... and for a family of one prompt, how much lower its threshold is (0.753 at the default).
 pub const SINGLE_PROMPT_DROP: f32 = 0.058;
+/// A family needs this many traces for a card (review S8).
+pub const MIN_TRACES: usize = 2;
+/// At most this many cards per repository, the best supported (review S8): every card is in the
+/// index every hook reads.
+pub const MAX_CARDS: usize = 16;
 
 /// How families form and when a card is delivered.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -90,8 +105,6 @@ const EDIT_TOOLS: [&str; 4] = ["Edit", "Write", "MultiEdit", "NotebookEdit"];
 struct EditView {
     k: usize,
     path: String,
-    /// A file the session created (a Write to a path it had not touched before).
-    new: bool,
     text: String,
 }
 
@@ -109,18 +122,11 @@ struct View<'a> {
     passed: bool,
 }
 
-/// The lines an edit added (all of a written file's): what to imitate, without the context.
-fn added(old: &str, new: &str) -> String {
-    if old.is_empty() {
-        return new.to_string();
-    }
-    let olds: BTreeSet<&str> = old.lines().collect();
-    new.lines()
-        .filter(|l| l.trim().is_empty() || !olds.contains(l))
-        .collect::<Vec<_>>()
-        .join("\n")
-        .trim_matches('\n')
-        .to_string()
+/// The text an edit wrote, whole: a written file's content, or an edit's replacement as the agent
+/// wrote it (fresh-install B9: lines picked out of it made fragments, an `if …:` without its
+/// body). What to imitate is its format.
+fn hunk(new: &str) -> String {
+    new.trim_matches('\n').to_string()
 }
 
 /// A shell command's stable head: the non-`cd` segments of its first line, pipes and redirections
@@ -270,17 +276,32 @@ fn stands_for(file: &str, path: &str) -> bool {
     ft.len() == pt.len() && ft.iter().zip(&pt).all(|(a, b)| *a == VARYING || a == b)
 }
 
-fn view<'a>(s: &'a Session) -> View<'a> {
+/// Whether a card may quote a file (review B3): not one that holds secrets by its kind (`.env*`,
+/// keys, credential stores), and not one git ignores in the trace's checkout.
+fn quotable(path: &str, ignore: &Ignore) -> bool {
+    !secrets::sensitive_path(path) && !ignore.ignored(path)
+}
+
+/// Whether a command line names a file a card may not quote, or holds a secret itself.
+fn names_secret(cmd: &str, ignore: &Ignore) -> bool {
+    secrets::has_secret(cmd)
+        || cmd.split(|c: char| c.is_whitespace() || "'\"<>|&;=".contains(c)).any(|w| {
+            let w = w.trim_start_matches("./");
+            !w.is_empty()
+                && !w.starts_with('-')
+                && (secrets::sensitive_path(w) || (!w.starts_with('/') && ignore.ignored(w)))
+        })
+}
+
+fn view<'a>(s: &'a Session, ignore: &Ignore) -> View<'a> {
     let root = s.root.to_string_lossy().to_string();
     let mut edits = Vec::new();
     let mut cmds = Vec::new();
-    let mut touched: BTreeSet<&str> = BTreeSet::new();
     for (k, st) in s.steps.iter().enumerate() {
         let c = &st.call;
-        let seen_before = st.rel_path.as_deref().is_some_and(|p| !touched.insert(p));
         if EDIT_TOOLS.contains(&c.tool.as_str()) {
             let Some(path) = st.rel_path.clone() else { continue };
-            if c.failed {
+            if c.failed || !quotable(&path, ignore) {
                 continue;
             }
             let i = &c.input;
@@ -288,18 +309,12 @@ fn view<'a>(s: &'a Session) -> View<'a> {
             let text = if c.tool == "MultiEdit" {
                 i.get("edits")
                     .and_then(|e| e.as_array())
-                    .map(|es| {
-                        es.iter()
-                            .map(|e| added(&s_(e, "old_string"), &s_(e, "new_string")))
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    })
+                    .map(|es| es.iter().map(|e| hunk(&s_(e, "new_string"))).collect::<Vec<_>>().join("\n…\n"))
                     .unwrap_or_default()
             } else {
-                let new = if c.tool == "Write" { s_(i, "content") } else { s_(i, "new_string") };
-                added(&s_(i, "old_string"), &new)
+                hunk(&if c.tool == "Write" { s_(i, "content") } else { s_(i, "new_string") })
             };
-            edits.push(EditView { k, path, new: c.tool == "Write" && !seen_before, text });
+            edits.push(EditView { k, path, text });
         } else if c.tool == "Bash" {
             let Some(cmd) = c.input.get("command").and_then(|x| x.as_str()) else { continue };
             let cmd = if root.is_empty() {
@@ -307,6 +322,11 @@ fn view<'a>(s: &'a Session) -> View<'a> {
             } else {
                 cmd.replace(&format!("{root}/"), "").replace(&root, ".")
             };
+            // A command that holds a secret, or reads or writes a file a card may not quote
+            // (`echo "KEY=…" > .env`, `cat .env.local`), is left out whole.
+            if names_secret(&cmd, ignore) {
+                continue;
+            }
             let norm = norm_cmd(&cmd);
             if !norm.is_empty() {
                 cmds.push(CmdView { k, norm, failed: c.failed, out: c.output.clone() });
@@ -316,7 +336,7 @@ fn view<'a>(s: &'a Session) -> View<'a> {
             if !c.failed {
                 let first = cmd.trim().lines().next().unwrap_or("");
                 for path in redirect_targets(first) {
-                    edits.push(EditView { k, path, new: false, text: first.to_string() });
+                    edits.push(EditView { k, path, text: first.to_string() });
                 }
             }
         }
@@ -354,16 +374,66 @@ fn error_line(out: &str) -> String {
     let l = out.lines().map(str::trim).find(|l| !l.is_empty() && !l.starts_with("Exit code")).unwrap_or("");
     let l: String = l.chars().filter(|c| !"`<>\"\\$;|&{}".contains(*c) && !c.is_control()).take(150).collect();
     let l = l.trim().to_string();
-    if adage_tracks::io::safe_text(&l) {
+    if adage_tracks::io::safe_text(&l) && !secrets::has_secret(&l) {
         l
     } else {
         String::new()
     }
 }
 
-/// A command a card may name: plain, no absolute path, no placeholder.
+/// A command a card may name: plain, no absolute path, no placeholder, nothing secret-looking.
 fn plain(c: &str) -> bool {
-    adage_tracks::io::safe_command(c) && !c.contains('{')
+    adage_tracks::io::safe_command(c) && !c.contains('{') && !secrets::has_secret(c)
+}
+
+/// A command worth listing (fresh-install B9): not one that only looks around or reads version
+/// control (`git status`, `ls -la`, `cat`, `grep`), nor a commit; what does the work (tests,
+/// builds, linters, generators, the project's scripts) is.
+fn productive(c: &str) -> bool {
+    use adage_core::action::Role;
+    let argv: Vec<String> = c.split_whitespace().map(str::to_string).collect();
+    !adage_core::pattern::is_housekeeping(c)
+        && !matches!(
+            adage_core::action::classify_argv(&argv).role,
+            Role::Read | Role::Search | Role::Trivial | Role::VcsRead | Role::VcsWrite
+        )
+}
+
+/// Whether a command runs tests.
+fn is_test_run(c: &str) -> bool {
+    let argv: Vec<String> = c.split_whitespace().map(str::to_string).collect();
+    adage_core::action::classify_argv(&argv).role == adage_core::action::Role::TestRun
+}
+
+/// The runner a test command starts with, before its targets and options
+/// (`.venv/bin/python -m pytest tests/a.py -x` → `.venv/bin/python -m pytest`): test runs of one
+/// family name different tests, and are one command.
+fn runner_key(c: &str) -> String {
+    let toks: Vec<&str> = c.split_whitespace().collect();
+    let mut out: Vec<&str> = toks.iter().take(1).copied().collect();
+    let mut i = 1;
+    while i < toks.len() {
+        let t = toks[i];
+        if t == "-m" && i + 1 < toks.len() {
+            out.extend([t, toks[i + 1]]);
+            i += 2;
+            continue;
+        }
+        if t.starts_with('-') || t.contains(['/', '.', ':', '=']) {
+            break;
+        }
+        out.push(t);
+        i += 1;
+    }
+    out.join(" ")
+}
+
+/// The tokens every command of a group begins with (at least its runner).
+fn common_prefix(cs: &[String]) -> String {
+    let toks: Vec<Vec<&str>> = cs.iter().map(|c| c.split_whitespace().collect()).collect();
+    let Some(first) = toks.first() else { return String::new() };
+    let n = (0..first.len()).take_while(|&i| toks.iter().all(|t| t.get(i) == Some(&first[i]))).count();
+    first[..n].join(" ")
 }
 
 /// Learn one family's card (views in chronological order). `None` without a passing trace or a
@@ -374,13 +444,13 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
     if passed == 0 {
         return None;
     }
-    // One trace is enough only when its task edits the same files every time: a trace that
-    // created files names them after its own task, and one trace cannot say which part of the
-    // name varies (the research's Go family: a one-trace card saved 9%, a four-trace one 34%).
-    if n == 1 && views[0].edits.iter().any(|e| e.new) {
+    // At least two traces (review S8): one trace is any one-off bug fix, and says neither which
+    // part of a file name varies nor what the task has in common with the next one (the
+    // research's Go family: a one-trace card saved 9%, a four-trace one 34%).
+    if n < MIN_TRACES {
         return None;
     }
-    let need = if n == 1 { 1 } else { n.div_ceil(2) };
+    let need = n.div_ceil(2);
     // 1. Files, in the median order of their first edit; files named differently each time are
     //    grouped by shape and anti-unified (`flag_<x>.go`).
     let mut per_file: BTreeMap<String, BTreeSet<usize>> = BTreeMap::new();
@@ -432,20 +502,18 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
         for v in &order {
             let hunks: Vec<&str> = v.edits.iter().filter(|e| stands_for(p, &e.path)).map(|e| e.text.as_str()).collect();
             let Some(h) = hunks.iter().max_by_key(|h| h.lines().count()) else { continue };
-            let lines: Vec<String> = h
-                .trim_matches('\n')
-                .lines()
-                .map(|l| {
-                    let l = l.replace('\t', "    ");
-                    let l: String = l.chars().take(MAX_LINE).collect();
-                    if adage_tracks::card::line_ok(&l) {
-                        l
-                    } else {
-                        "…".to_string()
-                    }
-                })
-                .collect();
-            if !lines.is_empty() && !lines.iter().all(|l| l.trim().is_empty()) {
+            // A line that cannot be quoted (markup, too long) or looks like a secret is elided:
+            // one `…` for a run of them.
+            let mut lines: Vec<String> = Vec::new();
+            for l in h.trim_matches('\n').lines() {
+                let l = l.replace('\t', "    ");
+                let l: String = l.chars().take(MAX_LINE).collect();
+                let l = if adage_tracks::card::line_ok(&l) && !secrets::has_secret(&l) { l } else { "…".to_string() };
+                if !(l == "…" && lines.last().is_some_and(|p| p == "…")) {
+                    lines.push(l);
+                }
+            }
+            if !lines.is_empty() && !lines.iter().all(|l| l.trim().is_empty() || l == "…") {
                 exemplars.push(Exemplar { path: p.clone(), lines });
             }
             break;
@@ -459,13 +527,18 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
         fails: u32,
         err: String,
     }
+    // Only productive commands (fresh-install B9); test runs grouped by their runner, so the
+    // runs of one family that name different tests are one command.
     let mut per_cmd: BTreeMap<String, Agg> = BTreeMap::new();
+    let mut shown: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for (i, v) in views.iter().enumerate() {
         for c in &v.cmds {
-            if c.norm.is_empty() {
+            if c.norm.is_empty() || !productive(&c.norm) {
                 continue;
             }
-            let a = per_cmd.entry(c.norm.clone()).or_default();
+            let key = if is_test_run(&c.norm) { runner_key(&c.norm) } else { c.norm.clone() };
+            shown.entry(key.clone()).or_default().push(c.norm.clone());
+            let a = per_cmd.entry(key).or_default();
             a.sessions.insert(i);
             a.runs += 1;
             if c.failed {
@@ -477,20 +550,25 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
         }
     }
     let verdict = |c: &str| verdicts.and_then(|m| m.get(c).copied());
-    let mut commands: Vec<CardCommand> = Vec::new();
-    let mut avoid: Vec<CardCommand> = Vec::new();
-    for (k, a) in &per_cmd {
-        if a.sessions.len() < need || !plain(k) {
-            continue;
-        }
-        let c = CardCommand {
-            command: k.clone(),
+    let entry = |k: &String, a: &Agg| {
+        let command = common_prefix(&shown[k]);
+        let verified = verdict(&command);
+        CardCommand {
+            command,
             sessions: a.sessions.len() as u32,
             runs: a.runs,
             failed: a.fails,
             error: String::new(),
-            verified: verdict(k),
-        };
+            verified,
+        }
+    };
+    let mut commands: Vec<CardCommand> = Vec::new();
+    let mut avoid: Vec<CardCommand> = Vec::new();
+    for (k, a) in &per_cmd {
+        let c = entry(k, a);
+        if a.sessions.len() < need || !plain(&c.command) {
+            continue;
+        }
         if a.fails * 2 < a.runs {
             commands.push(c);
         } else {
@@ -502,6 +580,20 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
     avoid.sort_by(by_use);
     commands.truncate(adage_tracks::card::MAX_COMMANDS);
     avoid.truncate(adage_tracks::card::MAX_AVOID);
+    // A test run to avoid comes with the one that worked instead (fresh-install B9), even when
+    // fewer than half of the traces ran it: the test run the passing traces used most.
+    if avoid.iter().any(|x| is_test_run(&x.command)) && !commands.iter().any(|x| is_test_run(&x.command)) {
+        let worked = per_cmd
+            .iter()
+            .filter(|(k, a)| is_test_run(k) && a.fails * 2 < a.runs)
+            .map(|(k, a)| entry(k, a))
+            .filter(|c| plain(&c.command) && c.verified != Some(false))
+            .max_by(|a, b| by_use(b, a));
+        if let Some(c) = worked {
+            commands.truncate(adage_tracks::card::MAX_COMMANDS - 1);
+            commands.insert(0, c);
+        }
+    }
     // 4. The finishing check: the command passing traces ran successfully after their last edit,
     //    of a head they also ran more than once before it (a verify loop).
     let head2 = |c: &str| c.split_whitespace().take(2).collect::<Vec<_>>().join(" ");
@@ -577,10 +669,15 @@ fn card_id(first: &str) -> String {
 /// Families and their cards for one repository's sessions (see the module documentation).
 /// Returns the card routes, each with why, and the number of families found.
 pub fn compile(ss: &[&Session], model: &StaticModel, p: &CardParams, provenance: &str) -> (Vec<(Route, Why)>, usize) {
+    // Each checkout's `.gitignore` rules, read once.
+    let mut ignores: BTreeMap<&Path, Ignore> = BTreeMap::new();
+    for s in ss {
+        ignores.entry(s.root.as_path()).or_insert_with(|| Ignore::new(&s.root));
+    }
     let mut items: Vec<(View, Vec<f32>)> = ss
         .iter()
         .filter_map(|s| {
-            let v = view(s);
+            let v = view(s, &ignores[s.root.as_path()]);
             if v.edits.is_empty() {
                 return None;
             }
@@ -694,6 +791,13 @@ pub fn compile(ss: &[&Session], model: &StaticModel, p: &CardParams, provenance:
         };
         out.push((route, why));
     }
+    // The best supported cards, then by id: deterministic.
+    out.sort_by(|a, b| {
+        (b.0.evidence.support, b.0.evidence.opportunities)
+            .cmp(&(a.0.evidence.support, a.0.evidence.opportunities))
+            .then_with(|| a.0.id.cmp(&b.0.id))
+    });
+    out.truncate(MAX_CARDS);
     let families = groups.len();
     (out, families)
 }
@@ -734,8 +838,49 @@ mod tests {
     }
 
     #[test]
-    fn added_lines_are_what_to_imitate() {
-        assert_eq!(added("a\nb", "a\nb\nc"), "c");
-        assert_eq!(added("", "x\ny"), "x\ny");
+    fn an_edit_is_quoted_as_a_whole_hunk() {
+        // Fresh-install B9: picking the added lines out made `if …:` without its body.
+        assert_eq!(hunk("\nif x:\n    return 1\n"), "if x:\n    return 1");
+    }
+
+    /// Fresh-install B9: listed commands do the work; a family's test runs are one command.
+    #[test]
+    fn commands_are_productive_and_test_runs_group_by_runner() {
+        for c in ["git status", "ls -la", "cat src/a.py", "grep -n x src", "git log --oneline -5", "git commit -m x"] {
+            assert!(!productive(c), "{c}");
+        }
+        for c in ["make check", ".venv/bin/python -m pytest tests", "go test ./...", "npm run build"] {
+            assert!(productive(c), "{c}");
+        }
+        assert_eq!(runner_key(".venv/bin/python -m pytest tests/test_a.py -xvs"), ".venv/bin/python -m pytest");
+        assert_eq!(runner_key("go test ./..."), "go test");
+        assert_eq!(runner_key("make check"), "make check");
+        let cs = [".venv/bin/python -m pytest tests/a.py -q", ".venv/bin/python -m pytest tests/b.py -q"];
+        assert_eq!(common_prefix(&cs.map(String::from)), ".venv/bin/python -m pytest");
+        assert_eq!(common_prefix(&["go test ./...".to_string(), "go test ./...".to_string()]), "go test ./...");
+    }
+
+    /// Review B3: nothing a card may not quote reaches it.
+    #[test]
+    fn secrets_and_secret_files_are_not_quotable() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join(".gitignore"), "local_settings.py\n/build/\n").unwrap();
+        let ig = Ignore::new(d.path());
+        for p in [".env", "config/.env.local", "certs/key.pem", "local_settings.py", "build/out.js"] {
+            assert!(!quotable(p, &ig), "{p}");
+        }
+        assert!(quotable("src/settings.py", &ig));
+        let token = format!("ghp_{}", "A1b2C3d4E5".repeat(4));
+        for c in [
+            format!("GITHUB_TOKEN={token} gh pr create"),
+            "echo \"API_KEY=abcdefgh12345678\" > .env".to_string(),
+            "cat .env.local".to_string(),
+            "cp local_settings.py /tmp/x".to_string(),
+        ] {
+            assert!(names_secret(&c, &ig), "{c}");
+        }
+        assert!(!names_secret("python -m pytest tests -q", &ig));
+        assert!(error_line(&format!("error: bad credentials {token}")).is_empty());
+        assert!(!plain(&format!("curl -H token:{token} x")));
     }
 }
