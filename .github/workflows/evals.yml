@@ -125,3 +125,7 @@ jobs:
 
       - name: external benchmark protocol (no Harbor, no agents)
         run: python3 -m unittest discover evals/external
+
+      # The replay savings metric's helpers (evals/replay); the end-to-end case uses target/debug/adage.
+      - name: replay savings helpers
+        run: python3 -m unittest discover evals/replay
