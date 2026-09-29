@@ -200,6 +200,13 @@ review (`adage train accept`). Anything short of that is prime at most:
 | the edited file's tests | prime (a check after an edit is suggested, as the learner's is) |
 | the same pack received from someone else (`adage add`) | an import: forming, prime at most (O2) |
 | the pack changed after its review | an import (the acceptance names the digest) |
+| a lookup through an unlisted script whose name says nothing of what it does (`scripts/ticket`) | prime: its effect is environment |
+
+The index's interlock still applies: two fire reflexes that direct different commands at one
+decision point cannot both fire. A "before you finish" check after any edit and a regenerate step
+after a schema edit meet at an edit of a schema, so the index keeps one at fire and weakens the
+other to prime (`adage_tracks::interlock`). `adage train accept` prints the pack's strengths; the
+index's are in `adage review`.
 
 This does not relax the evidence-origin policy below: *synthetic session evidence* (the optional
 skill-steered sessions) still never lifts a reflex above prime. A compiled skill's strength comes
