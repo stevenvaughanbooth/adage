@@ -20,7 +20,7 @@ dist = true
 adage-core = { path = "../adage-core" }
 adage-store = { path = "../adage-store" }
 adage-tracks = { path = "../adage-tracks" }
-adage-intent = { path = "../adage-intent" }
+adage-intent = { path = "../adage-intent", features = ["bundled"] }
 adage-runtime = { path = "../adage-runtime" }
 adage-learn = { path = "../adage-learn" }
 adage-graph = { path = "../adage-graph" }

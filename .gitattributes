@@ -5,3 +5,4 @@
 *.zst binary
 *.png binary
 *.safetensors binary
+crates/adage-intent/bundled/*.safetensors binary

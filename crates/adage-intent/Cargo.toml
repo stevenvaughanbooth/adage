@@ -14,5 +14,10 @@ once_cell.workspace = true
 sha2.workspace = true
 anyhow.workspace = true
 
+[features]
+# potion-base-8M, int8, compiled into the binary (src/model.rs, "The bundled model"): 7.9 MB.
+# The adage binary turns it on; library tests build without it unless the workspace unifies it.
+bundled = []
+
 [dev-dependencies]
 tempfile = "3"
