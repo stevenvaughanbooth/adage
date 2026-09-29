@@ -22,6 +22,7 @@ pub mod generate;
 pub mod graph_mine;
 pub mod replay;
 pub mod safety;
+pub mod savings_replay;
 pub mod score;
 pub mod transcript;
 pub mod value_types;
