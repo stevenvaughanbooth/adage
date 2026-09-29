@@ -613,7 +613,24 @@ def spool_directives(home, session_id):
             out.append({"ts": rec.get("ts"), "event": rec.get("event"), "kind": jd.get("kind"), "route": jd.get("route")})
         if d.get("continue_reason"):
             out.append({"ts": rec.get("ts"), "event": rec.get("event"), "kind": "stop_request", "text": d["continue_reason"]})
+        # An E2 action the hook ran and applied (adage-exec: the event's `exec` records).
+        for x in rec.get("exec") or []:
+            if isinstance(x, dict) and x.get("level") == "e2" and x.get("outcome") == "applied":
+                out.append({"ts": rec.get("ts"), "event": rec.get("event"), "kind": "e2_applied", "route": x.get("route")})
     return out
+
+
+def e2_applied_after(spool, events, last_edit, t0):
+    """Did an approved E2 action regenerate after the last edit the obligation covers? The hook runs
+    it right after that edit (PostToolUse), so its spool record comes at or after the edit's event.
+    Without the run's start time any applied action counts."""
+    applied = [d for d in spool or [] if d.get("kind") == "e2_applied"]
+    if not applied:
+        return False
+    if t0 is None or last_edit is None or not isinstance(applied[0].get("ts"), (int, float)):
+        return True
+    edit_t = events[last_edit]["t"]
+    return any(d["ts"] / 1000.0 - t0 >= edit_t for d in applied)
 
 
 def follow_counts(spool):
@@ -680,13 +697,16 @@ def regen_after_obligation(cfg, events, workdir):
     return any(e["cat"] == "regen" and not e.get("failed") for e in events[ob[-1] + 1:])
 
 
-def run_metrics(cfg, events, result, score, workdir, elapsed, sid, spool):
+def run_metrics(cfg, events, result, score, workdir, elapsed, sid, spool, t0=None):
     first_edit = next((e for e in events if e["cat"] == "edit"), None)
     before = [e for e in events if not first_edit or e["t"] < first_edit["t"]]
     lookup = next((e for e in events if e["cat"] == "lookup" and not e.get("failed")), None)
     ob_edits = [i for i, e in enumerate(events) if touches_obligation(cfg, e, workdir)]
     ob_applies = bool(ob_edits)
-    regen_after = ob_applies and regen_after_obligation(cfg, events, workdir)
+    # Met when the agent regenerated after its last covered edit, or an approved E2 action did.
+    regen_after = ob_applies and (
+        regen_after_obligation(cfg, events, workdir) or e2_applied_after(spool, events, ob_edits[-1], t0)
+    )
     stale = bool(score.get("stale_generated"))
     passed = bool(score.get("passed"))
     return {
@@ -957,7 +977,7 @@ class Live:
             self.archive_transcript(sid, config_dir)
         # The spool is in the arm's own ADAGE_HOME (instincts-home, e1-home), not always adage-home.
         spool = spool_directives(Path(env.get("ADAGE_HOME") or self.home), sid) if arm not in ("train", "off") else []
-        metrics = run_metrics(self.cfg, events, result, score, workdir, round(time.time() - t0, 2), sid, spool)
+        metrics = run_metrics(self.cfg, events, result, score, workdir, round(time.time() - t0, 2), sid, spool, t0)
         status, reason = demo_report.classify_status(result, len(events), metrics["turns"], score, scorer_ok,
                                                      self.cfg["max_turns"])
         metrics.update(status=status, status_reason=reason, exit_code=proc.returncode, harness_version=version)
@@ -1247,7 +1267,11 @@ def report_only(cfg, root):
         if not m or not m.get("obligation_applies"):
             continue
         workdir = root / "runs" / rid / cfg["workdir"]
-        met = regen_after_obligation(cfg, r.get("events", []), workdir) and not bool(score.get("stale_generated"))
+        events = r.get("events", [])
+        ob = [i for i, e in enumerate(events) if touches_obligation(cfg, e, workdir)]
+        regen = regen_after_obligation(cfg, events, workdir) or e2_applied_after(
+            m.get("adage"), events, ob[-1] if ob else None, r.get("t0"))
+        met = regen and not bool(score.get("stale_generated"))
         if m.get("obligation_met") != met:
             m["obligation_met"] = met
             changed += 1
