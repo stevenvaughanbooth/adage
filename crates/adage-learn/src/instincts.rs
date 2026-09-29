@@ -92,6 +92,43 @@ pub struct InstinctReport {
     /// Why nothing was bound, if nothing was.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub not_bound: Option<String>,
+    /// The checkout the instincts were bound against (recorded with [`record_binding`] once the
+    /// track is written).
+    #[serde(skip)]
+    pub root: Option<PathBuf>,
+}
+
+/// Where the checkout a repository's instincts were bound against is recorded, beside its tracks
+/// (a hidden file: never a track).
+pub fn binding_path(tracks_root: &Path, repo: &str) -> PathBuf {
+    tracks_root.join(slug(repo)).join(".instincts-binding.json")
+}
+
+/// What a binding was made from: the checkout and its declared files' fingerprint
+/// (`adage_instincts::fingerprint`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct Binding {
+    pub root: String,
+    pub declared: String,
+}
+
+/// Record that the repository's instincts are bound against `root` as its files are now.
+pub fn record_binding(tracks_root: &Path, repo: &str, root: &Path) {
+    let b = Binding { root: root.to_string_lossy().into(), declared: adage_instincts::fingerprint(root) };
+    let p = binding_path(tracks_root, repo);
+    if let (Some(dir), Ok(body)) = (p.parent(), serde_json::to_vec(&b)) {
+        let _ = std::fs::create_dir_all(dir);
+        let _ = adage_store::config::write_atomic(&p, &body);
+    }
+}
+
+/// Whether the repository's instincts should be bound again against the live checkout `root` (the
+/// session's): never bound, bound against another checkout (paths named in old traces, another
+/// worktree), or its declared files changed since (a `.venv` made, a Makefile edited).
+pub fn stale_binding(tracks_root: &Path, repo: &str, root: &Path) -> bool {
+    let recorded: Option<Binding> =
+        std::fs::read(binding_path(tracks_root, repo)).ok().and_then(|b| serde_json::from_slice(&b).ok());
+    recorded.is_none_or(|b| b.root != root.to_string_lossy() || b.declared != adage_instincts::fingerprint(root))
 }
 
 /// Runtime judgements of one route: the treated arm's (the directive was delivered), and the
@@ -256,6 +293,7 @@ pub fn plan_repo(
             rep.not_bound = Some("the repository's directory is not known here, so its files cannot be read".into());
             return Ok((rep, None));
         };
+        rep.root = Some(root.to_path_buf());
         // Auto-extinguish what agents followed and saw fail.
         for p in prev.iter().flat_map(|t| &t.routes).filter(|r| r.state.is_live()) {
             let j = judged.get(&(repo.to_string(), p.id.clone()));
@@ -422,6 +460,9 @@ pub fn learn_only(
         p.write()?;
         rr.tracks.push(tr);
     }
+    if let Some(r) = &ir.root {
+        record_binding(tracks_root, repo, r);
+    }
     rr.instincts = Some(ir);
     report.repos.insert(repo.to_string(), rr);
     let all = io::read_all(tracks_root)?;
@@ -471,6 +512,29 @@ mod tests {
         assert!(rep.not_bound.is_some() && plan.unwrap().1.track.routes.is_empty());
         let (rep, plan) = plan_repo("acme", None, &tracks, &[], &cfg, &none, "2026-09-27").unwrap();
         assert!(rep.not_bound.is_some() && plan.is_none());
+    }
+
+    /// Launch report, bug 7: bound against another checkout (the one old traces name), or before
+    /// the checkout's declared files changed, the binding is stale.
+    #[test]
+    fn a_binding_is_stale_for_another_checkout_or_changed_files() {
+        let d = tempfile::tempdir().unwrap();
+        let tracks = d.path().join("tracks");
+        let (live, old) = (d.path().join("live"), d.path().join("old"));
+        for r in [&live, &old] {
+            std::fs::create_dir_all(r).unwrap();
+            std::fs::write(r.join("pyproject.toml"), "[project]\nname = 'click'\n").unwrap();
+        }
+        assert!(stale_binding(&tracks, "click", &live), "never bound");
+        record_binding(&tracks, "click", &old);
+        assert!(stale_binding(&tracks, "click", &live), "bound against another checkout");
+        record_binding(&tracks, "click", &live);
+        assert!(!stale_binding(&tracks, "click", &live));
+        std::fs::create_dir_all(live.join(".venv/bin")).unwrap();
+        std::fs::write(live.join(".venv/pyvenv.cfg"), "home = /usr/bin\n").unwrap();
+        assert!(stale_binding(&tracks, "click", &live), "a .venv made since");
+        // The record is a hidden file beside the tracks, never a track.
+        assert!(io::read_all(&tracks).unwrap().is_empty());
     }
 
     #[test]

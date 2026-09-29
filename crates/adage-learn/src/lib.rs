@@ -219,9 +219,10 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     }
     if let (Some(repo), true, Some(ic)) = (only, sessions.is_empty(), cfg.instincts.as_ref()) {
         // No session to learn from yet: bind the repository's instincts from its files (day 0),
-        // when its root is known and they are not bound already.
+        // when its root is known and they are not bound against it as its files are now.
         let bound = io::read(&tracks_root.join(slug(repo)).join(instincts::TRACK)).is_ok();
-        if let (Some(root), false) = (ic.roots.get(repo), bound) {
+        let fresh = |root: &Path| bound && !instincts::stale_binding(tracks_root, repo, root);
+        if let Some(root) = ic.roots.get(repo).filter(|r| !fresh(r)) {
             let mut report = instincts::learn_only(repo, root, tracks_root, index_path, ic)?;
             report.sessions_read = read;
             report.sessions_steered = steered;
@@ -249,6 +250,11 @@ pub fn learn(inputs: &Inputs, tracks_root: &Path, index_path: &Path, cfg: &Learn
     (report.cache_hits, report.cache_misses) = (hits, misses);
     for p in &planned {
         p.write()?;
+    }
+    for (repo, rr) in &report.repos {
+        if let Some(root) = rr.instincts.as_ref().and_then(|i| i.root.as_deref()) {
+            instincts::record_binding(tracks_root, repo, root);
+        }
     }
     let all = io::read_all(tracks_root)?;
     let (index, conflicts) = Index::compile_root(tracks_root, &all);

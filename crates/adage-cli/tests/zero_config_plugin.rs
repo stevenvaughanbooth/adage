@@ -370,6 +370,48 @@ fn no_history_instincts() {
     assert!(card.contains("instincts active meanwhile"), "{card}");
 }
 
+/// Launch report, bug 7: instincts bound against a checkout without its `.venv` (RepoBench's
+/// training checkouts; a per-task worktree) directed nothing useful there. They bind against the
+/// session's own checkout and again when its declared files change: here a `.venv` made after the
+/// first binding brings U11's `.venv/bin/python -m pytest` at the next session start.
+#[cfg(unix)]
+#[test]
+fn instincts_rebind_when_the_checkout_changes() {
+    let w = World::new();
+    let repo = w.p("work/click");
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    std::fs::create_dir_all(repo.join("src/click")).unwrap();
+    std::fs::write(repo.join("src/click/__init__.py"), "").unwrap();
+    std::fs::write(repo.join("pyproject.toml"), "[project]\nname = 'click'\n[tool.pytest.ini_options]\n").unwrap();
+    let pytest_failed = || {
+        let out = w.hook(
+            "PostToolUseFailure",
+            &repo,
+            "s-fail",
+            json!({ "tool_name": "Bash", "tool_input": { "command": "python -m pytest tests -x" }, "error": "/usr/bin/python: No module named pytest" }),
+        );
+        context(&out)
+    };
+    w.start(&repo, "s1");
+    w.run_learner();
+    assert!(!pytest_failed().contains(".venv/bin/python"), "no .venv yet");
+    let before = w.spawned().len();
+    // The same checkout again, unchanged: nothing to rebind.
+    w.start(&repo, "s2");
+    assert_eq!(w.spawned().len(), before, "{:?}", w.spawned());
+    // A .venv appears (`uv venv`, `python -m venv .venv`): the next session start rebinds.
+    std::fs::create_dir_all(repo.join(".venv/bin")).unwrap();
+    std::fs::write(repo.join(".venv/pyvenv.cfg"), "home = /usr/bin\n").unwrap();
+    w.start(&repo, "s3");
+    let spawned = w.spawned();
+    assert_eq!(spawned.len(), before + 1, "{spawned:?}");
+    assert!(spawned.last().unwrap().contains(&"--bootstrap".to_string()), "{spawned:?}");
+    w.run_learner();
+    assert!(pytest_failed().contains(".venv/bin/python -m pytest"), "U11 bound against the live checkout");
+    w.start(&repo, "s4");
+    assert_eq!(w.spawned().len(), before + 1, "bound as the files are now: no second rebind");
+}
+
 /// Spools and a ledger for a synthetic population of `n_t` treated and `n_c` control sessions of
 /// `repo_key`, whose cost is `base` (treated) or `base + delta` (control), jittered.
 #[allow(clippy::too_many_arguments)]
