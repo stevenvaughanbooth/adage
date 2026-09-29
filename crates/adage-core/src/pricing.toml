@@ -7,8 +7,11 @@
 # only, never priced by guess. `prefix` matches the transcript's model id with or without a date
 # suffix (`claude-haiku-4-5-20251001` matches `claude-haiku-4-5`); the longest matching prefix wins.
 #
-# Cache writes use the 5-minute TTL rate (1.25x input), the TTL Claude Code writes by default;
-# cache reads are the per-model read rate (0.1x input on most models).
+# Cache writes are priced by TTL, as the transcript reports them: `cache_write` is the 5-minute rate
+# (1.25x input), and `cache_write_1h` the 1-hour rate (2x input when a model does not list it).
+# Claude Code writes 1-hour cache entries (`usage.cache_creation.ephemeral_1h_input_tokens`);
+# pricing those at the 5-minute rate read about 10% under its own `total_cost_usd`. Cache reads are
+# the per-model read rate (0.1x input on most models).
 #
 # Codex sessions (OpenAI models) are not priced here: they are shown as tokens and turns only.
 # OpenCode exports carry the harness's own cost, which is used as reported.

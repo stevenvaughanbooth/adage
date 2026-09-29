@@ -175,6 +175,8 @@ pub fn claude(path: &Path) -> Option<SessionSummary> {
             output: n("output_tokens"),
             cache_write: n("cache_creation_input_tokens"),
             cache_read: n("cache_read_input_tokens"),
+            // Written with the 1-hour TTL, priced at its own rate (2x input, not 1.25x).
+            cache_write_1h: u["cache_creation"]["ephemeral_1h_input_tokens"].as_u64().unwrap_or(0),
         };
         let entry = usage.entry(mid).or_insert_with(|| (model.clone(), Tokens::default()));
         if t.total() > 0 {
@@ -272,8 +274,8 @@ pub fn codex(path: &Path) -> Option<SessionSummary> {
                     s.tokens = Tokens {
                         input: n("input_tokens").saturating_sub(cached),
                         output: n("output_tokens"),
-                        cache_write: 0,
                         cache_read: cached,
+                        ..Default::default()
                     };
                 }
             }
@@ -341,6 +343,7 @@ pub fn opencode(path: &Path) -> Option<SessionSummary> {
             output: n(&t["output"]) + n(&t["reasoning"]),
             cache_write: n(&t["cache"]["write"]),
             cache_read: n(&t["cache"]["read"]),
+            ..Default::default()
         });
         for p in m["parts"].as_array().into_iter().flatten() {
             match p["type"].as_str() {
@@ -384,7 +387,15 @@ pub struct Ledger {
 struct Seen {
     /// Hash of the transcript's path → `[size, mtime_ns]` and the session id summarised.
     files: BTreeMap<String, (u64, u128, String)>,
+    /// The [`SUMMARY_REVISION`] the files were summarised with: an older one summarises them all
+    /// again (so a pricing fix reaches sessions already in the ledger).
+    #[serde(default)]
+    revision: u32,
 }
+
+/// How sessions are summarised and priced; bumped when that changes. 1: 1-hour cache writes
+/// priced at their own rate.
+pub const SUMMARY_REVISION: u32 = 1;
 
 fn path_hash(p: &Path) -> String {
     let d = Sha256::digest(p.to_string_lossy().as_bytes());
@@ -425,6 +436,9 @@ impl Ledger {
         let mut all = self.read();
         let mut seen: Seen =
             std::fs::read(self.seen_path()).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
+        if seen.revision != SUMMARY_REVISION {
+            seen = Seen { revision: SUMMARY_REVISION, ..Seen::default() };
+        }
         let mut changed = false;
         for p in transcripts {
             let Some((size, mtime)) = stamp(p) else { continue };
@@ -498,7 +512,7 @@ mod tests {
         );
         let s = claude(&p).unwrap();
         assert_eq!((s.model_turns, s.tool_calls, s.first_edit_turn), (3, 2, Some(1)));
-        assert_eq!(s.tokens, Tokens { input: 30, output: 300, cache_write: 0, cache_read: 3000 });
+        assert_eq!(s.tokens, Tokens { input: 30, output: 300, cache_read: 3000, ..Default::default() });
         assert_eq!(s.harness_version, "2.1.87");
         assert!(s.cost.source.starts_with("priced@"));
         let want = (30.0 * 3.0 + 300.0 * 15.0 + 3000.0 * 0.3) / 1e6;
@@ -506,6 +520,20 @@ mod tests {
         assert!(s.asked_for_help);
         let line = serde_json::to_string(&s).unwrap();
         assert!(!line.contains("Could you") && !line.contains(&d.path().to_string_lossy().to_string()), "{line}");
+    }
+
+    /// Launch report, bug 10: the ledger read about 10% under Claude Code's own `total_cost_usd`.
+    /// Claude Code writes 1-hour cache entries, which cost 2x input, not the 5-minute 1.25x. The
+    /// fixture is RepoBench v2's `eval-click-0cd28d65-r2-adage` (Claude Code 2.1.284, Haiku 4.5)
+    /// with its content stripped: usage, message ids, models and tool names only. Claude Code
+    /// reported `total_cost_usd` 0.2402909 for it; the old pricing gave 0.2191 (-8.8%).
+    #[test]
+    fn a_real_session_prices_to_what_claude_code_reported() {
+        let p = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ledger/click-0cd28d65-r2.jsonl");
+        let s = claude(&p).unwrap();
+        assert!(s.tokens.cache_write_1h > 0 && s.tokens.cache_write_1h <= s.tokens.cache_write, "{:?}", s.tokens);
+        let usd = s.cost.usd.unwrap();
+        assert!((usd - 0.2402909).abs() < 0.0005, "{usd} vs Claude Code's 0.2402909");
     }
 
     #[test]
