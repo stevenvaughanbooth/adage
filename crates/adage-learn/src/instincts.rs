@@ -12,11 +12,12 @@
 //!   approves the pack's environment steps for the repository (`Reviews::packs`).
 //! - **Auto-extinguish.** The runtime judges every instinct directive ([`adage_runtime::Judgement`]).
 //!   From the treated arm's spools, an instinct route with at least [`EXTINGUISH_MISFIRED`]
-//!   `misfired` judgements (the agent ran the directed command and it failed), or whose
-//!   ignore rate has a Wilson lower bound of at least [`EXTINGUISH_IGNORE_LOWER_BOUND`] over at least
-//!   [`EXTINGUISH_MIN_JUDGEMENTS`] judgements, is extinguished, recorded as a person's `extinguish` is (so a
-//!   re-bind does not bring it back), and the change appears in `learn.log`. Losing authority is
-//!   always automatic.
+//!   `misfired` judgements (the agent ran the directed command and it failed), or whose value is
+//!   positive with probability under [`EXTINGUISH_P_POSITIVE`] over at least
+//!   [`EXTINGUISH_MIN_JUDGEMENTS`] judgements ([`crate::value::judged`]: an ignore only lowers
+//!   `p_follow`, a misfire is a direct cost), is extinguished, recorded as a person's `extinguish`
+//!   is (so a re-bind does not bring it back), and the change appears in `learn.log`. Losing
+//!   authority is always automatic.
 //! - **Capped.** Prime, forming at most (never firm), never an obligation or a Stop request
 //!   (the runtime's part).
 
@@ -33,8 +34,8 @@ use std::path::{Path, PathBuf};
 pub const TRACK: &str = "instincts";
 /// misfired judgements that extinguish an instinct route.
 pub const EXTINGUISH_MISFIRED: u32 = 3;
-/// An ignore rate whose Wilson lower bound reaches this extinguishes an instinct route...
-pub const EXTINGUISH_IGNORE_LOWER_BOUND: f64 = 0.5;
+/// A route whose value is positive with less than this probability is extinguished...
+pub const EXTINGUISH_P_POSITIVE: f64 = 0.1;
 /// ...over at least this many judgements.
 pub const EXTINGUISH_MIN_JUDGEMENTS: u32 = 5;
 
@@ -139,11 +140,16 @@ pub fn should_extinguish(j: &Judged) -> Option<String> {
     if j.misfired >= EXTINGUISH_MISFIRED {
         return Some(format!("misfired {} times", j.misfired));
     }
-    let n = j.total();
-    if n >= EXTINGUISH_MIN_JUDGEMENTS && adage_tracks::wilson_lower(j.ignored, n) >= EXTINGUISH_IGNORE_LOWER_BOUND {
-        return Some(format!("ignored {} of {n} times", j.ignored));
+    if j.total() < EXTINGUISH_MIN_JUDGEMENTS {
+        return None;
     }
-    None
+    let a = crate::value::judged(j.followed, j.ignored, j.misfired);
+    (a.p_positive < EXTINGUISH_P_POSITIVE).then(|| {
+        format!(
+            "worth {:.1} calls, with probability {:.2} of helping ({} followed, {} ignored, {} misfired)",
+            a.mean, a.p_positive, j.followed, j.ignored, j.misfired
+        )
+    })
 }
 
 /// The repository's root on disk: the working directory most of its sessions recorded that still

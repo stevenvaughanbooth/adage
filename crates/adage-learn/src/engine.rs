@@ -59,6 +59,9 @@ pub struct EngineReport {
     /// The tests-of-the-edit route as planned ([`crate::testmap`]), delivered or not.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub testmap: Option<crate::testmap::Planned>,
+    /// The session-start line as planned ([`crate::testmap::card`]), delivered or not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub card: Option<crate::testmap::Card>,
 }
 
 /// One judged route, and why it exists.
@@ -986,6 +989,14 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
         report.testmap = Some(planned);
     } else if let Some((None, planned)) = plan {
         report.testmap = Some(planned);
+    }
+    // How tests run here, once per session, when that was a useful directive in the training
+    // sessions (`crate::testmap::card`).
+    if let Some((found, plan)) = crate::testmap::card(ss, &statics, &cfg.provenance) {
+        if let Some((route, why)) = found.filter(|(r, _)| !routes.iter().any(|j| j.route.id == r.id)) {
+            routes.push(Judged { route, why });
+        }
+        report.card = Some(plan);
     }
     // A value-flow reflex MDL did not select on its own (a longer pattern holding it was chosen,
     // or none): its route is the value slot's, with the slot's own evidence.

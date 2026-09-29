@@ -237,6 +237,44 @@ pub fn advantage(
     Advantage { mean, sd, p_positive, lower: mean - ADVANTAGE_Z * sd, q_null: m0, q_sat: m1 }
 }
 
+/// [`advantage`] where `Q(∅)` is a mixture: with no directive, a share `p_sat` of the agents
+/// already take an action in `Sat(d)` (cost `Q(Sat d)`) and the rest do something else (cost
+/// `Q(other)`), so `Q(∅) − Q(Sat d) = (1 − p_sat) · (Q(other) − Q(Sat d))`: a directive for what
+/// agents do anyway is worth nothing (Track G's `1 − p_soon`, derived). `sat_share` is p_sat's Beta
+/// posterior.
+pub fn advantage_mix(
+    q_other: (f64, f64),
+    q_sat: (f64, f64),
+    sat_share: (f64, f64),
+    follow: (f64, f64),
+    misfire: (f64, f64),
+    cost: f64,
+    misfire_cost: f64,
+) -> Advantage {
+    let (m0, s0) = gamma_moments(q_other);
+    let (m1, s1) = gamma_moments(q_sat);
+    let (pf, vf) = beta_moments(follow.0, follow.1);
+    let (ps, vs) = beta_moments(sat_share.0, sat_share.1);
+    let (pm, vm) = beta_moments(misfire.0, misfire.1);
+    // f = p_follow · (1 − p_sat), independent factors.
+    let (q, vq) = (1.0 - ps, vs);
+    let f = pf * q;
+    let vfq = (vf + pf * pf) * (vq + q * q) - f * f;
+    let d = m0 - m1;
+    let vd = s0 * s0 + s1 * s1;
+    let mean = f * d - cost - pm * misfire_cost;
+    let var = f * f * vd + vfq * d * d + vfq * vd + misfire_cost * misfire_cost * vm;
+    let sd = var.max(0.0).sqrt();
+    let p_positive = if sd > 0.0 {
+        normal_cdf(mean / sd)
+    } else if mean > 0.0 {
+        1.0
+    } else {
+        0.0
+    };
+    Advantage { mean, sd, p_positive, lower: mean - ADVANTAGE_Z * sd, q_null: ps * m1 + q * m0, q_sat: m1 }
+}
+
 /// Median of a list (the lower middle for an even count, so it is an observed value).
 pub fn median(v: &mut [f64]) -> f64 {
     if v.is_empty() {

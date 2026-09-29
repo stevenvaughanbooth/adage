@@ -14,7 +14,8 @@
 //! environment kind → situation → this repository: [`Priors`], fitted across repositories by
 //! `examples/outcome_priors.rs`, κ by the method of moments). `p_follow` has a fixed prior until
 //! follow judgements exist. The value is `A = p_follow · (Q(∅) − Q(Sat d)) − C(d) − p_misfire · m`
-//! ([`adage_graph::stats::advantage`]).
+//! ([`adage_graph::stats::advantage_mix`], with `Q(∅)` the mixture of the agents who already take
+//! `Sat(d)` and those who do something else).
 //!
 //! **Candidates** are safe by construction: the project's own environment running the tool that
 //! failed (declared by the repository, [`Statics`], or seen running tests in a trace). An install
@@ -82,10 +83,17 @@ impl Priors {
 
     /// The prior (mean, κ) for this repository's cell of `k` and `role`: the posterior down the
     /// levels, each level's κ the prior of the next.
+    ///
+    /// Levels with no data for `role` are passed over. When no level has any, the `null` chain is
+    /// the prior: with no evidence that the directed class does differently anywhere, it is
+    /// what agents do anyway, so a directive's value starts at zero rather than at the difference
+    /// between two unrelated defaults.
     pub fn prior(&self, k: &SituationKey, role: &str) -> (f64, f64, f64, f64) {
         let (mut m, mut kappa) = (DEFAULT_CALLS, DEFAULT_KAPPA);
         let (mut mis_a, mut mis_b) = MISFIRE_PRIOR;
-        for l in Self::levels(k, role) {
+        let levels = Self::levels(k, role);
+        let chain = if levels.iter().any(|l| self.cells.contains_key(l)) { levels } else { Self::levels(k, "null") };
+        for l in chain {
             if let Some(c) = self.cells.get(&l) {
                 let (a, b) = stats::gamma_poisson(c.sum, c.n, m, kappa);
                 m = a / b;
@@ -285,14 +293,20 @@ pub fn value_failures(ss: &[&Session], statics: &Statics, priors: &Priors) -> Ve
             let null: Vec<u32> = unexposed.iter().map(|a| a.x.reward.calls).collect();
             let sat: Vec<&&&At> =
                 unexposed.iter().filter(|a| a.x.next.as_ref().is_some_and(|r| r.env == env)).collect();
+            let other: Vec<f64> = unexposed
+                .iter()
+                .filter(|a| !a.x.next.as_ref().is_some_and(|r| r.env == env))
+                .map(|a| a.x.reward.calls as f64)
+                .collect();
             let (m0, k0, _, _) = priors.prior(&key, "null");
             let (m1, k1, ma, mb) = priors.prior(&key, &role);
-            let q_null = stats::gamma_poisson(null.iter().map(|&c| c as f64).sum(), null.len() as f64, m0, k0);
+            let q_other = stats::gamma_poisson(other.iter().sum(), other.len() as f64, m0, k0);
             let q_sat =
                 stats::gamma_poisson(sat.iter().map(|a| a.x.reward.calls as f64).sum(), sat.len() as f64, m1, k1);
             let mis = sat.iter().filter(|a| a.x.next_misfired).count() as f64;
             let misfire = (ma + mis, mb + sat.len() as f64 - mis);
-            let adv = stats::advantage(q_null, q_sat, FOLLOW_PRIOR, misfire, DIRECTIVE_COST, MISFIRE_COST);
+            let share = (1.0 + sat.len() as f64, 1.0 + other.len() as f64);
+            let adv = stats::advantage_mix(q_other, q_sat, share, FOLLOW_PRIOR, misfire, DIRECTIVE_COST, MISFIRE_COST);
             let ran_tests = ss
                 .iter()
                 .filter(|s| {
@@ -340,6 +354,26 @@ fn spelled(r: &Runner) -> Option<String> {
         }
         _ => None,
     }
+}
+
+/// What a directive that works saves when followed, in tool calls, before any trace of the
+/// repository says otherwise: U11's measured effect (1.85 calls from the dead end to a test run
+/// that ran tests, RepoBench v2), with the width of its interval.
+pub const PRIOR_SAVING: (f64, f64) = (1.85, 0.35);
+
+/// The value of a directive from its runtime judgements alone (an instinct's, which no trace
+/// valued): `p_follow` from follows and ignores (an ignore only lowers it), `p_misfire` from
+/// misfires, and the saving when followed from [`PRIOR_SAVING`] (outcome-optimisation §2.7).
+pub fn judged(followed: u32, ignored: u32, misfired: u32) -> Advantage {
+    let n = (followed + ignored + misfired) as f64;
+    let (m, sd) = PRIOR_SAVING;
+    // Gamma posteriors whose difference has mean m and variance sd²: Q(∅) = m + 1, Q(Sat) = 1.
+    let shape = |mean: f64, var: f64| (mean * mean / var, mean / var);
+    let q_null = shape(m + 1.0, sd * sd / 2.0);
+    let q_sat = shape(1.0, sd * sd / 2.0);
+    let follow = (FOLLOW_PRIOR.0 + followed as f64, FOLLOW_PRIOR.1 + ignored as f64);
+    let misfire = (MISFIRE_PRIOR.0 + misfired as f64, MISFIRE_PRIOR.1 + n - misfired as f64);
+    stats::advantage(q_null, q_sat, follow, misfire, DIRECTIVE_COST, MISFIRE_COST)
 }
 
 /// Strength from the value of a directive under the effect's ceiling (outcome-optimisation §4.2):
@@ -469,6 +503,18 @@ mod tests {
         let (m, kappa, _, _) = p.prior(&k, "venv");
         assert!((m - (15.0 + 4.0) / 11.0).abs() < 1e-12, "{m}");
         assert_eq!(kappa, 4.0);
+    }
+
+    #[test]
+    fn judgements_value_an_instinct() {
+        // Followed: plainly worth it.
+        assert!(judged(20, 0, 0).p_positive > 0.99);
+        // Ignored a few times: its value is lower, not gone (an ignore is no harm).
+        assert!(judged(0, 5, 0).p_positive > 0.5);
+        // Ignored almost always, over many deliveries: not worth its tokens.
+        assert!(judged(0, 200, 0).p_positive < 0.1, "{:?}", judged(0, 200, 0));
+        // Misfires cost.
+        assert!(judged(2, 0, 8).mean < 0.0);
     }
 
     #[test]

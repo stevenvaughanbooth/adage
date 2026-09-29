@@ -426,14 +426,19 @@ pub fn plan(
             x.next.as_ref().is_some_and(|r| r.family == runner.family && r.env.class() == EnvClass::Project)
         })
         .collect();
+    let in_sat = |x: &outcome::Situation| {
+        x.next.as_ref().is_some_and(|r| r.family == runner.family && r.env.class() == EnvClass::Project)
+    };
+    let other: Vec<f64> = unexposed.iter().filter(|(_, x)| !in_sat(x)).map(|(_, x)| x.reward.calls as f64).collect();
     let (m0, k0, _, _) = priors.prior(&key, "null");
     let (m1, k1, ma, mb) = priors.prior(&key, &role);
-    let q_null = stats::gamma_poisson(null.iter().sum(), null.len() as f64, m0, k0);
+    let q_other = stats::gamma_poisson(other.iter().sum(), other.len() as f64, m0, k0);
     let q_sat = stats::gamma_poisson(sat.iter().map(|(_, x)| x.reward.calls as f64).sum(), sat.len() as f64, m1, k1);
     let mis = sat.iter().filter(|(_, x)| x.next_misfired).count() as f64;
-    let adv = stats::advantage(
-        q_null,
+    let adv = stats::advantage_mix(
+        q_other,
         q_sat,
+        (1.0 + sat.len() as f64, 1.0 + other.len() as f64),
         value::FOLLOW_PRIOR,
         (ma + mis, mb + sat.len() as f64 - mis),
         value::DIRECTIVE_COST,
@@ -523,6 +528,169 @@ pub fn plan(
     };
     Some((Some((route, why)), planned))
 }
+
+/// Files that say how to work in a repository: reading one before the first test run is a step
+/// spent finding out how to run things.
+const HOW_TO: &[&str] = &[
+    "pyproject.toml",
+    "setup.cfg",
+    "setup.py",
+    "tox.ini",
+    "noxfile.py",
+    "pytest.ini",
+    "conftest.py",
+    "package.json",
+    "go.mod",
+    "Cargo.toml",
+    "Makefile",
+    "justfile",
+    "requirements.txt",
+    "requirements-dev.txt",
+    "vitest.config.ts",
+    "vitest.config.js",
+    "jest.config.js",
+    ".python-version",
+    "CONTRIBUTING.md",
+    "CONTRIBUTING.rst",
+];
+
+/// Whether a step explores how to work in the repository (outcome-optimisation §1.2's discovery;
+/// the embedding lab's "exploratory" steps): a manifest or tool configuration read, an install, a
+/// look at the environment (`which`, `--version`, `pip list`, a `.venv` listing), or a test run
+/// that failed for the environment.
+fn exploratory(st: &crate::import::StepObs) -> bool {
+    if let Some(p) = st.rel_path.as_deref() {
+        if !adage_core::keys::is_author(&st.norm.action) && HOW_TO.contains(&p.rsplit('/').next().unwrap_or(p)) {
+            return true;
+        }
+    }
+    let Some(a) = outcome::action_of(st) else { return false };
+    if a.role == Role::EnvSetup {
+        return true;
+    }
+    if a.role == Role::TestRun {
+        return !outcome::executed_tests(&st.call.output) && outcome::env_failure(&st.call.output).is_some();
+    }
+    let text = a.argv.join(" ");
+    matches!(a.role, Role::Search | Role::Read | Role::Trivial | Role::Other)
+        && (a.runner == "which"
+            || text.contains("--version")
+            || text.contains("venv")
+            || text.contains("site-packages")
+            || text.contains("node_modules/.bin")
+            || (text.starts_with("pip") && (text.contains(" list") || text.contains(" show"))))
+}
+
+/// The session-start line (the embedding lab's usefulness-labelled baseline, and the review's
+/// affordance card): "tests run with <the project's runner>", delivered once per session when it
+/// was a *useful* directive in at least [`CARD_RATE`] of the training sessions and at least two of
+/// them. Useful means the session later ran tests that way (the same tool, in a project
+/// environment, and tests ran), and before that spent a failed command or at least two steps
+/// finding out how to run things; a session that went straight to it did not need telling.
+pub fn card(ss: &[&Session], statics: &Statics, provenance: &str) -> Option<(Option<(Route, Why)>, Card)> {
+    // The tool this repository's tests run with: the family most sessions ran tests with.
+    let mut families: BTreeMap<String, u32> = BTreeMap::new();
+    for s in ss {
+        let fams: BTreeSet<String> = s
+            .steps
+            .iter()
+            .filter(|st| outcome::test_goal(st))
+            .filter_map(|st| outcome::runner(st).map(|r| r.family))
+            .collect();
+        for f in fams {
+            *families.entry(f).or_default() += 1;
+        }
+    }
+    let family = families.iter().max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0))).map(|(f, _)| f.clone())?;
+    let mut spellings: BTreeMap<String, u32> = BTreeMap::new();
+    for s in ss {
+        for st in &s.steps {
+            let Some(a) = outcome::action_of(st).filter(|a| a.role == Role::TestRun && a.runner == family) else {
+                continue;
+            };
+            if a.env.class() == EnvClass::Project && outcome::executed_tests(&st.call.output) {
+                if let Some(p) = prefix(&a) {
+                    *spellings.entry(p).or_default() += 1;
+                }
+            }
+        }
+    }
+    let seen = spellings.iter().max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0))).map(|(p, _)| p.clone());
+    let command = statics.declared.get(&family).map(|(_, c)| c.clone()).or(seen)?;
+    let (mut useful, n) = (0u32, ss.len() as u32);
+    for s in ss {
+        let Some(at) = s.steps.iter().position(|st| {
+            outcome::test_goal(st)
+                && outcome::runner(st).is_some_and(|r| r.family == family && r.env.class() == EnvClass::Project)
+        }) else {
+            continue;
+        };
+        let before = &s.steps[..at];
+        let failed = before.iter().any(|st| st.call.failed && outcome::action_of(st).is_some());
+        let explored = before.iter().filter(|st| exploratory(st)).count();
+        useful += u32::from(failed || explored >= 2);
+    }
+    let rate = if n > 0 { useful as f64 / n as f64 } else { 0.0 };
+    let plan = Card { command: command.clone(), useful, sessions: n };
+    if useful < 2 || rate < CARD_RATE {
+        return Some((None, plan));
+    }
+    let mut slots_ = BTreeMap::new();
+    slots_.insert("command".to_string(), command.clone());
+    let step = Step::Advise { template: "test-command".into(), slots: slots_ };
+    let trigger = Trigger::SessionStart;
+    let id = adage_graph::compile::ids::route_id("advise", &trigger, &step, &[]);
+    let route = Route {
+        id,
+        summary: "How tests run in this repository".into(),
+        trigger,
+        step,
+        slots: vec![],
+        effect: Effect::Observe,
+        strength: Strength::Prime,
+        state: initial_state(Effect::Observe),
+        exit: vec![Exit::IntentChanges],
+        evidence: Evidence {
+            opportunities: n,
+            support: useful,
+            rate,
+            lower_bound: wilson_lower(useful, n),
+            provenance: provenance.into(),
+            models: crate::evidence::models(ss),
+            origin: Some(Origin::Learned),
+            ..Default::default()
+        },
+        authored: false,
+    };
+    let why = Why {
+        shape: "advise".into(),
+        pattern: format!(
+            "[session start] =useful=> [{command}]: a useful directive in {useful} of {n} sessions (they later ran tests that way, after a failed command or steps spent finding out how)"
+        ),
+        backoff: 0,
+        gain: 0.0,
+        lift: 0.0,
+        conf: (rate * 1e4).round() / 1e4,
+        conf_lb: (wilson_lower(useful, n) * 1e4).round() / 1e4,
+        support: useful,
+        days: 0,
+        members: vec![],
+        examples: vec![],
+        prior: None,
+    };
+    Some((Some((route, why)), plan))
+}
+
+/// The session-start line as planned: its command, and the training sessions it was useful in.
+#[derive(Debug, Clone, Serialize)]
+pub struct Card {
+    pub command: String,
+    pub useful: u32,
+    pub sessions: u32,
+}
+
+/// The share of training sessions in which the session-start line must have been useful.
+pub const CARD_RATE: f64 = 0.7;
 
 #[cfg(test)]
 mod tests {
