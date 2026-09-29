@@ -15,17 +15,21 @@ fn a_real_control_trace_is_rewritten_only_at_its_dead_end() {
         shown: ".venv/bin/python".into(),
         pytest: true,
         modules: vec!["click".into(), "pytest".into()],
+        root: "/w/click".into(),
+        cwd: "/w/click".into(),
+        version: Some("3.12".into()),
+        uv: true,
     };
     let mut rewritten = Vec::new();
     for c in fixture["calls"].as_array().unwrap() {
         let cmd = c["command"].as_str().unwrap();
         match plan(cmd, &env, |_| None) {
-            Some(Pre::Rewrite { command, kind }) => {
+            Some(Pre::Rewrite { command, kind, .. }) => {
                 assert_eq!(kind, "test");
                 assert_eq!(command, cmd.replacen("python", "/w/click/.venv/bin/python", 1), "only the prefix");
                 rewritten.push(c["dead_end"].as_bool().unwrap());
             }
-            Some(Pre::Deny { reason }) => panic!("{cmd}: {reason}"),
+            Some(Pre::Advise { reason, .. }) => panic!("{cmd}: {reason}"),
             None => assert!(!c["dead_end"].as_bool().unwrap(), "a dead end left alone: {cmd}"),
         }
     }

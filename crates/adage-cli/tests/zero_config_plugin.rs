@@ -92,6 +92,8 @@ impl World {
             "CODEX_SANDBOX_NETWORK_DISABLED",
             "CLAUDE_CONFIG_DIR",
             "XDG_DATA_HOME",
+            "VIRTUAL_ENV",
+            "CONDA_PREFIX",
         ] {
             c.env_remove(v);
         }
@@ -100,6 +102,16 @@ impl World {
         let mut c = Command::new(exe);
         c.args(args).current_dir(cwd).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
         self.env(&mut c);
+        let mut child = c.spawn().unwrap();
+        let _ = child.stdin.take().unwrap().write_all(stdin.as_bytes());
+        child.wait_with_output().unwrap()
+    }
+    /// `adage` with extra environment variables.
+    fn run_env(&self, args: &[&str], stdin: &str, vars: &[(&str, &str)]) -> Output {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
+        c.args(args).current_dir(&self.root).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        self.env(&mut c);
+        c.envs(vars.iter().copied());
         let mut child = c.spawn().unwrap();
         let _ = child.stdin.take().unwrap().write_all(stdin.as_bytes());
         child.wait_with_output().unwrap()
@@ -458,27 +470,64 @@ fn pretool_rewrites_to_the_verified_environment() {
         }
     });
     assert_eq!(serde_json::from_str::<Value>(out.trim()).unwrap(), want, "{out}");
-    // A pip install into the system Python is refused, naming the command that reaches the project.
+    // A pip install of a test dependency into the system Python gets advice, never a refusal
+    // (review B2): the command runs as written, under the person's own permission rules.
     let out = pre("pip install pytest");
     let v: Value = serde_json::from_str(out.trim()).unwrap();
-    assert_eq!(v["hookSpecificOutput"]["permissionDecision"], "deny", "{out}");
-    assert!(v["hookSpecificOutput"]["permissionDecisionReason"]
-        .as_str()
-        .unwrap()
-        .contains(".venv/bin/python -m pip install"));
+    assert!(v["hookSpecificOutput"].get("permissionDecision").is_none(), "{out}");
+    assert!(v["hookSpecificOutput"].get("updatedInput").is_none(), "{out}");
+    let advice = v["hookSpecificOutput"]["additionalContext"].as_str().unwrap();
+    assert!(advice.contains(&format!("{} -m pip install <package>", py.display())), "{advice}");
+    // ... and nothing for an unrelated tool, `--user`, or a heredoc line (the reviewer's cases).
+    for cmd in ["pip install --user httpie", "pip install pre-commit && pre-commit install", "pip install numpy"] {
+        assert_eq!(pre(cmd).trim(), "", "{cmd}");
+    }
+    // Review B1, end to end: a heredoc body is data. The CI script is written as the agent wrote
+    // it, with no machine path in it; a commit message is left alone.
+    for cmd in [
+        "cat > ci.sh <<'EOF'\n#!/bin/sh\npytest -q\nEOF",
+        "git commit -F - <<'EOF'\nFix rounding\n\npytest tests passes now\nEOF",
+        "cat > setup.sh <<'EOF'\npip install -e .\nEOF",
+    ] {
+        assert_eq!(pre(cmd).trim(), "", "{cmd}");
+    }
+    // Review S1 and S2: another project's tests, or a pinned interpreter, are left alone.
+    assert_eq!(pre("cd /home/me/otherproj && pytest").trim(), "");
+    assert_eq!(pre("python3.9 -m pytest tests").trim(), "");
     // The project's own interpreter, and anything else, pass untouched.
     assert_eq!(pre(".venv/bin/python -m pytest tests").trim(), "");
     assert_eq!(pre("ls -la").trim(), "");
+    assert_eq!(pre("./pipeline.sh").trim(), "", "`pipeline` is not `pip`");
     // `adage delegate off` turns it off.
     std::fs::create_dir_all(w.p("data/exec")).unwrap();
     std::fs::write(w.p("data/exec/rewrite-off"), "").unwrap();
     assert_eq!(pre("python -m pytest tests").trim(), "");
     std::fs::remove_file(w.p("data/exec/rewrite-off")).unwrap();
-    // Recorded (never the command itself), and visible on the card.
+    // Review S4: the person allowed `pytest` as written; the rewritten command would lose that
+    // rule, so the hook advises instead of rewriting.
+    std::fs::create_dir_all(repo.join(".claude")).unwrap();
+    std::fs::write(repo.join(".claude/settings.local.json"), r#"{"permissions":{"allow":["Bash(pytest:*)"]}}"#)
+        .unwrap();
+    let out = pre("pytest -q tests");
+    let v: Value = serde_json::from_str(out.trim()).unwrap();
+    assert!(v["hookSpecificOutput"].get("updatedInput").is_none(), "{out}");
+    let advice = v["hookSpecificOutput"]["additionalContext"].as_str().unwrap();
+    assert!(advice.contains(&format!("`{} -m pytest -q tests`", py.display())), "{advice}");
+    std::fs::remove_file(repo.join(".claude/settings.local.json")).unwrap();
+    // A session started in an activated environment: that environment's `python` is left alone.
+    let o = w.run_env(
+        &["hook", "claude", "PreToolUse"],
+        &json!({ "session_id": "s1", "cwd": repo, "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": { "command": "pytest -q" } }).to_string(),
+        &[("VIRTUAL_ENV", "/opt/envs/other")],
+    );
+    assert_eq!(String::from_utf8_lossy(&o.stdout).trim(), "");
+    // Recorded (never the command itself), and visible on the card: rewrites only.
     let recs: Vec<Value> = adage_store::spool::read_all(&w.p("data/sessions/s1.spool")).unwrap();
     let pre: Vec<&Value> = recs.iter().filter(|r| r["kind"] == "pretool").collect();
-    assert_eq!(pre.len(), 2, "{recs:?}");
+    assert_eq!(pre.len(), 3, "{recs:?}");
     assert_eq!(pre[0]["pretool"], json!({ "rewrite": "test", "interpreter": ".venv/bin/python" }));
+    assert_eq!(pre[1]["pretool"], json!({ "advise": "pip-install", "interpreter": ".venv/bin/python" }));
+    assert_eq!(pre[2]["pretool"], json!({ "advise": "permissions", "interpreter": ".venv/bin/python" }));
     assert!(!serde_json::to_string(&recs).unwrap().contains("test_formatting"), "no command text in the spool");
     let key = pre[0]["repo"].as_str().unwrap();
     let slug: String =
@@ -486,7 +535,7 @@ fn pretool_rewrites_to_the_verified_environment() {
     std::fs::create_dir_all(w.p("data/ledger")).unwrap();
     std::fs::write(w.p("data/ledger").join(format!("{slug}.jsonl")), "").unwrap();
     let card = w.card(&repo);
-    assert!(card.contains("rewrote 2 commands to use the project's environment"), "{card}");
+    assert!(card.contains("rewrote 1 command to use the project's environment"), "{card}");
 }
 
 /// Spools and a ledger for a synthetic population of `n_t` treated and `n_c` control sessions of

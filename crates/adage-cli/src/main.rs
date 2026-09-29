@@ -32,6 +32,7 @@
 //! adage review delegate <track> <reflex> --level e1|e2 [--raw] [--fields ..] [--outputs <glob>]   approve an E1 prefetch or an E2 action (a person)
 //! adage review revoke <track> <reflex>   withdraw that grant
 //! adage delegate on|off|status       hooks call adage-exec (E1 prefetch, E2 actions) or adage; grants per repository
+//! adage delegate rewrites on|off     rewrites to the project's environment (PreToolUse), alone
 //! adage review <approve|extinguish|weaken|strengthen|pin|dismiss> <track> <route> [--by <name>]
 //! adage models fetch|install <dir>|status   the embedding model for intent families (optional)
 //! adage eval <dataset> [--split ..] [--json]  offline replay eval of what Adage would have said

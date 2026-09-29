@@ -46,8 +46,6 @@ pub enum Output {
     /// (`notice`). Harnesses that cannot rewrite a call render nothing (the post-hoc directive
     /// still follows the failure).
     Rewrite { input: Value, context: String, notice: String },
-    /// Before a tool call: refuse it, with the reason the model reads.
-    Deny(String),
 }
 
 /// Who is calling: the session and working directory every native payload must carry.

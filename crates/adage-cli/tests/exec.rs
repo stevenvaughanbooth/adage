@@ -155,6 +155,34 @@ fn approving_execution_is_a_persons_decision_and_shows_what_would_run() {
     assert_eq!((code, out.contains("Revoked 1")), (0, true), "{out}");
 }
 
+/// Review S5: rewrites to the project's environment have their own switch, and a plugin-only
+/// install (no adage-exec) that turned them off with `delegate off` gets them back with
+/// `delegate on`, even though execution stays unavailable.
+#[test]
+fn rewrites_switch_on_and_off_without_adage_exec() {
+    let w = World::new();
+    let marker = w.p("adage/exec/rewrite-off");
+    let (_, err, code) = w.run(&["delegate", "off"], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert!(marker.is_file(), "delegate off turns rewrites off");
+    let (_, err, code) = w.run(&["delegate", "on", "--bin", "/nonexistent/adage-exec"], &[]);
+    assert_eq!(code, 1, "no adage-exec: execution stays off: {err}");
+    assert!(err.contains("no adage-exec binary"), "{err}");
+    assert!(!marker.exists(), "but rewrites are back on");
+
+    let (_, _, code) = w.run(&["delegate", "rewrites", "off"], &[("CLAUDECODE", "1")]);
+    assert_eq!(code, 1, "a person's decision");
+    assert!(!marker.exists());
+    let (out, err, code) = w.run(&["delegate", "rewrites", "off"], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert!(marker.is_file() && out.contains("off"), "{out}");
+    let (out, err, code) = w.run(&["delegate", "rewrites", "on"], &[]);
+    assert_eq!(code, 0, "{err}");
+    assert!(!marker.exists() && out.contains("on"), "{out}");
+    let (_, _, code) = w.run(&["delegate", "rewrites", "maybe"], &[]);
+    assert_eq!(code, 1);
+}
+
 #[test]
 fn exec_enable_swaps_hook_registrations_and_disable_swaps_them_back() {
     let w = World::new();

@@ -6,6 +6,8 @@
 //! adage delegate on [--bin <adage-exec>] [--repo <dir>]   hooks call `adage-exec hook` (E1 prefetch,
 //!                                                          E2 actions)
 //! adage delegate off [--repo <dir>]                        hooks call `adage hook` again
+//! adage delegate rewrites <on|off>                         rewrites to the project's environment
+//!                                                          alone (no adage-exec needed)
 //! adage delegate [status] [--repo <dir>] [--json]          registrations, and grants per repository
 //! adage review delegate <track> <reflex> --level e1 [--raw] [--fields '<json>']
 //!                         [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
@@ -50,7 +52,8 @@ use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-const USAGE: &str = "usage: adage delegate <on [--bin <adage-exec>] | off | status [--json]> [--repo <dir>]";
+const USAGE: &str =
+    "usage: adage delegate <on [--bin <adage-exec>] | off | rewrites <on|off> | status [--json]> [--repo <dir>]";
 const REVIEW_USAGE: &str = "usage: adage review delegate <track> <reflex> --level e1 [--raw] [--fields '<json>'] [--exit-when field=value]... [--timeout-ms n] [--repo <dir>] [--by <name>]
        adage review delegate <track> <reflex> --level e2 [--outputs <glob>]... [--cache <glob>]... [--effect verify|regenerate] [--timeout-ms n] [--repo <dir>] [--by <name>]
        adage review revoke <track> <reflex> [--repo <dir>]";
@@ -115,11 +118,40 @@ pub fn delegate(args: &[String], paths: &Paths) -> Result<()> {
     match args.first().map(String::as_str) {
         Some("on") => switch(true, &args[1..], paths),
         Some("off") => switch(false, &args[1..], paths),
+        Some("rewrites") => match args.get(1).map(String::as_str) {
+            Some(v @ ("on" | "off")) => {
+                require_person(&format!("delegate rewrites {v}"))?;
+                rewrites(v == "on", paths)?;
+                println!("This takes effect at the next command.");
+                Ok(())
+            }
+            _ => bail!("{USAGE}"),
+        },
         Some("status") => status(&args[1..], paths),
         None => status(args, paths),
         Some(a) if a.starts_with("--") => status(args, paths),
         _ => bail!("{USAGE}"),
     }
+}
+
+/// Rewrites to the project's environment (docs/execution.md), on their own switch: they need no
+/// adage-exec, so a plugin-only install can turn them off and on again (review S5).
+fn rewrites(on: bool, paths: &Paths) -> Result<()> {
+    let off = adage_hook::rewrite_off(paths);
+    if on {
+        match std::fs::remove_file(&off) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.into()),
+            _ => {}
+        }
+        println!("Rewrites to the project's environment: on (off: adage delegate rewrites off).");
+    } else {
+        std::fs::create_dir_all(off.parent().context("no directory")?)?;
+        std::fs::write(&off, "")?;
+        println!(
+            "Rewrites to the project's environment: off (Python test runs keep the interpreter the agent chose; on: adage delegate rewrites on)."
+        );
+    }
+    Ok(())
 }
 
 fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
@@ -134,7 +166,13 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
             }
         };
         if !b.is_file() {
-            bail!("no adage-exec binary at {}; install it beside adage, or pass --bin", b.display());
+            // `delegate off` turned rewrites off without adage-exec; `delegate on` turns them back
+            // on without it, before saying execution is unavailable.
+            rewrites(true, paths)?;
+            bail!(
+                "no adage-exec binary at {}; install it beside adage, or pass --bin (execution stays off)",
+                b.display()
+            );
         }
         b
     } else {
@@ -170,15 +208,8 @@ fn switch(on: bool, args: &[String], paths: &Paths) -> Result<()> {
         println!("Execution: off. Hooks call adage again (approvals are kept; revoke them with review revoke).");
     }
     // Rewrites to the project's environment (docs/execution.md): on by default, off with
-    // `delegate off`, back on with `delegate on`.
-    let off = adage_hook::rewrite_off(paths);
-    if on {
-        let _ = std::fs::remove_file(&off);
-    } else {
-        std::fs::create_dir_all(off.parent().context("no directory")?)?;
-        std::fs::write(&off, "")?;
-        println!("Rewrites to the project's environment: off (Python test runs keep the interpreter the agent chose).");
-    }
+    // `delegate off`, back on with `delegate on`; alone with `delegate rewrites on|off`.
+    rewrites(on, paths)?;
     if changed == 0 {
         println!("No hook registration written by `adage install` needed changing.");
     }

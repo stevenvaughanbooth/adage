@@ -136,41 +136,62 @@ python -m pytest tests/test_formatting.py -xvs 2>&1 | head -50
 - **What is rewritten**: `pytest …`, `python -m pytest …`, and a `python`/`python3` run whose code
   imports the project's own package or a declared test dependency (`-c`, a heredoc, `-m <pkg>`, or a
   `.py` script it reads). Every argument, pipe and redirection is kept; only the interpreter word
-  changes (`adage_runtime::pretool`). An activated environment, `uv run`, an interpreter given by
-  path, or anything the reader cannot place is left alone.
-- **What is refused**: `pip install …` (and `python -m pip install …`) into the system Python, with
-  the command that reaches the project instead (`.venv/bin/python -m pip install …`, or
-  `uv pip install …`). Refusing it prevents a change to the machine's Python; it runs nothing.
+  changes (`adage_runtime::pretool`). The command is read as the shell reads it, and only the
+  command word of a simple command in the top-level list (`a && b | c; d`) is ever rewritten: a
+  heredoc body, a quoted string and a `-c` payload are data (a CI script written with
+  `cat > ci.sh <<'EOF'` keeps its `pytest -q`). Left alone as a whole: a command whose structure
+  the reader does not follow (a subshell or group, `if`/`for`/`while`/`case`, `$(…)` or
+  backquotes, `<(…)`, an unterminated quote or heredoc, a line continuation), an activated
+  environment (in the command, or `VIRTUAL_ENV`/`CONDA_PREFIX` in the session), `uv run`, an
+  interpreter given by path, a pinned version other than the environment's own (`python3.9`,
+  `python2`), and a command that `cd`s or `pushd`s outside the checkout.
+- **Advice, never a refusal, for `pip install`**: a plain `pip install` (or `pip3`, `python -m pip
+  install`) of the project itself (`-e .`, `.[test]`) or of test dependencies installed in the
+  environment, with no option that sends it elsewhere or that the reader does not know (`--user`,
+  `--target`, `--prefix`, `--root`, `-r`, …), gets `additionalContext` naming the environment and
+  the command that reaches it (`<abs>/.venv/bin/python -m pip install …`, or `uv pip install
+  --python <abs> …` when the project has a `uv.lock`: uv-made environments have no pip). The
+  command runs as written, under the person's own permission rules; anything else gets nothing.
+  It was a refusal before the launch review: a hook `deny` beats the person's own allow rules, and
+  no measured harm justified overriding them.
 - **When**: only in a repository whose U11 instinct is in service (not extinguished, rejected or
   turned off) and whose environment was **verified when the instincts were bound**, from its files
   alone: a `.venv` (or `venv`) with its `pyvenv.cfg` and interpreter, pytest in its
   `site-packages`, and the project imported from this checkout (an editable install or `.pth`
   pointing inside it). The result is recorded with the binding and rechecked whenever the
-  checkout's declared files or the environment's `site-packages` change. Nothing is verified, and
-  nothing is run, in the hook.
-- **How**: Claude Code's `PreToolUse` `updatedInput`, with no permission decision, so Claude Code's
-  own permission checks apply to the new command exactly as to the original; the model is told in
-  `additionalContext`, the person in one `systemMessage` line. Codex and OpenCode cannot rewrite a
-  call: they keep the post-hoc directive after the failure.
+  checkout's declared files or the environment's `site-packages` change. In another checkout of
+  the repository (a worktree) before its rebind lands: test runs only, and only when that
+  checkout's environment is its own (not a link out of it, and no `.pth` or editable finder in it
+  pointing into the checkout the instincts were bound in). Nothing is run in the hook.
+- **How**: Claude Code's `PreToolUse` `updatedInput`, with no permission decision; the model is
+  told in `additionalContext`, the person in one `systemMessage` line. Claude Code then checks the
+  new command against the person's permission rules, which match command text: so a rewrite that
+  would lose a `Bash(…)` allow rule the original matched (`Bash(pytest:*)`), or that `dontAsk`
+  mode would deny, is given as advice instead. The rules are read from the user, project and local
+  settings; rules given on the command line (`--allowedTools`) are invisible to a hook, so a
+  headless run allowed only `Bash(pytest:*)` there should turn rewrites off. Codex and OpenCode
+  cannot rewrite a call: they keep the post-hoc directive after the failure.
 
 **Why this is on by default, and not an E1/E2 grant.** Delegation consent exists because Adage
 would run something the agent did not ask for. A rewrite runs nothing on its own: the agent's own
-command still runs, through the agent's own tool and permissions, with a strictly equivalent
-interpreter (the same Python program, the environment the repository itself declares, verified to
-contain what the command imports) instead of one that fails (`No module named pytest`). It adds no
-effect, touches no file, and cannot run code the command did not already run. The refusal of a
-system `pip install` only prevents a mutation. So it is on by default for instincts with a verified
+command still runs, through the agent's own tool and permissions, with the environment the
+repository itself declares, verified to contain what the command imports, instead of the system
+interpreter that fails (`No module named pytest`). It adds no effect, touches no file, and cannot
+run code the command did not already run. So it is on by default for instincts with a verified
 environment, like a directive, and three things keep it honest: it is never done in the control
-arm (so its effect is measured), `adage delegate off` turns it off on the machine (`delegate on`
-back on), and it is always visible: the person sees each rewrite as it happens, and the status card
-says `rewrote N commands to use the project's environment`. The spool records the kind of rewrite
-and the interpreter, never the command.
+arm (so its effect is measured), `adage delegate rewrites off` turns it off on the machine
+(`delegate rewrites on` back on; neither needs adage-exec, and `delegate off`/`on` switch it too),
+and it is always visible: the person sees each rewrite as it happens, and the status card says
+`rewrote N commands to use the project's environment`. The spool records the kind of rewrite or
+advice and the interpreter, never the command.
 
 **Its value, offline** (`adage eval replay-savings --mode pre-emptive --only U11`, RepoBench v2
 control traces, calls per session): click +1.65 (post-hoc +0.69), attrs +3.31 (+2.47),
 marshmallow +2.99 (+2.21), Sonnet 5 on click +1.36 (+0.61); no harmful directive. Over the same
-traces the planner rewrites a command in 63 of 66 Haiku control sessions and refuses 130 system
-`pip install`s, the calls that installed pytest and the project into the machine's Python.
+traces the planner rewrote a command in 63 of 66 Haiku control sessions and refused 130 system
+`pip install`s, the calls that installed pytest and the project into the machine's Python. These
+counts are from the planner before the launch review; the narrower planner (shell-aware, advice
+instead of refusal) has not been re-counted.
 
 ## E2 actions from hooks
 

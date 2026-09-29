@@ -90,10 +90,6 @@ impl Adapter for Claude {
                 "hookSpecificOutput": { "hookEventName": "PreToolUse", "updatedInput": input, "additionalContext": context }
             })
             .to_string(),
-            Output::Deny(reason) => json!({
-                "hookSpecificOutput": { "hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason }
-            })
-            .to_string(),
         })
     }
 

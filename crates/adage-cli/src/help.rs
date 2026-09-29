@@ -97,7 +97,7 @@ const GROUPS: &[(&str, &[Cmd])] = &[
             Cmd {
                 name: "delegate",
                 about: "let approved reflexes act: hooks call adage-exec (E1 prefetch, E2 actions)",
-                usage: &["adage delegate on [--bin <adage-exec>] | off | status [--json]   [--repo <dir>]"],
+                usage: &["adage delegate on [--bin <adage-exec>] | off | status [--json]   [--repo <dir>]", "adage delegate rewrites on|off   rewrites to the project's environment alone"],
             },
         ],
     ),

@@ -335,7 +335,8 @@ fn read_spool(path: &Path, repo: &str) -> Option<SpoolSession> {
         }
         match r["kind"].as_str() {
             Some("session_start") => s.started = true,
-            Some("pretool") if r["withheld"] != true => s.rewritten += 1,
+            // Rewrites only: advice changes no command.
+            Some("pretool") if r["withheld"] != true && r["pretool"].get("rewrite").is_some() => s.rewritten += 1,
             Some("session_end") | Some("stop") => s.ended = true,
             _ => {}
         }

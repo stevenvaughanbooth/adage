@@ -182,7 +182,7 @@ fn repo_lines(paths: &Paths, repo: &str, index: &Index, now: u64) -> Vec<String>
         // Adage acting, not advising: always visible (docs/execution.md, rewrites).
         if c.rewritten > 0 {
             out.push(format!(
-                "rewrote {} to use the project's environment (off: adage delegate off)",
+                "rewrote {} to use the project's environment (off: adage delegate rewrites off)",
                 plural(c.rewritten, "command", "commands")
             ));
         }
