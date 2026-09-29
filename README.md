@@ -149,7 +149,9 @@ matches the family (by local embedding similarity), the card is delivered once, 
 - **How much history:** one earlier session is enough when a family edits the same files every time
   (click, marshmallow). Families whose file names vary per task (`flag_url.go`, `flag_port.go`)
   need two or more.
-- **What it is:** the card was a prototype in these runs, and is being built into `adage condition`.
+- **What it is:** the card was a Python prototype in these runs. It is now built into
+  `adage condition` and the hooks, and on by default (`learn.cards`). The shipped version is
+  validated separately below.
 - **Data:** [evals/lab/research/recurring-workflows](evals/lab/research/recurring-workflows/README.md).
 
 ### Compiled skills: a skill's effect without its text in context
