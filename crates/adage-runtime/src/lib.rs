@@ -454,6 +454,9 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
         Event::SessionStart | Event::SessionEnd => {}
         Event::Prompt { text } => {
             st.prompts += 1;
+            // A card waiting for an edit belongs to the prompt that came close to it: a new prompt
+            // is a new task, so it waits no longer (it waits again below if this prompt is close).
+            st.card_waiting = None;
             let spans = spans::extract(text);
             // 0. Inhibit first (Design §10.6): the dead ends to announce at the first prompt are chosen
             //    before anything else, so the caps never crowd a warning out, and nothing a

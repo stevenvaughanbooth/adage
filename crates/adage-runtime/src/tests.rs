@@ -518,6 +518,34 @@ fn a_card_is_said_once_at_a_close_prompt_or_at_the_first_edit_of_its_files_when_
     }
 }
 
+/// Review S7: a grey-zone card waits only for the prompt that came close to it. Prompt 1 is close
+/// and edits nothing of the card; prompt 2 is an unrelated task that edits a card file: no card.
+#[test]
+fn a_waiting_card_expires_at_the_next_prompt() {
+    let said = |d: &Decision| d.directives.iter().any(|x| x.route == "card-1");
+    let (dir, index, table) = card_fixture(0.99);
+    let ctx = Ctx {
+        index: &index,
+        repo: "acme".into(),
+        root: dir.path(),
+        table: &table,
+        embed: Some(&fake_embed),
+        params: Default::default(),
+    };
+    let mut st = SessionState::default();
+    decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() });
+    assert!(st.card_waiting.is_some(), "grey zone: waits");
+    decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "src/main.go")] });
+    let d = decide(&ctx, &mut st, &Event::Prompt { text: "write the docs".into() });
+    assert!(!said(&d) && st.card_waiting.is_none(), "an unrelated prompt ends the wait");
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "flag_port.go")] });
+    assert!(!said(&d), "a later task's edit of a card file does not bring the card");
+    // A close prompt again: it waits again, and its edit brings the card.
+    decide(&ctx, &mut st, &Event::Prompt { text: "add a test flag".into() });
+    let d = decide(&ctx, &mut st, &Event::Batch { calls: vec![edit_call(&dir, "flag_port.go")] });
+    assert!(said(&d));
+}
+
 #[test]
 fn intent_routes_fail_open_without_a_model() {
     let (dir, index, table) = intent_fixture(MODEL, 0.8);

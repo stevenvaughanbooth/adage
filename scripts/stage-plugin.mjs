@@ -99,6 +99,8 @@ try {
   for (const plugin of PLUGINS) {
     const dest = path.join(out, plugin.dir)
     cpSync(path.join(repo, plugin.dir), dest, { recursive: true, filter: (s) => !s.split(path.sep).includes("dist") })
+    // The binaries embed third-party data (the MIT embedding model): its notices travel with them.
+    for (const f of ["LICENSE", "NOTICE"]) copyFileSync(path.join(repo, f), path.join(dest, f))
     const sums = []
     for (const p of PLATFORMS) {
       for (const b of plugin.bins) {

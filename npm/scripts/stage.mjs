@@ -27,6 +27,8 @@ import { COMPANIONS, PACKAGE_NAME, PLATFORMS } from "../config.mjs"
 const here = path.dirname(fileURLToPath(import.meta.url))
 const npmDir = path.resolve(here, "..")
 const repoDir = path.resolve(npmDir, "..")
+// Copied into every package: npm adds LICENSE on its own, never NOTICE (third-party notices).
+const LEGAL = ["LICENSE", "NOTICE"]
 
 function args(argv) {
   const out = { "allow-missing": false }
@@ -134,6 +136,8 @@ try {
       path.join(dir, "README.md"),
       `# ${manifest.name}\n\nThe \`adage\` binary for ${p.os}-${p.cpu} (\`${p.target}\`). Install [\`${name}\`](https://www.npmjs.com/package/${name}) instead; it depends on this package on ${p.os}-${p.cpu} only.\n`,
     )
+    // The binary embeds third-party data (the MIT embedding model): its notices travel with it.
+    for (const f of LEGAL) copyFileSync(path.join(repoDir, f), path.join(dir, f))
     const dest = path.join(dir, "bin", p.exe)
     copyFileSync(bin, dest)
     chmodSync(dest, 0o755)
@@ -161,6 +165,7 @@ try {
   copyFileSync(path.join(npmDir, "cli/bin/adage.js"), path.join(mainDir, "bin/adage.js"))
   chmodSync(path.join(mainDir, "bin/adage.js"), 0o755)
   copyFileSync(path.join(npmDir, "cli/README.md"), path.join(mainDir, "README.md"))
+  for (const f of LEGAL) copyFileSync(path.join(repoDir, f), path.join(mainDir, f))
 
   const order = [...staged.map((s) => s.dir), mainDir]
   writeFileSync(path.join(out, "publish-order.txt"), order.map((d) => path.relative(out, d)).join("\n") + "\n")

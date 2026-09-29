@@ -58,6 +58,12 @@ try {
       [`${host.os}-${host.cpu}`, "cli"],
     )
 
+    // Third-party notices travel with the binary (review S13).
+    for (const d of ["cli", `${host.os}-${host.cpu}`]) {
+      for (const f of ["LICENSE", "NOTICE"]) assert.ok(existsSync(path.join(out, d, f)), `${d}/${f} staged`)
+    }
+    assert.ok(plat.files.includes("NOTICE") && main.files.includes("NOTICE"), "NOTICE is published")
+
     // Companions sit beside adage in the platform package.
     for (const e of companions) assert.ok(existsSync(path.join(out, `${host.os}-${host.cpu}`, "bin", e)), `${e} staged`)
 

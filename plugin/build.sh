@@ -17,3 +17,5 @@ mkdir -p "plugin/claude-code-exec/dist/$T"
 cp target/release/adage-exec "plugin/claude-code-exec/dist/$T/adage-exec"
 (cd plugin/claude-code-exec/dist && find . -name adage-exec -type f | sed 's|^\./||' | xargs $SUM > SHA256SUMS)
 echo "staged plugin/claude-code-exec/dist/$T/adage-exec"
+# The binaries embed third-party data (the MIT embedding model): its notices travel with them.
+for d in plugin/claude-code/dist plugin/claude-code-exec/dist; do cp LICENSE NOTICE "$d/"; done

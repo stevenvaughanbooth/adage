@@ -6,7 +6,7 @@
   "repository": { "type": "git", "url": "git+https://github.com/stevenvaughanbooth/adage.git" },
   "homepage": "https://github.com/stevenvaughanbooth/adage#readme",
   "bin": { "adage": "bin/adage.js" },
-  "files": ["bin/adage.js"],
+  "files": ["bin/adage.js", "LICENSE", "NOTICE"],
   "engines": { "node": ">=18" },
   "optionalDependencies": {}
 }

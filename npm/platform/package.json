@@ -7,6 +7,6 @@
   "homepage": "https://github.com/stevenvaughanbooth/adage#readme",
   "os": ["__OS__"],
   "cpu": ["__CPU__"],
-  "files": ["bin/"],
+  "files": ["bin/", "LICENSE", "NOTICE"],
   "preferUnplugged": true
 }
