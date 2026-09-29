@@ -165,6 +165,11 @@ def install(gv: dict) -> None:
         def phase(self, name, sessions):
             if name != "train":
                 return _phase(self, name, sessions)
+            # The confinement mounts ADAGE_HOME back only when it exists (runner.confine_argv); on
+            # the first training session nothing has created it yet, so the hooks and the learner
+            # wrote to the tmpfs over /tmp and everything they learned vanished with the sandbox.
+            # Found by the first live training run (2026-09-29), voided and re-run.
+            self.home.mkdir(parents=True, exist_ok=True)
             saved = self.cfg["concurrency"]
             self.cfg["concurrency"] = 1
             try:

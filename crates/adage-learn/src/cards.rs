@@ -9,13 +9,16 @@
 //!   the pinned static model's embeddings, the one the hook embeds with, at least
 //!   [`CardParams::family_similarity`]) *and* the shapes of the files they edited overlap
 //!   (Jaccard at least [`CardParams::file_overlap`]; a shape is directory, name token count, first
-//!   token and extension, so `flag_url.go` and `flag_port.go` agree). Families are the connected
+//!   token and extension, so `flag_url.go` and `flag_port.go` agree; a file a trace created also
+//!   counts by its role, so `middleware/no_sniff.go` and `middleware/hsts.go` agree). Families are the connected
 //!   components, in canonical order: every later trace that matched joins its family, and its
 //!   prompt joins the family's prompt library.
 //! - **Cards**: every file edited in at least half of the family's traces (all of them with one
 //!   trace), in the median order of first edit; files edited in one trace each, grouped by shape
-//!   and anti-unified (`flag_<x>.go`, `flag_<x>_test.go`); a file a command wrote by redirection
-//!   counts as edited. For each, the longest text the most recent passing trace added to it (or
+//!   and anti-unified (`flag_<x>.go`, `flag_<x>_test.go`), or, when each task created and named
+//!   them whole (`middleware/no_sniff.go`, `middleware/hsts.go`), grouped by role: directory, test
+//!   convention and extension (`middleware/<x>.go`, `middleware/<x>_test.go`); a file a command
+//!   wrote by redirection counts as edited. For each, the longest text the most recent passing trace added to it (or
 //!   to a file of the pattern's shape). The commands run in at least half of the traces
 //!   (normalised to their head), kept when they mostly worked and listed to avoid when they mostly
 //!   failed, with the first line of the error; and the check the passing traces finished with,
@@ -106,6 +109,8 @@ struct EditView {
     k: usize,
     path: String,
     text: String,
+    /// Written whole (`Write`): a file the task created, which recurring work names after the task.
+    created: bool,
 }
 
 struct CmdView {
@@ -261,9 +266,39 @@ fn anti_unify(paths: &[&str]) -> String {
     }
 }
 
-/// A path is one a card file stands for: itself, or of a pattern's shape with its fixed tokens.
+/// A created file's role when its whole name is the task's (`middleware/no_sniff.go`,
+/// `middleware/hsts.go` → `middleware/<x>.go`): its directory, whether it is a test sibling and of
+/// which convention (`<x>_test`, `test_<x>`, `<x>.test`, `<x>.spec`), and its extension. Coarser
+/// than [`shape`], so only files a task wrote whole are grouped this way.
+fn role(path: &str) -> String {
+    let (dir, name) = path.rsplit_once('/').unwrap_or(("", path));
+    let (stem, ext) = match name.rsplit_once('.') {
+        Some((s, e)) if !s.is_empty() => (s, format!(".{e}")),
+        _ => (name, String::new()),
+    };
+    let template = if stem.ends_with("_test") {
+        format!("{VARYING}_test")
+    } else if stem.starts_with("test_") {
+        format!("test_{VARYING}")
+    } else if let Some(k) = [".test", ".spec"].into_iter().find(|k| stem.ends_with(k)) {
+        format!("{VARYING}{k}")
+    } else {
+        VARYING.to_string()
+    };
+    if dir.is_empty() {
+        format!("{template}{ext}")
+    } else {
+        format!("{dir}/{template}{ext}")
+    }
+}
+
+/// A path is one a card file stands for: itself, a pattern's shape with its fixed tokens, or a
+/// role pattern's directory, test convention and extension.
 fn stands_for(file: &str, path: &str) -> bool {
     if file == path {
+        return true;
+    }
+    if file.contains(VARYING) && role(path) == file {
         return true;
     }
     if !file.contains(VARYING) || shape(file).0 != shape(path).0 {
@@ -314,7 +349,7 @@ fn view<'a>(s: &'a Session, ignore: &Ignore) -> View<'a> {
             } else {
                 hunk(&if c.tool == "Write" { s_(i, "content") } else { s_(i, "new_string") })
             };
-            edits.push(EditView { k, path, text });
+            edits.push(EditView { k, path, text, created: c.tool == "Write" });
         } else if c.tool == "Bash" {
             let Some(cmd) = c.input.get("command").and_then(|x| x.as_str()) else { continue };
             let cmd = if root.is_empty() {
@@ -336,7 +371,7 @@ fn view<'a>(s: &'a Session, ignore: &Ignore) -> View<'a> {
             if !c.failed {
                 let first = cmd.trim().lines().next().unwrap_or("");
                 for path in redirect_targets(first) {
-                    edits.push(EditView { k, path, text: first.to_string() });
+                    edits.push(EditView { k, path, text: first.to_string(), created: false });
                 }
             }
         }
@@ -345,10 +380,20 @@ fn view<'a>(s: &'a Session, ignore: &Ignore) -> View<'a> {
     View { s, edits, cmds, passed }
 }
 
-/// The shapes of the files a trace edited: traces of one family overlap here even when each names
-/// its new files after its own task (`flag_url.go`, `flag_port.go`).
-fn files_of(v: &View) -> BTreeSet<(String, usize, String, String)> {
-    v.edits.iter().map(|e| shape(&e.path)).collect()
+/// The shapes of the files a trace edited, and the roles of those it created: traces of one family
+/// overlap here even when each names its new files after its own task, in part (`flag_url.go`,
+/// `flag_port.go`: one shape) or whole (`no_sniff.go`, `hsts.go`: one role).
+fn files_of(v: &View) -> BTreeSet<String> {
+    let mut out: BTreeSet<String> = v
+        .edits
+        .iter()
+        .map(|e| {
+            let (d, n, f, x) = shape(&e.path);
+            format!("shape:{d}\u{1f}{n}\u{1f}{f}\u{1f}{x}")
+        })
+        .collect();
+    out.extend(v.edits.iter().filter(|e| e.created).map(|e| format!("role:{}", role(&e.path))));
+    out
 }
 
 fn jaccard<T: Ord>(a: &BTreeSet<T>, b: &BTreeSet<T>) -> f64 {
@@ -479,12 +524,32 @@ fn learn(views: &[&View], verdicts: Option<&BTreeMap<String, bool>>) -> Option<C
                 groups.entry(shape(p)).or_default().push(p);
             }
         }
+        let mut grouped: BTreeSet<&str> = BTreeSet::new();
         for ps in groups.values() {
             let sessions: BTreeSet<usize> = ps.iter().flat_map(|p| per_file[*p].iter().copied()).collect();
             let pat = anti_unify(ps);
             if sessions.len() >= need && pat.contains(VARYING) {
                 let mut pos: Vec<f64> = ps.iter().filter_map(|p| first_pos[*p].first().copied()).collect();
                 files.push((pat, sessions.len(), median(&mut pos)));
+                grouped.extend(ps.iter().copied());
+            }
+        }
+        // Files each task created and named whole after itself (`middleware/no_sniff.go`,
+        // `middleware/hsts.go`) share no name shape: grouped by role instead (`middleware/<x>.go`),
+        // and only files written whole, so edits to a package's existing files never merge.
+        let created: BTreeSet<&str> =
+            views.iter().flat_map(|v| v.edits.iter().filter(|e| e.created).map(|e| e.path.as_str())).collect();
+        let mut roles: BTreeMap<String, Vec<&str>> = BTreeMap::new();
+        for (p, s) in &per_file {
+            if s.len() == 1 && created.contains(p.as_str()) && !grouped.contains(p.as_str()) {
+                roles.entry(role(p)).or_default().push(p);
+            }
+        }
+        for (pat, ps) in &roles {
+            let sessions: BTreeSet<usize> = ps.iter().flat_map(|p| per_file[*p].iter().copied()).collect();
+            if ps.len() >= 2 && sessions.len() >= need {
+                let mut pos: Vec<f64> = ps.iter().filter_map(|p| first_pos[*p].first().copied()).collect();
+                files.push((pat.clone(), sessions.len(), median(&mut pos)));
             }
         }
     }
@@ -835,6 +900,22 @@ mod tests {
         assert_ne!(shape("flag_url.go"), shape("flag_url_test.go"), "a test sibling is its own role");
         assert!(stands_for("flag_<x>.go", "flag_ip.go") && !stands_for("flag_<x>.go", "flag_ip_test.go"));
         assert!(stands_for("a/b.py", "a/b.py") && !stands_for("a/b.py", "a/c.py"));
+    }
+
+    /// Files each task names whole after itself (chi's `middleware/no_sniff.go`, `hsts.go`) share
+    /// no shape; their role (directory, test convention, extension) is what recurs.
+    #[test]
+    fn a_created_file_named_after_its_task_has_a_role() {
+        assert_ne!(shape("middleware/no_sniff.go"), shape("middleware/hsts.go"));
+        assert_eq!(role("middleware/no_sniff.go"), "middleware/<x>.go");
+        assert_eq!(role("middleware/hsts.go"), "middleware/<x>.go");
+        assert_eq!(role("middleware/hsts_test.go"), "middleware/<x>_test.go");
+        assert_eq!(role("tests/test_port.py"), "tests/test_<x>.py");
+        assert_eq!(role("src/utils.test.ts"), "src/<x>.test.ts");
+        assert_eq!(role("Makefile"), "<x>");
+        assert!(stands_for("middleware/<x>.go", "middleware/real_ip.go"));
+        assert!(!stands_for("middleware/<x>.go", "middleware/real_ip_test.go"));
+        assert!(!stands_for("middleware/<x>.go", "other/real_ip.go"));
     }
 
     #[test]

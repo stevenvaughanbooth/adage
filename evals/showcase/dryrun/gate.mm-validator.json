@@ -1,0 +1,207 @@
+{
+ "family": "mm-validator",
+ "home": "/tmp/sc-dry-mm-validator-n1dd9hrr/adage-home",
+ "adage": "/tmp/adage-go-target/release/adage",
+ "cards": [
+  {
+   "id": "card-11e594f481",
+   "bytes": 9033
+  }
+ ],
+ "held_out": [
+  {
+   "task": "mm-validator--ends-with",
+   "session": "b354761b-b9be-4415-b836-ecc12d75cbef",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "mm-validator--ip-address",
+   "session": "ddae6564-b225-405e-8b8e-1fcfd84443a8",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "mm-validator--not-blank",
+   "session": "d972d597-ab0a-48c6-8a57-60b3a301c1f8",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "mm-validator--ascii",
+   "session": "e4b949eb-c15c-4c82-ae4c-0ecf6d47cc71",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "mm-validator--contains",
+   "session": "26f21128-1897-46a0-9ecd-4dd0b708fbcc",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "mm-validator--lowercase",
+   "session": "2e06b56a-2553-4efc-a2c9-06f9bf8fc34e",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "mm-validator--alphanumeric",
+   "session": "a936d796-630d-4176-bce0-ba5cccdc82fd",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "task": "mm-validator--max-words",
+   "session": "a39a172d-58ce-43a4-a32a-14515caac021",
+   "at_prompt": true,
+   "at_edit": null,
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  }
+ ],
+ "negatives": [
+  {
+   "id": "marshmallow-39e7c833",
+   "source": "repobench",
+   "session": "c26dc503-ce10-4972-810d-e23c9a565237",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "marshmallow-65374df0",
+   "source": "repobench",
+   "session": "cbce7519-f7a1-4f37-a33b-4c31ee8aa9fe",
+   "at_prompt": false,
+   "at_edit": "src/marshmallow/validate.py",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "id": "marshmallow-f07eadc8",
+   "source": "repobench",
+   "session": "2f353f13-3c67-4290-aacd-e4b3afc2f555",
+   "at_prompt": false,
+   "at_edit": "src/marshmallow/validate.py",
+   "card_routes_in_spool": [
+    "card-11e594f481"
+   ],
+   "delivered": true,
+   "other_directives": []
+  },
+  {
+   "id": "neg-mm-email-plus",
+   "source": "handwritten",
+   "session": "ae2e09f1-8124-4ef7-b3db-9c642f792926",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-mm-range-bounds",
+   "source": "handwritten",
+   "session": "f78b3381-26af-427e-9bf6-3fad853aac7d",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  },
+  {
+   "id": "neg-mm-hex-field",
+   "source": "handwritten",
+   "session": "d7b86eee-6b9b-45ea-8da8-dfe6e3f4f4b0",
+   "at_prompt": false,
+   "at_edit": null,
+   "card_routes_in_spool": [],
+   "delivered": false,
+   "other_directives": []
+  }
+ ],
+ "hook_events": [
+  "PostToolBatch",
+  "PostToolUseFailure",
+  "PreToolUse",
+  "SessionEnd",
+  "SessionStart",
+  "Stop",
+  "UserPromptSubmit"
+ ],
+ "summary": {
+  "cards": 1,
+  "card_formed": true,
+  "held_out_delivered": [
+   8,
+   8
+  ],
+  "held_out_at_prompt": 8,
+  "held_out_at_edit": 0,
+  "delivered_tasks": [
+   "mm-validator--ends-with",
+   "mm-validator--ip-address",
+   "mm-validator--not-blank",
+   "mm-validator--ascii",
+   "mm-validator--contains",
+   "mm-validator--lowercase",
+   "mm-validator--alphanumeric",
+   "mm-validator--max-words"
+  ],
+  "false_fires": [
+   2,
+   6
+  ],
+  "false_fire_ids": [
+   "marshmallow-65374df0",
+   "marshmallow-f07eadc8"
+  ],
+  "false_fires_at_prompt": 0,
+  "false_fires_at_edit_only": 2,
+  "false_fire_rate_wilson90_upper": 0.653
+ }
+}
