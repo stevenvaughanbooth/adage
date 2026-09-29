@@ -111,8 +111,13 @@ function fallback() {
     $("stagewrap").appendChild(d);
   }
 }
+// three.js needs WebGL 2. The probe's context is released at once.
 function webgl() {
-  try { const c = document.createElement("canvas"); return !!(c.getContext("webgl2") || c.getContext("webgl")); } catch { return false; }
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    return !!gl;
+  } catch { return false; }
 }
 
 syncPause();

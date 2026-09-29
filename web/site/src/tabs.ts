@@ -21,7 +21,7 @@ export const TABS: Tab[] = [
   { id: "agent", name: "At the hooks", dot: "var(--memory-soft)",
     title: "Where Adage fits",
     body: "Your agent keeps its model, context and tools. Adage runs at the harness's hooks, outside the model: when an event matches a reflex, the directive arrives as text at that moment. Reflexes you approve for delegation can run the step themselves. If Adage fails, the agent carries on as if it were not there.",
-    facts: ["Claude Code · Codex · OpenCode", "runs outside the model", "fails open"] },
+    facts: ["Claude Code · Codex and OpenCode in preview", "runs outside the model", "fails open"] },
 ];
 
 export const SCENE_OF: Record<string, string> = { overview: "overview", context: "memory", instincts: "instincts", reflexes: "reflexes", agent: "agent" };

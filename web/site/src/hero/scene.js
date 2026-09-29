@@ -40,7 +40,8 @@ export function build(opts) {
   const { canvas, onLost } = opts;
   let reduced = !!opts.reduced;
   const small = matchMedia("(max-width: 860px)").matches || (navigator.hardwareConcurrency || 8) <= 4;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+  // Bloom renders through its own multisampled target; without it (phones, the day theme) the canvas antialiases.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   // The palette is authored as display colours, drawn as-is (three's pre-r152 behaviour).
   renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
   renderer.setPixelRatio(Math.min(1.5, devicePixelRatio || 1));
@@ -60,7 +61,9 @@ export function build(opts) {
   // Bloom is optional: if it cannot be set up, the scene still draws without it.
   function makeComposer() {
     try {
-      const rt = new THREE.WebGLRenderTarget(512, 512, { type: THREE.HalfFloatType, samples: 4 });
+      // Half-float keeps r128's look only where the GPU can render to it; otherwise 8-bit, as r128 did.
+      const float = renderer.extensions.has("EXT_color_buffer_float") || renderer.extensions.has("EXT_color_buffer_half_float");
+      const rt = new THREE.WebGLRenderTarget(512, 512, { type: float ? THREE.HalfFloatType : THREE.UnsignedByteType, samples: 4 });
       const c = new EffectComposer(renderer, rt);
       c.addPass(new RenderPass(sc, cam));
       c.addPass(new UnrealBloomPass(new THREE.Vector2(512, 512), 0.75, 0.5, 0.5));
@@ -361,7 +364,7 @@ export function build(opts) {
   label("context · recalled by inference", V(0, 1.6, 0.3), ["overview"], "", 0, -10);
   label("instincts · built in", cordAt(LEVELS[1]).add(V(0.45, 0.1, 0)), ["overview"], "", 70, -8, false);
   label("reflexes · learned", cordAt(LEVELS[4]).add(V(0.45, 0.1, 0)), ["overview"], "", 70, -8, false);
-  label("the long way: up to memory and back", CENTER, ["reflexes"], "in", 0, -36);
+  label("the long way: up to memory and back", CENTER, ["reflexes"], "chip in", 0, -36);
   STATIONS.forEach(([t, s, f]) => label(`<small>${s}</small>${t}`, ringCurve.getPoint(f), ["agent"], "chip"));
 
   /* --- pulses: light travels --- */

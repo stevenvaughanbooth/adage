@@ -151,6 +151,9 @@ h1:focus { outline: none; }
 /* ---- the teaser film: it opens the page and dissolves into the hero ---- */
 .film { position: fixed; inset: 0; z-index: 50; background: var(--film); display: grid; place-items: center; opacity: 1; transition: opacity 1000ms var(--ease); }
 .film.out { opacity: 0; pointer-events: none; }
+/* If the scripts never run (blocked, failed, too old), the overlay gets out of the way by itself. */
+.film:not(.live) { animation: film-failsafe 0s 8s forwards; }
+@keyframes film-failsafe { to { visibility: hidden; pointer-events: none; } }
 .film[hidden] { display: none; }
 .film video { width: 100%; height: 100%; object-fit: contain; background: var(--film); }
 .film-open body { overflow: hidden; }
@@ -305,3 +308,15 @@ code { font: 0.92em var(--mono); background: var(--raised); border: 1px solid va
 .nf-main .btn { display: inline-block; }
 .split > *, .runs > *, .steps > * { min-width: 0; }
 @media (max-width: 560px) { .band .term pre code { font-size: 12.5px; } }
+
+/* Phones: the reflex table becomes one card per kind; the terminal wraps instead of hiding its ends. */
+@media (max-width: 560px) {
+  .kinds { overflow: visible; }
+  .kinds table { min-width: 0; }
+  .kinds thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .kinds tr { display: grid; gap: 6px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  .kinds tbody tr:last-child { border-bottom: 0; }
+  .kinds th, .kinds td { display: block; padding: 0; border: 0; }
+  .kinds td:last-child { display: flex; flex-wrap: wrap; }
+  .band .term pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+}

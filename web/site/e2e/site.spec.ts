@@ -59,7 +59,11 @@ test("the film follows the theme, and the choice is remembered", async ({ page }
   await skipFilm(page);
   await page.getByRole("button", { name: "Switch to the day theme" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  // Closed, the film fetches nothing; reopened, it plays the day cut.
+  await expect(page.locator("#film-video")).toHaveAttribute("data-src", /teaser-dark\.mp4$/);
+  await page.getByRole("link", { name: "Watch the teaser" }).click();
   await expect(page.locator("#film-video")).toHaveAttribute("data-src", /teaser-day\.mp4$/);
+  await page.keyboard.press("Escape");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
@@ -120,4 +124,13 @@ test("a phone never scrolls sideways", async ({ page }) => {
   await page.evaluate(() => document.querySelectorAll(".reveal").forEach((n) => n.classList.add("in")));
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBe(0);
+});
+
+test("Escape still closes the film after Play is pressed", async ({ page }) => {
+  await films(page, "hang");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Play the teaser/ }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#film")).toBeHidden();
 });

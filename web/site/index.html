@@ -7,13 +7,13 @@
 <meta name="theme-color" content="#050507" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ececef" media="(prefers-color-scheme: light)">
 <title>Adage · Agent traces become reflexes</title>
-<meta name="description" content="Adage gives coding agents instincts on day one and learns reflexes from their own traces, so the right step arrives at the right moment. For Claude Code, Codex and OpenCode.">
+<meta name="description" content="Adage gives coding agents instincts on day one and learns reflexes from their own traces, so the right step arrives at the right moment. For Claude Code, with Codex and OpenCode in preview.">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="canonical" href="__SITE_URL__/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Adage">
 <meta property="og:title" content="Adage · Agent traces become reflexes">
-<meta property="og:description" content="Instincts on day one. Reflexes learned from your agents' own traces. For Claude Code, Codex and OpenCode.">
+<meta property="og:description" content="Instincts on day one. Reflexes learned from your agents' own traces. For Claude Code, with Codex and OpenCode in preview.">
 <meta property="og:url" content="__SITE_URL__/">
 <meta property="og:image" content="__SITE_URL__/og.jpg">
 <meta property="og:image:width" content="1200">
@@ -26,7 +26,7 @@
 <a class="skiplink" href="#main">Skip to content</a>
 
 <div class="film" id="film" tabindex="-1" role="dialog" aria-modal="true" aria-label="Adage teaser film" aria-describedby="film-desc">
-  <video id="film-video" playsinline muted preload="auto" tabindex="-1"></video>
+  <video id="film-video" playsinline muted preload="none" tabindex="-1"></video>
   <p class="sr" id="film-desc">A short film, about one and a half minutes. Every step an agent takes is a thought; reflexes skip the model's work. It ends on the line: Agent traces become reflexes. Press Escape or Skip intro to go to the page.</p>
   <button class="film-close film-ui" id="film-close" type="button" aria-label="Close the teaser"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"/></svg></button>
   <button class="film-play" id="film-play" type="button" hidden>&#9654;&#xFE0E; Play the teaser &middot; 1:28</button>
@@ -56,7 +56,7 @@
   </div>
 
   <div class="copy">
-    <span class="eyebrow">For Claude Code, Codex and OpenCode</span>
+    <span class="eyebrow">For Claude Code · Codex and OpenCode in preview</span>
     <h1 id="h" tabindex="-1">Agent traces become <em>reflexes.</em></h1>
     <p class="sub">You don't decide to swallow when you drink. Your agent shouldn't have to remember to run <b>make gen</b> after every schema edit. Adage gives it <b>instincts</b> on day one, learns <b>reflexes</b> from its own traces, and delivers the right step at the right moment.</p>
     <div class="cta">
@@ -91,7 +91,7 @@
       <li class="step reveal">
         <span class="num">01</span>
         <h3>Read the traces</h3>
-        <p>Claude Code, Codex and OpenCode leave a transcript of every session. Adage reads them where they already are, on your machine. There is nothing to instrument.</p>
+        <p>Claude Code leaves a transcript of every session, and Adage reads it where it already is, on your machine. There is nothing to instrument. Codex and OpenCode adapters are in preview.</p>
       </li>
       <li class="step reveal">
         <span class="num">02</span>
@@ -114,7 +114,7 @@
         <li><b>hooks</b><span>Claude Code, Codex, OpenCode</span></li>
         <li><b>directives</b><span>text, at the moment</span></li>
       </ol>
-      <figcaption id="pipe-cap">From transcript to directive. Everything left of the hooks runs on your machine, outside the model.</figcaption>
+      <figcaption id="pipe-cap">From transcript to directive. Everything left of the hooks runs on your machine; nothing reaches the context window until a reflex matches.</figcaption>
     </figure>
 
     <h3 class="subhead reveal">Five kinds of reflex, learned today</h3>
@@ -137,35 +137,35 @@
   <div class="wrap">
     <p class="kicker reveal">Evidence</p>
     <h2 class="display reveal" id="ev-h">Measured against a control, <span class="soft">not a vibe.</span></h2>
-    <p class="lede reveal">Real agents, headless, each in a fresh copy of a repository whose conventions they cannot guess. Held-out work, with and without Adage, scored by hidden tests.</p>
+    <p class="lede reveal">Real agents, headless, each in a fresh copy of a repository whose conventions they cannot guess. The same work, with and without Adage, scored by hidden tests.</p>
 
     <div class="runs">
       <article class="trial reveal" aria-labelledby="run1">
         <header>
           <h3 id="run1">Claude Haiku 4.5</h3>
-          <p>Python sandbox repository · round 2, held out · 18 sessions with Adage, 18 without</p>
+          <p>Python sandbox repository · round 2 · 18 sessions with Adage, 18 without</p>
         </header>
         <dl class="stats">
-          <div><dt>Turns before the first edit (median)</dt><dd><span class="was">20</span><span class="arrow" aria-hidden="true">→</span><span class="now">2</span></dd></div>
-          <div><dt>Cost per run (mean)</dt><dd><span class="was">$0.135</span><span class="arrow" aria-hidden="true">→</span><span class="now">$0.053</span></dd></div>
-          <div><dt>Hidden checks passed</dt><dd><span class="was">78%</span><span class="arrow" aria-hidden="true">→</span><span class="now">100%</span><small>not significant at n = 18</small></dd></div>
+          <div><dt>Turns before the first edit (median)</dt><dd><span class="sr">without Adage </span><span class="was">20</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">2</span></dd></div>
+          <div><dt>Cost per run (mean)</dt><dd><span class="sr">without Adage </span><span class="was">$0.135</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">$0.053</span></dd></div>
+          <div><dt>Hidden checks passed</dt><dd><span class="sr">without Adage </span><span class="was">78%</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">100%</span><small>not significant at n = 18</small></dd></div>
         </dl>
-        <p class="note">The loop at work: in round 1, agents that stopped exploring hit a dead end (<code>pytest</code>). Round 2 learned it as an inhibit reflex, and it disappeared.</p>
+        <p class="note">The loop at work: in round 1, agents that no longer explored hit a dead end Adage had exposed (<code>pytest</code> first). Round 2 learned it as an inhibit reflex, and it disappeared.</p>
       </article>
       <article class="trial reveal" aria-labelledby="run2">
         <header>
           <h3 id="run2">Claude Sonnet 5</h3>
-          <p>TypeScript service on Node · round 2, held out · 36 sessions with Adage, 36 without</p>
+          <p>TypeScript service on Node · round 2 · 18 sessions with Adage, 18 without</p>
         </header>
         <dl class="stats">
-          <div><dt>Turns before the first edit (median)</dt><dd><span class="was">6</span><span class="arrow" aria-hidden="true">→</span><span class="now">3</span></dd></div>
-          <div><dt>Cost per run (mean)</dt><dd><span class="was">$0.086</span><span class="arrow" aria-hidden="true">→</span><span class="now">$0.065</span></dd></div>
-          <div><dt>Hidden checks passed</dt><dd><span class="was">100%</span><span class="arrow" aria-hidden="true">→</span><span class="now">100%</span></dd></div>
+          <div><dt>Turns before the first edit (median)</dt><dd><span class="sr">without Adage </span><span class="was">6</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">3</span><small>over the sessions that made an edit</small></dd></div>
+          <div><dt>Cost per run (mean)</dt><dd><span class="sr">without Adage </span><span class="was">$0.086</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">$0.065</span></dd></div>
+          <div><dt>Hidden checks passed</dt><dd><span class="sr">without Adage </span><span class="was">100%</span><span class="arrow" aria-hidden="true">→</span><span class="sr">, with Adage </span><span class="now">100%</span></dd></div>
         </dl>
         <p class="note">A stronger model found every convention on its own. Adage's effect moved from avoiding failures to skipping exploration: half the turns before the first edit, 24% lower cost, quality unchanged.</p>
       </article>
     </div>
-    <p class="caveat reveal">Early runs, published with their caveats: they predate a stricter protocol (repeated work items, fixed arm order, shared auto-memory), so treat the numbers as indicative until they are repeated. Every install keeps about one session in ten as a control, so you see your own numbers, not ours.</p>
+    <p class="caveat reveal">Early runs, published with their caveats: round 2 reused round 1's work items, arm order was fixed, and both arms shared the operator's auto-memory, so treat the numbers as indicative until they are repeated under the stricter protocol. Every install keeps about one session in ten as a control, so the effect can be measured on your own work.</p>
   </div>
 </section>
 
@@ -174,7 +174,7 @@
     <p class="kicker reveal">Built to stay out of the way</p>
     <h2 class="display reveal" id="trust-h">It speaks up only when it matches. <span class="soft">Otherwise it isn't there.</span></h2>
     <ul class="grid">
-      <li class="card reveal"><h3>Never executes</h3><p>The <code>adage</code> binary never runs a command. Your agent runs every step through its own tools, under its harness's permissions. Delegating a step is opt-in, per reflex, inside an OS sandbox.</p></li>
+      <li class="card reveal"><h3>Never executes</h3><p>The <code>adage</code> binary never runs your repository's commands. Your agent runs every step through its own tools, under its harness's permissions. Delegating a step is opt-in, per reflex, inside an OS sandbox.</p></li>
       <li class="card reveal"><h3>Fails open</h3><p>If Adage errors or runs out of time at a hook, the agent carries on as if it were not installed.</p></li>
       <li class="card reveal"><h3>Evidence attached</h3><p>Every reflex carries its distinct sessions and a Wilson lower bound. Review any of them, then strengthen, weaken or extinguish it.</p></li>
       <li class="card reveal"><h3>Yours, on disk</h3><p>Traces stay on your machine. Reflexes live in tracks on disk and travel as signed packs you can review, commit and share.</p></li>
@@ -208,7 +208,7 @@
     <form class="signup reveal" id="signup" action="/api/waitlist" method="post" novalidate>
       <label class="sr" for="email">Email address</label>
       <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@company.com" aria-describedby="signup-status">
-      <input class="hp" name="company" tabindex="-1" autocomplete="off" aria-hidden="true">
+      <input class="hp" name="hp_x7" tabindex="-1" autocomplete="off" aria-hidden="true">
       <button class="btn primary" type="submit">Join the list</button>
       <p class="status" id="signup-status" role="status" aria-live="polite"></p>
     </form>

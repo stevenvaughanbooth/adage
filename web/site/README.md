@@ -47,6 +47,14 @@ pnpm test:e2e     # builds, serves with `vite preview`, runs Playwright and axe 
 Media URLs must stay on `*.public.blob.vercel-storage.com` (or the site itself); anything else is
 blocked by the Content Security Policy in `vercel.json`.
 
+Before opening sign-ups, add a rate limit on `/api/waitlist` (Firewall → Configure → New rule:
+path equals `/api/waitlist`, rate limit, e.g. 5 requests per minute per IP). The function accepts
+only plain addresses and never lets a Slack or Discord message mention anyone, but it has no limit
+of its own.
+
+The CSP allows scripts from the site only, so Vercel's preview toolbar (from vercel.live) is blocked
+on preview deployments; turn it off in Settings → General → Vercel Toolbar to keep the console quiet.
+
 ## Files
 
 | Path | What |

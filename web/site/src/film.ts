@@ -17,9 +17,11 @@ export function createFilm(o: Opts) {
   const skip = $<HTMLButtonElement>("film-skip"), snd = $<HTMLButtonElement>("film-sound"), prog = $<HTMLElement>("film-prog"), play = $<HTMLButtonElement>("film-play");
   const root = document.documentElement;
   const outside = () => [...document.querySelectorAll<HTMLElement>("body > header, body > main, body > footer, .skiplink")];
-  let open = false, broken = false, back: Element | null = null, doneT = 0, idleT = 0;
+  let open = false, back: Element | null = null, doneT = 0, idleT = 0;
 
+  // The film downloads only while it is open: a theme switch later does not fetch the other cut.
   function source(keep: boolean) {
+    if (!open) return;
     const [src, poster] = SRC[o.isLight() ? "light" : "dark"];
     if (v.dataset.src === src) return;
     const t = v.currentTime, playing = open && !v.paused;
@@ -30,25 +32,28 @@ export function createFilm(o: Opts) {
   function syncSound() { snd.setAttribute("aria-pressed", String(!v.muted)); snd.textContent = v.muted ? "Sound on" : "Sound off"; }
   function run() {
     play.hidden = true;
-    v.play()?.catch(() => { if (open && !broken) play.hidden = false; });
+    v.play()?.catch(() => { if (open) play.hidden = false; });
   }
   function show({ sound = false } = {}) {
-    if (OFF || broken) return;
+    if (OFF) return;
     clearTimeout(doneT);
     back = document.activeElement;
     open = true; o.onOpen();
+    // Motion-sensitive visitors and data savers choose to play it, so only its metadata loads first.
+    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+    const wait = (o.reduced() || saveData) && !sound;
+    v.preload = wait ? "metadata" : "auto";
     source(false);
-    el.hidden = false; void el.offsetWidth; el.classList.remove("out", "awake");
+    el.hidden = false; el.inert = false; el.classList.add("live"); void el.offsetWidth; el.classList.remove("out", "awake");
     root.classList.add("film-open"); outside().forEach((e) => (e.inert = true));
     v.currentTime = 0; v.muted = !sound; syncSound(); prog.style.transform = "scaleX(0)";
-    // Motion-sensitive visitors and data savers choose to play it.
-    const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
-    if ((o.reduced() || saveData) && !sound) play.hidden = false; else run();
+    if (wait) play.hidden = false; else run();
     el.focus({ preventScroll: true });
   }
   function done(instant = false) {
     if (!open) return;
     open = false;
+    el.inert = true; // out of the accessibility tree at once, not after the fade
     el.classList.add("out"); root.classList.remove("film-open"); outside().forEach((e) => (e.inert = false));
     o.onClose();
     // Land on the hero: focus goes back where it was, or to the headline.
@@ -60,16 +65,19 @@ export function createFilm(o: Opts) {
   }
 
   v.addEventListener("ended", () => done());
-  v.addEventListener("error", () => { broken = true; done(true); });
+  // A film that cannot load closes at once; "Watch the teaser" tries again.
+  v.addEventListener("error", () => { if (open) done(true); v.removeAttribute("src"); delete v.dataset.src; });
   v.addEventListener("timeupdate", () => { if (v.duration) prog.style.transform = `scaleX(${v.currentTime / v.duration})`; });
   skip.addEventListener("click", () => done());
   $("film-close").addEventListener("click", () => done());
-  play.addEventListener("click", () => { v.muted = false; syncSound(); run(); });
+  // The Play button hides itself: keep focus in the dialog so Escape still works.
+  play.addEventListener("click", () => { v.muted = false; syncSound(); el.focus({ preventScroll: true }); run(); });
   snd.addEventListener("click", () => { v.muted = !v.muted; syncSound(); if (v.paused) run(); });
   v.addEventListener("click", () => { if (v.paused) run(); else v.pause(); });
-  el.addEventListener("keydown", (e) => {
+  document.addEventListener("keydown", (e) => {
+    if (!open) return;
     if (e.key === "Escape") { e.preventDefault(); done(); }
-    if (e.key === " " && (e.target === v || e.target === el)) { e.preventDefault(); if (v.paused) run(); else v.pause(); }
+    if (e.key === " " && (e.target === v || e.target === el || e.target === document.body)) { e.preventDefault(); if (v.paused) run(); else v.pause(); }
   });
   // The controls: shown while the pointer moves, hidden again after a moment of stillness.
   const wake = () => {
@@ -85,6 +93,9 @@ export function createFilm(o: Opts) {
     done,
     source,
     /** Open the page on the film, unless it is switched off for this build. */
-    start() { if (OFF) { el.hidden = true; return; } show(); },
+    start() {
+      if (OFF) { el.hidden = true; document.getElementById("teaser")?.remove(); return; }
+      show();
+    },
   };
 }
