@@ -53,6 +53,9 @@ pub struct EngineReport {
     pub intent_families: usize,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub dropped: Vec<Dropped>,
+    /// Every safe candidate the value model weighed ([`crate::value`]), delivered or not.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub valued: Vec<crate::value::Valued>,
 }
 
 /// One judged route, and why it exists.
@@ -901,6 +904,60 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
         }
         checked.is_none()
     });
+    // Directive value (outcome-optimisation §2, `crate::value`): after a test runner fails for
+    // the environment, the safe candidate that gets agents to a test run that ran tests soonest,
+    // admitted when verified or when its value is positive at the one-sided 90% bound. It
+    // replaces a mined route on the same trigger (a count is no evidence of value).
+    let repo = ss.first().map(|s| s.repo.clone()).unwrap_or_default();
+    let root = cfg
+        .instincts
+        .as_ref()
+        .and_then(|c| c.roots.get(&repo))
+        .or_else(|| cfg.roots.get(&repo))
+        .cloned()
+        .or_else(|| crate::instincts::root_of(ss.iter().map(|s| s.root.as_path())));
+    let statics = crate::value::Statics::of(root.as_deref());
+    let valued = crate::value::value_failures(ss, &statics, &cfg.priors);
+    let valued_routes = crate::value::failure_routes(&valued, ss, &cfg.provenance);
+    // A learned step that runs a runner the value model shows failing here for the environment is
+    // spelled with the environment that works (`python -m pytest tests/test_{part}` becomes
+    // `.venv/bin/python -m pytest tests/test_{part}`): the same command family (its evidence is
+    // counted on the family), run where it runs.
+    let respell: Vec<(String, String)> = valued
+        .iter()
+        .filter(|v| v.strength.is_some())
+        .filter_map(|v| Some((v.failed.clone()?, v.command.clone())))
+        .collect();
+    for j in routes.iter_mut() {
+        let Step::Run { command } = &j.route.step else { continue };
+        let Some((from, to)) = respell.iter().find(|(f, _)| command == f || command.starts_with(&format!("{f} ")))
+        else {
+            continue;
+        };
+        let new = format!("{to}{}", &command[from.len()..]);
+        if !io::safe_command(&new) {
+            continue;
+        }
+        let shape = adage_tracks::shape(&j.route).to_string();
+        j.route.step = Step::Run { command: new };
+        if !j.route.id.starts_with("dead-end-") && !j.route.id.starts_with("finish-line-") {
+            j.route.id = compile::ids::route_id(&shape, &j.route.trigger, &j.route.step, &j.route.slots);
+        }
+    }
+    for (route, why) in valued_routes {
+        routes.retain(|j| {
+            let same = j.route.id == route.id || j.route.trigger == route.trigger;
+            if same {
+                report.dropped.push(Dropped {
+                    pattern: j.why.pattern.clone(),
+                    reason: format!("{}: {} is valued on the same trigger", j.route.id, route.id),
+                });
+            }
+            !same
+        });
+        routes.push(Judged { route, why });
+    }
+    report.valued = valued;
     // A value-flow reflex MDL did not select on its own (a longer pattern holding it was chosen,
     // or none): its route is the value slot's, with the slot's own evidence.
     if !routes.iter().any(|j| j.route.id == compile::stable::LOOKUP_ID) {

@@ -291,7 +291,14 @@ pub fn prepare(dir: &Path, opts: &Options) -> Result<Prepared> {
             let p = if p.is_relative() && !p.exists() { dir.join(p) } else { p.clone() };
             serde_json::from_slice::<Index>(&std::fs::read(&p).with_context(|| p.display().to_string())?)?
         }
-        (None, InstinctMode::Off) => learn_index(&ds, &split.train, &cfg)?,
+        (None, InstinctMode::Off) => {
+            // The repository's files, when given, are read for the value model's static scan
+            // (`adage_learn::value::Statics`), with no instinct bound.
+            if let Some(d) = &opts.sandbox_dir {
+                cfg.roots.insert(ds.manifest.repo.clone(), d.clone());
+            }
+            learn_index(&ds, &split.train, &cfg)?
+        }
         (None, InstinctMode::With) => {
             cfg.instincts = Some(instinct_config(&ds.manifest.repo, &sandbox_files(dir, &ds, opts)?));
             learn_index(&ds, &split.train, &cfg)?

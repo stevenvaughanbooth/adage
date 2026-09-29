@@ -15,7 +15,9 @@ pub mod import;
 pub mod instincts;
 pub mod ledger;
 pub mod opencode;
+pub mod outcome;
 pub mod scope;
+pub mod value;
 
 use adage_core::CommandTable;
 use adage_intent::model::StaticModel;

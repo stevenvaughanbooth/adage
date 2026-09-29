@@ -3,7 +3,8 @@
 //! reason, or the judgement's), with the routes that survived.
 //!
 //! ```text
-//! cargo run --release -p adage-learn --example ledger -- [--demo] [--repo <key>] <transcript>... > ledger.json
+//! cargo run --release -p adage-learn --example ledger -- [--demo] [--repo <key>] [--root <dir>]
+//!     [--priors <json>] <transcript>... > ledger.json
 //! ```
 //!
 //! Read-only: nothing is written but the JSON on stdout. Thresholds are the `default` preset
@@ -18,11 +19,13 @@ use std::path::PathBuf;
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let demo = args.iter().any(|a| a == "--demo");
-    let repo = args.iter().position(|a| a == "--repo").and_then(|i| args.get(i + 1)).cloned();
+    let value = |f: &str| args.iter().position(|a| a == f).and_then(|i| args.get(i + 1)).cloned();
+    let repo = value("--repo");
+    let takes = ["--repo", "--root", "--priors"];
     let files: Vec<PathBuf> = args
         .iter()
         .enumerate()
-        .filter(|(i, a)| !a.starts_with("--") && !(*i > 0 && args[i - 1] == "--repo"))
+        .filter(|(i, a)| !a.starts_with("--") && !(*i > 0 && takes.contains(&args[i - 1].as_str())))
         .map(|(_, a)| PathBuf::from(a))
         .collect();
     let table = CommandTable::load();
@@ -33,7 +36,13 @@ fn main() {
         .collect();
     sessions.sort_by(|a, b| a.id.cmp(&b.id));
     let ss: Vec<&adage_learn::import::Session> = sessions.iter().collect();
-    let cfg = if demo { LearnConfig::demo() } else { LearnConfig::default() };
+    let mut cfg = if demo { LearnConfig::demo() } else { LearnConfig::default() };
+    if let (Some(root), Some(repo)) = (value("--root"), &repo) {
+        cfg.roots.insert(repo.clone(), PathBuf::from(root));
+    }
+    if let Some(p) = value("--priors") {
+        cfg.priors = serde_json::from_str(&std::fs::read_to_string(p).expect("priors file")).expect("priors json");
+    }
 
     // The scorer's view: every closed pattern it scored, with its gate.
     let annotated: Vec<adage_graph::input::Annotated> = ss.iter().map(|s| bridge::annotate(s)).collect();

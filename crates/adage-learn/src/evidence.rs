@@ -48,6 +48,12 @@ pub struct LearnConfig {
     /// Bind instincts per repository after learning ([`crate::instincts`]); `None` binds none
     /// (the offline eval's default, so its numbers are those of reflexes alone).
     pub instincts: Option<crate::instincts::Config>,
+    /// Cross-repository priors of the directive-value model ([`crate::value::Priors`]).
+    pub priors: crate::value::Priors,
+    /// Repository key → its root on disk, for the static scan the value model reads
+    /// ([`crate::value::Statics`]); a repository not named here is read at its sessions' working
+    /// directory (the instinct configuration's roots take precedence).
+    pub roots: BTreeMap<String, std::path::PathBuf>,
 }
 
 impl Default for LearnConfig {
@@ -90,6 +96,8 @@ impl LearnConfig {
             outcome_lift_lower_bound: p.outcome_lift_lower_bound,
             outcome_min_support: p.outcome_min_support.unwrap_or(p.min_support),
             instincts: None,
+            priors: p.outcome_priors.as_ref().and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
+            roots: BTreeMap::new(),
         }
     }
 }

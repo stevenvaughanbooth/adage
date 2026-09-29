@@ -880,10 +880,13 @@ fn push_history_capped(st: &mut SessionState, key: String, cap: usize) {
 /// Whether a failed call (canonical key `observed`) fires an after-failure trigger on `command`.
 /// The directed command, or it with options added ([`meets`]); for an instinct, any run of the
 /// same runner (`python3 -m unittest tests.test_billing -v` for `python3 -m unittest`): the binder
-/// binds the bare spellings agents reach for, and what fails is the runner, not the arguments.
+/// binds the bare spellings agents reach for, and what fails is the runner, not the arguments. The
+/// same holds for a learned route whose trigger names a runner with no operands (the value model's
+/// `exec python -m pytest`, `adage_learn::value`).
 fn failure_matches(r: &Route, command: &str, observed: &str) -> bool {
+    let bare = || pattern::Shape::of_key(command).is_some_and(|s| s.positionals.is_empty());
     meets(command, observed)
-        || (r.is_instinct()
+        || ((r.is_instinct() || bare())
             && !EXACT_KEYS.get()
             && command.strip_prefix("exec ").is_some_and(|runner| pattern::runs_avoided(runner, observed)))
 }
