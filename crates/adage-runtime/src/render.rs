@@ -318,6 +318,17 @@ pub fn route_text(r: &Route, bound: &[(String, String)]) -> Option<String> {
                 exit
             ))
         }
+        // A procedure card: fixed headings, its values checked when the track was read
+        // (`adage_tracks::card::check`) and again here; exemplar lines are quoted data.
+        (Step::Card { card }, _) => {
+            adage_tracks::card::check(card).ok()?;
+            let mut text = adage_tracks::card::text(card);
+            if !exit.trim().is_empty() {
+                text.push('\n');
+                text.push_str(exit.trim_start());
+            }
+            Some(text)
+        }
         (Step::Advise { template, slots }, _) => {
             // A fixed sentence; each slot value passed its contract when the track was read, and
             // is sanitised again (a value that changes is refused, not rendered).

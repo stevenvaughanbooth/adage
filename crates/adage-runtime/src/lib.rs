@@ -388,7 +388,18 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             //    if this repository has such routes (or intent context items); no model, no
             //    match (fail open). It embeds the prompt once.
             let mut emb: Option<Option<(String, Vec<f32>)>> = None;
-            if let Some((family, ir)) = match_intent(ctx, &routes, text, &mut emb) {
+            // A family's procedure card is matched on its own (it does not compete with a run),
+            // said once, and directs no command of its own.
+            let (cards, runs): (Vec<&IndexedRoute>, Vec<&IndexedRoute>) =
+                routes.iter().copied().partition(|r| matches!(r.route.step, Step::Card { .. }));
+            if let Some((_, ir)) = match_intent(ctx, &cards, text, &mut emb) {
+                if ok(st, &out, ir, inhibits_left) {
+                    if let Some(t) = render::route_text(&ir.route, &[]) {
+                        out.push(directive(ir, t));
+                    }
+                }
+            }
+            if let Some((family, ir)) = match_intent(ctx, &runs, text, &mut emb) {
                 st.intent = Some(family);
                 if ok(st, &out, ir, inhibits_left) {
                     if let Some((text, key, head)) = bind_prompt_route(&ir.route, &spans, text, ctx) {

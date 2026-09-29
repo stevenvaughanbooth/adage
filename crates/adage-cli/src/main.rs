@@ -260,6 +260,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
     if !args.iter().any(|a| a == "--no-instincts") {
         cfg.instincts = Some(autolearn::instinct_config(&settings, paths));
     }
+    cfg.cards = autolearn::card_params(&settings, paths);
     let cache =
         (settings.learn_parse_cache && !args.iter().any(|a| a == "--no-cache")).then(|| paths.cache().join("sessions"));
     transcripts.sort();

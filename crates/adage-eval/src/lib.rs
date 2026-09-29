@@ -221,6 +221,7 @@ fn step_text(s: &adage_tracks::Step) -> String {
             format!("advise {template} ({})", s.join(", "))
         }
         adage_tracks::Step::Sequence { commands } => commands.join(" then "),
+        adage_tracks::Step::Card { card } => format!("card of {} file(s)", card.files.len()),
     }
 }
 

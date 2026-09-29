@@ -84,6 +84,10 @@ fn step(s: &Step) -> Value {
             json!({ "kind": "advise", "label": adage_tracks::advice::text(template, slots).unwrap_or_default(), "template": template })
         }
         Step::Sequence { commands } => json!({ "kind": "sequence", "label": commands.join(" → ") }),
+        Step::Card { card } => json!({
+            "kind": "card",
+            "label": format!("procedure card: {} file(s), from {} session(s)", card.files.len(), card.sessions),
+        }),
     }
 }
 
@@ -98,6 +102,7 @@ fn route_keys(r: &Route, table: &CommandTable) -> Vec<(String, &'static str)> {
             v
         }
         Step::Sequence { commands } => commands.iter().map(|c| (command_key(c, table), "directs")).collect(),
+        Step::Card { card } => card.commands.iter().map(|c| (command_key(&c.command, table), "directs")).collect(),
         Step::ReadBatch { .. } | Step::Advise { .. } => vec![],
     }
 }

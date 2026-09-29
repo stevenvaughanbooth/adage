@@ -235,6 +235,22 @@ pub fn check_directive(r: &Route, text: &str, root: Option<&Path>, canaries: &[S
         Some(max) if r.strength < max => bad(format!("strength {:?} exceeds the ceiling {max:?}", r.strength)),
         _ => {}
     }
+    // A procedure card: exactly the card's own rendering (fixed headings over checked values),
+    // optionally followed by the exit clause, at prime, from an intent.
+    if let Step::Card { card } = &r.step {
+        if let Err(e) = adage_tracks::card::check(card) {
+            bad(format!("the card fails its checks: {e}"));
+        }
+        let body = adage_tracks::card::text(card);
+        let rest = text.strip_prefix(body.as_str()).map(str::trim);
+        if !matches!(rest, Some("") | Some("Ignore this if the user is asking for something else.")) {
+            bad("text is not the card's fixed rendering".into());
+        }
+        if r.strength != Strength::Prime || !matches!(r.trigger, Trigger::Intent { .. }) {
+            bad("a card is prime and follows an intent".into());
+        }
+        return out;
+    }
     if let Step::Advise { slots, .. } = &r.step {
         let Some(c) = T_ADVICE.iter().find_map(|re| re.captures(text)) else {
             bad("text is not one of the fixed advisory sentences".into());

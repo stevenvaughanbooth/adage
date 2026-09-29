@@ -312,6 +312,17 @@ pub fn validate(t: &Track) -> Result<()> {
                     bail!("{}: a sequence follows an edit, a command, a failure or a context", ctx());
                 }
             }
+            Step::Card { card } => {
+                crate::card::check(card).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
+                // A card suggests; it directs nothing on its own: prime, observe, no slots, and
+                // the prompt of a task of its family.
+                if r.strength != Strength::Prime || r.effect != Effect::Observe || !r.slots.is_empty() {
+                    bail!("{}: a card is prime, observe, with no slots", ctx());
+                }
+                if !matches!(r.trigger, Trigger::Intent { .. }) {
+                    bail!("{}: a card follows the prompt of a task of its family (an intent)", ctx());
+                }
+            }
             Step::Advise { template, slots } => {
                 crate::advice::check(template, slots, &table).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
                 // Advice directs nothing: prime, observe, no route slots, and a reactive trigger.
@@ -347,8 +358,8 @@ pub fn validate(t: &Track) -> Result<()> {
                 validate_intent(family, model, centroid, *threshold).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
                 // An intent route directs one fixed command: no slots, so nothing from the prompt
                 // (or the track) is interpolated into what the agent reads.
-                if !matches!(r.step, Step::Run { .. }) || !r.slots.is_empty() {
-                    bail!("{}: an intent route must be a run step with no slots", ctx());
+                if !matches!(r.step, Step::Run { .. } | Step::Card { .. }) || !r.slots.is_empty() {
+                    bail!("{}: an intent route must be a run step or a card, with no slots", ctx());
                 }
             }
             Trigger::Context { items, within } => {

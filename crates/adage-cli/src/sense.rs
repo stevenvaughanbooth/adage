@@ -123,6 +123,9 @@ pub struct RepoSense {
     pub sampled: bool,
     pub candidates: Vec<Candidate>,
     pub intent_families: usize,
+    /// Families of similar tasks, and the procedure cards (reflexes) they would form.
+    pub card_families: usize,
+    pub cards: usize,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -443,7 +446,8 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
         a.keep_recent();
         mined.append(&mut a.mined);
     }
-    let cfg = if o.demo { LearnConfig::demo() } else { LearnConfig::default() };
+    let mut cfg = if o.demo { LearnConfig::demo() } else { LearnConfig::default() };
+    cfg.cards = crate::autolearn::card_params(&adage_store::config::load(paths).config, paths);
     let (report, planned) = adage_learn::plan(mined, Some(&paths.models()), &paths.tracks(), &cfg)?;
     sense.thresholds = report.thresholds.clone();
     sense.intent_model = report.intent_model.clone();
@@ -523,6 +527,8 @@ pub fn run(o: &Options, paths: &Paths) -> Result<Sense> {
             sampled: a.sampled,
             candidates,
             intent_families: report.repos.get(&repo).map_or(0, |r| r.intent_families),
+            card_families: report.repos.get(&repo).map_or(0, |r| r.engine.card_families),
+            cards: report.repos.get(&repo).map_or(0, |r| r.engine.cards),
         });
     }
     Ok(sense)
@@ -692,6 +698,14 @@ pub fn print_text(s: &Sense) {
             println!("  prompt intents            skipped: no embedding model (`adage models fetch` enables them)");
         } else if r.intent_families > 0 {
             println!("  prompt intents            {} usable", r.intent_families);
+        }
+        if s.intent_model.is_some() && r.card_families > 0 {
+            println!(
+                "  recurring tasks           {} famil{}, {} with a procedure card (a reflex said once at a matching prompt)",
+                r.card_families,
+                if r.card_families == 1 { "y" } else { "ies" },
+                r.cards
+            );
         }
     }
     if s.repos.iter().any(|r| !r.candidates.is_empty()) {

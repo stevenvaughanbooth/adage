@@ -20,6 +20,7 @@ use std::path::{Path, PathBuf};
 const USAGE: &str = "usage:
   adage train <SKILL.md|runbook.md> [--repo <path>] [--no-replay] [--timeout-secs N] [--json]
   adage train accept <name>   install a compiled skill's pack, as reviewed
+  adage train cards [--repo <path>] [--timeout-secs N] [--json]   replay this repository's procedure cards
   adage train plan --from <file> [--repo <path>] [--seed N] [--sessions N] [--model ID] [--json] [--out plan.json]
   adage train --plan plan.json [--harness claude-code|fake] [--model ID] [--budget USD] [--max-turns N]
                   [--concurrency N] [--validate N] [--oracle trajectory] [--container none] [--run-id ID]
@@ -112,6 +113,7 @@ fn real_main(argv: Vec<String>) -> Result<()> {
     match cmd.as_str() {
         "plan" => cmd_plan(&mut a).and_then(|_| a.done().map(|_| ())),
         "report" => cmd_report(a),
+        "cards" => cmd_cards(a),
         "accept" => bail!("`accept` installs a pack, which the adage binary does: run `adage train accept <name>`"),
         _ if Path::new(&cmd).is_file() => cmd_compile(PathBuf::from(&cmd), a),
         "-h" | "--help" | "help" => {
@@ -120,6 +122,37 @@ fn real_main(argv: Vec<String>) -> Result<()> {
         }
         other => bail!("unknown command {other:?}\n\n{USAGE}"),
     }
+}
+
+fn cmd_cards(mut a: Args) -> Result<()> {
+    let repo = a.value("--repo")?.map(PathBuf::from);
+    let timeout: u64 = a.parsed("--timeout-secs")?.unwrap_or(300);
+    let json = a.flag("--json");
+    a.done()?;
+    let start = match repo {
+        Some(r) => r,
+        None => std::env::current_dir()?,
+    };
+    let root =
+        adage_core::repo::find_root(&start).context("run adage train cards inside a repository, or pass --repo")?;
+    let checked = adage_train::cards::verify(&adage_home(), &root, timeout.clamp(1, 3600) * 1000)?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&checked)?);
+        return Ok(());
+    }
+    if checked.is_empty() {
+        println!("adage train cards: this repository has no procedure cards yet (one forms after a passing session of a recurring task)");
+        return Ok(());
+    }
+    println!(
+        "adage train cards: {}'s procedure cards, their commands on a clean checkout",
+        adage_core::repo::repo_key(&root)
+    );
+    for c in &checked {
+        println!("  {:<18} {:<5} {}  ({})", c.card, if c.works { "works" } else { "fails" }, c.command, c.summary);
+    }
+    println!("recorded: the next learn (adage condition, or the automatic one) applies them to the cards");
+    Ok(())
 }
 
 fn cmd_compile(skill: PathBuf, mut a: Args) -> Result<()> {

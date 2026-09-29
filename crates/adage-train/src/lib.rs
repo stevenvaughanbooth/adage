@@ -16,6 +16,7 @@
 //! The `adage` binary (which hooks run) never executes anything; this is a separate, optional
 //! binary. See docs/training.md.
 
+pub mod cards;
 pub mod claims;
 pub mod compile;
 pub mod fake;

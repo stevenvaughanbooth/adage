@@ -51,6 +51,11 @@ pub struct EngineReport {
     pub contexts: usize,
     /// Prompt-intent prototypes that cleared the purity bar (none without an embedding model).
     pub intent_families: usize,
+    /// Families of similar tasks found, and procedure cards learned for them ([`crate::cards`]).
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub card_families: usize,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub cards: usize,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub dropped: Vec<Dropped>,
     /// Every safe candidate the value model weighed ([`crate::value`]), delivered or not.
@@ -1037,6 +1042,15 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
             routes.push(Judged { route: x.route, why: x.why });
         }
     }
+    // Procedure cards for families of similar tasks (recurring work), with the pinned model.
+    if let (Some(m), Some(cp)) = (model, cfg.cards.as_ref()) {
+        let (found, families) = crate::cards::compile(ss, m, cp, &cfg.provenance);
+        report.card_families = families;
+        report.cards = found.len();
+        for (route, why) in found {
+            routes.push(Judged { route, why });
+        }
+    }
     report.routes = routes.len();
     EngineRun { routes, report, counts: learned.counts }
 }
@@ -1048,4 +1062,8 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
 pub fn verdict(why: Option<&Why>, counts: &BTreeMap<String, Counts>, cfg: &LearnConfig) -> Option<Option<u32>> {
     let c = counts.get(&why?.pattern)?;
     Some(crate::dormant::verdict_counts(c.exposed, c.opportunities, c.support, cfg))
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }

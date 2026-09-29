@@ -203,6 +203,9 @@ pub enum Step {
     /// fixed template; the route's strength is at most the lowest ceiling of its commands, and
     /// whether it was followed is judged on the first.
     Sequence { commands: Vec<String> },
+    /// A procedure card for a family of similar tasks ([`crate::card`]): learned from this
+    /// repository's traces, triggered by an intent (the family's prompts), delivered once, prime.
+    Card { card: crate::card::Card },
 }
 
 /// Typed exit predicates, rendered by Adage from fixed templates — never free text from a track.
@@ -416,6 +419,7 @@ pub fn shape(r: &Route) -> &'static str {
         (_, Step::ReadBatch { .. }) => "read-batch",
         (_, Step::Sequence { .. }) => "sequence",
         (_, Step::Advise { .. }) => "advise",
+        (_, Step::Card { .. }) => "card",
         (Trigger::AfterEdit { .. }, Step::Run { .. }) if r.effect == Effect::Regenerate && r.slots.is_empty() => {
             "obligation"
         }
@@ -424,7 +428,7 @@ pub fn shape(r: &Route) -> &'static str {
 }
 
 /// Every delivery shape [`shape`] names.
-pub const SHAPES: [&str; 6] = ["run", "avoid", "read-batch", "obligation", "sequence", "advise"];
+pub const SHAPES: [&str; 7] = ["run", "avoid", "read-batch", "obligation", "sequence", "advise", "card"];
 
 /// The strength a route is delivered at: its own, except that a route forming or dormant, or
 /// an instinct, is never delivered fire (and an instinct never inhibit).

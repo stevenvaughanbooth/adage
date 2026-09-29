@@ -54,6 +54,9 @@ pub struct LearnConfig {
     /// ([`crate::value::Statics`]); a repository not named here is read at its sessions' working
     /// directory (the instinct configuration's roots take precedence).
     pub roots: BTreeMap<String, std::path::PathBuf>,
+    /// Learn procedure cards for families of similar tasks ([`crate::cards`]); `None` learns none
+    /// (the offline eval's default, so its numbers are those of reflexes alone).
+    pub cards: Option<crate::cards::CardParams>,
 }
 
 impl Default for LearnConfig {
@@ -98,6 +101,7 @@ impl LearnConfig {
             instincts: None,
             priors: p.outcome_priors.as_ref().and_then(|v| serde_json::from_value(v.clone()).ok()).unwrap_or_default(),
             roots: BTreeMap::new(),
+            cards: None,
         }
     }
 }
