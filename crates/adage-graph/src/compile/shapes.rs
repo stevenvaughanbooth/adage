@@ -266,13 +266,39 @@ fn dominant_literal(key: String, input: &Input) -> Result<(String, String, Effec
     Ok((key, lit.to_string(), effect))
 }
 
+/// Where a path component names one of `segs`: the segment itself, or, for a file segment, a test
+/// file named for it with a short word before it (`test_core.py` for `core.py`, `test-cli.js` for
+/// `cli.js`). A pytest node id after it (`::test_x`) is not part of the name. Returns the
+/// component with `{part}` in the segment's place (the node id dropped) and whether a node id
+/// followed.
+fn templated(component: &str, segs: &BTreeSet<&str>) -> Option<(String, bool)> {
+    let (base, node) = match component.split_once("::") {
+        Some((b, _)) => (b, true),
+        None => (component, false),
+    };
+    if segs.contains(base) {
+        return Some(("{part}".into(), node));
+    }
+    segs.iter().filter(|s| s.contains('.') && !s.starts_with('.')).find_map(|s| {
+        let prefix = base.strip_suffix(*s)?;
+        let word = prefix.strip_suffix(['_', '-'])?;
+        (!word.is_empty() && word.len() <= 12 && word.chars().all(|c| c.is_ascii_alphanumeric()))
+            .then(|| (format!("{prefix}{{part}}"), node))
+    })
+}
+
 /// The one template of a flow-bound command: the literal variants of the item's members with the
 /// component that is segment `depth` of an edited member path replaced by `{part}`
-/// (`make -C packages/{part} check`, `cargo test -p {part}`). A path argument that goes on past the
-/// segment (one test file of the part: `npm test -- packages/runtime-core/__tests__/x.spec.ts`)
-/// also stands for its part's directory (`npm test -- packages/{part}`): the part's tests, the
-/// family's stable prefix with the variable part bound to what was edited. The template covering
-/// at least `dominant` of the runs ([`variants::covers`]; the most runs of its own first) wins.
+/// (`make -C packages/{part} check`, `cargo test -p {part}`), or, for the edited file's own name,
+/// the test file named for it (`python -m pytest tests/test_{part}` after `src/pkg/core.py`:
+/// [`templated`]). A path argument that goes on past the segment (one test file of the part:
+/// `npm test -- packages/runtime-core/__tests__/x.spec.ts`, or one test of the file:
+/// `tests/test_core.py::test_x`) also stands for the part's directory or file
+/// (`npm test -- packages/{part}`), with no options after it (`-xvs`, `-k name`): the part's
+/// tests, the family's stable prefix with the variable part bound to what was edited. The template
+/// covering at least the prime share of the runs ([`variants::covers`]; the most runs of its own
+/// first) wins. The judge then counts it trace by trace, bound to each trace's own last edit
+/// (`adage_learn::engine`); the share here only rules out a template most runs do not follow.
 fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(String, u8, Effect)> {
     let keys = member_keys(v);
     let mut lits: Vec<(&Vec<String>, u32)> = Vec::new();
@@ -282,7 +308,7 @@ fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(St
         }
     }
     let max_depth = edits.iter().map(|p| p.split('/').count()).max().unwrap_or(0).min(8);
-    for depth in 0..max_depth.saturating_sub(1) {
+    for depth in 0..max_depth {
         // The parts: the segment at `depth` of the item's edited paths, or, below a directory
         // they share (`packages/` for `packages/runtime-core/src/x.ts`), of every path the traces
         // edited under it, so one item's single part still shows the part varying across the
@@ -292,7 +318,7 @@ fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(St
         let segs: BTreeSet<&str> = if own.len() >= 2 || depth == 0 {
             own
         } else {
-            if parent.len() != 1 || edits.iter().any(|p| p.split('/').count() <= depth + 1) {
+            if parent.len() != 1 || edits.iter().any(|p| p.split('/').count() <= depth) {
                 continue;
             }
             let parent = parent.into_iter().next().expect("one parent");
@@ -301,7 +327,7 @@ fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(St
                 .edited
                 .iter()
                 .chain(edits.iter())
-                .filter(|p| p.split('/').count() > depth + 1)
+                .filter(|p| p.split('/').count() > depth)
                 .filter(|p| p.split('/').take(depth).eq(parent.iter().copied()))
                 .filter_map(|p| p.split('/').nth(depth))
                 .collect()
@@ -310,28 +336,33 @@ fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(St
             continue;
         }
         // Each run's full template, and the templates standing for it (itself, and its part's
-        // directory), with the runs each stands for itself.
+        // directory or file with nothing after it from the first option on), with the runs each
+        // stands for itself.
         let mut full: Vec<(String, u32)> = Vec::new();
         let mut own: BTreeMap<String, u32> = BTreeMap::new();
         let mut total = 0;
         for (argv, n) in &lits {
             total += n;
-            let mut done = false;
-            let mut cut: Option<Vec<String>> = None;
+            let mut at: Option<usize> = None;
+            let mut cut: Option<String> = None;
             let t: Vec<String> = argv
                 .iter()
-                .map(|tok| {
-                    if done {
+                .enumerate()
+                .map(|(k, tok)| {
+                    if at.is_some() {
                         return tok.clone();
                     }
                     let parts: Vec<&str> = tok.split('/').collect();
-                    match parts.iter().position(|p| segs.contains(p)) {
-                        Some(i) => {
-                            done = true;
+                    match parts.iter().enumerate().find_map(|(i, p)| templated(p, &segs).map(|x| (i, x))) {
+                        Some((i, (part, node))) => {
+                            at = Some(k);
                             let mut q: Vec<String> = parts.iter().map(|p| p.to_string()).collect();
-                            q[i] = "{part}".into();
-                            if i + 1 < q.len() && !tok.starts_with('-') {
-                                cut = Some(q[..=i].to_vec());
+                            let whole = std::mem::replace(&mut q[i], part);
+                            if (i + 1 < q.len() || node) && !tok.starts_with('-') {
+                                cut = Some(q[..=i].join("/"));
+                            }
+                            if let Some((_, rest)) = whole.split_once("::") {
+                                q[i] = format!("{}::{rest}", q[i]);
                             }
                             q.join("/")
                         }
@@ -339,21 +370,15 @@ fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(St
                     }
                 })
                 .collect();
-            if !done {
-                continue;
-            }
+            let Some(at) = at else { continue };
             let f = stable::shell_join(&t);
             *own.entry(f.clone()).or_default() += n;
-            if let Some(c) = cut {
-                let dir = c.join("/");
-                let short: Vec<String> = t
-                    .iter()
-                    .map(|x| if x.contains("{part}") && x.starts_with(&dir) { dir.clone() } else { x.clone() })
-                    .collect();
-                let s = stable::shell_join(&short);
-                if s != f {
-                    *own.entry(s).or_default() += n;
-                }
+            let mut short: Vec<String> = t[..at].to_vec();
+            short.push(cut.unwrap_or_else(|| t[at].clone()));
+            short.extend(t[at + 1..].iter().take_while(|x| !x.starts_with('-')).cloned());
+            let s = stable::shell_join(&short);
+            if s != f {
+                *own.entry(s).or_default() += n;
             }
             full.push((f, *n));
         }
@@ -368,7 +393,7 @@ fn segment_template(v: &ItemView, edits: &[String], input: &Input) -> Option<(St
                 .filter(|(f, _)| variants::shape(f).is_some_and(|fs| variants::covers(&ts, &fs, true)))
                 .map(|(_, c)| c)
                 .sum();
-            if total == 0 || (covered as f64) < input.params.dominant * total as f64 - 1e-9 {
+            if total == 0 || (covered as f64) < input.params.prime_rate * total as f64 - 1e-9 {
                 continue;
             }
             if best.is_none_or(|(o, c, b)| (*n, covered, std::cmp::Reverse(t)) > (o, c, std::cmp::Reverse(b))) {

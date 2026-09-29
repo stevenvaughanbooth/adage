@@ -10,10 +10,11 @@ use adage_core::{CommandTable, Effect};
 use std::collections::BTreeMap;
 
 /// `(template id, required slots, optional slots)`.
-pub const TEMPLATES: [(&str, &[&str], &[&str]); 3] = [
+pub const TEMPLATES: [(&str, &[&str], &[&str]); 4] = [
     ("generated-file", &["path"], &["command"]),
     ("lockfile", &["path", "manager"], &[]),
     ("package-manager", &["manager", "lockfile"], &[]),
+    ("test-command", &["command"], &[]),
 ];
 
 /// Root lockfiles and the tool that maintains each: the only values the `lockfile` and
@@ -50,6 +51,7 @@ pub fn template(id: &str, with_command: bool) -> Option<&'static str> {
         ("package-manager", _) => {
             "This repository uses {manager} ({lockfile}), not npm: use {manager} for installs and scripts here."
         }
+        ("test-command", _) => "In this repository, tests run with {command}, followed by the test files or names to run.",
         _ => return None,
     })
 }
@@ -151,6 +153,12 @@ mod tests {
         );
         assert!(check("lockfile", &slots(&[("path", "uv.lock"), ("manager", "uv")]), &t).is_ok());
         assert!(check("package-manager", &slots(&[("manager", "pnpm"), ("lockfile", "pnpm-lock.yaml")]), &t).is_ok());
+        let s = slots(&[("command", ".venv/bin/python -m pytest")]);
+        assert!(check("test-command", &s, &t).is_ok());
+        assert_eq!(
+            text("test-command", &s).unwrap(),
+            "In this repository, tests run with .venv/bin/python -m pytest, followed by the test files or names to run."
+        );
         // Refused: unknown template, unknown slot, missing slot, hostile values.
         assert!(check("free-text", &slots(&[("path", "x")]), &t).is_err());
         assert!(check("lockfile", &slots(&[("path", "uv.lock")]), &t).is_err());

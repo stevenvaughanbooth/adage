@@ -27,6 +27,9 @@ fn slots(r: &Route) -> String {
                 }
                 SlotSource::OutputValue { field: None, vtype } => format!("output value of type {}", vtype.id),
                 SlotSource::EditSegment { glob, depth } => format!("segment {depth} of the edited {glob}"),
+                SlotSource::EditTests { glob, k, map } => {
+                    format!("at most {k} tests of the edited {glob} (a map of {} files)", map.len())
+                }
             };
             let contract = match &s.contract {
                 Contract::Pattern { regex } => regex.clone(),

@@ -133,6 +133,148 @@ pub fn wilson_lower(s: f64, n: f64, z: f64) -> f64 {
     ((centre - margin) / (1.0 + z2 / n)).max(0.0)
 }
 
+/// The Gamma posterior of a Poisson mean (tool calls to a goal event, outcome-optimisation §2.3)
+/// from `n` observations summing to `sum`, with a *supplied* parent prior of `kappa`
+/// pseudo-observations at mean `m`: (shape α, rate β), mean α / β.
+pub fn gamma_poisson(sum: f64, n: f64, m: f64, kappa: f64) -> (f64, f64) {
+    let kappa = kappa.max(1e-6);
+    (sum.max(0.0) + kappa * m.max(1e-6), n.max(0.0) + kappa)
+}
+
+/// The mean and standard deviation of a Gamma(α, β) posterior mean.
+pub fn gamma_moments((a, b): (f64, f64)) -> (f64, f64) {
+    (a / b, a.sqrt() / b)
+}
+
+/// The mean and variance of Beta(a, b).
+pub fn beta_moments(a: f64, b: f64) -> (f64, f64) {
+    let n = a + b;
+    (a / n, a * b / (n * n * (n + 1.0)))
+}
+
+/// The prior concentration of a Gamma–Poisson hierarchy fitted by the method of moments across
+/// units (outcome-optimisation §2.3: κ is fitted, not fixed): each unit is (sum, n) of one child
+/// (a repository, say). With the pooled mean m, the between-unit variance of the unit means
+/// beyond their Poisson sampling variance is τ², and the prior Gamma(m²/τ², m/τ²) has κ = m/τ².
+/// When the units vary no more than sampling explains, `max_kappa` (full pooling). `None` with
+/// fewer than two units that have data.
+pub fn fit_kappa(units: &[(f64, f64)], max_kappa: f64) -> Option<f64> {
+    let units: Vec<(f64, f64)> = units.iter().copied().filter(|&(_, n)| n > 0.0).collect();
+    if units.len() < 2 {
+        return None;
+    }
+    let (s, n): (f64, f64) = units.iter().fold((0.0, 0.0), |(a, b), &(x, y)| (a + x, b + y));
+    let m = s / n;
+    let k = units.len() as f64;
+    let means: Vec<f64> = units.iter().map(|&(x, y)| x / y).collect();
+    let between = means.iter().map(|x| (x - m) * (x - m)).sum::<f64>() / (k - 1.0);
+    let sampling = units.iter().map(|&(_, y)| m / y).sum::<f64>() / k;
+    let tau2 = between - sampling;
+    if tau2 <= 0.0 || m <= 0.0 {
+        return Some(max_kappa);
+    }
+    Some((m / tau2).clamp(1e-3, max_kappa))
+}
+
+/// The standard normal distribution function (Abramowitz and Stegun 26.2.17; |error| < 7.5e-8).
+pub fn normal_cdf(x: f64) -> f64 {
+    let t = 1.0 / (1.0 + 0.231_641_9 * x.abs());
+    let poly =
+        t * (0.319_381_530 + t * (-0.356_563_782 + t * (1.781_477_937 + t * (-1.821_255_978 + t * 1.330_274_429))));
+    let tail = (-0.5 * x * x).exp() / (2.0 * std::f64::consts::PI).sqrt() * poly;
+    if x >= 0.0 {
+        1.0 - tail
+    } else {
+        tail
+    }
+}
+
+/// The value of a directive (outcome-optimisation §2.4), in tool calls:
+/// `A = p_follow · (Q(∅) − Q(Sat d)) − C(d) − p_misfire · m`, with `Q(∅)` and `Q(Sat d)` Gamma
+/// posteriors of calls to the goal, `p_follow` and `p_misfire` Beta posteriors, `cost` the
+/// directive's own cost and `misfire_cost` what a misfire costs. The posterior of A by moments
+/// (the factors independent), read as normal.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Advantage {
+    pub mean: f64,
+    pub sd: f64,
+    /// P(A > 0).
+    pub p_positive: f64,
+    /// The one-sided 90% lower bound.
+    pub lower: f64,
+    /// Q(∅) and Q(Sat d), posterior means.
+    pub q_null: f64,
+    pub q_sat: f64,
+}
+
+/// z of the one-sided 90% bound an advantage is judged by.
+pub const ADVANTAGE_Z: f64 = 1.281_551_6;
+
+pub fn advantage(
+    q_null: (f64, f64),
+    q_sat: (f64, f64),
+    follow: (f64, f64),
+    misfire: (f64, f64),
+    cost: f64,
+    misfire_cost: f64,
+) -> Advantage {
+    let (m0, s0) = gamma_moments(q_null);
+    let (m1, s1) = gamma_moments(q_sat);
+    let (pf, vf) = beta_moments(follow.0, follow.1);
+    let (pm, vm) = beta_moments(misfire.0, misfire.1);
+    let d = m0 - m1;
+    let vd = s0 * s0 + s1 * s1;
+    let mean = pf * d - cost - pm * misfire_cost;
+    let var = pf * pf * vd + vf * d * d + vf * vd + misfire_cost * misfire_cost * vm;
+    let sd = var.max(0.0).sqrt();
+    let p_positive = if sd > 0.0 {
+        normal_cdf(mean / sd)
+    } else if mean > 0.0 {
+        1.0
+    } else {
+        0.0
+    };
+    Advantage { mean, sd, p_positive, lower: mean - ADVANTAGE_Z * sd, q_null: m0, q_sat: m1 }
+}
+
+/// [`advantage`] where `Q(∅)` is a mixture: with no directive, a share `p_sat` of the agents
+/// already take an action in `Sat(d)` (cost `Q(Sat d)`) and the rest do something else (cost
+/// `Q(other)`), so `Q(∅) − Q(Sat d) = (1 − p_sat) · (Q(other) − Q(Sat d))`: a directive for what
+/// agents do anyway is worth nothing (Track G's `1 − p_soon`, derived). `sat_share` is p_sat's Beta
+/// posterior.
+pub fn advantage_mix(
+    q_other: (f64, f64),
+    q_sat: (f64, f64),
+    sat_share: (f64, f64),
+    follow: (f64, f64),
+    misfire: (f64, f64),
+    cost: f64,
+    misfire_cost: f64,
+) -> Advantage {
+    let (m0, s0) = gamma_moments(q_other);
+    let (m1, s1) = gamma_moments(q_sat);
+    let (pf, vf) = beta_moments(follow.0, follow.1);
+    let (ps, vs) = beta_moments(sat_share.0, sat_share.1);
+    let (pm, vm) = beta_moments(misfire.0, misfire.1);
+    // f = p_follow · (1 − p_sat), independent factors.
+    let (q, vq) = (1.0 - ps, vs);
+    let f = pf * q;
+    let vfq = (vf + pf * pf) * (vq + q * q) - f * f;
+    let d = m0 - m1;
+    let vd = s0 * s0 + s1 * s1;
+    let mean = f * d - cost - pm * misfire_cost;
+    let var = f * f * vd + vfq * d * d + vfq * vd + misfire_cost * misfire_cost * vm;
+    let sd = var.max(0.0).sqrt();
+    let p_positive = if sd > 0.0 {
+        normal_cdf(mean / sd)
+    } else if mean > 0.0 {
+        1.0
+    } else {
+        0.0
+    };
+    Advantage { mean, sd, p_positive, lower: mean - ADVANTAGE_Z * sd, q_null: ps * m1 + q * m0, q_sat: m1 }
+}
+
 /// Median of a list (the lower middle for an even count, so it is an observed value).
 pub fn median(v: &mut [f64]) -> f64 {
     if v.is_empty() {

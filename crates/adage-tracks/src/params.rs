@@ -114,6 +114,11 @@ pub struct LearnParams {
     /// default, omitted from the canonical JSON) is `min_support`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outcome_min_support: Option<u32>,
+    /// Cross-repository priors of the directive-value model (`adage_learn::value::Priors`: cells
+    /// of calls-to-goal statistics by situation), fitted over other repositories' traces. `None`
+    /// (the default, omitted from the canonical JSON) is the learner's built-in weak prior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome_priors: Option<Value>,
 }
 
 /// The default `outcome_lift_lower_bound`.
@@ -139,6 +144,7 @@ impl Default for LearnParams {
             dormant_exposure: 0.5,
             outcome_lift_lower_bound: OUTCOME_LIFT_LOWER_BOUND,
             outcome_min_support: None,
+            outcome_priors: None,
         }
     }
 }

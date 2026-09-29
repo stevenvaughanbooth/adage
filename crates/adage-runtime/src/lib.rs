@@ -880,10 +880,13 @@ fn push_history_capped(st: &mut SessionState, key: String, cap: usize) {
 /// Whether a failed call (canonical key `observed`) fires an after-failure trigger on `command`.
 /// The directed command, or it with options added ([`meets`]); for an instinct, any run of the
 /// same runner (`python3 -m unittest tests.test_billing -v` for `python3 -m unittest`): the binder
-/// binds the bare spellings agents reach for, and what fails is the runner, not the arguments.
+/// binds the bare spellings agents reach for, and what fails is the runner, not the arguments. The
+/// same holds for a learned route whose trigger names a runner with no operands (the value model's
+/// `exec python -m pytest`, `adage_learn::value`).
 fn failure_matches(r: &Route, command: &str, observed: &str) -> bool {
+    let bare = || pattern::Shape::of_key(command).is_some_and(|s| s.positionals.is_empty());
     meets(command, observed)
-        || (r.is_instinct()
+        || ((r.is_instinct() || bare())
             && !EXACT_KEYS.get()
             && command.strip_prefix("exec ").is_some_and(|runner| pattern::runs_avoided(runner, observed)))
 }
@@ -1051,15 +1054,36 @@ fn bind_output_route(r: &Route, output: &str, ctx: &Ctx) -> Option<(String, Stri
 fn bind_edit_slots(r: &Route, rel: &str, ctx: &Ctx) -> Option<Vec<(String, String)>> {
     let mut bound = Vec::new();
     for s in &r.slots {
-        let SlotSource::EditSegment { glob, depth } = &s.source else { return None };
-        if !glob::Pattern::new(glob).is_ok_and(|g| g.matches(rel)) {
-            return None;
+        match &s.source {
+            SlotSource::EditSegment { glob, depth } => {
+                if !glob::Pattern::new(glob).is_ok_and(|g| g.matches(rel)) {
+                    return None;
+                }
+                let seg = rel.split('/').filter(|x| !x.is_empty()).nth(*depth as usize)?;
+                if !contract_ok(&s.contract, seg, ctx.root) {
+                    return None;
+                }
+                bound.push((s.name.clone(), seg.to_string()));
+            }
+            // The edited file's tests from the learned map: each must exist in the repository.
+            SlotSource::EditTests { glob, k, map } => {
+                if !glob::Pattern::new(glob).is_ok_and(|g| g.matches(rel)) {
+                    return None;
+                }
+                let tests: Vec<&str> = map
+                    .get(rel)?
+                    .iter()
+                    .filter(|t| contract_ok(&s.contract, t, ctx.root))
+                    .take(*k as usize)
+                    .map(String::as_str)
+                    .collect();
+                if tests.is_empty() {
+                    return None;
+                }
+                bound.push((s.name.clone(), tests.join(" ")));
+            }
+            _ => return None,
         }
-        let seg = rel.split('/').filter(|x| !x.is_empty()).nth(*depth as usize)?;
-        if !contract_ok(&s.contract, seg, ctx.root) {
-            return None;
-        }
-        bound.push((s.name.clone(), seg.to_string()));
     }
     Some(bound)
 }
