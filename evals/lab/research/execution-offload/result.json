@@ -1,0 +1,355 @@
+{
+ "slug": "execution-offload",
+ "headline": "A removed model turn is worth ~2% of session $, but a hook can take over few turns: even a perfect offload hook is capped at 14.6% (Haiku) / 9.8% (Sonnet) of $, the learned exact-prediction offload nets ~0, and the best realistic action (E2 verify-after-edit, compact on pass) saves +2.8% [2.0,3.7] of $ (Haiku split), +1.2% [0.7,1.7] LORO, ~+1% Sonnet: not the missing lever.",
+ "metric_name": "net $ saved per task as share of baseline $ (harness cost model; offload semantics = removed turn minus re-injected result; 90% task-clustered bootstrap)",
+ "held_out": {
+  "test_sets": {
+   "haiku": "6a795a362ccb (158 sessions / 38 tasks)",
+   "sonnet": "32 sessions / 16 tasks"
+  },
+  "verify_after_edit_compact": {
+   "haiku_split": {
+    "sessions": 158,
+    "tasks": 38,
+    "baseline_usd": 0.26039232658227857,
+    "baseline_calls": 32.34177215189873,
+    "usd_saved": 0.007399157594936712,
+    "usd_ci": [
+     0.004903187647058823,
+     0.01024299814814815
+    ],
+    "usd_share": 0.028415421038141587,
+    "usd_share_ci": [
+     0.020109372405189365,
+     0.0369731217537237
+    ],
+    "calls_saved": 1.1835443037974684,
+    "calls_ci": [
+     0.8481012658227848,
+     1.5766871165644172
+    ],
+    "calls_share": 0.03659491193737769,
+    "hits_per_session": 1.1835443037974684,
+    "misses_per_session": 1.1708860759493671
+   },
+   "sonnet_split": {
+    "sessions": 32,
+    "tasks": 16,
+    "baseline_usd": 0.5679950375,
+    "baseline_calls": 28.375,
+    "usd_saved": 0.0032721000000000004,
+    "usd_ci": [
+     -0.0002658249999999997,
+     0.007294056250000001
+    ],
+    "usd_share": 0.005760789767463417,
+    "usd_share_ci": [
+     -0.0005072140186103218,
+     0.013131920832150284
+    ],
+    "calls_saved": 0.375,
+    "calls_ci": [
+     0.125,
+     0.65625
+    ],
+    "calls_share": 0.013215859030837005,
+    "hits_per_session": 0.375,
+    "misses_per_session": 2.5625
+   }
+  },
+  "learned_exact_offload": {
+   "haiku_split": {
+    "sessions": 158,
+    "tasks": 38,
+    "baseline_usd": 0.26039232658227857,
+    "baseline_calls": 32.34177215189873,
+    "usd_saved": 0.00019785443037974708,
+    "usd_ci": [
+     -0.00012723018867924523,
+     0.0005185751773049642
+    ],
+    "usd_share": 0.0007598320310611352,
+    "usd_share_ci": [
+     -0.0004915228988428052,
+     0.0020311006240035356
+    ],
+    "calls_saved": 0.27848101265822783,
+    "calls_ci": [
+     0.1746987951807229,
+     0.39215686274509803
+    ],
+    "calls_share": 0.008610567514677104,
+    "hits_per_session": 0.27848101265822783,
+    "misses_per_session": 0.34810126582278483
+   },
+   "sonnet_split": {
+    "sessions": 32,
+    "tasks": 16,
+    "baseline_usd": 0.5679950375,
+    "baseline_calls": 28.375,
+    "usd_saved": -0.00263514375,
+    "usd_ci": [
+     -0.006284275000000001,
+     -0.00022316249999999996
+    ],
+    "usd_share": -0.004639378121327337,
+    "usd_share_ci": [
+     -0.011215310525419698,
+     -0.0003905399587765798
+    ],
+    "calls_saved": 0.0,
+    "calls_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_share": 0.0,
+    "hits_per_session": 0.0,
+    "misses_per_session": 0.28125
+   }
+  }
+ },
+ "leave_one_repo_out": {
+  "verify_after_edit_compact": {
+   "haiku": {
+    "sessions": 158,
+    "tasks": 38,
+    "baseline_usd": 0.26039232658227857,
+    "baseline_calls": 32.34177215189873,
+    "usd_saved": 0.0030879803797468357,
+    "usd_ci": [
+     0.001923601923076923,
+     0.0044624936305732495
+    ],
+    "usd_share": 0.011858953066234457,
+    "usd_share_ci": [
+     0.007498517531173474,
+     0.016585470031149147
+    ],
+    "calls_saved": 0.5506329113924051,
+    "calls_ci": [
+     0.35333333333333333,
+     0.7757575757575758
+    ],
+    "calls_share": 0.017025440313111546,
+    "hits_per_session": 0.5506329113924051,
+    "misses_per_session": 0.6012658227848101
+   },
+   "sonnet": {
+    "sessions": 32,
+    "tasks": 16,
+    "baseline_usd": 0.5679950375,
+    "baseline_calls": 28.375,
+    "usd_saved": 0.00562521875,
+    "usd_ci": [
+     0.0018933875,
+     0.009716568750000001
+    ],
+    "usd_share": 0.009903640663409844,
+    "usd_share_ci": [
+     0.0034991017295858086,
+     0.017210822543379023
+    ],
+    "calls_saved": 0.4375,
+    "calls_ci": [
+     0.1875,
+     0.6875
+    ],
+    "calls_share": 0.015418502202643172,
+    "hits_per_session": 0.4375,
+    "misses_per_session": 1.46875
+   }
+  },
+  "learned_exact_offload": {
+   "haiku": {
+    "sessions": 158,
+    "tasks": 38,
+    "baseline_usd": 0.26039232658227857,
+    "baseline_calls": 32.34177215189873,
+    "usd_saved": 0.0,
+    "usd_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_share": 0.0,
+    "usd_share_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_saved": 0.0,
+    "calls_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_share": 0.0,
+    "hits_per_session": 0.0,
+    "misses_per_session": 0.0
+   },
+   "sonnet": {
+    "sessions": 32,
+    "tasks": 16,
+    "baseline_usd": 0.5679950375,
+    "baseline_calls": 28.375,
+    "usd_saved": 0.0,
+    "usd_ci": [
+     0.0,
+     0.0
+    ],
+    "usd_share": 0.0,
+    "usd_share_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_saved": 0.0,
+    "calls_ci": [
+     0.0,
+     0.0
+    ],
+    "calls_share": 0.0,
+    "hits_per_session": 0.0,
+    "misses_per_session": 0.0
+   }
+  }
+ },
+ "sensitivities": {
+  "verify_after_edit p_skip=0.5": {
+   "haiku": {
+    "split": 0.011001893112232623,
+    "loro": 0.004064112109158285
+   },
+   "sonnet": {
+    "split": 0.0008996557474324769,
+    "loro": 0.0037769366074787234
+   }
+  },
+  "verify_after_edit harm=1 call/miss": {
+   "haiku": {
+    "split": -0.009273139601508993,
+    "loro": -0.006449046395799727
+   },
+   "sonnet": {
+    "split": -0.0907318425381598,
+    "loro": -0.03366099320097836
+   }
+  },
+  "learned_exact p_skip=0.5 haiku split": -0.020593552947354443,
+  "learned_exact harm=1 haiku split": -0.010436011192576537
+ },
+ "trajectory_earlier_failure_detection": {
+  "haiku": {
+   "U": {
+    "usd_share": 0.05623886046769407,
+    "ci": [
+     0.03565423541200468,
+     0.0774885231512343
+    ],
+    "calls": 1.4367088607594938
+   },
+   "D": {
+    "usd_share": 0.018111973763756617,
+    "ci": [
+     0.009643101478949062,
+     0.0268816488469188
+    ],
+    "calls": 0.3860759493670886
+   },
+   "C": {
+    "usd_share": 0.012671310512961217,
+    "ci": [
+     0.0055987882550891715,
+     0.020192131511319735
+    ],
+    "calls": 0.22784810126582278
+   }
+  },
+  "sonnet": {
+   "U": {
+    "usd_share": 0.06435239982180302,
+    "ci": [
+     0.02337158207394206,
+     0.10377474017249791
+    ],
+    "calls": 1.90625
+   },
+   "D": {
+    "usd_share": 0.011748099999905368,
+    "ci": [
+     0.0006539973941617445,
+     0.02711509003487016
+    ],
+    "calls": 0.40625
+   },
+   "C": {
+    "usd_share": 0.003935421706919402,
+    "ci": [
+     0.0,
+     0.012373554813303413
+    ],
+    "calls": 0.15625
+   }
+  }
+ },
+ "setup_offload": {
+  "haiku": {
+   "split": {
+    "conservative": 0.0009658794413714712,
+    "upper (all friction)": 0.025209448072460165
+   },
+   "loro": {
+    "conservative": -0.0005759614783414106,
+    "upper (all friction)": 0.07141678541558845
+   }
+  },
+  "sonnet": {
+   "split": {
+    "conservative": 0.0,
+    "upper (all friction)": 0.0
+   },
+   "loro": {
+    "conservative": -0.004764786347275085,
+    "upper (all friction)": 0.03321436743731968
+   }
+  }
+ },
+ "vs_baseline": "U11 + learned reflexes: +1.0 calls post-hoc, +2.11 pre-emptive (~3.9% $). Verify-after-edit: +1.18 calls/+2.8% (Haiku split), +0.55/+1.2% (LORO): same size or smaller, on different calls (post-edit test runs), roughly additive. Setup offload overlaps U11 and adds ~0 conservatively.",
+ "hard_coded_parts": [
+  "authoring-tool set (Edit/Write/MultiEdit/NotebookEdit) = edit stimulus and what a hook may not author",
+  "shell syntax: first word after VAR= as template, here-doc/-c/-e = inline script, path regex for printed paths; sandbox root strip (data prep)",
+  "MEASUREMENT ONLY: harness features.Act (run/targets/executed/env_friction/env_probe) for test-run coverage, trajectory windows, ceiling classes; category regexes in ceilings.py/stretches.py; trajectory.FAIL_TEXT",
+  "constants: W=3, 40-token wrapper, 60-token compact pass summary, tokens/char 0.324/0.387 for misses, LORO pool subsample 120, revised>=50% lines, repair specificity 0.5"
+ ],
+ "ceiling": {
+  "per_turn_value": "~$0.005 per removed turn on Haiku (~2% of session $)",
+  "exact_reachable": {
+   "haiku": 0.06260805697453227,
+   "sonnet": 0.018943288302936977
+  },
+  "all_test_runs_compacted": {
+   "haiku": 0.16184281772521855,
+   "sonnet": 0.16903376114443605
+  },
+  "union_reachable+after_edit_tests+friction": {
+   "haiku": {
+    "usd_share": 0.1463823737020012,
+    "ci": [
+     0.13572710740052932,
+     0.1578010190714603
+    ],
+    "calls": 7.7974683544303796
+   },
+   "sonnet": {
+    "usd_share": 0.09755124115516448,
+    "ci": [
+     0.08219306805566164,
+     0.11685187325779958
+    ],
+    "calls": 4.46875
+   }
+  },
+  "every_non_authoring_call (needs model reasoning)": {
+   "haiku": 0.4757665183876532,
+   "sonnet": 0.6133038618317154
+  }
+ },
+ "build_recommendation": "Do not build a general offload engine (exact-prediction oracle 6.3%/1.9%, learned ~0). Optionally build E2 'verify after edit' (re-run the agent's own last learned verifier command after an edit turn; deliver 'exit 0 \u00b7 N passed' on pass, full output on fail) as an experiment: expected +1-3% $ and +0.5-1.2 calls per Haiku task, ~+1% Sonnet; confirm with a 10-pair micro-slice on click/attrs measuring p_skip (>=0.6) and harm after miss deliveries.",
+ "so_what": "If shipped, verify-after-edit offload changes $/task by about -1% to -3% on Haiku (split +2.8% [2.0,3.7], LORO +1.2% [0.7,1.7]) and ~-1% on Sonnet (LORO +1.0% [0.3,1.7]), calls by -0.5 to -1.2; pass rate unmeasured offline (risk from ~1.2 unused mid-change deliveries/session). Even a perfect offload hook caps at 14.6%/9.8% of $. Confidence the realistic effect survives a live A/B: low-moderate."
+}
