@@ -69,5 +69,5 @@ if [ -z "$LINKED" ] && P=$(command -v adage 2>/dev/null) && [ -n "$P" ]; then
     ln -sfn "$P" "$DATA/bin/adage-exec" && LINKED=1
   fi
 fi
-[ -n "$LINKED" ] || fail "no binary for $(uname -s)-$(uname -m); install with brew install stevenvaughanbooth/tap/adage or npm i -g @adage/cli"
+[ -n "$LINKED" ] || fail "no binary for $(uname -s)-$(uname -m); install with brew install stevenvaughanbooth/tap/adage or npm i -g @adage-ai/cli"
 exec "$DATA/bin/adage-exec" hook claude SessionStart
