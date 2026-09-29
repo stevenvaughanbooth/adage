@@ -553,6 +553,29 @@ pub fn follows(directed: &str, observed: &str) -> bool {
             (Some(d), Some(o)) => d.followed_by(&o),
             _ => false,
         }
+        || observed.strip_prefix("exec ").is_some_and(|o| {
+            let o: Vec<String> = o.split_whitespace().map(str::to_string).collect();
+            follows_action(directed, &[o.as_slice()])
+        })
+}
+
+/// The action-level follow judgement ([`crate::action::satisfies`]) for a directed test run, over
+/// the observed call's command segments in order (`source .venv/bin/activate && python -m pytest
+/// tests/x.py | tail` is one test run in the project's environment). Only a directed test run is
+/// judged this way: the classifier reads its role, runner and environment exactly; any other
+/// command keeps the structural relation ([`Shape::followed_by`]).
+pub fn follows_action(directed: &str, observed: &[&[String]]) -> bool {
+    use crate::action::{classify, classify_argv, satisfies, Role};
+    let Some(d) = directed.strip_prefix("exec ") else { return false };
+    let d: Vec<String> = d.split_whitespace().map(str::to_string).collect();
+    let da = classify_argv(&d);
+    // The directed flags stay directed (`cargo test --workspace` is not `cargo test -p x`).
+    let flags = Shape::of_tokens(&d).map(|s| s.options).unwrap_or_default();
+    let has_flags = flags.iter().all(|f| {
+        let head = f.split(' ').next().unwrap_or(f);
+        head == "{env}" || observed.iter().any(|seg| seg.iter().any(|t| t == head))
+    });
+    da.role == Role::TestRun && !observed.is_empty() && has_flags && satisfies(&da, &classify(observed))
 }
 
 /// Programs an agent runs to look around or tidy up, whatever their arguments: never a step of
@@ -710,7 +733,6 @@ mod tests {
             "/usr/bin/python3 -m pytest",
             ".venv/bin/python -m unittest tests",
             ".venv/bin/python repro.py",
-            "uv run pytest tests",
         ] {
             assert!(!f(directed, o), "{o:?} must not follow {directed:?}");
         }
@@ -735,6 +757,20 @@ mod tests {
         ] {
             assert!(!f(d, o), "{o:?} must not follow {d:?}");
         }
+        // Through the action classifier: an activated environment, or uv's, runs the same tests.
+        let segs = |parts: &[&str]| -> Vec<Vec<String>> {
+            parts.iter().map(|p| p.split_whitespace().map(str::to_string).collect()).collect()
+        };
+        let act = |parts: &[&str]| {
+            let v = segs(parts);
+            let r: Vec<&[String]> = v.iter().map(|x| x.as_slice()).collect();
+            follows_action(&key(directed), &r)
+        };
+        assert!(act(&["source .venv/bin/activate", "python -m pytest tests/test_x.py -q", "tail -20"]));
+        assert!(act(&["uv run pytest tests -x"]));
+        assert!(!act(&["python -m pytest tests/test_x.py"]), "the system Python is the dead end itself");
+        assert!(!act(&["source .venv/bin/activate", "python repro.py"]), "not a test run");
+        assert!(!follows_action(&key("make gen"), &[segs(&["make gen"])[0].as_slice()]), "not a directed test run");
         // The project's interpreter is not the one on PATH, for dead ends too.
         assert!(!runs_avoided("python -m pytest", &key(".venv/bin/python -m pytest tests -x")));
         assert!(runs_avoided("python -m pytest", &key("python -m pytest tests -x")));

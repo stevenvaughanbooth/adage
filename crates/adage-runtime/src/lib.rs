@@ -294,6 +294,29 @@ fn follows(directed: &str, observed: &str) -> bool {
     }
 }
 
+/// The argv of each command a call ran, in order (an activation, the run, a filter), for the
+/// action-level follow judgement ([`follows_call`]).
+fn exec_segments(keyed: &[(String, adage_core::Normalized)]) -> Vec<Vec<String>> {
+    keyed
+        .iter()
+        .filter_map(|(_, n)| match &n.action {
+            adage_core::CanonicalAction::Exec { argv, .. } => Some(argv.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Whether a call as a whole follows a directed test run ([`pattern::follows_action`]: the
+/// action classifier reads `source .venv/bin/activate && python -m pytest …` as one test run in
+/// the project's environment, which no single key shows).
+fn follows_call(directed: &str, segs: &[Vec<String>]) -> bool {
+    if EXACT_KEYS.get() || segs.is_empty() {
+        return false;
+    }
+    let r: Vec<&[String]> = segs.iter().map(Vec::as_slice).collect();
+    pattern::follows_action(directed, &r)
+}
+
 /// The command line of a shell tool call (Claude Code's `Bash`, Codex's `shell`), if it has one.
 fn call_command(call: &Call) -> Option<&str> {
     match call.input.get("command")? {
@@ -498,7 +521,9 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                 let piped = !call.failed && call_command(call).is_some_and(outcome::piped);
                 let piped_failed = piped && outcome::piped_failure(&call.output);
                 let misfire = (call.failed || piped) && outcome::misfired(&call.output);
-                for (key, n) in call_keys(call, ctx) {
+                let keyed = call_keys(call, ctx);
+                let segs = exec_segments(&keyed);
+                for (key, n) in keyed {
                     let key = cap(key);
                     d.observed.push(key.clone());
                     push_history_capped(st, key.clone(), ctx.params.history);
@@ -506,7 +531,7 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
                     // added to narrow it ([`follows`]). Followed and failed without the runner
                     // reporting tests (or, piped, printing an environment failure) is a misfire.
                     st.pending.retain(|p| {
-                        if follows(&p.expect_key, &key) {
+                        if follows(&p.expect_key, &key) || follows_call(&p.expect_key, &segs) {
                             let route = p.route.clone();
                             d.judgements.push(if misfire {
                                 Judgement::Misfired { route }
@@ -764,14 +789,16 @@ pub fn decide(ctx: &Ctx, st: &mut SessionState, ev: &Event) -> Decision {
             st.pending.retain(|p| p.batches_left > 0);
         }
         Event::Failure { call } => {
-            for (key, _) in call_keys(call, ctx) {
+            let keyed = call_keys(call, ctx);
+            let segs = exec_segments(&keyed);
+            for (key, _) in keyed {
                 d.observed.push(format!("{key} !failed"));
                 push_history_capped(st, format!("{key} !failed"), ctx.params.history);
                 // The directed command, run within the follow window, failed: a misfire, unless
                 // it is a test run that ran and reported failing tests (followed; the tests
                 // failing is the task, not the directive).
                 st.pending.retain(|p| {
-                    if follows(&p.expect_key, &key) {
+                    if follows(&p.expect_key, &key) || follows_call(&p.expect_key, &segs) {
                         let route = p.route.clone();
                         d.judgements.push(if outcome::misfired(&call.output) {
                             Judgement::Misfired { route }

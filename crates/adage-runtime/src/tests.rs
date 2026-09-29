@@ -1699,6 +1699,14 @@ fn a_directed_runner_narrowed_to_the_task_is_followed() {
         (failed(followed, "bash: .venv/bin/python: No such file or directory"), "misfired"),
         (bash(&piped, "==== 1 failed, 2 passed in 0.2s ===="), "followed"),
         (bash(&piped, "bash: .venv/bin/python: No such file or directory"), "misfired"),
+        // The action classifier (adage_core::action): the environment activated, then its python.
+        (
+            bash(
+                "source .venv/bin/activate && python -m pytest tests/test_formatting.py -q 2>&1 | tail -20",
+                "==== 3 passed in 0.2s ====",
+            ),
+            "followed",
+        ),
     ] {
         let (mut st, mut fast_st) = (SessionState::default(), SessionState::default());
         let mut go = |ev: Event| decide_both(&ctx, &mut st, &mut fast_st, &ev);
