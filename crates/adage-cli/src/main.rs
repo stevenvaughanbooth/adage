@@ -47,6 +47,7 @@ mod autolearn;
 mod config;
 mod detect;
 mod doctor;
+mod evidence;
 mod exec;
 use adage_hook::failopen;
 mod graph;
@@ -99,9 +100,45 @@ fn main() {
         Some(Ok(())) => {}
         Some(Err(e)) => {
             eprintln!("adage: {e:#}");
+            // A bare permission error names no path: say which directory to check.
+            let denied = e.chain().any(|c| {
+                c.downcast_ref::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::PermissionDenied)
+            });
+            if denied {
+                eprintln!(
+                    "adage: a file could not be written or read; Adage keeps its data in {} (ADAGE_HOME), and `adage doctor` checks it",
+                    detect::tilde(&Paths::from_env().root)
+                );
+            }
             std::process::exit(1);
         }
         None => std::process::exit(1),
+    }
+}
+
+/// Create the data directory if need be and check that it can be written, with one clear message
+/// if not (rather than a bare "Permission denied" from whichever file came first).
+pub(crate) fn writable_data_dir(paths: &Paths) -> Result<()> {
+    let at = detect::tilde(&paths.root);
+    let fix = "set ADAGE_HOME to a writable directory (`adage doctor` checks it)";
+    if let Err(e) = std::fs::create_dir_all(&paths.root) {
+        bail!("cannot create the data directory {at} ({}); {fix}", io_reason(&e));
+    }
+    let probe = paths.root.join(format!(".adage-probe-{}", std::process::id()));
+    match std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(&probe) {
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe);
+            Ok(())
+        }
+        Err(e) => bail!("cannot write in the data directory {at} ({}); {fix}", io_reason(&e)),
+    }
+}
+
+/// An I/O error in a few words.
+fn io_reason(e: &std::io::Error) -> String {
+    match e.kind() {
+        std::io::ErrorKind::PermissionDenied => "permission denied".into(),
+        _ => e.to_string(),
     }
 }
 
@@ -286,7 +323,7 @@ fn condition(args: &[String], paths: &Paths) -> Result<()> {
         only_repo: None,
     };
     // One writer of the tracks and index at a time (automatic learners, review decisions).
-    std::fs::create_dir_all(&paths.root)?;
+    writable_data_dir(paths)?;
     let tracks_lock = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let before = adage_learn::diff::snapshot_all(&paths.tracks());
     let result = adage_learn::learn(&inputs, &paths.tracks(), &paths.index(), &cfg);
@@ -409,7 +446,7 @@ pub(crate) fn instincts_only(args: &[String], paths: &Paths) -> Result<()> {
     });
     let settings = adage_store::config::load(paths).config;
     let ic = autolearn::instinct_config(&settings, paths);
-    std::fs::create_dir_all(&paths.root)?;
+    writable_data_dir(paths)?;
     let tracks_lock = adage_store::lock::exclusive(&paths.tracks_lock())?;
     let before = adage_learn::diff::snapshot(&paths.tracks(), &repo);
     let result = adage_learn::instincts::learn_only(&repo, &root, &paths.tracks(), &paths.index(), &ic);
@@ -479,21 +516,25 @@ fn log_learn(
 }
 
 fn status(paths: &Paths) -> Result<()> {
-    let tracks = io::read_all(&paths.tracks())?;
+    let tracks = io::read_all_dirs(&paths.tracks())?;
     let has_intents =
-        tracks.iter().any(|t| t.routes.iter().any(|r| matches!(r.trigger, adage_tracks::Trigger::Intent { .. })));
-    match adage_intent::model::StaticModel::open(&adage_intent::model::dir_in(&paths.models())) {
-        Ok(m) => println!("intent model: {}", m.id),
-        Err(_) if has_intents => {
-            println!("intent model: not installed, so intent reflexes will not fire (`adage models fetch`)")
+        tracks.iter().any(|(_, t)| t.routes.iter().any(|r| matches!(r.trigger, adage_tracks::Trigger::Intent { .. })));
+    // What hooks embed prompts with: the installed model, else the one bundled in this binary, else
+    // the hashed fallback (`model::resolve`, as hooks, doctor and the status card choose it).
+    let r = adage_intent::model::resolve(&paths.models(), false);
+    match &r.source {
+        adage_intent::model::Source::Hashed { why } if has_intents && r.selected != "hashed" => {
+            println!("intent model: none ({why}), so intent reflexes will not fire (`adage models status` says why)")
         }
-        Err(_) => {}
+        _ => println!("intent model: {}", r.describe()),
     }
     if tracks.is_empty() {
         println!("no tracks installed in {}", paths.tracks().display());
         return Ok(());
     }
-    for t in tracks {
+    for (dir, t) in tracks {
+        // The evidence each strength was decided on (`evidence::describe`), with its reasons.
+        let whys = adage_tracks::why::load(&dir);
         let origin = if adage_tracks::index::is_imported(&t) {
             "  (imported)"
         } else if adage_tracks::index::is_instinct_track(&t) {
@@ -508,11 +549,15 @@ fn status(paths: &Paths) -> Result<()> {
                 Strength::Prime => ("🟡", "prime"),
                 Strength::Inhibit => ("🔴", "inhibit"),
             };
-            let e = &r.evidence;
             println!(
-                "  {dot} {word:<7} {:<22} {:>3}/{:<3} traces  rate {:.2}  lb {:.2}  {:?}",
-                r.id, e.support, e.opportunities, e.rate, e.lower_bound, r.effect
+                "  {dot} {word:<7} {:<22} {}  {}",
+                r.id,
+                r.effect.as_str(),
+                evidence::describe(r, whys.get(&r.id))
             );
+            if let Some(o) = evidence::obligation(r) {
+                println!("            {o}");
+            }
         }
     }
     Ok(())

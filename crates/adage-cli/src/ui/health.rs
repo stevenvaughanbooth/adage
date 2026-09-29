@@ -203,13 +203,23 @@ pub fn gather(paths: &Paths, root: Option<&Path>) -> Health {
             _ => Lamp::Off,
         },
     });
+    // What hooks embed with: an installed model, the one bundled in the binary, or the hashed
+    // fallback (`status_card::embeddings`, as the card and doctor say it).
     let model = by("embedding model");
-    let model_installed = model.is_some_and(|c| c.status == Status::Pass && c.detail.contains("installed;"));
+    let (embedder, unchosen_fallback) = crate::status_card::embeddings(paths);
+    let hashed = embedder == "hashed fallback";
     lights.push(Light {
-        label: if model_installed { "model".into() } else { "no model".into() },
+        label: if hashed {
+            "no model".into()
+        } else if embedder.ends_with("(bundled)") {
+            "bundled model".into()
+        } else {
+            "model".into()
+        },
         lamp: match model.map(|c| c.status) {
-            Some(Status::Pass) if model_installed => Lamp::Ok,
+            Some(Status::Pass) if !hashed => Lamp::Ok,
             Some(Status::Pass) | None => Lamp::Off,
+            Some(_) if !hashed && !unchosen_fallback => Lamp::Warn,
             Some(s) => lamp(s),
         },
     });

@@ -214,6 +214,11 @@ pub fn run_auto(args: &[String], paths: &Paths) -> Result<()> {
     let Some(root) = flag("--repo-root").map(PathBuf::from) else { bail!("--auto needs --repo-root <path>") };
     let after: Option<u64> = flag("--after").and_then(|v| v.parse().ok());
     let bootstrap = args.iter().any(|a| a == "--bootstrap");
+    // A directory that is not a repository (`~`, `/`): nothing to learn, and nothing to record
+    // (a request queued before hooks checked for one). A deleted directory is recorded below.
+    if root.is_dir() && !root.join(".git").exists() {
+        return Ok(());
+    }
     let repo = adage_core::repo::repo_key_cached(&root, &paths.repo_keys());
     let q = Queue::new(paths, &repo);
     let Some(_lock) = lock::exclusive_within(&q.lock(), LOCK_PATIENCE)? else {

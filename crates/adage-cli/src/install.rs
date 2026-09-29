@@ -12,6 +12,10 @@
 //!
 //! JSON files are merged: Adage's own entries are replaced, everything else is kept, and a file
 //! that is not a JSON object is refused. The OpenCode plugin file is replaced only if it is Adage's.
+//!
+//! `--write` first shows the change as a line diff. At a terminal it then asks before writing,
+//! unless `--yes` was given; without one (`ADAGE_ALLOW_NONINTERACTIVE=1`) it writes. A file it
+//! changes is copied to `<file>.adage-bak` first, so the previous version is one rename away.
 
 use crate::harness::{claude, codex, opencode};
 use adage_core::repo;
@@ -20,7 +24,10 @@ use serde_json::{json, Value};
 use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
-const USAGE: &str = "usage: adage install <claude-code|opencode|codex> [--print | --write] [--scope project|user] [--bin <path>] [--repo <dir>]";
+const USAGE: &str = "usage: adage install <claude-code|opencode|codex> [--print | --write [--yes]] [--scope project|user] [--bin <path>] [--repo <dir>]";
+
+/// The suffix of the copy kept of a file before `adage install` changes it.
+pub(crate) const BACKUP_SUFFIX: &str = ".adage-bak";
 
 /// Environment variables that mark a shell run by an agent. Only `CLAUDECODE` is documented; the
 /// others are observed conventions (docs/harnesses.md). A guard against steering, not a sandbox.
@@ -134,7 +141,31 @@ pub(crate) fn plan(harness: &str, scope: &str, repo: Option<&Path>, bin: Option<
 /// Make a planned write. Needs a person at a terminal, outside any agent session.
 pub(crate) fn apply(p: &Plan) -> Result<()> {
     require_person()?;
-    write_atomic(&p.target, &p.after)
+    write_with_backup(p).map(drop)
+}
+
+/// Write the plan's file, first copying what it holds now (if anything, and if it changes) to
+/// `<file>.adage-bak`. Returns the backup's path, when one was made.
+fn write_with_backup(p: &Plan) -> Result<Option<PathBuf>> {
+    let backup = match &p.before {
+        Some(before) if *before != p.after => {
+            let mut name = p.target.clone().into_os_string();
+            name.push(BACKUP_SUFFIX);
+            let b = PathBuf::from(name);
+            std::fs::write(&b, before)
+                .with_context(|| format!("backing up {} to {}", p.target.display(), b.display()))?;
+            Some(b)
+        }
+        _ => None,
+    };
+    write_atomic(&p.target, &p.after)?;
+    Ok(backup)
+}
+
+/// The person's answer to "Write it? [y/N]": yes only for `y` or `yes`.
+fn confirmed(answer: &mut impl std::io::BufRead) -> bool {
+    let mut line = String::new();
+    answer.read_line(&mut line).is_ok() && matches!(line.trim().to_lowercase().as_str(), "y" | "yes")
 }
 
 pub fn install(args: &[String]) -> Result<()> {
@@ -173,8 +204,31 @@ pub fn install(args: &[String]) -> Result<()> {
     require_person()?;
     let repo = flag(args, "--repo").map(PathBuf::from);
     let p = plan(harness, &scope, repo.as_deref(), bin)?;
-    write_atomic(&p.target, &p.after)?;
+    if p.before.as_deref() == Some(p.after.as_str()) {
+        println!("adage install: {} already registers these hooks; nothing to write", p.target.display());
+        return Ok(());
+    }
+    // What changes, before anything is written.
+    let verb = if p.before.is_some() { "would change" } else { "would be created" };
+    println!("adage install: {} {verb}:", p.target.display());
+    for l in line_diff(p.before.as_deref().unwrap_or(""), &p.after).lines() {
+        println!("  {l}");
+    }
+    let yes = args.iter().any(|a| a == "--yes" || a == "-y");
+    if !yes && std::io::stdin().is_terminal() {
+        use std::io::Write;
+        print!("Write it? [y/N] ");
+        let _ = std::io::stdout().flush();
+        if !confirmed(&mut std::io::stdin().lock()) {
+            println!("adage install: nothing written");
+            return Ok(());
+        }
+    }
+    let backup = write_with_backup(&p)?;
     println!("adage install: wrote {}", p.target.display());
+    if let Some(b) = backup {
+        println!("  the previous version is in {}", b.display());
+    }
     if harness == "codex" {
         println!("Codex asks you to review new hooks before they run: open /hooks in Codex to approve them.");
     }
@@ -248,10 +302,10 @@ fn own_file(target: &Path, content: &str) -> Result<String> {
 
 fn write_atomic(target: &Path, body: &str) -> Result<()> {
     let dir = target.parent().context("no parent directory")?;
-    std::fs::create_dir_all(dir)?;
+    std::fs::create_dir_all(dir).with_context(|| format!("cannot create {}", dir.display()))?;
     let tmp = dir.join(format!(".adage-install-{}.tmp", std::process::id()));
-    std::fs::write(&tmp, body)?;
-    std::fs::rename(&tmp, target)?;
+    std::fs::write(&tmp, body).with_context(|| format!("cannot write in {}", dir.display()))?;
+    std::fs::rename(&tmp, target).with_context(|| format!("cannot replace {}", target.display()))?;
     Ok(())
 }
 
@@ -288,6 +342,13 @@ pub(crate) fn line_diff(before: &str, after: &str) -> String {
 #[cfg(test)]
 mod diff_tests {
     use super::*;
+
+    #[test]
+    fn only_yes_confirms() {
+        for (a, want) in [("y\n", true), ("YES\n", true), (" yes ", true), ("\n", false), ("n\n", false), ("", false)] {
+            assert_eq!(confirmed(&mut a.as_bytes()), want, "{a:?}");
+        }
+    }
 
     #[test]
     fn diffs_show_only_changed_lines() {

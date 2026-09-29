@@ -72,7 +72,7 @@ fn load_store(paths: &Paths) -> Result<TrustStore> {
 
 fn save_store(paths: &Paths, store: &TrustStore) -> Result<()> {
     let p = trust_path(paths);
-    std::fs::create_dir_all(&paths.root)?;
+    crate::writable_data_dir(paths)?;
     let tmp = p.with_extension(format!("tmp{}", std::process::id()));
     std::fs::write(&tmp, serde_json::to_vec_pretty(store)?)?;
     std::fs::rename(tmp, p)?;

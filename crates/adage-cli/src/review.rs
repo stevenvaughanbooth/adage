@@ -436,7 +436,7 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     }
     println!("adage review: {} reflex(es) await a decision\n", items.len());
     for it in &items {
-        let (t, r, e) = (&it.inst.track, it.route, &it.route.evidence);
+        let (t, r) = (&it.inst.track, it.route);
         let origin = match origin_label(r) {
             Some(l) => format!("  ({l})"),
             None if it.inst.imported => "  (imported)".into(),
@@ -458,10 +458,11 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
             lower(r.state),
             if r.authored { " · authored" } else { "" }
         );
-        println!(
-            "  evidence   {}/{} traces over {} day(s) · rate {:.2} · Wilson lower bound {:.2}",
-            e.support, e.opportunities, e.days, e.rate, e.lower_bound
-        );
+        let whys = adage_tracks::why::load(&it.inst.dir);
+        println!("  evidence   {}", crate::evidence::describe(r, whys.get(&r.id)));
+        if let Some(o) = crate::evidence::obligation(r) {
+            println!("  enforced   {o}");
+        }
         println!("  runtime    followed {} · ignored {} (treated sessions)", it.followed, it.ignored);
         // The graph engine's reasons for a reflex (Track G §6.3): for people, never the agent.
         if let Some(w) = adage_tracks::why::load(&it.inst.dir).get(&r.id) {
