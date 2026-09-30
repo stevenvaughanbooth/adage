@@ -155,6 +155,45 @@ a **procedure card**: a 350–700-token reflex listing the files edited, in orde
 added last time, the test command that works, and the commands that kept failing. When a new prompt
 matches the family (by local embedding similarity), the card is delivered once, at the prompt.
 
+**The shipped product on five repositories (pre-registered showcase).** The product ran as a user
+installs it. Its background learner formed each family's card by itself from 4 ordinary Haiku
+sessions. Each Adage session was then paired with a control session on 8 held-out variants per
+family, 2 repeats each.
+
+- **Cost per task:** Adage cut it by **28.2%**, 90% CI [−31.2%, −25.0%], with Claude Haiku 4.5
+  (80 pairs, 40 variants, 5 families; intention to treat). Tool calls were cut by 25.1%
+  [−28.4, −21.6] and wall time by 16.8% [−19.7, −13.7].
+- **Hidden tests passed: lower with Adage, 51/80 vs 59/80** (−10.0 points [−15.7, −4.3]). Almost
+  all of it is one family, http-header (4/16 vs 14/16). Every failure there is the same check: the
+  task asks for a test, and the Adage session did not write one. None of the 4 training sessions
+  wrote a test either, so the card the product learned from them lists only `name.rs` and `mod.rs`.
+  The card faithfully repeats an incomplete procedure. The other four families pass 47/64 vs
+  45/64.
+- **Delivery:** the card reached 80/80 Adage sessions.
+- **False fires:** 3 of 30 same-repository negative prompts (upper bound 22.6%). None fired at the
+  prompt; all 3 fired at the first edit of a card file.
+
+| Family (repository) | Cost per task [90% CI] | Tool calls | Passed (control / Adage) |
+| --- | ---: | ---: | --- |
+| New parameter type (pallets/click, Python) | −19.4% [−24.1, −13.4] | −4.9% (no detectable change) | 13/16 / 14/16 |
+| New validator (marshmallow, Python) | −30.5% [−35.5, −25.4] | −29.1% | 16/16 / 16/16 |
+| New flag type (urfave/cli, Go) | −47.4% [−53.4, −40.6] | −39.8% | 1/16 / 1/16 |
+| New standard header (hyperium/http, Rust) | −16.2% [−25.1, −5.8] | −29.3% | 14/16 / **4/16** |
+| New middleware (go-chi/chi, Go) | −21.7% [−29.7, −13.4] | −20.9% | 15/16 / 16/16 |
+
+- **Per-family intervals:** each rests on 8 variants (about ±10 points). The go-flag saving is
+  partly control sessions hitting the 60-turn cap (5 of 16); without the 7 capped sessions, the
+  pooled cut is 25.1% [−28.5, −21.6]. Both go-flag arms fail CI's approval step, which no training
+  session performed.
+- **Claude Sonnet 5 (directional, 12 pairs, same Haiku-learned cards):** cost −17.0% [−28.7, −2.9],
+  12/12 vs 12/12 passed. Within that, mm-validator is −22.2% [−38.2, −0.7], and chi-middleware
+  shows no detectable change (−6.8% [−19.9, +7.4]).
+- **Spend:** $47.64 for 204 sessions, against a $60 hard cap.
+- **Details:** see [evals/showcase/RESULTS.md](evals/showcase/RESULTS.md); machine-readable data is
+  in [results.json](evals/showcase/results.json).
+
+The research that led to cards (prototype, before the shipped product):
+
 | Family (repository) | Card learned from | Cost per task | Tool calls | Hidden tests passed |
 | --- | --- | ---: | ---: | --- |
 | New parameter type (click) + new validator (marshmallow) | 4 earlier sessions | **−18.8%** [−25.8, −11.6] | −16% | 20/24 vs 19/24 |

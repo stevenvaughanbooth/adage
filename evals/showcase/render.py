@@ -142,7 +142,10 @@ def build(a: dict, status: str) -> dict:
                   "budget_central_usd": pr["budget"]["central_usd"]["total"], "cap_usd": pr["budget"]["caps_usd"]["global"]},
         "caveats": caveats,
         "data": {"analysis": "evals/showcase/analysis.json", "code": "evals/showcase/",
-                 "raw_runs": "not committed (transcripts); roots listed in prereg.json"},
+                 "raw_runs": ("evals/showcase/live/<root>/state.json: every session's metrics and hidden-check "
+                              "result, plus each root's gate.json, learner log and learned home; transcripts "
+                              "not committed" if status != "synthetic" and (HERE / "live").is_dir()
+                              else "not committed (transcripts); roots listed in prereg.json")},
     }
 
 
