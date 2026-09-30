@@ -96,6 +96,27 @@ four grant files before dispatch. Earlier scripts are historical; do not reuse t
 
 ## Launch experience and next priorities
 
+### Active diagnostic checkpoint
+
+Native delivery canaries are complete and archived at
+`evals/reflex-proof/harness/results/20260930-delivery-canary`: all four controls passed,
+total provider cost $0.0288169. Both context and valid Read-result replacement delivered
+random markers; malformed replacement and no-result controls did not. This is delivery
+evidence only. Driver and raw fixture outputs are retained. No execution grant was created.
+
+The next frozen diagnostic is `/private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-v2`,
+prepared by `evals/reflex-proof/harness/receipt_ablation.py`: two repetitions each of baseline,
+current-style receipt, typed receipt, and typed receipt with SessionStart responsibility
+guidance. Total reservation ceiling $2; the original shared $60 ledger remains authoritative.
+It uses an authored read-triggered fixture, not production learned execution. `receipt-v1`
+was stopped offline when Apple's Python launcher failed confinement; v2 uses the already
+prepared pinned interpreter. All attempts must remain recorded; no outcome retries.
+
+At this checkpoint, the first baseline completed; the remaining assignments are running
+sequentially. Inspect the ledger and each `finding.json` before resuming anything. Never
+dispatch an already attempted assignment. The probe stops on a missing CPU receipt or
+terminal error. Codex allowance most recently reported 97% used (3% remaining).
+
 Latest research checkpoint: [hook action reuse](hook-action-reuse-research.md). The user
 requested first-principles research before another fix. Official Claude, Gemini and
 LangChain sources distinguish result delivery, execution reuse and skipping model calls.
