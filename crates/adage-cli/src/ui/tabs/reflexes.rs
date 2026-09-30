@@ -425,7 +425,7 @@ fn lamp_spans(r: &RouteRow, t: &Theme) -> Vec<Span<'static>> {
     } else if t.color {
         Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.strength(r.strength))
     } else {
-        Span::styled(format!("{} ", &Theme::strength_word(r.strength)[..1].to_ascii_uppercase()), t.bold())
+        Span::styled(format!("{} ", Theme::strength_word(r.strength)[..1].to_ascii_uppercase()), t.bold())
     };
     vec![lamp, Span::styled(format!("{} ", t.glyph(glyph)), t.accent())]
 }
@@ -529,6 +529,17 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
         Span::styled(format!("{} ", t.glyph(kind_glyph(r))), t.accent()),
         Span::styled(r.id.clone(), t.bold()),
     ]));
+    // Execution authority is separate from learned strength. Keep the action and any
+    // uncertain outcome above the evidence, including in the stacked narrow layout.
+    let fact = |key: &str, value: String| {
+        Line::from(vec![Span::styled(format!("{key:<9}"), t.dim()), Span::raw(t.text(&value))])
+    };
+    v.push(fact("mode", format!("{}{}{}", r.execution.mode, t.sep(), r.execution.reason)));
+    v.push(fact("when", r.trigger.clone()));
+    v.push(fact("do", r.step.clone()));
+    if let Some(result) = &r.execution.last_result {
+        v.push(fact("last run", result.clone()));
+    }
     let mut facts = vec![r.stage().to_string(), format!("{}@{}", r.track, r.version)];
     if r.is_card() {
         facts.push("procedure card".into());
@@ -565,7 +576,7 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
         ]));
     }
     v.push(Line::raw(""));
-    v.push(head("WHAT THE AGENT SEES", t));
+    v.push(head("ADVISORY PREVIEW (EXAMPLE VALUES)", t));
     if r.directive.trim().is_empty() {
         v.push(Line::from(Span::styled("  (no preview: the reflex has no directive text)", t.dim())));
     } else {
@@ -843,6 +854,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         f.render_widget(Paragraph::new(view::wrap_lines(lines, area.width)), area);
         return;
     }
+    let nodes = tree(s);
     let wide = area.width >= 90;
     let (list, detail_a) = if wide {
         let left = (area.width * 2 / 5).clamp(40, 56);
@@ -852,8 +864,11 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
         f.render_widget(Paragraph::new(bar), rule);
         (l, d)
     } else {
+        let groups = nodes.iter().filter(|n| matches!(n, Node::Group { .. })).count();
+        let needed = (3 + nodes.len() + groups.saturating_sub(1)).min(u16::MAX as usize) as u16;
+        let list_height = needed.min(area.height.saturating_mul(45) / 100);
         let [l, rule, d] =
-            Layout::vertical([Constraint::Percentage(45), Constraint::Length(1), Constraint::Min(5)]).areas(area);
+            Layout::vertical([Constraint::Length(list_height), Constraint::Length(1), Constraint::Min(5)]).areas(area);
         f.render_widget(Paragraph::new(view::rule("", None, area.width, t)), rule);
         // The same one-column margin as every other pane's text.
         (l, d.inner(ratatui::layout::Margin { horizontal: 1, vertical: 0 }))
@@ -875,7 +890,6 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     };
     f.render_widget(Paragraph::new(filter_line), filter_a);
     f.render_widget(Paragraph::new(chips(s, t, list.width as usize)), chips_a);
-    let nodes = tree(s);
     if nodes.is_empty() {
         f.render_widget(
             Paragraph::new(Span::styled(" Nothing matches. esc clears the filter; F P I S reset the chips.", t.dim()))

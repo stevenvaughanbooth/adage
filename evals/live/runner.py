@@ -71,10 +71,13 @@ import subprocess
 import sys
 import threading
 import time
+import signal
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+from budget import Budget, known_cost, execution_lock  # noqa: E402
 REPO = HERE.parent.parent
 sys.path.insert(0, str(REPO / "demo"))
 import report as demo_report  # noqa: E402 - demo/report.py: statuses, statistics, results page
@@ -93,6 +96,7 @@ DEFAULTS = {
     "allowed_tools": ["Bash", "Read", "Edit", "Write", "Glob", "Grep", "LS", "MultiEdit"],
     "disallowed_tools": ["WebFetch", "WebSearch", "Agent", "Task"],
     "budget_usd": 10.0,
+    "session_budget_usd": 1.0,
     "workdir": "repo",
     # Extra environment variables passed to isolated sessions (e.g. Bedrock or Vertex settings).
     "forward_env": [],
@@ -167,6 +171,11 @@ def load_config(path, overrides):
             raise SystemExit(f"config {path}: unknown arm {arm!r} (one of {', '.join(ARMS)})")
     if not isinstance(cfg["rounds"], int) or cfg["rounds"] < 1:
         raise SystemExit(f"config {path}: rounds must be a positive integer")
+    for key in ("budget_usd", "session_budget_usd"):
+        if known_cost(cfg[key]) is None or cfg[key] <= 0:
+            raise SystemExit(f"config {path}: {key} must be finite and positive")
+    if cfg["session_budget_usd"] > cfg["budget_usd"]:
+        raise SystemExit(f"config {path}: session_budget_usd exceeds the total budget_usd")
     if cfg.get("host_auth"):
         cfg["forward_env"] = list(dict.fromkeys([*(cfg.get("forward_env") or []), *HOST_AUTH_ENV]))
     bad = [k for k in cfg.get("forward_env") or [] if forbidden_forward(k)]
@@ -263,6 +272,7 @@ def claude_command(cfg, prompt, settings):
         "claude", "-p", prompt,
         "--model", cfg["model"],
         "--max-turns", str(cfg["max_turns"]),
+        "--max-budget-usd", str(cfg["session_budget_usd"]),
         "--output-format", "stream-json", "--verbose", "--include-hook-events",
         "--setting-sources", "project,local",
         "--strict-mcp-config",
@@ -721,7 +731,7 @@ def run_metrics(cfg, events, result, score, workdir, elapsed, sid, spool, t0=Non
         "ran_regen": any(e["cat"] == "regen" for e in events),
         "obligation_applies": ob_applies,
         "obligation_met": (regen_after and not stale) if ob_applies else None,
-        "cost_usd": result.get("total_cost_usd") or 0.0,
+        "cost_usd": known_cost(result.get("total_cost_usd")),
         "passed": passed, "stale_generated": stale,
         "ci_passed": bool(score.get("ci_passed", passed)), "hidden_passed": bool(score.get("hidden_passed", passed)),
         "result_subtype": result.get("subtype"),
@@ -812,7 +822,6 @@ class Live:
         self.lock = threading.Lock()
         self.written = set()
         self.adage_exec = Path(cfg.get("adage_exec") or Path(adage).parent / "adage-exec")
-        self.spent = 0.0
         self.base_env = dict(os.environ)
         self.forward = list(cfg.get("forward_env") or [])
         self.auth = auth_source(self.base_env, self.forward, bool(cfg.get("host_auth"))) if isolate else None
@@ -826,15 +835,25 @@ class Live:
         self.state["isolated"] = isolate
         self.state["auth"] = self.auth[0] if self.auth else None
         self.state["fresh_pools"] = fresh_pools(cfg)
+        self.state["budget_usd"] = cfg["budget_usd"]
+        self.state["session_budget_usd"] = cfg["session_budget_usd"]
         self.state.setdefault("leaky", False)
         self.state["harness_version"] = harness_version()
         self.state.setdefault("started", time.time())
-        self.spent = sum((r.get("metrics") or {}).get("cost_usd") or 0.0 for r in self.state["runs"].values())
+        self.budget = Budget(self.state, cfg["budget_usd"], cfg["session_budget_usd"], self.lock, self.save)
 
     def save(self):
         tmp = self.root / "state.json.tmp"
-        tmp.write_text(json.dumps(self.state))
+        with tmp.open("w") as handle:
+            json.dump(self.state, handle)
+            handle.flush()
+            os.fsync(handle.fileno())
         tmp.replace(self.root / "state.json")
+        directory = os.open(self.root, os.O_RDONLY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
 
     def set_phase(self, phase):
         with self.lock:
@@ -898,10 +917,19 @@ class Live:
         return (score if isinstance(score, dict) else {}), ok
 
     def run_one(self, run_id, phase, arm, task, prompt_t):
-        if self.spent >= self.cfg["budget_usd"]:
+        attempt, reason = self.budget.reserve(run_id)
+        if attempt is None:
             self.update(run_id, id=run_id, phase=phase, arm=arm, task=task, round=self.round, status="skipped")
-            print(f"  {run_id}: skipped, spend cap ${self.cfg['budget_usd']} reached", flush=True)
+            print(f"  {run_id}: skipped, {reason}", flush=True)
             return
+        try:
+            self.run_reserved(attempt, run_id, phase, arm, task, prompt_t)
+        finally:
+            # Pre-dispatch preparation failures cost zero. Once dispatch was attempted,
+            # absence of a terminal cost blocks further sessions, including after restart.
+            self.budget.settle(attempt)
+
+    def run_reserved(self, attempt, run_id, phase, arm, task, prompt_t):
         run_dir = self.root / "runs" / run_id
         shutil.rmtree(run_dir, ignore_errors=True)
         workdir = run_dir / self.cfg["workdir"]
@@ -924,9 +952,13 @@ class Live:
             cmd = confine_argv(self.cfg, run_dir, env, ro=[settings, self.adage, self.adage_exec], rw=rw) + cmd
         t0 = time.time()
         events, directives, uses_by_id, sid, result, turns, version = [], [], {}, None, {}, 0, None
+        proc = None
         try:
             with open(run_dir / "stream.jsonl", "w") as raw:
-                proc = subprocess.Popen(cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, env=env)
+                if not self.budget.dispatch(attempt):
+                    raise RuntimeError("dispatch stopped: another session has unresolved accounting")
+                proc = subprocess.Popen(cmd, cwd=workdir, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                        text=True, env=env, start_new_session=True)
                 for line in proc.stdout:
                     t = round(time.time() - t0, 2)
                     raw.write(json.dumps({"t": t, "line": line.rstrip("\n")}) + "\n")
@@ -967,12 +999,24 @@ class Live:
                         result = m
                 proc.wait()
         finally:
+            if proc is not None and proc.poll() is None:
+                try:
+                    os.killpg(proc.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    proc.wait()
+            self.budget.settle(attempt, result)
             if self.isolate:  # the copied credentials never outlive the session
                 (config_dir / ".credentials.json").unlink(missing_ok=True)
         score, scorer_ok = self.score(workdir, task)
-        cost = result.get("total_cost_usd") or 0.0
-        with self.lock:
-            self.spent += cost
+        cost = known_cost(result.get("total_cost_usd"))
         if sid:
             self.archive_transcript(sid, config_dir)
         # The spool is in the arm's own ADAGE_HOME (instincts-home, e1-home), not always adage-home.
@@ -986,8 +1030,8 @@ class Live:
         self.update(run_id, status="passed" if metrics["passed"] else "failed", run_status=status, metrics=metrics,
                     t_end=time.time(), score={k: v for k, v in score.items() if not k.endswith("_tail")})
         print(f"  {run_id}: {status}{' (' + reason + ')' if reason else ''} passed={metrics['passed']} turns={metrics['turns']} "
-              f"first_edit={metrics['turns_to_first_edit']} dead_ends={metrics['dead_end_hits']} cost={cost:.3f} "
-              f"(total ${self.spent:.2f})", flush=True)
+              f"first_edit={metrics['turns_to_first_edit']} dead_ends={metrics['dead_end_hits']} "
+              f"cost={cost if cost is not None else 'unknown'} (known total ${self.budget.spent:.2f})", flush=True)
 
     def phase(self, name, sessions):
         unlink_archive(self.root)
@@ -1036,7 +1080,8 @@ class Live:
         idx = self.home / "index.json"
         tracks = json.loads(idx.read_text()).get("routes", []) if idx.exists() else []
         self.state["rounds"][str(self.round)] = {"learn": rep, "tracks": tracks, "sessions": len(transcripts),
-                                                 "leaky": leaky, "pool": sorted(pool) if pool is not None else None}
+                                                 "leaky": leaky, "pool": sorted(pool) if pool is not None else None,
+                                                 "learning_protocol": "outcome-assisted-condition"}
         self.state["learn"], self.state["tracks"] = rep, tracks
         if "instincts" in self.cfg["eval"].get("arms", []):
             self.state["rounds"][str(self.round)]["instincts_only"] = self.bind_instincts()
@@ -1190,7 +1235,10 @@ def main(argv):
     adage = Path(opts["adage"] or REPO / "target" / "release" / "adage")
     rounds = rounds_for(cfg, opts["round"])
     if opts["phases"] == ["report"]:
-        return report_only(cfg, root)
+        if not (root / "state.json").exists():
+            raise SystemExit(f"no state.json in {root}; run the experiment first")
+        with execution_lock(root):
+            return report_only(cfg, root)
     cfg["seed"] = resolve_seed(cfg, root)
     p = describe(cfg, opts["phases"], rounds, root, adage, opts["isolate"])
     if not opts["execute"]:
@@ -1218,7 +1266,11 @@ def main(argv):
               "the control arm is not isolated.", flush=True)
     if p["leaky_rounds"]:
         print(leak_warning(p["leaky_rounds"]), flush=True)
-    root.mkdir(parents=True, exist_ok=True)
+    with execution_lock(root):
+        return execute_plan(cfg, root, adage, rounds, opts)
+
+
+def execute_plan(cfg, root, adage, rounds, opts):
     live = Live(cfg, root, adage, rounds[0], opts["isolate"], opts["resume"])
     print(f"seed {cfg['seed']}  harness {live.state['harness_version']}  isolation {'on' if opts['isolate'] else 'OFF'}"
           f"{' (auth: ' + live.auth[0] + ')' if live.auth else ''}", flush=True)
@@ -1242,12 +1294,16 @@ def main(argv):
     if "report" in opts["phases"]:
         live.set_phase("done")
         latest = max(int(k) for k in summaries)
-        summary = {**summaries[str(latest)], "config": cfg["name"], "model": cfg["model"], "rounds": summaries}
+        summary = {**summaries[str(latest)], "config": cfg["name"], "model": cfg["model"], "rounds": summaries,
+                   "accounting": live.budget.data, "known_spend_usd": live.budget.spent}
         (root / "summary.json").write_text(json.dumps(summary, indent=2))
         for k in sorted(summaries, key=int):
             print(f"\nround {k}:")
             print_summary(summaries[k])
         print(f"results page: {results_page(root, live.state)}")
+    if live.budget.data["blocked_reason"]:
+        print(f"ACCOUNTING STOP: {live.budget.data['blocked_reason']}", file=sys.stderr)
+        return 2
     return 0
 
 

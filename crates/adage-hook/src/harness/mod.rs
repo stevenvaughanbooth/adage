@@ -66,6 +66,11 @@ pub trait Adapter: Sync {
     }
     /// Native event name and payload → normalised event. `None` → do nothing.
     fn translate(&self, event: &str, p: &Value, cwd: &str) -> Option<Event>;
+    /// Stable native occurrence identity, when the harness supplies one. Never derive this
+    /// from tool input/output contents: a later legitimate call can have identical contents.
+    fn event_identity(&self, _event: &str, _p: &Value) -> Option<String> {
+        None
+    }
     /// Normalised output → the exact bytes the harness expects on stdout.
     fn render(&self, event: &str, out: Output) -> Option<String>;
     /// The largest directive text this harness accepts in one response.
@@ -77,6 +82,19 @@ pub trait Adapter: Sync {
     fn is_learn_point(&self, event: &str) -> bool {
         matches!(event, "Stop" | "SessionEnd")
     }
+}
+
+/// Canonical identity of a complete native tool-call set, independent of completion order.
+/// Missing, duplicate or oversized IDs do not establish an occurrence identity.
+pub fn tool_event_identity(harness: &str, event: &str, mut ids: Vec<&str>) -> Option<String> {
+    if ids.is_empty() || ids.len() > 1024 || ids.iter().any(|id| id.is_empty() || id.len() > 256) {
+        return None;
+    }
+    ids.sort_unstable();
+    if ids.windows(2).any(|pair| pair[0] == pair[1]) {
+        return None;
+    }
+    serde_json::to_string(&(harness, event, ids)).ok()
 }
 
 pub fn adapter(harness: &str) -> Option<&'static dyn Adapter> {
@@ -110,4 +128,26 @@ pub fn calls(pairs: Vec<(String, Value)>, cwd: &str, output: &str, failed: bool)
             Call { tool, input, output: output.to_string(), failed }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn native_identity_requires_the_complete_call_set() {
+        let a = adapter("claude").unwrap();
+        let batch =
+            |ids: &[&str]| json!({"tool_calls": ids.iter().map(|id| json!({"tool_use_id": id})).collect::<Vec<_>>()});
+        let first = a.event_identity("PostToolBatch", &batch(&["one", "two"]));
+        assert!(first.is_some());
+        assert_eq!(first, a.event_identity("PostToolBatch", &batch(&["two", "one"])));
+        assert_ne!(first, a.event_identity("PostToolBatch", &batch(&["one", "three"])));
+        assert!(a.event_identity("PostToolBatch", &batch(&["one", "one"])).is_none());
+        assert!(a.event_identity("PostToolBatch", &json!({"tool_calls": [{"tool_use_id": "one"}, {}]})).is_none());
+        assert!(a.event_identity("PostToolBatch", &batch(&[])).is_none());
+        assert!(adapter("codex").unwrap().event_identity("PostToolUse", &json!({"tool_use_id": "one"})).is_some());
+        assert!(adapter("codex").unwrap().event_identity("PostToolUse", &json!({"id": "invented"})).is_none());
+    }
 }

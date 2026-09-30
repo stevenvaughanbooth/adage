@@ -1,0 +1,117 @@
+{
+  "autoMemoryEnabled": false,
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+            "args": [
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle/fixture_hook.py",
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle",
+              "0.25"
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+            "args": [
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle/fixture_hook.py",
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle",
+              "0.25"
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+            "args": [
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle/fixture_hook.py",
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle",
+              "0.25"
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+            "args": [
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle/fixture_hook.py",
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle",
+              "0.25"
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolBatch": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+            "args": [
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle/fixture_hook.py",
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle",
+              "0.25"
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+            "args": [
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle/fixture_hook.py",
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle",
+              "0.25"
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+            "args": [
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle/fixture_hook.py",
+              "/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-reflex-harness-fhhnwvle",
+              "0.25"
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

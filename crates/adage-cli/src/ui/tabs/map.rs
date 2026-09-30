@@ -351,7 +351,7 @@ fn reflex_spans(r: &RouteRow, t: &Theme, chosen: bool) -> Vec<Span<'static>> {
     let lamp = if t.color {
         Span::styled(format!("{} ", t.glyph(Glyph::Lamp)), t.strength(r.strength))
     } else {
-        Span::styled(format!("{} ", &Theme::strength_word(r.strength)[..1].to_ascii_uppercase()), t.bold())
+        Span::styled(format!("{} ", Theme::strength_word(r.strength)[..1].to_ascii_uppercase()), t.bold())
     };
     let glyph = if r.instinct { Glyph::Instinct } else { Glyph::Reflex };
     vec![

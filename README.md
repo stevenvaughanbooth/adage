@@ -3,10 +3,15 @@
 **Agent traces become reflexes.**
 
 Adage reads the traces your coding agents leave behind (Claude Code, OpenCode and Codex session
-transcripts), finds the paths that actually get work done, and compiles them into **reflexes**:
+transcripts), finds recurring procedures, and compiles them into **reflexes**:
 small, typed, deterministic responses with their evidence attached. At each decision point, the
-matching reflex tells the agent what to do next, so the agent spends turns on the task instead of
-rediscovering the repository.
+matching reflex can offer learned guidance or correct a supported command to the repository's
+declared environment. With separately approved execution, it can perform a routine lookup or
+staged action on the CPU. The aim is to reduce repeated work while leaving new reasoning to the
+agent; savings depend on the repository and the matched procedure.
+
+[How Adage works](docs/how-it-works.md) is the current behavior reference: what runs automatically,
+what requires approval, and what the evidence does and does not establish.
 
 Reflexes come from three places:
 
@@ -21,18 +26,19 @@ Reflexes come from three places:
   train accept` installs it; the agent then follows the procedure without the skill in context.
 
 Reflexes live in **tracks** on disk, and travel as signed, closed **packs** you can review, commit
-and share. Adage never runs the commands its reflexes direct: the agent runs every command through
-its own tools, under its harness's own permissions. The `adage` binary starts no process on the
+and share. By default, reflexes advise the agent and supported pre-call instincts can rewrite its
+tool arguments; the harness executes those calls under its own permissions. The `adage` binary starts no process on the
 agent's behalf (it starts only itself, to condition in the background, and `adage-train` when you
 ask it to train; a test pins this). Execution is a separate, opt-in binary (`adage-exec`, turned
 on with `adage delegate on`) that runs only reflexes you approved on that machine (`adage review
-delegate`), inside an OS sandbox.
+delegate`), inside an OS sandbox: E1 prefetches read-only results, while E2 stages actions and
+applies only permitted outputs. Selecting and running such an invocation needs no model request;
+the next model request may still consume its result.
 
 ```text
-  agent traces ──► adage condition ──► reflexes ──► index ──► hooks ──► directives
-  (transcripts)     (mine)            (tracks,    (compiled) (Claude Code,  (text; typed data
-  + instincts                          packs)                 OpenCode,     where you approved
-  + adage train                                               Codex)        execution)
+  agent traces ──► adage condition ──► reflexes ──► index ──► hooks
+  + instincts                        (tracks,               ├─ guidance / supported rewrites
+  + adage train                       packs)                └─ approved adage-exec actions
 ```
 
 ## Install
@@ -63,8 +69,9 @@ the line names the plugin's own binary instead, so the command works as written)
 From a terminal, `brew install stevenvaughanbooth/tap/adage` or `npm install -g @adage-sh/cli`
 (**not published yet:** until the first release is out, the tap and the npm package do not exist;
 build from source with `cargo install --locked --git https://github.com/stevenvaughanbooth/adage
-adage-cli`), then connect your agent once (`adage` tells you how: `adage install claude-code --write --scope user`,
-or `codex`, `opencode`) and start a session. Plain `adage`, anywhere (a terminal, a pipe, or
+adage-cli`), then run `adage init` inside your repository to connect a detected agent and learn
+from its previous sessions. For scripted setup, use `adage install claude-code --write --scope user`
+(or `codex`, `opencode`) and `adage condition --repo-root .`. Plain `adage`, anywhere (a terminal, a pipe, or
 `!adage` inside Claude Code), prints where things stand. An illustrative card (the numbers are made
 up to show every line; measured numbers are in [Benchmarks](#benchmarks)):
 
@@ -352,11 +359,25 @@ the repository for the first time, and turns automatic conditioning on if it is 
 summary. Piped, inside an agent session, or with `--print`, it prints the same report and writes
 nothing; `--yes` downloads the embedding model and binds this repository's instincts. `sense` reads
 the same traces `condition` does and lists the reflexes `condition` would form as candidates, with
-prompts shown only as short redacted snippets. With no history yet, `adage condition
---instincts-only` binds Adage's instincts from the repository's files alone. `doctor` exits
+prompts shown only as short redacted snippets. With no history yet, plain `adage condition`
+inside a repository binds available instincts from its files; `--instincts-only` requests that
+explicitly. `doctor` exits
 non-zero only when a check fails. From a source checkout, `cargo build --release --locked -p
 adage-cli -p adage-exec -p adage-train` builds all three into `target/release/`. Every command
 ends with the next one to run; `--plain` drops colour and glyphs, and `NO_COLOR` is honoured.
+
+Manual `sense` and `condition` discover existing Claude Code history (`CLAUDE_CONFIG_DIR/projects`,
+else `~/.claude/projects`), Codex history (`CODEX_HOME/sessions`, else `~/.codex/sessions`), and
+configured OpenCode exports. The `learn.*` source settings apply to both; `learn.codex_sessions = ""`
+disables Codex discovery. Explicit `--transcripts`, `--claude-projects`, or `--codex-sessions`
+replace defaults. The wizard conditions only the selected repository; plain `condition` processes
+all discovered repositories. Automatic Codex discovery requires registered Codex hooks or a Codex
+hook request. History is read locally; conditioning never executes its commands.
+
+See [How Adage works](docs/how-it-works.md) for the current behavior and limits, and
+[live learning](docs/live-learning.md) for discovery and background learning. Conditioning and
+advisory hooks are automatic after setup. CPU execution of learned actions requires the separate
+execution policy and local approval described in [execution](docs/execution.md).
 
 ### Watch it live
 

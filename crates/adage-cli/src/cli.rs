@@ -62,8 +62,14 @@ pub enum Command {
 
     // ------------------------------------------------------------------ learning
     /// What your agents actually do, read from past traces (read-only).
+    #[command(
+        after_help = "With no source named, reads configured Claude/Codex history and OpenCode exports. Explicit sources replace these defaults."
+    )]
     Sense(SenseArgs),
     /// Condition reflexes from traces and compile the index.
+    #[command(
+        after_help = "With no source named, reads configured Claude/Codex history and OpenCode exports. Explicit sources replace these defaults. With no default history, binds applicable instincts in the current repository."
+    )]
     Condition(ConditionArgs),
     /// What Adage told agents, and whether they followed it.
     Report(JsonArgs),
@@ -283,7 +289,7 @@ pub struct Sources {
     /// Transcript files to read (Claude Code JSONL, `opencode export` output).
     #[arg(long, value_name = "FILE", num_args = 1..)]
     pub transcripts: Vec<PathBuf>,
-    /// Claude Code history (default: ~/.claude/projects when no source is named).
+    /// Claude Code history (otherwise uses configured history when no source is named).
     #[arg(long, value_name = "DIR")]
     pub claude_projects: Option<PathBuf>,
     /// Codex rollouts ($CODEX_HOME/sessions).
@@ -313,7 +319,7 @@ pub struct SenseArgs {
 pub struct ConditionArgs {
     #[command(flatten)]
     pub sources: Sources,
-    /// Keep Codex rollouts whose working directory starts here.
+    /// Keep traces whose recorded working directory is inside this path.
     #[arg(long, value_name = "PATH")]
     pub cwd_prefix: Option<String>,
     /// Session outcomes, as a JSON file of {session: bool}.

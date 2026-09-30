@@ -16,13 +16,13 @@ from them. Instincts are innate responses that ship with Adage.
 | A shipped route | **instinct** | built-in route |
 | Trigger → response path, in docs | **reflex arc** | route (in explanations) |
 | What starts a reflex | **stimulus** (docs), **trigger** (CLI) | trigger |
-| What the reflex tells the agent | **response** (docs), **directive** (CLI, where precision matters) | directive |
+| What a reflex does when it matches | **response**; **directive** for advice, **action** for execution | directive used for every behavior |
 | Files on disk | **tracks** | (unchanged) |
 | Signed, shareable artefact | **pack** | shared track |
 | Holdout arm | **control** | holdout |
 | Traces of similar tasks | **family** (of similar tasks) | cluster |
 | What a family's traces had in common, said at the next such task | **procedure card**: a reflex, whose response is the card | recipe, playbook |
-| The web view (`graph --serve`) | **the map** | signal box |
+| The web view (`adage map`) | **the map** | signal box |
 
 ## Strength (formerly aspects)
 
@@ -31,6 +31,27 @@ from them. Instincts are innate responses that ship with Adage.
 | Green | **fire** | Do this: strong evidence |
 | Yellow | **prime** | Consider this: suggestion |
 | Red | **inhibit** | Don't do this: a known dead end |
+
+Strength describes evidence and how advice is phrased. **Fire does not mean a script is allowed
+to execute.** Accepting evidence and granting execution are separate decisions.
+
+## Execution status
+
+| Status | Meaning |
+| --- | --- |
+| **Suggest** | The agent receives applicable guidance; an execution grant is absent or automatic execution is off |
+| **Automatic** | A matching local grant (or explicit inert-observe policy) and execution enabled make the route eligible, subject to runtime checks |
+| **Needs review** | Saved execution authority no longer matches the executable or current policy |
+| **Needs recovery** | An interrupted E2 operation pauses further application in this worktree until inspected and acknowledged |
+| **Grant saved** | A grant exists, but the current view cannot validate that repository's scripts |
+| **Disabled** | A kill switch prevents interventions |
+| **Observe** | New sessions default to quiet controls; existing session assignments and explicit evaluation arm overrides still apply |
+| **Inactive** | The route is not active in the runtime index |
+| **Unavailable** | Required execution authority or sandbox state cannot be read or established |
+
+An **execution receipt** records what actually happened. **Unknown** means an attempt may have
+had an effect without a confirmed terminal receipt; it is never rendered as success or retried
+automatically. [How Adage works](how-it-works.md) defines the product contract behind these terms.
 
 ## Lifecycle (formerly route states)
 

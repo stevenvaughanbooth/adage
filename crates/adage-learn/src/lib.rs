@@ -91,7 +91,20 @@ pub struct Inputs {
 }
 
 pub fn slug(repo: &str) -> String {
-    repo.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect()
+    let old: String =
+        repo.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '-' }).collect();
+    // Preserve published track paths. Repository identities remain unchanged in Scope, but the
+    // directory name must fit track validation, including the longest suffix this learner emits.
+    if io::safe_name(&format!("{old}/{}", instincts::TRACK)) {
+        return old;
+    }
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(repo.as_bytes());
+    let hash: String = digest[..8].iter().map(|b| format!("{b:02x}")).collect();
+    let readable: String = old.to_ascii_lowercase().chars().take(64).collect();
+    let readable = readable.trim_matches(['-', '_']);
+    let readable = if readable.is_empty() { "unnamed" } else { readable };
+    format!("repo-{readable}-{hash}")
 }
 
 /// Semantic-version bump from the difference between the previous and new routes (Design §10.9).
@@ -596,6 +609,31 @@ pub fn is_prompt_route(r: &Route) -> bool {
 mod tests {
     use super::*;
     use adage_tracks::{Evidence, RouteState, Step, Strength};
+
+    #[test]
+    fn repository_slugs_preserve_valid_names_and_repair_invalid_track_paths() {
+        assert_eq!(slug("github.com/acme/billing"), "github-com-acme-billing");
+        assert_eq!(slug("acme_repo-v2"), "acme_repo-v2");
+        let originals = [
+            "MixedCase".to_string(),
+            "MIXEDCASE".to_string(),
+            ".private".to_string(),
+            "日本語".to_string(),
+            String::new(),
+            "x".repeat(119),
+            "x".repeat(120),
+        ];
+        let repaired: BTreeSet<_> = originals.iter().map(|r| slug(r)).collect();
+        assert_eq!(repaired.len(), originals.len(), "distinct invalid identities retain distinct hash suffixes");
+        for repo in originals {
+            let name = slug(&repo);
+            assert!(name.starts_with("repo-"), "{repo:?}: {name}");
+            assert!(io::safe_name(&format!("{name}/{}", instincts::TRACK)), "{name}");
+            assert!(io::safe_name(&format!("{name}/{TRACK}")), "{name}");
+            assert_eq!(name, slug(&repo), "deterministic directory identity");
+        }
+        assert_eq!(slug(&"x".repeat(118)), "x".repeat(118), "largest already-valid slug stays unchanged");
+    }
 
     #[test]
     fn the_summary_marks_nascent_reflexes_and_says_how_to_review_them() {

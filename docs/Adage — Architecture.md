@@ -1,9 +1,13 @@
 # Adage — Architecture
 
-**Status:** Draft 3, as built. It describes `main` at `cf5cf16`, not a plan · **Date:** 2026-09-23 ·
+**Status:** Historical implementation snapshot. It describes `main` at `cf5cf16` · **Date:** 2026-09-23 ·
 **Implements:** *Adage — Design Spec*, draft 6 · **Plan:** *Adage — Implementation Plan*, draft 3
 
-> This document answers *how* Adage is built today. Draft 2 was written before any code, and the
+> For current product behavior, defaults, execution authority and benchmark claim boundaries,
+> use [How Adage works](how-it-works.md). This older numbered snapshot remains for code and
+> design references; its feature checklist and benchmark numbers must not be read as current.
+>
+> This document answers *how* Adage was built at the revision above. Draft 2 was written before any code, and the
 > spikes (`spikes/S1`–`S8`) overturned several of its decisions, starting with the daemon. Draft 3
 > keeps draft 2's section numbers, because code comments cite them (`§4.7`, `§4.9`, `§4.11`,
 > `§6.3`, `§15`, `A12`, `F9`). Design behaviour is cited as **[D§n]**, and plan sections as

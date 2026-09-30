@@ -24,6 +24,13 @@ impl Adapter for Codex {
         "codex"
     }
 
+    fn event_identity(&self, event: &str, p: &Value) -> Option<String> {
+        if event != "PostToolUse" {
+            return None;
+        }
+        super::tool_event_identity(self.name(), event, vec![p.get("tool_use_id")?.as_str()?])
+    }
+
     fn translate(&self, event: &str, p: &Value, cwd: &str) -> Option<Event> {
         let tool_call = |failure: bool| -> Option<Event> {
             let tool = p.get("tool_name")?.as_str()?;

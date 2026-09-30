@@ -8,6 +8,65 @@
 
 use super::Resolved;
 
+/// Apple tool shims in /usr/bin load libxcrun and tools from the selected developer directory.
+/// Ask the fixed system selector with no inherited DEVELOPER_DIR or loader environment. Grant
+/// only its canonical Developer/CommandLineTools directory, never /Applications as a whole.
+#[cfg(target_os = "macos")]
+pub(crate) fn developer_dir() -> Option<std::path::PathBuf> {
+    static DIR: std::sync::OnceLock<Option<std::path::PathBuf>> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| {
+        let output = std::process::Command::new("/usr/bin/xcode-select")
+            .arg("-p")
+            .env_clear()
+            .stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()?;
+        if !output.status.success() || output.stdout.len() > 4096 {
+            return None;
+        }
+        let raw = std::str::from_utf8(&output.stdout).ok()?.trim();
+        let path = std::path::Path::new(raw);
+        if !path.is_absolute() {
+            return None;
+        }
+        let path = path.canonicalize().ok()?;
+        if !matches!(path.file_name()?.to_str()?, "Developer" | "CommandLineTools") || !path.join("usr").is_dir() {
+            return None;
+        }
+        Some(path)
+    })
+    .clone()
+}
+
+/// Count the real UID's existing processes without invoking a tool under the limit we are
+/// calculating. RLIMIT_NPROC is per UID on macOS too, not per sandbox. Snapshot races remain
+/// possible, but unrelated existing processes must not consume the run's entire allowance.
+#[cfg(target_os = "macos")]
+pub(crate) fn processes_of(uid: u32) -> std::io::Result<u64> {
+    use std::io;
+    unsafe extern "C" {
+        fn proc_listpids(kind: u32, info: u32, buffer: *mut libc::c_void, bytes: libc::c_int) -> libc::c_int;
+    }
+    const PROC_RUID_ONLY: u32 = 5;
+    let mut slots = 1024usize;
+    for _ in 0..8 {
+        let mut pids = vec![0i32; slots];
+        let bytes = (pids.len() * std::mem::size_of::<i32>()) as libc::c_int;
+        // SAFETY: the allocated buffer has exactly `bytes` writable bytes. The selector and
+        // real UID follow libproc.h/sys/proc_info.h's proc_listpids contract.
+        let got = unsafe { proc_listpids(PROC_RUID_ONLY, uid, pids.as_mut_ptr().cast(), bytes) };
+        if got < 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if got < bytes {
+            return Ok(pids[..got as usize / std::mem::size_of::<i32>()].iter().filter(|&&p| p > 0).count() as u64);
+        }
+        slots *= 2;
+    }
+    Err(io::Error::other("the UID process census exceeds its bound"))
+}
+
 /// Quote a path as an SBPL string literal.
 fn lit(p: &std::path::Path) -> String {
     let s = p.to_string_lossy();
@@ -29,6 +88,9 @@ fn lit(p: &std::path::Path) -> String {
 pub fn sbpl(res: &Resolved) -> String {
     let mut read: Vec<String> = res.read.iter().map(|p| format!("(subpath {})", lit(p))).collect();
     read.extend(res.dev.iter().map(|p| format!("(literal {})", lit(p))));
+    // macOS 26's dyld cache loader needs to open the root directory itself. Without this
+    // literal-node read, even /bin/sh aborts before main. Never use (subpath "/") here:
+    // descendants still require one of the explicit read grants below.
     format!(
         "(version 1)\n\
          (deny default)\n\
@@ -37,6 +99,8 @@ pub fn sbpl(res: &Resolved) -> String {
          (allow sysctl-read)\n\
          (allow signal (target same-sandbox))\n\
          (allow file-read-metadata)\n\
+         (allow file-read-data (literal \"/\"))\n\
+         (allow file-read-data (literal \"/Library/Preferences/com.apple.dt.Xcode.plist\"))\n\
          (allow file-read* {read})\n\
          (allow file-read* file-write* (subpath {scratch}) (literal \"/dev/null\"))\n\
          (deny network*)\n",
@@ -64,6 +128,15 @@ mod tests {
     use crate::request::Level;
     use std::path::PathBuf;
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn process_census_includes_the_current_users_existing_processes() {
+        // SAFETY: getuid has no preconditions. This is a read-only native census; no fork
+        // pressure or host-wide process limits are changed by the test.
+        let count = processes_of(unsafe { libc::getuid() }).unwrap();
+        assert!(count > 0, "the current test process must be counted");
+    }
+
     #[test]
     fn profile_denies_by_default_and_quotes_paths() {
         let res = Resolved {
@@ -83,6 +156,8 @@ mod tests {
         assert!(p.contains("(subpath \"/Users/a/re\\\"po\")"));
         assert!(p.contains("(allow file-read* file-write* (subpath \"/private/tmp/s\") (literal \"/dev/null\"))"));
         assert!(p.contains("(deny network*)"));
+        assert!(p.contains("(allow file-read-data (literal \"/\"))"));
+        assert!(!p.contains("(subpath \"/\")"), "root access must not include descendants");
         assert!(!p.contains("(allow network"));
         assert_eq!(p.matches("file-write*").count(), 1, "writes only to scratch and /dev/null");
     }

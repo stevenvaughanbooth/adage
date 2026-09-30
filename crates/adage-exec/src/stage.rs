@@ -28,7 +28,7 @@
 //!    `$ADAGE_HOME/exec/actions.spool` (never file contents). After three refusals of the change
 //!    set under one approval, that approval is revoked automatically ([`REVOKE_AFTER`]).
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -169,7 +169,7 @@ fn shown(rel: &str) -> String {
 }
 
 /// What a path holds in the worktree.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum FileState {
     Absent,
@@ -222,10 +222,10 @@ pub fn state_of(repo: &Path, rel: &str) -> FileState {
 /// Every path under `dir` (relative to `base`, prefixed by `prefix`), without following symlinks:
 /// files, symlinks and special files (not directories), bounded by `budget`.
 fn walk(dir: &Path, prefix: &str, skip_git: bool, out: &mut Vec<String>, budget: &mut usize) -> Result<(), String> {
-    let mut entries: Vec<_> = match std::fs::read_dir(dir) {
-        Ok(rd) => rd.flatten().collect(),
-        Err(_) => return Ok(()),
-    };
+    let mut entries: Vec<_> = std::fs::read_dir(dir)
+        .map_err(|e| format!("reading directory: {e}"))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| format!("reading directory entry: {e}"))?;
     entries.sort_by_key(|e| e.file_name());
     for e in entries {
         if *budget == 0 {
@@ -240,7 +240,7 @@ fn walk(dir: &Path, prefix: &str, skip_git: bool, out: &mut Vec<String>, budget:
         match e.file_type() {
             Ok(t) if t.is_dir() => walk(&e.path(), &rel, skip_git, out, budget)?,
             Ok(_) => out.push(rel),
-            Err(_) => {}
+            Err(e) => return Err(format!("reading entry type: {e}")),
         }
     }
     Ok(())
@@ -273,11 +273,53 @@ impl PreState {
     }
 }
 
+/// Repository inputs (outside declared outputs/cache and .git), captured before the process
+/// starts and checked immediately before applying. Bounded like the staged change set; an
+/// unreadable or oversized input set refuses rather than blessing a stale result.
+pub fn input_snapshot(repo: &Path, action: &ActionSpec) -> Result<BTreeMap<String, String>, Refusal> {
+    let mut files = Vec::new();
+    walk(repo, "", true, &mut files, &mut MAX_ENTRIES.clone()).map_err(|e| Refusal { stage: "inputs", reason: e })?;
+    let mut bytes = 0u64;
+    let mut out = BTreeMap::new();
+    for rel in files {
+        if matches_any(&action.cache, &rel)
+            || (action.kind == ActionKind::Regenerate && matches_any(&action.outputs, &rel))
+        {
+            continue;
+        }
+        let path = repo.join(&rel);
+        let read = || -> std::io::Result<(String, u64)> {
+            use std::io::Read;
+            let m = std::fs::symlink_metadata(&path)?;
+            if m.file_type().is_symlink() {
+                return Ok((format!("link:{}", std::fs::read_link(&path)?.to_string_lossy()), 0));
+            }
+            if !m.is_file() {
+                return Err(std::io::Error::other("input is not a regular file or symlink"));
+            }
+            let left = MAX_APPLY_BYTES.saturating_sub(bytes);
+            if m.len() > left {
+                return Err(std::io::Error::other("repository inputs exceed the 256 MiB snapshot bound"));
+            }
+            let mut data = Vec::new();
+            std::fs::File::open(&path)?.take(left + 1).read_to_end(&mut data)?;
+            if data.len() as u64 > left {
+                return Err(std::io::Error::other("input grew past the 256 MiB snapshot bound"));
+            }
+            Ok((format!("{}:{}", crate::sha256_hex(&data), exec_bit(&m)), data.len() as u64))
+        };
+        let (digest, n) = read().map_err(|e| Refusal { stage: "inputs", reason: format!("reading an input: {e}") })?;
+        bytes += n;
+        out.insert(rel, digest);
+    }
+    Ok(out)
+}
+
 // ---------------------------------------------------------------------------------------------
 // The change set
 // ---------------------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ChangeKind {
     Created,
@@ -691,6 +733,16 @@ pub fn apply(repo: &Path, plan: &Plan, pre: &PreState) -> Result<Vec<String>, Re
         }
         done.push(c.path.clone());
     }
+    // File data was synced before rename; persist directory entries before a successful
+    // terminal receipt can claim the apply completed durably.
+    #[cfg(unix)]
+    for c in &plan.apply {
+        for dir in repo.join(&c.path).ancestors().skip(1).take_while(|p| p.starts_with(repo)) {
+            if let Err(e) = std::fs::File::open(dir).and_then(|f| f.sync_all()) {
+                return refuse("apply", format!("changes applied but directory durability is uncertain: {e}"));
+            }
+        }
+    }
     Ok(done)
 }
 
@@ -827,6 +879,7 @@ pub struct Staged {
     pub duration_ms: u64,
     pub plan: Plan,
     pub pre: PreState,
+    pub inputs: BTreeMap<String, String>,
     /// Typed fields projected from stdout, when the request declares some and the run passed.
     pub fields: Option<Value>,
     pub backend: StageBackend,
@@ -859,6 +912,7 @@ pub fn stage_with(req: &ExecRequest, ctx: &Context, backend: StageBackend) -> Re
         .canonicalize()
         .map_err(|e| Refusal { stage: "request", reason: format!("repository root: {e}") })?;
     let pre = PreState::take(&repo, &action)?;
+    let inputs = input_snapshot(&repo, &action)?;
     let environment = env::build(&ctx.inherited_env, &repo, &scratch.path, &ctx.policy.env);
     let path_dirs: Vec<PathBuf> = environment["PATH"].split(':').map(PathBuf::from).collect();
     let stage_dir =
@@ -914,6 +968,7 @@ pub fn stage_with(req: &ExecRequest, ctx: &Context, backend: StageBackend) -> Re
         duration_ms: o.duration_ms,
         plan,
         pre,
+        inputs,
         fields,
         backend,
         stderr: o.stderr,
@@ -925,16 +980,21 @@ pub fn stage_with(req: &ExecRequest, ctx: &Context, backend: StageBackend) -> Re
 // ---------------------------------------------------------------------------------------------
 
 /// One changed path, as a result lists it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Line {
     pub path: String,
     pub change: ChangeKind,
 }
 
 /// `applied | refused(reason) | failed(exit)` (Track C §3.6).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "outcome", rename_all = "lowercase")]
 pub enum Outcome {
+    /// Effects may be present but completion is unconfirmed, including interrupted/partial
+    /// apply. Never automatically retry or treat this as a refusal that applied nothing.
+    Unknown {
+        reason: String,
+    },
     Applied {
         changed: Vec<Line>,
         discarded: usize,
@@ -955,6 +1015,7 @@ pub enum Outcome {
 impl Outcome {
     pub fn name(&self) -> &'static str {
         match self {
+            Outcome::Unknown { .. } => "unknown",
             Outcome::Applied { .. } => "applied",
             Outcome::Refused { .. } => "refused",
             Outcome::Failed { .. } => "failed",
@@ -985,8 +1046,26 @@ pub fn finish(s: &Staged) -> Outcome {
             counts: true,
         };
     }
+    match input_snapshot(&s.repo, &s.action) {
+        Ok(now) if now == s.inputs => {}
+        Ok(_) => {
+            return Outcome::Refused {
+                stage: "inputs".into(),
+                reason: "repository inputs changed while the action ran; nothing was applied".into(),
+                counts: false,
+            }
+        }
+        Err(e) => {
+            return Outcome::Refused {
+                stage: "inputs".into(),
+                reason: format!("repository inputs cannot be revalidated: {e}; nothing was applied"),
+                counts: false,
+            }
+        }
+    }
     match apply(&s.repo, &s.plan, &s.pre) {
         Ok(_) => Outcome::Applied { changed: lines(&s.plan.apply), discarded: s.plan.discarded.len() },
+        Err(r) if r.stage == "apply" => Outcome::Unknown { reason: r.reason },
         Err(r) => Outcome::Refused { stage: r.stage.into(), reason: r.reason, counts: false },
     }
 }
@@ -1010,19 +1089,7 @@ pub fn counted_refusals(home: &Path, repo: &str, route: &str, approved_on: &str)
         .count()
 }
 
-/// Record an outcome, and revoke the approval after [`REVOKE_AFTER`] counted refusals. Returns
-/// whether it was revoked.
-pub fn record(home: &Path, repo: &str, route: &str, approved_on: &str, session: &str, outcome: &Outcome) -> bool {
-    let rec = json!({
-        "ts": crate::time::now(),
-        "session": session,
-        "repo": repo,
-        "route": route,
-        "level": "e2",
-        "approved_on": approved_on,
-        "outcome": outcome,
-    });
-    let _ = adage_store::spool::append(&spool_path(home), &rec);
+pub(crate) fn revoke_if_needed(home: &Path, repo: &str, route: &str, approved_on: &str, outcome: &Outcome) -> bool {
     if !matches!(outcome, Outcome::Refused { counts: true, .. }) {
         return false;
     }

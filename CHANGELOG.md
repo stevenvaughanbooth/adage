@@ -18,6 +18,19 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Zero configuration: install the plugin, start a session
 
+- History discovery now agrees across learning, preview and setup, including configured Claude
+  and Codex locations. Empty repositories can bind applicable instincts; mixed-case and
+  dot-prefixed repository names publish valid learned tracks.
+- Approved staged actions record durable preparation and completion in the existing journal.
+  Uncertain completion pauses application for inspection and explicit recovery. Native tool
+  identities prevent duplicate application; recovery guidance never requests an automatic retry.
+- The Reflexes TUI separates evidence from execution authority and shows current grant state,
+  declared effects and the latest staged-action outcome. Execution approval remains person-gated.
+- macOS execution supports current loader and selected Xcode toolchain requirements while
+  preserving confined reads, writes and network denial. Updated sandbox grants require review.
+- Paid evaluation dispatch reserves per-session budgets durably and stops on unknown accounting.
+  The current behavior reference and reproducible proof ledger distinguish execution from savings.
+
 - **The marketplace plugin carries its binaries.** The release workflow stages both Claude Code
   plugins with verified binaries for all five targets (`scripts/stage-plugin.mjs`, archives
   checked against dist's `.sha256`, binaries against `dist/SHA256SUMS`) and publishes them to the

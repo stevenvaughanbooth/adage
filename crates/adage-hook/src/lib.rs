@@ -17,8 +17,8 @@
 //! the extension may return a replacement rendering for every directive (the E1 data blocks, an
 //! E2 action's result), blocks to add, obligations an action met (recorded in the session state,
 //! so no Stop request follows), a change to the Stop request, and a value recorded under `exec`
-//! in the spool record. An extension that returns nothing, panics, or returns text that would
-//! pass the harness's cap leaves the output exactly as `adage hook` prints it.
+//! in the spool record. A read-only extension's oversized text falls back to advice. Recovery
+//! warnings and potentially applied actions must never fall back to an instruction to repeat.
 
 pub mod autolearn;
 pub mod failopen;
@@ -44,6 +44,8 @@ pub struct Turn<'a> {
     pub harness: &'a str,
     /// The native event name.
     pub event: &'a str,
+    /// Opaque native tool-call identity. None means retries cannot be identified reliably.
+    pub event_identity: Option<String>,
     pub ev: &'a Event,
     pub session: &'a str,
     pub index: &'a Index,
@@ -109,6 +111,37 @@ pub struct Delivery {
     /// The Stop request: `None` as decided; `Some(None)` withdrawn (an action met it);
     /// `Some(Some(reason))` with this reason instead.
     pub stop: Option<Option<String>>,
+    /// Execution may have effects that require inspection. This warning takes precedence over
+    /// ordinary directives and must survive context overflow; it never implies a safe retry.
+    pub recovery: Option<String>,
+}
+
+const RECOVERY_NOTICE: &str = "Adage cannot confirm an execution outcome. Do not retry the action automatically. Inspect the worktree and execution journal, then ask the person to resolve recovery.";
+const APPLIED_NOTICE: &str = "Adage applied an approved action. Its detailed result could not fit here; inspect the execution journal before rerunning the action.";
+
+fn bounded_notice(text: String, fallback: &str, max: usize) -> Option<String> {
+    if text.len() <= max {
+        Some(text)
+    } else if fallback.len() <= max {
+        Some(fallback.into())
+    } else {
+        None
+    }
+}
+
+fn extension_delivery(f: impl FnOnce() -> Delivery) -> Delivery {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(f))
+        .unwrap_or_else(|_| Delivery { recovery: Some(RECOVERY_NOTICE.into()), ..Delivery::default() })
+}
+
+fn fitted_context(all: String, e0: impl FnOnce() -> String, applied: bool, max: usize) -> String {
+    if all.len() <= max {
+        all
+    } else if applied {
+        bounded_notice(APPLIED_NOTICE.into(), APPLIED_NOTICE, max).unwrap_or_default()
+    } else {
+        e0()
+    }
 }
 
 /// A step after `decide()` that may change what directives are delivered as (Track C §3.2).
@@ -696,7 +729,7 @@ fn respond(
         .map_err(|e| Failure::io("state", "updating the session state", &e))?;
 
     // An extension (adage-exec: E1 prefetch, E2 actions) sees the directives about to be
-    // delivered and the obligations armed or enforced now. A panic in it delivers E0.
+    // delivered and the obligations armed or enforced now. A panic cannot prove no action ran.
     let mut delivery = Delivery::default();
     if let Some(x) = opts.extension {
         let directives_due = decision.continue_reason.is_none() && !decision.directives.is_empty();
@@ -704,6 +737,7 @@ fn respond(
             let turn = Turn {
                 harness,
                 event,
+                event_identity: adapter.event_identity(event, p),
                 ev: &ev,
                 session,
                 index,
@@ -715,9 +749,7 @@ fn respond(
                 arm,
                 stimuli: &stims,
             };
-            delivery =
-                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| x.deliver(&turn, &decision.directives)))
-                    .unwrap_or_default();
+            delivery = extension_delivery(|| x.deliver(&turn, &decision.directives));
         }
     }
 
@@ -754,11 +786,22 @@ fn respond(
     if let Some(x) = delivery.spool.take() {
         rec["exec"] = x;
     }
+    if delivery.recovery.is_some() {
+        rec["recovery_required"] = json!(true);
+    }
     if let Err(e) = spool::append(&paths.spool(session), &rec) {
         // Measurement is lost, but the decision stands: record it and carry on.
         failopen::record(&paths.root, harness, event, &Failure::io("spool", "appending to the session spool", &e));
     }
 
+    if let Some(warning) = delivery.recovery.take() {
+        return Ok(bounded_notice(warning, RECOVERY_NOTICE, adapter.max_context()).and_then(|text| {
+            adapter.render(
+                event,
+                if matches!(ev, Event::Stop { .. }) { Output::Continue(text) } else { Output::Context(text) },
+            )
+        }));
+    }
     if let Some(reason) = decision.continue_reason {
         return Ok(adapter.render(event, Output::Continue(reason)));
     }
@@ -769,11 +812,12 @@ fn respond(
     let e0 = || decision.directives.iter().map(render::wrap_directive).collect::<Vec<_>>().join("\n\n");
     let texts = match delivery.texts {
         Some(t) if t.len() == decision.directives.len() => t,
+        _ if !delivery.met.is_empty() => vec![APPLIED_NOTICE.into()],
         _ => decision.directives.iter().map(render::wrap_directive).collect(),
     };
     let all: Vec<String> = texts.into_iter().chain(delivery.extra).collect();
-    // Whatever an extension adds must fit the cap whole, or it is not delivered at all.
-    let mut text = Some(all.join("\n\n")).filter(|t| t.len() <= max).unwrap_or_else(e0);
+    // An applied action cannot fall back to its original "run this" directive on overflow.
+    let mut text = fitted_context(all.join("\n\n"), e0, !delivery.met.is_empty(), max);
     if text.is_empty() {
         return Ok(None);
     }
@@ -788,6 +832,20 @@ fn respond(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn execution_fallback_never_reintroduces_an_action_after_an_uncertain_result() {
+        let panic = extension_delivery(|| panic!("after a possible side effect"));
+        assert!(panic.recovery.unwrap().contains("Do not retry"));
+        let overlong = format!("{}{}", RECOVERY_NOTICE, "x".repeat(10_000));
+        let warning = bounded_notice(overlong, RECOVERY_NOTICE, 512).unwrap();
+        assert_eq!(warning, RECOVERY_NOTICE);
+        assert!(bounded_notice("x".repeat(1000), RECOVERY_NOTICE, 10).is_none());
+        let applied = fitted_context("x".repeat(10_000), || panic!("must not restore run instruction"), true, 512);
+        assert_eq!(applied, APPLIED_NOTICE);
+        let readonly = fitted_context("x".repeat(10_000), || "read-only advice".into(), false, 512);
+        assert_eq!(readonly, "read-only advice");
+    }
 
     /// Review S3: a worktree whose `.venv` is the main checkout's (a link, or a copy with the
     /// main checkout's editable install) would test the main checkout's code: no rewrite there.
