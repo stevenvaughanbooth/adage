@@ -1,0 +1,82 @@
+{
+  "recorded_at": "2026-09-30T02:48:04.115610+00:00",
+  "status": "registered_before_training_dispatch",
+  "protocol_revision": 4,
+  "rows": [
+    {
+      "task": "mm-validator--starts-with",
+      "manifest_sha256": "12a71b3a673b3f7138e3210dcaab1ba320935363c2cf0c466676f5ec714f615a",
+      "settings_sha256": "979a03cd58d47f9d9023849299bd257993ac85e1974353b1258675df2fb67821",
+      "source_sha256": "5c819c09c1e009240c423f638a980e672ba70ba44541a66a9b2d68a5ddf43828"
+    },
+    {
+      "task": "mm-validator--multiple-of",
+      "manifest_sha256": "fc276240c1fb1ef1d06d7b052cde824ab4f1418c4261e9f83f96b16fbb0c3135",
+      "settings_sha256": "9f38341d49d515d784e94db67d3da51485f05aeba92f04b04263efff78a4bdce",
+      "source_sha256": "5c819c09c1e009240c423f638a980e672ba70ba44541a66a9b2d68a5ddf43828"
+    },
+    {
+      "task": "mm-validator--unique",
+      "manifest_sha256": "040e842b5fa88b7c9bac8e60185f21a0eba25a13fa30d68db223238f099893e4",
+      "settings_sha256": "ca2d84ceb48166dc370ae50db7e5e14c75bbbb0f39cdff7f68f440eb054daf1e",
+      "source_sha256": "5c819c09c1e009240c423f638a980e672ba70ba44541a66a9b2d68a5ddf43828"
+    },
+    {
+      "task": "mm-validator--hexadecimal",
+      "manifest_sha256": "12c7c0125b8ad5450acdedd7318f0b60c925cd36edad57ac37b2f409867062a6",
+      "settings_sha256": "aab3dc2ca2d827efe208408eb396e78211a6633905e0844628e425cc365eaebb",
+      "source_sha256": "5c819c09c1e009240c423f638a980e672ba70ba44541a66a9b2d68a5ddf43828"
+    },
+    {
+      "task": "mm-validator--ends-with",
+      "manifest_sha256": "95f51a0504b13ec28fdce4e7e83bbf205a34513e8565c92f57ff9e100d44354b",
+      "settings_sha256": "68fa3db6dd152bf21fa0e8ed1ab208654fb3c5d8f60fe1996d024ce554d01f62",
+      "source_sha256": "5c819c09c1e009240c423f638a980e672ba70ba44541a66a9b2d68a5ddf43828"
+    },
+    {
+      "task": "click-type--hex-color",
+      "manifest_sha256": "4764274cbd7e33cb336071f9085e51d666d00949c2accd72354da3c393eeac1b",
+      "settings_sha256": "0ae73d275d978dc064ab6fc3c303968b4241ec63f9def7539e71b4c29dc10912",
+      "source_sha256": "5c819c09c1e009240c423f638a980e672ba70ba44541a66a9b2d68a5ddf43828"
+    },
+    {
+      "task": "click-type--port",
+      "manifest_sha256": "c77ed336b4babba3da1333e7618311c078f3e796defcbacf34545ab0262d4d13",
+      "settings_sha256": "e4c6a5770e783a383c9db2a27d6a7877c984e1aaefcbc4f3c0939af909804eb2",
+      "source_sha256": "5c819c09c1e009240c423f638a980e672ba70ba44541a66a9b2d68a5ddf43828"
+    },
+    {
+      "task": "click-type--duration",
+      "manifest_sha256": "698cb4e91d752794a764d404bdafa20d53e500627f1a4ba488fcaa28397d10dd",
+      "settings_sha256": "b28b93f432ca1930a9d5c526f258ab4147b3538a125dd3b0a59cbfbb4d1c465e",
+      "source_sha256": "5c819c09c1e009240c423f638a980e672ba70ba44541a66a9b2d68a5ddf43828"
+    },
+    {
+      "task": "click-type--ip-address",
+      "manifest_sha256": "9540df968959c8dc11fc2d353b8b2bfeb2a4749fda6eee7dea03d5b45f1847d0",
+      "settings_sha256": "3fa793f7c8d54858b44acad5ce1cdc580cbc1a3aa274db7514447a05defb14c1",
+      "source_sha256": "5c819c09c1e009240c423f638a980e672ba70ba44541a66a9b2d68a5ddf43828"
+    },
+    {
+      "task": "click-type--semver",
+      "manifest_sha256": "0e70ef5d31876c9cdbd7756f00d1413b2bb121f215dfdf5e833b35bf202e4242",
+      "settings_sha256": "e451e2cfb2d397b50523f49534ff57c6973eaca838d0cfb4d99a22155dc448a4",
+      "source_sha256": "5c819c09c1e009240c423f638a980e672ba70ba44541a66a9b2d68a5ddf43828"
+    }
+  ],
+  "model": "claude-haiku-4-5-20251001",
+  "training_sessions": 10,
+  "per_session_cap_usd": 1.5,
+  "wall_seconds_per_session": 300,
+  "max_turns": 60,
+  "outcome_retries": false,
+  "training_hooks_enabled": false,
+  "dependency_setup": "Existing pinned offline setup reused from paired scorer, on trusted upstream bases.",
+  "startup": "Each session uses a fresh private messaging socket and startup profiler, as verified by native probe v4.",
+  "native_probe_record": "../20260930-native-probe-v4/validation.json",
+  "production_threshold_changes": false,
+  "original_recipes_preserved": true,
+  "measured_task_spend_before_usd": 0.0699153,
+  "conservative_charge_before_usd": 0.5,
+  "paid_training_dispatches_at_registration": 0
+}

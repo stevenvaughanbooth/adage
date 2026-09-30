@@ -14,6 +14,111 @@ from evals.live import runner
 
 
 class Accounting(unittest.TestCase):
+    def unknown(self, total=2, cap=.5, persist=lambda:None):
+        state = {"runs":{}}
+        ledger = Budget(state,total,cap,persist=persist)
+        attempt,_ = ledger.reserve("startup-censored")
+        ledger.dispatch(attempt)
+        ledger.settle(attempt,{})
+        return state,ledger,attempt
+
+    def authorization(self, cap=.5, run="startup-censored"):
+        return dict(kind="human_cap_charge",approved=True,run=run,cap_usd=cap,
+                    statement="Approve charging the full reserved cap; actual cost remains unknown.",
+                    source="explicit human reply in evaluation task")
+
+    def test_authorized_cap_charge_is_distinct_from_measured_cost_and_survives_restart(self):
+        state,ledger,attempt = self.unknown(total=1)
+        receipt = ledger.resolve_unknown_at_cap("startup-censored",self.authorization())
+        self.assertEqual(receipt["status"],"cap_charged")
+        self.assertIsNone(receipt["cost_usd"])
+        self.assertEqual(receipt["charged_usd"],.5)
+        self.assertEqual(receipt["resolution"]["authorization"],self.authorization())
+        self.assertEqual(ledger.measured_spent,0)
+        self.assertEqual(ledger.conservative_charges,.5)
+        restarted = Budget(copy.deepcopy(state),1,.5)
+        self.assertEqual(restarted.spent,.5)
+        next_attempt,reason = restarted.reserve("next")
+        self.assertIsNone(reason)
+        restarted.dispatch(next_attempt)
+        restarted.settle(next_attempt,{"total_cost_usd":.1})
+        self.assertAlmostEqual(restarted.spent,.6)
+        self.assertIsNone(restarted.reserve("cannot-fit-full-cap")[0])
+        ledger.settle(attempt,{"total_cost_usd":0})
+        self.assertIsNone(attempt["cost_usd"],"ordinary settle cannot rewrite conservative resolution as free")
+
+    def test_resolution_cannot_choose_smaller_charge_missing_human_record_or_known_attempt(self):
+        mutations = [lambda a:a.update(approved=False),lambda a:a.update(cap_usd=.1),lambda a:a.update(cap_usd=True),
+                     lambda a:a.update(run="another"),lambda a:a.update(statement=""),lambda a:a.update(source=""),
+                     lambda a:a.update(kind="automatic")]
+        for mutate in mutations:
+            state,ledger,_ = self.unknown()
+            before = copy.deepcopy(state)
+            authorization = self.authorization()
+            mutate(authorization)
+            with self.assertRaises(ValueError):
+                ledger.resolve_unknown_at_cap("startup-censored",authorization)
+            self.assertEqual(state,before)
+        _,ledger,_ = self.unknown()
+        ledger.resolve_unknown_at_cap("startup-censored",self.authorization())
+        with self.assertRaises(ValueError):
+            ledger.resolve_unknown_at_cap("startup-censored",self.authorization())
+        for status in ("reserved","dispatched","settled","cancelled"):
+            _,ledger,attempt = self.unknown()
+            attempt["status"] = status
+            with self.assertRaises(ValueError):
+                ledger.resolve_unknown_at_cap("startup-censored",self.authorization())
+
+    def test_other_unknown_and_fatal_blocks_are_not_cleared(self):
+        state,ledger,_ = self.unknown()
+        state["accounting"]["attempts"].append(dict(run="other",status="unknown",cost_usd=None,cap_usd=.5))
+        ledger.resolve_unknown_at_cap("startup-censored",self.authorization())
+        self.assertIsNone(ledger.reserve("blocked")[0])
+        for reason in ("budget accounting could not be persisted; dispatch is blocked",
+                       "a reported cost exceeded its reserved cap; stop and reconcile","custom operator block"):
+            state,ledger,_ = self.unknown()
+            state["accounting"]["blocked_reason"] = reason
+            restarted = Budget(state,2,.5)
+            restarted.resolve_unknown_at_cap("startup-censored",self.authorization())
+            self.assertEqual(restarted.data["blocked_reason"],reason)
+            self.assertIsNone(restarted.reserve("blocked")[0])
+
+    def test_failed_resolution_persistence_restores_unknown_and_keeps_dispatch_blocked(self):
+        state,ledger,attempt = self.unknown()
+        def fail():
+            raise OSError("disk full")
+        ledger.persist = fail
+        with self.assertRaises(OSError):
+            ledger.resolve_unknown_at_cap("startup-censored",self.authorization())
+        self.assertEqual(attempt["status"],"unknown")
+        self.assertNotIn("resolution",attempt)
+        self.assertIn("could not be persisted",ledger.data["blocked_reason"])
+        self.assertIsNone(ledger.reserve("blocked")[0])
+
+    def test_invalid_or_tampered_cap_charge_and_total_overrun_block_restart(self):
+        mutations = [lambda a:a.update(charged_usd=.1),lambda a:a.update(cost_usd=0),
+                     lambda a:a["resolution"].pop("authorization"),lambda a:a.update(cap_usd=None)]
+        for mutate in mutations:
+            state,ledger,attempt = self.unknown()
+            ledger.resolve_unknown_at_cap("startup-censored",self.authorization())
+            mutate(attempt)
+            restarted=Budget(copy.deepcopy(state),2,.5)
+            self.assertIsNone(restarted.reserve("blocked")[0])
+        state,ledger,_=self.unknown()
+        ledger.resolve_unknown_at_cap("startup-censored",self.authorization())
+        restarted=Budget(copy.deepcopy(state),.4,.1)
+        self.assertIsNone(restarted.reserve("blocked")[0])
+
+    def test_legacy_missing_cap_and_ambiguous_run_cannot_be_resolved(self):
+        state,ledger,attempt=self.unknown()
+        attempt.pop("cap_usd")
+        with self.assertRaises(ValueError):
+            ledger.resolve_unknown_at_cap("startup-censored",self.authorization())
+        state,ledger,attempt=self.unknown()
+        ledger.data["attempts"].append(copy.deepcopy(attempt))
+        with self.assertRaises(ValueError):
+            ledger.resolve_unknown_at_cap("startup-censored",self.authorization())
+
     def test_parallel_workers_reserve_full_caps_and_release_unused_cost(self):
         state = {"runs": {}}
         ledger = Budget(state, total=1, per_session=0.6)
