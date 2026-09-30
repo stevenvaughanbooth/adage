@@ -69,6 +69,7 @@ impl Extension for Prefetch {
     fn session_context(
         &self,
         repo_key: &str,
+        root: &std::path::Path,
         index: &adage_tracks::Index,
         paths: &adage_store::Paths,
     ) -> Option<String> {
@@ -76,6 +77,9 @@ impl Extension for Prefetch {
             return None;
         }
         let store = Store::load(&approvals::path(&paths.root)).ok()?;
+        let table = CommandTable::load();
+        // Only a grant whose key still equals the route's current one, derived as act() derives
+        // it: a lapsed grant would be refused, so it promises no receipt.
         let has_verifier = index.for_repo(repo_key).any(|r| {
             let label = format!("{}/{}", r.track, r.route.id);
             store.approvals.iter().any(|a| {
@@ -83,6 +87,8 @@ impl Extension for Prefetch {
                     && a.route == label
                     && a.key.level == Level::E2
                     && a.key.effect == adage_core::Effect::Verify
+                    && route::plan(r, index, root, &paths.tracks(), Level::E2, a.terms.as_ref(), &table)
+                        .is_ok_and(|p| store.find(&approvals::ApprovalKey::for_request(&p.request, repo_key)).is_some())
             })
         });
         has_verifier.then(|| "<adage-reflex track=\"adage/execution@1\" route=\"session-contract\" strength=\"prime\" kind=\"execution-contract\">\nAdage can run person-approved verification actions from hooks. A successful completion receipt records work already executed for the stated command and inputs. Use a current receipt as verification evidence instead of running the same verification solely to repeat it. A receipt covers only that command's scope, not all correctness. If a receipt is missing, failed, uncertain, or stale after source/configuration/runtime changes, perform the necessary verification. Run additional diagnostics for a different scope or an explicit rerun request. An approval alone is not a successful result; execution still checks its policy and grant at each action.\n</adage-reflex>".into())
@@ -765,15 +771,53 @@ mod prediction_tests {
     #[test]
     fn session_contract_requires_scoped_e2_verification_and_policy() {
         let f = Fixture::new();
-        assert!(PREFETCH.session_context("fixture", &f.index, &f.paths).is_none());
+        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none());
         f.approve();
-        let text = PREFETCH.session_context("fixture", &f.index, &f.paths).unwrap();
+        let text = PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).unwrap();
         assert!(text.contains("<adage-reflex") && text.contains("session-contract"));
         assert!(text.contains("missing, failed, uncertain, or stale"));
         assert!(text.contains("explicit rerun request"));
-        assert!(PREFETCH.session_context("other-repository", &f.index, &f.paths).is_none());
+        assert!(PREFETCH.session_context("other-repository", &f.root, &f.index, &f.paths).is_none());
         std::fs::write(f.paths.root.join("policy.toml"), "[exec]\nmax_level = \"E1\"\n").unwrap();
-        assert!(PREFETCH.session_context("fixture", &f.index, &f.paths).is_none());
+        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none());
+    }
+
+    #[test]
+    fn session_contract_ignores_lapsed_and_revoked_verification() {
+        let f = Fixture::new();
+        f.approve();
+        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_some());
+        let store_path = approvals::path(&f.paths.root);
+        let script = f.root.join("tools/check.sh");
+        let original = std::fs::read(&script).unwrap();
+        std::fs::write(&script, "#!/bin/sh\ntest -f src/other.rs\n").unwrap();
+        let store = Store::load(&store_path).unwrap();
+        let req = route::plan(
+            &f.index.routes[0],
+            &f.index,
+            &f.root,
+            &f.paths.tracks(),
+            Level::E2,
+            store.approvals[0].terms.as_ref(),
+            &CommandTable::load(),
+        )
+        .unwrap()
+        .request;
+        let key = approvals::ApprovalKey::for_request(&req, "fixture");
+        assert!(store.find(&key).is_none());
+        assert_eq!(store.lapsed(&key, &store.approvals[0].route)[0].1[0].field, "route_exec_digest");
+        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none(), "lapsed grant");
+        std::fs::write(&script, original).unwrap();
+        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_some(), "matches again");
+        let mut store = Store::load(&store_path).unwrap();
+        assert_eq!(store.revoke("fixture", Some("fixture/context/predict-check")), 1);
+        store.save(&store_path).unwrap();
+        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none(), "revoked grant");
+        f.approve();
+        let mut store = Store::load(&store_path).unwrap();
+        assert!(store.revoke_automatically("fixture", "fixture/context/predict-check", Level::E2, "refused"));
+        store.save(&store_path).unwrap();
+        assert!(PREFETCH.session_context("fixture", &f.root, &f.index, &f.paths).is_none(), "auto-revoked grant");
     }
 
     #[test]

@@ -151,7 +151,7 @@ fn fitted_context(all: String, e0: impl FnOnce() -> String, applied: bool, max: 
 pub trait Extension: Sync {
     fn deliver(&self, turn: &Turn<'_>, directives: &[Directive]) -> Delivery;
     /// Optional responsibility contract. No action runs here; the caller gates treatment.
-    fn session_context(&self, _repo_key: &str, _index: &Index, _paths: &Paths) -> Option<String> {
+    fn session_context(&self, _repo_key: &str, _root: &Path, _index: &Index, _paths: &Paths) -> Option<String> {
         None
     }
     /// The exec-only reflexes (`(track, route id)`, vendored scripts) this extension would carry
@@ -587,10 +587,12 @@ fn session_start(
             .is_some_and(|st| st.arm == Some(Arm::Treated))
     {
         extension.and_then(|ext| {
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ext.session_context(&key, s.index, s.paths)))
-                .ok()
-                .flatten()
-                .filter(|text| text.len() <= s.adapter.max_context())
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                ext.session_context(&key, s.root, s.index, s.paths)
+            }))
+            .ok()
+            .flatten()
+            .filter(|text| text.len() <= s.adapter.max_context())
         })
     } else {
         None
@@ -884,7 +886,7 @@ mod tests {
             fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
                 Delivery::default()
             }
-            fn session_context(&self, _: &str, _: &Index, _: &Paths) -> Option<String> {
+            fn session_context(&self, _: &str, _: &Path, _: &Index, _: &Paths) -> Option<String> {
                 Some("test execution contract".into())
             }
         }
