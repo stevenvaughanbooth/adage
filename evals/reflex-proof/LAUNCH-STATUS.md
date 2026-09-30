@@ -5,12 +5,13 @@ passes; it does not establish that automatic verification helps complete coding 
 This page is the launch evidence index. Preserve earlier reports, failed attempts and protocols
 when a later experiment supersedes them.
 
-A separately frozen [cold-start pilot](harness/results/20260930-cold-start-pilot/FINDINGS.md)
-completed all eight assignments: shipped instincts passed **4/4 tasks versus 2/4**, with **16.3%
-lower reported cost** ($0.8452748 versus $1.0104017) and **20.5% fewer observed model requests**
-(124 versus 156). Both cost regressions and both baseline failures are retained. All four instincts
-sessions delivered an advisory project-Python hint. This is a four-task, single-repository signal
-for out-of-the-box guidance, not learned automatic execution or a general savings estimate.
+The [cold-start pilot and fixed replication](harness/results/20260930-cold-start-replication/FINDINGS.md)
+completed sixteen assignments on four distinct Marshmallow tasks, twice per arm. Shipped instincts
+passed **8/8 outputs versus 6/8**, with **8.8% lower reported cost** ($1.7720458 versus $1.9429724)
+and **10.5% fewer observed model requests** (272 versus 304). Three cost regressions and both
+baseline failures remain in the totals. The reversed-order replication alone saved only 0.6%,
+had equal request counts and passed all four tasks in both arms. The intervention is advisory
+project-Python context; this is not learned automatic execution or a general savings estimate.
 
 The [cross-session learning-curve pilot](harness/LEARNING-CURVE.md) completed 15 distinct native
 training sessions and checkpoints at 0/3/5/10/15 sessions. **Every checkpoint produced zero executable
@@ -30,6 +31,12 @@ of those before execution eligibility. Even after fixing that admission gap, the
 trigger has at most three qualifying sessions because intervening edits or verification stop the
 recount. This is a concrete integration blocker, not evidence that more paid runs alone will solve it.
 All 78 current harness tests pass. No grant or automatic held-out arm was created for this check.
+
+The [execution-prefix integration](harness/results/20260930-execution-prefix-integration/FINDINGS.md)
+now clears the mining gap: replaying the frozen guided histories compiles nine candidates instead
+of zero. The best candidates still have only 4/5 qualifying continuations, so none receives an
+execution certificate. The frozen organic replay also remains uncertified. Final validation passes
+120 affected Rust tests and 81 harness tests. All original results remain unchanged.
 
 | Gate | Evidence | Current conclusion |
 | --- | --- | --- |

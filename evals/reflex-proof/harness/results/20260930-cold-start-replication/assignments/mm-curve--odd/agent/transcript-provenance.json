@@ -1,0 +1,8 @@
+{
+  "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v1/cold-replication-v1/heldout/mm-curve--odd/agent/repo",
+  "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v1/cold-replication-v1/heldout/mm-curve--odd/agent/native-transcript.jsonl",
+  "session_id": "bccde20e-fe59-4c40-9b2b-71dce37e3c22",
+  "sha256": "ce0b7414958b550c4276a8eacd5309d847649c3185af914d4ba658c78f469f0a",
+  "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-curve-guided-v1-cold-replication-v1-heldout-mm-curve--odd-agent-repo/bccde20e-fe59-4c40-9b2b-71dce37e3c22.jsonl",
+  "synthetic": false
+}
