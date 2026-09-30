@@ -1,0 +1,58 @@
+{
+  "evidence": "live_attempt",
+  "hook_events": [],
+  "receipts": [],
+  "duplicate_suppressions": 0,
+  "explicit_stream_request_ids": [
+    "req_011CfaGLBvbrBWh6P1SvaZtZ",
+    "req_011CfaGLMSLnZRbRwx26oroH"
+  ],
+  "api_request_count": null,
+  "observed_stream_request_id_count": 2,
+  "assistant_message_ids": [
+    "msg_011CfaGLCKAmkvbF2fdSumwk",
+    "msg_011CfaGLMovQDZ5WcwppNsV9"
+  ],
+  "total_cost_usd": 0.0057334000000000005,
+  "usage": {
+    "input_tokens": 18,
+    "cache_creation_input_tokens": 1287,
+    "cache_read_input_tokens": 9164,
+    "output_tokens": 445,
+    "output_tokens_details": {
+      "thinking_tokens": 326
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 1287,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 8,
+        "output_tokens": 230,
+        "cache_read_input_tokens": 5066,
+        "cache_creation_input_tokens": 319,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 319
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "num_turns": 2,
+  "result_status": "success",
+  "result_is_error": false,
+  "terminal_reason": "completed",
+  "result_text": "**FILE_ marker:** FILE_785a12d71463f5974939\n\n**HOOK_ receipt marker:** ABSENT",
+  "duration_api_ms": 4966,
+  "accounting": "reported",
+  "limitation": "No API-request count inferred. Inspect version-specific debug logs and raw stream; arrival timestamps do not prove request dispatch timing. Fixture selftests are not live hook evidence."
+}

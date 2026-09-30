@@ -1,0 +1,10 @@
+{
+  "answer": "**FILE_ marker:** FILE_9635e521857272e04e28\n\n**HOOK_ receipt marker:** ABSENT",
+  "arm": "malformed",
+  "cost_usd": 0.005046500000000001,
+  "hook_received": false,
+  "limitation": "one diagnostic sample; not production execution or action avoidance",
+  "original_received": true,
+  "passed": true,
+  "result_is_error": false
+}

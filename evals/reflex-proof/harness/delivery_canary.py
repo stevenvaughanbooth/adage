@@ -102,7 +102,7 @@ def prepare(authority, root):
     return root
 
 
-def live(session):
+def live(session, assess=None):
     manifest = json.loads((session / "manifest.json").read_text())
     authority = Path(manifest["experiment_root"])
     gate.validate_authority(manifest)
@@ -130,14 +130,7 @@ def live(session):
             if not budget.dispatch(attempt):
                 raise ValueError("accounting blocks dispatch")
             result = probe.execute(session / "manifest.json", CAP, 90)
-            config = json.loads((session / "hook-config.json").read_text())
-            answer = result.get("result_text") or ""
-            observed = dict(arm=manifest["arm"], original_received=config["original"] in answer,
-                hook_received=config["marker"] in answer, cost_usd=result.get("total_cost_usd"),
-                answer=answer, result_is_error=result.get("result_is_error"),
-                limitation="one diagnostic sample; not production execution or action avoidance")
-            observed["passed"] = (observed["original_received"] and result.get("result_is_error") is False
-                and observed["hook_received"] == (manifest["arm"] in ("context", "replacement")))
+            observed = (assess or assess_delivery)(session, manifest, result)
             gate.write(session / "finding.json", observed)
             state["runs"][key].update(status="complete", summary=result, finding=observed)
             return observed
@@ -147,6 +140,18 @@ def live(session):
         finally:
             budget.settle(attempt, result)
             gate.write(path, state)
+
+
+def assess_delivery(session, manifest, result):
+    config = json.loads((session / "hook-config.json").read_text())
+    answer = result.get("result_text") or ""
+    observed = dict(arm=manifest["arm"], original_received=config["original"] in answer,
+        hook_received=config["marker"] in answer, cost_usd=result.get("total_cost_usd"),
+        answer=answer, result_is_error=result.get("result_is_error"),
+        limitation="one diagnostic sample; not production execution or action avoidance")
+    observed["passed"] = (observed["original_received"] and result.get("result_is_error") is False
+        and observed["hook_received"] == (manifest["arm"] in ("context", "replacement")))
+    return observed
 
 
 if __name__ == "__main__":
