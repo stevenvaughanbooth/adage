@@ -79,6 +79,7 @@ test("the hero draws its scene", async ({ page }) => {
 });
 
 test("early access: success, a closed list, and a bad address", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await films(page, "fail");
   let open = true;
   await page.route("**/api/waitlist", (r) => r.fulfill(open ? { status: 200, json: { ok: true } } : { status: 503, json: { error: "closed" } }));
@@ -96,8 +97,8 @@ test("early access: success, a closed list, and a bad address", async ({ page })
   await page.getByRole("button", { name: "Join the list" }).click();
   await expect(status).toContainText("aren't open yet");
   await expect(email).toHaveValue("dev@example.com");
-  await page.getByRole("link", { name: "Try the source preview", exact: true }).click();
-  await expect(page).toHaveURL(/#start$/);
+  await page.getByRole("link", { name: "Walk through how Adage works", exact: true }).click();
+  await expect(page).toHaveURL(/\/how(?:[?#]|$)/);
 });
 
 for (const scheme of ["dark", "light"] as const) {

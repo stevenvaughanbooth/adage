@@ -274,7 +274,7 @@ $ make check
       <p class="kicker reveal">Get started</p>
       <h2 class="display reveal" id="start-h">Install the plugin. <span class="soft">Start a session.</span></h2>
       <p class="lede reveal">When the first release ships, install the Claude Code plugin and start a session in a repository. Adage binds instincts and learns from earlier traces in the background. The plugin bundles its binaries; it does not put <code>adage</code> on your terminal's PATH.</p>
-      <p class="reveal">Want to explore before launch? Build the CLI from source, then try the isolated demos below. Homebrew and <code>@adage-sh/cli</code> distribution are planned for the release. Codex and OpenCode adapters are in preview.</p>
+      <p class="reveal">Have repository access? Build the CLI from source, then try the isolated demos below. The source preview currently requires access to the private repository. Homebrew and <code>@adage-sh/cli</code> distribution are planned for the release. Codex and OpenCode adapters are in preview.</p>
       <p class="links reveal" id="repo-links" hidden><a href="#" data-repo="">Read the README</a><a href="#" data-repo="/blob/main/docs/lexicon.md">The lexicon</a></p>
     </div>
     <div class="term reveal" role="region" aria-label="Install and set up">
@@ -298,7 +298,7 @@ $ make check
       <article class="card reveal"><span class="kicker">02 / keyboard first</span><h3>The control room</h3><p>Inspect reflexes, review evidence, check health. Navigate without leaving the terminal.</p><code>adage ui --demo</code><button class="btn" type="button" data-copy="adage ui --demo">Copy TUI demo</button></article>
       <article class="card reveal"><span class="kicker">03 / the whole picture</span><h3>The local map</h3><p>Follow traces into reflexes in your browser. Read-only, served by the binary on localhost.</p><code>adage map --demo</code><button class="btn" type="button" data-copy="adage map --demo">Copy map demo</button></article>
     </div>
-    <details class="source-install reveal"><summary>Build the CLI from source · requires Rust and Git</summary><p>From the repository: <code>cargo install --locked --path crates/adage-cli</code>. Or install from Git:</p><pre><code>cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli</code></pre><button class="btn" type="button" data-copy="cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli">Copy source install</button><p>For a real repository, run <code>adage init</code>. Preview harness setup: <code>adage install codex --write --scope user</code> or <code>adage install opencode --write --scope user</code>. Run <code>adage doctor</code> to verify setup.</p></details>
+    <details class="source-install reveal"><summary>Source preview · requires repository access, Rust and Git</summary><p>Already have repository access? From your checkout: <code>cargo install --locked --path crates/adage-cli</code>. Or install from Git:</p><pre><code>cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli</code></pre><button class="btn" type="button" data-copy="cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli">Copy source install</button><p>For a real repository, run <code>adage init</code>. Preview harness setup: <code>adage install codex --write --scope user</code> or <code>adage install opencode --write --scope user</code>. Run <code>adage doctor</code> to verify setup.</p></details>
   </div>
 </section>
 
@@ -313,7 +313,7 @@ $ make check
       <button class="btn primary" type="submit">Join the list</button>
       <p class="status" id="signup-status" role="status" aria-live="polite"></p>
     </form>
-    <p class="reveal">Want to explore now? <a href="#start">Try the source preview</a> and run the local demos.</p>
+    <p class="reveal">Explore now: <a href="/how">Walk through how Adage works</a>, from traces to hooks and evidence.</p>
   </div>
 </section>
 </main>

@@ -25,8 +25,9 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 - The launch site now walks one concrete trace through conditioning and hook delivery, introduces
   the watch/TUI/map demos, and leads with completed shipped-product validation and its uncertainty.
-  The approved 45-second dark/day teaser replaces the older duration and posters. A source-preview
-  link gives visitors a way to explore while early-access signup is unavailable.
+  The approved 45-second dark/day teaser replaces the older duration and posters. The interactive
+  walkthrough gives visitors a way to explore while early-access signup is unavailable; source
+  installation clearly requires repository access before the public release.
 - The local map retries failed snapshots with bounded backoff, times out stalled requests, and
   labels stale data with a manual retry. Continuous events no longer starve snapshot refreshes.
   First-run hook checks can recover and be rechecked; demo data is explicitly labeled.
