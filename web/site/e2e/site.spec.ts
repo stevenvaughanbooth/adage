@@ -18,6 +18,7 @@ test("the page opens on the film; skipping lands on the hero", async ({ page }) 
   const film = page.getByRole("dialog", { name: "Adage teaser film" });
   await expect(film).toBeVisible();
   await expect(film).toBeFocused();
+  await expect(page.locator("#film-video")).toHaveJSProperty("muted", false);
   await expect(page.locator("main")).toHaveJSProperty("inert", true);
   // The controls stay hidden until the pointer moves.
   await expect(page.locator(".film-bar")).toHaveCSS("opacity", "0");
@@ -338,12 +339,11 @@ test("the film's speaker mutes and unmutes; the skip icon skips", async ({ page 
   await films(page, "hang");
   await page.goto("/");
   await page.locator("#film").hover();
-  const speaker = page.getByRole("button", { name: "Unmute" });
-  await speaker.click();
-  await expect(page.locator("#film-video")).toHaveJSProperty("muted", false);
   await page.getByRole("button", { name: "Mute" }).click();
   await expect(page.locator("#film-video")).toHaveJSProperty("muted", true);
   await expect(page.getByRole("button", { name: "Unmute" })).toBeVisible();
+  await page.getByRole("button", { name: "Unmute" }).click();
+  await expect(page.locator("#film-video")).toHaveJSProperty("muted", false);
   await page.locator("#film").screenshot({ path: "test-results/film-controls.png" });
   await page.getByRole("button", { name: "Skip intro" }).click();
   await expect(page.locator("#film")).toBeHidden();
@@ -362,4 +362,28 @@ test("the illustrative trace becomes a reflex, then a directive, by keyboard", a
   await expect(page.locator("#story-code")).toContainText("Adage: Changes to schema/*.json");
   await expect(page.getByRole("button", { name: /The next session gets a shortcut/ })).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator(".story-footnote")).toContainText("Illustrative sequence, not a benchmark");
+});
+
+
+test("blocked audible autoplay offers a click to play with sound", async ({ page }) => {
+  await films(page, "hang");
+  await page.addInitScript(() => {
+    let attempts = 0;
+    HTMLMediaElement.prototype.play = function () {
+      this.dataset.playAttempts = String(++attempts);
+      if (attempts === 1) return Promise.reject(new DOMException("Gesture required", "NotAllowedError"));
+      return Promise.resolve();
+    };
+  });
+  await page.goto("/");
+  const play = page.getByRole("button", { name: /Play the teaser with sound/ });
+  await expect(play).toBeVisible();
+  await expect(page.locator("#film-video")).toHaveJSProperty("muted", false);
+  await play.click();
+  await expect(play).toBeHidden();
+  await expect(page.locator("#film-video")).toHaveAttribute("data-play-attempts", "2");
+  await expect(page.locator("#film-video")).toHaveJSProperty("muted", false);
+  await expect(page.locator("#film")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#film")).toBeHidden();
 });
