@@ -63,7 +63,7 @@
   --film: #e9e9eb;
 }
 * { box-sizing: border-box; }
-html { scroll-behavior: smooth; scroll-padding-top: 72px; }
+html { scroll-behavior: smooth; }
 body { margin: 0; -webkit-font-smoothing: antialiased; background: var(--night); color: var(--ink-1); font: 16px/1.55 var(--body); }
 button { font: inherit; color: inherit; }
 a { color: inherit; }
@@ -408,10 +408,32 @@ code { font: 0.92em var(--mono); background: var(--raised); border: 1px solid va
 
 /* ---- the math ---- */
 .math .lede { max-width: 64ch; }
-.mathtoc { margin: 28px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
-.mathtoc a { font: 12.5px var(--mono); padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; color: var(--ink-2); background: var(--night); }
+/* One block at a time: the pills and arrows move a horizontal track that snaps to each block. */
+.mbar { margin: 28px 0 0; display: flex; align-items: center; gap: 16px 24px; }
+.mathtoc { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.mathtoc a { font: 12.5px var(--mono); padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; text-decoration: none; color: var(--ink-2); background: var(--night); white-space: nowrap; }
 .mathtoc a:hover { color: var(--ink-1); border-color: var(--memory); }
-.mblock { margin-top: clamp(40px, 5vw, 64px); padding-top: 28px; border-top: 1px solid var(--line); max-width: 860px; scroll-margin-top: 24px; }
+.mathtoc a[aria-current] { color: var(--ink-1); border-color: var(--memory); background: color-mix(in srgb, var(--memory) 16%, var(--night)); }
+.mctl { flex: none; display: flex; align-items: center; gap: 10px; }
+.mctl .count { min-width: 7ch; text-align: center; }
+.tbtn:disabled { opacity: 0.35; cursor: default; border-color: var(--line-strong); }
+.mtrack { position: relative; margin-top: 20px; display: flex; align-items: flex-start; gap: 20px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; transition: height 320ms var(--ease); border-radius: 18px; }
+.mtrack::-webkit-scrollbar { display: none; }
+.mtrack:focus-visible { outline-offset: 4px; }
+.mblock { flex: 0 0 100%; min-width: 0; scroll-margin-top: var(--mtop, 0px); scroll-snap-align: start; scroll-snap-stop: always; padding: clamp(20px, 3vw, 32px); border: 1px solid var(--line); border-radius: 18px; background: var(--raised); }
+.mblock .formula, .mblock .calc, .mblock .consts > div, .mblock .effects { break-inside: avoid; }
+.mblock .formula { background: var(--night); }
+/* Wide screens set a block in two columns, so most fit on one screen. */
+@media (min-width: 1100px) {
+  .mblock { columns: 2; column-gap: 44px; }
+  .mblock header, .mblock .effects, .mblock .calc, .mblock .formula { column-span: all; }
+  .mblock > :first-child + p { margin-top: 0; }
+  /* The heading and the lede sit side by side, so the block gets the screen. */
+  .math .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 48px; }
+  .math .wrap > * { grid-column: 1 / -1; }
+  .math .wrap > .kicker, .math .wrap > .display { grid-column: 1; }
+  .math .wrap > .lede { grid-column: 2; grid-row: 1 / span 2; align-self: end; margin: 0; }
+}
 .mblock header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 12px; }
 .mnum { font: 500 13px var(--mono); color: var(--memory); }
 .mblock h3 { margin: 0; font: 700 clamp(22px, 2.4vw, 28px)/1.2 var(--display); letter-spacing: -0.01em; }
@@ -524,3 +546,29 @@ math { color: inherit; font-family: "STIX Two Math", "Cambria Math", "Latin Mode
 @media (prefers-reduced-motion: reduce) { .learned-path { animation: none !important; } .detours, .story-controls button { transition: none; } }
 
 .story-terminal code { background: transparent; border: 0; padding: 0; color: var(--ink-1); font: inherit; }
+
+/* ======================================================================= one section per screen */
+/* The page moves a section at a time. A section taller than the screen still scrolls through
+   freely, then settles on the next. The browser settles on a nearby section by itself; on wide
+   screens src/snap.ts takes over (html.snapjs) and finishes each move in its direction. */
+html { scroll-snap-type: y proximity; }
+html.snapjs { scroll-snap-type: none; }
+main > section, .top.static { scroll-snap-align: start; }
+.howintro { scroll-snap-align: none; }
+.foot { scroll-snap-align: end; }
+@media (min-width: 861px) {
+  .hero { min-height: 100svh; }
+  main > section:not(.hero) { min-height: 100svh; display: flex; flex-direction: column; justify-content: center; }
+  .band { padding-block: clamp(56px, 9vh, 112px); }
+  /* /how opens under its header: the intro fills the rest of the first screen. */
+  .howpage .howintro { min-height: calc(100svh - 80px); }
+  .walkgrid { height: min(860px, calc(100svh - 56px)); }
+}
+@media (max-width: 860px) {
+  /* The math's pills become one row that scrolls sideways, with the arrows under it. */
+  .mbar { flex-direction: column; align-items: stretch; gap: 12px; }
+  .mathtoc { position: relative; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: calc(-1 * clamp(16px, 4vw, 48px)); padding-inline: clamp(16px, 4vw, 48px); }
+  .mathtoc::-webkit-scrollbar { display: none; }
+  .mctl { justify-content: space-between; }
+  .mtrack { gap: 12px; }
+}

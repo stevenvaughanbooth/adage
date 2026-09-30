@@ -243,6 +243,56 @@ test.describe("/how", () => {
     expect(errors).toEqual([]);
   });
 
+  test("the math is a carousel: arrows, pills, keys and #m- links move it", async ({ page }) => {
+    await page.goto("/how");
+    const count = page.locator("#mcount");
+    await expect(count).toHaveText("01 / 10");
+    await expect(page.locator("#mprev")).toBeDisabled();
+    await page.locator("#mnext").click();
+    await expect(count).toHaveText("02 / 10");
+    await expect(page.locator(".mathtoc a[aria-current]")).toHaveText("Graph engine");
+    await expect(page).toHaveURL(/#m-graph$/);
+    await page.locator(".mathtoc").getByRole("link", { name: "Skills" }).click();
+    await expect(count).toHaveText("10 / 10");
+    await expect(page.locator("#mnext")).toBeDisabled();
+    await page.locator("#mtrack").focus();
+    await page.keyboard.press("Home");
+    await expect(count).toHaveText("01 / 10");
+    // The track is as tall as the block in view.
+    await expect.poll(() => page.evaluate(() => {
+      const t = document.getElementById("mtrack")!;
+      return Math.abs(t.offsetHeight - document.querySelector<HTMLElement>(".mblock.on")!.offsetHeight);
+    })).toBeLessThan(2);
+
+    await page.goto("/how#m-hook");
+    await expect(count).toHaveText("08 / 10");
+    await expect(page.locator("#m-hook")).toBeInViewport();
+    await expect.poll(() => page.evaluate(() => Math.abs(scrollY - document.getElementById("math")!.offsetTop))).toBeLessThan(2);
+  });
+
+  test("the page moves a section at a time", async ({ page }) => {
+    await page.goto("/how");
+    const top = (id: string) => page.evaluate((i) => document.getElementById(i)!.offsetTop, id);
+    const y = () => page.evaluate(() => Math.round(scrollY));
+    await page.evaluate(() => scrollTo({ top: document.getElementById("walk")!.offsetTop, behavior: "instant" }));
+    await page.mouse.move(720, 450);
+    // A short wheel turn finishes the move: down to the next section, and back up.
+    await page.mouse.wheel(0, 120);
+    await expect.poll(y, { timeout: 5000 }).toBe(await top("math"));
+    await page.mouse.move(720, 60);
+    await page.mouse.wheel(0, -120);
+    await expect.poll(y, { timeout: 5000 }).toBe(await top("walk"));
+
+    // A section taller than the screen reads freely.
+    await page.goto("/#evidence");
+    const ev = await top("evidence");
+    await expect.poll(y).toBe(ev);
+    await page.mouse.move(720, 450);
+    await page.mouse.wheel(0, 300);
+    await page.waitForTimeout(800);
+    expect(await y()).toBe(ev + 300);
+  });
+
   test("the Wilson calculator agrees with the Rust bound", async ({ page }) => {
     await page.goto("/how#m-evidence");
     await page.locator("#wn").fill("8");
