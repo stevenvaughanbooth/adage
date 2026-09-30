@@ -28,7 +28,11 @@ ARMS = curve.ARMS
 
 
 def verify_curve(root):
-    if pairs.read(root / "manifest.json").get("protocol") == "learning-curve-cold-1":
+    protocol = pairs.read(root / "manifest.json").get("protocol")
+    if protocol == "learning-curve-guided-transfer-1":
+        import curve_transfer
+        return curve_transfer.verify(root)
+    if protocol == "learning-curve-cold-1":
         import curve_cold
         return curve_cold.verify(root)
     with curve_sessions.registry(root):
@@ -47,7 +51,8 @@ def prepare(root, task, descriptor):
         raise ValueError("complete base/gold validation required")
     entries = [r for r in base["matrix"] if r["task"] == task]
     cold_study = base["protocol"] == "learning-curve-cold-1"
-    expected_arms = {"agent", "instincts"} if cold_study else set(ARMS)
+    guided_transfer = base["protocol"] == "learning-curve-guided-transfer-1"
+    expected_arms = {"agent", "instincts"} if cold_study else {"learned", "automatic"} if guided_transfer else set(ARMS)
     if len(entries) != len(expected_arms) or {r["arm"] for r in entries} != expected_arms:
         raise ValueError("complete registered task arms required")
     plan = base["families"][0]
@@ -55,10 +60,11 @@ def prepare(root, task, descriptor):
     if cold_study:
         if pairs.sha(descriptor) != base["descriptor_sha256"] or artifact.get("checkpoint") != 0:
             raise ValueError("registered checkpoint-zero descriptor required")
-    elif (artifact.get("checkpoint") != 15 or artifact.get("family") != plan["family"]
+    elif (artifact.get("checkpoint") != (10 if guided_transfer else 15) or artifact.get("family") != plan["family"]
             or artifact.get("training_tasks") != plan["train"] or artifact.get("action_kind") != "verify"):
         raise ValueError("natural checkpoint-15 verification descriptor required")
-    for task_id in ([] if cold_study else plan["train"]):
+    # Guided transfer's verifier binds all ten native histories across its two source cohorts.
+    for task_id in ([] if cold_study or guided_transfer else plan["train"]):
         session = root / "sessions" / task_id
         manifest = pairs.read(session / "manifest.json")
         provenance = pairs.read(session / "transcript-provenance.json")
@@ -147,7 +153,7 @@ def prepare(root, task, descriptor):
             comparison_identity=dict(model=artifact["model"], base_commit=plan["base_full"],
                 binary_hashes={name: pairs.sha(Path(p)) for name, p in binaries.items()},
                 initial_source_digest=initial["digest"], policy_sha256=hashlib.sha256(normalized_policy.encode()).hexdigest()))
-        if cold_study:
+        if cold_study or guided_transfer:
             m["study_root"] = str(root)
         gate.validate_authority(m)
         gate.budget_limit(m)
@@ -244,9 +250,11 @@ def collect(manifest):
     return result
 
 
-def task_result(rows):
+def task_result(rows, expected_arms=ARMS):
     by_arm = {r["arm"]: r for r in rows}
-    if len(rows) != 4 or set(by_arm) != set(ARMS):
+    if tuple(expected_arms) not in (tuple(ARMS), ("learned", "automatic")):
+        raise ValueError("unsupported comparison arms")
+    if len(rows) != len(expected_arms) or set(by_arm) != set(expected_arms):
         return dict(passed=False, confirmed_elimination=False, reasons=["complete unique four-arm task required"])
     learned, automatic = by_arm["learned"], by_arm["automatic"]
     pair_rows = [copy.deepcopy(learned), copy.deepcopy(automatic)]
@@ -269,10 +277,11 @@ def task_result(rows):
     failed_only = learned.get("quality", {}).get("passed") is True and automatic.get("quality", {}).get("passed") is False
     return dict(passed=confirmed, confirmed_elimination=confirmed, reasons=reasons, literal_pair_evidence=comparison,
         automatic_only_quality_failure=failed_only,
-        quality_by_arm={arm: by_arm[arm].get("quality", {}) for arm in ARMS},
+        quality_by_arm={arm: by_arm[arm].get("quality", {}) for arm in expected_arms},
         contrasts={label: contrast(by_arm[left], by_arm[right]) for label, left, right in (
             ("instincts-agent", "agent", "instincts"), ("learned-instincts", "instincts", "learned"),
-            ("automatic-learned", "learned", "automatic"), ("automatic-agent", "agent", "automatic"))})
+            ("automatic-learned", "learned", "automatic"), ("automatic-agent", "agent", "automatic"))
+            if left in by_arm and right in by_arm})
 
 
 def fixed_pytest_evidence(row):
@@ -361,7 +370,9 @@ def report(root):
             order=entry["order"], status="uncollected", cost_usd=attempt.get("summary", {}).get("total_cost_usd"))
         row["ledger_attempt"] = attempt
         rows.append(row)
-    tasks = {task: task_result([r for r in rows if r["task"] == task]) for task in base["families"][0]["heldout"]}
+    expected_arms = ("learned", "automatic") if base["protocol"] == "learning-curve-guided-transfer-1" else ARMS
+    tasks = {task: task_result([r for r in rows if r["task"] == task], expected_arms)
+             for task in base["families"][0]["heldout"]}
     costs = [pairs.known_cost(r.get("cost_usd")) for r in rows]
     confirmed = sum(t.get("confirmed_elimination", False) for t in tasks.values())
     complete = all(r.get("status") != "uncollected" and not r.get("collection_errors") for r in rows)
@@ -377,7 +388,7 @@ def report(root):
         known_cost_usd=sum(c for c in costs if c is not None), unknown_cost_assignments=sum(c is None for c in costs),
         confirmed_eliminations=confirmed, automatic_only_quality_failures=sum(t.get("automatic_only_quality_failure", False) for t in tasks.values()),
         limitations=["Confirmed lower bounds admit only identical fixed project-Python pytest commands with literal test targets and allowlisted flags; other semantic equivalence remains unverified.",
-            "All 16 assignments, including failures, censored and missing runs, remain in the denominator.",
+            f"All {len(base['matrix'])} assignments, including failures, censored and missing runs, remain in the denominator.",
             "API requests and tokens do not measure GPU utilization or energy; four tasks are a feasibility screen."])
     output = root / "reports" / ("heldout-" + str(time.time_ns()) + ".json")
     pairs.write(output, result)

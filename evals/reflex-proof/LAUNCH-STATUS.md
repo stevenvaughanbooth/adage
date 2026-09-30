@@ -38,6 +38,14 @@ of zero. The best candidates still have only 4/5 qualifying continuations, so no
 execution certificate. The frozen organic replay also remains uncertified. Final validation passes
 120 affected Rust tests and 81 harness tests. All original results remain unchanged.
 
+The [cumulative guided follow-up](harness/results/20260930-cumulative-guided/FINDINGS.md) now
+certifies four triggers for one pytest routine from all ten native demonstrations, with nine
+supporting sessions and 9/10 qualifying continuations. Three triggers are learned sequence contexts.
+New task quality is 5/5, cumulative quality 9/10. This clears real-history learning/certification,
+but does not establish live automatic savings. The subsequent eight-assignment transfer comparison
+is frozen and prepared; its exact execution grants require the person's own terminal. Current
+harness validation passes 84 tests.
+
 | Gate | Evidence | Current conclusion |
 | --- | --- | --- |
 | Learn without authored routes or outcome labels | [Default onboarding](traces/results/onboarding.json) | Nine archived generated-repository training sessions produce learned routes using normal thresholds |
@@ -145,11 +153,14 @@ its entire $0.50 reservation; its actual bill remains unknown. The ledger record
 from measured provider costs. The earlier planning snapshot reported **$4.8605710**, leaving
 **$55.1394290** under the $60 task cap. The authoritative ledger's corresponding prior admission
 total is $4.8039968, a $0.0565742 reconciliation difference; retain the earlier snapshot as history.
-The [current accounting snapshot](harness/results/20260930-guided-demonstrations/budget-snapshot.json)
+The [48-attempt accounting snapshot](harness/results/20260930-guided-demonstrations/budget-snapshot.json)
 includes all 48 attempts through the natural, cold-start, diagnostic and guided runs: **$10.7000678
 measured provider cost + $0.50 approved conservative charge = $11.2000678 admission spend**,
 leaving **$48.7999322**. All attempts are settled or explicitly cap-charged; none are outstanding.
-This approval does not cover future unknown bills.
+The [62-attempt snapshot](harness/results/20260930-cumulative-guided/budget-snapshot.json), after
+the cold replication and cumulative guided study, records **$13.2920411 measured + $0.50 approved
+conservative charge = $13.7920411 admission spend**, leaving **$46.2079589**. No paid transfer
+sessions had started at this snapshot. This approval does not cover future unknown bills.
 Historical experiments elsewhere in the repository are separate from this task's ledger. Each new
 experiment must reserve full session caps durably before dispatch; a new unknown cost blocks further
 paid work. Human approval of a reflex is separate from evaluation spending authorization and applies

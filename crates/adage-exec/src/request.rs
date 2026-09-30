@@ -228,7 +228,12 @@ impl ActionSpec {
             if globs.len() > adage_pack::MAX_ACTION_GLOBS {
                 bail!("{what}: at most {} globs", adage_pack::MAX_ACTION_GLOBS);
             }
-            if let Some(g) = globs.iter().find(|g| !adage_pack::validate::action_glob_ok(g)) {
+            let valid_glob = if what == "cache" {
+                adage_pack::validate::cache_glob_ok
+            } else {
+                adage_pack::validate::action_glob_ok
+            };
+            if let Some(g) = globs.iter().find(|g| !valid_glob(g)) {
                 bail!("{what}: {g:?} is not a repository-relative glob outside .git");
             }
         }

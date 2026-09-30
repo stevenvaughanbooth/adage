@@ -71,7 +71,11 @@ also produced zero executable candidates despite five eventual test-command succ
 identified a mining/admission gap and insufficient trigger-specific evidence; the launch gate remains open.
 The [mining integration fix](evals/reflex-proof/harness/results/20260930-execution-prefix-integration/FINDINGS.md)
 now preserves executable prefixes: replaying those five histories compiles nine candidates instead
-of zero. None yet passes the unchanged execution evidence gate; compilation is not a savings result.
+of zero. Those five histories alone do not pass the unchanged execution evidence gate; compilation is not a savings result.
+A [separately registered five-session follow-up](evals/reflex-proof/harness/results/20260930-cumulative-guided/FINDINGS.md)
+then brings the retained history to ten sessions and certifies four triggers for one test routine,
+with **9/10 qualifying continuations**. This connects real traces to an executable learned artifact;
+live automatic action elimination remains a separate, human-approved evaluation.
 
 ```text
   agent traces ──► adage condition ──► reflexes ──► index ──► hooks

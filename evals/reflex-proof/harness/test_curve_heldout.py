@@ -46,8 +46,13 @@ class CurveHeldoutTests(unittest.TestCase):
             dict(event="PostToolUse", exit_code=0, payload={"session_id": "native", "tool_use_id": "test"},
                  before={"digest": "final"}, after={"digest": "final"})])
         self.assertTrue(heldout.task_result(rows)["confirmed_elimination"])
+        transfer = heldout.task_result(rows[2:], ("learned", "automatic"))
+        self.assertTrue(transfer["confirmed_elimination"])
+        self.assertEqual(set(transfer["contrasts"]), {"automatic-learned"})
+        self.assertFalse(heldout.task_result(rows[2:])["passed"], "four-arm default must remain strict")
         learned["hooks"][0]["after"]["digest"] = "stale"
         self.assertFalse(heldout.task_result(rows)["confirmed_elimination"])
+        self.assertFalse(heldout.task_result(rows[2:], ("learned", "automatic"))["confirmed_elimination"])
         for command in ("pytest -q", ".venv/bin/python -m pytest -k one", ".venv/bin/python -m pytest {tests}"):
             learned["template"] = command
             self.assertFalse(heldout.fixed_pytest_evidence(learned))

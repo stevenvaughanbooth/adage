@@ -145,6 +145,21 @@ The [complete findings](results/20260930-guided-demonstrations/FINDINGS.md) iden
 advisory contrast as an upstream admission gap, and a separate insufficiency in trigger-specific
 success evidence. The original checkpoint remains unchanged; no automatic comparison ran.
 
+The subsequent execution-prefix fix and a separately registered second set of five guided
+demonstrations now produce four certified triggers for one test command from ten retained native
+histories: nine qualifying continuations out of ten. The new five outputs independently pass 5/5;
+the original failing output remains, yielding 9/10 quality passes overall. This is instruction-guided
+cross-session learning, not autonomous discovery or an efficacy comparison.
+
+`curve_transfer.py` freezes a separate eight-session transfer study: the learned artifact with no
+execution grant versus the identical artifact with one human-approved context reflex. Four tasks,
+disjoint from training but previously observed in the cold pilots, use their original prompts
+without workflow guidance. Arms alternate by task. Source, model, scorer, native policy and learned
+knowledge are fixed; every outcome remains visible. The existing source-generation, approval,
+strict pytest-scope, unknown-shell and billing checks determine confirmed elimination. At least
+three confirmed eliminations, complete accounting and all task-quality checks are required for
+this transfer gate. A failed result is retained without relaxing the protocol or retrying outcomes.
+
 ## Offline preparation
 
 ```sh

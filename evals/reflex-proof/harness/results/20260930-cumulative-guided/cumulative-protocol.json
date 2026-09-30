@@ -1,0 +1,52 @@
+{
+  "protocol": "cumulative-guided-development-1",
+  "registered_at": "2026-09-30T18:40:54.748072+00:00",
+  "new_cohort_manifest_sha256": "c30251c8234a85e5693674048c88dec2b321c17d814defae9579858a37f7100b",
+  "old_checkpoint": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v1/checkpoints/5/attempt.json",
+  "old_attempt_sha256": "1a8f2e1df3b1d6f9cf377a784136e1fd0e977bee1a35387efa9d9487f50c3946",
+  "old_inputs": [
+    {
+      "session_id": "619ceb50-7f6d-494d-b6c0-1978fb0e9e5c",
+      "sha256": "d5ef3ae0ea648619120d9e8635f453fa2af61976483abae87211096c4fa60428",
+      "copy": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v1/checkpoints/5/history/619ceb50-7f6d-494d-b6c0-1978fb0e9e5c.jsonl",
+      "task": "mm-curve--starts-with"
+    },
+    {
+      "session_id": "b1d2f109-c9f2-4ff8-ae34-cb3dad7bb043",
+      "sha256": "65f83160016745d5a9210d08b9b4bb1a0cd27bb64c413fc93aeed1370d2f6c16",
+      "copy": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v1/checkpoints/5/history/b1d2f109-c9f2-4ff8-ae34-cb3dad7bb043.jsonl",
+      "task": "mm-curve--multiple-of"
+    },
+    {
+      "session_id": "30054069-82a2-4670-9f8c-bfc4bcd58c63",
+      "sha256": "e8040eeac21317f8264090fdd1c275a338da3ab04ac9fe499f74aa4d6675f40d",
+      "copy": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v1/checkpoints/5/history/30054069-82a2-4670-9f8c-bfc4bcd58c63.jsonl",
+      "task": "mm-curve--unique"
+    },
+    {
+      "session_id": "2441ebf5-8849-4543-95b8-4c7ff5a6758c",
+      "sha256": "84aea1a1b870cfce8f3a8bf8bdec4cbf97fb063e16bc7b70c4ae87fbe0d1ce0e",
+      "copy": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v1/checkpoints/5/history/2441ebf5-8849-4543-95b8-4c7ff5a6758c.jsonl",
+      "task": "mm-curve--hexadecimal"
+    },
+    {
+      "session_id": "cb9c9e3e-e0a8-476e-b83a-97b0a6380dab",
+      "sha256": "f3dc82f115cadfb58a90adcf743d0b48567bd38e63dc353de01ef556282d18b4",
+      "copy": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v1/checkpoints/5/history/cb9c9e3e-e0a8-476e-b83a-97b0a6380dab.jsonl",
+      "task": "mm-curve--ends-with"
+    }
+  ],
+  "new_tasks": [
+    "mm-curve--starts-with",
+    "mm-curve--multiple-of",
+    "mm-curve--unique",
+    "mm-curve--hexadecimal",
+    "mm-curve--ends-with"
+  ],
+  "source_binary_sha256": "ab909549c93758240df1b9087212ba958d47527067810e96e28706bdacfdbf17",
+  "total_sessions": 10,
+  "distinct_tasks": 5,
+  "paid_reservation_usd": 8,
+  "selection": "Combine all five old and all five new native histories, including failures; no retries or threshold changes. Condition once at ten. No candidate means stop this development study.",
+  "claims": "Instruction-guided repeated demonstrations, not autonomous discovery or held-out efficacy. Any later automatic comparison requires a separately frozen protocol and a human execution grant."
+}
