@@ -495,7 +495,7 @@ export function Inspector({ graph }: { graph: Graph }) {
       <Section label="Evidence" source={evidenceSource(r)} note={executionOnly ? "Immediate successful actions on a later model turn. These counts establish a recurring routine, not avoided work or permission." : evidenceNote(r)}>
         {executionOnly && e.execution ? (
           <div className="grid grid-cols-3 gap-2">
-            <Stat value={e.execution.immediate} of={`/${e.execution.opportunities}`} label="matching edits followed" />
+            <Stat value={e.execution.successful} of={`/${e.execution.opportunities}`} label="supported continuations" />
             <Stat value={e.execution.sessions} label="unsteered sessions" />
             <Stat value="—" label="savings not established" />
           </div>

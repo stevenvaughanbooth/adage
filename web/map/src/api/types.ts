@@ -101,7 +101,7 @@ export interface ArmStats {
 
 export interface Evidence {
   /** Recounted routine evidence, separate from execution authority and measured savings. */
-  execution?: { opportunities: number; immediate: number; sessions: number } | null;
+  execution?: { opportunities: number; successful: number; sessions: number } | null;
   support: number;
   opportunities: number;
   rate: number;

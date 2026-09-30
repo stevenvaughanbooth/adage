@@ -599,8 +599,8 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
         v.push(sourced(
             "from conditioning",
             format!(
-                "{}/{} matching edits immediately followed by a successful next-turn action across {} traces",
-                e.immediate, e.opportunities, e.sessions
+                "{}/{} matching situations with supported continuations across {} traces",
+                e.successful, e.opportunities, e.sessions
             ),
             t,
         ));

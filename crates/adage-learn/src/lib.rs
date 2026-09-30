@@ -538,7 +538,7 @@ pub fn route_line(track: &str, r: &Route) -> String {
     };
     let mut s = format!("{} [{}]", r.id, if r.evidence.execution.is_some() { "execution only" } else { strength });
     if let Some(e) = &r.evidence.execution {
-        s.push_str(&format!(" ({}/{} immediate actions across {} sessions); silent without a local E2 grant; review with `adage review delegate {track} {} --level e2`", e.immediate, e.opportunities, e.sessions, r.id));
+        s.push_str(&format!(" ({}/{} supported continuations across {} sessions); silent without a local E2 grant; review with `adage review delegate {track} {} --level e2`", e.successful, e.opportunities, e.sessions, r.id));
     }
     if let Some(l) = &r.evidence.outcome_lift {
         s.push_str(&format!(
@@ -659,9 +659,9 @@ mod tests {
         r.state = RouteState::Firm;
         r.strength = Strength::Fire;
         assert_eq!(route_line("clinic/work-items", &r), "lookup-work-item [fire]");
-        r.evidence.execution = Some(adage_tracks::ExecutionEvidence { opportunities: 5, immediate: 5, sessions: 5 });
+        r.evidence.execution = Some(adage_tracks::ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
         let line = route_line("clinic/work-items", &r);
-        assert!(line.contains("[execution only]") && line.contains("5/5 immediate actions"), "{line}");
+        assert!(line.contains("[execution only]") && line.contains("5/5 supported continuations"), "{line}");
         assert!(line.contains("adage review delegate clinic/work-items lookup-work-item --level e2"), "{line}");
     }
 }

@@ -660,7 +660,7 @@ mod tests {
         route.step = Step::Run { command: "python -m pytest".into() };
         route.effect = adage_core::Effect::Verify;
         route.evidence.execution =
-            Some(adage_tracks::ExecutionEvidence { opportunities: 5, immediate: 5, sessions: 5 });
+            Some(adage_tracks::ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
         adage_tracks::io::write(&paths.tracks().join("project/workflow"), &candidate).unwrap();
         Index::compile(&[candidate]).write_atomic(&paths.index()).unwrap();
         let row = load(&paths, Some(&root)).unwrap().rows.remove(0);
@@ -669,7 +669,7 @@ mod tests {
             "execution-only evidence cannot be shown as ordinary suggestions"
         );
         assert!(row.execution.reason.contains("silent"));
-        assert_eq!(row.more.execution.unwrap().immediate, 5);
+        assert_eq!(row.more.execution.unwrap().successful, 5);
         let counts = crate::status_card::reflexes(&Index::load(&paths.index()), &repo);
         assert_eq!((counts.total(), counts.execution_only), (1, 1));
     }

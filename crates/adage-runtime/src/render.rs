@@ -184,6 +184,17 @@ pub fn action_applied(d: &crate::Directive, edited: &str, command: &str, changed
     wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, d.origin.as_ref(), "e2")
 }
 
+/// A completed CPU action nominated by a learned context, with no edit obligation.
+pub fn action_predicted(d: &crate::Directive, command: &str, changed: &[String], verify: bool) -> String {
+    let outcome = if verify {
+        "verification succeeded; no repository files changed".to_string()
+    } else {
+        format!("updated {} declared output files", changed.len())
+    };
+    let body = format!("Adage ran `{}` automatically after a learned context matched: {outcome}. This action is complete; do not repeat it.", sanitise(command));
+    wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, d.origin.as_ref(), "e2")
+}
+
 /// A directive whose approved action Adage could not complete: the plain E0 directive, and why
 /// (a refusal reason, which never carries command output).
 pub fn action_not_run(d: &crate::Directive, reason: &str) -> String {

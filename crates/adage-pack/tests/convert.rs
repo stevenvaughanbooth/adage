@@ -126,7 +126,7 @@ fn the_instinct_catalogue_bound_on_acme_becomes_an_instinct_pack() {
 fn routine_execution_evidence_survives_sharing_without_a_grant() {
     let d = tempfile::tempdir().unwrap();
     let mut t = io::read(&track("finish-line")).unwrap();
-    let evidence = adage_tracks::ExecutionEvidence { opportunities: 5, immediate: 5, sessions: 5 };
+    let evidence = adage_tracks::ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 };
     t.routes[0].evidence.execution = Some(evidence.clone());
     io::write(d.path(), &t).unwrap();
     let p = round_trip(&from_track_dir(d.path()).unwrap().pack);

@@ -77,12 +77,12 @@ mod tests {
         r.slots.clear();
         r.effect = Effect::Verify;
         r.strength = Strength::Prime;
-        r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, immediate: 5, sessions: 5 });
+        r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
         io::validate(&t).unwrap();
         for e in [
             ExecutionEvidence::default(),
-            ExecutionEvidence { opportunities: 5, immediate: 6, sessions: 5 },
-            ExecutionEvidence { opportunities: 5, immediate: 4, sessions: 5 },
+            ExecutionEvidence { opportunities: 5, successful: 6, sessions: 5 },
+            ExecutionEvidence { opportunities: 5, successful: 4, sessions: 5 },
         ] {
             let mut bad = t.clone();
             bad.routes[0].evidence.execution = Some(e);

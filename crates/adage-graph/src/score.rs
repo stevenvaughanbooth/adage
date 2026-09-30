@@ -30,9 +30,10 @@
 //! (a dead end is a property of the runner, not of a contrast) or contrast ≥ `contrast`
 //! otherwise, and V > 0 for a directive (not for a guard: an obligation after `last(edit)` or an
 //! avoid after a failure, whose worth is in the sessions that would miss them: its gate is
-//! contrast or consistency alone). A single next action after an edit at ≥90% immediate
-//! precision is retained independently of advisory value for execution judgement. It still
-//! passes the support/day/contrast gates; the learner recounts every matching edit before
+//! contrast or consistency alone). A single successful continuation after an edit or a bounded
+//! multi-event context at ≥90% anchor confidence is retained independently of advisory value
+//! for execution judgement. It still passes the support/day/contrast gates; the learner
+//! recounts every matching compiled trigger before
 //! issuing an execution certificate and requires local human authorization to run. A guard's delivery is then decided on the traces, by the rate
 //! and Wilson rule of its judgement (`adage-learn`), as every reflex's is: a Beta lower bound here
 //! would demand five or six unanimous traces where three decide everything else (G5).
@@ -117,7 +118,7 @@ pub struct Scored {
     pub consistency: Option<f64>,
     pub p_soon: f64,
     pub p_next: f64,
-    /// Immediate edit-to-action candidate; requires an independent execution judgement.
+    /// Predictable continuation candidate; requires independent executable-trigger judgement.
     #[serde(default)]
     pub execution_candidate: bool,
     pub dturns: f64,
@@ -727,11 +728,11 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
     // the sessions that would miss it, which p_soon does not see, so its gate is contrast or
     // consistency alone.
     let guard = has_fail || (x_last.last && db.ty(x_last.label) == NodeType::Edit);
-    let execution_candidate = db.ty(x_last.label) == NodeType::Edit
+    let execution_candidate = (db.ty(x_last.label) == NodeType::Edit || (2..=3).contains(&xs.len()))
         && ys.len() == 1
         && db.ty(ys[0].label) == NodeType::Act
         && ys[0].pol != Pol::Fail
-        && p_next >= 0.9;
+        && conf_anchor >= 0.9;
     let gate = if !gate.is_empty() {
         gate
     } else if !guard && !execution_candidate && value <= 0.0 {

@@ -39,8 +39,8 @@ delegate`), inside an OS sandbox: E1 prefetches read-only results, while E2 stag
 applies only permitted outputs. Selecting and running such an invocation needs no model request;
 the next model request may still consume its result.
 
-The learner also retains **routine execution candidates**: exact commands that reliably follow
-edits, even when reminding the agent would add no value. They appear as needing execution approval
+The learner also retains **predictive execution candidates**: commands supported by recurring
+edit or multi-event contexts across sessions, even when reminding the agent would add no value. They appear as needing execution approval
 in review and stay silent without a valid local grant. Accepting their evidence with ordinary
 `adage review approve` does not authorize execution. Their evidence travels in packs; your local
 execution permission does not.

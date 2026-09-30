@@ -675,3 +675,20 @@ copy, 0 of 500 with the overlay). `crates/adage-cli/tests/actions.rs` checks out
 on an `evals/gen` python-make finish-line bundle through the real hook: the generated file is
 updated, nothing else changes, the staleness check passes, no Stop request follows, and an output
 edited while the action runs is refused with the E0 fallback.
+
+## Learned sequence predictions
+
+A runtime-selected learned `context` route can nominate its fixed, slot-free verification or
+regeneration command for E2 execution when it has execution evidence and an exact local grant.
+The command comes from the typed route, never from advisory prose. Matching may use related
+command variants, path globs and gaps across recent events. This path creates no edit obligation.
+It shares ordinary policy checks, sandbox staging, source identity, durable journal and result
+delivery. A completed receipt prevents a second execution of that prediction in the same session.
+CPU predictions clear pending agent-follow judgments, including when execution is withheld:
+the agent received no instruction to follow or ignore. They never falsely credit an agent action.
+Unknown outcomes retain the recovery block.
+
+Evidence and permission remain distinct. Context predictions with no grant remain unexecuted;
+control sessions never execute. Multi-command sequences and context input slots are not yet
+supported. See the [behavior reference](how-it-works.md#accumulated-prediction-and-current-execution-limits)
+for the accumulation model and current evidence limits.

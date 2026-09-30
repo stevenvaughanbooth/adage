@@ -11,6 +11,7 @@ when a later experiment supersedes them.
 | Remove an agent action through CPU execution | [Paired lookup results](harness/results/20260929-learned-action-gate/FINDINGS.md) | Three held-out triage tasks: all six answers correct; three agent lookups removed; observed model dispatches 6 → 3 |
 | Reliable complete result delivery | [Reliability](harness/results/20260929-learned-action-gate/reliability.json), [failed preflights](harness/results/20260929-learned-action-gate/preflight-failures.json) | 100/100 warm local repetitions after fixing interpreter launch; two earlier timeout failures retained |
 | Preserve routine actions as execution candidates | [Learner and review validation](harness/results/20260929-routine-learning/validation.json) | Production-default synthetic transcript tests retain exact edit-to-command routines, including project Python; no unapproved advice or execution. Real training still pending |
+| Connect cross-session sequence learning to CPU execution | [Native integration and regressions](harness/results/20260930-predictive-execution-integration/validation.json) | Five synthetic prior sessions learn a context that executes in a fresh session with an intervening read. Missing/stale grants remain silent; duplicates are withheld. 464 affected-crate tests and 229 CLI tests passed, with final focused checks recorded separately. Real-history development replay still has zero certificates |
 | Run project Python checks on staged source | [Native Python integration](harness/results/20260929-project-python/validation.json) | Real uv/pytest on macOS arm64 passes through route planning, approval, later test/source edits, and private staged execution; post-merge release staging sample 2.75 s including an 873 ms child ([integrated record](harness/results/20260930-integrated-validation/validation.json)). Initial identity discovery is additional; no live savings claim |
 | Full upstream suites through CPU staging | [Approved profile v3 result](harness/results/20260930-full-source-python-stage-profile3/validation.json), [initial failure](harness/results/20260930-full-source-python-stage/validation.json), [proposal canary](harness/results/20260930-proposed-temp-directory-policy/validation.json) | Marshmallow 1,190 passed; Click 2,240 passed and 26 skipped. Both checkouts unchanged. The approved macOS fix allows temporary-directory names, with child reads/writes still denied and old grants lapsed. Authored fixture routes: compatibility proven, live action elimination still pending |
 | Useful automatic execution on real code | [Prospective protocol](harness/REAL-REPO-GATE.md), [preparation and first attempt](harness/results/20260929-real-repository-preparation/report.json) | Four held-out base/gold scorers validated; first live substrate attempt stalled during CLI startup; the [revised native probe passed](harness/results/20260930-native-probe-v4/validation.json). No real-repository coding savings claim |
@@ -59,13 +60,21 @@ an unchanged execution of the first protocol.
 
 ## Prediction is the intended primitive
 
-These five-session checkpoints measure the current narrow execution certificate, which requires
-identical immediate edit-command repetition. They do not evaluate mature accumulated learning or
-generalized sequence prediction. Adage should learn from related sequences across past sessions
-and nominate useful approved actions in future tasks. The existing graph/prototype/context engine
-is the foundation; connecting those predictions to E2 selection and calibrated abstention is
-unproven integration work. Do not lower certainty requirements or relabel these zero-candidate
-results as a successful predictive-execution evaluation. See the [behavior reference](../../docs/how-it-works.md#accumulated-prediction-and-current-execution-limits).
+The original five-session checkpoints used an immediate edit-command execution certificate.
+The integrated learner now recounts related continuations after compiled multi-event contexts;
+the runtime connects those selections to the existing approved E2 executor. A synthetic native
+integration test learns from five prior sessions and executes the resulting context in a fresh
+session with an intervening read. This proves the connection, not real-repository savings.
+
+The [first predictive development replay](harness/results/20260930-predictive-learning-v1/checkpoint.json)
+reuses the frozen ten-session training cohort and still produces zero executable certificates.
+The [final release replay](harness/results/20260930-predictive-learning-v2/checkpoint.json), after
+the integration and accounting fixes, confirms the same result with frozen source/binary hashes.
+Each repository has only four sessions containing successful pytest observations, below the
+five-session support requirement; activation compounds and command variation also limit the
+current executable evidence. No extra paid calls or held-out pairs were used for this replay.
+This is neither a mature-history evaluation nor a successful action-elimination result. Preserve
+these negative records and the original thresholds. See the [behavior reference](../../docs/how-it-works.md#accumulated-prediction-and-current-execution-limits).
 
 ## Claims for launch
 

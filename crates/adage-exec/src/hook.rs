@@ -21,7 +21,9 @@
 //!
 //! **E2 actions.** When an edit arms a finish-line obligation (after editing `registry/*.csv`, run
 //! `make gen`), or the obligation's Stop request is due, and the reflex holds an explicit E2
-//! approval for this repository, the action runs here ([`act`]): at most one per event, never in
+//! approval for this repository, the action runs here ([`act`]). A runtime-selected learned
+//! context with execution evidence can also nominate its fixed command, without creating an
+//! obligation. Both paths run at most one action per event, never in
 //! the control arm, never under OpenCode (whose bridge waits one second), within 20 s. It is
 //! staged, its change set verified against the declared outputs, and applied only if nothing it
 //! touches changed meanwhile ([`crate::stage`]). Applied: the directive becomes a result block
@@ -34,7 +36,7 @@ use adage_core::CommandTable;
 use adage_eval::safety::{check_data_block, DataType};
 use adage_hook::{Delivery, Extension, Turn};
 use adage_runtime::{render, Directive};
-use adage_tracks::Step;
+use adage_tracks::{Origin, Step, Trigger};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::time::Instant;
@@ -77,8 +79,24 @@ impl Extension for Prefetch {
                 Err(r) => records.extend(r),
             }
         }
-        if !turn.stimuli.is_empty() {
-            let a = act(turn, directives);
+        let candidates = candidates(turn, directives);
+        if !candidates.is_empty() {
+            d.cpu_predictions =
+                candidates.iter().filter(|c| c.context.is_some()).map(|c| c.route.to_string()).collect();
+            // A prediction is execution-only. A missing or stale grant must not fall back to
+            // asking the agent to perform it. Keep positions aligned for result replacement.
+            if candidates.iter().any(|c| c.context.is_some()) {
+                let texts = d.texts.get_or_insert_with(|| directives.iter().map(render::wrap_directive).collect());
+                for (i, dir) in directives.iter().enumerate() {
+                    if candidates
+                        .iter()
+                        .any(|c| c.context.is_some() && c.route == dir.route && c.track == Some(dir.track.as_str()))
+                    {
+                        texts[i].clear();
+                    }
+                }
+            }
+            let a = act(turn, directives, &candidates);
             records.extend(a.records);
             if !a.replace.is_empty() {
                 let mut texts =
@@ -156,8 +174,61 @@ fn directive_for(ir: &adage_tracks::index::IndexedRoute, directives: &[Directive
     })
 }
 
-/// E2: run at most one approved action for the obligations this event armed or enforces.
-fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
+/// A runtime-selected action; a context prediction never creates an edit obligation.
+struct Candidate<'a> {
+    route: &'a str,
+    track: Option<&'a str>,
+    command: &'a str,
+    paths: &'a str,
+    edited: &'a str,
+    at_stop: bool,
+    context: Option<&'a Trigger>,
+}
+
+fn candidates<'a>(turn: &'a Turn<'_>, directives: &[Directive]) -> Vec<Candidate<'a>> {
+    let mut out: Vec<_> = turn
+        .stimuli
+        .iter()
+        .map(|s| Candidate {
+            route: &s.route,
+            track: None,
+            command: &s.command,
+            paths: &s.paths,
+            edited: &s.edited,
+            at_stop: s.at_stop,
+            context: None,
+        })
+        .collect();
+    // Only actual runtime selections qualify. Evidence is not authority: act() still requires
+    // the exact local E2 grant, then every ordinary request/sandbox/journal gate.
+    for d in directives {
+        let Some(ir) = route::find(turn.index, turn.repo_key, &d.track, &d.route) else { continue };
+        let r = &ir.route;
+        if !matches!(r.trigger, Trigger::Context { .. })
+            || r.origin() != Origin::Learned
+            || r.evidence.execution.is_none()
+            || !r.slots.is_empty()
+            || !matches!(r.effect, adage_core::Effect::Verify | adage_core::Effect::Regenerate)
+            || out.iter().any(|s| s.route == r.id)
+        {
+            continue;
+        }
+        let Step::Run { command } = &r.step else { continue };
+        out.push(Candidate {
+            route: &r.id,
+            track: Some(&ir.track),
+            command,
+            paths: "",
+            edited: "",
+            at_stop: false,
+            context: Some(&r.trigger),
+        });
+    }
+    out
+}
+
+/// E2: run at most one approved obligation or selected learned-context action.
+fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) -> Acted {
     let mut out = Acted::default();
     let home = &turn.paths.root;
     // Recovery precedes grant selection: a revoked/missing grant must not hide an earlier
@@ -181,30 +252,36 @@ fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
         return out;
     }
     let Ok(store) = Store::load(&approvals::path(home)) else { return out };
-    let approved = |s: &adage_hook::Stimulus| -> Option<(&Approval, &adage_tracks::index::IndexedRoute)> {
+    let approved = |s: &Candidate<'_>| -> Option<(&Approval, &adage_tracks::index::IndexedRoute)> {
         store.approvals.iter().filter(|a| a.key.repo == turn.repo_key && a.key.level == Level::E2).find_map(|a| {
             let ir = turn.index.routes.iter().find(|r| {
-                r.repo == turn.repo_key && r.route.id == s.route && a.route == format!("{}/{}", r.track, r.route.id)
+                r.repo == turn.repo_key
+                    && r.route.id == s.route
+                    && s.track.is_none_or(|t| t == r.track)
+                    && a.route == format!("{}/{}", r.track, r.route.id)
             })?;
             Some((a, ir))
         })
     };
     // At most one action per event.
-    let Some((s, a, ir)) = turn.stimuli.iter().find_map(|s| approved(s).map(|(a, ir)| (s, a, ir))) else { return out };
+    let Some((s, a, ir)) = candidates.iter().find_map(|s| approved(s).map(|(a, ir)| (s, a, ir))) else { return out };
     let label = a.route.clone();
-    let Some(dir) = directive_for(ir, directives, &s.command) else {
+    let Some(dir) = directive_for(ir, directives, s.command) else {
         out.records.push(json!({ "route": label, "level": "e2", "withheld": "render",
                                  "reason": "the action's directive could not be rendered" }));
         return out;
     };
     let not_run = |out: &mut Acted, stage: &str, reason: &str| {
         out.records
-            .push(json!({ "route": label, "level": "e2", "withheld": stage, "reason": crate::reason_text(reason) }));
-        if s.at_stop && ir.exec_only() {
+            .push(json!({ "route": label, "level": "e2", "withheld": stage, "reason": crate::reason_text(reason), "context": s.context }));
+        if s.context.is_some() {
+            // The spool records the reason; an unexecuted prediction supplies no agent advice.
+            out.replace.insert(dir.route.clone(), String::new());
+        } else if s.at_stop && ir.exec_only() {
             // The agent cannot run a vendored script itself: asking it to would be unfollowable.
             out.stop = Some(None);
         } else if s.at_stop {
-            out.stop = Some(Some(render::stop_reason_not_run(&s.paths, &s.command, reason)));
+            out.stop = Some(Some(render::stop_reason_not_run(s.paths, s.command, reason)));
         } else if directives.iter().any(|d| d.route == dir.route) {
             out.replace.insert(dir.route.clone(), render::action_not_run(&dir, reason));
         } else {
@@ -224,10 +301,10 @@ fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
         }
     };
     let mut req = plan.request;
-    match route::bound_from_command(&req.argv, &s.command) {
+    match route::bound_from_command(&req.argv, s.command) {
         Some(inputs) => req.inputs = inputs,
         None => {
-            not_run(&mut out, "bind", "its command could not be bound from the edit");
+            not_run(&mut out, "bind", "its command could not be bound from the selected action");
             return out;
         }
     }
@@ -253,10 +330,27 @@ fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
     let state = match adage_store::state::try_read::<adage_runtime::SessionState>(&turn.paths.state(turn.session)) {
         Ok(Some(s)) => s,
         _ => {
-            not_run(&mut out, "state", "the obligation occurrence cannot be read safely");
+            not_run(&mut out, "state", "the action occurrence cannot be read safely");
             return out;
         }
     };
+    // Runtime emits a context route once per session. Refuse replay before even spawning;
+    // completed/failed receipts survive state reconstruction and native event redelivery.
+    if s.context.is_some() {
+        match crate::journal::list(home) {
+            Ok(rows)
+                if rows.iter().any(|r| r.repo == turn.repo_key && r.session == turn.session && r.route == label) =>
+            {
+                not_run(&mut out, "duplicate", "this context action was already attempted in this session");
+                return out;
+            }
+            Err(_) => {
+                not_run(&mut out, "journal", "the execution journal cannot be read safely");
+                return out;
+            }
+            _ => {}
+        }
+    }
     let occurrence = match &turn.event_identity {
         Some(id) => format!("native:{id}:{}", s.route),
         None => format!("counter:{}:{}:{}:{}", turn.event, state.prompts, state.batches, s.route),
@@ -285,6 +379,7 @@ fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
         "route": label, "level": "e2", "outcome": outcome.name(), "exit": staged.exit,
         "duration_ms": staged.duration_ms,
         "operation_id": completed.id, "replayed_receipt": completed.replayed,
+        "context": s.context,
     });
     if revoked {
         rec["revoked"] = json!(true);
@@ -316,13 +411,19 @@ fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
         }
         crate::stage::Outcome::Applied { changed, .. } => {
             out.records.push(rec);
-            out.met.push(s.route.clone());
+            if s.context.is_none() {
+                out.met.push(s.route.to_string());
+            }
             if s.at_stop {
                 // The Stop hook cannot carry context: the request is withdrawn, the record kept.
                 out.stop = Some(None);
             } else {
                 let paths: Vec<String> = changed.iter().map(|l| l.path.clone()).collect();
-                let text = render::action_applied(&dir, &s.edited, &s.command, &paths);
+                let text = if s.context.is_some() {
+                    render::action_predicted(&dir, s.command, &paths, ir.route.effect == adage_core::Effect::Verify)
+                } else {
+                    render::action_applied(&dir, s.edited, s.command, &paths)
+                };
                 if directives.iter().any(|d| d.route == dir.route) {
                     out.replace.insert(dir.route.clone(), text);
                 } else {
@@ -489,4 +590,313 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
         });
     }
     Ok(Some((texts, records)))
+}
+
+#[cfg(test)]
+mod prediction_tests {
+    use super::*;
+    use adage_core::Effect;
+    use adage_runtime::{Arm, Call, Ctx, Event, SessionState};
+    use adage_store::Paths;
+    use adage_tracks::{CtxItem, Evidence, ExecutionEvidence, Index, IndexedRoute, Route, RouteState, Strength};
+
+    struct Fixture {
+        _tmp: tempfile::TempDir,
+        root: std::path::PathBuf,
+        paths: Paths,
+        index: Index,
+    }
+    impl Fixture {
+        fn new() -> Self {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path().canonicalize().unwrap().join("repo");
+            std::fs::create_dir_all(root.join("src")).unwrap();
+            std::fs::create_dir_all(root.join(".git")).unwrap();
+            std::fs::create_dir_all(root.join("tools")).unwrap();
+            std::fs::write(root.join("tools/check.sh"), "#!/bin/sh\ntest -f src/feature.rs\n").unwrap();
+            std::fs::write(root.join("src/feature.rs"), "fixture\n").unwrap();
+            let paths = Paths::at(tmp.path().join("adage"));
+            let index = Index {
+                generation: "fixture".into(),
+                routes: vec![IndexedRoute {
+                    repo: "fixture".into(),
+                    track: "fixture/context".into(),
+                    version: "0.1.0".into(),
+                    exec: None,
+                    route: Route {
+                        id: "predict-check".into(),
+                        summary: "verify after inspection and source edit".into(),
+                        trigger: Trigger::Context {
+                            items: vec![
+                                CtxItem::Act { keys: vec!["exec git status".into()] },
+                                CtxItem::Edit { glob: "src/*.rs".into() },
+                            ],
+                            within: 3,
+                        },
+                        step: Step::Run { command: "sh tools/check.sh".into() },
+                        slots: vec![],
+                        effect: Effect::Verify,
+                        strength: Strength::Fire,
+                        state: RouteState::Firm,
+                        exit: vec![],
+                        authored: false,
+                        evidence: Evidence {
+                            execution: Some(ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 }),
+                            ..Default::default()
+                        },
+                    },
+                }],
+                ..Default::default()
+            };
+            Self { _tmp: tmp, root, paths, index }
+        }
+        fn turn<'a>(&'a self, ev: &'a Event) -> Turn<'a> {
+            Turn {
+                harness: "claude",
+                event: "PostToolUse",
+                event_identity: Some("edit-1".into()),
+                ev,
+                session: "fixture-session",
+                index: &self.index,
+                repo_key: "fixture",
+                root: &self.root,
+                cwd: &self.root,
+                paths: &self.paths,
+                max_context: 16000,
+                arm: Some(Arm::Treated),
+                stimuli: &[],
+            }
+        }
+        fn selected(&self, path: &str) -> (Event, Vec<Directive>) {
+            let table = CommandTable::load();
+            let ctx = Ctx {
+                index: &self.index,
+                repo: "fixture".into(),
+                root: &self.root,
+                table: &table,
+                embed: None,
+                params: Default::default(),
+            };
+            let mut state = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+            let batch = |tool: &str, input| Event::Batch {
+                calls: vec![Call { tool: tool.into(), input, output: String::new(), failed: false }],
+            };
+            let events = [
+                batch("Bash", json!({"command":"git status --short"})),
+                batch("Read", json!({"file_path": self.root.join("README.md")})),
+                batch("Edit", json!({"file_path": self.root.join(path)})),
+            ];
+            let mut dirs = vec![];
+            adage_runtime::with_exec_only(vec![("fixture/context".into(), "predict-check".into())], || {
+                for ev in &events {
+                    dirs = adage_runtime::decide(&ctx, &mut state, ev).directives;
+                }
+                assert!(
+                    adage_runtime::decide(&ctx, &mut state, &events[2]).directives.is_empty(),
+                    "repeat is not selected"
+                );
+            });
+            assert!(state.obligations.is_empty(), "prediction creates no edit obligation");
+            adage_store::state::update::<SessionState, _>(&self.paths.state("fixture-session"), |s| *s = state)
+                .unwrap();
+            (events[2].clone(), dirs)
+        }
+        fn approve(&self) {
+            let terms = route::Terms { effect: Some(Effect::Verify), ..Default::default() };
+            let req = route::plan(
+                &self.index.routes[0],
+                &self.index,
+                &self.root,
+                &self.paths.tracks(),
+                Level::E2,
+                Some(&terms),
+                &CommandTable::load(),
+            )
+            .unwrap()
+            .request;
+            let mut store = Store::default();
+            store.approve(Approval {
+                key: approvals::ApprovalKey::for_request(&req, "fixture"),
+                route: approvals::route_label(&req),
+                approved_on: "fixture-only".into(),
+                by: None,
+                basis: Value::Null,
+                auto: false,
+                terms: Some(terms),
+            });
+            store.save(&approvals::path(&self.paths.root)).unwrap();
+            std::fs::write(self.paths.root.join("policy.toml"), "[exec]\nmax_level = \"E2\"\n").unwrap();
+        }
+    }
+
+    #[test]
+    fn selected_context_uses_typed_command_across_related_paths_and_intervening_reads() {
+        for path in ["src/feature.rs", "src/another.rs"] {
+            let mut f = Fixture::new();
+            let (event, mut dirs) = f.selected(path);
+            assert_eq!(dirs.len(), 1);
+            dirs[0].text = "untrusted prose suggesting another command".into();
+            let turn = f.turn(&event);
+            let c = candidates(&turn, &dirs);
+            assert_eq!(c.len(), 1);
+            assert_eq!(c[0].command, "sh tools/check.sh");
+            assert!(c[0].context.is_some());
+            assert!(candidates(&turn, &[]).is_empty(), "only actual selections nominate");
+            f.index.routes[0].route.authored = true;
+            assert!(candidates(&f.turn(&event), &dirs).is_empty(), "authored context is not learned");
+            f.index.routes[0].route.authored = false;
+            f.index.routes[0].route.evidence.execution = None;
+            assert!(
+                candidates(&f.turn(&event), &dirs).is_empty(),
+                "advice without execution evidence is not nominated"
+            );
+        }
+    }
+
+    #[test]
+    fn unapproved_context_does_not_execute_and_corrupt_journal_preserves_recovery() {
+        let f = Fixture::new();
+        let (event, dirs) = f.selected("src/feature.rs");
+        let turn = f.turn(&event);
+        let d = PREFETCH.deliver(&turn, &dirs);
+        assert!(d.spool.is_none() && d.met.is_empty());
+        assert!(d.texts.unwrap().iter().all(String::is_empty), "no unapproved fallback advice");
+        assert!(crate::journal::list(&f.paths.root).unwrap().is_empty());
+        std::fs::create_dir_all(f.paths.root.join("exec")).unwrap();
+        std::fs::write(crate::stage::spool_path(&f.paths.root), b"corrupt journal").unwrap();
+        let d = PREFETCH.deliver(&turn, &dirs);
+        assert!(d.recovery.is_some(), "recovery precedes missing approval");
+    }
+
+    #[test]
+    fn stale_context_grant_never_falls_back_to_agent_advice() {
+        let f = Fixture::new();
+        f.approve();
+        std::fs::write(f.root.join("tools/check.sh"), "#!/bin/sh\necho changed\n").unwrap();
+        let (event, dirs) = f.selected("src/feature.rs");
+        let delivery = PREFETCH.deliver(&f.turn(&event), &dirs);
+        assert!(delivery.texts.unwrap().iter().all(String::is_empty));
+        assert_eq!(delivery.cpu_predictions, vec!["predict-check"], "abstention is not ignored agent advice");
+        assert!(delivery.spool.unwrap()[0].get("withheld").is_some());
+        assert!(crate::journal::list(&f.paths.root).unwrap().is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prior_sessions_learn_a_context_that_executes_in_a_fresh_session() {
+        if !crate::stage::backend(&sandbox::detect()).available() {
+            return;
+        }
+        let mut f = Fixture::new();
+        std::fs::write(f.root.join("Makefile"), "test:\n\t@test -f src/feature.rs\n").unwrap();
+        let history = f._tmp.path().join("history");
+        std::fs::create_dir(&history).unwrap();
+        let mut transcripts = vec![];
+        for i in 0..5 {
+            let sid = format!("past-task-{i}");
+            let mut lines = vec![
+                json!({"type":"user","sessionId":sid,"cwd":f.root,"timestamp":"2026-09-20T10:00:00Z","message":{"role":"user","content":format!("Implement past feature {i}")}}),
+            ];
+            let calls = [
+                ("Edit", json!({"file_path":f.root.join("src/feature.rs")})),
+                ("Bash", json!({"command":if i % 2 == 0 { "git diff --stat" } else { "git diff --name-only" }})),
+                ("Bash", json!({"command":"git status --short"})),
+                ("Bash", json!({"command":"make test"})),
+            ];
+            for (n, (tool, input)) in calls.into_iter().enumerate() {
+                let id = format!("tool-{n}");
+                lines.push(json!({"type":"assistant","sessionId":sid,"cwd":f.root,"message":{"id":format!("turn-{n}"),"model":"fixture","content":[{"type":"tool_use","id":id,"name":tool,"input":input}]}}));
+                lines.push(json!({"type":"user","sessionId":sid,"cwd":f.root,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":id,"content":"done","is_error":false}]}}));
+            }
+            let path = history.join(format!("{sid}.jsonl"));
+            std::fs::write(&path, lines.iter().map(Value::to_string).collect::<Vec<_>>().join("\n")).unwrap();
+            transcripts.push(path);
+        }
+        let inputs = adage_learn::Inputs {
+            transcripts,
+            outcomes: BTreeMap::new(),
+            repo_override: Some("fixture".into()),
+            models: None,
+            cache: None,
+            only_repo: None,
+        };
+        adage_learn::learn(&inputs, &f.paths.tracks(), &f.paths.index(), &Default::default()).unwrap();
+        let learned = Index::load(&f.paths.index());
+        let ir = learned
+            .routes
+            .iter()
+            .find(|r| {
+                matches!(r.route.trigger, Trigger::Context { .. })
+                    && r.route.evidence.execution.is_some()
+                    && matches!(&r.route.step, Step::Run { command } if command == "make test")
+            })
+            .expect("production learning must produce the context and certificate")
+            .clone();
+        assert_eq!(ir.route.evidence.execution.as_ref().unwrap().sessions, 5);
+        assert!(!ir.route.authored);
+        // Isolate the learned candidate under test without altering its trigger, command or evidence.
+        f.index = Index { routes: vec![ir.clone()], ..learned };
+        f.approve(); // A test-only grant in this temporary home, never a real user's approval.
+        let table = CommandTable::load();
+        let ctx = Ctx {
+            index: &f.index,
+            repo: "fixture".into(),
+            root: &f.root,
+            table: &table,
+            embed: None,
+            params: Default::default(),
+        };
+        let mut state = SessionState { arm: Some(Arm::Treated), ..Default::default() };
+        let mut last = None;
+        adage_runtime::with_exec_only(vec![(ir.track.clone(), ir.route.id.clone())], || {
+            for (tool, input) in [
+                ("Edit", json!({"file_path":f.root.join("src/feature.rs")})),
+                ("Bash", json!({"command":"git diff --stat"})),
+                ("Read", json!({"file_path":f.root.join("README.md")})),
+                ("Bash", json!({"command":"git status --short"})),
+            ] {
+                let event = Event::Batch {
+                    calls: vec![Call { tool: tool.into(), input, output: "done".into(), failed: false }],
+                };
+                let decision = adage_runtime::decide(&ctx, &mut state, &event);
+                if !decision.directives.is_empty() {
+                    last = Some((event, decision.directives));
+                }
+            }
+        });
+        let (event, dirs) = last.expect("fresh related sequence predicts the learned command");
+        assert!(state.obligations.is_empty());
+        let delivery = PREFETCH.deliver(&f.turn(&event), &dirs);
+        let records = delivery.spool.unwrap();
+        assert_eq!(records[0]["outcome"], "applied", "{records}");
+        assert_eq!(delivery.cpu_predictions, vec![ir.route.id]);
+        assert!(delivery.texts.unwrap().join("\n").contains("verification succeeded"));
+        assert_eq!(std::fs::read_to_string(f.root.join("src/feature.rs")).unwrap(), "fixture\n");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn approved_context_runs_on_cpu_and_duplicate_never_stages_again() {
+        if !crate::stage::backend(&sandbox::detect()).available() {
+            return;
+        }
+        let f = Fixture::new();
+        f.approve();
+        let (event, dirs) = f.selected("src/feature.rs");
+        let mut turn = f.turn(&event);
+        turn.arm = Some(Arm::Control);
+        assert!(PREFETCH.deliver(&turn, &dirs).spool.is_none());
+        turn.arm = Some(Arm::Treated);
+        let d = PREFETCH.deliver(&turn, &dirs);
+        let records = d.spool.as_ref().unwrap();
+        assert_eq!(records[0]["outcome"], "applied", "{records}");
+        assert_eq!(records[0]["context"]["on"], "context");
+        assert!(d.met.is_empty(), "no invented obligation completion");
+        let text = d.texts.unwrap().join("\n");
+        assert!(text.contains("verification succeeded") && text.contains("exec=\"e2\""), "{text}");
+        assert!(!text.contains("after your edit"));
+        let repeat = PREFETCH.deliver(&turn, &dirs);
+        assert_eq!(repeat.spool.unwrap()[0]["withheld"], "duplicate");
+        assert_eq!(crate::journal::list(&f.paths.root).unwrap().len(), 1);
+    }
 }

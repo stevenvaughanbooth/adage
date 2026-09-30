@@ -85,6 +85,7 @@ dependencies = [
  "adage-core",
  "adage-eval",
  "adage-hook",
+ "adage-learn",
  "adage-pack",
  "adage-runtime",
  "adage-store",

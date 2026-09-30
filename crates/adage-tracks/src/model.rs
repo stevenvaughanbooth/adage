@@ -219,12 +219,13 @@ pub enum Exit {
 }
 
 /// Observational evidence for replacing a routine agent action with CPU execution. This is
-/// never permission: the existing local execution grant is still required. Counts cover every
-/// matching edit, not only the last edit in each session.
+/// never permission: the existing local execution grant is still required. Counts cover every eligible
+/// predictive trigger, including those without a compatible successful continuation. They
+/// measure observational support, not the success rate of a broader compiled action.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExecutionEvidence {
     pub opportunities: u32,
-    pub immediate: u32,
+    pub successful: u32,
     pub sessions: u32,
 }
 

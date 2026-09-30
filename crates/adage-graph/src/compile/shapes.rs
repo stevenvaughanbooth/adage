@@ -1095,6 +1095,20 @@ pub fn compile(input: &Input) -> Output {
             }
         }
         let last = r.context.last();
+        // Preserve a predictive multi-event boundary instead of flattening every sequence
+        // ending in an edit or failure into one event. Recounting uses this same context at
+        // learning and runtime; fallback shapes remain useful when context cannot compile.
+        if r.execution_candidate && (2..=CONTEXT_MAX_ITEMS).contains(&r.context.len()) {
+            let start = b.out.len();
+            if b.context(r) {
+                // This shape was retained for executable prediction. If its compiled trigger
+                // fails the independent recount, it must not turn into new advisory traffic.
+                for c in &mut b.out[start..] {
+                    c.advisory_eligible = false;
+                }
+                continue;
+            }
+        }
         match last {
             // A failed check, and the check that works.
             Some(x) if is_act(x) && x.ok == Some(false) => {

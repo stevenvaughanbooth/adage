@@ -308,7 +308,7 @@ fn graph_exposes_cpu_candidate_evidence_without_an_advisory_preview() {
     r.slots.clear();
     r.effect = Effect::Verify;
     r.strength = Strength::Prime;
-    r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, immediate: 5, sessions: 5 });
+    r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
     t.routes.push(r);
     io::write(&w.root.join("adage/tracks/acme/work"), &t).unwrap();
     Index::compile(&[t]).write_atomic(&w.root.join("adage/index.json")).unwrap();
@@ -316,7 +316,7 @@ fn graph_exposes_cpu_candidate_evidence_without_an_advisory_preview() {
     let candidate = g["routes"].as_array().unwrap().iter().find(|r| r["id"] == "routine-test").unwrap();
     assert_eq!(candidate["execution_only"], true);
     assert_eq!(candidate["directive"], "");
-    assert_eq!(candidate["evidence"]["execution"], json!({"opportunities":5,"immediate":5,"sessions":5}));
+    assert_eq!(candidate["evidence"]["execution"], json!({"opportunities":5,"successful":5,"sessions":5}));
     assert_eq!(candidate["review"]["execution_command"], "adage review delegate acme/work routine-test --level e2");
     assert!(candidate["review"]["reasons"].as_array().unwrap().iter().any(|r| r["kind"] == "execution"));
     let advisory = g["routes"].as_array().unwrap().iter().find(|r| r["id"] == "lookup").unwrap();

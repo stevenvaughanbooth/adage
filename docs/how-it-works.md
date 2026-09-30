@@ -36,13 +36,16 @@ scores their continuations. The CPU runtime tracks bounded recent context and re
 multi-event patterns with gaps. Prompt intent also uses embeddings. The ordered context retains
 information that a text embedding alone does not establish.
 
-Automatic execution currently covers approved lookup prefetches and actions selected from armed
-workflow obligations. The newer routine execution certificate is narrower still: an identical
-successful command immediately following a matching edit. That certificate is one supported
-mechanism, not the definition of a reflex or evidence that general predictive execution is done.
-General sequence predictions are not yet fully connected to E2 action selection and calibrated
-execution decisions. Extending that connection should reuse the existing predictor, approval
-store, typed inputs, sandbox, journal and result delivery.
+Automatic execution covers approved lookup prefetches, armed workflow obligations, and learned
+fixed-command context predictions with execution evidence. A selected sequence prediction enters
+the same E2 approval, staging, journal and result-delivery path without inventing an edit
+obligation. Context execution is currently one slot-free verification or regeneration command,
+once per route per session. Multi-command predictions and additional dynamic bindings remain
+unsupported. The earlier immediate exact edit-command certificate has been generalized; the
+original evaluation records retain its results. A native synthetic test now learns from five
+prior sessions and executes that learned context on a fresh session with an intervening read.
+Real-session predictive savings still require held-out evidence; the first replay of the frozen
+real-repository training histories produced zero executable certificates.
 
 The launch evaluation must measure accumulated learning on chronological histories and
 prediction on later unseen sessions: avoided failures, eliminated agent actions, task quality,
@@ -98,12 +101,19 @@ paid agent sessions only with an explicit human invocation. Neither is backgroun
 Routine actions have a different value test from reminders. If agents already run a check
 reliably, reminding them can add context without saving work, while an approved CPU action can
 still replace their next tool call. The graph learner can retain an **execution-only candidate**
-for a single verification or regeneration command after an edit. It independently checks every
-matching edit, requires at least the normal support threshold (five unsteered sessions by
-default), and requires at least 90% of those edits to be followed immediately by the same
-successful command in a later model turn. Intermediate edits, failures and commands already
-planned in the edit's model turn do not receive credit. Path arguments use the existing typed
-bindings; no repository-specific detector is added.
+for a single verification or regeneration command after an edit or learned sequence context.
+It recounts the actual compiled trigger using the runtime's context matcher, requires the normal
+support threshold (five unsteered sessions across multiple tasks by default), and requires at
+least 90% of trigger opportunities to have a compatible successful continuation within eight
+observed events. Inspection and failed checks may intervene. Another edit, setup, generation,
+publish action, task boundary or a different successful check stops that search. A command
+already queued in the triggering model turn receives no credit. Every trigger opportunity counts,
+including those without a supporting outcome. Related selectors and options can support a typed
+action family through the existing command-variant model; this is observational support, not a
+claim that every broader compiled command has already succeeded. No repository-specific detector
+is added. Compound shell commands currently cannot supply execution-certificate success: a final
+exit code alone cannot establish each segment's outcome. Predictive contexts that fail the recount
+are discarded rather than becoming advisory directives.
 
 The route records these observational counts in `evidence.execution`. They do not grant execution
 or prove savings. These candidates stay silent in ordinary advisory mode and become eligible

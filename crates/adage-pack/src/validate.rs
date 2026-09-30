@@ -1150,10 +1150,10 @@ fn validate_trigger(t: &TriggerV2) -> Result<()> {
 fn validate_evidence(e: &RouteEvidence) -> Result<()> {
     if let Some(x) = &e.execution {
         if x.opportunities == 0
-            || x.immediate == 0
+            || x.successful == 0
             || x.sessions == 0
-            || x.immediate > x.opportunities
-            || x.sessions > x.immediate
+            || x.successful > x.opportunities
+            || x.sessions > x.successful
         {
             bail!("evidence: invalid routine execution counts");
         }

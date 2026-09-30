@@ -574,7 +574,7 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
         }
         o.line(&row("step", Line::new().text(describe_step(&r.step))))?;
         if let Some(e) = &r.evidence.execution {
-            o.line(&row("CPU evidence", Line::new().text(format!("{} / {} matching edits immediately followed by the same successful action in a later model turn; {} sessions", e.immediate, e.opportunities, e.sessions))))?;
+            o.line(&row("CPU evidence", Line::new().text(format!("{} / {} matching situations supported by a compatible successful continuation before further mutation; {} sessions", e.successful, e.opportunities, e.sessions))))?;
             o.line(&row(
                 "execution",
                 Line::new().text("Silent without a valid local E2 grant; ordinary approve accepts evidence only"),

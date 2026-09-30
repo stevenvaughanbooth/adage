@@ -365,11 +365,11 @@ pub fn validate(t: &Track) -> Result<()> {
         }
         if let Some(e) = &r.evidence.execution {
             if e.opportunities == 0
-                || e.immediate == 0
+                || e.successful == 0
                 || e.sessions == 0
-                || e.immediate > e.opportunities
-                || e.sessions > e.immediate
-                || !matches!(r.trigger, Trigger::AfterEdit { .. })
+                || e.successful > e.opportunities
+                || e.sessions > e.successful
+                || !matches!(r.trigger, Trigger::AfterEdit { .. } | Trigger::Context { .. })
                 || !matches!(r.step, Step::Run { .. })
                 || !matches!(r.effect, Effect::Verify | Effect::Regenerate)
             {

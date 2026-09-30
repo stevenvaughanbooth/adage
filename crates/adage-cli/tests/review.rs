@@ -569,6 +569,10 @@ fn decisions_survive_relearning() {
     assert_eq!(strength(&w, work, "read-linked-files").unwrap().0, Strength::Prime);
     let q = reasons(&w.queue());
     assert_eq!(q.values().filter(|k| *k == &vec!["new".to_string()]).count(), 4, "every learned route is new: {q:?}");
+    let mut untouched = q;
+    for id in [&dead.id, "lookup-work-item", "read-linked-files"] {
+        assert!(untouched.remove(&key(work, id)).is_some());
+    }
 
     w.ok(&["review", "extinguish", dead_ends, &dead.id]);
     w.ok(&["review", "weaken", work, "lookup-work-item"]);
@@ -584,7 +588,7 @@ fn decisions_survive_relearning() {
     assert_eq!(strength(&w, work, "read-linked-files").unwrap().0, Strength::Fire, "a strengthening is not reverted");
     assert_eq!(versions(&w), decided);
     let q = reasons(&w.queue());
-    assert_eq!(q.len(), 1, "only the untouched finish-line route waits: {q:?}");
+    assert_eq!(q, untouched, "untouched routes, including execution candidates, keep their review state");
     // Deterministic: another re-learn gives identical bytes.
     let index = std::fs::read(w.paths().index()).unwrap();
     let review_file = std::fs::read(w.track_dir(work).join(review::FILE)).unwrap();
@@ -692,14 +696,14 @@ fn routine_candidate_stays_in_execution_review_after_evidence_approval() {
         5,
         5,
     );
-    r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, immediate: 5, sessions: 5 });
+    r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
     let mut t = make_track(NAME, "desire-path", vec![r]);
     t.manifest.scope.repo = adage_core::repo::repo_key(&w.p("work"));
     install(&w, NAME, &t, &[]);
     let first = w.queue();
     let row = &first["queue"][0];
     assert_eq!(row["execution_only"], true);
-    assert_eq!(row["evidence"]["execution"]["immediate"], 5);
+    assert_eq!(row["evidence"]["execution"]["successful"], 5);
     assert!(row["directive"].is_null());
     assert!(row["next"].as_str().unwrap().ends_with("routine --level e2"));
     let approved = w.ok(&["review", "approve", NAME, "routine"]);
