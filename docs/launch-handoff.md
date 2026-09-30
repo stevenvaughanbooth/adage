@@ -13,13 +13,12 @@ This follow-up uses branch `codex/launch-first-reflex` in
 Follow-up PR: https://github.com/stevenvaughanbooth/adage/pull/16 (draft, mergeable when checked).
 The primary checkout is `/Users/stevenbooth/Documents/skill-compile`; leave its local work alone.
 
-The user lifted the Codex 5% reserve and authorized using the remaining allowance. The independent
-paid evaluation ledger still has a $60 cap. At the last settled snapshot: $13.2920411 measured
-provider cost plus a separately human-approved $0.50 conservative unknown charge, totaling
-$13.7920411 across 62 attempts before transfer. After the completed eight-session transfer:
-**$15.1229241 measured + $0.50 conservative charge = $15.6229241**, 70 attempts, **$44.3770759
-remaining**. All settled or cap-charged; no active paid transfer process. Read the live ledger before scheduling anything; never reset it,
-double-dispatch, or treat an unknown bill as zero.
+The user authorized the remaining Codex allowance; the final check reports **99% used,
+1% remaining**. This is the budget handoff. The independent paid evaluation ledger retains
+its $60 ceiling: **$15.6474504 measured + $0.50 conservative charge = $16.1474504**, across
+**100 attempts**, with **$43.8525496 remaining**. All attempts are settled or cap-charged;
+accounting is unblocked and no paid process remains active. Read the live ledger before any
+new dispatch; never reset it, double-dispatch, or treat an unknown bill as zero.
 
 ## What is established
 
@@ -102,7 +101,7 @@ PR #16 remains draft. There are no paid processes running. Shared ledger now has
 attempts**, $15.6474504 measured plus the previous $0.50 conservative charge =
 **$16.1474504 admission spend**, **$43.8525496 remaining**. Accounting is unblocked.
 The latest diagnostic work cost $0.5245263 including failed/excluded attempts.
-Codex allowance last checked at 98% used (2% remaining); the user authorized the remainder.
+Final Codex allowance check: 99% used (1% remaining); the user authorized the remainder.
 
 Research: [hook action reuse](hook-action-reuse-research.md). Native Read delivery canaries
 all passed ($0.0288169), archived in `results/20260930-delivery-canary` under the harness.
@@ -147,7 +146,8 @@ The candidate production integration is now implemented in the existing pipeline
   This reduces eligible organic training while approved verification is enabled; control
   sessions remain important. Do not silently relax this contamination boundary.
 
-Local validation: execution/runtime/hook library suites pass; startup treatment/control,
+Local validation: all 24 CLI tests across `first_run`, `zero_config_plugin` and `exec` pass.
+Execution/runtime/hook library suites pass; startup treatment/control,
 notice separation, no-grant/E1 policy, real journal receipt identity and learning provenance
 regressions pass. These tests do not establish a live effect from this exact production text.
 The diagnostic supplied fixture-specific test counts; production receipts intentionally do not
@@ -169,7 +169,7 @@ The next agent should:
 
 The four old real-repository repeats occur in new assistant messages after the hook attachment,
 not in the same message as the triggering edit. Message IDs are not API request IDs. A scan of
-all eight old native transcripts found no known launcher-code markers; that negative scan does
+all 65 available historical cohort native transcripts (including the eight transfer runs) found no known launcher-code markers; that negative scan does
 not prove full historical prompt isolation. Preserve the frozen failure and use the fixed runner
 for all new evidence. Research and diagnostics identify a promising integration direction;
 open-source launch readiness is still not proven.

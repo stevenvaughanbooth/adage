@@ -3,6 +3,10 @@
 Research checkpoint: 2026-09-30. This is a diagnosis and prospective experiment plan,
 not evidence that duplicate work has been fixed.
 
+Subsequent live diagnostics, evaluator stdin isolation, candidate production integration, and
+current validation are recorded in the [launch handoff](launch-handoff.md). The experiment plan
+below is the original research checkpoint, not the latest execution status.
+
 ## The observed problem
 
 The completed Marshmallow transfer study executed one learned, human-approved pytest
