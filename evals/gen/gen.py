@@ -43,10 +43,22 @@ def dump(obj):
     return json.dumps(obj, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 
+# Variables that point git at another repository. Under `git bisect run`, a hook or any git that
+# exports them, a sandbox's `git init` would reinitialise that repository (as bare) and commit the
+# sandbox into it: the sandbox's git sees only its own directory.
+REPO_ENV = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY", "GIT_COMMON_DIR",
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE", "GIT_PREFIX")
+
+
+def git_env(**extra):
+    """The environment for git in a sandbox: this process's, without REPO_ENV."""
+    return {**{k: v for k, v in os.environ.items() if k not in REPO_ENV}, **extra}
+
+
 def git(cwd, *args, author=("Sandbox Maintainers", "maintainers@sandbox.example")):
-    env = dict(os.environ, GIT_AUTHOR_NAME=author[0], GIT_AUTHOR_EMAIL=author[1], GIT_COMMITTER_NAME=author[0],
-               GIT_COMMITTER_EMAIL=author[1], GIT_AUTHOR_DATE=FIXED_DATE, GIT_COMMITTER_DATE=FIXED_DATE,
-               GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    env = git_env(GIT_AUTHOR_NAME=author[0], GIT_AUTHOR_EMAIL=author[1], GIT_COMMITTER_NAME=author[0],
+                  GIT_COMMITTER_EMAIL=author[1], GIT_AUTHOR_DATE=FIXED_DATE, GIT_COMMITTER_DATE=FIXED_DATE,
+                  GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
     return subprocess.run(["git", "-c", "init.defaultBranch=main", "-c", "commit.gpgsign=false",
                            "-c", "core.autocrlf=false", *args],
                           cwd=cwd, env=env, check=True, capture_output=True, text=True).stdout.strip()

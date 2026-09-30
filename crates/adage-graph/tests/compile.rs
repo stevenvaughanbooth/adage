@@ -296,3 +296,28 @@ fn an_instinct_directing_the_same_step_is_recorded_as_a_prior() {
     });
     assert_eq!(out.routes[0].why.prior.as_deref(), Some("finish-line-inst"));
 }
+
+#[test]
+fn a_dead_ends_signature_is_the_cause_not_makes_status_line() {
+    // Regression (evals/gen, the instinct violation): a retired `make test` prints its reason, then
+    // make's own `Error 1` status line. The signature is the reason: the status line is the same
+    // whatever failed.
+    let failing = |id: &str| {
+        let mut a = trace(id, &[("$ make check", "verify")]);
+        a.session.steps.insert(
+            0,
+            input::Step::Exec {
+                argv: argv("make test"),
+                output: "Exit code 2\nerror: 'make test' is retired, the suite runs with 'make check'\n\
+                         make: *** [Makefile:15: test] Error 1"
+                    .into(),
+                failed: true,
+            },
+        );
+        a.meta.insert(0, StepMeta { turn: 0, prompt: 0, effect: "verify".into(), key: String::new() });
+        a
+    };
+    let c = Corpus::of(&[failing("s0"), failing("s1")], &[]);
+    let sigs: Vec<(&str, u32)> = c.acts["exec make test"].signatures.iter().map(|(s, n)| (s.as_str(), *n)).collect();
+    assert_eq!(sigs, [("error: 'make test' is retired, the suite runs with 'make check'", 2)]);
+}

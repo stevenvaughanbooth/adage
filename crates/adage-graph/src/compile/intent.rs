@@ -19,7 +19,7 @@
 use super::stable::{shell_join, stable};
 use crate::events::{self, Influence};
 use crate::input::{Annotated, Step as InStep};
-use adage_core::{spans, CommandTable, Effect};
+use adage_core::{spans, tokens, CommandTable, Effect};
 use adage_intent::cluster::{self, Params as ClusterParams};
 use adage_intent::model::StaticModel;
 use adage_intent::normalize::normalize;
@@ -71,7 +71,23 @@ pub fn first_prompt(a: &Annotated) -> &str {
 /// order; commands that took a value from the prompt, and commands a directive named first, are
 /// left out.
 pub fn candidates(a: &Annotated, influence: &[Influence], table: &CommandTable) -> Vec<Cand> {
-    let from_prompt: BTreeSet<String> = spans::extract(first_prompt(a)).into_iter().map(|x| x.value).collect();
+    let prompt = first_prompt(a);
+    let from_prompt: BTreeSet<String> = spans::extract(prompt).into_iter().map(|x| x.value).collect();
+    // The value flow's view of the prompt (the shared tokeniser, sub-tokens included: `#4280`
+    // gives `4280`, `ops/412` gives `412`), its identifier-like tokens only (with a digit), so a
+    // command that takes an item's id from a prompt that marks it (`Please work on #4280`) is the
+    // lookup's too, while a word the prompt happens to share with a command (`tests`) is not a value.
+    let ids: BTreeSet<String> = tokens::tokens(prompt, tokens::PROMPT_TOKENS)
+        .into_iter()
+        .map(|t| t.text)
+        .filter(|t| t.chars().any(|c| c.is_ascii_digit()))
+        .collect();
+    let takes_value = |av: &[String]| {
+        av.iter().any(|x| from_prompt.contains(x))
+            || crate::flow::sinks(av)
+                .iter()
+                .any(|(_, _, v)| ids.contains(v) || tokens::subs(v).iter().any(|(_, s)| ids.contains(*s)))
+    };
     let steps = &a.session.steps;
     let end = steps.iter().position(|s| matches!(s, InStep::Edit { .. })).unwrap_or(steps.len());
     let disc = &steps[..end];
@@ -88,7 +104,7 @@ pub fn candidates(a: &Annotated, influence: &[Influence], table: &CommandTable) 
     let mut out = Vec::new();
     for i in 0..disc.len() {
         let Some((av, failed, effect, key)) = exec(i) else { continue };
-        if !matches!(effect, Effect::Observe | Effect::Verify) || av.iter().any(|x| from_prompt.contains(x)) {
+        if !matches!(effect, Effect::Observe | Effect::Verify) || takes_value(av) {
             continue;
         }
         let identity = events::act_identity(av);
@@ -323,4 +339,44 @@ pub fn compile(
         out.routes.push(IntentRoute { route, why, sessions: who });
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::{Prompt, Session, StepMeta};
+
+    fn trace(prompt: &str, cmds: &[&str]) -> Annotated {
+        let steps: Vec<InStep> = cmds
+            .iter()
+            .map(|c| InStep::Exec {
+                argv: c.split_whitespace().map(str::to_string).collect(),
+                output: "ok".into(),
+                failed: false,
+            })
+            .collect();
+        let meta = (0..steps.len())
+            .map(|i| StepMeta { turn: i as u32, prompt: 0, effect: "observe".into(), key: String::new() })
+            .collect();
+        Annotated {
+            session: Session { id: "s".into(), prompts: vec![Prompt { text: prompt.into(), at_step: 0 }], steps },
+            meta,
+            day: "2026-09-01".into(),
+        }
+    }
+
+    #[test]
+    fn a_command_given_the_prompts_item_id_is_the_lookups_not_an_intents() {
+        // Regression (evals/gen, the `mixed` id shape): the prompt marks the id (`#4280`), the
+        // lookup takes it bare (`4280`). That command is the value-flow lookup's.
+        let table = CommandTable::load();
+        for prompt in ["Please work on #4280.", "Please work on 4280.", "Pick up ops/4280 and get it done."] {
+            let c = candidates(&trace(prompt, &["scripts/wi-lookup 4280", "scripts/check tests"]), &[], &table);
+            let lits: Vec<&str> = c.iter().map(|x| x.literal.as_str()).collect();
+            assert_eq!(lits, ["scripts/check tests"], "{prompt}");
+        }
+        // A word the prompt shares with a command is not a value.
+        let c = candidates(&trace("Fix the failing tests", &["scripts/check tests"]), &[], &table);
+        assert_eq!(c.len(), 1);
+    }
 }
