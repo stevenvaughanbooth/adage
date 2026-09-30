@@ -214,7 +214,7 @@ impl Corpus {
                         e.effect = Some(e.effect.map_or(eff, |x| max_effect(x, eff)));
                         let out = adage_core::tokens::bounded(output, input::MAX_OUTPUT);
                         if *failed {
-                            if let Some(sig) = stable::failure_signature(out) {
+                            if let Some(sig) = stable::failure_signature(argv, out) {
                                 *e.signatures.entry(sig).or_default() += 1;
                             }
                         } else if let Some(f) = stable::listed_field(out) {

@@ -22,7 +22,8 @@ both (`npm test` is `npm run test`), or when it runs the working command after t
 sequence, scope or env_sync convention (Track G G3) by an after-edit route on its glob directing its
 steps, its command with the edited part as a slot, or its environment step (nascent, awaiting review,
 as its ceiling requires). A finish line on a sequence's first step is part of it: expected, not a
-recovery. Context-triggered routes are neither (this rehearsal does not score them). The adage binary is
+recovery. Context-triggered routes and procedure cards are neither (this rehearsal does not score
+them; a card directs no command). The adage binary is
 --adage, else target/release/adage, else target/debug/adage in this repository. It writes
 ROOT/<bundle>/report.json and prints recovered vs expected. The default ROOT is DIR/rehearsal (for
 a bundle) or DIR/<bundle>/rehearsal (for a suite).
@@ -320,6 +321,14 @@ def inert(route):
     return (route.get("trigger") or {}).get("on") == "context"
 
 
+def card(route):
+    """A procedure card (adage_learn::cards): what the traces of a family of similar tasks had in
+    common, delivered once, prime, directing no command. It is learned from any task the rehearsal
+    repeats (every one: `--repeats` is 2), lists what those sessions ran (decoys included, as they
+    ran them), and matches no convention: not scored here, as adage-eval's scorer does not score it."""
+    return (route.get("step") or {}).get("do") == "card"
+
+
 def commands_of(route):
     step = route.get("step") or {}
     if step.get("do") == "sequence":
@@ -332,7 +341,7 @@ def compare(b, routes, held_out=None):
     (`lookup-work-item`, `dead-end-…`, `finish-line-…`) or by its shape (other shapes are named by
     content: `run-…`, `sequence-…`)."""
     rows, used = [], set()
-    routes = [r for r in routes if not inert(r["route"])]
+    routes = [r for r in routes if not inert(r["route"]) and not card(r["route"])]
 
     def take(pred):
         for r in routes:
@@ -460,6 +469,7 @@ def rehearse_bundle(bundle, root, repeats, adage, learn):
         else:
             routes = learned_routes(home)
             report["inert_routes"] = sorted(r["route"]["id"] for r in routes if inert(r["route"]))
+            report["cards"] = sorted(r["route"]["id"] for r in routes if card(r["route"]))
             report["active_in_index"] = sorted(r["route"]["id"] for r in
                                                json.loads((home / "index.json").read_text()).get("routes", []))
             rows, unexpected = compare(b, routes, ho)

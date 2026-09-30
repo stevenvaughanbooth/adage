@@ -108,13 +108,60 @@ fn signature_of(line: &str) -> String {
     s.split_whitespace().filter(|w| !w.starts_with('/')).collect::<Vec<_>>().join(" ").chars().take(120).collect()
 }
 
-/// The failure signature of a failed run's output: its last error line that renders safely.
-pub fn failure_signature(output: &str) -> Option<String> {
-    output.lines().rev().map(|l| signature_of(l.trim())).find(|l| {
+/// Whether `line` is only the program `argv` ran reporting that something it ran exited non-zero:
+/// the line begins with the program's own name (`make:`, `make[1]:`, `npm error`) and ends with a
+/// bare status (`Error 1`, `code 2`, `exit status 1`). Such a line follows the real cause, is the
+/// same whatever that cause, and so says nothing a signature should: a task runner wraps what it
+/// runs this way (`make: *** [Makefile:15: test] Error 1`). A runner's line that says what went
+/// wrong (`make: *** No rule to make target 'test'.  Stop.`) ends with no status, and is kept.
+fn exit_status_report(argv: &[String], line: &str) -> bool {
+    let Some(program) =
+        argv.iter().find(|a| !a.contains('=')).and_then(|a| a.rsplit(['/', '\\']).next()).filter(|p| !p.is_empty())
+    else {
+        return false;
+    };
+    let Some(rest) = line.strip_prefix(program) else { return false };
+    let rest = rest.strip_prefix('[').and_then(|r| r.split_once(']')).map_or(rest, |(level, r)| {
+        if level.chars().all(|c| c.is_ascii_digit()) {
+            r
+        } else {
+            rest
+        }
+    });
+    if !(rest.starts_with(':') || rest.starts_with(' ')) {
+        return false;
+    }
+    // Ends with `<status word> <number>`.
+    let mut words = rest.split_whitespace().rev();
+    let (Some(n), Some(w)) = (words.next(), words.next()) else { return false };
+    let n = n.strip_prefix('-').unwrap_or(n);
+    !n.is_empty()
+        && n.chars().all(|c| c.is_ascii_digit())
+        && ["error", "errno", "code", "status"].iter().any(|s| w.eq_ignore_ascii_case(s))
+}
+
+/// The failure signature of a failed run of `argv`: the last error line of its output that renders
+/// safely, passing over the program's own report of an exit status ([`exit_status_report`]) while
+/// an informative line precedes it.
+pub fn failure_signature(argv: &[String], output: &str) -> Option<String> {
+    let errorish = |l: &String| {
         let lc = l.to_ascii_lowercase();
         (lc.contains("error") || lc.contains("no module named") || lc.contains("not found") || lc.contains("not set"))
             && adage_tracks::io::safe_text(l)
-    })
+    };
+    let mut wrapper = None;
+    for raw in output.lines().rev() {
+        let l = signature_of(raw.trim());
+        if !errorish(&l) {
+            continue;
+        }
+        if exit_status_report(argv, raw.trim()) {
+            wrapper.get_or_insert(l);
+            continue;
+        }
+        return Some(l);
+    }
+    wrapper
 }
 
 /// Pseudo-field meaning "repository paths mentioned in the command's text output".
@@ -163,8 +210,41 @@ mod tests {
         assert_eq!(runner(&v(&["python3", "-m", "pytest", "tests/a.py", "-v"])), "python3 -m pytest");
         assert_eq!(runner(&v(&["cargo", "test", "--workspace"])), "cargo test");
         assert_eq!(
-            failure_signature("x\n/usr/bin/python3: No module named pytest\n").as_deref(),
+            failure_signature(&v(&["python3", "-m", "pytest"]), "x\n/usr/bin/python3: No module named pytest\n")
+                .as_deref(),
             Some("No module named pytest")
+        );
+    }
+
+    #[test]
+    fn a_runners_exit_status_line_is_not_the_signature() {
+        let v = |x: &[&str]| x.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let make = v(&["make", "test"]);
+        // evals/gen's retired `make test`: the recipe's error, then make's own status line.
+        let out = "Exit code 2\nerror: 'make test' is retired, the suite runs with 'make check'\n\
+                   make: *** [Makefile:15: test] Error 1";
+        assert_eq!(
+            failure_signature(&make, out).as_deref(),
+            Some("error: 'make test' is retired, the suite runs with 'make check'")
+        );
+        // A recursive make's status line, and npm's, are status reports too.
+        let out = "RuntimeError: TALLY_ENV is not set\nmake[1]: *** [Makefile:3: t] Error 2\nmake: *** [all] Error 2";
+        assert_eq!(failure_signature(&make, out).as_deref(), Some("RuntimeError: TALLY_ENV is not set"));
+        let npm = v(&["npm", "test"]);
+        let out = "Error: FIXTURES are not loaded\nnpm error Lifecycle script failed\nnpm error code 1";
+        assert_eq!(failure_signature(&npm, out).as_deref(), Some("npm error Lifecycle script failed"));
+        // A runner's line that says what went wrong is kept.
+        assert!(!exit_status_report(&make, "make: *** No rule to make target 'test'.  Stop."));
+        assert!(!exit_status_report(&make, "make: error: 2 targets failed"));
+        assert!(exit_status_report(&make, "make: *** [Makefile:15: test] Error 1"));
+        // With nothing else to go on, the status line is still a signature.
+        let out = "compiling\nmake: *** [Makefile:15: test] Error 1";
+        assert_eq!(failure_signature(&make, out).as_deref(), Some("make: *** [Makefile:15: test] Error 1"));
+        // Only the program that ran reports its own status: another's line is not passed over.
+        let out = "error: boom\nmake: *** [Makefile:15: test] Error 1";
+        assert_eq!(
+            failure_signature(&v(&["python3", "x.py"]), out).as_deref(),
+            Some("make: *** [Makefile:15: test] Error 1")
         );
         assert_eq!(listed_field("{\"files\": [\"a/b.py\"]}").as_deref(), Some("files"));
         assert_eq!(listed_field("Files:\n  tally/a.py\n").as_deref(), Some(PATHS_FIELD));
