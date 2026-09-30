@@ -91,6 +91,24 @@ class FixtureTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Nested Claude"):
                 probe.execute(self.root / "missing.json", 1, 10)
 
+    @unittest.skipIf(bool(os.environ.get("CLAUDECODE")), "preserve nested-session guard")
+    def test_launcher_stdin_cannot_become_extra_model_input(self):
+        # A real child process models print-mode reading stdin; no provider is contacted.
+        fake = ("import json,sys; print(json.dumps({'type':'result','subtype':'success',"
+                "'is_error':False,'total_cost_usd':0,'result':sys.stdin.read()}))")
+        manifest = self.root / "manifest.json"
+        manifest.write_text(json.dumps(dict(root=str(self.root), budget_usd=1,
+            expected_claude_version=probe.EXPECTED_VERSION,
+            argv=[sys.executable, "-c", fake, "--max-budget-usd", "1"])))
+        launcher = ("import sys; from pathlib import Path; from unittest.mock import patch; "
+            f"sys.path.insert(0,{str(probe.HERE)!r}); import probe\n"
+            f"with patch('probe.subprocess.check_output',return_value={probe.EXPECTED_VERSION!r}):\n"
+            f" probe.execute(Path({str(manifest)!r}),1,5)\n")
+        result = subprocess.run([sys.executable, "-c", launcher], input="UNINTENDED LAUNCHER INSTRUCTIONS",
+            text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(probe.summary(self.root)["result_text"], "")
+
 
 if __name__ == "__main__":
     unittest.main()
