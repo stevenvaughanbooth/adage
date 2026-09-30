@@ -75,7 +75,7 @@
       </div>
     </div>
   </div>
-  <p class="wrap walkhint">Drag the scene to turn it. Keys: ← → step, space plays. The data is a small sample set of traces, the same one the <code>adage map</code> tour uses.</p>
+  <p class="wrap walkhint">Drag the scene to turn it; pinch or ctrl-scroll to zoom. Keys: ← → step, space plays. The data is a small sample set of traces, the same one the <code>adage map</code> tour uses.</p>
 </section>
 
 <section class="band math" id="math" aria-labelledby="math-h">
@@ -84,11 +84,19 @@
     <h2 class="display reveal" id="math-h">Every threshold, <span class="soft">written down.</span></h2>
     <p class="lede reveal">Adage never asks a model whether a reflex is good. Each decision is arithmetic over counted traces, with the constants below. The values below are the defaults.</p>
 
-    <nav class="mathtoc reveal" aria-label="Math sections">
-      <a href="#m-read">Reading traces</a><a href="#m-graph">Graph engine</a><a href="#m-evidence">Evidence</a><a href="#m-uplift">Uplift</a><a href="#m-intent">Intent</a><a href="#m-cards">Procedure cards</a><a href="#m-seal">The index</a><a href="#m-hook">The hook</a><a href="#m-measure">Measurement</a><a href="#m-train">Skills</a>
-    </nav>
+    <div class="mbar reveal">
+      <nav class="mathtoc" aria-label="Math sections">
+        <a href="#m-read">Reading traces</a><a href="#m-graph">Graph engine</a><a href="#m-evidence">Evidence</a><a href="#m-uplift">Uplift</a><a href="#m-intent">Intent</a><a href="#m-cards">Procedure cards</a><a href="#m-seal">The index</a><a href="#m-hook">The hook</a><a href="#m-measure">Measurement</a><a href="#m-train">Skills</a>
+      </nav>
+      <div class="mctl" aria-label="Move through the math" role="group">
+        <button class="tbtn" id="mprev" type="button" aria-label="Previous block"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2 4 8l7 6z"/></svg></button>
+        <span class="count" id="mcount" aria-live="polite">01 / 10</span>
+        <button class="tbtn" id="mnext" type="button" aria-label="Next block"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2l7 6-7 6z"/></svg></button>
+      </div>
+    </div>
 
-    <article class="mblock reveal" id="m-read" aria-labelledby="m-read-h">
+    <div class="mtrack" id="mtrack" role="region" aria-roledescription="carousel" aria-label="The math, one block at a time" tabindex="0">
+    <article class="mblock" id="m-read" aria-labelledby="m-read-h" aria-roledescription="slide">
       <header><span class="mnum">01</span><h3 id="m-read-h">Reading traces: one shape for every harness</h3></header>
       <p>A transcript becomes a prompt followed by a flat list of steps. Tool calls that share one message id form one turn; results join their calls by id, wherever they appear. A compound shell command splits into one step per sub-action, and a failure is blamed on its last part only, unless the command used <code>||</code>.</p>
       <p>Each step gets a template key, with specifics replaced (a ticket becomes <code>{id}</code>), and an effect. Effects are ranked, and the rank caps how strongly a step may ever be directed:</p>
@@ -98,7 +106,7 @@
       <p class="fine">Observe and verify steps may fire. A regenerate step fires only after its edit. An install primes at most and starts nascent until a person reviews it. Edits and publishing are never directed. Only the hook's own output counts as a directive: what a directive named is exposed from the moment it arrived, and is no evidence for a reflex that directs it, so a reflex never learns from its own advice. Sub-agent transcripts are read too.</p>
       <p class="src">In the code: <code>crates/adage-learn/src/{lib,import,codex,opencode,cache}.rs</code> · <code>crates/adage-core/src/types.rs</code></p>
     </article>
-    <article class="mblock reveal" id="m-graph" aria-labelledby="m-graph-h">
+    <article class="mblock" id="m-graph" aria-labelledby="m-graph-h" aria-roledescription="slide">
       <header><span class="mnum">02</span><h3 id="m-graph-h">Graph engine: repeated subgraphs, chosen by compression</h3></header>
       <p>The graph engine is Adage's only learner, and it has no list of reflex kinds to look for: a reflex is whatever reliably precedes a step, and how it is delivered follows from its shape. Events are embedded and clustered into prototype labels, so each trace becomes a string, and repeated subgraphs become repeated substrings. Mining starts from a step worth delivering and grows closed patterns around it. A pattern is read as a prediction, <i>after this context, this follows</i>, with <i>s</i> supporting traces out of <i>n</i> opportunities. Its confidence is shrunk toward its parent pattern's confidence <i>m</i>:</p>
       <div class="formula">
@@ -112,7 +120,7 @@
       <p class="fine">A pattern in the code table costs its items' codes, plus 4 bits per item and log<sub>2</sub> 6 bits for its length. Tables fill best gain first, re-checking each gain before accepting it. Candidates that would deliver different directives never compete: each delivery shape gets its own table, and dead ends one per failing runner. Winners compile to delivery shapes (run, avoid, read-batch, obligation, sequence, advise), and every compiled reflex is then counted again on the traces as its own trigger and step read them (Evidence, below); until then it is provisional, prime at most. An interlock drops any reflex that would direct a runner a dead end says fails. Survivors go to one track per repository, <code>&lt;repo&gt;/learned</code>, with a <code>.why.json</code> beside it for people. On the offline bench's core suite the learner scores J 0.6307.</p>
       <p class="src">In the code: <code>crates/adage-graph</code> · <code>crates/adage-learn/src/{bridge,engine}.rs</code> · design: <code>docs/tracks/track-g-graph-engine.md</code></p>
     </article>
-    <article class="mblock reveal" id="m-evidence" aria-labelledby="m-evidence-h">
+    <article class="mblock" id="m-evidence" aria-labelledby="m-evidence-h" aria-roledescription="slide">
       <header><span class="mnum">03</span><h3 id="m-evidence-h">Evidence: the Wilson lower bound</h3></header>
       <p>Every advisory reflex the learner compiles is judged again on the traces, exactly as its own trigger and step read them. Evidence is counted in <em>distinct traces</em>, and a trace a directive already steered toward the step is left out. Out of <i>n</i> traces where a reflex had its chance, <i>k</i> took its path. A rate from few traces is uncertain, so strength is judged by the lower end of the 95% Wilson score interval, not by the rate:</p>
       <p>Predictive execution has a separate test: by default, at least five unsteered sessions across more than one task, with a compatible successful continuation supporting at least 90% of matching edit or sequence contexts. Intervening observations are allowed within a bounded window; later mutations and task changes end it. Every matching opportunity counts, including those without a supporting outcome. This evidence creates a candidate for human execution approval; it grants no permission and proves no savings by itself.</p>
@@ -149,7 +157,7 @@
       </dl>
       <p class="src">In the code: <code>crates/adage-tracks/src/model.rs</code> (<code>wilson_lower</code>, <code>ceiling</code>) · <code>crates/adage-learn/src/{engine,evidence}.rs</code> · <code>crates/adage-tracks/src/params.rs</code></p>
     </article>
-    <article class="mblock reveal" id="m-uplift" aria-labelledby="m-uplift-h">
+    <article class="mblock" id="m-uplift" aria-labelledby="m-uplift-h" aria-roledescription="slide">
       <header><span class="mnum">04</span><h3 id="m-uplift-h">Uplift: does telling the agent change anything?</h3></header>
       <p>A step agents always take on their own is not worth saying. For each reflex Adage estimates two rates: <i>p</i><sub>follow</sub>, how often agents take the step when told, and <i>p</i><sub>self</sub>, how often they take it unaided. Each is a Beta posterior that starts from a prior for its kind of directive and is updated by this repository's evidence: unexposed traces in the same situation and the control arm's would-have judgements for <i>p</i><sub>self</sub>, treated judgements for <i>p</i><sub>follow</sub>.</p>
       <div class="formula">
@@ -162,7 +170,7 @@
       </dl>
       <p class="src">In the code: <code>crates/adage-learn/src/value.rs</code> (<code>uplift</code>, <code>assess</code>) · <code>crates/adage-tracks/src/params.rs</code> (<code>UPLIFT_MIN</code>)</p>
     </article>
-    <article class="mblock reveal" id="m-intent" aria-labelledby="m-intent-h">
+    <article class="mblock" id="m-intent" aria-labelledby="m-intent-h" aria-roledescription="slide">
       <header><span class="mnum">05</span><h3 id="m-intent-h">Intent: prompts that mean the same thing</h3></header>
       <p>Prompts are cut to their first 128 words, with tickets, paths, URLs, SHAs, versions and code replaced by placeholders. A static model bundled in the <code>adage</code> binary (potion-base-8M, int8, 7.7 MB, SHA-256 pinned; nothing to download) embeds each one as the mean of its WordPiece token rows, scaled to unit length, so similarity is a dot product:</p>
       <div class="formula">
@@ -179,7 +187,7 @@
       <p class="fine">Here <i>n<sub>t</sub></i> counts prompts at cosine ≥ <i>t</i> from the family centre and <i>k<sub>t</sub></i> those whose trace ran the family's route. At the hook, a new prompt matches the most similar centre whose threshold it clears; it fires only if that family's LB reaches 0.80, and otherwise primes. With the explicit hashed fallback in place of a model there are no intent reflexes, and nothing fails.</p>
       <p class="src">In the code: <code>crates/adage-graph/src/compile/intent.rs</code> · <code>crates/adage-intent</code></p>
     </article>
-    <article class="mblock reveal" id="m-cards" aria-labelledby="m-cards-h">
+    <article class="mblock" id="m-cards" aria-labelledby="m-cards-h" aria-roledescription="slide">
       <header><span class="mnum">06</span><h3 id="m-cards-h">Procedure cards: the task a repository repeats</h3></header>
       <p>Most work in a repository is a variation of something done before. Two traces are one <em>family</em> when their first prompts are similar and the files they edited have the same shapes (directory, name tokens, extension, so <code>flag_url.go</code> and <code>flag_port.go</code> agree):</p>
       <div class="formula">
@@ -194,7 +202,7 @@
       </dl>
       <p class="src">In the code: <code>crates/adage-learn/src/cards.rs</code> · <code>crates/adage-tracks/src/card.rs</code></p>
     </article>
-    <article class="mblock reveal" id="m-seal" aria-labelledby="m-seal-h">
+    <article class="mblock" id="m-seal" aria-labelledby="m-seal-h" aria-roledescription="slide">
       <header><span class="mnum">07</span><h3 id="m-seal-h">The index: one sealed file</h3></header>
       <p>Every installed track compiles into one list. The same behaviour gets the same id wherever it was found, so duplicates collide, and precedence decides which copy stays: your own evidence, then a teammate's signed pack, then an instinct. The survivors are serialised in order and hashed, and the hook reads only that file:</p>
       <div class="formula">
@@ -203,7 +211,7 @@
       <p class="fine">Tracks are versioned: evidence moving bumps the patch number, an added reflex the minor, a changed or removed one the major. Imported reflexes start forming and never fire until your own traces confirm them. Instincts, 8 in the default set, deliver as prime at most and extinguish themselves if they keep misfiring. Tracks and the index are readable by their owner only.</p>
       <p class="src">In the code: <code>crates/adage-tracks/src/{index,interlock}.rs</code> · <code>adage-instincts</code> · <code>adage-pack</code></p>
     </article>
-    <article class="mblock reveal" id="m-hook" aria-labelledby="m-hook-h">
+    <article class="mblock" id="m-hook" aria-labelledby="m-hook-h" aria-roledescription="slide">
       <header><span class="mnum">08</span><h3 id="m-hook-h">The hook: a pure decision, and a control arm</h3></header>
       <p>Each hook event runs a pure function of the event and the index. Before anything is said, the session is assigned to an arm by a hash, so the assignment is stable and reproducible:</p>
       <div class="formula">
@@ -220,7 +228,7 @@
       <p>Approved execution is a separate path. With <code>adage-exec</code> enabled and a local grant for the exact reflex, E1 prefetches a read-only result; E2 runs an action in a disposable stage and applies permitted outputs. The invocation is selected and run on the CPU without a model request. The next model request may still consume its result. Learning a command does not approve it, and a delivered procedure card does not demonstrate CPU execution or saved turns.</p>
       <p class="src">In the code: <code>crates/adage-runtime/src/{lib,pretool,render}.rs</code> (<code>assign_arm</code>) · <code>crates/adage-hook</code></p>
     </article>
-    <article class="mblock reveal" id="m-measure" aria-labelledby="m-measure-h">
+    <article class="mblock" id="m-measure" aria-labelledby="m-measure-h" aria-roledescription="slide">
       <header><span class="mnum">09</span><h3 id="m-measure-h">Measurement: the task is the unit</h3></header>
       <p>Runs of one task are not independent, so the task, not the run, is the unit. For each of <i>J</i> tasks, compare the arms' means, then average over tasks:</p>
       <div class="formula">
@@ -246,7 +254,7 @@
       </dl>
       <p class="src">In the code: <code>crates/adage-cli/src/savings.rs</code> · <code>demo/report.py</code> (<code>cluster_perm_p</code>, <code>task_signflip_p</code>, <code>cluster_boot_ci</code>, <code>holm</code>) · <code>crates/adage-eval</code> · <code>evals/live</code></p>
     </article>
-    <article class="mblock reveal" id="m-train" aria-labelledby="m-train-h">
+    <article class="mblock" id="m-train" aria-labelledby="m-train-h" aria-roledescription="slide">
       <header><span class="mnum">10</span><h3 id="m-train-h">Skills: compiled, then verified</h3></header>
       <p><code>adage train &lt;SKILL.md&gt;</code> compiles a skill's procedure into one pack of reflexes by rules, with no model and no agent session: which command, after which edit, in which order. Every compiled command is replayed on a clean checkout of <code>HEAD</code> in <code>adage-exec</code>'s sandbox, with the network off, your working tree untouched and the <code>.venv</code> lent read-only. A command that fails there is stale and dropped; one that could not be replayed is kept at prime at most; judgment stays text. Nothing is installed until <code>adage train accept</code>.</p>
       <p>Skill-steered sessions are optional evidence, and they cost money. The skill's claims get generated tasks plus controls, your own agent runs each headlessly in a sealed clone with no remote, the traces go through the same learner, and reflexes are staged at prime, never activated. Held-out tasks then run in three arms: no skill, the skill in the prompt, and the staged reflexes through the hooks. A reflex is accepted when:</p>
@@ -256,6 +264,7 @@
       <p class="fine">Here <i>f</i> is the share of sessions that followed the step and <i>c</i> the cost in turns or dollars. A claim the agents contradict, like a test command that fails where another works, comes back as a dead end, and the skill is told which of its claims are stale.</p>
       <p class="src">In the code: <code>crates/adage-train/src/{compile,verify,report}.rs</code> · <code>docs/training.md</code></p>
     </article>
+    </div>
   </div>
 </section>
 

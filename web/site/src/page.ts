@@ -1,4 +1,5 @@
 import { initSignup } from "./signup";
+import { initSnap } from "./snap";
 
 // Everything below the hero: sections that rise into view, the copy button, the repository links
 // (shown only when the build names a public repository) and the early-access form.
@@ -30,4 +31,5 @@ export function initPage() {
   }
 
   initSignup();
+  initSnap();
 }

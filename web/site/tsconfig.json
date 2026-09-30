@@ -16,7 +16,7 @@
     "allowJs": true,
     "checkJs": false,
     "types": ["vite/client", "node"],
-    "paths": { "@how/*": ["../map/src/how/*"] }
+    "paths": { "@how/*": ["../map/src/how/*"], "three": ["./node_modules/@types/three"] }
   },
   "include": ["src", "api", "e2e", "scripts", "vite.config.ts", "playwright.config.ts"],
   "exclude": ["src/hero/scene.js"]

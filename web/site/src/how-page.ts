@@ -10,6 +10,7 @@ import "./styles.css";
 import { CHAPTERS, chapterIndex } from "@how/chapters";
 import { Stage, readPalette, webglAvailable } from "@how/engine";
 import type { Built } from "@how/types";
+import { initMath } from "./math";
 import { initPage } from "./page";
 import { initTheme } from "./theme";
 import { initWilson } from "./wilson";
@@ -191,6 +192,10 @@ function startStage() {
   inset();
 }
 
+// The page moves a section at a time: a plain wheel over the scene scrolls the page, and a pinch
+// (which arrives as ctrl + wheel) still zooms it. The engine's own wheel handler never sees the rest.
+$("stage").addEventListener("wheel", (e) => { if (!e.ctrlKey) e.stopPropagation(); }, { capture: true, passive: true });
+
 /* ------------------------------------------------------------ controls */
 $("prev").addEventListener("click", () => { stop(); prev(); });
 $("next").addEventListener("click", () => { stop(); next(); });
@@ -221,4 +226,5 @@ const start = chapterIndex(params.get("ch"));
 built = null;
 go(start, Number(params.get("step") ?? 0) || 0, true);
 initWilson();
+initMath();
 initPage();
