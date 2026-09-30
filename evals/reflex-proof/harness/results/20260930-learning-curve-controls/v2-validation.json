@@ -1,0 +1,1074 @@
+{
+  "complete": true,
+  "manifest_sha256": "d817ebf48a70f01d5a2284b29c585d828f1dba06e8df5575cd11b98498ac9599",
+  "paid_calls": 0,
+  "protocol": "learning-curve-1",
+  "rows": [
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.6,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[]",
+          "test_hidden_invalid[xab]",
+          "test_hidden_repr",
+          "test_hidden_valid[ab]",
+          "test_hidden_valid[abc]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1199,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[] - AssertionError: marshmallow.validate.StartsWith is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.StartsWith is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.StartsWith is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'StartsWith'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x108770b80>((('\\\\b' + 'StartsWith') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x108770b80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x109176b60>)\n9 failed, 1190 passed in 0.88s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_starts_with.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.49,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1200,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 24%]\n........................................................................ [ 30%]\n........................................................................ [ 36%]\n........................................................................ [ 42%]\n........................................................................ [ 48%]\n........................................................................ [ 54%]\n........................................................................ [ 60%]\n........................................................................ [ 66%]\n........................................................................ [ 72%]\n........................................................................ [ 78%]\n........................................................................ [ 84%]\n........................................................................ [ 90%]\n........................................................................ [ 96%]\n................................................                         [100%]\n1200 passed in 0.85s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--starts-with",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.52,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[10]",
+          "test_hidden_invalid[4]",
+          "test_hidden_repr",
+          "test_hidden_valid[-6]",
+          "test_hidden_valid[0]",
+          "test_hidden_valid[9]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1200,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[4] - AssertionError: marshmallow.validate.MultipleOf is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.MultipleOf is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.MultipleOf is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'MultipleOf'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x103f68b80>((('\\\\b' + 'MultipleOf') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x103f68b80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x109536b60>)\n10 failed, 1190 passed in 0.89s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_multiple_of.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.49,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1201,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n.................................................                        [100%]\n1201 passed in 0.86s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--multiple-of",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.51,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[value0]",
+          "test_hidden_invalid[value1]",
+          "test_hidden_repr",
+          "test_hidden_valid[value0]",
+          "test_hidden_valid[value1]",
+          "test_hidden_valid[value2]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1200,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[value1] - AssertionError: marshmallow.validate.Unique is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.Unique is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.Unique is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'Unique'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x106be09a0>((('\\\\b' + 'Unique') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x106be09a0> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x10779d7b0>)\n10 failed, 1190 passed in 0.88s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_unique.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.51,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1201,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n.................................................                        [100%]\n1201 passed in 0.87s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--unique",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.53,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[0x1f]",
+          "test_hidden_invalid[]",
+          "test_hidden_invalid[xyz]",
+          "test_hidden_repr",
+          "test_hidden_valid[0]",
+          "test_hidden_valid[deadBEEF]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1200,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[xyz] - AssertionError: marshmallow.validate.Hexadecimal is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.Hexadecimal is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.Hexadecimal is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'Hexadecimal'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x108608b80>((('\\\\b' + 'Hexadecimal') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x108608b80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x10934ab60>)\n10 failed, 1190 passed in 0.89s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_hexadecimal.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.49,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1201,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n.................................................                        [100%]\n1201 passed in 0.85s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--hexadecimal",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.53,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[]",
+          "test_hidden_invalid[main.pyc]",
+          "test_hidden_repr",
+          "test_hidden_valid[.py]",
+          "test_hidden_valid[main.py]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1199,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[] - AssertionError: marshmallow.validate.EndsWith is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.EndsWith is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.EndsWith is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'EndsWith'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x103930b80>((('\\\\b' + 'EndsWith') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x103930b80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x10a07b970>)\n9 failed, 1190 passed in 0.88s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_ends_with.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.49,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1200,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 24%]\n........................................................................ [ 30%]\n........................................................................ [ 36%]\n........................................................................ [ 42%]\n........................................................................ [ 48%]\n........................................................................ [ 54%]\n........................................................................ [ 60%]\n........................................................................ [ 66%]\n........................................................................ [ 72%]\n........................................................................ [ 78%]\n........................................................................ [ 84%]\n........................................................................ [ 90%]\n........................................................................ [ 96%]\n................................................                         [100%]\n1200 passed in 0.84s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--ends-with",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.52,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[256.0.0.1]",
+          "test_hidden_invalid[localhost]",
+          "test_hidden_repr",
+          "test_hidden_valid[127.0.0.1]",
+          "test_hidden_valid[::1]",
+          "test_hidden_version"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1200,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "FAILED tests/test_rw_hidden.py::test_hidden_invalid[localhost] - AssertionError: marshmallow.validate.IPAddress is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.IPAddress is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.IPAddress is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'IPAddress'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x1060c0b80>((('\\\\b' + 'IPAddress') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x1060c0b80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x107e7a3e0>)\nFAILED tests/test_rw_hidden.py::test_hidden_version - AttributeError: module 'marshmallow.validate' has no attribute 'IPAddress'\n10 failed, 1190 passed in 0.88s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_ip_address.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.49,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1201,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n.................................................                        [100%]\n1201 passed in 0.86s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--ip-address",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.52,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[",
+          "test_hidden_invalid[\\t\\n]",
+          "test_hidden_invalid[]",
+          "test_hidden_repr",
+          "test_hidden_valid[",
+          "test_hidden_valid[a]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1200,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[\\t\\n] - AssertionError: marshmallow.validate.NotBlank is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.NotBlank is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.NotBlank is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'NotBlank'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x10862cb80>((('\\\\b' + 'NotBlank') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x10862cb80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x10a3f7d30>)\n10 failed, 1190 passed in 0.88s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_not_blank.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.51,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1201,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n.................................................                        [100%]\n1201 passed in 0.87s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--not-blank",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.52,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[\\u65e5\\u672c]",
+          "test_hidden_invalid[h\\xe9llo]",
+          "test_hidden_repr",
+          "test_hidden_valid[]",
+          "test_hidden_valid[hello]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1199,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[\\u65e5\\u672c] - AssertionError: marshmallow.validate.Ascii is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.Ascii is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.Ascii is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'Ascii'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x1087189a0>((('\\\\b' + 'Ascii') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x1087189a0> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x10921df30>)\n9 failed, 1190 passed in 0.88s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_ascii.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.53,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1200,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 24%]\n........................................................................ [ 30%]\n........................................................................ [ 36%]\n........................................................................ [ 42%]\n........................................................................ [ 48%]\n........................................................................ [ 54%]\n........................................................................ [ 60%]\n........................................................................ [ 66%]\n........................................................................ [ 72%]\n........................................................................ [ 78%]\n........................................................................ [ 84%]\n........................................................................ [ 90%]\n........................................................................ [ 96%]\n................................................                         [100%]\n1200 passed in 0.86s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--ascii",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.5,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[abc]",
+          "test_hidden_invalid[value1]",
+          "test_hidden_repr",
+          "test_hidden_valid[axb]",
+          "test_hidden_valid[value1]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1199,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[value1] - AssertionError: marshmallow.validate.Contains is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.Contains is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.Contains is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'Contains'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x108374ae0>((('\\\\b' + 'Contains') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x108374ae0> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x10a153b50>)\n9 failed, 1190 passed in 0.88s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_contains.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.57,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1200,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 24%]\n........................................................................ [ 30%]\n........................................................................ [ 36%]\n........................................................................ [ 42%]\n........................................................................ [ 48%]\n........................................................................ [ 54%]\n........................................................................ [ 60%]\n........................................................................ [ 66%]\n........................................................................ [ 72%]\n........................................................................ [ 78%]\n........................................................................ [ 84%]\n........................................................................ [ 90%]\n........................................................................ [ 96%]\n................................................                         [100%]\n1200 passed in 0.92s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--contains",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.52,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[ABC]",
+          "test_hidden_invalid[Abc]",
+          "test_hidden_repr",
+          "test_hidden_valid[a-1]",
+          "test_hidden_valid[abc]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1199,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[ABC] - AssertionError: marshmallow.validate.Lowercase is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.Lowercase is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.Lowercase is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'Lowercase'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x103e0cb80>((('\\\\b' + 'Lowercase') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x103e0cb80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x10a5cf970>)\n9 failed, 1190 passed in 0.89s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_lowercase.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.5,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1200,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 24%]\n........................................................................ [ 30%]\n........................................................................ [ 36%]\n........................................................................ [ 42%]\n........................................................................ [ 48%]\n........................................................................ [ 54%]\n........................................................................ [ 60%]\n........................................................................ [ 66%]\n........................................................................ [ 72%]\n........................................................................ [ 78%]\n........................................................................ [ 84%]\n........................................................................ [ 90%]\n........................................................................ [ 96%]\n................................................                         [100%]\n1200 passed in 0.85s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--lowercase",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.53,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[]",
+          "test_hidden_invalid[a-b]",
+          "test_hidden_invalid[h\\xe9llo]",
+          "test_hidden_repr",
+          "test_hidden_valid[Z]",
+          "test_hidden_valid[abc123]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1200,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[h\\xe9llo] - AssertionError: marshmallow.validate.Alphanumeric is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.Alphanumeric is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.Alphanumeric is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'Alphanumeric'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x102350ae0>((('\\\\b' + 'Alphanumeric') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x102350ae0> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x1084072e0>)\n10 failed, 1190 passed in 0.90s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_alphanumeric.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.5,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1201,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n.................................................                        [100%]\n1201 passed in 0.86s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--alphanumeric",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.53,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[a",
+          "test_hidden_invalid[w",
+          "test_hidden_repr",
+          "test_hidden_valid[",
+          "test_hidden_valid[]",
+          "test_hidden_valid[one"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1200,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[w x y z q] - AssertionError: marshmallow.validate.MaxWords is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.MaxWords is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.MaxWords is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'MaxWords'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x104410b80>((('\\\\b' + 'MaxWords') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x104410b80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x10ac1bd30>)\n10 failed, 1190 passed in 0.89s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_max_words.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.51,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1201,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n.................................................                        [100%]\n1201 passed in 0.87s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--max-words",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.54,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[Level]",
+          "test_hidden_invalid[ab]",
+          "test_hidden_repr",
+          "test_hidden_valid[\\xe9t\\xe9]",
+          "test_hidden_valid[]",
+          "test_hidden_valid[level]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1200,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[ab] - AssertionError: marshmallow.validate.Palindrome is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.Palindrome is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.Palindrome is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'Palindrome'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x10a1d0b80>((('\\\\b' + 'Palindrome') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x10a1d0b80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x10ab82e30>)\n10 failed, 1190 passed in 0.88s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_palindrome.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.47,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1201,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n.................................................                        [100%]\n1201 passed in 0.86s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--palindrome",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.53,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[value0]",
+          "test_hidden_invalid[value1]",
+          "test_hidden_repr",
+          "test_hidden_valid[value0]",
+          "test_hidden_valid[value1]",
+          "test_hidden_valid[value2]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1200,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[value1] - AssertionError: marshmallow.validate.StrictlyIncreasing is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.StrictlyIncreasing is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.StrictlyIncreasing is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'StrictlyIncreasing'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x10837cb80>((('\\\\b' + 'StrictlyIncreasing') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x10837cb80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x108d723e0>)\n10 failed, 1190 passed in 0.89s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_strictly_increasing.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.51,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1201,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n.................................................                        [100%]\n1201 passed in 0.87s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--strictly-increasing",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.56,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[\\t]",
+          "test_hidden_invalid[]",
+          "test_hidden_invalid[a\\nb]",
+          "test_hidden_repr",
+          "test_hidden_valid[\\xe9]",
+          "test_hidden_valid[hello"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1200,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[\\t] - AssertionError: marshmallow.validate.Printable is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.Printable is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.Printable is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'Printable'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x10a800b80>((('\\\\b' + 'Printable') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x10a800b80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x10c5cbd30>)\n10 failed, 1190 passed in 0.91s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_printable.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.5,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1201,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n.................................................                        [100%]\n1201 passed in 0.86s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--printable",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.52,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[-8]",
+          "test_hidden_invalid[0]",
+          "test_hidden_invalid[4]",
+          "test_hidden_repr",
+          "test_hidden_valid[-3]",
+          "test_hidden_valid[101]",
+          "test_hidden_valid[3]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1201,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[-8] - AssertionError: marshmallow.validate.Odd is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.Odd is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.Odd is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'Odd'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x1088ac9a0>((('\\\\b' + 'Odd') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x1088ac9a0> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x109daa110>)\n11 failed, 1190 passed in 0.88s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_odd.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.5,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1202,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n..................................................                       [100%]\n1202 passed in 0.86s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--odd",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.52,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[-inf]",
+          "test_hidden_invalid[inf]",
+          "test_hidden_invalid[nan]",
+          "test_hidden_repr",
+          "test_hidden_valid[-1.25]",
+          "test_hidden_valid[0]",
+          "test_hidden_valid[1e+300]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1201,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[nan] - AssertionError: marshmallow.validate.Finite is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.Finite is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.Finite is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'Finite'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x1041049a0>((('\\\\b' + 'Finite') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x1041049a0> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x109abad40>)\n11 failed, 1190 passed in 0.89s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_finite.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.5,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1202,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n..................................................                       [100%]\n1202 passed in 0.87s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--finite",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.57,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[abb]",
+          "test_hidden_invalid[value0]",
+          "test_hidden_invalid[value2]",
+          "test_hidden_repr",
+          "test_hidden_valid[value0]",
+          "test_hidden_valid[value1]",
+          "test_hidden_valid[value2]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1201,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[value2] - AssertionError: marshmallow.validate.NoAdjacentDuplicates is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.NoAdjacentDuplicates is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.NoAdjacentDuplicates is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'NoAdjacentDuplicates'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x108e40b80>((('\\\\b' + 'NoAdjacentDuplicates') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x108e40b80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x109dc6980>)\n11 failed, 1190 passed in 0.91s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_no_adjacent_duplicates.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.51,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1202,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n..................................................                       [100%]\n1202 passed in 0.87s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--no-adjacent-duplicates",
+      "valid": true
+    },
+    {
+      "base": {
+        "changed_files": [],
+        "checks": {
+          "tests": false
+        },
+        "ci_passed": false,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.56,
+        "exit_code": 1,
+        "hidden_failed": [
+          "test_hidden_changelog",
+          "test_hidden_custom_error",
+          "test_hidden_docstring",
+          "test_hidden_has_tests",
+          "test_hidden_invalid[\\U0001f600a]",
+          "test_hidden_invalid[\\xe9\\xe9a]",
+          "test_hidden_invalid[abcde]",
+          "test_hidden_repr",
+          "test_hidden_valid[\\U0001f600]",
+          "test_hidden_valid[\\xe9\\xe9]",
+          "test_hidden_valid[]",
+          "test_hidden_valid[abcd]"
+        ],
+        "hidden_passed": false,
+        "n_tests": 1202,
+        "passed": false,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "assert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_invalid[\\U0001f600a] - AssertionError: marshmallow.validate.MaxUtf8Bytes is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_custom_error - AssertionError: marshmallow.validate.MaxUtf8Bytes is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_repr - AssertionError: marshmallow.validate.MaxUtf8Bytes is missing\nassert None is not None\nFAILED tests/test_rw_hidden.py::test_hidden_docstring - AttributeError: module 'marshmallow.validate' has no attribute 'MaxUtf8Bytes'\nFAILED tests/test_rw_hidden.py::test_hidden_changelog - AssertionError: no entry in the unreleased version's changes\nassert None\n +  where None = <function search at 0x10a720b80>((('\\\\b' + 'MaxUtf8Bytes') + '\\\\b'), 'unreleased)\\n------------------\\n\\nFeatures:\\n\\n- Simplify `get_value` to match actual usage (:pr:`3024`).\\n\\nBug fix...rror`) for NaN in `TimeDelta <marshmallow.fields.TimeDelta>`\\n  (:pr:`3004`).\\n  Thanks :user:`vidigoat` for the PR.\\n')\n +    where <function search at 0x10a720b80> = re.search\nFAILED tests/test_rw_hidden.py::test_hidden_has_tests - assert False\n +  where False = any(<generator object test_hidden_has_tests.<locals>.<genexpr> at 0x10c46d4e0>)\n12 failed, 1190 passed in 0.91s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "gold": {
+        "changed_files": [
+          "CHANGELOG.rst",
+          "src/marshmallow/validate.py",
+          "tests/test_gold_max_utf8_bytes.py"
+        ],
+        "checks": {
+          "tests": true
+        },
+        "ci_passed": true,
+        "dependency_mode": "frozen prepared environment; no rescue install",
+        "elapsed_s": 1.51,
+        "exit_code": 0,
+        "hidden_failed": [],
+        "hidden_passed": true,
+        "n_tests": 1203,
+        "passed": true,
+        "rescue_error": null,
+        "suite_failed": [],
+        "tail": "........................................................................ [ 23%]\n........................................................................ [ 29%]\n........................................................................ [ 35%]\n........................................................................ [ 41%]\n........................................................................ [ 47%]\n........................................................................ [ 53%]\n........................................................................ [ 59%]\n........................................................................ [ 65%]\n........................................................................ [ 71%]\n........................................................................ [ 77%]\n........................................................................ [ 83%]\n........................................................................ [ 89%]\n........................................................................ [ 95%]\n...................................................                      [100%]\n1203 passed in 0.87s",
+        "test_confinement": "macOS Seatbelt, read allowlist, network denied"
+      },
+      "task": "mm-curve--max-utf8-bytes",
+      "valid": true
+    }
+  ],
+  "source_sha256": {
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/lab/research/recurring-workflows/families.py": "0592230842e8f6cf0f7f8696464027da464cd41bbe997be1950a2deec49c41d1",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/live/budget.py": "de4f9c2376204ac2e6ffff71ec43bcbf9318366c7f8a1eb5d1aed186279c27d2",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/live/runner.py": "914ebd5dfc0238b17d1038e9fe706da947f42f91ab5a80c133c8bc0350e81f19",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/LEARNING-CURVE.md": "bd3bc4915c70d523508c03479711870bb11efde4a60dda43777a905c9dfe2217",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/REAL-REPO-PAIRS.md": "d5a6b7859bb23de1601f19b5fb7816dfbfc699e85b826d300bb72203d1bba396",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/bash_action_audit.py": "1b1ff9d152f96c347682006f972c43516293e03c1ab7dc3d2a59726bbbdf94a7",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/curve_tasks.py": "9be77f97b2d3b7de606b11a03b73df7cab0f55cdc83251f1a7863a1ef5aba229",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/learning_curve.py": "7111b7aa8d1ec2a87d515a10976193a23c1c36ba76e6996832d87e4713ea78b1",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/probe.py": "0c7bd1e043428200c97e3c80c79ada22c8c1473ba2ce9640c861a2dcfb6660e4",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/real_repo_gate.py": "63cbc45c201d0c6852998cf2f8a9db6ffd2a1b561f2fbe3265276e306978a563",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/real_repo_pairs.py": "4b1aac547369157a8faedfed372741e811d3ad972baf3d075f09a225e1374f8a",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/repobench/common.py": "ecbc22b6a895453319709cdca73fa478e76786929f535196bc0b7ee9fc4ec44d",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/repobench/repos.json": "1bdb8ffb5b64411d5913549aec287f091b08e6a7096e9ad5c70c5b7c1b1b5030",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/repobench/sandbox.py": "3579ef53fe4db9a28a046727fef916b8f810cb39557110e9a2d1733b1abf912c",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/repobench/score.py": "e63d2c3bb7ffe9049bf95e7a712f562c4ed87a5000b6b7da63e89d863de9ebdd",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/showcase/fam_python.py": "9a7e2c5137e90b7ff1f07a9f1518baa15fba791560dc234c2fad366871d227c9",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/showcase/families.py": "275d9c0113f8e9fdd1ef75562cff112c61934e00926b7e2f54f11514378616a8",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/showcase/sc_score.py": "338307033ea3c76df0c0ec965ba1290991862b02f752b0a6985a25a94bf13e61"
+  },
+  "valid": true
+}

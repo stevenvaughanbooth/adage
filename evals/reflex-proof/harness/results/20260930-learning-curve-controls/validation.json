@@ -1,0 +1,52 @@
+{
+  "attempts": [
+    {
+      "complete": true,
+      "failed": [
+        "mm-curve--printable"
+      ],
+      "paid_calls": 0,
+      "passing": 18,
+      "revision": 1,
+      "tasks": 19,
+      "valid": false
+    },
+    {
+      "complete": true,
+      "failed": [],
+      "paid_calls": 0,
+      "passing": 19,
+      "revision": 2,
+      "tasks": 19,
+      "valid": true
+    }
+  ],
+  "checkpoints_conditioned": false,
+  "correction": "Printable gold now explicitly rejects empty input as required by the frozen task prompt; Python str.isprintable alone accepts it. Task prompts and hidden tests were unchanged.",
+  "files": {
+    "v1-curve_tasks.py.txt": "af8ef83e75676f8af94cb8333c8ddf1d5808e13ea2a5dc0e35913648f2ada657",
+    "v1-learning_curve.py.txt": "a870dea19a5c6bec16158454dd0e2cbd0654a44e313174e4b516b9f4830ab8a2",
+    "v1-manifest.json": "f68bd6156218b36bb6bcb5a01fd97f975032d6f919e651f995826eac5fb9bf4c",
+    "v1-validation.json": "25acf67de943eed11389ed97020fcc7ce2d84b4dbba60adcf628f184dc8d9e29",
+    "v2-manifest.json": "d817ebf48a70f01d5a2284b29c585d828f1dba06e8df5575cd11b98498ac9599",
+    "v2-validation.json": "98143be5da762fbf5af9f011c5b429dea9867782ffc46e228db29b59a8866d03"
+  },
+  "harness_tests": {
+    "command": "python3 -m unittest discover -s evals/reflex-proof/harness -p 'test_*.py'",
+    "failed": 0,
+    "passed": 56
+  },
+  "live_agent_results": false,
+  "new_cost_usd": 0,
+  "next": [
+    "Integrate native paid runner and checkpoint conditioning with the shared ledger.",
+    "Resolve paid budget scope before dispatch.",
+    "Collect the frozen training history, learn with defaults, review genuine candidates.",
+    "Run all four held-out arms only after native confinement and local execution approval."
+  ],
+  "paid_calls": 0,
+  "recorded_at": "2026-09-30T15:32:00Z",
+  "schema": 1,
+  "source_revision": "fc5519805cff7721f55446ac73716cd8c88cf6c1 plus prospective evaluation files hashed in manifests",
+  "status": "offline-controls-passed-live-unproven"
+}

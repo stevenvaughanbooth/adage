@@ -308,6 +308,11 @@ task interval above includes zero. Direct CPU action elimination has its own
 remain pending. The status card measures your own sessions, with a control, before showing a
 dollar figure.
 
+The next [cross-session evaluation](evals/reflex-proof/harness/LEARNING-CURVE.md) measures learning
+after 0, 3, 5, 10 and 15 related tasks, then compares four new tasks with no Adage, shipped instincts,
+learned guidance, and approved CPU execution. This is a prospective protocol, not a measured savings
+claim; correctness and duplicate agent work are part of its acceptance criteria.
+
 ## Results on generated sandboxes
 
 Real **Claude Haiku 4.5** agents, headless, each in a fresh copy of a sandbox repository whose

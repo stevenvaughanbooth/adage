@@ -5,6 +5,14 @@ passes; it does not establish that automatic verification helps complete coding 
 This page is the launch evidence index. Preserve earlier reports, failed attempts and protocols
 when a later experiment supersedes them.
 
+The next prospective [cross-session learning-curve pilot](harness/LEARNING-CURVE.md) uses 15 distinct
+training tasks, checkpoints at 0/3/5/10/15 sessions, and four new held-out tasks in four arms. It
+separates shipped instincts, learned guidance and approved CPU execution. All 19 offline base/gold
+controls pass after correcting one reference implementation; [both attempts and the 56 passing
+harness tests are recorded](harness/results/20260930-learning-curve-controls/validation.json).
+This protocol has no paid efficacy results yet. Its four-task screen cannot support a general
+launch-site savings percentage.
+
 | Gate | Evidence | Current conclusion |
 | --- | --- | --- |
 | Learn without authored routes or outcome labels | [Default onboarding](traces/results/onboarding.json) | Nine archived generated-repository training sessions produce learned routes using normal thresholds |

@@ -1,5 +1,9 @@
 # Hook-boundary substrate probe
 
+For the next real-repository experiment, see the [cross-session learning-curve protocol](LEARNING-CURVE.md).
+`learning_curve.py` freezes task/source hashes and validates the 19 base/gold controls without paid
+calls. It reuses the scoring/confinement substrate below; paid execution is not enabled by preparation.
+
 This is permanent evaluation scaffolding, not a second Adage runtime. The tiny fixture
 executor can only append `fixture-effect` inside a marked temporary directory. It does
 not implement grants, route mining, general scripts, production scheduling, or sandboxing.
