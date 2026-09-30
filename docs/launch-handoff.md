@@ -10,6 +10,7 @@ compilation, a successful hook, or advisory benchmark gains alone.
 PR #14 merged into main at `e5f5e33651df86a3b1dc89bafb6ba10e9193c2e1`.
 This follow-up uses branch `codex/launch-first-reflex` in
 `/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile`.
+Follow-up PR: https://github.com/stevenvaughanbooth/adage/pull/16 (draft, mergeable when checked).
 The primary checkout is `/Users/stevenbooth/Documents/skill-compile`; leave its local work alone.
 
 The user lifted the Codex 5% reserve and authorized using the remaining allowance. The independent
@@ -35,7 +36,9 @@ double-dispatch, or treat an unknown bill as zero.
 
 Website evidence is in `web/site/index.html` and `web/site/public/evidence/cold-start.json`.
 All study records are indexed by `evals/reflex-proof/LAUNCH-STATUS.md`. Do not cherry-pick or delete
-earlier failures. Recheck production deployment after merge; Git push alone is not proof it is live.
+earlier failures. GitHub deployment `6768511910` reports successful Production deployment of the
+PR #14 merge commit. Its reported URL is `https://adage-site-r5gqonovm-adage3.vercel.app`;
+public-domain accessibility was not independently verified. Recheck future deployments after merge.
 
 ## CPU transfer study and approval boundary
 
