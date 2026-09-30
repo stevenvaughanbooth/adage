@@ -10,8 +10,13 @@ const EMAIL = /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
+// Public availability only: never return the destination or contact it during this check.
+export function GET(): Response {
+  return json(200, { available: Boolean(process.env.WAITLIST_WEBHOOK_URL?.trim()) });
+}
+
 export async function POST(request: Request): Promise<Response> {
-  const hook = process.env.WAITLIST_WEBHOOK_URL;
+  const hook = process.env.WAITLIST_WEBHOOK_URL?.trim();
   if (!hook) return json(503, { error: "sign-ups are not open yet" });
 
   let body: { email?: unknown; hp_x7?: unknown } | null;

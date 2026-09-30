@@ -271,6 +271,7 @@ code { font: 0.92em var(--mono); background: var(--raised); border: 1px solid va
 /* ---- early access ---- */
 .access { background: radial-gradient(ellipse 60% 70% at 50% 100%, color-mix(in srgb, var(--memory) 18%, transparent), transparent 70%); }
 .signup { margin: 32px auto 0; display: grid; grid-template-columns: 1fr auto; gap: 10px; max-width: 480px; }
+.signup-fields { grid-column: 1 / -1; display: grid; grid-template-columns: inherit; gap: 10px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .signup input[type="email"] { min-width: 0; font: inherit; color: var(--ink-1); background: var(--raised); border: 1px solid var(--line-strong); border-radius: 10px; padding: 11px 14px; }
 .signup input[type="email"]::placeholder { color: var(--ink-3); }
 .signup input[type="email"]:focus-visible { outline: 2px solid var(--memory); outline-offset: 1px; border-radius: 10px; }
