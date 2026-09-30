@@ -18,6 +18,9 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Launch clarity and local experience
 
+- Keep the unsuccessful learned-CPU pilot in the repository evaluation record, outside
+  launch-site assets. Document hook-result reuse research and the next diagnostic protocol.
+
 - First-run completion now points to learned-candidate review and execution status, distinguishing
   evidence approval from permission to run scripts. The first-reflex guide explains empty-history
   states, execution policy, scoped grants and how to verify an action actually replaced agent work.

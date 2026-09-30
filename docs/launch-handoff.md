@@ -96,6 +96,17 @@ four grant files before dispatch. Earlier scripts are historical; do not reuse t
 
 ## Launch experience and next priorities
 
+Latest research checkpoint: [hook action reuse](hook-action-reuse-research.md). The user
+requested first-principles research before another fix. Official Claude, Gemini and
+LangChain sources distinguish result delivery, execution reuse and skipping model calls.
+Installed Claude is 2.1.282; result-replacement capability is present but has not passed a
+live Adage canary. No new paid runs or runtime changes were made in this checkpoint.
+Codex allowance last checked at 96% used (4% remaining). Remove the CPU pilot paragraph
+and `web/site/public/evidence/learned-cpu.json` from the launch site; keep the full failed
+study in the repository. The next experiment is a small delivery/receipt ablation, with
+fresh protocol/accounting, before any further real-repository cohort. See the research
+document for controls, validity requirements and exact code entry points.
+
 The follow-up adds `docs/first-reflex.md`, first-run links to review and execution status, clearer
 cache errors, and regression coverage for pytest's hidden metadata. It preserves the current TUI.
 Do not create another learner or parallel onboarding implementation.
