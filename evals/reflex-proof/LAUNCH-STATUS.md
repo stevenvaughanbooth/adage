@@ -2,6 +2,9 @@
 
 Status: **real-repository CPU action-elimination gate pending**. The generated lookup mechanism
 passes; it does not establish that automatic verification helps complete coding tasks.
+The [frozen transfer preparation](harness/results/20260930-transfer-preparation/FINDINGS.md)
+retains a zero-spend approval failure and its narrow pytest-cache fix. The replacement eight-session
+comparison is ready and waits for human execution grants; no live transfer result is claimed.
 This page is the launch evidence index. Preserve earlier reports, failed attempts and protocols
 when a later experiment supersedes them.
 
