@@ -47,11 +47,13 @@ export function initSnap() {
     scrollTo({ top: to, behavior: reduced.matches ? "instant" : "smooth" });
   }
 
-  addEventListener("scroll", () => {
+  // scrollend marks the true end of a scroll, smooth ones included. Where there is none, a quiet
+  // moment stands in for it; it must outlast a slow frame, or it would cut a smooth scroll short.
+  if ("onscrollend" in window) addEventListener("scrollend", settle);
+  else addEventListener("scroll", () => {
     clearTimeout(timer);
-    timer = window.setTimeout(settle, 140); // where there is no scrollend
+    timer = window.setTimeout(settle, 250);
   }, { passive: true });
-  addEventListener("scrollend", settle);
   // A wheel or key while the page glides takes the page back from it.
   const take = () => { gliding = false; };
   addEventListener("wheel", take, { passive: true });
