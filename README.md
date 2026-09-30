@@ -225,8 +225,9 @@ sessions per arm:
 | Turns | 27.3 | 7.3 | **7.9** |
 | Input tokens | 564k | 103k | **109k** |
 
-- **What it captures:** the compiled reflexes capture 100% of the skill's effect on pass rate and
-  98% of its cost saving.
+- **What it captures in this sample:** the compiled reflexes matched the skill's 12/12 pass count
+  and captured about 98% of its observed cost saving. Twelve sessions per arm do not establish
+  equivalence across tasks or repositories.
 - **Why compile at all:** the compiled steps are verified, delivered only when they apply, and
   work across Claude Code, Codex and OpenCode.
 - **The compiler catches stale instructions:** on a second skill, replay found that one of its
@@ -257,9 +258,12 @@ in Go, Rust, TypeScript and C), each task is new, so there is less to learn from
   pre-call rewrite and default-on cards, which the live validation re-checks.
 - **Stronger models gain less:** Sonnet-class agents already avoid most procedural waste.
 
-**What this means for you:** savings scale with how much of your work repeats. On recurring
-work, expect a noticeable cut; on one-off tasks, a few percent from instincts. The status card
-measures it on your own sessions, with a control, before it shows a dollar figure.
+**What this means for you:** these experiments identify recurring procedures as a promising target;
+they do not establish a savings percentage for a new repository. The shipped-product recurring
+task interval above includes zero. Direct CPU action elimination has its own
+[launch gate](evals/reflex-proof/LAUNCH-STATUS.md), and real-repository coding results for that gate
+remain pending. The status card measures your own sessions, with a control, before showing a
+dollar figure.
 
 ## Results on generated sandboxes
 
