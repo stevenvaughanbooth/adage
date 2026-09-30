@@ -25,12 +25,12 @@ pub(crate) static ASSETS: &[Asset] = &[
         gz: Some(include_bytes!("../../assets/map/assets/how-DM9UFcFa.js.gz")),
     },
     Asset {
-        path: "assets/index-Ci799seN.js",
+        path: "assets/index-DJMU86RG.js",
         content_type: "text/javascript; charset=utf-8",
         immutable: true,
         raw: None,
-        br: Some(include_bytes!("../../assets/map/assets/index-Ci799seN.js.br")),
-        gz: Some(include_bytes!("../../assets/map/assets/index-Ci799seN.js.gz")),
+        br: Some(include_bytes!("../../assets/map/assets/index-DJMU86RG.js.br")),
+        gz: Some(include_bytes!("../../assets/map/assets/index-DJMU86RG.js.gz")),
     },
     Asset {
         path: "assets/layout.worker-C5z_fNT1.js",
@@ -57,12 +57,12 @@ pub(crate) static ASSETS: &[Asset] = &[
         gz: Some(include_bytes!("../../assets/map/assets/rolldown-runtime-hePW80VL.js.gz")),
     },
     Asset {
-        path: "assets/style-C3U2bhsP.css",
+        path: "assets/style-bIoCEh8R.css",
         content_type: "text/css; charset=utf-8",
         immutable: true,
         raw: None,
-        br: Some(include_bytes!("../../assets/map/assets/style-C3U2bhsP.css.br")),
-        gz: Some(include_bytes!("../../assets/map/assets/style-C3U2bhsP.css.gz")),
+        br: Some(include_bytes!("../../assets/map/assets/style-bIoCEh8R.css.br")),
+        gz: Some(include_bytes!("../../assets/map/assets/style-bIoCEh8R.css.gz")),
     },
     Asset {
         path: "index.html",

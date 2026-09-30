@@ -28,17 +28,36 @@ function set(patch: Partial<Store>) {
 }
 
 export async function fetchJson<T>(url: string): Promise<T> {
-  const r = await fetch(url, { cache: "no-store", headers: { Accept: "application/json" } });
-  if (!r.ok) throw new Error(`${r.status} ${(await r.text()).trim()}`);
-  return (await r.json()) as T;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const r = await fetch(url, { cache: "no-store", headers: { Accept: "application/json" }, signal: controller.signal });
+    if (!r.ok) throw new Error(`${r.status} ${(await r.text()).trim()}`);
+    return (await r.json()) as T;
+  } catch (e) {
+    if (controller.signal.aborted) throw new Error("The local server took too long to respond. Try again.");
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 let inflight: Promise<void> | null = null;
+let retryDelay = 1000;
 export function refresh(): Promise<void> {
   if (inflight) return inflight;
+  if (later) clearTimeout(later);
+  later = null;
   inflight = fetchJson<unknown>("/api/v1/graph")
-    .then((raw) => set({ graph: normalizeGraph(raw), error: null }))
-    .catch((e: unknown) => set({ error: String(e) }))
+    .then((raw) => {
+      retryDelay = 1000;
+      set({ graph: normalizeGraph(raw), error: null });
+    })
+    .catch((e: unknown) => {
+      set({ error: e instanceof Error ? e.message : String(e) });
+      refreshSoon(retryDelay);
+      retryDelay = Math.min(retryDelay * 2, 30_000);
+    })
     .finally(() => {
       inflight = null;
     });
@@ -46,8 +65,13 @@ export function refresh(): Promise<void> {
 }
 
 let later: ReturnType<typeof setTimeout> | null = null;
+let due = 0;
 function refreshSoon(ms = 1500) {
+  // A busy stream must not postpone the snapshot indefinitely.
+  const next = Date.now() + ms;
+  if (later && due <= next) return;
   if (later) clearTimeout(later);
+  due = next;
   later = setTimeout(() => {
     later = null;
     void refresh();
@@ -84,7 +108,7 @@ export function start() {
   source = new EventSource("/api/v1/events");
   source.addEventListener("open", () => {
     // Back after a drop: what changed meanwhile never streamed, so load it now.
-    if (state.connection === "offline") void refresh();
+    if (state.connection === "offline" || state.error) void refresh();
     set({ connection: "live" });
   });
   // The browser retries on its own (readyState CONNECTING), but once the stream has dropped the
@@ -128,6 +152,12 @@ export function subscribeDecisions(fn: (e: TraceEvent) => void): () => void {
 
 let health: Promise<Health> | null = null;
 export function loadHealth(force = false): Promise<Health> {
-  if (!health || force) health = fetchJson<Health>("/api/v1/health");
+  if (!health || force) {
+    const request = fetchJson<Health>("/api/v1/health").catch((e: unknown) => {
+      if (health === request) health = null;
+      throw e;
+    });
+    health = request;
+  }
   return health;
 }

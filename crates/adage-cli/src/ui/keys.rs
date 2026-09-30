@@ -67,6 +67,7 @@ pub const REFLEXES: &[Key] = &[
     k("o", "open in map", "the same reflex in the web map (adage map --focus)", false),
     k("F P I", "strengths", "show or hide fire, prime, inhibit", false),
     k("S", "states", "cycle the lifecycle filter", false),
+    k("esc", "reset filters", "reset the search, strength and lifecycle filters", false),
     k("PgUp PgDn", "scroll", "scroll the detail", false),
     k("R", "reload", "reload the reflexes", false),
 ];

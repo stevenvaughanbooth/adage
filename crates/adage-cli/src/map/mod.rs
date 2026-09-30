@@ -72,6 +72,7 @@ fn options(args: &[String]) -> Result<Options> {
 pub(crate) struct Shared {
     pub(crate) paths: Paths,
     pub(crate) port: u16,
+    pub(crate) demo: bool,
     /// The repository the doctor's per-repository checks look at.
     pub(crate) repo_root: Option<PathBuf>,
     pub(crate) hub: events::Hub,
@@ -121,6 +122,7 @@ pub fn run(args: &[String], paths: &Paths) -> Result<()> {
     let shared = Arc::new(Shared {
         paths: paths.clone(),
         port: addr.port(),
+        demo: opts.demo,
         repo_root,
         hub: events::Hub::new(),
         connections: AtomicUsize::new(0),

@@ -11,10 +11,13 @@ export function initPage() {
   document.querySelectorAll(".reveal").forEach((n) => io.observe(n));
 
   document.querySelectorAll<HTMLButtonElement>("button[data-copy]").forEach((b) => {
+    const label = b.textContent;
+    let reset = 0;
     b.addEventListener("click", async () => {
+      clearTimeout(reset);
       try { await navigator.clipboard.writeText(b.dataset.copy!); b.textContent = "Copied"; }
       catch { b.textContent = "Select and copy"; }
-      setTimeout(() => (b.textContent = "Copy"), 1800);
+      reset = window.setTimeout(() => (b.textContent = label), 1800);
     });
   });
 
@@ -42,7 +45,7 @@ export function initPage() {
       });
       if (r.ok) { form.reset(); say("You're on the list. We'll email you once, when the first release is ready.", "ok"); }
       else if (r.status === 400 || r.status === 413) say("That address doesn't look right. Check it and try again.", "err");
-      else if (r.status === 503) say("Sign-ups aren't open yet. Please try again soon.", "err");
+      else if (r.status === 503) say("Sign-ups aren't open yet. Explore the interactive walkthrough below while you wait.", "err");
       else say("Something went wrong on our side. Please try again in a minute.", "err");
     } catch {
       say("Couldn't reach the server. Check your connection and try again.", "err");

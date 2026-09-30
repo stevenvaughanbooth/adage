@@ -360,16 +360,22 @@ fn the_cli_refuses_to_execute_inside_an_agent_session() {
         .unwrap();
     assert!(st.status.success(), "{}", String::from_utf8_lossy(&st.stderr));
     assert!(String::from_utf8_lossy(&st.stdout).contains("nothing was executed"));
-    for (k, v) in [("CLAUDECODE", "1"), ("ADAGE_TRAIN_SESSION", "x/y")] {
-        let st = Command::new(bin())
+    // Assert each refusal independently of the agent that invokes the test runner.
+    let clean_command = || {
+        let mut c = Command::new(bin());
+        for key in adage_train::isolate::AGENT_ENV {
+            c.env_remove(key);
+        }
+        c
+    };
+    for k in adage_train::isolate::AGENT_ENV {
+        let st = clean_command()
             .args(["--plan"])
             .arg(&out)
             .args(["--budget", "1", "--execute"])
             .env("ADAGE_HOME", tmp.path().join("h"))
             .env("ADAGE_ALLOW_NONINTERACTIVE", "1")
-            .env_remove("CLAUDECODE")
-            .env_remove("ADAGE_ARM")
-            .env(k, v)
+            .env(k, "1")
             .output()
             .unwrap();
         assert!(!st.status.success());
@@ -378,13 +384,10 @@ fn the_cli_refuses_to_execute_inside_an_agent_session() {
     }
     assert!(!tmp.path().join("h").exists());
     // Without a terminal (and without the CI switch): refused too.
-    let st = Command::new(bin())
+    let st = clean_command()
         .args(["--plan"])
         .arg(&out)
         .args(["--budget", "1", "--execute"])
-        .env_remove("CLAUDECODE")
-        .env_remove("ADAGE_ARM")
-        .env_remove("ADAGE_TRAIN_SESSION")
         .env_remove("ADAGE_ALLOW_NONINTERACTIVE")
         .env("ADAGE_HOME", tmp.path().join("h"))
         .stdin(std::process::Stdio::null())

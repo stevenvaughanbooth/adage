@@ -230,6 +230,8 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
         match code {
             KeyCode::Esc => {
                 st.filter.clear();
+                st.hidden = [false; 3];
+                st.states = 0;
                 st.filtering = false;
             }
             KeyCode::Enter => st.filtering = false,
@@ -248,7 +250,12 @@ pub fn key(s: &mut AppState, code: KeyCode) -> Option<Cmd> {
         KeyCode::End => move_by(s, 10_000),
         KeyCode::PageDown => s.reflexes.detail_scroll = s.reflexes.detail_scroll.saturating_add(5),
         KeyCode::PageUp => s.reflexes.detail_scroll = s.reflexes.detail_scroll.saturating_sub(5),
-        KeyCode::Esc if !s.reflexes.filter.is_empty() => s.reflexes.filter.clear(),
+        KeyCode::Esc => {
+            s.reflexes.filter.clear();
+            s.reflexes.hidden = [false; 3];
+            s.reflexes.states = 0;
+            s.reflexes.detail_scroll = 0;
+        }
         KeyCode::Char('/') => s.reflexes.filtering = true,
         KeyCode::Char('F') => s.reflexes.hidden[0] = !s.reflexes.hidden[0],
         KeyCode::Char('P') => s.reflexes.hidden[1] = !s.reflexes.hidden[1],
@@ -907,7 +914,7 @@ pub fn draw(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     f.render_widget(Paragraph::new(chips(s, t, list.width as usize)), chips_a);
     if nodes.is_empty() {
         f.render_widget(
-            Paragraph::new(Span::styled(" Nothing matches. esc clears the filter; F P I S reset the chips.", t.dim()))
+            Paragraph::new(Span::styled(" Nothing matches. esc resets the search and filter chips.", t.dim()))
                 .wrap(Wrap { trim: false }),
             tree_a,
         );

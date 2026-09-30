@@ -32,10 +32,10 @@ expression: text
                                        │           o  the same reflex in the web map (adage map --focus)     │
                                        │       F P I  show or hide fire, prime, inhibit                      │
                                        │           S  cycle the lifecycle filter                             │
-                                       │   PgUp PgDn  scroll the detail                                      │
-                                       │           R  reload the reflexes                                    │e   n pin   m dismiss
-                                       ╰─────────────────────────────────────────────────────────────────────╯
-                                                        │    same as adage review weaken harbor-dispatch/incidents lookup-incident from any shell
+                                       │         esc  reset the search, strength and lifecycle filters       │
+                                       │   PgUp PgDn  scroll the detail                                      │e   n pin   m dismiss
+                                       │           R  reload the reflexes                                    │
+                                       ╰─────────────────────────────────────────────────────────────────────╯ents lookup-incident from any shell
                                                         │
                                                         │
                                                         │

@@ -303,3 +303,49 @@ test("the live Health view carries the runtime rows from the binary", async ({ p
   await expect(page.getByTestId("runtime-rewrites")).toContainText(/Rewrites to the project’s environment: (on|off)/);
   await expect(page.getByTestId("runtime-model")).toBeVisible();
 });
+
+
+test("initial graph failure recovers even with no stream", async ({ page }) => {
+  let attempts = 0;
+  await page.route("**/api/v1/events", (r) => r.abort());
+  await page.route("**/api/v1/graph", (r) => ++attempts === 1 ? r.fulfill({ status: 503, body: "temporarily unavailable" }) : r.continue());
+  await page.goto(EMPTY);
+  await expect(page.getByText("The map could not load its data.")).toBeVisible();
+  await expect(page.getByRole("main", { name: "First run" })).toBeVisible({ timeout: 15_000 });
+  expect(attempts).toBeGreaterThanOrEqual(2);
+});
+
+test("first-run health failure can be rechecked without reloading", async ({ page }) => {
+  await page.route("**/api/v1/health", (r) => r.fulfill({ status: 503, body: "busy" }));
+  await page.goto(EMPTY);
+  await expect(page.getByText("check unavailable", { exact: true })).toBeVisible();
+  await expect(page.getByText("Could not check hooks.", { exact: false })).toBeVisible();
+  await page.unroute("**/api/v1/health");
+  await page.getByRole("button", { name: "Recheck setup" }).click();
+  await expect(page.getByText("not set up: run adage init", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("live-pill")).toContainText("Ready");
+});
+
+test("sample data is labeled and a failed refresh exposes stale data", async ({ page }) => {
+  let snapshots = 0;
+  await page.route("**/api/v1/graph", (r) => ++snapshots === 1 ? r.continue() : r.fulfill({ status: 503, body: "busy" }));
+  await page.route("**/api/v1/events", (r) => r.fulfill({ contentType: "text/event-stream", body: 'event: graph\ndata: {}\n\n' }));
+  await page.goto(DEMO);
+  await expect(page.getByText("Demo data", { exact: true })).toBeVisible();
+  await expect(page.getByText("Showing the last snapshot.", { exact: false })).toBeVisible();
+  await expect(page.getByTestId("live-pill")).toContainText("Stale");
+  await page.unroute("**/api/v1/graph");
+  await page.getByRole("button", { name: "Retry now" }).click();
+  await expect(page.getByText("Showing the last snapshot.", { exact: false })).toHaveCount(0);
+});
+
+
+test("health errors do not leave a checking or healthy headline", async ({ page }) => {
+  await page.route("**/api/v1/health", (r) => r.fulfill({ status: 503, body: "busy" }));
+  await page.goto(`${EMPTY}/?view=health`);
+  await expect(page.getByRole("heading", { name: "Health check unavailable." })).toBeVisible();
+  await page.unroute("**/api/v1/health");
+  await page.getByRole("button", { name: "Check again" }).click();
+  await expect(page.getByRole("heading", { name: "Health check unavailable." })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Check again" })).toBeEnabled();
+});

@@ -137,6 +137,8 @@ pub fn wrap(
     rest: &[String],
     res: &Resolved,
 ) -> (std::path::PathBuf, Vec<String>) {
+    #[cfg(target_os = "macos")]
+    let program = interpreter(program.to_path_buf());
     let mut a = vec!["-p".to_string(), sbpl(res), "--".into(), program.to_string_lossy().into_owned()];
     a.extend(rest.iter().cloned());
     (sandbox_exec.to_path_buf(), a)
@@ -145,6 +147,7 @@ pub fn wrap(
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use crate::limits::Limits;
     use crate::request::Level;
     use std::path::PathBuf;
@@ -161,7 +164,14 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn system_python_shim_resolves_only_within_the_selected_developer_directory() {
-        for p in ["/usr/local/bin/python3", "/usr/bin/git", "/bin/sh", "/repo/python3"] {
+        for p in [
+            "/usr/local/bin/python3",
+            "/opt/homebrew/bin/python3",
+            "/repo/.venv/bin/python3",
+            "/usr/bin/git",
+            "/bin/sh",
+            "/repo/python3",
+        ] {
             assert_eq!(interpreter(p.into()), std::path::Path::new(p));
         }
         let Some(developer) = developer_dir() else { return };

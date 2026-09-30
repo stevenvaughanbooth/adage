@@ -38,7 +38,9 @@ case "$(uname -s)-$(uname -m)" in
   *) T="" ;;
 esac
 case "$T" in *-linux-musl) [ -f "$ROOT/dist/$T/adage-exec" ] || T="${T%-musl}-gnu" ;; esac
-sha256() { { shasum -a 256 "$1" || sha256sum "$1"; } 2>/dev/null | cut -d' ' -f1; }
+# Prefer native digest providers: the Perl helper is noticeably slower for large debug builds.
+# All paths verify the same SHA-256; missing providers fall back without weakening verification.
+sha256() { { sha256sum "$1" || openssl dgst -sha256 -r "$1" || shasum -a 256 "$1"; } 2>/dev/null | cut -d' ' -f1; }
 LINKED=""
 install_bundled() {
   NAME="$1"; SRC="$ROOT/dist/$T/$NAME"

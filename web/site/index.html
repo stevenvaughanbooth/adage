@@ -27,9 +27,9 @@
 
 <div class="film" id="film" tabindex="-1" role="dialog" aria-modal="true" aria-label="Adage teaser film" aria-describedby="film-desc">
   <video id="film-video" playsinline muted preload="none" tabindex="-1"></video>
-  <p class="sr" id="film-desc">A short film, about one and a half minutes. Every step an agent takes is a thought; reflexes skip the model's work. It ends on the line: Agent traces become reflexes. Press Escape or the Skip intro button to go to the page.</p>
+  <p class="sr" id="film-desc">A 45-second film: an agent repeats work, Adage learns paths through its traces, and hooks deliver learned reflexes. The cinematic GPU-to-CPU sequence represents replacing repeated model deliberation with local matching. The film ends on Adage. Press Escape or the Skip intro button to go to the page.</p>
   <button class="film-close film-ui" id="film-close" type="button" aria-label="Close the teaser"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2 2l10 10M12 2L2 12"/></svg></button>
-  <button class="film-play" id="film-play" type="button" hidden>&#9654;&#xFE0E; Play the teaser &middot; 1:28</button>
+  <button class="film-play" id="film-play" type="button" hidden>&#9654;&#xFE0E; Play the teaser &middot; 0:45</button>
   <div class="film-bar film-ui">
     <button class="iconbtn" id="film-sound" type="button" aria-label="Unmute" title="Unmute"><svg viewBox="0 0 20 20" aria-hidden="true"><path class="spk" d="M3 7.5h3l4-3.5v12l-4-3.5H3z"/><g class="on"><path d="M13 7.2a4 4 0 0 1 0 5.6"/><path d="M15.4 5a7 7 0 0 1 0 10"/></g><g class="off"><path d="M13.5 7.5l5 5M18.5 7.5l-5 5"/></g></svg></button>
     <div class="film-track" aria-hidden="true"><i id="film-prog"></i></div>
@@ -58,11 +58,11 @@
   <div class="copy">
     <span class="eyebrow">For Claude Code · Codex and OpenCode in preview</span>
     <h1 id="h" tabindex="-1">Agent traces become <em>reflexes.</em></h1>
-    <p class="sub">You don't decide to swallow when you drink. Your agent shouldn't have to remember to run <b>make gen</b> after every schema edit. Adage gives it <b>instincts</b> on day one, learns <b>reflexes</b> from its own traces, and delivers the right step at the right moment.</p>
+    <p class="sub">A local learning layer for coding agents. Give yours <b>instincts</b> on day one, turn past work into <b>reflexes</b>, and deliver the next useful step exactly when it matters. Memories aren't enough. Train the moves.</p>
     <div class="cta">
       <a class="btn primary" href="#access">Get early access</a>
-      <a class="btn" href="/how">See how it works</a>
-      <a class="textlink" id="teaser" href="#film"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1l9 5-9 5z"/></svg>Watch the teaser</a>
+      <a class="btn" href="#shortcuts">See a reflex happen</a>
+      <a class="textlink" id="teaser" href="#film"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 1l9 5-9 5z"/></svg>Watch the teaser <span aria-hidden="true">· 45s</span></a>
     </div>
     <div class="tabrow">
       <div class="tabs" role="tablist" aria-label="Parts of the agent" id="tabs"></div>
@@ -80,6 +80,54 @@
     <span><i class="dot prime"></i>instinct</span>
     <span><i class="dot fire"></i>reflex</span>
     <span><i class="dot inhibit"></i>inhibit</span>
+  </div>
+</section>
+
+<section class="band shortcuts" id="shortcuts" aria-labelledby="shortcuts-h">
+  <div class="wrap">
+    <p class="kicker">The same repo. The next task.</p>
+    <h2 class="display" id="shortcuts-h">Past sessions. <span class="soft">Future shortcuts.</span></h2>
+    <p class="lede">Your agent figured it out yesterday. Why make it rediscover the path today?</p>
+    <div class="reflex-story" data-stage="0">
+      <div class="story-controls" role="group" aria-label="Follow a learned reflex">
+        <button type="button" aria-pressed="true" aria-controls="story-output" data-story="0"><span>01 / observe</span><b>The agent finds a path</b><small>Edits, dead ends, commands that work.</small></button>
+        <button type="button" aria-pressed="false" aria-controls="story-output" data-story="1"><span>02 / condition</span><b>The pattern becomes a reflex</b><small>Repeated steps. A typed trigger. Evidence.</small></button>
+        <button type="button" aria-pressed="false" aria-controls="story-output" data-story="2"><span>03 / match</span><b>The next session gets a shortcut</b><small>A local hook delivers the right step.</small></button>
+      </div>
+      <div class="story-stage">
+        <div class="story-graph" aria-hidden="true">
+          <svg viewBox="0 0 640 190" fill="none">
+            <g class="detours" stroke="currentColor"><path d="M62 95L165 30L305 30L440 95 M62 95L180 160L305 160L440 95 M180 160L305 95 M165 30L305 95"/><circle cx="165" cy="30" r="6"/><circle cx="305" cy="30" r="6"/><circle cx="180" cy="160" r="6"/><circle cx="305" cy="160" r="6"/></g>
+            <path class="learned-path" d="M62 95H580" pathLength="1"/>
+            <g class="path-nodes"><circle cx="62" cy="95" r="8"/><circle cx="305" cy="95" r="8"/><circle cx="580" cy="95" r="8"/></g>
+            <g class="graph-labels" fill="currentColor"><text x="62" y="125" text-anchor="middle">schema edit</text><text x="305" y="125" text-anchor="middle">make gen</text><text x="580" y="125" text-anchor="middle">make check</text></g>
+          </svg>
+          <span class="story-mode" id="story-mode">Trace · exploring the repository</span>
+        </div>
+        <div class="story-terminal" id="story-output" role="region" aria-label="Illustrative agent session" aria-live="polite" aria-atomic="true">
+          <p class="story-caption" id="story-caption">Session 1 / discovery</p>
+          <pre><code id="story-code">edit schema/event.json
+$ make check
+  generated files are out of date
+$ make gen
+$ make check
+  checks pass</code></pre>
+          <p id="story-detail">The trace records the recovery. Across sessions, a repeatable edit → regenerate pattern builds evidence.</p>
+        </div>
+      </div>
+    </div>
+    <p class="story-footnote">Illustrative sequence, not a benchmark. Matching runs locally on the CPU; your agent still reasons and executes through its own tools and permissions. <a href="/how">Walk the full graph →</a></p>
+    <details class="source-install">
+      <summary>What actually moves off the model?</summary>
+      <p><b>By default:</b> local CPU matching delivers guidance; supported pre-call instincts can correct a command to the repository's verified environment without another model request. The agent still executes its tools.</p>
+      <p><b>With separate execution approval:</b> <code>adage-exec</code> can prefetch a read-only result or run a staged action in a sandbox and apply permitted outputs. Choosing and running that invocation needs no model request; the agent may still reason over its result.</p>
+      <p>A learned command is not automatically approved to run. A delivered directive is not proof of a saved model turn. Each behavior has its own evidence.</p>
+    </details>
+    <div class="story-inputs">
+      <p><span>Ready on day one</span><b>Instincts</b>Bind known moves to your repository's tools.</p>
+      <p><span>Learned from work</span><b>Traces</b>Turn repeated paths and dead ends into reflexes.</p>
+      <p><span>Taught by you</span><b>Skills</b>Compile procedural steps. Keep judgment as text.</p>
+    </div>
   </div>
 </section>
 
@@ -112,9 +160,9 @@
         <li><b>reflexes</b><span>tracks and packs</span></li>
         <li><b>index</b><span>compiled</span></li>
         <li><b>hooks</b><span>Claude Code, Codex, OpenCode</span></li>
-        <li><b>directives</b><span>text, at the moment</span></li>
+        <li><b>response</b><span>guidance, rewrites, approved actions</span></li>
       </ol>
-      <figcaption id="pipe-cap">From transcript to directive. Everything left of the hooks runs on your machine; nothing reaches the context window until a reflex matches.</figcaption>
+      <figcaption id="pipe-cap">From transcript to directive. Learning and matching run on your machine. A match can deliver guidance, rewrite a supported command, or dispatch a separately approved CPU action.</figcaption>
     </figure>
 
     <p class="deeper reveal"><a class="btn" href="/how" aria-label="Learn more: every stage, step by step, with the math">Learn more</a></p>
@@ -146,6 +194,15 @@
     <h2 class="display reveal" id="ev-h">Measured against a control, <span class="soft">not a vibe.</span></h2>
     <p class="lede reveal">Real agents, headless, on sandbox repositories whose conventions they cannot guess and on real open-source repositories. The same work, with and without Adage, scored by hidden tests. The comparisons below measure advice and procedure cards; they do not measure automatic CPU action replacement.</p>
 
+    <article class="trial current-proof reveal" aria-labelledby="current-proof-h">
+      <header><p class="kicker">Latest · shipped product validation</p><h3 id="current-proof-h">A new task family. A real repository.</h3><p>Claude Haiku 4.5 · unjs/ufo · 16 paired sessions in 8 task clusters · pre-registered protocol</p></header>
+      <dl class="stats">
+        <div><dt>Estimated cost change</dt><dd><span class="now">−10.3%</span><small>90% interval: −20.1% to +2.0%</small></dd></div>
+        <div><dt>Hidden checks passed</dt><dd><span class="now">16/16</span><small>with Adage · 15/16 without</small></dd></div>
+        <div><dt>Procedure card delivery</dt><dd><span class="now">16/16</span><small>matching tasks · 0/8 unrelated tasks</small></dd></div>
+      </dl>
+      <p class="note">The card reached the right tasks. Cost savings are plausible, not established: the interval includes no benefit. Tested at commit <code>acdb0a4</code> on September 29, 2026; later card-grouping and judge changes are not covered. With only 8 clusters, this nominal 90% interval has roughly 85% coverage. The larger numbers below and in the teaser come from earlier sandbox or prototype studies.</p>
+    </article>
     <div class="runs">
       <article class="trial reveal" aria-labelledby="run1">
         <header>
@@ -180,7 +237,7 @@
           <div><dt>Cost per task: new parameter type (click), new validator (marshmallow)</dt><dd><span class="now">−18.8%</span><small>interval −25.8% to −11.6% · hidden tests 20/24 with, 19/24 without</small></dd></div>
           <div><dt>Cost per task: new flag type (urfave/cli, Go)</dt><dd><span class="now">−33.8%</span><small>interval −44.3% to −23.6% · hidden tests 2/12 in both arms</small></dd></div>
         </dl>
-        <p class="note">Read the Go row with care: half its control sessions hit the 60-turn cap. The card was a Python prototype in these runs; the shipped card is on by default, and its live validation is pre-registered.</p>
+        <p class="note">Read the Go row with care: half its control sessions hit the 60-turn cap. The card was a Python prototype in these runs; the shipped card is on by default. Its completed fresh-family validation is shown above.</p>
       </article>
       <article class="trial reveal" aria-labelledby="run4">
         <header>
@@ -203,7 +260,7 @@
     <p class="kicker reveal">Built to stay out of the way</p>
     <h2 class="display reveal" id="trust-h">It speaks up only when it matches. <span class="soft">Otherwise it isn't there.</span></h2>
     <ul class="grid">
-      <li class="card reveal"><h3>Never runs a command for you</h3><p>Your agent runs every step through its own tools, under its harness's permissions. One change is on by default in Claude Code: a Python test run under the system Python is pointed at the project's verified <code>.venv</code>, shown to you each time; <code>adage delegate rewrites off</code> turns it off. Delegating a step is opt-in, per reflex, inside an OS sandbox.</p></li>
+      <li class="card reveal"><h3>Your agent keeps control</h3><p>By default, your agent executes the suggested steps through its own tools and permissions. One change is on by default in Claude Code: a Python test run under the system Python is pointed at the project's verified <code>.venv</code>, shown to you each time; <code>adage delegate rewrites off</code> turns it off. Delegating a step is opt-in, per reflex, inside an OS sandbox.</p></li>
       <li class="card reveal"><h3>Fails open</h3><p>If Adage errors or runs out of time at a hook, the agent carries on as if it were not installed.</p></li>
       <li class="card reveal"><h3>Evidence attached</h3><p>Every reflex carries its distinct sessions, a Wilson lower bound and its uplift, what telling the agent changes. Review any of them, then strengthen, weaken or extinguish it.</p></li>
       <li class="card reveal"><h3>Yours, on disk</h3><p>Traces stay on your machine. Reflexes live in tracks on disk and travel as signed packs you can review, commit and share.</p></li>
@@ -216,7 +273,8 @@
     <div>
       <p class="kicker reveal">Get started</p>
       <h2 class="display reveal" id="start-h">Install the plugin. <span class="soft">Start a session.</span></h2>
-      <p class="lede reveal">In Claude Code, two commands install Adage with its binaries verified, so nothing else is downloaded. At the first session in a repository, Adage binds its instincts and learns from that repository's earlier sessions, and one line tells you so. Plain <code>adage</code>, in a terminal or as <code>!adage</code> in Claude Code, prints where things stand. For Codex and OpenCode, install the binary with Homebrew or npm and run <code>adage install codex</code> or <code>adage install opencode</code>. The first release is on its way; early access gets it first.</p>
+      <p class="lede reveal">When the first release ships, install the Claude Code plugin and start a session in a repository. Adage binds instincts and learns from earlier traces in the background. The plugin bundles its binaries; it does not put <code>adage</code> on your terminal's PATH.</p>
+      <p class="reveal">Have repository access? Build the CLI from source, then try the isolated demos below. The source preview currently requires access to the private repository. Homebrew and <code>@adage-sh/cli</code> distribution are planned for the release. Codex and OpenCode adapters are in preview.</p>
       <p class="links reveal" id="repo-links" hidden><a href="#" data-repo="">Read the README</a><a href="#" data-repo="/blob/main/docs/lexicon.md">The lexicon</a></p>
     </div>
     <div class="term reveal" role="region" aria-label="Install and set up">
@@ -224,11 +282,23 @@
       <pre><code><span class="c"># in Claude Code, once the first release ships</span>
 /plugin marketplace add stevenvaughanbooth/adage
 /plugin install adage@adage
-<span class="c"># then start a session; in a terminal, any time:</span>
-<span class="p">$</span> adage          <span class="c"># where things stand, and what it saves</span>
-<span class="p">$</span> adage watch    <span class="c"># a live pane for a split terminal</span></code></pre>
+<span class="c"># then start a coding session in your repo</span></code></pre>
       <button class="copybtn" type="button" data-copy="/plugin marketplace add stevenvaughanbooth/adage&#10;/plugin install adage@adage">Copy</button>
     </div>
+  </div>
+</section>
+
+<section class="band" id="explore" aria-labelledby="explore-h">
+  <div class="wrap">
+    <p class="kicker reveal">Look under the hood</p>
+    <h2 class="display reveal" id="explore-h">See every reflex. <span class="soft">Follow its evidence.</span></h2>
+    <p class="lede reveal">One local system, three ways in. The demos use sample traces in temporary storage and leave your real Adage data alone.</p>
+    <div class="experience-grid">
+      <article class="card reveal"><span class="kicker">01 / beside your agent</span><h3>The live pane</h3><p>Keep a small terminal split open. See hooks and reflexes as they happen.</p><code>adage watch --demo</code><button class="btn" type="button" data-copy="adage watch --demo">Copy live demo</button></article>
+      <article class="card reveal"><span class="kicker">02 / keyboard first</span><h3>The control room</h3><p>Inspect reflexes, review evidence, check health. Navigate without leaving the terminal.</p><code>adage ui --demo</code><button class="btn" type="button" data-copy="adage ui --demo">Copy TUI demo</button></article>
+      <article class="card reveal"><span class="kicker">03 / the whole picture</span><h3>The local map</h3><p>Follow traces into reflexes in your browser. Read-only, served by the binary on localhost.</p><code>adage map --demo</code><button class="btn" type="button" data-copy="adage map --demo">Copy map demo</button></article>
+    </div>
+    <details class="source-install reveal"><summary>Source preview · requires repository access, Rust and Git</summary><p>Already have repository access? From your checkout: <code>cargo install --locked --path crates/adage-cli</code>. Or install from Git:</p><pre><code>cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli</code></pre><button class="btn" type="button" data-copy="cargo install --locked --git https://github.com/stevenvaughanbooth/adage adage-cli">Copy source install</button><p>For a real repository, run <code>adage init</code>. Preview harness setup: <code>adage install codex --write --scope user</code> or <code>adage install opencode --write --scope user</code>. Run <code>adage doctor</code> to verify setup.</p></details>
   </div>
 </section>
 
@@ -243,6 +313,7 @@
       <button class="btn primary" type="submit">Join the list</button>
       <p class="status" id="signup-status" role="status" aria-live="polite"></p>
     </form>
+    <p class="reveal">Explore now: <a href="/how">Walk through how Adage works</a>, from traces to hooks and evidence.</p>
   </div>
 </section>
 </main>

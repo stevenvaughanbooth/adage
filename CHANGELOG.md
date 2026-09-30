@@ -16,6 +16,27 @@ paths that get work done, and compiles them into reflexes: small, typed, determi
 with their evidence attached. At each decision point the matching reflex tells the agent what to
 do next. Adage never runs the commands it directs; execution is a separate, opt-in binary.
 
+### Launch clarity and local experience
+
+- Plugin bootstrap prefers a native SHA-256 provider, reducing first-start checksum cost while
+  retaining the same digest verification and portable fallback.
+
+- On macOS, a direct system-Python action resolves Apple's launcher to the interpreter in the
+  already selected developer toolchain, preventing sandbox startup timeouts without expanding
+  permissions. Unix-only staging tests are guarded so Windows compile checks remain valid;
+  the ARM64 musl sandbox retains its kexec-file denial when libc omits the syscall constant.
+
+- The launch site now walks one concrete trace through conditioning and hook delivery, introduces
+  the watch/TUI/map demos, and leads with completed shipped-product validation and its uncertainty.
+  The approved 45-second dark/day teaser replaces the older duration and posters. The interactive
+  walkthrough gives visitors a way to explore while early-access signup is unavailable; source
+  installation clearly requires repository access before the public release.
+- The local map retries failed snapshots with bounded backoff, times out stalled requests, and
+  labels stale data with a manual retry. Continuous events no longer starve snapshot refreshes.
+  First-run hook checks can recover and be rechecked; demo data is explicitly labeled.
+- In the TUI's Reflexes tab, Escape resets both the search and filter chips, including an empty
+  result caused solely by strength/lifecycle filters. Reverse map navigation starts at the last item.
+
 ### Zero configuration: install the plugin, start a session
 
 - The graph learner can retain routine after-edit verification/generation as execution-only

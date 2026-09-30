@@ -50,6 +50,24 @@ check "bundled: exits 0" [ "$code" = 0 ]
 check "bundled: links adage-<sha>" sh -c "readlink '$W/data1/bin/adage' | grep -q '^adage-[0-9a-f]\{64\}\$'"
 check "bundled: binary runs" sh -c "'$W/data1/bin/adage' version | grep -q '^adage '"
 
+# Native providers and the portable fallback must produce the same digest in both plugins.
+printf 'abc' >"$W/digest input"
+DIGEST=ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+mkdir -p "$W/fallback-bin"
+for provider in sha256sum openssl; do
+  printf '#!/bin/sh\nexit 1\n' >"$W/fallback-bin/$provider"
+  chmod +x "$W/fallback-bin/$provider"
+done
+for script in "$SS" "$REPO/plugin/claude-code-exec/scripts/session-start"; do
+  sed -n '/^sha256()/p' "$script" >"$W/digest-function"
+  GOT=$(PATH="$BASE" sh -c '. "$1"; sha256 "$2"' sh "$W/digest-function" "$W/digest input")
+  check "digest: native provider ($script)" [ "$GOT" = "$DIGEST" ]
+  if PATH="$BASE" command -v shasum >/dev/null 2>&1; then
+    GOT=$(PATH="$W/fallback-bin:$BASE" sh -c '. "$1"; sha256 "$2"' sh "$W/digest-function" "$W/digest input")
+    check "digest: portable fallback ($script)" [ "$GOT" = "$DIGEST" ]
+  fi
+done
+
 # 2. Bundled binary tampered with: ignored, with a hint; PATH has nothing: fail open.
 R2="$W/root2"; cp -R "$R1" "$R2"; printf 'x' >>"$R2/dist/$T/adage"
 mkdir -p "$R2/scripts"; cp "$REPO/plugin/claude-code/scripts/quiet" "$R2/scripts/quiet"
