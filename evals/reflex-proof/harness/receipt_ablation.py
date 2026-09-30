@@ -37,12 +37,14 @@ def hook(session):
     payload = json.load(sys.stdin)
     config = json.loads((session / "hook-config.json").read_text())
     arm = config["arm"]
+    editing = config.get("mode") == "edit"
     event = payload.get("hook_event_name")
     if event == "SessionStart" and arm == "ownership":
-        return {"hookSpecificOutput":{"hookEventName":event, "additionalContext":POLICY}}
-    if arm == "baseline" or event != "PostToolUse" or payload.get("tool_name") != "Read":
+        policy = POLICY.replace("read increment.py", "edit CHANGELOG.md") if editing else POLICY
+        return {"hookSpecificOutput":{"hookEventName":event, "additionalContext":policy}}
+    if arm == "baseline" or event != "PostToolUse" or payload.get("tool_name") != ("Edit" if editing else "Read"):
         return {}
-    if Path(payload.get("tool_input", {}).get("file_path", "")).name != "increment.py":
+    if Path(payload.get("tool_input", {}).get("file_path", "")).name != ("CHANGELOG.md" if editing else "increment.py"):
         return {}
     checkout = session / "workspace"
     authority = Path(config["authority"])
@@ -67,7 +69,7 @@ def hook(session):
     return response
 
 
-def prepare(authority, root):
+def prepare(authority, root, editing=False):
     # Reuse the frozen diagnostic runner and budget contract; change fixtures before dispatch.
     delivery.prepare(authority, root)
     authority, root = authority.resolve(), root.resolve()
@@ -77,7 +79,8 @@ def prepare(authority, root):
     protocol.update(kind="receipt-consumption ablation", arms=list(ARMS), repetitions=2,
         maximum_new_reservations_usd=8 * delivery.CAP,
         expected="diagnostic only; count all agent Bash requests and actual successful CPU receipts",
-        limitation="read-triggered authored fixture, not learned production reflex or real-code transfer")
+        mode="edit" if editing else "read",
+        limitation="authored fixture, not learned production reflex or real-code transfer")
     protocol["sources"][str(Path(__file__).resolve())] = gate.sha(Path(__file__))
     gate.write(root / "protocol.json", protocol)
     for repetition in range(2):
@@ -85,11 +88,16 @@ def prepare(authority, root):
             session = root / (str(repetition + 1) + "-" + arm)
             checkout = session / "workspace"
             checkout.mkdir(parents=True)
-            (checkout / "increment.py").write_text("def increment(n):\n    return n + 1\n")
+            (checkout / "increment.py").write_text("def increment(n):\n    return n " + ("-" if editing else "+") + " 1\n")
             (checkout / "verify.py").write_text(VERIFY)
+            if editing:
+                (checkout / "CHANGELOG.md").write_text("# Changes\n\nNo changes yet.\n")
             (session / ".reflex-fixture").write_text("receipt diagnostic only\n")
-            gate.write(session / "hook-config.json", dict(arm=arm, authority=str(authority)))
+            gate.write(session / "hook-config.json", dict(arm=arm, authority=str(authority), mode="edit" if editing else "read"))
             settings = gate.native_settings(authority, checkout, ["Read", "Bash(" + command(authority) + ")"])
+            if editing:
+                settings["permissions"]["allow"] += ["Edit(/" + str(checkout / name) + ")" for name in ("increment.py", "CHANGELOG.md")]
+                settings["permissions"]["deny"] += ["Edit(/" + str(checkout / "verify.py") + ")"]
             handler = dict(type="command", command=sys.executable,
                 args=[str(Path(__file__).resolve()), "hook", str(session)], timeout=20)
             settings.update(disableAllHooks=False, hooks={event:[dict(hooks=[handler])]
@@ -102,8 +110,15 @@ def prepare(authority, root):
                 "--settings", str(session / "settings.json"), "--strict-mcp-config", "--mcp-config",
                 '{"mcpServers":{}}', "--tools", "Read,Bash", "--allowedTools", "Read", "Bash(" + command(authority) + ")",
                 "--permission-mode", "dontAsk",
-                "Assess whether increment.py implements n + 1 for integers. Inspect the source, verify it, "
+                "Use Read on " + str(checkout / "increment.py") + " first (no directory search is needed). "
+                "Assess whether this file implements n + 1 for integers. Verify it, "
                 "and report your evidence and its limits. The repository verifier is `" + command(authority) + "`. Do not edit files."]
+            if editing:
+                argv[argv.index("--tools")+1] = "Read,Edit,Bash"
+                argv[argv.index("--permission-mode"):argv.index("--permission-mode")] = ["Edit"]
+                argv[-1] = ("Use Read on " + str(checkout / "increment.py") + " and " + str(checkout / "CHANGELOG.md") +
+                    ". Fix increment.py to return n + 1 for integers using Edit. Then update CHANGELOG.md using Edit. "
+                    "Verify the implementation and report evidence and limits. The repository verifier is `" + command(authority) + "`. Do not change verify.py.")
             gate.write(session / "manifest.json", dict(root=str(session), execution_root=str(checkout),
                 experiment_root=str(authority), arm=arm, repetition=repetition+1, argv=argv,
                 expected_claude_version=delivery.probe.EXPECTED_VERSION, budget_usd=delivery.CAP,
@@ -121,20 +136,27 @@ def assess(session, manifest, result):
     commands = [c["input"].get("command") for c in calls.values() if c.get("name") == "Bash"]
     receipts = session / "cpu-receipts.jsonl"
     cpu = [json.loads(x) for x in receipts.read_text().splitlines()] if receipts.exists() else []
-    return dict(arm=manifest["arm"], repetition=manifest["repetition"], agent_commands=commands,
+    assessment = dict(arm=manifest["arm"], repetition=manifest["repetition"], agent_commands=commands,
         agent_tool_calls=len(calls), successful_cpu_receipts=sum(r["exit_code"]==0 for r in cpu),
         result_is_error=result.get("result_is_error"), cost_usd=result.get("total_cost_usd"),
         answer=result.get("result_text"), source_unchanged=all(gate.sha(Path(p))==h
             for p,h in manifest["files"].items()),
         limitation="authored diagnostic; not production learned action elimination")
+    if json.loads((session / "hook-config.json").read_text()).get("mode") == "edit":
+        authority = Path(manifest["experiment_root"])
+        quality = gate.confined(authority, "quality-" + session.name,
+            [str(interpreter(authority)), "-B", "verify.py"], session / "workspace", timeout=10)
+        assessment["quality_exit"] = quality.returncode
+        assessment["verifier_unchanged"] = gate.sha(session / "workspace/verify.py") == manifest["files"][str(session / "workspace/verify.py")]
+    return assessment
 
 
 if __name__ == "__main__":
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("command", choices=("prepare", "live", "hook"))
+    p.add_argument("command", choices=("prepare", "prepare-edit", "live", "hook"))
     p.add_argument("path",type=Path)
     p.add_argument("destination",type=Path,nargs="?")
     a=p.parse_args()
-    value=prepare(a.path,a.destination) if a.command=="prepare" else (
+    value=prepare(a.path,a.destination,a.command=="prepare-edit") if a.command.startswith("prepare") else (
         hook(a.path) if a.command=="hook" else delivery.live(a.path, assess))
     print(json.dumps(value,default=str))

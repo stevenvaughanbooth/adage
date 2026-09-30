@@ -112,10 +112,21 @@ It uses an authored read-triggered fixture, not production learned execution. `r
 was stopped offline when Apple's Python launcher failed confinement; v2 uses the already
 prepared pinned interpreter. All attempts must remain recorded; no outcome retries.
 
-At this checkpoint, the first baseline completed; the remaining assignments are running
-sequentially. Inspect the ledger and each `finding.json` before resuming anything. Never
-dispatch an already attempted assignment. The probe stops on a missing CPU receipt or
-terminal error. Codex allowance most recently reported 97% used (3% remaining).
+`receipt-v2` stopped after two paid assignments because the generic arm attempted a denied
+directory search and never read the fixture. Preserve that whole cohort as infrastructure
+evidence. Fresh `receipt-v3` supplied an absolute Read path uniformly: all eight completed,
+$0.1158012 total. Baseline requested the verifier 2/2; generic receipt 1/2; typed 0/2;
+typed plus ownership 0/2. All six non-baseline runs executed the CPU verifier successfully.
+This small authored diagnostic is not a real-repository savings estimate; generic wording
+was explicitly labeled simulated, an additional interpretation limit. Full records, including
+stopped v2 outcomes, are in `results/20260930-receipt-ablation` under the harness.
+
+Now running: `/private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v1`, same four
+arms and two repetitions, but the agent must fix a function and then edit a changelog; the
+hook verifies after the changelog edit. The verifier is protected and independent quality
+is checked afterward. Same $0.25 per-assignment cap, $2 maximum new reservations.
+Inspect the ledger and each `finding.json` before resuming anything. Never dispatch an
+already attempted assignment. Codex allowance last reported 97% used (3% remaining).
 
 Latest research checkpoint: [hook action reuse](hook-action-reuse-research.md). The user
 requested first-principles research before another fix. Official Claude, Gemini and
