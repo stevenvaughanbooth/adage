@@ -87,7 +87,7 @@ executable definition, pinned script bytes, effect, output contract and sandbox 
 
 Changes to that bound definition or a pinned script invalidate the old grant. Evidence updates alone need not.
 Disabling execution preserves learned knowledge for suggestions. A repository kill switch stops
-hook interventions. See [execution and recovery](execution.md) for the exact controls and limits.
+hook interventions. See [execution and recovery](execution.md) for the exact controls and limits, including direct system-Python resolution on macOS.
 
 The script closure is not a complete dependency graph. An approved `make gen` can invoke
 repository code that is not individually pinned in its grant. The staged input snapshot catches

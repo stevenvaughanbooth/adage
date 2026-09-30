@@ -489,6 +489,12 @@ Apple's command shims can load their tools and linked frameworks. A literal read
 acceptance; Adage does not accept licenses or change the file. Other applications and preference
 files are not granted by these rules.
 
+For a direct invocation of Apple's `/usr/bin/python3` launcher, Adage runs `usr/bin/python3`
+from the system-selected developer directory instead. The canonical interpreter must remain
+inside that directory, which the toolchain profile already permits. This avoids launcher startup stalling inside the sandbox without widening its filesystem or network permissions.
+Other interpreters retain their resolved path. A shell script that invokes the launcher itself
+is not rewritten by this rule.
+
 `RLIMIT_NPROC` on macOS counts existing processes for the real UID. A native libproc census adds
 the configured headroom to that existing count, capped by the inherited hard limit; a failed
 census or inability to install the limit refuses the run. It is a per-user snapshot limit, not

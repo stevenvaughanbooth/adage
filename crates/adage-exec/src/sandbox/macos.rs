@@ -39,6 +39,19 @@ pub(crate) fn developer_dir() -> Option<std::path::PathBuf> {
     .clone()
 }
 
+/// `/usr/bin/python3` is an Apple launcher. Its startup can stall under the
+/// deny-default sandbox. Use the interpreter in the already selected/readable toolchain;
+/// never substitute a repository interpreter or follow a link outside that directory.
+#[cfg(target_os = "macos")]
+fn direct_python(program: &std::path::Path) -> Option<std::path::PathBuf> {
+    if program != std::path::Path::new("/usr/bin/python3") {
+        return None;
+    }
+    let developer = developer_dir()?;
+    let python = developer.join("usr/bin/python3").canonicalize().ok()?;
+    (python.starts_with(&developer) && python.is_file()).then_some(python)
+}
+
 /// Count the real UID's existing processes without invoking a tool under the limit we are
 /// calculating. RLIMIT_NPROC is per UID on macOS too, not per sandbox. Snapshot races remain
 /// possible, but unrelated existing processes must not consume the run's entire allowance.
@@ -116,6 +129,10 @@ pub fn wrap(
     rest: &[String],
     res: &Resolved,
 ) -> (std::path::PathBuf, Vec<String>) {
+    #[cfg(target_os = "macos")]
+    let direct = direct_python(program);
+    #[cfg(target_os = "macos")]
+    let program = direct.as_deref().unwrap_or(program);
     let mut a = vec!["-p".to_string(), sbpl(res), "--".into(), program.to_string_lossy().into_owned()];
     a.extend(rest.iter().cloned());
     (sandbox_exec.to_path_buf(), a)
@@ -124,6 +141,19 @@ pub fn wrap(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn only_the_system_python_launcher_is_resolved() {
+        use std::path::Path;
+        assert!(direct_python(Path::new("/opt/homebrew/bin/python3")).is_none());
+        assert!(direct_python(Path::new("/repo/.venv/bin/python3")).is_none());
+        assert!(direct_python(Path::new("/usr/bin/git")).is_none());
+        if let Some(python) = direct_python(Path::new("/usr/bin/python3")) {
+            assert!(python.starts_with(developer_dir().unwrap()));
+            assert!(python.is_file());
+        }
+    }
     use crate::limits::Limits;
     use crate::request::Level;
     use std::path::PathBuf;
