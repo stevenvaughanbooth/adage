@@ -1,9 +1,9 @@
 // npm distribution settings, read by npm/scripts/stage.mjs and the release workflow.
 
-// The npm package name (decision D3): `@adage-sh/cli`, in the `adage-sh` npm org (decided
-// 2026-09-30; `adage` itself and the `adage` org were taken). This is the only place the name is
-// set. Platform packages are named
-// `<PACKAGE_NAME>-<os>-<cpu>` (`@adage-sh/cli-darwin-arm64`); the command is `adage` whatever the name.
+// The npm package name (decision D3): `@adage-sh/cli`, in the `adage-sh` npm org (claimed
+// 2026-09-30, matching the adage.sh domain; `adage` itself and the `adage` org were taken). This
+// is the only place the name is set. Platform packages are named `<PACKAGE_NAME>-<os>-<cpu>`
+// (`@adage-sh/cli-darwin-arm64`); the command is `adage` whatever the name.
 export const PACKAGE_NAME = "@adage-sh/cli"
 
 // Release targets (dist-workspace.toml) and the npm platform package each one becomes. Linux builds

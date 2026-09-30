@@ -100,7 +100,6 @@ macOS arm64 and x64, Linux x64 and arm64, and Windows x64, with clippy `-D warni
 | — | Instincts | ✅ | Shipped reflexes bound from a repository's files on day 0; the core instincts pack (docs/instincts.md) |
 | — | Training | ✅ | `adage train`: a skill or runbook → sandboxed agent sessions → staged reflexes, and which claims are stale (docs/training.md) |
 | — | Terminal UI | ✅ | `adage watch`, `adage ui`, the interactive `adage init` wizard |
-| — | Design system and map web app | ✅ | One token set (`design/tokens/adage.tokens.json`) for the terminal (`adage-term`) and the `adage map` web app (`web/map`); docs/design/ |
 | — | Evals as a product | ⚠️ partial | Offline: `adage eval` (§3a). Live: `evals/live/runner.py` runs the with/without A/B on any sandbox and task set; not yet a product |
 | — | First run: `init`, `doctor`, `map` | ✅ | Plan §6.3 |
 | — | Release engineering (M1) | ✅ built | CI, `dist` releases, npm packages, marketplace, Windows port; first tagged release waits on secrets and D1–D4 |
@@ -329,7 +328,7 @@ starts without it.
 
 The pilot follows Design §18 (pilot definition):
 
-1. **Sense.** Run `adage sense` over existing Claude Code history, read-only, with no hooks
+1. **Sense.** Run `adage condition` over existing Claude Code history, read-only, with no hooks
    installed. Gates:
    - ≥ 95% of calls normalise;
    - the reflexes look right to you in `adage review`;
@@ -384,7 +383,7 @@ The binary stays `adage` whatever the package names are.
 - **Diagnostics.** `adage doctor` checks the binary, the hooks, the index, the model, and fail-open
   status.
 - **Sense report (J1).** A readable "what your agents actually do" report, generated from `graph`.
-- **The map without the demo.** `adage map` serves the live page from the binary, so
+- **map without the demo.** `adage map` serves the live page from the binary, so
   no Python demo server is needed.
 - **Architecture draft 3, and user docs:**
   - a quick start per harness;
@@ -432,6 +431,6 @@ The binary stays `adage` whatever the package names are.
 | **O9** | Employer IP clearance | Get it in writing before M2 or any public release |
 | **D1** | License | ✅ **Apache-2.0** (decided 2026-09-23). Open core is still to decide before building depots |
 | **D2** | DCO or CLA | ✅ **DCO sign-off** (decided 2026-09-23) |
-| **D3** | npm name | ✅ **`@adage-sh/cli`**, in the `adage-sh` npm org (decided 2026-09-30, after `@adage-ai/cli` on 2026-09-29 and `@adage/cli` on 2026-09-23; `adage` and the `adage` org were taken). The binary stays `adage` |
+| **D3** | npm name | ✅ **`@adage-sh/cli`**, in the `adage-sh` npm org (claimed 2026-09-30 to match the adage.sh domain: `adage` and the `adage` org were taken; first decided as `@adage/cli` on 2026-09-23). The binary stays `adage` |
 | **D4** | Apple Developer ID ($99/yr) | ✅ **Yes** (decided 2026-09-23). Enrol, add the signing secrets, set `macos-sign = true` in `dist-workspace.toml`; required before Homebrew and direct downloads |
 | **D5** | Private or public beta first | A private beta with a few teams after the pilot, then public |
