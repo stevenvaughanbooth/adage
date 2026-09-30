@@ -31,6 +31,10 @@ pub struct StepObs {
     /// before its tool call (0 for a call before any prompt). Saturates at `u16::MAX`.
     #[serde(default)]
     pub prompt: u16,
+    /// Native per-tool cwd was the repository root, with no prior unknown shell/cwd change.
+    /// Only used to admit new direct-pytest verbosity pooling; old/cache/other-harness data fail closed.
+    #[serde(default)]
+    pub project_pytest_root_cwd: bool,
 }
 
 /// One prompt the person typed, and where it falls among the session's steps.
@@ -421,7 +425,7 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     let mut day = String::new();
     let mut prompt: Option<String> = None;
     // (turn, tool_use_id, name, input, prompt index) in order
-    let mut uses: Vec<(u32, String, String, Value, u16)> = Vec::new();
+    let mut uses: Vec<(u32, String, String, Value, u16, Option<String>)> = Vec::new();
     let mut results: HashMap<String, (String, bool)> = HashMap::new();
     let mut turn_of_msg: HashMap<String, u32> = HashMap::new();
     let mut signals = Signals::default();
@@ -526,6 +530,7 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
                                 it.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                                 it.get("input").cloned().unwrap_or(Value::Null),
                                 prompts.current(),
+                                rec.get("cwd").and_then(Value::as_str).map(str::to_string),
                             ));
                         }
                     }
@@ -548,11 +553,42 @@ pub fn parse_transcript(path: &Path, table: &CommandTable, repo_override: Option
     let root_str = root.to_string_lossy().to_string();
     let mut steps = Vec::new();
     let mut first_step: Vec<u32> = Vec::with_capacity(uses.len());
-    for (turn, tid, name, input, at) in uses {
+    let unsafe_shell_turns: BTreeSet<u32> = uses
+        .iter()
+        .filter_map(|(turn, _, name, input, _, recorded)| {
+            let direct = input
+                .get("command")
+                .and_then(Value::as_str)
+                .is_some_and(|c| adage_core::execution_equivalence::project_pytest_key(c).is_some());
+            let at_root = recorded.as_deref().is_some_and(|p| Path::new(p) == root);
+            (name == "Bash" && (!direct || !at_root)).then_some(*turn)
+        })
+        .collect();
+    let mut shell_cwd_known = true;
+    for (turn, tid, name, input, at, recorded_cwd) in uses {
+        // Tool calls in one assistant turn may run concurrently; ordering in JSON is not proof.
+        if unsafe_shell_turns.contains(&turn) {
+            shell_cwd_known = false;
+        }
         first_step.push(steps.len() as u32);
         let (output, failed) = results.get(&tid).cloned().unwrap_or_default();
         let call = Call { tool: name.clone(), input: input.clone(), output, failed };
-        steps.extend(call_steps(turn, at, &call, normalize_tool(&name, &input, &root_str, table), &root));
+        let direct = input
+            .get("command")
+            .and_then(Value::as_str)
+            .is_some_and(|c| adage_core::execution_equivalence::project_pytest_key(c).is_some());
+        let root_cwd = recorded_cwd.as_deref().is_some_and(|p| Path::new(p) == root);
+        let eligible_cwd = name == "Bash" && shell_cwd_known && root_cwd && direct;
+        if name == "Bash" && (!root_cwd || !direct) {
+            // A recorded root may be session metadata, not a fresh shell pwd. Never use it to
+            // undo an earlier cd, source, compound or unknown command's cwd uncertainty.
+            shell_cwd_known = false;
+        }
+        let mut imported = call_steps(turn, at, &call, normalize_tool(&name, &input, &root_str, table), &root);
+        for step in &mut imported {
+            step.project_pytest_root_cwd = eligible_cwd;
+        }
+        steps.extend(imported);
     }
     let prompts = prompts.anchor(&steps);
     let influence = signals.anchor(&first_step, steps.len());
@@ -594,7 +630,15 @@ pub(crate) fn call_steps(turn: u32, prompt: u16, call: &Call, actions: Vec<Norma
             let rel_path = keys::action_path(&n.action).map(|p| repo::relativize(root, p));
             let mut call = call.clone();
             call.failed = keys::sub_action_failed(i, count, call.failed, or_chain);
-            StepObs { turn, key: template_key(&n.action), norm: n, call, rel_path, prompt }
+            StepObs {
+                turn,
+                key: template_key(&n.action),
+                norm: n,
+                call,
+                rel_path,
+                prompt,
+                project_pytest_root_cwd: false,
+            }
         })
         .collect()
 }

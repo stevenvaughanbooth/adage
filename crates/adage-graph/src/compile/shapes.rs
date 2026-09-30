@@ -210,6 +210,7 @@ fn covering(v: &ItemView, input: &Input) -> Option<(String, String)> {
                 command: lit.clone(),
                 runs,
                 ok_sessions: a.literal_ok.get(lit).copied().unwrap_or(0),
+                ok_session_ids: a.literal_ok_ids.get(lit).cloned().unwrap_or_default(),
                 effect: max_effect(effect, io::classify(lit, &table)),
                 directable: directable(lit),
             });
@@ -634,16 +635,26 @@ impl<'a> Builder<'a> {
             return any;
         }
         // A path flow need not vary: a repeated edit to the same test file followed by the
-        // same literal check is executable without a slot. Retain only an observed singleton
-        // literal here; a dominant literal is insufficient to collapse a variable input.
+        // same check is executable without a slot. A singleton, or only reviewed pytest
+        // verbosity variants with identical inputs, is constant; dominance alone is not.
+        let literals: BTreeSet<_> = member_keys(&cont[0])
+            .iter()
+            .filter_map(|k| self.input.corpus.acts.get(k))
+            .flat_map(|a| a.literals.keys())
+            .collect();
+        let root_support: BTreeSet<_> = member_keys(&cont[0])
+            .iter()
+            .filter_map(|k| self.input.corpus.acts.get(k))
+            .flat_map(|a| a.literal_ok_ids.values().flatten())
+            .collect();
         let constant_flow = r.execution_candidate
-            && member_keys(&cont[0])
-                .iter()
-                .filter_map(|k| self.input.corpus.acts.get(k))
-                .flat_map(|a| a.literals.keys())
-                .collect::<BTreeSet<_>>()
-                .len()
-                == 1;
+            && (literals.len() == 1
+                || (root_support.len() >= self.input.params.min_sessions as usize
+                    && literals.first().is_some_and(|first| {
+                        literals
+                            .iter()
+                            .all(|lit| adage_core::execution_equivalence::project_pytest_equivalent(first, lit))
+                    })));
         if cont[0].flow && !constant_flow {
             self.drop(r, "a flow-bound command has no single template");
             return false;

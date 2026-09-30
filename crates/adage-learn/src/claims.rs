@@ -273,6 +273,7 @@ mod tests {
     fn step(i: u32, action: CanonicalAction, effect: Effect) -> StepObs {
         let rel_path = adage_core::keys::action_path(&action).map(str::to_string);
         StepObs {
+            project_pytest_root_cwd: false,
             turn: i,
             key: adage_core::keys::template_key(&action),
             norm: adage_core::Normalized { action, effect, mutating: false, confidence: 1.0, note: String::new() },

@@ -7,8 +7,8 @@
 //! options that change nothing it checks (`-j4`, `--no-fail-fast`). The directed command is the
 //! family's **covering variant** W: a member that
 //!
-//! - agents actually ran, successfully, in at least `min_sessions` traces (embeddings and
-//!   prototypes widen triggers, never actions: nothing is directed that no one ran);
+//! - agents actually ran successfully, with `min_sessions` supporting traces (only reviewed
+//!   output-verbosity variants of direct project-Python pytest may union distinct session IDs);
 //! - is a fixed, plain command;
 //! - covers at least `dominant` of the family's runs, where W covers a variant V when V
 //!   [meets](adage_core::pattern::meets) W (V is W with options added: `cargo fmt --all --check`
@@ -23,6 +23,7 @@
 //! (`adage_learn::engine`) counts a trace's run of the family as evidence for W.
 
 use adage_core::pattern::Shape;
+use std::collections::BTreeSet;
 
 /// Options that select part of the repository or of its targets, without a value (`--lib`), and
 /// flags whose value selects a part (`-p <package>`). Data: extend it here.
@@ -141,6 +142,8 @@ pub struct Variant {
     pub command: String,
     pub runs: u32,
     pub ok_sessions: u32,
+    /// Identity-bearing evidence is required to union equivalent literals without double counting.
+    pub ok_session_ids: BTreeSet<String>,
     pub effect: adage_core::Effect,
     /// A fixed, plain command (no placeholder, nothing quoted, safe to direct).
     pub directable: bool,
@@ -157,7 +160,18 @@ pub fn covering(family: &[Variant], min_sessions: u32, dominant: f64) -> Option<
     let mut best: Option<(u32, u32, &Variant)> = None;
     for (i, w) in family.iter().enumerate() {
         let Some(ws) = &shapes[i] else { continue };
-        if !w.directable || w.ok_sessions < min_sessions {
+        let equivalent_sessions: BTreeSet<&String> = family
+            .iter()
+            .filter(|v| {
+                v.effect == w.effect
+                    && adage_core::execution_equivalence::project_pytest_equivalent(&w.command, &v.command)
+            })
+            .flat_map(|v| v.ok_session_ids.iter())
+            .collect();
+        if !w.directable
+            || w.ok_sessions == 0
+            || (w.ok_sessions < min_sessions && equivalent_sessions.len() < min_sessions as usize)
+        {
             continue;
         }
         let covered: u32 = family
@@ -188,7 +202,15 @@ mod tests {
     use adage_core::Effect;
 
     fn v(cmd: &str, runs: u32, ok: u32, effect: Effect) -> Variant {
-        Variant { key: format!("exec {cmd}"), command: cmd.into(), runs, ok_sessions: ok, effect, directable: true }
+        Variant {
+            key: format!("exec {cmd}"),
+            command: cmd.into(),
+            runs,
+            ok_sessions: ok,
+            ok_session_ids: BTreeSet::new(),
+            effect,
+            directable: true,
+        }
     }
 
     fn shape(c: &str) -> Shape {
@@ -246,5 +268,34 @@ mod tests {
         // A dominant variant covers itself.
         let one = vec![v("make gen", 9, 9, Effect::Regenerate), v("make gen -j4", 1, 1, Effect::Regenerate)];
         assert_eq!(covering(&one, 5, 0.8).map(|x| x.1).as_deref(), Some("make gen"));
+    }
+
+    #[test]
+    fn equivalent_pytest_support_unions_identities_not_literal_counts() {
+        let variant = |flags: &str, ids: &[&str]| {
+            let mut v = v(
+                &format!(".venv/bin/python -m pytest tests/test_a.py {flags}"),
+                ids.len() as u32,
+                ids.len() as u32,
+                Effect::Verify,
+            );
+            v.ok_session_ids = ids.iter().map(|s| s.to_string()).collect();
+            v
+        };
+        let mut family = vec![variant("-q", &["a", "b", "c"]), variant("-v", &["c", "d", "e"])];
+        let chosen = covering(&family, 5, 0.8).expect("five unique successful sessions");
+        assert!(family.iter().any(|v| v.command == chosen.1));
+        family[1] = variant("-v", &["a", "b", "c"]);
+        assert!(covering(&family, 5, 0.8).is_none(), "six counts in three sessions cannot pass");
+        for flags in ["-x", "-s", "-q -k one", "-q tests/other.py"] {
+            family[1] = variant(flags, &["c", "d", "e"]);
+            assert!(covering(&family, 5, 0.8).is_none(), "behavior/scope changes: {flags}");
+        }
+        family[1] = variant("-v", &["c", "d", "e"]);
+        family[1].command = family[1].command.replace(".venv/", "other/");
+        assert!(covering(&family, 5, 0.8).is_none(), "different environment");
+        family[1] = variant("-v", &["c", "d", "e"]);
+        family.iter_mut().for_each(|v| v.ok_session_ids.clear());
+        assert!(covering(&family, 5, 0.8).is_none(), "legacy counts cannot be summed");
     }
 }

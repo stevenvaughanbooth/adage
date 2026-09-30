@@ -470,6 +470,27 @@ def validate_authority(value):
             raise ValueError("cohort budget authority differs from its frozen preparation")
 
 
+def budget_limit(value):
+    """A prospective allocation may raise admission; old recipes keep their original ceiling.
+
+    The shared ledger is never reset. The allocation records a human spending authorization;
+    it is not an execution grant and cannot authorize a script.
+    """
+    digest = value.get("budget_allocation_sha256")
+    if digest is None:
+        return 27.50
+    allocation = Path(value["experiment_root"]) / "evaluation-allocation.json"
+    if sha(allocation) != digest:
+        raise ValueError("budget allocation changed after preparation")
+    decision = json.loads(allocation.read_text())
+    cap = decision.get("ledger_ceiling_usd")
+    if (decision.get("kind") != "human_evaluation_budget" or not decision.get("statement")
+            or decision.get("authority") != value["experiment_root"]
+            or isinstance(cap, bool) or not isinstance(cap, (int, float)) or not 0 < cap <= 60):
+        raise ValueError("invalid prospective evaluation allocation")
+    return cap
+
+
 def require_native_review(value):
     root = Path(value["experiment_root"])
     review_path = Path(value.get("native_review_path", root / "native-confinement-reviewed.json"))
@@ -527,7 +548,7 @@ def run_session(manifest_path, wall_seconds=300):
         key = str(session.relative_to(root))
         if key in state["runs"]:
             raise ValueError("assignment already attempted; outcome retries are forbidden")
-        budget = Budget(state, 27.50, value["budget_usd"], persist=lambda: write(path, state))
+        budget = Budget(state, budget_limit(value), value["budget_usd"], persist=lambda: write(path, state))
         attempt, why = budget.reserve(key)
         if attempt is None:
             raise ValueError(why)

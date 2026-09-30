@@ -356,7 +356,13 @@ mod tests {
             })
             .collect();
         let meta = (0..steps.len())
-            .map(|i| StepMeta { turn: i as u32, prompt: 0, effect: "observe".into(), key: String::new() })
+            .map(|i| StepMeta {
+                project_pytest_root_cwd: false,
+                turn: i as u32,
+                prompt: 0,
+                effect: "observe".into(),
+                key: String::new(),
+            })
             .collect();
         Annotated {
             session: Session { id: "s".into(), prompts: vec![Prompt { text: prompt.into(), at_step: 0 }], steps },

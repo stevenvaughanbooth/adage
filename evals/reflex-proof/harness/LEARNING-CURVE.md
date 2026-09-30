@@ -1,8 +1,12 @@
 # Cross-session learning-curve pilot
 
-Status: prospective protocol; offline preparation is implemented. Paid dispatch, checkpoint
-conditioning and four-arm result collection are not yet integrated. No efficacy result exists for
-this protocol. Historical experiments and their negative results remain unchanged.
+Status: the native runner, chronological checkpoints and four-arm collector are implemented.
+The first 15-session pilot completed: **zero executable candidates** at every checkpoint.
+Independent post-training grading passed 12/15 tasks; training cost $3.7549221. All sessions,
+including failures, were retained. Per the registered stop rule, no automatic held-out arm ran.
+See the [complete record](results/20260930-learning-curve-native/report.json).
+A separate development replay with narrow pytest verbosity equivalence also produced zero
+candidates. It does not replace the original checkpoints or constitute held-out efficacy.
 
 ## Question and causal comparisons
 
@@ -91,14 +95,33 @@ pilot estimates variability, before collecting confirmation results.
 
 15 training + 16 held-out sessions at $1.50 maximum = $46.50 reserved. Reserve a further $0.50 for a
 new native confinement probe after runner changes. Prior CPU-eval charges were $4.860571, so the
-maximum total for this experiment would be $51.860571. This does **not** silently include or exclude
-the separate $47.64 showcase study: the user must clarify the existing $60 cap's scope before dispatch.
+maximum total for this experiment would be $51.860571. The user subsequently approved paid work;
+the explicit allocation uses the existing $60 CPU-evaluation ledger. The separate $47.64 showcase
+study remains separately disclosed and is not silently charged to a fresh ledger.
 All runs use the existing authority ledger, including previous/unknown charges. A prospective
 allocation update must replace the old $27.50 admission ceiling explicitly; never reset the ledger.
 An unknown bill blocks further dispatch. No automatic retries or hidden overrun allowance.
 
-Codex allowance: 15% remaining is the working stop; user permits approaching 10% only to finish a
-concrete result. Never consume the remaining allowance merely waiting for paid-run permission.
+Codex allowance: the user's latest instruction makes **10% remaining a hard floor**.
+Check the account allowance between meaningful phases and stop above it.
+
+## Diagnostic conclusion and next experiment
+
+Seven of 15 training sessions contain a recognized successful pytest invocation; only three use
+direct project-Python commands. Others use activation chains or task-specific selectors. Successful
+invocations are descriptive observations, not evidence that every selected test scope is equivalent.
+The minimal equivalence change unions distinct sessions only for identical direct project-Python
+commands differing in verbosity, with native root-working-directory provenance. Unknown cwd,
+activation chains, different environments, selectors and behavioral flags remain separate.
+
+Before another learning cohort, improve trustworthy execution-context capture and demonstrate that
+the compiler can extract a supported routine from natural traces. Buying more sessions without
+understanding eligibility would repeat the bottleneck. A stronger teacher is a separate prospective
+experiment; do not quietly substitute it into this fixed-model result.
+
+Cold-start instincts remain a separate causal question. Any two-arm cold-only continuation must
+freeze its own protocol, sources and assignment order before dispatch. It must retain all four
+original unattempted CPU comparisons and must never count advisory savings as CPU action elimination.
 
 ## Offline preparation
 

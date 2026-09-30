@@ -27,7 +27,13 @@ fn trace(id: &str, steps: &[(&str, &str)]) -> Annotated {
             "r " => input::Step::Read { path: rest.into() },
             _ => input::Step::Edit { path: rest.into() },
         });
-        meta.push(StepMeta { turn: i as u32, prompt: 0, effect: effect.to_string(), key: String::new() });
+        meta.push(StepMeta {
+            project_pytest_root_cwd: false,
+            turn: i as u32,
+            prompt: 0,
+            effect: effect.to_string(),
+            key: String::new(),
+        });
     }
     Annotated {
         session: Session { id: id.into(), prompts: vec![Prompt { text: "fix it".into(), at_step: 0 }], steps: out },
@@ -315,7 +321,16 @@ fn a_dead_ends_signature_is_the_cause_not_makes_status_line() {
                 failed: true,
             },
         );
-        a.meta.insert(0, StepMeta { turn: 0, prompt: 0, effect: "verify".into(), key: String::new() });
+        a.meta.insert(
+            0,
+            StepMeta {
+                project_pytest_root_cwd: false,
+                turn: 0,
+                prompt: 0,
+                effect: "verify".into(),
+                key: String::new(),
+            },
+        );
         a
     };
     let c = Corpus::of(&[failing("s0"), failing("s1")], &[]);

@@ -5,13 +5,15 @@ passes; it does not establish that automatic verification helps complete coding 
 This page is the launch evidence index. Preserve earlier reports, failed attempts and protocols
 when a later experiment supersedes them.
 
-The next prospective [cross-session learning-curve pilot](harness/LEARNING-CURVE.md) uses 15 distinct
-training tasks, checkpoints at 0/3/5/10/15 sessions, and four new held-out tasks in four arms. It
-separates shipped instincts, learned guidance and approved CPU execution. All 19 offline base/gold
-controls pass after correcting one reference implementation; [both attempts and the 56 passing
-harness tests are recorded](harness/results/20260930-learning-curve-controls/validation.json).
-This protocol has no paid efficacy results yet. Its four-task screen cannot support a general
-launch-site savings percentage.
+The [cross-session learning-curve pilot](harness/LEARNING-CURVE.md) completed 15 distinct native
+training sessions and checkpoints at 0/3/5/10/15 sessions. **Every checkpoint produced zero executable
+candidates.** Training cost $3.7549221; independent hidden checks and full-suite grading passed 12/15
+tasks. All 19 offline base/gold controls pass after correcting one reference implementation.
+The [complete native record](harness/results/20260930-learning-curve-native/report.json) preserves
+every assignment, checkpoint and failure. A development replay with narrow command equivalence also
+produced zero candidates. No held-out automatic arm ran, and there is no real-coding CPU savings
+percentage to publish. The updated harness passes 72 tests; the equivalence change passes 188 focused
+Rust tests. These test counts establish contracts, not product efficacy.
 
 | Gate | Evidence | Current conclusion |
 | --- | --- | --- |

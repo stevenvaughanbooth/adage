@@ -58,6 +58,9 @@ actions and reduced observed model requests from six to three, with all answers 
 This is a small generated-repository mechanism proof, not a general coding speedup claim.
 The [launch evidence index](evals/reflex-proof/LAUNCH-STATUS.md) tracks real-repository validation,
 release gates, failed attempts and evaluation spending.
+The latest [15-session real-repository learning pilot](evals/reflex-proof/harness/results/20260930-learning-curve-native/report.json)
+passed independent task grading on 12/15 outputs but learned zero automatically executable actions.
+Real-coding CPU savings remain unproven; the full result is retained alongside the mechanism proof.
 
 ```text
   agent traces ──► adage condition ──► reflexes ──► index ──► hooks
