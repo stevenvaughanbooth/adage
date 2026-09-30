@@ -94,7 +94,7 @@ export function TopBar({
       <a href="/" className="wordmark" aria-label="Adage map, home" onClick={(e) => (e.preventDefault(), setUrl({ view: "map" }, true))}>
         Adage
       </a>
-      {graph?.demo && <span className="rounded border border-accent/40 px-2 py-1 font-mono text-xs text-accent-soft">Demo · sample data</span>}
+      {graph?.demo && <span className="shrink-0 whitespace-nowrap rounded border border-accent/40 px-2 py-1 font-mono text-xs text-accent-soft">Demo data</span>}
       {all.length > 1 ? (
         <label className="relative hidden items-center sm:flex">
           <span className="sr-only">Repository</span>
@@ -140,7 +140,7 @@ export function TopBar({
       <div className="grow" />
       <LivePill stale={stale} connection={connection} graph={graph} firstRun={firstRun} />
       {c && !firstRun && (
-        <div className="hidden items-center gap-3.5 font-mono text-xs text-ink-2 xl:flex" aria-label="Reflexes by strength">
+        <div className="hidden items-center gap-3.5 font-mono text-xs text-ink-2 2xl:flex" aria-label="Reflexes by strength">
           {STRENGTHS.map((s) => (
             <span key={s} className="flex items-center gap-1.5">
               <Lamp strength={s} />

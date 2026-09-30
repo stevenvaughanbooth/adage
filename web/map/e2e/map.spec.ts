@@ -331,7 +331,7 @@ test("sample data is labeled and a failed refresh exposes stale data", async ({ 
   await page.route("**/api/v1/graph", (r) => ++snapshots === 1 ? r.continue() : r.fulfill({ status: 503, body: "busy" }));
   await page.route("**/api/v1/events", (r) => r.fulfill({ contentType: "text/event-stream", body: 'event: graph\ndata: {}\n\n' }));
   await page.goto(DEMO);
-  await expect(page.getByText("Demo · sample data", { exact: true })).toBeVisible();
+  await expect(page.getByText("Demo data", { exact: true })).toBeVisible();
   await expect(page.getByText("Showing the last snapshot.", { exact: false })).toBeVisible();
   await expect(page.getByTestId("live-pill")).toContainText("Stale");
   await page.unroute("**/api/v1/graph");
