@@ -107,7 +107,7 @@ if [ -z "$LINKED" ]; then
   if [ -n "$TAMPERED" ]; then
     fail "the bundled binary for $OSARCH does not match its checksum; reinstall the plugin, or install adage with brew or npm"
   fi
-  fail "no binary for $OSARCH; install with brew install stevenvaughanbooth/tap/adage or npm i -g @adage-ai/cli"
+  fail "no binary for $OSARCH; install with brew install stevenvaughanbooth/tap/adage or npm i -g @adage-sh/cli"
 fi
 rm -f "$DATA/status" 2>/dev/null
 if [ -n "$EXEC_MSG" ]; then
