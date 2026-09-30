@@ -331,6 +331,7 @@ impl Cx {
             _ => RouteOrigin::Imported,
         });
         let evidence = RouteEvidence {
+            execution: e.execution.clone(),
             opportunities: e.opportunities,
             support: e.support,
             days: e.days,

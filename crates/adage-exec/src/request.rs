@@ -258,6 +258,9 @@ pub struct ExecRequest {
     pub output: OutputSpec,
     #[serde(default)]
     pub scripts: Vec<ScriptRef>,
+    /// An exact, locally approved Python environment for staged E2 verification.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_python: Option<crate::project_python::ProjectPython>,
     pub profile: Profile,
     #[serde(default)]
     pub labels: Labels,
@@ -427,7 +430,12 @@ impl ExecRequest {
     /// not part of it, so an approval covers every value the contracts accept.
     pub fn exec_digest(&self) -> String {
         if let Some(d) = &self.route_exec_digest {
-            return d.clone();
+            return match &self.project_python {
+                None => d.clone(),
+                Some(p) => crate::sha256_hex(
+                    crate::canonical_json(&serde_json::json!({ "pack": d, "project_python": p })).as_bytes(),
+                ),
+            };
         }
         let mut v = serde_json::json!({
             "argv": self.argv,
@@ -440,6 +448,9 @@ impl ExecRequest {
         if let Some(a) = &self.action {
             v["action"] = serde_json::json!(a);
         }
+        if let Some(p) = &self.project_python {
+            v["project_python"] = serde_json::json!(p);
+        }
         crate::sha256_hex(crate::canonical_json(&v).as_bytes())
     }
 }
@@ -449,12 +460,13 @@ fn adage_core_invisible(c: char) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     pub(crate) fn req(argv: &[&str]) -> ExecRequest {
         ExecRequest {
             repo_root: PathBuf::from("/nonexistent"),
+            project_python: None,
             argv: argv.iter().map(|s| s.to_string()).collect(),
             inputs: BTreeMap::new(),
             contracts: BTreeMap::new(),

@@ -101,6 +101,7 @@ fn reflex(context: Vec<ItemView>, continuation: Vec<ItemView>, target: Option<&s
         contrast: 0.9,
         consistency: None,
         value: 1.0,
+        execution_candidate: false,
         gain: 10.0,
         exposed: 0,
         target: target.map(str::to_string),

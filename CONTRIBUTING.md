@@ -29,6 +29,7 @@ cargo test --workspace --locked        # includes the normaliser's golden fixtur
 node npm/test/launcher.test.mjs        # the npm launcher, against target/debug/adage
 plugin/test/session-start.test.sh      # how the Claude Code plugin finds its binary
 node scripts/check-plugin.mjs          # plugin and marketplace versions and hook paths
+node scripts/test-stage-plugin.mjs     # reject missing/mismatched release archive checksums (Unix)
 claude plugin validate --strict plugin/claude-code && claude plugin validate --strict .
 cargo deny check                       # licenses, advisories, bans, sources (deny.toml)
 scripts/cross-check.sh                 # clippy for every release target, including Windows, from any host
@@ -38,6 +39,30 @@ scripts/cross-check.sh                 # clippy for every release target, includ
 tree-sitter's build script needs, so it never links). Only CI proves that it links and passes tests
 there. Code that differs by platform goes behind `cfg(unix)` / `cfg(windows)`, and tests that need
 Unix-only facilities (symlinks, `#!/bin/sh` scripts) are `#[cfg(unix)]`.
+
+Before a Unix plugin release, also run the optimized artifact gate:
+
+```bash
+cargo test --release --locked -p adage-cli --test zero_config_plugin release_plugin_startup -- --nocapture
+cargo build --release --locked -p adage-cli -p adage-exec
+plugin/test/session-start.test.sh target/release/adage
+```
+
+The startup gate stages a checksummed release binary and dispatches the checked-in plugin hook
+registration. It requires a real background bootstrap from 12 historical sessions, a useful
+post-failure response, first startup under 1,500 ms and all ten repeated starts under 200 ms.
+Those latency limits apply to optimized release artifacts; the debug integration suite tests
+semantics without applying release budgets to a larger instrumented binary. Tests that need
+`ADAGE_TEST_NO_SPAWN` are explicitly ignored in release builds because the recorder and fault
+injection exist only with debug assertions. The release gate uses neither, and cannot silently
+skip an unsupported Unix target. The shell suite additionally checks that bundled delegation
+installs its verified learner companion and actually bootstraps without an `adage` on PATH.
+
+Local success on one machine does not establish the full release matrix. CI must link and test
+each promised target, and release staging must have checksummed archives for every required
+binary. Windows automatic execution remains unavailable (E0 only); the Unix startup gate does
+not validate Windows Claude Code plugin invocation. Validate that harness integration separately
+before describing Windows plugin support as verified.
 
 ## Evals
 

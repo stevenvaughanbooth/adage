@@ -1,5 +1,8 @@
 # Reflex proof: current evidence
 
+For the current open-source release decision, outstanding gates and cumulative paid spend, see
+the [launch evidence index](LAUNCH-STATUS.md). Earlier reports below retain their original scope.
+
 **New launch mechanism gate passed:** a genuinely learned, human-approved lookup eliminated
 one agent action and one observed model request on each of three held-out tasks. All six
 paired sessions returned complete correct answers; 100 subsequent local hook runs passed.

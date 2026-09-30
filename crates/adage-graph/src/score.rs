@@ -30,7 +30,10 @@
 //! (a dead end is a property of the runner, not of a contrast) or contrast ≥ `contrast`
 //! otherwise, and V > 0 for a directive (not for a guard: an obligation after `last(edit)` or an
 //! avoid after a failure, whose worth is in the sessions that would miss them: its gate is
-//! contrast or consistency alone). A guard's delivery is then decided on the traces, by the rate
+//! contrast or consistency alone). A single next action after an edit at ≥90% immediate
+//! precision is retained independently of advisory value for execution judgement. It still
+//! passes the support/day/contrast gates; the learner recounts every matching edit before
+//! issuing an execution certificate and requires local human authorization to run. A guard's delivery is then decided on the traces, by the rate
 //! and Wilson rule of its judgement (`adage-learn`), as every reflex's is: a Beta lower bound here
 //! would demand five or six unanimous traces where three decide everything else (G5).
 //!
@@ -114,6 +117,9 @@ pub struct Scored {
     pub consistency: Option<f64>,
     pub p_soon: f64,
     pub p_next: f64,
+    /// Immediate edit-to-action candidate; requires an independent execution judgement.
+    #[serde(default)]
+    pub execution_candidate: bool,
     pub dturns: f64,
     pub value: f64,
     pub exposed: u32,
@@ -716,14 +722,19 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
     } else {
         String::new()
     };
-    // A directive with no value is never delivered (prime needs V > 0, Track G §6.1). An
+    // A directive with no value is never delivered as advice (prime needs V > 0, Track G §6.1). An
     // obligation (after the last edit) or an avoid (after a failure) is a guard: its worth is in
     // the sessions that would miss it, which p_soon does not see, so its gate is contrast or
     // consistency alone.
     let guard = has_fail || (x_last.last && db.ty(x_last.label) == NodeType::Edit);
+    let execution_candidate = db.ty(x_last.label) == NodeType::Edit
+        && ys.len() == 1
+        && db.ty(ys[0].label) == NodeType::Act
+        && ys[0].pol != Pol::Fail
+        && p_next >= 0.9;
     let gate = if !gate.is_empty() {
         gate
-    } else if !guard && value <= 0.0 {
+    } else if !guard && !execution_candidate && value <= 0.0 {
         format!("value {value:.2} <= 0")
     } else {
         gate
@@ -750,6 +761,7 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
         consistency,
         p_soon,
         p_next,
+        execution_candidate,
         dturns,
         value,
         exposed,

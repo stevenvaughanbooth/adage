@@ -416,6 +416,7 @@ pub fn check(req: &ExecRequest, ctx: &Context) -> Result<Checked, (Refusal, Opti
     let plain = |r: Refusal| (r, None);
     let request = |reason: String| plain(Refusal { stage: "request", reason });
     let bound = req.bind().map_err(|e| request(e.to_string()))?;
+    crate::project_python::validate(req).map_err(request)?;
     // An action's summary needs no typed fields (it reports its outcome and changed paths).
     if !(req.level == Level::E2 && req.output.mode == crate::request::OutputMode::Typed && req.output.fields.is_empty())
     {
@@ -454,7 +455,7 @@ pub fn check(req: &ExecRequest, ctx: &Context) -> Result<Checked, (Refusal, Opti
         }
     }
     let classified = classify::effect(&bound, ctx.table);
-    let has_scripts = !req.scripts.is_empty();
+    let has_scripts = !req.scripts.is_empty() || req.project_python.is_some();
     // Declaring less than the computed effect refuses, except for scripts a person approved at a
     // lower effect (§2.2): the sandbox then enforces the approved profile.
     if classified > req.effect && !has_scripts {

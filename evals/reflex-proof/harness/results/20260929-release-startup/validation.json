@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-09-30T01:15:19.878008+00:00",
+  "source": {
+    "base_commit": "6993880b39679db3832fe1ffedf9b376f91f5aca",
+    "working_tree_changes": true,
+    "selected_source_sha256": {
+      ".github/workflows/ci.yml": "e3f5dfaa07ef702d9b86c83032d52086de0a5bcd3b03318ab1d0ab19ff0bce32",
+      "CONTRIBUTING.md": "abf3924afa69b33c1f16a9957b6e97677b0d854593b8c59105b3732ac8d82616",
+      "crates/adage-cli/tests/zero_config_plugin.rs": "961f3bd0af7177f6e2ad89adaa2deaf0ffc4ff310c51c5c5e6c4a31bbf7c9248",
+      "crates/adage-cli/tests/fresh_install.rs": "d57e58f07ee161739ea43e8a3b95e99510dc24aad6a37a5ed3844d915b066c74",
+      "crates/adage-cli/tests/live_learn.rs": "13bcc59493ab158498697f57e4d59a7cafe931b2970a71d8f9a3ccc346df93a7",
+      "plugin/build.sh": "06d6abe59ec81f8dce03a343d3740d47335cd7bf0c9e0af6e19377ecc9e04e50",
+      "plugin/claude-code/hooks/hooks.json": "97725ab271c2ad51c49140454e143ab3dff89cdaa48a7711d87e7664ff1f771f",
+      "plugin/claude-code/scripts/session-start": "4d0a2b46469524b0c7a1146461346126517fc24dc6e81c9fa8b92e2e03f8af0e",
+      "plugin/claude-code-exec/scripts/session-start": "8309e210c8d5c52d4228433d31adc547c68b6c55ad729402e3b83a1fc6398c4f",
+      "plugin/test/session-start.test.sh": "466dd4f326163611f5d6ff86e0ccc864fa3125b8ab452a8f042f1aa55a07ba37",
+      "scripts/stage-plugin.mjs": "994026ffe0ab3dcbf60f7bd82a251fcbb880c67ced7b36a5d989ab09aa819a54",
+      "scripts/test-stage-plugin.mjs": "b4f6afad36cf0b7defc4e05983c615846298ff167ad1351dbab7b655a1d2e176"
+    },
+    "artifact_sha256": {
+      "target/release/adage": "8bc076cc5774e334aab2523f1e09e4aec11783feb01b48a73a3092b5a1171c05",
+      "target/debug/adage": "2c141f0b208d820fc6062d3d723927387e33bb700b7d3c396eae8bf4b476250c",
+      "target/debug/adage-exec": "0eb37eed5bb8cd841ba8083314c601b8a4b4ab904e47a527a903cafcd8fb7564"
+    },
+    "scope": "Hashes identify the selected test/packaging sources and local binaries; this is not a claim that the entire uncommitted tree is immutable."
+  },
+  "platform": {
+    "system": "Darwin",
+    "release": "25.6.0",
+    "machine": "arm64",
+    "rust_host": "aarch64-apple-darwin"
+  },
+  "outcome": "local_release_startup_and_plugin_integrity_pass",
+  "runs": [
+    {
+      "command": "cargo test --release --offline --locked -p adage-cli --test zero_config_plugin release_plugin_startup -- --nocapture",
+      "passed": 1,
+      "failed": 0,
+      "filtered_out": 11,
+      "measurements": {
+        "first_start_ms": 1023.275417,
+        "first_start_budget_ms": 1500,
+        "repeated_start_p95_ms": 60.541458,
+        "repeated_start_budget_ms": 200,
+        "repeated_samples": 10,
+        "percentile_method": "nearest rank; p95 of ten is their maximum",
+        "historical_sessions_learned": 12
+      },
+      "checks": [
+        "staged checksummed release artifact",
+        "dispatch actual checked-in hook command and args",
+        "real detached background learner without debug recorder",
+        "registered failure hook delivers make test"
+      ]
+    },
+    {
+      "command": "cargo test --offline --locked -p adage-cli --test zero_config_plugin --test live_learn --test fresh_install --no-fail-fast",
+      "passed": 27,
+      "failed": 0,
+      "ignored": 0,
+      "targets": {
+        "fresh_install": 9,
+        "live_learn": 7,
+        "zero_config_plugin": 11
+      }
+    },
+    {
+      "command": "node scripts/check-plugin.mjs",
+      "result": "pass; both plugin manifests and versions agree"
+    },
+    {
+      "command": "node npm/test/launcher.test.mjs",
+      "result": "pass; adage-exec and adage-train companions staged"
+    },
+    {
+      "command": "plugin/test/session-start.test.sh",
+      "result": "pass; includes bundled learner installation and real bootstrap with no adage on PATH, missing/corrupt companion refusal, original binary/fallback checks"
+    },
+    {
+      "command": "node scripts/test-stage-plugin.mjs",
+      "result": "pass; verified archive pair accepted; absent and mismatched checksums rejected for each of two binaries"
+    }
+  ],
+  "prior_failures_resolved": [
+    {
+      "failure": "The debug plugin startup integration applied release latency budgets to a roughly 103 MiB debug executable.",
+      "resolution": "Preserved all debug semantic assertions. Enforced the unchanged 1500/200 ms budgets in an optimized release artifact test instead."
+    },
+    {
+      "failure": "Recorder-dependent tests expected ADAGE_TEST_NO_SPAWN records from release binaries, where the instrumentation is intentionally absent.",
+      "resolution": "Only instrumentation-dependent tests explicitly ignored in release; debug suite runs all cases. Added real-process release bootstrap coverage."
+    },
+    {
+      "failure": "Bundled executor was copied without its learner companion, so plugin-only delegation could lose background learning.",
+      "resolution": "Verify and install both binaries beside each other; local plugin build stages both; real-bootstrap regression passes."
+    },
+    {
+      "failure": "Release archive staging accepted archives without a checksum despite claiming verification.",
+      "resolution": "Missing checksums now fail closed before extraction; regression covers missing and incorrect checksums for both archives."
+    }
+  ],
+  "limitations": [
+    "One local macOS arm64 host; not a substitute for native CI on the complete promised release matrix.",
+    "GitHub Actions billing/spending restriction remains an external validation blocker.",
+    "No live paid-agent run or GPU/cost saving estimate is established by these startup checks.",
+    "Windows automatic execution remains E0-only; Windows Claude Code plugin invocation is not verified by Unix checks.",
+    "The archive integrity test uses small fake binaries; it proves packaging rejection behavior, not execution of every native target.",
+    "No release tag, package publication, marketplace publication, or OS signing/notarization was performed.",
+    "The broader release-mode integration suite was not rerun in full; the measured release run selected the real startup gate."
+  ]
+}

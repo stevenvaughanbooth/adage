@@ -17,7 +17,10 @@
 //!    the Wilson rule over those counts (a lower bound for fire, a rate for prime, capped by the
 //!    ceiling), with the outcome-lift path as a second gate. Context routes keep the reflex's own
 //!    evidence. A trace that received a directive naming what a route directs is left out of its
-//!    count ([`exposed`]).
+//!    count ([`exposed`]). Routine execution candidates are separately recounted at every
+//!    matching edit: an identical successful command must be the immediate next tool in a
+//!    later model turn, with ≥90% event precision and the existing session/task support gates.
+//!    Their certificate preserves executable knowledge without low-value advisory delivery.
 //!
 //! **Instincts as priors.** The repository's installed instinct routes are pseudo-evidence on the
 //! reflex at the same decision point directing the same command: 3 traces at 0.7 in the prime
@@ -538,9 +541,70 @@ fn one_task(ss: &[&Session], support: &BTreeSet<String>) -> Result<(), String> {
     Ok(())
 }
 
+/// Recount the executable trigger, including intermediate edits that `last(edit)` hides.
+/// Only an immediately following, successful, identical command counts; a broad command that
+/// merely covers a narrower observed test run is not evidence that the broad command is routine.
+/// A command already queued in the edit's model turn cannot eliminate a later model action.
+fn execution_evidence(r: &Route, ss: &[&Session], cfg: &LearnConfig) -> Result<ExecutionEvidence, String> {
+    let (Trigger::AfterEdit { paths }, Step::Run { command }) = (&r.trigger, &r.step) else {
+        return Err("execution candidate is not a single after-edit command".into());
+    };
+    if !matches!(r.effect, Effect::Verify | Effect::Regenerate) {
+        return Err("execution candidate is not verification or regeneration".into());
+    }
+    let depth = match r.slots.as_slice() {
+        [] => None,
+        [Slot { name, source: SlotSource::EditSegment { depth, .. }, .. }] if name == "part" => Some(*depth as usize),
+        _ => return Err("execution candidate has unsupported input bindings".into()),
+    };
+    let (mut opportunities, mut immediate) = (0, 0);
+    let mut support = BTreeSet::new();
+    for s in ss {
+        for (i, st) in s.steps.iter().enumerate() {
+            let Some(path) = edited(st).filter(|p| glob_hit(paths, p)) else { continue };
+            opportunities += 1;
+            let bound = match depth {
+                Some(d) => match path.split('/').filter(|x| !x.is_empty()).nth(d) {
+                    Some(part) => command.replace("{part}", part),
+                    None => continue,
+                },
+                None => command.clone(),
+            };
+            if s.steps.get(i + 1).is_some_and(|next| {
+                next.turn > st.turn && !next.call.failed && argv(next).is_some_and(|a| shell_join(a) == bound)
+            }) {
+                immediate += 1;
+                support.insert(s.id.clone());
+            }
+        }
+    }
+    if support.len() < cfg.min_support as usize || opportunities == 0 || immediate as f64 / (opportunities as f64) < 0.9
+    {
+        return Err(format!("routine execution needs {} unexposed sessions and 90% immediate actions: {} sessions, {immediate}/{opportunities} edits", cfg.min_support, support.len()));
+    }
+    one_task(ss, &support)?;
+    Ok(ExecutionEvidence { opportunities, immediate, sessions: support.len() as u32 })
+}
+
 /// Judge one compiled route (see the module documentation); `Err` drops it.
-fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], prior: bool) -> Result<Route, String> {
+fn judge(
+    c: &compile::Compiled,
+    ss: &[&Session],
+    cfg: &LearnConfig,
+    lookup: &[Route],
+    prior: bool,
+) -> Result<Route, String> {
+    let mut r = c.route.clone();
     let seen: Vec<&Session> = ss.iter().copied().filter(|s| !exposed(s, &r)).collect();
+    let execution = if c.execution_candidate {
+        match execution_evidence(&r, &seen, cfg) {
+            Ok(e) => Some(e),
+            Err(_) if c.advisory_eligible => None,
+            Err(reason) => return Err(reason),
+        }
+    } else {
+        None
+    };
     match (&r.trigger, &r.step) {
         (Trigger::Prompt { .. }, Step::Run { command }) => {
             let id = |c: &str| adage_graph::select::command_identity(c);
@@ -635,7 +699,7 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
     // of its rate in the traces that made no such edit (a handful of traces on either side proves
     // little). A regeneration owed by an edit is not run without one, and a check scoped to the
     // edited part names what was edited: both keep the plain contrast.
-    if by_edit && r.effect == Effect::Verify && r.slots.is_empty() {
+    if by_edit && r.effect == Effect::Verify && r.slots.is_empty() && execution.is_none() {
         let (k, m) = c.without;
         let upper = wilson_upper(k, m, CHECK_Z);
         let lower = 1.0 - wilson_upper(c.opportunities - n, c.opportunities, CHECK_Z);
@@ -678,6 +742,7 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
     };
     r.strength = strength;
     r.evidence = Evidence {
+        execution,
         opportunities: c.opportunities,
         support: n,
         days: days(&seen, &c.support),
@@ -823,7 +888,7 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
     let mut routes = Vec::new();
     for c in out.routes {
         let prior = c.why.prior.is_some();
-        match judge(c.route.clone(), ss, cfg, &lookup, prior) {
+        match judge(&c, ss, cfg, &lookup, prior) {
             Ok(r) => {
                 report.contexts += usize::from(matches!(r.trigger, Trigger::Context { .. }));
                 routes.push(Judged { route: r, why: c.why });

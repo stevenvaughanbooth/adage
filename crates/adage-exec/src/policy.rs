@@ -262,6 +262,7 @@ mod tests {
     fn complete_stdout_uses_unstructured_output_policy() {
         let mut req = ExecRequest {
             repo_root: "/repo".into(),
+            project_python: None,
             argv: vec!["git".into(), "status".into()],
             inputs: Default::default(),
             contracts: Default::default(),

@@ -2,8 +2,10 @@
 //! installs the Claude Code plugin and starts a session; no `adage` command is ever typed.
 //!
 //! Every test runs with an isolated `HOME`, `ADAGE_HOME`, `XDG_CONFIG_HOME` and `CODEX_HOME`, and
-//! with `ADAGE_TEST_NO_SPAWN=record`: a hook records the learner it would start, and the test runs
-//! that exact command line itself, as the detached learner would.
+//! with `ADAGE_TEST_NO_SPAWN=record` in debug builds: a hook records the learner it would start,
+//! and the test runs that exact command line itself. Recorder-dependent cases are explicitly
+//! ignored in release, where that instrumentation does not exist. `release_plugin_startup`
+//! instead verifies the staged release artifact with a real detached learner and strict budgets.
 
 use adage_sim::{claude, scenario};
 use serde_json::{json, Value};
@@ -201,10 +203,89 @@ fn system_message(out: &str) -> Option<String> {
     v["systemMessage"].as_str().map(str::to_string)
 }
 
+/// Product startup budgets apply to the release artifact, including checksum verification,
+/// installation and first execution. Dispatch the checked-in registration itself, so a green
+/// result requires the plugin's actual command/args paths and a real background bootstrap.
+#[test]
+#[cfg(all(unix, not(debug_assertions)))]
+fn release_plugin_startup() {
+    let w = World::new();
+    let plugin = w.staged_plugin().expect("the release startup gate requires a supported plugin target");
+    let data = w.p("plugin-data");
+    let repo = w.repo("work/billing");
+    w.history(&repo, adage_sim::CLAUDE_SEED, 12);
+    let registration: Value = serde_json::from_slice(&std::fs::read(plugin.join("hooks/hooks.json")).unwrap()).unwrap();
+    let dispatch = |event: &str, sid: &str, extra: Value| {
+        let spec = &registration["hooks"][event][0]["hooks"][0];
+        assert_eq!(spec["type"], "command");
+        let expand = |s: &str| {
+            s.replace("${CLAUDE_PLUGIN_ROOT}", &plugin.to_string_lossy())
+                .replace("${CLAUDE_PLUGIN_DATA}", &data.to_string_lossy())
+        };
+        let exe = PathBuf::from(expand(spec["command"].as_str().expect("registered hook command")));
+        let args: Vec<String> = spec["args"].as_array().unwrap().iter().map(|a| expand(a.as_str().unwrap())).collect();
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let mut p = json!({ "session_id": sid, "cwd": repo, "hook_event_name": event, "source": "startup" });
+        for (k, v) in extra.as_object().unwrap() {
+            p[k] = v.clone();
+        }
+        let now = Instant::now();
+        let out = w.run(&exe, &args, &p.to_string(), &repo);
+        let took = now.elapsed();
+        assert!(out.status.success() && out.stderr.is_empty(), "{event}: {}", text(&out));
+        (out, took)
+    };
+    let (first, cold) = dispatch("SessionStart", "release-first", json!({}));
+    assert!(cold < Duration::from_millis(1500), "release first startup exceeds 1500 ms: {cold:?}");
+    let notice = system_message(&String::from_utf8_lossy(&first.stdout)).expect("first-use notice");
+    assert!(notice.contains("learning from 12 past sessions in this repo"), "{notice}");
+    assert!(data.join("bin/adage").is_file(), "the installed binary must serve later hooks");
+    assert!(!w.p("data/learn-queue/spawn-record.jsonl").exists(), "production must not use the debug recorder");
+
+    let waiting = Instant::now();
+    loop {
+        let learned = std::fs::read_to_string(w.p("data/learn.log")).unwrap_or_default().lines().any(|line| {
+            serde_json::from_str::<Value>(line)
+                .is_ok_and(|r| r["kind"] == "condition" && r["sessions_read"].as_u64().is_some_and(|n| n >= 12))
+        });
+        let idle = std::fs::read_dir(w.p("data/learn-queue")).into_iter().flatten().flatten().all(|e| {
+            e.path().extension().is_none_or(|x| x != "lock") || !adage_store::lock::is_held(&e.path()).unwrap_or(true)
+        });
+        if learned && idle {
+            break;
+        }
+        assert!(waiting.elapsed() < Duration::from_secs(120), "the real detached learner did not finish");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let mut warm = Vec::new();
+    for i in 0..10 {
+        let (_, took) = dispatch("SessionStart", &format!("release-warm-{i}"), json!({}));
+        warm.push(took);
+    }
+    warm.sort();
+    // Nearest-rank p95 with ten samples is their maximum: all ten must meet the existing budget.
+    let p95 = warm[9];
+    assert!(p95 < Duration::from_millis(200), "release repeated startup exceeds 200 ms: {warm:?}");
+    let (failure, _) = dispatch(
+        "PostToolUseFailure",
+        "release-warm-9",
+        json!({
+            "tool_name": "Bash", "tool_input": { "command": "python3 -m unittest" },
+            "error": "RuntimeError: ACME_ENV is not set"
+        }),
+    );
+    assert!(context(&String::from_utf8_lossy(&failure.stdout)).contains("make test"), "{}", text(&failure));
+    eprintln!("release plugin: first={cold:?}; repeated p95={p95:?}; 12 historical sessions learned; registered failure hook delivered make test");
+}
+
 /// 1. The plugin, a repository with history, and nothing else: the first session start learns,
 ///    the first prompt is directed, and another repository's traces are never opened.
 #[test]
 #[cfg(unix)]
+#[cfg_attr(
+    not(debug_assertions),
+    ignore = "requires the debug-only spawn recorder; release_plugin_startup exercises the release artifact"
+)]
 fn zero_config_plugin() {
     let w = World::new();
     let Some(plugin) = w.staged_plugin() else { return };
@@ -223,15 +304,15 @@ fn zero_config_plugin() {
     let out = String::from_utf8_lossy(&o.stdout).to_string();
     let msg = system_message(&out).unwrap_or_else(|| panic!("a systemMessage: {out:?}"));
     assert!(msg.contains("learning from 12 past sessions in this repo"), "{msg}");
-    assert!(took < Duration::from_millis(1500), "the first start (copying the binary) took {took:?}");
-    // Every later start is the plain hook path: well under 200 ms.
+    // This test uses the instrumented debug binary. Enforce product latency budgets on the
+    // shipped release artifact in release_plugin_startup, not on debug symbols and codegen.
     let (o2, took2) = w.shim(
         &plugin,
         &data,
         &json!({ "session_id": "s-again", "cwd": repo_w, "hook_event_name": "SessionStart", "source": "startup" }),
     );
     assert!(o2.status.success());
-    assert!(took2 < Duration::from_millis(200), "a session start took {took2:?}");
+    eprintln!("debug plugin startup: first {took:?}, repeat {took2:?} (release budgets tested separately)");
     let spawned = w.spawned();
     assert!(spawned[0].contains(&"--bootstrap".to_string()), "{spawned:?}");
     // Launch report, bug 11: the bootstrap session is assigned its arm and spools its
@@ -369,6 +450,7 @@ fn worktree_keys() {
 /// 3. A repository with a Makefile and no history at all: instincts direct the very first session,
 ///    and the card says how many sessions of its own it needs.
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
 fn no_history_instincts() {
     let w = World::new();
     let repo = w.repo("work/acme");
@@ -399,6 +481,7 @@ fn no_history_instincts() {
 /// first binding brings U11's `.venv/bin/python -m pytest` at the next session start.
 #[cfg(unix)]
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
 fn instincts_rebind_when_the_checkout_changes() {
     let w = World::new();
     let repo = w.p("work/click");
@@ -441,6 +524,7 @@ fn instincts_rebind_when_the_checkout_changes() {
 /// refused, and the card says how many commands were rewritten. Golden hook output.
 #[cfg(unix)]
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
 fn pretool_rewrites_to_the_verified_environment() {
     let w = World::new();
     let repo = w.p("work/click");
@@ -637,6 +721,7 @@ fn savings_gate() {
 
 /// 5. A session on a model the price table does not list: tokens and turns, never dollars.
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
 fn pricing_honesty() {
     let w = World::new();
     let repo = w.repo("work/acme");
@@ -670,6 +755,7 @@ fn pricing_honesty() {
 ///    hooks and learning go on.
 #[test]
 #[cfg(unix)]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
 fn model_blocked() {
     let w = World::new();
     let calls = w.p("curl-calls");
@@ -764,6 +850,7 @@ fn exec_marker_without_plugin() {
 
 /// 8. At most one notice a day per repository, and only when something is new.
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
 fn notice_throttle() {
     let w = World::new();
     let repo = w.repo("work/acme");
@@ -811,6 +898,7 @@ fn notice_throttle() {
 
 /// 9. A damaged index is rebuilt at the next session start, silently, and the next event is served.
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
 fn index_self_heal() {
     let w = World::new();
     let repo = w.repo("work/acme");

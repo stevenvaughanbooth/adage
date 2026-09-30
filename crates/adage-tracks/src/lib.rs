@@ -69,6 +69,30 @@ mod tests {
     }
 
     #[test]
+    fn routine_execution_evidence_must_be_consistent_and_action_shaped() {
+        let mut t = sample();
+        let r = &mut t.routes[0];
+        r.trigger = Trigger::AfterEdit { paths: "src/*.rs".into() };
+        r.step = Step::Run { command: "cargo test".into() };
+        r.slots.clear();
+        r.effect = Effect::Verify;
+        r.strength = Strength::Prime;
+        r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, immediate: 5, sessions: 5 });
+        io::validate(&t).unwrap();
+        for e in [
+            ExecutionEvidence::default(),
+            ExecutionEvidence { opportunities: 5, immediate: 6, sessions: 5 },
+            ExecutionEvidence { opportunities: 5, immediate: 4, sessions: 5 },
+        ] {
+            let mut bad = t.clone();
+            bad.routes[0].evidence.execution = Some(e);
+            assert!(io::validate(&bad).is_err());
+        }
+        t.routes[0].trigger = Trigger::SessionStart;
+        assert!(io::validate(&t).is_err());
+    }
+
+    #[test]
     fn validation_refuses_unsafe_routes() {
         let mut t = sample();
         t.routes[0].effect = Effect::Publish;

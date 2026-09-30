@@ -398,6 +398,51 @@ C1/C3 build requests from packs through the library type `adage_exec::ExecReques
 root, argv template, bound inputs and contracts, effect, level, output spec, scripts with SHA-256,
 sandbox profile, labels, origin, and the pack's reflex exec digest when there is one).
 
+## Approved project Python verification
+
+An E2 verify action may explicitly name `.venv/bin/python` or `venv/bin/python` (including
+`python3` and `python3.N` aliases), followed by `-m pytest` or a repository-relative `.py` script.
+Interpreter options before that module or script are refused; application arguments remain part
+of the exact approved argv. Pytest selection paths are staged source inputs, so editing the test
+under the same command/dependency grant does not require reapproval or move it out of pytest's
+normal configuration-discovery tree. A `.py` interpreter entrypoint remains a hash-bound
+`ScriptRef`, including an entrypoint at the repository root. Bare `python`, bare `pytest`, other modules, wrapper interpreters,
+and automatic substitution of a different interpreter are outside this adapter.
+
+Review shows the environment, runtime location, and dependency hashes. The local approval binds
+the adapter version, `pyvenv.cfg`, native interpreter bytes, environment tree, and runtime `lib`
+tree, including bytecode and symlink targets. Changing any of these requires a fresh approval.
+This includes ordinary cache churn: an agent running Python directly may create a new dependency
+or runtime `.pyc` file and lapse this strict grant even without a package upgrade. Adage's private
+execution avoids writing those caches back; cache-normalized grants are future work.
+The configured runtime must be a separate installation matching the environment's declared
+Python 3.8+ version; system site packages and dependency symlinks escaping the approved trees
+are refused. The runtime `lib` tree and exact interpreter are copied into private scratch, checked against
+the approved hashes, and executed there. Original runtime paths receive no additional sandbox
+read grants. This does not change the sandbox's existing platform toolchain grants.
+
+Execution uses a private copy of the staged environment and base runtime, with interpreter
+aliases and `pyvenv.cfg` rebound to that runtime snapshot. Absolute dependency symlinks other
+than the declared interpreter aliases are refused because they cannot be relocated safely. Plain editable `.pth` paths inside the
+original repository are rebased to staged source. Local import-hook code, including uv's normal
+hook, is hash-bound approved dependency code and runs under the same sandbox; executable `.pth`
+lines embedding the original checkout and external path entries are refused. Import-hook
+layouts that cannot work without reading the original checkout remain unsupported. Source and
+original environment files are not rewritten. The extra environment copy keeps this runtime
+preparation separate from the staged source change set.
+
+Adapter version 1 forces `-B` and a fresh `-X pycache_prefix`, disables user site packages, removes
+private environment bytecode, and adds its private `bin` directory to the sanitized PATH. It
+still runs on the CPU with no model call. Dependency hashing and copying add measurable setup
+cost; they are included in the launch evaluation rather than counted as zero-cost work. Python
+preparation shares the E2 action wall budget (at most 20 seconds); hash/copy loops and stage
+boundaries check a cooperative deadline, and the child receives only the remaining time. A
+blocked filesystem syscall cannot be interrupted by these checks. `Staged.duration_ms` continues
+to mean child duration; evaluation must measure wall time around the full stage separately. A native
+macOS integration test uses real uv/pytest, asserts imports come from staged source, and verifies
+that the original checkout and environment are unchanged. Linux native execution for this
+adapter still requires its own platform validation; Windows has no automatic E2 execution.
+
 ## The gates, in order
 
 1. **Request.** Each `{slot}` is bound to a value that matches its contract (anchored, passing the
@@ -406,7 +451,8 @@ sandbox profile, labels, origin, and the pack's reflex exec digest when there is
    regenerate (environment only with the managed opt-in), and only through a stage.
 2. **Classification.** The local command table re-classifies the bound argv. A path as the program
    (a repository script) or an interpreter is **environment** whatever its name. Declaring less than
-   the classified effect refuses, except for scripts a person approved at a lower effect.
+   the classified effect refuses, except for scripts a person approved at a lower effect or the
+   explicitly approved project Python verify adapter above.
 3. **Policy** (below).
 4. **Approval.** Equality on every field of the key, or automatic approval of the inert-observe
    class when policy turns it on.
@@ -427,7 +473,8 @@ templates, the scripts and their hashes, the effect, the level, the output mode,
 the contracts accept. Changing anything else lapses the approval; `run` then reports
 `exec-changed` with the fields that differ, and re-approval is explicit.
 
-This key covers declared script references, not a complete transitive dependency closure.
+Except for the explicitly bound project Python dependency trees above, this key covers declared
+script references, not a complete transitive dependency closure.
 For example, `make gen` may load a Makefile and further scripts that are not individually
 hashed in the grant. The E2 input snapshot checks for changes during staging; changing those
 unbound dependencies before a run does not itself lapse the grant. Repository/toolchain reads

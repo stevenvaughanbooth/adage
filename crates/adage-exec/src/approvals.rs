@@ -309,6 +309,7 @@ mod tests {
         let fields = serde_json::from_str(r#"{"n":{"type":"int"}}"#).unwrap();
         ExecRequest {
             repo_root: PathBuf::from("/r"),
+            project_python: None,
             argv: vec!["jq".into(), ".".into(), "{f}".into()],
             inputs: BTreeMap::new(),
             contracts: [("f".to_string(), r"^[a-z]{1,8}\.json$".to_string())].into(),

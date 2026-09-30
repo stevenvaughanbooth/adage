@@ -57,10 +57,9 @@ function fromArchive(artifacts, app, target, exe, scratch) {
   const archive = [".tar.xz", ".tar.gz", ".zip"].map((ext) => path.join(artifacts, base + ext)).find(existsSync)
   if (!archive) return null
   // dist writes <archive>.sha256 beside each archive: a mismatch stops the release.
-  if (existsSync(`${archive}.sha256`)) {
-    const want = readFileSync(`${archive}.sha256`, "utf8").trim().split(/\s+/)[0]
-    if (want !== sha256(archive)) fail(`${archive} does not match ${path.basename(archive)}.sha256`)
-  }
+  if (!existsSync(`${archive}.sha256`)) fail(`${archive} has no .sha256; refusing an unverified release archive`)
+  const want = readFileSync(`${archive}.sha256`, "utf8").trim().split(/\s+/)[0]
+  if (want !== sha256(archive)) fail(`${archive} does not match ${path.basename(archive)}.sha256`)
   const into = path.join(scratch, app, target)
   mkdirSync(into, { recursive: true })
   try {

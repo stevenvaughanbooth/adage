@@ -35,6 +35,12 @@ delegate`), inside an OS sandbox: E1 prefetches read-only results, while E2 stag
 applies only permitted outputs. Selecting and running such an invocation needs no model request;
 the next model request may still consume its result.
 
+The learner also retains **routine execution candidates**: exact commands that reliably follow
+edits, even when reminding the agent would add no value. They appear as needing execution approval
+in review and stay silent without a valid local grant. Accepting their evidence with ordinary
+`adage review approve` does not authorize execution. Their evidence travels in packs; your local
+execution permission does not.
+
 For a learned lookup to replace an agent action, it must deliver the information the agent
 would have fetched. Approved lookups can declare a bounded **complete stdout** contract: Adage
 preserves the full text or withholds it on overflow, instead of silently returning a partial
@@ -46,6 +52,8 @@ That [gate now passes](evals/reflex-proof/harness/results/20260929-learned-actio
 on three held-out work-item triage tasks, automatic execution removed all three agent lookup
 actions and reduced observed model requests from six to three, with all answers correct.
 This is a small generated-repository mechanism proof, not a general coding speedup claim.
+The [launch evidence index](evals/reflex-proof/LAUNCH-STATUS.md) tracks real-repository validation,
+release gates, failed attempts and evaluation spending.
 
 ```text
   agent traces ──► adage condition ──► reflexes ──► index ──► hooks
@@ -62,8 +70,10 @@ In Claude Code:
 /plugin install adage@adage
 ```
 
-Then start a session. That is all. The plugin carries verified binaries for macOS (arm64, x64),
-Linux (x64, arm64) and Windows (x64), so nothing else is installed and nothing is downloaded. At
+Then start a session. The release plugin carries checksummed binaries for macOS (arm64, x64),
+Linux (x64, arm64) and Windows (x64), so nothing else is installed and nothing is downloaded.
+Native Windows plugin hook invocation remains unverified; automatic execution requires macOS
+or Linux (including WSL). At
 the first session in a repository you see one line, which the agent never sees:
 
 ```text
@@ -352,7 +362,7 @@ adage watch            # in a split pane: Adage's health, hook activity and cond
 adage map              # the map of your reflexes in the browser (read-only, loopback only)
 adage ui               # the full terminal app: reflexes, map, health, settings
 adage doctor           # check binary, data dir, index, tracks, model, hooks, kill switches
-adage review           # reflexes waiting for your decision, with evidence and the exact directive text
+adage review           # evidence, advice previews, and routine candidates awaiting execution approval
 ```
 
 Then, when you want to:

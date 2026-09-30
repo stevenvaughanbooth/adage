@@ -625,6 +625,7 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                 "uplift": uplift,
                 "outcome_lift": e.outcome_lift,
                 "effect_evidence": e.effect_evidence,
+                "execution": e.execution,
             });
             // Kept quiet on its uplift: agents already take the step unaided, so it waits for a person.
             let quiet = r.state == adage_tracks::RouteState::Nascent
@@ -635,7 +636,11 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                 "summary": r.summary,
                 "instinct": r.is_instinct() || index::is_instinct_track(t),
                 "origin": origin_label(r),
-                "review": { "verbs": standing.map(|s| s.verbs.clone()).unwrap_or_default(), "reasons": reasons },
+                "review": {
+                    "verbs": standing.map(|s| s.verbs.clone()).unwrap_or_default(),
+                    "reasons": reasons,
+                    "execution_command": e.execution.as_ref().map(|_| format!("adage review delegate {} {} --level e2", inst.reference, r.id)),
+                },
                 "track": t.manifest.track.name,
                 "version": t.manifest.track.version,
                 "reference": inst.reference,
@@ -651,7 +656,8 @@ pub(crate) fn build(paths: &Paths, max_events: usize) -> Result<Value> {
                 "quiet": quiet,
                 "trigger": trigger(&r.trigger),
                 "step": step_json,
-                "directive": preview(t, r).0,
+                "execution_only": e.execution.is_some(),
+                "directive": if e.execution.is_some() { String::new() } else { preview(t, r).0 },
                 "obligation": crate::evidence::obligation(r),
                 "evidence": evidence,
                 "live": {

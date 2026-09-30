@@ -40,17 +40,23 @@ esac
 case "$T" in *-linux-musl) [ -f "$ROOT/dist/$T/adage-exec" ] || T="${T%-musl}-gnu" ;; esac
 sha256() { { shasum -a 256 "$1" || sha256sum "$1"; } 2>/dev/null | cut -d' ' -f1; }
 LINKED=""
-SRC="$ROOT/dist/$T/adage-exec"
-if [ -n "$T" ] && [ -f "$SRC" ]; then
-  WANT=$(grep " $T/adage-exec\$" "$ROOT/dist/SHA256SUMS" 2>/dev/null | cut -d' ' -f1)
-  if [ -n "$WANT" ] && [ -x "$DATA/bin/adage-exec-$WANT" ]; then GOT="$WANT"; else GOT=$(sha256 "$SRC"); fi
-  if [ -n "$WANT" ] && [ "$WANT" = "$GOT" ]; then
-    if [ ! -x "$DATA/bin/adage-exec-$GOT" ]; then
-      cp "$SRC" "$DATA/bin/.adage-exec-$GOT.tmp" && chmod 755 "$DATA/bin/.adage-exec-$GOT.tmp" \
-        && mv "$DATA/bin/.adage-exec-$GOT.tmp" "$DATA/bin/adage-exec-$GOT" || skip "cannot install the bundled binary"
-    fi
-    ln -sfn "adage-exec-$GOT" "$DATA/bin/adage-exec" && LINKED=1
+install_bundled() {
+  NAME="$1"; SRC="$ROOT/dist/$T/$NAME"
+  [ -n "$T" ] && [ -f "$SRC" ] || return 1
+  WANT=$(grep " $T/$NAME\$" "$ROOT/dist/SHA256SUMS" 2>/dev/null | cut -d' ' -f1)
+  if [ -n "$WANT" ] && [ -x "$DATA/bin/$NAME-$WANT" ]; then GOT="$WANT"; else GOT=$(sha256 "$SRC"); fi
+  [ -n "$WANT" ] && [ "$WANT" = "$GOT" ] || return 1
+  if [ ! -x "$DATA/bin/$NAME-$GOT" ]; then
+    cp "$SRC" "$DATA/bin/.$NAME-$GOT.tmp" && chmod 755 "$DATA/bin/.$NAME-$GOT.tmp" \
+      && mv "$DATA/bin/.$NAME-$GOT.tmp" "$DATA/bin/$NAME-$GOT" || return 1
   fi
+  ln -sfn "$NAME-$GOT" "$DATA/bin/$NAME"
+}
+if install_bundled adage-exec; then
+  # The installed executor locates its learner beside itself, not in dist/. Both binaries must
+  # be verified and installed together; otherwise delegation would silently disable learning.
+  install_bundled adage || fail "the bundled learner is missing or does not match its checksum; reinstall the plugin"
+  LINKED=1
 fi
 if [ -z "$LINKED" ] && P=$(command -v adage-exec 2>/dev/null) && [ -n "$P" ] && [ -f "$P" ]; then
   ln -sfn "$P" "$DATA/bin/adage-exec" && LINKED=1

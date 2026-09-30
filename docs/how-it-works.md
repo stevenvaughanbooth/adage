@@ -68,6 +68,21 @@ pipeline. `adage sense` previews available evidence without publishing learned r
 and replays compiled commands in a sandbox. Its optional `--execute` evidence workflow starts
 paid agent sessions only with an explicit human invocation. Neither is background learning.
 
+Routine actions have a different value test from reminders. If agents already run a check
+reliably, reminding them can add context without saving work, while an approved CPU action can
+still replace their next tool call. The graph learner can retain an **execution-only candidate**
+for a single verification or regeneration command after an edit. It independently checks every
+matching edit, requires at least the normal support threshold (five unsteered sessions by
+default), and requires at least 90% of those edits to be followed immediately by the same
+successful command in a later model turn. Intermediate edits, failures and commands already
+planned in the edit's model turn do not receive credit. Path arguments use the existing typed
+bindings; no repository-specific detector is added.
+
+The route records these observational counts in `evidence.execution`. They do not grant execution
+or prove savings. These candidates stay silent in ordinary advisory mode and become eligible
+only through the existing execution review and local grant. Actual avoided agent work still
+requires a paired live evaluation; see the [launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md).
+
 ## What embeddings do
 
 The intent subsystem supports versioned local static embedding models, including bundled
@@ -99,7 +114,8 @@ execution, each prompt input must have exactly one distinct matching value withi
 scan. Ambiguous prompts retain ordinary guidance instead of executing an arbitrary first match.
 
 Changes to that bound definition or a pinned script invalidate the old grant. Evidence updates alone need not.
-Disabling execution preserves learned knowledge for suggestions. A repository kill switch stops
+Disabling execution preserves learned knowledge and ordinary suggestions; execution-only candidates
+stay silent. A repository kill switch stops
 hook interventions. See [execution and recovery](execution.md) for the exact controls and limits.
 
 The script closure is not a complete dependency graph. An approved `make gen` can invoke

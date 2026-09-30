@@ -539,6 +539,9 @@ pub const MAX_ACTION_GLOBS: usize = 16;
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RouteEvidence {
+    /// Observational routine evidence, never a portable execution grant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution: Option<adage_tracks::ExecutionEvidence>,
     #[serde(default)]
     pub opportunities: u32,
     #[serde(default)]

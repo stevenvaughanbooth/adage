@@ -397,6 +397,7 @@ export function Inspector({ graph }: { graph: Graph }) {
   const l = lifecycle(r.state);
   const inst = isInstinct(r);
   const e = r.evidence;
+  const executionOnly = Boolean(r.execution_only);
   const verbs = orderedVerbs(r);
   const bar = graph.bars?.fire_lower_bound ?? 0.8;
   const upliftBar = graph.bars?.uplift_min ?? UPLIFT_MIN;
@@ -418,7 +419,7 @@ export function Inspector({ graph }: { graph: Graph }) {
           </span>
         </h2>
         <div className="flex flex-wrap gap-1.5">
-          <StrengthChip strength={s} hollow={l === "nascent" || l === "extinguished"} />
+          {executionOnly ? <Pill>CPU execution candidate</Pill> : <StrengthChip strength={s} hollow={l === "nascent" || l === "extinguished"} />}
           <LifecycleChip lifecycle={l} />
           {quiet && (
             <span className="inline-flex h-6 items-center gap-1.5 rounded-full border border-line-strong px-2.5 text-xs text-ink-1">
@@ -450,7 +451,7 @@ export function Inspector({ graph }: { graph: Graph }) {
         )}
       </div>
 
-      {quiet && <QuietPanel r={r} bar={upliftBar} />}
+      {quiet && !executionOnly && <QuietPanel r={r} bar={upliftBar} />}
 
       {r.trigger.kind === "context" && r.trigger.items && r.trigger.items.length > 0 && (
         <Section label="Stimulus: a run of events" note={r.trigger.within ? `Each within ${plural(r.trigger.within, "event")} of the one before; the last one fires it.` : undefined}>
@@ -464,9 +465,16 @@ export function Inspector({ graph }: { graph: Graph }) {
         </Section>
       )}
 
-      <Section label={quiet ? "What the agent would see" : "What the agent sees"}>
-        <Directive text={r.directive} />
-      </Section>
+      {executionOnly ? (
+        <Section label="CPU execution" note="This routine stays silent without a valid local execution grant. Evidence approval alone does not authorize it to run.">
+          <code className="break-words text-xs text-accent-soft">{r.step.label}</code>
+          <CommandButton command="adage delegate status" why="Check current execution authority from this repository." />
+        </Section>
+      ) : (
+        <Section label={quiet ? "What the agent would see" : "What the agent sees"}>
+          <Directive text={r.directive} />
+        </Section>
+      )}
 
       {card && (
         <Section label="Procedure card">
@@ -484,8 +492,14 @@ export function Inspector({ graph }: { graph: Graph }) {
         </Section>
       )}
 
-      <Section label="Evidence" source={evidenceSource(r)} note={evidenceNote(r)}>
-        {card ? (
+      <Section label="Evidence" source={evidenceSource(r)} note={executionOnly ? "Immediate successful actions on a later model turn. These counts establish a recurring routine, not avoided work or permission." : evidenceNote(r)}>
+        {executionOnly && e.execution ? (
+          <div className="grid grid-cols-3 gap-2">
+            <Stat value={e.execution.immediate} of={`/${e.execution.opportunities}`} label="matching edits followed" />
+            <Stat value={e.execution.sessions} label="unsteered sessions" />
+            <Stat value="—" label="savings not established" />
+          </div>
+        ) : card ? (
           <div className="grid grid-cols-3 gap-2">
             <Stat value={card.passed} of={`/${card.sessions}`} label="traces passed" />
             <Stat value={card.files.length} label="files" />
@@ -512,7 +526,7 @@ export function Inspector({ graph }: { graph: Graph }) {
             <Gauge lb={e.lower_bound} bar={bar} />
           </>
         )}
-        {e.describe && (
+        {e.describe && !executionOnly && (
           <p className="m-0 font-mono text-[11px] leading-snug text-ink-3" data-testid="evidence-describe">
             <Prose text={e.describe} />
           </p>
@@ -530,7 +544,7 @@ export function Inspector({ graph }: { graph: Graph }) {
         )}
       </Section>
 
-      {!quiet && e.uplift && (
+      {!executionOnly && !quiet && e.uplift && (
         <Section label="Uplift" note="How much more often agents take the step when told than unaided: what delivering it changes.">
           <UpliftBar u={e.uplift} bar={upliftBar} />
         </Section>
@@ -575,8 +589,11 @@ export function Inspector({ graph }: { graph: Graph }) {
 
       <div className="grow" />
       <div className="flex flex-col gap-2">
+        {executionOnly && r.review?.execution_command && (
+          <CommandButton command={r.review.execution_command} why="Review and approve the exact automatic action at your terminal." primary />
+        )}
         {verbs.slice(0, 1).map((v) => (
-          <CommandButton key={v} command={reviewCommand(v, r)} why={verbWhy(v)} primary />
+          <CommandButton key={v} command={reviewCommand(v, r)} why={executionOnly && v === "approve" ? "Accept the evidence; this does not grant execution permission." : verbWhy(v)} primary={!executionOnly} />
         ))}
         {verbs.length > 1 && (
           <details className="group">
@@ -585,7 +602,7 @@ export function Inspector({ graph }: { graph: Graph }) {
             </summary>
             <div className="mt-1 flex flex-col gap-1.5">
               {verbs.slice(1).map((v) => (
-                <CommandButton key={v} command={reviewCommand(v, r)} why={verbWhy(v)} />
+                <CommandButton key={v} command={reviewCommand(v, r)} why={executionOnly && v === "approve" ? "Accept the evidence; this does not grant execution permission." : verbWhy(v)} />
               ))}
             </div>
           </details>

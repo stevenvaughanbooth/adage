@@ -39,6 +39,8 @@ pub struct Reflexes {
     pub skills: usize,
     /// Of the learned ones: procedure cards for families of similar tasks.
     pub cards: usize,
+    /// Indexed routes that stay silent until separately authorized for execution.
+    pub execution_only: usize,
 }
 
 impl Reflexes {
@@ -50,6 +52,7 @@ impl Reflexes {
 pub fn reflexes(index: &Index, repo: &str) -> Reflexes {
     let mut r = Reflexes::default();
     for ir in index.for_repo(repo) {
+        r.execution_only += usize::from(ir.exec_only());
         if ir.route.is_instinct() {
             r.instincts += 1;
         } else if ir.track.ends_with(&format!("/{}", adage_learn::TRACK)) {
@@ -140,8 +143,12 @@ fn repo_lines(paths: &Paths, repo: &str, root: &Path, index: &Index, now: u64) -
     out.push(if r.total() == 0 {
         "no reflexes active yet".to_string()
     } else {
-        format!("{} active: {}", plural(r.total(), "reflex", "reflexes"), parts.join(", "))
+        let label = if r.execution_only > 0 { "indexed" } else { "active" };
+        format!("{} {label}: {}", plural(r.total(), "reflex", "reflexes"), parts.join(", "))
     });
+    if r.execution_only > 0 {
+        out.push(format!("{} execution-only; authority: adage delegate status", r.execution_only));
+    }
 
     // Learning.
     let cfg = adage_store::config::load(paths);

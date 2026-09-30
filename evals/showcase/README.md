@@ -1,6 +1,12 @@
 # Adage showcase: the shipped product on recurring work, five repositories
 
-Prepared 2026-09-29. **No paid session has run.** This is the benchmark behind the website's numbers:
+Prepared 2026-09-29. This protocol is historical: `live/` now contains paid training-session
+records and parsed-history archives. Some later training sessions received Adage cards; they
+must not be counted as unsteered evidence for those commands. The archive's learned cards do
+not establish automatic CPU action elimination. See the [current launch evidence
+index](../reflex-proof/LAUNCH-STATUS.md) for that separate gate.
+
+This is the benchmark protocol for
 what the shipped product does on recurring developer tasks when it learns each one from a user's own
 sessions. The pre-registration is [`prereg.json`](prereg.json); `analyze.py` and `render.py` read every
 parameter from it. The protocol is the GO validation's ([`evals/launch/go-validation`](../launch/go-validation/README.md)),

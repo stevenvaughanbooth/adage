@@ -303,6 +303,10 @@ pub struct Compiled {
     pub why: Why,
     /// Its id has its shape's fixed form ([`stable`]).
     pub fixed_id: bool,
+    /// Needs an independent all-edit execution recount before a certificate is issued.
+    pub execution_candidate: bool,
+    /// Passed the original advisory value/guard gate, independently of execution admission.
+    pub advisory_eligible: bool,
 }
 
 /// A reflex that compiled to nothing, and why.

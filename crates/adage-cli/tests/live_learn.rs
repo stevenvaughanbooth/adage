@@ -134,6 +134,7 @@ impl World {
 /// without changing what the hook prints; other events, `learn.auto = false`, `ADAGE_AUTO_LEARN=0`
 /// and `.adage/disabled` do not.
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
 fn every_harness_enqueues_and_starts_a_learner_at_stop_and_session_end() {
     let w = World::new();
     w.config("[learn]\nmin_interval_secs = 0\n");
@@ -182,6 +183,7 @@ fn every_harness_enqueues_and_starts_a_learner_at_stop_and_session_end() {
 }
 
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
 fn debounce_and_single_flight() {
     let w = World::new();
     w.config("[learn]\nmin_interval_secs = 120\n");
@@ -225,6 +227,7 @@ fn debounce_and_single_flight() {
 }
 
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
 fn a_learner_that_cannot_start_fails_open() {
     let w = World::new();
     let mut c = w.cmd(&["hook", "claude", "Stop"]);

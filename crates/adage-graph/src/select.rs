@@ -146,6 +146,8 @@ pub struct Reflex {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub consistency: Option<f64>,
     pub value: f64,
+    #[serde(default)]
+    pub execution_candidate: bool,
     /// Compression gain, bits.
     pub gain: f64,
     pub exposed: u32,
@@ -514,6 +516,7 @@ fn reflex(db: &Db, sc: &Scored, gain: f64) -> Reflex {
         contrast: sc.contrast,
         consistency: sc.consistency,
         value: sc.value,
+        execution_candidate: sc.execution_candidate,
         gain,
         exposed: sc.exposed,
         target,

@@ -18,6 +18,21 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Zero configuration: install the plugin, start a session
 
+- The graph learner can retain routine after-edit verification/generation as execution-only
+  candidates when reminders have little value. Independent evidence requires normal session
+  support and at least 90% immediate successful next-turn actions. Candidates remain silent
+  without an exact local execution grant; their evidence is not a savings claim.
+
+- E2 verification can use an explicitly approved project Python environment. The interpreter,
+  dependency environment, and runtime are hash-bound and privately staged; pytest reads edited
+  staged tests without turning those test inputs into fixed scripts. Unsupported layouts refuse
+  execution. Review and both maps distinguish execution candidates from advisory previews.
+
+- The execution plugin installs its checksummed `adage` learner companion beside `adage-exec`,
+  preserving background learning when the plugin is the only installation. Release staging
+  rejects archives with missing checksums. Plugin startup latency is verified on the release
+  binary with real background learning; debug-only spawn-recorder tests remain separate.
+
 - Approved learned lookups can deliver complete bounded multiline stdout. Unsafe, empty or
   oversized results are withheld; selected partial fields no longer claim the agent need not
   repeat the lookup. Complete stdout retains the explicit unstructured-output policy and human

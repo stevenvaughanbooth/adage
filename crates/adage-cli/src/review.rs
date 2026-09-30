@@ -281,7 +281,48 @@ struct Item<'a> {
     proposal: Option<&'a Proposal>,
 }
 
-fn queue<'a>(all: &'a [Installed], judged: &BTreeMap<(String, String), (u32, u32)>, index: &Index) -> Vec<Item<'a>> {
+fn queue<'a>(
+    all: &'a [Installed],
+    judged: &BTreeMap<(String, String), (u32, u32)>,
+    index: &Index,
+    paths: &Paths,
+) -> Vec<Item<'a>> {
+    let store = adage_exec::approvals::Store::load(&adage_exec::approvals::path(&paths.root)).ok();
+    let root = std::env::current_dir().ok().and_then(|p| adage_core::repo::find_root(&p));
+    let repo = root.as_deref().map(adage_core::repo::repo_key);
+    let table = adage_core::CommandTable::load();
+    let granted = |inst: &Installed, r: &Route| {
+        let Some((store, root)) = store.as_ref().zip(root.as_deref()) else { return false };
+        if repo.as_deref() != Some(inst.track.manifest.scope.repo.as_str()) {
+            return false;
+        }
+        let Some(ir) = index.routes.iter().find(|ir| {
+            ir.repo == inst.track.manifest.scope.repo
+                && ir.track == inst.track.manifest.track.name
+                && ir.route.id == r.id
+        }) else {
+            return false;
+        };
+        let label = format!("{}/{}", ir.track, r.id);
+        store
+            .approvals
+            .iter()
+            .filter(|a| a.route == label && a.key.repo == ir.repo && a.key.level == adage_exec::Level::E2)
+            .any(|a| {
+                adage_exec::route::plan(
+                    ir,
+                    index,
+                    root,
+                    &paths.tracks(),
+                    adage_exec::Level::E2,
+                    a.terms.as_ref(),
+                    &table,
+                )
+                .is_ok_and(|p| {
+                    store.find(&adage_exec::approvals::ApprovalKey::for_request(&p.request, &ir.repo)).is_some()
+                })
+            })
+    };
     let mut items = Vec::new();
     for inst in all {
         let m = &inst.track.manifest;
@@ -363,6 +404,9 @@ fn queue<'a>(all: &'a [Installed], judged: &BTreeMap<(String, String), (u32, u32
                     format!("agents ignored this reflex in {ignored} of {n} treated traces{since}; {advice}"),
                 ));
             }
+            if r.evidence.execution.is_some() && live(r.state) && !granted(inst, r) {
+                reasons.push(("execution", "Routine CPU candidate; silent without a valid local E2 grant. Ordinary approve accepts the evidence only. Review execution from this repository with `adage review delegate <track> <reflex> --level e2`.".into()));
+            }
             if !reasons.is_empty() {
                 items.push(Item { inst, route: r, reasons, followed, ignored, proposal });
             }
@@ -375,7 +419,7 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     let all = discover(&paths.tracks())?;
     let judged = judgements(paths);
     let index = Index::compile_root(&paths.tracks(), &all.iter().map(|i| i.track.clone()).collect::<Vec<_>>()).0;
-    let items = queue(&all, &judged, &index);
+    let items = queue(&all, &judged, &index, paths);
     let inert = crate::packs::inert_routes(paths);
     let attested = attestations(paths);
     let revoked = adage_exec::approvals::Store::load(&adage_exec::approvals::path(&paths.root))
@@ -397,16 +441,18 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
                     "route": r.id,
                     "reasons": it.reasons.iter().map(|(k, d)| json!({ "kind": k, "detail": d })).collect::<Vec<_>>(),
                     "strength": strength_str(r.strength),
+                    "execution_only": e.execution.is_some(),
+                    "next": if e.execution.is_some() { Some(format!("adage review delegate {} {} --level e2", it.inst.reference, r.id)) } else { None },
                     "ceiling": ceiling_str(r),
                     "effect": r.effect.as_str(),
                     "state": lower(r.state),
                     "authored": r.authored,
                     "decisions": verbs(r, it.proposal.is_some()),
                     "step": describe_step(&r.step),
-                    "evidence": { "support": e.support, "opportunities": e.opportunities, "days": e.days, "rate": e.rate, "lower_bound": e.lower_bound },
+                    "evidence": { "support": e.support, "opportunities": e.opportunities, "days": e.days, "rate": e.rate, "lower_bound": e.lower_bound, "execution": e.execution },
                     "runtime": { "followed": it.followed, "ignored": it.ignored },
                     "why": adage_tracks::why::load(&it.inst.dir).remove(&r.id),
-                    "directive": directive,
+                    "directive": if e.execution.is_some() { Value::Null } else { json!(directive) },
                     "example_values": examples,
                     "last_review": it.inst.reviews.routes.get(&r.id).map(|v| json!({ "decision": v.decision.as_str(), "on": v.on, "by": v.by })),
                     "proposal": it.proposal.map(|p| {
@@ -491,7 +537,11 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
             };
             o.line(&row("why", Line::new().text(line)))?;
         }
-        let mut strength = Line::new().strength(words::strength(r.strength));
+        let mut strength = if r.evidence.execution.is_some() {
+            Line::new().text("Execution only")
+        } else {
+            Line::new().strength(words::strength(r.strength))
+        };
         if r.strength != Strength::Inhibit {
             strength = strength.quiet(format!(" (ceiling {})", ceiling_str(r)));
         }
@@ -523,6 +573,17 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
             }
         }
         o.line(&row("step", Line::new().text(describe_step(&r.step))))?;
+        if let Some(e) = &r.evidence.execution {
+            o.line(&row("CPU evidence", Line::new().text(format!("{} / {} matching edits immediately followed by the same successful action in a later model turn; {} sessions", e.immediate, e.opportunities, e.sessions))))?;
+            o.line(&row(
+                "execution",
+                Line::new().text("Silent without a valid local E2 grant; ordinary approve accepts evidence only"),
+            ))?;
+            o.line(&row(
+                "delegate",
+                Line::new().cmd(format!("adage review delegate {} {} --level e2", it.inst.reference, r.id)),
+            ))?;
+        }
         let (directive, examples) = preview(t, r);
         let ex = if examples.is_empty() {
             String::new()
@@ -532,9 +593,11 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
                 examples.iter().map(|(k, v)| format!("{k} = {v}")).collect::<Vec<_>>().join(", ")
             )
         };
-        o.line(&row("directive", Line::new().faint(ex)))?;
-        for line in directive.lines() {
-            o.line(&Line::new().text("    ").quiet(line))?;
+        if r.evidence.execution.is_none() {
+            o.line(&row("directive", Line::new().faint(ex)))?;
+            for line in directive.lines() {
+                o.line(&Line::new().text("    ").quiet(line))?;
+            }
         }
         if let Some(p) = it.proposal {
             o.line(&row(
@@ -556,7 +619,14 @@ fn list(paths: &Paths, as_json: bool) -> Result<()> {
     } else {
         "or another decision listed above"
     };
-    o.next(&format!("adage review approve {} {}", first.inst.reference, first.route.id), why)?;
+    if first.route.evidence.execution.is_some() {
+        o.next(
+            &format!("adage review delegate {} {} --level e2", first.inst.reference, first.route.id),
+            "review the exact command and execution limits from its repository",
+        )?;
+    } else {
+        o.next(&format!("adage review approve {} {}", first.inst.reference, first.route.id), why)?;
+    }
     Ok(())
 }
 
@@ -705,7 +775,7 @@ pub(crate) fn standings(paths: &Paths) -> Result<BTreeMap<(String, String), Stan
             out.insert((inst.reference.clone(), r.id.clone()), Standing { verbs: verbs(r, proposed), reasons: vec![] });
         }
     }
-    for it in queue(&all, &judged, &index) {
+    for it in queue(&all, &judged, &index, paths) {
         if let Some(s) = out.get_mut(&(it.inst.reference.clone(), it.route.id.clone())) {
             s.reasons = it.reasons;
         }
@@ -776,7 +846,7 @@ fn decide(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
     // What waits now, after this decision.
     let all = discover(&paths.tracks())?;
     let index = Index::load(&paths.index());
-    let left = queue(&all, &judgements(paths), &index).len();
+    let left = queue(&all, &judgements(paths), &index, paths).len();
     if left > 0 {
         let why = if left == 1 { "1 reflex still waits".to_string() } else { format!("{left} reflexes still wait") };
         o.next("adage review", &why)?;
@@ -1004,6 +1074,16 @@ fn apply(verb: &str, spec: &str, route_id: &str, by: Option<String>, paths: &Pat
             .text(words::lifecycle(after.state))
     };
     rows.push(("lifecycle", lifecycle));
+    if after.evidence.execution.is_some() {
+        rows.push((
+            "execution",
+            Line::new().text("Evidence decision only; execution still requires a valid local E2 grant"),
+        ));
+        rows.push((
+            "delegate",
+            Line::new().cmd(format!("adage review delegate {} {route_id} --level e2", inst.reference)),
+        ));
+    }
     if after.authored != before.authored {
         rows.push(("pinned", Line::new().text("yes: `adage condition` will not overwrite it")));
     }

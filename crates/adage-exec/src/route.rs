@@ -277,6 +277,13 @@ pub fn plan(
         return Err("a finish-line step changes the repository; it runs only as an E2 action".into());
     }
     let argv: Vec<String> = command.split_whitespace().map(String::from).collect();
+    let project_python = match argv.first() {
+        Some(program) => crate::project_python::identify(root, program)?,
+        None => None,
+    };
+    if project_python.is_some() && (level != Level::E2 || ir.route.effect != Effect::Verify) {
+        return Err("project Python is supported only for E2 verification".into());
+    }
     let used = crate::request::slots(&argv);
     let mut contracts = BTreeMap::new();
     let mut repo_paths = std::collections::BTreeSet::new();
@@ -346,8 +353,22 @@ pub fn plan(
         (Some(_), _) => return Err("the route's pack cannot be read".into()),
         (None, _) => {
             let mut scripts = Vec::new();
-            for a in &argv {
-                if let Some(p) = is_script_path(a, root) {
+            let python_pytest = project_python.is_some()
+                && argv.get(1).is_some_and(|a| a == "-m")
+                && argv.get(2).is_some_and(|a| a == "pytest");
+            for (position, a) in argv.iter().enumerate() {
+                // pytest selection paths are mutable staged source inputs, not standalone
+                // scripts. Hashing/shadowing them would lapse a grant on every test edit and
+                // change pytest's configuration/conftest discovery root.
+                if python_pytest || project_python.as_ref().is_some_and(|p| &p.program == a) {
+                    continue;
+                }
+                let python_entrypoint = project_python.is_some()
+                    && position == 1
+                    && a.ends_with(".py")
+                    && adage_core::repo::is_safe_relative(a)
+                    && std::fs::symlink_metadata(root.join(a)).is_ok_and(|m| m.is_file());
+                if let Some(p) = python_entrypoint.then(|| a.clone()).or_else(|| is_script_path(a, root)) {
                     let h =
                         hash_file(&root.join(p.trim_start_matches("./"))).ok_or(format!("script {p} is unreadable"))?;
                     scripts.push(ScriptRef { path: p, sha256: h });
@@ -402,9 +423,10 @@ pub fn plan(
         profile.limits = profile.limits.with_timeout(level, ms);
     }
     let exit_when = terms.map(|t| t.exit_when.clone()).unwrap_or_default();
-    Ok(Plan {
+    let plan = Plan {
         request: ExecRequest {
             repo_root: root.to_path_buf(),
+            project_python,
             argv,
             inputs: BTreeMap::new(),
             contracts,
@@ -424,7 +446,9 @@ pub fn plan(
         },
         exit_when,
         repo_paths,
-    })
+    };
+    crate::project_python::validate_command(&plan.request)?;
+    Ok(plan)
 }
 
 /// The values a directive bound, read back from its text: the indented command line, aligned

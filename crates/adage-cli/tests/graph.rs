@@ -296,3 +296,32 @@ fn graph_carries_quiet_cards_sequences_savings_and_rewrites() {
     let g: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
     assert_eq!(g["runtime"]["rewrite"], json!({ "on": false, "config": true, "marker": true }));
 }
+
+#[test]
+fn graph_exposes_cpu_candidate_evidence_without_an_advisory_preview() {
+    let w = World::new();
+    let mut t = track();
+    let mut r = t.routes[0].clone();
+    r.id = "routine-test".into();
+    r.trigger = Trigger::AfterEdit { paths: "src/*.rs".into() };
+    r.step = Step::Run { command: "cargo test".into() };
+    r.slots.clear();
+    r.effect = Effect::Verify;
+    r.strength = Strength::Prime;
+    r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, immediate: 5, sessions: 5 });
+    t.routes.push(r);
+    io::write(&w.root.join("adage/tracks/acme/work"), &t).unwrap();
+    Index::compile(&[t]).write_atomic(&w.root.join("adage/index.json")).unwrap();
+    let g: Value = serde_json::from_str(&w.run(&["graph", "--json"], &json!({}), "treated")).unwrap();
+    let candidate = g["routes"].as_array().unwrap().iter().find(|r| r["id"] == "routine-test").unwrap();
+    assert_eq!(candidate["execution_only"], true);
+    assert_eq!(candidate["directive"], "");
+    assert_eq!(candidate["evidence"]["execution"], json!({"opportunities":5,"immediate":5,"sessions":5}));
+    assert_eq!(candidate["review"]["execution_command"], "adage review delegate acme/work routine-test --level e2");
+    assert!(candidate["review"]["reasons"].as_array().unwrap().iter().any(|r| r["kind"] == "execution"));
+    let advisory = g["routes"].as_array().unwrap().iter().find(|r| r["id"] == "lookup").unwrap();
+    assert_eq!(advisory["execution_only"], false);
+    assert!(advisory["evidence"]["execution"].is_null());
+    assert!(advisory["review"]["execution_command"].is_null());
+    assert!(advisory["directive"].as_str().unwrap().contains("wi-lookup"));
+}

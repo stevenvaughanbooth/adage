@@ -121,3 +121,25 @@ fn the_instinct_catalogue_bound_on_acme_becomes_an_instinct_pack() {
     let de = p.routes.iter().find(|r| r.id == "dead-end-d41b1e").unwrap();
     assert!(matches!(&de.trigger, TriggerV2::AfterFailure { signature, .. } if signature.contains("ACME_ENV")));
 }
+
+#[test]
+fn routine_execution_evidence_survives_sharing_without_a_grant() {
+    let d = tempfile::tempdir().unwrap();
+    let mut t = io::read(&track("finish-line")).unwrap();
+    let evidence = adage_tracks::ExecutionEvidence { opportunities: 5, immediate: 5, sessions: 5 };
+    t.routes[0].evidence.execution = Some(evidence.clone());
+    io::write(d.path(), &t).unwrap();
+    let p = round_trip(&from_track_dir(d.path()).unwrap().pack);
+    assert_eq!(p.routes[0].evidence.as_ref().unwrap().execution.as_ref(), Some(&evidence));
+    let r = adage_pack::bind::to_runtime(&p.routes[0], &p, &adage_core::CommandTable::load()).unwrap();
+    let ir = adage_tracks::IndexedRoute {
+        repo: "another-repository".into(),
+        track: "shared/routine".into(),
+        version: "0.1.0".into(),
+        route: r,
+        exec: None,
+    };
+    assert!(ir.exec_only(), "import must not turn a silent CPU candidate into unsolicited advice");
+    assert_eq!(ir.route.evidence.execution, Some(evidence));
+    assert!(p.routes[0].exec.is_none(), "observational evidence does not create execution authority");
+}

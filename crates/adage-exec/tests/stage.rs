@@ -22,6 +22,8 @@ use adage_exec::stage::{self, Outcome, StageBackend};
 use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+#[cfg(target_os = "macos")]
+use std::path::PathBuf;
 use std::process::Command;
 
 const OUTPUTS: &str = "gen/**";
@@ -190,6 +192,7 @@ fn request(repo: &Path, script: &str) -> ExecRequest {
     std::fs::set_permissions(repo.join("tools/act.sh"), std::fs::Permissions::from_mode(0o644)).unwrap();
     ExecRequest {
         repo_root: repo.to_path_buf(),
+        project_python: None,
         argv: vec!["sh".into(), "tools/act.sh".into()],
         inputs: BTreeMap::new(),
         contracts: BTreeMap::new(),
@@ -224,6 +227,78 @@ fn approved(req: &ExecRequest) -> Store {
 
 fn e3_policy() -> Policy {
     Policy { max_level: Level::E2, ..Policy::default() }
+}
+
+/// Run explicitly with ADAGE_TEST_PROJECT_PYTHON_FIXTURE naming a prepared, offline uv project
+/// whose .venv contains pytest. The fixture is read only; every execution uses a disposable copy.
+#[test]
+#[cfg(target_os = "macos")]
+#[ignore = "requires a prepared offline uv/pytest fixture; exercises real project-Python staging"]
+fn approved_project_python_runs_pytest_against_staged_source() {
+    let source = PathBuf::from(std::env::var_os("ADAGE_TEST_PROJECT_PYTHON_FIXTURE").expect("prepared uv fixture"))
+        .canonicalize()
+        .unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().canonicalize().unwrap().join("repo");
+    std::fs::create_dir_all(repo.join("src/cpu_probe")).unwrap();
+    std::fs::create_dir_all(repo.join("tests")).unwrap();
+    std::fs::create_dir_all(repo.join(".git")).unwrap();
+    copy_tree(&source.join(".venv"), &repo.join(".venv"));
+    let site = repo.join(".venv/lib/python3.12/site-packages");
+    assert!(site.join("pytest").is_dir(), "fixture must contain real pytest");
+    for e in std::fs::read_dir(&site).unwrap().flatten() {
+        if e.path().extension().is_some_and(|x| x == "pth") {
+            let s = std::fs::read_to_string(e.path()).unwrap();
+            std::fs::write(e.path(), s.replace(source.to_str().unwrap(), repo.to_str().unwrap())).unwrap();
+        }
+    }
+    std::fs::write(repo.join("src/cpu_probe/__init__.py"), "answer = 42\n").unwrap();
+    std::fs::write(repo.join("tests/test_probe.py"), format!("import cpu_probe\ndef test_staged_import():\n    assert cpu_probe.answer == 42\n    assert not cpu_probe.__file__.startswith({:?})\n    assert '/tree/src/' in cpu_probe.__file__\n", repo.to_str().unwrap())).unwrap();
+    let table = CommandTable::load();
+    let command = ".venv/bin/python -m pytest -q -p no:cacheprovider tests/test_probe.py";
+    let ir = adage_tracks::index::IndexedRoute {
+        repo: "fixture".into(),
+        track: "fixture/learned".into(),
+        version: "0.1.0".into(),
+        exec: None,
+        route: adage_tracks::Route {
+            id: "verify".into(),
+            summary: String::new(),
+            trigger: adage_tracks::Trigger::AfterEdit { paths: "tests/*.py".into() },
+            step: adage_tracks::Step::Run { command: command.into() },
+            slots: vec![],
+            effect: adage_tracks::io::classify(command, &table),
+            strength: adage_tracks::Strength::Fire,
+            state: adage_tracks::RouteState::Firm,
+            exit: vec![],
+            evidence: Default::default(),
+            authored: false,
+        },
+    };
+    let index = adage_tracks::Index { routes: vec![ir.clone()], ..Default::default() };
+    let planned = || adage_exec::route::plan(&ir, &index, &repo, &repo, Level::E2, None, &table).unwrap().request;
+    let original_request = planned();
+    assert!(original_request.scripts.is_empty(), "pytest selections must remain staged inputs");
+    let store = approved(&original_request);
+    // Editing the selected test after approval keeps this exact dependency/command grant valid.
+    std::fs::write(repo.join("src/cpu_probe/__init__.py"), "answer = 43\n").unwrap();
+    std::fs::write(repo.join("tests/test_probe.py"), format!("import cpu_probe\ndef test_staged_import():\n    assert cpu_probe.answer == 43\n    assert not cpu_probe.__file__.startswith({:?})\n    assert '/tree/src/' in cpu_probe.__file__\n    assert '/tree/tests/' in __file__\n", repo.to_str().unwrap())).unwrap();
+    let req = planned();
+    assert_eq!(ApprovalKey::for_request(&original_request, "fixture"), ApprovalKey::for_request(&req, "fixture"));
+    let before = snapshot(&repo);
+    let cap = sandbox::detect();
+    assert!(cap.available(), "native proof requires an enforced sandbox");
+    let policy = e3_policy();
+    let start = std::time::Instant::now();
+    let staged = stage::stage(&req, &context(&policy, &store, &cap, &table)).unwrap();
+    assert_eq!(staged.exit, Some(0), "{}", String::from_utf8_lossy(&staged.stderr));
+    assert!(staged.plan.refused.is_empty(), "{:?}", staged.plan);
+    assert_eq!(snapshot(&repo), before, "verification must never modify original sources or environment");
+    eprintln!(
+        "real uv/pytest staged verification passed in {:?} including identity checks and copies; interpreter run {}ms",
+        start.elapsed(),
+        staged.duration_ms
+    );
 }
 
 #[test]
