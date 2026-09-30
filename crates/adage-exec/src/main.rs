@@ -399,7 +399,7 @@ fn cmd_doctor(a: &Args) -> Result<i32> {
 
 fn cmd_journal(a: &Args) -> Result<i32> {
     a.only(&["--repo"], &[])?;
-    let repo = a.one("--repo").map(|p| std::fs::canonicalize(p)).transpose()?;
+    let repo = a.one("--repo").map(std::fs::canonicalize).transpose()?;
     let repo = repo.as_ref().map(|p| adage_core::repo::repo_key(p));
     let rows: Vec<_> = adage_exec::journal::list(&adage_home())?
         .into_iter()

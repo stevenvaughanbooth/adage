@@ -694,7 +694,7 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
     let (variant, variant_share) = match variants.iter().max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0))) {
         Some((&v, &c)) if tot > 0 => {
             let share = c as f64 / tot as f64;
-            (Some(v).filter(|_| share >= p.dominant), share)
+            ((share >= p.dominant).then_some(v), share)
         }
         _ => (None, 0.0),
     };

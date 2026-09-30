@@ -97,28 +97,6 @@ pub fn tool_event_identity(harness: &str, event: &str, mut ids: Vec<&str>) -> Op
     serde_json::to_string(&(harness, event, ids)).ok()
 }
 
-#[cfg(test)]
-mod identity_tests {
-    use super::*;
-    use serde_json::json;
-
-    #[test]
-    fn native_identity_requires_the_complete_call_set() {
-        let a = adapter("claude").unwrap();
-        let batch =
-            |ids: &[&str]| json!({"tool_calls": ids.iter().map(|id| json!({"tool_use_id": id})).collect::<Vec<_>>()});
-        let first = a.event_identity("PostToolBatch", &batch(&["one", "two"]));
-        assert!(first.is_some());
-        assert_eq!(first, a.event_identity("PostToolBatch", &batch(&["two", "one"])));
-        assert_ne!(first, a.event_identity("PostToolBatch", &batch(&["one", "three"])));
-        assert!(a.event_identity("PostToolBatch", &batch(&["one", "one"])).is_none());
-        assert!(a.event_identity("PostToolBatch", &json!({"tool_calls": [{"tool_use_id": "one"}, {}]})).is_none());
-        assert!(a.event_identity("PostToolBatch", &batch(&[])).is_none());
-        assert!(adapter("codex").unwrap().event_identity("PostToolUse", &json!({"tool_use_id": "one"})).is_some());
-        assert!(adapter("codex").unwrap().event_identity("PostToolUse", &json!({"id": "invented"})).is_none());
-    }
-}
-
 pub fn adapter(harness: &str) -> Option<&'static dyn Adapter> {
     match harness {
         "claude" => Some(&claude::Claude),
@@ -150,4 +128,26 @@ pub fn calls(pairs: Vec<(String, Value)>, cwd: &str, output: &str, failed: bool)
             Call { tool, input, output: output.to_string(), failed }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod identity_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn native_identity_requires_the_complete_call_set() {
+        let a = adapter("claude").unwrap();
+        let batch =
+            |ids: &[&str]| json!({"tool_calls": ids.iter().map(|id| json!({"tool_use_id": id})).collect::<Vec<_>>()});
+        let first = a.event_identity("PostToolBatch", &batch(&["one", "two"]));
+        assert!(first.is_some());
+        assert_eq!(first, a.event_identity("PostToolBatch", &batch(&["two", "one"])));
+        assert_ne!(first, a.event_identity("PostToolBatch", &batch(&["one", "three"])));
+        assert!(a.event_identity("PostToolBatch", &batch(&["one", "one"])).is_none());
+        assert!(a.event_identity("PostToolBatch", &json!({"tool_calls": [{"tool_use_id": "one"}, {}]})).is_none());
+        assert!(a.event_identity("PostToolBatch", &batch(&[])).is_none());
+        assert!(adapter("codex").unwrap().event_identity("PostToolUse", &json!({"tool_use_id": "one"})).is_some());
+        assert!(adapter("codex").unwrap().event_identity("PostToolUse", &json!({"id": "invented"})).is_none());
+    }
 }

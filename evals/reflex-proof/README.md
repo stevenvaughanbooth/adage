@@ -1,6 +1,9 @@
 # Reflex proof: current evidence
 
-Isolated branch `codex/reflex-proof`, base main `acdb0a4acd875be56821469aaeadeb29b8d6d493`.
+Isolated branch `codex/reflex-proof`, original base main `acdb0a4acd875be56821469aaeadeb29b8d6d493`;
+main `d4f7e60` integrated before opening the PR. Historical measurements retain their original
+source checksums. The [launch sequence](../../docs/reflex-proof-plan.md#launch-sequence-after-this-pr)
+incorporates the advisory results and showcase work subsequently landed on main.
 Protocol and six decision gates: [design plan](../../docs/reflex-proof-plan.md).
 
 This work evaluates and strengthens the existing Adage components: history discovery,
@@ -19,6 +22,13 @@ The current product reference is [How Adage works](../../docs/how-it-works.md).
 | [macOS replay and containment](../../crates/adage-exec/tests/replay.rs) | Loader defect fixed; successful replay and blocked external file/network operations | Focused macOS tests, not the Linux-only hostile escape suite |
 
 ## Validation
+
+After integrating main: workspace formatting and warnings-denied all-target lint passed;
+50 CLI unit tests, 3 action/pack tests, 6 source tests, accepted-pack integration, 58 executor
+unit tests and 8 shared-hook tests passed. The paid-runner/accounting suite passed all 50 tests;
+npm launcher, session-start shell tests and plugin metadata checks passed. This does not replace
+the full native-platform CI matrix. A [separate integrated onboarding report](traces/results/onboarding-integrated.json)
+binds the rerun to its actual sources and binary; the earlier report is preserved.
 
 The [validation ledger](validation.json) preserves completed broad-run targets and final
 focused checks. The broad debug workspace run was stopped during the unmodified graph

@@ -42,11 +42,157 @@ Do not port the intermediate branch's storage architecture by assumption. Advice
 
 ## What gets built first
 
-1. Reusable hook-boundary probes with offline selftests and an explicit paid-run manifest.
-2. A reproducible trace sufficiency audit and opportunity analysis. It never executes commands contained in traces.
-3. A frozen experimental protocol and cost budget.
+The probes, source audit and prospective protocol now exist. The next work is the launch sequence
+below. Direct CPU execution and correct matching are mandatory gates: a delivered suggestion,
+successful shell command, or fast embedding alone cannot satisfy either.
 
-These are evaluation infrastructure, not a second product runtime. The eventual production executor and learner will be tested through the same fixtures. A full storage rewrite, schema rename, new predictor, and TUI redesign are not prerequisites for discovering whether the proposal is valuable.
+## Launch sequence after this PR
+
+Updated 2026-09-29 after integrating main `d4f7e60`. The newly landed
+[GO validation](../evals/launch/go-validation/RESULTS.md) reports advisory cost/task at −10.3%
+with a 90% interval [−20.1%, +2.0%], on an older product build. It is encouraging and underpowered,
+not established savings or evidence for CPU automation. The
+[showcase](../evals/showcase/README.md) adds five real repositories and existing experiment
+infrastructure; reuse it rather than starting another advisory benchmark. Its recorded probes
+include 3/30 negative deliveries at the first edit. Inspect current run artifacts before using
+its README's status sentence: training artifacts have landed since its original preparation.
+
+### L1. Establish a reproducible release candidate
+
+Finish CI on the integrated revision: formatting, warnings-denied lint, full workspace tests,
+native platform tests and packaging checks. Separate functional plugin tests that need the
+debug-only spawn recorder from a release-artifact startup benchmark. Keep the 1.5 s first-start
+and 200 ms subsequent-start budgets; measure a distribution on supported hardware, with binary
+size, cache state and signature status. Fix genuine regressions rather than increasing limits.
+Test install, upgrade, uninstall and reinstatement of the previous configuration in temporary
+homes. Verify the published binary and marketplace payload, not only a source checkout.
+
+**Exit:** the exact candidate has a green supported-platform matrix and reproducible installation;
+platform exclusions are explicit. macOS and Linux must actually execute confined commands.
+Windows may launch as advisory-only if the UI and docs make execution unavailable explicitly.
+Attach missing/skipped checks to the release decision; never count them as tested confinement.
+
+### L2. Make pattern recognition an independently tested product capability
+
+Use the existing `adage-graph`, learner bridge, runtime and harness adapters. Freeze naturally
+learned artifacts from training traces without hidden scorer outcomes or hand-inserted routes.
+For each held-out opportunity, record the pre-action event window, expected match/abstention,
+bound arguments, actual decision and why. Match against independently labeled eligible
+opportunities, not simply the next command the historical agent happened to choose.
+
+Include paraphrases, unfamiliar command names, new parameter values, same-file unrelated edits,
+negated requests, exploration, incomplete results, wrong repositories, reordered/concurrent events,
+changed scripts, redelivery and stale state. Keep task families, repeats and forked sessions in
+one split. Calibrate on a separate split; evaluate untouched holdouts once. Compare exact features,
+causal sequence/dataflow and CPU embeddings using the ablations in stage 3 below.
+
+**Exit:** fix and retain regressions for known false fires; zero wrong repository or ambiguous
+argument executions in the adversarial suite. Target at least 99% correct action-and-binding
+precision for automatic candidates and publish its task-grouped uncertainty and coverage. A small
+sample that cannot support that precision claim stays in suggest mode; abstention is valid.
+Do not widen matching to improve coverage until execution precision is supported. Temporal order
+comes from event identity and causal links, not a sentence embedding.
+
+### L3. Prove learned matching actually removes a model-mediated action
+
+This is the first product-value lever: **one complete learned reflex executed by the CPU**.
+Start with a read-only lookup and one bounded verification/regeneration procedure. Both must be
+learned through the production pipeline; the existing authored fixtures are reliability tests,
+not proof that the learner discovers executable programs. If natural training forms no executable
+route, retain that zero and diagnose the graph's induction/qualification reason before expanding.
+
+For each case, replay the real native hook in a fresh process with the local model loaded and
+model-provider access absent. Supply a fixture execution grant only in tests; the live pilot uses
+a person's real grant. Assert the matcher and argument binding, actual sandbox subprocess,
+expected output/file diff, canonical receipt, and zero model-client invocations within the reflex.
+Exercise negative events and show that neither subprocess nor effect occurs. Test changed grants,
+timeouts, cancellation, concurrent hooks, duplicate IDs, missing IDs and interrupted application.
+
+Then run a real agent with observable request boundaries: trigger → match/bind → script start/end
+→ durable result → next model request. Verify receipt/result availability before that next request
+and absence of an intervening request. Session/assistant message counts are not substitutes for
+API request IDs. Native IDs deduplicate application today; they do not prevent duplicate staging
+or provide universal exactly-once execution. Improve those guarantees only where measured cost
+or effect semantics require them, and document the supported boundary.
+
+Extend `project.rs`/output contracts so a lookup contains the title, description, acceptance
+criteria and relevant files the agent needs, with bounded fields and explicit incompleteness.
+Do not silently promote arbitrary raw output to trusted data. Compare the SAME frozen reflex in
+suggest and automatic modes; inspect whether the agent repeats the work after receiving the result.
+
+**Exit:** learned read and staged-action cases complete through the production hook, on macOS and
+Linux, without a model call to select or execute the procedure; expected effects match external
+checks; no unauthorized changes; duplicate/recovery cases pass. The live automatic arm must avoid
+the replaced agent action at preserved task quality. If it repeats the lookup, the utility gate
+fails even if CPU execution succeeded. Report whole-hook CPU/wall time, model request counts where
+observable, result-context tokens and net task cost separately.
+
+### L4. Make the authority and first-use experience complete
+
+Use the existing TUI layout, CLI preview and approval store. `init` should show history discovered,
+learning progress, the first applicable reflex and a plain-language explanation of its value.
+No-history and no-candidate states should explain what was learned and what happens next.
+Advice and supported rewrites provide immediate value; learning a repository script never grants
+permission to execute it automatically.
+
+Add **Suggest / Automatic / Disabled** controls with a single review of repository scope,
+resolved command, pinned scripts, outputs, confinement and limits. The TUI must invoke the same
+person-gated grant service as the CLI; evidence approval remains separate. Add revoke, stale-grant
+explanations and receipt inspection/recovery using the canonical journal. No parallel permissions
+or receipt model. Extend explicit dependencies for common entry points such as Makefile targets:
+pin declared executable inputs and invalidate grants when they change; unresolved dynamic closure
+must be visible and cannot claim fully pinned automation. Do not hash all source files into grants,
+which would invalidate them after every legitimate edit.
+
+**Exit:** five first-time developers on at least three repositories can connect, identify the first
+useful reflex, explain its mode, approve a bounded action and revoke it without editing configuration.
+Target a correct first approval within two minutes after learning completes; all five must revoke
+successfully and distinguish unknown from successful execution. These are proposed usability gates,
+not measured claims. Timing a snapshot renderer is not a substitute for the walkthrough.
+
+### L5. Turn the mechanism into credible launch evidence
+
+Reuse the existing live runner, showcase fixtures and scoring. Reconcile their ongoing experiment
+status, credentials and spend before dispatch; this thread's historical $0.0152216 ledger is not a
+global ledger for other workers. Establish one cross-run reservation owner under the user's cap.
+The previously proposed $28 screen is an allocation proposal, not permission to duplicate the
+new showcase runs or spend a second $60. Use the available authenticated confined Linux host if
+accessible; otherwise retain the platform blocker without weakening isolation.
+
+Run the matched suggest/automatic comparison after L2–L3, with learning frozen and an external
+task scorer. Count all assigned tasks, including no-fire, failure, timeout and budget-stopped cases;
+show missing accounting explicitly. Use held-out tasks on at least three repositories, blocked arm
+ordering and task-cluster analysis. Set confirmatory sample size and quality margin from pilot
+variance before collecting confirmatory outcomes. A 15% lower cost is a useful pilot target,
+not a guaranteed claim or a reason to stop favorably. Student-model transfer is a separate arm
+using the same teacher-learned artifact, not a separate artifact tuned to the student test set.
+
+**Exit:** publish the tested revision, frozen artifact hashes, sample size, task quality, absolute
+and relative cost/latency, confidence intervals and all exclusions/deviations. A general savings
+headline requires a powered result at preserved quality; otherwise launch with the narrower
+demonstrated execution claim and descriptive results, not a universal percentage or GPU-energy
+claim. Existing advisory wins do not pass this CPU-value gate.
+
+### L6. Release the primitive, then multiply its impact
+
+Test a signed reflex pack on a clean recipient checkout with new held-out argument values:
+install without effects, inspect provenance, approve locally, execute, update a pinned dependency,
+observe grant invalidation, revoke and uninstall. Imported grants never travel with the package.
+Use a genuinely different environment for compatibility evidence, beyond a clone of the sender.
+Finish release artifacts, rollback instructions and a local diagnostic bundle that excludes raw
+private traces and credentials. Update README, behavior reference and launch copy from the same
+evidence ledger in each change.
+
+**Exit:** recipient execution and revocation pass; release candidate checks and operational docs
+are complete; launch claims have evidence links. After launch, expand to multi-step typed
+procedures, skill compilation coverage and teacher-to-student transfer where single-step value
+is demonstrated. A marketplace, general script synthesis and a new embedding architecture are
+deferred until adoption and measurements justify them.
+
+Implementation order: L1 and L2 can proceed together; L3 depends on qualified matches; L4 can
+develop alongside L3 on shared fixtures. L5 depends on L2–L3 and the reconciled evaluation host;
+L6 transfer testing can run in parallel, with release after all applicable gates. These are
+bounded changes to current components, not a rewrite or a second runtime.
 
 ## Six stages and decision rules
 
