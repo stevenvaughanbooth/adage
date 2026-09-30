@@ -1,0 +1,8 @@
+{
+  "cwd": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/automatic/repo",
+  "destination": "/private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3/heldout/mm-curve--finite/automatic/native-transcript.jsonl",
+  "session_id": "0cf99922-909b-405d-a486-e0c4aaa8daf9",
+  "sha256": "6fa5986ed72b4a39a823eb4eda6cac930103395aa0be68e46d45835ac7b206d7",
+  "source": "/Users/stevenbooth/.claude/projects/-private-tmp-adage-real-repo-gate-v1-cohorts-curve-guided-v2-transfer-v3-heldout-mm-curve--finite-automatic-repo/0cf99922-909b-405d-a486-e0c4aaa8daf9.jsonl",
+  "synthetic": false
+}

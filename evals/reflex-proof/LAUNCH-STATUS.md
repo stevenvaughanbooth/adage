@@ -1,10 +1,15 @@
 # Open-source launch evidence
 
-Status: **real-repository CPU action-elimination gate pending**. The generated lookup mechanism
-passes; it does not establish that automatic verification helps complete coding tasks.
+Status: **real-repository CPU action-elimination gate failed in the completed pilot**. The
+[eight-session result](harness/results/20260930-live-cpu-transfer/FINDINGS.md) establishes 4/4
+successful learned CPU executions and 4/4 correct automatic outputs versus 3/4 baseline outputs,
+but 0/4 confirmed action eliminations. Every automatic session repeated the test command after
+receiving its result. The frozen scorer also excludes approved cache changes; correcting that
+alone does not resolve the duplicate-work finding. No CPU-driven savings claim is established.
 The [frozen transfer preparation](harness/results/20260930-transfer-preparation/FINDINGS.md)
 retains a zero-spend approval failure and its narrow pytest-cache fix. The replacement eight-session
-comparison is ready and waits for human execution grants; no live transfer result is claimed.
+comparison was superseded by the completed `transfer-v3` study linked above. Earlier preparation
+records remain historical; the human issued all four grants and every assigned session completed.
 The [launch-experience follow-up](harness/results/20260930-launch-experience/FINDINGS.md) adds the
 first-reflex guide and TUI next steps, covers pytest's hidden cache metadata explicitly, and records
 112 passing Rust/onboarding checks plus a fresh unchanged-history replay. The current study is
@@ -50,10 +55,10 @@ certifies four triggers for one pytest routine from all ten native demonstration
 supporting sessions and 9/10 qualifying continuations. Three triggers are learned sequence contexts.
 New task quality is 5/5, cumulative quality 9/10. This clears real-history learning/certification,
 but does not establish live automatic savings. The subsequent eight-assignment transfer comparison
-is frozen and prepared; its exact execution grants require the person's own terminal. Current
-harness validation passes 84 tests.
+is complete, with the failed action-elimination result at the top of this page. The person issued
+all four exact execution grants. Current harness validation passes 84 tests.
 
-| Gate | Evidence | Current conclusion |
+| Historical gate | Evidence | Conclusion at that checkpoint |
 | --- | --- | --- |
 | Learn without authored routes or outcome labels | [Default onboarding](traces/results/onboarding.json) | Nine archived generated-repository training sessions produce learned routes using normal thresholds |
 | Remove an agent action through CPU execution | [Paired lookup results](harness/results/20260929-learned-action-gate/FINDINGS.md) | Three held-out triage tasks: all six answers correct; three agent lookups removed; observed model dispatches 6 → 3 |
@@ -168,6 +173,10 @@ The [62-attempt snapshot](harness/results/20260930-cumulative-guided/budget-snap
 the cold replication and cumulative guided study, records **$13.2920411 measured + $0.50 approved
 conservative charge = $13.7920411 admission spend**, leaving **$46.2079589**. No paid transfer
 sessions had started at this snapshot. This approval does not cover future unknown bills.
+The [70-attempt snapshot](harness/results/20260930-live-cpu-transfer/budget-snapshot.json) includes
+all eight completed transfer assignments: **$15.1229241 measured + $0.50 conservative charge =
+$15.6229241 admission spend**, leaving **$44.3770759**. The transfer itself cost **$1.8308830**;
+all assignments are settled, and no paid transfer process remains active.
 Historical experiments elsewhere in the repository are separate from this task's ledger. Each new
 experiment must reserve full session caps durably before dispatch; a new unknown cost blocks further
 paid work. Human approval of a reflex is separate from evaluation spending authorization and applies

@@ -74,8 +74,12 @@ now preserves executable prefixes: replaying those five histories compiles nine 
 of zero. Those five histories alone do not pass the unchanged execution evidence gate; compilation is not a savings result.
 A [separately registered five-session follow-up](evals/reflex-proof/harness/results/20260930-cumulative-guided/FINDINGS.md)
 then brings the retained history to ten sessions and certifies four triggers for one test routine,
-with **9/10 qualifying continuations**. This connects real traces to an executable learned artifact;
-live automatic action elimination remains a separate, human-approved evaluation.
+with **9/10 qualifying continuations**. This connects real traces to an executable learned artifact.
+The [completed eight-session CPU transfer study](evals/reflex-proof/harness/results/20260930-live-cpu-transfer/FINDINGS.md)
+then executed that routine successfully in all four automatic sessions, whose outputs all passed
+independent grading (baseline: 3/4). The agent nevertheless repeated the command in every automatic
+session: **0/4 confirmed action eliminations**. Execution is proven in this pilot; replacement of
+agent work remains the launch gate.
 
 ```text
   agent traces ──► adage condition ──► reflexes ──► index ──► hooks

@@ -16,7 +16,9 @@ The primary checkout is `/Users/stevenbooth/Documents/skill-compile`; leave its 
 The user lifted the Codex 5% reserve and authorized using the remaining allowance. The independent
 paid evaluation ledger still has a $60 cap. At the last settled snapshot: $13.2920411 measured
 provider cost plus a separately human-approved $0.50 conservative unknown charge, totaling
-$13.7920411 across 62 attempts. Read the live ledger before scheduling anything; never reset it,
+$13.7920411 across 62 attempts before transfer. After the completed eight-session transfer:
+**$15.1229241 measured + $0.50 conservative charge = $15.6229241**, 70 attempts, **$44.3770759
+remaining**. All settled or cap-charged; no active paid transfer process. Read the live ledger before scheduling anything; never reset it,
 double-dispatch, or treat an unknown bill as zero.
 
 ## What is established
@@ -32,7 +34,10 @@ double-dispatch, or treat an unknown bill as zero.
 - Production execution-prefix admission now retains routine actions without relaxing the
   execution evidence bar. Execution-only candidates cannot fall back into ordinary advice.
 - The earlier generated lookup benchmark proved action elimination; real coding transfer remains
-  a separate open gate. GPU utilization and energy were never measured.
+  a separate open gate. The completed real-coding study ran the learned CPU reflex successfully
+  in 4/4 automatic sessions, with 4/4 correct outputs versus 3/4 baseline. **0/4 confirmed action
+  eliminations:** every automatic session requested the same command again after its receipt.
+  GPU utilization and energy were never measured.
 
 Website evidence is in `web/site/index.html` and `web/site/public/evidence/cold-start.json`.
 All study records are indexed by `evals/reflex-proof/LAUNCH-STATUS.md`. Do not cherry-pick or delete
@@ -49,19 +54,21 @@ Original learned artifacts: `cumulative-10`; first cache-fix replay: `cumulative
 Current replay: `cumulative-launch-10`; current prepared study: `transfer-v3`.
 Current human script: `/private/tmp/adage-real-repo-cpu-approve-v4.sh` (earlier scripts are superseded).
 
-After all four human grants exist, from the worktree run:
+**Completed:** all eight `transfer-v3` assignments are collected and settled. Executor session
+58750 has exited; `/private/tmp/adage-transfer-v3-run.json` contains the run output. **Do not
+dispatch this study again.** The result and diagnosis are in
+`evals/reflex-proof/harness/results/20260930-live-cpu-transfer/FINDINGS.md`.
+
+To inspect the existing completed study, from the worktree run:
 
 ```sh
-python3 evals/reflex-proof/harness/curve_transfer.py run \
-  /private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3
 python3 evals/reflex-proof/harness/curve_transfer.py report \
   /private/tmp/adage-real-repo-gate-v1/cohorts/curve-guided-v2/transfer-v3
 ```
 
-First inspect the ledger and any live processes: never start a second copy of an attempted run.
-If this run has already completed, report and export it rather than dispatching it again. The
-eight sessions reserve at most $12 against the shared ledger. Do not edit the frozen harness,
-`LEARNING-CURVE.md`, task material or binaries during the comparison.
+The archived report and export script preserve the original decision even after future harness
+changes. Do not overwrite frozen roots, their task material, histories or binaries. Any new paid
+study needs its own prospective protocol and assignments; do not reuse these outcomes as unseen.
 
 The frozen transfer study compares `learned` (same artifact, no execution permission) against
 `automatic` (one human-approved context). Eight sessions cover four tasks excluded from training,
@@ -93,15 +100,22 @@ The follow-up adds `docs/first-reflex.md`, first-run links to review and executi
 cache errors, and regression coverage for pytest's hidden metadata. It preserves the current TUI.
 Do not create another learner or parallel onboarding implementation.
 
-1. Finish the fixed real-repository CPU comparison after valid human grants. Export every result,
-   updated ledger, quality grade, execution receipt and reproducible aggregate before making claims.
-2. Walk the first-reflex guide on a fresh supported installation. Verify hook registration, history
+1. Address the observed duplicate-work failure. Native transcripts confirm that the CPU completion
+   reached the model as `hook_additional_context`, yet every automatic arm requested the exact test
+   again (2/1/1/1 times). Build an offline regression from these events, investigate how to present
+   completed verification with explicit scope and freshness, and measure action avoidance separately
+   from merely suppressing a subprocess after the model has already requested it.
+2. Before a new paid study, fix receipt scoring prospectively: approved cache-only changes currently
+   fail the no-changes receipt filter despite unchanged final source digests. Predeclare appropriate
+   pytest flag equivalences. Preserve this failed result; a scoring correction alone cannot erase
+   the actual duplicate agent requests. See the post-hoc delivery and runtime diagnostics.
+3. Walk the first-reflex guide on a fresh supported installation. Verify hook registration, history
    discovery, empty-history behavior, candidate review, policy/grant setup, result delivery and revoke.
-3. Improve naturally occurring history coverage; current organic-versus-guided gap is material.
+4. Improve naturally occurring history coverage; current organic-versus-guided gap is material.
    Measure unnecessary executions, duplicates, abstention and drift along with saved actions.
-4. Run release platform CI before claiming all advertised binaries and harnesses work. Local macOS
+5. Run release platform CI before claiming all advertised binaries and harnesses work. Local macOS
    success is not Linux or Windows evidence; Windows automatic execution is unsupported.
-5. Replicate on another repository/model before treating the pilot as a general savings estimate.
+6. Replicate on another repository/model before treating the pilot as a general savings estimate.
    Frontier-to-cheaper-model transfer and a marketplace remain future hypotheses.
 
 Do not promise a universal session count for learning or guaranteed savings from `init`. The launch

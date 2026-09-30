@@ -1,0 +1,83 @@
+{
+  "kind": "post-hoc native delivery and duplicate-request audit",
+  "rows": [
+    {
+      "task": "mm-curve--odd",
+      "native_receipt_attachment_types": [
+        "hook_success",
+        "hook_additional_context"
+      ],
+      "receipt_hook_outputs": [
+        "{\"hookSpecificOutput\":{\"additionalContext\":\"<adage-reflex track=\\\"github-com-marshmallow-code-marshmallow/learned@0.1.0\\\" route=\\\"run-175d85\\\" strength=\\\"prime\\\" kind=\\\"run\\\" exec=\\\"e2\\\">\\nAdage ran `.venv/bin/python -m pytest tests/test_validate.py -q` automatically after a learned context matched: verification succeeded; no repository files changed. This action is complete; do not repeat it.\\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\\n</adage-reflex>\",\"hookEventName\":\"PostToolUse\"}}\n"
+      ],
+      "subsequent_matching_agent_requests": [
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+          "seconds_after_receipt": 10.941346334,
+          "source_matches_final": true,
+          "tool_use_id": "toolu_01SebcxiPWcyzbw8RQuhJhyo"
+        },
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+          "seconds_after_receipt": 30.971551917,
+          "source_matches_final": true,
+          "tool_use_id": "toolu_01EGSbEz1uyasUHGNKtJPDFT"
+        }
+      ]
+    },
+    {
+      "task": "mm-curve--finite",
+      "native_receipt_attachment_types": [
+        "hook_success",
+        "hook_additional_context"
+      ],
+      "receipt_hook_outputs": [
+        "{\"hookSpecificOutput\":{\"additionalContext\":\"<adage-reflex track=\\\"github-com-marshmallow-code-marshmallow/learned@0.1.0\\\" route=\\\"run-175d85\\\" strength=\\\"prime\\\" kind=\\\"run\\\" exec=\\\"e2\\\">\\nAdage ran `.venv/bin/python -m pytest tests/test_validate.py -q` automatically after a learned context matched: verification succeeded; no repository files changed. This action is complete; do not repeat it.\\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\\n</adage-reflex>\",\"hookEventName\":\"PostToolUse\"}}\n"
+      ],
+      "subsequent_matching_agent_requests": [
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+          "seconds_after_receipt": 10.27636,
+          "source_matches_final": true,
+          "tool_use_id": "toolu_01QwAHLPh2EecqyuhezqKjuL"
+        }
+      ]
+    },
+    {
+      "task": "mm-curve--no-adjacent-duplicates",
+      "native_receipt_attachment_types": [
+        "hook_success",
+        "hook_additional_context"
+      ],
+      "receipt_hook_outputs": [
+        "{\"hookSpecificOutput\":{\"additionalContext\":\"<adage-reflex track=\\\"github-com-marshmallow-code-marshmallow/learned@0.1.0\\\" route=\\\"run-175d85\\\" strength=\\\"prime\\\" kind=\\\"run\\\" exec=\\\"e2\\\">\\nAdage ran `.venv/bin/python -m pytest tests/test_validate.py -q` automatically after a learned context matched: verification succeeded; no repository files changed. This action is complete; do not repeat it.\\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\\n</adage-reflex>\",\"hookEventName\":\"PostToolUse\"}}\n"
+      ],
+      "subsequent_matching_agent_requests": [
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+          "seconds_after_receipt": 9.687489292,
+          "source_matches_final": true,
+          "tool_use_id": "toolu_01JAEQ8QV8ERw4Em6xL7g389"
+        }
+      ]
+    },
+    {
+      "task": "mm-curve--max-utf8-bytes",
+      "native_receipt_attachment_types": [
+        "hook_success",
+        "hook_additional_context"
+      ],
+      "receipt_hook_outputs": [
+        "{\"hookSpecificOutput\":{\"additionalContext\":\"<adage-reflex track=\\\"github-com-marshmallow-code-marshmallow/learned@0.1.0\\\" route=\\\"run-175d85\\\" strength=\\\"prime\\\" kind=\\\"run\\\" exec=\\\"e2\\\">\\nAdage ran `.venv/bin/python -m pytest tests/test_validate.py -q` automatically after a learned context matched: verification succeeded; no repository files changed. This action is complete; do not repeat it.\\nLearned by Adage from this repository's earlier agent sessions; not requested by the user.\\n</adage-reflex>\",\"hookEventName\":\"PostToolUse\"}}\n"
+      ],
+      "subsequent_matching_agent_requests": [
+        {
+          "command": ".venv/bin/python -m pytest tests/test_validate.py -q",
+          "seconds_after_receipt": 11.660315958,
+          "source_matches_final": true,
+          "tool_use_id": "toolu_01BDhrqjCXPtzGP6U8DpYj4o"
+        }
+      ]
+    }
+  ]
+}

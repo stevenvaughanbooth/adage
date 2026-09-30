@@ -75,6 +75,13 @@ prior sessions, one human grant, complete CPU-produced results, zero agent looku
 correct answers. The same reflex in suggest mode required one lookup action per task. This
 validates that mechanism; broader coding-task savings and platform reliability remain separate.
 
+The [real-coding transfer pilot](../evals/reflex-proof/harness/results/20260930-live-cpu-transfer/FINDINGS.md)
+now connects ten explicitly guided prior sessions to successful automatic pytest execution on
+four different coding tasks. All four automatic outputs passed independent checks, versus three
+of four baseline outputs. Every automatic session nevertheless requested the test command again
+after receiving its completion context. Thus CPU execution is demonstrated in this pilot, while
+the action-elimination launch gate remains unmet. No physical GPU savings were measured.
+
 ## From history to a reflex
 
 1. **Discover and import.** Read supported Claude, Codex and OpenCode history sources. Retain
