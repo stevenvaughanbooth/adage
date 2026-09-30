@@ -1,0 +1,224 @@
+{
+  "autoMemoryEnabled": false,
+  "disableAllHooks": false,
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "args": [
+              "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/receipt_ablation.py",
+              "hook",
+              "/private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership"
+            ],
+            "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+            "timeout": 20,
+            "type": "command"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "args": [
+              "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/reflex-proof/harness/receipt_ablation.py",
+              "hook",
+              "/private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership"
+            ],
+            "command": "/Applications/Xcode.app/Contents/Developer/usr/bin/python3",
+            "timeout": 20,
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(/private/tmp/adage-real-repo-gate-v1/runtime/python/cpython-3.12.14-macos-aarch64-none/bin/python3 -B verify.py)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/increment.py)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/CHANGELOG.md)"
+    ],
+    "blockReadsOutsideWorkingDirectories": true,
+    "deny": [
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.venv)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.venv/**)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.git)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.git/**)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.claude)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.claude/**)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.agents)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.agents/**)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.codex)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.codex/**)",
+      "Edit(//private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/verify.py)"
+    ]
+  },
+  "sandbox": {
+    "allowUnsandboxedCommands": false,
+    "autoAllowBashIfSandboxed": false,
+    "credentials": {
+      "envVars": [
+        {
+          "mode": "deny",
+          "name": "BROWSER_USE_ACCESS_VERIFYING_IDENTITY"
+        },
+        {
+          "mode": "deny",
+          "name": "COLORTERM"
+        },
+        {
+          "mode": "deny",
+          "name": "COMMAND_MODE"
+        },
+        {
+          "mode": "deny",
+          "name": "CPATH"
+        },
+        {
+          "mode": "deny",
+          "name": "DISABLE_AUTO_UPDATE"
+        },
+        {
+          "mode": "deny",
+          "name": "FPATH"
+        },
+        {
+          "mode": "deny",
+          "name": "GH_PAGER"
+        },
+        {
+          "mode": "deny",
+          "name": "GIT_PAGER"
+        },
+        {
+          "mode": "deny",
+          "name": "HOMEBREW_CELLAR"
+        },
+        {
+          "mode": "deny",
+          "name": "HOMEBREW_PREFIX"
+        },
+        {
+          "mode": "deny",
+          "name": "HOMEBREW_REPOSITORY"
+        },
+        {
+          "mode": "deny",
+          "name": "INFOPATH"
+        },
+        {
+          "mode": "deny",
+          "name": "LC_ALL"
+        },
+        {
+          "mode": "deny",
+          "name": "LC_CTYPE"
+        },
+        {
+          "mode": "deny",
+          "name": "LIBRARY_PATH"
+        },
+        {
+          "mode": "deny",
+          "name": "LOG_FORMAT"
+        },
+        {
+          "mode": "deny",
+          "name": "MANPATH"
+        },
+        {
+          "mode": "deny",
+          "name": "MallocNanoZone"
+        },
+        {
+          "mode": "deny",
+          "name": "NO_COLOR"
+        },
+        {
+          "mode": "deny",
+          "name": "OLDPWD"
+        },
+        {
+          "mode": "deny",
+          "name": "OSLogRateLimit"
+        },
+        {
+          "mode": "deny",
+          "name": "PAGER"
+        },
+        {
+          "mode": "deny",
+          "name": "RUST_LOG"
+        },
+        {
+          "mode": "deny",
+          "name": "SDKROOT"
+        },
+        {
+          "mode": "deny",
+          "name": "SSH_AUTH_SOCK"
+        },
+        {
+          "mode": "deny",
+          "name": "STARSHIP_SESSION_KEY"
+        },
+        {
+          "mode": "deny",
+          "name": "STARSHIP_SHELL"
+        },
+        {
+          "mode": "deny",
+          "name": "XPC_FLAGS"
+        },
+        {
+          "mode": "deny",
+          "name": "XPC_SERVICE_NAME"
+        },
+        {
+          "mode": "deny",
+          "name": "ZSH_TMUX_AUTOSTART"
+        },
+        {
+          "mode": "deny",
+          "name": "ZSH_TMUX_AUTOSTARTED"
+        },
+        {
+          "mode": "deny",
+          "name": "__CF_USER_TEXT_ENCODING"
+        }
+      ]
+    },
+    "enabled": true,
+    "excludedCommands": [],
+    "failIfUnavailable": true,
+    "filesystem": {
+      "allowRead": [
+        "/private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace",
+        "/private/tmp/adage-real-repo-gate-v1/runtime/python"
+      ],
+      "denyRead": [
+        "/Users/stevenbooth",
+        "/private/tmp/adage-real-repo-gate-v1"
+      ],
+      "denyWrite": [
+        "/private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.venv",
+        "/private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.git",
+        "/private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.claude",
+        "/private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.agents",
+        "/private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v2/2-ownership/workspace/.codex"
+      ]
+    },
+    "network": {
+      "allowAllUnixSockets": false,
+      "allowLocalBinding": false,
+      "allowedDomains": [],
+      "deniedDomains": [
+        "*"
+      ]
+    }
+  }
+}

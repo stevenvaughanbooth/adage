@@ -96,48 +96,83 @@ four grant files before dispatch. Earlier scripts are historical; do not reuse t
 
 ## Launch experience and next priorities
 
-### Active diagnostic checkpoint
+### Latest checkpoint: receipt integration and evaluator isolation
 
-Native delivery canaries are complete and archived at
-`evals/reflex-proof/harness/results/20260930-delivery-canary`: all four controls passed,
-total provider cost $0.0288169. Both context and valid Read-result replacement delivered
-random markers; malformed replacement and no-result controls did not. This is delivery
-evidence only. Driver and raw fixture outputs are retained. No execution grant was created.
+PR #16 remains draft. There are no paid processes running. Shared ledger now has **100
+attempts**, $15.6474504 measured plus the previous $0.50 conservative charge =
+**$16.1474504 admission spend**, **$43.8525496 remaining**. Accounting is unblocked.
+The latest diagnostic work cost $0.5245263 including failed/excluded attempts.
+Codex allowance last checked at 98% used (2% remaining); the user authorized the remainder.
 
-The next frozen diagnostic is `/private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-v2`,
-prepared by `evals/reflex-proof/harness/receipt_ablation.py`: two repetitions each of baseline,
-current-style receipt, typed receipt, and typed receipt with SessionStart responsibility
-guidance. Total reservation ceiling $2; the original shared $60 ledger remains authoritative.
-It uses an authored read-triggered fixture, not production learned execution. `receipt-v1`
-was stopped offline when Apple's Python launcher failed confinement; v2 uses the already
-prepared pinned interpreter. All attempts must remain recorded; no outcome retries.
+Research: [hook action reuse](hook-action-reuse-research.md). Native Read delivery canaries
+all passed ($0.0288169), archived in `results/20260930-delivery-canary` under the harness.
+Both context and valid result replacement delivered random markers; malformed replacement
+and no-result controls did not. This verifies native delivery, not production action avoidance.
 
-`receipt-v2` stopped after two paid assignments because the generic arm attempted a denied
-directory search and never read the fixture. Preserve that whole cohort as infrastructure
-evidence. Fresh `receipt-v3` supplied an absolute Read path uniformly: all eight completed,
-$0.1158012 total. Baseline requested the verifier 2/2; generic receipt 1/2; typed 0/2;
-typed plus ownership 0/2. All six non-baseline runs executed the CPU verifier successfully.
-This small authored diagnostic is not a real-repository savings estimate; generic wording
-was explicitly labeled simulated, an additional interpretation limit. Full records, including
-stopped v2 outcomes, are in `results/20260930-receipt-ablation` under the harness.
+A **real evaluator bug** was found during the edit diagnostic: Claude inherited launcher
+stdin and one agent reproduced the launcher Python program as an attempted command.
+`probe.execute` now uses `stdin=DEVNULL`; the intended prompt is already in argv. A real
+child-process regression fails on the old implementation and passes after the fix. All 85
+harness tests pass. Preserve `receipt-edit-v1` as contaminated; the earlier heredoc-launched
+read comparison `receipt-v3` is also excluded from behavioral conclusions. Do not promote
+its apparently positive rates. `receipt-v2` previously stopped on a navigation/permission
+confound and remains excluded. All outcomes and frozen code are archived.
 
-Now running: `/private/tmp/adage-real-repo-gate-v1/diagnostics/receipt-edit-v1`, same four
-arms and two repetitions, but the agent must fix a function and then edit a changelog; the
-hook verifies after the changelog edit. The verifier is protected and independent quality
-is checked afterward. Same $0.25 per-assignment cap, $2 maximum new reservations.
-Inspect the ledger and each `finding.json` before resuming anything. Never dispatch an
-already attempted assignment. Codex allowance last reported 97% used (3% remaining).
+Clean fresh `receipt-edit-v2` ran eight assignments after stdin isolation, $0.1513985 total:
 
-Latest research checkpoint: [hook action reuse](hook-action-reuse-research.md). The user
-requested first-principles research before another fix. Official Claude, Gemini and
-LangChain sources distinguish result delivery, execution reuse and skipping model calls.
-Installed Claude is 2.1.282; result-replacement capability is present but has not passed a
-live Adage canary. No new paid runs or runtime changes were made in this checkpoint.
-Codex allowance last checked at 96% used (4% remaining). Remove the CPU pilot paragraph
-and `web/site/public/evidence/learned-cpu.json` from the launch site; keep the full failed
-study in the repository. The next experiment is a small delivery/receipt ablation, with
-fresh protocol/accounting, before any further real-repository cohort. See the research
-document for controls, validity requirements and exact code entry points.
+| Arm | Agent requested verifier | Independent quality | Successful CPU runs |
+| --- | --- | --- | --- |
+| Baseline | 2/2 | 2/2 | 0 |
+| Current-style receipt | 2/2 | 2/2 | 2 |
+| Structured receipt | 1/2 | 2/2 | 2 |
+| Structured receipt + startup responsibility | 0/2 | 2/2 | 2 |
+
+Archive: `evals/reflex-proof/harness/results/20260930-edit-receipt-ablation`. This is an
+authored function-fix/changelog fixture, not learned real-repository evidence. Two repetitions
+per arm are a diagnostic signal, not a reliable effect estimate. Current-style text was labeled
+simulated; acknowledge that difference. No new launch-site statistics were added.
+
+The candidate production integration is now implemented in the existing pipeline:
+
+- `Extension::session_context` supplies a bounded model-facing responsibility contract only
+  in treated supported sessions with a scoped E2 verification approval and E2 policy enabled.
+  A stored grant is not a promise of execution; execution still rechecks the actual request.
+- SessionStart keeps model context separate from the person's notice; muting notices does not
+  mute the contract. Control, damaged-index, no-extension and no-grant paths remain silent.
+- Successful learned CPU actions deliver journal operation ID, declared-input digest, exit
+  status and duration, with explicit scope and later-change caveats. Cache-only writes are
+  no longer described as no repository changes. No raw stdout is newly exposed.
+- The contract uses existing provenance tags. Learning conservatively treats the continuation
+  as guided from session start, rather than learning its own instructions as organic evidence.
+  This reduces eligible organic training while approved verification is enabled; control
+  sessions remain important. Do not silently relax this contamination boundary.
+
+Local validation: execution/runtime/hook library suites pass; startup treatment/control,
+notice separation, no-grant/E1 policy, real journal receipt identity and learning provenance
+regressions pass. These tests do not establish a live effect from this exact production text.
+The diagnostic supplied fixture-specific test counts; production receipts intentionally do not
+expose undeclared stdout or invent test counts. That distinction needs prospective validation.
+
+The next agent should:
+
+1. Run a production-binary SessionStart/receipt canary, then stale-input, failed verification,
+   changed environment, broader scope and explicit-rerun controls. Do not implement command
+   denial to disguise repeats; no permission or execution grant may be bypassed.
+2. Prepare a NEW real-repository cohort with fresh frozen binaries, replayed original training,
+   updated native-confinement verification where source identity requires it, and corrected
+   prospective cache-only scoring. The old binary hash allowlist must remain a check: replace
+   it only with measured new hashes in the new reviewed protocol. Never overwrite old studies.
+3. Obtain new person-issued grants for new evaluation homes after preparation. Do not copy old
+   approvals. Freeze the whole matrix before the first paid agent. Keep the shared ledger.
+4. Measure repeated tool requests, model requests/tokens/cost, quality and necessary reruns.
+   Include a no-execution control. A small authored diagnostic is not a replacement for this gate.
+
+The four old real-repository repeats occur in new assistant messages after the hook attachment,
+not in the same message as the triggering edit. Message IDs are not API request IDs. A scan of
+all eight old native transcripts found no known launcher-code markers; that negative scan does
+not prove full historical prompt isolation. Preserve the frozen failure and use the fixed runner
+for all new evidence. Research and diagnostics identify a promising integration direction;
+open-source launch readiness is still not proven.
 
 The follow-up adds `docs/first-reflex.md`, first-run links to review and execution status, clearer
 cache errors, and regression coverage for pytest's hidden metadata. It preserves the current TUI.

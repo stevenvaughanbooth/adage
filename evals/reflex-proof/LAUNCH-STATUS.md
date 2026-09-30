@@ -17,6 +17,14 @@ first-reflex guide and TUI next steps, covers pytest's hidden cache metadata exp
 This page is the launch evidence index. Preserve earlier reports, failed attempts and protocols
 when a later experiment supersedes them.
 
+The subsequent [edit-receipt diagnostic](harness/results/20260930-edit-receipt-ablation/summary.json)
+is an authored fixture, not a launch benchmark. After fixing inherited-stdin contamination,
+two runs per arm observed verifier requests in baseline 2/2, generic receipt 2/2, structured
+receipt 1/2, and structured receipt plus startup responsibility 0/2; all eight fixes passed.
+Pre-fix behavioral comparisons are excluded, with their raw records preserved. The candidate
+production integration is implemented and locally tested, but needs a fresh real-repository
+cohort and negative controls. The [handoff](../../docs/launch-handoff.md) is the current resume point.
+
 The [cold-start pilot and fixed replication](harness/results/20260930-cold-start-replication/FINDINGS.md)
 completed sixteen assignments on four distinct Marshmallow tasks, twice per arm. Shipped instincts
 passed **8/8 outputs versus 6/8**, with **8.8% lower reported cost** ($1.7720458 versus $1.9429724)

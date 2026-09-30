@@ -35,6 +35,8 @@ use std::path::PathBuf;
 pub enum Output {
     /// Directive text (already wrapped and capped) for the model's next turn.
     Context(String),
+    /// Session responsibility context, with an optional separate person-only notice.
+    SessionContext { context: String, notice: Option<String> },
     /// A stop-hook request to continue, with its reason (fixed template).
     Continue(String),
     /// One line for the person, not the model (docs/zero-config.md §3.3): Claude Code shows a

@@ -185,13 +185,33 @@ pub fn action_applied(d: &crate::Directive, edited: &str, command: &str, changed
 }
 
 /// A completed CPU action nominated by a learned context, with no edit obligation.
-pub fn action_predicted(d: &crate::Directive, command: &str, changed: &[String], verify: bool) -> String {
+pub struct CpuReceipt<'a> {
+    pub operation: &'a str,
+    /// Digest of the executor's declared inputs, not a claim about all repository files.
+    pub input_digest: &'a str,
+    pub exit: Option<i32>,
+    pub duration_ms: u64,
+}
+
+pub fn action_predicted(
+    d: &crate::Directive,
+    command: &str,
+    changed: &[String],
+    verify: bool,
+    receipt: &CpuReceipt<'_>,
+) -> String {
     let outcome = if verify {
-        "verification succeeded; no repository files changed".to_string()
+        "verification succeeded; no source files changed (declared caches may have changed)".to_string()
     } else {
         format!("updated {} declared output files", changed.len())
     };
-    let body = format!("Adage ran `{}` automatically after a learned context matched: {outcome}. This action is complete; do not repeat it.", sanitise(command));
+    let data = serde_json::json!({
+        "status": "completed", "command": sanitise(command),
+        "operation_id": sanitise(receipt.operation),
+        "declared_input_digest": sanitise(receipt.input_digest),
+        "exit_code": receipt.exit, "duration_ms": receipt.duration_ms,
+    });
+    let body = format!("COMPLETED CPU ACTION\nAdage ran `{}` automatically after a learned context matched: {outcome}.\nReceipt: {data}\nThis is completed work for the stated command and staged inputs. Use it as evidence within that scope. It does not verify later edits, a changed environment, or additional test scopes. No raw command output is included.", sanitise(command));
     wrap_exec(&d.track, &d.version, &d.route, &d.kind, d.strength, &body, d.origin.as_ref(), "e2")
 }
 

@@ -1,0 +1,62 @@
+{
+  "evidence": "live_attempt",
+  "hook_events": [],
+  "receipts": [],
+  "duplicate_suppressions": 0,
+  "explicit_stream_request_ids": [
+    "req_011CfaHEqGrtXCq8RK4Upbi4",
+    "req_011CfaHF1cD4TUQyggAV9Fpu",
+    "req_011CfaHFGAKwNhZuJfw2gVkf",
+    "req_011CfaHFTFa5SARYk5mq25v1"
+  ],
+  "api_request_count": null,
+  "observed_stream_request_id_count": 4,
+  "assistant_message_ids": [
+    "msg_011CfaHEqiAK4e6tEda7wqTR",
+    "msg_011CfaHF1y3LmWj33DsbtdpX",
+    "msg_011CfaHFGXtfkMZETiKY1Lw1",
+    "msg_011CfaHFTd9XYaTBNk72Ua75"
+  ],
+  "total_cost_usd": 0.0188914,
+  "usage": {
+    "input_tokens": 34,
+    "cache_creation_input_tokens": 4486,
+    "cache_read_input_tokens": 41804,
+    "output_tokens": 1141,
+    "output_tokens_details": {
+      "thinking_tokens": 354
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 4486,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 8,
+        "output_tokens": 304,
+        "cache_read_input_tokens": 11913,
+        "cache_creation_input_tokens": 348,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 348
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "num_turns": 6,
+  "result_status": "success",
+  "result_is_error": false,
+  "terminal_reason": "completed",
+  "result_text": "Perfect! The fix has been successfully implemented and verified. Here's the evidence:\n\n**Changes Made:**\n1. **increment.py**: Changed the function from `return n - 1` to `return n + 1`\n2. **CHANGELOG.md**: Added entry documenting the fix\n\n**Verification Results:**\n- \u2705 All 3 test cases passed\n- \u2705 0 failures\n- **Test cases verified:**\n  - increment(-1) = 0 \u2713\n  - increment(0) = 1 \u2713\n  - increment(41) = 42 \u2713\n\nThe implementation now correctly returns n + 1 for all integer inputs.",
+  "duration_api_ms": 10995,
+  "accounting": "reported",
+  "limitation": "No API-request count inferred. Inspect version-specific debug logs and raw stream; arrival timestamps do not prove request dispatch timing. Fixture selftests are not live hook evidence."
+}

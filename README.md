@@ -81,6 +81,11 @@ independent grading (baseline: 3/4). The agent nevertheless repeated the command
 session: **0/4 confirmed action eliminations**. Execution is proven in this pilot; replacement of
 agent work remains the launch gate.
 
+The current integration gives approved verification sessions a model-facing execution contract
+and delivers completion receipts with journal identity, input digest and exit status. A small
+authored diagnostic motivates this change; it does **not** establish real-repository savings
+for the updated implementation. The [handoff](docs/launch-handoff.md) records the remaining tests.
+
 ```text
   agent traces ──► adage condition ──► reflexes ──► index ──► hooks
   + instincts                        (tracks,               ├─ guidance / supported rewrites

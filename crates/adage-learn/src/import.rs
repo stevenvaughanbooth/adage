@@ -830,6 +830,10 @@ mod tests {
 
     #[test]
     fn a_directive_is_read_for_what_it_named_and_where() {
+        // A session-wide execution contract steers the entire continuation even before
+        // an action runs; never relearn it as an organic demonstration.
+        let (_, contract) = read("<adage-reflex track=\"adage/execution@1\" route=\"session-contract\" strength=\"prime\" kind=\"execution-contract\">Use successful current receipts as evidence.</adage-reflex>");
+        assert!(contract[0].all);
         let (d, f) = read(
             "<adage-reflex track=\"t@1.0.0\" route=\"finish-line-1\" strength=\"fire\" kind=\"obligation\">\nIn this repository, changes to files matching schema/*.json must be followed by running:\n  make gen\nx\n</adage-reflex>",
         );

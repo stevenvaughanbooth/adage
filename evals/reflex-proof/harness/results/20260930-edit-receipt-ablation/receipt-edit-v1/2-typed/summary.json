@@ -1,0 +1,62 @@
+{
+  "evidence": "live_attempt",
+  "hook_events": [],
+  "receipts": [],
+  "duplicate_suppressions": 0,
+  "explicit_stream_request_ids": [
+    "req_011CfaH6EMgCadeTtbyzxw4Q",
+    "req_011CfaH6T98CWzxiFGB5T24a",
+    "req_011CfaH6h2Hfnei4VV12rM6y",
+    "req_011CfaH6vNif9ztkdDp3w7Jd"
+  ],
+  "api_request_count": null,
+  "observed_stream_request_id_count": 4,
+  "assistant_message_ids": [
+    "msg_011CfaH6EikvnN6obGD6vkQD",
+    "msg_011CfaH6TUxfbSGVeiEJaQaw",
+    "msg_011CfaH6hQNP9zT4GqcrEH5u",
+    "msg_011CfaH6vjZ7rWfwwpJhGYsW"
+  ],
+  "total_cost_usd": 0.021175,
+  "usage": {
+    "input_tokens": 33,
+    "cache_creation_input_tokens": 5114,
+    "cache_read_input_tokens": 42840,
+    "output_tokens": 1326,
+    "output_tokens_details": {
+      "thinking_tokens": 447
+    },
+    "server_tool_use": {
+      "web_search_requests": 0,
+      "web_fetch_requests": 0
+    },
+    "service_tier": "standard",
+    "cache_creation": {
+      "ephemeral_1h_input_tokens": 5114,
+      "ephemeral_5m_input_tokens": 0
+    },
+    "inference_geo": "not_available",
+    "iterations": [
+      {
+        "input_tokens": 8,
+        "output_tokens": 312,
+        "cache_read_input_tokens": 12445,
+        "cache_creation_input_tokens": 444,
+        "cache_creation": {
+          "ephemeral_5m_input_tokens": 0,
+          "ephemeral_1h_input_tokens": 444
+        },
+        "type": "message"
+      }
+    ],
+    "speed": "standard"
+  },
+  "num_turns": 6,
+  "result_status": "success",
+  "result_is_error": false,
+  "terminal_reason": "completed",
+  "result_text": "## \u2713 Implementation Complete\n\n**Changes Made:**\n1. **increment.py**: Fixed the function to return `n + 1` instead of `n - 1`\n2. **CHANGELOG.md**: Documented the fix\n\n**Verification Results:**\n- **All tests passed**: 3/3 cases\n- Test cases verified:\n  - `increment(-1)` \u2192 `0` \u2713\n  - `increment(0)` \u2192 `1` \u2713\n  - `increment(41)` \u2192 `42` \u2713\n- Exit code: `0` (success)\n- Source integrity verified (SHA256: `597d5df55e28d50696c8f0c02b7986f85f9d43db52a80399d32ca37a4bf2fe14`)\n\n**Limits:**\n- Verification covers the specific test cases in verify.py (integers: -1, 0, 41)\n- No type checking performed for non-integer inputs\n- No verification of floating point behavior (if needed)",
+  "duration_api_ms": 12294,
+  "accounting": "reported",
+  "limitation": "No API-request count inferred. Inspect version-specific debug logs and raw stream; arrival timestamps do not prove request dispatch timing. Fixture selftests are not live hook evidence."
+}

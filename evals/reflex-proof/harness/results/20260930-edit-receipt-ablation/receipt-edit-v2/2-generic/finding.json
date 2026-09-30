@@ -1,0 +1,16 @@
+{
+  "agent_commands": [
+    "/private/tmp/adage-real-repo-gate-v1/runtime/python/cpython-3.12.14-macos-aarch64-none/bin/python3 -B verify.py"
+  ],
+  "agent_tool_calls": 5,
+  "answer": "**\u2713 Complete**\n\n**Evidence:**\n- `increment.py` fixed: Changed `return n - 1` \u2192 `return n + 1`\n- `CHANGELOG.md` updated: Added version 1.0.0 entry documenting the fix\n- Verifier output: **3/3 test cases passed** \n  - Test cases: `[-1, 0]`, `[0, 1]`, `[41, 42]` (each input correctly returns n + 1)\n  - Source SHA256: `597d5df55e28d50696c8f0c02b7986f85f9d43db52a80399d32ca37a4bf2fe14`\n\n**Limits:** The verifier tests basic integer inputs; edge cases beyond the test set (very large integers, non-integer types) are not explicitly validated by the current test suite.",
+  "arm": "generic",
+  "cost_usd": 0.0192562,
+  "limitation": "authored diagnostic; not production learned action elimination",
+  "quality_exit": 0,
+  "repetition": 2,
+  "result_is_error": false,
+  "source_unchanged": false,
+  "successful_cpu_receipts": 1,
+  "verifier_unchanged": true
+}

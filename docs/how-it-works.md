@@ -49,6 +49,19 @@ prior sessions and executes that learned context on a fresh session with an inte
 Real-session predictive savings still require held-out evidence; the first replay of the frozen
 real-repository training histories produced zero executable certificates.
 
+For supported treated sessions with an E2 verification grant and E2 policy enabled, SessionStart
+also explains how to use completed verification as evidence. This model-facing contract is
+separate from the person's startup notice. It does not promise that a stored approval will run;
+the normal execution checks still apply. Missing, failed, uncertain or stale receipts, changed
+test scope and explicit rerun requests still require the appropriate verification.
+
+A completed learned-context action reports its journal operation ID, declared-input digest,
+exit status and duration. The digest is not a blanket freshness certificate for the whole
+repository, and raw stdout is not newly exposed. The contract marks the session as guided for
+learning, conservatively excluding its continuation from organic demonstrations. Control sessions
+receive no contract. This integration has local regression coverage; its real-repository action
+avoidance remains unproven. See the [diagnostic and handoff](launch-handoff.md).
+
 The launch evaluation must measure accumulated learning on chronological histories and
 prediction on later unseen sessions: avoided failures, eliminated agent actions, task quality,
 unnecessary executions, abstentions, and net cost/time. A five-session zero-candidate checkpoint

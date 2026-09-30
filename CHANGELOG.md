@@ -18,6 +18,12 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Launch clarity and local experience
 
+- Approved E2 verification sessions receive a model-facing responsibility contract, separate
+  from UI notices. Learned CPU completions carry journal-backed metadata and scope caveats;
+  guided sessions stay excluded from organic learning. Live real-repository savings remain unproven.
+- Live evaluation subprocesses no longer inherit launcher stdin as unintended model input.
+  The regression reproduces the prior leak; contaminated diagnostic cohorts remain archived.
+
 - Keep the unsuccessful learned-CPU pilot in the repository evaluation record, outside
   launch-site assets. Document hook-result reuse research and the next diagnostic protocol.
 

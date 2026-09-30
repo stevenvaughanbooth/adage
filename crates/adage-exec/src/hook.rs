@@ -66,6 +66,28 @@ pub fn adage_beside() -> Option<std::path::PathBuf> {
 }
 
 impl Extension for Prefetch {
+    fn session_context(
+        &self,
+        repo_key: &str,
+        index: &adage_tracks::Index,
+        paths: &adage_store::Paths,
+    ) -> Option<String> {
+        if policy::load(&paths.root).ok()?.max_level < Level::E2 {
+            return None;
+        }
+        let store = Store::load(&approvals::path(&paths.root)).ok()?;
+        let has_verifier = index.for_repo(repo_key).any(|r| {
+            let label = format!("{}/{}", r.track, r.route.id);
+            store.approvals.iter().any(|a| {
+                a.key.repo == repo_key
+                    && a.route == label
+                    && a.key.level == Level::E2
+                    && a.key.effect == adage_core::Effect::Verify
+            })
+        });
+        has_verifier.then(|| "<adage-reflex track=\"adage/execution@1\" route=\"session-contract\" strength=\"prime\" kind=\"execution-contract\">\nAdage can run person-approved verification actions from hooks. A successful completion receipt records work already executed for the stated command and inputs. Use a current receipt as verification evidence instead of running the same verification solely to repeat it. A receipt covers only that command's scope, not all correctness. If a receipt is missing, failed, uncertain, or stale after source/configuration/runtime changes, perform the necessary verification. Run additional diagnostics for a different scope or an explicit rerun request. An approval alone is not a successful result; execution still checks its policy and grant at each action.\n</adage-reflex>".into())
+    }
+
     fn deliver(&self, turn: &Turn<'_>, directives: &[Directive]) -> Delivery {
         let mut d = Delivery::default();
         let mut records: Vec<Value> = Vec::new();
@@ -420,7 +442,18 @@ fn act(turn: &Turn<'_>, directives: &[Directive], candidates: &[Candidate<'_>]) 
             } else {
                 let paths: Vec<String> = changed.iter().map(|l| l.path.clone()).collect();
                 let text = if s.context.is_some() {
-                    render::action_predicted(&dir, s.command, &paths, ir.route.effect == adage_core::Effect::Verify)
+                    render::action_predicted(
+                        &dir,
+                        s.command,
+                        &paths,
+                        ir.route.effect == adage_core::Effect::Verify,
+                        &render::CpuReceipt {
+                            operation: completed.id.as_deref().unwrap_or_default(),
+                            input_digest: &crate::sha256_hex(crate::canonical_json(&staged.inputs).as_bytes()),
+                            exit: staged.exit,
+                            duration_ms: staged.duration_ms,
+                        },
+                    )
                 } else {
                     render::action_applied(&dir, s.edited, s.command, &paths)
                 };
@@ -730,6 +763,20 @@ mod prediction_tests {
     }
 
     #[test]
+    fn session_contract_requires_scoped_e2_verification_and_policy() {
+        let f = Fixture::new();
+        assert!(PREFETCH.session_context("fixture", &f.index, &f.paths).is_none());
+        f.approve();
+        let text = PREFETCH.session_context("fixture", &f.index, &f.paths).unwrap();
+        assert!(text.contains("<adage-reflex") && text.contains("session-contract"));
+        assert!(text.contains("missing, failed, uncertain, or stale"));
+        assert!(text.contains("explicit rerun request"));
+        assert!(PREFETCH.session_context("other-repository", &f.index, &f.paths).is_none());
+        std::fs::write(f.paths.root.join("policy.toml"), "[exec]\nmax_level = \"E1\"\n").unwrap();
+        assert!(PREFETCH.session_context("fixture", &f.index, &f.paths).is_none());
+    }
+
+    #[test]
     fn selected_context_uses_typed_command_across_related_paths_and_intervening_reads() {
         for path in ["src/feature.rs", "src/another.rs"] {
             let mut f = Fixture::new();
@@ -894,6 +941,9 @@ mod prediction_tests {
         assert!(d.met.is_empty(), "no invented obligation completion");
         let text = d.texts.unwrap().join("\n");
         assert!(text.contains("verification succeeded") && text.contains("exec=\"e2\""), "{text}");
+        let receipt = crate::journal::list(&f.paths.root).unwrap().pop().unwrap();
+        assert!(text.contains(&receipt.id) && text.contains(&receipt.input_digest), "{text}");
+        assert!(text.contains("\"exit_code\":0") && text.contains("does not verify later edits"));
         assert!(!text.contains("after your edit"));
         let repeat = PREFETCH.deliver(&turn, &dirs);
         assert_eq!(repeat.spool.unwrap()[0]["withheld"], "duplicate");

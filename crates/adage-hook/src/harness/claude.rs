@@ -94,6 +94,13 @@ impl Adapter for Claude {
             Output::Context(text) => {
                 json!({ "hookSpecificOutput": { "hookEventName": event, "additionalContext": text } }).to_string()
             }
+            Output::SessionContext { context, notice } => {
+                let mut value = json!({ "hookSpecificOutput": { "hookEventName": event, "additionalContext": context } });
+                if let Some(notice) = notice {
+                    value["systemMessage"] = json!(notice);
+                }
+                value.to_string()
+            }
             // Shown to the person as a hook system message; the model never receives it (Claude
             // Code 2.1: `hook_system_message` attachments are not sent to the API).
             Output::Notice(text) => json!({ "systemMessage": text }).to_string(),

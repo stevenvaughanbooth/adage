@@ -150,6 +150,10 @@ fn fitted_context(all: String, e0: impl FnOnce() -> String, applied: bool, max: 
 /// A step after `decide()` that may change what directives are delivered as (Track C §3.2).
 pub trait Extension: Sync {
     fn deliver(&self, turn: &Turn<'_>, directives: &[Directive]) -> Delivery;
+    /// Optional responsibility contract. No action runs here; the caller gates treatment.
+    fn session_context(&self, _repo_key: &str, _index: &Index, _paths: &Paths) -> Option<String> {
+        None
+    }
     /// The exec-only reflexes (`(track, route id)`, vendored scripts) this extension would carry
     /// out in this repository, so `decide()` may direct them. Asked only when the index holds one.
     fn exec_only(&self, _repo_key: &str, _index: &Index, _paths: &Paths) -> Vec<(String, String)> {
@@ -262,7 +266,7 @@ pub fn run(harness: &str, event: &str, opts: Options) -> Result<Option<String>, 
     if matches!(adapter.translate(event, &p, &cwd.to_string_lossy()), Some(Event::SessionStart)) {
         let start =
             Start { adapter, harness, event, session: &session, root: &root, in_repo, paths: &paths, index: &index };
-        return session_start(&start, damaged, &learner);
+        return session_start(&start, damaged, &learner, opts.extension);
     }
     let out = respond(adapter, harness, event, &p, &session, &cwd, &root, &paths, opts, &index);
     if in_repo && adapter.is_learn_point(event) {
@@ -520,6 +524,7 @@ fn session_start(
     s: &Start<'_>,
     damaged: bool,
     learner: &dyn Fn() -> Result<PathBuf, Failure>,
+    extension: Option<&dyn Extension>,
 ) -> Result<Option<String>, Failure> {
     let keys: std::collections::BTreeSet<&str> = s.index.routes.iter().map(|r| r.repo.as_str()).collect();
     let routed = repo::lookup_key(s.root, Some(&s.paths.repo_keys()), &keys);
@@ -574,8 +579,26 @@ fn session_start(
             failopen::record(&s.paths.root, s.harness, s.event, &f);
         }
     }
+    let context = if !damaged
+        && s.adapter.name() != "opencode"
+        && state::try_read::<SessionState>(&s.paths.state(s.session))
+            .ok()
+            .flatten()
+            .is_some_and(|st| st.arm == Some(Arm::Treated))
+    {
+        extension.and_then(|ext| {
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| ext.session_context(&key, s.index, s.paths)))
+                .ok()
+                .flatten()
+                .filter(|text| text.len() <= s.adapter.max_context())
+        })
+    } else {
+        None
+    };
     if damaged || !cfg.ui_notices {
-        return Ok(None);
+        return Ok(
+            context.and_then(|context| s.adapter.render(s.event, Output::SessionContext { context, notice: None }))
+        );
     }
     let text = if bootstrap && first {
         let now = autolearn::now_ms();
@@ -589,7 +612,10 @@ fn session_start(
     } else {
         autolearn::take_notice(s.paths, &key)
     };
-    Ok(text.and_then(|t| s.adapter.render(s.event, Output::Notice(t))))
+    Ok(match context {
+        Some(context) => s.adapter.render(s.event, Output::SessionContext { context, notice: text }),
+        None => text.and_then(|t| s.adapter.render(s.event, Output::Notice(t))),
+    })
 }
 
 /// What the first session in a repository says: how many of its earlier traces Adage is learning
@@ -836,6 +862,61 @@ fn respond(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn session_contract_and_person_notice_use_separate_channels() {
+        use crate::harness::Adapter;
+        let value = harness::claude::Claude
+            .render(
+                "SessionStart",
+                Output::SessionContext { context: "model contract".into(), notice: Some("person notice".into()) },
+            )
+            .unwrap();
+        let value: Value = serde_json::from_str(&value).unwrap();
+        assert_eq!(value["hookSpecificOutput"]["additionalContext"], "model contract");
+        assert_eq!(value["systemMessage"], "person notice");
+    }
+
+    #[test]
+    fn session_contract_is_treatment_only_and_independent_of_ui_notices() {
+        struct Contract;
+        impl Extension for Contract {
+            fn deliver(&self, _: &Turn<'_>, _: &[Directive]) -> Delivery {
+                Delivery::default()
+            }
+            fn session_context(&self, _: &str, _: &Index, _: &Paths) -> Option<String> {
+                Some("test execution contract".into())
+            }
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let paths = Paths::at(temp.path().join("home"));
+        std::fs::create_dir_all(&paths.root).unwrap();
+        std::fs::write(paths.root.join("config.toml"), "[learn]\nauto = false\n[ui]\nnotices = \"off\"\n").unwrap();
+        let index = Index::default();
+        let start = Start {
+            adapter: &harness::claude::Claude,
+            harness: "claude",
+            event: "SessionStart",
+            session: "contract-test",
+            root: temp.path(),
+            in_repo: true,
+            paths: &paths,
+            index: &index,
+        };
+        let learner = || Err(Failure::new("test", "no learner needed"));
+        for (arm, expected) in [(Arm::Control, false), (Arm::Treated, true)] {
+            state::update::<SessionState, _>(&paths.state(start.session), |st| st.arm = Some(arm)).unwrap();
+            let result = session_start(&start, false, &learner, Some(&Contract)).unwrap();
+            assert_eq!(result.is_some(), expected);
+            if let Some(result) = result {
+                let result: Value = serde_json::from_str(&result).unwrap();
+                assert_eq!(result["hookSpecificOutput"]["additionalContext"], "test execution contract");
+                assert!(result.get("systemMessage").is_none());
+            }
+        }
+        assert!(session_start(&start, true, &learner, Some(&Contract)).unwrap().is_none());
+        assert!(session_start(&start, false, &learner, None).unwrap().is_none());
+    }
 
     #[test]
     fn execution_fallback_never_reintroduces_an_action_after_an_uncertain_result() {
