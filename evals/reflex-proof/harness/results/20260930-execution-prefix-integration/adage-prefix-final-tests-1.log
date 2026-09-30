@@ -1,0 +1,19 @@
+
+running 11 tests
+test a_dead_ends_signature_is_the_cause_not_makes_status_line ... ok
+test a_longer_context_compiles_to_a_context_trigger ... ok
+test an_instinct_directing_the_same_step_is_recorded_as_a_prior ... ok
+test an_environment_step_after_an_edit_is_a_nascent ... ok
+test a_regeneration_after_the_last_edit_is_an_obligation_with_its_fixed_id ... ok
+test execution_only_admission_cannot_fall_back_to_advice ... ok
+test a_variable_argument_with_no_bound_source_is_not_directed ... ok
+test a_check_after_an_edit_is_a_prime_run_and_an_observation_is_not_compiled ... ok
+test a_segment_of_the_edited_path_binds_the_scope_of_a_check ... ok
+test two_steps_after_an_edit_are_a_sequence_and_a_repeated_step_counts_once ... ok
+test a_failed_check_then_a_working_one_is_an_avoid_announced_by_how_often_it_is_run ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+   Compiling adage-graph v0.1.0 (/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/crates/adage-graph)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.51s
+     Running tests/compile.rs (target/debug/deps/compile-21df079362eb2c32)

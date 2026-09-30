@@ -48,7 +48,7 @@ pub struct Params {
     pub score: ScoreParams,
     /// At most this many reflexes (the compiled-route bound, Track G §1.3).
     pub max_reflexes: usize,
-    /// At most this many closed patterns are scored (Track G §1.3).
+    /// Total scoring cap: closed advisory patterns first, then single-action execution prefixes.
     pub max_closed: usize,
     /// Worker threads everywhere. Never changes the result.
     pub threads: usize,
@@ -148,6 +148,9 @@ pub struct Reflex {
     pub value: f64,
     #[serde(default)]
     pub execution_candidate: bool,
+    /// Retained for execution judgement only; advisory admission did not pass.
+    #[serde(default)]
+    pub execution_only: bool,
     /// Compression gain, bits.
     pub gain: f64,
     pub exposed: u32,
@@ -517,6 +520,7 @@ fn reflex(db: &Db, sc: &Scored, gain: f64) -> Reflex {
         consistency: sc.consistency,
         value: sc.value,
         execution_candidate: sc.execution_candidate,
+        execution_only: sc.execution_only,
         gain,
         exposed: sc.exposed,
         target,
@@ -582,6 +586,19 @@ pub fn select(db: &Db, scored: &[Scored], max: usize) -> Vec<(usize, f64)> {
     kept.into_iter().map(|(i, g, _)| (i, g)).collect()
 }
 
+/// Keep the existing advisory closed pool first, then independently executable prefixes.
+/// Closure can absorb a useful check into a later unrelated action with identical support.
+/// Both use the same mined patterns, score cache, deterministic ordering and total cap.
+fn scoring_patterns<'a>(db: &Db, mined: &'a mine::Mined, max: usize) -> Vec<&'a mine::MinedPattern> {
+    let mut patterns: Vec<_> =
+        mined.patterns.iter().filter(|m| m.closed || score::execution_shape(db, &m.pattern)).collect();
+    patterns.sort_by(|a, b| {
+        b.closed.cmp(&a.closed).then(b.sessions.len().cmp(&a.sessions.len())).then(a.pattern.cmp(&b.pattern))
+    });
+    patterns.truncate(max);
+    patterns
+}
+
 /// Learn reflexes from `train`; evaluate on `test` (held out) when it is not empty.
 pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) -> (Learned, Option<HeldOut>) {
     let p = p.resolved();
@@ -595,12 +612,13 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
     let t1 = Instant::now();
     let mined = mine::mine(&db, &p.mine);
     let t2 = Instant::now();
-    // At most `max_closed` closed patterns are scored (Track G §1.3): by support, then pattern.
-    let mut closed: Vec<&mine::MinedPattern> = mined.closed().collect();
-    closed.sort_by(|a, b| b.sessions.len().cmp(&a.sessions.len()).then(a.pattern.cmp(&b.pattern)));
-    closed.truncate(p.max_closed);
+    // Score the closed advisory pool and execution prefixes within the shared cap.
+    let closed = scoring_patterns(&db, &mined, p.max_closed);
     let mut scored = score::score_all(&db, &closed, &mined.patterns, &p.score);
-    let calibration = fit_calibration(&corpus.labels, &tr, &db, &scored, &p);
+    // Execution prefixes must not change the calibration population used by existing advice.
+    let advisory_scored: Vec<_> =
+        closed.iter().zip(&scored).filter(|(m, _)| m.closed).map(|(_, sc)| sc.clone()).collect();
+    let calibration = fit_calibration(&corpus.labels, &tr, &db, &advisory_scored, &p);
     for sc in scored.iter_mut() {
         calibration.calibrate(sc, p.score.quantile);
     }
@@ -631,7 +649,7 @@ pub fn learn_split(train: &[EventSession], test: &[EventSession], p: &Params) ->
         expansions: mined.expansions,
         truncated: mined.truncated,
         frequent: mined.patterns.len(),
-        closed: closed.len(),
+        closed: closed.iter().filter(|m| m.closed).count(),
         gated: scored.iter().filter(|s| s.passes).count(),
         singleton_share: epoch.singleton_share(),
         tau: epoch.families.iter().map(|(k, f)| (k.clone(), f.tau)).collect(),
@@ -700,7 +718,7 @@ fn fit_calibration(
         }
         let idb = Db::build(labels, &itr, &p.mine);
         let mined = mine::mine(&idb, &p.mine);
-        let mut closed: Vec<&mine::MinedPattern> = mined.closed().collect();
+        let mut closed: Vec<_> = mined.closed().collect();
         closed.sort_by(|a, b| b.sessions.len().cmp(&a.sessions.len()).then(a.pattern.cmp(&b.pattern)));
         closed.truncate(p.max_closed);
         let iscored = score::score_all(&idb, &closed, &mined.patterns, &p.score);
@@ -733,9 +751,7 @@ pub fn candidates_shaped(sessions: &[EventSession], p: &Params) -> Vec<(String, 
     let all: Vec<&crate::events::LSession> = corpus.sessions.iter().collect();
     let db = Db::build(&corpus.labels, &all, &p.mine);
     let mined = mine::mine(&db, &p.mine);
-    let mut closed: Vec<&mine::MinedPattern> = mined.closed().collect();
-    closed.sort_by(|a, b| b.sessions.len().cmp(&a.sessions.len()).then(a.pattern.cmp(&b.pattern)));
-    closed.truncate(p.max_closed);
+    let closed = scoring_patterns(&db, &mined, p.max_closed);
     score::score_all(&db, &closed, &mined.patterns, &p.score)
         .into_iter()
         .map(|s| (s.pattern.render(&db.labels), shape(&db, &s.pattern), s))

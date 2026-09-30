@@ -32,7 +32,8 @@
 //! avoid after a failure, whose worth is in the sessions that would miss them: its gate is
 //! contrast or consistency alone). A single successful continuation after an edit or a bounded
 //! multi-event context at ≥90% anchor confidence is retained independently of advisory value
-//! for execution judgement. It still passes the support/day/contrast gates; the learner
+//! for execution judgement, including frequent prefixes absorbed by closure. It still passes
+//! support/day/consistency gates; contrast and advisory value never grant execution. The learner
 //! recounts every matching compiled trigger before
 //! issuing an execution certificate and requires local human authorization to run. A guard's delivery is then decided on the traces, by the rate
 //! and Wilson rule of its judgement (`adage-learn`), as every reflex's is: a Beta lower bound here
@@ -121,6 +122,9 @@ pub struct Scored {
     /// Predictable continuation candidate; requires independent executable-trigger judgement.
     #[serde(default)]
     pub execution_candidate: bool,
+    /// Admission bypassed advisory closure, contrast or value; never deliver as advice.
+    #[serde(default)]
+    pub execution_only: bool,
     pub dturns: f64,
     pub value: f64,
     pub exposed: u32,
@@ -593,6 +597,19 @@ impl Stats {
     }
 }
 
+/// Structural admission only. The score and independent execution recount still judge evidence.
+pub(crate) fn execution_shape(db: &Db, pat: &Pattern) -> bool {
+    if pat.cut == 0 || pat.cut >= pat.items.len() {
+        return false;
+    }
+    let xs = pat.context();
+    let ys = &pat.items[pat.cut..];
+    (db.ty(xs[xs.len() - 1].label) == NodeType::Edit || (2..=3).contains(&xs.len()))
+        && ys.len() == 1
+        && db.ty(ys[0].label) == NodeType::Act
+        && ys[0].pol != Pol::Fail
+}
+
 /// Score one pattern (every join it reads comes from `cache`, or is computed when missing).
 pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Cache) -> Scored {
     let pat = &mp.pattern;
@@ -718,8 +735,6 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
         } else {
             String::new()
         }
-    } else if contrast < p.contrast {
-        format!("contrast {contrast:.2} < {}", p.contrast)
     } else {
         String::new()
     };
@@ -728,17 +743,23 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
     // the sessions that would miss it, which p_soon does not see, so its gate is contrast or
     // consistency alone.
     let guard = has_fail || (x_last.last && db.ty(x_last.label) == NodeType::Edit);
-    let execution_candidate = (db.ty(x_last.label) == NodeType::Edit || (2..=3).contains(&xs.len()))
-        && ys.len() == 1
-        && db.ty(ys[0].label) == NodeType::Act
-        && ys[0].pol != Pol::Fail
-        && conf_anchor >= 0.9;
-    let gate = if !gate.is_empty() {
-        gate
-    } else if !guard && !execution_candidate && value <= 0.0 {
+    let execution_candidate = execution_shape(db, pat) && conf_anchor >= 0.9;
+    let advisory_gate = if consistency.is_none() && contrast < p.contrast {
+        format!("contrast {contrast:.2} < {}", p.contrast)
+    } else if !guard && value <= 0.0 {
         format!("value {value:.2} <= 0")
     } else {
+        String::new()
+    };
+    let execution_only = !mp.closed || !advisory_gate.is_empty();
+    let gate = if !gate.is_empty() {
         gate
+    } else if execution_candidate {
+        String::new()
+    } else if !mp.closed {
+        "non-closed pattern is not an execution candidate".into()
+    } else {
+        advisory_gate
     };
     Scored {
         pattern: Pattern { items: pat.items.clone(), cut },
@@ -763,6 +784,7 @@ pub fn score(db: &Db, st: &Stats, mp: &MinedPattern, p: &ScoreParams, cache: &Ca
         p_soon,
         p_next,
         execution_candidate,
+        execution_only,
         dturns,
         value,
         exposed,

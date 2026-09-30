@@ -1229,6 +1229,9 @@ mod execution_equivalence_tests {
             }
             calls.push(("Write", json!({"file_path":format!("{cwd}/tests/test_a.py"), "content":"pass"})));
             calls.push(("Bash", json!({"command":command})));
+            if mode.starts_with("trailing-action") {
+                calls.push(("Bash", json!({"command":".venv/bin/python -c \"print(1)\""})));
+            }
             if mode == "same-turn-shell" {
                 calls.push(("Bash", json!({"command":"cd sub"})));
             }
@@ -1243,8 +1246,10 @@ mod execution_equivalence_tests {
                 lines.push(json!({"type":"assistant", "sessionId":sid, "cwd":recorded_cwd,
                     "message":{"id":format!("turn-{message_turn}"), "model":"fixture", "content":[
                         {"type":"tool_use", "id":id, "name":tool, "input":input}]}}));
+                let failed = mode == "trailing-action-failure" && i == 0 && turn == 1;
                 lines.push(json!({"type":"user", "sessionId":sid, "cwd":cwd,
-                    "message":{"content":[{"type":"tool_result", "tool_use_id":id, "is_error":false, "content":"1 passed"}]}}));
+                    "message":{"content":[{"type":"tool_result", "tool_use_id":id, "is_error":failed,
+                        "content":if failed {"1 failed"} else {"1 passed"}}]}}));
             }
             let path = temp.path().join(format!("{sid}.jsonl"));
             std::fs::write(&path, lines.iter().map(|v| v.to_string()).collect::<Vec<_>>().join("\n")).unwrap();
@@ -1261,6 +1266,27 @@ mod execution_equivalence_tests {
         let index = temp.path().join("index.json");
         crate::learn(&inputs, &temp.path().join("tracks"), &index, &LearnConfig::default()).unwrap();
         Index::load(&index)
+    }
+
+    #[test]
+    fn independently_executable_check_survives_a_common_later_action() {
+        let command = ".venv/bin/python -m pytest tests/test_a.py -q";
+        let commands = [command; 5];
+        let index = routine_cwd(&commands, "trailing-action");
+        let certified: Vec<_> = index.routes.iter().filter(|r| r.route.evidence.execution.is_some()).collect();
+        assert!(!certified.is_empty(), "closure must not absorb the independently executable check");
+        for r in certified {
+            assert_eq!(r.route.step, Step::Run { command: command.into() });
+            let ev = r.route.evidence.execution.as_ref().unwrap();
+            assert_eq!((ev.sessions, ev.successful, ev.opportunities), (5, 5, 5));
+        }
+        for (commands, mode) in [(&commands[..4], "trailing-action"), (&commands[..], "trailing-action-failure")] {
+            let index = routine_cwd(commands, mode);
+            assert!(
+                !index.routes.iter().any(|r| r.route.evidence.execution.is_some()),
+                "prefix admission must preserve independent support and success recount: {mode}"
+            );
+        }
     }
 
     #[test]

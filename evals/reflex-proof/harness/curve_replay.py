@@ -11,19 +11,36 @@ import real_repo_gate as gate
 import real_repo_pairs as pairs
 
 
+def validated_inputs(original):
+    """Replay one complete frozen checkpoint without mixing training regimes."""
+    count, rows = original.get("count"), original.get("inputs", [])
+    if (original.get("status") != "completed" or type(count) is not int or count <= 0
+            or len(rows) != count):
+        raise ValueError("complete nonempty chronological checkpoint required")
+    kind = rows[0].get("kind", "organic-training")
+    guidance = rows[0].get("workflow_guidance")
+    if kind not in ("organic-training", "instruction-guided-training"):
+        raise ValueError("unknown training regime")
+    if (len({r["session_id"] for r in rows}) != count or len({r["sha256"] for r in rows}) != count
+            or any(r.get("kind", "organic-training") != kind
+                   or r.get("workflow_guidance") != guidance for r in rows)):
+        raise ValueError("duplicate or mixed training history")
+    for row in rows:
+        if (row.get("synthetic") is not False or row.get("hooks_enabled") is not False
+                or gate.sha(Path(row["copy"])) != row["sha256"]):
+            raise ValueError("frozen native history changed or exposed")
+    return rows
+
+
 def replay(checkpoint, output, binary):
     checkpoint, output, binary = checkpoint.resolve(strict=True), output.resolve(), binary.resolve(strict=True)
     original = pairs.read(checkpoint / "attempt.json")
-    if original["status"] != "completed" or original["count"] != 15 or len(original["inputs"]) != 15:
-        raise ValueError("completed chronological checkpoint 15 required")
-    for row in original["inputs"]:
-        if row["synthetic"] or row["hooks_enabled"] or gate.sha(Path(row["copy"])) != row["sha256"]:
-            raise ValueError("frozen native history changed or exposed")
+    rows = validated_inputs(original)
     output.mkdir(parents=True, exist_ok=False)
     history = output / "history"
     history.mkdir()
     inputs = []
-    for row in original["inputs"]:
+    for row in rows:
         dest = history / Path(row["copy"]).name
         shutil.copyfile(row["copy"], dest)
         if gate.sha(dest) != row["sha256"]:
@@ -36,7 +53,8 @@ def replay(checkpoint, output, binary):
     sources = {str(p.relative_to(gate.REPO)): gate.sha(p) for p in
         [*sorted((gate.REPO / "crates").rglob("*")), gate.REPO / "Cargo.toml", gate.REPO / "Cargo.lock"] if p.is_file()}
     record = dict(kind="development-replay", status="started", original_checkpoint=str(checkpoint),
-        original_attempt_sha256=gate.sha(checkpoint / "attempt.json"), count=15, inputs=inputs,
+        original_attempt_sha256=gate.sha(checkpoint / "attempt.json"), count=original["count"], inputs=inputs,
+        training_kind=rows[0].get("kind", "organic-training"), workflow_guidance=rows[0].get("workflow_guidance"),
         production_source_sha256=sources, binary_sha256=gate.sha(executable), command=command,
         paid_calls=0, grants_written=False, efficacy_result=False,
         limitation="Code changed after observing training. This is development evidence, not held-out efficacy.")

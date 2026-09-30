@@ -1,0 +1,1238 @@
+{
+  "sessions_read": 15,
+  "sessions_used": 15,
+  "sessions_steered": 0,
+  "repos": {
+    "github.com/marshmallow-code/marshmallow": {
+      "sessions": 15,
+      "intent_families": 0,
+      "tracks": [
+        {
+          "name": "github-com-marshmallow-code-marshmallow/learned",
+          "version": "0.1.0",
+          "change": "created",
+          "routes": [
+            "card-45392d81e4 [prime]",
+            "dead-end-0c60c9 [fire]",
+            "dead-end-fa6db4 [fire]",
+            "run-d0b5a9 [prime]"
+          ]
+        },
+        {
+          "name": "github-com-marshmallow-code-marshmallow/instincts",
+          "version": "0.1.0",
+          "change": "created",
+          "routes": [
+            "dead-end-1fbe94 [prime, instinct u11, forming]",
+            "dead-end-5347bf [prime, instinct u11, forming]",
+            "dead-end-93981f [prime, instinct u11, forming]",
+            "dead-end-95d94b [prime, instinct u11, forming]",
+            "dead-end-9aeb2e [prime, instinct u3, forming]",
+            "dead-end-c7dcb6 [prime, instinct u11, forming]",
+            "instinct-u11-565bfd [prime, instinct u11, forming]",
+            "instinct-u11-580139 [prime, instinct u11, forming]",
+            "instinct-u11-983271 [prime, instinct u11, forming]",
+            "instinct-u11-aa69ba [prime, instinct u11, forming]",
+            "instinct-u11-b46676 [prime, instinct u11, forming]",
+            "instinct-u11-b87800 [prime, instinct u11, forming]",
+            "instinct-u11-c243e0 [prime, instinct u11, forming]",
+            "instinct-u11-eae4d7 [prime, instinct u11, forming]",
+            "instinct-u11-ed6cec [prime, instinct u11, forming]",
+            "instinct-u11-f38551 [prime, instinct u11, forming]",
+            "instinct-u6-d18b41 [prime, instinct u6, forming]"
+          ]
+        }
+      ],
+      "instincts": {
+        "bound": 6,
+        "advice": 11,
+        "nascent": 0,
+        "skipped": [
+          "P1: after pytest fails with \"No module named 'marshmallow'\", tox -e py: already bound by U11",
+          "P1: after pytest fails with \"command not found: pytest\", tox -e py: already bound by U11",
+          "P1: after pytest fails with \"pytest: command not found\", tox -e py: already bound by U11",
+          "P1: after python -m pytest fails with \"No module named 'marshmallow'\", tox -e py: already bound by U11",
+          "P1: after python -m pytest fails with \"No module named pytest\", tox -e py: already bound by U11",
+          "P1: after python -m pytest fails with \"command not found: python\", tox -e py: already bound by U11",
+          "P1: after python -m pytest fails with \"python: command not found\", tox -e py: already bound by U11",
+          "P1: after python3 -m pytest fails with \"No module named 'marshmallow'\", tox -e py: already bound by U11",
+          "P1: after python3 -m pytest fails with \"No module named pytest\", tox -e py: already bound by U11",
+          "U11: dead-end-0cdcfb (after python -m pytest fails with \"No module named pytest\", .venv/bin/python -m pytest): route dead-end-fa6db4 directs .venv/bin/python -m pytest for this failure",
+          "U11: dead-end-855e84 (after python3 -m pytest fails with \"No module named pytest\", .venv/bin/python -m pytest): route dead-end-0c60c9 directs .venv/bin/python -m pytest for this failure",
+          "U11: dead-end-97f983 (after python -m pytest fails with \"python: command not found\", .venv/bin/python -m pytest): route dead-end-fa6db4 directs .venv/bin/python -m pytest for this failure",
+          "U11: dead-end-a6ab60 (after python -m pytest fails with \"No module named 'marshmallow'\", .venv/bin/python -m pytest): route dead-end-fa6db4 directs .venv/bin/python -m pytest for this failure",
+          "U11: dead-end-d9d28b (after python3 -m pytest fails with \"No module named 'marshmallow'\", .venv/bin/python -m pytest): route dead-end-0c60c9 directs .venv/bin/python -m pytest for this failure",
+          "U11: dead-end-dec50b (after python -m pytest fails with \"command not found: python\", .venv/bin/python -m pytest): route dead-end-fa6db4 directs .venv/bin/python -m pytest for this failure",
+          "U3: after pytest fails with \"No module named 'marshmallow'\", tox -e py: already bound by U11",
+          "U3: after pytest fails with \"command not found: pytest\", tox -e py: already bound by U11",
+          "U3: after pytest fails with \"pytest: command not found\", tox -e py: already bound by U11",
+          "U3: after python -m pytest fails with \"No module named 'marshmallow'\", tox -e py: already bound by U11",
+          "U3: after python -m pytest fails with \"No module named pytest\", tox -e py: already bound by U11",
+          "U3: after python -m pytest fails with \"command not found: python\", tox -e py: already bound by U11",
+          "U3: after python -m pytest fails with \"python: command not found\", tox -e py: already bound by U11",
+          "U3: after python3 -m pytest fails with \"No module named 'marshmallow'\", tox -e py: already bound by U11",
+          "U3: after python3 -m pytest fails with \"No module named pytest\", tox -e py: already bound by U11",
+          "U3: dead-end-527c67 (after python3 -m pytest fails with \"tox -e py\", tox -e py): route dead-end-0c60c9 directs .venv/bin/python -m pytest for this failure",
+          "U3: dead-end-923c12 (after python -m pytest fails with \"tox -e py\", tox -e py): route dead-end-fa6db4 directs .venv/bin/python -m pytest for this failure"
+        ],
+        "extinguished": [],
+        "confirmed": []
+      },
+      "engine": {
+        "sessions": 15,
+        "reflexes": 12,
+        "compiled": 1,
+        "routes": 4,
+        "contexts": 0,
+        "intent_families": 0,
+        "card_families": 1,
+        "cards": 1,
+        "dropped": [
+          {
+            "pattern": "[act/h:cat✓] & [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/h:cat✓] & [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/h:git commit✗] || → [act/h:echo✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[read/x:pyproject.toml] || → [act/x:exec python3 --version✓]",
+            "reason": "a one-event context of this type has no trigger"
+          },
+          {
+            "pattern": "[read/p:src/marshmallow/validate.py] → [edit/x:tests/test_validate.py] || → [act/x:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/p:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] || → [act/x:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/h:sleep✓] & [act/p:exec git add {path} {path} CHANGELOG.rst] || & [act/x:exec sleep {n}✓]",
+            "reason": "\"sleep 2\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/h:sleep✓] & [act/p:exec git add {path} {path} CHANGELOG.rst] || & [act/x:exec sleep {n}✓]",
+            "reason": "\"sleep 2\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/p:src/marshmallow/validate.py] → [act/p:exec git status✓] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/p:src/marshmallow/validate.py] → [act/x:exec git status✓] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[edit/x:tests/test_validate.py] → [act/x:exec which python3✓] → [read/x:pyproject.toml] || → [act/x:exec python3 --version✓]",
+            "reason": "pyproject.toml cannot be a context item"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [act/x:exec which python3✓] → [read/x:pyproject.toml] || → [act/x:exec python3 --version✓]",
+            "reason": "CHANGELOG.rst cannot be a context item"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [act/x:exec which python3✓] → [read/x:pyproject.toml] || → [act/x:exec python3 --version✓]",
+            "reason": "tests/test_validate.py cannot be a context item"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → [act/x:exec which python3✓] → [read/x:pyproject.toml] || → [act/x:exec python3 --version✓]",
+            "reason": "pyproject.toml cannot be a context item"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [read/x:CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [read/x:CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/x:exec which python3✓] → [act/x:exec python3 -m pytest {path} -xvs✗] → [read/x:pyproject.toml] || → [act/x:exec python3 --version✓]",
+            "reason": "pyproject.toml cannot be a context item"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [edit/x:tests/test_validate.py] → [read/x:pyproject.toml] || → [act/x:exec python3 --version✓]",
+            "reason": "src/marshmallow/validate.py cannot be a context item"
+          },
+          {
+            "pattern": "[edit/x:tests/test_validate.py] → [act/x:exec which python3✓] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [act/x:exec which python3✓] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [act/x:exec which python3✓] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → [act/x:exec which python3✓] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/x:exec which python3✓] → [read/x:pyproject.toml] || → [act/x:exec python3 --version✓]",
+            "reason": "pyproject.toml cannot be a context item"
+          },
+          {
+            "pattern": "last[edit/k:edit] || → [act/x:exec git status✓]",
+            "reason": "\"git status\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/p:src/marshmallow/validate.py] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [read/x:tests/test_validate.py] → last[edit/k:edit] || → [act/x:exec git status✓]",
+            "reason": "\"git status\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [read/x:tests/test_validate.py] → last[edit/k:edit] || → [act/x:exec git status✓]",
+            "reason": "\"git status\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec which python3✓] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:tests/test_validate.py] → last[edit/k:edit] || → [act/x:exec git status✓]",
+            "reason": "\"git status\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/p:src/marshmallow/validate.py] → [act/x:exec git status✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/p:src/marshmallow/validate.py] → [act/x:exec git status✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [act/x:exec git status✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/p:src/marshmallow/validate.py] → [edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/p:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] || → [act/x:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/x:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] || → [act/x:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/p:src/marshmallow/validate.py] → [edit/x:tests/test_validate.py] → [read/x:pyproject.toml] || → [act/x:exec python3 --version✓]",
+            "reason": "src/marshmallow/validate.py cannot be a context item"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/x:tests/test_validate.py] → [read/x:pyproject.toml] || → [act/x:exec python3 --version✓]",
+            "reason": "tests/test_validate.py cannot be a context item"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → last[edit/x:tests/test_validate.py] || → [act/x:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/p:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] → [read/x:pyproject.toml] || → [act/x:exec python3 --version✓]",
+            "reason": "src/marshmallow/validate.py cannot be a context item"
+          },
+          {
+            "pattern": "[read/p:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/x:CHANGELOG.rst] → last[edit/x:tests/test_validate.py] || → [act/p:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → last[edit/x:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] || → [act/p:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → last[edit/x:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] || → [act/p:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [read/x:CHANGELOG.rst] → last[edit/x:tests/test_validate.py] || → [act/p:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → last[edit/x:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] || → [act/p:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:CHANGELOG.rst] → last[edit/x:tests/test_validate.py] || → [act/p:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → last[edit/x:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] || → [act/p:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [act/x:exec git status✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] || → [act/x:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → last[edit/x:tests/test_validate.py] || → [act/p:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] || → [act/p:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/x:tests/test_validate.py] → last[edit/x:tests/test_validate.py] || → [act/p:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → last[edit/x:src/marshmallow/validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → last[edit/x:src/marshmallow/validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → last[edit/x:src/marshmallow/validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → last[edit/x:src/marshmallow/validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[edit/x:tests/test_validate.py] → last[edit/x:CHANGELOG.rst] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → last[edit/x:CHANGELOG.rst] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → last[edit/x:CHANGELOG.rst] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → last[edit/x:CHANGELOG.rst] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/x:exec python3 -c {code}] → [act/x:exec git status✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:CHANGELOG.rst] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/x:tests/test_validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [read/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [read/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → [edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → [read/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:tests/test_validate.py] → [act/p:exec git status✓] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:tests/test_validate.py] → [act/x:exec git status✓] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/p:src/marshmallow/validate.py] → [edit/x:tests/test_validate.py] || → [act/x:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → last[edit/x:src/marshmallow/validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → last[edit/x:src/marshmallow/validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → last[edit/x:src/marshmallow/validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → last[edit/x:src/marshmallow/validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [read/x:CHANGELOG.rst] → [act/p:exec git status✓] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:CHANGELOG.rst] → [act/p:exec git status✓] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [read/x:CHANGELOG.rst] → [act/x:exec git status✓] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:CHANGELOG.rst] → [act/x:exec git status✓] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [act/p:exec git status✓] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [act/x:exec git status✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [act/x:exec git status✓] || → [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → last[edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → last[edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/x:exec python3 --version✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → last[edit/x:tests/test_validate.py] → last[edit/x:CHANGELOG.rst] || → [act/x:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[edit/x:tests/test_validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [edit/x:tests/test_validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [read/x:tests/test_validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [read/x:tests/test_validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [edit/x:tests/test_validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:tests/test_validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → [edit/x:tests/test_validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → [read/x:tests/test_validate.py] → [act/h:python3 -m pytest✗] || → [act/x:exec python3 -c {code}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → last[edit/x:tests/test_validate.py] → last[edit/x:CHANGELOG.rst] || → [act/x:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] → [act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/h:rm✓] & [act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/x:src/marshmallow/validate.py] → last[edit/x:CHANGELOG.rst] || → [act/x:exec which python3✓]",
+            "reason": "\"which python3\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] & [act/x:exec rm -f {path}✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git] → [act/p:exec git status✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec cat✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/h:cat✓] & [act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/h:git commit✗] & [act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/h:git commit✗] & [act/x:exec cat✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst✓] & [act/x:exec cat✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/x:exec cat✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/h:git commit✗] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec rm -f {path}✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/h:cat✓] & [act/h:git commit✗] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/h:git add✓] & [act/h:git commit✗] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/x:exec rm -f {path}✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] → [act/x:exec rm -f {path}✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/h:git commit✗] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/x:exec rm -f {path}✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/x:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/x:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec git add {path} {path} CHANGELOG.rst] → [act/x:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/h:git commit✗] || → [act/h:echo✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/h:rm✓] & [act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git] → [act/p:exec git status✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → last[edit/x:src/marshmallow/validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → last[edit/x:src/marshmallow/validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → last[edit/x:src/marshmallow/validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → last[edit/x:src/marshmallow/validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/x:exec rm -f {path}✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git] → [act/p:exec git status✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] → [act/x:exec rm -f {path}✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git] → [act/p:exec git status✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/x:exec rm -f {path}✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git] → [act/p:exec git status✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [read/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [read/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → [edit/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/x:src/marshmallow/validate.py] → [read/x:tests/test_validate.py] → [act/x:exec python3 -m pytest {path} -xvs✗] || → [act/p:exec which python3✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git] → [act/p:exec git status✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] → [act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git] → [act/p:exec git status✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec rm -f {path}✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git] → [act/p:exec git status✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/p:exec git status✓] → [act/h:cat✓] & [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/h:cat✓] & [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec git status✓] → [act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec git status✓] → [act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/h:cat✓] & [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] → [act/h:cat✓] & [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec git diff {path}✓] → [act/h:cat✓] & [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec python3 -c {code}] → [act/p:exec git status✓] → [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/h:cat✓] & [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/h:./**/*.noext] → [act/h:cat✓] & [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] → [act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] → [act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/p:exec git status✓] → [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [act/p:exec git status✓] → [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "last[edit/k:edit] → [act/p:exec git status✓] → [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec python3 -c {code}] → [act/p:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec python3 -c {code}] → [act/p:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/h:cat✓] & [act/h:git add✓] & [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec git diff {path}✓] → [act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec git diff {path}✓] → [act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/h:cat✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/x:exec git status✓] → [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec python3 -c {code}] → [act/x:exec git status✓] → [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [act/x:exec git status✓] → [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "last[edit/k:edit] → [act/x:exec git status✓] → [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/h:cat✓] & [act/h:git add✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/h:cat✓] & [act/h:git add✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/h:git add✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/p:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/p:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/k:edit] → [act/p:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "last[edit/k:edit] → [act/p:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/x:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/x:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/x:exec python3 -c {code}] → [act/x:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec python3 -c {code}] → [act/x:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "last[edit/k:edit] → [act/x:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "last[edit/k:edit] → [act/x:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/h:git add✓] & [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/h:git add✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/h:git add✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/p:exec git diff {path}✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/p:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/h:cat✓] & [act/h:git commit✗] & [act/p:exec git add {path} {path} CHANGELOG.rst✓] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/h:cat✓] & [act/p:exec git add {path} {path} CHANGELOG.rst✓] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/h:git add✓] & [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/h:cat✓] & [act/p:exec git add {path} {path} CHANGELOG.rst✓] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec git diff {path}✓] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[edit/x:tests/test_validate.py] → [act/p:exec python -m pytest {path} -xvs] → [act/p:exec git add {path} {path} CHANGELOG.rst✓] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/h:cat✓] & [act/p:exec git add {path} {path} CHANGELOG.rst✓] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/p:exec python -m pytest {path} -xvs] → [act/p:exec git add {path} {path} CHANGELOG.rst✓] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/h:git add] & [act/h:sleep✓] & [act/p:exec git add {path} {path} CHANGELOG.rst] || & [act/x:exec sleep {n}✓]",
+            "reason": "\"sleep 2\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/h:sleep✓] & [act/p:exec git add {path} {path} CHANGELOG.rst] || & [act/x:exec sleep {n}✓]",
+            "reason": "\"sleep 2\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] → [act/h:sleep✓] & [act/p:exec git add {path} {path} CHANGELOG.rst] || & [act/x:exec sleep {n}✓]",
+            "reason": "\"sleep 2\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec git status] → [act/h:sleep✓] & [act/p:exec git add {path} {path} CHANGELOG.rst] || & [act/x:exec sleep {n}✓]",
+            "reason": "\"sleep 2\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/h:git commit] || & [act/x:exec cat✓]",
+            "reason": "\"cat\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec sleep {n}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || → [act/x:exec sleep {n}✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git] → [act/p:exec git status✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git] → [act/p:exec git status✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git] → [act/p:exec git status✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] || =same_art=> [read/x:.git] → [act/p:exec git status✓]",
+            "reason": "no directable working command after the failure"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → last[edit/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:CHANGELOG.rst] → last[edit/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → last[edit/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → last[edit/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/x:CHANGELOG.rst] → last[edit/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/x:src/marshmallow/validate.py] → last[edit/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/x:tests/test_validate.py] → last[edit/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [read/x:CHANGELOG.rst] → last[edit/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:src/marshmallow/validate.py] → [read/x:tests/test_validate.py] → last[edit/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:CHANGELOG.rst] → last[edit/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/p:exec git add {path} {path} CHANGELOG.rst] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/k:fails: fatal: Unable to create {path} Operation not permitted✗] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[act/x:exec git status✓] → [act/p:exec git add {path} {path} CHANGELOG.rst] → [act/h:git commit✗] || & [act/x:exec cat✓]",
+            "reason": "an avoid names a check that fails and a check that works"
+          },
+          {
+            "pattern": "[read/x:tests/test_validate.py] → [read/x:tests/test_validate.py] → last[edit/x:src/marshmallow/validate.py] || → [act/x:exec wc -l {path}✓]",
+            "reason": "\"wc -l tests/test_validate.py\" is housekeeping, not a step to direct"
+          },
+          {
+            "pattern": "[prompt/k:prompt] → [read/p:src/marshmallow/validate.py] → [edit/x:tests/test_validate.py] || → [act/x:exec python3 --version✓]",
+            "reason": "run-86ffe6: rate 0.33 below the bar and no outcome lift, or may never be directed"
+          }
+        ],
+        "valued": [
+          {
+            "key": {
+              "ecosystem": "py",
+              "env_kind": "venv",
+              "trigger": "cmd-not-found:1",
+              "phase": "pre-goal"
+            },
+            "failed": "python -m pytest",
+            "signature": "1: command not found",
+            "command": ".venv/bin/python -m pytest",
+            "role": "venv",
+            "advantage": {
+              "mean": 5.49018947368421,
+              "sd": 1.4124017969802676,
+              "p_positive": 0.9999492619942498,
+              "lower": 3.680123690921273,
+              "q_null": 9.145122807017543,
+              "q_sat": 3.0
+            },
+            "n_null": 15,
+            "n_sat": 1,
+            "ran_tests": 3,
+            "declared": true,
+            "effective": 2.0,
+            "harm_in_window": 2,
+            "uplift": {
+              "kind": "avoid",
+              "p_follow": 0.944,
+              "p_self": 0.1137,
+              "mean": 0.8303,
+              "lower": 0.7076,
+              "prior_self": 0.29,
+              "traces": 15,
+              "traces_took": 1
+            },
+            "strength": "fire"
+          },
+          {
+            "key": {
+              "ecosystem": "py",
+              "env_kind": "venv",
+              "trigger": "no-module:pytest",
+              "phase": "pre-goal"
+            },
+            "failed": "python3 -m pytest",
+            "signature": "No module named pytest",
+            "command": ".venv/bin/python -m pytest",
+            "role": "venv",
+            "advantage": {
+              "mean": 5.747068783068783,
+              "sd": 1.3292645115955621,
+              "p_positive": 0.9999923155059564,
+              "lower": 4.043547721410271,
+              "q_null": 9.093105413105413,
+              "q_sat": 2.6666666666666665
+            },
+            "n_null": 14,
+            "n_sat": 2,
+            "ran_tests": 3,
+            "declared": true,
+            "effective": 3.0,
+            "harm_in_window": 2,
+            "uplift": {
+              "kind": "avoid",
+              "p_follow": 0.944,
+              "p_self": 0.1756,
+              "mean": 0.7684,
+              "lower": 0.6295,
+              "prior_self": 0.29,
+              "traces": 14,
+              "traces_took": 2
+            },
+            "strength": "fire"
+          }
+        ],
+        "testmap": {
+          "glob": "src/marshmallow/*.py",
+          "command": ".venv/bin/python -m pytest {tests}",
+          "runner": "pytest",
+          "map_files": 8,
+          "advantage": {
+            "mean": 6.107348684210527,
+            "sd": 1.9889226182577118,
+            "p_positive": 0.9989320785598923,
+            "lower": 3.558441720506168,
+            "q_null": 11.344473684210527,
+            "q_sat": 4.0
+          },
+          "n_null": 15,
+          "n_sat": 0,
+          "verified": true,
+          "uplift": {
+            "kind": "run-after-edit",
+            "p_follow": 0.881,
+            "p_self": 0.0674,
+            "mean": 0.8136,
+            "lower": 0.6772,
+            "prior_self": 0.32,
+            "traces": 15
+          },
+          "strength": "prime"
+        },
+        "card": {
+          "command": ".venv/bin/python -m pytest",
+          "useful": 3,
+          "sessions": 15
+        }
+      }
+    }
+  },
+  "index_generation": "0b694400a8b2593a",
+  "thresholds": "min_support=5 fire_lower_bound=0.8 prime_rate=0.5",
+  "intent_model": "potion-base-8m-i8@b9c0e329a2ce"
+}

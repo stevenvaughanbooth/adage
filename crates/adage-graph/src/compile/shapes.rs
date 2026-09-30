@@ -443,8 +443,9 @@ impl<'a> Builder<'a> {
 
     fn push(&mut self, shape: &'static str, fixed_id: bool, r: &Reflex, route: Route, prior: Option<&Route>) {
         let why = why(r, shape, prior.map(|p| p.id.clone()));
-        let advisory_eligible = r.value > 0.0
-            || r.context.last().is_some_and(|v| v.ok == Some(false) || (v.ty == NodeType::Edit && v.last));
+        let advisory_eligible = !r.execution_only
+            && (r.value > 0.0
+                || r.context.last().is_some_and(|v| v.ok == Some(false) || (v.ty == NodeType::Edit && v.last)));
         self.out.push(Compiled {
             shape,
             route,

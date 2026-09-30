@@ -108,6 +108,7 @@ fn reflex(context: Vec<ItemView>, continuation: Vec<ItemView>, target: Option<&s
         consistency: None,
         value: 1.0,
         execution_candidate: false,
+        execution_only: false,
         gain: 10.0,
         exposed: 0,
         target: target.map(str::to_string),
@@ -336,4 +337,15 @@ fn a_dead_ends_signature_is_the_cause_not_makes_status_line() {
     let c = Corpus::of(&[failing("s0"), failing("s1")], &[]);
     let sigs: Vec<(&str, u32)> = c.acts["exec make test"].signatures.iter().map(|(s, n)| (s.as_str(), *n)).collect();
     assert_eq!(sigs, [("error: 'make test' is retired, the suite runs with 'make check'", 2)]);
+}
+
+#[test]
+fn execution_only_admission_cannot_fall_back_to_advice() {
+    let mut r = reflex(vec![edit("registry/currencies.csv")], vec![act("exec make gen")], Some("exec make gen"));
+    r.execution_candidate = true;
+    r.execution_only = true;
+    // Even a positive advisory value and last-edit guard cannot erase admission provenance.
+    let out = compile(&[r]);
+    assert!(!out.routes.is_empty(), "{:?}", out.dropped);
+    assert!(out.routes.iter().all(|c| c.execution_candidate && !c.advisory_eligible));
 }
