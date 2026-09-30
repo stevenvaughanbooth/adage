@@ -137,6 +137,11 @@ pub struct FieldSpec {
     /// `title`, `_` read as a space, any case).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub text: bool,
+    /// Preserve complete stdout as bounded, scanned text, including its line breaks. Unlike
+    /// a labelled field this is an explicit unstructured-output contract: it requires the raw
+    /// output policy and a person grant. Overflow withholds instead of returning a partial task.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stdout: bool,
 }
 
 /// The output contract: typed fields, or raw text.
@@ -309,6 +314,11 @@ pub fn slots(argv: &[String]) -> Vec<String> {
 }
 
 impl OutputSpec {
+    /// Whole stdout carries unstructured content even when wrapped in a typed JSON field.
+    pub fn unstructured(&self) -> bool {
+        self.mode == OutputMode::Raw || self.fields.values().any(|f| f.stdout)
+    }
+
     /// Check the spec itself: safe names, bounded enums, strict patterns.
     pub fn validate(&self) -> Result<()> {
         if self.mode == OutputMode::Typed && self.fields.is_empty() {
@@ -320,6 +330,9 @@ impl OutputSpec {
         for (name, f) in &self.fields {
             if !safe_id(name) {
                 bail!("field name {name:?} is not a safe id");
+            }
+            if f.stdout && (f.ty != FieldType::Text || f.text || f.json.is_some() || f.optional) {
+                bail!("field {name}: stdout must be required text with no text or json selector");
             }
             if f.text && f.ty == FieldType::RepoPathList && f.json.is_some() {
                 bail!("field {name}: only a repo-path-list with no json path is read from text output");

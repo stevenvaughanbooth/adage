@@ -18,6 +18,15 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Zero configuration: install the plugin, start a session
 
+- Approved learned lookups can deliver complete bounded multiline stdout. Unsafe, empty or
+  oversized results are withheld; selected partial fields no longer claim the agent need not
+  repeat the lookup. Complete stdout retains the explicit unstructured-output policy and human
+  grant boundary. Automatic E1 execution abstains on ambiguous prompt arguments.
+- The macOS executor resolves Apple's system Python launcher to its selected interpreter,
+  avoiding Xcode discovery timeouts in fresh sandbox homes. Complete/raw lookup output from a
+  nonzero exit is withheld instead of presented as a completed lookup.
+- First-run integration checks now exercise six shipped advisory instincts and the Python
+  environment CPU rewrite through real hooks, including opt-out and execution permissions.
 - History discovery now agrees across learning, preview and setup, including configured Claude
   and Codex locations. Empty repositories can bind applicable instincts; mixed-case and
   dot-prefixed repository names publish valid learned tracks.

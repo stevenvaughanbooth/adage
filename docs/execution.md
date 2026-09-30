@@ -64,11 +64,30 @@ repository paths its output names (`files`) and the work item's text fields when
 `Title: …` line, whichever shape the output has). A `text` field is bounded plain text: control and
 invisible characters stripped, whitespace collapsed, at most 600 characters (`max`, up to 2,000),
 and withheld when the output scanner finds instruction-shaped text, a secret or an Adage tag in it.
-When the block carries such text, the directive says "The lookup was run; its result is below; you
-don't need to run it again." (with paths only, "That lookup has been run; its result is below.").
+These selected fields can omit task details; their delivery does not claim the lookup is complete.
+For a CLI with unlabelled or multiline task details, an explicit complete-output contract is:
+
+```sh
+adage review delegate acme-billing/learned lookup-work-item --level e1 \
+  --fields '{"result":{"type":"text","stdout":true,"max":2000}}'
+```
+
+This required text field preserves complete stdout and its line breaks after stripping controls
+and invisible characters. It scans the entire result and refuses empty, unsafe or oversized
+output instead of truncating it. A nonzero command exit withholds complete stdout and raw results,
+even if their text passes projection. It requires `exec.allow_raw_output = true` and a person grant;
+wrapping stdout in JSON does not make unstructured content eligible for automatic approval.
+Nonzero process exits withhold complete/raw output and retain advisory fallback. Only successful
+complete stdout (this contract or approved raw mode) says "The lookup was run;
+its result is below; you don't need to run it again." Selected fields say "That lookup has been
+run; its result is below." The person must decide whether that command supplies enough task data;
+complete stdout is not a claim that the upstream CLI itself returned a complete work item.
 `--fields` declares the fields explicitly. The prompt value a learned lookup binds (`{item}`, a
 learned value type) is E1's input as a typed prompt span is: the runtime binds it
-(`adage_core::vtype`), and the contract checks it again before it runs.
+(`adage_core::vtype`), and the contract checks it again before it runs. Automatic E1 execution
+also requires exactly one distinct matching value for every input slot, respecting learned mention
+constraints. Repeated mentions of the same value are fine; multiple matching values or a prompt
+beyond the bounded complete input scan retain advisory behavior without running the command.
 A pack reflex's fields, exits and timeout come from its pack. `--raw` asks for raw mode (policy
 must allow it); `--timeout-ms` raises the wall timeout up to 3,000 ms.
 
@@ -101,6 +120,11 @@ on the projected fields ("Its state is Closed, so nothing further is directed fo
 script runs from a private copy inside a shadow of the repository in scratch (its siblings are
 symlinks into the read-only repository), so a script that finds its data relative to itself
 still works.
+
+On macOS, the exact `/usr/bin/python3` toolchain shim resolves to the Python interpreter under
+the selected developer directory, already allowed by the sandbox. This avoids repeated Xcode
+discovery in a fresh scratch home. Other interpreters keep normal PATH resolution; no timeout
+or filesystem allowance is enlarged.
 
 **On any failure** (no approval match, a changed script, no sandbox, policy, a timeout, output
 past the capture cap, a field that fails its type, an oracle violation, text past the harness's
@@ -531,6 +555,12 @@ block withheld; after every run the group is killed and reaped (`adage-exec` is 
 so orphans are collected rather than left as zombies counting against `RLIMIT_NPROC`). The
 profile, and so its id, includes the limits.
 
+On macOS, `/usr/bin/python3` is Apple's toolchain launcher. Adage resolves this exact system
+shim to Python inside the selected canonical developer directory, which the sandbox already
+allows. This avoids repeated Xcode discovery in each fresh scratch home. Other Python
+installations keep ordinary PATH resolution; the execution timeout and approval contract stay
+unchanged.
+
 ## Output
 
 **Typed** (default): stdout's JSON object (first `{` to last `}`); only the declared fields are
@@ -539,6 +569,12 @@ the root, symlinks included; `repo-path-list`: capped at `max`, default 20, at m
 7–40 lower-case hex; `int` with optional `min`/`max_value`; `bool`; `enum` with at most 32 safe-id
 values; `pattern` with a strict regex); Adage re-serialises canonically (sorted keys). Any failure
 withholds the whole block.
+
+Text fields normally read a declared JSON field, or a labelled section when `text: true`, and
+scan the full source value before applying the character cap. Explicit `stdout: true` is a
+required text-only field with no other source selector: complete scanned stdout, at most `max`
+characters (default 600, hard cap 2,000), no truncation. It shares raw-output policy and requires
+a person grant. The independent delivery oracle allows line breaks only for this declared source.
 
 **Raw** (needs `allow_raw_output` and its own approval; never automatic): ANSI escapes, control,
 invisible and bidirectional characters stripped; scanned for secrets (the `redact.rs` token rules

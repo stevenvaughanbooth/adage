@@ -1,7 +1,7 @@
 # How Adage works
 
 This is the product behavior reference for the README, CLI, TUI and launch copy.
-Updated 2026-09-29 against the launch worktree, with main's UX push `52c256b` integrated.
+Updated 2026-09-29 against the launch worktree, based on merged main `9877af3`.
 Implementation changes must update this page and the relevant operational guide in the same change.
 The older numbered [architecture document](Adage%20%E2%80%94%20Architecture.md) is a historical
 implementation snapshot, not the current feature checklist.
@@ -36,6 +36,12 @@ A procedure card is useful learned guidance, but delivering it is not evidence o
 An observed command running successfully is not evidence that it saved a model request. If the
 agent repeats a prefetched lookup, the hook did work without necessarily removing any work.
 Skill invocation can intentionally hand control to the agent when judgment is required.
+
+The [learned lookup gate](../evals/reflex-proof/harness/results/20260929-learned-action-gate/FINDINGS.md)
+now demonstrates the full E1 chain on three held-out triage tasks: default learning from nine
+prior sessions, one human grant, complete CPU-produced results, zero agent lookup actions, and
+correct answers. The same reflex in suggest mode required one lookup action per task. This
+validates that mechanism; broader coding-task savings and platform reliability remain separate.
 
 ## From history to a reflex
 
@@ -84,6 +90,13 @@ Running repository scripts automatically has an additional authority boundary. L
 script does not approve it. Reviewing evidence does not approve execution. Enabling the executing
 hook does not grant every route. A person's execution grant is local and bound to repository,
 executable definition, pinned script bytes, effect, output contract and sandbox profile.
+
+For text-only lookups, an explicit complete-stdout field can preserve the whole answer, including
+line breaks, within its declared bound. It requires unstructured-output policy and an exact human
+grant. Unsafe, empty or oversized output is withheld; it never becomes a silently truncated task.
+Selected title/path fields alone do not establish that the lookup is complete. For automatic E1
+execution, each prompt input must have exactly one distinct matching value within the full bounded
+scan. Ambiguous prompts retain ordinary guidance instead of executing an arbitrary first match.
 
 Changes to that bound definition or a pinned script invalidate the old grant. Evidence updates alone need not.
 Disabling execution preserves learned knowledge for suggestions. A repository kill switch stops

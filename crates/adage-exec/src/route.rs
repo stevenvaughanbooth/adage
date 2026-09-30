@@ -130,6 +130,7 @@ pub fn implicit_outputs(ir: &IndexedRoute, index: &Index, table: &CommandTable) 
                         max_value: None,
                         optional: false,
                         text,
+                        stdout: false,
                     },
                 );
             }
@@ -170,6 +171,7 @@ pub fn lookup_outputs(ir: &IndexedRoute) -> Option<BTreeMap<String, FieldSpec>> 
             max_value: None,
             optional: true,
             text: true,
+            stdout: false,
         };
         let mut out: BTreeMap<String, FieldSpec> = [("files".to_string(), base.clone())].into();
         for name in LOOKUP_TEXT_FIELDS {
@@ -227,6 +229,7 @@ fn field_of_type(
         max_value: None,
         optional: false,
         text: false,
+        stdout: false,
     };
     Some(match ty {
         "repo-path" => base,
@@ -459,6 +462,54 @@ pub fn bound_from_command(template: &[String], command: &str) -> Option<BTreeMap
     bound_inputs(template, &format!("\n  {command}"))
 }
 
+/// Execution needs one unambiguous value per prompt slot. Advisory binding may choose the first
+/// mention; a CPU action must abstain instead. Use the same tokenizer, mention constraints and
+/// value types as the shared runtime, and refuse prompts beyond that runtime's bounded scan.
+pub fn unique_prompt_inputs(
+    route: &adage_tracks::Route,
+    event: &adage_runtime::Event,
+    inputs: &BTreeMap<String, String>,
+) -> Result<(), String> {
+    if route.slots.is_empty() {
+        return Ok(());
+    }
+    let adage_runtime::Event::Prompt { text } = event else {
+        return Err("prompt inputs require a prompt event".into());
+    };
+    use adage_core::tokens::{with_mentions, MAX_BYTES, PROMPT_TOKENS};
+    let tokens = with_mentions(text, PROMPT_TOKENS + 1);
+    if text.len() > MAX_BYTES || tokens.len() > PROMPT_TOKENS {
+        return Err("prompt exceeds the complete input scan limit".into());
+    }
+    let spans = adage_core::spans::extract(text);
+    for slot in &route.slots {
+        let Contract::Pattern { regex } = &slot.contract else {
+            return Err(format!("slot {} has no prompt pattern contract", slot.name));
+        };
+        let re = regex::Regex::new(regex).map_err(|_| format!("slot {} has an invalid pattern", slot.name))?;
+        let accepted = |v: &str| re.is_match(v) && crate::request::plain_token(v);
+        let values: std::collections::BTreeSet<&str> = match &slot.source {
+            SlotSource::PromptValue { vtype, mentions } => tokens
+                .iter()
+                .filter(|(t, m)| {
+                    (mentions.is_empty() || mentions.contains(m))
+                        && adage_core::vtype::matches(&vtype.runs, &t.text)
+                        && accepted(&t.text)
+                })
+                .map(|(t, _)| t.text.as_str())
+                .collect(),
+            SlotSource::Prompt { span } => {
+                spans.iter().filter(|s| s.kind == *span && accepted(&s.value)).map(|s| s.value.as_str()).collect()
+            }
+            _ => return Err(format!("slot {} is not a prompt input", slot.name)),
+        };
+        if values.len() != 1 || inputs.get(&slot.name).is_none_or(|v| !values.contains(v.as_str())) {
+            return Err(format!("slot {} has no unique matching prompt value", slot.name));
+        }
+    }
+    Ok(())
+}
+
 /// The index entry for a directive, if the index holds it for this repository.
 pub fn find<'a>(index: &'a Index, repo: &str, track: &str, route: &str) -> Option<&'a IndexedRoute> {
     index.routes.iter().find(|r| r.repo == repo && r.track == track && r.route.id == route)
@@ -513,8 +564,13 @@ mod tests {
     #[test]
     fn a_learned_prompt_value_lookup_plans_at_e1() {
         use adage_core::vtype::{Class, Run, Runs};
-        let runs =
-            Runs { branches: vec![vec![Run::Lit { text: "W-".into() }, Run::Class { class: Class::D, lo: 4, hi: 4 }]] };
+        let runs = Runs {
+            branches: vec![vec![
+                Run::Lit { text: "W".into() },
+                Run::Lit { text: "-".into() },
+                Run::Class { class: Class::D, lo: 4, hi: 4 },
+            ]],
+        };
         let regex = adage_core::vtype::to_regex(&runs);
         let vtype = adage_tracks::ValueType {
             id: "vt-0123456789abcdef".into(),
@@ -540,6 +596,26 @@ mod tests {
         let mut req = p.request.clone();
         req.inputs = bound_inputs(&req.argv, text).unwrap();
         assert_eq!(req.bind().unwrap(), ["python3", "scripts/wi-lookup", "W-2042"]);
+        let prompt = |text: &str| adage_runtime::Event::Prompt { text: text.into() };
+        for text in ["Pick up W-2042", "W-2042 then W-2042 again"] {
+            assert!(unique_prompt_inputs(&ir.route, &prompt(text), &req.inputs).is_ok());
+        }
+        for text in ["Compare W-2042 and W-9999", "W-9999", "no matching value"] {
+            assert!(unique_prompt_inputs(&ir.route, &prompt(text), &req.inputs).is_err());
+        }
+        // A matching value beyond the shared tokenizer's window must not silently disappear.
+        let long = format!("W-2042 {} W-9999", "word ".repeat(adage_core::tokens::PROMPT_TOKENS));
+        assert!(unique_prompt_inputs(&ir.route, &prompt(&long), &req.inputs).is_err());
+        let mut mention = ir.route.clone();
+        if let SlotSource::PromptValue { mentions, .. } = &mut mention.slots[0].source {
+            mentions.push(adage_core::tokens::Mention { prefix: "#".into(), suffix: String::new() });
+        }
+        assert!(unique_prompt_inputs(&mention, &prompt("W-9999 and #W-2042"), &req.inputs).is_ok());
+        assert!(unique_prompt_inputs(&mention, &prompt("#W-9999 and #W-2042"), &req.inputs).is_err());
+        let mut span = ir.route.clone();
+        span.slots[0].source = SlotSource::Prompt { span: adage_core::spans::SpanKind::Ticket };
+        assert!(unique_prompt_inputs(&span, &prompt("W-2042 twice W-2042"), &req.inputs).is_ok());
+        assert!(unique_prompt_inputs(&span, &prompt("W-2042 and W-9999"), &req.inputs).is_err());
         // A value the type does not accept never binds.
         req.inputs.insert("item".into(), "W-20421;id".into());
         assert!(req.bind().is_err());

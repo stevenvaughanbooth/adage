@@ -35,6 +35,18 @@ delegate`), inside an OS sandbox: E1 prefetches read-only results, while E2 stag
 applies only permitted outputs. Selecting and running such an invocation needs no model request;
 the next model request may still consume its result.
 
+For a learned lookup to replace an agent action, it must deliver the information the agent
+would have fetched. Approved lookups can declare a bounded **complete stdout** contract: Adage
+preserves the full text or withholds it on overflow, instead of silently returning a partial
+task. Automatic argument binding also abstains when a prompt contains multiple distinct matching
+values. See [complete lookup results](docs/execution.md#e1-prefetch-adage-exec-hook)
+and the [action-elimination gate](evals/reflex-proof/harness/ACTION-GATE.md).
+
+That [gate now passes](evals/reflex-proof/harness/results/20260929-learned-action-gate/FINDINGS.md):
+on three held-out work-item triage tasks, automatic execution removed all three agent lookup
+actions and reduced observed model requests from six to three, with all answers correct.
+This is a small generated-repository mechanism proof, not a general coding speedup claim.
+
 ```text
   agent traces ──► adage condition ──► reflexes ──► index ──► hooks
   + instincts                        (tracks,               ├─ guidance / supported rewrites

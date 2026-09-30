@@ -150,7 +150,8 @@ def execute(manifest_path, budget, wall_seconds):
     lines = queue.Queue()
     with (root / "stderr.log").open("w") as err, (root / "stdout.jsonl").open("w") as raw, \
             (root / "stream-observations.jsonl").open("w") as observations:
-        child = subprocess.Popen(argv, cwd=root, stdout=subprocess.PIPE, stderr=err, text=True, start_new_session=True)
+        child = subprocess.Popen(argv, cwd=manifest.get("execution_root", root), stdout=subprocess.PIPE,
+                                 stderr=err, text=True, start_new_session=True)
         def read_lines():
             for line in child.stdout:
                 lines.put((monotonic_ns(), line))

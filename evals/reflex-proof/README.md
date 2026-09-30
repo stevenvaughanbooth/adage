@@ -1,5 +1,10 @@
 # Reflex proof: current evidence
 
+**New launch mechanism gate passed:** a genuinely learned, human-approved lookup eliminated
+one agent action and one observed model request on each of three held-out tasks. All six
+paired sessions returned complete correct answers; 100 subsequent local hook runs passed.
+[Results, costs, reproduction and limits](harness/results/20260929-learned-action-gate/FINDINGS.md).
+
 Isolated branch `codex/reflex-proof`, original base main `acdb0a4acd875be56821469aaeadeb29b8d6d493`;
 main `d4f7e60` integrated before opening the PR, then UX main `52c256b` merged into that PR.
 Historical measurements retain their original
@@ -14,6 +19,7 @@ The current product reference is [How Adage works](../../docs/how-it-works.md).
 
 | Evidence | Result | Limit |
 | --- | --- | --- |
+| [Learned action elimination](harness/results/20260929-learned-action-gate/FINDINGS.md) | 3/3 automatic sessions made zero agent calls versus one in each suggest session; requests 3 versus 6; all 6 answers correct; reported cost 21.4% lower | Three triage tasks in one generated repository, not general coding savings; 100 local repetitions are a separate reliability check |
 | [Live hook boundary](harness/results/20260929-claude-2.1.282/FINDINGS.md) | Two fixture actions completed and receipts reached context before the next observed API dispatch | One real Claude run; not production Adage execution or task savings |
 | [Trace sufficiency](traces/README.md) | 540 traces / 10,846 calls audited, source checksums and grouped splits | Source availability, not executable coverage or prediction accuracy |
 | [Default onboarding](traces/results/onboarding.json) | Nine archived training sessions, default thresholds and no supplied outcomes produced three learned routes plus three instincts; a held-out prompt received a learned card and lookup guidance | Generated repository; real CLI learner and registered hook, but fixture registration rather than an interactive installer test; no savings claim |
@@ -99,19 +105,21 @@ and authentication before any new paid dispatch.
 
 ## Budget
 
-User-approved ceiling: **$60**. Reported spend: **$0.0152216** (one successful
-live substrate run; preceding authentication failure reported $0 and zero usage).
-No subsequent production agent runs have been purchased. The unused $15 pilot
-allocation is released; no run is outstanding. Remaining budget: **$59.9847784**.
-This budget does not substitute for the product's human execution grant.
+User-approved ceiling for this task: **$60**. Known spend is **$0.0565742**:
+$0.0152216 for the earlier substrate probe and $0.0413526 for six completed production
+lookup sessions. All paid attempts have settled accounting; none is outstanding. The separate
+historical $15 pilot allocation was unused and released. These figures cover this task, not the
+provider account or separate experiments. The product's human execution grant was obtained
+separately and never bypassed.
 
 ## How the evidence changes the next step
 
 Current main already includes generic graph learning, E1/E2 execution, exact local
 grants and signed packages. Preserve them. Complete integration checks and establish
 the supported evaluation platform,
-then measure **complete result delivery and avoided duplicate agent work** with the
-same learned candidate in suggest and automatic modes. No additional workflow family
+then extend the now-passed **complete result delivery and avoided duplicate agent work** gate
+from triage to full coding tasks, with the same learned candidate in suggest and automatic modes.
+No additional workflow family
 or TUI redesign can compensate for a result the agent must immediately fetch again.
 
 The Reflexes read model now joins effective grant/lapse state with the canonical E2

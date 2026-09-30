@@ -1,7 +1,7 @@
 # Instincts
 
-Every route Adage had until now is a **reflex**: a route learned from a repository's own agent
-sessions. A reflex needs history, so a repository Adage has never seen gets nothing on day 0.
+A **reflex** is learned from a repository's own agent sessions. An **instinct** ships with Adage
+and binds from declared repository files, so a new repository can benefit before it has history.
 
 An **instinct** is a prebuilt route that ships with Adage. It is a template (data, in
 [`crates/adage-instincts/data/catalogue.toml`](../crates/adage-instincts/data/catalogue.toml)) plus a
@@ -15,6 +15,56 @@ Stop block, and a reflex that says otherwise always wins.
 `adage condition --instincts-only` binds them with no sessions at all); the index, the runtime, the CLI
 and the offline eval know them by their provenance. This document is the catalogue, the binding
 and override model, the safety rules, and how the crate is wired in ([Integration](#integration)).
+
+## What ships at launch
+
+The core pack contains **eight enabled instinct detectors**: U1, U3, U4, U5, U6, N1, P1 and U11.
+They may bind multiple routes, one route, or none in a repository. A route is installed only when
+its declared facts support it; competing test entry points, unsafe command bodies, or an absent
+environment can correctly leave an instinct unbound. The remaining catalogue entries are disabled.
+
+Run `adage init --yes --repo /path/to/repo` to install available harness integration and bind
+these defaults without transcripts. Noninteractive `adage init` previews setup without writing.
+In a terminal, the interactive wizard's Condition step binds defaults alongside learned reflexes. With automatic
+learning enabled, SessionStart requests a background bootstrap for a new or changed checkout;
+the hook itself does not wait for binding, so a first event can arrive before that work finishes.
+
+| Shipped behavior | Matching and delivery | What happens automatically |
+| --- | --- | --- |
+| U1 / P1: use the declared test wrapper | A known runner failure names the wrapper's required environment or loader | CPU match; the agent receives the replacement command as a suggestion |
+| U3: use the repository's test command | An undeclared runner fails with a specific signature and one unambiguous entry point exists | CPU match; suggested command |
+| U4 / U6: generated files and lockfiles | An edit touches a declared generated file or root lockfile | CPU match; advice naming the owner or generator |
+| U5: regenerate after input changes | An edit matches declared generator prerequisites | CPU match; suggested regeneration command |
+| N1: use the declared package manager | A known package-manager mismatch fails with its specific signature | CPU match; suggestions; environment-changing suggestions await pack review |
+| U11: use the project's Python environment | A supported Python command targets the project and its local environment was verified at bind time | On Claude Code, CPU rewrites the interpreter in `PreToolUse`; the harness executes the corrected pending tool call under its permissions |
+
+**Matching on the CPU is distinct from eliminating an agent action.** Most shipped instincts
+deliver suggestions and still require agent inference. U11 can prevent an environment-recovery
+turn by rewriting a tool call the agent already proposed. It does not itself launch a new script,
+and its additional context is an explanation, not a request for the agent to perform the rewrite.
+Codex and OpenCode retain post-failure advice for this instinct. Automatic execution of learned
+actions is a separate mode with explicit human grants; `init` never grants arbitrary scripts.
+See [execution](execution.md) for that permission and runtime contract.
+
+### Reproducible launch checks
+
+`cargo test --locked -p adage-cli --test instincts` includes two checks of the public setup path:
+
+- `init_without_history_delivers_six_shipped_instincts` starts with isolated homes and no history,
+  runs `init --yes`, and delivers U1, U3, U4, U5, U6 and N1 through real hook processes. It verifies
+  that an actual assertion-failure signature stays silent, no instinct blocks Stop, and no
+  execution approval is created. These are suggestion checks, not six saved-action claims.
+- `init_environment_instinct_rewrites_and_runs_without_inference` (Unix, requires Python 3 with
+  `venv`) creates a real local environment without downloading packages, runs `init --yes`,
+  invokes the Claude PreToolUse hook, and executes the exact returned command. The command
+  imports the project and asserts that it runs inside the virtualenv. The test also verifies that
+  `delegate rewrites off` takes effect at the next hook. No model API is called.
+
+The second check proves the rewritten command works, with **zero model calls during matching and
+rewrite**. It does not measure live-agent cost savings. Existing catalogue, detector, hostile-file,
+real-failure, and cross-harness tests cover binding precision and delivery separately. The learned
+action launch gate must additionally demonstrate one fewer agent tool action for the same verified
+task outcome; neither catalogue size nor an emitted suggestion meets that gate.
 
 ## Catalogue
 
@@ -437,11 +487,9 @@ directives and fast-path mismatches 0 either way.
 ### Not done yet
 
 - **U2 (no blind retry)** needs `Trigger::RepeatFailure`; it stays disabled.
-- **SessionStart bind in the hook**: binding happens in the background learner at the end of a
-  repository's first session, or through `adage condition --instincts-only` / `adage init`; not yet
-  when a session *starts* in an unseen repository.
-- **The interactive `adage init` wizard** does not have an instincts step (the plain `adage init`
-  does).
+- **Synchronous first-event availability**: SessionStart asks the background learner to bootstrap
+  instincts in an unseen or changed checkout; an event that arrives before it finishes may have
+  no defaults yet. `adage init --yes` binds before returning.
 - **U11 for node** (`node_modules/.bin`) and for poetry/pdm projects (their `run` does not sync the
   environment, so it would not answer a missing one).
 - **Workspace packages** (N3) and the other P1 instincts, each with its missing trigger or slot.

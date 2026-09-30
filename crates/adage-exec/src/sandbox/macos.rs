@@ -39,6 +39,27 @@ pub(crate) fn developer_dir() -> Option<std::path::PathBuf> {
     .clone()
 }
 
+/// Apple's /usr/bin/python3 is a libxcrun launcher, not the interpreter. With a fresh scratch
+/// HOME its toolchain discovery can launch xcodebuild repeatedly and exhaust E1's wall budget
+/// before Python starts. Resolve that one system shim to the selected developer interpreter;
+/// the same canonical developer directory is already included in the sandbox's read grants.
+/// User-installed interpreters and all other commands retain their ordinary PATH resolution.
+#[cfg(target_os = "macos")]
+pub(crate) fn interpreter(program: std::path::PathBuf) -> std::path::PathBuf {
+    if program != std::path::Path::new("/usr/bin/python3") {
+        return program;
+    }
+    let Some(developer) = developer_dir() else { return program };
+    let Ok(real) = developer.join("usr/bin/python3").canonicalize() else { return program };
+    use std::os::unix::fs::PermissionsExt;
+    if real.starts_with(&developer) && real.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+    {
+        real
+    } else {
+        program
+    }
+}
+
 /// Count the real UID's existing processes without invoking a tool under the limit we are
 /// calculating. RLIMIT_NPROC is per UID on macOS too, not per sandbox. Snapshot races remain
 /// possible, but unrelated existing processes must not consume the run's entire allowance.
@@ -135,6 +156,19 @@ mod tests {
         // pressure or host-wide process limits are changed by the test.
         let count = processes_of(unsafe { libc::getuid() }).unwrap();
         assert!(count > 0, "the current test process must be counted");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn system_python_shim_resolves_only_within_the_selected_developer_directory() {
+        for p in ["/usr/local/bin/python3", "/usr/bin/git", "/bin/sh", "/repo/python3"] {
+            assert_eq!(interpreter(p.into()), std::path::Path::new(p));
+        }
+        let Some(developer) = developer_dir() else { return };
+        let Ok(real) = developer.join("usr/bin/python3").canonicalize() else { return };
+        if real.starts_with(&developer) && real.is_file() {
+            assert_eq!(interpreter("/usr/bin/python3".into()), real);
+        }
     }
 
     #[test]

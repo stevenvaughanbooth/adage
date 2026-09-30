@@ -1,0 +1,30 @@
+{
+  "native_host": "macOS",
+  "rust": {
+    "adage-exec lib": 61,
+    "adage-exec e1": 2,
+    "adage-exec parity": 17,
+    "adage-exec replay": 3,
+    "adage-eval lib": 33,
+    "adage-cli bin": 99,
+    "adage-cli actions": 3,
+    "adage-cli first_run": 8,
+    "adage-cli instincts": 7,
+    "adage-cli live_learn": 7,
+    "adage-cli sources": 7,
+    "adage-cli train_accept": 1
+  },
+  "python": {
+    "reflex-proof harness": 16,
+    "live budget": 11
+  },
+  "format": "cargo fmt --all --check passed",
+  "lint": "cargo clippy --offline --workspace --all-targets --locked -- -D warnings passed",
+  "source_validation": "Frozen measured source hashes match final implementation; source manifest identifies working-tree changes beyond baseline Git revision.",
+  "limits": [
+    "Selected integrated suites, not a full cargo test --workspace run.",
+    "e1_private is Linux-only and ran zero tests on this host; no macOS coverage claimed for it.",
+    "Native Linux/Windows release matrix remains required.",
+    "Existing plugin debug startup timing limitation remains a separate launch task."
+  ]
+}

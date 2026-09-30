@@ -367,6 +367,7 @@ pub fn data_type(f: &FieldSpec) -> DataType {
         FieldType::Bool => DataType::Bool,
         FieldType::Enum => DataType::Enum(f.values.clone()),
         FieldType::Pattern => DataType::Pattern(f.regex.clone().unwrap_or_default()),
+        FieldType::Text if f.stdout => DataType::TextLines { max: f.max.unwrap_or(DEFAULT_TEXT).min(MAX_TEXT) },
         FieldType::Text => DataType::Text { max: f.max.unwrap_or(DEFAULT_TEXT).min(MAX_TEXT) },
     }
 }
@@ -436,6 +437,9 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
                 return Err(fail(records, "bind", "the directive's command line does not match the route's template"))
             }
         }
+        if let Err(reason) = route::unique_prompt_inputs(&ir.route, turn.ev, &req.inputs) {
+            return Err(fail(records, "bind", &reason));
+        }
         // All E1 runs of one event together stay within E1's longest wall timeout.
         let left = limits::E1_MAX_WALL_MS.saturating_sub(started.elapsed().as_millis() as u64);
         if left < req.profile.limits.wall_ms {
@@ -464,13 +468,10 @@ fn prefetch(turn: &Turn<'_>, directives: &[Directive]) -> Result<Option<(Vec<Str
             .iter()
             .find(|(f, v)| projected.get(f.as_str()).and_then(|x| x.as_str()) == Some(v.as_str()))
             .and_then(|(f, v)| render::e1_exit_note(f, v));
-        // The lookup's own text came through (not only the paths it links): the agent need not
-        // run it again.
-        let whole = req
-            .output
-            .fields
-            .iter()
-            .any(|(k, f)| f.ty == FieldType::Text && projected.get(k).is_some_and(|v| v.is_string()));
+        // Only a complete stdout contract can say the lookup need not be repeated. A title or
+        // an acceptance field alone does not establish that the task's description was retained.
+        let whole = req.output.mode == OutputMode::Raw
+            || req.output.fields.iter().any(|(k, f)| f.stdout && projected.get(k).is_some_and(|v| v.is_string()));
         let Some(text) = render::wrap_directive_e1(d, &delivered.block, note.as_deref(), whole) else {
             return Err(fail(records, "render", "the data block is not one whole <adage-data> block"));
         };

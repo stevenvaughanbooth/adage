@@ -1,5 +1,9 @@
 # Production-path pilot: prepared, not dispatched
 
+Historical preparation, superseded by the [completed learned action gate](results/20260929-learned-action-gate/FINDINGS.md).
+That later experiment used default learning without outcome labels, a human-approved complete
+result contract, and a restricted host-login harness. This original coding-task pilot was never dispatched.
+
 2026-09-29, source revision acdb0a4. Additional paid spend **$0**; release the unused $15
 reservation. Earlier fixture hook-boundary spend remains $0.0152216.
 

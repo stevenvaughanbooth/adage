@@ -1,0 +1,25 @@
+{
+  "checks": [
+    {
+      "context_bytes": 367,
+      "executed": false,
+      "prompt": "Please compare CARE-279 and CARE-441."
+    },
+    {
+      "context_bytes": 0,
+      "executed": false,
+      "prompt": "Please triage CARE-27."
+    },
+    {
+      "context_bytes": 0,
+      "executed": false,
+      "prompt": "Explain the project architecture."
+    },
+    {
+      "advisory_fallback": true,
+      "case": "no execution grant",
+      "executed": false
+    }
+  ],
+  "paid_calls": 0
+}
