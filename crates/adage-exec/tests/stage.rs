@@ -563,3 +563,111 @@ fn gate_g4_no_write_outside_declared_outputs_in_500_staged_runs() {
         }
     }
 }
+
+/// Offline compatibility gate over pinned, full upstream checkouts. This deliberately constructs
+/// an authored fixture route and an in-memory fixture approval; it is not learning, a real-user
+/// grant, or evidence that an agent action/inference was eliminated.
+#[test]
+#[cfg(target_os = "macos")]
+#[ignore = "requires both prepared pinned real repositories and offline uv dependencies"]
+fn approved_project_python_runs_full_pinned_baseline_suites() {
+    let root = PathBuf::from(std::env::var_os("ADAGE_TEST_REAL_PROJECT_ROOT").expect("prepared repository root"))
+        .canonicalize()
+        .unwrap();
+    let output = PathBuf::from(std::env::var_os("ADAGE_TEST_REAL_PROJECT_RESULTS").expect("separate result directory"));
+    std::fs::create_dir_all(&output).unwrap();
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(root.join("manifest.json")).unwrap()).unwrap();
+    let table = CommandTable::load();
+    let policy = e3_policy();
+    let cap = sandbox::detect();
+    assert!(cap.available(), "this compatibility gate requires the native production sandbox");
+    let command = ".venv/bin/python -m pytest -q -p no:cacheprovider --junitxml=adage-baseline-result.xml tests";
+    let mut rows = Vec::new();
+    for (family, pinned) in [
+        ("mm-validator", "7f0792bd7a06f72e393ec866ac1e89e1502ccfe1"),
+        ("click-type", "06b2a678741131fd577ce170e23e5ca0aeba0309"),
+    ] {
+        let plan = manifest["families"].as_array().unwrap().iter().find(|p| p["family"] == family).unwrap();
+        assert_eq!(plan["base_full"], pinned, "explicitly review a different prepared base");
+        let original = root.join("bases").join(family);
+        let original_before = snapshot(&original);
+        let temp = tempfile::tempdir().unwrap();
+        let repo = temp.path().canonicalize().unwrap().join("repo");
+        copy_tree(&original, &repo);
+        // Fixture relocation only: production subsequently rebases this copied environment
+        // once more into its stage. The original prepared repository is never modified.
+        for entry in std::fs::read_dir(repo.join(".venv/lib/python3.12/site-packages")).unwrap().flatten() {
+            if entry.path().extension().is_some_and(|s| s == "pth") {
+                let text = std::fs::read_to_string(entry.path()).unwrap();
+                std::fs::write(entry.path(), text.replace(original.to_str().unwrap(), repo.to_str().unwrap())).unwrap();
+            }
+        }
+        let ir = adage_tracks::index::IndexedRoute {
+            repo: "fixture".into(),
+            track: "fixture/compatibility".into(),
+            version: "0.1.0".into(),
+            exec: None,
+            route: adage_tracks::Route {
+                id: "verify".into(),
+                summary: "Offline compatibility fixture, not a learned route".into(),
+                trigger: adage_tracks::Trigger::AfterEdit { paths: "src/**/*.py".into() },
+                step: adage_tracks::Step::Run { command: command.into() },
+                slots: vec![],
+                effect: adage_tracks::io::classify(command, &table),
+                strength: adage_tracks::Strength::Fire,
+                state: adage_tracks::RouteState::Firm,
+                exit: vec![],
+                evidence: Default::default(),
+                authored: true,
+            },
+        };
+        let index = adage_tracks::Index { routes: vec![ir.clone()], ..Default::default() };
+        let terms = adage_exec::route::Terms { cache: vec!["adage-baseline-result.xml".into()], ..Default::default() };
+        let req = adage_exec::route::plan(&ir, &index, &repo, &repo, Level::E2, Some(&terms), &table).unwrap().request;
+        assert!(req.scripts.is_empty());
+        let store = approved(&req);
+        let before = snapshot(&repo);
+        let start = std::time::Instant::now();
+        let result = stage::stage(&req, &context(&policy, &store, &cap, &table));
+        let wall_ms = start.elapsed().as_secs_f64() * 1000.0;
+        let unchanged = snapshot(&repo) == before && snapshot(&original) == original_before;
+        let row = match result {
+            Err(refusal) => serde_json::json!({"family":family,"pinned_base":pinned,"command":command,
+                "wall_ms":wall_ms,"passed":false,"refusal":refusal.to_string(),"source_unchanged":unchanged}),
+            Ok(staged) => {
+                let report = staged.plan.apply.iter().find_map(|change| {
+                    if change.path != "adage-baseline-result.xml" {
+                        return None;
+                    }
+                    match &change.after {
+                        stage::After::File { bytes, .. } => Some(bytes),
+                        _ => None,
+                    }
+                });
+                if let Some(bytes) = report {
+                    std::fs::write(output.join(format!("{family}.xml")), bytes).unwrap();
+                }
+                let refused: Vec<_> = staged
+                    .plan
+                    .refused
+                    .iter()
+                    .map(|(path, reason)| serde_json::json!({"path":path,"reason":reason}))
+                    .collect();
+                serde_json::json!({"family":family,"pinned_base":pinned,"command":command,
+                    "wall_ms":wall_ms,"child_ms":staged.duration_ms,"exit":staged.exit,"signal":staged.signal,
+                    "passed":staged.exit==Some(0) && refused.is_empty() && report.is_some() && unchanged,
+                    "refused_changes":refused,"stderr":String::from_utf8_lossy(&staged.stderr),
+                    "junit_present":report.is_some(),"source_unchanged":unchanged,
+                    "project_python":req.project_python})
+            }
+        };
+        eprintln!("full pinned suite: {row}");
+        rows.push(row);
+    }
+    std::fs::write(output.join("outcomes.json"), serde_json::to_vec_pretty(&rows).unwrap()).unwrap();
+    assert!(
+        rows.iter().all(|row| row["passed"] == true),
+        "full-suite compatibility failure; preserve outcomes and JUnit reports before changing policy"
+    );
+}
