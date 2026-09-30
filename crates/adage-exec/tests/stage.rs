@@ -12,6 +12,8 @@
 //! backend (no user namespaces, no bubblewrap with overlays) the runs are skipped, and the test
 //! asserts that nothing runs.
 
+#![cfg(unix)]
+
 use adage_core::{CommandTable, Effect};
 use adage_exec::approvals::{Approval, ApprovalKey, Store};
 use adage_exec::policy::Policy;

@@ -30,34 +30,34 @@ function tracesToday(g: Graph | null, repo: string | null): number {
   return s.size;
 }
 
-export function LivePill({ connection, graph, firstRun }: { connection: Connection; graph: Graph | null; firstRun: boolean }) {
+export function LivePill({ connection, graph, firstRun, stale = false }: { connection: Connection; graph: Graph | null; firstRun: boolean; stale?: boolean }) {
   const [url] = useUrl();
   const n = tracesToday(graph, url.repo);
   const tone =
-    connection === "offline"
+    (connection === "offline" || stale)
       ? "border-inhibit/35 bg-inhibit/8"
       : firstRun || connection === "connecting"
         ? "border-accent/30 bg-accent/8"
         : "border-fire/25 bg-fire/8";
   const dot =
-    connection === "offline"
+    (connection === "offline" || stale)
       ? "var(--color-lamp-inhibit)"
       : firstRun || connection === "connecting"
         ? "var(--glyph-arc)"
         : "var(--color-lamp-fire)";
   const [word, rest] =
-    connection === "offline"
-      ? ["Offline", "· is adage map running? Retrying"]
+    (connection === "offline" || stale)
+      ? [stale ? "Stale" : "Offline", "· retrying updates"]
       : connection === "connecting"
         ? ["Connecting", ""]
         : firstRun
-          ? ["Listening", "· waiting for the first trace"]
+          ? ["Ready", "· waiting for the first trace"]
           : ["Live", `· ${n} trace${n === 1 ? "" : "s"} today`];
   return (
     <div
       className={cx("flex h-7 shrink-0 items-center gap-2 rounded-full border px-3 text-[12.5px] text-ink-1", tone)}
       role="status"
-      title={connection === "offline" ? "The map stopped hearing from adage map; what it shows may be out of date" : undefined}
+      title={(connection === "offline" || stale) ? "The map stopped hearing from adage map; what it shows may be out of date" : undefined}
       data-testid="live-pill"
     >
       <span
@@ -76,11 +76,13 @@ export function TopBar({
   connection,
   firstRun,
   onPalette,
+  stale,
 }: {
   graph: Graph | null;
   connection: Connection;
   firstRun: boolean;
   onPalette: () => void;
+  stale: boolean;
 }) {
   const [url, setUrl] = useUrl();
   const theme = useTheme();
@@ -92,6 +94,7 @@ export function TopBar({
       <a href="/" className="wordmark" aria-label="Adage map, home" onClick={(e) => (e.preventDefault(), setUrl({ view: "map" }, true))}>
         Adage
       </a>
+      {graph?.demo && <span className="shrink-0 whitespace-nowrap rounded border border-accent/40 px-2 py-1 font-mono text-xs text-accent-soft">Demo data</span>}
       {all.length > 1 ? (
         <label className="relative hidden items-center sm:flex">
           <span className="sr-only">Repository</span>
@@ -135,9 +138,9 @@ export function TopBar({
         ))}
       </nav>
       <div className="grow" />
-      <LivePill connection={connection} graph={graph} firstRun={firstRun} />
+      <LivePill stale={stale} connection={connection} graph={graph} firstRun={firstRun} />
       {c && !firstRun && (
-        <div className="hidden items-center gap-3.5 font-mono text-xs text-ink-2 xl:flex" aria-label="Reflexes by strength">
+        <div className="hidden items-center gap-3.5 font-mono text-xs text-ink-2 2xl:flex" aria-label="Reflexes by strength">
           {STRENGTHS.map((s) => (
             <span key={s} className="flex items-center gap-1.5">
               <Lamp strength={s} />

@@ -50,16 +50,25 @@ function CommandLine({ command }: { command: string }) {
 
 export function FirstRun({ graph, connection }: { graph: Graph; connection: Connection }) {
   const [health, setHealth] = useState<Health | null>(null);
+  const [healthError, setHealthError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [checking, setChecking] = useState(true);
   useEffect(() => {
-    loadHealth().then(setHealth, () => setHealth(null));
-  }, []);
+    let active = true;
+    setChecking(true);
+    setHealthError(false);
+    loadHealth(true).then(
+      (result) => { if (active) { setHealth(result); setChecking(false); } },
+      () => { if (active) { setHealthError(true); setChecking(false); } },
+    );
+    return () => { active = false; };
+  }, [attempt, connection]);
   const hooks = health?.checks.filter((c) => c.check.toLowerCase().startsWith("hooks")) ?? [];
   // A harness that is not installed passes with "nothing to check": that is not a hook.
   const installed = hooks.filter((c) => c.status === "pass" && !/nothing to check/i.test(c.detail));
   const hooksOk = installed.length > 0 && hooks.every((c) => c.status === "pass");
   const instincts = graph.routes.filter(isInstinct);
   const tracks = [...new Set(instincts.map((r) => `${r.track}@${r.version}`))];
-  const need = graph.bars?.min_support ?? 3;
   const port = typeof location !== "undefined" ? location.host : "127.0.0.1:8765";
   return (
     <main aria-label="First run" className="canvas-grid relative flex min-h-0 grow flex-col overflow-hidden">
@@ -92,19 +101,19 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
               Your first reflex forms <span className="text-accent-soft">here.</span>
             </h1>
             <p className="m-0 max-w-[54ch] text-[17px] leading-[1.55] font-light text-ink-2">
-              Adage is listening. When an agent works in this repository, its trace lands on this map, and moves that repeat become
-              reflexes with their evidence attached.
+              Connect your agent, then work in this repository. Its traces appear here, and repeated moves can become
+              reflexes with their evidence attached. The map shows what Adage has learned; opening it does not install hooks.
             </p>
           </div>
           <ol className="m-0 flex list-none flex-col rounded-lg border border-line-strong bg-panel p-0">
             <Step
-              done={hooksOk}
-              label={hooksOk ? "Hooks installed" : "Hooks"}
+              done={hooksOk && !checking && !healthError}
+              label={hooksOk && !checking && !healthError ? "Hooks installed" : "Hooks"}
               detail={
-                health
+                checking ? "checking…" : healthError ? "check unavailable" : health
                   ? hooksOk
                     ? installed.map((h) => h.check.replace(/^hooks\s*:?\s*\(?/i, "").replace(/\)$/, "")).join(" · ") || "installed"
-                    : "not set up: run adage init"
+                    : installed.length ? "some hooks need attention: adage doctor" : "not set up: run adage init"
                   : "checking…"
               }
             />
@@ -113,9 +122,15 @@ export function FirstRun({ graph, connection }: { graph: Graph; connection: Conn
               label={instincts.length ? `${plural(instincts.length, "instinct")} already active` : "Instincts"}
               detail={tracks.join(" · ") || "none bound yet"}
             />
-            <Step done={false} label="Waiting for traces" detail={`${graph.sessions.total} of about ${need} to form a reflex`} last />
+            <Step done={false} label="Waiting for traces" detail="Repeated steps build evidence" last />
           </ol>
           <div className="flex flex-col gap-2.5">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-ink-2" role="status">
+              {healthError && <span>Could not check hooks. Is the local server still running?</span>}
+              <button type="button" disabled={checking} onClick={() => setAttempt((n) => n + 1)} className="text-accent-soft underline underline-offset-4 disabled:opacity-50">
+                {checking ? "Checking setup…" : "Recheck setup"}
+              </button>
+            </div>
             {health && !hooksOk && (
               <>
                 <span className="text-sm text-ink-2">Not set up here yet? In the repository, run:</span>

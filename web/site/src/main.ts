@@ -4,6 +4,7 @@ import "@fontsource-variable/red-hat-mono/wght.css";
 import "./styles.css";
 import { TABS, SCENE_OF } from "./tabs";
 import { createFilm } from "./film";
+import { initStory } from "./story";
 import { initPage } from "./page";
 import { initTheme, isLight } from "./theme";
 
@@ -103,6 +104,7 @@ initTheme((light) => { scene?.theme(light); film.source(true); });
 select(0);
 film.start();
 initPage();
+initStory();
 
 if (webgl()) {
   import("./hero/scene.js")

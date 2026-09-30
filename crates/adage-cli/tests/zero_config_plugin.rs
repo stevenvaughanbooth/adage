@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+#[cfg(unix)]
 use std::time::{Duration, Instant};
 
 struct World {
@@ -29,12 +30,14 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
+#[cfg(unix)]
 fn sha256(p: &Path) -> String {
     use sha2::{Digest, Sha256};
     Sha256::digest(std::fs::read(p).unwrap()).iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// The shim's target triple for this machine (what `session-start` looks for under dist/).
+#[cfg(unix)]
 fn target() -> Option<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("linux", "x86_64") => Some("x86_64-unknown-linux-musl"),
@@ -65,6 +68,7 @@ impl World {
         at
     }
     /// `n` simulated Claude Code traces recorded in `cwd`, in `~/.claude/projects`.
+    #[cfg(unix)]
     fn history(&self, cwd: &Path, seed: u64, n: usize) {
         let cwd = cwd.to_string_lossy();
         for s in scenario::history(seed).iter().take(n) {
@@ -107,6 +111,7 @@ impl World {
         child.wait_with_output().unwrap()
     }
     /// `adage` with extra environment variables.
+    #[cfg(unix)]
     fn run_env(&self, args: &[&str], stdin: &str, vars: &[(&str, &str)]) -> Output {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
         c.args(args).current_dir(&self.root).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
@@ -160,6 +165,7 @@ impl World {
     }
     /// A copy of the Claude Code plugin with this build's adage bundled and checksummed, as the
     /// release stages it for the marketplace.
+    #[cfg(unix)]
     fn staged_plugin(&self) -> Option<PathBuf> {
         let t = target()?;
         let root = self.p("plugin");
@@ -171,6 +177,7 @@ impl World {
         std::fs::write(root.join("dist/SHA256SUMS"), format!("{}  {t}/adage\n", sha256(&bin))).unwrap();
         Some(root)
     }
+    #[cfg(unix)]
     fn shim(&self, plugin: &Path, data: &Path, payload: &Value) -> (Output, Duration) {
         let t = Instant::now();
         let o = self.run(

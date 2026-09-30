@@ -58,6 +58,9 @@ fn open_up(p: &Path) {
 }
 
 fn env_for(c: &mut Command, home: &Path) {
+    // Exercise Apple's system Python launcher even when the developer's PATH has another Python.
+    #[cfg(target_os = "macos")]
+    c.env("PATH", "/usr/bin:/bin:/usr/sbin:/sbin");
     c.env("ADAGE_HOME", home)
         .env("ADAGE_POLICY", home.join("no-managed-policy.toml"))
         .env("ADAGE_ALLOW_NONINTERACTIVE", "1")

@@ -472,3 +472,54 @@ math { color: inherit; font-family: "STIX Two Math", "Cambria Math", "Latin Mode
 }
 .deeper { margin: 32px 0 0; text-align: center; }
 .deeper .btn { display: inline-block; padding: 12px 28px; font-size: 15.5px; }
+
+/* A trace becoming a shortcut: one story, explicitly controlled by the visitor. */
+.shortcuts { background: radial-gradient(ellipse at 75% 45%, color-mix(in srgb, var(--memory) 9%, transparent), transparent 65%); }
+.reflex-story { display: grid; grid-template-columns: minmax(240px, .8fr) minmax(0, 1.6fr); gap: 32px; margin-top: 40px; }
+.story-controls { display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.story-controls button { padding: 20px; display: grid; gap: 7px; text-align: left; border: 1px solid var(--line); border-radius: 14px; background: transparent; color: var(--ink-2); cursor: pointer; transition: border-color 200ms, background 200ms; }
+.story-controls button[aria-pressed="true"] { background: var(--raised); border-color: var(--memory); color: var(--ink-1); }
+.story-controls button span, .story-caption, .story-mode { font: 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--memory-soft); }
+.story-controls button b { font: 650 20px/1.2 var(--display); }
+.story-controls button small { font-size: 14px; color: var(--ink-2); }
+.story-stage { min-width: 0; overflow: hidden; border: 1px solid var(--line-strong); border-radius: 18px; background: var(--glass); }
+.story-graph { position: relative; padding: 8px 20px 20px; border-bottom: 1px solid var(--line); background-image: radial-gradient(var(--line-strong) 1px, transparent 1px); background-size: 20px 20px; }
+.story-graph svg { display: block; width: 100%; }
+.detours { color: var(--ink-3); opacity: .6; transition: opacity 500ms; }
+.learned-path { stroke: var(--memory-soft); stroke-width: 2; stroke-dasharray: .02 .02; transition: stroke 500ms; }
+.path-nodes { fill: var(--night); stroke: var(--memory-soft); stroke-width: 2; }
+.graph-labels { font: 12px var(--mono); color: var(--ink-2); }
+[data-stage="1"] .detours, [data-stage="2"] .detours { opacity: .12; }
+[data-stage="1"] .learned-path, [data-stage="2"] .learned-path { stroke: var(--fire); stroke-width: 3; stroke-dasharray: 1; animation: learn-path 700ms var(--ease); }
+[data-stage="2"] .path-nodes { stroke: var(--fire); fill: var(--fire); }
+@keyframes learn-path { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+.story-terminal { padding: 24px 28px; min-height: 310px; }
+.story-caption { margin: 0 0 18px; }
+.story-terminal pre { margin: 0; min-height: 145px; white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.75 var(--mono); }
+.story-terminal p:last-child { margin: 18px 0 0; max-width: 58ch; color: var(--ink-2); font-size: 14px; }
+.story-footnote { max-width: 85ch; font-size: 13px; color: var(--ink-2); margin-top: 22px; }
+.story-footnote a { color: var(--memory-soft); white-space: nowrap; }
+.story-inputs, .experience-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; margin-top: 40px; }
+.story-inputs p { margin: 0; border-top: 1px solid var(--line-strong); padding-top: 20px; color: var(--ink-2); }
+.story-inputs span { display: block; font: 11px var(--mono); color: var(--ink-3); text-transform: uppercase; }
+.story-inputs b { display: block; margin-block: 8px; font: 650 24px var(--display); color: var(--ink-1); }
+.current-proof { margin-top: 36px; border-color: var(--memory); }
+.experience-grid .card { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; min-width: 0; }
+.experience-grid .card p { flex: 1; }
+.experience-grid code { font: 13px var(--mono); }
+.source-install { margin-top: 30px; padding: 20px; border: 1px solid var(--line-strong); border-radius: 12px; color: var(--ink-2); }
+.source-install summary { cursor: pointer; color: var(--ink-1); }
+.source-install pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; }
+@media (max-width: 760px) {
+  .reflex-story, .story-inputs, .experience-grid { grid-template-columns: 1fr; }
+  .reflex-story { gap: 16px; }
+  .story-controls { gap: 6px; }
+  .story-controls button { padding: 14px 16px; }
+  .story-controls button b { font-size: 18px; }
+  .story-controls button small { display: none; }
+  .story-terminal { padding: 20px; min-height: 330px; }
+  .story-graph { padding-inline: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .learned-path { animation: none !important; } .detours, .story-controls button { transition: none; } }
+
+.story-terminal code { background: transparent; border: 0; padding: 0; color: var(--ink-1); font: inherit; }

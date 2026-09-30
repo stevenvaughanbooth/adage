@@ -190,7 +190,10 @@ pub(crate) fn route(req: &Request, shared: &Shared) -> Reply {
     let res = match path {
         "/api/v1/events" => return Reply::Events,
         "/api/v1/graph" | "/graph.json" => match crate::graph::build(&shared.paths, EVENTS) {
-            Ok(v) => json_response(&v),
+            Ok(mut v) => {
+                v["demo"] = json!(shared.demo);
+                json_response(&v)
+            }
             // The page shows "offline" and retries.
             Err(e) => text("503 Service Unavailable", &format!("{e:#}")),
         },
@@ -439,6 +442,7 @@ mod tests {
         Shared {
             paths: adage_store::Paths::at(dir),
             port: 8765,
+            demo: false,
             repo_root: None,
             hub: Hub::new(),
             connections: AtomicUsize::new(0),
@@ -464,6 +468,11 @@ mod tests {
         assert_eq!((g.status, g.content_type), ("200 OK", "application/json"));
         let v: Value = serde_json::from_slice(&req(&ok("/api/v1/graph"), &s).body).unwrap();
         assert_eq!(v["sessions"]["total"], 0);
+        assert_eq!(v["demo"], false);
+        let mut demo = shared(d.path());
+        demo.demo = true;
+        let v: Value = serde_json::from_slice(&req(&ok("/api/v1/graph"), &demo).body).unwrap();
+        assert_eq!(v["demo"], true);
         let h: Value = serde_json::from_slice(&req(&ok("/api/v1/health"), &s).body).unwrap();
         assert!(h["checks"].as_array().is_some_and(|c| !c.is_empty()) && h["summary"]["pass"].is_u64());
         assert_eq!(req(&ok("/api/v1/reflex/nope"), &s).status, "404 Not Found");

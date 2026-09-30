@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from "react";
-import { start, useStore } from "./api/client";
+import { refresh, start, useStore } from "./api/client";
 import { Inspector } from "./components/Inspector";
 import { FilterSheet, LeftRail } from "./components/LeftRail";
 import { MapCanvas } from "./components/MapCanvas";
@@ -123,7 +123,7 @@ export function App() {
         if (!keys.length) return true;
         const cur = findRoute(graph, url.reflex);
         const i = cur ? keys.indexOf(routeKey(cur)) : -1;
-        const next = keys[(i + (k === "j" ? 1 : -1) + keys.length) % keys.length] ?? null;
+        const next = keys[i < 0 ? (k === "j" ? 0 : keys.length - 1) : (i + (k === "j" ? 1 : -1) + keys.length) % keys.length] ?? null;
         setUrl({ reflex: next }, true);
         void e;
         return true;
@@ -136,7 +136,13 @@ export function App() {
       <a href="#content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-raised focus:px-3 focus:py-2">
         Skip to content
       </a>
-      <TopBar graph={graph} connection={connection} firstRun={firstRun} onPalette={() => setPalette(true)} />
+      <TopBar graph={graph} stale={Boolean(error)} connection={connection} firstRun={firstRun} onPalette={() => setPalette(true)} />
+      {graph && error && (
+        <div role="status" className="flex flex-wrap items-center gap-3 border-b border-inhibit/35 bg-inhibit/8 px-5 py-2 text-sm">
+          <span>Showing the last snapshot. Updates could not load; retrying automatically.</span>
+          <button type="button" className="underline underline-offset-4" onClick={() => void refresh()}>Retry now</button>
+        </div>
+      )}
       <div id="content" className="flex min-h-0 grow flex-col">
         {url.view === "how" ? (
           <Suspense fallback={<Loading error={null} />}>
@@ -180,6 +186,7 @@ function Loading({ error }: { error: string | null }) {
           <p className="m-0 text-sm text-ink-2">
             Is <code className="font-mono text-accent-soft">adage map</code> still running? The page retries on its own.
           </p>
+          <button type="button" className="rounded-md border border-line-strong px-4 py-2" onClick={() => void refresh()}>Retry now</button>
         </div>
       ) : (
         <p className="lbl">Loading the map…</p>

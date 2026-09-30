@@ -8,11 +8,15 @@ use std::process::{Command, Output, Stdio};
 fn adage(home: &Path, args: &[&str]) -> Command {
     let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
     c.args(args)
+        // Text assertions use UTF-8 glyphs regardless of the invoking terminal.
+        .env("TERM", "xterm-256color")
+        .env("LC_ALL", "C.UTF-8")
+        .env("ADAGE_ASCII", "0")
+        .env("NO_COLOR", "1")
         .env("ADAGE_HOME", home.join("adage"))
         .env("HOME", home.join("home"))
         .env("XDG_CONFIG_HOME", home.join("xdg"))
         .env("CODEX_HOME", home.join("codex"))
-        .env("NO_COLOR", "1")
         .env_remove("CLAUDE_CONFIG_DIR")
         .env_remove("ADAGE_DISABLE")
         .stdin(Stdio::null())

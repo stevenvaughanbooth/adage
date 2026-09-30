@@ -81,7 +81,7 @@ export function Health() {
       .catch((e: unknown) => setError(String(e)))
       .finally(() => setBusy(false));
   }, []);
-  useEffect(() => load(false), [load]);
+  useEffect(() => load(true), [load]);
   const s = data?.summary;
   const order = { fail: 0, warn: 1, pass: 2 } as const;
   const checks = [...(data?.checks ?? [])].sort((a, b) => order[a.status] - order[b.status]);
@@ -91,7 +91,9 @@ export function Health() {
         <div className="flex flex-col gap-1.5">
           <span className="lbl">Health · adage doctor</span>
           <h1 className="display m-0 text-[34px] leading-[1.05] font-semibold sm:text-[44px]">
-            {!s ? (
+            {error ? (
+              "Health check unavailable."
+            ) : !s ? (
               "Checking…"
             ) : s.fail ? (
               <>
@@ -125,7 +127,7 @@ export function Health() {
         </div>
       </div>
       {data?.runtime && <Runtime rt={data.runtime} />}
-      {error && <p className="m-0 rounded-md border border-inhibit/35 bg-inhibit/8 px-3 py-2 text-sm">Could not run the checks: {error}</p>}
+      {error && <p role="status" className="m-0 rounded-md border border-inhibit/35 bg-inhibit/8 px-3 py-2 text-sm">Could not run the checks: {error}{data ? " Showing the last completed check below." : ""}</p>}
       <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 xl:grid-cols-2">
         {checks.map((c) => {
           const m = MARK[c.status];
