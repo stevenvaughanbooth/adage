@@ -11,6 +11,7 @@ Vercel Function (`api/waitlist.ts`). It is separate from `web/map`, which the `a
 pnpm install
 pnpm dev          # http://localhost:5174
 pnpm typecheck
+pnpm test:api     # registration availability contract; no requests leave the test
 pnpm test:e2e     # builds, serves with `vite preview`, runs Playwright and axe (both themes, phone width)
 ```
 
@@ -42,7 +43,7 @@ pnpm test:e2e     # builds, serves with `vite preview`, runs Playwright and axe 
    | --- | --- | --- |
    | `VITE_MEDIA_BASE` | for the film | Where the films are served from, ending in `/` (printed by `pnpm media --upload`). |
    | `VITE_FILM_DARK_URL`, `VITE_FILM_DAY_URL` | or these | Each cut by its full URL, whatever name it was uploaded with (set on the project: the `adage-media` Blob store). |
-   | `WAITLIST_WEBHOOK_URL` | for sign-ups | Where each sign-up is POSTed as JSON (`email`, `source`, `at`, plus `text`/`content` for Slack or Discord webhooks; Zapier or Make work too). Unset: the form says sign-ups aren't open yet. Nothing is stored by the site. |
+   | `WAITLIST_WEBHOOK_URL` | for sign-ups | Where each sign-up is POSTed as JSON (`email`, `source`, `at`, plus `text`/`content` for Slack or Discord webhooks; Zapier or Make work too). Unset: the availability check shows registration is closed before asking for an address. Nothing is stored by the site. |
    | `VITE_REPO_URL` | when the repository is public | Shows the README and lexicon links under "Get started". |
    | `SITE_URL` | optional | The canonical URL for Open Graph tags. Defaults to the production domain Vercel provides. |
    | `VITE_FILM=off` | optional | Builds the site without the opening film. |
@@ -71,7 +72,7 @@ on preview deployments; turn it off in Settings → General → Vercel Toolbar t
 | `how.html`, `src/how-page.ts` | `/how`: the walkthrough shell around the shared chapters, and the math. |
 | `src/wilson.ts` | The Wilson calculator on `/how` (the same bound as `wilson_lower` in adage-tracks). |
 | `src/theme.ts` | The Day/Night choice, shared by every page. |
-| `src/page.ts` | Section reveals, copy button, repository links, the early-access form. |
-| `api/waitlist.ts` | `POST /api/waitlist`: validates and forwards to `WAITLIST_WEBHOOK_URL`. |
+| `src/page.ts`, `src/signup.ts` | Section reveals, copy button, repository links, and recoverable early-access registration. |
+| `api/waitlist.ts` | `GET` returns only registration availability; `POST` validates and forwards to `WAITLIST_WEBHOOK_URL`. |
 | `scripts/media.mjs` | Encodes, and optionally uploads, the films. |
 | `public/` | Favicon, Open Graph image, posters, `robots.txt`. |

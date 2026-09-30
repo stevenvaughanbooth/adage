@@ -16,7 +16,8 @@
     "preview": "vite preview --port 4173 --strictPort",
     "media": "node scripts/media.mjs",
     "e2e": "playwright test",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:api": "node --experimental-strip-types --test scripts/waitlist.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",

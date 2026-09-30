@@ -307,11 +307,15 @@ $ make check
     <h2 class="display reveal" id="access-h">Get early access</h2>
     <p class="lede reveal">We'll email you once, when the first release is ready. Nothing else.</p>
     <form class="signup reveal" id="signup" action="/api/waitlist" method="post" novalidate>
+      <fieldset class="signup-fields" id="signup-fields" hidden disabled>
+      <legend class="sr">Join early access</legend>
       <label class="sr" for="email">Email address</label>
       <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@company.com" aria-describedby="signup-status">
       <input class="hp" name="hp_x7" tabindex="-1" autocomplete="off" aria-hidden="true">
       <button class="btn primary" type="submit">Join the list</button>
-      <p class="status" id="signup-status" role="status" aria-live="polite"></p>
+      </fieldset>
+      <p class="status" id="signup-status" role="status" aria-live="polite">Enable JavaScript to check early-access availability.</p>
+      <button class="btn" id="signup-retry" type="button" hidden>Check availability again</button>
     </form>
     <p class="reveal">Explore now: <a href="/how">Walk through how Adage works</a>, from traces to hooks and evidence.</p>
   </div>

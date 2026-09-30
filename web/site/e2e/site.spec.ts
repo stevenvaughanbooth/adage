@@ -82,7 +82,7 @@ test("early access: success, a closed list, and a bad address", async ({ page })
   await page.emulateMedia({ reducedMotion: "reduce" });
   await films(page, "fail");
   let open = true;
-  await page.route("**/api/waitlist", (r) => r.fulfill(open ? { status: 200, json: { ok: true } } : { status: 503, json: { error: "closed" } }));
+  await page.route("**/api/waitlist", (r) => r.fulfill(r.request().method() === "GET" ? { status: 200, json: { available: true } } : open ? { status: 200, json: { ok: true } } : { status: 503, json: { error: "closed" } }));
   await page.goto("/#access");
   const email = page.getByRole("textbox", { name: "Email address" });
   const status = page.locator("#signup-status");
@@ -96,9 +96,73 @@ test("early access: success, a closed list, and a bad address", async ({ page })
   await email.fill("dev@example.com");
   await page.getByRole("button", { name: "Join the list" }).click();
   await expect(status).toContainText("aren't open yet");
-  await expect(email).toHaveValue("dev@example.com");
+  await expect(page.locator("#email")).toHaveValue("dev@example.com");
   await page.getByRole("link", { name: "Walk through how Adage works", exact: true }).click();
   await expect(page).toHaveURL(/\/how(?:[?#]|$)/);
+});
+
+test("closed registration asks for no address and can reopen without a reload", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await films(page, "fail");
+  let available = false;
+  let posts = 0;
+  await page.route("**/api/waitlist", (route) => {
+    if (route.request().method() === "POST") posts++;
+    return route.fulfill({ json: { available } });
+  });
+  await page.goto("/#access");
+  await expect(page.locator("#signup-status")).toContainText("aren't open yet");
+  await expect(page.getByRole("textbox", { name: "Email address" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Join the list" })).toHaveCount(0);
+  expect(posts).toBe(0);
+  available = true;
+  await page.getByRole("button", { name: "Check availability again" }).click();
+  await expect(page.getByRole("textbox", { name: "Email address" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Join the list" })).toBeEnabled();
+});
+
+test("an unavailable registration check recovers and a closing list preserves the address", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await films(page, "fail");
+  let healthy = false;
+  await page.route("**/api/waitlist", (route) => route.fulfill(
+    route.request().method() === "POST" ? { status: 503, json: { error: "closed" } }
+      : healthy ? { json: { available: true } } : { status: 502, json: {} },
+  ));
+  await page.goto("/#access");
+  await expect(page.locator("#signup-status")).toContainText("Couldn't check registration");
+  healthy = true;
+  await page.getByRole("button", { name: "Check availability again" }).click();
+  const email = page.locator("#email");
+  await email.fill("dev@example.com");
+  await page.getByRole("button", { name: "Join the list" }).click();
+  await expect(page.locator("#signup-status")).toContainText("aren't open yet");
+  await expect(email).toBeHidden();
+  await page.getByRole("button", { name: "Check availability again" }).click();
+  await expect(email).toBeFocused();
+  await expect(email).toHaveValue("dev@example.com");
+});
+
+test("a stalled registration request unlocks without losing the address or double posting", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await films(page, "fail");
+  let posts = 0;
+  await page.route("**/api/waitlist", (route) => {
+    if (route.request().method() === "GET") return route.fulfill({ json: { available: true } });
+    posts++;
+    // Keep the response pending; the client's timeout must release the form.
+  });
+  await page.goto("/#access");
+  const email = page.locator("#email");
+  await email.fill("dev@example.com");
+  const join = page.getByRole("button", { name: "Join the list" });
+  await join.click();
+  await expect(join).toBeDisabled();
+  await page.locator("#signup").evaluate((form: HTMLFormElement) => form.requestSubmit());
+  await expect(page.locator("#signup-status")).toContainText("timed out", { timeout: 15_000 });
+  await expect(join).toBeEnabled();
+  await expect(email).toHaveValue("dev@example.com");
+  expect(posts).toBe(1);
 });
 
 for (const scheme of ["dark", "light"] as const) {
