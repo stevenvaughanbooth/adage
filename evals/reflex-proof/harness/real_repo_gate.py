@@ -362,7 +362,7 @@ def native_settings(root, checkout, allowed, protected=()):
                 "credentials": {"envVars": [{"name": name, "mode": "deny"} for name in scrub]}}}
 
 
-def prepare_session(root, task, model, native_probe=False):
+def prepare_session(root, task, model, native_probe=False, setup_checkout=None):
     """Prepare one unique assignment, no paid dispatch; no training intervention."""
     import probe
     manifest = json.loads((root / "manifest.json").read_text())
@@ -378,7 +378,10 @@ def prepare_session(root, task, model, native_probe=False):
     checkout = session / "repo"
     plan = manifest["families"][0] if native_probe else next(p for p in manifest["families"] if task in p["train"])
     create_checkout(root, plan["repo"], plan["base_full"], checkout)
-    setup(root, checkout, plan["repo"], manifest["python_requested"])
+    if setup_checkout is None:
+        setup(root, checkout, plan["repo"], manifest["python_requested"])
+    else:
+        setup_checkout(root, checkout, plan, manifest["python_requested"])
     cap = 0.50 if native_probe else manifest["budget"]["per_session_usd"]
     tools = "Read,Bash" if native_probe else "Read,Edit,Write,Glob,Grep,Bash"
     allowed = ["Read"] if native_probe else ["Read", "Edit", "Write", "Glob", "Grep",
@@ -453,6 +456,55 @@ def retain_transcript(session, checkout):
     return value
 
 
+def validate_authority(value):
+    """Cohorts share one ancestor ledger; aliases cannot create a second budget."""
+    root, session = Path(value["experiment_root"]), Path(value["root"])
+    if root != root.resolve() or session != session.resolve() or root not in session.parents:
+        raise ValueError("budget authority must be a canonical ancestor of the assignment")
+    if value.get("cohort_root"):
+        cohort = Path(value["cohort_root"])
+        if cohort != cohort.resolve() or root not in cohort.parents or cohort not in session.parents:
+            raise ValueError("cohort must be nested under the canonical budget authority")
+        control = json.loads((cohort / "manifest.json").read_text())
+        if control.get("budget_authority") != str(root):
+            raise ValueError("cohort budget authority differs from its frozen preparation")
+
+
+def require_native_review(value):
+    root = Path(value["experiment_root"])
+    review_path = Path(value.get("native_review_path", root / "native-confinement-reviewed.json"))
+    review = json.loads(review_path.read_text())
+    if not review.get("passed"):
+        raise ValueError("review actual native probe evidence before training")
+    if value.get("cohort_root"):
+        cohort = Path(value["cohort_root"])
+        if review_path != cohort / "native-confinement-reviewed.json" or review.get("cohort_root") != str(cohort):
+            raise ValueError("native review must belong to this policy cohort")
+        native_path = cohort / "sessions/native-confinement/manifest.json"
+        if review.get("manifest_sha256") != sha(native_path):
+            raise ValueError("native review must bind the exact cohort canary recipe")
+        if value.get("native_review_sha256") != sha(review_path):
+            raise ValueError("native review changed after assignment preparation")
+        native = json.loads(native_path.read_text())
+        helper = HERE / "cohort_v5.py"
+        if (native.get("source_sha256") != sha(Path(__file__)) or
+                native.get("shared_sources", {}).get(str(helper)) != sha(helper)):
+            raise ValueError("native review tested different runner or sandbox policy source")
+        from cohort_v5 import policy
+        native_checkout = Path(native["execution_root"])
+        expected_native = policy(root, native_checkout, cohort / "runtime/python", [native_checkout / "native_canary.py"])
+        expected_native["permissions"]["allow"] = ["Read", "Bash"]
+        native_settings_path = Path(native["root"]) / "settings.json"
+        if (sha(native_settings_path) != native["settings_sha256"] or
+                json.loads(native_settings_path.read_text()) != expected_native):
+            raise ValueError("native reviewed sandbox policy differs from current policy")
+        if value.get("execution_root"):
+            settings = json.loads((Path(value["root"]) / "settings.json").read_text())
+            expected = policy(root, Path(value["execution_root"]), cohort / "runtime/python")
+            if any(settings.get(key) != expected[key] for key in ("sandbox", "permissions", "autoMemoryEnabled")):
+                raise ValueError("assignment permissions differ from reviewed cohort policy")
+
+
 def run_session(manifest_path, wall_seconds=300):
     """Explicit paid entry point; root reviewer dispatches after freezing preparations."""
     import probe
@@ -460,13 +512,13 @@ def run_session(manifest_path, wall_seconds=300):
     from budget import Budget, execution_lock
     value = json.loads(manifest_path.read_text())
     root, session = Path(value["experiment_root"]), Path(value["root"])
+    validate_authority(value)
     if sha(Path(__file__)) != value["source_sha256"] or sha(session / "settings.json") != value["settings_sha256"]:
         raise ValueError("prepared runner or settings changed; refreeze before paid dispatch")
     if any(sha(Path(p)) != digest for p, digest in value["shared_sources"].items()):
         raise ValueError("shared budget or executor changed; refreeze before paid dispatch")
     if value["kind"] == "organic-training":
-        if not json.loads((root / "native-confinement-reviewed.json").read_text()).get("passed"):
-            raise ValueError("review actual native probe evidence before training")
+        require_native_review(value)
     elif sha(Path(value["execution_root"]) / "native_canary.py") != value["canary_sha256"]:
         raise ValueError("native canary changed")
     with execution_lock(root):
@@ -491,7 +543,7 @@ def run_session(manifest_path, wall_seconds=300):
                 with socket.create_connection(listener.getsockname(), timeout=2):
                     pass
                 write(session / "outside-control.json", dict(network_connected=True,
-                    read_canary_exists=(root / "private/native-read-canary.txt").is_file()))
+                    read_canary_exists=(Path(value.get("cohort_root", root)) / "private/native-read-canary.txt").is_file()))
             if not budget.dispatch(attempt):
                 raise ValueError("budget blocked before dispatch")
             result = probe.execute(manifest_path, value["budget_usd"], wall_seconds)

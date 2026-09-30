@@ -12,13 +12,16 @@ def passing_rows():
     common = dict(task="task", learned_files={"index.json":"same"}, prompt="same", template="pytest {test}", route="learned/r",
         quality={"passed":True,"n_tests":10}, process={"exit_code":0}, cost_usd=.1,
         summary={"result_is_error":False}, matching_agent_actions=[], successful_matching_agent_actions=[],
-        all_journal_receipts=[], final_generation_receipts=[], agent_action_count=3, agent_verification_actions=[],
+        all_journal_receipts=[], final_generation_receipts=[], agent_action_count=3, agent_actions=[{"id":f"read-{i}","name":"Read","input":{}} for i in range(3)],
         observed_dispatches=[{"request_id":"one"}], comparison_identity={"model":"same","base_commit":"same"})
     baseline, automatic = copy.deepcopy(common), copy.deepcopy(common)
     baseline.update(arm="suggest", matching_agent_actions=[{"id":"test"}],
                     successful_matching_agent_actions=[{"id":"test"}], agent_action_count=4,
                     observed_dispatches=[{"request_id":"one"},{"request_id":"two"}])
     automatic.update(arm="automatic", final_generation_receipts=[{"id":"cpu"}])
+    baseline["agent_actions"].append({"id":"test","name":"Bash","input":{"command":"pytest tests/test_a.py"}})
+    for row in (baseline, automatic):
+        row["bash_action_audit"] = pairs.bash_audit.audit_bash_actions(row["agent_actions"])
     return [baseline, automatic]
 
 
@@ -42,7 +45,7 @@ class PairEvidenceTests(unittest.TestCase):
             lambda r:r[0].update(successful_matching_agent_actions=[]),
             lambda r:r[1].update(final_generation_receipts=[]),
             lambda r:r[1].update(matching_agent_actions=[{"id":"duplicate"}]),
-            lambda r:r[1].update(agent_verification_actions=[{"id":"alternative"}]),
+            lambda r:r[1].update(bash_action_audit={}),
             lambda r:r[1].update(observed_dispatches=[])]
         for mutate in mutations:
             rows = passing_rows()
@@ -95,8 +98,33 @@ class PairEvidenceTests(unittest.TestCase):
     def test_pytest_aliases_flags_and_selectors_never_disappear_from_counter(self):
         commands = [".venv/bin/pytest -q tests/renamed.py", ".venv/bin/python -m pytest tests/other.py -q",
                     ".venv/bin/python -m pytest -k changed_selector"]
-        actions = [{"name":"Bash","input":{"command":command}} for command in commands]
-        self.assertEqual(len(pairs.agent_verification_actions(actions)), 3)
+        actions = [{"id":str(i),"name":"Bash","input":{"command":command}} for i,command in enumerate(commands)]
+        self.assertEqual(len(pairs.bash_audit.audit_bash_actions(actions)["blocking_actions"]), 3)
+
+    def test_unknown_code_wrapper_or_unattested_inspection_blocks_elimination(self):
+        for command in ("python -c 'import os; os.system(\"pytest\")'", "./check.sh", "make", "env pytest", "ls"):
+            rows = passing_rows()
+            rows[0]["agent_actions"].append({"id":"extra","name":"Read","input":{}})
+            rows[0]["agent_action_count"] += 1
+            rows[1]["agent_actions"].append({"id":"indirect","name":"Bash","input":{"command":command}})
+            rows[1]["agent_action_count"] += 1
+            for row in rows:
+                row["bash_action_audit"] = pairs.bash_audit.audit_bash_actions(row["agent_actions"])
+            result = pairs.pair_result(rows)
+            self.assertFalse(result["passed"])
+            self.assertFalse(result["verification_action_suppressed"])
+            self.assertTrue(result["total_tool_calls_reduced"])
+            self.assertEqual(result["automatic_bash_blockers"][0]["tool_id"], "indirect")
+            self.assertEqual(result["matching_agent_action_delta"], 1)  # Descriptive only.
+
+    def test_verification_suppression_does_not_imply_fewer_total_tool_calls(self):
+        rows = passing_rows()
+        rows[1]["agent_actions"].append({"id":"extra","name":"Read","input":{}})
+        rows[1]["agent_action_count"] += 1
+        result = pairs.pair_result(rows)
+        self.assertTrue(result["verification_action_suppressed"])
+        self.assertFalse(result["total_tool_calls_reduced"])
+        self.assertFalse(result["passed"])
 
     def test_shared_unknown_attempt_blocks_before_model_or_assignment_retry(self):
         with tempfile.TemporaryDirectory() as d:

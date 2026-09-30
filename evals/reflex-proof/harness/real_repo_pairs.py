@@ -22,6 +22,7 @@ import xml.etree.ElementTree as ET
 
 import real_repo_gate as substrate
 import probe
+import bash_action_audit as bash_audit
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
@@ -40,7 +41,7 @@ def read(path):
 
 
 def source_hashes():
-    files = [Path(__file__), HERE / "REAL-REPO-PAIRS.md", HERE / "real_repo_gate.py", HERE / "probe.py", REPO / "evals/live/budget.py",
+    files = [Path(__file__), HERE / "bash_action_audit.py", HERE / "REAL-REPO-PAIRS.md", HERE / "real_repo_gate.py", HERE / "probe.py", REPO / "evals/live/budget.py",
              REPO / "evals/live/runner.py", REPO / "evals/showcase/sc_score.py",
              REPO / "evals/showcase/families.py", REPO / "evals/showcase/fam_python.py",
              REPO / "evals/lab/research/recurring-workflows/families.py", REPO / "evals/repobench/score.py",
@@ -222,7 +223,11 @@ def prepare_pair(root, task, descriptor):
         allowed = ["Read", "Edit", "Write", "Glob", "Grep", "Bash(.venv/bin/python -m pytest *)",
                    "Bash(.venv/bin/python -m pytest)", "Bash(.venv/bin/pytest *)", "Bash(.venv/bin/pytest)",
                    "Bash(git status *)", "Bash(git status)", "Bash(git diff *)", "Bash(git diff)", "Bash(ls *)", "Bash(ls)"]
-        settings = substrate.native_settings(root, checkout, allowed)
+        if base.get("protocol_revision") == 5:
+            from cohort_v5 import policy
+            settings = policy(Path(base["budget_authority"]), checkout, root / "runtime/python")
+        else:
+            settings = substrate.native_settings(root, checkout, allowed)
         settings["disableAllHooks"] = False
         settings["hooks"] = {event:[{"hooks":[{"type":"command", "command":shlex.join([
             base["preparation_python"], "-B", str(Path(__file__)), "hook", str(session / "manifest.json")]),
@@ -246,6 +251,15 @@ def prepare_pair(root, task, descriptor):
             hidden_identities=str(hidden_path),
             matching_command_template=candidates[0]["route"]["step"]["command"],
             initial_source=tree_state(checkout), training_tasks=plan["train"], model=artifact["model"])
+        if base.get("protocol_revision") == 5:
+            from cohort_v5 import startup_argv
+            m["argv"] = startup_argv(m["argv"])
+            review = root / "native-confinement-reviewed.json"
+            m.update(cohort_root=str(root), experiment_root=base["budget_authority"], protocol_revision=5,
+                     native_review_path=str(review), native_review_sha256=sha(review))
+            m["sources"][str(HERE / "cohort_v5.py")] = sha(HERE / "cohort_v5.py")
+            substrate.validate_authority(m)
+            substrate.require_native_review(m)
         normalized_settings = json.dumps(settings, sort_keys=True).replace(str(session), "<assignment>")
         m["comparison_identity"] = dict(protocol=PROTOCOL, model=artifact["model"], base_commit=plan["base_full"],
             binary_hashes={name:sha(Path(path)) for name,path in binaries.items()}, sources=m["sources"],
@@ -368,25 +382,6 @@ def final_receipts(hooks, route, session_id, checkout, final_digest):
     return eligible
 
 
-def agent_verification_actions(actions):
-    """All admitted pytest entry points, independent of learned slots, flags or test selectors.
-
-    This is a conservative evaluation counter for this fixed Python tool substrate, never a
-    stimulus detector or a route supplied to the product learner.
-    """
-    found = []
-    for action in actions:
-        if action.get("name") != "Bash":
-            continue
-        try:
-            argv = shlex.split(action.get("input", {}).get("command", ""))
-        except ValueError:
-            continue
-        if argv and (Path(argv[0]).name == "pytest" or len(argv) >= 3 and argv[1:3] == ["-m", "pytest"]):
-            found.append(action)
-    return found
-
-
 def score_with_integrity(root, task, scoring, expected):
     junit = scoring / "adage-independent-junit.xml"
     original_confined = substrate.confined
@@ -407,7 +402,7 @@ def score_with_integrity(root, task, scoring, expected):
 def collect(manifest_path):
     m = read(manifest_path)
     verify(m)
-    session, checkout, root = Path(m["root"]), Path(m["execution_root"]), Path(m["experiment_root"])
+    session, checkout, root = Path(m["root"]), Path(m["execution_root"]), Path(m.get("cohort_root", m["experiment_root"]))
     if (session / "collection.json").exists():
         raise ValueError("collection is immutable; retain prior attempt")
     provenance = substrate.retain_transcript(session, checkout)
@@ -455,7 +450,7 @@ def collect(manifest_path):
     output = dict(protocol=PROTOCOL, task=m["task"], arm=m["arm"], provenance=provenance, quality=quality,
         summary=summary, process=read(session / "run.json"), **metrics, matching_agent_actions=matching,
         successful_matching_agent_actions=successful, final_generation_receipts=receipts,
-        agent_verification_actions=agent_verification_actions(metrics["agent_actions"]),
+        bash_action_audit=bash_audit.audit_bash_actions(metrics["agent_actions"]),
         all_journal_receipts=journal(m), hooks=hooks, final_generation=final["digest"],
         runtime_records=runtime_records, execution_attempts=[e for r in runtime_records for e in r.get("exec", [])],
         observed_dispatches=dispatches, cost_usd=summary.get("total_cost_usd"), learned_files=m["learned_files"],
@@ -474,7 +469,21 @@ def pair_result(rows):
     for key in ("task", "learned_files", "prompt", "template", "route", "comparison_identity"):
         if key not in baseline or key not in automatic or baseline.get(key) != automatic.get(key):
             reasons.append("arm mismatch: " + key)
+    automatic_blockers = []
     for r in rows:
+        actions = r.get("agent_actions")
+        if not isinstance(actions, list) or any(not isinstance(a, dict) for a in actions):
+            reasons.append(r["arm"] + ": complete action records missing")
+        else:
+            # No trusted shell/config attestation exists in this protocol. Recompute with
+            # default strict assumptions; a stored inspection label cannot waive uncertainty.
+            expected_audit = bash_audit.audit_bash_actions(actions)
+            if r.get("bash_action_audit") != expected_audit or r.get("agent_action_count") != len(actions):
+                reasons.append(r["arm"] + ": Bash audit missing, inconsistent, or incomplete")
+            if r["arm"] == "automatic":
+                automatic_blockers = expected_audit["blocking_actions"]
+                if automatic_blockers:
+                    reasons.append("automatic arm has definite or unclassified potential Bash verification")
         if not r.get("quality", {}).get("passed") or r["quality"].get("n_tests", 0) <= 0:
             reasons.append(r["arm"] + ": independent quality failed")
         if r.get("process", {}).get("exit_code") != 0 or r["process"].get("cancelled"):
@@ -490,17 +499,19 @@ def pair_result(rows):
         reasons.append("no successful production CPU receipt for final source generation")
     if automatic.get("matching_agent_actions"):
         reasons.append("automatic arm still performed the corresponding agent action")
-    if "agent_verification_actions" not in automatic or automatic["agent_verification_actions"]:
-        reasons.append("automatic arm verification counter missing or agent still invoked pytest")
     if not all(r.get("observed_dispatches") for r in rows):
         reasons.append("actual request-dispatch diagnostics missing")
     saved = len(baseline.get("matching_agent_actions", [])) - len(automatic.get("matching_agent_actions", []))
     if saved < 1:
         reasons.append("corresponding agent action was not eliminated")
+    verification_action_suppressed = not reasons
     if baseline.get("agent_action_count", 0) <= automatic.get("agent_action_count", 0):
         reasons.append("total agent actions did not decrease")
     dispatch_delta = len(baseline.get("observed_dispatches", [])) - len(automatic.get("observed_dispatches", []))
-    return dict(passed=not reasons, reasons=reasons, matching_agent_actions_eliminated=saved,
+    return dict(passed=not reasons, reasons=reasons, matching_agent_action_delta=saved,
+                verification_action_suppressed=verification_action_suppressed,
+                automatic_bash_blockers=automatic_blockers,
+                total_tool_calls_reduced=baseline.get("agent_action_count", 0) > automatic.get("agent_action_count", 0),
                 observed_model_dispatches_saved=dispatch_delta,
                 observed_inference_reduction=not reasons and dispatch_delta > 0,
                 total_agent_action_delta=baseline.get("agent_action_count", 0)-automatic.get("agent_action_count", 0))
@@ -512,8 +523,8 @@ def live(manifest_path, wall_seconds=300):
     root, session = Path(m["experiment_root"]), Path(m["root"])
     if tree_state(Path(m["execution_root"])) != m["initial_source"]:
         raise ValueError("prepared checkout changed before dispatch")
-    if not read(root / "native-confinement-reviewed.json").get("passed"):
-        raise ValueError("actual native confinement probe must be reviewed first")
+    substrate.validate_authority(m)
+    substrate.require_native_review(m)
     if m["arm"] == "automatic" and not (Path(m["home"]) / "approvals.json").is_file():
         raise ValueError("human must grant the exact automatic candidate in its prepared home")
     with execution_lock(root):

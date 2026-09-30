@@ -41,6 +41,22 @@ budget cutoffs, infrastructure failures, unknown accounting and negative results
 revision gets a reason and a timestamp before subsequent dispatch. Keep broad harness debug logs,
 credentials and local approval grants out of public exports.
 
+## Training policy correction
+
+The first fresh training cohort stopped after three completed sessions. All three attempted
+`python -m pytest`; the evaluation command allowlist denied those calls before a test process ran.
+Inspection commands such as `find`, `grep`, and `wc` did succeed. The
+[complete policy-friction record](harness/results/20260930-real-repository-training/v4-policy-stop.json)
+retains all ten assignments, three costs and transcripts, and seven undispatched assignments.
+No hidden coding quality was scored, and CLI success is not treated as code correctness.
+
+The entire cohort is excluded from subsequent learning and efficacy analysis regardless of outcome.
+The next prospective cohort repeats the same fixed matrix with generic Bash permission inside the
+mandatory native sandbox. Filesystem, network, credential, and protected-write restrictions remain;
+there is no task-specific command hint or environment activation. The [new native canary passed](harness/results/20260930-native-probe-v5/review.json);
+[ten fresh assignments were frozen](harness/results/20260930-real-repository-training-v5/protocol.json) before dispatch. Training is in progress. This is an explicitly revised feasibility experiment, not
+an unchanged execution of the first protocol.
+
 ## Claims for launch
 
 The measured claim today is narrow: **a learned, approved CPU lookup replaced one agent lookup
@@ -57,7 +73,7 @@ population savings percentage.
 
 ## Paid evaluation ledger
 
-The user authorized **$60 for this task**. Measured spend so far is **$0.0699153**, plus an explicitly approved conservative charge of **$0.50** for an unknown earlier bill:
+The user authorized **$60 for this task**. Reported spend before the in-progress cohort-5 training is **$0.5775710**, plus an explicitly approved conservative charge of **$0.50** for an unknown earlier bill:
 
 | Experiment | Paid sessions | Reported USD | Record |
 | --- | ---: | ---: | --- |
@@ -65,10 +81,12 @@ The user authorized **$60 for this task**. Measured spend so far is **$0.0699153
 | Learned lookup pairs | 6 | 0.0413526 | [All attempts and accounting](harness/results/20260929-learned-action-gate/report.json) |
 | First native sandbox probe | 1 attempted | Actual bill unknown; $0.50 charged by human approval | [Original attempt](harness/results/20260929-real-repository-preparation/paid-state.json), [resolution](harness/results/20260930-native-probe-v4/prior-cost-resolution.json) |
 | Revised native sandbox probe | 1 | 0.0133411 | [Passing native confinement](harness/results/20260930-native-probe-v4/validation.json) |
+| Generic-Bash native confinement probe | 1 | 0.0124461 | [Passing native confinement](harness/results/20260930-native-probe-v5/review.json) |
+| Training cohort v4, stopped for test-command permission mismatch | 3 of 10 assigned | 0.4952096 | [Every assignment and observed denial](harness/results/20260930-real-repository-training/v4-policy-stop.json) |
 
 One startup-censored attempt has no reported terminal cost. The human explicitly approved charging
 its entire $0.50 reservation; its actual bill remains unknown. The ledger records this separately
-from measured provider costs. Admission charges total **$0.5699153**, leaving **$59.4300847** under
+from measured provider costs. Admission charges total **$1.0775710**, leaving **$58.9224290** under
 the $60 task cap before further reservations. This approval does not cover future unknown bills.
 Historical experiments elsewhere in the repository are separate from this task's ledger. Each new
 experiment must reserve full session caps durably before dispatch; a new unknown cost blocks further
