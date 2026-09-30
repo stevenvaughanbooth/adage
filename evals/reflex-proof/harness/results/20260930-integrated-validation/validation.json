@@ -148,7 +148,39 @@
     "No native Linux or Windows validation in this record.",
     "No browser visual/end-to-end review in this record.",
     "The adage-eval section of the older workspace run passed; do not count the failing parent command as a full workspace pass.",
-    "Earlier pre-merge workspace run had four CLI locale-related failures; merged CLI regression suite above passed those tests."
+    "Earlier pre-merge workspace run finished with four CLI locale-related failures and one training guard diagnostic assertion failure. Corresponding merged suites above pass; failed history is retained separately."
   ],
-  "paid_calls": 0
+  "paid_calls": 0,
+  "prior_workspace_run": {
+    "command": "cargo test --offline --locked --workspace --exclude adage-exec --no-fail-fast",
+    "completed_at_recording": "2026-09-30T02:26:03.174641+00:00",
+    "exit_code": 101,
+    "passed": 839,
+    "failed": 5,
+    "ignored": 3,
+    "log_sha256": "61179a16dca6db10ed49af9236b1cc3b686e18c68de492a69b82816aef963906",
+    "source_scope": "Started before the main merge; exact working snapshot not frozen. Kept as diagnostic history, not integrated source validation.",
+    "failures": [
+      {
+        "target": "adage-cli/tests/packs",
+        "count": 2,
+        "resolution": "Merged CLI suite passes; locale-isolated assertions from main."
+      },
+      {
+        "target": "adage-cli/tests/sense",
+        "count": 1,
+        "resolution": "Merged CLI suite passes; locale-isolated assertions from main."
+      },
+      {
+        "target": "adage-cli/tests/watch",
+        "count": 1,
+        "resolution": "Merged CLI suite passes; locale-isolated assertions from main."
+      },
+      {
+        "target": "adage-train/tests/pipeline",
+        "count": 1,
+        "resolution": "The old test required a specific marker name while inheriting CODEX_SANDBOX_NETWORK_DISABLED. The production guard correctly refused. Main isolates each refusal case; all seven merged pipeline tests pass in integrated-rest."
+      }
+    ]
+  }
 }
