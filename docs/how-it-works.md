@@ -1,7 +1,7 @@
 # How Adage works
 
 This is the product behavior reference for the README, CLI, TUI and launch copy.
-Updated 2026-09-29 against the launch worktree, based on merged main `9877af3`.
+Updated 2026-09-30 against the launch worktree, based on merged main `422ebdb`.
 Implementation changes must update this page and the relevant operational guide in the same change.
 The older numbered [architecture document](Adage%20%E2%80%94%20Architecture.md) is a historical
 implementation snapshot, not the current feature checklist.
@@ -22,6 +22,33 @@ no applicable history or declared conventions must receive an honest “nothing 
 See [zero-config behavior](zero-config.md), [live learning](live-learning.md) and
 [harness integration](harnesses.md) for exact commands, source locations and settings.
 Noninteractive previews remain read-only; installing hooks is an explicit setup operation.
+
+## Accumulated prediction and current execution limits
+
+The intended primitive learns patterns across many sessions and applies them to later, different
+tasks. Related event sequences may support the same action even when filenames, test selectors,
+intervening observations, or individual commands differ. Successful outcomes and failed paths
+both inform which action is useful. An embedding similarity is evidence of relatedness, not by
+itself a calibrated probability that execution will help.
+
+The existing graph engine embeds events, forms prototypes, mines cross-session sequences, and
+scores their continuations. The CPU runtime tracks bounded recent context and recognizes
+multi-event patterns with gaps. Prompt intent also uses embeddings. The ordered context retains
+information that a text embedding alone does not establish.
+
+Automatic execution currently covers approved lookup prefetches and actions selected from armed
+workflow obligations. The newer routine execution certificate is narrower still: an identical
+successful command immediately following a matching edit. That certificate is one supported
+mechanism, not the definition of a reflex or evidence that general predictive execution is done.
+General sequence predictions are not yet fully connected to E2 action selection and calibrated
+execution decisions. Extending that connection should reuse the existing predictor, approval
+store, typed inputs, sandbox, journal and result delivery.
+
+The launch evaluation must measure accumulated learning on chronological histories and
+prediction on later unseen sessions: avoided failures, eliminated agent actions, task quality,
+unnecessary executions, abstentions, and net cost/time. A five-session zero-candidate checkpoint
+neither proves mature learning ineffective nor supports a savings claim. Execution grants remain
+specific to reviewed actions; the pattern that nominates an action need not be an exact replay.
 
 ## Four distinct behaviors
 

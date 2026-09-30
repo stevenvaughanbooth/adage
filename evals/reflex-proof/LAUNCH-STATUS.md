@@ -54,8 +54,18 @@ The entire cohort is excluded from subsequent learning and efficacy analysis reg
 The next prospective cohort repeats the same fixed matrix with generic Bash permission inside the
 mandatory native sandbox. Filesystem, network, credential, and protected-write restrictions remain;
 there is no task-specific command hint or environment activation. The [new native canary passed](harness/results/20260930-native-probe-v5/review.json);
-[ten fresh assignments were frozen](harness/results/20260930-real-repository-training-v5/protocol.json) before dispatch. Training is in progress. This is an explicitly revised feasibility experiment, not
+[ten fresh assignments were frozen](harness/results/20260930-real-repository-training-v5/protocol.json) before dispatch. All ten attempts completed; one hit its turn limit. The [learning checkpoint](harness/results/20260930-real-repository-training-v5/learning-checkpoint.json) produced 25 routes per repository and zero narrow execution certificates. No held-out execution pair ran. This is an explicitly revised feasibility experiment, not
 an unchanged execution of the first protocol.
+
+## Prediction is the intended primitive
+
+These five-session checkpoints measure the current narrow execution certificate, which requires
+identical immediate edit-command repetition. They do not evaluate mature accumulated learning or
+generalized sequence prediction. Adage should learn from related sequences across past sessions
+and nominate useful approved actions in future tasks. The existing graph/prototype/context engine
+is the foundation; connecting those predictions to E2 selection and calibrated abstention is
+unproven integration work. Do not lower certainty requirements or relabel these zero-candidate
+results as a successful predictive-execution evaluation. See the [behavior reference](../../docs/how-it-works.md#accumulated-prediction-and-current-execution-limits).
 
 ## Claims for launch
 
@@ -73,7 +83,7 @@ population savings percentage.
 
 ## Paid evaluation ledger
 
-The user authorized **$60 for this task**. Reported spend before the in-progress cohort-5 training is **$0.5775710**, plus an explicitly approved conservative charge of **$0.50** for an unknown earlier bill:
+The user authorized **$60 for this task**. Measured spend so far is **$4.3605710**, plus an explicitly approved conservative charge of **$0.50** for an unknown earlier bill:
 
 | Experiment | Paid sessions | Reported USD | Record |
 | --- | ---: | ---: | --- |
@@ -83,10 +93,11 @@ The user authorized **$60 for this task**. Reported spend before the in-progress
 | Revised native sandbox probe | 1 | 0.0133411 | [Passing native confinement](harness/results/20260930-native-probe-v4/validation.json) |
 | Generic-Bash native confinement probe | 1 | 0.0124461 | [Passing native confinement](harness/results/20260930-native-probe-v5/review.json) |
 | Training cohort v4, stopped for test-command permission mismatch | 3 of 10 assigned | 0.4952096 | [Every assignment and observed denial](harness/results/20260930-real-repository-training/v4-policy-stop.json) |
+| Training cohort v5, two repository learning checkpoints | 10 | 3.7830000 | [Every attempt and learning result](harness/results/20260930-real-repository-training-v5/learning-checkpoint.json) |
 
 One startup-censored attempt has no reported terminal cost. The human explicitly approved charging
 its entire $0.50 reservation; its actual bill remains unknown. The ledger records this separately
-from measured provider costs. Admission charges total **$1.0775710**, leaving **$58.9224290** under
+from measured provider costs. Admission charges total **$4.8605710**, leaving **$55.1394290** under
 the $60 task cap before further reservations. This approval does not cover future unknown bills.
 Historical experiments elsewhere in the repository are separate from this task's ledger. Each new
 experiment must reserve full session caps durably before dispatch; a new unknown cost blocks further

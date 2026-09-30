@@ -13,6 +13,10 @@ agent; savings depend on the repository and the matched procedure.
 [How Adage works](docs/how-it-works.md) is the current behavior reference: what runs automatically,
 what requires approval, and what the evidence does and does not establish.
 
+Learning accumulates across sessions and is intended to generalize to later tasks. The graph
+engine already models related event sequences; connecting those predictions broadly to automatic
+actions remains an active launch gate. See [current capabilities and limits](docs/how-it-works.md#accumulated-prediction-and-current-execution-limits).
+
 Reflexes come from three places:
 
 - **Traces.** `adage condition` mines real traces in a repository.
