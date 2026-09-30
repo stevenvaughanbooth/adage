@@ -1,0 +1,1 @@
+{"root":"/private/tmp/adage-real-repo-gate-v1/bases/mm-validator","declared":"f550ea3c83ae","env":{"interpreter":".venv/bin/python","pytest":true,"modules":["marshmallow","pytest","simplejson"]}}

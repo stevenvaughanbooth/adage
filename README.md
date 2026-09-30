@@ -58,6 +58,10 @@ actions and reduced observed model requests from six to three, with all answers 
 This is a small generated-repository mechanism proof, not a general coding speedup claim.
 The [launch evidence index](evals/reflex-proof/LAUNCH-STATUS.md) tracks real-repository validation,
 release gates, failed attempts and evaluation spending.
+In a separate [four-task cold-start pilot](evals/reflex-proof/harness/results/20260930-cold-start-pilot/FINDINGS.md)
+on Marshmallow, shipped instincts passed **4/4 tasks versus 2/4** for the agent alone, with **16.3%
+lower reported API cost** and **20.5% fewer observed model requests**. Two tasks cost more with
+instincts. This small, single-repository result measures advisory value, not automatic CPU execution.
 The latest [15-session real-repository learning pilot](evals/reflex-proof/harness/results/20260930-learning-curve-native/report.json)
 passed independent task grading on 12/15 outputs but learned zero automatically executable actions.
 Real-coding CPU savings remain unproven; the full result is retained alongside the mechanism proof.

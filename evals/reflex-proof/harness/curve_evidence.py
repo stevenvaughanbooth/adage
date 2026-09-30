@@ -3,6 +3,7 @@ from collections import Counter
 from datetime import datetime, timezone
 import argparse
 import json
+import math
 from pathlib import Path
 import re
 import shlex
@@ -78,6 +79,8 @@ def training_row(root, task, ledger):
 
 def report(root):
     m = pairs.read(root / "manifest.json")
+    if m["protocol"] == "learning-curve-cold-1":
+        return cold_report(root)
     ledger = pairs.read(Path(m["budget_authority"]) / "paid-state.json")
     rows = [training_row(root, t, ledger) for t in m["families"][0]["train"]]
     checkpoints = []
@@ -121,6 +124,54 @@ def report(root):
             "No broad debug logs, credentials or local execution grants are exported."])
 
 
+def cold_report(root):
+    """Compact public evidence; raw collections remain hash-addressed in the local archive."""
+    source = curve_heldout.report(root)
+    rows = []
+    for r in source["rows"]:
+        session = root / "heldout" / r["task"] / r["arm"]
+        row = {k: r.get(k) for k in ("task", "arm", "order", "status", "cost_usd", "quality",
+            "agent_action_count", "observed_dispatches", "collection_errors", "comparison_identity")}
+        row["accounting"] = {k: r.get("summary", {}).get(k) for k in
+            ("usage", "duration_api_ms", "num_turns", "result_status", "result_is_error", "terminal_reason")}
+        row["actions"] = [dict(id=a.get("id"), name=a.get("name"),
+            command=a.get("input", {}).get("command") if a.get("name") == "Bash" else None,
+            result_present=a.get("id") in r.get("tool_results", {}),
+            reported_error=r.get("tool_results", {}).get(a.get("id"), {}).get("is_error"))
+            for a in r.get("agent_actions", [])]
+        row["hook_deliveries"] = [dict(event=h["event"], output=h["output"],
+            tool_use_id=h.get("payload", {}).get("tool_use_id"), exit_code=h["exit_code"])
+            for h in r.get("hooks", []) if h.get("output")]
+        hook_ms = sorted((h["ended_ns"] - h["wrapper_started_ns"]) / 1e6 for h in r.get("hooks", []))
+        row["hook_wall_time"] = dict(calls=len(hook_ms), total_ms=sum(hook_ms),
+            p95_ms=hook_ms[math.ceil(.95 * len(hook_ms)) - 1] if hook_ms else None,
+            definition="Wrapper wall time, including harness evidence hashing; not CPU utilization.")
+        row["automatic_execution_receipts"] = len(r.get("all_journal_receipts", []))
+        row["source_sha256"] = {p.name: pairs.sha(p) for p in [session / name for name in
+            ("manifest.json", "collection.json", "native-transcript.jsonl", "transcript-provenance.json", "summary.json", "settings.json")]
+            if p.is_file()}
+        rows.append(row)
+    totals = {}
+    for arm in ("agent", "instincts"):
+        assigned = [r for r in rows if r["arm"] == arm]
+        complete = len(assigned) == 4 and all(r["quality"] is not None and not r["collection_errors"] for r in assigned)
+        costs = [pairs.known_cost(r["cost_usd"]) for r in assigned]
+        totals[arm] = dict(assignments=len(assigned), complete=complete,
+            quality_passed=sum(r["quality"].get("passed", False) for r in assigned if r["quality"] is not None),
+            reported_cost_usd=sum(costs) if complete and all(c is not None for c in costs) else None,
+            observed_model_requests=sum(len(r["observed_dispatches"]) for r in assigned)
+                if complete and all(r["observed_dispatches"] for r in assigned) else None,
+            agent_tool_calls=sum(r["agent_action_count"] for r in assigned)
+                if complete and all(isinstance(r["agent_action_count"], int) for r in assigned) else None)
+    return dict(protocol=source["protocol"], recorded_at=datetime.now(timezone.utc).isoformat(),
+        manifest_sha256=pairs.sha(root / "manifest.json"), assignment_denominator=8, collected=source["collected"],
+        rows=rows, totals=totals, contrasts=source["contrasts"], cpu_savings_claim="not tested",
+        learned_savings_claim="not tested", limitations=source["limitations"] + [
+            "One run per arm per task; differences include ordinary model variation.",
+            "Reported API costs and observed requests do not measure GPU utilization or energy.",
+            "All assignments remain visible. Missing costs or request observations are not zero."])
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path)
@@ -130,5 +181,5 @@ if __name__ == "__main__":
         parser.error("evidence snapshots are immutable")
     result = report(args.root.resolve(strict=True))
     pairs.write(args.output, result)
-    print(json.dumps(dict(output=str(args.output), training_cost_usd=result["known_training_cost_usd"],
-                         cpu_gate_passed=result["heldout"]["passed"])))
+    print(json.dumps(dict(output=str(args.output), training_cost_usd=result.get("known_training_cost_usd"),
+                         cpu_gate_passed=result.get("heldout", {}).get("passed"), totals=result.get("totals"))))

@@ -119,9 +119,12 @@ the compiler can extract a supported routine from natural traces. Buying more se
 understanding eligibility would repeat the bottleneck. A stronger teacher is a separate prospective
 experiment; do not quietly substitute it into this fixed-model result.
 
-Cold-start instincts remain a separate causal question. Any two-arm cold-only continuation must
-freeze its own protocol, sources and assignment order before dispatch. It must retain all four
-original unattempted CPU comparisons and must never count advisory savings as CPU action elimination.
+The separate cold-only continuation froze its own protocol, sources and alternating assignment order
+before dispatch. All eight runs completed: instincts passed 4/4 tasks versus 2/4, with 16.3% lower
+reported cost and 20.5% fewer observed requests. Two tasks cost more with instincts. The
+[complete cold-start record](results/20260930-cold-start-pilot/FINDINGS.md) preserves all outcomes;
+the four original unattempted CPU comparisons remain unattempted. These advisory results do not
+count as CPU action elimination and the small pilot does not establish general savings.
 
 ## Offline preparation
 

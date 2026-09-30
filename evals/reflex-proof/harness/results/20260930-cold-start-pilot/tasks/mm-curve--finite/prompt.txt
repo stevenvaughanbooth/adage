@@ -1,0 +1,3 @@
+Add a new validator to marshmallow: `marshmallow.validate.Finite(*, error=None)`, which accepts finite real numbers; NaN and positive or negative infinity fail. Its default error message is `Must satisfy Finite.`; a custom `error` message may interpolate `{input}`. Examples of valid input: `0`. Examples of invalid input: `1e309`.
+
+Follow the conventions of the existing validators, include tests and a docstring, and add a changelog entry.

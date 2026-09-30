@@ -5,6 +5,13 @@ passes; it does not establish that automatic verification helps complete coding 
 This page is the launch evidence index. Preserve earlier reports, failed attempts and protocols
 when a later experiment supersedes them.
 
+A separately frozen [cold-start pilot](harness/results/20260930-cold-start-pilot/FINDINGS.md)
+completed all eight assignments: shipped instincts passed **4/4 tasks versus 2/4**, with **16.3%
+lower reported cost** ($0.8452748 versus $1.0104017) and **20.5% fewer observed model requests**
+(124 versus 156). Both cost regressions and both baseline failures are retained. All four instincts
+sessions delivered an advisory project-Python hint. This is a four-task, single-repository signal
+for out-of-the-box guidance, not learned automatic execution or a general savings estimate.
+
 The [cross-session learning-curve pilot](harness/LEARNING-CURVE.md) completed 15 distinct native
 training sessions and checkpoints at 0/3/5/10/15 sessions. **Every checkpoint produced zero executable
 candidates.** Training cost $3.7549221; independent hidden checks and full-suite grading passed 12/15
