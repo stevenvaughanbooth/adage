@@ -18,6 +18,9 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 ### Launch clarity and local experience
 
+- Plugin bootstrap prefers a native SHA-256 provider, reducing first-start checksum cost while
+  retaining the same digest verification and portable fallback.
+
 - On macOS, a direct system-Python action resolves Apple's launcher to the interpreter in the
   already selected developer toolchain, preventing sandbox startup timeouts without expanding
   permissions. Unix-only staging tests are guarded so Windows compile checks remain valid;
