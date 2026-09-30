@@ -5,6 +5,10 @@ passes; it does not establish that automatic verification helps complete coding 
 The [frozen transfer preparation](harness/results/20260930-transfer-preparation/FINDINGS.md)
 retains a zero-spend approval failure and its narrow pytest-cache fix. The replacement eight-session
 comparison is ready and waits for human execution grants; no live transfer result is claimed.
+The [launch-experience follow-up](harness/results/20260930-launch-experience/FINDINGS.md) adds the
+first-reflex guide and TUI next steps, covers pytest's hidden cache metadata explicitly, and records
+112 passing Rust/onboarding checks plus a fresh unchanged-history replay. The current study is
+`transfer-v3`; the [continuation handoff](../../docs/launch-handoff.md) has its exact commands and scope.
 This page is the launch evidence index. Preserve earlier reports, failed attempts and protocols
 when a later experiment supersedes them.
 
