@@ -45,7 +45,7 @@ export function initPage() {
       });
       if (r.ok) { form.reset(); say("You're on the list. We'll email you once, when the first release is ready.", "ok"); }
       else if (r.status === 400 || r.status === 413) say("That address doesn't look right. Check it and try again.", "err");
-      else if (r.status === 503) say("Sign-ups aren't open yet. Please try again soon.", "err");
+      else if (r.status === 503) say("Sign-ups aren't open yet. You can explore the source preview below.", "err");
       else say("Something went wrong on our side. Please try again in a minute.", "err");
     } catch {
       say("Couldn't reach the server. Check your connection and try again.", "err");

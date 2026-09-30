@@ -20,11 +20,13 @@ do next. Adage never runs the commands it directs; execution is a separate, opt-
 
 - On macOS, a direct system-Python action resolves Apple's launcher to the interpreter in the
   already selected developer toolchain, preventing sandbox startup timeouts without expanding
-  permissions. Unix-only staging tests are guarded so Windows compile checks remain valid.
+  permissions. Unix-only staging tests are guarded so Windows compile checks remain valid;
+  the ARM64 musl sandbox retains its kexec-file denial when libc omits the syscall constant.
 
 - The launch site now walks one concrete trace through conditioning and hook delivery, introduces
   the watch/TUI/map demos, and leads with completed shipped-product validation and its uncertainty.
-  The approved 45-second dark/day teaser replaces the older duration and posters.
+  The approved 45-second dark/day teaser replaces the older duration and posters. A source-preview
+  link gives visitors a way to explore while early-access signup is unavailable.
 - The local map retries failed snapshots with bounded backoff, times out stalled requests, and
   labels stale data with a manual retry. Continuous events no longer starve snapshot refreshes.
   First-run hook checks can recover and be rechecked; demo data is explicitly labeled.

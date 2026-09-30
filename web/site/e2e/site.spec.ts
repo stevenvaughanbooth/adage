@@ -95,6 +95,9 @@ test("early access: success, a closed list, and a bad address", async ({ page })
   await email.fill("dev@example.com");
   await page.getByRole("button", { name: "Join the list" }).click();
   await expect(status).toContainText("aren't open yet");
+  await expect(email).toHaveValue("dev@example.com");
+  await page.getByRole("link", { name: "Try the source preview", exact: true }).click();
+  await expect(page).toHaveURL(/#start$/);
 });
 
 for (const scheme of ["dark", "light"] as const) {

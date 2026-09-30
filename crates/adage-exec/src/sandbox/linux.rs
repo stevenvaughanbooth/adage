@@ -187,6 +187,12 @@ fn nr(n: libc::c_long) -> i64 {
 
 /// System calls that always fail with `EPERM` inside the sandbox.
 fn denied() -> Vec<i64> {
+    // libc omits this constant for aarch64 musl. Preserve the denial using the Linux UAPI
+    // number from include/uapi/asm-generic/unistd.h (__NR_kexec_file_load), also used by glibc.
+    #[cfg(all(target_arch = "aarch64", target_env = "musl"))]
+    const KEXEC_FILE_LOAD: libc::c_long = 294;
+    #[cfg(not(all(target_arch = "aarch64", target_env = "musl")))]
+    const KEXEC_FILE_LOAD: libc::c_long = libc::SYS_kexec_file_load;
     #[allow(unused_mut)] // extended on x86_64 only
     let mut v: Vec<libc::c_long> = vec![
         libc::SYS_socket,
@@ -209,7 +215,7 @@ fn denied() -> Vec<i64> {
         libc::SYS_perf_event_open,
         libc::SYS_userfaultfd,
         libc::SYS_kexec_load,
-        libc::SYS_kexec_file_load,
+        KEXEC_FILE_LOAD,
         libc::SYS_init_module,
         libc::SYS_finit_module,
         libc::SYS_delete_module,

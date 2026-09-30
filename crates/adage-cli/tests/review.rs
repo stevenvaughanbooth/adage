@@ -41,6 +41,11 @@ impl World {
         let mut c = Command::new(env!("CARGO_BIN_EXE_adage"));
         c.args(args)
             .current_dir(self.p("work"))
+            // Text assertions use UTF-8 glyphs regardless of the invoking terminal.
+            .env("TERM", "xterm-256color")
+            .env("LC_ALL", "C.UTF-8")
+            .env("ADAGE_ASCII", "0")
+            .env("NO_COLOR", "1")
             .env("ADAGE_HOME", self.p("data"))
             .env("HOME", self.p("home"))
             .env_remove("CLAUDECODE")
