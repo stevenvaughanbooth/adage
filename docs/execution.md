@@ -552,7 +552,11 @@ bound read-write, as nobody when invoked by root.
 **macOS: `sandbox-exec -p`** with a generated SBPL profile: `(deny default)`, process exec and
 fork, sysctl reads, reads of the repository, toolchain and CAS paths, writes to scratch and
 `/dev/null` only, `(deny network*)`. macOS 26's dyld startup also needs `file-read-data` on the
-**literal root directory node** (`/`); this is not a root-subtree grant. The selected developer
+**literal root directory node** (`/`); this is not a root-subtree grant. The literal `/tmp`
+and `/private/tmp` directory nodes are also readable for ordinary path-readability checks.
+Processes can list names in those directories; this does not grant access to child file contents
+or writes outside the existing scratch grant. Native canaries verify both spellings can be read
+while a known sibling file cannot be read, overwritten, or accompanied by a newly written file. The selected developer
 toolchain is resolved using fixed `/usr/bin/xcode-select -p` with an empty environment. Its
 canonical developer directory and, for Xcode, that selected app's `Contents` are readable so
 Apple's command shims can load their tools and linked frameworks. A literal read of
@@ -569,8 +573,8 @@ is not rewritten by this rule.
 `RLIMIT_NPROC` on macOS counts existing processes for the real UID. A native libproc census adds
 the configured headroom to that existing count, capped by the inherited hard limit; a failed
 census or inability to install the limit refuses the run. It is a per-user snapshot limit, not
-a private process quota. Enforcement profile version **2** binds these changes so old grants
-lapse rather than silently gaining the new toolchain permissions. The replay tests exercise
+a private process quota. Enforcement profile version **3** binds the current permissions, including
+the temporary directory-node reads, so existing version 2 grants lapse and require a fresh review. The replay tests exercise
 actual shell startup, outside-file denial and a live loopback listener on macOS; Linux-only
 escape payload enumeration is not evidence of macOS containment.
 

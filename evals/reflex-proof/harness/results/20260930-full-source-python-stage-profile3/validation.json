@@ -1,0 +1,157 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-30",
+  "source_commit": "94b697166bf6c6f0506a54e1d4393a5715033ed7",
+  "working_tree_modified": true,
+  "source_sha256": {
+    "crates/adage-exec/tests/stage.rs": "abc91c46e9fd5d93c8f51c13a5f12a89c1eeea951baa1079dc07df2f6fe7070a",
+    "crates/adage-exec/src/project_python.rs": "48fec2507062c4dcc07b21c1b395b1d4f5dc18b53082498504c3c62f61286054",
+    "crates/adage-exec/src/route.rs": "3fb9d9366e86bbfc70509407c4bee3f6de210db7b25d31a2095ceaa983e5e7dd",
+    "crates/adage-exec/src/stage.rs": "8599992a11bcdef902a3af7f40cff02336003be7c4f61202c39da6d19c45b8da",
+    "crates/adage-exec/src/sandbox/mod.rs": "a3bb9043830b22baddc001c5e000dfb7f6c3c2bff045cfc2649581a2b8b4790e",
+    "crates/adage-exec/src/sandbox/macos.rs": "6161df14f921cb2e19db0757dffe6d06e0eac58b4ea4e9c3c62faf515e7c3305",
+    "docs/execution.md": "88aef27069257f86ad767d7e50c3df3f41ee1b82b93fcf17b32b26a8454f5fbd"
+  },
+  "reviewed_patch_sha256": "a795354ce22f674ca0d9bc61363e44099871a76eb9d61432c09e0441c066b861",
+  "authorization": "Human explicitly approved the reviewed literal temporary-directory-node permission patch before application.",
+  "scope": "Offline full-source baseline compatibility through production route::plan and stage; authored fixture routes and in-memory fixture approvals only. No learning, paid model calls, user grants, or eliminated-action claim.",
+  "platform": {
+    "system": "Darwin",
+    "release": "25.6.0",
+    "machine": "arm64"
+  },
+  "command": "ADAGE_TEST_REAL_PROJECT_ROOT=/private/tmp/adage-real-repo-gate-v1 ADAGE_TEST_REAL_PROJECT_RESULTS=/private/tmp/adage-full-pinned-stage-proof-v2-profile3 cargo test --release --offline --locked -p adage-exec --test stage approved_project_python_runs_full_pinned_baseline_suites -- --ignored --nocapture",
+  "test_outcome": {
+    "passed": 1,
+    "failed": 0,
+    "repositories_passed": 2
+  },
+  "paid_calls": 0,
+  "approvals": "Fresh in-memory fixture store only; no approval file created, copied, or modified.",
+  "policy": {
+    "enforcement_version": 3,
+    "change": "macOS file-read-data for literal /tmp and /private/tmp nodes only; no subpath grant",
+    "observable_rights": "Directory names can be listed; existing read grants still govern child contents and scratch governs writes.",
+    "grant_lapse": "Profile identity differs from version2, so an existing version2 key does not authorize version3."
+  },
+  "native_canary": {
+    "production_test": "sandbox::macos::tests::temporary_directory_nodes_are_readable_but_child_contents_and_writes_are_denied",
+    "passed": true,
+    "assertions": [
+      "Both literal spellings readable",
+      "Known disposable child name visible in directory listing",
+      "Known child file contents denied",
+      "Known child overwrite denied",
+      "New sibling creation denied",
+      "Original known child bytes unchanged"
+    ]
+  },
+  "results": [
+    {
+      "child_ms": 2194,
+      "command": ".venv/bin/python -m pytest -q -p no:cacheprovider --junitxml=adage-baseline-result.xml tests",
+      "exit": 0,
+      "family": "mm-validator",
+      "junit_present": true,
+      "passed": true,
+      "pinned_base": "7f0792bd7a06f72e393ec866ac1e89e1502ccfe1",
+      "project_python": {
+        "adapter_version": 1,
+        "config_sha256": "75554e0d9585fbda1cbaeafe470253043f5a930e8de3744bbff93fda386f6ed0",
+        "environment_sha256": "53495f3d2ce62f54a93b13cf86904469abda60dfc9b90bf684526bfa0d339acc",
+        "executable": "/private/tmp/adage-real-repo-gate-v1/runtime/python/cpython-3.12.14-macos-aarch64-none/bin/python3.12",
+        "executable_sha256": "2d96eb826dc74db4fcd5da6dde045a6fa145e292e07e69d1bdd1a19fa90ffc22",
+        "program": ".venv/bin/python",
+        "runtime_root": "/private/tmp/adage-real-repo-gate-v1/runtime/python/cpython-3.12.14-macos-aarch64-none",
+        "runtime_sha256": "841a938ee92efd117efe4bab95d310bf825e3a312981130c9d1e31d182b8013b",
+        "version": "3.12"
+      },
+      "refused_changes": [],
+      "signal": null,
+      "source_unchanged": true,
+      "stderr": "",
+      "wall_ms": 3783.470708,
+      "junit_counts": {
+        "tests": 1190,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "passed": 1190
+      },
+      "junit_sha256": "ddd3da9424e3710c493af03b45c1bbe842cd1f529b78d10f558a9b2ba38e0a9a",
+      "failing_cases": []
+    },
+    {
+      "child_ms": 4900,
+      "command": ".venv/bin/python -m pytest -q -p no:cacheprovider --junitxml=adage-baseline-result.xml tests",
+      "exit": 0,
+      "family": "click-type",
+      "junit_present": true,
+      "passed": true,
+      "pinned_base": "06b2a678741131fd577ce170e23e5ca0aeba0309",
+      "project_python": {
+        "adapter_version": 1,
+        "config_sha256": "75554e0d9585fbda1cbaeafe470253043f5a930e8de3744bbff93fda386f6ed0",
+        "environment_sha256": "5c4951e4fe7297ea6714c3846652a21e22d10db80b85b23c3887e32bc03e7023",
+        "executable": "/private/tmp/adage-real-repo-gate-v1/runtime/python/cpython-3.12.14-macos-aarch64-none/bin/python3.12",
+        "executable_sha256": "2d96eb826dc74db4fcd5da6dde045a6fa145e292e07e69d1bdd1a19fa90ffc22",
+        "program": ".venv/bin/python",
+        "runtime_root": "/private/tmp/adage-real-repo-gate-v1/runtime/python/cpython-3.12.14-macos-aarch64-none",
+        "runtime_sha256": "841a938ee92efd117efe4bab95d310bf825e3a312981130c9d1e31d182b8013b",
+        "version": "3.12"
+      },
+      "refused_changes": [],
+      "signal": null,
+      "source_unchanged": true,
+      "stderr": "",
+      "wall_ms": 6094.722792,
+      "junit_counts": {
+        "tests": 2266,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 26,
+        "passed": 2240
+      },
+      "junit_sha256": "3a15c108660cbacaa84966e6bc3b6a8bfe5665c44845bf375c9eddb72dc39614",
+      "failing_cases": []
+    }
+  ],
+  "preserved_failure": {
+    "path": "evals/reflex-proof/harness/results/20260930-full-source-python-stage/validation.json",
+    "sha256": "c7ee2a64cdafaa325a2c3d4f25c3aca322ed98b9473f69f448fda59f14fa4ece",
+    "unchanged_from_committed_record": true,
+    "prior_failure": "Click test_other_command_invoke_with_defaults[opt_params12-/tmp]: Path /tmp is not readable."
+  },
+  "verification": [
+    {
+      "command": "cargo fmt -p adage-exec --check",
+      "outcome": "passed"
+    },
+    {
+      "command": "cargo test --offline --locked -p adage-exec --lib sandbox -- --nocapture",
+      "passed": 8,
+      "failed": 0
+    },
+    {
+      "command": "cargo test --offline --locked -p adage-exec --lib",
+      "passed": 72,
+      "failed": 0
+    },
+    {
+      "command": "cargo clippy --offline --locked -p adage-exec --all-targets -- -D warnings",
+      "outcome": "passed"
+    },
+    {
+      "command": "git diff --check",
+      "outcome": "passed"
+    }
+  ],
+  "limits": [
+    "macOS arm64 native proof only",
+    "Single baseline compatibility run per repository, not a latency distribution or GPU-savings experiment",
+    "Total stage wall includes staging, child execution and cleanup; fixture copying, initial approval planning and snapshot audits are outside this timer",
+    "Prepared source copied in full; only copied editable .pth fixture paths relocated before approval",
+    "JUnit report captured from staged declared cache output without applying it to either checkout",
+    "Existing upstream pytest configuration preserved, including Click default stress-marker exclusion and26 skips; no test changed or removed"
+  ]
+}

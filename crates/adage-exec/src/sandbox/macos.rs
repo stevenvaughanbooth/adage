@@ -111,7 +111,9 @@ pub fn sbpl(res: &Resolved) -> String {
     read.extend(res.dev.iter().map(|p| format!("(literal {})", lit(p))));
     // macOS 26's dyld cache loader needs to open the root directory itself. Without this
     // literal-node read, even /bin/sh aborts before main. Never use (subpath "/") here:
-    // descendants still require one of the explicit read grants below.
+    // descendants still require one of the explicit read grants below. The two temporary
+    // directory nodes likewise support readability checks and listing names only; they grant
+    // neither child file contents nor writes. Enforcement profile v3 binds this change.
     format!(
         "(version 1)\n\
          (deny default)\n\
@@ -121,6 +123,7 @@ pub fn sbpl(res: &Resolved) -> String {
          (allow signal (target same-sandbox))\n\
          (allow file-read-metadata)\n\
          (allow file-read-data (literal \"/\"))\n\
+         (allow file-read-data (literal \"/tmp\") (literal \"/private/tmp\"))\n\
          (allow file-read-data (literal \"/Library/Preferences/com.apple.dt.Xcode.plist\"))\n\
          (allow file-read* {read})\n\
          (allow file-read* file-write* (subpath {scratch}) (literal \"/dev/null\"))\n\
@@ -181,6 +184,46 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn temporary_directory_nodes_are_readable_but_child_contents_and_writes_are_denied() {
+        let child = tempfile::NamedTempFile::new_in("/private/tmp").unwrap();
+        std::fs::write(child.path(), "disposable known canary\n").unwrap();
+        let name = child.path().file_name().unwrap().to_str().unwrap();
+        let new_name = format!("{name}-denied-write");
+        let repo = tempfile::tempdir().unwrap();
+        let scratch = crate::run::Scratch::new(None).unwrap();
+        let mut profile = crate::sandbox::Profile::for_level(Level::E1);
+        profile.limits.wall_ms = 10_000;
+        let resolved = Resolved::new(&profile, repo.path(), &scratch.path, &[], None, None).unwrap();
+        let capability = crate::sandbox::detect();
+        assert!(matches!(capability.backend, crate::sandbox::Backend::SandboxExec { .. }), "native Seatbelt required");
+        let environment = crate::env::build(&Default::default(), repo.path(), &scratch.path, &[]);
+        let script = format!(
+            "set -e; for root in /tmp /private/tmp; do \
+             test -r \"$root\"; /bin/ls -A \"$root\" | /usr/bin/grep -Fxq -- '{name}'; \
+             if /bin/cat \"$root/{name}\" >/dev/null 2>&1; then exit 11; fi; \
+             if (printf changed > \"$root/{name}\") 2>/dev/null; then exit 12; fi; \
+             if (printf created > \"$root/{new_name}\") 2>/dev/null; then exit 13; fi; \
+             done; printf 'directory-readable; child-read-denied; child-write-denied\\n'"
+        );
+        let result = crate::run::spawn_sandboxed(
+            std::path::Path::new("/bin/sh"),
+            &["-c".into(), script],
+            &environment,
+            &resolved,
+            &capability,
+        )
+        .unwrap();
+        assert_eq!(result.exit, Some(0), "{}", String::from_utf8_lossy(&result.stderr));
+        assert_eq!(
+            String::from_utf8_lossy(&result.stdout),
+            "directory-readable; child-read-denied; child-write-denied\n"
+        );
+        assert_eq!(std::fs::read_to_string(child.path()).unwrap(), "disposable known canary\n");
+        assert!(!std::path::Path::new("/private/tmp").join(new_name).exists());
+    }
+
     #[test]
     fn profile_denies_by_default_and_quotes_paths() {
         let res = Resolved {
@@ -202,6 +245,13 @@ mod tests {
         assert!(p.contains("(deny network*)"));
         assert!(p.contains("(allow file-read-data (literal \"/\"))"));
         assert!(!p.contains("(subpath \"/\")"), "root access must not include descendants");
+        assert!(p.contains("(allow file-read-data (literal \"/tmp\") (literal \"/private/tmp\"))"));
+        for root in ["/tmp", "/private/tmp"] {
+            assert!(
+                !p.contains(&format!("(subpath \"{root}\")")),
+                "temporary directory access must not include descendants"
+            );
+        }
         assert!(!p.contains("(allow network"));
         assert_eq!(p.matches("file-write*").count(), 1, "writes only to scratch and /dev/null");
     }
