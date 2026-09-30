@@ -1,5 +1,5 @@
-// The teaser film opens the page, then dissolves into the hero. It plays muted (browsers allow no
-// sound without a gesture); the controls stay hidden until the pointer moves or a control is focused.
+// The teaser film opens with sound, then dissolves into the hero. If audible autoplay is blocked,
+// visitors choose Play; controls stay hidden until the pointer moves or a control is focused.
 // The day or night cut follows the theme. If the film cannot load, the page simply starts at the hero.
 
 const MEDIA = (import.meta.env.VITE_MEDIA_BASE as string | undefined) || "/media/";
@@ -42,19 +42,19 @@ export function createFilm(o: Opts) {
     play.hidden = true;
     v.play()?.catch(() => { if (open) play.hidden = false; });
   }
-  function show({ sound = false } = {}) {
+  function show({ userInitiated = false } = {}) {
     if (OFF) return;
     clearTimeout(doneT);
     back = document.activeElement;
     open = true; o.onOpen();
     // Motion-sensitive visitors and data savers choose to play it, so only its metadata loads first.
     const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
-    const wait = (o.reduced() || saveData) && !sound;
+    const wait = (o.reduced() || saveData) && !userInitiated;
     v.preload = wait ? "metadata" : "auto";
     source(false);
     el.hidden = false; el.inert = false; el.classList.add("live"); void el.offsetWidth; el.classList.remove("out", "awake");
     root.classList.add("film-open"); outside().forEach((e) => (e.inert = true));
-    v.currentTime = 0; v.muted = !sound; syncSound(); prog.style.transform = "scaleX(0)";
+    v.currentTime = 0; v.muted = false; syncSound(); prog.style.transform = "scaleX(0)";
     if (wait) play.hidden = false; else run();
     el.focus({ preventScroll: true });
   }

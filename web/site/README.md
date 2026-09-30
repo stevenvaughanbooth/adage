@@ -17,9 +17,9 @@ pnpm test:e2e     # builds, serves with `vite preview`, runs Playwright and axe 
 
 ## How the page behaves
 
-- **The film opens the page**, muted (browsers allow no sound without a gesture), in the night or
-  day cut to match the theme. The controls (X, sound, skip) appear when the pointer moves or a
-  control has keyboard focus; Escape skips. When it ends or is skipped it fades into the hero, which
+- **The film opens the page with sound**, in the night or day cut to match the theme. If the
+  browser blocks audible autoplay, a "Play the teaser with sound" button starts it on click. The
+  controls (X, sound, skip) appear when the pointer moves or a control has keyboard focus; Escape skips. When it ends or is skipped it fades into the hero, which
   then assembles. If the film cannot load, the page starts at the hero. With reduced motion or
   data saving on, it waits for Play. "Watch the teaser" replays it with sound.
 - **Theme:** follows the system; the Day/Night button overrides it and is remembered.
