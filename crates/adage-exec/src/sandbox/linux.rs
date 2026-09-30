@@ -401,7 +401,7 @@ pub fn prepare(res: &Resolved, userns: bool) -> Result<Prepared, String> {
         userns,
         uid_map: format!("{uid} {uid} 1").into_bytes(),
         gid_map: format!("{gid} {gid} 1").into_bytes(),
-        nproc: super::nproc_budget(res),
+        nproc: super::nproc_budget(res).map_err(|e| format!("process limit: {e}"))?,
         overlay,
         bind: bind_mount(res)?,
     })

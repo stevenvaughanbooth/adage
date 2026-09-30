@@ -199,7 +199,11 @@ fn basic_pre_exec(cmd: &mut Command, limits: crate::limits::Limits, nproc: u64, 
             };
             // RLIMIT_AS is not enforced on macOS; failures there are ignored.
             let _ = set(libc::RLIMIT_AS, limits.address_space);
-            let _ = set(libc::RLIMIT_NPROC, nproc);
+            // Respect an inherited hard ceiling, and refuse if this essential bound cannot
+            // be installed. Never silently run without a process-count limit.
+            let mut inherited = std::mem::zeroed::<libc::rlimit>();
+            check(libc::getrlimit(libc::RLIMIT_NPROC, &mut inherited))?;
+            check(set(libc::RLIMIT_NPROC, nproc.min(inherited.rlim_max as u64)))?;
             let _ = set(libc::RLIMIT_FSIZE, limits.file_size);
             let _ = set(libc::RLIMIT_NOFILE, limits.open_files);
             let _ = set(libc::RLIMIT_CORE, 0);
@@ -250,7 +254,9 @@ pub(crate) fn spawn_sandboxed_with(
             let (p, a) = sandbox::bwrap::wrap(path, program, args, res);
             let mut c = Command::new(p);
             c.args(a);
-            basic_pre_exec(&mut c, limits, sandbox::nproc_budget(res), res.drop_to);
+            let nproc = sandbox::nproc_budget(res)
+                .map_err(|e| Refusal { stage: "limits", reason: format!("process limit: {e}") })?;
+            basic_pre_exec(&mut c, limits, nproc, res.drop_to);
             c
         }
         #[cfg(unix)]
@@ -258,7 +264,9 @@ pub(crate) fn spawn_sandboxed_with(
             let (p, a) = sandbox::macos::wrap(path, program, args, res);
             let mut c = Command::new(p);
             c.args(a);
-            basic_pre_exec(&mut c, limits, sandbox::nproc_budget(res), res.drop_to);
+            let nproc = sandbox::nproc_budget(res)
+                .map_err(|e| Refusal { stage: "limits", reason: format!("process limit: {e}") })?;
+            basic_pre_exec(&mut c, limits, nproc, res.drop_to);
             c
         }
         #[allow(unreachable_patterns)]

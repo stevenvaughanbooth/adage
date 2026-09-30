@@ -58,7 +58,7 @@ pub struct Profile {
 }
 
 /// Bumped whenever enforcement changes in a way approvals should notice.
-pub const PROFILE_VERSION: u32 = 1;
+pub const PROFILE_VERSION: u32 = 2;
 
 impl Profile {
     pub fn for_level(level: Level) -> Profile {
@@ -322,18 +322,24 @@ pub fn others_can_reach(p: &Path) -> bool {
 }
 
 /// `RLIMIT_NPROC` for a run: the profile's budget on top of the tasks the run's user already has
-/// (the limit counts every task of the user, not just the sandbox's). On Linux only; elsewhere the
-/// profile's number as is.
-pub fn nproc_budget(res: &Resolved) -> u64 {
+/// (the limit counts the user's existing tasks/processes, not just the sandbox's). A failed
+/// macOS process census refuses the run instead of silently removing its bound.
+pub fn nproc_budget(res: &Resolved) -> std::io::Result<u64> {
     #[cfg(target_os = "linux")]
     {
         // SAFETY: getuid has no preconditions.
         let uid = res.drop_to.map(|(u, _)| u).unwrap_or_else(|| unsafe { libc::getuid() });
-        res.limits.nproc + linux::tasks_of(uid)
+        Ok(res.limits.nproc.saturating_add(linux::tasks_of(uid)))
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(target_os = "macos")]
     {
-        res.limits.nproc
+        // SAFETY: getuid has no preconditions.
+        let uid = res.drop_to.map(|(u, _)| u).unwrap_or_else(|| unsafe { libc::getuid() });
+        Ok(res.limits.nproc.saturating_add(macos::processes_of(uid)?))
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        Ok(res.limits.nproc)
     }
 }
 
@@ -384,6 +390,19 @@ impl Resolved {
                     }
                     for d in path_dirs {
                         add(d);
+                    }
+                    #[cfg(target_os = "macos")]
+                    if let Some(developer) = macos::developer_dir() {
+                        add(&developer);
+                        // xcodebuild's linked frameworks live beside Developer, inside the
+                        // selected app bundle. Never extend this to the Applications directory.
+                        if let Some(contents) =
+                            developer.parent().filter(|p| p.file_name().is_some_and(|n| n == "Contents"))
+                        {
+                            if contents.parent().is_some_and(|p| p.extension().is_some_and(|e| e == "app")) {
+                                add(contents);
+                            }
+                        }
                     }
                 }
                 Read::Cas => {

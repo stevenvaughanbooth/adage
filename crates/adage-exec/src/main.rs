@@ -40,6 +40,8 @@ const USAGE: &str = "usage:
   adage-exec approve <the same request flags> [--by <name>]
   adage-exec revoke  --repo <dir> [--track <t> --route <r>]
   adage-exec status  --repo <dir>
+  adage-exec journal [--repo <dir>]
+  adage-exec recover --id <operation-id> --acknowledge
   adage-exec doctor  [--json]";
 
 struct Args {
@@ -199,6 +201,10 @@ fn cmd_run(a: &Args) -> Result<i32> {
         return Ok(if ok { 0 } else { 3 });
     }
     if req.level == Level::E2 {
+        if let Some(receipt) = adage_exec::journal::pending(&home, &req.repo_root)? {
+            println!("{}", serde_json::to_string_pretty(&receipt)?);
+            return Ok(3);
+        }
         let staged = match adage_exec::stage::stage(&req, &ctx) {
             Ok(s) => s,
             Err(r) => {
@@ -206,12 +212,29 @@ fn cmd_run(a: &Args) -> Result<i32> {
                 return Ok(3);
             }
         };
-        let outcome = adage_exec::stage::finish(&staged);
-        let route = approvals::route_label(&req);
         let approved_on = store.find(&ctx_key(&req, &ctx)).map(|a| a.approved_on.clone()).unwrap_or_default();
-        let revoked = adage_exec::stage::record(&home, &ctx.repo_key, &route, &approved_on, "adage-exec run", &outcome);
+        // A person's explicit CLI invocation is a new occurrence, not a hook retry.
+        let occurrence = format!(
+            "{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos()
+        );
+        let completed = adage_exec::journal::finish(
+            &staged,
+            &adage_exec::journal::Commit {
+                home: &home,
+                repo: &ctx.repo_key,
+                session: "adage-exec run",
+                occurrence: &occurrence,
+                approved_on: &approved_on,
+                request: &req,
+            },
+        );
+        let outcome = completed.outcome;
+        let revoked = completed.revoked;
         let kind = req.action.as_ref().map(|a| a.kind).unwrap_or(ActionKind::Regenerate);
-        let v = adage_exec::stage::result_json(&req.labels.route, kind, Some(&staged), &outcome, revoked);
+        let mut v = adage_exec::stage::result_json(&req.labels.route, kind, Some(&staged), &outcome, revoked);
+        v["operation_id"] = serde_json::json!(completed.id);
         println!("{}", serde_json::to_string_pretty(&v)?);
         return Ok(if outcome.name() == "applied" { 0 } else { 3 });
     }
@@ -374,6 +397,30 @@ fn cmd_doctor(a: &Args) -> Result<i32> {
     Ok(0)
 }
 
+fn cmd_journal(a: &Args) -> Result<i32> {
+    a.only(&["--repo"], &[])?;
+    let repo = a.one("--repo").map(|p| std::fs::canonicalize(p)).transpose()?;
+    let repo = repo.as_ref().map(|p| adage_core::repo::repo_key(p));
+    let rows: Vec<_> = adage_exec::journal::list(&adage_home())?
+        .into_iter()
+        .filter(|r| repo.as_ref().is_none_or(|k| &r.repo == k))
+        .collect();
+    println!("{}", serde_json::to_string_pretty(&rows)?);
+    Ok(0)
+}
+
+fn cmd_recover(a: &Args) -> Result<i32> {
+    a.only(&["--id"], &["--acknowledge"])?;
+    person::require_person("recover")?;
+    if !a.has("--acknowledge") {
+        bail!("inspect the worktree first, then use --acknowledge; recovery does not retry or roll back the action");
+    }
+    let id = a.one("--id").context("--id is required")?;
+    let receipt = adage_exec::journal::acknowledge(&adage_home(), &id)?;
+    println!("{}", serde_json::to_string_pretty(&receipt)?);
+    Ok(0)
+}
+
 fn main() {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("hook") {
@@ -392,6 +439,8 @@ fn main() {
         "revoke" => cmd_revoke(&a),
         "status" => cmd_status(&a),
         "doctor" => cmd_doctor(&a),
+        "journal" => cmd_journal(&a),
+        "recover" => cmd_recover(&a),
         other => {
             eprintln!("adage-exec: unknown command {other:?}\n{USAGE}");
             std::process::exit(2);

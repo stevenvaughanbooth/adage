@@ -214,8 +214,7 @@ Track C milestone C5. A finish-line reflex (after editing files matching `regist
    - Linux as root: sandboxed commands run as nobody, who cannot write root's files through an
      overlay (overlayfs keeps the lower layer's owners), so the worktree is copied into scratch and
      given to nobody;
-   - macOS: an APFS `clonefile` copy of the worktree in scratch (compile-checked; running it needs
-     the macOS runner).
+   - macOS: an APFS `clonefile` copy of the worktree in scratch.
 3. **Verify the change set.** The upper layer (or the copy) is read against the worktree:
    whiteouts are deletions, an opaque directory deletes what the worktree held under it,
    redirects and metacopy (never enabled) refuse. A path under `.git` always refuses. A
@@ -223,10 +222,12 @@ Track C milestone C5. A finish-line reflex (after editing files matching `regist
    under `cache` globs are discarded; anything else refuses the whole application. A **verify**
    action may change no source; only cache paths are kept. Symlinks, FIFOs and devices are never
    applied; no file over 64 MiB, no set over 256 MiB.
-4. **Apply** each change beside its target (temporary file, fsync, rename), and only when every
-   path's state equals the state recorded before the run: an output the agent edited meanwhile
-   applies nothing (optimistic concurrency). Parent directories must be real directories inside
-   the repository.
+4. **Prepare and apply.** Take a brief lock for the canonical worktree, re-read the exact local
+   grant, and durably append a `prepared` receipt to the existing action journal. A failed
+   preparation applies nothing. Recheck the captured repository inputs and every output's prior
+   state before applying: a concurrent source or output edit refuses the application. Writes use
+   temporary files, file fsync and per-file rename; affected directories are synced before the
+   completed receipt. Parent directories must be real directories inside the repository.
 5. **Deliver.** Applied: the directive is replaced by a result from one fixed template, and the
    obligation is marked met, so no Stop request follows:
 
@@ -240,10 +241,47 @@ Track C milestone C5. A finish-line reflex (after editing files matching `regist
    Refused or failed: the plain E0 directive, plus "Adage did not run it: <reason>." (a reason
    never carries command output). At Stop an applied action withdraws the Stop request (the Stop
    hook cannot carry context); a refused one keeps the request and adds the reason.
-6. **Record** `outcome: applied | refused | failed` with the exit status in
-   `$ADAGE_HOME/exec/actions.spool` and in the event's `exec` spool record, never the output. Three
+6. **Complete the receipt** as `applied | refused | failed | unknown` in
+   `$ADAGE_HOME/exec/actions.spool` before claiming success. The event's `exec` spool is a derived
+   observation, not execution authority. Neither contains command output. Three
    refused change sets under one approval revoke it automatically (a conflict with the agent's own
    edit does not count); `adage review` lists it as `exec-revoked`.
+
+### Interrupted actions and recovery
+
+`actions.spool` is the one authoritative E2 journal. Prepared and completed records use its
+existing CRC framing, but execution reads them strictly: corrupt, truncated or semantically
+invalid transitions refuse execution rather than disappearing from history. New records are
+flushed with file and directory fsync. The bounded reader refuses a journal larger than 64 MiB;
+there is no automatic rotation that can discard unresolved operations.
+
+An interrupted prepared operation or a failed completion write is **unknown**. Some, all, or
+none of its planned changes may already be present. It blocks further E2 applications in that
+worktree, including other routes; the hooks show a recovery warning rather than instructing an
+automatic retry. A multi-file apply is atomic per file, not as a group. Adage never promises
+exactly-once execution or automatic rollback.
+
+Inspect with `adage-exec journal --repo <dir>`. After inspecting the diff and repairing anything
+necessary, a person can run `adage-exec recover --id <id> --acknowledge`. Acknowledgement retains
+the unknown outcome, permits later occurrences, and does not execute the interrupted operation.
+The command uses the same person/terminal guard as approval. A corrupt journal needs inspection
+and repair; acknowledgement does not silently discard damaged frames.
+
+Reservations bind repository, canonical worktree, session, route, execution grant, bound inputs,
+and occurrence. A repeated occurrence returns its receipt only while its captured inputs and
+outputs still match. Later occurrences remain eligible. Harness-native event identities are
+used when provided; the fallback session counters cannot guarantee deduplication of a native
+event redelivered as a newly counted batch.
+
+The apply lock coordinates Adage processes and is never held while the sandboxed script runs.
+It does not lock editors or other same-user programs. Input/output comparisons are optimistic:
+an external write can race the final comparison. Grant re-reading catches revocation before
+that check; concurrent revocation is not an atomic cancellation of an apply already underway.
+Repository input snapshots exclude declared outputs, cache paths and `.git`; they hash at most
+256 MiB across a traversal of at most 20,000 entries, refusing unreadable or oversized inputs.
+They do not prove hermeticity of toolchain files or external symlink targets. Capturing and
+rechecking these inputs adds I/O and CPU proportional to repository size; no large-repository
+hook-latency claim has been established by the small regression fixtures.
 
 `exec="e2"` on the wrapper steers the session by influence, as E1 does.
 
@@ -291,6 +329,8 @@ adage-exec run     --repo <dir> --argv '<json array>' [request flags] [--dry-run
 adage-exec approve --repo <dir> --argv '<json array>' [request flags] [--by <name>]
 adage-exec revoke  --repo <dir> [--track <t> --route <r>]
 adage-exec status  --repo <dir>
+adage-exec journal [--repo <dir>]
+adage-exec recover --id <operation-id> --acknowledge
 adage-exec doctor  [--json]
 ```
 
@@ -363,6 +403,12 @@ templates, the scripts and their hashes, the effect, the level, the output mode,
 the contracts accept. Changing anything else lapses the approval; `run` then reports
 `exec-changed` with the fields that differ, and re-approval is explicit.
 
+This key covers declared script references, not a complete transitive dependency closure.
+For example, `make gen` may load a Makefile and further scripts that are not individually
+hashed in the grant. The E2 input snapshot checks for changes during staging; changing those
+unbound dependencies before a run does not itself lapse the grant. Repository/toolchain reads
+remain subject to the sandbox, and output application remains subject to the declared outputs.
+
 The store is `$ADAGE_HOME/approvals.json`: plain JSON, mode 0600, written atomically (temporary
 file, fsync, rename). A symlink, an unparseable file or an unknown version refuses execution.
 Approvals never travel with a track or pack.
@@ -434,8 +480,22 @@ bound read-write, as nobody when invoked by root.
 
 **macOS: `sandbox-exec -p`** with a generated SBPL profile: `(deny default)`, process exec and
 fork, sysctl reads, reads of the repository, toolchain and CAS paths, writes to scratch and
-`/dev/null` only, `(deny network*)`. Compile-checked for macOS; running it needs the macOS CI
-runner.
+`/dev/null` only, `(deny network*)`. macOS 26's dyld startup also needs `file-read-data` on the
+**literal root directory node** (`/`); this is not a root-subtree grant. The selected developer
+toolchain is resolved using fixed `/usr/bin/xcode-select -p` with an empty environment. Its
+canonical developer directory and, for Xcode, that selected app's `Contents` are readable so
+Apple's command shims can load their tools and linked frameworks. A literal read of
+`/Library/Preferences/com.apple.dt.Xcode.plist` lets those tools check the existing license
+acceptance; Adage does not accept licenses or change the file. Other applications and preference
+files are not granted by these rules.
+
+`RLIMIT_NPROC` on macOS counts existing processes for the real UID. A native libproc census adds
+the configured headroom to that existing count, capped by the inherited hard limit; a failed
+census or inability to install the limit refuses the run. It is a per-user snapshot limit, not
+a private process quota. Enforcement profile version **2** binds these changes so old grants
+lapse rather than silently gaining the new toolchain permissions. The replay tests exercise
+actual shell startup, outside-file denial and a live loopback listener on macOS; Linux-only
+escape payload enumeration is not evidence of macOS containment.
 
 **Windows: unavailable** (E0 only; WSL counts as Linux). With no mechanism, E1 and above are
 unavailable and `doctor` says why.
@@ -494,7 +554,7 @@ canaries.
 ## The escape suite (L0-sec)
 
 `cargo test -p adage-exec --test escape -- --nocapture` runs each payload under every backend the
-machine offers (Landlock+seccomp; bubblewrap when installed) and prints one `contained:` line per
+machine offers among its Linux backends (Landlock+seccomp; bubblewrap when installed) and prints one `contained:` line per
 payload and backend; with no backend it asserts that nothing runs. Payloads: writing outside
 scratch (world-writable targets, the repository, `/tmp`); connecting to 127.0.0.1 (a live listener)
 and 1.1.1.1, and opening IPv6, netlink and Unix sockets; reading `~/.ssh` keys in a world-readable
@@ -503,6 +563,8 @@ bomb that also tries to `setsid` out of the group; 10 GB of output and a 100 MB 
 hardlink escapes from the repository and scratch; `/proc/self/root` and `/proc/1/root` paths; a
 repository whose `core.fsmonitor` and `diff.*.textconv` point at a script, run hardened and
 unhardened; and `RIPGREP_CONFIG_PATH` smuggling a `--pre` preprocessor. Required: 0 escapes.
+On macOS this enumerator takes its unavailable-backend branch; a green result is not execution
+coverage. `cargo test -p adage-exec --test replay` contains the bounded macOS smoke checks.
 
 ## Gate G4: staged runs (L0-sec)
 

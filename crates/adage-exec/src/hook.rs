@@ -9,10 +9,11 @@
 //! (`adage_eval::safety::check_data_block`), the directive adapts ("That lookup has been run; its
 //! result is below."), and the block is placed beside it.
 //!
-//! **On any failure** (no sandbox, a lapsed approval, a timeout, output that fails its type, an
-//! oracle violation, a panic, text past the harness's cap) the output is exactly the E0 output.
-//! With nothing approved, nothing is loaded beyond the approvals file, and the output equals
-//! `adage hook`'s byte for byte.
+//! E1 failures retain ordinary advice. E2 failures before application can return advice with a
+//! reason; uncertain application, journal corruption and extension panics instead deliver a
+//! recovery notice. Completed actions whose detail exceeds the harness cap deliver a bounded
+//! completion notice, never an instruction to repeat the action. With no grants or pending
+//! recovery, the output equals `adage hook`'s byte for byte.
 //!
 //! The spool record gains `exec`: per attempted route, `{ route, level, exit, bytes, sha256,
 //! truncated, duration_ms, auto }` when delivered, `{ route, level, withheld }` when not. The
@@ -92,6 +93,7 @@ impl Extension for Prefetch {
             d.extra = a.extra;
             d.met = a.met;
             d.stop = a.stop;
+            d.recovery = a.recovery;
         }
         if !records.is_empty() {
             d.spool = Some(Value::Array(records));
@@ -129,6 +131,7 @@ struct Acted {
     met: Vec<String>,
     stop: Option<Option<String>>,
     records: Vec<Value>,
+    recovery: Option<String>,
 }
 
 /// The directive for a route: the one about to be delivered, else rebuilt from the index entry
@@ -156,10 +159,27 @@ fn directive_for(ir: &adage_tracks::index::IndexedRoute, directives: &[Directive
 /// E2: run at most one approved action for the obligations this event armed or enforces.
 fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
     let mut out = Acted::default();
+    let home = &turn.paths.root;
+    // Recovery precedes grant selection: a revoked/missing grant must not hide an earlier
+    // possibly applied action and restore a directive asking the agent to repeat it.
+    match crate::journal::pending(home, turn.root) {
+        Ok(Some(receipt)) => {
+            out.recovery = Some(format!("Adage paused actions in this worktree because operation {} needs recovery. Inspect its changes before acknowledging it; do not retry automatically.", receipt.id));
+            out.records.push(
+                json!({ "route": receipt.route, "level": "e2", "outcome": "unknown", "operation_id": receipt.id }),
+            );
+            return out;
+        }
+        Err(e) => {
+            out.recovery = Some(format!("Adage cannot verify the execution journal: {}. Earlier changes may be present. Inspect the worktree and repair the journal; do not retry automatically.", crate::reason_text(&e.to_string())));
+            out.records.push(json!({ "route": "*", "level": "e2", "outcome": "unknown", "withheld": "journal" }));
+            return out;
+        }
+        Ok(None) => {}
+    }
     if turn.arm == Some(adage_runtime::Arm::Control) {
         return out;
     }
-    let home = &turn.paths.root;
     let Ok(store) = Store::load(&approvals::path(home)) else { return out };
     let approved = |s: &adage_hook::Stimulus| -> Option<(&Approval, &adage_tracks::index::IndexedRoute)> {
         store.approvals.iter().filter(|a| a.key.repo == turn.repo_key && a.key.level == Level::E2).find_map(|a| {
@@ -227,6 +247,20 @@ fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
         home: adage_store::home_dir(),
         canaries: Vec::new(),
     };
+    // Prefer native tool-call identity: a redelivery must not become a fresh apply just
+    // because decide() incremented a batch counter. Counters remain a best-effort fallback
+    // for Stop and older payloads without IDs; those cannot promise redelivery deduplication.
+    let state = match adage_store::state::try_read::<adage_runtime::SessionState>(&turn.paths.state(turn.session)) {
+        Ok(Some(s)) => s,
+        _ => {
+            not_run(&mut out, "state", "the obligation occurrence cannot be read safely");
+            return out;
+        }
+    };
+    let occurrence = match &turn.event_identity {
+        Some(id) => format!("native:{id}:{}", s.route),
+        None => format!("counter:{}:{}:{}:{}", turn.event, state.prompts, state.batches, s.route),
+    };
     let staged = match crate::stage::stage(&req, &ctx) {
         Ok(x) => x,
         Err(r) => {
@@ -234,16 +268,52 @@ fn act(turn: &Turn<'_>, directives: &[Directive]) -> Acted {
             return out;
         }
     };
-    let outcome = crate::stage::finish(&staged);
-    let revoked = crate::stage::record(home, turn.repo_key, &label, &a.approved_on, turn.session, &outcome);
+    let completed = crate::journal::finish(
+        &staged,
+        &crate::journal::Commit {
+            home,
+            repo: turn.repo_key,
+            session: turn.session,
+            occurrence: &occurrence,
+            approved_on: &a.approved_on,
+            request: &req,
+        },
+    );
+    let outcome = completed.outcome;
+    let revoked = completed.revoked;
     let mut rec = json!({
         "route": label, "level": "e2", "outcome": outcome.name(), "exit": staged.exit,
         "duration_ms": staged.duration_ms,
+        "operation_id": completed.id, "replayed_receipt": completed.replayed,
     });
     if revoked {
         rec["revoked"] = json!(true);
     }
     match &outcome {
+        crate::stage::Outcome::Unknown { reason } => {
+            // Do not fall back to an instruction to repeat a potentially applied action.
+            let text = format!("Adage cannot confirm this action's completion: {}. Do not retry it automatically; inspect the worktree and ask the person to acknowledge recovery.", crate::reason_text(reason));
+            out.recovery = Some(text.clone());
+            if s.at_stop {
+                out.stop = Some(Some(text));
+            } else {
+                let block = render::wrap_origin(
+                    &dir.track,
+                    &dir.version,
+                    &dir.route,
+                    &dir.kind,
+                    dir.strength,
+                    &text,
+                    dir.origin.as_ref(),
+                );
+                if directives.iter().any(|d| d.route == dir.route) {
+                    out.replace.insert(dir.route.clone(), block);
+                } else {
+                    out.extra.push(block);
+                }
+            }
+            out.records.push(rec);
+        }
         crate::stage::Outcome::Applied { changed, .. } => {
             out.records.push(rec);
             out.met.push(s.route.clone());

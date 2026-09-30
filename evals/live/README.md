@@ -30,7 +30,7 @@ agent runs`.
 | Phase | What happens |
 | --- | --- |
 | `train` | Round 1 only. Baseline agents work the training tasks with no Adage hooks installed |
-| `learn` | `adage condition` reads the training transcripts. In later rounds it also reads earlier rounds' eval sessions (see below), with each route kind excluded from the sessions it steered |
+| `learn` | Outcome-assisted `adage condition` reads training transcripts **and hidden scorer pass/fail labels via `--outcomes`**. This is not the shipped default bootstrap protocol. In later rounds it also reads earlier rounds' eval sessions (see below), with each route kind excluded from the sessions it steered |
 | `eval` | Agents work the held-out tasks: every (task, repeat) runs one session per arm, in a seeded random order: `adage` (hooks installed, directives delivered), `control` (hooks installed, directives logged but not delivered: the control) and optionally `off` (no hooks: measures hook overhead), `instincts` (hooks installed, directives delivered, from a day-0 index of instincts only: `adage condition --instincts-only` over a fresh sandbox, in `private/instincts-home`) and `e1` (the learned index plus E1 prefetch through `adage-exec`, from `private/e1-home`, which a person prepares: a copy of `adage-home` with `adage review delegate ... --level e1` approvals; the runner refuses the arm without it) and `agents-md` (the control's hooks, directives withheld, plus a context file the sandbox command commits as `CLAUDE.md` when it gets `{arm}` = `agents-md`: an up-front context file against just-in-time reflexes; see evals/repobench) |
 | `report` | `summary.json` and a results page (below): per-arm aggregates, task-level statistics between `adage` and `control` (see [Statistics](#statistics)) |
 
@@ -219,7 +219,8 @@ The config is JSON. `configs/acme-billing.json` is the demo.
 | `model`, `max_turns`, `concurrency` | Passed to `claude -p`, and the number of sessions run in parallel |
 | `learn_args` | Extra `adage condition` arguments (`["--demo"]` for small runs) |
 | `allowed_tools`, `disallowed_tools` | `claude --allowedTools/--disallowedTools` |
-| `budget_usd` | Spend cap. No new session starts once the reported cost reaches it |
+| `budget_usd` | Total admission budget: known spend plus every outstanding full-session reservation must fit before another session is admitted |
+| `session_budget_usd` | Positive per-session reservation and Claude `--max-budget-usd` value (default `$1`); cannot exceed `budget_usd` |
 | `classify` | Substrings of a Bash command that make it a `lookup`, `regen`, `verify` or `bash_edit` call; `check_flags` turn a regen command into a verify (`--verify`). Defaults describe acme-billing |
 | `obligation.paths` | The glob whose edits the finish-line obligation covers (acme: `schema/*.json`) |
 | `labels` | Legend text for the results page (`lookup`, `regen`) |
@@ -315,7 +316,20 @@ agent may try `npx` for a TypeScript tool, which the sandbox cannot stop from us
 - Each session runs in a fresh sandbox and an empty home of its own (see [Isolation](#isolation)),
   with the harness's own permissions and `--setting-sources project,local`. Your user settings,
   memory and MCP servers are not loaded.
-- The spend cap is checked before every session.
+- Before each session, the runner atomically reserves its full `session_budget_usd`. Concurrent
+  workers wait for outstanding reservations to settle. Each Claude invocation receives
+  `--max-budget-usd`; leave headroom below the real authorized ceiling because the harness may
+  report a cost above its requested cap.
+- `state.json.accounting` records every attempt, including reruns with the same ID. Missing,
+  invalid, or interrupted terminal cost is **unknown**, never zero. Unknown accounting or a cap
+  overrun stops further dispatch, persists across restarts, and returns exit code 2. Already
+  dispatched workers can finish within their existing reservations; no new worker may start.
+- A failed accounting write blocks further dispatch and wakes waiting workers. A process lock
+  refuses two simultaneous runner invocations against the same experiment root. Separate roots
+  have separate ledgers; the operator must allocate their budgets from the shared authorization.
+- Review actual terminal result records before reconciling an unknown attempt. Do not delete the
+  ledger, clear the stop reason, or treat a missing cost as free to resume. Legacy zero-cost records
+  need reconciliation because the old runner also wrote zero when the cost was missing.
 
 ## Output, and turning a run into an offline dataset
 
@@ -350,7 +364,7 @@ every earlier round's eval sessions, test on that round's control arm.
 ## Tests
 
 ```bash
-python3 -m unittest evals/live/test_runner.py
+python3 -m unittest evals/live/test_runner.py evals/live/test_budget.py
 ```
 
 This smoke-tests the dry run and unit-tests the analysis. It runs no agent and spends nothing. It

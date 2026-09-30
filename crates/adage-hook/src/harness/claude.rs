@@ -57,6 +57,20 @@ impl Adapter for Claude {
         "claude"
     }
 
+    fn event_identity(&self, event: &str, p: &Value) -> Option<String> {
+        let ids = match event {
+            "PostToolBatch" => p
+                .get("tool_calls")?
+                .as_array()?
+                .iter()
+                .map(|call| call.get("tool_use_id")?.as_str())
+                .collect::<Option<Vec<_>>>()?,
+            "PostToolUse" | "PostToolUseFailure" => vec![p.get("tool_use_id")?.as_str()?],
+            _ => return None,
+        };
+        super::tool_event_identity(self.name(), event, ids)
+    }
+
     fn translate(&self, event: &str, p: &Value, _cwd: &str) -> Option<Event> {
         Some(match event {
             "SessionStart" => Event::SessionStart,

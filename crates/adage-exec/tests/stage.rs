@@ -291,22 +291,41 @@ fn three_refusals_revoke_the_approval() {
     );
     let store = approved(&req);
     store.save(&adage_exec::approvals::path(home.path())).unwrap();
-    let refused = Outcome::Refused { stage: "verify".into(), reason: "outside".into(), counts: true };
-    let conflict = Outcome::Refused { stage: "conflict".into(), reason: "edited".into(), counts: false };
-    let route = "fixture/g4/regen";
     let on = "2026-09-28T00:00:00Z";
-    assert!(!stage::record(home.path(), "fixture", route, on, "s", &conflict));
-    assert!(!stage::record(home.path(), "fixture", route, on, "s", &refused));
-    assert!(!stage::record(home.path(), "fixture", route, on, "s", &refused));
-    assert_eq!(Store::load(&adage_exec::approvals::path(home.path())).unwrap().approvals.len(), 1);
-    assert!(stage::record(home.path(), "fixture", route, on, "s", &refused), "the third counted refusal revokes");
+    for n in 0..3 {
+        let staged = stage::Staged {
+            repo: req.repo_root.canonicalize().unwrap(),
+            action: req.action.clone().unwrap(),
+            exit: Some(0),
+            signal: None,
+            duration_ms: 1,
+            pre: stage::PreState::default(),
+            inputs: BTreeMap::new(),
+            fields: None,
+            backend: StageBackend::Copy,
+            stderr: vec![],
+            plan: stage::Plan { refused: vec![("src/a".into(), "outside")], ..Default::default() },
+        };
+        let done = adage_exec::journal::finish(
+            &staged,
+            &adage_exec::journal::Commit {
+                home: home.path(),
+                repo: "fixture",
+                session: "s",
+                occurrence: &n.to_string(),
+                approved_on: on,
+                request: &req,
+            },
+        );
+        assert_eq!(done.revoked, n == 2, "third counted refusal revokes: {:?}", done.outcome);
+    }
     let s = Store::load(&adage_exec::approvals::path(home.path())).unwrap();
     assert!(s.approvals.is_empty());
     assert_eq!(s.revoked.len(), 1);
     assert!(s.revoked[0].cause.contains("refused 3 times"));
     let recs: Vec<serde_json::Value> = adage_store::spool::read_all(&stage::spool_path(home.path())).unwrap();
-    assert_eq!(recs.len(), 4);
-    assert_eq!(recs[3]["outcome"]["outcome"], "refused");
+    assert_eq!(recs.len(), 6, "each refusal has a prepare and a completion");
+    assert_eq!(recs[5]["outcome"]["outcome"], "refused");
     assert!(!serde_json::to_string(&recs).unwrap().contains("echo"), "never the command's text or output");
 }
 

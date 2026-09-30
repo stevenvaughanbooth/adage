@@ -5,6 +5,33 @@ be learned, and a background learner does it, usually within seconds. There is n
 to remember, and no daemon. This page is the contract for everything that watches it happen
 (`adage ui`, `adage watch`, scripts): the settings, the files, and the two streams to follow.
 The design is in [Architecture §4.7.2](Adage%20—%20Architecture.md#472-live-learning).
+For current product behavior and execution boundaries, see [How Adage works](how-it-works.md).
+
+## First run and existing history
+
+Run `adage init` at a terminal inside the repository. The wizard shows hook registrations before
+writing them, then conditions that repository from its existing history. It uses the same scoped
+learner as the hooks (`condition --auto --repo-root <root>`), including linked checkouts, and binds
+applicable instincts from repository files even when there are no traces. Skipping a hook install
+does not enable that harness's automatic history discovery. `init --print` is a read-only preview.
+
+Manual `adage sense` and `adage condition` use the configured Claude Code history, Codex rollouts
+and OpenCode exports. Without source overrides, Claude history is under `CLAUDE_CONFIG_DIR/projects`
+(else `~/.claude/projects`); Codex history is under `CODEX_HOME/sessions` (else `~/.codex/sessions`).
+Manual discovery of Codex history does not require hooks to be installed; `learn.codex_sessions = ""`
+disables it. A configured directory replaces that harness's default location. OpenCode exports
+require `learn.opencode_exports` or an explicit `--transcripts` file.
+
+Explicit `--transcripts`, `--claude-projects` and `--codex-sessions` replace all default sources;
+an empty explicit source is never silently replaced by other history. Plain `condition` learns
+all discovered repositories. `--cwd-prefix <path>` filters by recorded path components (so
+`/work/app` does not include `/work/app-other`). With no default history in a repository, it binds
+available file-based instincts; explicit empty sources still report an error. `--no-instincts`
+and `instincts.enabled = false` suppress the no-history fallback.
+
+Conditioning reads traces locally and uses their recorded evidence; it needs no hidden test
+outcome file and runs none of their commands. Few traces may support no learned reflex yet.
+History discovery, a learned route, and hook delivery are distinct from measured developer savings.
 
 ## Settings: `$ADAGE_HOME/config.toml`
 
@@ -16,7 +43,7 @@ has a default, so the file is optional.
 auto = true               # learn automatically when agent sessions stop or end
 min_interval_secs = 120   # at most one automatic learn per repository per interval (0–86400)
 thresholds = "default"    # evidence bars: "default", or "demo" (lower); `adage condition --demo` still overrides
-claude_projects = ""      # Claude Code history ("" = ~/.claude/projects)
+claude_projects = ""      # Claude Code history ("" = CLAUDE_CONFIG_DIR/projects, else ~/.claude/projects)
 codex_sessions = "auto"   # Codex rollouts: "auto" ($CODEX_HOME/sessions once Codex hooks are registered), a directory, or "" (none)
 opencode_exports = ""     # a directory of `opencode export` files ("" = none)
 parse_cache = true        # keep parsed transcripts in cache/sessions (owner-only; faster re-learning)
@@ -99,10 +126,9 @@ other key only tunes Adage or turns something down, and can be set from anywhere
 6. **Manual learning** (`adage condition`) uses the same thresholds (unless `--demo`), the same cache
    and the same lock, and writes the same `learn.log` lines with `"trigger":"manual"`.
 
-Automatic learning of a repository produces exactly the tracks a full `adage condition` over the same
-sources produces for it (tested), so the two never fight. Set `learn.codex_sessions` if you also
-learn Codex history by hand, or evidence from it will come and go between manual and automatic
-runs.
+Automatic and manual learning use the same learner and source settings. Automatic Codex discovery
+in `auto` mode additionally requires registered Codex hooks or a Codex hook request. Register its
+hooks or configure its history directory explicitly to keep its past traces in both paths.
 
 ## Files
 

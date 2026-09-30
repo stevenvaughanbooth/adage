@@ -22,6 +22,7 @@ pub mod classify;
 pub mod env;
 pub mod git;
 pub mod hook;
+pub mod journal;
 pub mod limits;
 pub mod person;
 pub mod policy;

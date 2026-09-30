@@ -440,9 +440,7 @@ fn strength_name(a: adage_tracks::Strength) -> &'static str {
 
 fn verb_effect(verb: &str) -> &'static str {
     match verb {
-        "approve" => {
-            "Approve: accept the reflex as it is (or apply its proposed change, or put a nascent one into service)."
-        }
+        "approve" => "Approve: accept this learning evidence or proposed change. This does not grant script execution.",
         "extinguish" => {
             "Extinguish: take it out of service; `adage condition` keeps it out unless it strengthens materially."
         }
@@ -558,6 +556,14 @@ pub fn route_detail(r: &RouteRow, t: &Theme) -> Vec<Line<'static>> {
             Span::styled(r.id.clone(), t.bold()),
             Span::styled(format!("  {} (ceiling {})", strength_name(r.strength), r.ceiling), t.strength(r.strength)),
         ]),
+        kv("mode", format!("{} · {}", r.execution.mode, r.execution.reason), t),
+        kv("when", r.trigger.clone(), t),
+        kv("do", r.step.clone(), t),
+    ];
+    if let Some(result) = &r.execution.last_result {
+        lines.push(kv("last run", result.clone(), t));
+    }
+    lines.extend([
         kv("track", format!("{} @ {}{}", r.track, r.version, if r.imported { " (imported)" } else { "" }), t),
         kv("repo", r.repo.clone(), t),
         kv(
@@ -571,8 +577,6 @@ pub fn route_detail(r: &RouteRow, t: &Theme) -> Vec<Line<'static>> {
             ),
             t,
         ),
-        kv("when", r.trigger.clone(), t),
-        kv("do", r.step.clone(), t),
         kv(
             "evidence",
             format!("{}/{} traces · rate {:.2} · Wilson lb {:.2}", r.support, r.opportunities, r.rate, r.lower_bound),
@@ -584,7 +588,7 @@ pub fn route_detail(r: &RouteRow, t: &Theme) -> Vec<Line<'static>> {
             t,
         ),
         kv("control", format!("would-have {} · unaided {} · missed {}", l.would_have, l.unaided, l.not_reached), t),
-    ];
+    ]);
     for (k, d) in &r.reasons {
         lines.push(Line::from(vec![
             Span::styled(format!("{:<9}", "review"), t.dim()),
@@ -596,7 +600,7 @@ pub fn route_detail(r: &RouteRow, t: &Theme) -> Vec<Line<'static>> {
         routes::ACTIONS.iter().filter(|(_, v)| r.verbs.contains(v)).map(|(k, v)| format!("{k} {v}")).collect();
     lines.push(kv("keys", keys.join(" · "), t));
     lines.push(Line::raw(""));
-    lines.push(Line::from(Span::styled("directive, exactly as delivered (example values):", t.dim())));
+    lines.push(Line::from(Span::styled("advisory form (example values):", t.dim())));
     for d in r.directive.lines() {
         lines.push(Line::from(Span::styled(format!("  {d}"), t.strength(r.strength))));
     }
@@ -631,7 +635,10 @@ fn draw_routes(f: &mut Frame, area: Rect, s: &AppState, ctx: &Ctx) {
     let [list, detail] = if wide {
         Layout::horizontal([Constraint::Percentage(42), Constraint::Percentage(58)]).areas(area)
     } else {
-        Layout::vertical([Constraint::Percentage(45), Constraint::Percentage(55)]).areas(area)
+        let groups = rows.iter().enumerate().filter(|(i, r)| *i == 0 || rows[*i - 1].reference != r.reference).count();
+        let needed = (rows.len() + groups + 1).min(u16::MAX as usize) as u16;
+        let height = needed.min(area.height.saturating_mul(45) / 100).max(3);
+        Layout::vertical([Constraint::Length(height), Constraint::Min(0)]).areas(area)
     };
     // The list, grouped by track.
     let mut lines: Vec<Line> = Vec::new();

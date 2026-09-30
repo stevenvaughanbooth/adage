@@ -1,0 +1,137 @@
+{
+  "revision": "acdb0a4acd875be56821469aaeadeb29b8d6d493",
+  "binary_sha256": "d6eeaf02ebb4eae2ee4d9b509f01431800b02da2d6bbbb8a00de55ef09397070",
+  "training_sessions": 9,
+  "training_only": true,
+  "default_thresholds": true,
+  "inputs": [
+    {
+      "file": "sessions/train-CARE-297-r1.jsonl",
+      "session_id": "c0366072-beeb-4b79-8988-ec72fb47cc78",
+      "task": "CARE-297",
+      "sha256": "d09e0e715c0d46d0ee825bfe8950cd3229ef26c0bed96d0312ff95f45b801eec"
+    },
+    {
+      "file": "sessions/train-CARE-297-r2.jsonl",
+      "session_id": "d0051457-851a-4bc7-8ab1-1da7395f37fc",
+      "task": "CARE-297",
+      "sha256": "ab5825ca8acb99ab1c2f5ad03ea6e8fc2cf5c21c9fbd58a39610a77ace298cc2"
+    },
+    {
+      "file": "sessions/train-CARE-297-r3.jsonl",
+      "session_id": "c4ece547-0677-4b96-b2da-b26b91d3da3e",
+      "task": "CARE-297",
+      "sha256": "7750de334d95acf2c266c9f801155e72ab3a9da8dcb4cb153f1fa2732c632213"
+    },
+    {
+      "file": "sessions/train-CARE-672-r1.jsonl",
+      "session_id": "9f7cc9c7-df02-46e8-aecf-16d4da911be1",
+      "task": "CARE-672",
+      "sha256": "adc4b43854ad2e5ab7dd1e7c60ca130ee7ed24816d9ac39108c76974d7d6e388"
+    },
+    {
+      "file": "sessions/train-CARE-672-r2.jsonl",
+      "session_id": "bea1f973-a158-4a71-bbfb-72add5872200",
+      "task": "CARE-672",
+      "sha256": "7731900a3070df74bfcc2e6dc9090d7812412c8cfb1d2750e1bfcb3081f1c6f3"
+    },
+    {
+      "file": "sessions/train-CARE-672-r3.jsonl",
+      "session_id": "1a9ec811-72f0-4314-b237-cef357c1eee5",
+      "task": "CARE-672",
+      "sha256": "564f339cfa9d97e3686dcc04b7989ab125833a63cc0bf4190e8185db35d51db4"
+    },
+    {
+      "file": "sessions/train-CARE-971-r1.jsonl",
+      "session_id": "834676b0-c5f4-43c4-9c3c-47857201114b",
+      "task": "CARE-971",
+      "sha256": "40182f963139f078fc835ba35dd2a82d506c3e2c80d61d9a91816f84a2d32cfa"
+    },
+    {
+      "file": "sessions/train-CARE-971-r2.jsonl",
+      "session_id": "46628a16-23c9-461c-8307-c859a466536f",
+      "task": "CARE-971",
+      "sha256": "4cf023c3c79b2ccd894308dc3b05c4159d7c1e5ab7364705f9cd1582a31049a1"
+    },
+    {
+      "file": "sessions/train-CARE-971-r3.jsonl",
+      "session_id": "04429dd7-e76e-4fe0-a1aa-c8ac33ecfdd5",
+      "task": "CARE-971",
+      "sha256": "b6cf957bff1c58849e645425bf4996e925e602284791713b28b861b35464d530"
+    }
+  ],
+  "routes": [
+    {
+      "track": "wardline-clinic/learned",
+      "id": "card-157e34741c",
+      "step": "card",
+      "command": null,
+      "trigger": "intent"
+    },
+    {
+      "track": "wardline-clinic/learned",
+      "id": "card-b62470ea5c",
+      "step": "card",
+      "command": null,
+      "trigger": "intent"
+    },
+    {
+      "track": "wardline-clinic/learned",
+      "id": "lookup-work-item",
+      "step": "run",
+      "command": "python3 tools/case {item}",
+      "trigger": "prompt"
+    }
+  ],
+  "heldout_task": "CARE-279",
+  "grants_written": false,
+  "learned_index_sha256": "a411f5a8baac74d1603d29dfc6846d8c1912aa299c958d148c118605632f56bf",
+  "learned_files": [
+    {
+      "file": "tracks/wardline-clinic/.follow-weights.json",
+      "sha256": "997438d0fb4e84f9d82c1c5f936cbf4dffcbcf663204c23c67cf2a56367c5533"
+    },
+    {
+      "file": "tracks/wardline-clinic/learned/.why.json",
+      "sha256": "f8396962c647ac63a00b669e2ac97fd19bf6d7052316022a1ae9704b644799f5"
+    },
+    {
+      "file": "tracks/wardline-clinic/learned/routes/card-157e34741c.yaml",
+      "sha256": "a31f3703416b20c501249df2fbdf06afa93ac43f3713822e0e3b9c63b3555417"
+    },
+    {
+      "file": "tracks/wardline-clinic/learned/routes/card-b62470ea5c.yaml",
+      "sha256": "3843b207becccfbf991bda9ec64ec28f9a48820f61224598112d781a70d2860d"
+    },
+    {
+      "file": "tracks/wardline-clinic/learned/routes/lookup-work-item.yaml",
+      "sha256": "26af1242d8a36c14880bc9d6b6c0632c6742166ef0cc7ff500c9f088fb3ef981"
+    },
+    {
+      "file": "tracks/wardline-clinic/learned/track.toml",
+      "sha256": "b46f0c8d734665ad8a49ea4796beef66b93c59ba53c0d45a0fe1a932ec1a8252"
+    }
+  ],
+  "paid_calls": 0,
+  "cost_usd": 0,
+  "fixture_script_sha256": "e708b13727123cc08b34069851ab42b40e7086b0cb1332ef2d9f4ff528137c81",
+  "condition_argv": [
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/target/debug/adage",
+    "condition",
+    "--json",
+    "--repo",
+    "wardline-clinic",
+    "--outcomes",
+    "/private/var/folders/gb/6q6ync357_s47x28mv9h_vcc0000gn/T/adage-production-pilot-zbhsqu3f/private/outcomes.json",
+    "--transcripts",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/datasets/live-20260928-py-clinic-s12/sessions/train-CARE-297-r1.jsonl",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/datasets/live-20260928-py-clinic-s12/sessions/train-CARE-297-r2.jsonl",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/datasets/live-20260928-py-clinic-s12/sessions/train-CARE-297-r3.jsonl",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/datasets/live-20260928-py-clinic-s12/sessions/train-CARE-672-r1.jsonl",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/datasets/live-20260928-py-clinic-s12/sessions/train-CARE-672-r2.jsonl",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/datasets/live-20260928-py-clinic-s12/sessions/train-CARE-672-r3.jsonl",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/datasets/live-20260928-py-clinic-s12/sessions/train-CARE-971-r1.jsonl",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/datasets/live-20260928-py-clinic-s12/sessions/train-CARE-971-r2.jsonl",
+    "/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile/evals/datasets/live-20260928-py-clinic-s12/sessions/train-CARE-971-r3.jsonl"
+  ]
+}

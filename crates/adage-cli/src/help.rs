@@ -46,6 +46,8 @@ const GROUPS: &[(&str, &[Cmd])] = &[
                 usage: &[
                     "adage condition [--claude-projects <dir>] [--codex-sessions <dir>] [--transcripts <file>...]",
                     "                [--cwd-prefix <path>] [--repo <key>] [--outcomes <json>] [--demo] [--no-cache] [--no-instincts] [--json]",
+                    "                  defaults: configured Claude/Codex history and OpenCode exports; explicit sources replace defaults",
+                    "                  no default history: bind available instincts in the current repository",
                     "adage condition --instincts-only [--repo-path <dir>] [--repo <key>] [--json]",
                     "                  instincts for one repository from its files alone, before any trace (day 0)",
                     "adage condition --auto --repo-root <path>",

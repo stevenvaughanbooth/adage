@@ -544,6 +544,7 @@ fn route_row(id: &str, strength: Strength, verbs: Vec<&'static str>, reasons: Ve
         authored: false,
         trigger: "a prompt names a ticket".into(),
         step: "run `bin/fetch-incident {item}`".into(),
+        executable: true,
         support: 24,
         opportunities: 25,
         rate: 0.96,
@@ -552,6 +553,7 @@ fn route_row(id: &str, strength: Strength, verbs: Vec<&'static str>, reasons: Ve
         directive: "<adage-reflex track=\"harbor-dispatch/incidents@0.3.0\" route=\"lookup-incident\" strength=\"fire\">\nIncidents are looked up with: `bin/fetch-incident INC-12`\n</adage-reflex>".into(),
         verbs,
         reasons,
+        execution: super::routes::ExecutionView::default(),
     }
 }
 
@@ -598,7 +600,25 @@ fn app_frames_routes_health_settings() {
     // The routes tab stacks list and detail on a narrow screen.
     s.tab = Tab::Routes;
     let (narrow, _) = render(70, 30, |f| app::draw(f, &s, &c));
-    assert!(narrow.contains("lookup-incident") && narrow.contains("Wilson lb 0.80"), "{narrow}");
+    assert!(narrow.contains("lookup-incident") && narrow.contains("Suggest · No execution grant"), "{narrow}");
+    snap("app-routes-narrow", &narrow);
+}
+
+#[test]
+fn reflex_detail_prioritizes_execution_and_unknown_outcome() {
+    let d = tempfile::tempdir().unwrap();
+    let c = ctx(Paths::at(d.path()), false);
+    let mut s = app_state();
+    s.tab = Tab::Routes;
+    let row = &mut s.routes.as_mut().unwrap().as_mut().unwrap().rows[0];
+    row.execution.mode = "Needs recovery".into();
+    row.execution.reason = "Inspect the worktree before acknowledging".into();
+    row.execution.last_result = Some("Unknown · completion could not be recorded".into());
+    for width in [70, 110] {
+        let (text, _) = render(width, 30, |f| app::draw(f, &s, &c));
+        assert!(text.contains("Needs recovery") && text.contains("Unknown"), "{text}");
+        assert!(!text.contains("Completed"), "unknown must never render as success");
+    }
 }
 
 #[test]

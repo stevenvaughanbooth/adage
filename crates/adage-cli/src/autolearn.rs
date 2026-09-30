@@ -108,10 +108,7 @@ fn codex_sessions(cfg: &Config, req: Option<&Request>, root: &Path) -> Option<Pa
 fn sources(cfg: &Config, q: &Queue, req: Option<&Request>, roots: &[PathBuf]) -> Vec<PathBuf> {
     use adage_learn::scope;
     let mut set: BTreeSet<PathBuf> = BTreeSet::new();
-    let claude = cfg
-        .learn_claude_projects
-        .clone()
-        .or_else(|| adage_store::home_dir().map(|h| h.join(".claude").join("projects")));
+    let claude = crate::history::claude_projects(cfg);
     if let Some(d) = claude {
         set.extend(scope::claude_transcripts(&d, roots));
     }
@@ -119,14 +116,7 @@ fn sources(cfg: &Config, q: &Queue, req: Option<&Request>, roots: &[PathBuf]) ->
         set.extend(scope::recorded_inside(adage_learn::codex::discover(&d).0, roots));
     }
     if let Some(d) = &cfg.learn_opencode_exports {
-        let mut files: Vec<PathBuf> = std::fs::read_dir(d)
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "json"))
-            .collect();
-        files.sort();
+        let files = crate::history::opencode_exports(d);
         set.extend(scope::recorded_inside(files, roots));
     }
     // Additive: every transcript ever found for this repository (in the configured sources or

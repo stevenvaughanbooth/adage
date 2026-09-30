@@ -19,6 +19,17 @@ const HEADER: usize = 12;
 pub const MAX_RECORD: usize = 1 << 20;
 
 pub fn append<T: Serialize>(path: &Path, record: &T) -> io::Result<()> {
+    append_impl(path, record, false)
+}
+
+/// Append and durably flush a complete record before returning. Callers that use a spool as
+/// an execution journal must serialize writers, use [`read_all_strict`], and treat any error as
+/// uncertain storage. The ordinary telemetry writer deliberately keeps its cheaper semantics.
+pub fn append_durable<T: Serialize>(path: &Path, record: &T) -> io::Result<()> {
+    append_impl(path, record, true)
+}
+
+fn append_impl<T: Serialize>(path: &Path, record: &T, durable: bool) -> io::Result<()> {
     let payload = serde_json::to_vec(record).map_err(io::Error::other)?;
     if payload.len() > MAX_RECORD {
         return Err(io::Error::other("spool record too large"));
@@ -32,7 +43,41 @@ pub fn append<T: Serialize>(path: &Path, record: &T) -> io::Result<()> {
         std::fs::create_dir_all(dir)?;
     }
     let mut f = OpenOptions::new().create(true).append(true).open(path)?;
-    f.write_all(&buf)
+    f.write_all(&buf)?;
+    if durable {
+        f.sync_all()?;
+        // Persist the directory entry as well, including any freshly created ancestors.
+        #[cfg(unix)]
+        for dir in path.ancestors().skip(1).filter(|p| !p.as_os_str().is_empty()) {
+            std::fs::File::open(dir)?.sync_all()?;
+        }
+    }
+    Ok(())
+}
+
+/// Read every frame without resynchronizing or discarding corrupt, truncated, or invalid JSON
+/// records. Execution authority must never silently lose a prepared or completed operation.
+pub fn read_all_strict<T: DeserializeOwned>(path: &Path) -> io::Result<Vec<T>> {
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e),
+    };
+    let mut out = Vec::new();
+    let mut at = 0;
+    while at < bytes.len() {
+        if !valid_frame_at(&bytes, at) {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, format!("invalid spool frame at byte {at}")));
+        }
+        let len = u32::from_le_bytes(bytes[at + 4..at + 8].try_into().unwrap()) as usize;
+        let end = at + HEADER + len;
+        out.push(
+            serde_json::from_slice(&bytes[at + HEADER..end])
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
+        );
+        at = end;
+    }
+    Ok(out)
 }
 
 /// The valid records from byte `offset` on, and the offset to continue from. A frame that runs past
@@ -118,6 +163,17 @@ pub fn read_all<T: DeserializeOwned>(path: &Path) -> io::Result<Vec<T>> {
 mod tests {
     use super::*;
     use serde_json::{json, Value};
+
+    #[test]
+    fn durable_records_are_strictly_read_and_torn_tails_refuse() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("new/nested/journal.spool");
+        append_durable(&p, &json!({ "state": "prepared" })).unwrap();
+        assert_eq!(read_all_strict::<Value>(&p).unwrap().len(), 1);
+        OpenOptions::new().append(true).open(&p).unwrap().write_all(&MAGIC).unwrap();
+        assert_eq!(read_all_strict::<Value>(&p).unwrap_err().kind(), io::ErrorKind::InvalidData);
+        assert_eq!(read_all::<Value>(&p).unwrap().len(), 1, "telemetry retains its tolerant reader");
+    }
 
     #[test]
     fn append_and_read_back_in_order() {

@@ -297,8 +297,9 @@ fn detail(w: &Wizard, t: &Theme) -> Vec<Line<'static>> {
             }
         },
         Kind::Learn => {
-            out.push(Line::raw("Run a first `adage condition`: it reads your agents' traces (Claude Code history"));
-            out.push(Line::raw("under ~/.claude/projects), mines reflexes, writes tracks, and compiles the index"));
+            out.push(Line::raw("Condition this repository from its existing Claude Code history, Codex history"));
+            out.push(Line::raw("when registered, and configured OpenCode exports. Bind instincts from its files,"));
+            out.push(Line::raw("learn reflexes, write tracks, and compile the index"));
             out.push(Line::raw("hooks read. It reads transcripts; it never runs anything they contain."));
         }
         Kind::AutoLearn => {
