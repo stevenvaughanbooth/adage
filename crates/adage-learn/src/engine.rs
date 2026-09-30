@@ -17,7 +17,11 @@
 //!    the Wilson rule over those counts (a lower bound for fire, a rate for prime, capped by the
 //!    ceiling), with the outcome-lift path as a second gate. Context routes keep the reflex's own
 //!    evidence. A trace that received a directive naming what a route directs is left out of its
-//!    count ([`exposed`]).
+//!    count ([`exposed`]). Routine execution candidates are separately recounted at every
+//!    compiled trigger, including multi-event contexts: a compatible successful continuation
+//!    must occur in a later model turn within eight events, before another mutation or task,
+//!    with ≥90% observed support and the existing session/task support gates.
+//!    Their certificate preserves executable knowledge without low-value advisory delivery.
 //!
 //! **Instincts as priors.** The repository's installed instinct routes are pseudo-evidence on the
 //! reflex at the same decision point directing the same command: 3 traces at 0.7 in the prime
@@ -538,9 +542,131 @@ fn one_task(ss: &[&Session], support: &BTreeSet<String>) -> Result<(), String> {
     Ok(())
 }
 
+/// Recount the executable prediction using the same generalized context matcher as the runtime.
+/// Compatible successful continuations may follow observations or failed checks, but not a new
+/// source mutation. Every eligible trigger counts, including abstentions and contrary outcomes.
+/// This is observational prediction evidence, not a grant or a claim of eliminated inference.
+fn execution_evidence(r: &Route, ss: &[&Session], cfg: &LearnConfig) -> Result<ExecutionEvidence, String> {
+    let Step::Run { command } = &r.step else {
+        return Err("execution candidate is not one command".into());
+    };
+    if !matches!(r.effect, Effect::Verify | Effect::Regenerate) {
+        return Err("execution candidate is not verification or regeneration".into());
+    }
+    let depth = match r.slots.as_slice() {
+        [] => None,
+        [Slot { name, source: SlotSource::EditSegment { depth, .. }, .. }] if name == "part" => Some(*depth as usize),
+        _ => return Err("execution candidate has unsupported input bindings".into()),
+    };
+    let net = adage_tracks::context::CtxNet::of([r]);
+    let symbols = adage_runtime::context::Symbols::new(&net);
+    let (mut opportunities, mut successful) = (0, 0);
+    let mut support = BTreeSet::new();
+    for s in ss {
+        let mut context = adage_runtime::CtxState::default();
+        for (i, st) in s.steps.iter().enumerate() {
+            let bound = match &r.trigger {
+                Trigger::AfterEdit { paths } => {
+                    let Some(path) = edited(st).filter(|p| glob_hit(paths, p)) else { continue };
+                    match depth {
+                        Some(d) => match path.split('/').filter(|x| !x.is_empty()).nth(d) {
+                            Some(part) => command.replace("{part}", part),
+                            None => continue,
+                        },
+                        None => command.clone(),
+                    }
+                }
+                Trigger::Context { .. } if r.slots.is_empty() => {
+                    let syms = if let Some(path) = edited(st) {
+                        symbols.edit(path)
+                    } else if st.call.failed {
+                        symbols.fail(&st.key, &st.call)
+                    } else {
+                        symbols.act(&st.key)
+                    };
+                    if !context.push(&net, &syms) || !net.walk(&context.recent()).contains(r.id.as_str()) {
+                        continue;
+                    }
+                    command.clone()
+                }
+                _ => return Err("execution candidate has unsupported predictive trigger".into()),
+            };
+            opportunities += 1;
+            let want = Want::new(bound);
+            // An eight-event horizon admits intervening inspection and environment-failure
+            // observations. Never cross another edit, setup, generation or publishing action.
+            let mut hit = false;
+            for next in s.steps.iter().skip(i + 1).take(8) {
+                if next.prompt != st.prompt || edited(next).is_some() {
+                    break;
+                }
+                if want.hit(next) {
+                    // A shell group's final status does not establish each member's outcome.
+                    // Keep the sequence context broad while requiring reliable action evidence.
+                    let raw = next
+                        .call
+                        .input
+                        .get("command")
+                        .or_else(|| next.call.input.get("cmd"))
+                        .and_then(serde_json::Value::as_str);
+                    hit = next.turn > st.turn
+                        && raw.is_some_and(adage_tracks::io::safe_command)
+                        && !adage_core::outcome::misfired(&next.call.output)
+                        && !adage_core::outcome::tests_failed(&next.call.output);
+                    break;
+                }
+                if matches!(
+                    next.norm.effect,
+                    Effect::Author | Effect::Environment | Effect::Regenerate | Effect::Publish
+                ) || (next.norm.effect == Effect::Verify && !next.call.failed)
+                {
+                    break;
+                }
+            }
+            if hit {
+                successful += 1;
+                support.insert(s.id.clone());
+            }
+        }
+    }
+    if support.len() < cfg.min_support as usize
+        || opportunities == 0
+        || successful as f64 / (opportunities as f64) < 0.9
+    {
+        return Err(format!("predictive execution needs {} unexposed sessions and 90% supported continuations: {} sessions, {successful}/{opportunities} opportunities", cfg.min_support, support.len()));
+    }
+    one_task(ss, &support)?;
+    Ok(ExecutionEvidence { opportunities, successful, sessions: support.len() as u32 })
+}
+
 /// Judge one compiled route (see the module documentation); `Err` drops it.
-fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], prior: bool) -> Result<Route, String> {
+fn judge(
+    c: &compile::Compiled,
+    ss: &[&Session],
+    cfg: &LearnConfig,
+    lookup: &[Route],
+    prior: bool,
+) -> Result<Route, String> {
+    let mut r = c.route.clone();
     let seen: Vec<&Session> = ss.iter().copied().filter(|s| !exposed(s, &r)).collect();
+    let execution = if c.execution_candidate {
+        match execution_evidence(&r, &seen, cfg) {
+            Ok(e) => Some(e),
+            Err(_) if c.advisory_eligible => None,
+            Err(reason) => return Err(reason),
+        }
+    } else {
+        None
+    };
+    // Predicting an approved action and estimating the value of advice are different questions.
+    // A reliable continuation beyond an avoidable failed attempt must not be discarded by the
+    // advisory counter's deliberate exclusion of recovery runs.
+    if let Some(evidence) = execution {
+        r.evidence.execution = Some(evidence);
+        r.evidence.models = models(&seen);
+        r.strength = Strength::Prime;
+        return Ok(r);
+    }
     match (&r.trigger, &r.step) {
         (Trigger::Prompt { .. }, Step::Run { command }) => {
             let id = |c: &str| adage_graph::select::command_identity(c);
@@ -604,8 +730,9 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
             return Ok(r);
         }
         (Trigger::Context { .. }, _) => {
-            // Nothing counts a context again on the traces (it is matched at hook time only): it
-            // keeps the reflex's own evidence.
+            // Advisory scoring keeps the graph posterior; execution is separately recounted
+            // through the actual compiled generalized context above.
+            r.evidence.execution = execution;
             r.evidence.models = models(&seen);
             return Ok(r);
         }
@@ -635,7 +762,7 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
     // of its rate in the traces that made no such edit (a handful of traces on either side proves
     // little). A regeneration owed by an edit is not run without one, and a check scoped to the
     // edited part names what was edited: both keep the plain contrast.
-    if by_edit && r.effect == Effect::Verify && r.slots.is_empty() {
+    if by_edit && r.effect == Effect::Verify && r.slots.is_empty() && execution.is_none() {
         let (k, m) = c.without;
         let upper = wilson_upper(k, m, CHECK_Z);
         let lower = 1.0 - wilson_upper(c.opportunities - n, c.opportunities, CHECK_Z);
@@ -678,6 +805,7 @@ fn judge(mut r: Route, ss: &[&Session], cfg: &LearnConfig, lookup: &[Route], pri
     };
     r.strength = strength;
     r.evidence = Evidence {
+        execution,
         opportunities: c.opportunities,
         support: n,
         days: days(&seen, &c.support),
@@ -823,7 +951,7 @@ pub fn run(ss: &[&Session], cfg: &LearnConfig, priors: &[Route], model: Option<&
     let mut routes = Vec::new();
     for c in out.routes {
         let prior = c.why.prior.is_some();
-        match judge(c.route.clone(), ss, cfg, &lookup, prior) {
+        match judge(&c, ss, cfg, &lookup, prior) {
             Ok(r) => {
                 report.contexts += usize::from(matches!(r.trigger, Trigger::Context { .. }));
                 routes.push(Judged { route: r, why: c.why });

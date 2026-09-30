@@ -630,6 +630,7 @@ fn runtime_route(r: &RouteV2, trigger: Trigger, slots: Vec<Slot>, step: Step, ef
         .collect();
     let e = r.evidence.clone().unwrap_or_default();
     let evidence = Evidence {
+        execution: e.execution,
         opportunities: e.opportunities,
         support: e.support,
         days: e.days,

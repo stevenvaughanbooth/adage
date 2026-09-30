@@ -108,6 +108,9 @@ pub struct Delivery {
     pub extra: Vec<String>,
     /// Obligations an applied action met: marked met in the session state.
     pub met: Vec<String>,
+    /// Contexts handled as CPU predictions, including abstentions: the agent was not instructed
+    /// to perform them, so retire advisory follow judgements without marking obligations met.
+    pub cpu_predictions: Vec<String>,
     /// The Stop request: `None` as decided; `Some(None)` withdrawn (an action met it);
     /// `Some(Some(reason))` with this reason instead.
     pub stop: Option<Option<String>>,
@@ -754,10 +757,11 @@ fn respond(
     }
 
     // Obligations an action met: no Stop request follows for them.
-    if !delivery.met.is_empty() {
+    if !delivery.met.is_empty() || !delivery.cpu_predictions.is_empty() {
         let met = delivery.met.clone();
         let withdrawn = matches!(delivery.stop, Some(None));
         let marked = state::update::<SessionState, _>(&state_path, |st| {
+            st.pending.retain(|p| !delivery.cpu_predictions.contains(&p.route));
             for o in st.obligations.iter_mut().filter(|o| met.contains(&o.route)) {
                 o.met = true;
                 if withdrawn && o.stop_requested {

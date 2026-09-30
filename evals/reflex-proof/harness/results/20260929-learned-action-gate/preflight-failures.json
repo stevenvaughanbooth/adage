@@ -1,0 +1,31 @@
+{
+  "failures": [
+    {
+      "receipt": {
+        "level": "e1",
+        "reason": "timed out after 1500 ms",
+        "route": "wardline-clinic-adb7827d7971/learned/lookup-work-item",
+        "withheld": "limits"
+      },
+      "session": "gate-offline-CARE-279-1790728954397035000"
+    },
+    {
+      "receipt": {
+        "level": "e1",
+        "reason": "timed out after 1500 ms",
+        "route": "wardline-clinic-adb7827d7971/learned/lookup-work-item",
+        "withheld": "limits"
+      },
+      "session": "gate-offline-CARE-279-1790728995890005000"
+    }
+  ],
+  "fix": {
+    "previous_manifest_sha256": "8f14241bfb71642fd65a29cfe87d806cd347210268137712a6c1f3e93d5169ca",
+    "reason": "Resolve Apple system Python launcher to selected interpreter; withhold failed complete output. No paid sessions yet. Human-approved command, scripts, fields, policy, repository and timeout unchanged."
+  },
+  "initial_binary_sha256": {
+    "adage": "90a32e8fe88ea1eb21af7707a1f440d5f981e86e2667d0f060a7cfbaec694af4",
+    "adage-exec": "0389590345c7bf20afa2920e13e223d6c75f722edc9c03e1a2a947aae88f056b"
+  },
+  "paid_calls": 0
+}

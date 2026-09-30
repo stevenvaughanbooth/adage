@@ -137,6 +137,11 @@ pub struct FieldSpec {
     /// `title`, `_` read as a space, any case).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub text: bool,
+    /// Preserve complete stdout as bounded, scanned text, including its line breaks. Unlike
+    /// a labelled field this is an explicit unstructured-output contract: it requires the raw
+    /// output policy and a person grant. Overflow withholds instead of returning a partial task.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stdout: bool,
 }
 
 /// The output contract: typed fields, or raw text.
@@ -253,6 +258,9 @@ pub struct ExecRequest {
     pub output: OutputSpec,
     #[serde(default)]
     pub scripts: Vec<ScriptRef>,
+    /// An exact, locally approved Python environment for staged E2 verification.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_python: Option<crate::project_python::ProjectPython>,
     pub profile: Profile,
     #[serde(default)]
     pub labels: Labels,
@@ -309,6 +317,11 @@ pub fn slots(argv: &[String]) -> Vec<String> {
 }
 
 impl OutputSpec {
+    /// Whole stdout carries unstructured content even when wrapped in a typed JSON field.
+    pub fn unstructured(&self) -> bool {
+        self.mode == OutputMode::Raw || self.fields.values().any(|f| f.stdout)
+    }
+
     /// Check the spec itself: safe names, bounded enums, strict patterns.
     pub fn validate(&self) -> Result<()> {
         if self.mode == OutputMode::Typed && self.fields.is_empty() {
@@ -320,6 +333,9 @@ impl OutputSpec {
         for (name, f) in &self.fields {
             if !safe_id(name) {
                 bail!("field name {name:?} is not a safe id");
+            }
+            if f.stdout && (f.ty != FieldType::Text || f.text || f.json.is_some() || f.optional) {
+                bail!("field {name}: stdout must be required text with no text or json selector");
             }
             if f.text && f.ty == FieldType::RepoPathList && f.json.is_some() {
                 bail!("field {name}: only a repo-path-list with no json path is read from text output");
@@ -414,7 +430,12 @@ impl ExecRequest {
     /// not part of it, so an approval covers every value the contracts accept.
     pub fn exec_digest(&self) -> String {
         if let Some(d) = &self.route_exec_digest {
-            return d.clone();
+            return match &self.project_python {
+                None => d.clone(),
+                Some(p) => crate::sha256_hex(
+                    crate::canonical_json(&serde_json::json!({ "pack": d, "project_python": p })).as_bytes(),
+                ),
+            };
         }
         let mut v = serde_json::json!({
             "argv": self.argv,
@@ -427,6 +448,9 @@ impl ExecRequest {
         if let Some(a) = &self.action {
             v["action"] = serde_json::json!(a);
         }
+        if let Some(p) = &self.project_python {
+            v["project_python"] = serde_json::json!(p);
+        }
         crate::sha256_hex(crate::canonical_json(&v).as_bytes())
     }
 }
@@ -436,12 +460,13 @@ fn adage_core_invisible(c: char) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     pub(crate) fn req(argv: &[&str]) -> ExecRequest {
         ExecRequest {
             repo_root: PathBuf::from("/nonexistent"),
+            project_python: None,
             argv: argv.iter().map(|s| s.to_string()).collect(),
             inputs: BTreeMap::new(),
             contracts: BTreeMap::new(),

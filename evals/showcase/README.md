@@ -3,7 +3,14 @@
 Prepared 2026-09-29; **run 2026-09-29/30, complete: see [RESULTS.md](RESULTS.md)** (and
 `results.json`; run records in `live/`). All 204 sessions ran, costing $47.64. Cost per task was cut by
 28.2% [−31.2, −25.0]. Passes were lower (51/80 vs 59/80), almost all in http-header: its card, learned
-from 4 training sessions that wrote no test, has no test step. This is the benchmark behind the website's numbers:
+from 4 training sessions that wrote no test, has no test step.
+
+Some later training sessions received Adage cards; they must not be counted as unsteered
+evidence for those commands. This advisory-card study does not establish automatic CPU action
+elimination. Its budget is separate from the [current launch evidence index](../reflex-proof/LAUNCH-STATUS.md)
+and that gate's evaluations. Preserve the quality regression alongside the cost result.
+
+This is the benchmark behind the website's numbers:
 what the shipped product does on recurring developer tasks when it learns each one from a user's own
 sessions. The pre-registration is [`prereg.json`](prereg.json); `analyze.py` and `render.py` read every
 parameter from it. The protocol is the GO validation's ([`evals/launch/go-validation`](../launch/go-validation/README.md)),

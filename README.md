@@ -13,6 +13,10 @@ agent; savings depend on the repository and the matched procedure.
 [How Adage works](docs/how-it-works.md) is the current behavior reference: what runs automatically,
 what requires approval, and what the evidence does and does not establish.
 
+Learning accumulates across sessions and is intended to generalize to later tasks. The graph
+engine already models related event sequences; connecting those predictions broadly to automatic
+actions remains an active launch gate. See [current capabilities and limits](docs/how-it-works.md#accumulated-prediction-and-current-execution-limits).
+
 Reflexes come from three places:
 
 - **Traces.** `adage condition` mines real traces in a repository.
@@ -35,6 +39,26 @@ delegate`), inside an OS sandbox: E1 prefetches read-only results, while E2 stag
 applies only permitted outputs. Selecting and running such an invocation needs no model request;
 the next model request may still consume its result.
 
+The learner also retains **predictive execution candidates**: commands supported by recurring
+edit or multi-event contexts across sessions, even when reminding the agent would add no value. They appear as needing execution approval
+in review and stay silent without a valid local grant. Accepting their evidence with ordinary
+`adage review approve` does not authorize execution. Their evidence travels in packs; your local
+execution permission does not.
+
+For a learned lookup to replace an agent action, it must deliver the information the agent
+would have fetched. Approved lookups can declare a bounded **complete stdout** contract: Adage
+preserves the full text or withholds it on overflow, instead of silently returning a partial
+task. Automatic argument binding also abstains when a prompt contains multiple distinct matching
+values. See [complete lookup results](docs/execution.md#e1-prefetch-adage-exec-hook)
+and the [action-elimination gate](evals/reflex-proof/harness/ACTION-GATE.md).
+
+That [gate now passes](evals/reflex-proof/harness/results/20260929-learned-action-gate/FINDINGS.md):
+on three held-out work-item triage tasks, automatic execution removed all three agent lookup
+actions and reduced observed model requests from six to three, with all answers correct.
+This is a small generated-repository mechanism proof, not a general coding speedup claim.
+The [launch evidence index](evals/reflex-proof/LAUNCH-STATUS.md) tracks real-repository validation,
+release gates, failed attempts and evaluation spending.
+
 ```text
   agent traces ──► adage condition ──► reflexes ──► index ──► hooks
   + instincts                        (tracks,               ├─ guidance / supported rewrites
@@ -50,8 +74,10 @@ In Claude Code:
 /plugin install adage@adage
 ```
 
-Then start a session. That is all. The plugin carries verified binaries for macOS (arm64, x64),
-Linux (x64, arm64) and Windows (x64), so nothing else is installed and nothing is downloaded. At
+Then start a session. The release plugin carries checksummed binaries for macOS (arm64, x64),
+Linux (x64, arm64) and Windows (x64), so nothing else is installed and nothing is downloaded.
+Native Windows plugin hook invocation remains unverified; automatic execution requires macOS
+or Linux (including WSL). At
 the first session in a repository you see one line, which the agent never sees:
 
 ```text
@@ -242,8 +268,9 @@ sessions per arm:
 | Turns | 27.3 | 7.3 | **7.9** |
 | Input tokens | 564k | 103k | **109k** |
 
-- **What it captures:** the compiled reflexes capture 100% of the skill's effect on pass rate and
-  98% of its cost saving.
+- **What it captures in this sample:** the compiled reflexes matched the skill's 12/12 pass count
+  and captured about 98% of its observed cost saving. Twelve sessions per arm do not establish
+  equivalence across tasks or repositories.
 - **Why compile at all:** the compiled steps are verified, delivered only when they apply, and
   work across Claude Code, Codex and OpenCode.
 - **The compiler catches stale instructions:** on a second skill, replay found that one of its
@@ -274,9 +301,12 @@ in Go, Rust, TypeScript and C), each task is new, so there is less to learn from
   pre-call rewrite and default-on cards, which the live validation re-checks.
 - **Stronger models gain less:** Sonnet-class agents already avoid most procedural waste.
 
-**What this means for you:** savings scale with how much of your work repeats. On recurring
-work, expect a noticeable cut; on one-off tasks, a few percent from instincts. The status card
-measures it on your own sessions, with a control, before it shows a dollar figure.
+**What this means for you:** these experiments identify recurring procedures as a promising target;
+they do not establish a savings percentage for a new repository. The shipped-product recurring
+task interval above includes zero. Direct CPU action elimination has its own
+[launch gate](evals/reflex-proof/LAUNCH-STATUS.md), and real-repository coding results for that gate
+remain pending. The status card measures your own sessions, with a control, before showing a
+dollar figure.
 
 ## Results on generated sandboxes
 
@@ -379,7 +409,7 @@ adage watch            # in a split pane: Adage's health, hook activity and cond
 adage map              # the map of your reflexes in the browser (read-only, loopback only)
 adage ui               # the full terminal app: reflexes, map, health, settings
 adage doctor           # check binary, data dir, index, tracks, model, hooks, kill switches
-adage review           # reflexes waiting for your decision, with evidence and the exact directive text
+adage review           # evidence, advice previews, and routine candidates awaiting execution approval
 ```
 
 Then, when you want to:

@@ -16,6 +16,9 @@ SS="$REPO/plugin/claude-code/scripts/session-start"
 W=$(cd "$(mktemp -d)" && pwd -P) # physical path: node reports resolved paths
 trap 'rm -rf "$W"' EXIT
 export ADAGE_HOME="$W/adage-home"
+export HOME="$W/home" XDG_CONFIG_HOME="$W/xdg" CODEX_HOME="$W/codex"
+mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$CODEX_HOME"
+unset CLAUDE_CONFIG_DIR ADAGE_TEST_NO_SPAWN || true
 unset ADAGE_DISABLE || true
 case "$(uname -s)-$(uname -m)" in
   Darwin-arm64) T=aarch64-apple-darwin ;; Darwin-x86_64) T=x86_64-apple-darwin ;;
@@ -139,6 +142,37 @@ if [ -x "$(dirname "$BIN")/adage-exec" ]; then ln -s "$(dirname "$BIN")/adage-ex
 runx "$W/xdata2" "$W/xpath:$BASE"
 check "exec on: exec plugin exits 0" [ "$code" = 0 ]
 check "exec on: exec plugin serves" sh -c "readlink '$W/xdata2/bin/adage-exec' | grep -q '/adage'"
+
+# A plugin-only installation must retain its learner after delegation is enabled. There is no
+# adage on this PATH: the executor must find its verified companion in plugin-data/bin.
+EXEC_BIN="$(dirname "$BIN")/adage-exec"
+[ -x "$EXEC_BIN" ] || { echo "build adage-exec beside $BIN to test bundled delegation"; exit 1; }
+export ADAGE_HOME="$W/bundled-adage-home"
+mkdir -p "$ADAGE_HOME/exec"; echo '{}' >"$ADAGE_HOME/exec/enabled"
+XR="$W/bundled-exec"; mkdir -p "$XR/dist/$T" "$XR/scripts"
+cp "$EXEC_BIN" "$XR/dist/$T/adage-exec"; cp "$BIN" "$XR/dist/$T/adage"
+cp "$REPO/plugin/claude-code-exec/scripts/quiet" "$XR/scripts/quiet"
+(cd "$XR/dist" && { shasum -a 256 "$T/adage" "$T/adage-exec" 2>/dev/null || sha256sum "$T/adage" "$T/adage-exec"; } >SHA256SUMS)
+cp -R "$REPO/evals/sandboxes/acme-billing" "$W/billing"; mkdir -p "$W/billing/.git"
+PAYLOAD="{\"session_id\":\"exec-bootstrap\",\"cwd\":\"$W/billing\",\"hook_event_name\":\"SessionStart\",\"source\":\"startup\"}"
+ADAGE_AUTO_LEARN=1 runx "$W/bundled-data" "$BASE"
+check "bundled exec: learner installed beside executor" [ -x "$W/bundled-data/bin/adage" ]
+check "bundled exec: learner verified and digest named" sh -c "readlink '$W/bundled-data/bin/adage' | grep -q '^adage-[0-9a-f]\{64\}\$'"
+n=0
+while ! grep -q '"kind":"condition"' "$ADAGE_HOME/learn.log" 2>/dev/null && [ "$n" -lt 120 ]; do
+  sleep 1; n=$((n + 1))
+done
+check "bundled exec: real detached learner bootstraps instincts" grep -q '"kind":"condition"' "$ADAGE_HOME/learn.log"
+check "bundled exec: real learner builds index" [ -s "$ADAGE_HOME/index.json" ]
+# A corrupt or absent learner must never be installed or quietly disable background learning.
+printf 'tampered' >>"$XR/dist/$T/adage"
+runx "$W/tampered-companion" "$BASE"
+check "bundled exec: tampered companion fails open with notice" grep -q 'bundled learner is missing or does not match its checksum' "$W/out"
+check "bundled exec: tampered companion leaves quiet hook" [ "$(target_of "$W/tampered-companion/bin/adage-exec")" = "$XR/scripts/quiet" ]
+check "bundled exec: tampered companion is not installed" [ ! -e "$W/tampered-companion/bin/adage" ]
+rm "$XR/dist/$T/adage"
+runx "$W/missing-companion" "$BASE"
+check "bundled exec: missing companion explained" grep -q 'bundled learner is missing or does not match its checksum' "$W/out"
 rm -f "$ADAGE_HOME/exec/enabled"
 
 [ "$fails" = 0 ] && echo "session-start ok" || { echo "$fails failure(s)"; exit 1; }

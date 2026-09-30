@@ -45,10 +45,11 @@ pub struct IndexedRoute {
 }
 
 impl IndexedRoute {
-    /// A route only `adage-exec` can carry out: it runs a vendored script (`cas/<hex>`), which
+    /// A routine action with no advisory value, or a route only `adage-exec` can carry out: it runs a vendored script (`cas/<hex>`), which
     /// has no path in the repository an agent could run, so E0 never directs it (Track C §1.7).
     pub fn exec_only(&self) -> bool {
-        self.exec.as_ref().is_some_and(|b| b.scripts.iter().any(|(p, _)| p.starts_with("cas/")))
+        self.route.evidence.execution.is_some()
+            || self.exec.as_ref().is_some_and(|b| b.scripts.iter().any(|(p, _)| p.starts_with("cas/")))
     }
 }
 

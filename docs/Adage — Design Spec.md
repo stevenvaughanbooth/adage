@@ -2,6 +2,11 @@
 
 **Status:** Design phase, draft 7 — decisions closed except O9; architecture review changes applied · **Date:** 2026-09-22 · **Supersedes:** *Interaction Graph Compiler — Design v2*
 
+This document preserves the original advisory design. For current product behavior, including
+learned execution candidates and approved direct CPU actions, use [how it works](how-it-works.md)
+and [execution](execution.md). The [launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md)
+records what has actually been verified and which claims remain unproven.
+
 > **Adage** — *Agentic DAG Engine.* **Agent traces become reflexes.** An adage is wisdom distilled
 > from long experience; a reflex is what your agents' traces distil into. Brand system in
 > [§17](#17-naming-and-brand).

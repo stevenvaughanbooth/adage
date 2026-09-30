@@ -85,6 +85,9 @@ impl World {
             .env_remove("OPENCODE")
             .env_remove("CODEX_SANDBOX")
             .env_remove("CODEX_SANDBOX_NETWORK_DISABLED")
+            .env_remove("VIRTUAL_ENV")
+            .env_remove("CONDA_PREFIX")
+            .env_remove("ADAGE_EMBED_MODEL")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -148,11 +151,115 @@ fn assert_instinct_text(t: &str) {
     assert!(!t.contains("\"decision\":\"block\"") && !t.contains("{\"continue\""), "never a stop request:\n{t}");
 }
 
+/// The launch entry point, with no sessions or hand-written tracks: six distinct shipped
+/// defaults bind, and their real hooks deliver useful, correctly scoped suggestions. None of
+/// these suggestions constitutes permission to execute a repository command.
+#[test]
+fn init_without_history_delivers_six_shipped_instincts() {
+    let python = World::new();
+    let node = World::new().with_pnpm();
+    for (w, expected) in [(&python, &["U1", "U3", "U4", "U5"][..]), (&node, &["U6", "N1"][..])] {
+        let out = w.ok(&["init", "--yes", "--repo", &w.repo()]);
+        assert!(out.contains("no traces") || out.contains("No traces"), "{out}");
+        let review: Value = serde_json::from_str(&w.ok(&["review", "--json"])).unwrap();
+        let rows = review["queue"].as_array().unwrap();
+        for instinct in expected {
+            assert!(rows.iter().any(|r| r["origin"]["instinct"] == *instinct), "{instinct}: {review:#}");
+        }
+    }
+    let cases = [
+        ("U1", "failure", "python3 -m unittest", "RuntimeError: ACME_ENV is not set", "make test"),
+        ("U3", "failure", "pytest", "RuntimeError: ACME_ENV is not set", "make test"),
+        ("U4", "edit", "acme/generated/models.py", "", "is generated"),
+        ("U5", "edit", "schema/invoice.json", "", "make gen"),
+        ("U6", "edit", "pnpm-lock.yaml", "", "maintained by pnpm"),
+        ("N1", "failure", "yarn test", "yarn: command not found", "pnpm test"),
+    ];
+    for (instinct, kind, input, error, expected) in cases {
+        let w = if ["U6", "N1"].contains(&instinct) { &node } else { &python };
+        let cwd = w.repo();
+        let session = format!("launch-{instinct}");
+        let mut p = json!({ "session_id": session, "cwd": cwd, "transcript_path": "/dev/null" });
+        let event = if kind == "failure" {
+            p["tool_name"] = json!("Bash");
+            p["tool_input"] = json!({ "command": input });
+            p["error"] = json!(error);
+            "PostToolUseFailure"
+        } else {
+            p["tool_calls"] = json!([{ "tool_name": "Edit", "tool_input": {
+                "file_path": format!("{cwd}/{input}"), "old_string": "a", "new_string": "b"
+            }, "tool_response": "ok" }]);
+            "PostToolBatch"
+        };
+        p["hook_event_name"] = json!(event);
+        let delivered = w.hook("claude", event, &p);
+        assert_instinct_text(&delivered);
+        assert!(delivered.contains(expected), "{instinct}: {delivered}");
+        assert!(!delivered.contains("updatedInput"), "an advisory is not a CPU rewrite");
+        let stop = w.hook(
+            "claude",
+            "Stop",
+            &json!({
+                "session_id": session, "cwd": cwd, "hook_event_name": "Stop", "stop_hook_active": false
+            }),
+        );
+        assert!(!stop.contains("\"decision\":\"block\""), "instincts never block completion: {stop}");
+    }
+    // An assertion failure has the same runner but not the declared failure signature.
+    let miss = python.hook(
+        "claude",
+        "PostToolUseFailure",
+        &json!({
+            "session_id": "launch-assertion", "cwd": python.repo(), "hook_event_name": "PostToolUseFailure",
+            "tool_name": "Bash", "tool_input": { "command": "python3 -m unittest" },
+            "error": "FAIL: test_total\nAssertionError: 1 != 2"
+        }),
+    );
+    assert!(miss.trim().is_empty(), "real test failures must not redirect the runner: {miss}");
+    assert!(!python.p("adage/approvals.json").exists(), "init must not approve arbitrary scripts");
+    assert!(!node.p("adage/approvals.json").exists(), "init must not approve arbitrary scripts");
+}
+
+/// U11's CPU rewrite through the same fresh-install path, followed by execution of the actual
+/// returned shell command. No model or transcript is involved; a real local virtualenv makes
+/// the assertion depend on using the corrected interpreter, not merely on returning JSON.
+#[cfg(unix)]
+#[test]
+fn init_environment_instinct_rewrites_and_runs_without_inference() {
+    let w = World::new();
+    std::fs::write(w.p("acme/pyproject.toml"), "[project]\nname = 'acme'\n[tool.pytest.ini_options]\n").unwrap();
+    let setup = Command::new("python3")
+        .args(["-m", "venv", "--without-pip"])
+        .arg(w.p("acme/.venv"))
+        .output()
+        .expect("the execution proof requires python3");
+    assert!(setup.status.success(), "{}", String::from_utf8_lossy(&setup.stderr));
+    w.ok(&["init", "--yes", "--repo", &w.repo()]);
+    let command =
+        "python -c 'import acme, sys; assert sys.prefix != sys.base_prefix; print(\"project environment used\")'";
+    let payload = json!({
+        "session_id": "launch-cpu", "cwd": w.repo(), "hook_event_name": "PreToolUse",
+        "tool_name": "Bash", "tool_input": { "command": command, "description": "Reproduce in the project" }
+    });
+    let delivered = w.hook("claude", "PreToolUse", &payload);
+    let v: Value = serde_json::from_str(&delivered).unwrap_or_else(|_| panic!("{delivered}"));
+    let updated = &v["hookSpecificOutput"]["updatedInput"];
+    let rewritten = updated["command"].as_str().expect("a CPU rewrite, not advice");
+    assert!(rewritten.contains(".venv/bin/python"), "{rewritten}");
+    assert_eq!(updated["description"], payload["tool_input"]["description"]);
+    let executed = Command::new("/bin/sh").args(["-c", rewritten]).current_dir(w.p("acme")).output().unwrap();
+    assert!(executed.status.success(), "{}", String::from_utf8_lossy(&executed.stderr));
+    assert_eq!(String::from_utf8_lossy(&executed.stdout).trim(), "project environment used");
+    // Human opt-out takes effect on the next hook, without another bind or a restart.
+    w.ok(&["delegate", "rewrites", "off"]);
+    assert!(w.hook("claude", "PreToolUse", &payload).trim().is_empty());
+}
+
 #[test]
 fn claude_code_instinct_golden() {
     let w = World::new();
     let out = w.bind();
-    assert!(out.contains(&format!("{TRACK}@0.1.0 · created")), "{out}");
+    assert!(out.lines().any(|line| line.contains(&format!("{TRACK}@0.1.0")) && line.ends_with("created")), "{out}");
     let cwd = w.repo();
     let with = |ev: &str, extra: Value| {
         let mut b =
@@ -306,7 +413,7 @@ fn doctor_review_and_pack_approval() {
     // `pnpm install`; `npm install` refuses nothing here, so it binds nothing.
     assert_eq!(nascent.len(), 4, "npm ci and yarn install → pnpm install: {q:#}");
     let text = w.ok(&["review"]);
-    assert!(text.contains(" · instinct U1 (from Makefile)"), "{text}");
+    assert!(text.contains("instinct U1 (from Makefile)"), "{text}");
     // Approving one environment step approves the pack's for this repository.
     let out = w.ok(&["review", "approve", TRACK, nascent[0]]);
     assert!(out.contains(&format!("approved    pack core's environment steps for {KEY}")), "{out}");
@@ -320,7 +427,7 @@ fn doctor_review_and_pack_approval() {
     assert_eq!(install, 4, "every environment step is delivered after pack approval");
     // An extinguished instinct stays extinguished across re-binds.
     let out = w.ok(&["review", "extinguish", TRACK, "finish-line-e7e809"]);
-    assert!(out.contains("→ extinguished"), "{out}");
+    assert!(out.lines().any(|line| line.contains("lifecycle") && line.ends_with("extinguished")), "{out}");
     w.bind();
     let idx = std::fs::read_to_string(w.p("adage/index.json")).unwrap();
     assert!(!idx.contains("finish-line-e7e809"), "an extinguish decision holds");

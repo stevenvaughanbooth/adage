@@ -1,0 +1,38 @@
+{
+  "scope": "Disposable standalone candidate profile only; production policy, repository files, and real grants unchanged. No paid calls.",
+  "positive_control": {
+    "readable": true,
+    "writable": true
+  },
+  "cases": [
+    {
+      "case": "unchanged-policy-control",
+      "exit": 1,
+      "stdout": "",
+      "stderr": "",
+      "wall_ms": 10.813791000000004,
+      "profile_sha256": "d0f2936933b3acfe4ec79a20f9db0abb6d3b90d699ab62297b42aa8619167eb9",
+      "child_unchanged": true,
+      "sibling_not_created": true
+    },
+    {
+      "case": "candidate-literal-nodes",
+      "exit": 0,
+      "stdout": "directory-readable; child-read-denied; child-write-denied\n",
+      "stderr": "",
+      "wall_ms": 21.250249999999998,
+      "profile_sha256": "ee83666d44ac1efedc5e146f62f5eb10ab9c80a94092eb73c8de7703ffab6a34",
+      "child_unchanged": true,
+      "sibling_not_created": true
+    }
+  ],
+  "passed": true,
+  "observable_rights": "/tmp and /private/tmp directory names may be listed; child file contents, existing child overwrites, and new sibling creation remain denied.",
+  "recorded_at": "2026-09-30T02:20:25.691423+00:00",
+  "status": "proposal_only_pending_human_permission",
+  "patch_sha256": "a795354ce22f674ca0d9bc61363e44099871a76eb9d61432c09e0441c066b861",
+  "production_applied": false,
+  "paid_calls": 0,
+  "limitation": "Disposable candidate-profile canary, not a successful production full-source rerun. The original Click suite failure remains unresolved.",
+  "permission_reason": "Automatic approval review rejected persistent exposure of temporary-directory names without explicit human authorization."
+}

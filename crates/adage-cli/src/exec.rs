@@ -626,6 +626,14 @@ pub fn review(verb: &str, args: &[String], paths: &Paths) -> Result<()> {
         Line::new().text(level.as_str().to_uppercase()).sep().quiet(format!("output {}", req.output.mode.as_str())),
     )?;
     o.kv("argv", Line::new().cmd(req.argv.join(" ")))?;
+    if let Some(p) = &req.project_python {
+        o.kv("Python", Line::new().text(format!("{} (Python {})", p.program, p.version)))?;
+        o.kv("runtime", Line::new().text(p.runtime_root.display().to_string()))?;
+        o.kv("dependencies", Line::new().text(format!("sha256 {}", p.environment_sha256)))?;
+        o.kv("runtime hash", Line::new().text(format!("sha256 {}", p.runtime_sha256)))?;
+        o.note("This exact interpreter and dependency tree are approved and run from verified private snapshots. Changes require a new grant; editable project paths are rebased into the staged checkout.")?;
+        o.note("Python uses -B and a fresh scratch bytecode-cache prefix, so cached bytecode cannot replace the approved source dependencies.")?;
+    }
     for (k, v) in &req.contracts {
         let what = if level == Level::E1 {
             format!("{{{k}}} from the prompt, must match {v}")

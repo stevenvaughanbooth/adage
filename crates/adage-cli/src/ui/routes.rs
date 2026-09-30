@@ -95,6 +95,8 @@ pub struct RouteRow {
 /// obligation, a procedure card's contents, and whether it was compiled from a skill.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct More {
+    /// Routine next-action evidence; this route has no ordinary advisory delivery.
+    pub execution: Option<adage_tracks::ExecutionEvidence>,
     /// Kept quiet by its uplift: agents already take its step unaided, so it is not delivered
     /// until a person approves it. Not an install step.
     pub quiet: bool,
@@ -269,6 +271,7 @@ pub fn more_of(r: &adage_tracks::Route, why: Option<&adage_tracks::why::Why>, sk
         _ => (None, None),
     };
     More {
+        execution: r.evidence.execution.clone(),
         quiet: r.state == adage_tracks::RouteState::Nascent && crate::evidence::quiet_line(r).is_some(),
         quiet_line: crate::evidence::quiet_line(r),
         uplift: r.evidence.uplift.as_ref().map(|u| u.line()),
@@ -346,6 +349,10 @@ pub fn load(paths: &Paths, root: Option<&Path>) -> Result<Routes> {
         if !row.executable {
             view.reason = "Learned guidance; the agent handles this step".into();
             continue;
+        }
+        if row.more.execution.is_some() {
+            view.mode = "Needs approval".into();
+            view.reason = "Routine CPU candidate; silent until execution is approved".into();
         }
         let store = match &store {
             Ok(s) => s,
@@ -452,6 +459,8 @@ pub fn load(paths: &Paths, root: Option<&Path>) -> Result<Routes> {
             "Needs review"
         } else if enabled {
             "Automatic"
+        } else if row.more.execution.is_some() {
+            "Paused"
         } else {
             "Suggest"
         }
@@ -642,5 +651,26 @@ mod tests {
         std::fs::create_dir_all(root.join(".adage")).unwrap();
         std::fs::write(root.join(".adage/disabled"), "").unwrap();
         assert_eq!(view().mode, "Disabled");
+
+        std::fs::remove_file(root.join(".adage/disabled")).unwrap();
+        let mut candidate = adage_tracks::io::read(&paths.tracks().join("project/workflow")).unwrap();
+        let route = &mut candidate.routes[0];
+        route.id = "routine-check".into();
+        route.trigger = Trigger::AfterEdit { paths: "tests/*.py".into() };
+        route.step = Step::Run { command: "python -m pytest".into() };
+        route.effect = adage_core::Effect::Verify;
+        route.evidence.execution =
+            Some(adage_tracks::ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
+        adage_tracks::io::write(&paths.tracks().join("project/workflow"), &candidate).unwrap();
+        Index::compile(&[candidate]).write_atomic(&paths.index()).unwrap();
+        let row = load(&paths, Some(&root)).unwrap().rows.remove(0);
+        assert_eq!(
+            row.execution.mode, "Needs approval",
+            "execution-only evidence cannot be shown as ordinary suggestions"
+        );
+        assert!(row.execution.reason.contains("silent"));
+        assert_eq!(row.more.execution.unwrap().successful, 5);
+        let counts = crate::status_card::reflexes(&Index::load(&paths.index()), &repo);
+        assert_eq!((counts.total(), counts.execution_only), (1, 1));
     }
 }

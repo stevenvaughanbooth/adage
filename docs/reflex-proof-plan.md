@@ -1,6 +1,7 @@
 # Reflex execution: evidence before expansion
 
-Status: evidence and implementation gates, 2026-09-29, updated against main `acdb0a4acd875be56821469aaeadeb29b8d6d493`. Execution exists; broad incremental task value remains the question.
+Status: 2026-09-29, launch action gate based on merged main `9877af3`. The complete learned
+lookup mechanism now passes; broad coding-task value remains the question.
 
 ## Objective
 
@@ -14,16 +15,18 @@ This plan includes future experiments. The authoritative current behavior is
 
 | Gate | Current evidence | Still required |
 | --- | --- | --- |
-| Harness boundary | Real fixture actions precede the next observed model request | Production automatic-versus-suggest pair with complete results |
+| Harness boundary | Three production automatic/suggest pairs: complete results before the first model request, one agent action eliminated per task | Additional harnesses and complete coding workflows |
 | Learning inputs | Checksummed source audit; default onboarding learns and delivers on archived clinic history | Held-out executable prediction/binding accuracy across real repositories |
-| Execution reliability | Canonical durable journal, recovery, real-hook duplicate tests and 500 staged safety runs | Linux platform checks and failure testing beyond the covered fault model |
+| Execution reliability | Canonical durable journal, recovery, real-hook duplicate tests, 500 staged safety runs and 100/100 repeated learned E1 hook calls | Native platform matrix and failure testing beyond the covered fault model |
 | Developer experience | Effective authority/outcome states, narrow/wide snapshots and source-discovery checks | First-user walkthrough; execution approval/recovery remain CLI controls |
 | Packaging | Vendored-script and accepted-skill-pack integration tests pass | Benefit and compatibility in a genuinely different recipient environment |
-| Net value | Budget accounting tested; prospective screen preregistered | Authenticated confined Linux runner, missing real-repository training inputs, then paid comparisons |
+| Net value | Three held-out triage pairs: all answers correct, 3 versus 6 observed model requests, 21.4% lower reported cost in this small pilot | Full coding tasks across real repositories and a powered quality/cost evaluation |
 
 ## Worktree and integration boundary
 
-Work in the isolated `codex/reflex-proof` worktree at `/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile`. It was fast-forwarded from `d3f8905` to the newly published main `acdb0a4`. The primary checkout has not been edited by this experiment.
+Work in the isolated worktree at `/Users/stevenbooth/.codex/worktrees/adage-reflex-proof/skill-compile`.
+The original `codex/reflex-proof` work merged as PR #7; `codex/launch-action-gate` continues from
+merged main `9877af3`. The primary checkout has not been edited by this experiment.
 
 The earlier five-miner assessment and intermediate branch `f8e7d29` do not describe current main. Current main already has a generic graph learner, local CPU embeddings, shared hook pipeline, E1 read prefetch, E2 staged execution, exact local approvals, signed packs with vendored scripts, skill compilation, and measured savings. Preserve these components. Separate `adage` and `adage-exec` entry points share the hook pipeline; that is not a reason to merge or replace them.
 
@@ -324,7 +327,16 @@ Proposed pilot target: >=15% lower total billed cost for automatic versus equiva
 
 The user authorized a **$60 total cap** for the initial paid evaluation. Reserve at most $3 for initial live harness-boundary probes (at most three sequential runs with a $1 per-run harness budget). The remaining $57 is reserved for paired value runs after the execution gate passes; it is not permission to silently exceed the total if a harness budget is soft. Generate the complete run matrix and cost reservations first. Enforce per-run limits and reserve worst-case concurrent commitments before dispatch; do not rely only on completed-cost totals. Record budget-stopped runs and stop if accounting is unavailable. The initial pilot is a screening experiment, not the confirmatory trial.
 
-Live barrier timing now has direct evidence and current main already implements production execution. Incremental automatic-versus-advisory savings, embedding ablation gains, developer usability and cross-repository transfer remain separate unproven claims. Paid spend is $0.0152216. The additional $15 pilot reservation was unused and released: no further paid run is outstanding, leaving $59.9847784. The offline candidate does not yet justify a live automatic run: its result contract omits task information, the desired regeneration route was not learned, and the existing confined live runner requires a supported platform/auth setup. Prepare and approve a fresh bounded run matrix after those gates pass. Every result must include command/configuration, code revision, source manifest hashes, and its limits. Offline reports must identify themselves as offline.
+The [completed lookup gate](../evals/reflex-proof/harness/results/20260929-learned-action-gate/FINDINGS.md)
+adds production action-elimination evidence: complete output, a real human grant, three held-out
+task pairs, all answers correct, zero automatic-arm agent tool calls. The explicit host-restricted
+triage probe uses a narrow tool surface; it does not remove the Linux coding runner's confinement
+requirements. The desired learned regeneration route is still a separate unmet gate. Broad
+coding-task savings, embedding ablation gains, developer usability and cross-repository transfer
+remain unproven. Known paid spend for this task is $0.0565742, including $0.0413526 for the new
+six-session pilot. No paid run remains outstanding; the earlier $15 reservation was unused and
+released. This is task accounting, not global provider spend. Every result must retain its exact
+configuration, source/binary/input hashes and limitations; offline repeats remain labelled offline.
 
 ## Stop/change decisions
 

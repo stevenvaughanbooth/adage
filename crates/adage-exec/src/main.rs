@@ -141,6 +141,7 @@ fn request(a: &Args) -> Result<ExecRequest> {
     }
     Ok(ExecRequest {
         repo_root: repo,
+        project_python: None,
         argv,
         inputs: a.all("--input").iter().map(|s| kv(s, "--input")).collect::<Result<_>>()?,
         contracts: a.all("--contract").iter().map(|s| kv(s, "--contract")).collect::<Result<_>>()?,

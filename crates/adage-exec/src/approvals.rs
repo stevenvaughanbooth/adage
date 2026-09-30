@@ -275,8 +275,8 @@ pub fn auto_eligible(req: &ExecRequest, ctx: &AutoContext) -> Result<(), Vec<Str
             _ => why.push(format!("slot {{{name}}} has no strict contract")),
         }
     }
-    if req.output.mode != OutputMode::Typed {
-        why.push("output mode is raw".into());
+    if req.output.unstructured() {
+        why.push("output includes unstructured stdout".into());
     }
     if !ctx.sandbox_enforced {
         why.push("no sandbox is enforced on this machine".into());
@@ -309,6 +309,7 @@ mod tests {
         let fields = serde_json::from_str(r#"{"n":{"type":"int"}}"#).unwrap();
         ExecRequest {
             repo_root: PathBuf::from("/r"),
+            project_python: None,
             argv: vec!["jq".into(), ".".into(), "{f}".into()],
             inputs: BTreeMap::new(),
             contracts: [("f".to_string(), r"^[a-z]{1,8}\.json$".to_string())].into(),
@@ -430,6 +431,9 @@ mod tests {
                 r.contracts.insert("f".into(), ".*".into());
             }),
             Box::new(|r| r.output.mode = OutputMode::Raw),
+            Box::new(|r| {
+                r.output.fields = serde_json::from_str(r#"{"result":{"type":"text","stdout":true}}"#).unwrap();
+            }),
             Box::new(|r| r.origin = Origin::Pack { signer: None, trusted: true, forming_passed: false }),
             Box::new(|r| r.effect = Effect::Verify),
         ];

@@ -58,7 +58,7 @@ pub struct Profile {
 }
 
 /// Bumped whenever enforcement changes in a way approvals should notice.
-pub const PROFILE_VERSION: u32 = 2;
+pub const PROFILE_VERSION: u32 = 3;
 
 impl Profile {
     pub fn for_level(level: Level) -> Profile {
@@ -93,8 +93,9 @@ impl Profile {
             Write::Scratch => "scratch only",
             Write::Overlay => "repository overlay",
         };
+        let directory_names = if cfg!(target_os = "macos") { ", /tmp directory names" } else { "" };
         format!(
-            "reads: {} · writes: {writes} · network: {} · timeout: {} ms",
+            "reads: {}{directory_names} · writes: {writes} · network: {} · timeout: {} ms",
             reads.join(", "),
             if self.net { "on" } else { "off" },
             self.limits.wall_ms
@@ -507,8 +508,20 @@ mod tests {
         assert_ne!(a.id(), b.id());
         assert_eq!(
             a.summary(),
-            "reads: repository, toolchain, cas · writes: scratch only · network: off · timeout: 1500 ms"
+            format!(
+                "reads: repository, toolchain, cas{} · writes: scratch only · network: off · timeout: 1500 ms",
+                if cfg!(target_os = "macos") { ", /tmp directory names" } else { "" }
+            )
         );
+    }
+
+    #[test]
+    fn version_three_lapses_grants_from_the_previous_enforcement_profile() {
+        assert_eq!(PROFILE_VERSION, 3);
+        let profile = Profile::for_level(Level::E2);
+        let previous = serde_json::json!({ "version": 2, "profile": profile });
+        let old_id = crate::sha256_hex(crate::canonical_json(&previous).as_bytes());
+        assert_ne!(profile.id(), old_id, "the added directory-node permission requires renewed approval");
     }
 
     #[test]

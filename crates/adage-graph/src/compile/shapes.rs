@@ -442,7 +442,16 @@ impl<'a> Builder<'a> {
 
     fn push(&mut self, shape: &'static str, fixed_id: bool, r: &Reflex, route: Route, prior: Option<&Route>) {
         let why = why(r, shape, prior.map(|p| p.id.clone()));
-        self.out.push(Compiled { shape, route, why, fixed_id });
+        let advisory_eligible = r.value > 0.0
+            || r.context.last().is_some_and(|v| v.ok == Some(false) || (v.ty == NodeType::Edit && v.last));
+        self.out.push(Compiled {
+            shape,
+            route,
+            why,
+            fixed_id,
+            execution_candidate: r.execution_candidate,
+            advisory_eligible,
+        });
     }
 
     /// A prompt value flowing into an act: the lookup, with G1's learned type for the sink.
@@ -624,7 +633,18 @@ impl<'a> Builder<'a> {
             }
             return any;
         }
-        if cont[0].flow {
+        // A path flow need not vary: a repeated edit to the same test file followed by the
+        // same literal check is executable without a slot. Retain only an observed singleton
+        // literal here; a dominant literal is insufficient to collapse a variable input.
+        let constant_flow = r.execution_candidate
+            && member_keys(&cont[0])
+                .iter()
+                .filter_map(|k| self.input.corpus.acts.get(k))
+                .flat_map(|a| a.literals.keys())
+                .collect::<BTreeSet<_>>()
+                .len()
+                == 1;
+        if cont[0].flow && !constant_flow {
             self.drop(r, "a flow-bound command has no single template");
             return false;
         }
@@ -1075,6 +1095,20 @@ pub fn compile(input: &Input) -> Output {
             }
         }
         let last = r.context.last();
+        // Preserve a predictive multi-event boundary instead of flattening every sequence
+        // ending in an edit or failure into one event. Recounting uses this same context at
+        // learning and runtime; fallback shapes remain useful when context cannot compile.
+        if r.execution_candidate && (2..=CONTEXT_MAX_ITEMS).contains(&r.context.len()) {
+            let start = b.out.len();
+            if b.context(r) {
+                // This shape was retained for executable prediction. If its compiled trigger
+                // fails the independent recount, it must not turn into new advisory traffic.
+                for c in &mut b.out[start..] {
+                    c.advisory_eligible = false;
+                }
+                continue;
+            }
+        }
         match last {
             // A failed check, and the check that works.
             Some(x) if is_act(x) && x.ok == Some(false) => {

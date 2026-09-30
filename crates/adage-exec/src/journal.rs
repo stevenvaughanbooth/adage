@@ -299,6 +299,7 @@ mod tests {
             std::fs::write(repo.join("source"), "source").unwrap();
             let req = ExecRequest {
                 repo_root: repo.canonicalize().unwrap(),
+                project_python: None,
                 argv: vec!["make".into(), "gen".into()],
                 inputs: BTreeMap::new(),
                 contracts: BTreeMap::new(),

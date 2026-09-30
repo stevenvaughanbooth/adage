@@ -1,0 +1,41 @@
+{
+  "exports": [
+    {
+      "export_stream_sha256": "393239ea31440cd350437af02526613b04453f0a706b1e92a1c01e558efc5b64",
+      "filter": "assistant/user/result only; local fixture/source prefixes replaced; system initialization omitted; broad debug logs excluded",
+      "original_stream_sha256": "31a20c69e7fb5590e0368575dce0f51bbad66d7c0241cd89467975304f3db935",
+      "run": "CARE-279-automatic"
+    },
+    {
+      "export_stream_sha256": "6cc60d8aa5866cc1ed42405d69a694332d8ce63d9b4c873c8fb7392779054d3b",
+      "filter": "assistant/user/result only; local fixture/source prefixes replaced; system initialization omitted; broad debug logs excluded",
+      "original_stream_sha256": "2d0fba81232b535075066c6a1b86e9049a1e7659653ea0ed07f351bced685d81",
+      "run": "CARE-279-suggest"
+    },
+    {
+      "export_stream_sha256": "eec0840040e532d5a82357f138612aea9c753b25849b2d4800d562540dca27aa",
+      "filter": "assistant/user/result only; local fixture/source prefixes replaced; system initialization omitted; broad debug logs excluded",
+      "original_stream_sha256": "1670c36085b971f097ce06492e2a292de002e98878cdbb7fd3c4ad1e13c32677",
+      "run": "CARE-441-automatic"
+    },
+    {
+      "export_stream_sha256": "035e5a6f7713bff879af9efddf985fba4fda680300e55a0b4f42ce24c4ea585a",
+      "filter": "assistant/user/result only; local fixture/source prefixes replaced; system initialization omitted; broad debug logs excluded",
+      "original_stream_sha256": "9c3b4fc88d30c0f47a4865f0c5575496e8d5b34bab5c7cbdcca9e2b0e9f25c29",
+      "run": "CARE-441-suggest"
+    },
+    {
+      "export_stream_sha256": "b71f522e9f9d1c3f853a0823ea081e0de58e7091a8b803718bb33e4d252334c4",
+      "filter": "assistant/user/result only; local fixture/source prefixes replaced; system initialization omitted; broad debug logs excluded",
+      "original_stream_sha256": "df9640f2754051692f186870d5ec115e399b40f35b0174f693db1e47376cc5a2",
+      "run": "CARE-807-automatic"
+    },
+    {
+      "export_stream_sha256": "b741835c0bac8d20e48179c8eebc669c99eef3e529f13129e78b9fa2d6d1fa8b",
+      "filter": "assistant/user/result only; local fixture/source prefixes replaced; system initialization omitted; broad debug logs excluded",
+      "original_stream_sha256": "7f670e47e97afb6ab2943d7c22ef22d9f09fb7222d37b9544828ef52886ba37c",
+      "run": "CARE-807-suggest"
+    }
+  ],
+  "private_grants_exported": false
+}

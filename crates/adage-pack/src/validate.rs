@@ -1148,6 +1148,16 @@ fn validate_trigger(t: &TriggerV2) -> Result<()> {
 }
 
 fn validate_evidence(e: &RouteEvidence) -> Result<()> {
+    if let Some(x) = &e.execution {
+        if x.opportunities == 0
+            || x.successful == 0
+            || x.sessions == 0
+            || x.successful > x.opportunities
+            || x.sessions > x.successful
+        {
+            bail!("evidence: invalid routine execution counts");
+        }
+    }
     let unit = |x: f64| x.is_finite() && (0.0..=1.0).contains(&x);
     let nonneg = |x: f64| x.is_finite() && (0.0..=1e6).contains(&x);
     if !unit(e.rate) || !unit(e.lower_bound) || !nonneg(e.median_position) || !nonneg(e.turns_saved) {

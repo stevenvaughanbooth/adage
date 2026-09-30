@@ -16,7 +16,7 @@ export const TABS: Tab[] = [
     facts: ["8 in the default set", "bound from: Makefile · package.json · CI · lockfiles", "strength: prime at most"] },
   { id: "reflexes", name: "Reflexes", dot: "var(--fire)",
     title: "Reflexes are learned from traces",
-    body: "Adage reads what your agents did and keeps the steps that got work done. When the same moment comes back, a hook matches it and hands the agent a one-line directive, so the model doesn't have to recall it. Dead ends become inhibit reflexes, and a task the repository repeats gets a procedure card.",
+    body: "Adage reads what your agents did and keeps recurring steps. A hook can deliver advice when the same moment returns, or execute an exact action you have approved. Routine execution candidates stay silent until approved. Dead ends become inhibit reflexes, and recurring tasks can get a procedure card.",
     facts: ["learned from: your agents' traces", "fire · prime · inhibit", "10% of sessions are a control"] },
   { id: "agent", name: "At the hooks", dot: "var(--memory-soft)",
     title: "Where Adage fits",

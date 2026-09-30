@@ -363,6 +363,19 @@ pub fn validate(t: &Track) -> Result<()> {
                 }
             }
         }
+        if let Some(e) = &r.evidence.execution {
+            if e.opportunities == 0
+                || e.successful == 0
+                || e.sessions == 0
+                || e.successful > e.opportunities
+                || e.sessions > e.successful
+                || !matches!(r.trigger, Trigger::AfterEdit { .. } | Trigger::Context { .. })
+                || !matches!(r.step, Step::Run { .. })
+                || !matches!(r.effect, Effect::Verify | Effect::Regenerate)
+            {
+                bail!("{}: invalid routine execution evidence", ctx());
+            }
+        }
         if let Some(o) = &r.evidence.origin {
             validate_origin(o).map_err(|e| anyhow::anyhow!("{}: {e}", ctx()))?;
         }

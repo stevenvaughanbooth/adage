@@ -416,6 +416,7 @@ pub fn check(req: &ExecRequest, ctx: &Context) -> Result<Checked, (Refusal, Opti
     let plain = |r: Refusal| (r, None);
     let request = |reason: String| plain(Refusal { stage: "request", reason });
     let bound = req.bind().map_err(|e| request(e.to_string()))?;
+    crate::project_python::validate(req).map_err(request)?;
     // An action's summary needs no typed fields (it reports its outcome and changed paths).
     if !(req.level == Level::E2 && req.output.mode == crate::request::OutputMode::Typed && req.output.fields.is_empty())
     {
@@ -454,7 +455,7 @@ pub fn check(req: &ExecRequest, ctx: &Context) -> Result<Checked, (Refusal, Opti
         }
     }
     let classified = classify::effect(&bound, ctx.table);
-    let has_scripts = !req.scripts.is_empty();
+    let has_scripts = !req.scripts.is_empty() || req.project_python.is_some();
     // Declaring less than the computed effect refuses, except for scripts a person approved at a
     // lower effect (§2.2): the sandbox then enforces the approved profile.
     if classified > req.effect && !has_scripts {
@@ -739,6 +740,8 @@ pub(crate) fn resolve_program(
             .ok_or_else(|| Refusal { stage: "request", reason: format!("{} is not on the sanitised PATH", argv[0]) })?
     };
     let is_git = program.file_name().is_some_and(|n| n == "git");
+    #[cfg(target_os = "macos")]
+    let program = sandbox::macos::interpreter(program);
     let full = if is_git { git::harden(&argv, res.drop_to.map(|_| res.seen_repo())) } else { argv };
     Ok((program, full))
 }
@@ -778,6 +781,11 @@ pub fn execute(req: &ExecRequest, ctx: &Context) -> Result<Delivered, Refusal> {
         (None, Some(s)) => return refuse("run", format!("killed by signal {s}")),
         _ => return refuse("run", "exit status unknown"),
     };
+    // A complete-output contract replaces a lookup only after it succeeded. Error text emitted
+    // before a nonzero exit is not a completed result, even if it passes the text scanner.
+    if exit != 0 && req.output.unstructured() {
+        return refuse("run", format!("lookup exited {exit}; complete output was withheld"));
+    }
     let payload = project::project(&o.stdout, &req.output, &repo, &ctx.canaries, req.profile.limits.return_bytes)
         .map_err(|w| Refusal { stage: "output", reason: format!("{w} (exit {exit})") })?;
     let block = render::data_block_checked(

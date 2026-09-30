@@ -116,6 +116,10 @@ fn learned_routes(report: &Value) -> Vec<String> {
         .into_iter()
         .flatten()
         .flat_map(|t| t["routes"].as_array().cloned().unwrap_or_default())
+        // Execution candidates are additional learned knowledge, silent without a local grant.
+        // These replay assertions cover advisory delivery; the replay below still checks that
+        // no extra directive reaches the agent.
+        .filter(|r| !r.as_str().is_some_and(|s| s.contains("[execution only]")))
         .filter_map(|r| r.as_str().map(|s| s.split(' ').next().unwrap().to_string()))
         // Procedure cards (families of similar tasks, with the bundled model) are their own kind;
         // `adage-learn/tests/cards.rs` covers them.

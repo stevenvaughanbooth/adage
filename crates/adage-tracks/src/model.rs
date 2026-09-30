@@ -218,8 +218,21 @@ pub enum Exit {
     ExploratoryChange,
 }
 
+/// Observational evidence for replacing a routine agent action with CPU execution. This is
+/// never permission: the existing local execution grant is still required. Counts cover every eligible
+/// predictive trigger, including those without a compatible successful continuation. They
+/// measure observational support, not the success rate of a broader compiled action.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionEvidence {
+    pub opportunities: u32,
+    pub successful: u32,
+    pub sessions: u32,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Evidence {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution: Option<ExecutionEvidence>,
     /// Distinct sessions in which the trigger occurred.
     pub opportunities: u32,
     /// Distinct sessions that did what the route directs.

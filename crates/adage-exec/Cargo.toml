@@ -47,6 +47,7 @@ seccompiler = "0.5"
 
 [dev-dependencies]
 tempfile = "3"
+adage-learn = { path = "../adage-learn" }
 
 [[test]]
 name = "escape"

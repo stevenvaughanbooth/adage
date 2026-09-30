@@ -39,17 +39,25 @@ pub(crate) fn developer_dir() -> Option<std::path::PathBuf> {
     .clone()
 }
 
-/// `/usr/bin/python3` is an Apple launcher. Its startup can stall under the
-/// deny-default sandbox. Use the interpreter in the already selected/readable toolchain;
-/// never substitute a repository interpreter or follow a link outside that directory.
+/// Apple's /usr/bin/python3 is a libxcrun launcher, not the interpreter. With a fresh scratch
+/// HOME its toolchain discovery can launch xcodebuild repeatedly and exhaust E1's wall budget
+/// before Python starts. Resolve that one system shim to the selected developer interpreter;
+/// the same canonical developer directory is already included in the sandbox's read grants.
+/// User-installed interpreters and all other commands retain their ordinary PATH resolution.
 #[cfg(target_os = "macos")]
-fn direct_python(program: &std::path::Path) -> Option<std::path::PathBuf> {
+pub(crate) fn interpreter(program: std::path::PathBuf) -> std::path::PathBuf {
     if program != std::path::Path::new("/usr/bin/python3") {
-        return None;
+        return program;
     }
-    let developer = developer_dir()?;
-    let python = developer.join("usr/bin/python3").canonicalize().ok()?;
-    (python.starts_with(&developer) && python.is_file()).then_some(python)
+    let Some(developer) = developer_dir() else { return program };
+    let Ok(real) = developer.join("usr/bin/python3").canonicalize() else { return program };
+    use std::os::unix::fs::PermissionsExt;
+    if real.starts_with(&developer) && real.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0)
+    {
+        real
+    } else {
+        program
+    }
 }
 
 /// Count the real UID's existing processes without invoking a tool under the limit we are
@@ -103,7 +111,9 @@ pub fn sbpl(res: &Resolved) -> String {
     read.extend(res.dev.iter().map(|p| format!("(literal {})", lit(p))));
     // macOS 26's dyld cache loader needs to open the root directory itself. Without this
     // literal-node read, even /bin/sh aborts before main. Never use (subpath "/") here:
-    // descendants still require one of the explicit read grants below.
+    // descendants still require one of the explicit read grants below. The two temporary
+    // directory nodes likewise support readability checks and listing names only; they grant
+    // neither child file contents nor writes. Enforcement profile v3 binds this change.
     format!(
         "(version 1)\n\
          (deny default)\n\
@@ -113,6 +123,7 @@ pub fn sbpl(res: &Resolved) -> String {
          (allow signal (target same-sandbox))\n\
          (allow file-read-metadata)\n\
          (allow file-read-data (literal \"/\"))\n\
+         (allow file-read-data (literal \"/tmp\") (literal \"/private/tmp\"))\n\
          (allow file-read-data (literal \"/Library/Preferences/com.apple.dt.Xcode.plist\"))\n\
          (allow file-read* {read})\n\
          (allow file-read* file-write* (subpath {scratch}) (literal \"/dev/null\"))\n\
@@ -130,9 +141,7 @@ pub fn wrap(
     res: &Resolved,
 ) -> (std::path::PathBuf, Vec<String>) {
     #[cfg(target_os = "macos")]
-    let direct = direct_python(program);
-    #[cfg(target_os = "macos")]
-    let program = direct.as_deref().unwrap_or(program);
+    let program = interpreter(program.to_path_buf());
     let mut a = vec!["-p".to_string(), sbpl(res), "--".into(), program.to_string_lossy().into_owned()];
     a.extend(rest.iter().cloned());
     (sandbox_exec.to_path_buf(), a)
@@ -142,18 +151,6 @@ pub fn wrap(
 mod tests {
     use super::*;
 
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn only_the_system_python_launcher_is_resolved() {
-        use std::path::Path;
-        assert!(direct_python(Path::new("/opt/homebrew/bin/python3")).is_none());
-        assert!(direct_python(Path::new("/repo/.venv/bin/python3")).is_none());
-        assert!(direct_python(Path::new("/usr/bin/git")).is_none());
-        if let Some(python) = direct_python(Path::new("/usr/bin/python3")) {
-            assert!(python.starts_with(developer_dir().unwrap()));
-            assert!(python.is_file());
-        }
-    }
     use crate::limits::Limits;
     use crate::request::Level;
     use std::path::PathBuf;
@@ -165,6 +162,66 @@ mod tests {
         // pressure or host-wide process limits are changed by the test.
         let count = processes_of(unsafe { libc::getuid() }).unwrap();
         assert!(count > 0, "the current test process must be counted");
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn system_python_shim_resolves_only_within_the_selected_developer_directory() {
+        for p in [
+            "/usr/local/bin/python3",
+            "/opt/homebrew/bin/python3",
+            "/repo/.venv/bin/python3",
+            "/usr/bin/git",
+            "/bin/sh",
+            "/repo/python3",
+        ] {
+            assert_eq!(interpreter(p.into()), std::path::Path::new(p));
+        }
+        let Some(developer) = developer_dir() else { return };
+        let Ok(real) = developer.join("usr/bin/python3").canonicalize() else { return };
+        if real.starts_with(&developer) && real.is_file() {
+            assert_eq!(interpreter("/usr/bin/python3".into()), real);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn temporary_directory_nodes_are_readable_but_child_contents_and_writes_are_denied() {
+        let child = tempfile::NamedTempFile::new_in("/private/tmp").unwrap();
+        std::fs::write(child.path(), "disposable known canary\n").unwrap();
+        let name = child.path().file_name().unwrap().to_str().unwrap();
+        let new_name = format!("{name}-denied-write");
+        let repo = tempfile::tempdir().unwrap();
+        let scratch = crate::run::Scratch::new(None).unwrap();
+        let mut profile = crate::sandbox::Profile::for_level(Level::E1);
+        profile.limits.wall_ms = 10_000;
+        let resolved = Resolved::new(&profile, repo.path(), &scratch.path, &[], None, None).unwrap();
+        let capability = crate::sandbox::detect();
+        assert!(matches!(capability.backend, crate::sandbox::Backend::SandboxExec { .. }), "native Seatbelt required");
+        let environment = crate::env::build(&Default::default(), repo.path(), &scratch.path, &[]);
+        let script = format!(
+            "set -e; for root in /tmp /private/tmp; do \
+             test -r \"$root\"; /bin/ls -A \"$root\" | /usr/bin/grep -Fxq -- '{name}'; \
+             if /bin/cat \"$root/{name}\" >/dev/null 2>&1; then exit 11; fi; \
+             if (printf changed > \"$root/{name}\") 2>/dev/null; then exit 12; fi; \
+             if (printf created > \"$root/{new_name}\") 2>/dev/null; then exit 13; fi; \
+             done; printf 'directory-readable; child-read-denied; child-write-denied\\n'"
+        );
+        let result = crate::run::spawn_sandboxed(
+            std::path::Path::new("/bin/sh"),
+            &["-c".into(), script],
+            &environment,
+            &resolved,
+            &capability,
+        )
+        .unwrap();
+        assert_eq!(result.exit, Some(0), "{}", String::from_utf8_lossy(&result.stderr));
+        assert_eq!(
+            String::from_utf8_lossy(&result.stdout),
+            "directory-readable; child-read-denied; child-write-denied\n"
+        );
+        assert_eq!(std::fs::read_to_string(child.path()).unwrap(), "disposable known canary\n");
+        assert!(!std::path::Path::new("/private/tmp").join(new_name).exists());
     }
 
     #[test]
@@ -188,6 +245,13 @@ mod tests {
         assert!(p.contains("(deny network*)"));
         assert!(p.contains("(allow file-read-data (literal \"/\"))"));
         assert!(!p.contains("(subpath \"/\")"), "root access must not include descendants");
+        assert!(p.contains("(allow file-read-data (literal \"/tmp\") (literal \"/private/tmp\"))"));
+        for root in ["/tmp", "/private/tmp"] {
+            assert!(
+                !p.contains(&format!("(subpath \"{root}\")")),
+                "temporary directory access must not include descendants"
+            );
+        }
         assert!(!p.contains("(allow network"));
         assert_eq!(p.matches("file-write*").count(), 1, "writes only to scratch and /dev/null");
     }

@@ -48,6 +48,9 @@ impl World {
             .env("NO_COLOR", "1")
             .env("ADAGE_HOME", self.p("data"))
             .env("HOME", self.p("home"))
+            .env("TERM", "xterm")
+            .env("LC_ALL", "en_US.UTF-8")
+            .env_remove("ADAGE_ASCII")
             .env_remove("CLAUDECODE")
             .env_remove("OPENCODE")
             .env_remove("CODEX_SANDBOX")
@@ -566,6 +569,10 @@ fn decisions_survive_relearning() {
     assert_eq!(strength(&w, work, "read-linked-files").unwrap().0, Strength::Prime);
     let q = reasons(&w.queue());
     assert_eq!(q.values().filter(|k| *k == &vec!["new".to_string()]).count(), 4, "every learned route is new: {q:?}");
+    let mut untouched = q;
+    for id in [&dead.id, "lookup-work-item", "read-linked-files"] {
+        assert!(untouched.remove(&key(work, id)).is_some());
+    }
 
     w.ok(&["review", "extinguish", dead_ends, &dead.id]);
     w.ok(&["review", "weaken", work, "lookup-work-item"]);
@@ -581,7 +588,7 @@ fn decisions_survive_relearning() {
     assert_eq!(strength(&w, work, "read-linked-files").unwrap().0, Strength::Fire, "a strengthening is not reverted");
     assert_eq!(versions(&w), decided);
     let q = reasons(&w.queue());
-    assert_eq!(q.len(), 1, "only the untouched finish-line route waits: {q:?}");
+    assert_eq!(q, untouched, "untouched routes, including execution candidates, keep their review state");
     // Deterministic: another re-learn gives identical bytes.
     let index = std::fs::read(w.paths().index()).unwrap();
     let review_file = std::fs::read(w.track_dir(work).join(review::FILE)).unwrap();
@@ -674,4 +681,69 @@ fn walk(dir: &Path) -> Vec<String> {
         }
     }
     out
+}
+
+#[test]
+fn routine_candidate_stays_in_execution_review_after_evidence_approval() {
+    let w = World::new();
+    assert!(Command::new("git").args(["init", "-q"]).current_dir(w.p("work")).status().unwrap().success());
+    let mut r = route(
+        "routine",
+        Trigger::AfterEdit { paths: "src/*.rs".into() },
+        Step::Run { command: "cargo test".into() },
+        Effect::Verify,
+        Strength::Prime,
+        5,
+        5,
+    );
+    r.evidence.execution = Some(ExecutionEvidence { opportunities: 5, successful: 5, sessions: 5 });
+    let mut t = make_track(NAME, "desire-path", vec![r]);
+    t.manifest.scope.repo = adage_core::repo::repo_key(&w.p("work"));
+    install(&w, NAME, &t, &[]);
+    let first = w.queue();
+    let row = &first["queue"][0];
+    assert_eq!(row["execution_only"], true);
+    assert_eq!(row["evidence"]["execution"]["successful"], 5);
+    assert!(row["directive"].is_null());
+    assert!(row["next"].as_str().unwrap().ends_with("routine --level e2"));
+    let approved = w.ok(&["review", "approve", NAME, "routine"]);
+    assert!(approved.contains("execution still requires a valid local E2 grant"), "{approved}");
+    assert_eq!(reasons(&w.queue())[&key(NAME, "routine")], vec!["execution"]);
+    let shown = w.ok(&["review"]);
+    assert!(shown.contains("Execution only") && shown.contains("5 / 5"), "{shown}");
+    assert!(!shown.contains("\n  directive"), "{shown}");
+
+    // A fixture grant is valid only for this exact derived request; no command is executed.
+    let index = w.index();
+    let ir = &index.routes[0];
+    let terms = adage_exec::route::Terms::default();
+    let plan = adage_exec::route::plan(
+        ir,
+        &index,
+        &w.p("work"),
+        &w.paths().tracks(),
+        adage_exec::Level::E2,
+        Some(&terms),
+        &adage_core::CommandTable::load(),
+    )
+    .unwrap();
+    let mut store = adage_exec::approvals::Store::default();
+    store.approvals.push(adage_exec::approvals::Approval {
+        key: adage_exec::approvals::ApprovalKey::for_request(&plan.request, &ir.repo),
+        route: format!("{NAME}/routine"),
+        approved_on: "2026-09-29".into(),
+        by: None,
+        basis: json!({}),
+        auto: false,
+        terms: Some(terms),
+    });
+    store.save(&adage_exec::approvals::path(&w.paths().root)).unwrap();
+    assert!(!reasons(&w.queue()).contains_key(&key(NAME, "routine")));
+    let mut changed = w.track(NAME);
+    changed.routes[0].step = Step::Run { command: "cargo test --locked".into() };
+    io::write(&w.track_dir(NAME), &changed).unwrap();
+    assert!(
+        reasons(&w.queue())[&key(NAME, "routine")].contains(&"execution".into()),
+        "stale execution approval must return to review"
+    );
 }

@@ -1,7 +1,7 @@
 # How Adage works
 
 This is the product behavior reference for the README, CLI, TUI and launch copy.
-Updated 2026-09-29 against the launch worktree, with main's UX push `52c256b` integrated.
+Updated 2026-09-30 against the launch worktree, based on merged main `0c28814`.
 Implementation changes must update this page and the relevant operational guide in the same change.
 The older numbered [architecture document](Adage%20%E2%80%94%20Architecture.md) is a historical
 implementation snapshot, not the current feature checklist.
@@ -23,6 +23,36 @@ See [zero-config behavior](zero-config.md), [live learning](live-learning.md) an
 [harness integration](harnesses.md) for exact commands, source locations and settings.
 Noninteractive previews remain read-only; installing hooks is an explicit setup operation.
 
+## Accumulated prediction and current execution limits
+
+The intended primitive learns patterns across many sessions and applies them to later, different
+tasks. Related event sequences may support the same action even when filenames, test selectors,
+intervening observations, or individual commands differ. Successful outcomes and failed paths
+both inform which action is useful. An embedding similarity is evidence of relatedness, not by
+itself a calibrated probability that execution will help.
+
+The existing graph engine embeds events, forms prototypes, mines cross-session sequences, and
+scores their continuations. The CPU runtime tracks bounded recent context and recognizes
+multi-event patterns with gaps. Prompt intent also uses embeddings. The ordered context retains
+information that a text embedding alone does not establish.
+
+Automatic execution covers approved lookup prefetches, armed workflow obligations, and learned
+fixed-command context predictions with execution evidence. A selected sequence prediction enters
+the same E2 approval, staging, journal and result-delivery path without inventing an edit
+obligation. Context execution is currently one slot-free verification or regeneration command,
+once per route per session. Multi-command predictions and additional dynamic bindings remain
+unsupported. The earlier immediate exact edit-command certificate has been generalized; the
+original evaluation records retain its results. A native synthetic test now learns from five
+prior sessions and executes that learned context on a fresh session with an intervening read.
+Real-session predictive savings still require held-out evidence; the first replay of the frozen
+real-repository training histories produced zero executable certificates.
+
+The launch evaluation must measure accumulated learning on chronological histories and
+prediction on later unseen sessions: avoided failures, eliminated agent actions, task quality,
+unnecessary executions, abstentions, and net cost/time. A five-session zero-candidate checkpoint
+neither proves mature learning ineffective nor supports a savings claim. Execution grants remain
+specific to reviewed actions; the pattern that nominates an action need not be an exact replay.
+
 ## Four distinct behaviors
 
 | Behavior | What happens at the hook | Model involvement | Authority |
@@ -36,6 +66,12 @@ A procedure card is useful learned guidance, but delivering it is not evidence o
 An observed command running successfully is not evidence that it saved a model request. If the
 agent repeats a prefetched lookup, the hook did work without necessarily removing any work.
 Skill invocation can intentionally hand control to the agent when judgment is required.
+
+The [learned lookup gate](../evals/reflex-proof/harness/results/20260929-learned-action-gate/FINDINGS.md)
+now demonstrates the full E1 chain on three held-out triage tasks: default learning from nine
+prior sessions, one human grant, complete CPU-produced results, zero agent lookup actions, and
+correct answers. The same reflex in suggest mode required one lookup action per task. This
+validates that mechanism; broader coding-task savings and platform reliability remain separate.
 
 ## From history to a reflex
 
@@ -62,6 +98,28 @@ pipeline. `adage sense` previews available evidence without publishing learned r
 and replays compiled commands in a sandbox. Its optional `--execute` evidence workflow starts
 paid agent sessions only with an explicit human invocation. Neither is background learning.
 
+Routine actions have a different value test from reminders. If agents already run a check
+reliably, reminding them can add context without saving work, while an approved CPU action can
+still replace their next tool call. The graph learner can retain an **execution-only candidate**
+for a single verification or regeneration command after an edit or learned sequence context.
+It recounts the actual compiled trigger using the runtime's context matcher, requires the normal
+support threshold (five unsteered sessions across multiple tasks by default), and requires at
+least 90% of trigger opportunities to have a compatible successful continuation within eight
+observed events. Inspection and failed checks may intervene. Another edit, setup, generation,
+publish action, task boundary or a different successful check stops that search. A command
+already queued in the triggering model turn receives no credit. Every trigger opportunity counts,
+including those without a supporting outcome. Related selectors and options can support a typed
+action family through the existing command-variant model; this is observational support, not a
+claim that every broader compiled command has already succeeded. No repository-specific detector
+is added. Compound shell commands currently cannot supply execution-certificate success: a final
+exit code alone cannot establish each segment's outcome. Predictive contexts that fail the recount
+are discarded rather than becoming advisory directives.
+
+The route records these observational counts in `evidence.execution`. They do not grant execution
+or prove savings. These candidates stay silent in ordinary advisory mode and become eligible
+only through the existing execution review and local grant. Actual avoided agent work still
+requires a paired live evaluation; see the [launch evidence index](../evals/reflex-proof/LAUNCH-STATUS.md).
+
 ## What embeddings do
 
 The intent subsystem supports versioned local static embedding models, including bundled
@@ -85,9 +143,17 @@ script does not approve it. Reviewing evidence does not approve execution. Enabl
 hook does not grant every route. A person's execution grant is local and bound to repository,
 executable definition, pinned script bytes, effect, output contract and sandbox profile.
 
+For text-only lookups, an explicit complete-stdout field can preserve the whole answer, including
+line breaks, within its declared bound. It requires unstructured-output policy and an exact human
+grant. Unsafe, empty or oversized output is withheld; it never becomes a silently truncated task.
+Selected title/path fields alone do not establish that the lookup is complete. For automatic E1
+execution, each prompt input must have exactly one distinct matching value within the full bounded
+scan. Ambiguous prompts retain ordinary guidance instead of executing an arbitrary first match.
+
 Changes to that bound definition or a pinned script invalidate the old grant. Evidence updates alone need not.
-Disabling execution preserves learned knowledge for suggestions. A repository kill switch stops
-hook interventions. See [execution and recovery](execution.md) for the exact controls and limits, including direct system-Python resolution on macOS.
+Disabling execution preserves learned knowledge and ordinary suggestions; execution-only candidates
+stay silent. A repository kill switch stops hook interventions. See [execution and recovery](execution.md)
+for the exact controls and limits, including direct system-Python resolution on macOS.
 
 The script closure is not a complete dependency graph. An approved `make gen` can invoke
 repository code that is not individually pinned in its grant. The staged input snapshot catches

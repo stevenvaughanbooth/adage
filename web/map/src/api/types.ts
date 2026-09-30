@@ -100,6 +100,8 @@ export interface ArmStats {
 }
 
 export interface Evidence {
+  /** Recounted routine evidence, separate from execution authority and measured savings. */
+  execution?: { opportunities: number; successful: number; sessions: number } | null;
   support: number;
   opportunities: number;
   rate: number;
@@ -143,7 +145,9 @@ export interface Route {
   in_index: boolean;
   instinct?: boolean;
   origin?: string | null;
-  review?: { verbs: string[]; reasons: { kind: string; why: string }[] };
+  review?: { verbs: string[]; reasons: { kind: string; why: string }[]; execution_command?: string | null };
+  /** Silent unless an exact local execution grant is valid; never ordinary advice. */
+  execution_only?: boolean;
   /** fire / prime / inhibit (older binaries: `aspect` green/yellow/red). */
   strength: string;
   ceiling: string;

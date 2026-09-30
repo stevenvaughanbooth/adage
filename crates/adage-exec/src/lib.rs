@@ -27,6 +27,7 @@ pub mod limits;
 pub mod person;
 pub mod policy;
 pub mod project;
+pub mod project_python;
 pub mod render;
 pub mod replay;
 pub mod request;

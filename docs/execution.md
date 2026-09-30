@@ -64,11 +64,30 @@ repository paths its output names (`files`) and the work item's text fields when
 `Title: …` line, whichever shape the output has). A `text` field is bounded plain text: control and
 invisible characters stripped, whitespace collapsed, at most 600 characters (`max`, up to 2,000),
 and withheld when the output scanner finds instruction-shaped text, a secret or an Adage tag in it.
-When the block carries such text, the directive says "The lookup was run; its result is below; you
-don't need to run it again." (with paths only, "That lookup has been run; its result is below.").
+These selected fields can omit task details; their delivery does not claim the lookup is complete.
+For a CLI with unlabelled or multiline task details, an explicit complete-output contract is:
+
+```sh
+adage review delegate acme-billing/learned lookup-work-item --level e1 \
+  --fields '{"result":{"type":"text","stdout":true,"max":2000}}'
+```
+
+This required text field preserves complete stdout and its line breaks after stripping controls
+and invisible characters. It scans the entire result and refuses empty, unsafe or oversized
+output instead of truncating it. A nonzero command exit withholds complete stdout and raw results,
+even if their text passes projection. It requires `exec.allow_raw_output = true` and a person grant;
+wrapping stdout in JSON does not make unstructured content eligible for automatic approval.
+Nonzero process exits withhold complete/raw output and retain advisory fallback. Only successful
+complete stdout (this contract or approved raw mode) says "The lookup was run;
+its result is below; you don't need to run it again." Selected fields say "That lookup has been
+run; its result is below." The person must decide whether that command supplies enough task data;
+complete stdout is not a claim that the upstream CLI itself returned a complete work item.
 `--fields` declares the fields explicitly. The prompt value a learned lookup binds (`{item}`, a
 learned value type) is E1's input as a typed prompt span is: the runtime binds it
-(`adage_core::vtype`), and the contract checks it again before it runs.
+(`adage_core::vtype`), and the contract checks it again before it runs. Automatic E1 execution
+also requires exactly one distinct matching value for every input slot, respecting learned mention
+constraints. Repeated mentions of the same value are fine; multiple matching values or a prompt
+beyond the bounded complete input scan retain advisory behavior without running the command.
 A pack reflex's fields, exits and timeout come from its pack. `--raw` asks for raw mode (policy
 must allow it); `--timeout-ms` raises the wall timeout up to 3,000 ms.
 
@@ -101,6 +120,11 @@ on the projected fields ("Its state is Closed, so nothing further is directed fo
 script runs from a private copy inside a shadow of the repository in scratch (its siblings are
 symlinks into the read-only repository), so a script that finds its data relative to itself
 still works.
+
+On macOS, the exact `/usr/bin/python3` toolchain shim resolves to the Python interpreter under
+the selected developer directory, already allowed by the sandbox. This avoids repeated Xcode
+discovery in a fresh scratch home. Other interpreters keep normal PATH resolution; no timeout
+or filesystem allowance is enlarged.
 
 **On any failure** (no approval match, a changed script, no sandbox, policy, a timeout, output
 past the capture cap, a field that fails its type, an oracle violation, text past the harness's
@@ -374,6 +398,51 @@ C1/C3 build requests from packs through the library type `adage_exec::ExecReques
 root, argv template, bound inputs and contracts, effect, level, output spec, scripts with SHA-256,
 sandbox profile, labels, origin, and the pack's reflex exec digest when there is one).
 
+## Approved project Python verification
+
+An E2 verify action may explicitly name `.venv/bin/python` or `venv/bin/python` (including
+`python3` and `python3.N` aliases), followed by `-m pytest` or a repository-relative `.py` script.
+Interpreter options before that module or script are refused; application arguments remain part
+of the exact approved argv. Pytest selection paths are staged source inputs, so editing the test
+under the same command/dependency grant does not require reapproval or move it out of pytest's
+normal configuration-discovery tree. A `.py` interpreter entrypoint remains a hash-bound
+`ScriptRef`, including an entrypoint at the repository root. Bare `python`, bare `pytest`, other modules, wrapper interpreters,
+and automatic substitution of a different interpreter are outside this adapter.
+
+Review shows the environment, runtime location, and dependency hashes. The local approval binds
+the adapter version, `pyvenv.cfg`, native interpreter bytes, environment tree, and runtime `lib`
+tree, including bytecode and symlink targets. Changing any of these requires a fresh approval.
+This includes ordinary cache churn: an agent running Python directly may create a new dependency
+or runtime `.pyc` file and lapse this strict grant even without a package upgrade. Adage's private
+execution avoids writing those caches back; cache-normalized grants are future work.
+The configured runtime must be a separate installation matching the environment's declared
+Python 3.8+ version; system site packages and dependency symlinks escaping the approved trees
+are refused. The runtime `lib` tree and exact interpreter are copied into private scratch, checked against
+the approved hashes, and executed there. Original runtime paths receive no additional sandbox
+read grants. This does not change the sandbox's existing platform toolchain grants.
+
+Execution uses a private copy of the staged environment and base runtime, with interpreter
+aliases and `pyvenv.cfg` rebound to that runtime snapshot. Absolute dependency symlinks other
+than the declared interpreter aliases are refused because they cannot be relocated safely. Plain editable `.pth` paths inside the
+original repository are rebased to staged source. Local import-hook code, including uv's normal
+hook, is hash-bound approved dependency code and runs under the same sandbox; executable `.pth`
+lines embedding the original checkout and external path entries are refused. Import-hook
+layouts that cannot work without reading the original checkout remain unsupported. Source and
+original environment files are not rewritten. The extra environment copy keeps this runtime
+preparation separate from the staged source change set.
+
+Adapter version 1 forces `-B` and a fresh `-X pycache_prefix`, disables user site packages, removes
+private environment bytecode, and adds its private `bin` directory to the sanitized PATH. It
+still runs on the CPU with no model call. Dependency hashing and copying add measurable setup
+cost; they are included in the launch evaluation rather than counted as zero-cost work. Python
+preparation shares the E2 action wall budget (at most 20 seconds); hash/copy loops and stage
+boundaries check a cooperative deadline, and the child receives only the remaining time. A
+blocked filesystem syscall cannot be interrupted by these checks. `Staged.duration_ms` continues
+to mean child duration; evaluation must measure wall time around the full stage separately. A native
+macOS integration test uses real uv/pytest, asserts imports come from staged source, and verifies
+that the original checkout and environment are unchanged. Linux native execution for this
+adapter still requires its own platform validation; Windows has no automatic E2 execution.
+
 ## The gates, in order
 
 1. **Request.** Each `{slot}` is bound to a value that matches its contract (anchored, passing the
@@ -382,7 +451,8 @@ sandbox profile, labels, origin, and the pack's reflex exec digest when there is
    regenerate (environment only with the managed opt-in), and only through a stage.
 2. **Classification.** The local command table re-classifies the bound argv. A path as the program
    (a repository script) or an interpreter is **environment** whatever its name. Declaring less than
-   the classified effect refuses, except for scripts a person approved at a lower effect.
+   the classified effect refuses, except for scripts a person approved at a lower effect or the
+   explicitly approved project Python verify adapter above.
 3. **Policy** (below).
 4. **Approval.** Equality on every field of the key, or automatic approval of the inert-observe
    class when policy turns it on.
@@ -403,7 +473,8 @@ templates, the scripts and their hashes, the effect, the level, the output mode,
 the contracts accept. Changing anything else lapses the approval; `run` then reports
 `exec-changed` with the fields that differ, and re-approval is explicit.
 
-This key covers declared script references, not a complete transitive dependency closure.
+Except for the explicitly bound project Python dependency trees above, this key covers declared
+script references, not a complete transitive dependency closure.
 For example, `make gen` may load a Makefile and further scripts that are not individually
 hashed in the grant. The E2 input snapshot checks for changes during staging; changing those
 unbound dependencies before a run does not itself lapse the grant. Repository/toolchain reads
@@ -481,7 +552,11 @@ bound read-write, as nobody when invoked by root.
 **macOS: `sandbox-exec -p`** with a generated SBPL profile: `(deny default)`, process exec and
 fork, sysctl reads, reads of the repository, toolchain and CAS paths, writes to scratch and
 `/dev/null` only, `(deny network*)`. macOS 26's dyld startup also needs `file-read-data` on the
-**literal root directory node** (`/`); this is not a root-subtree grant. The selected developer
+**literal root directory node** (`/`); this is not a root-subtree grant. The literal `/tmp`
+and `/private/tmp` directory nodes are also readable for ordinary path-readability checks.
+Processes can list names in those directories; this does not grant access to child file contents
+or writes outside the existing scratch grant. Native canaries verify both spellings can be read
+while a known sibling file cannot be read, overwritten, or accompanied by a newly written file. The selected developer
 toolchain is resolved using fixed `/usr/bin/xcode-select -p` with an empty environment. Its
 canonical developer directory and, for Xcode, that selected app's `Contents` are readable so
 Apple's command shims can load their tools and linked frameworks. A literal read of
@@ -498,8 +573,8 @@ is not rewritten by this rule.
 `RLIMIT_NPROC` on macOS counts existing processes for the real UID. A native libproc census adds
 the configured headroom to that existing count, capped by the inherited hard limit; a failed
 census or inability to install the limit refuses the run. It is a per-user snapshot limit, not
-a private process quota. Enforcement profile version **2** binds these changes so old grants
-lapse rather than silently gaining the new toolchain permissions. The replay tests exercise
+a private process quota. Enforcement profile version **3** binds the current permissions, including
+the temporary directory-node reads, so existing version 2 grants lapse and require a fresh review. The replay tests exercise
 actual shell startup, outside-file denial and a live loopback listener on macOS; Linux-only
 escape payload enumeration is not evidence of macOS containment.
 
@@ -537,6 +612,12 @@ block withheld; after every run the group is killed and reaped (`adage-exec` is 
 so orphans are collected rather than left as zombies counting against `RLIMIT_NPROC`). The
 profile, and so its id, includes the limits.
 
+On macOS, `/usr/bin/python3` is Apple's toolchain launcher. Adage resolves this exact system
+shim to Python inside the selected canonical developer directory, which the sandbox already
+allows. This avoids repeated Xcode discovery in each fresh scratch home. Other Python
+installations keep ordinary PATH resolution; the execution timeout and approval contract stay
+unchanged.
+
 ## Output
 
 **Typed** (default): stdout's JSON object (first `{` to last `}`); only the declared fields are
@@ -545,6 +626,12 @@ the root, symlinks included; `repo-path-list`: capped at `max`, default 20, at m
 7–40 lower-case hex; `int` with optional `min`/`max_value`; `bool`; `enum` with at most 32 safe-id
 values; `pattern` with a strict regex); Adage re-serialises canonically (sorted keys). Any failure
 withholds the whole block.
+
+Text fields normally read a declared JSON field, or a labelled section when `text: true`, and
+scan the full source value before applying the character cap. Explicit `stdout: true` is a
+required text-only field with no other source selector: complete scanned stdout, at most `max`
+characters (default 600, hard cap 2,000), no truncation. It shares raw-output policy and requires
+a person grant. The independent delivery oracle allows line breaks only for this declared source.
 
 **Raw** (needs `allow_raw_output` and its own approval; never automatic): ANSI escapes, control,
 invisible and bidirectional characters stripped; scanned for secrets (the `redact.rs` token rules
@@ -588,3 +675,20 @@ copy, 0 of 500 with the overlay). `crates/adage-cli/tests/actions.rs` checks out
 on an `evals/gen` python-make finish-line bundle through the real hook: the generated file is
 updated, nothing else changes, the staleness check passes, no Stop request follows, and an output
 edited while the action runs is refused with the E0 fallback.
+
+## Learned sequence predictions
+
+A runtime-selected learned `context` route can nominate its fixed, slot-free verification or
+regeneration command for E2 execution when it has execution evidence and an exact local grant.
+The command comes from the typed route, never from advisory prose. Matching may use related
+command variants, path globs and gaps across recent events. This path creates no edit obligation.
+It shares ordinary policy checks, sandbox staging, source identity, durable journal and result
+delivery. A completed receipt prevents a second execution of that prediction in the same session.
+CPU predictions clear pending agent-follow judgments, including when execution is withheld:
+the agent received no instruction to follow or ignore. They never falsely credit an agent action.
+Unknown outcomes retain the recovery block.
+
+Evidence and permission remain distinct. Context predictions with no grant remain unexecuted;
+control sessions never execute. Multi-command sequences and context input slots are not yet
+supported. See the [behavior reference](how-it-works.md#accumulated-prediction-and-current-execution-limits)
+for the accumulation model and current evidence limits.

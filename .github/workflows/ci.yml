@@ -107,6 +107,11 @@ jobs:
       - name: Claude Code session-start hook
         if: runner.os != 'Windows'
         run: plugin/test/session-start.test.sh
+      - name: release plugin startup and real background bootstrap
+        if: runner.os != 'Windows'
+        # Product latency budgets are checked on the shipped profile. Debug-only spawn
+        # instrumentation is deliberately absent: the registered hooks must learn for real.
+        run: cargo test --release --locked -p adage-cli --test zero_config_plugin release_plugin_startup -- --nocapture
 
   # Release targets without a native CI test runner: the static musl builds dist ships for Linux,
   # each built natively (x64, and arm64 on GitHub's arm64 runner) with the distribution's musl-gcc.
@@ -181,6 +186,8 @@ jobs:
           node-version: 22
       - name: structure and versions
         run: node scripts/check-plugin.mjs
+      - name: release archive checksum enforcement
+        run: node scripts/test-stage-plugin.mjs
       - name: install the Claude Code CLI (validation only; no agent runs)
         run: npm install -g @anthropic-ai/claude-code
       - name: claude plugin validate

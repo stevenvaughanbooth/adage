@@ -826,9 +826,10 @@ const COPY_BYTES: u64 = 2 << 30;
 
 /// Copy a worktree (`.git` included): directories, regular files with their mode and
 /// modification time, symlinks as symlinks; special files are left out. Bounded.
-fn copy_tree(from: &Path, to: &Path, entries: &mut usize, bytes: &mut u64) -> Result<(), String> {
+pub(crate) fn copy_tree(from: &Path, to: &Path, entries: &mut usize, bytes: &mut u64) -> Result<(), String> {
     std::fs::create_dir(to).map_err(|e| e.to_string())?;
     for e in std::fs::read_dir(from).map_err(|e| e.to_string())?.flatten() {
+        crate::project_python::checkpoint()?;
         if *entries == 0 {
             return Err(format!("the worktree has more than {} entries", MAX_ENTRIES * 4));
         }
@@ -896,6 +897,10 @@ pub fn stage(req: &ExecRequest, ctx: &Context) -> Result<Staged, Refusal> {
 /// [`stage`] with a given staging mechanism (the escape and G4 suites run each one this machine
 /// has).
 pub fn stage_with(req: &ExecRequest, ctx: &Context, backend: StageBackend) -> Result<Staged, Refusal> {
+    let started = std::time::Instant::now();
+    let _python_budget = req.project_python.as_ref().map(|_| crate::project_python::budget(req.profile.limits.wall_ms));
+    let preparation_check =
+        || crate::project_python::checkpoint().map_err(|reason| Refusal { stage: "limits", reason });
     if req.level != Level::E2 {
         return refuse("request", "only an E2 action is staged");
     }
@@ -913,7 +918,8 @@ pub fn stage_with(req: &ExecRequest, ctx: &Context, backend: StageBackend) -> Re
         .map_err(|e| Refusal { stage: "request", reason: format!("repository root: {e}") })?;
     let pre = PreState::take(&repo, &action)?;
     let inputs = input_snapshot(&repo, &action)?;
-    let environment = env::build(&ctx.inherited_env, &repo, &scratch.path, &ctx.policy.env);
+    preparation_check()?;
+    let mut environment = env::build(&ctx.inherited_env, &repo, &scratch.path, &ctx.policy.env);
     let path_dirs: Vec<PathBuf> = environment["PATH"].split(':').map(PathBuf::from).collect();
     let stage_dir =
         StageDir::new(owner).map_err(|e| Refusal { stage: "stage", reason: format!("staging directory: {e}") })?;
@@ -947,14 +953,43 @@ pub fn stage_with(req: &ExecRequest, ctx: &Context, backend: StageBackend) -> Re
         }
         _ => {}
     }
-    let (program, full) = run::resolve_program(req, &checked.bound, &run_root, &scratch.path, &res, &environment, ctx)?;
+    preparation_check()?;
+    let mut bound = checked.bound.clone();
+    if req.project_python.is_some() {
+        let python = crate::project_python::prepare(req, &run_root, &scratch.path, ctx.home.as_deref())
+            .map_err(|reason| Refusal { stage: "project-python", reason })?;
+        if let Some((u, g)) = owner {
+            chown_tree(&scratch.path.join("python-runtime"), u, g)
+                .map_err(|e| Refusal { stage: "project-python", reason: format!("the private runtime owner: {e}") })?;
+            chown_tree(&scratch.path.join("project-python"), u, g).map_err(|e| Refusal {
+                stage: "project-python",
+                reason: format!("the private environment owner: {e}"),
+            })?;
+        }
+        bound[0] = python.to_string_lossy().into_owned();
+        bound.splice(
+            1..1,
+            ["-B".into(), "-X".into(), format!("pycache_prefix={}", scratch.path.join("python-bytecode").display())],
+        );
+        environment.insert("PYTHONDONTWRITEBYTECODE".into(), "1".into());
+        environment.insert("PYTHONNOUSERSITE".into(), "1".into());
+        environment.remove("PYTHONHOME");
+        environment.insert("PATH".into(), format!("{}:{}", python.parent().unwrap().display(), environment["PATH"]));
+    }
+    let (program, full) = run::resolve_program(req, &bound, &run_root, &scratch.path, &res, &environment, ctx)?;
+    preparation_check()?;
+    if req.project_python.is_some() {
+        res.limits.wall_ms = req.profile.limits.wall_ms.saturating_sub(started.elapsed().as_millis() as u64).max(1);
+    }
     let o = run::spawn_sandboxed(&program, &full[1..], &environment, &res, &cap)?;
+    preparation_check()?;
     if o.timed_out {
         return refuse("limits", format!("timed out after {} ms", req.profile.limits.wall_ms));
     }
     let changes =
         if copied { tree_changes(&tree, &repo) } else { overlay_changes(&stage_dir.path.join("upper"), &repo) }
             .map_err(|e| Refusal { stage: "verify", reason: e })?;
+    preparation_check()?;
     let plan = judge(changes, &action, req.profile.limits.file_size);
     let fields = (o.exit == Some(0) && !req.output.fields.is_empty())
         .then(|| project::typed(&o.stdout, &req.output, &repo, req.profile.limits.return_bytes).ok())

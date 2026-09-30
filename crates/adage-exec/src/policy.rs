@@ -24,7 +24,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-use crate::request::{ExecRequest, Level, Origin, OutputMode};
+use crate::request::{ExecRequest, Level, Origin};
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -219,7 +219,7 @@ impl Policy {
         if req.level > self.max_level {
             return Err(format!("policy caps execution at {}", self.max_level.as_str().to_uppercase()));
         }
-        if req.output.mode == OutputMode::Raw && !self.allow_raw_output {
+        if req.output.unstructured() && !self.allow_raw_output {
             return Err("policy does not allow raw output (exec.allow_raw_output)".into());
         }
         for e in [req.effect, classified] {
@@ -256,6 +256,30 @@ mod tests {
         assert_eq!(p.max_level, Level::E1);
         assert!(!p.auto_approve && !p.allow_raw_output && !p.allow_vendor_scripts);
         assert!(p.require_sandbox);
+    }
+
+    #[test]
+    fn complete_stdout_uses_unstructured_output_policy() {
+        let mut req = ExecRequest {
+            repo_root: "/repo".into(),
+            project_python: None,
+            argv: vec!["git".into(), "status".into()],
+            inputs: Default::default(),
+            contracts: Default::default(),
+            effect: Effect::Observe,
+            level: Level::E1,
+            output: Default::default(),
+            scripts: vec![],
+            profile: crate::sandbox::Profile::for_level(Level::E1),
+            labels: Default::default(),
+            origin: Origin::Local,
+            route_exec_digest: None,
+            action: None,
+        };
+        req.output.fields = serde_json::from_str(r#"{"result":{"type":"text","stdout":true}}"#).unwrap();
+        assert!(Policy::default().permits(&req, Effect::Observe).unwrap_err().contains("allow_raw_output"));
+        let allowed = merge(Some(&raw("[exec]\nallow_raw_output = true\n")), None).unwrap();
+        assert!(allowed.permits(&req, Effect::Observe).is_ok());
     }
 
     #[test]

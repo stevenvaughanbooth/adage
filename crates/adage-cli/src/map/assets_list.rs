@@ -25,12 +25,12 @@ pub(crate) static ASSETS: &[Asset] = &[
         gz: Some(include_bytes!("../../assets/map/assets/how-DM9UFcFa.js.gz")),
     },
     Asset {
-        path: "assets/index-DYk-92ZO.js",
+        path: "assets/index-B-Sy1aaP.js",
         content_type: "text/javascript; charset=utf-8",
         immutable: true,
         raw: None,
-        br: Some(include_bytes!("../../assets/map/assets/index-DYk-92ZO.js.br")),
-        gz: Some(include_bytes!("../../assets/map/assets/index-DYk-92ZO.js.gz")),
+        br: Some(include_bytes!("../../assets/map/assets/index-B-Sy1aaP.js.br")),
+        gz: Some(include_bytes!("../../assets/map/assets/index-B-Sy1aaP.js.gz")),
     },
     Asset {
         path: "assets/layout.worker-C5z_fNT1.js",

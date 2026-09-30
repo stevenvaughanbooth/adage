@@ -584,7 +584,9 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
     }
     v.push(Line::raw(""));
     v.push(head("ADVISORY PREVIEW (EXAMPLE VALUES)", t));
-    if r.directive.trim().is_empty() {
+    if r.more.execution.is_some() {
+        v.push(Line::from(Span::styled("  Execution-only candidate; no advisory reminder is delivered.", t.dim())));
+    } else if r.directive.trim().is_empty() {
         v.push(Line::from(Span::styled("  (no preview: the reflex has no directive text)", t.dim())));
     } else {
         v.extend(view::directive_lines(&r.directive, t, ""));
@@ -593,7 +595,20 @@ pub fn detail(r: &RouteRow, s: &AppState, ctx: &Ctx) -> Vec<Line<'static>> {
     // Two sources, each named: the traces conditioning read (history), and what the hooks have
     // recorded since the reflex was installed (live).
     v.push(head("EVIDENCE", t));
-    if let Some(value) = &r.more.value {
+    if let Some(e) = &r.more.execution {
+        v.push(sourced(
+            "from conditioning",
+            format!(
+                "{}/{} matching situations with supported continuations across {} traces",
+                e.successful, e.opportunities, e.sessions
+            ),
+            t,
+        ));
+        v.push(Line::from(Span::styled(
+            "  Observed routine; avoided agent work has not been established by these counts.",
+            t.dim(),
+        )));
+    } else if let Some(value) = &r.more.value {
         // Decided on the calls it saves, not on how often traces took it.
         v.push(sourced("from conditioning", value.clone(), t));
     } else if let Some(c) = &r.more.card {

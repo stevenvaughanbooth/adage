@@ -857,7 +857,9 @@ pub fn assess(
             followed: j.followed + j.misfired,
         };
         let up = uplift(kind_of(r), &u, priors, bar).summary;
-        if up.gated && r.state.is_live() {
+        // Advisory uplift does not measure replacing an already-routine agent action. Keep
+        // that knowledge for local execution review, while recording its low advisory uplift.
+        if up.gated && r.state.is_live() && r.evidence.execution.is_none() {
             r.state = RouteState::Nascent;
             gated.push(r.id.clone());
         }

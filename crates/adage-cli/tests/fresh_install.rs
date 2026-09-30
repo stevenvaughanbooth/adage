@@ -170,6 +170,7 @@ fn track(repo: &str, routes: Vec<Route>) -> Track {
 /// starts no learner, and leaves nothing for doctor to warn about; a request an older Adage queued
 /// for such a directory is not a warning either, and its learner exits quietly.
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
 fn b2_outside_a_repository_nothing_is_learned_or_said() {
     let w = World::new();
     let gone = w.p("gone");
@@ -242,6 +243,7 @@ fn b3_status_and_watch_show_the_bundled_model() {
 /// B4: switching the model hooks embed with says which reflexes stop matching prompts, and asks
 /// for their repository to be conditioned again at once.
 #[test]
+#[cfg_attr(not(debug_assertions), ignore = "requires debug-only ADAGE_TEST_NO_SPAWN instrumentation")]
 fn b4_switching_models_requeues_what_was_learned_with_the_old_one() {
     let w = World::new();
     let repo = w.repo("work/acme");
